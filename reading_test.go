@@ -84,3 +84,20 @@ func TestReadingColumnCentresAndCaps(t *testing.T) {
 		t.Fatalf("expected responsive full-width column at X 0, got w=%v x=%v", child.Size().Width, child.Position().X)
 	}
 }
+
+// TestReadingColumnMinSizeWidthIsZero guards the sidebar-fills-the-screen bug: the
+// column must not propagate its (wide) text min-width upward, or the enclosing
+// HSplit divider can collapse the reading pane and let the sidebar take over.
+func TestReadingColumnMinSizeWidthIsZero(t *testing.T) {
+	wide := canvas.NewRectangle(color.Black)
+	wide.SetMinSize(fyne.NewSize(2000, 400))
+	l := &readingColumn{maxWidth: 760}
+
+	ms := l.MinSize([]fyne.CanvasObject{wide})
+	if ms.Width != 0 {
+		t.Errorf("readingColumn MinSize width must be 0 (decoupled from text width), got %v", ms.Width)
+	}
+	if ms.Height != 400 {
+		t.Errorf("expected height passed through (400), got %v", ms.Height)
+	}
+}
