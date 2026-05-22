@@ -419,7 +419,13 @@ func (l *readingColumn) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	if len(objects) == 0 {
 		return fyne.Size{}
 	}
-	return objects[0].MinSize()
+	// Report height only. The width is deliberately 0: the child is a Wrapping=Off
+	// text whose MinSize width is its longest line. If that fed upward, the
+	// enclosing HSplit would size its divider from it (split.go computeSplitLengths
+	// clamps to leading/trailing minimums), and a transient narrow layout could
+	// feed back and let the sidebar expand to fill the window. The real layout
+	// width comes from the parent in Layout, not from here.
+	return fyne.NewSize(0, objects[0].MinSize().Height)
 }
 
 func indexOf(values []int, target int) int {
