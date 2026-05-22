@@ -1,0 +1,56 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Run Application",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "env": {},
+            "args": [],
+            "showLog": true,
+            "trace": "verbose"
+        },
+        {
+            "name": "Run Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-v",
+                "-run",
+                "Test"
+            ]
+        },
+        {
+            "name": "Run Test at Cursor",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-v",
+                "-run",
+                "${selectedText}"
+            ],
+            "showLog": true
+        },
+        {
+            "name": "Benchmark",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-bench",
+                ".",
+                "-benchmem",
+                "-v"
+            ],
+            "showLog": true
+        }
+    ]
+}

@@ -1,0 +1,13 @@
+# Compiled application binary
+/holy-bible
+
+# Go test / build / coverage artifacts
+*.test
+*.out
+coverage.*
+
+# Local Bible cache (normally lives in the OS cache dir; ignore any local copy)
+holy-bible-cache.json
+
+# macOS / editor cruft
+.DS_Store
