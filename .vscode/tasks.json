@@ -1,0 +1,99 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "build",
+                "-o",
+                "holy-bible",
+                "./main.go"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$go"
+            ]
+        },
+        {
+            "label": "Run",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "run",
+                "main.go"
+            ],
+            "group": {
+                "kind": "test"
+            },
+            "problemMatcher": [
+                "$go"
+            ],
+            "isBackground": false
+        },
+        {
+            "label": "Test All",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "test",
+                "-v",
+                "-race",
+                "./..."
+            ],
+            "group": {
+                "kind": "test"
+            },
+            "problemMatcher": [
+                "$go"
+            ]
+        },
+        {
+            "label": "Test Coverage",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "test",
+                "-coverprofile=coverage.out",
+                "./..."
+            ],
+            "group": {
+                "kind": "test"
+            },
+            "problemMatcher": [
+                "$go"
+            ]
+        },
+        {
+            "label": "Lint",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "vet",
+                "./..."
+            ],
+            "group": {
+                "kind": "test"
+            },
+            "problemMatcher": [
+                "$go"
+            ]
+        },
+        {
+            "label": "Format",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "fmt",
+                "./..."
+            ],
+            "group": {
+                "kind": "test"
+            }
+        }
+    ]
+}

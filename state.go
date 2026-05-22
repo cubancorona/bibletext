@@ -1,0 +1,291 @@
+package main
+
+import (
+	"strings"
+
+	"fyne.io/fyne/v2"
+)
+
+// AppState holds everything the UI renders from, plus hooks the widgets install
+// so state-mutating helpers can request a redraw without knowing about widgets.
+type AppState struct {
+	Bible *BibleData
+
+	CurrentBook    string
+	CurrentChapter int
+
+	BookFilterQuery string
+
+	SearchQuery              string
+	ActiveSearchQuery        string
+	SearchResults            []Verse
+	SearchTruncated          bool
+	IsSearching              bool
+	CanReturnToSearchResults bool
+
+	HighlightedBook     string
+	HighlightedChapter  int
+	HighlightedVerse    int
+	HasHighlightedVerse bool
+
+	RecentChapters []ChapterVisit
+
+	// Wiring installed by the UI. All are nil during unit tests, so every call
+	// site must go through the do* helpers below.
+	theme         *bibleTheme
+	app           fyne.App
+	window        fyne.Window
+	showReading   func()       // rebuild only the right-hand reading/results pane
+	syncSidebar   func()       // refresh the sidebar book list selection
+	focusSearch   func()       // move keyboard focus into the search field
+	setSearchText func(string) // set the search field's text (e.g. to clear it)
+}
+
+// ChapterVisit is one entry in the reading history.
+type ChapterVisit struct {
+	Book    string
+	Chapter int
+}
+
+func (s *AppState) pal() palette {
+	if s.theme != nil {
+		return s.theme.palette()
+	}
+	return lightPalette
+}
+
+func (s *AppState) refresh() {
+	if s.showReading != nil {
+		s.showReading()
+	}
+	if s.syncSidebar != nil {
+		s.syncSidebar()
+	}
+}
+
+func (s *AppState) refreshReadingOnly() {
+	if s.showReading != nil {
+		s.showReading()
+	}
+}
+
+func filterBooks(books []string, query string) []string {
+	trimmed := strings.ToLower(strings.TrimSpace(query))
+	if trimmed == "" {
+		return append([]string(nil), books...)
+	}
+	filtered := make([]string, 0, len(books))
+	for _, book := range books {
+		if strings.Contains(strings.ToLower(book), trimmed) {
+			filtered = append(filtered, book)
+		}
+	}
+	return filtered
+}
+
+func indexOfBook(books []string, target string) int {
+	for i, book := range books {
+		if book == target {
+			return i
+		}
+	}
+	return -1
+}
+
+func selectBook(state *AppState, book string, resetChapter bool) {
+	state.CurrentBook = book
+	if resetChapter {
+		chapters := state.Bible.GetChapterNumbersForBook(book)
+		if len(chapters) > 0 {
+			state.CurrentChapter = chapters[0]
+		} else {
+			state.CurrentChapter = 1
+		}
+		addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
+	}
+	state.IsSearching = false
+	state.CanReturnToSearchResults = false
+	clearHighlightedVerse(state)
+}
+
+func normalizeCurrentChapter(state *AppState, chapters []int) {
+	if len(chapters) == 0 {
+		state.CurrentChapter = 1
+		return
+	}
+	for _, chapter := range chapters {
+		if chapter == state.CurrentChapter {
+			return
+		}
+	}
+	state.CurrentChapter = chapters[0]
+}
+
+func moveChapter(state *AppState, step int) bool {
+	chapters := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
+	if len(chapters) == 0 {
+		return false
+	}
+	normalizeCurrentChapter(state, chapters)
+	currentIdx := -1
+	for i, chapter := range chapters {
+		if chapter == state.CurrentChapter {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx == -1 {
+		return false
+	}
+	nextIdx := currentIdx + step
+	if nextIdx < 0 || nextIdx >= len(chapters) {
+		return false
+	}
+	state.CurrentChapter = chapters[nextIdx]
+	clearHighlightedVerse(state)
+	addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
+	return true
+}
+
+// maxRecent caps the reading history. The slim history bar shows all but the
+// current chapter, so this bounds how far back you can jump.
+const maxRecent = 7
+
+func addRecentChapter(state *AppState, book string, chapter int) {
+	if chapter < 1 || book == "" {
+		return
+	}
+	updated := make([]ChapterVisit, 0, maxRecent)
+	updated = append(updated, ChapterVisit{Book: book, Chapter: chapter})
+	for _, v := range state.RecentChapters {
+		if v.Book == book && v.Chapter == chapter {
+			continue
+		}
+		updated = append(updated, v)
+		if len(updated) == maxRecent {
+			break
+		}
+	}
+	state.RecentChapters = updated
+}
+
+// recentJumpTargets returns previously visited chapters (newest first),
+// excluding the current one, for the history bar.
+func recentJumpTargets(state *AppState, limit int) []ChapterVisit {
+	if len(state.RecentChapters) <= 1 {
+		return nil
+	}
+	out := make([]ChapterVisit, 0, limit)
+	for i := 1; i < len(state.RecentChapters) && len(out) < limit; i++ {
+		out = append(out, state.RecentChapters[i])
+	}
+	return out
+}
+
+func clearHistory(state *AppState) {
+	if len(state.RecentChapters) > 1 {
+		state.RecentChapters = state.RecentChapters[:1]
+	}
+}
+
+func navigateToVisit(state *AppState, visit ChapterVisit) {
+	selectBook(state, visit.Book, false)
+	state.CurrentChapter = visit.Chapter
+	addRecentChapter(state, visit.Book, visit.Chapter)
+	state.refresh()
+}
+
+// executeSearch runs a full search (used on Enter). An exact single-verse
+// reference like "John 3:16" jumps straight to the verse in context.
+func executeSearch(state *AppState, rawQuery string) {
+	trimmed := strings.TrimSpace(rawQuery)
+	state.SearchQuery = trimmed
+
+	if trimmed == "" {
+		clearSearchState(state)
+		state.refreshReadingOnly()
+		return
+	}
+
+	if book, chapter, verse, hasVerse, ok := state.Bible.parseReferenceQuery(trimmed); ok && hasVerse {
+		if match := state.Bible.GetVerse(book, chapter, verse); match != nil {
+			openSearchResult(state, *match)
+			return
+		}
+	}
+
+	runSearch(state, trimmed)
+}
+
+// searchResultsOnly powers live, as-you-type search. It only lists matches; it
+// never navigates away, so typing a reference doesn't jump around mid-keystroke.
+// It runs synchronously on the UI goroutine (no background timer), so it is
+// race-free.
+func searchResultsOnly(state *AppState, rawQuery string) {
+	trimmed := strings.TrimSpace(rawQuery)
+	state.SearchQuery = trimmed
+	if trimmed == "" {
+		clearSearchState(state)
+		state.refreshReadingOnly()
+		return
+	}
+	runSearch(state, trimmed)
+}
+
+func runSearch(state *AppState, trimmed string) {
+	state.ActiveSearchQuery = trimmed
+	state.IsSearching = true
+	state.CanReturnToSearchResults = false
+	clearHighlightedVerse(state)
+
+	if len([]rune(trimmed)) < 2 {
+		state.SearchResults = nil
+		state.SearchTruncated = false
+		state.refreshReadingOnly()
+		return
+	}
+
+	results, truncated := state.Bible.SearchSmartLimited(trimmed, 120)
+	state.SearchResults = results
+	state.SearchTruncated = truncated
+	state.refreshReadingOnly()
+}
+
+func openSearchResult(state *AppState, verse Verse) {
+	selectBook(state, verse.BookName, false)
+	state.CurrentChapter = verse.Chapter
+	addRecentChapter(state, verse.BookName, verse.Chapter)
+	state.HighlightedBook = verse.BookName
+	state.HighlightedChapter = verse.Chapter
+	state.HighlightedVerse = verse.Verse
+	state.HasHighlightedVerse = true
+	state.IsSearching = false
+	state.CanReturnToSearchResults = true
+	state.refresh()
+}
+
+func clearHighlightedVerse(state *AppState) {
+	state.HighlightedBook = ""
+	state.HighlightedChapter = 0
+	state.HighlightedVerse = 0
+	state.HasHighlightedVerse = false
+}
+
+func clearSearchState(state *AppState) {
+	state.SearchQuery = ""
+	state.ActiveSearchQuery = ""
+	state.SearchResults = nil
+	state.SearchTruncated = false
+	state.IsSearching = false
+	state.CanReturnToSearchResults = false
+	clearHighlightedVerse(state)
+}
+
+func isVerseHighlighted(state *AppState, verse Verse) bool {
+	if !state.HasHighlightedVerse {
+		return false
+	}
+	return state.HighlightedBook == verse.BookName &&
+		state.HighlightedChapter == verse.Chapter &&
+		state.HighlightedVerse == verse.Verse
+}
