@@ -23,14 +23,27 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 	label.TextSize = 11
 	label.TextStyle = fyne.TextStyle{Bold: true}
 
+	// Consolidate by book: one book name followed by its chapter numbers, each
+	// number individually clickable — e.g. "John 1 3 5   Genesis 1".
 	chips := container.NewHBox()
-	for _, t := range targets {
-		v := t
-		chip := widget.NewButton(fmt.Sprintf("%s %d", v.Book, v.Chapter), func() {
-			navigateToVisit(state, v)
-		})
-		chip.Importance = widget.LowImportance
-		chips.Add(chip)
+	for _, g := range groupVisitsByBook(targets) {
+		book := g.Book
+
+		name := canvas.NewText(book, pal.Text)
+		name.TextSize = 13
+		name.TextStyle = fyne.TextStyle{Bold: true}
+
+		group := container.NewHBox(container.NewCenter(name))
+		for _, ch := range g.Chapters {
+			chapter := ch
+			num := widget.NewButton(fmt.Sprintf("%d", chapter), func() {
+				navigateToVisit(state, ChapterVisit{Book: book, Chapter: chapter})
+			})
+			num.Importance = widget.LowImportance
+			group.Add(num)
+		}
+		chips.Add(group)
+		chips.Add(hgap(10))
 	}
 
 	clear := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {

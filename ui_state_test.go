@@ -245,6 +245,24 @@ func TestRecentJumpTargetsExcludesCurrentAndOrders(t *testing.T) {
 	}
 }
 
+func TestGroupVisitsByBookConsolidates(t *testing.T) {
+	visits := []ChapterVisit{
+		{Book: "John", Chapter: 5},
+		{Book: "Genesis", Chapter: 1},
+		{Book: "John", Chapter: 1},
+		{Book: "John", Chapter: 3},
+		{Book: "John", Chapter: 5}, // duplicate
+	}
+	got := groupVisitsByBook(visits)
+	want := []bookChapters{
+		{Book: "John", Chapters: []int{1, 3, 5}}, // sorted + de-duped, book kept first (most recent)
+		{Book: "Genesis", Chapters: []int{1}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("groupVisitsByBook mismatch:\n got %+v\nwant %+v", got, want)
+	}
+}
+
 func TestClearHistoryKeepsCurrentChapter(t *testing.T) {
 	state := &AppState{
 		RecentChapters: []ChapterVisit{

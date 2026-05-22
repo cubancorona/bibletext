@@ -37,7 +37,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		searchEntry.SetText("")
 	})
 	clearSearch.Importance = widget.LowImportance
-	searchRow := container.NewBorder(nil, nil, nil, clearSearch, searchEntry)
+	searchRow := container.NewBorder(nil, nil, nil, clearSearch, inputFrame(searchEntry, pal.Border))
 
 	state.focusSearch = func() {
 		if state.window != nil {
@@ -118,7 +118,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		caption("Keyword, or a reference like John 3:16."),
 		spacer(10),
 		sectionLabel("BOOKS", pal),
-		bookFilter,
+		inputFrame(bookFilter, pal.Border),
 	)
 
 	body := container.NewBorder(header, nil, nil, nil, list)
@@ -152,5 +152,11 @@ func caption(text string) fyne.CanvasObject {
 func spacer(h float32) fyne.CanvasObject {
 	r := canvas.NewRectangle(color.Transparent)
 	r.SetMinSize(fyne.NewSize(0, h))
+	return r
+}
+
+func hgap(w float32) fyne.CanvasObject {
+	r := canvas.NewRectangle(color.Transparent)
+	r.SetMinSize(fyne.NewSize(w, 0))
 	return r
 }

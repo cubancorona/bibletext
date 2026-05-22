@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -29,6 +30,11 @@ type AppState struct {
 	HasHighlightedVerse bool
 
 	RecentChapters []ChapterVisit
+
+	// Annotations is the foundation for note/highlight + research features. It is
+	// populated/persisted by future work; the reading view already renders verses
+	// as selectable, individually-referenceable blocks.
+	Annotations *AnnotationStore
 
 	// Wiring installed by the UI. All are nil during unit tests, so every call
 	// site must go through the do* helpers below.
@@ -180,6 +186,38 @@ func recentJumpTargets(state *AppState, limit int) []ChapterVisit {
 		out = append(out, state.RecentChapters[i])
 	}
 	return out
+}
+
+// bookChapters groups recently visited chapters of one book.
+type bookChapters struct {
+	Book     string
+	Chapters []int
+}
+
+// groupVisitsByBook consolidates visits so each book appears once with its
+// chapters (sorted, de-duplicated), keeping books in most-recent-first order.
+// e.g. visits to John 5, Genesis 1, John 1, John 3 -> "John 1,3,5" then "Genesis 1".
+func groupVisitsByBook(visits []ChapterVisit) []bookChapters {
+	index := make(map[string]int)
+	seen := make(map[string]map[int]bool)
+	groups := make([]bookChapters, 0, len(visits))
+	for _, v := range visits {
+		gi, ok := index[v.Book]
+		if !ok {
+			gi = len(groups)
+			index[v.Book] = gi
+			groups = append(groups, bookChapters{Book: v.Book})
+			seen[v.Book] = make(map[int]bool)
+		}
+		if !seen[v.Book][v.Chapter] {
+			seen[v.Book][v.Chapter] = true
+			groups[gi].Chapters = append(groups[gi].Chapters, v.Chapter)
+		}
+	}
+	for i := range groups {
+		sort.Ints(groups[i].Chapters)
+	}
+	return groups
 }
 
 func clearHistory(state *AppState) {
