@@ -20,11 +20,6 @@ const (
 	colorNameMuted       fyne.ThemeColorName = "holyMuted"
 )
 
-// sizeNameReading is a dedicated size for scripture body text, so the reading
-// area can be generous while the UI chrome stays compact. RichText resolves it
-// through the theme like any built-in size name.
-const sizeNameReading fyne.ThemeSizeName = "holyReading"
-
 // palette is the single source of truth for every colour in the UI. Routing all
 // colours through here keeps the design consistent and makes dark mode a swap.
 type palette struct {
@@ -77,7 +72,8 @@ var darkPalette = palette{
 // bibleTheme is a Fyne theme whose colours come from the active palette. The dark
 // flag is an explicit user choice, so we ignore the OS variant Fyne passes in.
 type bibleTheme struct {
-	dark bool
+	dark  bool
+	fonts *bookFonts // book-like serif; nil falls back to Fyne's bundled font
 }
 
 func (t *bibleTheme) palette() palette {
@@ -141,6 +137,11 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 }
 
 func (t *bibleTheme) Font(style fyne.TextStyle) fyne.Resource {
+	// Keep monospace/symbol text on the default faces; everything else uses the
+	// book-like serif when available for a warmer, more page-like feel.
+	if t.fonts != nil && !style.Monospace && !style.Symbol {
+		return t.fonts.face(style)
+	}
 	return theme.DefaultTheme().Font(style)
 }
 
@@ -150,10 +151,13 @@ func (t *bibleTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 
 func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
-	case sizeNameReading: // scripture body
-		return 18
-	case theme.SizeNameText: // UI chrome: entries, buttons, lists
-		return 13
+	case theme.SizeNameText: // body text (reading + UI); Entry forces one size
+		return 16
+	case theme.SizeNameInputBorder:
+		// The read-only reading text is an Entry; its blinking caret is drawn at
+		// this width. Zero removes the caret. Entry outlines are supplied by our
+		// own bordered surfaces instead (see the search/filter fields).
+		return 0
 	case theme.SizeNameCaptionText:
 		return 11
 	case theme.SizeNameHeadingText:
@@ -186,4 +190,16 @@ func surface(content fyne.CanvasObject, bg, border color.Color, minSize fyne.Siz
 		frame.SetMinSize(minSize)
 	}
 	return container.NewStack(frame, container.NewPadded(content))
+}
+
+// inputFrame draws a thin rounded outline around an input field without adding
+// padding. We zero the theme's input-border size (to hide the read-only reading
+// caret), so fields get their outline here instead. The rectangle is
+// non-interactive, so clicks still reach the entry beneath it.
+func inputFrame(content fyne.CanvasObject, border color.Color) fyne.CanvasObject {
+	outline := canvas.NewRectangle(color.Transparent)
+	outline.StrokeColor = border
+	outline.StrokeWidth = 1
+	outline.CornerRadius = 6
+	return container.NewStack(content, outline)
 }

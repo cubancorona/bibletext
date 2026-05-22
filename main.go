@@ -28,6 +28,7 @@ func main() {
 		Bible:          bibleData,
 		CurrentBook:    defaultStartBook(bibleData),
 		CurrentChapter: 1,
+		Annotations:    NewAnnotationStore(),
 	}
 	if chapters := bibleData.GetChapterNumbersForBook(state.CurrentBook); len(chapters) > 0 {
 		state.CurrentChapter = chapters[0]

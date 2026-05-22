@@ -62,35 +62,25 @@ func TestGroupVersesIntoParagraphsPreservesEveryVerse(t *testing.T) {
 	}
 }
 
-func TestReadingLayoutStacksCentresAndCaps(t *testing.T) {
-	a := canvas.NewRectangle(color.Black)
-	a.SetMinSize(fyne.NewSize(10, 100))
-	b := canvas.NewRectangle(color.Black)
-	b.SetMinSize(fyne.NewSize(10, 50))
-	objects := []fyne.CanvasObject{a, b}
+func TestReadingColumnCentresAndCaps(t *testing.T) {
+	child := canvas.NewRectangle(color.Black)
+	child.SetMinSize(fyne.NewSize(10, 200))
+	objects := []fyne.CanvasObject{child}
 
-	l := &readingLayout{maxWidth: 760, spacing: 20}
+	l := &readingColumn{maxWidth: 760}
 
 	// Wide window: width capped at 760 and centred (x = (1200-760)/2).
 	l.Layout(objects, fyne.NewSize(1200, 800))
-	if a.Size().Width != 760 {
-		t.Fatalf("expected capped width 760, got %v", a.Size().Width)
+	if child.Size().Width != 760 {
+		t.Fatalf("expected capped width 760, got %v", child.Size().Width)
 	}
-	if a.Position().X != (1200-760)/2 {
-		t.Fatalf("expected centred X 220, got %v", a.Position().X)
-	}
-	// Second paragraph stacks below the first with spacing (100 + 20).
-	if b.Position().Y != 120 {
-		t.Fatalf("expected second paragraph at Y 120, got %v", b.Position().Y)
+	if child.Position().X != (1200-760)/2 {
+		t.Fatalf("expected centred X 220, got %v", child.Position().X)
 	}
 
 	// Narrow window: column fills the width and sits at the left edge.
 	l.Layout(objects, fyne.NewSize(300, 800))
-	if a.Size().Width != 300 || a.Position().X != 0 {
-		t.Fatalf("expected responsive full-width column at X 0, got w=%v x=%v", a.Size().Width, a.Position().X)
-	}
-
-	if ms := l.MinSize(objects); ms.Height != 100+50+20 {
-		t.Fatalf("expected MinSize height 170 (heights + spacing), got %v", ms.Height)
+	if child.Size().Width != 300 || child.Position().X != 0 {
+		t.Fatalf("expected responsive full-width column at X 0, got w=%v x=%v", child.Size().Width, child.Position().X)
 	}
 }

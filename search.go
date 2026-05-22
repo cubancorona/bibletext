@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -40,7 +41,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 		rows = append(rows, searchResultRow(state, verse, terms, pal))
 	}
 
-	column := container.New(&readingLayout{maxWidth: 820, spacing: 6}, rows...)
+	column := container.New(&readingColumn{maxWidth: 820}, container.NewVBox(rows...))
 	scroll := container.NewVScroll(column)
 	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
 
@@ -143,7 +144,7 @@ func resultSegment(s string, colorName fyne.ThemeColorName, bold bool) widget.Ri
 		Text: s,
 		Style: widget.RichTextStyle{
 			Inline:    true,
-			SizeName:  sizeNameReading,
+			SizeName:  theme.SizeNameText,
 			ColorName: colorName,
 			TextStyle: fyne.TextStyle{Bold: bold},
 		},

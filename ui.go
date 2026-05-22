@@ -17,7 +17,7 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	state.app = app
 	state.window = window
 	if state.theme == nil {
-		state.theme = &bibleTheme{}
+		state.theme = &bibleTheme{fonts: loadBookFonts()}
 	}
 	app.Settings().SetTheme(state.theme)
 	pal := state.pal()

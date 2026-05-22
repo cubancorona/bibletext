@@ -3,54 +3,64 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
-	"fyne.io/fyne/v2/widget"
 )
 
-func collectRichText(o fyne.CanvasObject, out *[]*widget.RichText) {
+func findChapterText(o fyne.CanvasObject) *chapterText {
 	switch v := o.(type) {
-	case *widget.RichText:
-		*out = append(*out, v)
+	case *chapterText:
+		return v
 	case *container.Scroll:
-		collectRichText(v.Content, out)
+		return findChapterText(v.Content)
 	case *container.Split:
-		collectRichText(v.Leading, out)
-		collectRichText(v.Trailing, out)
+		if c := findChapterText(v.Leading); c != nil {
+			return c
+		}
+		return findChapterText(v.Trailing)
 	case *fyne.Container:
 		for _, c := range v.Objects {
-			collectRichText(c, out)
+			if r := findChapterText(c); r != nil {
+				return r
+			}
 		}
 	}
+	return nil
 }
 
-// TestReadingParagraphsUseSingleSegment guards the fix for the "one character
-// per line" bug: Fyne mis-wraps a RichText when a line break falls amid multiple
-// inline segments, so every reading block must contain exactly one text segment.
-func TestReadingParagraphsUseSingleSegment(t *testing.T) {
+// TestChapterTextIsSelectableReadOnlyWholeChapter verifies the chapter renders as
+// one selectable, read-only block (so selection/copy spans the whole chapter) and
+// uses manual wrapping (no internal scroll area).
+func TestChapterTextIsSelectableReadOnlyWholeChapter(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
-	state := sampleState() // John 1 has verses 1-3 in the sample data
-	var rts []*widget.RichText
-	collectRichText(buildReadingView(state), &rts)
-	if len(rts) == 0 {
-		t.Fatal("found no reading paragraphs")
+	state := sampleState() // John 1: verses 1-3 in the sample data
+	ct := findChapterText(buildReadingView(state))
+	if ct == nil {
+		t.Fatal("no chapterText found in the reading view")
 	}
-	for i, rt := range rts {
-		if len(rt.Segments) != 1 {
-			t.Errorf("reading block %d has %d segments; must be 1 to wrap correctly", i, len(rt.Segments))
+	if ct.Wrapping != fyne.TextWrapOff {
+		t.Errorf("expected manual wrapping (TextWrapOff), got %v", ct.Wrapping)
+	}
+	// All verses share one widget, so selection can span the whole chapter.
+	for _, frag := range []string{"beginning", "same", "things"} {
+		if !strings.Contains(ct.Text, frag) {
+			t.Errorf("chapter text is missing %q — verses should share one selectable widget", frag)
 		}
+	}
+	before := ct.Text
+	ct.TypedRune('Z')
+	if ct.Text != before {
+		t.Error("chapter text must be read-only")
 	}
 }
 
-// TestHighlightedVerseIsOwnBoldBlock verifies a highlighted verse splits out into
-// its own single-segment, bold block (the scroll-to target), with the verses
-// before and after kept in their own plain blocks.
-func TestHighlightedVerseIsOwnBoldBlock(t *testing.T) {
+func TestChapterTextLocatesHighlightedVerse(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
@@ -60,21 +70,19 @@ func TestHighlightedVerseIsOwnBoldBlock(t *testing.T) {
 	state.HighlightedVerse = 2
 	state.HasHighlightedVerse = true
 
-	var rts []*widget.RichText
-	collectRichText(buildReadingView(state), &rts)
-	if len(rts) != 3 {
-		t.Fatalf("expected 3 blocks (before / highlighted / after), got %d", len(rts))
+	ct := findChapterText(buildReadingView(state))
+	if ct == nil {
+		t.Fatal("no chapterText found")
 	}
-	for i, rt := range rts {
-		if len(rt.Segments) != 1 {
-			t.Errorf("block %d has %d segments; must be 1", i, len(rt.Segments))
-		}
+	if ct.highlightLine < 0 {
+		t.Error("expected the highlighted verse to be located for scroll-to")
 	}
-	mid, ok := rts[1].Segments[0].(*widget.TextSegment)
-	if !ok || !mid.Style.TextStyle.Bold {
-		t.Error("the highlighted verse block should be bold")
-	}
-	if !ok || mid.Style.ColorName != colorNameHighlightHi {
-		t.Error("the highlighted verse block should use the highlight colour")
+}
+
+func TestCleanCopyJoinsSoftWrapsKeepsParagraphs(t *testing.T) {
+	in := "In the\nbeginning was\nthe Word.\n\nThe same\nwas here."
+	want := "In the beginning was the Word.\n\nThe same was here."
+	if got := cleanCopy(in); got != want {
+		t.Errorf("cleanCopy = %q, want %q", got, want)
 	}
 }

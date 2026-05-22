@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"strings"
 
@@ -29,26 +30,26 @@ func buildReadingView(state *AppState) fyne.CanvasObject {
 	normalizeCurrentChapter(state, chapterNumbers)
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 
-	var paragraphs []fyne.CanvasObject
-	var highlightTarget fyne.CanvasObject
+	col := &readingColumn{maxWidth: 760}
+	var child fyne.CanvasObject
+	var chapter *chapterText
 	if len(verses) == 0 {
 		msg := widget.NewLabel("No verses are available for this chapter yet.")
 		msg.Wrapping = fyne.TextWrapWord
-		paragraphs = append(paragraphs, msg)
+		child = msg
 	} else {
-		for _, para := range groupVersesIntoParagraphs(verses) {
-			objs, target := paragraphObjects(state, para)
-			paragraphs = append(paragraphs, objs...)
-			if target != nil {
-				highlightTarget = target
-			}
-		}
+		// One widget for the whole chapter, so selection and copy span the entire
+		// passage, not just a single paragraph.
+		chapter = newChapterText(state, verses)
+		col.chapter = chapter
+		child = chapter
 	}
 
-	reading := &readingLayout{maxWidth: 760, spacing: 16, target: highlightTarget}
-	column := container.New(reading, paragraphs...)
-	scroll := container.NewVScroll(column)
-	reading.scroll = scroll // wired after creation so the layout can scroll to a verse
+	scroll := container.NewVScroll(container.New(col, child))
+	col.scroll = scroll
+	if chapter != nil {
+		chapter.parentScroll = scroll
+	}
 
 	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
 
@@ -139,58 +140,217 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 	return surface(container.NewHBox(back), pal.SurfaceAlt, pal.Border, fyne.Size{})
 }
 
-// paragraphObjects renders a paragraph as flowing scripture. Each block is a
-// RichText with a SINGLE text segment: Fyne mis-wraps RichText when a line break
-// lands amid multiple inline segments (it then breaks one character per line), so
-// one segment per block keeps wrapping reliable. When the paragraph contains the
-// highlighted verse, that verse becomes its own accent-coloured block (also the
-// scroll-to target); the verses around it stay in plain blocks.
-func paragraphObjects(state *AppState, verses []Verse) (objs []fyne.CanvasObject, target fyne.CanvasObject) {
-	hiIdx := -1
-	for i, v := range verses {
-		if isVerseHighlighted(state, v) {
-			hiIdx = i
-			break
-		}
-	}
+// chapterText renders an entire chapter as one read-only, selectable text block.
+// A single widget means selection (and copy) spans the whole chapter, not just a
+// paragraph. It uses Wrapping=Off + Scroll=None so Fyne creates no inner scroll
+// area: the block grows to its full height and reads like a printed page, while
+// the surrounding page scroll handles movement. Wrapping is performed manually
+// and redone on resize, so it stays responsive.
+type chapterText struct {
+	widget.Entry
 
-	if hiIdx == -1 {
-		return []fyne.CanvasObject{verseBlock(verses, false)}, nil
-	}
+	paragraphs   [][]Verse
+	highlightRef VerseRef
+	hasHighlight bool
+	clipboard    fyne.Clipboard
+	parentScroll *container.Scroll
 
-	if hiIdx > 0 {
-		objs = append(objs, verseBlock(verses[:hiIdx], false))
-	}
-	target = verseBlock(verses[hiIdx:hiIdx+1], true)
-	objs = append(objs, target)
-	if hiIdx < len(verses)-1 {
-		objs = append(objs, verseBlock(verses[hiIdx+1:], false))
-	}
-	return objs, target
+	lastWidth     float32
+	highlightLine int // line of the highlighted verse after wrapping (-1 = none)
+	totalLines    int
 }
 
-func verseBlock(verses []Verse, highlight bool) fyne.CanvasObject {
-	var b strings.Builder
-	for i, v := range verses {
-		if i > 0 {
-			b.WriteString("  ")
+// entryScrollNone is widget.ScrollNone, assignable to Entry.Scroll as an untyped
+// constant (the field's type lives in an internal package).
+const entryScrollNone = 3
+
+func newChapterText(state *AppState, verses []Verse) *chapterText {
+	c := &chapterText{
+		paragraphs:    groupVersesIntoParagraphs(verses),
+		highlightLine: -1,
+	}
+	if state.HasHighlightedVerse {
+		c.hasHighlight = true
+		c.highlightRef = VerseRef{Book: state.HighlightedBook, Chapter: state.HighlightedChapter, Verse: state.HighlightedVerse}
+	}
+	if state.window != nil {
+		c.clipboard = state.window.Clipboard()
+	}
+	c.ExtendBaseWidget(c)
+	c.MultiLine = true
+	c.Wrapping = fyne.TextWrapOff
+	c.Scroll = entryScrollNone // no internal scroll area is created
+	c.rewrap(720)              // initial; corrected once the real width is known
+	return c
+}
+
+// rewrap lays the chapter out to the given width by inserting line breaks: a
+// single newline for a soft wrap and a blank line between paragraphs. It records
+// the line where the highlighted verse begins so it can be scrolled into view.
+func (c *chapterText) rewrap(width float32) {
+	avail := width - 4*theme.InnerPadding()
+	if avail < 80 {
+		avail = 80
+	}
+	textSize := theme.TextSize()
+	var style fyne.TextStyle
+	spaceW := fyne.MeasureText(" ", textSize, style).Width
+
+	c.highlightLine = -1
+	lineNo := 0
+	paras := make([]string, 0, len(c.paragraphs))
+
+	for pi, para := range c.paragraphs {
+		if pi > 0 {
+			lineNo++ // the blank line produced by joining paragraphs with "\n\n"
 		}
-		if n := superscriptNumber(v.Verse); n != "" {
-			b.WriteString(n)
-			b.WriteString(" ")
+		var lines []string
+		var cur strings.Builder
+		curW := float32(0)
+		for _, v := range para {
+			if c.hasHighlight && refOf(v) == c.highlightRef {
+				c.highlightLine = lineNo + len(lines)
+			}
+			for _, w := range verseTokens(v) {
+				ww := fyne.MeasureText(w, textSize, style).Width
+				add := ww
+				if cur.Len() > 0 {
+					add += spaceW
+				}
+				if cur.Len() > 0 && curW+add > avail {
+					lines = append(lines, cur.String())
+					cur.Reset()
+					cur.WriteString(w)
+					curW = ww
+				} else {
+					if cur.Len() > 0 {
+						cur.WriteString(" ")
+					}
+					cur.WriteString(w)
+					curW += add
+				}
+			}
 		}
-		b.WriteString(strings.TrimSpace(v.Text))
+		if cur.Len() > 0 {
+			lines = append(lines, cur.String())
+		}
+		lineNo += len(lines)
+		paras = append(paras, strings.Join(lines, "\n"))
 	}
 
-	style := widget.RichTextStyle{SizeName: sizeNameReading, ColorName: colorNameVerseText}
-	if highlight {
-		style.ColorName = colorNameHighlightHi
-		style.TextStyle = fyne.TextStyle{Bold: true}
-	}
+	c.totalLines = lineNo + 1
+	c.Entry.SetText(strings.Join(paras, "\n\n"))
+}
 
-	rt := widget.NewRichText(&widget.TextSegment{Text: b.String(), Style: style})
-	rt.Wrapping = fyne.TextWrapWord
-	return rt
+// verseTokens splits a verse into wrap tokens, keeping the superscript number
+// attached to the first word so a number never wraps onto its own line.
+func verseTokens(v Verse) []string {
+	words := strings.Fields(strings.TrimSpace(v.Text))
+	num := superscriptNumber(v.Verse)
+	if num == "" {
+		return words
+	}
+	if len(words) == 0 {
+		return []string{num}
+	}
+	words[0] = num + " " + words[0]
+	return words
+}
+
+// Resize re-wraps to the new width (responsive) before laying out.
+func (c *chapterText) Resize(size fyne.Size) {
+	if size.Width > 1 && size.Width != c.lastWidth {
+		c.lastWidth = size.Width
+		c.rewrap(size.Width)
+	}
+	c.Entry.Resize(size)
+}
+
+// highlightY is the approximate Y of the highlighted verse, for scroll-to.
+func (c *chapterText) highlightY() float32 {
+	if c.highlightLine < 0 || c.totalLines <= 0 {
+		return 0
+	}
+	return float32(c.highlightLine) / float32(c.totalLines) * c.MinSize().Height
+}
+
+// Read-only: ignore typed input but keep cursor movement, selection and copy.
+func (c *chapterText) TypedRune(rune) {}
+
+func (c *chapterText) TypedKey(key *fyne.KeyEvent) {
+	switch key.Name {
+	case fyne.KeyLeft, fyne.KeyRight, fyne.KeyUp, fyne.KeyDown,
+		fyne.KeyHome, fyne.KeyEnd, fyne.KeyPageUp, fyne.KeyPageDown:
+		c.Entry.TypedKey(key)
+	}
+}
+
+func (c *chapterText) TypedShortcut(sc fyne.Shortcut) {
+	switch sc.(type) {
+	case *fyne.ShortcutCopy:
+		// Copy clean text: drop the soft wraps we inserted, keep paragraph breaks.
+		if c.clipboard != nil {
+			c.clipboard.SetContent(cleanCopy(c.SelectedText()))
+			return
+		}
+		c.Entry.TypedShortcut(sc)
+	case *fyne.ShortcutSelectAll:
+		c.Entry.TypedShortcut(sc)
+	}
+}
+
+// cleanCopy turns soft-wrap newlines back into spaces while preserving the blank
+// line between paragraphs, so copied passages read naturally.
+func cleanCopy(s string) string {
+	const para = "\x00"
+	s = strings.ReplaceAll(s, "\n\n", para)
+	s = strings.ReplaceAll(s, "\n", " ")
+	return strings.ReplaceAll(s, para, "\n\n")
+}
+
+// Scrolled forwards the wheel to the page so the whole chapter scrolls.
+func (c *chapterText) Scrolled(ev *fyne.ScrollEvent) {
+	if c.parentScroll != nil {
+		c.parentScroll.Scrolled(ev)
+	}
+}
+
+func (c *chapterText) CreateRenderer() fyne.WidgetRenderer {
+	return &plainEntryRenderer{base: c.Entry.CreateRenderer()}
+}
+
+// plainEntryRenderer strips the entry's box and border so the text reads as prose.
+type plainEntryRenderer struct{ base fyne.WidgetRenderer }
+
+func (r *plainEntryRenderer) Destroy()                     { r.base.Destroy() }
+func (r *plainEntryRenderer) Objects() []fyne.CanvasObject { return r.base.Objects() }
+func (r *plainEntryRenderer) Layout(size fyne.Size)        { r.base.Layout(size); r.makePlain() }
+func (r *plainEntryRenderer) Refresh()                     { r.base.Refresh(); r.makePlain() }
+
+func (r *plainEntryRenderer) MinSize() fyne.Size {
+	m := r.base.MinSize()
+	if trim := theme.InputBorderSize() * 2; m.Height > trim {
+		m.Height -= trim
+	}
+	return m
+}
+
+func (r *plainEntryRenderer) makePlain() {
+	objs := r.base.Objects()
+	if len(objs) < 2 {
+		return
+	}
+	if box, ok := objs[0].(*canvas.Rectangle); ok {
+		box.FillColor = color.Transparent
+		box.CornerRadius = 0
+		canvas.Refresh(box)
+	}
+	if border, ok := objs[1].(*canvas.Rectangle); ok {
+		border.StrokeColor = color.Transparent
+		border.StrokeWidth = 0
+		border.CornerRadius = 0
+		canvas.Refresh(border)
+	}
 }
 
 func copyChapter(state *AppState) {
@@ -209,82 +369,57 @@ func copyChapter(state *AppState) {
 	state.window.Clipboard().SetContent(b.String())
 }
 
-// readingLayout stacks paragraphs vertically, centred and capped at a
-// comfortable line length. When a target paragraph and scroll are set it scrolls
-// that verse into view during layout — on the render thread, so no goroutine and
-// no data race.
-type readingLayout struct {
+// readingColumn centres its single child and caps the line length for
+// comfortable reading. When the child is a chapterText with a highlighted verse,
+// it scrolls that verse into view during layout — on the render thread, so there
+// is no goroutine and no data race.
+type readingColumn struct {
 	maxWidth float32
-	spacing  float32
-	target   fyne.CanvasObject
 	scroll   *container.Scroll
+	chapter  *chapterText
 	scrolled bool
 }
 
-func (l *readingLayout) columnWidth(available float32) float32 {
-	if available > l.maxWidth {
-		return l.maxWidth
+func (l *readingColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) == 0 {
+		return
 	}
-	if available < 0 {
-		return 0
-	}
-	return available
-}
+	child := objects[0]
 
-func (l *readingLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	width := l.columnWidth(size.Width)
-	x := (size.Width - width) / 2
+	w := size.Width
+	if w > l.maxWidth {
+		w = l.maxWidth
+	}
+	if w < 0 {
+		w = 0
+	}
+	x := (size.Width - w) / 2
 	if x < 0 {
 		x = 0
 	}
 
-	y := float32(0)
-	targetY := float32(-1)
-	for _, o := range objects {
-		if !o.Visible() {
-			continue
-		}
-		// Resize to the column width first so wrapping content reflows, then
-		// read the resulting height.
-		o.Resize(fyne.NewSize(width, o.MinSize().Height))
-		h := o.MinSize().Height
-		o.Resize(fyne.NewSize(width, h))
-		o.Move(fyne.NewPos(x, y))
-		if o == l.target {
-			targetY = y
-		}
-		y += h + l.spacing
-	}
+	// First resize sets the width so wrapping content reflows; then size to the
+	// resulting height.
+	child.Resize(fyne.NewSize(w, child.MinSize().Height))
+	child.Resize(fyne.NewSize(w, child.MinSize().Height))
+	child.Move(fyne.NewPos(x, 0))
 
-	if l.scroll != nil && l.target != nil && targetY >= 0 && !l.scrolled {
-		offset := targetY - 32
-		if offset < 0 {
-			offset = 0
+	if l.scroll != nil && l.chapter != nil && l.chapter.highlightLine >= 0 && !l.scrolled {
+		y := l.chapter.highlightY() - 24
+		if y < 0 {
+			y = 0
 		}
-		l.scroll.Offset = fyne.NewPos(0, offset)
+		l.scroll.Offset = fyne.NewPos(0, y)
 		l.scrolled = true
 		l.scroll.Refresh()
 	}
 }
 
-func (l *readingLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	var width, height float32
-	visible := 0
-	for _, o := range objects {
-		if !o.Visible() {
-			continue
-		}
-		m := o.MinSize()
-		if m.Width > width {
-			width = m.Width
-		}
-		height += m.Height
-		visible++
+func (l *readingColumn) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) == 0 {
+		return fyne.Size{}
 	}
-	if visible > 1 {
-		height += float32(visible-1) * l.spacing
-	}
-	return fyne.NewSize(width, height)
+	return objects[0].MinSize()
 }
 
 func indexOf(values []int, target int) int {
