@@ -1,0 +1,7 @@
+Website = "https://github.com/willownoonan/holy-bible"
+
+[Details]
+Name = "Holy Bible"
+ID = "com.willow.holybibledesktop"
+Version = "1.0.0"
+Build = 2

@@ -1,4 +1,4 @@
-package main
+package holybible
 
 import (
 	"image/color"
@@ -152,7 +152,7 @@ func (t *bibleTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
 	case theme.SizeNameText: // body text (reading + UI); Entry forces one size
-		return 16
+		return 18
 	case theme.SizeNameInputBorder:
 		// The read-only reading text is an Entry; its blinking caret is drawn at
 		// this width. Zero removes the caret. Entry outlines are supplied by our
@@ -169,7 +169,7 @@ func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNameInnerPadding:
 		return 7
 	case theme.SizeNameLineSpacing:
-		return 6
+		return 8
 	}
 	return theme.DefaultTheme().Size(name)
 }

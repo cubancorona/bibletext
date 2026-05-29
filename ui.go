@@ -1,46 +1,17 @@
-package main
+package holybible
 
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
-// CreateMainUI assembles the whole window. The sidebar and the split are built
-// once and stay put; navigation swaps only the reading pane's content, so the
-// search and filter fields never lose focus. Toggling the theme rebuilds the
-// tree with the new palette.
-func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.CanvasObject {
-	state.app = app
-	state.window = window
-	if state.theme == nil {
-		state.theme = &bibleTheme{fonts: loadBookFonts()}
-	}
-	app.Settings().SetTheme(state.theme)
-	pal := state.pal()
-
-	sidebar := buildSidebar(state)
-
-	readingHost := container.NewStack(buildReadingPane(state))
-	state.showReading = func() {
-		readingHost.Objects = []fyne.CanvasObject{buildReadingPane(state)}
-		readingHost.Refresh()
-	}
-
-	split := container.NewHSplit(sidebar, readingHost)
-	split.SetOffset(0.2)
-
-	body := container.NewBorder(buildHeader(state), nil, nil, nil, split)
-
-	base := canvas.NewRectangle(pal.Background)
-	root := container.NewStack(base, body)
-
-	installShortcuts(state)
-	return root
-}
+// Shared UI helpers used by both the desktop and mobile entry points. The
+// platform-specific layout (HSplit + keyboard shortcuts vs. bottom tabs + drawer
+// with touch-sized rows) lives in ui_desktop.go and ui_mobile.go, selected by
+// build tag — `CreateMainUI` is defined in exactly one of them per build.
 
 func buildHeader(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
@@ -73,6 +44,8 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	return container.NewStack(bg, content)
 }
 
+// toggleTheme flips light/dark and rebuilds the window content so every
+// palette-coloured canvas object is recreated against the new colours.
 func toggleTheme(state *AppState) {
 	if state.theme == nil || state.app == nil || state.window == nil {
 		return
@@ -80,38 +53,4 @@ func toggleTheme(state *AppState) {
 	state.theme.dark = !state.theme.dark
 	state.app.Settings().SetTheme(state.theme)
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
-}
-
-// installShortcuts wires keyboard shortcuts on the window canvas. The canvas
-// stores shortcuts in a map keyed by name, so re-installing after a theme
-// rebuild is harmless. Handlers read state hooks lazily so they always target
-// the current widgets.
-func installShortcuts(state *AppState) {
-	if state.window == nil {
-		return
-	}
-	cnv := state.window.Canvas()
-
-	cnv.AddShortcut(&desktop.CustomShortcut{
-		KeyName:  fyne.KeyF,
-		Modifier: fyne.KeyModifierShortcutDefault,
-	}, func(fyne.Shortcut) {
-		if state.focusSearch != nil {
-			state.focusSearch()
-		}
-	})
-
-	cnv.SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		if ev.Name != fyne.KeyEscape {
-			return
-		}
-		if !state.IsSearching && !state.HasHighlightedVerse {
-			return
-		}
-		if state.setSearchText != nil {
-			state.setSearchText("")
-		}
-		clearSearchState(state)
-		state.refresh()
-	})
 }

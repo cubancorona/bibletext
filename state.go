@@ -1,4 +1,4 @@
-package main
+package holybible
 
 import (
 	"sort"
@@ -45,6 +45,17 @@ type AppState struct {
 	syncSidebar   func()       // refresh the sidebar book list selection
 	focusSearch   func()       // move keyboard focus into the search field
 	setSearchText func(string) // set the search field's text (e.g. to clear it)
+	// surfaceReading is called when a result is opened from search (or another
+	// off-screen view) so the platform can bring the reading pane back into
+	// focus. No-op on desktop (the reading pane is always visible alongside);
+	// on mobile it switches the bottom tab bar to Read.
+	surfaceReading func()
+	// hideReadingOverlay / showReadingOverlay let shared code (e.g. the chapter
+	// picker popup) temporarily hide the iOS native reading overlay (a
+	// UITextView that floats above the Fyne canvas, so it would otherwise cover
+	// any popup). Both are nil/no-op on desktop and Android.
+	hideReadingOverlay func()
+	showReadingOverlay func()
 }
 
 // ChapterVisit is one entry in the reading history.
@@ -300,6 +311,9 @@ func openSearchResult(state *AppState, verse Verse) {
 	state.IsSearching = false
 	state.CanReturnToSearchResults = true
 	state.refresh()
+	if state.surfaceReading != nil {
+		state.surfaceReading()
+	}
 }
 
 func clearHighlightedVerse(state *AppState) {

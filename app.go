@@ -1,4 +1,4 @@
-package main
+package holybible
 
 import (
 	"fmt"
@@ -9,11 +9,13 @@ import (
 	"fyne.io/fyne/v2/app"
 )
 
-// main loads the Bible (from cache, or the API on first run) and opens the
-// reading window. Detailed progress is printed only on a first-run download.
-func main() {
-	myApp := app.NewWithID("holy-bible")
-
+// LoadAndPrepareState loads the Bible (from cache, or the API on first run) and
+// returns a fully-initialised AppState ready to hand to CreateMainUI. A first-run
+// download is announced on stdout; any failure is fatal and exits the process.
+//
+// This is exported so each cmd/* entry point can do the same load before opening
+// its platform-specific window (a desktop window vs. a Fyne mobile window).
+func LoadAndPrepareState() *AppState {
 	cachePath := defaultCachePath()
 	bibleData, source, err := loadBibleData(FetchBibleFromAPI, cachePath, currentUTCTime)
 	if err != nil {
@@ -34,6 +36,15 @@ func main() {
 		state.CurrentChapter = chapters[0]
 	}
 	addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
+	return state
+}
+
+// Run is the desktop entry: loads the data, opens a sized window, and starts the
+// event loop. Mobile entries (Fyne iOS) use the same data path but configure the
+// window differently — see cmd/mobile/main.go.
+func Run() {
+	myApp := app.NewWithID("holy-bible")
+	state := LoadAndPrepareState()
 
 	window := myApp.NewWindow("Holy Bible — World English Bible")
 	window.Resize(fyne.NewSize(1280, 860))

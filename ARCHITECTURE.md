@@ -26,19 +26,33 @@ every run:  cache ──load──▶ BibleData ──PrepareSearchIndex──�
 
 ## Module map
 
+The whole shared codebase is one Go package, `holybible`. Two thin entry points
+under `cmd/` consume it — one for desktop, one for the Fyne mobile target.
+
 | File | Responsibility |
 | --- | --- |
-| `main.go` | Load data, create the window, run the event loop |
+| `cmd/desktop/main.go` | Desktop entry — opens a sized window, calls `holybible.Run()` |
+| `cmd/mobile/main.go` | Mobile entry — built via `fyne package -os ios -src ./cmd/mobile`; the OS controls the window size |
+| `app.go` | `LoadAndPrepareState()` + `Run()`: data load, state bootstrap, desktop window glue |
 | `bible.go` | Data model, search ranking, reference parsing, book aliases |
 | `cache.go` | Versioned, atomic, validated on-disk cache |
 | `fetch_bible_data.go` | API client with retry / backoff / rate-limit handling |
+| `annotation.go` | Verse-anchored annotation store (foundation for notes/highlights) |
 | `theme.go` | `palette`, light/dark `bibleTheme`, custom colour names, `surface` helper |
+| `font.go` | OS-serif loading (Georgia / DejaVuSerif); returns `nil` on iOS — theme falls back to Fyne's bundled font |
 | `state.go` | `AppState`, navigation/search/history logic (no widget code) |
-| `ui.go` | Top-level layout, header, theme toggle, keyboard shortcuts |
-| `sidebar.go` | Persistent sidebar: search, book filter, book list |
+| `ui.go` | Shared header + theme toggle (used by both desktop and mobile layouts) |
+| `ui_desktop.go` | `//go:build !ios && !android` — `CreateMainUI` (HSplit + sidebar) and keyboard shortcuts |
+| `ui_mobile.go` | `//go:build ios || android` — `CreateMainUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
+| `sidebar.go` | Desktop sidebar: search, book filter, book list |
 | `reading.go` | Reading view: flowing column, verse highlight, chapter picker, copy |
 | `search.go` | Search results view + match-term highlighting |
 | `history.go` | Slim recent-history bar |
+
+`CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
+build — selected by Go build tag — so each platform gets the right layout
+without runtime branching, and pulls in only the drivers it actually uses
+(`driver/desktop` for shortcuts on desktop; nothing extra on mobile).
 
 ## UI architecture
 
@@ -103,11 +117,22 @@ in the test harness, not the app.
 
 ## Cross-platform builds
 
+Desktop targets compile from `./cmd/desktop` (Fyne pulls in OpenGL/GLFW):
+
 ```bash
-GOOS=linux   GOARCH=amd64 go build -o holy-bible-linux .
-GOOS=windows GOARCH=amd64 go build -o holy-bible.exe .
-GOOS=darwin  GOARCH=arm64 go build -o holy-bible-macos .
+GOOS=linux   GOARCH=amd64 go build -o holy-bible-linux ./cmd/desktop
+GOOS=windows GOARCH=amd64 go build -o holy-bible.exe   ./cmd/desktop
+GOOS=darwin  GOARCH=arm64 go build -o holy-bible-macos ./cmd/desktop
 ```
 
-Fyne needs a C toolchain and the platform's graphics/dev libraries — see the
-[Fyne docs](https://docs.fyne.io/started/).
+Mobile targets are packaged by the `fyne` CLI from `./cmd/mobile`. This sets up
+the right CGO toolchain (iOS SDK or Android NDK) and assembles a `.app`/`.ipa`
+or `.apk`/`.aab` together with `FyneApp.toml` and `Icon.png`:
+
+```bash
+fyne package -os ios       -appID com.willow.holybible -src ./cmd/mobile
+fyne package -os android   -appID com.willow.holybible -src ./cmd/mobile
+```
+
+Fyne needs a C toolchain and the platform's graphics/dev libraries on every
+target — see the [Fyne docs](https://docs.fyne.io/started/).

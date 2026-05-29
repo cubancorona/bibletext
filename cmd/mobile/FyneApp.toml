@@ -1,0 +1,8 @@
+Website = "https://github.com/willownoonan/holy-bible"
+
+[Details]
+Icon = "Icon.png"
+Name = "Holy Bible"
+ID = "com.willow.holybible"
+Version = "1.0.0"
+Build = 16
