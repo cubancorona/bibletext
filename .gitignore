@@ -1,5 +1,13 @@
-# Compiled application binary
+# Compiled application binaries
 /holy-bible
+/cmd/desktop/desktop
+/cmd/mobile/mobile
+
+# Fyne mobile packaging output (.app, .ipa, .apk, .aab and bundle dirs)
+*.app
+*.ipa
+*.apk
+*.aab
 
 # Go test / build / coverage artifacts
 *.test

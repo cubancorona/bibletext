@@ -1,4 +1,4 @@
-package main
+package holybible
 
 import (
 	"fmt"
@@ -510,6 +510,20 @@ func showChapterPicker(anchor fyne.CanvasObject, state *AppState) {
 	pal := state.pal()
 
 	var popup *widget.PopUp
+
+	// On iOS the reading view is a native UITextView overlay that floats above
+	// the Fyne canvas, so it would render on top of (and steal touches from)
+	// this popup. Hide it while the picker is open; restore it on dismiss.
+	// No-op on desktop/Android.
+	if state.hideReadingOverlay != nil {
+		state.hideReadingOverlay()
+	}
+	restoreOverlay := func() {
+		if state.showReadingOverlay != nil {
+			state.showReadingOverlay()
+		}
+	}
+
 	columns := chapterPickerColumns(len(chapterNumbers))
 	grid := container.NewGridWithColumns(columns)
 	for _, chapter := range chapterNumbers {
@@ -522,6 +536,7 @@ func showChapterPicker(anchor fyne.CanvasObject, state *AppState) {
 				popup.Hide()
 			}
 			state.refresh()
+			restoreOverlay()
 		})
 		if ch == state.CurrentChapter {
 			btn.Importance = widget.HighImportance
@@ -541,6 +556,7 @@ func showChapterPicker(anchor fyne.CanvasObject, state *AppState) {
 		if popup != nil {
 			popup.Hide()
 		}
+		restoreOverlay()
 	})
 	closeBtn.Importance = widget.LowImportance
 

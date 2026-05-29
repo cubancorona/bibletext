@@ -1,0 +1,8 @@
+Website = "https://github.com/cubancorona/holy-bible"
+
+[Details]
+Icon = "Icon.png"
+Name = "Holy Bible"
+ID = "io.github.cubancorona.holybible"
+Version = "1.0.0"
+Build = 16
