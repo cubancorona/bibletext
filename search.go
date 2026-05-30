@@ -17,7 +17,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	trimmed := strings.TrimSpace(state.ActiveSearchQuery)
 
 	title := canvas.NewText(fmt.Sprintf("Results for %q", trimmed), pal.Text)
-	title.TextSize = 24
+	title.TextSize = headingTextSize
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	var sub string
@@ -32,7 +32,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 		sub = fmt.Sprintf("%d matches", len(state.SearchResults))
 	}
 	subLabel := canvas.NewText(sub, pal.TextMuted)
-	subLabel.TextSize = 13
+	subLabel.TextSize = subheadingTextSize
 
 	terms := strings.Fields(strings.ToLower(trimmed))
 

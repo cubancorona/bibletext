@@ -9,6 +9,13 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
+// Shared type scale, used by both the desktop and mobile layouts so headings
+// and sub-labels stay the same size across platforms.
+const (
+	headingTextSize    = 26 // primary page heading: "Book N", "Results for …"
+	subheadingTextSize = 13 // chapter line ("Chapter N of M"), search sub-label
+)
+
 // Custom theme color names. ThemeColorName is just a string, so we can register
 // our own and resolve them through bibleTheme.Color. RichText segments reference
 // these names to stay in sync with light/dark mode automatically.

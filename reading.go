@@ -15,43 +15,27 @@ import (
 )
 
 // buildReadingPane returns the right-hand content: search results when a search
-// is active, otherwise the chapter reading view.
+// is active, otherwise the chapter reading view. On macOS the reading text is a
+// native NSTextView overlay; setReadingOverlayVisible hides it while the search
+// results are shown (no-op on other platforms).
 func buildReadingPane(state *AppState) fyne.CanvasObject {
 	if state.IsSearching {
+		setReadingOverlayVisible(false)
 		return buildSearchResultsView(state)
 	}
+	setReadingOverlayVisible(true)
 	return buildReadingView(state)
 }
 
 func buildReadingView(state *AppState) fyne.CanvasObject {
-	pal := state.pal()
-
 	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
 	normalizeCurrentChapter(state, chapterNumbers)
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 
-	col := &readingColumn{maxWidth: 760}
-	var child fyne.CanvasObject
-	var chapter *chapterText
-	if len(verses) == 0 {
-		msg := widget.NewLabel("No verses are available for this chapter yet.")
-		msg.Wrapping = fyne.TextWrapWord
-		child = msg
-	} else {
-		// One widget for the whole chapter, so selection and copy span the entire
-		// passage, not just a single paragraph.
-		chapter = newChapterText(state, verses)
-		col.chapter = chapter
-		child = chapter
-	}
-
-	scroll := container.NewVScroll(container.New(col, child))
-	col.scroll = scroll
-	if chapter != nil {
-		chapter.parentScroll = scroll
-	}
-
-	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
+	// The scrollable text area is platform-specific: a Fyne chapterText (with
+	// drag-selection) on Linux/Windows, and a native NSTextView overlay (with
+	// the system selection menu) on macOS — see reading_fyne.go / reading_macos.go.
+	paper := readingScrollArea(state, verses, state.pal())
 
 	top := container.NewVBox()
 	if bar := buildHistoryBar(state); bar != nil {
@@ -82,7 +66,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 
 	// Heading reflects the chapter: "Genesis 1".
 	title := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text)
-	title.TextSize = 28
+	title.TextSize = headingTextSize
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	// Small copy icon tucked beside the heading — close to the text it copies.
@@ -95,10 +79,10 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	if total > 1 {
 		chapterLine = newChapterPickerAnchor(state,
 			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
-			pal.TextMuted, 13)
+			pal.TextMuted, subheadingTextSize)
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
-		lbl.TextSize = 13
+		lbl.TextSize = subheadingTextSize
 		chapterLine = container.NewHBox(lbl)
 	}
 
@@ -239,6 +223,94 @@ func rebuildWindow(state *AppState) {
 	}
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)
+}
+
+// --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------
+//
+// buildChapterHTML emits an HTML document that the AppKit/UIKit HTML importer
+// turns into a richly-styled attributed string for the native text overlay
+// (shared by the iOS and macOS reading views). All colours are inlined so
+// light/dark mode tracks the active palette on every rebuild.
+//
+// The font stack leads with Georgia — a warm, screen-optimised book serif that
+// is present on both macOS and iOS and matches the desktop chrome — with Iowan
+// Old Style and Times as fallbacks. Generous line-height + paragraph spacing
+// give an unhurried, page-of-a-book feel; kerning + ligatures + old-style
+// numerals add a faint warmth.
+func buildChapterHTML(state *AppState, verses []Verse) string {
+	pal := state.pal()
+	textHex := nrgbaToHex(pal.Text)
+	numHex := nrgbaToHex(pal.VerseNumber)
+	highlightTextHex := nrgbaToHex(pal.HighlightText)
+	highlightBgHex := nrgbaToHex(pal.Highlight)
+
+	var b strings.Builder
+	b.WriteString("<html><head><style>")
+	fmt.Fprintf(&b, `body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 19px;
+		color: %s;
+		line-height: 1.72;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}`, textHex)
+	fmt.Fprintf(&b, `p {
+		margin: 0 0 24px 0;
+		text-align: left;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}`)
+	fmt.Fprintf(&b, `sup.v {
+		color: %s;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}`, numHex)
+	fmt.Fprintf(&b, `.hl {
+		color: %s;
+		background-color: %s;
+		font-weight: 600;
+		padding: 0 2px;
+		border-radius: 2px;
+	}`, highlightTextHex, highlightBgHex)
+	b.WriteString("</style></head><body>")
+
+	for _, para := range groupVersesIntoParagraphs(verses) {
+		b.WriteString("<p>")
+		for i, v := range para {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
+			body := htmlEscape(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
+			if isVerseHighlighted(state, v) {
+				fmt.Fprintf(&b, `<span class="hl">%s</span>`, body)
+			} else {
+				b.WriteString(body)
+			}
+		}
+		b.WriteString("</p>")
+	}
+	b.WriteString("</body></html>")
+	return b.String()
+}
+
+// nrgbaToHex formats an image/color.NRGBA as a #RRGGBB string for CSS.
+func nrgbaToHex(c color.NRGBA) string {
+	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
+}
+
+// htmlEscape escapes the characters that would break out of a content span.
+func htmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	return s
 }
 
 func backToResultsBar(state *AppState) fyne.CanvasObject {
