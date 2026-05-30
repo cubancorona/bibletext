@@ -289,11 +289,13 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 // chapterHeaderMobile is a compact, low-chrome chapter toolbar tuned for the
 // mobile reading view. Mirrors the "Holy Bible · World English Bible …"
-// pattern of the top header: a larger book heading sits on top of a smaller,
-// muted chapter line (tappable to open the picker).
+// pattern of the top header: a larger book heading (with a small inline copy
+// icon) sits on top of a smaller, muted chapter line (tappable to open the
+// picker). Chapter navigation and the full-screen toggle sit on the right,
+// with full-screen as the rightmost (last) control.
 //
 //	┌─────────────────────────────────────────────────────┐
-//	│ John                          ⤢   ⧉   ←   →         │
+//	│ John ⧉                            ←   →   ⤢         │
 //	│ Chapter 1 of 21 ▾                                   │
 //	└─────────────────────────────────────────────────────┘
 func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObject {
@@ -303,6 +305,13 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	title := canvas.NewText(state.CurrentBook, pal.Text)
 	title.TextSize = 24
 	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	// Small copy icon tucked right after the book name — closer to the text
+	// it copies, and visually lighter than the chapter-nav arrows.
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 15, 30, func() {
+		copyChapter(state)
+	})
+	titleRow := container.NewHBox(title, hgap(4), copyBtn)
 
 	var chapterLine fyne.CanvasObject
 	if total > 1 {
@@ -319,15 +328,6 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	}
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
-
-	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
-		state.IsFullScreen = true
-		rebuildWindow(state)
-	})
-	fullScreenBtn.Importance = widget.LowImportance
-
-	copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() { copyChapter(state) })
-	copyBtn.Importance = widget.LowImportance
 
 	prev := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
 		if moveChapter(state, -1) {
@@ -349,8 +349,15 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		next.Disable()
 	}
 
-	left := container.NewVBox(title, chapterLine)
-	nav := container.NewHBox(fullScreenBtn, copyBtn, prev, next)
+	// Full-screen is the rightmost control.
+	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
+		state.IsFullScreen = true
+		rebuildWindow(state)
+	})
+	fullScreenBtn.Importance = widget.LowImportance
+
+	left := container.NewVBox(titleRow, chapterLine)
+	nav := container.NewHBox(prev, next, fullScreenBtn)
 	right := container.NewVBox(layout.NewSpacer(), nav, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, left, right, nil)
 
@@ -358,6 +365,43 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	rule.StrokeWidth = 1
 	return container.NewVBox(row, rule)
 }
+
+// iconTapButton is a small, low-chrome tappable icon — lighter than
+// widget.Button (no background, no fixed padding). The icon is rendered at
+// iconSize, centred inside a box of boxH height so it can line up vertically
+// with adjacent text of a different size.
+type iconTapButton struct {
+	widget.BaseWidget
+	state    *AppState
+	icon     fyne.Resource
+	iconSize float32
+	boxH     float32
+	onTapped func()
+}
+
+func newIconTapButton(state *AppState, icon fyne.Resource, iconSize, boxH float32, onTapped func()) *iconTapButton {
+	b := &iconTapButton{state: state, icon: icon, iconSize: iconSize, boxH: boxH, onTapped: onTapped}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *iconTapButton) Tapped(*fyne.PointEvent) {
+	if b.onTapped != nil {
+		b.onTapped()
+	}
+}
+
+func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
+	img := canvas.NewImageFromResource(theme.NewColoredResource(b.icon, colorNameMuted))
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(b.iconSize, b.iconSize))
+	// GridWrap pins the cell to a fixed size; NewCenter vertically centres the
+	// smaller icon within that box so it aligns with neighbouring text.
+	box := container.NewGridWrap(fyne.NewSize(b.iconSize+8, b.boxH), container.NewCenter(img))
+	return widget.NewSimpleRenderer(box)
+}
+
+var _ fyne.Tappable = (*iconTapButton)(nil)
 
 // chapterPickerAnchor is a small tappable bit of muted text (e.g.
 // "Chapter 1 of 21 ▾") that opens the chapter picker on tap. It avoids
