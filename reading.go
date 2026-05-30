@@ -75,38 +75,39 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	})
 	titleRow := container.NewHBox(title, hgap(6), copyBtn)
 
+	const navBoxH = 24
+
 	var chapterLine fyne.CanvasObject
 	if total > 1 {
 		chapterLine = newChapterPickerAnchor(state,
 			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
-			pal.TextMuted, subheadingTextSize)
+			pal.TextMuted, subheadingTextSize, navBoxH)
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
 		lbl.TextSize = subheadingTextSize
-		chapterLine = container.NewHBox(lbl)
+		chapterLine = container.NewCenter(lbl)
 	}
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
 
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, 24, func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, navBoxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
 
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, 24, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, navBoxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
 	})
 	next.disabled = idx < 0 || idx >= total-1
 
-	chapterRow := container.NewHBox(
-		container.NewVBox(layout.NewSpacer(), chapterLine, layout.NewSpacer()),
-		hgap(12),
-		prev, next,
-	)
+	// The chapter line and arrows sit directly in the HBox (no spacer-VBox
+	// wrapper): each control carries its own boxH so they share a baseline, and
+	// the picker anchor needs a first-class hit box rather than a nested one.
+	chapterRow := container.NewHBox(chapterLine, hgap(12), prev, next)
 
 	// Focus toggle on the right: enter distraction-free reading (hide the
 	// sidebar + app header) or, when already in it, restore the full layout.
@@ -188,11 +189,12 @@ type chapterPickerAnchor struct {
 	text  string
 	tint  color.NRGBA
 	size  float32
+	boxH  float32
 	lbl   *canvas.Text
 }
 
-func newChapterPickerAnchor(state *AppState, text string, tint color.NRGBA, size float32) *chapterPickerAnchor {
-	a := &chapterPickerAnchor{state: state, text: text, tint: tint, size: size}
+func newChapterPickerAnchor(state *AppState, text string, tint color.NRGBA, size, boxH float32) *chapterPickerAnchor {
+	a := &chapterPickerAnchor{state: state, text: text, tint: tint, size: size, boxH: boxH}
 	a.ExtendBaseWidget(a)
 	return a
 }
@@ -201,7 +203,14 @@ func (a *chapterPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
 	a.lbl = canvas.NewText(a.text, a.tint)
 	a.lbl.TextSize = a.size
 	a.lbl.TextStyle = fyne.TextStyle{Bold: true}
-	return widget.NewSimpleRenderer(a.lbl)
+	// Mirror iconTapButton: pin the text inside a fixed-size GridWrap cell so the
+	// widget has a solid, full-height hit rectangle. A bare canvas.Text renderer
+	// is not reliably matched by Fyne's mobile-driver tap hit-test, which left the
+	// chapter picker unresponsive on iOS; the explicit box fixes it and also
+	// vertically centres the small text against the taller nav arrows.
+	w := fyne.MeasureText(a.text, a.size, a.lbl.TextStyle).Width
+	box := container.NewGridWrap(fyne.NewSize(w, a.boxH), container.NewCenter(a.lbl))
+	return widget.NewSimpleRenderer(box)
 }
 
 func (a *chapterPickerAnchor) Tapped(*fyne.PointEvent) {
