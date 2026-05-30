@@ -223,7 +223,6 @@ import "C"
 import (
 	"fmt"
 	"image/color"
-	"strings"
 	"time"
 	"unsafe"
 
@@ -304,7 +303,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 
 	// Heading reflects the chapter: "John 1".
 	title := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text)
-	title.TextSize = 24
+	title.TextSize = headingTextSize
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	// Small copy icon tucked right after the book name — closer to the text
@@ -318,10 +317,10 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	if total > 1 {
 		chapterLine = newChapterPickerAnchor(state,
 			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
-			pal.TextMuted, 12)
+			pal.TextMuted, subheadingTextSize)
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
-		lbl.TextSize = 12
+		lbl.TextSize = subheadingTextSize
 		chapterLine = container.NewHBox(lbl)
 	}
 
@@ -492,93 +491,5 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	C.holyBibleTVSetHTML(c)
 }
 
-// buildChapterHTML emits an HTML document that NSAttributedString's HTML
-// importer turns into a richly-styled attributed string. We embed all colors
-// inline so light/dark mode tracks the active palette without a re-parse.
-//
-// Typography choices, in order of preference:
-//   - "New York"  — Apple's modern serif, designed for digital reading. Ships
-//     with iOS 13+; warm, readable, elegant.
-//   - "Iowan Old Style" — a newspaper face that's available on iOS and is one
-//     of the best body serifs for screens.
-//   - Georgia, "Times New Roman" — universal fallbacks.
-//
-// We pair the larger size with generous line-height for an unhurried, almost
-// page-of-a-book feel; ligatures + kerning + slight letter-spacing give a
-// faint warmth without becoming ornamental.
-func buildChapterHTML(state *AppState, verses []Verse) string {
-	pal := state.pal()
-	textHex := nrgbaToHex(pal.Text)
-	numHex := nrgbaToHex(pal.VerseNumber)
-	highlightTextHex := nrgbaToHex(pal.HighlightText)
-	highlightBgHex := nrgbaToHex(pal.Highlight)
-
-	var b strings.Builder
-	b.WriteString("<html><head><style>")
-	fmt.Fprintf(&b, `body {
-		font-family: "New York", "Iowan Old Style", Georgia, "Times New Roman", serif;
-		font-size: 19px;
-		color: %s;
-		line-height: 1.72;
-		letter-spacing: 0.004em;
-		margin: 0; padding: 0;
-		-webkit-text-size-adjust: 100%%;
-		-webkit-font-smoothing: antialiased;
-		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
-	}`, textHex)
-	fmt.Fprintf(&b, `p {
-		margin: 0 0 24px 0;
-		text-align: left;
-		hyphens: auto;
-		-webkit-hyphens: auto;
-	}`)
-	fmt.Fprintf(&b, `sup.v {
-		color: %s;
-		font-weight: 600;
-		font-size: 0.66em;
-		letter-spacing: 0;
-		margin-right: 2px;
-	}`, numHex)
-	fmt.Fprintf(&b, `.hl {
-		color: %s;
-		background-color: %s;
-		font-weight: 600;
-		padding: 0 2px;
-		border-radius: 2px;
-	}`, highlightTextHex, highlightBgHex)
-	b.WriteString("</style></head><body>")
-
-	for _, para := range groupVersesIntoParagraphs(verses) {
-		b.WriteString("<p>")
-		for i, v := range para {
-			if i > 0 {
-				b.WriteByte(' ')
-			}
-			fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
-			body := htmlEscape(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
-			if isVerseHighlighted(state, v) {
-				fmt.Fprintf(&b, `<span class="hl">%s</span>`, body)
-			} else {
-				b.WriteString(body)
-			}
-		}
-		b.WriteString("</p>")
-	}
-	b.WriteString("</body></html>")
-	return b.String()
-}
-
-// nrgbaToHex formats an image/color.NRGBA as a #RRGGBB string suitable for CSS.
-func nrgbaToHex(c color.NRGBA) string {
-	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
-}
-
-// htmlEscape inlines just the four characters that would break out of a
-// content span; we don't expect <, >, & in verse text but be safe.
-func htmlEscape(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	return s
-}
+// buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS
+// NSTextView overlay shares the exact same chapter HTML as the iOS UITextView.
