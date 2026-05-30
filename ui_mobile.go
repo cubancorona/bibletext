@@ -26,6 +26,15 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	app.Settings().SetTheme(state.theme)
 	pal := state.pal()
 
+	// Distraction-free reading mode: the entire window becomes the reading
+	// pane plus a small exit affordance — no top header, no bottom tabs.
+	// On iOS the native UITextView overlay therefore fills nearly the whole
+	// screen.
+	if state.IsFullScreen {
+		base := canvas.NewRectangle(pal.Background)
+		return container.NewStack(base, buildReadingViewMobile(state))
+	}
+
 	// Mobile uses a different reading pane (RichText, not the desktop Entry-based
 	// chapterText) — see reading_mobile.go for why.
 	mobileReading := func() fyne.CanvasObject {

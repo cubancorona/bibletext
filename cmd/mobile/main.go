@@ -24,5 +24,6 @@ func main() {
 	w := myApp.NewWindow("Holy Bible")
 	// On iOS / Android the OS controls the window size; Resize is a no-op there.
 	w.SetContent(holybible.CreateMainUI(myApp, state, w))
+	holybible.ObserveSystemThemeChanges(myApp, state)
 	w.ShowAndRun()
 }

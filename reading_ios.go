@@ -60,6 +60,10 @@ static void holyBibleEnsureTV(void) {
             tv.alwaysBounceVertical = YES;
             tv.backgroundColor = UIColor.clearColor;
             tv.textContainerInset = UIEdgeInsetsMake(14, 16, 14, 16);
+            // Stop iOS from auto-adjusting the content inset for the safe
+            // area — we already position the textView below it via the Fyne
+            // layout, and the auto-adjust would push verse 1 off the top.
+            tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
             // Start visible — the Read tab is selected at app launch and
             // AppTabs.OnSelected doesn't fire for the initial selection.
             tv.hidden = NO;
@@ -104,8 +108,70 @@ void holyBibleTVSetHTML(const char *html) {
         }
         NSLog(@"holybible: HTML set (%lu bytes input → %lu attr chars)",
               (unsigned long)len, (unsigned long)as.length);
+        // NSAttributedString's HTML importer routinely injects a non-zero
+        // paragraphSpacingBefore (and sometimes a minimumLineHeight) on the
+        // FIRST paragraph that no CSS can override — leaving an ugly
+        // ~100pt empty band before verse 1. Walk the string and zero those
+        // paragraph-style fields so the chapter actually starts where the
+        // UITextView frame top is.
+        NSMutableAttributedString *mas = [as mutableCopy];
+        [mas enumerateAttribute:NSParagraphStyleAttributeName
+                        inRange:NSMakeRange(0, mas.length)
+                        options:0
+                     usingBlock:^(id v, NSRange r, BOOL *stop) {
+            if (v == nil) return;
+            NSMutableParagraphStyle *ps = [(NSParagraphStyle*)v mutableCopy];
+            ps.paragraphSpacingBefore = 0;
+            [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
+        }];
+        as = mas;
         gReadingTV.attributedText = as;
+        // Aggressive scroll-to-top: UITextView may relayout after attributedText
+        // is set, the Fyne side pushes a new frame just after, and either can
+        // shift the offset. Reset on this tick, the next runloop tick, and a
+        // ~200ms tick to outlast the slowest re-layout we've seen in practice.
+        [gReadingTV layoutIfNeeded];
         gReadingTV.contentOffset = CGPointZero;
+        NSLog(@"holybible: post-HTML offset=(%.1f,%.1f) insets=(%.1f,%.1f,%.1f,%.1f) adj=(%.1f,%.1f,%.1f,%.1f) tcInset=(%.1f,%.1f,%.1f,%.1f) contentSize=%.1fx%.1f",
+              gReadingTV.contentOffset.x, gReadingTV.contentOffset.y,
+              gReadingTV.contentInset.top, gReadingTV.contentInset.left,
+              gReadingTV.contentInset.bottom, gReadingTV.contentInset.right,
+              gReadingTV.adjustedContentInset.top, gReadingTV.adjustedContentInset.left,
+              gReadingTV.adjustedContentInset.bottom, gReadingTV.adjustedContentInset.right,
+              gReadingTV.textContainerInset.top, gReadingTV.textContainerInset.left,
+              gReadingTV.textContainerInset.bottom, gReadingTV.textContainerInset.right,
+              gReadingTV.contentSize.width, gReadingTV.contentSize.height);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (gReadingTV != nil) {
+                gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
+            }
+        });
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (gReadingTV != nil) {
+                gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
+                NSLog(@"holybible: final offset=(%.1f,%.1f) adj=%.1f",
+                      gReadingTV.contentOffset.x, gReadingTV.contentOffset.y,
+                      gReadingTV.adjustedContentInset.top);
+            }
+        });
+    });
+}
+
+// holyBibleTVScrollToFraction scrolls the text view so the given normalised
+// position (0.0 = top, 1.0 = bottom) is at the visible top. Used to jump to a
+// highlighted verse from search results.
+void holyBibleTVScrollToFraction(float fraction) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gReadingTV == nil) return;
+        CGFloat contentH = gReadingTV.contentSize.height;
+        CGFloat viewportH = gReadingTV.bounds.size.height;
+        if (contentH <= viewportH) return;
+        CGFloat maxY = contentH - viewportH;
+        CGFloat y = fraction * contentH;
+        if (y > maxY) y = maxY;
+        if (y < 0)    y = 0;
+        gReadingTV.contentOffset = CGPointMake(0, y);
     });
 }
 
@@ -123,9 +189,30 @@ void holyBibleTVSetFrame(float x, float y, float w, float h) {
             safe = gReadingTV.superview.safeAreaInsets;
         }
         CGRect r = CGRectMake(x + safe.left, y + safe.top, w, h);
-        NSLog(@"holybible: setFrame raw(%.1f,%.1f) safe.top=%.1f → (%.1f,%.1f) %.1fx%.1f hidden=%d",
-              x, y, safe.top, x + safe.left, y + safe.top, w, h, gReadingTV.hidden);
+        BOOL changed = !CGRectEqualToRect(r, gReadingTV.frame);
         gReadingTV.frame = r;
+        // When the frame changes, the UITextView re-lays out the text. If the
+        // previous chapter happened to scroll mid-paragraph, the offset can
+        // carry over and land in the middle of the new chapter. Pin to the
+        // top on every frame change for predictability — we use both APIs:
+        // contentOffset sets the raw scroll; scrollRangeToVisible asks UIKit
+        // to make the first character of the text visible, which it honours
+        // even when HTML→NSAttributedString conversion has inserted phantom
+        // paragraph-spacing before the first <p>.
+        if (changed) {
+            gReadingTV.contentOffset = CGPointZero;
+            if (gReadingTV.attributedText.length > 0) {
+                [gReadingTV scrollRangeToVisible:NSMakeRange(0, 1)];
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (gReadingTV != nil) {
+                    gReadingTV.contentOffset = CGPointZero;
+                    if (gReadingTV.attributedText.length > 0) {
+                        [gReadingTV scrollRangeToVisible:NSMakeRange(0, 1)];
+                    }
+                }
+            });
+        }
     });
 }
 
@@ -157,6 +244,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -180,6 +269,25 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 	host := newNativeReadingHost(state, verses)
 
+	paper := canvas.NewRectangle(pal.Surface)
+	paper.StrokeColor = pal.Border
+	paper.StrokeWidth = 1
+	paper.CornerRadius = 8
+
+	// Full-screen reading: no chrome at all except a small exit affordance.
+	// Tabs and the top "Holy Bible" header are skipped in ui_mobile.go for this
+	// case, so the UITextView fills almost the whole device screen.
+	if state.IsFullScreen {
+		exit := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
+			state.IsFullScreen = false
+			rebuildWindow(state)
+		})
+		exit.Importance = widget.LowImportance
+		exitRow := container.NewBorder(nil, nil, nil, exit, nil)
+		body := container.NewBorder(exitRow, nil, nil, nil, container.NewStack(paper, host))
+		return container.NewPadded(body)
+	}
+
 	top := container.NewVBox()
 	if bar := buildHistoryBar(state); bar != nil {
 		top.Add(bar)
@@ -187,18 +295,113 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	if state.CanReturnToSearchResults {
 		top.Add(backToResultsBar(state))
 	}
-	top.Add(chapterHeader(state, chapterNumbers))
-
-	// Draw a "paper" rectangle behind the UITextView so the reading area still
-	// has the parchment look; the UITextView's backgroundColor is clear, so
-	// this shows through.
-	paper := canvas.NewRectangle(pal.Surface)
-	paper.StrokeColor = pal.Border
-	paper.StrokeWidth = 1
-	paper.CornerRadius = 8
+	top.Add(chapterHeaderMobile(state, chapterNumbers))
 
 	body := container.NewBorder(top, nil, nil, nil, container.NewStack(paper, host))
 	return container.NewPadded(body)
+}
+
+// chapterHeaderMobile is a compact, low-chrome chapter toolbar tuned for the
+// mobile reading view. Compared to the desktop chapterHeader it uses a smaller
+// serif for the book title, a flat low-importance picker button for the
+// chapter line, and tighter icon-only nav buttons — so the chrome stays out of
+// the way of the verse text and the native iOS selection menu.
+//
+// Layout (single row):
+//
+//	[ John                 ]   [ ⤢ ] [ ⧉ ] [ ← ] [ → ]
+//	[ ▾ Chapter 1 of 21   ]
+//
+// The first action is the full-screen toggle — primary navigation aid; copy +
+// prev/next follow it.
+func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObject {
+	pal := state.pal()
+	total := len(chapterNumbers)
+
+	title := canvas.NewText(state.CurrentBook, pal.Text)
+	title.TextSize = 22
+	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	var chapterLine fyne.CanvasObject
+	if total > 1 {
+		var pick *widget.Button
+		pick = widget.NewButtonWithIcon(
+			fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total),
+			theme.MenuDropDownIcon(),
+			func() { showChapterPicker(pick, state) },
+		)
+		pick.Importance = widget.LowImportance
+		chapterLine = container.NewHBox(pick)
+	} else {
+		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
+		lbl.TextSize = 12
+		chapterLine = container.NewHBox(lbl)
+	}
+
+	idx := indexOf(chapterNumbers, state.CurrentChapter)
+
+	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
+		state.IsFullScreen = true
+		rebuildWindow(state)
+	})
+	fullScreenBtn.Importance = widget.LowImportance
+
+	copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() { copyChapter(state) })
+	copyBtn.Importance = widget.LowImportance
+
+	prev := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
+		if moveChapter(state, -1) {
+			state.refresh()
+		}
+	})
+	prev.Importance = widget.LowImportance
+	if idx <= 0 {
+		prev.Disable()
+	}
+
+	next := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
+		if moveChapter(state, 1) {
+			state.refresh()
+		}
+	})
+	next.Importance = widget.LowImportance
+	if idx < 0 || idx >= total-1 {
+		next.Disable()
+	}
+
+	left := container.NewVBox(title, chapterLine)
+	nav := container.NewHBox(fullScreenBtn, copyBtn, prev, next)
+	right := container.NewVBox(layout.NewSpacer(), nav, layout.NewSpacer())
+	row := container.NewBorder(nil, nil, left, right, nil)
+
+	rule := canvas.NewLine(pal.Border)
+	rule.StrokeWidth = 1
+	return container.NewVBox(row, rule)
+}
+
+// rebuildWindow swaps in a fresh CreateMainUI tree. We use this rather than
+// state.refresh() when the change affects more than the reading pane (e.g.
+// entering or leaving full-screen mode, which also hides/shows the bottom
+// tab bar and the top "Holy Bible" header).
+//
+// After SetContent, Fyne re-lays out the new tree on its own schedule. The
+// native UITextView overlay tracks the new host via Resize/Move, but a few of
+// those can fire with intermediate values before the tree settles. We post a
+// deferred re-push so the UITextView reliably ends up at the new host's
+// settled rect, especially when transitioning into/out of full-screen mode
+// where the previous host's rect is very different.
+func rebuildWindow(state *AppState) {
+	if state.app == nil || state.window == nil {
+		return
+	}
+	state.window.SetContent(CreateMainUI(state.app, state, state.window))
+	time.AfterFunc(150*time.Millisecond, func() {
+		fyne.Do(func() {
+			if currentHost != nil {
+				setFrameFromObject(currentHost)
+			}
+		})
+	})
 }
 
 // nativeReadingHost is a Fyne widget that holds no visible content of its own
@@ -213,6 +416,7 @@ type nativeReadingHost struct {
 func newNativeReadingHost(state *AppState, verses []Verse) *nativeReadingHost {
 	h := &nativeReadingHost{state: state}
 	h.ExtendBaseWidget(h)
+	currentHost = h
 	// Push the HTML into the UITextView right away (it'll appear on the next
 	// frame once Resize has set the frame). Doing this in the constructor
 	// rather than in CreateRenderer means tab-switches that rebuild the
@@ -250,13 +454,27 @@ func (h *nativeReadingHost) Move(p fyne.Position) {
 // position we read can be too high, causing the verse text to overlap the
 // header. We push immediately (responsive) AND again on the next event-loop
 // tick once the whole tree has settled, which lands the final correct frame.
+//
+// We also have to defend against this race: when the window content is
+// replaced (e.g. entering/leaving full-screen mode), Fyne creates a NEW
+// nativeReadingHost. The OLD host may still have a scheduled re-push in flight
+// that, by the time it fires, would read stale position/size from the now-
+// detached widget and overwrite the new host's correct frame. currentHost is
+// the latest one; only it gets to push.
 func (h *nativeReadingHost) pushFrame() {
 	setFrameFromObject(h)
-	// Re-read after layout settles. fyne.Do runs on the UI goroutine.
 	time.AfterFunc(50*time.Millisecond, func() {
-		fyne.Do(func() { setFrameFromObject(h) })
+		fyne.Do(func() {
+			if currentHost == h {
+				setFrameFromObject(h)
+			}
+		})
 	})
 }
+
+// currentHost is the most recently constructed nativeReadingHost. Stale
+// AfterFunc callbacks from previous hosts compare against this and bail.
+var currentHost *nativeReadingHost
 
 func setFrameFromObject(h *nativeReadingHost) {
 	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(h)
@@ -301,6 +519,17 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 // buildChapterHTML emits an HTML document that NSAttributedString's HTML
 // importer turns into a richly-styled attributed string. We embed all colors
 // inline so light/dark mode tracks the active palette without a re-parse.
+//
+// Typography choices, in order of preference:
+//   - "New York"  — Apple's modern serif, designed for digital reading. Ships
+//     with iOS 13+; warm, readable, elegant.
+//   - "Iowan Old Style" — a newspaper face that's available on iOS and is one
+//     of the best body serifs for screens.
+//   - Georgia, "Times New Roman" — universal fallbacks.
+//
+// We pair the larger size with generous line-height for an unhurried, almost
+// page-of-a-book feel; ligatures + kerning + slight letter-spacing give a
+// faint warmth without becoming ornamental.
 func buildChapterHTML(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	textHex := nrgbaToHex(pal.Text)
@@ -310,13 +539,37 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 
 	var b strings.Builder
 	b.WriteString("<html><head><style>")
-	fmt.Fprintf(&b, `body { font-family: Georgia, "Times New Roman", serif; `+
-		`font-size: 18px; color: %s; line-height: 1.55; margin: 0; padding: 0; -webkit-text-size-adjust: 100%%; }`,
-		textHex)
-	fmt.Fprintf(&b, `p { margin: 0 0 14px 0; }`)
-	fmt.Fprintf(&b, `sup.v { color: %s; font-weight: bold; font-size: 0.62em; }`, numHex)
-	fmt.Fprintf(&b, `.hl { color: %s; background-color: %s; font-weight: bold; }`,
-		highlightTextHex, highlightBgHex)
+	fmt.Fprintf(&b, `body {
+		font-family: "New York", "Iowan Old Style", Georgia, "Times New Roman", serif;
+		font-size: 19px;
+		color: %s;
+		line-height: 1.72;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}`, textHex)
+	fmt.Fprintf(&b, `p {
+		margin: 0 0 24px 0;
+		text-align: left;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}`)
+	fmt.Fprintf(&b, `sup.v {
+		color: %s;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}`, numHex)
+	fmt.Fprintf(&b, `.hl {
+		color: %s;
+		background-color: %s;
+		font-weight: 600;
+		padding: 0 2px;
+		border-radius: 2px;
+	}`, highlightTextHex, highlightBgHex)
 	b.WriteString("</style></head><body>")
 
 	for _, para := range groupVersesIntoParagraphs(verses) {

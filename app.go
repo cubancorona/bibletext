@@ -3,6 +3,7 @@ package holybible
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -49,7 +50,34 @@ func Run() {
 	window := myApp.NewWindow("Holy Bible — World English Bible")
 	window.Resize(fyne.NewSize(1280, 860))
 	window.SetContent(CreateMainUI(myApp, state, window))
+	ObserveSystemThemeChanges(myApp, state)
 	window.ShowAndRun()
+}
+
+// systemThemeOnce guarantees we install the system-appearance listener exactly
+// once per process — both cmd/desktop (via Run) and cmd/mobile call
+// ObserveSystemThemeChanges, and we don't want stacked subscribers.
+var systemThemeOnce sync.Once
+
+// ObserveSystemThemeChanges subscribes to Fyne's settings-change channel so a
+// system light/dark switch rebuilds the window content. Fyne re-runs Color()
+// automatically when the variant changes, but anything generated outside the
+// theme callback (like the HTML the iOS UITextView consumes) is stale until we
+// rebuild the tree.
+func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
+	systemThemeOnce.Do(func() {
+		ch := make(chan fyne.Settings, 1)
+		myApp.Settings().AddChangeListener(ch)
+		go func() {
+			for range ch {
+				fyne.Do(func() {
+					if state.window != nil && state.app != nil {
+						state.window.SetContent(CreateMainUI(state.app, state, state.window))
+					}
+				})
+			}
+		}()
+	})
 }
 
 // defaultStartBook opens on John when available, else the first loaded book.
