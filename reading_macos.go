@@ -25,6 +25,35 @@ package holybible
 static NSScrollView *gScroll = nil;
 static NSTextView   *gTextView = nil;
 
+// Character range of the highlighted verse (set when arriving from a search
+// result), or {NSNotFound, 0} for a plain chapter. holyBibleMacScrollTV uses it
+// to land the highlighted verse near the top instead of pinning to verse 1.
+static NSRange gMacHighlightRange = {NSNotFound, 0};
+
+// holyBibleMacScrollTV positions the chapter: at the highlighted verse when one
+// is set (a search jump), otherwise at the very top. NSTextView is flipped, so
+// larger y is further down; we scroll the clip view to the verse's glyph rect.
+static void holyBibleMacScrollTV(void) {
+    if (gTextView == nil || gScroll == nil) return;
+    if (gMacHighlightRange.location != NSNotFound &&
+        gMacHighlightRange.length > 0 &&
+        NSMaxRange(gMacHighlightRange) <= gTextView.textStorage.length) {
+        NSLayoutManager *lm = gTextView.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:gMacHighlightRange
+                                    actualCharacterRange:NULL];
+        NSRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gTextView.textContainer];
+        CGFloat y = rect.origin.y + gTextView.textContainerInset.height - 16;
+        if (y < 0) y = 0;
+        [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
+        [gScroll reflectScrolledClipView:gScroll.contentView];
+        return;
+    }
+    [gTextView scrollRangeToVisible:NSMakeRange(0, 0)];
+    [[gScroll contentView] scrollToPoint:NSZeroPoint];
+    [gScroll reflectScrolledClipView:gScroll.contentView];
+}
+
 // Find the Fyne window. Fyne (via glfw) creates one standard NSWindow; prefer
 // the key window, fall back to the first window.
 static NSWindow *holyBibleMacWindow(void) {
@@ -111,11 +140,20 @@ void holyBibleMacTVSetHTML(const char *html) {
             ps.paragraphSpacingBefore = 0;
             [as addAttribute:NSParagraphStyleAttributeName value:ps range:r];
         }];
+        // Find the highlighted verse (the .hl span becomes a background-coloured
+        // run) so a search jump lands on it rather than the chapter's top.
+        gMacHighlightRange = (NSRange){NSNotFound, 0};
+        [as enumerateAttribute:NSBackgroundColorAttributeName
+                       inRange:NSMakeRange(0, as.length)
+                       options:0
+                    usingBlock:^(id value, NSRange r, BOOL *stop) {
+            if (value != nil) {
+                gMacHighlightRange = r;
+                *stop = YES;
+            }
+        }];
         [gTextView.textStorage setAttributedString:as];
-        // Scroll to the top of the new chapter.
-        [gTextView scrollRangeToVisible:NSMakeRange(0, 0)];
-        [[gScroll contentView] scrollToPoint:NSZeroPoint];
-        [gScroll reflectScrolledClipView:gScroll.contentView];
+        holyBibleMacScrollTV();
     });
 }
 
@@ -130,7 +168,15 @@ void holyBibleMacTVSetFrame(double x, double y, double w, double h) {
         if (parent == nil) return;
         CGFloat ph = parent.bounds.size.height;
         NSRect r = NSMakeRect(x, ph - y - h, w, h);
+        BOOL changed = !NSEqualRects(r, gScroll.frame);
         gScroll.frame = r;
+        // SetHTML may have scrolled to the highlighted verse while the overlay
+        // was still at its initial width; once the real frame lands the text
+        // rewraps, so re-assert the highlight position. Only when a highlight is
+        // active — otherwise leave the reader's scroll position untouched.
+        if (changed && gMacHighlightRange.location != NSNotFound) {
+            holyBibleMacScrollTV();
+        }
     });
 }
 
@@ -167,6 +213,12 @@ import (
 // reading rectangle; the native NSTextView paints the verses on top. A
 // parchment rectangle sits behind it (the text view's background is clear).
 func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
+	// The NSTextView floats above the Fyne canvas, so any Fyne popup (the
+	// chapter picker) would render behind it. Let shared code hide/show the
+	// overlay around such popups — showChapterPicker calls these.
+	state.hideReadingOverlay = func() { setReadingOverlayVisible(false) }
+	state.showReadingOverlay = func() { setReadingOverlayVisible(true) }
+
 	if len(verses) == 0 {
 		msg := widget.NewLabel("No verses are available for this chapter yet.")
 		msg.Wrapping = fyne.TextWrapWord

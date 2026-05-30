@@ -63,9 +63,15 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		state.showReading = func() {
 			readingHost.Objects = []fyne.CanvasObject{rebuildMobileReadingPane(state)}
 			readingHost.Refresh()
+			// rebuildMobileReadingPane swaps between the reading view and the
+			// search-results list; the native overlay must only show over the
+			// former, or it paints on top of the results.
+			notifyReadingOverlay(!state.IsSearching)
 		}
 		content = readingHost
-		notifyReadingOverlay(true)
+		// When a search is active the Read tab shows the results list (Fyne), so
+		// the native overlay has to stay hidden to avoid overlapping it.
+		notifyReadingOverlay(!state.IsSearching)
 	}
 
 	tabBar := buildMobileTabBar(state)

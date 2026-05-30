@@ -24,6 +24,38 @@ package holybible
 // and the iOS selection state stays alive across chapter changes.
 static UITextView *gReadingTV = nil;
 
+// Character range of the highlighted verse (set when arriving from a search
+// result), or {NSNotFound, 0} for a plain chapter view. holyBibleScrollReadingTV
+// uses it to land the highlighted verse near the top instead of scrolling to
+// the chapter's first verse.
+static NSRange gReadingHighlightRange = {NSNotFound, 0};
+
+// holyBibleScrollReadingTV positions the chapter: at the highlighted verse when
+// one is set (a search jump), otherwise pinned to the top. Centralised so the
+// several places that re-assert the offset (after setText, after a frame push,
+// and on deferred ticks) all agree.
+static void holyBibleScrollReadingTV(void) {
+    if (gReadingTV == nil) return;
+    NSUInteger len = gReadingTV.textStorage.length;
+    if (gReadingHighlightRange.location != NSNotFound &&
+        gReadingHighlightRange.length > 0 &&
+        NSMaxRange(gReadingHighlightRange) <= len) {
+        NSLayoutManager *lm = gReadingTV.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
+                                    actualCharacterRange:NULL];
+        CGRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gReadingTV.textContainer];
+        // A little breathing room above the verse so it doesn't kiss the top.
+        CGFloat target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
+        CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
+        if (target > maxY) target = maxY;
+        if (target < 0) target = 0;
+        gReadingTV.contentOffset = CGPointMake(0, target);
+        return;
+    }
+    gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
+}
+
 // Look up the foreground UIWindow that Fyne renders into. iOS 13+ uses scenes;
 // pre-13 we fall back to the deprecated keyWindow. Fyne's mobile driver creates
 // exactly one window, so the first one we find is the right one.
@@ -123,41 +155,33 @@ void holyBibleTVSetHTML(const char *html) {
             [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
         }];
         as = mas;
-        gReadingTV.attributedText = as;
-        // Aggressive scroll-to-top: UITextView may relayout after attributedText
-        // is set, the Fyne side pushes a new frame just after, and either can
-        // shift the offset. Reset on this tick, the next runloop tick, and a
-        // ~200ms tick to outlast the slowest re-layout we've seen in practice.
-        [gReadingTV layoutIfNeeded];
-        gReadingTV.contentOffset = CGPointZero;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (gReadingTV != nil) {
-                gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
+        // Find the highlighted verse (the .hl span becomes a background-coloured
+        // run) so we can scroll to it rather than the top when arriving from a
+        // search result. First background run wins — there's only ever one.
+        gReadingHighlightRange = (NSRange){NSNotFound, 0};
+        [as enumerateAttribute:NSBackgroundColorAttributeName
+                       inRange:NSMakeRange(0, as.length)
+                       options:0
+                    usingBlock:^(id value, NSRange range, BOOL *stop) {
+            if (value != nil) {
+                gReadingHighlightRange = range;
+                *stop = YES;
             }
+        }];
+        gReadingTV.attributedText = as;
+        // Aggressive re-assert of the scroll position: UITextView may relayout
+        // after attributedText is set, the Fyne side pushes a new frame just
+        // after, and either can shift the offset. Land it on this tick, the next
+        // runloop tick, and a ~200ms tick to outlast the slowest re-layout.
+        [gReadingTV layoutIfNeeded];
+        holyBibleScrollReadingTV();
+        dispatch_async(dispatch_get_main_queue(), ^{
+            holyBibleScrollReadingTV();
         });
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            if (gReadingTV != nil) {
-                gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
-            }
+            holyBibleScrollReadingTV();
         });
-    });
-}
-
-// holyBibleTVScrollToFraction scrolls the text view so the given normalised
-// position (0.0 = top, 1.0 = bottom) is at the visible top. Used to jump to a
-// highlighted verse from search results.
-void holyBibleTVScrollToFraction(float fraction) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (gReadingTV == nil) return;
-        CGFloat contentH = gReadingTV.contentSize.height;
-        CGFloat viewportH = gReadingTV.bounds.size.height;
-        if (contentH <= viewportH) return;
-        CGFloat maxY = contentH - viewportH;
-        CGFloat y = fraction * contentH;
-        if (y > maxY) y = maxY;
-        if (y < 0)    y = 0;
-        gReadingTV.contentOffset = CGPointMake(0, y);
     });
 }
 
@@ -179,24 +203,14 @@ void holyBibleTVSetFrame(float x, float y, float w, float h) {
         gReadingTV.frame = r;
         // When the frame changes, the UITextView re-lays out the text. If the
         // previous chapter happened to scroll mid-paragraph, the offset can
-        // carry over and land in the middle of the new chapter. Pin to the
-        // top on every frame change for predictability — we use both APIs:
-        // contentOffset sets the raw scroll; scrollRangeToVisible asks UIKit
-        // to make the first character of the text visible, which it honours
-        // even when HTML→NSAttributedString conversion has inserted phantom
-        // paragraph-spacing before the first <p>.
+        // carry over and land in the middle of the new chapter. Re-assert the
+        // intended position (top, or the highlighted verse on a search jump);
+        // layoutIfNeeded first so the glyph geometry matches the new width.
         if (changed) {
-            gReadingTV.contentOffset = CGPointZero;
-            if (gReadingTV.attributedText.length > 0) {
-                [gReadingTV scrollRangeToVisible:NSMakeRange(0, 1)];
-            }
+            [gReadingTV layoutIfNeeded];
+            holyBibleScrollReadingTV();
             dispatch_async(dispatch_get_main_queue(), ^{
-                if (gReadingTV != nil) {
-                    gReadingTV.contentOffset = CGPointZero;
-                    if (gReadingTV.attributedText.length > 0) {
-                        [gReadingTV scrollRangeToVisible:NSMakeRange(0, 1)];
-                    }
-                }
+                holyBibleScrollReadingTV();
             });
         }
     });
@@ -313,40 +327,40 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	})
 	titleRow := container.NewHBox(title, hgap(4), copyBtn)
 
+	const navBoxH = 22
+
 	var chapterLine fyne.CanvasObject
 	if total > 1 {
 		chapterLine = newChapterPickerAnchor(state,
 			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
-			pal.TextMuted, subheadingTextSize)
+			pal.TextMuted, subheadingTextSize, navBoxH)
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
 		lbl.TextSize = subheadingTextSize
-		chapterLine = container.NewHBox(lbl)
+		chapterLine = container.NewCenter(lbl)
 	}
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
 
 	// Prev/next as compact icon buttons sitting next to the chapter line, so
 	// they're close to the book + chapter text rather than floating far right.
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 18, 22, func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 18, navBoxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
 
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 18, 22, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 18, navBoxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
 	})
 	next.disabled = idx < 0 || idx >= total-1
 
-	chapterRow := container.NewHBox(
-		container.NewVBox(layout.NewSpacer(), chapterLine, layout.NewSpacer()),
-		hgap(10),
-		prev, next,
-	)
+	// Controls sit directly in the HBox so the picker anchor keeps a first-class
+	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS).
+	chapterRow := container.NewHBox(chapterLine, hgap(10), prev, next)
 
 	// Full-screen is the lone control on the right.
 	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
