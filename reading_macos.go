@@ -22,6 +22,57 @@ package holybible
 #import <AppKit/AppKit.h>
 #import <stdlib.h>
 
+// Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
+// an AI study action; it copies both strings immediately.
+extern void holyBibleAIMenuTapped(char *action, char *text);
+
+// HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
+// Analyze translation) to the right-click selection menu and hands the selected
+// text to Go.
+@interface HBReadingTextView : NSTextView
+@end
+
+@implementation HBReadingTextView
+
+- (NSString *)hbSelectedText {
+    NSRange sel = self.selectedRange;
+    if (sel.length == 0 || NSMaxRange(sel) > self.textStorage.length) return @"";
+    return [self.textStorage.string substringWithRange:sel];
+}
+
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+    NSMenu *menu = [super menuForEvent:event];
+    if (menu == nil || self.selectedRange.length == 0) return menu;
+
+    NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
+    for (NSArray *pair in @[@[@"Explain", @"explain"],
+                            @[@"Analyze context", @"context"],
+                            @[@"Analyze translation", @"translation"]]) {
+        SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
+        NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:pair[0] action:action keyEquivalent:@""];
+        it.target = self;
+        [ai addItem:it];
+    }
+
+    [menu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
+    aiItem.submenu = ai;
+    [menu addItem:aiItem];
+    return menu;
+}
+
+- (void)hbAI_explain:(id)sender {
+    holyBibleAIMenuTapped((char *)"explain", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbAI_context:(id)sender {
+    holyBibleAIMenuTapped((char *)"context", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbAI_translation:(id)sender {
+    holyBibleAIMenuTapped((char *)"translation", (char *)self.hbSelectedText.UTF8String);
+}
+
+@end
+
 static NSScrollView *gScroll = nil;
 static NSTextView   *gTextView = nil;
 
@@ -79,7 +130,7 @@ static void holyBibleMacEnsureTV(void) {
             sv.drawsBackground = NO;
 
             NSSize contentSize = [sv contentSize];
-            NSTextView *tv = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, contentSize.width, contentSize.height)];
+            HBReadingTextView *tv = [[HBReadingTextView alloc] initWithFrame:NSMakeRect(0, 0, contentSize.width, contentSize.height)];
             tv.editable = NO;
             tv.selectable = YES;
             tv.richText = YES;
