@@ -186,7 +186,7 @@ func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNameInnerPadding:
 		return 7
 	case theme.SizeNameLineSpacing:
-		return 8
+		return 10 // a touch airier for an unhurried, page-like read
 	}
 	return theme.DefaultTheme().Size(name)
 }

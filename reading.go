@@ -67,24 +67,35 @@ func buildReadingView(state *AppState) fyne.CanvasObject {
 	return container.NewPadded(container.NewBorder(top, nil, nil, nil, paper))
 }
 
-// chapterHeader renders the book title, chapter indicator/picker and the
-// copy/previous/next controls, followed by a divider.
+// chapterHeader renders the book + chapter heading, a small inline copy icon,
+// the chapter picker with prev/next arrows clustered beside it, and a focus
+// (distraction-free) toggle on the right, followed by a divider. It mirrors the
+// iOS chapter toolbar, adapted to desktop sizing.
+//
+//	┌─────────────────────────────────────────────────────┐
+//	│ Genesis 1 ⧉                                    ⤢    │
+//	│ Chapter 1 of 50 ▾   ←  →                            │
+//	└─────────────────────────────────────────────────────┘
 func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	pal := state.pal()
 	total := len(chapterNumbers)
 
-	title := canvas.NewText(state.CurrentBook, pal.Text)
+	// Heading reflects the chapter: "Genesis 1".
+	title := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text)
 	title.TextSize = 28
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
+	// Small copy icon tucked beside the heading — close to the text it copies.
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 17, 36, func() {
+		copyChapter(state)
+	})
+	titleRow := container.NewHBox(title, hgap(6), copyBtn)
+
 	var chapterLine fyne.CanvasObject
 	if total > 1 {
-		var pick *widget.Button
-		pick = widget.NewButtonWithIcon(fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total), theme.MenuDropDownIcon(), func() {
-			showChapterPicker(pick, state)
-		})
-		pick.Importance = widget.LowImportance
-		chapterLine = container.NewHBox(pick)
+		chapterLine = newChapterPickerAnchor(state,
+			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
+			pal.TextMuted, 13)
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
 		lbl.TextSize = 13
@@ -93,36 +104,141 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
 
-	copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() { copyChapter(state) })
-	copyBtn.Importance = widget.LowImportance
-
-	prev := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, 24, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
-	prev.Importance = widget.LowImportance
-	if idx <= 0 {
-		prev.Disable()
-	}
+	prev.disabled = idx <= 0
 
-	next := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, 24, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
 	})
-	next.Importance = widget.LowImportance
-	if idx < 0 || idx >= total-1 {
-		next.Disable()
-	}
+	next.disabled = idx < 0 || idx >= total-1
 
-	nav := container.NewHBox(copyBtn, prev, next)
-	left := container.NewVBox(title, chapterLine)
-	row := container.NewBorder(nil, nil, left, container.NewVBox(layout.NewSpacer(), nav, layout.NewSpacer()), nil)
+	chapterRow := container.NewHBox(
+		container.NewVBox(layout.NewSpacer(), chapterLine, layout.NewSpacer()),
+		hgap(12),
+		prev, next,
+	)
+
+	// Focus toggle on the right: enter distraction-free reading (hide the
+	// sidebar + app header) or, when already in it, restore the full layout.
+	focusIcon := theme.ViewFullScreenIcon()
+	if state.IsFullScreen {
+		focusIcon = theme.ViewRestoreIcon()
+	}
+	focusBtn := widget.NewButtonWithIcon("", focusIcon, func() {
+		state.IsFullScreen = !state.IsFullScreen
+		rebuildWindow(state)
+	})
+	focusBtn.Importance = widget.LowImportance
+
+	left := container.NewVBox(titleRow, chapterRow)
+	right := container.NewVBox(layout.NewSpacer(), focusBtn, layout.NewSpacer())
+	row := container.NewBorder(nil, nil, left, right, nil)
 
 	rule := canvas.NewLine(pal.Border)
 	rule.StrokeWidth = 1
 	return container.NewVBox(row, rule)
+}
+
+// --- Shared compact toolbar controls -----------------------------------------
+//
+// iconTapButton and chapterPickerAnchor were first written for the iOS reading
+// header; they're shared here so the desktop chapter toolbar can use the same
+// small, low-chrome controls.
+
+// iconTapButton is a small, low-chrome tappable icon — lighter than
+// widget.Button (no background, no fixed padding). The icon is rendered at
+// iconSize, centred inside a box of boxH height so it can line up vertically
+// with adjacent text of a different size. A disabled button renders faint and
+// ignores taps.
+type iconTapButton struct {
+	widget.BaseWidget
+	state    *AppState
+	icon     fyne.Resource
+	iconSize float32
+	boxH     float32
+	disabled bool
+	onTapped func()
+}
+
+func newIconTapButton(state *AppState, icon fyne.Resource, iconSize, boxH float32, onTapped func()) *iconTapButton {
+	b := &iconTapButton{state: state, icon: icon, iconSize: iconSize, boxH: boxH, onTapped: onTapped}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *iconTapButton) Tapped(*fyne.PointEvent) {
+	if b.disabled || b.onTapped == nil {
+		return
+	}
+	b.onTapped()
+}
+
+func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
+	img := canvas.NewImageFromResource(theme.NewColoredResource(b.icon, colorNameMuted))
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(b.iconSize, b.iconSize))
+	if b.disabled {
+		img.Translucency = 0.6 // faint when there's no chapter to move to
+	}
+	// GridWrap pins the cell to a fixed size; NewCenter vertically centres the
+	// smaller icon within that box so it aligns with neighbouring text.
+	box := container.NewGridWrap(fyne.NewSize(b.iconSize+8, b.boxH), container.NewCenter(img))
+	return widget.NewSimpleRenderer(box)
+}
+
+var _ fyne.Tappable = (*iconTapButton)(nil)
+
+// chapterPickerAnchor is a small tappable bit of muted text (e.g.
+// "Chapter 1 of 21 ▾") that opens the chapter picker on tap. It avoids
+// widget.Button's relatively heavy padding so the chapter line stays as
+// quiet as the "World English Bible · Public Domain" subtitle.
+type chapterPickerAnchor struct {
+	widget.BaseWidget
+	state *AppState
+	text  string
+	tint  color.NRGBA
+	size  float32
+	lbl   *canvas.Text
+}
+
+func newChapterPickerAnchor(state *AppState, text string, tint color.NRGBA, size float32) *chapterPickerAnchor {
+	a := &chapterPickerAnchor{state: state, text: text, tint: tint, size: size}
+	a.ExtendBaseWidget(a)
+	return a
+}
+
+func (a *chapterPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
+	a.lbl = canvas.NewText(a.text, a.tint)
+	a.lbl.TextSize = a.size
+	a.lbl.TextStyle = fyne.TextStyle{Bold: true}
+	return widget.NewSimpleRenderer(a.lbl)
+}
+
+func (a *chapterPickerAnchor) Tapped(*fyne.PointEvent) {
+	showChapterPicker(a, a.state)
+}
+
+// Make sure Fyne dispatches taps to us.
+var _ fyne.Tappable = (*chapterPickerAnchor)(nil)
+
+// rebuildWindow swaps in a fresh CreateMainUI tree. Use this (rather than
+// state.refresh(), which only repaints the reading pane) when a change affects
+// the whole window chrome — e.g. entering or leaving the distraction-free
+// reading mode, which hides/shows the sidebar (desktop) or bottom tabs and
+// header (mobile). afterRebuild is a build-tagged hook: a no-op on desktop,
+// and an overlay re-pin on iOS.
+func rebuildWindow(state *AppState) {
+	if state.app == nil || state.window == nil {
+		return
+	}
+	state.window.SetContent(CreateMainUI(state.app, state, state.window))
+	afterRebuild(state)
 }
 
 func backToResultsBar(state *AppState) fyne.CanvasObject {
