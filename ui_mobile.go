@@ -35,58 +35,88 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return container.NewStack(base, buildReadingViewMobile(state))
 	}
 
-	// Mobile uses a different reading pane (RichText, not the desktop Entry-based
-	// chapterText) — see reading_mobile.go for why.
-	mobileReading := func() fyne.CanvasObject {
-		if state.IsSearching {
-			return buildSearchResultsView(state)
-		}
-		return buildReadingViewMobile(state)
-	}
-	readingHost := container.NewStack(mobileReading())
-	state.showReading = func() {
-		readingHost.Objects = []fyne.CanvasObject{mobileReading()}
-		readingHost.Refresh()
-	}
-
-	// Tabs need to exist before the helpers that switch between them.
-	var tabs *container.AppTabs
+	// gotoReadTab is used by Books/Search to jump back to the reading pane after
+	// the user picks a book or a search result. We rebuild the window on every
+	// tab change (reliable repaint — Fyne's in-place host-swap doesn't always
+	// repaint a UITextView-overlaid tree) so this just sets the tab + rebuilds.
 	gotoReadTab := func() {
-		if tabs != nil {
-			tabs.SelectIndex(0)
-		}
+		state.CurrentTab = 0
+		rebuildWindow(state)
 	}
-	// surfaceReading is called by state.openSearchResult so tapping a result
-	// brings the reading pane forward instead of leaving the user on Search.
 	state.surfaceReading = gotoReadTab
-
-	booksTab := buildMobileBooksTab(state, gotoReadTab)
-	searchTab := buildMobileSearchTab(state, gotoReadTab)
 
 	// On mobile we don't have a sidebar to re-highlight; syncSidebar is a no-op.
 	state.syncSidebar = func() {}
 
-	tabs = container.NewAppTabs(
-		container.NewTabItemWithIcon("Read", theme.DocumentIcon(), readingHost),
-		container.NewTabItemWithIcon("Books", theme.MenuIcon(), booksTab),
-		container.NewTabItemWithIcon("Search", theme.SearchIcon(), searchTab),
-	)
-	tabs.SetTabLocation(container.TabLocationBottom)
-	// On iOS the reading text is rendered by a UITextView overlay; we have to
-	// hide it when Books or Search is on screen, or it'd float on top of those
-	// tabs. notifyReadingOverlay is a build-tag shim — no-op on Android.
-	tabs.OnSelected = func(ti *container.TabItem) {
-		if ti.Text == "Read" {
-			notifyReadingOverlay(true)
-		} else {
-			notifyReadingOverlay(false)
+	// Build only the active tab's content — the others are constructed on
+	// demand when the user switches (rebuildWindow re-runs CreateMainUI).
+	var content fyne.CanvasObject
+	switch state.CurrentTab {
+	case 1:
+		content = buildMobileBooksTab(state, gotoReadTab)
+		notifyReadingOverlay(false)
+	case 2:
+		content = buildMobileSearchTab(state, gotoReadTab)
+		notifyReadingOverlay(false)
+	default: // 0 = Read
+		readingHost := container.NewStack(rebuildMobileReadingPane(state))
+		state.showReading = func() {
+			readingHost.Objects = []fyne.CanvasObject{rebuildMobileReadingPane(state)}
+			readingHost.Refresh()
 		}
+		content = readingHost
+		notifyReadingOverlay(true)
 	}
 
-	body := container.NewBorder(buildHeader(state), nil, nil, nil, tabs)
+	tabBar := buildMobileTabBar(state)
+	body := container.NewBorder(buildHeader(state), tabBar, nil, nil, content)
 
 	base := canvas.NewRectangle(pal.Background)
 	return container.NewStack(base, body)
+}
+
+// rebuildMobileReadingPane returns the search-results view when a search is
+// active, otherwise the native reading view.
+func rebuildMobileReadingPane(state *AppState) fyne.CanvasObject {
+	if state.IsSearching {
+		return buildSearchResultsView(state)
+	}
+	return buildReadingViewMobile(state)
+}
+
+// buildMobileTabBar renders the compact bottom tab strip. Selecting a tab sets
+// state.CurrentTab and rebuilds the window. Each tab is a tabCell (icon + tiny
+// label); the active one is accent-coloured.
+func buildMobileTabBar(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+
+	items := []struct {
+		label string
+		icon  fyne.Resource
+	}{
+		{"Read", theme.DocumentIcon()},
+		{"Books", theme.MenuIcon()},
+		{"Search", theme.SearchIcon()},
+	}
+
+	cells := make([]fyne.CanvasObject, len(items))
+	for i, it := range items {
+		i, it := i, it
+		cell := newTabCell(state, it.icon, it.label, i == state.CurrentTab, func() {
+			if state.CurrentTab == i {
+				return
+			}
+			state.CurrentTab = i
+			rebuildWindow(state)
+		})
+		cells[i] = cell
+	}
+
+	rule := canvas.NewLine(pal.Border)
+	rule.StrokeWidth = 1
+	bg := canvas.NewRectangle(pal.SurfaceAlt)
+	row := container.NewGridWithColumns(len(items), cells...)
+	return container.NewStack(bg, container.NewVBox(rule, container.NewPadded(row)))
 }
 
 // buildMobileBooksTab is a touch-sized, scrollable book list with a filter on
@@ -212,3 +242,77 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
 }
+
+// ----------------------------------------------------------------------------
+// Custom bottom tab bar
+// ----------------------------------------------------------------------------
+
+// tabCell is one tappable icon+label slot inside the compact bottom bar. The
+// bar itself is assembled in buildMobileTabBar; selecting a cell sets
+// state.CurrentTab and rebuilds the window (reliable repaint).
+type tabCell struct {
+	widget.BaseWidget
+	state    *AppState
+	icon     fyne.Resource
+	label    string
+	active   bool
+	onTapped func()
+
+	iconImg *canvas.Image
+	text    *canvas.Text
+}
+
+func newTabCell(state *AppState, icon fyne.Resource, label string, active bool, onTapped func()) *tabCell {
+	c := &tabCell{state: state, icon: icon, label: label, active: active, onTapped: onTapped}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *tabCell) Tapped(*fyne.PointEvent) {
+	if c.onTapped != nil {
+		c.onTapped()
+	}
+}
+
+func (c *tabCell) CreateRenderer() fyne.WidgetRenderer {
+	pal := c.state.pal()
+	tint := pal.TextMuted
+	if c.active {
+		tint = pal.Accent
+	}
+
+	// Tint the SVG icon to the same colour as the label by binding it to a
+	// theme colour name (Primary for active, Foreground for inactive — both
+	// are already correct in bibleTheme).
+	c.iconImg = canvas.NewImageFromResource(c.themedIcon())
+	c.iconImg.FillMode = canvas.ImageFillContain
+	c.iconImg.SetMinSize(fyne.NewSize(20, 20))
+
+	c.text = canvas.NewText(c.label, tint)
+	c.text.TextSize = 10
+	c.text.Alignment = fyne.TextAlignCenter
+	c.text.TextStyle = fyne.TextStyle{Bold: c.active}
+
+	col := container.NewVBox(
+		container.NewCenter(c.iconImg),
+		spacer(2),
+		container.NewCenter(c.text),
+	)
+	return widget.NewSimpleRenderer(col)
+}
+
+// themedIcon returns the cell's icon as a colour-bound theme resource so it
+// re-tints automatically with the active palette.
+func (c *tabCell) themedIcon() fyne.Resource {
+	if c.active {
+		return theme.NewColoredResource(c.icon, theme.ColorNamePrimary)
+	}
+	// Inactive: muted foreground — we use the existing "muted" theme colour
+	// name from theme.go (colorNameMuted), which bibleTheme resolves to
+	// pal.TextMuted.
+	return theme.NewColoredResource(c.icon, colorNameMuted)
+}
+
+// Compile-time interface checks: tab cells must be Tappable for the bottom
+// bar to dispatch taps to them.
+var _ fyne.Tappable = (*tabCell)(nil)
