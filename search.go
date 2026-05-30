@@ -2,12 +2,14 @@ package holybible
 
 import (
 	"fmt"
+	"image/color"
 	"sort"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -50,22 +52,77 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {
-	v := verse
-	ref := widget.NewButton(fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse), func() {
-		openSearchResult(state, v)
-	})
-	ref.Importance = widget.LowImportance
+	ref := canvas.NewText(fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse), pal.Accent)
+	ref.TextStyle = fyne.TextStyle{Bold: true}
+	ref.TextSize = 18
 
 	segs := termHighlightSegments(strings.TrimSpace(verse.Text), terms, colorNameVerseText, colorNameHighlightHi)
 	text := widget.NewRichText(segs...)
 	text.Wrapping = fyne.TextWrapWord
 
-	return container.NewVBox(
-		container.NewBorder(nil, nil, ref, nil, nil),
-		text,
-		widget.NewSeparator(),
-	)
+	// The whole card is one tap target — reference, verse text, and surrounding
+	// padding — not just the reference heading.
+	inner := container.NewPadded(container.NewVBox(ref, text))
+	card := newSearchResultCard(state, verse, inner, pal)
+
+	return container.NewVBox(card, widget.NewSeparator())
 }
+
+// searchResultCard makes an entire result row tappable. Previously only the
+// small "Book C:V" heading opened the verse, which is an awkward target —
+// especially on touch, where the rest of the row looks tappable but isn't.
+// Tapping anywhere on the card jumps to that verse; on desktop it also shows a
+// pointer cursor and a faint hover wash so the row reads as clickable.
+type searchResultCard struct {
+	widget.BaseWidget
+	state   *AppState
+	verse   Verse
+	content fyne.CanvasObject
+	hoverBg color.NRGBA
+	bg      *canvas.Rectangle
+}
+
+func newSearchResultCard(state *AppState, verse Verse, content fyne.CanvasObject, pal palette) *searchResultCard {
+	c := &searchResultCard{state: state, verse: verse, content: content, hoverBg: pal.SurfaceAlt}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *searchResultCard) CreateRenderer() fyne.WidgetRenderer {
+	c.bg = canvas.NewRectangle(color.Transparent)
+	c.bg.CornerRadius = 8
+	return widget.NewSimpleRenderer(container.NewStack(c.bg, c.content))
+}
+
+func (c *searchResultCard) Tapped(*fyne.PointEvent) {
+	openSearchResult(c.state, c.verse)
+}
+
+func (c *searchResultCard) MouseIn(*desktop.MouseEvent) {
+	if c.bg != nil {
+		c.bg.FillColor = c.hoverBg
+		c.bg.Refresh()
+	}
+}
+
+func (c *searchResultCard) MouseMoved(*desktop.MouseEvent) {}
+
+func (c *searchResultCard) MouseOut() {
+	if c.bg != nil {
+		c.bg.FillColor = color.Transparent
+		c.bg.Refresh()
+	}
+}
+
+func (c *searchResultCard) Cursor() desktop.Cursor {
+	return desktop.PointerCursor
+}
+
+var (
+	_ fyne.Tappable      = (*searchResultCard)(nil)
+	_ desktop.Hoverable  = (*searchResultCard)(nil)
+	_ desktop.Cursorable = (*searchResultCard)(nil)
+)
 
 type matchRange struct {
 	start int
