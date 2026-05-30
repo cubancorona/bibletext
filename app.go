@@ -64,12 +64,22 @@ var systemThemeOnce sync.Once
 // automatically when the variant changes, but anything generated outside the
 // theme callback (like the HTML the iOS UITextView consumes) is stale until we
 // rebuild the tree.
+//
+// CreateMainUI calls app.Settings().SetTheme() on every build, which ALSO
+// fires this listener — so we must guard against a rebuild loop by only acting
+// when the actual light/dark variant has changed since the last rebuild.
 func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 	systemThemeOnce.Do(func() {
 		ch := make(chan fyne.Settings, 1)
 		myApp.Settings().AddChangeListener(ch)
+		lastVariant := myApp.Settings().ThemeVariant()
 		go func() {
 			for range ch {
+				v := myApp.Settings().ThemeVariant()
+				if v == lastVariant {
+					continue // theme object changed but not the variant — ignore
+				}
+				lastVariant = v
 				fyne.Do(func() {
 					if state.window != nil && state.app != nil {
 						state.window.SetContent(CreateMainUI(state.app, state, state.window))

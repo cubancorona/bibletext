@@ -288,36 +288,30 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 }
 
 // chapterHeaderMobile is a compact, low-chrome chapter toolbar tuned for the
-// mobile reading view. Compared to the desktop chapterHeader it uses a smaller
-// serif for the book title, a flat low-importance picker button for the
-// chapter line, and tighter icon-only nav buttons — so the chrome stays out of
-// the way of the verse text and the native iOS selection menu.
+// mobile reading view. Mirrors the "Holy Bible · World English Bible …"
+// pattern of the top header: a larger book heading sits on top of a smaller,
+// muted chapter line (tappable to open the picker).
 //
-// Layout (single row):
-//
-//	[ John                 ]   [ ⤢ ] [ ⧉ ] [ ← ] [ → ]
-//	[ ▾ Chapter 1 of 21   ]
-//
-// The first action is the full-screen toggle — primary navigation aid; copy +
-// prev/next follow it.
+//	┌─────────────────────────────────────────────────────┐
+//	│ John                          ⤢   ⧉   ←   →         │
+//	│ Chapter 1 of 21 ▾                                   │
+//	└─────────────────────────────────────────────────────┘
 func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	pal := state.pal()
 	total := len(chapterNumbers)
 
 	title := canvas.NewText(state.CurrentBook, pal.Text)
-	title.TextSize = 22
+	title.TextSize = 24
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	var chapterLine fyne.CanvasObject
 	if total > 1 {
-		var pick *widget.Button
-		pick = widget.NewButtonWithIcon(
-			fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total),
-			theme.MenuDropDownIcon(),
-			func() { showChapterPicker(pick, state) },
-		)
-		pick.Importance = widget.LowImportance
-		chapterLine = container.NewHBox(pick)
+		anchor := &chapterPickerAnchor{}
+		anchor.ExtendBaseWidget(anchor)
+		anchor.state = state
+		anchor.text = fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total)
+		anchor.tint = pal.TextMuted
+		chapterLine = anchor
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
 		lbl.TextSize = 12
@@ -364,6 +358,32 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	rule.StrokeWidth = 1
 	return container.NewVBox(row, rule)
 }
+
+// chapterPickerAnchor is a small tappable bit of muted text (e.g.
+// "Chapter 1 of 21 ▾") that opens the chapter picker on tap. It avoids
+// widget.Button's relatively heavy padding so the chapter line stays as
+// quiet as the "World English Bible · Public Domain" subtitle.
+type chapterPickerAnchor struct {
+	widget.BaseWidget
+	state *AppState
+	text  string
+	tint  color.NRGBA
+	lbl   *canvas.Text
+}
+
+func (a *chapterPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
+	a.lbl = canvas.NewText(a.text, a.tint)
+	a.lbl.TextSize = 12
+	a.lbl.TextStyle = fyne.TextStyle{Bold: true}
+	return widget.NewSimpleRenderer(a.lbl)
+}
+
+func (a *chapterPickerAnchor) Tapped(*fyne.PointEvent) {
+	showChapterPicker(a, a.state)
+}
+
+// Make sure Fyne dispatches taps to us.
+var _ fyne.Tappable = (*chapterPickerAnchor)(nil)
 
 // rebuildWindow swaps in a fresh CreateMainUI tree. We use this rather than
 // state.refresh() when the change affects more than the reading pane (e.g.

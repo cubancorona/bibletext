@@ -36,6 +36,11 @@ type AppState struct {
 	// button — no app header, no chapter toolbar, no bottom tabs.
 	IsFullScreen bool
 
+	// CurrentTab is the selected mobile bottom-bar tab: 0 Read, 1 Books,
+	// 2 Search. The mobile UI rebuilds the window on tab change (reliable
+	// repaint) rather than swapping a content host in place.
+	CurrentTab int
+
 	// Annotations is the foundation for note/highlight + research features. It is
 	// populated/persisted by future work; the reading view already renders verses
 	// as selectable, individually-referenceable blocks.
