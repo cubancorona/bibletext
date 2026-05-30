@@ -19,6 +19,45 @@ package holybible
 
 #import <UIKit/UIKit.h>
 
+// Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
+// an AI study action; it copies both strings immediately, so passing the
+// transient UTF8String pointers is safe.
+extern void holyBibleAIMenuTapped(char *action, char *text);
+
+// HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
+// Analyze translation) to the standard selection menu and hands the selected
+// text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
+@interface HBReadingTextView : UITextView <UITextViewDelegate>
+@end
+
+@implementation HBReadingTextView
+
+- (UIMenu *)textView:(UITextView *)textView
+    editMenuForTextInRange:(NSRange)range
+          suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0)) {
+    if (range.length == 0 || NSMaxRange(range) > textView.text.length) {
+        return [UIMenu menuWithChildren:suggestedActions];
+    }
+    NSString *captured = [[textView.text substringWithRange:range] copy];
+
+    UIAction * (^make)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
+        return [UIAction actionWithTitle:title image:nil identifier:nil
+                                 handler:^(__kindof UIAction *_Nonnull a) {
+            holyBibleAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
+        }];
+    };
+
+    UIMenu *ai = [UIMenu menuWithTitle:@"Study with AI" image:nil identifier:nil options:0
+                              children:@[
+                                  make(@"Explain", @"explain"),
+                                  make(@"Analyze context", @"context"),
+                                  make(@"Analyze translation", @"translation"),
+                              ]];
+    return [UIMenu menuWithChildren:[suggestedActions arrayByAddingObject:ai]];
+}
+
+@end
+
 // One persistent UITextView attached to the app's main window. We never
 // destroy it during the app lifetime — easier to manage than re-attaching,
 // and the iOS selection state stays alive across chapter changes.
@@ -85,7 +124,8 @@ static void holyBibleEnsureTV(void) {
             return;
         }
         if (gReadingTV == nil) {
-            UITextView *tv = [[UITextView alloc] init];
+            HBReadingTextView *tv = [[HBReadingTextView alloc] init];
+            tv.delegate = tv; // its own delegate for the AI menu hook
             tv.editable = NO;
             tv.selectable = YES;
             tv.scrollEnabled = YES;

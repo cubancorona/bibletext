@@ -1,0 +1,28 @@
+//go:build ignore
+
+// AI key setup
+// ============
+// The AI study features (Explain / Analyze context / Analyze translation) call
+// Google Gemini with a single app-owned key. Provide it in ONE of two ways:
+//
+//   1. Env var (best for development):
+//        export GEMINI_API_KEY=AIza...
+//      Then run/build normally — no file needed.
+//
+//   2. Embedded key (for packaged builds):
+//      Copy this file to `ai_key.go` (which is git-ignored), remove the
+//      `//go:build ignore` line at the top, and paste your key below. It gets
+//      compiled into the binary.
+//
+// Get a free key at https://aistudio.google.com/apikey
+//
+// NOTE: an embedded key ships inside the app binary and can be extracted, and all
+// usage bills to / shares the rate limits of that one key. That's fine for personal
+// or small-group builds; move to a hosted proxy (swap geminiAPIKey/newGeminiClient
+// in ai.go) before any wide public release.
+
+package holybible
+
+func init() {
+	embeddedGeminiKey = "AIza...replace-me..."
+}
