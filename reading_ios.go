@@ -106,8 +106,6 @@ void holyBibleTVSetHTML(const char *html) {
             gReadingTV.text = s;
             return;
         }
-        NSLog(@"holybible: HTML set (%lu bytes input → %lu attr chars)",
-              (unsigned long)len, (unsigned long)as.length);
         // NSAttributedString's HTML importer routinely injects a non-zero
         // paragraphSpacingBefore (and sometimes a minimumLineHeight) on the
         // FIRST paragraph that no CSS can override — leaving an ugly
@@ -132,15 +130,6 @@ void holyBibleTVSetHTML(const char *html) {
         // ~200ms tick to outlast the slowest re-layout we've seen in practice.
         [gReadingTV layoutIfNeeded];
         gReadingTV.contentOffset = CGPointZero;
-        NSLog(@"holybible: post-HTML offset=(%.1f,%.1f) insets=(%.1f,%.1f,%.1f,%.1f) adj=(%.1f,%.1f,%.1f,%.1f) tcInset=(%.1f,%.1f,%.1f,%.1f) contentSize=%.1fx%.1f",
-              gReadingTV.contentOffset.x, gReadingTV.contentOffset.y,
-              gReadingTV.contentInset.top, gReadingTV.contentInset.left,
-              gReadingTV.contentInset.bottom, gReadingTV.contentInset.right,
-              gReadingTV.adjustedContentInset.top, gReadingTV.adjustedContentInset.left,
-              gReadingTV.adjustedContentInset.bottom, gReadingTV.adjustedContentInset.right,
-              gReadingTV.textContainerInset.top, gReadingTV.textContainerInset.left,
-              gReadingTV.textContainerInset.bottom, gReadingTV.textContainerInset.right,
-              gReadingTV.contentSize.width, gReadingTV.contentSize.height);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (gReadingTV != nil) {
                 gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
@@ -150,9 +139,6 @@ void holyBibleTVSetHTML(const char *html) {
                        dispatch_get_main_queue(), ^{
             if (gReadingTV != nil) {
                 gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
-                NSLog(@"holybible: final offset=(%.1f,%.1f) adj=%.1f",
-                      gReadingTV.contentOffset.x, gReadingTV.contentOffset.y,
-                      gReadingTV.adjustedContentInset.top);
             }
         });
     });
