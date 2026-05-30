@@ -316,12 +316,9 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 
 	var chapterLine fyne.CanvasObject
 	if total > 1 {
-		anchor := &chapterPickerAnchor{}
-		anchor.ExtendBaseWidget(anchor)
-		anchor.state = state
-		anchor.text = fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total)
-		anchor.tint = pal.TextMuted
-		chapterLine = anchor
+		chapterLine = newChapterPickerAnchor(state,
+			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
+			pal.TextMuted, 12)
 	} else {
 		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
 		lbl.TextSize = 12
@@ -368,91 +365,12 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	return container.NewVBox(row, rule)
 }
 
-// iconTapButton is a small, low-chrome tappable icon — lighter than
-// widget.Button (no background, no fixed padding). The icon is rendered at
-// iconSize, centred inside a box of boxH height so it can line up vertically
-// with adjacent text of a different size. A disabled button renders faint and
-// ignores taps.
-type iconTapButton struct {
-	widget.BaseWidget
-	state    *AppState
-	icon     fyne.Resource
-	iconSize float32
-	boxH     float32
-	disabled bool
-	onTapped func()
-}
-
-func newIconTapButton(state *AppState, icon fyne.Resource, iconSize, boxH float32, onTapped func()) *iconTapButton {
-	b := &iconTapButton{state: state, icon: icon, iconSize: iconSize, boxH: boxH, onTapped: onTapped}
-	b.ExtendBaseWidget(b)
-	return b
-}
-
-func (b *iconTapButton) Tapped(*fyne.PointEvent) {
-	if b.disabled || b.onTapped == nil {
-		return
-	}
-	b.onTapped()
-}
-
-func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
-	img := canvas.NewImageFromResource(theme.NewColoredResource(b.icon, colorNameMuted))
-	img.FillMode = canvas.ImageFillContain
-	img.SetMinSize(fyne.NewSize(b.iconSize, b.iconSize))
-	if b.disabled {
-		img.Translucency = 0.6 // faint when there's no chapter to move to
-	}
-	// GridWrap pins the cell to a fixed size; NewCenter vertically centres the
-	// smaller icon within that box so it aligns with neighbouring text.
-	box := container.NewGridWrap(fyne.NewSize(b.iconSize+8, b.boxH), container.NewCenter(img))
-	return widget.NewSimpleRenderer(box)
-}
-
-var _ fyne.Tappable = (*iconTapButton)(nil)
-
-// chapterPickerAnchor is a small tappable bit of muted text (e.g.
-// "Chapter 1 of 21 ▾") that opens the chapter picker on tap. It avoids
-// widget.Button's relatively heavy padding so the chapter line stays as
-// quiet as the "World English Bible · Public Domain" subtitle.
-type chapterPickerAnchor struct {
-	widget.BaseWidget
-	state *AppState
-	text  string
-	tint  color.NRGBA
-	lbl   *canvas.Text
-}
-
-func (a *chapterPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
-	a.lbl = canvas.NewText(a.text, a.tint)
-	a.lbl.TextSize = 12
-	a.lbl.TextStyle = fyne.TextStyle{Bold: true}
-	return widget.NewSimpleRenderer(a.lbl)
-}
-
-func (a *chapterPickerAnchor) Tapped(*fyne.PointEvent) {
-	showChapterPicker(a, a.state)
-}
-
-// Make sure Fyne dispatches taps to us.
-var _ fyne.Tappable = (*chapterPickerAnchor)(nil)
-
-// rebuildWindow swaps in a fresh CreateMainUI tree. We use this rather than
-// state.refresh() when the change affects more than the reading pane (e.g.
-// entering or leaving full-screen mode, which also hides/shows the bottom
-// tab bar and the top "Holy Bible" header).
-//
-// After SetContent, Fyne re-lays out the new tree on its own schedule. The
-// native UITextView overlay tracks the new host via Resize/Move, but a few of
-// those can fire with intermediate values before the tree settles. We post a
-// deferred re-push so the UITextView reliably ends up at the new host's
-// settled rect, especially when transitioning into/out of full-screen mode
-// where the previous host's rect is very different.
-func rebuildWindow(state *AppState) {
-	if state.app == nil || state.window == nil {
-		return
-	}
-	state.window.SetContent(CreateMainUI(state.app, state, state.window))
+// afterRebuild (iOS) re-pins the native UITextView overlay after the window
+// tree is swapped. Fyne re-lays out on its own schedule, and a few Resize/Move
+// calls can fire with intermediate values before the tree settles, so we post
+// a deferred re-push to land the overlay on the new host's settled rect —
+// important across full-screen transitions where the rect changes a lot.
+func afterRebuild(state *AppState) {
 	time.AfterFunc(150*time.Millisecond, func() {
 		fyne.Do(func() {
 			if currentHost != nil {

@@ -22,13 +22,27 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	app.Settings().SetTheme(state.theme)
 	pal := state.pal()
 
-	sidebar := buildSidebar(state)
-
 	readingHost := container.NewStack(buildReadingPane(state))
 	state.showReading = func() {
 		readingHost.Objects = []fyne.CanvasObject{buildReadingPane(state)}
 		readingHost.Refresh()
 	}
+
+	// Distraction-free reading: drop the sidebar and the app header so the
+	// reading column gets the whole window. The chapter toolbar stays (so you
+	// can still navigate chapters and toggle back out via its focus button).
+	if state.IsFullScreen {
+		// No sidebar means no search field; keep the hooks safe no-ops.
+		state.syncSidebar = func() {}
+		state.focusSearch = func() {}
+		state.setSearchText = func(string) {}
+		base := canvas.NewRectangle(pal.Background)
+		root := container.NewStack(base, readingHost)
+		installShortcuts(state)
+		return root
+	}
+
+	sidebar := buildSidebar(state)
 
 	split := container.NewHSplit(sidebar, readingHost)
 	split.SetOffset(0.2)
@@ -41,6 +55,10 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	installShortcuts(state)
 	return root
 }
+
+// afterRebuild is a no-op on desktop — there's no native overlay to re-pin
+// after the window content is swapped (see the iOS build for the real one).
+func afterRebuild(*AppState) {}
 
 // installShortcuts wires keyboard shortcuts on the window canvas. The canvas
 // stores shortcuts in a map keyed by name, so re-installing after a theme

@@ -15,6 +15,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// afterRebuild is a no-op on Android (no native text overlay to re-pin).
+func afterRebuild(*AppState) {}
+
 // buildReadingViewMobile is the mobile reading pane.
 //
 // Each paragraph is rendered as one widget.RichText (verses flow inline with
