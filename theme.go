@@ -69,22 +69,45 @@ var darkPalette = palette{
 	Input:         color.NRGBA{R: 38, G: 35, B: 31, A: 255},
 }
 
-// bibleTheme is a Fyne theme whose colours come from the active palette. The dark
-// flag is an explicit user choice, so we ignore the OS variant Fyne passes in.
+// bibleTheme is a Fyne theme whose colours come from the active palette. Light
+// vs. dark is driven by the OS variant Fyne hands to Color() — there is no
+// explicit in-app toggle; we follow the system setting.
 type bibleTheme struct {
-	dark  bool
 	fonts *bookFonts // book-like serif; nil falls back to Fyne's bundled font
 }
 
+// isDark reports whether the app should currently render with the dark
+// palette, derived from the current Fyne app's theme variant (which itself
+// tracks the OS appearance setting).
+func isDark() bool {
+	app := fyne.CurrentApp()
+	if app == nil {
+		return false
+	}
+	return app.Settings().ThemeVariant() == theme.VariantDark
+}
+
+// palette returns the right palette for the current system appearance.
+// Code that needs colours outside of Fyne's Color() callback (e.g. canvas
+// rectangles, the HTML the iOS UITextView consumes) uses this.
 func (t *bibleTheme) palette() palette {
-	if t.dark {
+	if isDark() {
+		return darkPalette
+	}
+	return lightPalette
+}
+
+// paletteFor maps a Fyne theme variant to one of our palettes. Used inside
+// Color(), where we get the variant for free.
+func paletteFor(variant fyne.ThemeVariant) palette {
+	if variant == theme.VariantDark {
 		return darkPalette
 	}
 	return lightPalette
 }
 
 func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	p := t.palette()
+	p := paletteFor(variant)
 	switch name {
 	case theme.ColorNameBackground:
 		return p.Background
@@ -113,7 +136,7 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 	case theme.ColorNameSelection:
 		return withAlpha(p.Accent, 40)
 	case theme.ColorNameShadow:
-		if t.dark {
+		if variant == theme.VariantDark {
 			return color.NRGBA{A: 90}
 		}
 		return color.NRGBA{A: 24}
@@ -127,13 +150,7 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 		return p.HighlightText
 	}
 
-	// Fall back to Fyne's defaults, but force the variant to match our mode so
-	// any colour we don't override still looks right in dark mode.
-	v := theme.VariantLight
-	if t.dark {
-		v = theme.VariantDark
-	}
-	return theme.DefaultTheme().Color(name, v)
+	return theme.DefaultTheme().Color(name, variant)
 }
 
 func (t *bibleTheme) Font(style fyne.TextStyle) fyne.Resource {

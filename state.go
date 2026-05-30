@@ -31,6 +31,11 @@ type AppState struct {
 
 	RecentChapters []ChapterVisit
 
+	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,
+	// CreateMainUI on iOS/Android renders only the reading area and a tiny exit
+	// button — no app header, no chapter toolbar, no bottom tabs.
+	IsFullScreen bool
+
 	// Annotations is the foundation for note/highlight + research features. It is
 	// populated/persisted by future work; the reading view already renders verses
 	// as selectable, individually-referenceable blocks.

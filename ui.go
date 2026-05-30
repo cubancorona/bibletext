@@ -4,8 +4,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/widget"
 )
 
 // Shared UI helpers used by both the desktop and mobile entry points. The
@@ -16,25 +14,18 @@ import (
 func buildHeader(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
+	// The chrome should defer to the reading text — small serif title, muted
+	// subtitle, no in-app theme toggle (light vs. dark follows the system
+	// appearance via the variant Fyne hands bibleTheme.Color).
 	title := canvas.NewText("Holy Bible", pal.Text)
-	title.TextSize = 21
+	title.TextSize = 17
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	subtitle := canvas.NewText("World English Bible · Public Domain", pal.TextMuted)
-	subtitle.TextSize = 11
-
-	toggleLabel := "Dark mode"
-	if state.theme.dark {
-		toggleLabel = "Light mode"
-	}
-	themeToggle := widget.NewButton(toggleLabel, func() {
-		toggleTheme(state)
-	})
-	themeToggle.Importance = widget.LowImportance
+	subtitle.TextSize = 10
 
 	left := container.NewVBox(title, subtitle)
-	right := container.NewVBox(layout.NewSpacer(), themeToggle, layout.NewSpacer())
-	row := container.NewBorder(nil, nil, left, right, nil)
+	row := container.NewBorder(nil, nil, left, nil, nil)
 
 	rule := canvas.NewLine(pal.Border)
 	rule.StrokeWidth = 1
@@ -42,15 +33,4 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	bg := canvas.NewRectangle(pal.SurfaceAlt)
 	content := container.NewVBox(container.NewPadded(row), rule)
 	return container.NewStack(bg, content)
-}
-
-// toggleTheme flips light/dark and rebuilds the window content so every
-// palette-coloured canvas object is recreated against the new colours.
-func toggleTheme(state *AppState) {
-	if state.theme == nil || state.app == nil || state.window == nil {
-		return
-	}
-	state.theme.dark = !state.theme.dark
-	state.app.Settings().SetTheme(state.theme)
-	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 }

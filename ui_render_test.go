@@ -48,13 +48,7 @@ func TestFullUIBuildsAndExercisesPaths(t *testing.T) {
 		t.Fatal("expected recent history after navigating between books")
 	}
 
-	// Toggle dark mode and back; both rebuild the full tree.
-	toggleTheme(state)
-	if !state.theme.dark {
-		t.Fatal("expected dark mode enabled")
-	}
-	toggleTheme(state)
-	if state.theme.dark {
-		t.Fatal("expected light mode after toggling back")
-	}
+	// There's no in-app dark-mode toggle any more (we follow the OS variant).
+	// Rebuild the window once more to make sure CreateMainUI is idempotent.
+	win.SetContent(CreateMainUI(app, state, win))
 }
