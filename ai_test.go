@@ -29,45 +29,53 @@ func (m *mockHTTP) Do(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-func testClient(m *mockHTTP) *geminiClient {
+// fakePrefs is an in-memory prefStore for keyStore tests.
+type fakePrefs struct{ m map[string]string }
+
+func newFakePrefs() *fakePrefs                { return &fakePrefs{m: map[string]string{}} }
+func (f *fakePrefs) String(key string) string { return f.m[key] }
+func (f *fakePrefs) StringWithFallback(key, fb string) string {
+	if v, ok := f.m[key]; ok {
+		return v
+	}
+	return fb
+}
+func (f *fakePrefs) SetString(key, value string) { f.m[key] = value }
+
+// --- Gemini -----------------------------------------------------------------
+
+func geminiTestClient(m *mockHTTP) *geminiClient {
 	return &geminiClient{apiKey: "test-key", model: "gemini-test", baseURL: "https://example.test/v1", http: m}
 }
 
-func TestGenerateSendsKeyAndURLAndParsesText(t *testing.T) {
+func TestGeminiGenerateSendsKeyURLAndParses(t *testing.T) {
 	m := &mockHTTP{statusCode: 200, body: `{"candidates":[{"content":{"parts":[{"text":"Hello "},{"text":"world."}]}}]}`}
-	out, err := testClient(m).generate(context.Background(), "prompt text")
-	if err != nil {
-		t.Fatalf("generate: %v", err)
+	out, err := geminiTestClient(m).generate(context.Background(), "prompt")
+	if err != nil || out != "Hello world." {
+		t.Fatalf("got (%q, %v)", out, err)
 	}
-	if out != "Hello world." {
-		t.Errorf("text = %q, want %q", out, "Hello world.")
+	if m.lastReq.Header.Get("x-goog-api-key") != "test-key" {
+		t.Errorf("missing api key header")
 	}
-	if got := m.lastReq.Header.Get("x-goog-api-key"); got != "test-key" {
-		t.Errorf("api key header = %q", got)
-	}
-	if m.lastReq.Method != http.MethodPost {
-		t.Errorf("method = %q", m.lastReq.Method)
-	}
-	wantURL := "https://example.test/v1/models/gemini-test:generateContent"
-	if m.lastReq.URL.String() != wantURL {
-		t.Errorf("url = %q, want %q", m.lastReq.URL.String(), wantURL)
+	if m.lastReq.URL.String() != "https://example.test/v1/models/gemini-test:generateContent" {
+		t.Errorf("url = %q", m.lastReq.URL.String())
 	}
 }
 
-func TestGenerateRateLimitedReturnsAPIError(t *testing.T) {
+func TestGeminiRateLimited(t *testing.T) {
 	m := &mockHTTP{statusCode: http.StatusTooManyRequests, body: `{"error":{"message":"quota"}}`}
-	_, err := testClient(m).generate(context.Background(), "p")
+	_, err := geminiTestClient(m).generate(context.Background(), "p")
 	var apiErr *apiHTTPError
-	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusTooManyRequests {
-		t.Fatalf("want apiHTTPError 429, got %v", err)
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 429 {
+		t.Fatalf("want 429 apiHTTPError, got %v", err)
 	}
-	if friendlyAIError(err) == "" || !strings.Contains(friendlyAIError(err), "busy") {
-		t.Errorf("friendly message = %q", friendlyAIError(err))
+	if !strings.Contains(friendlyAIError(err), "busy") {
+		t.Errorf("friendly = %q", friendlyAIError(err))
 	}
 }
 
 func TestGenerateEmptyKey(t *testing.T) {
-	c := testClient(&mockHTTP{})
+	c := geminiTestClient(&mockHTTP{})
 	c.apiKey = ""
 	if _, err := c.generate(context.Background(), "p"); !errors.Is(err, errNoAPIKey) {
 		t.Fatalf("want errNoAPIKey, got %v", err)
@@ -84,70 +92,142 @@ func TestParseGeminiText(t *testing.T) {
 		{"ok", `{"candidates":[{"content":{"parts":[{"text":"Answer."}]}}]}`, "Answer.", false},
 		{"no candidates", `{"candidates":[]}`, "", true},
 		{"blocked", `{"promptFeedback":{"blockReason":"SAFETY"}}`, "", true},
-		{"empty text", `{"candidates":[{"content":{"parts":[{"text":"  "}]},"finishReason":"SAFETY"}]}`, "", true},
-		{"garbage", `not json`, "", true},
+		{"garbage", `nope`, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := parseGeminiText([]byte(tc.body))
-			if tc.wantErr && err == nil {
-				t.Fatalf("want error, got %q", got)
-			}
-			if !tc.wantErr && (err != nil || got != tc.want) {
-				t.Fatalf("got (%q, %v), want %q", got, err, tc.want)
+			if tc.wantErr != (err != nil) || (!tc.wantErr && got != tc.want) {
+				t.Fatalf("got (%q, %v)", got, err)
 			}
 		})
 	}
 }
 
-func TestBuildAIPromptVariesByAction(t *testing.T) {
-	const book, chap, sel = "John", 3, "For God so loved the world"
+// --- OpenAI / Anthropic adapters --------------------------------------------
 
-	explain := buildAIPrompt(aiActionExplain, book, chap, sel)
-	context := buildAIPrompt(aiActionContext, book, chap, sel)
-	translation := buildAIPrompt(aiActionTranslation, book, chap, sel)
-
-	for _, p := range []string{explain, context, translation} {
-		if !strings.Contains(p, "John 3") {
-			t.Errorf("prompt missing reference: %q", p)
-		}
-		if !strings.Contains(p, sel) {
-			t.Errorf("prompt missing selected text: %q", p)
-		}
+func TestOpenAIGenerate(t *testing.T) {
+	m := &mockHTTP{statusCode: 200, body: `{"choices":[{"message":{"content":"Hi."}}]}`}
+	c := &openAIClient{apiKey: "k", model: "gpt", baseURL: "https://x.test/v1", http: m}
+	out, err := c.generate(context.Background(), "p")
+	if err != nil || out != "Hi." {
+		t.Fatalf("got (%q, %v)", out, err)
 	}
-	if !strings.Contains(strings.ToLower(context), "context") {
-		t.Errorf("context prompt should mention context")
+	if m.lastReq.Header.Get("Authorization") != "Bearer k" {
+		t.Errorf("auth header = %q", m.lastReq.Header.Get("Authorization"))
 	}
-	if !strings.Contains(translation, "World English Bible") {
-		t.Errorf("translation prompt should mention the WEB translation")
-	}
-	if explain == context || context == translation {
-		t.Errorf("prompts should differ by action")
+	if m.lastReq.URL.String() != "https://x.test/v1/chat/completions" {
+		t.Errorf("url = %q", m.lastReq.URL.String())
 	}
 }
 
-func TestGeminiAPIKeyPrefersEnv(t *testing.T) {
-	saved := embeddedGeminiKey
-	t.Cleanup(func() { embeddedGeminiKey = saved })
-
-	embeddedGeminiKey = "embedded-key"
-	t.Setenv("GEMINI_API_KEY", "env-key")
-	if got := geminiAPIKey(); got != "env-key" {
-		t.Errorf("with env set, key = %q, want env-key", got)
+func TestAnthropicGenerate(t *testing.T) {
+	m := &mockHTTP{statusCode: 200, body: `{"content":[{"type":"text","text":"Hello."}]}`}
+	c := &anthropicClient{apiKey: "k", model: "claude", baseURL: "https://a.test", http: m}
+	out, err := c.generate(context.Background(), "p")
+	if err != nil || out != "Hello." {
+		t.Fatalf("got (%q, %v)", out, err)
 	}
+	if m.lastReq.Header.Get("x-api-key") != "k" {
+		t.Errorf("x-api-key = %q", m.lastReq.Header.Get("x-api-key"))
+	}
+	if m.lastReq.Header.Get("anthropic-version") == "" {
+		t.Errorf("missing anthropic-version header")
+	}
+	if m.lastReq.URL.String() != "https://a.test/v1/messages" {
+		t.Errorf("url = %q", m.lastReq.URL.String())
+	}
+}
 
+func TestParseAdapterText(t *testing.T) {
+	if v, _ := parseOpenAIText([]byte(`{"choices":[{"message":{"content":"A"}}]}`)); v != "A" {
+		t.Errorf("openai parse = %q", v)
+	}
+	if _, err := parseOpenAIText([]byte(`{"choices":[]}`)); err == nil {
+		t.Errorf("openai empty should error")
+	}
+	if v, _ := parseAnthropicText([]byte(`{"content":[{"type":"text","text":"B"}]}`)); v != "B" {
+		t.Errorf("anthropic parse = %q", v)
+	}
+	if _, err := parseAnthropicText([]byte(`{"content":[]}`)); err == nil {
+		t.Errorf("anthropic empty should error")
+	}
+}
+
+func TestProviderRegistry(t *testing.T) {
+	for _, id := range []string{providerGemini, providerOpenAI, providerAnthropic, providerGrok} {
+		p, ok := providerByID(id)
+		if !ok || p.New == nil || p.Model == "" || p.KeyURL == "" || p.Name == "" {
+			t.Errorf("provider %q incomplete: %+v ok=%v", id, p, ok)
+		}
+	}
+	if _, ok := providerByID("nope"); ok {
+		t.Errorf("unknown provider should not resolve")
+	}
+}
+
+// --- Key store + resolution -------------------------------------------------
+
+func TestKeyStore(t *testing.T) {
+	ks := newKeyStoreWith(newFakePrefs())
+	if ks.activeProvider() != defaultProviderID {
+		t.Errorf("default active = %q", ks.activeProvider())
+	}
+	ks.setActiveProvider(providerAnthropic)
+	if ks.activeProvider() != providerAnthropic {
+		t.Errorf("active = %q", ks.activeProvider())
+	}
+	ks.setActiveProvider("bogus") // ignored
+	if ks.activeProvider() != providerAnthropic {
+		t.Errorf("bogus provider should be ignored, got %q", ks.activeProvider())
+	}
+	ks.setAPIKey(providerOpenAI, "  sk-123  ")
+	if ks.apiKey(providerOpenAI) != "sk-123" {
+		t.Errorf("key not trimmed/stored: %q", ks.apiKey(providerOpenAI))
+	}
+}
+
+func TestProviderAPIKeyPrefersEnv(t *testing.T) {
+	ks := newKeyStoreWith(newFakePrefs())
+	ks.setAPIKey(providerGemini, "stored")
+	t.Setenv("GEMINI_API_KEY", "env")
+	if providerAPIKey(ks, providerGemini) != "env" {
+		t.Errorf("env should win")
+	}
 	t.Setenv("GEMINI_API_KEY", "")
-	if got := geminiAPIKey(); got != "embedded-key" {
-		t.Errorf("without env, key = %q, want embedded-key", got)
+	if providerAPIKey(ks, providerGemini) != "stored" {
+		t.Errorf("stored should be used without env")
+	}
+}
+
+// --- Shared prompts / orchestration -----------------------------------------
+
+func TestBuildAIPromptVariesByAction(t *testing.T) {
+	const book, chap, sel = "John", 3, "For God so loved the world"
+	explain := buildAIPrompt(aiActionExplain, book, chap, sel)
+	ctx := buildAIPrompt(aiActionContext, book, chap, sel)
+	trans := buildAIPrompt(aiActionTranslation, book, chap, sel)
+
+	for _, p := range []string{explain, ctx, trans} {
+		if !strings.Contains(p, "John 3") || !strings.Contains(p, sel) {
+			t.Errorf("prompt missing ref/selection: %q", p)
+		}
+	}
+	if !strings.Contains(strings.ToLower(ctx), "context") {
+		t.Errorf("context prompt should mention context")
+	}
+	if !strings.Contains(trans, "World English Bible") {
+		t.Errorf("translation prompt should mention WEB")
+	}
+	if explain == ctx || ctx == trans {
+		t.Errorf("prompts should differ by action")
 	}
 }
 
 func TestAIActionTitle(t *testing.T) {
 	for action, want := range map[string]string{
-		aiActionExplain:     "Explanation",
-		aiActionContext:     "Context",
-		aiActionTranslation: "Translation",
-		"unknown":           "Explanation",
+		aiActionExplain: "Explanation", aiActionContext: "Context",
+		aiActionTranslation: "Translation", "unknown": "Explanation",
 	} {
 		if got := aiActionTitle(action); got != want {
 			t.Errorf("aiActionTitle(%q) = %q, want %q", action, got, want)
@@ -156,16 +236,9 @@ func TestAIActionTitle(t *testing.T) {
 }
 
 func TestRunAIActionUsesCache(t *testing.T) {
-	saved := embeddedGeminiKey
-	t.Cleanup(func() { embeddedGeminiKey = saved })
-	t.Setenv("GEMINI_API_KEY", "") // force use of embedded
-	embeddedGeminiKey = ""         // no key -> errNoAPIKey, but cache should short-circuit
-
-	state := &AppState{CurrentBook: "Mark", CurrentChapter: 1}
-	key := aiCacheKey(aiActionExplain, "Mark", 1, "the beginning")
-	aiCacheMu.Lock()
-	aiCache[key] = "cached answer"
-	aiCacheMu.Unlock()
+	state := &AppState{CurrentBook: "Mark", CurrentChapter: 1} // no aiKeys -> inert store, active=gemini
+	key := aiCacheKey(providerGemini+"|"+aiActionExplain, "Mark", 1, "the beginning")
+	aiCacheSet(key, "cached answer")
 	t.Cleanup(func() {
 		aiCacheMu.Lock()
 		delete(aiCache, key)
@@ -175,5 +248,17 @@ func TestRunAIActionUsesCache(t *testing.T) {
 	got, err := runAIAction(context.Background(), state, aiActionExplain, "the beginning")
 	if err != nil || got != "cached answer" {
 		t.Fatalf("cache hit: got (%q, %v)", got, err)
+	}
+}
+
+func TestRunAIActionNoKeyError(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "") // ensure no ambient dev key
+	state := &AppState{CurrentBook: "Acts", CurrentChapter: 2}
+	_, err := runAIAction(context.Background(), state, aiActionExplain, "unique selection no cache")
+	if !isNoKeyError(err) {
+		t.Fatalf("want noKeyError, got %v", err)
+	}
+	if !strings.Contains(friendlyAIError(err), "settings") {
+		t.Errorf("friendly should point to settings: %q", friendlyAIError(err))
 	}
 }

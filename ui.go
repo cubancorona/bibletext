@@ -4,6 +4,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 // Shared UI helpers used by both the desktop and mobile entry points. The
@@ -25,7 +28,13 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	subtitle.TextSize = 10
 
 	left := container.NewVBox(title, subtitle)
-	row := container.NewBorder(nil, nil, left, nil, nil)
+
+	// Settings gear (AI study: pick a provider + paste your key).
+	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { showAISettings(state) })
+	gear.Importance = widget.LowImportance
+	right := container.NewVBox(layout.NewSpacer(), gear, layout.NewSpacer())
+
+	row := container.NewBorder(nil, nil, left, right, nil)
 
 	rule := canvas.NewLine(pal.Border)
 	rule.StrokeWidth = 1

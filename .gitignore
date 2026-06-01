@@ -17,8 +17,5 @@ coverage.*
 # Local Bible cache (normally lives in the OS cache dir; ignore any local copy)
 holy-bible-cache.json
 
-# Embedded Gemini API key — provided locally, never committed (see ai_key.go.example)
-ai_key.go
-
 # macOS / editor cruft
 .DS_Store

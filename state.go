@@ -66,6 +66,10 @@ type AppState struct {
 	// any popup). Both are nil/no-op on desktop and Android.
 	hideReadingOverlay func()
 	showReadingOverlay func()
+
+	// aiKeys holds the user's AI provider choice + keys (bring-your-own-key),
+	// lazily created via keys(); nil-safe so unit tests work without a Fyne app.
+	aiKeys *keyStore
 }
 
 // ChapterVisit is one entry in the reading history.
@@ -79,6 +83,15 @@ func (s *AppState) pal() palette {
 		return s.theme.palette()
 	}
 	return lightPalette
+}
+
+// keys returns the AI key store, binding it to the app's Preferences on first
+// use. Always returns a usable (possibly inert) store.
+func (s *AppState) keys() *keyStore {
+	if s.aiKeys == nil {
+		s.aiKeys = newKeyStore()
+	}
+	return s.aiKeys
 }
 
 func (s *AppState) refresh() {
