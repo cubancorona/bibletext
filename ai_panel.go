@@ -106,14 +106,25 @@ func showAIPanel(state *AppState, action, selectedText string) {
 	}
 
 	var startFetch func()
-	setError := func(msg string) {
+	setError := func(msg string, needsSettings bool) {
 		copyBtn.Disable()
 		lbl := widget.NewLabel(msg)
 		lbl.Wrapping = fyne.TextWrapWord
 		lbl.Alignment = fyne.TextAlignCenter
-		retry := widget.NewButton("Try again", func() { startFetch() })
+		var actBtn *widget.Button
+		if needsSettings {
+			actBtn = widget.NewButton("Open AI settings", func() {
+				if popup != nil {
+					popup.Hide()
+				}
+				showAISettings(state)
+			})
+			actBtn.Importance = widget.HighImportance
+		} else {
+			actBtn = widget.NewButton("Try again", func() { startFetch() })
+		}
 		body.Objects = []fyne.CanvasObject{
-			container.NewVBox(layout.NewSpacer(), lbl, container.NewCenter(retry), layout.NewSpacer()),
+			container.NewVBox(layout.NewSpacer(), lbl, container.NewCenter(actBtn), layout.NewSpacer()),
 		}
 		body.Refresh()
 	}
@@ -126,7 +137,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 			result, err := runAIAction(ctx, state, action, selectedText)
 			fyne.Do(func() {
 				if err != nil {
-					setError(friendlyAIError(err))
+					setError(friendlyAIError(err), isNoKeyError(err))
 					return
 				}
 				setResult(result)
