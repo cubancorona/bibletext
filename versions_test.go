@@ -162,6 +162,11 @@ func TestLoadVersionDataWebDoesNotNeedBase(t *testing.T) {
 }
 
 func TestSwitchVersionUpdatesState(t *testing.T) {
+	// LSB is a not-yet-licensed (testing) version, so it is normally not
+	// selectable; unlock internal testing mode so the switch is allowed and
+	// exercises the placeholder path.
+	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "1")
+
 	base := baseSampleBible()
 	state := &AppState{
 		Bible:          base,
@@ -187,5 +192,48 @@ func TestSwitchVersionUpdatesState(t *testing.T) {
 	switchVersion(state, "web")
 	if state.CurrentVersion != "web" || state.Bible != base {
 		t.Error("switching back to web should restore the base data")
+	}
+}
+
+func TestVersionSelectionGating(t *testing.T) {
+	web, _ := versionByID("web")
+	nrsv, _ := versionByID("nrsv")
+
+	// Public domain is always selectable; an unlicensed copyrighted version is
+	// not selectable by default (it shows as "evaluation in progress").
+	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "")
+	if !web.canSelect() {
+		t.Error("web (public domain) must be selectable")
+	}
+	if nrsv.canSelect() {
+		t.Error("nrsv must not be selectable without a license or the testing flag")
+	}
+
+	// The internal testing flag unlocks it for QA.
+	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "1")
+	if !nrsv.canSelect() {
+		t.Error("nrsv should be selectable when HOLY_BIBLE_ENABLE_TESTING=1")
+	}
+}
+
+// TestSwitchVersionRefusesUnselectable is the backstop guaranteeing users can't
+// reach a not-yet-licensed version's placeholder, even if some code path calls
+// switchVersion directly.
+func TestSwitchVersionRefusesUnselectable(t *testing.T) {
+	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "")
+
+	base := baseSampleBible()
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: "web",
+		currentMode:    modeReal,
+		loadedVersions: map[string]*BibleData{"web": base},
+		CurrentBook:    "John",
+		CurrentChapter: 1,
+	}
+
+	switchVersion(state, "nrsv")
+	if state.CurrentVersion != "web" || state.Bible != base {
+		t.Errorf("switch to an unlicensed version should be a no-op; got version=%q", state.CurrentVersion)
 	}
 }

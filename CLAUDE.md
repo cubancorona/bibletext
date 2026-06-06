@@ -54,9 +54,15 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
   registry (WEB public-domain, NRSV/LSB licensed) and a `bibleSource` per version
   (`webSource` = bible-api.com; `licensedAPISource` = scaffold gated on a license
-  opt-in + `BIBLE_API_KEY`). Unlicensed versions serve a clearly-labeled testing
-  placeholder mirroring WEB's structure (`makePlaceholderBible`). `switchVersion`
-  swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
+  opt-in + `BIBLE_API_KEY`). **Not-yet-licensed versions are NOT user-selectable**
+  (`canSelect` = real text available, i.e. `!isTesting()`): the picker
+  (`versions_ui.go`) renders them de-emphasized and non-tappable as "evaluation in
+  progress", and `switchVersion` refuses them — so no copyrighted placeholder text
+  reaches users. The placeholder path (`makePlaceholderBible`, mirrors WEB's
+  structure) stays in the code and is unlocked for internal QA by
+  `HOLY_BIBLE_ENABLE_TESTING=1` (`testingVersionsEnabled`); once a license is
+  configured the version flips to selectable with real text automatically.
+  `switchVersion` swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
   `holy-bible-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
   shared → both platforms). All versions share the canonical 66-book structure,
   so reading/search/AI need no per-version code. Docs: README → "Bible versions".

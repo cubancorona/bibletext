@@ -7,11 +7,15 @@ package holybible
 //
 // Licensing. The World English Bible is public domain and comes from the free
 // bible-api.com source. NRSV and LSB are copyrighted and require a distribution
-// license (see README → "Bible versions"); until a license + credentials are
-// configured, those versions serve a clearly-labeled TESTING placeholder so the
-// whole flow (switching, reading, search, AI study) can be exercised. The
-// retrieval/cache/UI are fully wired — only the licensed provider's HTTP calls
-// remain to be filled in (licensedAPISource.fetch).
+// license (see README → "Bible versions"). Until a license + credentials are
+// configured they are NOT user-selectable: the picker shows them as "evaluation
+// in progress" and tapping is disabled, so a shipped build never exposes
+// placeholder text to end users. The full testing/placeholder path stays in the
+// code and can be exercised for internal QA by setting HOLY_BIBLE_ENABLE_TESTING=1
+// (see canSelect + testingVersionsEnabled). The retrieval/cache/UI are fully
+// wired — only the licensed provider's HTTP calls remain to be filled in
+// (licensedAPISource.fetch), at which point the version becomes selectable
+// automatically with real text.
 
 import (
 	"fmt"
@@ -44,6 +48,16 @@ type BibleVersion struct {
 // isTesting reports whether this version currently serves placeholder text
 // rather than real scripture (because its licensed source isn't available yet).
 func (v BibleVersion) isTesting() bool { return v.source == nil || !v.source.available() }
+
+// canSelect reports whether a user may switch to this version. It is true only
+// when real text is available — public domain, or licensed *and* configured.
+// Versions still in placeholder mode are deliberately NOT selectable in a normal
+// build (the picker shows them as "evaluation in progress"), so no copyrighted
+// placeholder text is ever exposed to end users. Setting HOLY_BIBLE_ENABLE_TESTING=1
+// unlocks them for internal QA of the placeholder flow.
+func (v BibleVersion) canSelect() bool {
+	return !v.isTesting() || testingVersionsEnabled()
+}
 
 // registeredVersions is the ordered list shown in the version picker.
 var registeredVersions = []BibleVersion{
@@ -151,6 +165,14 @@ func envTruthy(v string) bool {
 	return false
 }
 
+// testingVersionsEnabled unlocks the not-yet-licensed versions for internal QA,
+// making them selectable so the placeholder flow can be exercised end to end.
+// It is off by default, so shipped builds never expose placeholder text to users
+// (they see the versions as "evaluation in progress", not selectable).
+func testingVersionsEnabled() bool {
+	return envTruthy(os.Getenv("HOLY_BIBLE_ENABLE_TESTING"))
+}
+
 // --- Loading + placeholders -------------------------------------------------
 
 // dataMode distinguishes real scripture from a testing placeholder.
@@ -237,7 +259,11 @@ func switchVersion(state *AppState, id string) {
 		return
 	}
 	v, ok := versionByID(id)
-	if !ok {
+	if !ok || !v.canSelect() {
+		// Unknown id, or a not-yet-licensed version while internal testing mode is
+		// off: refuse the switch so placeholder text is never shown to users. The
+		// picker already renders these as non-tappable "evaluation in progress"
+		// rows; this is the matching backstop.
 		return
 	}
 

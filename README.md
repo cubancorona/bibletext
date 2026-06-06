@@ -43,27 +43,66 @@ Two more translations are wired in:
 | Version | Abbrev | Rights holder | Status |
 |---|---|---|---|
 | World English Bible | WEB | Public domain | ✅ Real text |
-| New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 License required |
-| Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 License required |
+| New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 Evaluation in progress |
+| Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
 
-**NRSV and LSB are copyrighted** and cannot be redistributed without permission,
-so until a license is configured they run in a **testing mode**: every verse is
-replaced with clearly-labeled placeholder text (e.g. `[NRSV sample — licensed
-text not available in this testing build] John 1:1`), and a **TESTING** badge
-appears beside the version name. This exercises the whole flow — switching,
-navigation, search, AI study — with the real retrieval, cache and UI already in
-place.
+**NRSV and LSB are copyrighted** and can't be redistributed without permission, so
+in normal builds they appear in the switcher as **"Evaluation in progress — not yet
+available"** and are **greyed out / not selectable** — no placeholder text is ever
+shown to users. The full retrieval, cache, switching, search and AI-study path is
+already wired, so each becomes a normal, selectable translation the moment a license
+is configured (see [Activating a licensed version](#activating-a-licensed-version)) —
+no UI or code change needed.
+
+For internal QA before a license lands, set `HOLY_BIBLE_ENABLE_TESTING=1`. That
+unlocks the not-yet-licensed versions with **clearly-labeled placeholder text** (e.g.
+`[NRSV sample — licensed text not available in this testing build] John 1:1`) and a
+**TESTING** badge, so switching, navigation, search and AI study can be exercised end
+to end — without shipping copyrighted text.
 
 ### Getting a license
 
-- **NRSV** — administered by the **National Council of the Churches of Christ in
-  the USA**. Request distribution permission from the NCC
-  (<https://www.ncccusa.org/>), or license it through a Bible-API provider that
-  carries it, e.g. **API.Bible / scripture.api.bible**
-  (<https://scripture.api.bible/>) — you apply for access and agree to the
-  publisher's terms.
-- **LSB** — published by **The Lockman Foundation**. Request digital/app
-  licensing from their permissions team (<https://www.lockman.org/>).
+Two routes: go through an **API provider** that already carries the translation
+(simplest — it matches the `licensedAPISource` code path), or license **directly**
+from the rights holder and load the text they supply. Two real-world wrinkles to
+know before you start:
+
+- **"NRSV" in practice means the NRSVue.** The original 1989 NRSV is **no longer
+  available for new licenses** (only the NRSV Catholic Edition is). License the
+  **New Revised Standard Version Updated Edition (NRSVue, 2021)** instead.
+- **The LSB is licensed directly, not via a public API.** The Lockman Foundation
+  distributes it through per-partner agreements, so you'll most likely receive the
+  text as a data file/feed rather than an API `bibleId`.
+
+**NRSVue** — copyright: **National Council of Churches**; permissions managed by
+**Petradi Rights Management**.
+- Email **`NCCrights@petradirights.com`** with your use details (translation,
+  verse counts, product description, distribution format, target markets, sales
+  projections, timeline). Mobile-app / software use needs a paid license — it's
+  outside the free-use policy and a fee applies. Hub: <https://www.friendshippress.org/>.
+- Or license via an API provider that carries it (API.Bible, below) — **confirm
+  it's in their catalog first.**
+- Free-use (no permission needed): up to **500 verses** *and* under **25%** of your
+  work, with attribution — enough for a sample/preview, not the whole text.
+
+**LSB (Legacy Standard Bible)** — copyright: **The Lockman Foundation**, managed
+with **Three Sixteen Publishing**.
+- Email **`info@316publishing.com`** to set up a licensing agreement. There's no
+  advertised self-serve API or data download — you agree terms and they provide the
+  text for your app (which then plugs in as a file-based source — see below).
+  General permissions info: <https://www.lockman.org/>.
+
+**API.Bible (`scripture.api.bible`)** — the provider the code scaffolds against,
+run by the American Bible Society; carries many popular translations. **Confirm
+NRSVue (and, if ever offered, LSB) are actually in its catalog before relying on it.**
+1. Sign up at <https://scripture.api.bible/> → get your **API key** from the
+   dashboard once approved (sent in the `api-key` request header). This is
+   `BIBLE_API_KEY`.
+2. A distributed app needs **commercial** access — copyrighted translations start
+   around **$10/month each**; the free Starter plan's 3 licensed Bibles are
+   **non-commercial only**. Arrange commercial terms with them.
+3. Get each translation's **`bibleId`**: `GET /v1/bibles` returns the Bibles your
+   key can access, each with an `id`. That id is your `HOLY_BIBLE_PROVIDER_ID_*`.
 
 ### Activating a licensed version
 
@@ -80,6 +119,14 @@ export HOLY_BIBLE_PROVIDER_ID_NRSV="<provider's bible id>"
 The double gate — a license opt-in **and** credentials — makes it impossible to
 ship copyrighted text by accident. Each version caches to its own file
 (`holy-bible-<id>.json`) beside the WEB cache.
+
+Those env vars drive the **API-provider path** (`licensedAPISource`) — the right
+shape for the NRSVue via API.Bible. The **LSB** arrives as licensed **data**, not an
+API, so it plugs in differently: add a small file-based `bibleSource` that parses the
+supplied text into `BibleData` (the `bibleSource` interface in `versions.go` is built
+for exactly this — `webSource`, `licensedAPISource`, and a future `licensedFileSource`
+all satisfy it, and the rest of the app is unchanged). Gate it the same way so the
+real text only loads once you've dropped the licensed file in place.
 
 ## AI study (bring your own key)
 

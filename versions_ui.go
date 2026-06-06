@@ -107,7 +107,7 @@ func showVersionPicker(state *AppState) {
 		}))
 	}
 
-	note := widget.NewLabel("Licensed translations (NRSV, LSB) show clearly-marked placeholder text until a license is configured.")
+	note := widget.NewLabel("NRSV and LSB are under evaluation and not yet selectable; they unlock once licensing is complete.")
 	note.Wrapping = fyne.TextWrapWord
 	closeBtn := widget.NewButton("Close", closePicker)
 	footer := container.NewVBox(
@@ -141,15 +141,25 @@ func showVersionPicker(state *AppState) {
 	popup.Resize(fyne.NewSize(w, h))
 }
 
-// versionRow is one tappable card in the picker: name + abbreviation, the
-// publisher/license note, a TESTING tag for placeholder versions, and a check on
-// the active one. A background rectangle gives it a solid hit rectangle (mobile)
-// and a subtle highlight for the current version.
+// versionRow is one card in the picker: name + abbreviation, the publisher/license
+// note, a status line, and a check on the active one. A background rectangle gives
+// it a solid hit rectangle (mobile) and a subtle highlight for the current version.
+//
+// Selectable versions (real text available) are tappable. A version that isn't yet
+// licensed is rendered de-emphasized and NON-tappable with a formal "evaluation in
+// progress" note — it is never wrapped in a tapBox, so users cannot reach its
+// placeholder text. (When HOLY_BIBLE_ENABLE_TESTING=1, such a version becomes
+// selectable and instead carries the internal TESTING placeholder tag.)
 func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject {
 	pal := state.pal()
+	selectable := v.canSelect()
 	current := v.ID == state.CurrentVersion
 
-	name := canvas.NewText(v.Name+"  ("+v.Abbrev+")", pal.Text)
+	nameColor := pal.Text
+	if !selectable {
+		nameColor = pal.TextMuted // greyed: present but not available
+	}
+	name := canvas.NewText(v.Name+"  ("+v.Abbrev+")", nameColor)
 	name.TextStyle = fyne.TextStyle{Bold: true}
 	name.TextSize = 15
 
@@ -157,7 +167,16 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 	publisher.TextSize = 11
 
 	lines := container.NewVBox(name, publisher)
-	if v.isTesting() {
+	switch {
+	case !selectable:
+		// Copyrighted translation we don't yet have rights to ship: shown, but not
+		// selectable, with a formal status note instead of any placeholder text.
+		tag := canvas.NewText("Evaluation in progress — not yet available", pal.TextMuted)
+		tag.TextSize = 11
+		tag.TextStyle = fyne.TextStyle{Italic: true}
+		lines.Add(tag)
+	case v.isTesting():
+		// Selectable only because internal testing mode is on (HOLY_BIBLE_ENABLE_TESTING).
 		tag := canvas.NewText("TESTING — placeholder text, not the real translation", pal.Accent)
 		tag.TextSize = 11
 		tag.TextStyle = fyne.TextStyle{Italic: true}
@@ -181,6 +200,10 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 	bg.CornerRadius = 8
 
 	card := container.NewStack(bg, container.NewPadded(inner))
+	if !selectable {
+		// No tapBox wrapper → genuinely inert; the row is informational only.
+		return card
+	}
 	return newTapBox(card, onTap)
 }
 
