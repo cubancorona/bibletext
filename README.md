@@ -23,6 +23,67 @@ calm, responsive reading layout.
 - ⌨️ **Keyboard shortcuts** (desktop) — `Cmd/Ctrl+F` focuses search, `Esc` clears.
 - 📱 **Touch UI** (iOS) — bottom-tab layout (Read / Books / Search) with full-size
   touch targets; the same data, search and theme code as the desktop build.
+- 🤖 **AI study** (bring your own key) — select any passage and ask an AI to
+  **Explain**, **Analyze context**, or **Analyze translation** it, using your own
+  Gemini / ChatGPT / Claude / Grok API key. See
+  [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
+
+## AI study (bring your own key)
+
+Select a passage in the reader and the native selection menu gains a **Study with
+AI** submenu with three actions — **Explain**, **Analyze context**, and **Analyze
+translation**. The chosen action plus the selected text are sent to an AI provider
+of your choice, and the answer appears in a panel.
+
+You supply your own API key per provider. Keys are stored **only on this device**
+(via the OS preferences store) — nothing is embedded in the app. Open the header
+**gear → AI study** sheet to pick a provider and paste a key:
+
+| Provider | Model | Get a key |
+|---|---|---|
+| Google Gemini | `gemini-2.5-flash` | <https://aistudio.google.com/apikey> |
+| ChatGPT (OpenAI) | `gpt-4o-mini` | <https://platform.openai.com/api-keys> |
+| Claude (Anthropic) | `claude-3-5-haiku-latest` | <https://console.anthropic.com/settings/keys> |
+| Grok (xAI) | `grok-2-latest` | <https://console.x.ai> |
+
+A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `XAI_API_KEY`) overrides the stored key when set.
+
+### What gets sent
+
+Each action builds one prompt (`buildAIPrompt` in `ai.go`) and sends it as a
+single user message at temperature `0.4`, capped at `4096` output tokens.
+Identical requests are cached in memory, so re-opening the same analysis does not
+re-send. Only the text you selected — plus the book and chapter it came from — and
+the fixed instructions below ever leave the device:
+
+```
+You are a knowledgeable, even-handed Bible study assistant. Write in clear,
+plain language for a general reader and keep it concise — a few short paragraphs
+at most. Where scholars disagree or a point is uncertain, say so briefly rather
+than overstating. Do not use markdown headings or bullet lists.
+
+{task}
+
+Passage ({Book} {Chapter}):
+"{selected text}"
+```
+
+`{task}` is the only part that differs per action:
+
+- **Explain** — "Explain what the passage below means: its main idea, any imagery
+  or terms a general reader might not know, and how its parts connect."
+- **Analyze context** — "Explain the context of the passage below: who wrote it
+  and to whom, what is happening in the surrounding narrative, and how it fits the
+  historical, literary, and theological themes of `{Book}`."
+- **Analyze translation** — "Discuss translation considerations for the passage
+  below: notable Hebrew or Greek words behind the English, how major English
+  translations render it differently, and nuances that are hard to carry into
+  English. The quoted text is from the World English Bible."
+
+The reference sent is the **book and chapter only** (e.g. `Passage (John 1)`), not
+the specific verse number. The separate **Test key** button in settings sends just
+`Reply with the single word: OK` to validate a key.
 
 ## Repository layout
 
