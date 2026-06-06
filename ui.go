@@ -28,10 +28,13 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// TESTING badge when a version is showing placeholder text (see versions.go).
 	left := container.NewVBox(title, versionSelector(state))
 
-	// Settings gear (AI study: pick a provider + paste your key).
+	// Settings gear (AI study: pick a provider + paste your key) sits beside the
+	// subtle verse-of-the-day sparkle. Both are low-importance so the chrome stays
+	// quiet next to the reading text.
 	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { showAISettings(state) })
 	gear.Importance = widget.LowImportance
-	right := container.NewVBox(layout.NewSpacer(), gear, layout.NewSpacer())
+	controls := container.NewHBox(verseOfDayButton(state), gear)
+	right := container.NewVBox(layout.NewSpacer(), controls, layout.NewSpacer())
 
 	row := container.NewBorder(nil, nil, left, right, nil)
 
