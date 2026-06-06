@@ -12,6 +12,14 @@ import (
 type AppState struct {
 	Bible *BibleData
 
+	// Translation the reader is showing. CurrentVersion is a BibleVersion ID
+	// (see versions.go); currentMode says whether Bible is real scripture or a
+	// testing placeholder; loadedVersions caches already-loaded translations so
+	// switching back is instant (the default/base version is always present).
+	CurrentVersion string
+	currentMode    dataMode
+	loadedVersions map[string]*BibleData
+
 	CurrentBook    string
 	CurrentChapter int
 
@@ -92,6 +100,27 @@ func (s *AppState) keys() *keyStore {
 		s.aiKeys = newKeyStore()
 	}
 	return s.aiKeys
+}
+
+// currentVersion returns the active translation's metadata (falls back to the
+// default if CurrentVersion is unset, e.g. in unit tests).
+func (s *AppState) currentVersion() BibleVersion {
+	if v, ok := versionByID(s.CurrentVersion); ok {
+		return v
+	}
+	v, _ := versionByID(defaultVersionID)
+	return v
+}
+
+// baseBible is the default (public-domain) translation, used as the structural
+// template for testing placeholders. nil only before the first load.
+func (s *AppState) baseBible() *BibleData {
+	if s.loadedVersions != nil {
+		if b := s.loadedVersions[defaultVersionID]; b != nil {
+			return b
+		}
+	}
+	return s.Bible
 }
 
 func (s *AppState) refresh() {

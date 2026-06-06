@@ -51,6 +51,15 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `ai.go` (shared preamble + per-action task + the quoted selection; documented
   in README → "AI study"). Settings sheet: `ai_settings.go` (header gear). Result
   panel: `ai_panel.go`.
+- **Bible versions (translations).** `versions.go` defines `BibleVersion` +
+  registry (WEB public-domain, NRSV/LSB licensed) and a `bibleSource` per version
+  (`webSource` = bible-api.com; `licensedAPISource` = scaffold gated on a license
+  opt-in + `BIBLE_API_KEY`). Unlicensed versions serve a clearly-labeled testing
+  placeholder mirroring WEB's structure (`makePlaceholderBible`). `switchVersion`
+  swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
+  `holy-bible-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
+  shared → both platforms). All versions share the canonical 66-book structure,
+  so reading/search/AI need no per-version code. Docs: README → "Bible versions".
 
 ## Conventions
 

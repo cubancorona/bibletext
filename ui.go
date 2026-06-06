@@ -24,10 +24,9 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	title.TextSize = 17
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	subtitle := canvas.NewText("World English Bible · Public Domain", pal.TextMuted)
-	subtitle.TextSize = 10
-
-	left := container.NewVBox(title, subtitle)
+	// The subtitle doubles as the translation switcher (WEB / NRSV / LSB), with a
+	// TESTING badge when a version is showing placeholder text (see versions.go).
+	left := container.NewVBox(title, versionSelector(state))
 
 	// Settings gear (AI study: pick a provider + paste your key).
 	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { showAISettings(state) })

@@ -17,18 +17,18 @@ import (
 // This is exported so each cmd/* entry point can do the same load before opening
 // its platform-specific window (a desktop window vs. a Fyne mobile window).
 func LoadAndPrepareState() *AppState {
-	cachePath := defaultCachePath()
-	bibleData, source, err := loadBibleData(FetchBibleFromAPI, cachePath, currentUTCTime)
+	version, _ := versionByID(defaultVersionID)
+	bibleData, mode, err := loadVersionData(version, nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Holy Bible failed to load:", err)
 		os.Exit(1)
 	}
-	if source == "api" {
-		fmt.Printf("Downloaded the World English Bible (%d books) and saved a local cache.\n", len(bibleData.Books))
-	}
 
 	state := &AppState{
 		Bible:          bibleData,
+		CurrentVersion: version.ID,
+		currentMode:    mode,
+		loadedVersions: map[string]*BibleData{version.ID: bibleData},
 		CurrentBook:    defaultStartBook(bibleData),
 		CurrentChapter: 1,
 		Annotations:    NewAnnotationStore(),
@@ -47,7 +47,7 @@ func Run() {
 	myApp := app.NewWithID("holy-bible")
 	state := LoadAndPrepareState()
 
-	window := myApp.NewWindow("Holy Bible — World English Bible")
+	window := myApp.NewWindow("Holy Bible")
 	window.Resize(fyne.NewSize(1280, 860))
 	window.SetContent(CreateMainUI(myApp, state, window))
 	ObserveSystemThemeChanges(myApp, state)

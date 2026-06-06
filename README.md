@@ -27,6 +27,59 @@ calm, responsive reading layout.
   **Explain**, **Analyze context**, or **Analyze translation** it, using your own
   Gemini / ChatGPT / Claude / Grok API key. See
   [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
+- 📚 **Multiple translations** — read the public-domain **World English Bible**,
+  and switch to **NRSV** or **LSB** once licensed (a clearly-labeled testing mode
+  runs until then). See [Bible versions](#bible-versions).
+
+## Bible versions
+
+The reader ships with the **World English Bible (WEB)** — a public-domain
+translation, free to distribute, fetched from
+[bible-api.com](https://bible-api.com/). Use the **translation switcher in the
+header** (the version name beneath "Holy Bible") to change versions.
+
+Two more translations are wired in:
+
+| Version | Abbrev | Rights holder | Status |
+|---|---|---|---|
+| World English Bible | WEB | Public domain | ✅ Real text |
+| New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 License required |
+| Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 License required |
+
+**NRSV and LSB are copyrighted** and cannot be redistributed without permission,
+so until a license is configured they run in a **testing mode**: every verse is
+replaced with clearly-labeled placeholder text (e.g. `[NRSV sample — licensed
+text not available in this testing build] John 1:1`), and a **TESTING** badge
+appears beside the version name. This exercises the whole flow — switching,
+navigation, search, AI study — with the real retrieval, cache and UI already in
+place.
+
+### Getting a license
+
+- **NRSV** — administered by the **National Council of the Churches of Christ in
+  the USA**. Request distribution permission from the NCC
+  (<https://www.ncccusa.org/>), or license it through a Bible-API provider that
+  carries it, e.g. **API.Bible / scripture.api.bible**
+  (<https://scripture.api.bible/>) — you apply for access and agree to the
+  publisher's terms.
+- **LSB** — published by **The Lockman Foundation**. Request digital/app
+  licensing from their permissions team (<https://www.lockman.org/>).
+
+### Activating a licensed version
+
+Once you hold a license and have provider credentials, **no code change is
+needed** — set these environment variables (the source is `licensedAPISource`
+in `versions.go`, with the provider's HTTP calls ready to be filled in):
+
+```bash
+export BIBLE_API_KEY="<your provider api key>"
+export HOLY_BIBLE_LICENSE_NRSV=1                 # explicit "we are licensed" opt-in
+export HOLY_BIBLE_PROVIDER_ID_NRSV="<provider's bible id>"
+```
+
+The double gate — a license opt-in **and** credentials — makes it impossible to
+ship copyrighted text by accident. Each version caches to its own file
+(`holy-bible-<id>.json`) beside the WEB cache.
 
 ## AI study (bring your own key)
 
