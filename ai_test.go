@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mockHTTP implements httpClient, capturing the request and returning canned data.
@@ -15,10 +16,12 @@ type mockHTTP struct {
 	statusCode int
 	body       string
 	err        error
+	calls      int
 }
 
 func (m *mockHTTP) Do(req *http.Request) (*http.Response, error) {
 	m.lastReq = req
+	m.calls++
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -71,6 +74,40 @@ func TestGeminiRateLimited(t *testing.T) {
 	}
 	if !strings.Contains(friendlyAIError(err), "busy") {
 		t.Errorf("friendly = %q", friendlyAIError(err))
+	}
+}
+
+func TestDoAIRequestRetriesOn5xx(t *testing.T) {
+	old := aiRetrySleep
+	aiRetrySleep = func(time.Duration) {}
+	t.Cleanup(func() { aiRetrySleep = old })
+
+	m := &mockHTTP{statusCode: http.StatusServiceUnavailable, body: `{"error":{"message":"overloaded"}}`}
+	c := &geminiClient{apiKey: "k", model: "m", baseURL: "https://x.test/v1", http: m}
+	_, err := c.generate(context.Background(), "p")
+	var apiErr *apiHTTPError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 503 {
+		t.Fatalf("want 503 apiHTTPError, got %v", err)
+	}
+	if m.calls != 3 {
+		t.Errorf("expected 3 attempts on 5xx, got %d", m.calls)
+	}
+}
+
+func TestDoAIRequestNoRetryOn4xx(t *testing.T) {
+	old := aiRetrySleep
+	aiRetrySleep = func(time.Duration) {}
+	t.Cleanup(func() { aiRetrySleep = old })
+
+	m := &mockHTTP{statusCode: http.StatusBadRequest, body: `{"error":{"message":"bad"}}`}
+	c := &geminiClient{apiKey: "k", model: "m", baseURL: "https://x.test/v1", http: m}
+	_, err := c.generate(context.Background(), "p")
+	var apiErr *apiHTTPError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 400 {
+		t.Fatalf("want 400 apiHTTPError, got %v", err)
+	}
+	if m.calls != 1 {
+		t.Errorf("expected 1 attempt on 4xx, got %d", m.calls)
 	}
 }
 

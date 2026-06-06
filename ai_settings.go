@@ -1,8 +1,10 @@
 package holybible
 
-// The AI settings panel (bring-your-own-key): pick the active AI and paste an
-// API key per provider, with a link out to each provider's key page and a "Test"
-// button. Keys are saved to the on-device key store (ai_keystore.go).
+// The AI settings sheet (bring-your-own-key). It stays deliberately calm: choose
+// one assistant, see and edit just that assistant's key, test it, save. The key
+// area swaps to whichever provider is selected, so there's never a wall of four
+// password fields. Reachable any time from the header gear, including after a key
+// is already set. Keys live in the on-device key store (ai_keystore.go).
 
 import (
 	"context"
@@ -38,123 +40,146 @@ func showAISettings(state *AppState) {
 	}
 
 	providers := aiProviders()
-
-	// Active-provider chooser.
-	names := make([]string, len(providers))
 	nameToID := map[string]string{}
 	idToName := map[string]string{}
+	names := make([]string, len(providers))
 	for i, p := range providers {
 		names[i] = p.Name
 		nameToID[p.Name] = p.ID
 		idToName[p.ID] = p.Name
 	}
-	active := widget.NewRadioGroup(names, nil)
-	active.SetSelected(idToName[store.activeProvider()])
 
-	// One key field per provider.
-	entries := map[string]*widget.Entry{}
-	keyRows := container.NewVBox()
+	// pending holds in-progress edits per provider so switching the picker never
+	// loses what you typed; it's flushed to the store on Save.
+	pending := map[string]string{}
 	for _, p := range providers {
-		entry := widget.NewPasswordEntry()
-		entry.SetPlaceHolder("Paste " + p.Name + " key")
-		entry.SetText(store.apiKey(p.ID))
-		entries[p.ID] = entry
-
-		name := canvas.NewText(p.Name, pal.Text)
-		name.TextStyle = fyne.TextStyle{Bold: true}
-
-		var getLink fyne.CanvasObject
-		if u, err := url.Parse(p.KeyURL); err == nil {
-			getLink = widget.NewHyperlink("Get a key ↗", u)
-		} else {
-			getLink = layout.NewSpacer()
-		}
-
-		hint := canvas.NewText(p.KeyHint, pal.TextMuted)
-		hint.TextSize = 11
-
-		keyRows.Add(container.NewVBox(
-			container.NewBorder(nil, nil, name, getLink),
-			entry,
-			hint,
-			widget.NewSeparator(),
-		))
+		pending[p.ID] = store.apiKey(p.ID)
 	}
 
-	// Test the selected provider's key with a tiny request.
-	status := widget.NewLabel("")
-	status.Wrapping = fyne.TextWrapWord
-	testBtn := widget.NewButton("Test selected", func() {
-		id := nameToID[active.Selected]
+	// keyArea shows only the selected provider's key + status; it rebuilds when the
+	// picker changes.
+	keyArea := container.NewStack()
+	var renderKey func(id string)
+	renderKey = func(id string) {
 		info, ok := providerByID(id)
 		if !ok {
 			return
 		}
-		key := strings.TrimSpace(entries[id].Text)
-		if key == "" {
-			status.SetText("Paste a " + info.Name + " key first.")
-			return
-		}
-		status.SetText("Testing " + info.Name + "…")
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			_, err := info.New(key).generate(ctx, "Reply with the single word: OK")
-			fyne.Do(func() {
-				if err != nil {
-					status.SetText("✗ " + friendlyAIError(err))
-				} else {
-					status.SetText("✓ " + info.Name + " is working.")
-				}
-			})
-		}()
-	})
 
-	var popup *widget.PopUp
-	saveBtn := widget.NewButton("Save", func() {
-		for id, entry := range entries {
-			store.setAPIKey(id, entry.Text)
-		}
-		if active.Selected != "" {
-			store.setActiveProvider(nameToID[active.Selected])
-		}
-		if popup != nil {
-			popup.Hide()
-		}
-		restore()
-	})
-	saveBtn.Importance = widget.HighImportance
-	cancelBtn := widget.NewButton("Cancel", func() {
-		if popup != nil {
-			popup.Hide()
-		}
-		restore()
-	})
+		heading := canvas.NewText(info.Name+" key", pal.Text)
+		heading.TextStyle = fyne.TextStyle{Bold: true}
 
-	title := canvas.NewText("AI study settings", pal.Text)
+		var link fyne.CanvasObject = layout.NewSpacer()
+		if u, err := url.Parse(info.KeyURL); err == nil {
+			link = widget.NewHyperlink("Get a key ↗", u)
+		}
+
+		entry := widget.NewPasswordEntry()
+		entry.SetPlaceHolder("Paste your " + info.Name + " key")
+		entry.SetText(pending[id])
+		entry.OnChanged = func(s string) { pending[id] = s }
+
+		var status *canvas.Text
+		if strings.TrimSpace(store.apiKey(id)) != "" {
+			status = canvas.NewText("✓ A key is saved — paste a new one to replace it.", pal.Accent)
+		} else {
+			status = canvas.NewText(info.KeyHint, pal.TextMuted)
+		}
+		status.TextSize = 12
+
+		result := widget.NewLabel("")
+		result.Wrapping = fyne.TextWrapWord
+		result.Hide()
+		testBtn := widget.NewButton("Test key", func() {
+			key := strings.TrimSpace(entry.Text)
+			result.Show()
+			if key == "" {
+				result.SetText("Paste a key first.")
+				return
+			}
+			result.SetText("Testing…")
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				_, err := info.New(key).generate(ctx, "Reply with the single word: OK")
+				fyne.Do(func() {
+					if err != nil {
+						result.SetText("✗ " + friendlyAIError(err))
+					} else {
+						result.SetText("✓ Working")
+					}
+				})
+			}()
+		})
+		testBtn.Importance = widget.LowImportance
+
+		keyArea.Objects = []fyne.CanvasObject{
+			container.NewVBox(
+				container.NewBorder(nil, nil, heading, link),
+				entry,
+				status,
+				// Result sits to the right of the button, so showing it never grows
+				// the sheet (and the sheet is sized to fit without scrolling).
+				container.NewBorder(nil, nil, testBtn, nil, result),
+			),
+		}
+		keyArea.Refresh()
+	}
+
+	active := widget.NewRadioGroup(names, func(name string) {
+		if id, ok := nameToID[name]; ok {
+			renderKey(id)
+		}
+	})
+	active.Required = true
+	active.SetSelected(idToName[store.activeProvider()])
+	renderKey(store.activeProvider())
+
+	// --- Chrome.
+	title := canvas.NewText("AI study", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 22
-	intro := widget.NewLabel("Bring your own key. Choose an AI and paste its API key — keys stay on this device.")
+	intro := widget.NewLabel("Pick an assistant and paste its API key. Everything stays on this device.")
 	intro.Wrapping = fyne.TextWrapWord
 	header := container.NewVBox(title, intro, widget.NewSeparator())
 
 	form := container.NewVBox(
-		sectionLabel("ACTIVE AI", pal),
+		sectionLabel("ASSISTANT", pal),
 		active,
 		widget.NewSeparator(),
-		sectionLabel("API KEYS", pal),
-		keyRows,
-		container.NewHBox(testBtn),
-		status,
+		keyArea,
 	)
 	body := container.NewVScroll(container.NewPadded(form))
 
-	note := canvas.NewText("Keys are stored on this device.", pal.TextMuted)
+	var popup *widget.PopUp
+	save := func() {
+		for id, v := range pending {
+			store.setAPIKey(id, v)
+		}
+		if id, ok := nameToID[active.Selected]; ok {
+			store.setActiveProvider(id)
+		}
+		if popup != nil {
+			popup.Hide()
+		}
+		restore()
+	}
+	cancel := func() {
+		if popup != nil {
+			popup.Hide()
+		}
+		restore()
+	}
+	saveBtn := widget.NewButton("Save", save)
+	saveBtn.Importance = widget.HighImportance
+	cancelBtn := widget.NewButton("Cancel", cancel)
+
+	note := canvas.NewText("Keys are stored only on this device.", pal.TextMuted)
 	note.TextSize = 11
 	footer := container.NewVBox(
 		widget.NewSeparator(),
 		note,
-		container.NewHBox(layout.NewSpacer(), cancelBtn, saveBtn),
+		container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, saveBtn)),
 	)
 
 	content := container.NewBorder(header, footer, nil, nil, body)
@@ -163,5 +188,12 @@ func showAISettings(state *AppState) {
 		cnv,
 	)
 	popup.Show()
-	popup.Resize(aiPanelSize(cnv.Size()))
+	// Size to the form's natural height so there's no empty space below it,
+	// capped to the screen (the body scrolls if a small window forces it).
+	ps := aiPanelSize(cnv.Size())
+	h := header.MinSize().Height + form.MinSize().Height + footer.MinSize().Height + 84
+	if h > ps.Height {
+		h = ps.Height
+	}
+	popup.Resize(fyne.NewSize(ps.Width, h))
 }

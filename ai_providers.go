@@ -54,6 +54,12 @@ const (
 	grokBaseURL      = "https://api.x.ai/v1"
 
 	anthropicVersion = "2023-06-01"
+
+	// aiMaxOutputTokens caps each answer. It's generous because "thinking" models
+	// (e.g. gemini-2.5-flash) spend part of this budget on hidden reasoning, so a
+	// low cap truncates the visible answer mid-sentence. The prompt keeps answers
+	// concise, so a high cap just prevents truncation rather than producing essays.
+	aiMaxOutputTokens = 4096
 )
 
 // aiProviders is the registry shown in settings and used to build clients.
@@ -158,7 +164,7 @@ func (c *geminiClient) generate(ctx context.Context, prompt string) (string, err
 	}
 	payload, err := json.Marshal(geminiRequest{
 		Contents:         []geminiContent{{Parts: []geminiPart{{Text: prompt}}}},
-		GenerationConfig: &geminiGenConfig{Temperature: 0.4, MaxOutputTokens: 1024},
+		GenerationConfig: &geminiGenConfig{Temperature: 0.4, MaxOutputTokens: aiMaxOutputTokens},
 	})
 	if err != nil {
 		return "", err
@@ -242,7 +248,7 @@ func (c *openAIClient) generate(ctx context.Context, prompt string) (string, err
 		Model:       c.model,
 		Messages:    []openAIMessage{{Role: "user", Content: prompt}},
 		Temperature: 0.4,
-		MaxTokens:   1024,
+		MaxTokens:   aiMaxOutputTokens,
 	})
 	if err != nil {
 		return "", err
@@ -311,7 +317,7 @@ func (c *anthropicClient) generate(ctx context.Context, prompt string) (string, 
 	}
 	payload, err := json.Marshal(anthropicRequest{
 		Model:     c.model,
-		MaxTokens: 1024,
+		MaxTokens: aiMaxOutputTokens,
 		Messages:  []anthropicMessage{{Role: "user", Content: prompt}},
 	})
 	if err != nil {
@@ -354,21 +360,50 @@ func parseAnthropicText(body []byte) (string, error) {
 
 // doAIRequest performs the request and returns the body, mapping non-200 to a
 // typed apiHTTPError (shared with the bible fetcher) carrying a short detail.
+//
+// It retries a couple of times on transient failures — network errors and 5xx
+// server responses, which the providers return intermittently under load — so a
+// momentary blip doesn't surface as a hard error to the reader. 4xx (bad key,
+// bad request, rate limit) are returned immediately; retrying those wouldn't help.
 func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	const attempts = 3
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			if req.GetBody != nil {
+				if b, err := req.GetBody(); err == nil {
+					req.Body = b
+				}
+			}
+			aiRetrySleep(time.Duration(attempt) * 600 * time.Millisecond)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err // network error — transient, retry
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		if resp.StatusCode == http.StatusOK {
+			return body, nil
+		}
+		apiErr := &apiHTTPError{StatusCode: resp.StatusCode, Details: errorSnippet(body)}
+		if resp.StatusCode >= 500 {
+			lastErr = apiErr // server error — transient, retry
+			continue
+		}
+		return nil, apiErr // 4xx — caller-fixable, don't retry
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, &apiHTTPError{StatusCode: resp.StatusCode, Details: errorSnippet(body)}
-	}
-	return body, nil
+	return nil, lastErr
 }
+
+// aiRetrySleep is a seam for tests.
+var aiRetrySleep = time.Sleep
 
 // errorSnippet extracts a short, human-ish message from an error response body
 // (OpenAI/Gemini use {"error":{"message":...}}; Anthropic uses the same shape).
