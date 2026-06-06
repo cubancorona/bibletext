@@ -21,7 +21,7 @@ gofmt -w .  &&  go vet ./...        # format + vet before committing
 
 # Packaged bundles (run from the cmd dir, not the repo root):
 cd cmd/desktop && fyne package -os darwin       --app-id com.willow.holybibledesktop
-cd cmd/mobile  && fyne package -os iossimulator --app-id com.willow.holybiblemobile
+cd cmd/mobile  && fyne package -os iossimulator --app-id com.willow.holybible
 ```
 
 VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →

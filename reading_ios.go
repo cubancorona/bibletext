@@ -329,12 +329,13 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	state.hideReadingOverlay = func() { C.holyBibleTVSuppress() }
 	state.showReadingOverlay = func() {
 		C.holyBibleTVUnsuppress()
-		// Restore only the overlay that belongs to the current view: the reading
-		// text when reading, nothing when search results are showing.
-		if state.IsSearching {
-			C.holyBibleTVHide()
-		} else {
+		// Restore only the overlay that belongs to the current view (reading,
+		// not search results or another tab) — same invariant as every other
+		// visibility decision.
+		if overlayShouldShow(state) {
 			C.holyBibleTVShow()
+		} else {
+			C.holyBibleTVHide()
 		}
 	}
 
@@ -462,9 +463,16 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 func afterRebuild(state *AppState) {
 	time.AfterFunc(150*time.Millisecond, func() {
 		fyne.Do(func() {
-			if currentHost != nil {
+			// Re-pin the overlay frame only when the reading view is the content
+			// on screen; pushing a frame for a stale host while another tab is up
+			// would drag the (hidden) overlay to the wrong place.
+			if overlayShouldShow(state) && currentHost != nil {
 				setFrameFromObject(currentHost)
 			}
+			// Re-assert visibility LAST so it wins any async show/hide ordering
+			// from the rebuild — this is what stops a stray show from leaving the
+			// overlay stuck as a black rectangle over the Books/Search tabs.
+			notifyReadingOverlay(overlayShouldShow(state))
 		})
 	})
 }
