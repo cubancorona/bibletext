@@ -25,6 +25,8 @@ package bibletext
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
 // an AI study action; it copies both strings immediately.
 extern void bibleTextAIMenuTapped(char *action, char *text);
+// Sibling callback for the non-AI selection-menu actions (Share verse, …).
+extern void bibleTextStudyMenuTapped(char *action, char *text);
 
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the right-click selection menu and hands the selected
@@ -58,6 +60,18 @@ extern void bibleTextAIMenuTapped(char *action, char *text);
     NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
     aiItem.submenu = ai;
     [menu addItem:aiItem];
+
+    // Share verse → with citation / as image (both go to the macOS share sheet).
+    NSMenu *share = [[NSMenu alloc] initWithTitle:@"Share verse"];
+    NSMenuItem *sc = [[NSMenuItem alloc] initWithTitle:@"Share with citation" action:@selector(hbShare_cite:) keyEquivalent:@""];
+    sc.target = self;
+    [share addItem:sc];
+    NSMenuItem *si = [[NSMenuItem alloc] initWithTitle:@"Share as image" action:@selector(hbShare_image:) keyEquivalent:@""];
+    si.target = self;
+    [share addItem:si];
+    NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share verse" action:nil keyEquivalent:@""];
+    shareItem.submenu = share;
+    [menu addItem:shareItem];
     return menu;
 }
 
@@ -69,6 +83,12 @@ extern void bibleTextAIMenuTapped(char *action, char *text);
 }
 - (void)hbAI_translation:(id)sender {
     bibleTextAIMenuTapped((char *)"translation", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbShare_cite:(id)sender {
+    bibleTextStudyMenuTapped((char *)"share-cite", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbShare_image:(id)sender {
+    bibleTextStudyMenuTapped((char *)"share-image", (char *)self.hbSelectedText.UTF8String);
 }
 
 @end
@@ -273,6 +293,47 @@ void bibleTextMacTVUnsuppress(void) {
         gReadingSuppressed = NO;
     });
 }
+
+// --- Share -----------------------------------------------------------------
+// Present the macOS share sheet (NSSharingServicePicker) anchored at the current
+// selection, so "Share with citation" / "Share as image" reach Messages, Mail,
+// Notes, AirDrop, etc. — the same destinations Copy/Share would.
+static NSRect bibleTextMacSelectionRect(void) {
+    if (gTextView == nil) return NSZeroRect;
+    NSRange sel = gTextView.selectedRange;
+    if (sel.length == 0) {
+        NSRect b = gTextView.visibleRect;
+        return NSMakeRect(NSMidX(b), NSMidY(b), 1, 1);
+    }
+    NSLayoutManager *lm = gTextView.layoutManager;
+    NSRange g = [lm glyphRangeForCharacterRange:sel actualCharacterRange:NULL];
+    NSRect r = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
+    r.origin.x += gTextView.textContainerInset.width;
+    r.origin.y += gTextView.textContainerInset.height;
+    return r;
+}
+
+void bibleTextShareText(const char *text) {
+    if (text == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gTextView == nil || s.length == 0) return;
+        NSSharingServicePicker *p = [[NSSharingServicePicker alloc] initWithItems:@[s]];
+        [p showRelativeToRect:bibleTextMacSelectionRect() ofView:gTextView preferredEdge:NSMaxYEdge];
+    });
+}
+
+void bibleTextShareImageFile(const char *path) {
+    if (path == NULL) return;
+    NSString *p = [NSString stringWithUTF8String:path];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gTextView == nil) return;
+        NSImage *img = [[NSImage alloc] initWithContentsOfFile:p];
+        NSArray *items = img ? @[img] : @[[NSURL fileURLWithPath:p]];
+        NSSharingServicePicker *sp = [[NSSharingServicePicker alloc] initWithItems:items];
+        [sp showRelativeToRect:bibleTextMacSelectionRect() ofView:gTextView preferredEdge:NSMaxYEdge];
+    });
+}
 */
 import "C"
 
@@ -330,6 +391,20 @@ func setReadingOverlayVisible(visible bool) {
 }
 
 func hideNativeReadingOverlayMac() { C.bibleTextMacTVHide() }
+
+// nativeShareText / nativeShareImage present the macOS share sheet for the
+// selection-menu Share actions (see share.go).
+func nativeShareText(s string) {
+	c := C.CString(s)
+	defer C.free(unsafe.Pointer(c))
+	C.bibleTextShareText(c)
+}
+
+func nativeShareImage(path string) {
+	c := C.CString(path)
+	defer C.free(unsafe.Pointer(c))
+	C.bibleTextShareImageFile(c)
+}
 
 // macReadingHost is the transparent Fyne widget that tracks the reading
 // rectangle and pushes it to the NSScrollView frame.

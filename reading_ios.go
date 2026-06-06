@@ -23,6 +23,8 @@ package bibletext
 // an AI study action; it copies both strings immediately, so passing the
 // transient UTF8String pointers is safe.
 extern void bibleTextAIMenuTapped(char *action, char *text);
+// Sibling callback for the non-AI selection-menu actions (Share verse, …).
+extern void bibleTextStudyMenuTapped(char *action, char *text);
 
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the standard selection menu and hands the selected
@@ -53,7 +55,20 @@ extern void bibleTextAIMenuTapped(char *action, char *text);
                                   make(@"Analyze context", @"context"),
                                   make(@"Analyze translation", @"translation"),
                               ]];
-    return [UIMenu menuWithChildren:[suggestedActions arrayByAddingObject:ai]];
+
+    // Share verse → with citation / as image (both go to the iOS share sheet).
+    UIAction * (^study)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
+        return [UIAction actionWithTitle:title image:nil identifier:nil
+                                 handler:^(__kindof UIAction *_Nonnull a) {
+            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
+        }];
+    };
+    UIMenu *share = [UIMenu menuWithTitle:@"Share verse" image:nil identifier:nil options:0
+                                 children:@[
+                                     study(@"Share with citation", @"share-cite"),
+                                     study(@"Share as image", @"share-image"),
+                                 ]];
+    return [UIMenu menuWithChildren:[suggestedActions arrayByAddingObjectsFromArray:@[ai, share]]];
 }
 
 @end
@@ -296,6 +311,56 @@ void bibleTextTVSuppress(void) {
 void bibleTextTVUnsuppress(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingSuppressed = NO;
+    });
+}
+
+// --- Share -----------------------------------------------------------------
+// Present the iOS share sheet (UIActivityViewController) for "Share with
+// citation" / "Share as image". On iPad the sheet is a popover, so anchor it at
+// the current selection rect.
+static UIViewController *bibleTextTopVC(void) {
+    UIWindow *win = bibleTextFindWindow();
+    UIViewController *vc = win.rootViewController;
+    while (vc.presentedViewController != nil) vc = vc.presentedViewController;
+    return vc;
+}
+
+static void bibleTextPresentShare(NSArray *items) {
+    if (items.count == 0) return;
+    UIViewController *top = bibleTextTopVC();
+    if (top == nil) return;
+    UIActivityViewController *av =
+        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
+    if (av.popoverPresentationController != nil && gReadingTV != nil) {
+        av.popoverPresentationController.sourceView = gReadingTV;
+        CGRect r = CGRectZero;
+        if (gReadingTV.selectedTextRange != nil) {
+            r = [gReadingTV firstRectForRange:gReadingTV.selectedTextRange];
+        }
+        if (CGRectIsEmpty(r) || CGRectIsNull(r)) {
+            r = CGRectMake(CGRectGetMidX(gReadingTV.bounds), CGRectGetMidY(gReadingTV.bounds), 1, 1);
+        }
+        av.popoverPresentationController.sourceRect = r;
+    }
+    [top presentViewController:av animated:YES completion:nil];
+}
+
+void bibleTextShareText(const char *text) {
+    if (text == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (s.length == 0) return;
+        bibleTextPresentShare(@[s]);
+    });
+}
+
+void bibleTextShareImageFile(const char *path) {
+    if (path == NULL) return;
+    NSString *p = [NSString stringWithUTF8String:path];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIImage *img = [UIImage imageWithContentsOfFile:p];
+        if (img == nil) return;
+        bibleTextPresentShare(@[img]);
     });
 }
 */
@@ -578,6 +643,20 @@ func (h *nativeReadingHost) Hide() {
 // every tab change).
 func showNativeReadingOverlay() { C.bibleTextTVShow() }
 func hideNativeReadingOverlay() { C.bibleTextTVHide() }
+
+// nativeShareText / nativeShareImage present the iOS share sheet for the
+// selection-menu Share actions (see share.go).
+func nativeShareText(s string) {
+	c := C.CString(s)
+	defer C.free(unsafe.Pointer(c))
+	C.bibleTextShareText(c)
+}
+
+func nativeShareImage(path string) {
+	c := C.CString(path)
+	defer C.free(unsafe.Pointer(c))
+	C.bibleTextShareImageFile(c)
+}
 
 // pushChapterHTML builds the chapter as HTML (so NSAttributedString gets nice
 // inline styling — superscript verse numbers, accent color, serif font) and
