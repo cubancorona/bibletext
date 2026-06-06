@@ -41,6 +41,7 @@ type palette struct {
 	Highlight     color.NRGBA // faint wash behind the highlighted verse
 	HighlightText color.NRGBA // the highlighted verse's own text
 	VerseNumber   color.NRGBA // superscript verse numbers
+	RedLetter     color.NRGBA // words of Christ (red-letter mode)
 	Input         color.NRGBA
 }
 
@@ -57,6 +58,7 @@ var lightPalette = palette{
 	Highlight:     color.NRGBA{R: 249, G: 238, B: 206, A: 255},
 	HighlightText: color.NRGBA{R: 116, G: 80, B: 28, A: 255},
 	VerseNumber:   color.NRGBA{R: 162, G: 122, B: 64, A: 255},
+	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255}, // deep crimson on parchment
 	Input:         color.NRGBA{R: 252, G: 251, B: 247, A: 255},
 }
 
@@ -73,6 +75,7 @@ var darkPalette = palette{
 	Highlight:     color.NRGBA{R: 61, G: 51, B: 35, A: 255},
 	HighlightText: color.NRGBA{R: 240, G: 214, B: 162, A: 255},
 	VerseNumber:   color.NRGBA{R: 207, G: 171, B: 113, A: 255},
+	RedLetter:     color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
 	Input:         color.NRGBA{R: 38, G: 35, B: 31, A: 255},
 }
 

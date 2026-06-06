@@ -252,6 +252,8 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	numHex := nrgbaToHex(pal.VerseNumber)
 	highlightTextHex := nrgbaToHex(pal.HighlightText)
 	highlightBgHex := nrgbaToHex(pal.Highlight)
+	redLetterHex := nrgbaToHex(pal.RedLetter)
+	redLetter := redLetterEnabled()
 
 	var b strings.Builder
 	b.WriteString("<html><head><style>")
@@ -286,6 +288,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		padding: 0 2px;
 		border-radius: 2px;
 	}`, highlightTextHex, highlightBgHex)
+	fmt.Fprintf(&b, `.wj { color: %s; }`, redLetterHex)
 	b.WriteString("</style></head><body>")
 
 	for _, para := range groupVersesIntoParagraphs(verses) {
@@ -296,9 +299,13 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			}
 			fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
 			body := htmlEscape(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
-			if isVerseHighlighted(state, v) {
+			switch {
+			case isVerseHighlighted(state, v):
+				// A search highlight wins visually over red-letter.
 				fmt.Fprintf(&b, `<span class="hl">%s</span>`, body)
-			} else {
+			case redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse):
+				fmt.Fprintf(&b, `<span class="wj">%s</span>`, body)
+			default:
 				b.WriteString(body)
 			}
 		}
