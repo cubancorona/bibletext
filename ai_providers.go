@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // Pluggable AI providers. Every backend implements one method — generate(prompt)
 // → text — so the menu, result panel, prompts, and cache stay provider-agnostic.

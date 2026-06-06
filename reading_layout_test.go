@@ -1,6 +1,6 @@
 //go:build !race
 
-package holybible
+package bibletext
 
 import (
 	"strings"

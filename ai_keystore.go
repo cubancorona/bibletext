@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // On-device storage for the user's AI keys and provider choice. Backed by Fyne
 // Preferences (per-app, persisted across launches). Wrapped behind prefStore so

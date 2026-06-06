@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // The AI study result panel: a modal popup that shows a spinner while Gemini
 // answers, then the response (or a friendly error with a retry). It reuses the

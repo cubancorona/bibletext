@@ -19,19 +19,19 @@ every run:  cache ──load──▶ BibleData ──PrepareSearchIndex──�
   - Repeated chapter failures abort the book; a load that misses any book errors out.
 - [cache.go](cache.go) — versioned cache with an atomic write (temp file + rename).
   Validates structure on load; a corrupt/old cache is discarded and refetched.
-  Location: OS cache dir, or `HOLY_BIBLE_CACHE_PATH`.
+  Location: OS cache dir, or `BIBLETEXT_CACHE_PATH`.
 - [bible.go](bible.go) — `BibleData` (`map[book]map[chapter][]Verse` + ordered
   `Books`), verse lookup, and search. `PrepareSearchIndex` precomputes lowercased
   verse text so search is allocation-light.
 
 ## Module map
 
-The whole shared codebase is one Go package, `holybible`. Two thin entry points
+The whole shared codebase is one Go package, `bibletext`. Two thin entry points
 under `cmd/` consume it — one for desktop, one for the Fyne mobile target.
 
 | File | Responsibility |
 | --- | --- |
-| `cmd/desktop/main.go` | Desktop entry — opens a sized window, calls `holybible.Run()` |
+| `cmd/desktop/main.go` | Desktop entry — opens a sized window, calls `bibletext.Run()` |
 | `cmd/mobile/main.go` | Mobile entry — built via `fyne package -os ios -src ./cmd/mobile`; the OS controls the window size |
 | `app.go` | `LoadAndPrepareState()` + `Run()`: data load, state bootstrap, desktop window glue |
 | `bible.go` | Data model, search ranking, reference parsing, book aliases |
@@ -120,9 +120,9 @@ in the test harness, not the app.
 Desktop targets compile from `./cmd/desktop` (Fyne pulls in OpenGL/GLFW):
 
 ```bash
-GOOS=linux   GOARCH=amd64 go build -o holy-bible-linux ./cmd/desktop
-GOOS=windows GOARCH=amd64 go build -o holy-bible.exe   ./cmd/desktop
-GOOS=darwin  GOARCH=arm64 go build -o holy-bible-macos ./cmd/desktop
+GOOS=linux   GOARCH=amd64 go build -o bibletext-linux ./cmd/desktop
+GOOS=windows GOARCH=amd64 go build -o bibletext.exe   ./cmd/desktop
+GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos ./cmd/desktop
 ```
 
 Mobile targets are packaged by the `fyne` CLI from `./cmd/mobile`. This sets up
@@ -130,8 +130,8 @@ the right CGO toolchain (iOS SDK or Android NDK) and assembles a `.app`/`.ipa`
 or `.apk`/`.aab` together with `FyneApp.toml` and `Icon.png`:
 
 ```bash
-fyne package -os ios       -appID io.github.cubancorona.holybible -src ./cmd/mobile
-fyne package -os android   -appID io.github.cubancorona.holybible -src ./cmd/mobile
+fyne package -os ios       -appID io.github.cubancorona.bibletext -src ./cmd/mobile
+fyne package -os android   -appID io.github.cubancorona.bibletext -src ./cmd/mobile
 ```
 
 Fyne needs a C toolchain and the platform's graphics/dev libraries on every

@@ -6,7 +6,7 @@
 // That race lives in Fyne's test harness (not the real driver or our code), so
 // we skip these under -race; the pure-logic tests stay fully race-checked.
 
-package holybible
+package bibletext
 
 import (
 	"testing"

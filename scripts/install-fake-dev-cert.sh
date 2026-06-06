@@ -16,7 +16,7 @@
 # option (e.g. headless box).
 set -euo pipefail
 
-TEAMID="${1:-HOLYBIBLE1}"          # 10-char fake team identifier
+TEAMID="${1:-BIBLETEXT1}"          # 10-char fake team identifier
 PW="$(openssl rand -hex 8)"        # one-shot password, not stored anywhere
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -25,14 +25,14 @@ cd "$WORKDIR"
 
 echo "==> generating self-signed cert with OU=$TEAMID"
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes \
-    -subj "/CN=Apple Development: holy-bible local ($TEAMID)/OU=$TEAMID/O=Holy Bible Local/C=US" \
+    -subj "/CN=Apple Development: bibletext local ($TEAMID)/OU=$TEAMID/O=BibleText Local/C=US" \
     -addext "extendedKeyUsage=codeSigning" \
     -addext "keyUsage=digitalSignature" >/dev/null 2>&1
 
 echo "==> wrapping in PKCS12 with legacy PBE (macOS keychain requires it)"
 openssl pkcs12 -export -inkey key.pem -in cert.pem -out cert.p12 \
     -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg SHA1 \
-    -password "pass:$PW" -name "Apple Development: holy-bible local" >/dev/null
+    -password "pass:$PW" -name "Apple Development: bibletext local" >/dev/null
 
 echo "==> importing into login.keychain-db"
 security import cert.p12 -k "$HOME/Library/Keychains/login.keychain-db" -P "$PW" \

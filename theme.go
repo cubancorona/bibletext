@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"image/color"
@@ -20,11 +20,11 @@ const (
 // our own and resolve them through bibleTheme.Color. RichText segments reference
 // these names to stay in sync with light/dark mode automatically.
 const (
-	colorNameVerseNumber fyne.ThemeColorName = "holyVerseNumber"
-	colorNameVerseText   fyne.ThemeColorName = "holyVerseText"
-	colorNameHighlight   fyne.ThemeColorName = "holyHighlight"
-	colorNameHighlightHi fyne.ThemeColorName = "holyHighlightText"
-	colorNameMuted       fyne.ThemeColorName = "holyMuted"
+	colorNameVerseNumber fyne.ThemeColorName = "bibleTextVerseNumber"
+	colorNameVerseText   fyne.ThemeColorName = "bibleTextVerseText"
+	colorNameHighlight   fyne.ThemeColorName = "bibleTextHighlight"
+	colorNameHighlightHi fyne.ThemeColorName = "bibleTextHighlightText"
+	colorNameMuted       fyne.ThemeColorName = "bibleTextMuted"
 )
 
 // palette is the single source of truth for every colour in the UI. Routing all

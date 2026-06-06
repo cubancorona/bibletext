@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // The AI settings sheet (bring-your-own-key). It stays deliberately calm: choose
 // one assistant, see and edit just that assistant's key, test it, save. The key

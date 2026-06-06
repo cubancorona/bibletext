@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"path/filepath"
@@ -43,13 +43,13 @@ func TestVersionRegistry(t *testing.T) {
 
 func TestCachePathForVersion(t *testing.T) {
 	dir := t.TempDir()
-	legacy := filepath.Join(dir, "holy-bible-cache.json")
-	t.Setenv("HOLY_BIBLE_CACHE_PATH", legacy)
+	legacy := filepath.Join(dir, "bibletext-cache.json")
+	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
 
 	if got := cachePathForVersion("web"); got != legacy {
 		t.Errorf("web cache = %q, want legacy %q", got, legacy)
 	}
-	wantNRSV := filepath.Join(dir, "holy-bible-nrsv.json")
+	wantNRSV := filepath.Join(dir, "bibletext-nrsv.json")
 	if got := cachePathForVersion("nrsv"); got != wantNRSV {
 		t.Errorf("nrsv cache = %q, want %q", got, wantNRSV)
 	}
@@ -60,8 +60,8 @@ func TestLicensedSourceAvailability(t *testing.T) {
 
 	// Nothing configured -> not available.
 	t.Setenv("BIBLE_API_KEY", "")
-	t.Setenv("HOLY_BIBLE_LICENSE_NRSV", "")
-	t.Setenv("HOLY_BIBLE_PROVIDER_ID_NRSV", "")
+	t.Setenv("BIBLETEXT_LICENSE_NRSV", "")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_NRSV", "")
 	if s.available() {
 		t.Fatal("licensed source should be unavailable with no env")
 	}
@@ -76,8 +76,8 @@ func TestLicensedSourceAvailability(t *testing.T) {
 	}
 
 	// All three -> available (real fetch is still a scaffold, but the gate opens).
-	t.Setenv("HOLY_BIBLE_LICENSE_NRSV", "1")
-	t.Setenv("HOLY_BIBLE_PROVIDER_ID_NRSV", "abc123")
+	t.Setenv("BIBLETEXT_LICENSE_NRSV", "1")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_NRSV", "abc123")
 	if !s.available() {
 		t.Error("key + license opt-in + provider id should be available")
 	}
@@ -149,7 +149,7 @@ func TestLoadVersionDataWebDoesNotNeedBase(t *testing.T) {
 	// The public-domain default must not require a base placeholder; with a temp
 	// cache present it loads from cache (no network).
 	dir := t.TempDir()
-	t.Setenv("HOLY_BIBLE_CACHE_PATH", filepath.Join(dir, "holy-bible-cache.json"))
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
 	if err := saveBibleToCache(cachePathForVersion("web"), fullValidBible(), currentUTCTime); err != nil {
 		t.Fatalf("seed cache: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestSwitchVersionUpdatesState(t *testing.T) {
 	// LSB is a not-yet-licensed (testing) version, so it is normally not
 	// selectable; unlock internal testing mode so the switch is allowed and
 	// exercises the placeholder path.
-	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "1")
+	t.Setenv("BIBLETEXT_ENABLE_TESTING", "1")
 
 	base := baseSampleBible()
 	state := &AppState{
@@ -201,7 +201,7 @@ func TestVersionSelectionGating(t *testing.T) {
 
 	// Public domain is always selectable; an unlicensed copyrighted version is
 	// not selectable by default (it shows as "evaluation in progress").
-	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "")
+	t.Setenv("BIBLETEXT_ENABLE_TESTING", "")
 	if !web.canSelect() {
 		t.Error("web (public domain) must be selectable")
 	}
@@ -210,9 +210,9 @@ func TestVersionSelectionGating(t *testing.T) {
 	}
 
 	// The internal testing flag unlocks it for QA.
-	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "1")
+	t.Setenv("BIBLETEXT_ENABLE_TESTING", "1")
 	if !nrsv.canSelect() {
-		t.Error("nrsv should be selectable when HOLY_BIBLE_ENABLE_TESTING=1")
+		t.Error("nrsv should be selectable when BIBLETEXT_ENABLE_TESTING=1")
 	}
 }
 
@@ -220,7 +220,7 @@ func TestVersionSelectionGating(t *testing.T) {
 // reach a not-yet-licensed version's placeholder, even if some code path calls
 // switchVersion directly.
 func TestSwitchVersionRefusesUnselectable(t *testing.T) {
-	t.Setenv("HOLY_BIBLE_ENABLE_TESTING", "")
+	t.Setenv("BIBLETEXT_ENABLE_TESTING", "")
 
 	base := baseSampleBible()
 	state := &AppState{

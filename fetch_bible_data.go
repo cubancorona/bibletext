@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"encoding/json"
@@ -253,7 +253,7 @@ func fetchWithRetry(client httpClient, url string, maxRetries int) ([]byte, erro
 		}
 
 		// Set user agent to be polite to the server
-		req.Header.Set("User-Agent", "HolyBible-Go/1.0 (Learning Project)")
+		req.Header.Set("User-Agent", "BibleText-Go/1.0 (Learning Project)")
 
 		// Make the request
 		resp, err := client.Do(req)

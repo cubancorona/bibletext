@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 
 const (
 	cacheSchemaVersion = 1
-	cacheFileName      = "holy-bible-cache.json"
+	cacheFileName      = "bibletext-cache.json"
 )
 
 var errCacheNotFound = errors.New("cache not found")
@@ -23,7 +23,7 @@ type bibleCache struct {
 }
 
 func defaultCachePath() string {
-	if custom := os.Getenv("HOLY_BIBLE_CACHE_PATH"); custom != "" {
+	if custom := os.Getenv("BIBLETEXT_CACHE_PATH"); custom != "" {
 		return custom
 	}
 
@@ -32,7 +32,7 @@ func defaultCachePath() string {
 		return cacheFileName
 	}
 
-	return filepath.Join(cacheDir, "holy-bible", cacheFileName)
+	return filepath.Join(cacheDir, "bibletext", cacheFileName)
 }
 
 func loadBibleFromCache(path string) (*BibleData, error) {

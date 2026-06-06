@@ -1,6 +1,6 @@
 //go:build ios
 
-package holybible
+package bibletext
 
 // Native-iOS reading pane: a real UITextView (isEditable=NO, isSelectable=YES)
 // is attached to the Fyne app's UIWindow as an overlay. The user gets the full
@@ -22,7 +22,7 @@ package holybible
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
 // an AI study action; it copies both strings immediately, so passing the
 // transient UTF8String pointers is safe.
-extern void holyBibleAIMenuTapped(char *action, char *text);
+extern void bibleTextAIMenuTapped(char *action, char *text);
 
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the standard selection menu and hands the selected
@@ -43,7 +43,7 @@ extern void holyBibleAIMenuTapped(char *action, char *text);
     UIAction * (^make)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            holyBibleAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
+            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
         }];
     };
 
@@ -64,7 +64,7 @@ extern void holyBibleAIMenuTapped(char *action, char *text);
 static UITextView *gReadingTV = nil;
 
 // Character range of the highlighted verse (set when arriving from a search
-// result), or {NSNotFound, 0} for a plain chapter view. holyBibleScrollReadingTV
+// result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
 // uses it to land the highlighted verse near the top instead of scrolling to
 // the chapter's first verse.
 static NSRange gReadingHighlightRange = {NSNotFound, 0};
@@ -72,16 +72,16 @@ static NSRange gReadingHighlightRange = {NSNotFound, 0};
 // gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
 // settings) is open. The UITextView floats above the whole Fyne canvas, so it
 // must stay down for the duration of the modal — not merely be hidden once. A
-// layout pass behind the modal can call holyBibleTVShow again, which would paint
+// layout pass behind the modal can call bibleTextTVShow again, which would paint
 // the verses back over the popup and steal its touches. While suppressed, Show
 // is a no-op; only Unsuppress clears it.
 static BOOL gReadingSuppressed = NO;
 
-// holyBibleScrollReadingTV positions the chapter: at the highlighted verse when
+// bibleTextScrollReadingTV positions the chapter: at the highlighted verse when
 // one is set (a search jump), otherwise pinned to the top. Centralised so the
 // several places that re-assert the offset (after setText, after a frame push,
 // and on deferred ticks) all agree.
-static void holyBibleScrollReadingTV(void) {
+static void bibleTextScrollReadingTV(void) {
     if (gReadingTV == nil) return;
     NSUInteger len = gReadingTV.textStorage.length;
     if (gReadingHighlightRange.location != NSNotFound &&
@@ -106,7 +106,7 @@ static void holyBibleScrollReadingTV(void) {
 // Look up the foreground UIWindow that Fyne renders into. iOS 13+ uses scenes;
 // pre-13 we fall back to the deprecated keyWindow. Fyne's mobile driver creates
 // exactly one window, so the first one we find is the right one.
-static UIWindow *holyBibleFindWindow(void) {
+static UIWindow *bibleTextFindWindow(void) {
     if (@available(iOS 13.0, *)) {
         NSSet<UIScene*> *scenes = UIApplication.sharedApplication.connectedScenes;
         for (UIScene *scene in scenes) {
@@ -124,11 +124,11 @@ static UIWindow *holyBibleFindWindow(void) {
 // Ensure the UITextView exists and is parented to the current window. Called
 // from every public entry point so we recover if iOS recreated the window
 // (e.g. after backgrounding+foregrounding the app on a real device).
-static void holyBibleEnsureTV(void) {
+static void bibleTextEnsureTV(void) {
     dispatch_block_t block = ^{
-        UIWindow *win = holyBibleFindWindow();
+        UIWindow *win = bibleTextFindWindow();
         if (win == nil) {
-            NSLog(@"holybible: ensureTV — no UIWindow yet");
+            NSLog(@"bibletext: ensureTV — no UIWindow yet");
             return;
         }
         if (gReadingTV == nil) {
@@ -148,7 +148,7 @@ static void holyBibleEnsureTV(void) {
             // AppTabs.OnSelected doesn't fire for the initial selection.
             tv.hidden = NO;
             gReadingTV = tv;
-            NSLog(@"holybible: ensureTV — created UITextView, attaching to window %@", win);
+            NSLog(@"bibletext: ensureTV — created UITextView, attaching to window %@", win);
         }
         if (gReadingTV.superview != win) {
             [gReadingTV removeFromSuperview];
@@ -163,13 +163,13 @@ static void holyBibleEnsureTV(void) {
     }
 }
 
-void holyBibleTVSetHTML(const char *html) {
+void bibleTextTVSetHTML(const char *html) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
     NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding];
     NSUInteger len = data.length;
     dispatch_async(dispatch_get_main_queue(), ^{
-        holyBibleEnsureTV();
+        bibleTextEnsureTV();
         if (gReadingTV == nil) return;
         NSError *err = nil;
         NSDictionary *opts = @{
@@ -182,7 +182,7 @@ void holyBibleTVSetHTML(const char *html) {
                               documentAttributes:nil
                                            error:&err];
         if (as == nil) {
-            NSLog(@"holybible: HTML parse failed (input %lu bytes): %@", (unsigned long)len, err);
+            NSLog(@"bibletext: HTML parse failed (input %lu bytes): %@", (unsigned long)len, err);
             gReadingTV.text = s;
             return;
         }
@@ -222,20 +222,20 @@ void holyBibleTVSetHTML(const char *html) {
         // after, and either can shift the offset. Land it on this tick, the next
         // runloop tick, and a ~200ms tick to outlast the slowest re-layout.
         [gReadingTV layoutIfNeeded];
-        holyBibleScrollReadingTV();
+        bibleTextScrollReadingTV();
         dispatch_async(dispatch_get_main_queue(), ^{
-            holyBibleScrollReadingTV();
+            bibleTextScrollReadingTV();
         });
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            holyBibleScrollReadingTV();
+            bibleTextScrollReadingTV();
         });
     });
 }
 
-void holyBibleTVSetFrame(float x, float y, float w, float h) {
+void bibleTextTVSetFrame(float x, float y, float w, float h) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        holyBibleEnsureTV();
+        bibleTextEnsureTV();
         if (gReadingTV == nil) return;
         // Fyne renders its canvas inset below the device safe area (Dynamic
         // Island / status bar on top, home indicator on the bottom), so a Fyne
@@ -256,34 +256,34 @@ void holyBibleTVSetFrame(float x, float y, float w, float h) {
         // layoutIfNeeded first so the glyph geometry matches the new width.
         if (changed) {
             [gReadingTV layoutIfNeeded];
-            holyBibleScrollReadingTV();
+            bibleTextScrollReadingTV();
             dispatch_async(dispatch_get_main_queue(), ^{
-                holyBibleScrollReadingTV();
+                bibleTextScrollReadingTV();
             });
         }
     });
 }
 
-void holyBibleTVShow(void) {
+void bibleTextTVShow(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gReadingSuppressed) return; // a modal is up; stay down until released
-        holyBibleEnsureTV();
+        bibleTextEnsureTV();
         if (gReadingTV == nil) return;
         gReadingTV.hidden = NO;
         [gReadingTV.superview bringSubviewToFront:gReadingTV];
     });
 }
 
-void holyBibleTVHide(void) {
+void bibleTextTVHide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gReadingTV == nil) return;
         gReadingTV.hidden = YES;
     });
 }
 
-// holyBibleTVSuppress hides the overlay and latches it down so any stray
-// holyBibleTVShow from a layout pass behind a modal is ignored.
-void holyBibleTVSuppress(void) {
+// bibleTextTVSuppress hides the overlay and latches it down so any stray
+// bibleTextTVShow from a layout pass behind a modal is ignored.
+void bibleTextTVSuppress(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingSuppressed = YES;
         if (gReadingTV == nil) return;
@@ -291,9 +291,9 @@ void holyBibleTVSuppress(void) {
     });
 }
 
-// holyBibleTVUnsuppress clears the latch. It does not show the overlay on its
+// bibleTextTVUnsuppress clears the latch. It does not show the overlay on its
 // own — the caller decides whether to show (reading) or keep hidden (search).
-void holyBibleTVUnsuppress(void) {
+void bibleTextTVUnsuppress(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingSuppressed = NO;
     });
@@ -326,16 +326,16 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 	// Let shared popups (the chapter picker) hide/show the native overlay so it
 	// doesn't float over them. Idempotent — safe to set on every rebuild.
-	state.hideReadingOverlay = func() { C.holyBibleTVSuppress() }
+	state.hideReadingOverlay = func() { C.bibleTextTVSuppress() }
 	state.showReadingOverlay = func() {
-		C.holyBibleTVUnsuppress()
+		C.bibleTextTVUnsuppress()
 		// Restore only the overlay that belongs to the current view (reading,
 		// not search results or another tab) — same invariant as every other
 		// visibility decision.
 		if overlayShouldShow(state) {
-			C.holyBibleTVShow()
+			C.bibleTextTVShow()
 		} else {
-			C.holyBibleTVHide()
+			C.bibleTextTVHide()
 		}
 	}
 
@@ -351,7 +351,7 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	paper.CornerRadius = 8
 
 	// Full-screen reading: no chrome at all except a small exit affordance.
-	// Tabs and the top "Holy Bible" header are skipped in ui_mobile.go for this
+	// Tabs and the top "BibleText" header are skipped in ui_mobile.go for this
 	// case, so the UITextView fills almost the whole device screen.
 	if state.IsFullScreen {
 		exit := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
@@ -555,7 +555,7 @@ func setFrameFromObject(h *nativeReadingHost) {
 	if sz.Width <= 0 || sz.Height <= 0 {
 		return
 	}
-	C.holyBibleTVSetFrame(
+	C.bibleTextTVSetFrame(
 		C.float(pos.X), C.float(pos.Y),
 		C.float(sz.Width), C.float(sz.Height),
 	)
@@ -564,20 +564,20 @@ func setFrameFromObject(h *nativeReadingHost) {
 // Show / Hide are hooked into the tab-switching logic from ui_mobile.go.
 func (h *nativeReadingHost) Show() {
 	h.BaseWidget.Show()
-	C.holyBibleTVShow()
+	C.bibleTextTVShow()
 }
 
 func (h *nativeReadingHost) Hide() {
 	h.BaseWidget.Hide()
-	C.holyBibleTVHide()
+	C.bibleTextTVHide()
 }
 
 // showNativeReadingOverlay / hideNativeReadingOverlay are package-level so
 // ui_mobile.go's tab-change handler can drive visibility without holding a
 // reference to the host widget (which would force a circular dependency for
 // every tab change).
-func showNativeReadingOverlay() { C.holyBibleTVShow() }
-func hideNativeReadingOverlay() { C.holyBibleTVHide() }
+func showNativeReadingOverlay() { C.bibleTextTVShow() }
+func hideNativeReadingOverlay() { C.bibleTextTVHide() }
 
 // pushChapterHTML builds the chapter as HTML (so NSAttributedString gets nice
 // inline styling — superscript verse numbers, accent color, serif font) and
@@ -586,7 +586,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	html := buildChapterHTML(state, verses)
 	c := C.CString(html)
 	defer C.free(unsafe.Pointer(c))
-	C.holyBibleTVSetHTML(c)
+	C.bibleTextTVSetHTML(c)
 }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS

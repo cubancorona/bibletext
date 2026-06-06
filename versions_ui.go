@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // Translation switcher UI: a quiet selector in the shared header (so it appears
 // on both desktop and iOS) that opens a modal version picker. Switching swaps
@@ -148,7 +148,7 @@ func showVersionPicker(state *AppState) {
 // Selectable versions (real text available) are tappable. A version that isn't yet
 // licensed is rendered de-emphasized and NON-tappable with a formal "evaluation in
 // progress" note — it is never wrapped in a tapBox, so users cannot reach its
-// placeholder text. (When HOLY_BIBLE_ENABLE_TESTING=1, such a version becomes
+// placeholder text. (When BIBLETEXT_ENABLE_TESTING=1, such a version becomes
 // selectable and instead carries the internal TESTING placeholder tag.)
 func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject {
 	pal := state.pal()
@@ -176,7 +176,7 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 		tag.TextStyle = fyne.TextStyle{Italic: true}
 		lines.Add(tag)
 	case v.isTesting():
-		// Selectable only because internal testing mode is on (HOLY_BIBLE_ENABLE_TESTING).
+		// Selectable only because internal testing mode is on (BIBLETEXT_ENABLE_TESTING).
 		tag := canvas.NewText("TESTING — placeholder text, not the real translation", pal.Accent)
 		tag.TextSize = 11
 		tag.TextStyle = fyne.TextStyle{Italic: true}

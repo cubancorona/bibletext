@@ -3,7 +3,7 @@
 // Skipped under -race: see the note in ui_focus_test.go about Fyne's test app
 // clearing its font cache on a background goroutine.
 
-package holybible
+package bibletext
 
 import (
 	"testing"

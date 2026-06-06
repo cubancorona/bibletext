@@ -1,7 +1,7 @@
-Website = "https://github.com/cubancorona/holy-bible"
+Website = "https://github.com/cubancorona/bibletext"
 
 [Details]
-Name = "Holy Bible"
-ID = "io.github.cubancorona.holybibledesktop"
+Name = "BibleText"
+ID = "io.github.cubancorona.bibletextdesktop"
 Version = "1.0.0"
 Build = 29
