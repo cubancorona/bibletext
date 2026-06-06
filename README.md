@@ -166,7 +166,7 @@ on `ui_desktop.go` / `ui_mobile.go` make the linker pick the platform-appropriat
 ## Requirements
 
 - Go 1.21 or newer
-- Fyne v2.4.1 and its [system dependencies](https://docs.fyne.io/started/)
+- Fyne v2.7.4 (pinned in `go.mod`) and its [system dependencies](https://docs.fyne.io/started/)
 - For iOS packaging: macOS, **Xcode** (full install, not just Command Line
   Tools), and an Apple Developer account for signing
 - For Android packaging: the Android SDK + NDK

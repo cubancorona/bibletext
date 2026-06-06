@@ -55,10 +55,10 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	switch state.CurrentTab {
 	case 1:
 		content = buildMobileBooksTab(state, gotoReadTab)
-		notifyReadingOverlay(false)
+		notifyReadingOverlay(overlayShouldShow(state))
 	case 2:
 		content = buildMobileSearchTab(state, gotoReadTab)
-		notifyReadingOverlay(false)
+		notifyReadingOverlay(overlayShouldShow(state))
 	default: // 0 = Read
 		readingHost := container.NewStack(rebuildMobileReadingPane(state))
 		state.showReading = func() {
@@ -67,12 +67,12 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 			// rebuildMobileReadingPane swaps between the reading view and the
 			// search-results list; the native overlay must only show over the
 			// former, or it paints on top of the results.
-			notifyReadingOverlay(!state.IsSearching)
+			notifyReadingOverlay(overlayShouldShow(state))
 		}
 		content = readingHost
 		// When a search is active the Read tab shows the results list (Fyne), so
 		// the native overlay has to stay hidden to avoid overlapping it.
-		notifyReadingOverlay(!state.IsSearching)
+		notifyReadingOverlay(overlayShouldShow(state))
 	}
 
 	tabBar := buildMobileTabBar(state)
@@ -80,6 +80,21 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 
 	base := canvas.NewRectangle(pal.Background)
 	return container.NewStack(base, body)
+}
+
+// overlayShouldShow is the single source of truth for native reading-overlay
+// visibility on mobile: the iOS UITextView must be visible exactly when the
+// reading view is the content actually on screen — the Read tab with no active
+// search, or distraction-free full-screen reading. Every place that toggles the
+// overlay derives the answer from here, and afterRebuild re-asserts it as the
+// last word after each window rebuild, so a stray async show/hide during the
+// rebuild can't leave the overlay floating over the Books/Search tabs as a
+// blank (black) rectangle.
+func overlayShouldShow(state *AppState) bool {
+	if state.IsFullScreen {
+		return true
+	}
+	return state.CurrentTab == 0 && !state.IsSearching
 }
 
 // rebuildMobileReadingPane returns the search-results view when a search is
@@ -206,15 +221,15 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 
 	resultsHost := container.NewStack(buildSearchResultsView(state))
 
-	// Reroute showReading so a tap on a search result repaints the results panel
-	// here (if still on the search tab) and also primes the Read tab with the
-	// chosen verse. The desktop version pipes this through the persistent
-	// readingHost; on mobile both views need to refresh.
-	previousShow := state.showReading
+	// Reroute showReading so live, as-you-type search repaints the results panel
+	// here. We deliberately do NOT chain to the Read tab's previous showReading
+	// closure: that closure drives the native reading overlay, and invoking it
+	// from the Search tab (with stale, off-tab state) is exactly what could leave
+	// the UITextView floating over the results as a blank rectangle. The Read tab
+	// is rebuilt fresh from state when the user switches to it, so there's nothing
+	// to "prime" here — we just keep the overlay hidden and repaint the list.
 	state.showReading = func() {
-		if previousShow != nil {
-			previousShow()
-		}
+		notifyReadingOverlay(overlayShouldShow(state))
 		resultsHost.Objects = []fyne.CanvasObject{buildSearchResultsView(state)}
 		resultsHost.Refresh()
 	}

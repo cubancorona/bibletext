@@ -18,9 +18,16 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 	trimmed := strings.TrimSpace(state.ActiveSearchQuery)
 
-	title := canvas.NewText(fmt.Sprintf("Results for %q", trimmed), pal.Text)
-	title.TextSize = headingTextSize
+	// Echo the query as a heading, but truncate-to-fit with an ellipsis: a
+	// width-aware Label keeps an unusually long query (a big paste, or repeated
+	// characters) from rendering as one unbroken bar that runs off the edge of
+	// the results header — on both the narrow phone column and the wide desktop
+	// pane. Colour comes from the theme foreground (= pal.Text); SizeNameHeadingText
+	// matches the other page headings.
+	title := widget.NewLabel(fmt.Sprintf("Results for %q", trimmed))
 	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.SizeName = theme.SizeNameHeadingText
+	title.Truncation = fyne.TextTruncateEllipsis
 
 	var sub string
 	switch {

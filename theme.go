@@ -185,7 +185,9 @@ func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNameCaptionText:
 		return 11
 	case theme.SizeNameHeadingText:
-		return 23
+		// Used by the search-results heading Label (search.go); keep it equal to
+		// the canvas-text page headings ("Book N") so all headings match.
+		return headingTextSize
 	case theme.SizeNameSubHeadingText:
 		return 16
 	case theme.SizeNamePadding:
