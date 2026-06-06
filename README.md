@@ -27,6 +27,17 @@ calm, responsive reading layout.
   **Explain**, **Analyze context**, or **Analyze translation** it, using your own
   Gemini / ChatGPT / Claude / Grok API key. See
   [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
+- 🔗 **Cross-references** — select a verse and choose **Cross-references** to see
+  the related passages (vote-ranked), each a tap away in context. Data is the
+  public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
+  set, fetched once and cached for offline use.
+- 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
+- ✦ **Verse of the day** — a subtle sparkle in the header opens one
+  Christ-centred verse that rotates daily, with a jump to read it in context.
+- 📤 **Share a verse** — from the selection menu: **Share with citation** (text +
+  reference, ready to paste into a message) or **Share as image** (a clean,
+  text-only card with a dynamic colour treatment — no imagery). Both open your
+  device's native share sheet.
 - 📚 **Multiple translations** — read the public-domain **World English Bible**,
   and switch to **NRSV** or **LSB** once licensed (a clearly-labeled testing mode
   runs until then). See [Bible versions](#bible-versions).
@@ -299,6 +310,8 @@ harness, not in this app or the real renderer.
 
 Application code is provided for educational and devotional use. The bundled
 scripture text is the **World English Bible**, which is in the public domain.
+Cross-reference data is from **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
+(Treasury of Scripture Knowledge), used under **CC BY**.
 
 ---
 
