@@ -34,12 +34,20 @@ if [ -z "${BOOTED:-}" ]; then
     DEVICE_UDID=$(xcrun simctl list devices available | awk -F'[()]' -v name="$DEVICE_NAME" '
         $0 ~ name "[[:space:]]*\\(" { print $2; exit }')
     if [ -z "${DEVICE_UDID:-}" ]; then
-        echo "Couldn't find an available simulator named '$DEVICE_NAME'." >&2
+        # Requested device isn't available (e.g. a newer Xcode ships newer
+        # models and dropped "$DEVICE_NAME"). Fall back to the first available
+        # iPhone simulator so the script keeps working across Xcode versions.
+        DEVICE_UDID=$(xcrun simctl list devices available | awk -F'[()]' '/iPhone.*\(/ {print $2; exit}')
+        [ -n "${DEVICE_UDID:-}" ] && echo "==> '$DEVICE_NAME' unavailable; using first available iPhone" >&2
+    fi
+    if [ -z "${DEVICE_UDID:-}" ]; then
+        echo "No available iPhone simulator found." >&2
         echo "Available devices:" >&2
         xcrun simctl list devices available | sed 's/^/  /' >&2
+        echo "Download a runtime with: xcodebuild -downloadPlatform iOS" >&2
         exit 1
     fi
-    echo "==> booting $DEVICE_NAME ($DEVICE_UDID)"
+    echo "==> booting $DEVICE_UDID"
     xcrun simctl boot "$DEVICE_UDID"
     BOOTED="$DEVICE_UDID"
 fi
