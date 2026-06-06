@@ -17,6 +17,7 @@ import (
 const (
 	selActionShareCite  = "share-cite"
 	selActionShareImage = "share-image"
+	selActionCrossRef   = "crossref"
 )
 
 // dispatchSelectionAction routes a non-AI selection-menu action from the native
@@ -34,6 +35,8 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 		shareVerse(state, text, false)
 	case selActionShareImage:
 		shareVerse(state, text, true)
+	case selActionCrossRef:
+		showCrossRefs(state, text)
 	}
 }
 

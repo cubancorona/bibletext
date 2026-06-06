@@ -68,7 +68,8 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
                                      study(@"Share with citation", @"share-cite"),
                                      study(@"Share as image", @"share-image"),
                                  ]];
-    return [UIMenu menuWithChildren:[suggestedActions arrayByAddingObjectsFromArray:@[ai, share]]];
+    UIAction *xref = study(@"Cross-references", @"crossref");
+    return [UIMenu menuWithChildren:[suggestedActions arrayByAddingObjectsFromArray:@[ai, xref, share]]];
 }
 
 @end
