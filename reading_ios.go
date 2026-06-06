@@ -69,6 +69,14 @@ static UITextView *gReadingTV = nil;
 // the chapter's first verse.
 static NSRange gReadingHighlightRange = {NSNotFound, 0};
 
+// gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
+// settings) is open. The UITextView floats above the whole Fyne canvas, so it
+// must stay down for the duration of the modal — not merely be hidden once. A
+// layout pass behind the modal can call holyBibleTVShow again, which would paint
+// the verses back over the popup and steal its touches. While suppressed, Show
+// is a no-op; only Unsuppress clears it.
+static BOOL gReadingSuppressed = NO;
+
 // holyBibleScrollReadingTV positions the chapter: at the highlighted verse when
 // one is set (a search jump), otherwise pinned to the top. Centralised so the
 // several places that re-assert the offset (after setText, after a frame push,
@@ -258,6 +266,7 @@ void holyBibleTVSetFrame(float x, float y, float w, float h) {
 
 void holyBibleTVShow(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (gReadingSuppressed) return; // a modal is up; stay down until released
         holyBibleEnsureTV();
         if (gReadingTV == nil) return;
         gReadingTV.hidden = NO;
@@ -269,6 +278,24 @@ void holyBibleTVHide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gReadingTV == nil) return;
         gReadingTV.hidden = YES;
+    });
+}
+
+// holyBibleTVSuppress hides the overlay and latches it down so any stray
+// holyBibleTVShow from a layout pass behind a modal is ignored.
+void holyBibleTVSuppress(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gReadingSuppressed = YES;
+        if (gReadingTV == nil) return;
+        gReadingTV.hidden = YES;
+    });
+}
+
+// holyBibleTVUnsuppress clears the latch. It does not show the overlay on its
+// own — the caller decides whether to show (reading) or keep hidden (search).
+void holyBibleTVUnsuppress(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gReadingSuppressed = NO;
     });
 }
 */
@@ -299,8 +326,17 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 	// Let shared popups (the chapter picker) hide/show the native overlay so it
 	// doesn't float over them. Idempotent — safe to set on every rebuild.
-	state.hideReadingOverlay = hideNativeReadingOverlay
-	state.showReadingOverlay = showNativeReadingOverlay
+	state.hideReadingOverlay = func() { C.holyBibleTVSuppress() }
+	state.showReadingOverlay = func() {
+		C.holyBibleTVUnsuppress()
+		// Restore only the overlay that belongs to the current view: the reading
+		// text when reading, nothing when search results are showing.
+		if state.IsSearching {
+			C.holyBibleTVHide()
+		} else {
+			C.holyBibleTVShow()
+		}
+	}
 
 	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
 	normalizeCurrentChapter(state, chapterNumbers)

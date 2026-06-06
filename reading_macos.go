@@ -81,6 +81,14 @@ static NSTextView   *gTextView = nil;
 // to land the highlighted verse near the top instead of pinning to verse 1.
 static NSRange gMacHighlightRange = {NSNotFound, 0};
 
+// gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
+// settings) is open. The native NSTextView floats above the whole Fyne canvas,
+// so it must stay down for the duration of the modal — not just be hidden once.
+// A layout pass behind the modal can call holyBibleMacTVShow again (e.g. a scroll
+// re-pins the overlay), which would paint the verses back over the popup and
+// steal its clicks. While suppressed, Show is a no-op; only Unsuppress clears it.
+static BOOL gReadingSuppressed = NO;
+
 // holyBibleMacScrollTV positions the chapter: at the highlighted verse when one
 // is set (a search jump), otherwise at the very top. NSTextView is flipped, so
 // larger y is further down; we scroll the clip view to the verse's glyph rect.
@@ -233,6 +241,7 @@ void holyBibleMacTVSetFrame(double x, double y, double w, double h) {
 
 void holyBibleMacTVShow(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (gReadingSuppressed) return; // a modal is up; stay down until released
         holyBibleMacEnsureTV();
         if (gScroll == nil) return;
         gScroll.hidden = NO;
@@ -244,6 +253,24 @@ void holyBibleMacTVHide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gScroll == nil) return;
         gScroll.hidden = YES;
+    });
+}
+
+// holyBibleMacTVSuppress hides the overlay and latches it down so that any
+// stray holyBibleMacTVShow from a layout pass behind a modal is ignored.
+void holyBibleMacTVSuppress(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gReadingSuppressed = YES;
+        if (gScroll == nil) return;
+        gScroll.hidden = YES;
+    });
+}
+
+// holyBibleMacTVUnsuppress clears the latch. It does not show the overlay on its
+// own — the caller decides whether to show (reading) or keep hidden (search).
+void holyBibleMacTVUnsuppress(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gReadingSuppressed = NO;
     });
 }
 */
@@ -267,8 +294,14 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	// The NSTextView floats above the Fyne canvas, so any Fyne popup (the
 	// chapter picker) would render behind it. Let shared code hide/show the
 	// overlay around such popups — showChapterPicker calls these.
-	state.hideReadingOverlay = func() { setReadingOverlayVisible(false) }
-	state.showReadingOverlay = func() { setReadingOverlayVisible(true) }
+	state.hideReadingOverlay = func() { C.holyBibleMacTVSuppress() }
+	state.showReadingOverlay = func() {
+		C.holyBibleMacTVUnsuppress()
+		// Restore only the overlay that belongs to the current view: the reading
+		// text when reading, nothing when search results are showing (so closing
+		// settings mid-search doesn't paint verses over the results).
+		setReadingOverlayVisible(!state.IsSearching)
+	}
 
 	if len(verses) == 0 {
 		msg := widget.NewLabel("No verses are available for this chapter yet.")
