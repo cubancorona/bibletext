@@ -61,6 +61,11 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     aiItem.submenu = ai;
     [menu addItem:aiItem];
 
+    // Cross-references → related passages for the selection.
+    NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
+    xref.target = self;
+    [menu addItem:xref];
+
     // Share verse → with citation / as image (both go to the macOS share sheet).
     NSMenu *share = [[NSMenu alloc] initWithTitle:@"Share verse"];
     NSMenuItem *sc = [[NSMenuItem alloc] initWithTitle:@"Share with citation" action:@selector(hbShare_cite:) keyEquivalent:@""];
@@ -83,6 +88,9 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
 }
 - (void)hbAI_translation:(id)sender {
     bibleTextAIMenuTapped((char *)"translation", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbCrossRefs:(id)sender {
+    bibleTextStudyMenuTapped((char *)"crossref", (char *)self.hbSelectedText.UTF8String);
 }
 - (void)hbShare_cite:(id)sender {
     bibleTextStudyMenuTapped((char *)"share-cite", (char *)self.hbSelectedText.UTF8String);
