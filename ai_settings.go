@@ -136,14 +136,21 @@ func showAISettings(state *AppState) {
 	renderKey(store.activeProvider())
 
 	// --- Chrome.
-	title := canvas.NewText("AI study", pal.Text)
+	title := canvas.NewText("Settings", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 22
-	intro := widget.NewLabel("Pick an assistant and paste its API key. Everything stays on this device.")
+	intro := widget.NewLabel("Reading options, and optional AI study with your own key. Everything stays on this device.")
 	intro.Wrapping = fyne.TextWrapWord
 	header := container.NewVBox(title, intro, widget.NewSeparator())
 
+	// Reading options.
+	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
+	redLetter.SetChecked(redLetterEnabled())
+
 	form := container.NewVBox(
+		sectionLabel("READING", pal),
+		redLetter,
+		widget.NewSeparator(),
 		sectionLabel("ASSISTANT", pal),
 		active,
 		widget.NewSeparator(),
@@ -159,10 +166,13 @@ func showAISettings(state *AppState) {
 		if id, ok := nameToID[active.Selected]; ok {
 			store.setActiveProvider(id)
 		}
+		setRedLetterEnabled(redLetter.Checked)
 		if popup != nil {
 			popup.Hide()
 		}
 		restore()
+		// Re-render the chapter so red-letter turns on/off immediately.
+		state.refreshReadingOnly()
 	}
 	cancel := func() {
 		if popup != nil {
