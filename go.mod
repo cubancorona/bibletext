@@ -1,4 +1,4 @@
-module holybible
+module bibletext
 
 go 1.21
 

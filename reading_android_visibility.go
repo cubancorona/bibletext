@@ -1,6 +1,6 @@
 //go:build android
 
-package holybible
+package bibletext
 
 // notifyReadingOverlay is a no-op on Android; the Android build uses the Fyne
 // RichText reading view (see reading_mobile.go), which is part of the regular

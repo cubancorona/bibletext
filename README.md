@@ -1,4 +1,4 @@
-# Holy Bible Study
+# BibleText
 
 A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, and
 iOS** from a single Go codebase, built with [Fyne](https://fyne.io/). It
@@ -36,7 +36,7 @@ calm, responsive reading layout.
 The reader ships with the **World English Bible (WEB)** — a public-domain
 translation, free to distribute, fetched from
 [bible-api.com](https://bible-api.com/). Use the **translation switcher in the
-header** (the version name beneath "Holy Bible") to change versions.
+header** (the version name beneath "BibleText") to change versions.
 
 Two more translations are wired in:
 
@@ -54,7 +54,7 @@ already wired, so each becomes a normal, selectable translation the moment a lic
 is configured (see [Activating a licensed version](#activating-a-licensed-version)) —
 no UI or code change needed.
 
-For internal QA before a license lands, set `HOLY_BIBLE_ENABLE_TESTING=1`. That
+For internal QA before a license lands, set `BIBLETEXT_ENABLE_TESTING=1`. That
 unlocks the not-yet-licensed versions with **clearly-labeled placeholder text** (e.g.
 `[NRSV sample — licensed text not available in this testing build] John 1:1`) and a
 **TESTING** badge, so switching, navigation, search and AI study can be exercised end
@@ -102,7 +102,7 @@ NRSVue (and, if ever offered, LSB) are actually in its catalog before relying on
    around **$10/month each**; the free Starter plan's 3 licensed Bibles are
    **non-commercial only**. Arrange commercial terms with them.
 3. Get each translation's **`bibleId`**: `GET /v1/bibles` returns the Bibles your
-   key can access, each with an `id`. That id is your `HOLY_BIBLE_PROVIDER_ID_*`.
+   key can access, each with an `id`. That id is your `BIBLETEXT_PROVIDER_ID_*`.
 
 ### Activating a licensed version
 
@@ -112,13 +112,13 @@ in `versions.go`, with the provider's HTTP calls ready to be filled in):
 
 ```bash
 export BIBLE_API_KEY="<your provider api key>"
-export HOLY_BIBLE_LICENSE_NRSV=1                 # explicit "we are licensed" opt-in
-export HOLY_BIBLE_PROVIDER_ID_NRSV="<provider's bible id>"
+export BIBLETEXT_LICENSE_NRSV=1                 # explicit "we are licensed" opt-in
+export BIBLETEXT_PROVIDER_ID_NRSV="<provider's bible id>"
 ```
 
 The double gate — a license opt-in **and** credentials — makes it impossible to
 ship copyrighted text by accident. Each version caches to its own file
-(`holy-bible-<id>.json`) beside the WEB cache.
+(`bibletext-<id>.json`) beside the WEB cache.
 
 Those env vars drive the **API-provider path** (`licensedAPISource`) — the right
 shape for the NRSVue via API.Bible. The **LSB** arrives as licensed **data**, not an
@@ -188,9 +188,9 @@ the specific verse number. The separate **Test key** button in settings sends ju
 ## Repository layout
 
 ```
-holy-bible/
-├── go.mod                  # module holybible
-├── *.go                    # shared package: holybible
+bibletext/
+├── go.mod                  # module bibletext
+├── *.go                    # shared package: bibletext
 │   ├── bible.go cache.go fetch_bible_data.go annotation.go   (pure data layer)
 │   ├── state.go theme.go font.go                              (cross-platform UI scaffolding)
 │   ├── sidebar.go reading.go search.go history.go ui.go       (shared widgets)
@@ -205,7 +205,7 @@ holy-bible/
         └── Icon.png          # 1024×1024 app icon — replace before App Store
 ```
 
-The same `holybible` package is consumed by both `cmd/` entry points; build tags
+The same `bibletext` package is consumed by both `cmd/` entry points; build tags
 on `ui_desktop.go` / `ui_mobile.go` make the linker pick the platform-appropriate
 `CreateMainUI` implementation. Pure data files (`bible.go`, `cache.go`,
 `fetch_bible_data.go`, `annotation.go`) have no UI deps and compile everywhere.
@@ -224,16 +224,16 @@ on `ui_desktop.go` / `ui_mobile.go` make the linker pick the platform-appropriat
 
 ```bash
 go mod download
-go build -o holy-bible ./cmd/desktop
-./holy-bible
+go build -o bibletext ./cmd/desktop
+./bibletext
 ```
 
 Cross-compile for other desktop OSes:
 
 ```bash
-GOOS=linux   GOARCH=amd64 go build -o holy-bible-linux  ./cmd/desktop
-GOOS=windows GOARCH=amd64 go build -o holy-bible.exe    ./cmd/desktop
-GOOS=darwin  GOARCH=arm64 go build -o holy-bible-macos  ./cmd/desktop
+GOOS=linux   GOARCH=amd64 go build -o bibletext-linux  ./cmd/desktop
+GOOS=windows GOARCH=amd64 go build -o bibletext.exe    ./cmd/desktop
+GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos  ./cmd/desktop
 ```
 
 ### iOS
@@ -254,16 +254,16 @@ go install fyne.io/tools/cmd/fyne@latest    # NB: the new tools repo, not the
 # Build & run on the iOS simulator (`-src` must point to the directory with
 # main.go + FyneApp.toml + Icon.png — i.e. ./cmd/mobile, or just cd into it):
 cd cmd/mobile
-fyne package -os iossimulator --app-id com.willow.holybible
+fyne package -os iossimulator --app-id com.willow.bibletext
 
 # Boot a simulator and install:
 xcrun simctl boot "iPhone 15" 2>/dev/null   # or any simulator name from `simctl list devices`
 open -a Simulator
-xcrun simctl install booted "Holy Bible.app"
-xcrun simctl launch booted com.willow.holybible
+xcrun simctl install booted "BibleText.app"
+xcrun simctl launch booted com.willow.bibletext
 
 # Build a signed .ipa for a real device (paid Developer Program required):
-fyne package -os ios --app-id com.willow.holybible \
+fyne package -os ios --app-id com.willow.bibletext \
              --certificate "Apple Development: Your Name (TEAMID)" \
              --profile "Your Provisioning Profile Name"
 ```
@@ -274,14 +274,14 @@ fyne package -os ios --app-id com.willow.holybible \
 ### Android
 
 ```bash
-fyne package -os android -appID com.willow.holybible -src ./cmd/mobile
+fyne package -os android -appID com.willow.bibletext -src ./cmd/mobile
 ```
 
 On first launch the app downloads the World English Bible from
 [bible-api.com](https://bible-api.com/) (about 30–60 seconds) and saves a local
 cache in the OS cache directory (on iOS, inside the app's container). Every
 later launch loads instantly from cache and works offline. Set
-`HOLY_BIBLE_CACHE_PATH` to override the cache location on desktop.
+`BIBLETEXT_CACHE_PATH` to override the cache location on desktop.
 
 ## Tests
 

@@ -1,5 +1,5 @@
 {
-  // Build / run / test tasks for the Holy Bible Fyne app.
+  // Build / run / test tasks for the BibleText Fyne app.
   //   Cmd+Shift+B          -> "Build (compile check)"   (default build)
   //   Cmd+Shift+P > Run Test Task -> "Test (race)"      (default test)
   //   Cmd+Shift+P > Run Task -> any of the below
@@ -26,9 +26,9 @@
     },
     {
       "label": "Package Desktop (.app)",
-      "detail": "fyne package -> cmd/desktop/Holy Bible.app",
+      "detail": "fyne package -> cmd/desktop/BibleText.app",
       "type": "shell",
-      "command": "fyne package -os darwin --app-id com.willow.holybibledesktop",
+      "command": "fyne package -os darwin --app-id com.willow.bibletextdesktop",
       "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -37,7 +37,7 @@
       "label": "Package iOS Simulator",
       "detail": "fyne package -> cmd/mobile (iossimulator)",
       "type": "shell",
-      "command": "fyne package -os iossimulator --app-id com.willow.holybible",
+      "command": "fyne package -os iossimulator --app-id com.willow.bibletext",
       "options": { "cwd": "${workspaceFolder}/cmd/mobile" },
       "group": "build",
       "problemMatcher": ["$go"]

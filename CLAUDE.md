@@ -1,11 +1,11 @@
-# Holy Bible — project guide for AI assistants
+# BibleText — project guide for AI assistants
 
 A cross-platform Bible reader (macOS / Windows / Linux / iOS) from one Go
-codebase, built with [Fyne](https://fyne.io/). Module name: `holybible`.
+codebase, built with [Fyne](https://fyne.io/). Module name: `bibletext`.
 
 ## Layout
 
-- Repo root = the shared **`holybible` library package** (all the `*.go` files).
+- Repo root = the shared **`bibletext` library package** (all the `*.go` files).
   It is NOT a `main` package — do not try to `go run .` or `go build .` here.
 - Entry points live under `cmd/`:
   - `cmd/desktop/main.go` — desktop window (HSplit + sidebar + shortcuts)
@@ -20,8 +20,8 @@ go test -race ./...                 # tests live in the root package
 gofmt -w .  &&  go vet ./...        # format + vet before committing
 
 # Packaged bundles (run from the cmd dir, not the repo root):
-cd cmd/desktop && fyne package -os darwin       --app-id com.willow.holybibledesktop
-cd cmd/mobile  && fyne package -os iossimulator --app-id com.willow.holybible
+cd cmd/desktop && fyne package -os darwin       --app-id com.willow.bibletextdesktop
+cd cmd/mobile  && fyne package -os iossimulator --app-id com.willow.bibletext
 ```
 
 VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
@@ -41,7 +41,7 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   call `state.hideReadingOverlay()` on open and `state.showReadingOverlay()` on
   close; a `gReadingSuppressed` latch keeps the overlay down for the whole modal.
 - **Native → Go bridge.** `ai_menu_darwin.go` has the repo's only `//export`
-  callback (`holyBibleAIMenuTapped`); its cgo preamble must stay empty of C
+  callback (`bibleTextAIMenuTapped`); its cgo preamble must stay empty of C
   *definitions* (only declarations allowed alongside `//export`).
 - **AI study (BYOK).** Select text → native "Study with AI" menu → Explain /
   Analyze context / Analyze translation. Providers (Gemini / OpenAI / Anthropic
@@ -60,10 +60,10 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   progress", and `switchVersion` refuses them — so no copyrighted placeholder text
   reaches users. The placeholder path (`makePlaceholderBible`, mirrors WEB's
   structure) stays in the code and is unlocked for internal QA by
-  `HOLY_BIBLE_ENABLE_TESTING=1` (`testingVersionsEnabled`); once a license is
+  `BIBLETEXT_ENABLE_TESTING=1` (`testingVersionsEnabled`); once a license is
   configured the version flips to selectable with real text automatically.
   `switchVersion` swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
-  `holy-bible-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
+  `bibletext-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
   shared → both platforms). All versions share the canonical 66-book structure,
   so reading/search/AI need no per-version code. Docs: README → "Bible versions".
 

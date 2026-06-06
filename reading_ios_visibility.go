@@ -1,6 +1,6 @@
 //go:build ios
 
-package holybible
+package bibletext
 
 // notifyReadingOverlay is the build-tag shim ui_mobile.go uses to keep the
 // native UITextView overlay in sync with the bottom-tab selection — visible

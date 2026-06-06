@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // Bible translations (versions). The reader can switch between translations; the
 // active one's text lives in AppState.Bible and is swapped on switch. All
@@ -11,7 +11,7 @@ package holybible
 // configured they are NOT user-selectable: the picker shows them as "evaluation
 // in progress" and tapping is disabled, so a shipped build never exposes
 // placeholder text to end users. The full testing/placeholder path stays in the
-// code and can be exercised for internal QA by setting HOLY_BIBLE_ENABLE_TESTING=1
+// code and can be exercised for internal QA by setting BIBLETEXT_ENABLE_TESTING=1
 // (see canSelect + testingVersionsEnabled). The retrieval/cache/UI are fully
 // wired — only the licensed provider's HTTP calls remain to be filled in
 // (licensedAPISource.fetch), at which point the version becomes selectable
@@ -53,7 +53,7 @@ func (v BibleVersion) isTesting() bool { return v.source == nil || !v.source.ava
 // when real text is available — public domain, or licensed *and* configured.
 // Versions still in placeholder mode are deliberately NOT selectable in a normal
 // build (the picker shows them as "evaluation in progress"), so no copyrighted
-// placeholder text is ever exposed to end users. Setting HOLY_BIBLE_ENABLE_TESTING=1
+// placeholder text is ever exposed to end users. Setting BIBLETEXT_ENABLE_TESTING=1
 // unlocks them for internal QA of the placeholder flow.
 func (v BibleVersion) canSelect() bool {
 	return !v.isTesting() || testingVersionsEnabled()
@@ -113,8 +113,8 @@ func (webSource) fetch() (*BibleData, error) { return FetchBibleFromAPI() }
 // secrets live in the repo:
 //
 //	BIBLE_API_KEY                  provider API key (shared across versions)
-//	HOLY_BIBLE_LICENSE_<ID>=1      explicit "we are licensed for <ID>" opt-in
-//	HOLY_BIBLE_PROVIDER_ID_<ID>    the provider's bible id for this translation
+//	BIBLETEXT_LICENSE_<ID>=1      explicit "we are licensed for <ID>" opt-in
+//	BIBLETEXT_PROVIDER_ID_<ID>    the provider's bible id for this translation
 //
 // (<ID> is the upper-cased version id, e.g. NRSV, LSB.)
 type licensedAPISource struct {
@@ -130,12 +130,12 @@ func (s *licensedAPISource) apiKey() string { return strings.TrimSpace(os.Getenv
 // licensed is the explicit operator opt-in confirming we hold rights to ship
 // this translation's text.
 func (s *licensedAPISource) licensed() bool {
-	return envTruthy(os.Getenv("HOLY_BIBLE_LICENSE_" + strings.ToUpper(s.versionID)))
+	return envTruthy(os.Getenv("BIBLETEXT_LICENSE_" + strings.ToUpper(s.versionID)))
 }
 
 // providerVersionID is the licensed provider's id for this translation.
 func (s *licensedAPISource) providerVersionID() string {
-	return strings.TrimSpace(os.Getenv("HOLY_BIBLE_PROVIDER_ID_" + strings.ToUpper(s.versionID)))
+	return strings.TrimSpace(os.Getenv("BIBLETEXT_PROVIDER_ID_" + strings.ToUpper(s.versionID)))
 }
 
 func (s *licensedAPISource) available() bool {
@@ -145,7 +145,7 @@ func (s *licensedAPISource) available() bool {
 func (s *licensedAPISource) fetch() (*BibleData, error) {
 	if !s.available() {
 		return nil, fmt.Errorf("version %q: licensed source not configured "+
-			"(need a distribution license, BIBLE_API_KEY, HOLY_BIBLE_LICENSE_%s=1 and HOLY_BIBLE_PROVIDER_ID_%s)",
+			"(need a distribution license, BIBLE_API_KEY, BIBLETEXT_LICENSE_%s=1 and BIBLETEXT_PROVIDER_ID_%s)",
 			s.versionID, strings.ToUpper(s.versionID), strings.ToUpper(s.versionID))
 	}
 	// TODO(license): with rights secured, implement the provider call here.
@@ -170,7 +170,7 @@ func envTruthy(v string) bool {
 // It is off by default, so shipped builds never expose placeholder text to users
 // (they see the versions as "evaluation in progress", not selectable).
 func testingVersionsEnabled() bool {
-	return envTruthy(os.Getenv("HOLY_BIBLE_ENABLE_TESTING"))
+	return envTruthy(os.Getenv("BIBLETEXT_ENABLE_TESTING"))
 }
 
 // --- Loading + placeholders -------------------------------------------------
@@ -236,14 +236,14 @@ func placeholderVerseText(abbrev, book string, chapter, verse int) string {
 }
 
 // cachePathForVersion is the on-disk cache for a version. The default (web) stays
-// at the legacy path (honoring HOLY_BIBLE_CACHE_PATH) for backwards
-// compatibility; other versions live beside it as holy-bible-<id>.json.
+// at the legacy path (honoring BIBLETEXT_CACHE_PATH) for backwards
+// compatibility; other versions live beside it as bibletext-<id>.json.
 func cachePathForVersion(id string) string {
 	base := defaultCachePath()
 	if id == defaultVersionID {
 		return base
 	}
-	return filepath.Join(filepath.Dir(base), "holy-bible-"+id+".json")
+	return filepath.Join(filepath.Dir(base), "bibletext-"+id+".json")
 }
 
 // --- Switching --------------------------------------------------------------
@@ -277,7 +277,7 @@ func switchVersion(state *AppState, id string) {
 		d, m, err := loadVersionData(v, state.baseBible())
 		if err != nil {
 			// Keep the current version rather than blanking the reader.
-			fmt.Fprintf(os.Stderr, "Holy Bible: could not load %s: %v\n", v.Name, err)
+			fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)
 			return
 		}
 		data, mode = d, m

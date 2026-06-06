@@ -1,5 +1,5 @@
 # Compiled application binaries
-/holy-bible
+/bibletext
 /cmd/desktop/desktop
 /cmd/mobile/mobile
 
@@ -15,7 +15,7 @@
 coverage.*
 
 # Local Bible cache (normally lives in the OS cache dir; ignore any local copy)
-holy-bible-cache.json
+bibletext-cache.json
 
 # macOS / editor cruft
 .DS_Store

@@ -1,6 +1,6 @@
 //go:build android
 
-package holybible
+package bibletext
 
 import (
 	"fmt"

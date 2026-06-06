@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ func LoadAndPrepareState() *AppState {
 	version, _ := versionByID(defaultVersionID)
 	bibleData, mode, err := loadVersionData(version, nil)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Holy Bible failed to load:", err)
+		fmt.Fprintln(os.Stderr, "BibleText failed to load:", err)
 		os.Exit(1)
 	}
 
@@ -44,10 +44,10 @@ func LoadAndPrepareState() *AppState {
 // event loop. Mobile entries (Fyne iOS) use the same data path but configure the
 // window differently — see cmd/mobile/main.go.
 func Run() {
-	myApp := app.NewWithID("holy-bible")
+	myApp := app.NewWithID("bibletext")
 	state := LoadAndPrepareState()
 
-	window := myApp.NewWindow("Holy Bible")
+	window := myApp.NewWindow("BibleText")
 	window.Resize(fyne.NewSize(1280, 860))
 	window.SetContent(CreateMainUI(myApp, state, window))
 	ObserveSystemThemeChanges(myApp, state)

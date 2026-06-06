@@ -1,6 +1,6 @@
 //go:build ios || !darwin
 
-package holybible
+package bibletext
 
 import (
 	"fyne.io/fyne/v2"

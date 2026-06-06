@@ -1,4 +1,4 @@
-# Holy Bible — Session Status (2026-05-25)
+# BibleText — Session Status (2026-05-25)
 
 This document captures the state of the project at the end of the iOS
 porting + selection session, so you can pick up where we left off.
@@ -6,16 +6,16 @@ porting + selection session, so you can pick up where we left off.
 ## Overall shape
 
 **Single Go codebase that builds for desktop (macOS / Linux / Windows) and
-iOS.** Same `holybible` package; build tags pick the right UI per platform.
+iOS.** Same `bibletext` package; build tags pick the right UI per platform.
 
 ```
-holy-bible/
-├── go.mod                # module holybible, Fyne v2.7.4
+bibletext/
+├── go.mod                # module bibletext, Fyne v2.7.4
 ├── go.sum
 ├── ARCHITECTURE.md
 ├── README.md
 ├── SESSION_STATUS.md     ← this file
-├── *.go (data + shared UI; package holybible)
+├── *.go (data + shared UI; package bibletext)
 │   ├── bible.go cache.go fetch_bible_data.go annotation.go  (pure data)
 │   ├── state.go theme.go font.go                            (shared scaffolding)
 │   ├── sidebar.go reading.go search.go history.go ui.go     (shared widgets)
@@ -27,8 +27,8 @@ holy-bible/
 │   ├── reading_ios_visibility.go        //go:build ios
 │   └── reading_android_visibility.go    //go:build android
 ├── cmd/
-│   ├── desktop/{main.go, FyneApp.toml, Icon.png, Holy Bible.app}
-│   └── mobile/{main.go, FyneApp.toml, Icon.png, Holy-Bible.app}
+│   ├── desktop/{main.go, FyneApp.toml, Icon.png, BibleText.app}
+│   └── mobile/{main.go, FyneApp.toml, Icon.png, BibleText.app}
 └── scripts/
     ├── run-ios-sim.sh
     └── install-fake-dev-cert.sh
@@ -37,7 +37,7 @@ holy-bible/
 ## What's confirmed working
 
 ### Desktop (macOS)
-- ✅ Builds cleanly: `go build -o holy-bible ./cmd/desktop`
+- ✅ Builds cleanly: `go build -o bibletext ./cmd/desktop`
 - ✅ Also packages as a `.app` bundle via `fyne package -os darwin` in `cmd/desktop/`
 - ✅ All non-Fyne-harness tests pass: `go test ./...` (one in-memory render test
   panics inside Fyne 2.7.4 — see "Known Issues" below)
@@ -45,7 +45,7 @@ holy-bible/
   light/dark, chapter copy, history bar, selectable verses
 
 ### iOS Simulator
-- ✅ Builds cleanly: `cd cmd/mobile && fyne package -os iossimulator --app-id com.willow.holybible`
+- ✅ Builds cleanly: `cd cmd/mobile && fyne package -os iossimulator --app-id com.willow.bibletext`
 - ✅ Simulator runtime installed (iOS 26.5)
 - ✅ Self-signed "Apple Development" cert in keychain (via
   `scripts/install-fake-dev-cert.sh`) — Fyne's iOS packager needs ANY such cert
@@ -78,12 +78,12 @@ selection across paragraphs all work natively** because they're built into
 UITextView. The Read tab content is now genuinely "like an email."
 
 Log lines confirming the wire-up (filtered from iOS syslog with
-`xcrun simctl spawn UDID log stream --predicate 'eventMessage CONTAINS "holybible:"'`):
+`xcrun simctl spawn UDID log stream --predicate 'eventMessage CONTAINS "bibletext:"'`):
 
 ```
-holybible: ensureTV — created UITextView, attaching to window <UIWindow…>
-holybible: HTML set (7183 bytes input → 5254 attr chars)
-holybible: setFrame (14.0,174.6) 374.0x500.9 hidden=0 superview=<UIWindow…>
+bibletext: ensureTV — created UITextView, attaching to window <UIWindow…>
+bibletext: HTML set (7183 bytes input → 5254 attr chars)
+bibletext: setFrame (14.0,174.6) 374.0x500.9 hidden=0 superview=<UIWindow…>
 ```
 
 ### Resolved this session
@@ -95,7 +95,7 @@ holybible: setFrame (14.0,174.6) 374.0x500.9 hidden=0 superview=<UIWindow…>
   overlapping the "Chapter N of M" header. Root cause: Fyne renders its canvas
   inset below the device safe area (Dynamic Island), so a Fyne coordinate Y
   maps to window Y + safeAreaInsets.top, but the UITextView is a raw window
-  subview. Fix is in `holyBibleTVSetFrame` (reading_ios.go) — it now adds
+  subview. Fix is in `bibleTextTVSetFrame` (reading_ios.go) — it now adds
   `superview.safeAreaInsets` (.top/.left) to the frame origin. Verified: text
   now starts cleanly below the header and ends above the tab bar.
 
@@ -122,8 +122,8 @@ Ran an interactive pass before committing:
 1. **Overlay scroll position on chapter change.** Switching chapters in place
    sometimes leaves the UITextView scrolled a little below verse 1 (a full
    rebuild — e.g. dark-mode toggle — scrolls to top correctly). The
-   `contentOffset = CGPointZero` reset in `holyBibleTVSetHTML` races the frame
-   set; reset it again right after `holyBibleTVSetFrame`, or after a tick.
+   `contentOffset = CGPointZero` reset in `bibleTextTVSetHTML` races the frame
+   set; reset it again right after `bibleTextTVSetFrame`, or after a tick.
 2. **No scroll-to-matched-verse.** Tapping a search result loads the right
    chapter but doesn't scroll the UITextView to the matched verse (desktop's
    chapterText did this via highlightLine). Add a `scrollRangeToVisible:` call
@@ -167,10 +167,10 @@ was blocked when the Anthropic safety classifier went down mid-session.
 **To resume:**
 
 ```bash
-UDID=$(cat /tmp/holybible-sim-udid)
-xcrun simctl install "$UDID" /Users/willow/Dev/holy-bible/cmd/mobile/Holy-Bible.app
-xcrun simctl terminate "$UDID" com.willow.holybible
-xcrun simctl launch --console "$UDID" com.willow.holybible
+UDID=$(cat /tmp/bibletext-sim-udid)
+xcrun simctl install "$UDID" /Users/willow/Dev/bibletext/cmd/mobile/BibleText.app
+xcrun simctl terminate "$UDID" com.willow.bibletext
+xcrun simctl launch --console "$UDID" com.willow.bibletext
 ```
 
 then in the simulator:
@@ -254,24 +254,24 @@ then in the simulator:
 
 ```bash
 # Confirm desktop still builds + most tests pass
-cd /Users/willow/Dev/holy-bible
-go build -o /tmp/holy-bible ./cmd/desktop
+cd /Users/willow/Dev/bibletext
+go build -o /tmp/bibletext ./cmd/desktop
 go test ./...   # one Fyne 2.7.4 painter panic is expected — see #1 above
 
 # Confirm iOS sim build is current
 export PATH="$(go env GOPATH)/bin:$PATH"
 cd cmd/mobile
-fyne package -os iossimulator --app-id com.willow.holybible
+fyne package -os iossimulator --app-id com.willow.bibletext
 
 # Install + launch the latest build
-UDID=$(cat /tmp/holybible-sim-udid)
-xcrun simctl install "$UDID" Holy-Bible.app
-xcrun simctl terminate "$UDID" com.willow.holybible
-xcrun simctl launch --console "$UDID" com.willow.holybible
+UDID=$(cat /tmp/bibletext-sim-udid)
+xcrun simctl install "$UDID" BibleText.app
+xcrun simctl terminate "$UDID" com.willow.bibletext
+xcrun simctl launch --console "$UDID" com.willow.bibletext
 ```
 
-The simulator UDID `cat /tmp/holybible-sim-udid` was saved earlier this session;
-the device is named `HolyBibleTestSim` and runs iOS 26.5.
+The simulator UDID `cat /tmp/bibletext-sim-udid` was saved earlier this session;
+the device is named `BibleTextTestSim` and runs iOS 26.5.
 
 ## Where to look in the code
 

@@ -1,7 +1,7 @@
-Website = "https://github.com/willownoonan/holy-bible"
+Website = "https://github.com/willownoonan/bibletext"
 
 [Details]
-Name = "Holy Bible"
-ID = "com.willow.holybibledesktop"
+Name = "BibleText"
+ID = "com.willow.bibletextdesktop"
 Version = "1.0.0"
 Build = 29

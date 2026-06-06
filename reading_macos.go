@@ -1,6 +1,6 @@
 //go:build darwin && !ios
 
-package holybible
+package bibletext
 
 // Native-macOS reading pane: a real AppKit NSTextView (editable=NO,
 // selectable=YES) inside an NSScrollView, attached to the Fyne window's
@@ -24,7 +24,7 @@ package holybible
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
 // an AI study action; it copies both strings immediately.
-extern void holyBibleAIMenuTapped(char *action, char *text);
+extern void bibleTextAIMenuTapped(char *action, char *text);
 
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the right-click selection menu and hands the selected
@@ -62,13 +62,13 @@ extern void holyBibleAIMenuTapped(char *action, char *text);
 }
 
 - (void)hbAI_explain:(id)sender {
-    holyBibleAIMenuTapped((char *)"explain", (char *)self.hbSelectedText.UTF8String);
+    bibleTextAIMenuTapped((char *)"explain", (char *)self.hbSelectedText.UTF8String);
 }
 - (void)hbAI_context:(id)sender {
-    holyBibleAIMenuTapped((char *)"context", (char *)self.hbSelectedText.UTF8String);
+    bibleTextAIMenuTapped((char *)"context", (char *)self.hbSelectedText.UTF8String);
 }
 - (void)hbAI_translation:(id)sender {
-    holyBibleAIMenuTapped((char *)"translation", (char *)self.hbSelectedText.UTF8String);
+    bibleTextAIMenuTapped((char *)"translation", (char *)self.hbSelectedText.UTF8String);
 }
 
 @end
@@ -77,22 +77,22 @@ static NSScrollView *gScroll = nil;
 static NSTextView   *gTextView = nil;
 
 // Character range of the highlighted verse (set when arriving from a search
-// result), or {NSNotFound, 0} for a plain chapter. holyBibleMacScrollTV uses it
+// result), or {NSNotFound, 0} for a plain chapter. bibleTextMacScrollTV uses it
 // to land the highlighted verse near the top instead of pinning to verse 1.
 static NSRange gMacHighlightRange = {NSNotFound, 0};
 
 // gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
 // settings) is open. The native NSTextView floats above the whole Fyne canvas,
 // so it must stay down for the duration of the modal — not just be hidden once.
-// A layout pass behind the modal can call holyBibleMacTVShow again (e.g. a scroll
+// A layout pass behind the modal can call bibleTextMacTVShow again (e.g. a scroll
 // re-pins the overlay), which would paint the verses back over the popup and
 // steal its clicks. While suppressed, Show is a no-op; only Unsuppress clears it.
 static BOOL gReadingSuppressed = NO;
 
-// holyBibleMacScrollTV positions the chapter: at the highlighted verse when one
+// bibleTextMacScrollTV positions the chapter: at the highlighted verse when one
 // is set (a search jump), otherwise at the very top. NSTextView is flipped, so
 // larger y is further down; we scroll the clip view to the verse's glyph rect.
-static void holyBibleMacScrollTV(void) {
+static void bibleTextMacScrollTV(void) {
     if (gTextView == nil || gScroll == nil) return;
     if (gMacHighlightRange.location != NSNotFound &&
         gMacHighlightRange.length > 0 &&
@@ -115,7 +115,7 @@ static void holyBibleMacScrollTV(void) {
 
 // Find the Fyne window. Fyne (via glfw) creates one standard NSWindow; prefer
 // the key window, fall back to the first window.
-static NSWindow *holyBibleMacWindow(void) {
+static NSWindow *bibleTextMacWindow(void) {
     NSWindow *w = NSApp.keyWindow;
     if (w == nil) w = NSApp.mainWindow;
     if (w == nil && NSApp.windows.count > 0) w = NSApp.windows.firstObject;
@@ -124,9 +124,9 @@ static NSWindow *holyBibleMacWindow(void) {
 
 // Ensure the scroll view + text view exist and are parented to the current
 // window's content view.
-static void holyBibleMacEnsureTV(void) {
+static void bibleTextMacEnsureTV(void) {
     dispatch_block_t block = ^{
-        NSWindow *win = holyBibleMacWindow();
+        NSWindow *win = bibleTextMacWindow();
         if (win == nil || win.contentView == nil) return;
 
         if (gScroll == nil) {
@@ -168,12 +168,12 @@ static void holyBibleMacEnsureTV(void) {
     else dispatch_sync(dispatch_get_main_queue(), block);
 }
 
-void holyBibleMacTVSetHTML(const char *html) {
+void bibleTextMacTVSetHTML(const char *html) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
     NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding];
     dispatch_async(dispatch_get_main_queue(), ^{
-        holyBibleMacEnsureTV();
+        bibleTextMacEnsureTV();
         if (gTextView == nil) return;
         NSDictionary *opts = @{
             NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
@@ -184,7 +184,7 @@ void holyBibleMacTVSetHTML(const char *html) {
             [[NSMutableAttributedString alloc] initWithData:data options:opts
                                          documentAttributes:nil error:&err];
         if (as == nil) {
-            NSLog(@"holybible(mac): HTML parse failed: %@", err);
+            NSLog(@"bibletext(mac): HTML parse failed: %@", err);
             [gTextView setString:s];
             return;
         }
@@ -212,16 +212,16 @@ void holyBibleMacTVSetHTML(const char *html) {
             }
         }];
         [gTextView.textStorage setAttributedString:as];
-        holyBibleMacScrollTV();
+        bibleTextMacScrollTV();
     });
 }
 
-// holyBibleMacTVSetFrame positions the overlay. Inputs are Fyne coordinates
+// bibleTextMacTVSetFrame positions the overlay. Inputs are Fyne coordinates
 // (top-left origin, points). AppKit content views are non-flipped (bottom-left
 // origin), so we flip Y using the content view height.
-void holyBibleMacTVSetFrame(double x, double y, double w, double h) {
+void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        holyBibleMacEnsureTV();
+        bibleTextMacEnsureTV();
         if (gScroll == nil) return;
         NSView *parent = gScroll.superview;
         if (parent == nil) return;
@@ -234,31 +234,31 @@ void holyBibleMacTVSetFrame(double x, double y, double w, double h) {
         // rewraps, so re-assert the highlight position. Only when a highlight is
         // active — otherwise leave the reader's scroll position untouched.
         if (changed && gMacHighlightRange.location != NSNotFound) {
-            holyBibleMacScrollTV();
+            bibleTextMacScrollTV();
         }
     });
 }
 
-void holyBibleMacTVShow(void) {
+void bibleTextMacTVShow(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gReadingSuppressed) return; // a modal is up; stay down until released
-        holyBibleMacEnsureTV();
+        bibleTextMacEnsureTV();
         if (gScroll == nil) return;
         gScroll.hidden = NO;
         [gScroll.superview addSubview:gScroll positioned:NSWindowAbove relativeTo:nil];
     });
 }
 
-void holyBibleMacTVHide(void) {
+void bibleTextMacTVHide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gScroll == nil) return;
         gScroll.hidden = YES;
     });
 }
 
-// holyBibleMacTVSuppress hides the overlay and latches it down so that any
-// stray holyBibleMacTVShow from a layout pass behind a modal is ignored.
-void holyBibleMacTVSuppress(void) {
+// bibleTextMacTVSuppress hides the overlay and latches it down so that any
+// stray bibleTextMacTVShow from a layout pass behind a modal is ignored.
+void bibleTextMacTVSuppress(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingSuppressed = YES;
         if (gScroll == nil) return;
@@ -266,9 +266,9 @@ void holyBibleMacTVSuppress(void) {
     });
 }
 
-// holyBibleMacTVUnsuppress clears the latch. It does not show the overlay on its
+// bibleTextMacTVUnsuppress clears the latch. It does not show the overlay on its
 // own — the caller decides whether to show (reading) or keep hidden (search).
-void holyBibleMacTVUnsuppress(void) {
+void bibleTextMacTVUnsuppress(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingSuppressed = NO;
     });
@@ -294,9 +294,9 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	// The NSTextView floats above the Fyne canvas, so any Fyne popup (the
 	// chapter picker) would render behind it. Let shared code hide/show the
 	// overlay around such popups — showChapterPicker calls these.
-	state.hideReadingOverlay = func() { C.holyBibleMacTVSuppress() }
+	state.hideReadingOverlay = func() { C.bibleTextMacTVSuppress() }
 	state.showReadingOverlay = func() {
-		C.holyBibleMacTVUnsuppress()
+		C.bibleTextMacTVUnsuppress()
 		// Restore only the overlay that belongs to the current view: the reading
 		// text when reading, nothing when search results are showing (so closing
 		// settings mid-search doesn't paint verses over the results).
@@ -323,13 +323,13 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 // buildReadingPane when switching between reading and search results).
 func setReadingOverlayVisible(visible bool) {
 	if visible {
-		C.holyBibleMacTVShow()
+		C.bibleTextMacTVShow()
 	} else {
-		C.holyBibleMacTVHide()
+		C.bibleTextMacTVHide()
 	}
 }
 
-func hideNativeReadingOverlayMac() { C.holyBibleMacTVHide() }
+func hideNativeReadingOverlayMac() { C.bibleTextMacTVHide() }
 
 // macReadingHost is the transparent Fyne widget that tracks the reading
 // rectangle and pushes it to the NSScrollView frame.
@@ -349,8 +349,8 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	html := buildChapterHTML(state, verses)
 	c := C.CString(html)
 	defer C.free(unsafe.Pointer(c))
-	C.holyBibleMacTVSetHTML(c)
-	C.holyBibleMacTVShow()
+	C.bibleTextMacTVSetHTML(c)
+	C.bibleTextMacTVShow()
 	return h
 }
 
@@ -387,7 +387,7 @@ func setMacFrameFromObject(h *macReadingHost) {
 	if sz.Width <= 0 || sz.Height <= 0 {
 		return
 	}
-	C.holyBibleMacTVSetFrame(
+	C.bibleTextMacTVSetFrame(
 		C.double(pos.X), C.double(pos.Y),
 		C.double(sz.Width), C.double(sz.Height),
 	)

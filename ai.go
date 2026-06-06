@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 // AI study actions. When the reader selects a passage and picks "Explain",
 // "Analyze context" or "Analyze translation" from the selection menu, the chosen

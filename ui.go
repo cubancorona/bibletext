@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"fyne.io/fyne/v2"
@@ -20,7 +20,7 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// The chrome should defer to the reading text — small serif title, muted
 	// subtitle, no in-app theme toggle (light vs. dark follows the system
 	// appearance via the variant Fyne hands bibleTheme.Color).
-	title := canvas.NewText("Holy Bible", pal.Text)
+	title := canvas.NewText("BibleText", pal.Text)
 	title.TextSize = 17
 	title.TextStyle = fyne.TextStyle{Bold: true}
 

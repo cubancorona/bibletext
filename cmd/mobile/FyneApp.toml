@@ -1,8 +1,8 @@
-Website = "https://github.com/willownoonan/holy-bible"
+Website = "https://github.com/willownoonan/bibletext"
 
 [Details]
 Icon = "Icon.png"
-Name = "Holy Bible"
-ID = "com.willow.holybible"
+Name = "BibleText"
+ID = "com.willow.bibletext"
 Version = "1.0.0"
-Build = 59
+Build = 61

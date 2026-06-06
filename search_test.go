@@ -1,4 +1,4 @@
-package holybible
+package bibletext
 
 import (
 	"strings"

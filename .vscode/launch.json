@@ -1,6 +1,6 @@
 {
-  // Run/Debug for the Holy Bible (Fyne) app.
-  // The repo root is the `holybible` LIBRARY package; the real entry points
+  // Run/Debug for the BibleText (Fyne) app.
+  // The repo root is the `bibletext` LIBRARY package; the real entry points
   // live under cmd/.
   //
   //   "Debug ..."  -> runs under the delve debugger (breakpoints, stepping).
@@ -26,7 +26,7 @@
       // shipped artifact (proper app-id, icon, bundle behaviour).
       "type": "node-terminal",
       "request": "launch",
-      "command": "fyne package -os darwin --app-id com.willow.holybibledesktop && './Holy Bible.app/Contents/MacOS/desktop'",
+      "command": "fyne package -os darwin --app-id com.willow.bibletextdesktop && './BibleText.app/Contents/MacOS/desktop'",
       "cwd": "${workspaceFolder}/cmd/desktop"
     },
     {

@@ -1,6 +1,6 @@
 //go:build darwin
 
-package holybible
+package bibletext
 
 // This file holds the single native→Go callback for the AI selection-menu items.
 // It lives on its own because a file containing an //export directive may only
@@ -15,12 +15,12 @@ import "C"
 
 import "fyne.io/fyne/v2"
 
-// holyBibleAIMenuTapped is called from the HBReadingTextView subclasses when the
+// bibleTextAIMenuTapped is called from the HBReadingTextView subclasses when the
 // user picks an AI study action. It runs on the native UI thread, so it copies the
 // C strings right away and hops onto Fyne's UI goroutine before showing anything.
 //
-//export holyBibleAIMenuTapped
-func holyBibleAIMenuTapped(cAction, cText *C.char) {
+//export bibleTextAIMenuTapped
+func bibleTextAIMenuTapped(cAction, cText *C.char) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
 	state := activeAIState
