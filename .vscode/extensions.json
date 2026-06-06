@@ -1,0 +1,11 @@
+{
+  // Suggested when opening this folder. golang.go is required; the rest are the
+  // AI assistants this project is set up to use (any one is enough for chat /
+  // inline help — see CLAUDE.md for project context they all benefit from).
+  "recommendations": [
+    "golang.go",
+    "anthropic.claude-code",
+    "google.geminicodeassist",
+    "openai.chatgpt"
+  ]
+}

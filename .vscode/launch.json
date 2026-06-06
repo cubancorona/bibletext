@@ -1,56 +1,79 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        
-        {
-            "name": "Run Application",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${workspaceFolder}",
-            "env": {},
-            "args": [],
-            "showLog": true,
-            "trace": "verbose"
-        },
-        {
-            "name": "Run Tests",
-            "type": "go",
-            "request": "launch",
-            "mode": "test",
-            "program": "${workspaceFolder}",
-            "args": [
-                "-v",
-                "-run",
-                "Test"
-            ]
-        },
-        {
-            "name": "Run Test at Cursor",
-            "type": "go",
-            "request": "launch",
-            "mode": "test",
-            "program": "${workspaceFolder}",
-            "args": [
-                "-v",
-                "-run",
-                "${selectedText}"
-            ],
-            "showLog": true
-        },
-        {
-            "name": "Benchmark",
-            "type": "go",
-            "request": "launch",
-            "mode": "test",
-            "program": "${workspaceFolder}",
-            "args": [
-                "-bench",
-                ".",
-                "-benchmem",
-                "-v"
-            ],
-            "showLog": true
-        }
-    ]
+  // Run/Debug for the Holy Bible (Fyne) app.
+  // The repo root is the `holybible` LIBRARY package; the real entry points
+  // live under cmd/.
+  //
+  //   "Debug ..."  -> runs under the delve debugger (breakpoints, stepping).
+  //   "Run ..."    -> launches the app in an integrated terminal with NO
+  //                   debugger attached (node-terminal just runs the shell
+  //                   command; node isn't involved).
+  //
+  // Note: ⌃F5 (Run > Run Without Debugging) also runs any config below without
+  // the debugger — the "Run ..." entries are just one-click shortcuts for it.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Desktop (no debugger)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "go run ./cmd/desktop",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Run Packaged Desktop (.app, no debugger)",
+      // Builds the macOS .app bundle, then runs its binary in the foreground
+      // (so VS Code's Stop button controls it). Use this to exercise the real
+      // shipped artifact (proper app-id, icon, bundle behaviour).
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "fyne package -os darwin --app-id com.willow.holybibledesktop && './Holy Bible.app/Contents/MacOS/desktop'",
+      "cwd": "${workspaceFolder}/cmd/desktop"
+    },
+    {
+      "name": "Run on iOS Simulator (no debugger)",
+      // Packages the iOS-simulator .app, boots a simulator, installs and
+      // launches it (scripts/run-ios-sim.sh). Requires Xcode, an iOS runtime,
+      // and an "Apple Development" cert — see the script header.
+      //
+      // There is deliberately NO delve "Debug iOS" config: a Go app cross-
+      // compiled into an iOS bundle and run inside the simulator sandbox is not
+      // delve-debuggable via vscode-go. Debug iOS-specific code with log/print
+      // + Console.app, or step the SAME Go logic via "Debug Desktop App".
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./scripts/run-ios-sim.sh",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Debug Desktop App",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/desktop",
+      "cwd": "${workspaceFolder}",
+      "showLog": true,
+      // To exercise AI study with a key while debugging, set a provider key here
+      // (overrides the on-device stored key), e.g.:
+      //   "GEMINI_API_KEY": "AIza...", "OPENAI_API_KEY": "sk-...",
+      //   "ANTHROPIC_API_KEY": "sk-ant-...", "XAI_API_KEY": "xai-..."
+      "env": {}
+    },
+    {
+      "name": "Debug Package Tests",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}",
+      "args": ["-test.v"]
+    },
+    {
+      "name": "Debug Test At Cursor",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}",
+      // Select a test name in the editor, then run this config.
+      "args": ["-test.v", "-test.run", "${selectedText}"]
+    }
+  ]
 }

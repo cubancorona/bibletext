@@ -1,18 +1,42 @@
 {
-    "[go]": {
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit"
-        }
-    },
-    "go.lintOnSave": "package",
-    "go.vetOnSave": "package",
-    "go.useLanguageServer": true,
-    "go.languageServerFlags": [
-        "-rpc.trace"
-    ],
-    "go.lintTool": "golangci-lint",
-    "go.lintFlags": [
-        "--fast"
-    ]
+  // --- Go editing: format + organize imports on save via gopls ---
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "go.useLanguageServer": true,
+  "go.formatTool": "default",
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--fast"],
+  "go.lintOnSave": "package",
+  "go.vetOnSave": "package",
+
+  // Run tests with the race detector + verbose output from the UI/CodeLens.
+  "go.testFlags": ["-race", "-v"],
+  "go.testTimeout": "120s",
+  "go.coverOnSingleTest": true,
+  "go.toolsManagement.autoUpdate": true,
+
+  // gopls analyses the host build (macOS desktop). Files tagged `ios`/`android`
+  // are shown greyed-out — that's expected; build them with the fyne tasks.
+  "gopls": {
+    "ui.semanticTokens": true,
+    "ui.completion.usePlaceholders": true
+  },
+
+  // AI inline suggestions on (Claude Code / Gemini / ChatGPT extensions).
+  "editor.inlineSuggest.enabled": true,
+  "chat.commandCenter.enabled": true,
+
+  // Keep packaged .app bundles out of the file tree and search results.
+  "files.exclude": {
+    "**/*.app": true
+  },
+  "search.exclude": {
+    "**/*.app": true,
+    "**/coverage.out": true
+  }
 }

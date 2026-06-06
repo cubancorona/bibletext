@@ -1,99 +1,111 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Build",
-            "type": "shell",
-            "command": "go",
-            "args": [
-                "build",
-                "-o",
-                "holy-bible",
-                "./main.go"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$go"
-            ]
-        },
-        {
-            "label": "Run",
-            "type": "shell",
-            "command": "go",
-            "args": [
-                "run",
-                "main.go"
-            ],
-            "group": {
-                "kind": "test"
-            },
-            "problemMatcher": [
-                "$go"
-            ],
-            "isBackground": false
-        },
-        {
-            "label": "Test All",
-            "type": "shell",
-            "command": "go",
-            "args": [
-                "test",
-                "-v",
-                "-race",
-                "./..."
-            ],
-            "group": {
-                "kind": "test"
-            },
-            "problemMatcher": [
-                "$go"
-            ]
-        },
-        {
-            "label": "Test Coverage",
-            "type": "shell",
-            "command": "go",
-            "args": [
-                "test",
-                "-coverprofile=coverage.out",
-                "./..."
-            ],
-            "group": {
-                "kind": "test"
-            },
-            "problemMatcher": [
-                "$go"
-            ]
-        },
-        {
-            "label": "Lint",
-            "type": "shell",
-            "command": "go",
-            "args": [
-                "vet",
-                "./..."
-            ],
-            "group": {
-                "kind": "test"
-            },
-            "problemMatcher": [
-                "$go"
-            ]
-        },
-        {
-            "label": "Format",
-            "type": "shell",
-            "command": "go",
-            "args": [
-                "fmt",
-                "./..."
-            ],
-            "group": {
-                "kind": "test"
-            }
-        }
-    ]
+  // Build / run / test tasks for the Holy Bible Fyne app.
+  //   Cmd+Shift+B          -> "Build (compile check)"   (default build)
+  //   Cmd+Shift+P > Run Test Task -> "Test (race)"      (default test)
+  //   Cmd+Shift+P > Run Task -> any of the below
+  // The shared package lives at the repo root; entry points are in cmd/.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build (compile check)",
+      "detail": "go build ./... — fast 'does everything compile' check",
+      "type": "shell",
+      "command": "go build ./...",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run Desktop (go run)",
+      "detail": "Fast build + launch of the desktop reader (no .app bundle)",
+      "type": "shell",
+      "command": "go run ./cmd/desktop",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Package Desktop (.app)",
+      "detail": "fyne package -> cmd/desktop/Holy Bible.app",
+      "type": "shell",
+      "command": "fyne package -os darwin --app-id com.willow.holybibledesktop",
+      "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Package iOS Simulator",
+      "detail": "fyne package -> cmd/mobile (iossimulator)",
+      "type": "shell",
+      "command": "fyne package -os iossimulator --app-id com.willow.holybible",
+      "options": { "cwd": "${workspaceFolder}/cmd/mobile" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run on iOS Simulator",
+      "detail": "package + boot sim + install + launch (scripts/run-ios-sim.sh)",
+      "type": "shell",
+      "command": "./scripts/run-ios-sim.sh",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Test (race)",
+      "detail": "go test -race ./...",
+      "type": "shell",
+      "command": "go test -race ./...",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Test (verbose)",
+      "type": "shell",
+      "command": "go test -v ./...",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Test Coverage",
+      "detail": "writes coverage.out (open with: go tool cover -html=coverage.out)",
+      "type": "shell",
+      "command": "go test -coverprofile=coverage.out ./...",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Vet",
+      "type": "shell",
+      "command": "go vet ./...",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Lint (golangci-lint)",
+      "type": "shell",
+      "command": "golangci-lint run --fast",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Format (gofmt)",
+      "type": "shell",
+      "command": "gofmt -l -w .",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "none"
+    },
+    {
+      "label": "Tidy (go mod tidy)",
+      "type": "shell",
+      "command": "go mod tidy",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "none"
+    }
+  ]
 }
