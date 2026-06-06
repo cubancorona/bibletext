@@ -31,3 +31,21 @@ func bibleTextAIMenuTapped(cAction, cText *C.char) {
 		dispatchAIAction(state, action, text)
 	})
 }
+
+// bibleTextStudyMenuTapped is the sibling callback for the non-AI selection-menu
+// actions (Share verse, and — as they land — Cross-references and Word study).
+// Same threading contract as above: copy the C strings, then hop to Fyne's UI
+// goroutine before touching any state.
+//
+//export bibleTextStudyMenuTapped
+func bibleTextStudyMenuTapped(cAction, cText *C.char) {
+	action := C.GoString(cAction)
+	text := C.GoString(cText)
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		dispatchSelectionAction(state, action, text)
+	})
+}
