@@ -1,0 +1,41 @@
+{
+  // Multi-platform Bible reader (Go + Fyne). Open this file with
+  // "File → Open Workspace from File…" to load the project with its tasks,
+  // launch configs, and recommended extensions in one shot. The folder-level
+  // .vscode/{settings,tasks,launch,extensions}.json still apply; the blocks
+  // below add workspace-scoped settings on top.
+  "folders": [
+    {
+      "name": "bibletext",
+      "path": "."
+    }
+  ],
+  "settings": {
+    // Trim the tree/search to source — packaged bundles and coverage output.
+    "files.exclude": {
+      "**/*.app": true
+    },
+    "search.exclude": {
+      "**/*.app": true,
+      "**/coverage.out": true
+    },
+    // Match the gofmt-on-save convention used across the repo (CLAUDE.md).
+    "[go]": {
+      "editor.defaultFormatter": "golang.go",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+      }
+    },
+    "go.useLanguageServer": true,
+    "go.testFlags": ["-race", "-v"]
+  },
+  "extensions": {
+    "recommendations": [
+      "golang.go",
+      "anthropic.claude-code",
+      "google.geminicodeassist",
+      "openai.chatgpt"
+    ]
+  }
+}
