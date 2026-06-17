@@ -270,10 +270,11 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		searchEntry.SetText(s)
 	}
 
+	// The "what to type" hint now lives in the centred empty state
+	// (searchPromptView), so the header stays clean: just the label + field.
 	header := container.NewVBox(
 		sectionLabel("SEARCH", pal),
 		inputFrame(searchEntry, pal.Border),
-		caption("Keyword, or a reference like John 3:16."),
 	)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
 }
