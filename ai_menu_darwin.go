@@ -19,14 +19,15 @@ import "fyne.io/fyne/v2"
 // reader finishes a scroll. It persists the current reading position (book /
 // chapter / scroll anchor) so the saved spot is always up to date — the iOS
 // app-background lifecycle hook doesn't fire reliably, so we save on scroll-end
-// rather than only at exit. It runs on the native UI thread; flushReadingState
-// only reads the live scroll (already main-thread-safe) and writes a small
-// preference blob, so no Fyne UI-goroutine hop is needed.
+// rather than only at exit. It runs on the native (main) UI thread, so it uses
+// the async flush: it reads the live scroll there (TextKit is main-thread-only)
+// but writes the preference blob on a goroutine, so a finger-lift never blocks
+// the main thread with a JSON encode + write (which made scrolling feel laggy).
 //
 //export bibleTextReadingScrolled
 func bibleTextReadingScrolled() {
 	if state := activeAIState; state != nil {
-		flushReadingState(state)
+		flushReadingStateAsync(state)
 	}
 }
 

@@ -137,6 +137,13 @@ func flushReadingState(s *AppState) {
 		return
 	}
 	p := appPrefs()
+	writeReadingState(p, captureSnapshot(s, p))
+}
+
+// captureSnapshot reads the live scroll position (captureReadingAnchor uses
+// TextKit and MUST run on the main thread) and builds the snapshot, preserving
+// the previously-saved anchor for this chapter when the live read fails.
+func captureSnapshot(s *AppState, p prefStore) readingState {
 	verse, delta, frac, ok := captureReadingAnchor()
 	if !ok {
 		if prev, had := readReadingState(p); had &&
@@ -146,7 +153,21 @@ func flushReadingState(s *AppState) {
 			verse, delta, frac = 0, 0, 0
 		}
 	}
-	writeReadingState(p, snapshotReadingState(s, verse, delta, frac))
+	return snapshotReadingState(s, verse, delta, frac)
+}
+
+// flushReadingStateAsync captures on the calling (main) thread but writes the
+// prefs blob on a goroutine, so a scroll-end never blocks the main thread with a
+// synchronous JSON encode + preference write — which made scrolling feel laggy.
+// Used from the native scroll-end callback; the lifecycle hooks use the
+// synchronous flushReadingState (the write must finish before the app suspends).
+func flushReadingStateAsync(s *AppState) {
+	if s == nil {
+		return
+	}
+	p := appPrefs()
+	snap := captureSnapshot(s, p)
+	go writeReadingState(p, snap)
 }
 
 // applyRestoredState validates a persisted state against the loaded Bible and,
