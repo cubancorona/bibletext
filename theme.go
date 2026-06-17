@@ -127,6 +127,12 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 		return p.Text
 	case theme.ColorNamePrimary:
 		return p.Accent
+	case theme.ColorNameForegroundOnPrimary:
+		// The label/icon on accent-filled (primary) buttons. Use the palette's
+		// AccentText — a warm cream on the light-mode brown accent, near-black on
+		// the lighter dark-mode accent — rather than the default stark white (which
+		// would be unreadable on the dark-mode accent).
+		return p.AccentText
 	case theme.ColorNameButton:
 		return p.SurfaceAlt
 	case theme.ColorNameInputBackground:
@@ -196,7 +202,12 @@ func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNamePadding:
 		return 7
 	case theme.SizeNameInnerPadding:
-		return 7
+		return 8 // a little more breathing room inside buttons/fields
+	case theme.SizeNameInputRadius:
+		// Softer, more modern rounding on buttons (and input fields, which share
+		// this radius) — the default is small and reads a touch dated. inputFrame's
+		// outline matches this so the search/filter fields stay consistent.
+		return 10
 	case theme.SizeNameLineSpacing:
 		return 10 // a touch airier for an unhurried, page-like read
 	}
@@ -229,6 +240,6 @@ func inputFrame(content fyne.CanvasObject, border color.Color) fyne.CanvasObject
 	outline := canvas.NewRectangle(color.Transparent)
 	outline.StrokeColor = border
 	outline.StrokeWidth = 1
-	outline.CornerRadius = 6
+	outline.CornerRadius = 10 // match SizeNameInputRadius so the field reads as one shape
 	return container.NewStack(content, outline)
 }
