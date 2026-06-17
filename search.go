@@ -18,6 +18,12 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 	trimmed := strings.TrimSpace(state.ActiveSearchQuery)
 
+	// Before a real query is entered, show a calm, centred prompt rather than an
+	// empty `Results for ""` heading sitting over an empty bordered box.
+	if len([]rune(trimmed)) < 2 {
+		return searchPromptView(state)
+	}
+
 	// Echo the query as a heading, but truncate-to-fit with an ellipsis: a
 	// width-aware Label keeps an unusually long query (a big paste, or repeated
 	// characters) from rendering as one unbroken bar that runs off the edge of
@@ -31,8 +37,6 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 
 	var sub string
 	switch {
-	case len([]rune(trimmed)) < 2:
-		sub = "Type at least 2 characters to search."
 	case len(state.SearchResults) == 0:
 		sub = "No verses matched your search."
 	case state.SearchTruncated:
@@ -56,6 +60,35 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 
 	head := container.NewVBox(title, subLabel, widget.NewSeparator())
 	return container.NewPadded(container.NewBorder(head, nil, nil, nil, paper))
+}
+
+// searchPromptView is the calm, centred empty state shown before a query is
+// entered — a muted search glyph and a one-line invitation. Clearer than echoing
+// `Results for ""` over an empty results box.
+func searchPromptView(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+
+	icon := canvas.NewImageFromResource(theme.NewColoredResource(theme.SearchIcon(), colorNameMuted))
+	icon.FillMode = canvas.ImageFillContain
+	icon.SetMinSize(fyne.NewSize(44, 44))
+
+	title := canvas.NewText("Search the Bible", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 20
+	title.Alignment = fyne.TextAlignCenter
+
+	hint := canvas.NewText("A word or phrase, or a reference like John 3:16.", pal.TextMuted)
+	hint.TextSize = subheadingTextSize
+	hint.Alignment = fyne.TextAlignCenter
+
+	col := container.NewVBox(
+		container.NewCenter(icon),
+		spacer(12),
+		container.NewCenter(title),
+		spacer(4),
+		container.NewCenter(hint),
+	)
+	return container.NewCenter(col)
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {
