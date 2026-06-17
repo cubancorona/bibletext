@@ -1,6 +1,7 @@
 Website = "https://github.com/willownoonan/bibletext"
 
 [Details]
+Icon = "Icon.png"
 Name = "BibleText"
 ID = "com.willow.bibletextdesktop"
 Version = "1.0.0"
