@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -113,14 +114,29 @@ func showAISettings(state *AppState) {
 		})
 		testBtn.Importance = widget.LowImportance
 
+		// API keys are pasted, not typed — a one-tap Paste avoids fighting the
+		// on-screen keyboard (which otherwise covers this field on a phone).
+		pasteBtn := widget.NewButtonWithIcon("Paste", theme.ContentPasteIcon(), func() {
+			if state.window == nil {
+				return
+			}
+			clip := state.window.Clipboard()
+			if clip == nil {
+				return
+			}
+			if v := strings.TrimSpace(clip.Content()); v != "" {
+				entry.SetText(v) // fires OnChanged, which records pending[id]
+			}
+		})
+
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
 				container.NewBorder(nil, nil, heading, link),
 				entry,
 				status,
-				// Result sits to the right of the button, so showing it never grows
-				// the sheet (and the sheet is sized to fit without scrolling).
-				container.NewBorder(nil, nil, testBtn, nil, result),
+				// Paste + Test sit on the left; the result label fills the rest, so
+				// showing it never grows the sheet.
+				container.NewBorder(nil, nil, container.NewHBox(pasteBtn, testBtn), nil, result),
 			),
 		}
 		keyArea.Refresh()
@@ -147,14 +163,15 @@ func showAISettings(state *AppState) {
 	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
 	redLetter.SetChecked(redLetterEnabled())
 
+	// Assistant + key first so the key field sits high in the sheet — on a phone
+	// the soft keyboard covers the lower half, and this keeps the field above it.
 	form := container.NewVBox(
-		sectionLabel("READING", pal),
-		redLetter,
-		widget.NewSeparator(),
 		sectionLabel("ASSISTANT", pal),
 		active,
-		widget.NewSeparator(),
 		keyArea,
+		widget.NewSeparator(),
+		sectionLabel("READING", pal),
+		redLetter,
 	)
 	body := container.NewVScroll(container.NewPadded(form))
 
@@ -203,6 +220,11 @@ func showAISettings(state *AppState) {
 	ps := aiPanelSize(cnv.Size())
 	h := header.MinSize().Height + form.MinSize().Height + footer.MinSize().Height + 84
 	if h > ps.Height {
+		h = ps.Height
+	}
+	// Phone: ride tall so the sheet sits near the top of the screen, keeping the
+	// key field above the soft keyboard (the form scrolls inside if it overflows).
+	if fyne.CurrentDevice().IsMobile() {
 		h = ps.Height
 	}
 	popup.Resize(fyne.NewSize(ps.Width, h))
