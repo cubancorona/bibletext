@@ -49,9 +49,21 @@ func showAIPanel(state *AppState, action, selectedText string) {
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
 
-	quote := canvas.NewText("“"+oneLinePreview(selectedText, 80)+"”", pal.TextMuted)
-	quote.TextStyle = fyne.TextStyle{Italic: true}
-	quote.TextSize = subheadingTextSize
+	// The quoted selection stays to one quiet line. A canvas.Text just clips at
+	// the panel edge with no hint there's more, so use a RichText that truncates
+	// with an ellipsis (it's given the panel width by the VBox). The char cap is
+	// only a sanity bound; the visual truncation is what keeps it tidy.
+	quote := widget.NewRichText(&widget.TextSegment{
+		Text: "“" + oneLinePreview(selectedText, 300) + "”",
+		Style: widget.RichTextStyle{
+			ColorName: colorNameMuted,
+			SizeName:  theme.SizeNameCaptionText,
+			TextStyle: fyne.TextStyle{Italic: true},
+			Inline:    true,
+		},
+	})
+	quote.Wrapping = fyne.TextWrapOff
+	quote.Truncation = fyne.TextTruncateEllipsis
 
 	header := container.NewVBox(title, ref, quote, widget.NewSeparator())
 
