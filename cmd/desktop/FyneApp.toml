@@ -1,6 +1,7 @@
 Website = "https://github.com/cubancorona/bibletext"
 
 [Details]
+Icon = "Icon.png"
 Name = "BibleText"
 ID = "io.github.cubancorona.bibletextdesktop"
 Version = "1.0.0"

@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8f2e5"/>
+      <stop offset="0.52" stop-color="#eee4d0"/>
+      <stop offset="1" stop-color="#ddcfb2"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fdf3d4" stop-opacity="1"/>
+      <stop offset="0.30" stop-color="#f4dc94" stop-opacity="0.92"/>
+      <stop offset="0.66" stop-color="#eccf82" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#eccf82" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.6" stop-color="#fbeec9"/>
+      <stop offset="1" stop-color="#f3dca0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.4" r="0.72">
+      <stop offset="0.62" stop-color="#3a2c16" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3a2c16" stop-opacity="0.20"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- soft sunrise glow behind the rays and book -->
+  <circle cx="512" cy="452" r="340" fill="url(#glow)"/>
+
+  <!-- three rays of light, two-tone gold for subtle dimension -->
+  <g fill="#c08f48">
+    <polygon points="512,470 484,128 540,128"/>
+    <polygon points="512,470 286,212 332,178"/>
+    <polygon points="512,470 692,178 738,212"/>
+  </g>
+  <g fill="#a9742f">
+    <polygon points="512,470 512,128 540,128"/>
+    <polygon points="512,470 309,195 286,212"/>
+    <polygon points="512,470 715,195 738,212"/>
+  </g>
+
+  <!-- luminous core where the light rises from the gutter -->
+  <circle cx="512" cy="474" r="82" fill="url(#core)"/>
+
+  <!-- book: dark cover, gold page edges, cream pages -->
+  <path d="M512 506 C 380 462, 232 470, 162 508 L 162 802 C 232 762, 380 752, 512 796 Z" fill="#241c15"/>
+  <path d="M512 506 C 644 462, 792 470, 862 508 L 862 802 C 792 762, 644 752, 512 796 Z" fill="#1f1810"/>
+
+  <path d="M512 510 C 388 470, 250 478, 188 512 L 188 786 C 250 752, 388 744, 512 784 Z" fill="#b07c33"/>
+  <path d="M512 510 C 636 470, 774 478, 836 512 L 836 786 C 774 752, 636 744, 512 784 Z" fill="#a9742f"/>
+
+  <path d="M512 498 C 392 458, 256 466, 196 500 L 196 770 C 256 738, 392 730, 512 770 Z" fill="#f6f0e3"/>
+  <path d="M512 498 C 632 458, 768 466, 828 500 L 828 770 C 768 738, 632 730, 512 770 Z" fill="#ece2cd"/>
+
+  <!-- gutter -->
+  <path d="M512 500 L 512 768" stroke="#bd8a44" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- text lines -->
+  <g stroke="#a9742f" stroke-width="17" stroke-linecap="round">
+    <line x1="276" y1="566" x2="452" y2="552"/>
+    <line x1="276" y1="620" x2="452" y2="606"/>
+    <line x1="276" y1="674" x2="452" y2="660"/>
+    <line x1="572" y1="552" x2="748" y2="566"/>
+    <line x1="572" y1="606" x2="748" y2="620"/>
+    <line x1="572" y1="660" x2="748" y2="674"/>
+  </g>
+
+  <!-- gentle vignette for depth -->
+  <rect width="1024" height="1024" fill="url(#vignette)"/>
+</svg>
