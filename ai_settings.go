@@ -78,14 +78,10 @@ func showAISettings(state *AppState) {
 		entry := widget.NewPasswordEntry()
 		entry.SetPlaceHolder("Paste your " + info.Name + " key")
 		entry.SetText(pending[id])
-		entry.OnChanged = func(s string) { pending[id] = s }
 
-		var status *canvas.Text
-		if strings.TrimSpace(store.apiKey(id)) != "" {
-			status = canvas.NewText("✓ A key is saved — paste a new one to replace it.", pal.Accent)
-		} else {
-			status = canvas.NewText(info.KeyHint, pal.TextMuted)
-		}
+		// status + the Clear button are kept in step with what's in the field and
+		// what's saved by refreshStatus (defined below, once the button exists).
+		status := canvas.NewText("", pal.TextMuted)
 		status.TextSize = 12
 
 		result := widget.NewLabel("")
@@ -129,14 +125,50 @@ func showAISettings(state *AppState) {
 			}
 		})
 
+		// Clear empties the field; with the field empty, Save removes the saved key
+		// (Cancel keeps it). An X icon makes the intent obvious.
+		clearBtn := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), func() {
+			entry.SetText("") // fires OnChanged → pending[id] = "" → refreshStatus
+		})
+
+		refreshStatus := func() {
+			cur := strings.TrimSpace(entry.Text)
+			saved := strings.TrimSpace(store.apiKey(id))
+			switch {
+			case cur == "" && saved != "":
+				status.Text = "Key cleared — tap Save to remove it (Cancel keeps it)."
+				status.Color = pal.TextMuted
+			case cur != "" && cur == saved:
+				status.Text = "✓ A key is saved. Clear it, or paste a new one to replace it."
+				status.Color = pal.Accent
+			case cur != "":
+				status.Text = "New key — tap Save to store it."
+				status.Color = pal.TextMuted
+			default:
+				status.Text = info.KeyHint
+				status.Color = pal.TextMuted
+			}
+			status.Refresh()
+			if cur != "" || saved != "" {
+				clearBtn.Enable()
+			} else {
+				clearBtn.Disable()
+			}
+		}
+		entry.OnChanged = func(s string) {
+			pending[id] = s
+			refreshStatus()
+		}
+		refreshStatus()
+
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
 				container.NewBorder(nil, nil, heading, link),
 				entry,
 				status,
-				// Paste + Test sit on the left; the result label fills the rest, so
-				// showing it never grows the sheet.
-				container.NewBorder(nil, nil, container.NewHBox(pasteBtn, testBtn), nil, result),
+				// Paste + Clear + Test sit on the left; the result label fills the
+				// rest, so showing it never grows the sheet.
+				container.NewBorder(nil, nil, container.NewHBox(pasteBtn, clearBtn, testBtn), nil, result),
 			),
 		}
 		keyArea.Refresh()
