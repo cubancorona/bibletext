@@ -24,8 +24,21 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	if state.theme == nil {
 		state.theme = &bibleTheme{fonts: loadBookFonts()}
 	}
-	app.Settings().SetTheme(state.theme)
+	applyTheme(app, state)
 	pal := state.pal()
+
+	// Startup: the Bible loads on a background goroutine, so until it's ready we
+	// render only the loading/error screen and keep the native UITextView overlay
+	// detached (there's no chapter to show yet, and pinning it over a tree with no
+	// reading view is exactly the black-rectangle hazard).
+	switch state.loadPhase {
+	case loadPending:
+		notifyReadingOverlay(false)
+		return buildLoadingView(state)
+	case loadFailed:
+		notifyReadingOverlay(false)
+		return buildLoadErrorView(state)
+	}
 
 	// Distraction-free reading mode: the entire window becomes the reading
 	// pane plus a small exit affordance — no top header, no bottom tabs.
@@ -234,10 +247,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		resultsHost.Refresh()
 	}
 
-	searchEntry.OnChanged = func(s string) {
-		searchResultsOnly(state, s)
-	}
+	onSearchChanged, stopSearchDebounce := newSearchDebouncer(state)
+	searchEntry.OnChanged = onSearchChanged
 	searchEntry.OnSubmitted = func(s string) {
+		stopSearchDebounce() // Enter searches now; cancel the pending debounced run
 		wasSearching := state.IsSearching
 		executeSearch(state, s)
 		// executeSearch jumps to a verse only when an exact ref was matched;

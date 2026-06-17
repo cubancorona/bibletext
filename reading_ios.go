@@ -25,6 +25,23 @@ package bibletext
 extern void bibleTextAIMenuTapped(char *action, char *text);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
 extern void bibleTextStudyMenuTapped(char *action, char *text);
+// Called when the reader finishes scrolling, to persist the live scroll position.
+// iOS's app-background lifecycle hook is unreliable, so we save continuously
+// (on scroll-end) instead, keeping the saved position current even on a hard kill.
+extern void bibleTextReadingScrolled(void);
+
+// --- Reading-position restore -------------------------------------------------
+// A one-shot scroll target applied when reopening into the last-read chapter
+// (see reading_state.go). Declared before the text-view class so its
+// scrollViewDidScroll can disarm the restore the moment the user takes over.
+// `ok` distinguishes "read the live scroll" (1, even when at the top) from
+// "couldn't read it — view gone" (0).
+typedef struct { int verse; double delta; double frac; int ok; } BTAnchor;
+
+static NSInteger gReadingRestoreVerse = 0;
+static CGFloat   gReadingRestoreDelta = 0;
+static CGFloat   gReadingRestoreFrac  = 0;
+static BOOL      gReadingHasRestore   = NO;
 
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the standard selection menu and hands the selected
@@ -69,7 +86,32 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
                                      study(@"Share as image", @"share-image"),
                                  ]];
     UIAction *xref = study(@"Cross-references", @"crossref");
-    return [UIMenu menuWithChildren:[suggestedActions arrayByAddingObjectsFromArray:@[ai, xref, share]]];
+
+    // Now that the text view is hosted in a view controller (see bibleTextEnsureTV),
+    // the system's suggestedActions — Copy, Look Up, Translate, Define — present
+    // correctly instead of crashing, and the ▸ overflow + our submenus navigate
+    // properly. Lead with "Study with AI" (the flagship), then the standard system
+    // actions, then our secondary study/share actions.
+    NSArray *tail = [suggestedActions arrayByAddingObjectsFromArray:@[xref, share]];
+    return [UIMenu menuWithChildren:[@[ai] arrayByAddingObjectsFromArray:tail]];
+}
+
+// When the user drags the chapter, drop any pending restore target so the
+// reopen-position logic stops re-pinning and the reader scrolls freely. A
+// programmatic contentOffset change (our own restore) sets neither flag.
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (scrollView.dragging || scrollView.decelerating) {
+        gReadingHasRestore = NO;
+    }
+}
+
+// Persist the reading position whenever the user finishes scrolling, so the
+// saved spot is always current (the iOS background lifecycle hook is unreliable).
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
+    bibleTextReadingScrolled();
+}
+- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
+    if (!decelerate) bibleTextReadingScrolled();
 }
 
 @end
@@ -93,8 +135,50 @@ static NSRange gReadingHighlightRange = {NSNotFound, 0};
 // is a no-op; only Unsuppress clears it.
 static BOOL gReadingSuppressed = NO;
 
-// bibleTextScrollReadingTV positions the chapter: at the highlighted verse when
-// one is set (a search jump), otherwise pinned to the top. Centralised so the
+// Verse numbers are the only small-font runs in the chapter: buildChapterHTML
+// renders them as <sup class="v"> at font-size 0.66em (~12.5px) while body text
+// is 19px. Detecting them by font size (rather than a superscript attribute,
+// which UIKit doesn't expose) works uniformly and the run's text is the digits.
+#define BT_VERSE_FONT_MAX 15.0
+
+// btIOSLocForVerse returns the character location of `verse`'s number run, or
+// NSNotFound.
+static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse) {
+    __block NSUInteger found = NSNotFound;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        if ([[ts.string substringWithRange:r] integerValue] == verse) {
+            found = r.location;
+            *stop = YES;
+        }
+    }];
+    return found;
+}
+
+// btIOSVerseAtIndex returns the verse whose number run is the last at or before
+// character index ci (the top-visible verse), writing its location to *outLoc.
+static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc) {
+    __block NSInteger verse = 0;
+    __block NSUInteger loc = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (r.location > ci) { *stop = YES; return; }
+        if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        NSInteger n = [[ts.string substringWithRange:r] integerValue];
+        if (n > 0) { verse = n; loc = r.location; }
+    }];
+    if (outLoc) *outLoc = loc;
+    return verse;
+}
+
+// bibleTextScrollReadingTV positions the chapter, in priority order: the
+// highlighted verse (a search jump), then a one-shot restore target (reopening
+// where the reader left off), otherwise pinned to the top. Centralised so the
 // several places that re-assert the offset (after setText, after a frame push,
 // and on deferred ticks) all agree.
 static void bibleTextScrollReadingTV(void) {
@@ -115,6 +199,32 @@ static void bibleTextScrollReadingTV(void) {
         if (target < 0) target = 0;
         gReadingTV.contentOffset = CGPointMake(0, target);
         return;
+    }
+    if (gReadingHasRestore && len > 0) {
+        UITextView *tv = gReadingTV;
+        NSLayoutManager *lm = tv.layoutManager;
+        CGFloat insetTop = tv.textContainerInset.top;
+        CGFloat target = -1;
+        if (gReadingRestoreVerse > 0) {
+            NSUInteger loc = btIOSLocForVerse(tv.textStorage, gReadingRestoreVerse);
+            if (loc != NSNotFound) {
+                NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1)
+                                       actualCharacterRange:NULL];
+                CGRect rr = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
+                target = rr.origin.y + insetTop + gReadingRestoreDelta;
+            }
+        }
+        if (target < 0 && gReadingRestoreFrac > 0) {
+            CGFloat scrollable = tv.contentSize.height - tv.bounds.size.height;
+            if (scrollable > 0) target = gReadingRestoreFrac * scrollable;
+        }
+        if (target >= 0) {
+            CGFloat maxY = tv.contentSize.height - tv.bounds.size.height;
+            if (target > maxY) target = maxY;
+            if (target < 0) target = 0;
+            tv.contentOffset = CGPointMake(0, target);
+            return;
+        }
     }
     gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
 }
@@ -166,11 +276,19 @@ static void bibleTextEnsureTV(void) {
             gReadingTV = tv;
             NSLog(@"bibletext: ensureTV — created UITextView, attaching to window %@", win);
         }
-        if (gReadingTV.superview != win) {
+        // Host the text view inside the root view controller's view, NOT the bare
+        // window. The iOS edit menu walks the text view's responder chain to find a
+        // UIViewController to present from — its overflow (▸) page, its submenus,
+        // and the system actions (Look Up / Translate / Define) all need one. A bare
+        // window subview has no VC in its chain, so the overflow and submenus do
+        // nothing and the system actions CRASH. rootViewController.view is full
+        // window, so the frame math (window coords + safe-area inset) is unchanged.
+        UIView *host = win.rootViewController.view ?: win;
+        if (gReadingTV.superview != host) {
             [gReadingTV removeFromSuperview];
-            [win addSubview:gReadingTV];
+            [host addSubview:gReadingTV];
         }
-        [win bringSubviewToFront:gReadingTV];
+        [host bringSubviewToFront:gReadingTV];
     };
     if ([NSThread isMainThread]) {
         block();
@@ -290,9 +408,23 @@ void bibleTextTVShow(void) {
     });
 }
 
+// bibleTextDismissMenu takes down any active text-selection edit menu. The
+// UITextView floats above the Fyne canvas, so its edit menu is a SEPARATE UIKit
+// element: hiding/suppressing the text view does NOT remove the menu, which would
+// otherwise keep floating on screen — orphaned — and stack up as the user selects
+// again (a Fyne modal opening on an AI/cross-ref action is the common trigger).
+// resignFirstResponder clears the selection and takes the menu down with it
+// (UITextView exposes no editMenuInteraction to dismiss directly); the view
+// becomes first responder again on the next tap when it's shown.
+static void bibleTextDismissMenu(void) {
+    if (gReadingTV == nil) return;
+    [gReadingTV resignFirstResponder];
+}
+
 void bibleTextTVHide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gReadingTV == nil) return;
+        bibleTextDismissMenu();
         gReadingTV.hidden = YES;
     });
 }
@@ -303,6 +435,7 @@ void bibleTextTVSuppress(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingSuppressed = YES;
         if (gReadingTV == nil) return;
+        bibleTextDismissMenu();
         gReadingTV.hidden = YES;
     });
 }
@@ -362,6 +495,63 @@ void bibleTextShareImageFile(const char *path) {
         UIImage *img = [UIImage imageWithContentsOfFile:p];
         if (img == nil) return;
         bibleTextPresentShare(@[img]);
+    });
+}
+
+// --- Reading-position capture / restore (Go bridge) -------------------------
+
+// bibleTextTVCaptureAnchor reads the current scroll position as a verse anchor
+// (top-visible verse + within-verse delta) plus a whole-chapter fraction
+// fallback. Synchronous on the main thread; null-safe during teardown.
+BTAnchor bibleTextTVCaptureAnchor(void) {
+    __block BTAnchor out = {0, 0, 0, 0};
+    dispatch_block_t block = ^{
+        if (gReadingTV == nil) return;
+        UITextView *tv = gReadingTV;
+        NSLayoutManager *lm = tv.layoutManager;
+        NSTextStorage *ts = tv.textStorage;
+        if (ts.length == 0) return;
+        out.ok = 1; // the live scroll was readable (even if it's at the top)
+        CGFloat offY = tv.contentOffset.y;
+        if (offY <= 0.5) return; // at the top → zero anchor
+        CGFloat insetTop = tv.textContainerInset.top;
+        CGFloat scrollable = tv.contentSize.height - tv.bounds.size.height;
+        if (scrollable > 1) {
+            CGFloat f = offY / scrollable;
+            if (f < 0) f = 0;
+            if (f > 1) f = 1;
+            out.frac = f;
+        }
+        CGFloat tcY = offY - insetTop + 2;
+        if (tcY < 0) tcY = 0;
+        NSUInteger gi = [lm glyphIndexForPoint:CGPointMake(4, tcY) inTextContainer:tv.textContainer];
+        NSUInteger ci = [lm characterIndexForGlyphAtIndex:gi];
+        NSUInteger loc = 0;
+        NSInteger verse = btIOSVerseAtIndex(ts, ci, &loc);
+        if (verse <= 0) return;
+        NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1) actualCharacterRange:NULL];
+        CGRect rr = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
+        out.verse = (int)verse;
+        out.delta = offY - (rr.origin.y + insetTop);
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
+    return out;
+}
+
+// bibleTextTVArmRestore stashes a one-shot scroll target consumed by
+// bibleTextScrollReadingTV on the next layout. verse<=0 && frac<=0 disarms.
+void bibleTextTVArmRestore(int verse, double delta, double frac) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (verse <= 0 && frac <= 0) {
+            gReadingHasRestore = NO;
+            gReadingRestoreVerse = 0; gReadingRestoreDelta = 0; gReadingRestoreFrac = 0;
+            return;
+        }
+        gReadingRestoreVerse = verse;
+        gReadingRestoreDelta = delta;
+        gReadingRestoreFrac = frac;
+        gReadingHasRestore = YES;
     });
 }
 */
@@ -458,43 +648,46 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	pal := state.pal()
 	total := len(chapterNumbers)
 
-	// Heading reflects the chapter: "John 1".
-	title := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text)
-	title.TextSize = headingTextSize
-	title.TextStyle = fyne.TextStyle{Bold: true}
+	// "John 10 ⌄" — one cohesive tap target (text + a clear dropdown chevron) that
+	// opens the combined reference picker (book list + chapter grid). A roomy box
+	// height makes it a comfortable touch target.
+	const titleBoxH = 40
+	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
+		showReferencePicker(state)
+	})
 
-	// Small copy icon tucked right after the book name — closer to the text
-	// it copies, and visually lighter than the chapter-nav arrows.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 15, 30, func() {
+	// Small copy icon tucked after the heading — lighter than the chapter-nav
+	// arrows but still a full-height (finger-friendly) hit box.
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, titleBoxH, func() {
 		copyChapter(state)
 	})
-	titleRow := container.NewHBox(title, hgap(4), copyBtn)
+	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
 
-	const navBoxH = 22
+	// Chapter arrows get the full 44pt touch target so they're easy to tap.
+	navBoxH := minTapTarget
 
-	var chapterLine fyne.CanvasObject
-	if total > 1 {
-		chapterLine = newChapterPickerAnchor(state,
-			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
-			pal.TextMuted, subheadingTextSize, navBoxH)
-	} else {
-		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
-		lbl.TextSize = subheadingTextSize
-		chapterLine = container.NewCenter(lbl)
+	// Quiet chapter context below the heading — also a picker target, so the
+	// whole "Chapter N of M" line opens the picker too.
+	chapText := fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total)
+	if total <= 1 {
+		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
+	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, navBoxH, false, func() {
+		showReferencePicker(state)
+	})
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
 
 	// Prev/next as compact icon buttons sitting next to the chapter line, so
 	// they're close to the book + chapter text rather than floating far right.
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 18, navBoxH, func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, navBoxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
 
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 18, navBoxH, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, navBoxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
@@ -503,7 +696,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 
 	// Controls sit directly in the HBox so the picker anchor keeps a first-class
 	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS).
-	chapterRow := container.NewHBox(chapterLine, hgap(10), prev, next)
+	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next)
 
 	// Full-screen is the lone control on the right.
 	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
@@ -663,10 +856,38 @@ func nativeShareImage(path string) {
 // inline styling — superscript verse numbers, accent color, serif font) and
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
+	// Arm any pending one-shot scroll restore for this chapter (reopening where
+	// the reader left off) before pushing the text, so bibleTextScrollReadingTV
+	// lands on the saved position rather than the top. A normal push disarms it.
+	// (Done before the skip check below so a pending restore always re-arms.)
+	armPendingRestore(state)
+
+	// Skip the costly HTML rebuild + NSAttributedString re-import when the
+	// UITextView already holds this exact chapter render (e.g. switching to the
+	// Books tab and back, or a refresh that didn't change the text). A pending
+	// scroll restore forces the push so the scroll cadence runs. The fingerprint
+	// includes highlight + theme so a search-jump or light/dark flip still pushes.
+	fp := chapterRenderFingerprint(state)
+	if state.restore == nil && fp == lastPushedChapterFP {
+		return
+	}
+	lastPushedChapterFP = fp
+
 	html := buildChapterHTML(state, verses)
 	c := C.CString(html)
 	defer C.free(unsafe.Pointer(c))
 	C.bibleTextTVSetHTML(c)
+}
+
+// captureReadingAnchor / armReadingRestore bridge the reading-position restore
+// (reading_state.go) to the native UITextView scroll machinery.
+func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
+	a := C.bibleTextTVCaptureAnchor()
+	return int(a.verse), float64(a.delta), float64(a.frac), a.ok != 0
+}
+
+func armReadingRestore(verse int, delta, frac float64) {
+	C.bibleTextTVArmRestore(C.int(verse), C.double(delta), C.double(frac))
 }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS

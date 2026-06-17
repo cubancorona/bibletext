@@ -49,7 +49,7 @@ func FetchBibleFromAPI() (*BibleData, error) {
 
 func fetchBibleFromAPIWithClient(books []string, client httpClient, sleepFn func(time.Duration)) (*BibleData, error) {
 	fmt.Println("Fetching complete World English Bible from bible-api.com...")
-	fmt.Println("(This happens once - takes ~30-60 seconds on first run)")
+	fmt.Println("(This happens once on first run; it fetches chapter-by-chapter and can take several minutes. The result is cached.)")
 
 	bd := &BibleData{
 		Verses: make(map[string]map[int][]Verse),

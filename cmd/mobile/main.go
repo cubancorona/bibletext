@@ -19,11 +19,16 @@ import (
 
 func main() {
 	myApp := app.NewWithID("com.willow.bibletext")
-	state := bibletext.LoadAndPrepareState()
+	// The Bible loads on a background goroutine so the window appears instantly
+	// with a loading spinner — crucial on iOS, where a slow first-run fetch on
+	// the main thread would trip the launch watchdog and get the app SIGKILLed.
+	state := bibletext.NewLoadingState()
 
 	w := myApp.NewWindow("BibleText")
 	// On iOS / Android the OS controls the window size; Resize is a no-op there.
-	w.SetContent(bibletext.CreateMainUI(myApp, state, w))
+	w.SetContent(bibletext.CreateMainUI(myApp, state, w)) // shows the spinner
 	bibletext.ObserveSystemThemeChanges(myApp, state)
+	bibletext.InstallReadingStateFlush(myApp, w, state)
+	bibletext.StartBackgroundLoad(myApp, w, state)
 	w.ShowAndRun()
 }

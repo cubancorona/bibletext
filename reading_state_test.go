@@ -1,0 +1,169 @@
+package bibletext
+
+import (
+	"testing"
+)
+
+// memPrefStore is an in-memory prefStore for exercising the persistence layer
+// without a running Fyne app.
+type memPrefStore struct{ m map[string]string }
+
+func newMemPrefStore() *memPrefStore { return &memPrefStore{m: map[string]string{}} }
+
+func (p *memPrefStore) String(key string) string { return p.m[key] }
+func (p *memPrefStore) StringWithFallback(key, fb string) string {
+	if v, ok := p.m[key]; ok {
+		return v
+	}
+	return fb
+}
+func (p *memPrefStore) SetString(key, value string) { p.m[key] = value }
+
+func TestReadingStateRoundTrip(t *testing.T) {
+	p := newMemPrefStore()
+	in := readingState{
+		Version:     "web",
+		Book:        "John",
+		Chapter:     3,
+		AnchorVerse: 16,
+		AnchorDelta: 12.5,
+		ScrollFrac:  0.42,
+		Recent: []ChapterVisit{
+			{Book: "John", Chapter: 3},
+			{Book: "Genesis", Chapter: 1},
+		},
+	}
+	writeReadingState(p, in)
+
+	got, ok := readReadingState(p)
+	if !ok {
+		t.Fatal("readReadingState returned not-ok for a freshly written state")
+	}
+	if got.Version != in.Version || got.Book != in.Book || got.Chapter != in.Chapter {
+		t.Errorf("version/book/chapter mismatch: %+v", got)
+	}
+	if got.AnchorVerse != 16 || got.AnchorDelta != 12.5 || got.ScrollFrac != 0.42 {
+		t.Errorf("scroll anchor mismatch: verse=%d delta=%v frac=%v", got.AnchorVerse, got.AnchorDelta, got.ScrollFrac)
+	}
+	if len(got.Recent) != 2 || got.Recent[1].Book != "Genesis" {
+		t.Errorf("recent mismatch: %+v", got.Recent)
+	}
+}
+
+func TestReadReadingStateRejectsJunk(t *testing.T) {
+	if _, ok := readReadingState(nil); ok {
+		t.Error("nil store should report absent")
+	}
+	if _, ok := readReadingState(newMemPrefStore()); ok {
+		t.Error("empty store should report absent")
+	}
+	p := newMemPrefStore()
+	p.SetString(prefReadingState, "{not json")
+	if _, ok := readReadingState(p); ok {
+		t.Error("invalid JSON should report absent")
+	}
+	p.SetString(prefReadingState, `{"book":"","chapter":0}`)
+	if _, ok := readReadingState(p); ok {
+		t.Error("a state with no book/chapter should report absent")
+	}
+}
+
+func TestApplyRestoredStateValid(t *testing.T) {
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base},
+	}
+	rs := readingState{
+		Version: defaultVersionID, Book: book, Chapter: ch,
+		AnchorVerse: 2, AnchorDelta: 8,
+		Recent: []ChapterVisit{{Book: book, Chapter: ch}},
+	}
+	if !applyRestoredState(state, rs, base) {
+		t.Fatal("applyRestoredState should succeed for a valid saved state")
+	}
+	if state.CurrentBook != book || state.CurrentChapter != ch {
+		t.Errorf("restored position = %s %d, want %s %d", state.CurrentBook, state.CurrentChapter, book, ch)
+	}
+	if state.restore == nil || state.restore.Verse != 2 || state.restore.Book != book || state.restore.Chapter != ch {
+		t.Errorf("pending restore anchor not set correctly: %+v", state.restore)
+	}
+	if len(state.RecentChapters) == 0 || state.RecentChapters[0].Book != book || state.RecentChapters[0].Chapter != ch {
+		t.Errorf("current chapter must be at history head: %+v", state.RecentChapters)
+	}
+}
+
+func TestApplyRestoredStateInvalidBookFallsBack(t *testing.T) {
+	base := baseSampleBible()
+	state := &AppState{Bible: base, CurrentVersion: defaultVersionID}
+	rs := readingState{Version: defaultVersionID, Book: "Nonexiston", Chapter: 1}
+	if applyRestoredState(state, rs, base) {
+		t.Error("a saved book that no longer exists must not restore (caller falls back)")
+	}
+}
+
+func TestApplyRestoredStateClampsChapter(t *testing.T) {
+	base := baseSampleBible()
+	book, _ := firstBookChapter(t, base)
+	state := &AppState{Bible: base, CurrentVersion: defaultVersionID}
+	rs := readingState{Version: defaultVersionID, Book: book, Chapter: 9999}
+	if !applyRestoredState(state, rs, base) {
+		t.Fatal("restore should succeed and clamp an out-of-range chapter")
+	}
+	nums := base.GetChapterNumbersForBook(book)
+	if state.CurrentChapter != nums[0] {
+		t.Errorf("chapter clamp = %d, want %d", state.CurrentChapter, nums[0])
+	}
+	// No scroll anchor was saved, so no pending restore should be set.
+	if state.restore != nil {
+		t.Errorf("no anchor saved → no pending restore, got %+v", state.restore)
+	}
+}
+
+func TestRestoreRecentDropsInvalidAndDedups(t *testing.T) {
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+	saved := []ChapterVisit{
+		{Book: book, Chapter: ch},       // duplicate of current → should not double
+		{Book: "Ghostbook", Chapter: 1}, // invalid → dropped
+		{Book: book, Chapter: ch},       // another duplicate
+	}
+	out := restoreRecent(saved, base, book, ch)
+	if len(out) != 1 {
+		t.Fatalf("want only the current entry after dedup/drop, got %+v", out)
+	}
+	if out[0].Book != book || out[0].Chapter != ch {
+		t.Errorf("head must be current chapter, got %+v", out[0])
+	}
+}
+
+func TestNavigateToReference(t *testing.T) {
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+	state := &AppState{
+		Bible: base, CurrentVersion: defaultVersionID,
+		CurrentBook: "Somewhere", CurrentChapter: 99,
+	}
+	navigateToReference(state, book, ch)
+	if state.CurrentBook != book || state.CurrentChapter != ch {
+		t.Fatalf("navigate set %s %d, want %s %d", state.CurrentBook, state.CurrentChapter, book, ch)
+	}
+	if len(state.RecentChapters) == 0 || state.RecentChapters[0].Book != book || state.RecentChapters[0].Chapter != ch {
+		t.Errorf("visit not recorded at history head: %+v", state.RecentChapters)
+	}
+}
+
+// firstBookChapter returns a real (book, chapter) from the sample Bible.
+func firstBookChapter(t *testing.T, bd *BibleData) (string, int) {
+	t.Helper()
+	for _, b := range bd.Books {
+		if nums := bd.GetChapterNumbersForBook(b); len(nums) > 0 {
+			return b, nums[0]
+		}
+	}
+	t.Fatal("sample Bible has no books with chapters")
+	return "", 0
+}

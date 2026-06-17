@@ -40,9 +40,43 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   Because they float on top, any Fyne modal (chapter picker, AI panels) must
   call `state.hideReadingOverlay()` on open and `state.showReadingOverlay()` on
   close; a `gReadingSuppressed` latch keeps the overlay down for the whole modal.
+  **The iOS UITextView MUST be added to `window.rootViewController.view`, NOT to
+  the bare window** (`bibleTextEnsureTV`). The selection edit menu walks the text
+  view's responder chain to find a view controller to present from — its ▸
+  overflow page, its submenus, and the system actions (Look Up / Translate /
+  Define) all need one, and the system actions *crash* without it. A bare
+  window-subview has no VC in its chain, so those silently fail / crash while only
+  flat top-level taps (Copy) work. The custom selection menu is built in
+  `HBReadingTextView`'s `editMenuForTextInRange:` (Study with AI submenu +
+  Cross-references + Share, prepended before iOS's suggestedActions).
 - **Native → Go bridge.** `ai_menu_darwin.go` has the repo's only `//export`
   callback (`bibleTextAIMenuTapped`); its cgo preamble must stay empty of C
   *definitions* (only declarations allowed alongside `//export`).
+- **Background load + loading screen.** The Bible (~6.4 MB JSON parse +
+  `PrepareSearchIndex` over ~31k verses, or a multi-minute first-run API fetch)
+  loads on a goroutine via `StartBackgroundLoad` (`app.go`), NOT before the
+  window shows — otherwise the iOS launch watchdog SIGKILLs the app on a slow
+  first run. Entry points (`cmd/mobile/main.go`, `Run`) build a `NewLoadingState`
+  (`loadPhase == loadPending`), show the window immediately, then kick off the
+  load; `CreateMainUI` renders `buildLoadingView` (a spinner, `ui.go`) and keeps
+  the native overlay detached until `loadPhase == loadReady`, at which point the
+  loaded fields are copied into the live state under `fyne.Do` and `rebuildWindow`
+  re-pins the overlay + re-arms the saved scroll restore. Offline first run →
+  `loadFailed` → `buildLoadErrorView` with Retry (replaces the old fatal
+  `os.Exit`). `loadStateData` does the heavy work and returns an error.
+- **Reading perf invariants (iOS sluggishness fixes).** Three gates keep the
+  native-overlay reading view cheap on every nav/tab tap: (1) `applyTheme`
+  (`app.go`) calls `SetTheme` only when the theme object changes — re-running it
+  per build forces a full canvas theme-walk; (2) `pushChapterHTML` (iOS) /
+  `newMacReadingHost` (macOS) skip the costly HTML rebuild + NSAttributedString
+  re-import when `chapterRenderFingerprint` (`reading.go`) is unchanged and no
+  scroll restore is pending — the fingerprint MUST include book/chapter/version,
+  theme variant, red-letter, and the highlighted-verse identity, or a search-jump
+  / light-dark flip would show stale text; (3) live search is debounced via
+  `newSearchDebouncer` (`state.go`), whose trailing timer marshals back through
+  `fyne.Do`. `Verse.Ref` and `BibleData.chapterNums` are precomputed in
+  `PrepareSearchIndex` (on the load goroutine) so search/nav don't re-format or
+  re-sort per keystroke.
 - **AI study (BYOK).** Select text → native "Study with AI" menu → Explain /
   Analyze context / Analyze translation. Providers (Gemini / OpenAI / Anthropic
   / Grok) live in `ai_providers.go`; keys are stored on-device via `keyStore`
@@ -66,6 +100,27 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `bibletext-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
   shared → both platforms). All versions share the canonical 66-book structure,
   so reading/search/AI need no per-version code. Docs: README → "Bible versions".
+
+- **Reading-position + history persistence.** `reading_state.go` persists *where
+  the reader left off* — translation, book, chapter, the within-chapter **scroll
+  position**, and the recent-chapters history — as one JSON blob in
+  `fyne.Preferences` (key `reading.state`). Scroll is stored as a **verse anchor**
+  (top-visible verse + within-verse delta, with a whole-chapter `scrollFrac`
+  fallback) so it survives re-wrap on width/orientation/translation changes (font
+  is fixed at 19px). Saving: continuously on navigation (`addRecentChapter` /
+  `clearHistory` / `switchVersion` → `persistReadingPosition`, chapter pinned to
+  top) **and** the precise scroll via `flushReadingState` — on iOS from a native
+  scroll-end callback (`bibleTextReadingScrolled`, an `//export` in
+  `ai_menu_darwin.go`; the iOS background lifecycle hook is unreliable) plus the
+  app-lifecycle/close hooks (`InstallReadingStateFlush`); on macOS the
+  window-close/stop hooks. Restoring happens once in `LoadAndPrepareState`
+  (`applyRestoredState`, validated against the loaded Bible); the native overlay
+  arms a one-shot scroll target (`armPendingRestore` → `armReadingRestore`) that
+  `bibleTextScrollReadingTV` / `bibleTextMacScrollTV` apply through their existing
+  re-assert cadence and drop on the first user scroll. Verse numbers are located
+  in the attributed string by font size (the only sub-19px runs). Per-platform
+  scroll hooks live in `reading_ios.go` (cgo), `reading_macos.go` (cgo), and a
+  no-op `reading_scroll_fyne.go` (Linux/Windows/Android restore book/chapter only).
 
 ## Conventions
 
