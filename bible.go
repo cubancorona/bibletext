@@ -17,6 +17,7 @@ type Verse struct {
 	Verse    int    // Verse number within the chapter
 	Text     string // The actual text of the verse
 	Search   string `json:"-"` // Lowercased text for fast case-insensitive search
+	Ref      string `json:"-"` // Lowercased "book c:v" for fast reference matching
 }
 
 // BibleData holds all Bible verses organized by book and chapter
@@ -35,6 +36,14 @@ type BibleData struct {
 	// Books is a slice containing all 66 book names in canonical order
 	// Used to display the book list in the sidebar
 	Books []string
+
+	// chapterNums caches the sorted chapter numbers per book so the reading
+	// view, search, and navigation don't re-allocate + re-sort on every call.
+	// Built once by PrepareSearchIndex on the load goroutine, then read-only —
+	// nil for directly-constructed BibleData (tests, placeholders), where
+	// GetChapterNumbersForBook falls back to computing on the fly. Unexported,
+	// so encoding/json skips it (not persisted in the cache).
+	chapterNums map[string][]int
 }
 
 // NewBibleData creates and initializes a new BibleData structure
@@ -259,7 +268,17 @@ func (bd *BibleData) GetChaptersForBook(book string) int {
 }
 
 // GetChapterNumbersForBook returns sorted available chapter numbers for a book.
+// When the chapterNums cache is present (the normal loaded-Bible case) it returns
+// the shared cached slice — callers only read/range it, so there's no defensive
+// copy. Falls back to computing for directly-constructed BibleData (tests).
 func (bd *BibleData) GetChapterNumbersForBook(book string) []int {
+	if bd.chapterNums != nil {
+		if numbers, ok := bd.chapterNums[book]; ok {
+			return numbers
+		}
+		return []int{}
+	}
+
 	chapters, ok := bd.Verses[book]
 	if !ok {
 		return []int{}
@@ -390,7 +409,7 @@ func (bd *BibleData) SearchSmartLimited(query string, limit int) ([]Verse, bool)
 			verses := chapters[chapter]
 			for _, verse := range verses {
 				text := searchText(verse)
-				ref := strings.ToLower(fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse))
+				ref := refText(verse)
 
 				allTermsMatch := true
 				score := 0
@@ -537,15 +556,38 @@ func searchText(v Verse) string {
 	return strings.ToLower(v.Text)
 }
 
-// PrepareSearchIndex precomputes normalized verse text used by search.
+// refText returns the lowercased "book c:v" reference, using the precomputed
+// index when present (it always is for a loaded Bible) and falling back to
+// formatting on the fly for directly-constructed verses (tests).
+func refText(v Verse) string {
+	if v.Ref != "" {
+		return v.Ref
+	}
+	return strings.ToLower(fmt.Sprintf("%s %d:%d", v.BookName, v.Chapter, v.Verse))
+}
+
+// PrepareSearchIndex precomputes normalized verse text + reference strings used
+// by search, and the per-book sorted chapter-number cache. It is the heavy
+// per-load pass (~31k verses), so it runs on the background load goroutine
+// before the UI ever sees the BibleData; afterwards the data is read-only.
 func (bd *BibleData) PrepareSearchIndex() {
+	nums := make(map[string][]int, len(bd.Verses))
 	for book, chapters := range bd.Verses {
 		for chapter, verses := range chapters {
 			for i := range verses {
 				verses[i].Search = strings.ToLower(verses[i].Text)
+				verses[i].Ref = strings.ToLower(fmt.Sprintf("%s %d:%d", verses[i].BookName, verses[i].Chapter, verses[i].Verse))
 			}
 			chapters[chapter] = verses
 		}
 		bd.Verses[book] = chapters
+
+		ns := make([]int, 0, len(chapters))
+		for chapter := range chapters {
+			ns = append(ns, chapter)
+		}
+		sort.Ints(ns)
+		nums[book] = ns
 	}
+	bd.chapterNums = nums
 }
