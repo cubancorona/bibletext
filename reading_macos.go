@@ -284,6 +284,52 @@ static void bibleTextMacEnsureTV(void) {
     else dispatch_sync(dispatch_get_main_queue(), block);
 }
 
+// bibleTextMacApplyHTML parses `data` as HTML and applies it to the text view,
+// returning YES on success (NO without touching the view on failure, so the
+// caller can retry). Main-thread only.
+static BOOL bibleTextMacApplyHTML(NSData *data) {
+    if (gTextView == nil || data == nil) return NO;
+    NSDictionary *opts = @{
+        NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
+        NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
+    };
+    NSError *err = nil;
+    NSMutableAttributedString *as =
+        [[NSMutableAttributedString alloc] initWithData:data options:opts
+                                     documentAttributes:nil error:&err];
+    if (as == nil) return NO;
+    // The HTML importer injects a phantom paragraphSpacingBefore on the first
+    // paragraph; zero it so the chapter starts flush at the top.
+    [as enumerateAttribute:NSParagraphStyleAttributeName
+                   inRange:NSMakeRange(0, as.length) options:0
+                usingBlock:^(id v, NSRange r, BOOL *stop) {
+        if (v == nil) return;
+        NSMutableParagraphStyle *ps = [(NSParagraphStyle *)v mutableCopy];
+        ps.paragraphSpacingBefore = 0;
+        [as addAttribute:NSParagraphStyleAttributeName value:ps range:r];
+    }];
+    gMacHighlightRange = (NSRange){NSNotFound, 0};
+    [as enumerateAttribute:NSBackgroundColorAttributeName
+                   inRange:NSMakeRange(0, as.length) options:0
+                usingBlock:^(id value, NSRange r, BOOL *stop) {
+        if (value != nil) { gMacHighlightRange = r; *stop = YES; }
+    }];
+    [gTextView.textStorage setAttributedString:as];
+    bibleTextMacScrollTV();
+    return YES;
+}
+
+static NSString *bibleTextMacPlainFromHTML(NSString *html) {
+    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
+    NSString *t = [re stringByReplacingMatchesInString:html options:0
+                                                 range:NSMakeRange(0, html.length) withTemplate:@""];
+    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
+    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
+    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
+    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
+    return t;
+}
+
 void bibleTextMacTVSetHTML(const char *html) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
@@ -291,44 +337,17 @@ void bibleTextMacTVSetHTML(const char *html) {
     dispatch_async(dispatch_get_main_queue(), ^{
         bibleTextMacEnsureTV();
         if (gTextView == nil) return;
-        NSDictionary *opts = @{
-            NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
-            NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
-        };
-        NSError *err = nil;
-        NSMutableAttributedString *as =
-            [[NSMutableAttributedString alloc] initWithData:data options:opts
-                                         documentAttributes:nil error:&err];
-        if (as == nil) {
-            NSLog(@"bibletext(mac): HTML parse failed: %@", err);
-            [gTextView setString:s];
-            return;
-        }
-        // The HTML importer injects a phantom paragraphSpacingBefore on the
-        // first paragraph; zero it so the chapter starts flush at the top.
-        [as enumerateAttribute:NSParagraphStyleAttributeName
-                       inRange:NSMakeRange(0, as.length)
-                       options:0
-                    usingBlock:^(id v, NSRange r, BOOL *stop) {
-            if (v == nil) return;
-            NSMutableParagraphStyle *ps = [(NSParagraphStyle *)v mutableCopy];
-            ps.paragraphSpacingBefore = 0;
-            [as addAttribute:NSParagraphStyleAttributeName value:ps range:r];
-        }];
-        // Find the highlighted verse (the .hl span becomes a background-coloured
-        // run) so a search jump lands on it rather than the chapter's top.
-        gMacHighlightRange = (NSRange){NSNotFound, 0};
-        [as enumerateAttribute:NSBackgroundColorAttributeName
-                       inRange:NSMakeRange(0, as.length)
-                       options:0
-                    usingBlock:^(id value, NSRange r, BOOL *stop) {
-            if (value != nil) {
-                gMacHighlightRange = r;
-                *stop = YES;
-            }
-        }];
-        [gTextView.textStorage setAttributedString:as];
-        bibleTextMacScrollTV();
+        if (bibleTextMacApplyHTML(data)) return;
+        // Never drop raw markup into the view; retry, then fall back to plain text.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (bibleTextMacApplyHTML(data)) return;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if (bibleTextMacApplyHTML(data)) return;
+                NSLog(@"bibletext(mac): HTML import failed after retries; showing plain text");
+                if (gTextView != nil) [gTextView setString:bibleTextMacPlainFromHTML(s)];
+            });
+        });
     });
 }
 

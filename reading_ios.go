@@ -297,72 +297,85 @@ static void bibleTextEnsureTV(void) {
     }
 }
 
+// bibleTextApplyHTML parses `data` as HTML into an attributed string and applies
+// it to the reading text view, returning YES on success. MUST run on the main
+// thread. Returns NO (without touching the view) if the import fails so the
+// caller can retry — see bibleTextTVSetHTML.
+static BOOL bibleTextApplyHTML(NSData *data) {
+    if (gReadingTV == nil || data == nil) return NO;
+    NSDictionary *opts = @{
+        NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
+        NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
+    };
+    NSError *err = nil;
+    NSAttributedString *as = [[NSAttributedString alloc]
+                                initWithData:data options:opts documentAttributes:nil error:&err];
+    if (as == nil) return NO;
+    // NSAttributedString's HTML importer routinely injects a non-zero
+    // paragraphSpacingBefore (and sometimes a minimumLineHeight) on the FIRST
+    // paragraph that no CSS can override — leaving an ugly ~100pt empty band
+    // before verse 1. Zero those so the chapter starts at the frame top.
+    NSMutableAttributedString *mas = [as mutableCopy];
+    [mas enumerateAttribute:NSParagraphStyleAttributeName
+                    inRange:NSMakeRange(0, mas.length) options:0
+                 usingBlock:^(id v, NSRange r, BOOL *stop) {
+        if (v == nil) return;
+        NSMutableParagraphStyle *ps = [(NSParagraphStyle*)v mutableCopy];
+        ps.paragraphSpacingBefore = 0;
+        [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
+    }];
+    as = mas;
+    // Find the highlighted verse (the .hl span becomes a background-coloured run)
+    // so we scroll to it rather than the top when arriving from a search result.
+    gReadingHighlightRange = (NSRange){NSNotFound, 0};
+    [as enumerateAttribute:NSBackgroundColorAttributeName
+                   inRange:NSMakeRange(0, as.length) options:0
+                usingBlock:^(id value, NSRange range, BOOL *stop) {
+        if (value != nil) { gReadingHighlightRange = range; *stop = YES; }
+    }];
+    gReadingTV.attributedText = as;
+    // Aggressive re-assert of the scroll position across the relayout + frame push.
+    [gReadingTV layoutIfNeeded];
+    bibleTextScrollReadingTV();
+    dispatch_async(dispatch_get_main_queue(), ^{ bibleTextScrollReadingTV(); });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ bibleTextScrollReadingTV(); });
+    return YES;
+}
+
+// bibleTextPlainFromHTML strips tags + the few entities buildChapterHTML emits —
+// a readable last resort so the reader never sees raw markup.
+static NSString *bibleTextPlainFromHTML(NSString *html) {
+    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
+    NSString *t = [re stringByReplacingMatchesInString:html options:0
+                                                 range:NSMakeRange(0, html.length) withTemplate:@""];
+    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
+    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
+    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
+    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
+    return t;
+}
+
 void bibleTextTVSetHTML(const char *html) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
     NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding];
-    NSUInteger len = data.length;
     dispatch_async(dispatch_get_main_queue(), ^{
         bibleTextEnsureTV();
         if (gReadingTV == nil) return;
-        NSError *err = nil;
-        NSDictionary *opts = @{
-            NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
-            NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
-        };
-        NSAttributedString *as = [[NSAttributedString alloc]
-                                    initWithData:data
-                                         options:opts
-                              documentAttributes:nil
-                                           error:&err];
-        if (as == nil) {
-            NSLog(@"bibletext: HTML parse failed (input %lu bytes): %@", (unsigned long)len, err);
-            gReadingTV.text = s;
-            return;
-        }
-        // NSAttributedString's HTML importer routinely injects a non-zero
-        // paragraphSpacingBefore (and sometimes a minimumLineHeight) on the
-        // FIRST paragraph that no CSS can override — leaving an ugly
-        // ~100pt empty band before verse 1. Walk the string and zero those
-        // paragraph-style fields so the chapter actually starts where the
-        // UITextView frame top is.
-        NSMutableAttributedString *mas = [as mutableCopy];
-        [mas enumerateAttribute:NSParagraphStyleAttributeName
-                        inRange:NSMakeRange(0, mas.length)
-                        options:0
-                     usingBlock:^(id v, NSRange r, BOOL *stop) {
-            if (v == nil) return;
-            NSMutableParagraphStyle *ps = [(NSParagraphStyle*)v mutableCopy];
-            ps.paragraphSpacingBefore = 0;
-            [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
-        }];
-        as = mas;
-        // Find the highlighted verse (the .hl span becomes a background-coloured
-        // run) so we can scroll to it rather than the top when arriving from a
-        // search result. First background run wins — there's only ever one.
-        gReadingHighlightRange = (NSRange){NSNotFound, 0};
-        [as enumerateAttribute:NSBackgroundColorAttributeName
-                       inRange:NSMakeRange(0, as.length)
-                       options:0
-                    usingBlock:^(id value, NSRange range, BOOL *stop) {
-            if (value != nil) {
-                gReadingHighlightRange = range;
-                *stop = YES;
-            }
-        }];
-        gReadingTV.attributedText = as;
-        // Aggressive re-assert of the scroll position: UITextView may relayout
-        // after attributedText is set, the Fyne side pushes a new frame just
-        // after, and either can shift the offset. Land it on this tick, the next
-        // runloop tick, and a ~200ms tick to outlast the slowest re-layout.
-        [gReadingTV layoutIfNeeded];
-        bibleTextScrollReadingTV();
+        if (bibleTextApplyHTML(data)) return;
+        // The WebKit-backed HTML importer fails intermittently — most often right
+        // after the app returns to the foreground. NEVER drop raw markup into the
+        // view (the old code did `gReadingTV.text = rawHTML`); retry on later
+        // runloop turns and, only if every attempt fails, show tag-stripped text.
         dispatch_async(dispatch_get_main_queue(), ^{
-            bibleTextScrollReadingTV();
-        });
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            bibleTextScrollReadingTV();
+            if (bibleTextApplyHTML(data)) return;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if (bibleTextApplyHTML(data)) return;
+                NSLog(@"bibletext: HTML import failed after retries; showing plain text");
+                if (gReadingTV != nil) gReadingTV.text = bibleTextPlainFromHTML(s);
+            });
         });
     });
 }
