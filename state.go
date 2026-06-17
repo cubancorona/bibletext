@@ -3,6 +3,7 @@ package bibletext
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 )
@@ -78,7 +79,36 @@ type AppState struct {
 	// aiKeys holds the user's AI provider choice + keys (bring-your-own-key),
 	// lazily created via keys(); nil-safe so unit tests work without a Fyne app.
 	aiKeys *keyStore
+
+	// restore is a pending one-shot scroll target set by applyRestoredState when
+	// reopening into the last-read chapter; the native reading overlay consumes it
+	// on first layout (see armPendingRestore / reading_state.go). nil in the
+	// common case (fresh navigation pins to the chapter top).
+	restore *restoreAnchor
+
+	// loadPhase drives the startup loading screen. The Bible loads on a
+	// background goroutine (so the window appears instantly and the iOS launch
+	// watchdog can't SIGKILL us); while loadPhase != loadReady, CreateMainUI
+	// renders only a spinner (loadPending) or an error+retry view (loadFailed)
+	// and the native reading overlay is NOT attached. See StartBackgroundLoad.
+	loadPhase loadPhase
+	loadErr   error
+
+	// appliedTheme tracks the theme object last handed to app.Settings().SetTheme
+	// so CreateMainUI re-applies it only when it actually changes — re-applying on
+	// every rebuild forces a full canvas theme-walk + relayout (a real cost on a
+	// phone, on every tab tap / navigation).
+	appliedTheme fyne.Theme
 }
+
+// loadPhase is the startup state machine for the background Bible load.
+type loadPhase int
+
+const (
+	loadReady   loadPhase = iota // data is in; render the normal UI (the zero value, so a bare AppState — tests, helpers — is "ready" and renders the real UI)
+	loadPending                  // loading; show the spinner
+	loadFailed                   // first-run fetch failed (offline); show retry
+)
 
 // ChapterVisit is one entry in the reading history.
 type ChapterVisit struct {
@@ -236,6 +266,9 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 		}
 	}
 	state.RecentChapters = updated
+	// Every book/chapter navigation funnels through here, so this is the single
+	// place to persist the current location + history (no-op without a Fyne app).
+	persistReadingPosition(state)
 }
 
 // recentJumpTargets returns previously visited chapters (newest first),
@@ -287,6 +320,7 @@ func clearHistory(state *AppState) {
 	if len(state.RecentChapters) > 1 {
 		state.RecentChapters = state.RecentChapters[:1]
 	}
+	persistReadingPosition(state)
 }
 
 func navigateToVisit(state *AppState, visit ChapterVisit) {
@@ -331,6 +365,37 @@ func searchResultsOnly(state *AppState, rawQuery string) {
 		return
 	}
 	runSearch(state, trimmed)
+}
+
+// searchDebounceDelay is how long a search field waits for typing to settle
+// before running the (synchronous, whole-corpus) search. Short enough to feel
+// live, long enough that a fast typist doesn't queue a scan + results rebuild on
+// every keystroke.
+const searchDebounceDelay = 150 * time.Millisecond
+
+// newSearchDebouncer returns an OnChanged handler that defers the search until
+// typing pauses, plus a stop() to cancel a pending run. The trailing timer fires
+// on its own goroutine, so the search (which mutates state + repaints widgets) is
+// marshaled back to the UI goroutine with fyne.Do. Both returned closures are
+// only ever called from the UI goroutine (Entry callbacks), so the timer pointer
+// needs no lock. Call stop() from OnSubmitted, which searches immediately.
+func newSearchDebouncer(state *AppState) (onChanged func(string), stop func()) {
+	var timer *time.Timer
+	stop = func() {
+		if timer != nil {
+			timer.Stop()
+			timer = nil
+		}
+	}
+	onChanged = func(s string) {
+		if timer != nil {
+			timer.Stop()
+		}
+		timer = time.AfterFunc(searchDebounceDelay, func() {
+			fyne.Do(func() { searchResultsOnly(state, s) })
+		})
+	}
+	return onChanged, stop
 }
 
 func runSearch(state *AppState, trimmed string) {

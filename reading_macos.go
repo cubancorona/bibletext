@@ -117,9 +117,67 @@ static NSRange gMacHighlightRange = {NSNotFound, 0};
 // steal its clicks. While suppressed, Show is a no-op; only Unsuppress clears it.
 static BOOL gReadingSuppressed = NO;
 
-// bibleTextMacScrollTV positions the chapter: at the highlighted verse when one
-// is set (a search jump), otherwise at the very top. NSTextView is flipped, so
-// larger y is further down; we scroll the clip view to the verse's glyph rect.
+// --- Reading-position restore -------------------------------------------------
+// A one-shot scroll target applied when reopening into the last-read chapter
+// (see reading_state.go). Verse numbers render as <sup> runs (buildChapterHTML),
+// so we map between a verse number and its character location by enumerating the
+// superscript runs — the trailing &nbsp; sits outside the <sup>, so each
+// superscript run is exactly the verse digits.
+
+// `ok` distinguishes "read the live scroll" (1, even at the top) from "couldn't
+// read it — view gone" (0).
+typedef struct { int verse; double delta; double frac; int ok; } BTAnchor;
+
+static NSInteger gMacRestoreVerse = 0;
+static CGFloat   gMacRestoreDelta = 0;
+static CGFloat   gMacRestoreFrac  = 0;
+static BOOL      gMacHasRestore   = NO;
+
+// Verse numbers are the only small-font runs: buildChapterHTML renders them as
+// <sup class="v"> at font-size 0.66em (~12.5px) while body text is 19px.
+// Detecting them by font size (rather than a superscript attribute) matches the
+// iOS overlay and reads the run's digits directly.
+#define BT_VERSE_FONT_MAX 15.0
+
+// btMacLocForVerse returns the character location of `verse`'s number run, or
+// NSNotFound.
+static NSUInteger btMacLocForVerse(NSTextStorage *ts, NSInteger verse) {
+    __block NSUInteger found = NSNotFound;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        if ([[ts.string substringWithRange:r] integerValue] == verse) {
+            found = r.location;
+            *stop = YES;
+        }
+    }];
+    return found;
+}
+
+// btMacVerseAtIndex returns the verse whose number run is the last at or before
+// character index ci (the top-visible verse), writing its location to *outLoc.
+static NSInteger btMacVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc) {
+    __block NSInteger verse = 0;
+    __block NSUInteger loc = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (r.location > ci) { *stop = YES; return; }
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        NSInteger n = [[ts.string substringWithRange:r] integerValue];
+        if (n > 0) { verse = n; loc = r.location; }
+    }];
+    if (outLoc) *outLoc = loc;
+    return verse;
+}
+
+// bibleTextMacScrollTV positions the chapter, in priority order: the highlighted
+// verse (a search jump), then a one-shot restore target (reopening where the
+// reader left off), otherwise the very top. NSTextView is flipped, so larger y is
+// further down; we scroll the clip view to the target glyph rect.
 static void bibleTextMacScrollTV(void) {
     if (gTextView == nil || gScroll == nil) return;
     if (gMacHighlightRange.location != NSNotFound &&
@@ -135,6 +193,36 @@ static void bibleTextMacScrollTV(void) {
         [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
         [gScroll reflectScrolledClipView:gScroll.contentView];
         return;
+    }
+    if (gMacHasRestore) {
+        NSLayoutManager *lm = gTextView.layoutManager;
+        NSTextStorage *ts = gTextView.textStorage;
+        CGFloat insetH = gTextView.textContainerInset.height;
+        CGFloat y = -1;
+        if (gMacRestoreVerse > 0) {
+            NSUInteger loc = btMacLocForVerse(ts, gMacRestoreVerse);
+            if (loc != NSNotFound) {
+                NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1)
+                                       actualCharacterRange:NULL];
+                NSRect rr = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
+                y = rr.origin.y + insetH + gMacRestoreDelta;
+            }
+        }
+        if (y < 0 && gMacRestoreFrac > 0) {
+            CGFloat docH = [lm usedRectForTextContainer:gTextView.textContainer].size.height + insetH * 2;
+            CGFloat viewH = gScroll.contentView.bounds.size.height;
+            CGFloat scrollable = docH - viewH;
+            if (scrollable > 0) y = gMacRestoreFrac * scrollable;
+        }
+        if (y >= 0) {
+            CGFloat maxY = gTextView.frame.size.height - gScroll.contentView.bounds.size.height;
+            if (maxY < 0) maxY = 0;
+            if (y > maxY) y = maxY;
+            if (y < 0) y = 0;
+            [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
+            [gScroll reflectScrolledClipView:gScroll.contentView];
+            return;
+        }
     }
     [gTextView scrollRangeToVisible:NSMakeRange(0, 0)];
     [[gScroll contentView] scrollToPoint:NSZeroPoint];
@@ -257,12 +345,18 @@ void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
         NSRect r = NSMakeRect(x, ph - y - h, w, h);
         BOOL changed = !NSEqualRects(r, gScroll.frame);
         gScroll.frame = r;
-        // SetHTML may have scrolled to the highlighted verse while the overlay
-        // was still at its initial width; once the real frame lands the text
-        // rewraps, so re-assert the highlight position. Only when a highlight is
-        // active — otherwise leave the reader's scroll position untouched.
-        if (changed && gMacHighlightRange.location != NSNotFound) {
+        // SetHTML may have scrolled to the highlighted verse / restore target
+        // while the overlay was still at its initial width; once the real frame
+        // lands the text rewraps, so re-assert that position. Only when a
+        // highlight or a pending restore is active — otherwise leave the reader's
+        // scroll position untouched.
+        if (changed && (gMacHighlightRange.location != NSNotFound || gMacHasRestore)) {
+            BOOL wasRestore = gMacHasRestore;
             bibleTextMacScrollTV();
+            // One-shot: once the real frame has landed and the restore scroll has
+            // been re-applied at the correct width, disarm — so later user resizes
+            // don't snap the reader back to the restored position.
+            if (wasRestore) gMacHasRestore = NO;
         }
     });
 }
@@ -340,6 +434,66 @@ void bibleTextShareImageFile(const char *path) {
         NSArray *items = img ? @[img] : @[[NSURL fileURLWithPath:p]];
         NSSharingServicePicker *sp = [[NSSharingServicePicker alloc] initWithItems:items];
         [sp showRelativeToRect:bibleTextMacSelectionRect() ofView:gTextView preferredEdge:NSMaxYEdge];
+    });
+}
+
+// --- Reading-position capture / restore (Go bridge) -------------------------
+
+// bibleTextMacCaptureAnchor reads the current scroll position as a verse anchor
+// (top-visible verse + within-verse delta) plus a whole-chapter fraction
+// fallback. Synchronous on the main thread; safe to call during shutdown (it
+// null-checks the view and returns a zero anchor when the view is gone).
+BTAnchor bibleTextMacCaptureAnchor(void) {
+    __block BTAnchor out = {0, 0, 0, 0};
+    dispatch_block_t block = ^{
+        if (gTextView == nil || gScroll == nil) return;
+        NSTextView *tv = gTextView;
+        NSLayoutManager *lm = tv.layoutManager;
+        NSTextStorage *ts = tv.textStorage;
+        if (ts.length == 0) return;
+        out.ok = 1; // the live scroll was readable (even if it's at the top)
+        CGFloat offY = tv.visibleRect.origin.y;
+        if (offY <= 0.5) return; // at the top → zero anchor
+        CGFloat insetH = tv.textContainerInset.height;
+        CGFloat docH = [lm usedRectForTextContainer:tv.textContainer].size.height + insetH * 2;
+        CGFloat viewH = tv.visibleRect.size.height;
+        CGFloat scrollable = docH - viewH;
+        if (scrollable > 1) {
+            CGFloat f = offY / scrollable;
+            if (f < 0) f = 0;
+            if (f > 1) f = 1;
+            out.frac = f;
+        }
+        CGFloat tcY = offY - insetH + 2;
+        if (tcY < 0) tcY = 0;
+        NSUInteger gi = [lm glyphIndexForPoint:NSMakePoint(4, tcY) inTextContainer:tv.textContainer];
+        NSUInteger ci = [lm characterIndexForGlyphAtIndex:gi];
+        NSUInteger loc = 0;
+        NSInteger verse = btMacVerseAtIndex(ts, ci, &loc);
+        if (verse <= 0) return;
+        NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1) actualCharacterRange:NULL];
+        NSRect rr = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
+        out.verse = (int)verse;
+        out.delta = offY - (rr.origin.y + insetH);
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
+    return out;
+}
+
+// bibleTextMacArmRestore stashes a one-shot scroll target consumed by
+// bibleTextMacScrollTV on the next layout. verse<=0 && frac<=0 disarms.
+void bibleTextMacArmRestore(int verse, double delta, double frac) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (verse <= 0 && frac <= 0) {
+            gMacHasRestore = NO;
+            gMacRestoreVerse = 0; gMacRestoreDelta = 0; gMacRestoreFrac = 0;
+            return;
+        }
+        gMacRestoreVerse = verse;
+        gMacRestoreDelta = delta;
+        gMacRestoreFrac = frac;
+        gMacHasRestore = YES;
     });
 }
 */
@@ -428,13 +582,36 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	macCurrentHost = h
-	// Push HTML now; the frame follows on the first Resize.
-	html := buildChapterHTML(state, verses)
-	c := C.CString(html)
-	defer C.free(unsafe.Pointer(c))
-	C.bibleTextMacTVSetHTML(c)
+	// Arm any pending one-shot scroll restore for this chapter (reopening where
+	// the reader left off) before pushing the text, so bibleTextMacScrollTV lands
+	// on the saved position rather than the top. A normal push disarms it.
+	armPendingRestore(state)
+	// Skip the HTML rebuild + NSAttributedString re-import when the NSTextView
+	// already holds this exact chapter render (mirrors the iOS gate in
+	// pushChapterHTML); a pending scroll restore forces the push. SetHTML consumes
+	// the C string synchronously, so freeing right after the call is safe.
+	fp := chapterRenderFingerprint(state)
+	if state.restore != nil || fp != lastPushedChapterFP {
+		lastPushedChapterFP = fp
+		html := buildChapterHTML(state, verses)
+		c := C.CString(html)
+		C.bibleTextMacTVSetHTML(c)
+		C.free(unsafe.Pointer(c))
+	}
+	// Push the frame so the (possibly already-populated) text view shows.
 	C.bibleTextMacTVShow()
 	return h
+}
+
+// captureReadingAnchor / armReadingRestore bridge the reading-position restore
+// (reading_state.go) to the native NSTextView scroll machinery.
+func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
+	a := C.bibleTextMacCaptureAnchor()
+	return int(a.verse), float64(a.delta), float64(a.frac), a.ok != 0
+}
+
+func armReadingRestore(verse int, delta, frac float64) {
+	C.bibleTextMacArmRestore(C.int(verse), C.double(delta), C.double(frac))
 }
 
 func (h *macReadingHost) CreateRenderer() fyne.WidgetRenderer {

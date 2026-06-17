@@ -20,8 +20,19 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	if state.theme == nil {
 		state.theme = &bibleTheme{fonts: loadBookFonts()}
 	}
-	app.Settings().SetTheme(state.theme)
+	applyTheme(app, state)
 	pal := state.pal()
+
+	// Startup: render only the loading/error screen until the background Bible
+	// load finishes (keeps the macOS NSTextView overlay out until there's text).
+	switch state.loadPhase {
+	case loadPending:
+		setReadingOverlayVisible(false)
+		return buildLoadingView(state)
+	case loadFailed:
+		setReadingOverlayVisible(false)
+		return buildLoadErrorView(state)
+	}
 
 	readingHost := container.NewStack(buildReadingPane(state))
 	state.showReading = func() {

@@ -291,6 +291,8 @@ func switchVersion(state *AppState, id string) {
 	state.CurrentVersion = id
 	state.currentMode = mode
 	clampToCurrentVersion(state)
+	// Remember the chosen translation (and current location) across launches.
+	persistReadingPosition(state)
 	rebuildWindow(state)
 }
 

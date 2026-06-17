@@ -23,13 +23,13 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	searchEntry.SetPlaceHolder("Search…")
 	searchEntry.SetText(state.SearchQuery)
 
-	// Live search runs synchronously on the UI goroutine for every keystroke
-	// (the corpus is small and indexed, so this is fast and race-free). It only
-	// lists matches; pressing Enter additionally jumps to an exact verse ref.
-	searchEntry.OnChanged = func(s string) {
-		searchResultsOnly(state, s)
-	}
+	// Live search lists matches as you type, debounced so a fast typist doesn't
+	// queue a whole-corpus scan + results rebuild on every keystroke; pressing
+	// Enter cancels the pending run and additionally jumps to an exact verse ref.
+	onSearchChanged, stopSearchDebounce := newSearchDebouncer(state)
+	searchEntry.OnChanged = onSearchChanged
 	searchEntry.OnSubmitted = func(s string) {
+		stopSearchDebounce()
 		executeSearch(state, s)
 	}
 

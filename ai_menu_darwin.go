@@ -15,6 +15,21 @@ import "C"
 
 import "fyne.io/fyne/v2"
 
+// bibleTextReadingScrolled is called from the native text overlays when the
+// reader finishes a scroll. It persists the current reading position (book /
+// chapter / scroll anchor) so the saved spot is always up to date — the iOS
+// app-background lifecycle hook doesn't fire reliably, so we save on scroll-end
+// rather than only at exit. It runs on the native UI thread; flushReadingState
+// only reads the live scroll (already main-thread-safe) and writes a small
+// preference blob, so no Fyne UI-goroutine hop is needed.
+//
+//export bibleTextReadingScrolled
+func bibleTextReadingScrolled() {
+	if state := activeAIState; state != nil {
+		flushReadingState(state)
+	}
+}
+
 // bibleTextAIMenuTapped is called from the HBReadingTextView subclasses when the
 // user picks an AI study action. It runs on the native UI thread, so it copies the
 // C strings right away and hops onto Fyne's UI goroutine before showing anything.

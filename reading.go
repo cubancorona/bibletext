@@ -64,29 +64,30 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	pal := state.pal()
 	total := len(chapterNumbers)
 
-	// Heading reflects the chapter: "Genesis 1".
-	title := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text)
-	title.TextSize = headingTextSize
-	title.TextStyle = fyne.TextStyle{Bold: true}
+	// "Book N ⌄" — one cohesive tap target (text + a clear dropdown chevron) that
+	// opens the combined reference picker (book list + chapter grid).
+	const titleBoxH = 38
+	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
+		showReferencePicker(state)
+	})
 
 	// Small copy icon tucked beside the heading — close to the text it copies.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 17, 36, func() {
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 17, titleBoxH, func() {
 		copyChapter(state)
 	})
-	titleRow := container.NewHBox(title, hgap(6), copyBtn)
+	titleRow := container.NewHBox(ref, hgap(8), copyBtn)
 
-	const navBoxH = 24
+	const navBoxH = 34
 
-	var chapterLine fyne.CanvasObject
-	if total > 1 {
-		chapterLine = newChapterPickerAnchor(state,
-			fmt.Sprintf("Chapter %d of %d  ▾", state.CurrentChapter, total),
-			pal.TextMuted, subheadingTextSize, navBoxH)
-	} else {
-		lbl := canvas.NewText(fmt.Sprintf("Chapter %d", state.CurrentChapter), pal.TextMuted)
-		lbl.TextSize = subheadingTextSize
-		chapterLine = container.NewCenter(lbl)
+	// Quiet chapter context below the heading — also a picker target, so the
+	// whole "Chapter N of M" line opens the picker too.
+	chapText := fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total)
+	if total <= 1 {
+		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
+	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, navBoxH, false, func() {
+		showReferencePicker(state)
+	})
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
 
@@ -107,7 +108,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// The chapter line and arrows sit directly in the HBox (no spacer-VBox
 	// wrapper): each control carries its own boxH so they share a baseline, and
 	// the picker anchor needs a first-class hit box rather than a nested one.
-	chapterRow := container.NewHBox(chapterLine, hgap(12), prev, next)
+	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next)
 
 	// Focus toggle on the right: enter distraction-free reading (hide the
 	// sidebar + app header) or, when already in it, restore the full layout.
@@ -135,6 +136,15 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 // iconTapButton and chapterPickerAnchor were first written for the iOS reading
 // header; they're shared here so the desktop chapter toolbar can use the same
 // small, low-chrome controls.
+
+// minTapTarget is the smallest comfortable touch target (Apple HIG ~44pt). The
+// reading header passes it as the box height for the small icon buttons (the
+// chapter arrows, the copy icon) so they're easy to hit on a phone; the picker
+// text anchors get generous horizontal padding (tapTextHPad) for the same reason.
+const (
+	minTapTarget float32 = 44
+	tapTextHPad  float32 = 18
+)
 
 // iconTapButton is a small, low-chrome tappable icon — lighter than
 // widget.Button (no background, no fixed padding). The icon is rendered at
@@ -172,53 +182,119 @@ func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
 		img.Translucency = 0.6 // faint when there's no chapter to move to
 	}
 	// GridWrap pins the cell to a fixed size; NewCenter vertically centres the
-	// smaller icon within that box so it aligns with neighbouring text.
-	box := container.NewGridWrap(fyne.NewSize(b.iconSize+8, b.boxH), container.NewCenter(img))
+	// smaller icon within that box so it aligns with neighbouring text. The cell
+	// is at least as wide as it is tall, so a small glyph still gets a square,
+	// finger-friendly hit area rather than a thin sliver.
+	w := b.iconSize + 16
+	if w < b.boxH {
+		w = b.boxH
+	}
+	box := container.NewGridWrap(fyne.NewSize(w, b.boxH), container.NewCenter(img))
 	return widget.NewSimpleRenderer(box)
 }
 
 var _ fyne.Tappable = (*iconTapButton)(nil)
 
-// chapterPickerAnchor is a small tappable bit of muted text (e.g.
-// "Chapter 1 of 21 ▾") that opens the chapter picker on tap. It avoids
-// widget.Button's relatively heavy padding so the chapter line stays as
-// quiet as the "World English Bible · Public Domain" subtitle.
-type chapterPickerAnchor struct {
+// tapText is a small tappable bit of bold text with a solid GridWrap hit box.
+// A bare canvas.Text renderer is not reliably matched by Fyne's mobile-driver
+// tap hit-test (it once left the chapter picker unresponsive on iOS); pinning
+// the text inside a fixed-size cell gives a full-height hit rectangle and
+// vertically centres it against taller neighbouring controls. Used for the
+// tappable book name and chapter number in the reading header.
+type tapText struct {
 	widget.BaseWidget
-	state *AppState
 	text  string
 	tint  color.NRGBA
 	size  float32
 	boxH  float32
-	lbl   *canvas.Text
+	bold  bool
+	onTap func()
 }
 
-func newChapterPickerAnchor(state *AppState, text string, tint color.NRGBA, size, boxH float32) *chapterPickerAnchor {
-	a := &chapterPickerAnchor{state: state, text: text, tint: tint, size: size, boxH: boxH}
-	a.ExtendBaseWidget(a)
-	return a
+// newTapText makes a bold tappable label (the book + chapter heading).
+func newTapText(text string, tint color.NRGBA, size, boxH float32, onTap func()) *tapText {
+	return newTapTextStyled(text, tint, size, boxH, true, onTap)
 }
 
-func (a *chapterPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
-	a.lbl = canvas.NewText(a.text, a.tint)
-	a.lbl.TextSize = a.size
-	a.lbl.TextStyle = fyne.TextStyle{Bold: true}
-	// Mirror iconTapButton: pin the text inside a fixed-size GridWrap cell so the
-	// widget has a solid, full-height hit rectangle. A bare canvas.Text renderer
-	// is not reliably matched by Fyne's mobile-driver tap hit-test, which left the
-	// chapter picker unresponsive on iOS; the explicit box fixes it and also
-	// vertically centres the small text against the taller nav arrows.
-	w := fyne.MeasureText(a.text, a.size, a.lbl.TextStyle).Width
-	box := container.NewGridWrap(fyne.NewSize(w, a.boxH), container.NewCenter(a.lbl))
+// newTapTextStyled is newTapText with control over the weight, so the quiet
+// "Chapter N of M" line can be tappable without going bold.
+func newTapTextStyled(text string, tint color.NRGBA, size, boxH float32, bold bool, onTap func()) *tapText {
+	t := &tapText{text: text, tint: tint, size: size, boxH: boxH, bold: bold, onTap: onTap}
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *tapText) CreateRenderer() fyne.WidgetRenderer {
+	lbl := canvas.NewText(t.text, t.tint)
+	lbl.TextSize = t.size
+	lbl.TextStyle = fyne.TextStyle{Bold: t.bold}
+	// Pad the hit box well beyond the glyphs so the heading is an easy phone
+	// target, not a thin strip the width of the text.
+	w := fyne.MeasureText(t.text, t.size, lbl.TextStyle).Width + tapTextHPad
+	box := container.NewGridWrap(fyne.NewSize(w, t.boxH), container.NewCenter(lbl))
 	return widget.NewSimpleRenderer(box)
 }
 
-func (a *chapterPickerAnchor) Tapped(*fyne.PointEvent) {
-	showChapterPicker(a, a.state)
+func (t *tapText) Tapped(*fyne.PointEvent) {
+	if t.onTap != nil {
+		t.onTap()
+	}
 }
 
 // Make sure Fyne dispatches taps to us.
-var _ fyne.Tappable = (*chapterPickerAnchor)(nil)
+var _ fyne.Tappable = (*tapText)(nil)
+
+// referenceButton is the tappable book+chapter heading ("John 10 ⌄") that opens
+// the combined reference picker. It renders the bold reference text followed
+// immediately by a clear, full-size dropdown chevron — one cohesive, unambiguous
+// affordance in a single comfortable hit box. (It replaces a heading + a separate
+// tiny muted caret, which read as a small ambiguous mark floating a wide gap from
+// the text.)
+type referenceButton struct {
+	widget.BaseWidget
+	text  string
+	tint  color.NRGBA
+	size  float32
+	boxH  float32
+	onTap func()
+}
+
+func newReferenceButton(text string, tint color.NRGBA, size, boxH float32, onTap func()) *referenceButton {
+	b := &referenceButton{text: text, tint: tint, size: size, boxH: boxH, onTap: onTap}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *referenceButton) Tapped(*fyne.PointEvent) {
+	if b.onTap != nil {
+		b.onTap()
+	}
+}
+
+func (b *referenceButton) CreateRenderer() fyne.WidgetRenderer {
+	style := fyne.TextStyle{Bold: true}
+	lbl := canvas.NewText(b.text, b.tint)
+	lbl.TextSize = b.size
+	lbl.TextStyle = style
+	textW := fyne.MeasureText(b.text, b.size, style).Width
+
+	// A solid dropdown chevron in the heading colour — far clearer as a "tap to
+	// change book/chapter" affordance than a tiny muted caret. Sized generously so
+	// the visible glyph reads big (the icon SVG carries some internal whitespace).
+	chevSize := b.size * 0.8
+	chev := canvas.NewImageFromResource(theme.NewColoredResource(theme.MenuDropDownIcon(), theme.ColorNameForeground))
+	chev.FillMode = canvas.ImageFillContain
+	chev.SetMinSize(fyne.NewSize(chevSize, chevSize))
+
+	// Text then chevron, tight (one theme pad between them — not a wide gap), with
+	// just a little symmetric breathing room as the hit box.
+	inner := container.NewHBox(container.NewCenter(lbl), container.NewCenter(chev))
+	w := textW + chevSize + theme.Padding() + 8
+	box := container.NewGridWrap(fyne.NewSize(w, b.boxH), container.NewCenter(inner))
+	return widget.NewSimpleRenderer(box)
+}
+
+var _ fyne.Tappable = (*referenceButton)(nil)
 
 // rebuildWindow swaps in a fresh CreateMainUI tree. Use this (rather than
 // state.refresh(), which only repaints the reading pane) when a change affects
@@ -232,6 +308,37 @@ func rebuildWindow(state *AppState) {
 	}
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)
+}
+
+// lastPushedChapterFP is the fingerprint of the chapter HTML currently held by
+// the native reading overlay (iOS UITextView / macOS NSTextView). The native
+// push paths skip rebuilding + re-importing the HTML when it hasn't changed —
+// re-parsing the whole chapter through the NSAttributedString HTML importer is
+// the single most frequent expensive op (it fires on every tab-return-to-Read
+// and same-chapter refresh). Written only from the UI goroutine; unused on
+// platforms without a native overlay (Linux/Windows/Android).
+var lastPushedChapterFP string
+
+// chapterRenderFingerprint captures everything buildChapterHTML's output depends
+// on, so the native push can detect a no-op. It MUST include the theme variant
+// (colours are inlined) and the highlight identity (arriving at the same chapter
+// from a search hit vs. prev/next is the same book+chapter but renders the
+// highlighted verse differently).
+func chapterRenderFingerprint(state *AppState) string {
+	var variant fyne.ThemeVariant
+	if app := fyne.CurrentApp(); app != nil {
+		variant = app.Settings().ThemeVariant()
+	}
+	red := 0
+	if redLetterEnabled() {
+		red = 1
+	}
+	hl := "0"
+	if state.HasHighlightedVerse {
+		hl = fmt.Sprintf("%s:%d:%d", state.HighlightedBook, state.HighlightedChapter, state.HighlightedVerse)
+	}
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl)
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------
@@ -700,49 +807,146 @@ func superscriptNumber(n int) string {
 	return b.String()
 }
 
-// --- Chapter picker ---------------------------------------------------------
+// --- Reference picker -------------------------------------------------------
+//
+// One combined book + chapter picker on a single screen, opened from the reading
+// header (tapping the book name or the chapter number): a scrollable book list
+// on the left and a calendar-style chapter-number grid on the right that updates
+// as you select a book. Tapping a chapter navigates there. Shared by desktop and
+// iOS via the same header.
 
-func showChapterPicker(anchor fyne.CanvasObject, state *AppState) {
-	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
-	if len(chapterNumbers) == 0 {
-		return
+// fixedWidthLayout pins its content to a fixed width while filling the available
+// height — used for the picker's left-hand book column.
+type fixedWidthLayout struct{ width float32 }
+
+func (f fixedWidthLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	h := float32(0)
+	for _, o := range objs {
+		if m := o.MinSize(); m.Height > h {
+			h = m.Height
+		}
 	}
-	cnv := canvasForObject(anchor)
+	return fyne.NewSize(f.width, h)
+}
+
+func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objs {
+		o.Resize(fyne.NewSize(f.width, size.Height))
+		o.Move(fyne.NewPos(0, 0))
+	}
+}
+
+func showReferencePicker(state *AppState) {
+	cnv := pickerCanvas(state)
 	if cnv == nil {
 		return
 	}
 	pal := state.pal()
 
-	var popup *widget.PopUp
-
 	// On iOS the reading view is a native UITextView overlay that floats above
-	// the Fyne canvas, so it would render on top of (and steal touches from)
-	// this popup. Hide it while the picker is open; restore it on dismiss.
-	// No-op on desktop/Android.
+	// the Fyne canvas, so it would cover (and steal touches from) this popup.
+	// Hide it while the picker is open; restore on dismiss. No-op elsewhere.
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
 	}
-	restoreOverlay := func() {
+	restore := func() {
 		if state.showReadingOverlay != nil {
 			state.showReadingOverlay()
 		}
 	}
 
-	columns := chapterPickerColumns(len(chapterNumbers))
-	grid := container.NewGridWithColumns(columns)
-	for _, chapter := range chapterNumbers {
-		ch := chapter
-		btn := widget.NewButton(fmt.Sprintf("%d", ch), func() {
-			state.CurrentChapter = ch
-			clearHighlightedVerse(state)
-			addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
-			if popup != nil {
-				popup.Hide()
+	var popup *widget.PopUp
+	closePicker := func() {
+		if popup != nil {
+			popup.Hide()
+		}
+		restore()
+	}
+
+	books := state.Bible.Books
+	selected := state.CurrentBook
+
+	// Right pane: the chapter grid for the currently-selected book.
+	chapterPane := container.NewStack()
+	renderChapters := func(book string) {
+		chapterPane.Objects = []fyne.CanvasObject{referenceChapterGrid(state, pal, book, func(ch int) {
+			navigateToReference(state, book, ch)
+			closePicker()
+		})}
+		chapterPane.Refresh()
+	}
+	renderChapters(selected)
+
+	// Left pane: a scrollable list of every book; selecting one swaps the right
+	// pane to that book's chapters (without navigating yet).
+	list := widget.NewList(
+		func() int { return len(books) },
+		func() fyne.CanvasObject {
+			lbl := widget.NewLabel("")
+			lbl.Truncation = fyne.TextTruncateEllipsis
+			return lbl
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			lbl := o.(*widget.Label)
+			lbl.SetText(books[i])
+			if books[i] == selected {
+				lbl.TextStyle = fyne.TextStyle{Bold: true}
+			} else {
+				lbl.TextStyle = fyne.TextStyle{}
 			}
-			state.refresh()
-			restoreOverlay()
-		})
-		if ch == state.CurrentChapter {
+			lbl.Refresh()
+		},
+	)
+	list.OnSelected = func(id widget.ListItemID) {
+		if id < 0 || id >= len(books) {
+			return
+		}
+		selected = books[id]
+		renderChapters(selected)
+		list.Refresh()
+	}
+
+	title := canvas.NewText("Go to", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 18
+	header := pickerHeader(title, closePicker)
+
+	divider := canvas.NewRectangle(pal.Border)
+	divider.SetMinSize(fyne.NewSize(1, 0))
+	left := container.New(fixedWidthLayout{width: 152},
+		container.NewBorder(nil, nil, nil, divider, list))
+	body := container.NewBorder(header, nil, left, nil, container.NewPadded(chapterPane))
+
+	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
+	popup.Show()
+	w, h := pickerSplitSize(cnv)
+	popup.Resize(fyne.NewSize(w, h))
+
+	// Highlight + reveal the current book (its OnSelected refreshes the chapters).
+	for i, b := range books {
+		if b == selected {
+			list.Select(i)
+			list.ScrollTo(i)
+			break
+		}
+	}
+}
+
+// referenceChapterGrid is the right pane: the chapter-number grid for one book,
+// with the book name + chapter count above it. onPick fires with the chapter.
+func referenceChapterGrid(state *AppState, pal palette, book string, onPick func(int)) fyne.CanvasObject {
+	nums := state.Bible.GetChapterNumbersForBook(book)
+
+	head := canvas.NewText(fmt.Sprintf("%s · %d chapters", book, len(nums)), pal.TextMuted)
+	head.TextSize = 12
+
+	// Fixed-size cells that wrap to as many columns as the pane is wide — so the
+	// grid fits without clipping on a narrow phone pane and fills out on desktop.
+	grid := container.NewGridWrap(fyne.NewSize(46, 40))
+	for _, c := range nums {
+		ch := c
+		btn := widget.NewButton(fmt.Sprintf("%d", ch), func() { onPick(ch) })
+		if book == state.CurrentBook && ch == state.CurrentChapter {
 			btn.Importance = widget.HighImportance
 		} else {
 			btn.Importance = widget.LowImportance
@@ -750,41 +954,62 @@ func showChapterPicker(anchor fyne.CanvasObject, state *AppState) {
 		grid.Add(btn)
 	}
 
-	titleText := canvas.NewText(state.CurrentBook, pal.Text)
-	titleText.TextStyle = fyne.TextStyle{Bold: true}
-	titleText.TextSize = 18
-	subText := canvas.NewText(fmt.Sprintf("%d chapters", len(chapterNumbers)), pal.TextMuted)
-	subText.TextSize = 12
+	return container.NewBorder(container.NewPadded(head), nil, nil, nil,
+		container.NewVScroll(container.NewPadded(grid)))
+}
 
-	closeBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-		if popup != nil {
-			popup.Hide()
-		}
-		restoreOverlay()
-	})
+// pickerHeader is a stage's top row: a leading element (title, or back+title) on
+// the left and a close button on the right, above a separator.
+func pickerHeader(leading fyne.CanvasObject, onClose func()) fyne.CanvasObject {
+	closeBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), onClose)
 	closeBtn.Importance = widget.LowImportance
+	bar := container.NewBorder(nil, nil, leading, container.NewVBox(closeBtn, layout.NewSpacer()), nil)
+	return container.NewVBox(bar, widget.NewSeparator())
+}
 
-	head := container.NewBorder(nil, nil,
-		container.NewVBox(titleText, subText),
-		container.NewVBox(closeBtn, layout.NewSpacer()),
-	)
-	body := container.NewVBox(head, widget.NewSeparator())
+// navigateToReference jumps to a specific book + chapter and records the visit.
+func navigateToReference(state *AppState, book string, chapter int) {
+	selectBook(state, book, false)
+	state.CurrentChapter = chapter
+	clearHighlightedVerse(state)
+	addRecentChapter(state, book, chapter)
+	state.refresh()
+}
 
-	rows := int(math.Ceil(float64(len(chapterNumbers)) / float64(columns)))
-	maxHeight := float32(520)
-	if _, size := cnv.InteractiveArea(); size.Height > 0 {
-		maxHeight = size.Height * 0.7
+// pickerCanvas returns the canvas to host a picker modal.
+func pickerCanvas(state *AppState) fyne.Canvas {
+	if state.window != nil {
+		return state.window.Canvas()
 	}
-	if gridHeight := float32(rows) * 46; gridHeight <= maxHeight {
-		body.Add(grid)
-	} else {
-		gs := container.NewVScroll(grid)
-		gs.SetMinSize(fyne.NewSize(float32(columns)*52, maxHeight))
-		body.Add(gs)
+	if d := fyne.CurrentApp().Driver(); d != nil {
+		if ws := d.AllWindows(); len(ws) > 0 {
+			return ws[0].Canvas()
+		}
 	}
+	return nil
+}
 
-	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
-	popup.Show()
+// pickerSplitSize gives the split picker a roomy size (it needs width for the
+// book column plus the chapter grid) capped to the screen.
+func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
+	w, h := float32(560), float32(560)
+	if _, sz := cnv.InteractiveArea(); sz.Width > 0 {
+		w = sz.Width - 24
+		if w > 640 {
+			w = 640
+		}
+		if w < 320 {
+			w = 320
+		}
+		h = sz.Height * 0.8
+		if h > 680 {
+			h = 680
+		}
+		if h < 300 {
+			h = 300
+		}
+	}
+	return w, h
 }
 
 func chapterPickerColumns(total int) int {
@@ -799,18 +1024,4 @@ func chapterPickerColumns(total int) int {
 		columns = 8
 	}
 	return columns
-}
-
-func canvasForObject(obj fyne.CanvasObject) fyne.Canvas {
-	driver := fyne.CurrentApp().Driver()
-	if driver == nil {
-		return nil
-	}
-	if cnv := driver.CanvasForObject(obj); cnv != nil {
-		return cnv
-	}
-	if windows := driver.AllWindows(); len(windows) > 0 {
-		return windows[0].Canvas()
-	}
-	return nil
 }
