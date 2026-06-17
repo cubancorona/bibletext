@@ -270,6 +270,13 @@ static void bibleTextEnsureTV(void) {
             // area — we already position the textView below it via the Fyne
             // layout, and the auto-adjust would push verse 1 off the top.
             tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+            // Smooth scrolling for long, richly-attributed chapters. UITextView on
+            // iOS 16+ defaults to TextKit 2, which lays glyphs out LAZILY while you
+            // scroll and visibly hitches on a long chapter of HTML-imported text.
+            // Touching layoutManager drops the view to TextKit 1; setting
+            // allowsNonContiguousLayout = NO lays the whole chapter out up front so
+            // scrolling stays smooth (a small one-time cost when the chapter loads).
+            tv.layoutManager.allowsNonContiguousLayout = NO;
             // Start visible — the Read tab is selected at app launch and
             // AppTabs.OnSelected doesn't fire for the initial selection.
             tv.hidden = NO;
