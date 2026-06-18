@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -15,7 +16,8 @@ import (
 )
 
 // numberEntry is an Entry that requests the iOS number pad. iOS number pads have no
-// hyphen, so the Goto picker adds a "–" key beside the field for verse ranges.
+// hyphen, so the Goto picker takes a verse range as TWO number fields (start + end)
+// rather than one hyphenated field.
 type numberEntry struct {
 	widget.Entry
 }
@@ -28,16 +30,19 @@ func newNumberEntry() *numberEntry {
 	return e
 }
 
-// gotoPickerModal is the shared book + chapter picker. Two flavours:
+// gotoPickerModal is the shared book + chapter picker. The LEFT pane is a two-stage
+// book navigator: an alphabet grid of the letters that have books → tap a letter →
+// that letter's books (with a back row to the alphabet). The RIGHT pane is the chapter
+// grid for the selected book. Two flavours differ only at the bottom + on chapter-tap:
 //
-//   - withVerse=true  (the header "Go to" button → showGotoPicker): books are
-//     ALPHABETICAL and a verse/range box + Go button sit at the bottom. Tapping a
-//     book or chapter only SELECTS it; Go (or Return in the box) commits, honoring
-//     the verse box. Committing via Go — not a grid tap — is deliberate: once you
-//     type a verse the iOS keyboard covers the grid, so Go stays reachable above it.
-//   - withVerse=false (the book-name / "Chapter N of M" tap → showChapterPicker):
-//     the usual quick picker — books in BIBLE order, no verse box, and tapping a
-//     chapter navigates immediately.
+//   - withVerse=true  (the header "Go to" button → showGotoPicker): a verse-range row
+//     (start + end number fields) + Go button sit at the bottom. Tapping a book or
+//     chapter only SELECTS it; Go commits, honoring the range. Committing via Go — not
+//     a grid tap — is deliberate: once the iOS keyboard is up it covers the grid, so Go
+//     stays reachable above it.
+//   - withVerse=false (the book-name / "Chapter N of M" tap → showChapterPicker): no
+//     verse row, and tapping a CHAPTER navigates immediately. (Tapping a BOOK still only
+//     selects it, so its chapters appear on the right.)
 //
 // On iOS the reading pane is a native UITextView floating above the Fyne canvas, so
 // (like every modal here) we hide it while the picker is up and restore on close.
@@ -61,12 +66,11 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		}
 	}
 
-	// Header "Go to" lists books alphabetically (find by name); the usual picker keeps
-	// canonical Bible order.
-	books := state.Bible.Books
-	if withVerse {
-		books = alphabeticalBooks(books)
-	}
+	// The book navigator groups books alphabetically (so "1/2/3 John" sit under J,
+	// "1 Kings" under K, etc.) for both flavours; the alphabet grid shows only the
+	// letters that actually have books.
+	sortedBooks := alphabeticalBooks(state.Bible.Books)
+	letters := bookLetters(sortedBooks)
 	selectedBook := state.CurrentBook
 	selectedChapter := state.CurrentChapter
 
@@ -82,11 +86,18 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		return -1
 	}
 
-	var verseEntry *numberEntry
+	var startEntry, endEntry *numberEntry
 	commit := func() {
-		verseText := ""
-		if verseEntry != nil {
-			verseText = verseEntry.Text
+		start, end := "", ""
+		if startEntry != nil {
+			start = strings.TrimSpace(startEntry.Text)
+		}
+		if endEntry != nil {
+			end = strings.TrimSpace(endEntry.Text)
+		}
+		verseText := start // "" → chapter top; "16" → v16; "16"+"18" → "16-18"
+		if start != "" && end != "" {
+			verseText = start + "-" + end
 		}
 		goToChapterWithVerse(state, selectedBook, selectedChapter, verseText)
 		closePicker()
@@ -110,29 +121,11 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	}
 	renderChapters()
 
-	list := widget.NewList(
-		func() int { return len(books) },
-		func() fyne.CanvasObject {
-			lbl := widget.NewLabel("")
-			lbl.Truncation = fyne.TextTruncateEllipsis
-			return lbl
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			lbl := o.(*widget.Label)
-			lbl.SetText(books[i])
-			if books[i] == selectedBook {
-				lbl.TextStyle = fyne.TextStyle{Bold: true}
-			} else {
-				lbl.TextStyle = fyne.TextStyle{}
-			}
-			lbl.Refresh()
-		},
-	)
-	list.OnSelected = func(id widget.ListItemID) {
-		if id < 0 || id >= len(books) {
-			return
-		}
-		selectedBook = books[id]
+	// Tapping a book SELECTS it (refreshes the chapter grid) but stays on the same
+	// letter's list, so re-picking a sibling is one tap; the user returns to the
+	// alphabet only via the back row. Never touches bookStage.
+	selectBookInPicker := func(book string) {
+		selectedBook = book
 		if selectedBook == state.CurrentBook {
 			selectedChapter = state.CurrentChapter
 		} else if nums := state.Bible.GetChapterNumbersForBook(selectedBook); len(nums) > 0 {
@@ -141,8 +134,69 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 			selectedChapter = 1
 		}
 		renderChapters()
-		list.Refresh()
 	}
+
+	// The left pane is a two-stage navigator swapped IN PLACE (bookPane.Objects +
+	// Refresh, the same idiom as renderChapters) — no popup rebuild, so the non-modal
+	// anchor and the keyboard never churn. Stage 0 = alphabet grid; stage 1 = the
+	// tapped letter's books with a back row to the alphabet.
+	bookPane := container.NewStack()
+	bookStage := 0
+	activeLetter := firstLetter(state.CurrentBook)
+	var renderBooks func()
+	renderBooks = func() {
+		if bookStage == 1 {
+			// "‹ J" back row: a chevron + the active letter, pinned above the book list.
+			back := widget.NewButtonWithIcon(string(activeLetter), theme.NavigateBackIcon(), func() {
+				bookStage = 0
+				renderBooks()
+			})
+			back.Importance = widget.LowImportance
+			back.Alignment = widget.ButtonAlignLeading
+			rows := container.NewVBox()
+			for _, b := range sortedBooks { // sortedBooks is alphabetical, so the bucket is ordered
+				if firstLetter(b) != activeLetter {
+					continue
+				}
+				book := b
+				btn := widget.NewButton(book, func() { selectBookInPicker(book) })
+				btn.Alignment = widget.ButtonAlignLeading
+				if book == selectedBook {
+					btn.Importance = widget.HighImportance
+				} else {
+					btn.Importance = widget.LowImportance
+				}
+				rows.Add(btn)
+			}
+			bookPane.Objects = []fyne.CanvasObject{
+				container.NewBorder(back, nil, nil, nil, container.NewVScroll(rows)),
+			}
+		} else {
+			head := canvas.NewText("Book", pal.TextMuted)
+			head.TextSize = 12
+			grid := container.NewGridWrap(fyne.NewSize(46, 40)) // same cell as the chapter grid
+			for _, r := range letters {
+				letter := r
+				btn := widget.NewButton(string(letter), func() {
+					activeLetter = letter
+					bookStage = 1
+					renderBooks()
+				})
+				if letter == firstLetter(selectedBook) {
+					btn.Importance = widget.HighImportance // guide the eye to the current book's letter
+				} else {
+					btn.Importance = widget.LowImportance
+				}
+				grid.Add(btn)
+			}
+			bookPane.Objects = []fyne.CanvasObject{
+				container.NewBorder(container.NewPadded(head), nil, nil, nil,
+					container.NewVScroll(container.NewPadded(grid))),
+			}
+		}
+		bookPane.Refresh()
+	}
+	renderBooks()
 
 	title := canvas.NewText("Go to", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -152,24 +206,31 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	divider := canvas.NewRectangle(pal.Border)
 	divider.SetMinSize(fyne.NewSize(1, 0))
 	left := container.New(fixedWidthLayout{width: 152},
-		container.NewBorder(nil, nil, nil, divider, list))
+		container.NewBorder(nil, nil, nil, divider, bookPane))
 
 	var bottom fyne.CanvasObject
 	if withVerse {
-		verseEntry = newNumberEntry()
-		verseEntry.SetPlaceHolder("verse — e.g. 16 or 16-18")
-		verseEntry.OnSubmitted = func(string) { commit() }
-		caret := withCaret(state, verseEntry)
-		// iOS number pads have no hyphen, so a "–" key sits beside the field for ranges.
-		dashBtn := widget.NewButton("–", func() {
-			verseEntry.SetText(verseEntry.Text + "-")
-			verseEntry.CursorColumn = len([]rune(verseEntry.Text))
-			cnv.Focus(verseEntry)
-		})
-		dashBtn.Importance = widget.LowImportance
+		// A verse RANGE as two number fields — "verse [16] to [18]" — so there's no
+		// hyphen to type (the iOS number pad has none) and no decoded glyph to puzzle
+		// over. Each field needs its OWN withCaret wrapper: the base theme zeroes the
+		// caret size globally, so a shared wrapper would leave one field caretless. The
+		// number pad has no return key, so Go is the only commit path.
+		startEntry = newNumberEntry()
+		startEntry.SetPlaceHolder("verse")
+		startEntry.OnSubmitted = func(string) { commit() }
+		endEntry = newNumberEntry()
+		endEntry.SetPlaceHolder("end")
+		endEntry.OnSubmitted = func(string) { commit() }
+		toLabel := canvas.NewText("to", pal.TextMuted)
+		toLabel.TextSize = 14
 		goBtn := widget.NewButton("Go", commit)
 		goBtn.Importance = widget.HighImportance
-		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, container.NewHBox(dashBtn, goBtn), inputFrame(caret, pal.Border)))
+		startFrame := inputFrame(withCaret(state, startEntry), pal.Border)
+		endCell := container.New(fixedWidthLayout{width: 64}, inputFrame(withCaret(state, endEntry), pal.Border))
+		// startFrame flexes (Border center); "to" + end field + Go stay compact on the
+		// right, keeping the row's MinSize bounded so the no-clamp non-modal card fits.
+		trailing := container.NewHBox(container.NewCenter(toLabel), endCell, goBtn)
+		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, trailing, startFrame))
 	}
 
 	body := container.NewBorder(header, bottom, left, nil, container.NewPadded(chapterPane))
@@ -201,38 +262,60 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		w, h := pickerSplitSize(cnv)
 		popup.Resize(fyne.NewSize(w, h))
 	}
-
-	for i, b := range books {
-		if b == selectedBook {
-			list.Select(i)
-			list.ScrollTo(i)
-			break
-		}
-	}
 }
 
-// showGotoPicker is the header "Go to" button's picker: alphabetical books + a verse
-// box. showChapterPicker is the usual book-name / chapter-line tap: Bible order, no
-// verse box, chapter-tap navigates immediately.
+// showGotoPicker is the header "Go to" button's picker (alphabet navigator + a verse-
+// range row). showChapterPicker is the book-name / chapter-line tap while reading (same
+// navigator, no verse row, chapter-tap navigates immediately).
 func showGotoPicker(state *AppState)    { gotoPickerModal(state, true) }
 func showChapterPicker(state *AppState) { gotoPickerModal(state, false) }
+
+// bookBase returns a book's sort name and leading ordinal, treating a leading number as
+// a book ordinal rather than a sort character: "1 John" -> ("john", 1), "Genesis" ->
+// ("genesis", 0). Shared by alphabeticalBooks (ordering) and firstLetter (grouping) so
+// the two can never diverge.
+func bookBase(b string) (string, int) {
+	if i := strings.IndexByte(b, ' '); i > 0 {
+		if n, err := strconv.Atoi(b[:i]); err == nil {
+			return strings.ToLower(b[i+1:]), n // "1 John" -> ("john", 1)
+		}
+	}
+	return strings.ToLower(b), 0
+}
+
+// firstLetter is the uppercase letter a book is grouped under in the alphabet grid,
+// after stripping a leading "N ": "1 John" -> 'J', "Genesis" -> 'G'.
+func firstLetter(b string) rune {
+	name, _ := bookBase(b)
+	for _, r := range name {
+		return unicode.ToUpper(r)
+	}
+	return ' '
+}
+
+// bookLetters returns the distinct first letters of the given (already alphabetical)
+// books in first-seen (A→Z) order — only letters that actually have books, so the
+// alphabet grid has no dead keys.
+func bookLetters(sorted []string) []rune {
+	seen := map[rune]bool{}
+	var out []rune
+	for _, b := range sorted {
+		if r := firstLetter(b); !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	return out
+}
 
 // alphabeticalBooks returns the books sorted by name, treating a leading number as a
 // book ordinal rather than a sort character: "1 John"/"2 John"/"3 John" group under
 // "John" (after the gospel of John), "1 Corinthians" under "Corinthians", etc.
 func alphabeticalBooks(books []string) []string {
 	out := append([]string(nil), books...)
-	base := func(b string) (string, int) {
-		if i := strings.IndexByte(b, ' '); i > 0 {
-			if n, err := strconv.Atoi(b[:i]); err == nil {
-				return strings.ToLower(b[i+1:]), n // "1 John" -> ("john", 1)
-			}
-		}
-		return strings.ToLower(b), 0
-	}
 	sort.Slice(out, func(i, j int) bool {
-		ni, oi := base(out[i])
-		nj, oj := base(out[j])
+		ni, oi := bookBase(out[i])
+		nj, oj := bookBase(out[j])
 		if ni != nj {
 			return ni < nj
 		}
