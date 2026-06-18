@@ -838,7 +838,7 @@ func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 
 // referenceChapterGrid is the right pane: the chapter-number grid for one book,
 // with the book name + chapter count above it. onPick fires with the chapter.
-func referenceChapterGrid(state *AppState, pal palette, book string, onPick func(int)) fyne.CanvasObject {
+func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) fyne.CanvasObject {
 	nums := state.Bible.GetChapterNumbersForBook(book)
 
 	head := canvas.NewText(fmt.Sprintf("%s · %d chapters", book, len(nums)), pal.TextMuted)
@@ -850,7 +850,7 @@ func referenceChapterGrid(state *AppState, pal palette, book string, onPick func
 	for _, c := range nums {
 		ch := c
 		btn := widget.NewButton(fmt.Sprintf("%d", ch), func() { onPick(ch) })
-		if book == state.CurrentBook && ch == state.CurrentChapter {
+		if ch == selected {
 			btn.Importance = widget.HighImportance
 		} else {
 			btn.Importance = widget.LowImportance
