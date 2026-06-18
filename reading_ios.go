@@ -55,6 +55,12 @@ static BOOL      gReadingHasRestore   = NO;
 // statics in this file.
 static NSRange gReadingHighlightRange = {NSNotFound, 0};
 
+// The single-tap "clear highlight" recognizer (created in bibleTextEnsureTV). It is
+// ENABLED only while a verse is highlighted; during ordinary reading it stays
+// disabled, so it never participates in touch handling and can add no latency to
+// scrolling. bibleTextApplyHTML toggles it to match gReadingHighlightRange.
+static UITapGestureRecognizer *gHighlightTap = nil;
+
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the standard selection menu and hands the selected
 // text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
@@ -115,10 +121,10 @@ static NSRange gReadingHighlightRange = {NSNotFound, 0};
 // programmatic contentOffset change (our own restore) sets neither flag.
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
     if (scrollView.dragging || scrollView.decelerating) {
+        // Disarm a pending restore the moment the user takes over the scroll. (We do
+        // NOT poke the edit menu here — it self-dismisses on scroll, and calling it
+        // every scroll frame is needless main-thread work during the gesture.)
         gReadingHasRestore = NO;
-        // UIEditMenuInteraction already self-dismisses on scroll; this is
-        // belt-and-suspenders across iOS point releases and costs nothing.
-        if (@available(iOS 16.0, *)) [self.hlMenu dismissMenu];
     }
 }
 
@@ -372,6 +378,8 @@ static void bibleTextEnsureTV(void) {
             hlTap.delaysTouchesEnded = NO;
             hlTap.delegate = tv;
             [tv addGestureRecognizer:hlTap];
+            hlTap.enabled = NO; // enabled only while a verse is highlighted (see applyHTML)
+            gHighlightTap = hlTap;
             if (@available(iOS 16.0, *)) {
                 tv.hlMenu = [[UIEditMenuInteraction alloc] initWithDelegate:tv];
                 [tv addInteraction:tv.hlMenu];
@@ -436,6 +444,9 @@ static BOOL bibleTextApplyHTML(NSData *data) {
                 usingBlock:^(id value, NSRange range, BOOL *stop) {
         if (value != nil) { gReadingHighlightRange = range; *stop = YES; }
     }];
+    // Only watch for a clear-highlight tap while something is actually highlighted —
+    // keeps the recognizer out of the touch path (and off the scroll) when reading.
+    if (gHighlightTap) gHighlightTap.enabled = (gReadingHighlightRange.location != NSNotFound);
     gReadingTV.attributedText = as;
     // Aggressive re-assert of the scroll position across the relayout + frame push.
     [gReadingTV layoutIfNeeded];
