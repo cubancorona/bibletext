@@ -56,9 +56,9 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 
 	sidebar := buildSidebar(state)
 
-	// A citation Goto field tops the reading column (the sidebar already has search).
-	readingColumn := container.NewBorder(buildGotoBar(state), nil, nil, nil, readingHost)
-	split := container.NewHSplit(sidebar, readingColumn)
+	// The Goto field is a popup opened from the header's centered "Go to" button
+	// (showGotoPopup); the reading column no longer reserves an inline row for it.
+	split := container.NewHSplit(sidebar, readingHost)
 	split.SetOffset(0.2)
 
 	body := container.NewBorder(buildHeader(state), nil, nil, nil, split)

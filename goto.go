@@ -20,30 +20,45 @@ var chapterTailPattern = regexp.MustCompile(`\s+\d.*$`)
 // maxGotoSuggestions caps the book chips so the row stays tidy on a phone.
 const maxGotoSuggestions = 4
 
-// buildGotoBar is a compact "jump to a reference" field for the top of the reading
-// view. Type a citation — "John 3:16", "Ps 23", "1 cor 13" — and press return to go
-// there; while you type the book name, matching books appear as tappable chips so
-// you don't have to spell the whole thing. It reuses the shared reference parser
-// (aliases + prefixes), so it understands the same forms the search box does.
-func buildGotoBar(state *AppState) fyne.CanvasObject {
+// showGotoPopup opens a small modal for jumping straight to a reference: type a
+// citation — "John 3:16", "Ps 23", "1 cor 13" — and press Go. While you type the
+// book name, matching books appear as tappable chips. It is opened from the centered
+// "Go to" button in the header, so the reading layout reserves no inline row.
+//
+// On iOS the reading pane is a native UITextView floating above the Fyne canvas, so
+// (like showReferencePicker) we hide it while the modal is up and restore on close.
+func showGotoPopup(state *AppState) {
+	cnv := pickerCanvas(state)
+	if cnv == nil {
+		return
+	}
 	pal := state.pal()
 
+	if state.hideReadingOverlay != nil {
+		state.hideReadingOverlay()
+	}
+	var popup *widget.PopUp
+	closePopup := func() {
+		if popup != nil {
+			popup.Hide()
+		}
+		if state.showReadingOverlay != nil {
+			state.showReadingOverlay()
+		}
+	}
+
 	entry := widget.NewEntry()
-	entry.PlaceHolder = "Go to a verse — e.g. John 3:16"
+	entry.PlaceHolder = "e.g. John 3:16, Ps 23, 1 Cor 13"
 
 	hint := canvas.NewText("", pal.TextMuted)
 	hint.TextSize = 12
 
-	// Chips live in a horizontal scroll so a book with many matches ("1/2/3 John")
-	// never pushes the field off-screen; the row collapses to nothing when empty.
 	suggestions := container.NewHBox()
 
 	var refreshSuggestions func(string)
-
 	jump := func() {
 		if goToReference(state, entry.Text) {
-			entry.SetText("")
-			refreshSuggestions("")
+			closePopup()
 			return
 		}
 		if strings.TrimSpace(entry.Text) != "" {
@@ -51,7 +66,6 @@ func buildGotoBar(state *AppState) fyne.CanvasObject {
 			hint.Refresh()
 		}
 	}
-
 	refreshSuggestions = func(text string) {
 		if hint.Text != "" {
 			hint.Text = ""
@@ -67,9 +81,8 @@ func buildGotoBar(state *AppState) fyne.CanvasObject {
 			return
 		}
 		matches := filterBooks(state.Bible.Books, portion)
-		// A single exact match needs no chip — just press return.
 		if len(matches) == 1 && strings.EqualFold(matches[0], portion) {
-			suggestions.Refresh()
+			suggestions.Refresh() // a single exact match needs no chip
 			return
 		}
 		for i, b := range matches {
@@ -80,9 +93,7 @@ func buildGotoBar(state *AppState) fyne.CanvasObject {
 			chip := widget.NewButton(book, func() {
 				entry.SetText(book + " ")
 				entry.CursorColumn = len([]rune(entry.Text))
-				if state.window != nil {
-					state.window.Canvas().Focus(entry)
-				}
+				cnv.Focus(entry)
 				entry.Refresh()
 				refreshSuggestions(entry.Text)
 			})
@@ -91,18 +102,40 @@ func buildGotoBar(state *AppState) fyne.CanvasObject {
 		}
 		suggestions.Refresh()
 	}
-
 	entry.OnChanged = refreshSuggestions
 	entry.OnSubmitted = func(string) { jump() }
 
-	goBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), jump)
-	goBtn.Importance = widget.LowImportance
+	goBtn := widget.NewButtonWithIcon("Go", theme.NavigateNextIcon(), jump)
+	goBtn.Importance = widget.HighImportance
 
 	field := container.NewBorder(nil, nil, nil, goBtn, inputFrame(entry, pal.Border))
 
-	return container.NewVBox(
+	title := canvas.NewText("Go to a verse", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 18
+	header := pickerHeader(title, closePopup)
+
+	body := container.NewVBox(
+		header,
 		container.NewPadded(field),
 		container.NewHScroll(suggestions),
-		hint,
+		container.NewPadded(hint),
 	)
+
+	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
+	popup.Show()
+	w := minF(cnv.Size().Width-40, 460)
+	popup.Resize(fyne.NewSize(w, popup.MinSize().Height))
+
+	// Focus the field so the soft keyboard appears immediately on a phone.
+	cnv.Focus(entry)
+}
+
+// gotoButton is the single centered control in the header that opens showGotoPopup.
+// It is shorter than the title+subtitle column on its left, so dropping it into the
+// header's center slot doesn't change the bar's height.
+func gotoButton(state *AppState) fyne.CanvasObject {
+	btn := widget.NewButtonWithIcon("Go to", theme.NavigateNextIcon(), func() { showGotoPopup(state) })
+	btn.Importance = widget.LowImportance
+	return container.NewCenter(btn)
 }
