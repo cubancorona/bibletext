@@ -404,8 +404,10 @@ static void bibleTextEnsureTV(void) {
             hlTap.enabled = NO; // enabled only while a verse is highlighted (see applyHTML)
             gHighlightTap = hlTap;
             if (@available(iOS 16.0, *)) {
+                // Created but NOT attached here — btIOSSetHighlightUIEnabled adds the
+                // interaction only while a verse is highlighted, keeping it (and the
+                // recognizers it installs) off the touch path during ordinary reading.
                 tv.hlMenu = [[UIEditMenuInteraction alloc] initWithDelegate:tv];
-                [tv addInteraction:tv.hlMenu];
             }
             gReadingTV = tv;
             NSLog(@"bibletext: ensureTV — created UITextView, attaching to window %@", win);
@@ -435,6 +437,24 @@ static void bibleTextEnsureTV(void) {
 // it to the reading text view, returning YES on success. MUST run on the main
 // thread. Returns NO (without touching the view) if the import fails so the
 // caller can retry — see bibleTextTVSetHTML.
+// btIOSSetHighlightUIEnabled attaches the clear-highlight tap recognizer + edit-menu
+// interaction ONLY while a verse is highlighted. During ordinary reading both are
+// fully off the text view's touch pipeline, so they add nothing to scrolling — a
+// UIEditMenuInteraction installs its own gesture recognizers that otherwise process
+// every touch (including scroll pans). Called from bibleTextApplyHTML.
+static void btIOSSetHighlightUIEnabled(BOOL on) {
+    if (gReadingTV == nil) return;
+    if (gHighlightTap) gHighlightTap.enabled = on;
+    if (@available(iOS 16.0, *)) {
+        HBReadingTextView *tv = (HBReadingTextView *)gReadingTV;
+        UIEditMenuInteraction *m = tv.hlMenu;
+        if (m == nil) return;
+        BOOL attached = [tv.interactions containsObject:m];
+        if (on && !attached) [tv addInteraction:m];
+        else if (!on && attached) [tv removeInteraction:m];
+    }
+}
+
 static BOOL bibleTextApplyHTML(NSData *data) {
     if (gReadingTV == nil || data == nil) return NO;
     NSDictionary *opts = @{
@@ -467,9 +487,10 @@ static BOOL bibleTextApplyHTML(NSData *data) {
                 usingBlock:^(id value, NSRange range, BOOL *stop) {
         if (value != nil) { gReadingHighlightRange = range; *stop = YES; }
     }];
-    // Only watch for a clear-highlight tap while something is actually highlighted —
-    // keeps the recognizer out of the touch path (and off the scroll) when reading.
-    if (gHighlightTap) gHighlightTap.enabled = (gReadingHighlightRange.location != NSNotFound);
+    // Attach the clear-highlight tap recognizer + edit-menu interaction ONLY while a
+    // verse is highlighted; during ordinary reading they're off the touch path
+    // entirely, so they add nothing to scrolling.
+    btIOSSetHighlightUIEnabled(gReadingHighlightRange.location != NSNotFound);
     gReadingTV.attributedText = as;
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
     // Re-assert the scroll position across the relayout + frame push.
