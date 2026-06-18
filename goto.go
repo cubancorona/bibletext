@@ -326,15 +326,15 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 
 		// Lift the verse row above the soft keyboard while a verse field is focused, by
 		// growing kbInset — deferred off the focus event (so it doesn't re-enter layout)
-		// and guarded so it never touches a closed popup. The number pad is roughly a fixed
-		// height; estimate it from the screen.
+		// and guarded so it never touches a closed popup. The iOS number pad is ~a third
+		// of the screen; tuned so the verse row sits JUST above it, not floating high.
 		if kbInset != nil {
-			kb := cnv.Size().Height * 0.40
-			if kb > 360 {
-				kb = 360
+			kb := cnv.Size().Height * 0.33
+			if kb > 320 {
+				kb = 320
 			}
-			if kb < 260 {
-				kb = 260
+			if kb < 220 {
+				kb = 220
 			}
 			startEntry.onFocus = func(bool) {
 				time.AfterFunc(50*time.Millisecond, func() {
