@@ -19,7 +19,8 @@ import (
 // numberEntry is an Entry that requests the iOS number pad. iOS number pads have no
 // hyphen, so the Goto picker takes a verse range as TWO number fields (start + end)
 // rather than one hyphenated field. onFocus fires on focus gain/loss so the picker can
-// shrink to clear the keyboard only while a field is being typed into.
+// lift the verse row above the soft keyboard (by growing an internal spacer — never by
+// resizing the popup, which would self-dismiss).
 type numberEntry struct {
 	widget.Entry
 	onFocus func(focused bool)
@@ -264,7 +265,8 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	left := container.New(fixedWidthLayout{width: 152},
 		container.NewBorder(nil, nil, nil, divider, leftPane))
 
-	var bottom fyne.CanvasObject
+	var verseRow fyne.CanvasObject
+	var kbInset *canvas.Rectangle // grows to lift the verse row above the soft keyboard
 	if withVerse {
 		// A verse RANGE as two number fields — "verse [16] to [18]" — so there's no
 		// hyphen to type (the iOS number pad has none) and no decoded glyph to puzzle
@@ -286,66 +288,75 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// startFrame flexes (Border center); "to" + end field + Go stay compact on the
 		// right, keeping the row's MinSize bounded so the no-clamp non-modal card fits.
 		trailing := container.NewHBox(container.NewCenter(toLabel), endCell, goBtn)
-		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, trailing, startFrame))
+		row := container.NewPadded(container.NewBorder(nil, nil, nil, trailing, startFrame))
+		// kbInset is a transparent spacer BELOW the verse row. While a verse field is
+		// focused we grow it to the keyboard's height, lifting the verse row above the
+		// soft keyboard — by shifting content INSIDE the card, never by resizing the
+		// popup. The card stays full-screen, so a tap can never land "outside" it and the
+		// picker can't self-dismiss (the bug that came from resizing on focus).
+		kbInset = canvas.NewRectangle(color.Transparent)
+		verseRow = container.NewVBox(row, kbInset)
 	}
 
-	body := container.NewBorder(header, bottom, left, nil, container.NewPadded(chapterPane))
+	// Verse row at the BOTTOM (above the inset spacer). Full-screen card; the popup is
+	// never resized — see the popup section.
+	body := container.NewBorder(header, verseRow, left, nil, container.NewPadded(chapterPane))
 	card := surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{})
 
-	if withVerse {
-		// Top-anchored, non-modal so the bottom verse box stays ABOVE the iOS
-		// keyboard. A modal popup always centers and ignores Move (so the verse box
-		// would land under the keyboard, which the canvas doesn't shrink for); a
-		// non-modal popup honors Move and dismisses on a tap outside the card.
+	if withVerse && fyne.CurrentDevice().IsMobile() {
+		// MOBILE verse picker: a non-modal popup anchored at the top, opened near
+		// FULL-SCREEN so the whole alphabet grid, book list and chapter grid are visible.
+		// The popup is NEVER resized — resizing moved the bottom verse field out from under
+		// the in-flight tap and Fyne re-targeted the tap to the popup background (Hide),
+		// self-dismissing the picker. Instead, focusing a verse field grows kbInset to lift
+		// the verse row above the keyboard; the full-screen card means no tap is ever
+		// "outside" it, so it can't self-dismiss.
 		popup = widget.NewPopUp(card, cnv)
-		// Anchor the top just below the safe-area inset; the card grows downward from
-		// there (the renderer clamps X to the canvas anyway).
+		w, h := pickerVerseSize(cnv)
+		popup.Resize(fyne.NewSize(w, h))
 		topY := float32(12)
 		if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 			topY = pos.Y + 12
 		}
-		// resizePicker swaps between near-full-screen (keyboard down → the whole grids
-		// and lists are visible) and the upper ~55% (keyboard up → the bottom verse box
-		// clears the number pad), staying top-anchored + centered. A non-modal popup
-		// honors Move/Resize, so this is a cheap re-layout, not a rebuild.
-		resizePicker := func(keyboard bool) {
-			w, h := pickerVerseSize(cnv, keyboard)
-			popup.Resize(fyne.NewSize(w, h))
-			x := (cnv.Size().Width - w) / 2
-			if x < 0 {
-				x = 0
-			}
-			popup.Move(fyne.NewPos(x, topY))
-		}
-		// Shrink only while a verse field is focused (the keyboard is up). ALWAYS run the
-		// resize off the event handler (AfterFunc + fyne.Do): resizing the popup
-		// synchronously inside FocusGained re-enters Fyne's layout during its own tap/focus
-		// processing AND moves the field out from under the in-flight tap, which tore the
-		// picker down ("crashes away" when tapping the verse box). The brief delay also lets
-		// moving start↔end settle so we only grow back when neither field holds focus.
-		onVerseFocus := func(bool) {
-			time.AfterFunc(60*time.Millisecond, func() {
-				fyne.Do(func() {
-					f := cnv.Focused()
-					resizePicker(f == startEntry || f == endEntry)
-				})
-			})
-		}
-		startEntry.onFocus = onVerseFocus
-		endEntry.onFocus = onVerseFocus
-
-		w, h := pickerVerseSize(cnv, false) // open near full-screen
-		popup.Resize(fyne.NewSize(w, h))
 		x := (cnv.Size().Width - w) / 2
 		if x < 0 {
 			x = 0
 		}
 		popup.ShowAtPosition(fyne.NewPos(x, topY))
-		// A non-modal popup also closes on a tap OUTSIDE the card (Fyne's PopUp.Tapped →
-		// Hide), which bypasses closePicker — so without this the reading overlay would
-		// stay suppressed (hideReadingOverlay latched it down) and the reading pane would
-		// go blank until another modal cycled through closePicker. Poll until the popup is
-		// gone by ANY route, then restore the overlay (idempotent with closePicker).
+
+		// Lift the verse row above the soft keyboard while a verse field is focused, by
+		// growing kbInset — deferred off the focus event (so it doesn't re-enter layout)
+		// and guarded so it never touches a closed popup. The number pad is roughly a fixed
+		// height; estimate it from the screen.
+		if kbInset != nil {
+			kb := cnv.Size().Height * 0.40
+			if kb > 360 {
+				kb = 360
+			}
+			if kb < 260 {
+				kb = 260
+			}
+			startEntry.onFocus = func(bool) {
+				time.AfterFunc(50*time.Millisecond, func() {
+					fyne.Do(func() {
+						if popup == nil || !popup.Visible() {
+							return
+						}
+						h := float32(0)
+						if f := cnv.Focused(); f == startEntry || f == endEntry {
+							h = kb
+						}
+						kbInset.SetMinSize(fyne.NewSize(0, h))
+						body.Refresh()
+					})
+				})
+			}
+			endEntry.onFocus = startEntry.onFocus
+		}
+		// A non-modal popup also closes on a tap OUTSIDE the card (PopUp.Tapped → Hide),
+		// which bypasses closePicker — so the reading overlay would stay suppressed and the
+		// pane blank. Poll until the popup is gone by ANY route, then restore the overlay
+		// (idempotent with closePicker).
 		var watchDismiss func()
 		watchDismiss = func() {
 			if popup == nil || !popup.Visible() {
@@ -358,6 +369,9 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		}
 		time.AfterFunc(200*time.Millisecond, func() { fyne.Do(watchDismiss) })
 	} else {
+		// DESKTOP (and the non-verse chapter picker on any platform): a normal centered
+		// modal. No soft keyboard, so none of the top-anchor / full-screen / tap-dismiss
+		// machinery applies.
 		popup = widget.NewModalPopUp(card, cnv)
 		popup.Show()
 		w, h := pickerSplitSize(cnv)
