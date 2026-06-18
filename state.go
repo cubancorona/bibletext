@@ -1,7 +1,6 @@
 package bibletext
 
 import (
-	"sort"
 	"strings"
 	"time"
 
@@ -291,8 +290,10 @@ type bookChapters struct {
 }
 
 // groupVisitsByBook consolidates visits so each book appears once with its
-// chapters (sorted, de-duplicated), keeping books in most-recent-first order.
-// e.g. visits to John 5, Genesis 1, John 1, John 3 -> "John 1,3,5" then "Genesis 1".
+// chapters, de-duplicated and in most-recently-read-first order (visits arrive
+// newest-first, so append order already is). Books stay in most-recent-first
+// order too. e.g. visits John 5, Genesis 1, John 1, John 3 -> "John 5,1,3" then
+// "Genesis 1".
 func groupVisitsByBook(visits []ChapterVisit) []bookChapters {
 	index := make(map[string]int)
 	seen := make(map[string]map[int]bool)
@@ -309,9 +310,6 @@ func groupVisitsByBook(visits []ChapterVisit) []bookChapters {
 			seen[v.Book][v.Chapter] = true
 			groups[gi].Chapters = append(groups[gi].Chapters, v.Chapter)
 		}
-	}
-	for i := range groups {
-		sort.Ints(groups[i].Chapters)
 	}
 	return groups
 }
