@@ -161,7 +161,9 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 						continue
 					}
 					book := b
-					btn := widget.NewButton(book, func() { selectBookInPicker(book) })
+					// renderBooks re-highlights the tapped book (HighImportance); the
+					// stage is unchanged, so the list stays put and the chapter grid updates.
+					btn := widget.NewButton(book, func() { selectBookInPicker(book); renderBooks() })
 					btn.Alignment = widget.ButtonAlignLeading
 					if book == selectedBook {
 						btn.Importance = widget.HighImportance
