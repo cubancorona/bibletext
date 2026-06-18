@@ -63,7 +63,7 @@ type AppState struct {
 	CurrentTab int
 
 	// aiSearchMode is the Search tab's mode: false = keyword search, true = the
-	// natural-language "Ask AI" passage search. Kept on state so the chosen mode
+	// natural-language "Ask" passage search. Kept on state so the chosen mode
 	// survives the window rebuilds that tab switches trigger.
 	aiSearchMode bool
 

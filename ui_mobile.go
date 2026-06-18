@@ -231,7 +231,7 @@ func buildMobileBooksTab(state *AppState, switchToRead func()) fyne.CanvasObject
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, list)
 }
 
-// buildMobileSearchTab is the full-screen search experience. A "Find / Ask AI"
+// buildMobileSearchTab is the full-screen search experience. A "Find / Ask"
 // toggle switches the single field between keyword search (live results as you
 // type; an exact reference like "John 3:16" jumps on Submit) and natural-language
 // AI search ("what did God say to Jonah?"), which returns relevant passages.
@@ -278,7 +278,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 
 	// --- Ask-AI search. ---
 	aiEntry := widget.NewEntry()
-	aiEntry.SetPlaceHolder("Ask for passages — e.g. what did God say to Jonah?")
+	aiEntry.SetPlaceHolder("Ask for passages…")
 	aiEntry.SetText(state.aiSearchQuery) // restore the last question on tab return
 
 	var aiBar *widget.ProgressBarInfinite
@@ -356,8 +356,15 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	})
 	clearAskBtn.Importance = widget.LowImportance
 
+	// A quiet standing disclaimer beneath the Ask field (shown only in Ask mode).
+	disc := canvas.NewText("AI is used · results may be imperfect", pal.TextMuted)
+	disc.TextSize = 12
+	disc.Alignment = fyne.TextAlignCenter
+	aiDisclaimer := container.NewPadded(disc)
+
 	applyMode = func() {
 		if state.aiSearchMode {
+			aiDisclaimer.Show()
 			fieldHost.Objects = []fyne.CanvasObject{
 				container.NewBorder(nil, nil, nil, container.NewHBox(clearAskBtn, askBtn), inputFrame(withCaret(state, aiEntry), pal.Border)),
 			}
@@ -371,6 +378,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 				resultsHost.Objects = []fyne.CanvasObject{aiSearchPromptView(state)}
 			}
 		} else {
+			aiDisclaimer.Hide()
 			stopAIBar()
 			fieldHost.Objects = []fyne.CanvasObject{
 				container.NewBorder(nil, nil, nil, clearKwBtn, inputFrame(withCaret(state, searchEntry), pal.Border)),
@@ -387,13 +395,13 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		applyMode()
 	})
 
-	header := container.NewVBox(toggle, fieldHost)
-	applyMode() // initialise to the persisted mode
+	header := container.NewVBox(toggle, fieldHost, aiDisclaimer)
+	applyMode() // initialise to the persisted mode (also shows/hides the AI disclaimer)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
 }
 
 // buildSearchModeToggle is a two-segment control switching the Search tab between
-// keyword ("Find") and natural-language ("Ask AI") search; the active half is filled.
+// keyword ("Find") and natural-language ("Ask") search; the active half is filled.
 func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
 	var find, ask *widget.Button
 	apply := func(ai bool) {
@@ -408,7 +416,7 @@ func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasO
 		ask.Refresh()
 	}
 	find = widget.NewButton("Find", func() { apply(false); onSelect(false) })
-	ask = widget.NewButton("Ask AI", func() { apply(true); onSelect(true) })
+	ask = widget.NewButton("Ask", func() { apply(true); onSelect(true) })
 	apply(state.aiSearchMode)
 	return container.NewGridWithColumns(2, find, ask)
 }
