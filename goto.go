@@ -174,7 +174,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		} else {
 			head := canvas.NewText("Book", pal.TextMuted)
 			head.TextSize = 12
-			grid := container.NewGridWrap(fyne.NewSize(46, 40)) // same cell as the chapter grid
+			grid := container.NewGridWrap(fyne.NewSize(40, 34)) // dense → 3 cols, all letters
 			for _, r := range letters {
 				letter := r
 				btn := widget.NewButton(string(letter), func() {
@@ -191,7 +191,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 			}
 			bookPane.Objects = []fyne.CanvasObject{
 				container.NewBorder(container.NewPadded(head), nil, nil, nil,
-					container.NewVScroll(container.NewPadded(grid))),
+					container.NewVScroll(denseGrid(state, grid))),
 			}
 		}
 		bookPane.Refresh()
@@ -397,6 +397,32 @@ func withCaret(state *AppState, e fyne.CanvasObject) fyne.CanvasObject {
 		base = state.theme
 	}
 	return container.NewThemeOverride(e, caretTheme{Theme: base})
+}
+
+// denseGridTheme tightens the inter-cell gap (SizeNamePadding) and button inner
+// padding for the picker's letter + chapter grids, so more letters/chapters fit
+// without scrolling. The base theme's padding is a roomy 7pt, which (with GridWrap's
+// per-cell spacing) wastes horizontal room and forces too few columns; 3pt packs the
+// grid tightly while the cells themselves stay finger-sized.
+type denseGridTheme struct{ fyne.Theme }
+
+func (t denseGridTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNamePadding:
+		return 3
+	case theme.SizeNameInnerPadding:
+		return 4
+	}
+	return t.Theme.Size(name)
+}
+
+// denseGrid wraps a picker grid so its cells pack tightly (see denseGridTheme).
+func denseGrid(state *AppState, obj fyne.CanvasObject) fyne.CanvasObject {
+	var base fyne.Theme = theme.DefaultTheme()
+	if state.theme != nil {
+		base = state.theme
+	}
+	return container.NewThemeOverride(obj, denseGridTheme{Theme: base})
 }
 
 // smallChipTheme shrinks a button's text + padding so it reads as a small, quiet
