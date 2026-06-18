@@ -856,13 +856,13 @@ func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 	}
 }
 
-// referenceChapterGrid is the right pane: the chapter-number grid for one book,
-// with the book name + chapter count above it. onPick fires with the chapter.
-// referenceChapterGrid returns the chapter grid plus a reselect(chapter) callback that
-// re-highlights the selected chapter IN PLACE (just the buttons' importance), so the
-// caller can change selection without rebuilding the grid — rebuilding re-creates the
-// theme override and visibly reflows the cells.
-func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(int)) {
+// referenceChapterGrid is the right pane: the chapter-number grid for one book, with the
+// book name + chapter count above it. onPick fires with the chapter. It returns the grid,
+// a reselect(chapter) callback that re-highlights the selected chapter IN PLACE (just the
+// buttons' importance — rebuilding would re-create the theme override and reflow the
+// cells), and scrollToSelected() which scrolls the grid so the selected chapter is visible
+// (used when the keyboard shrinks the pane).
+func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(int), func()) {
 	nums := state.Bible.GetChapterNumbersForBook(book)
 
 	head := canvas.NewText(fmt.Sprintf("%s · %d chapters", book, len(nums)), pal.TextMuted)
@@ -883,7 +883,9 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 		grid.Add(btn)
 	}
 
+	cur := selected
 	reselect := func(sel int) {
+		cur = sel
 		for ch, b := range btns {
 			imp := widget.LowImportance
 			if ch == sel {
@@ -896,9 +898,30 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 		}
 	}
 
-	obj := container.NewBorder(container.NewPadded(head), nil, nil, nil,
-		container.NewVScroll(denseGrid(state, grid)))
-	return obj, reselect
+	scroll := container.NewVScroll(denseGrid(state, grid))
+	scrollToSelected := func() { scrollChildIntoView(scroll, btns[cur]) }
+
+	obj := container.NewBorder(container.NewPadded(head), nil, nil, nil, scroll)
+	return obj, reselect, scrollToSelected
+}
+
+// scrollChildIntoView scrolls a VScroll so target (a descendant of its content) is
+// visible — only when it's currently outside the viewport, so it never jumps a selection
+// that's already on screen. Used when the keyboard shrinks the Goto picker's panes.
+func scrollChildIntoView(scroll *container.Scroll, target fyne.CanvasObject) {
+	if scroll == nil || target == nil {
+		return
+	}
+	top := target.Position().Y
+	bottom := top + target.Size().Height
+	viewTop := scroll.Offset.Y
+	viewBottom := viewTop + scroll.Size().Height
+	switch {
+	case top < viewTop:
+		scroll.ScrollToOffset(fyne.NewPos(0, top))
+	case bottom > viewBottom:
+		scroll.ScrollToOffset(fyne.NewPos(0, bottom-scroll.Size().Height))
+	}
 }
 
 // pickerHeader is a stage's top row: a leading element (title, or back+title) on
