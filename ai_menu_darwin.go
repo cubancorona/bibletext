@@ -27,6 +27,11 @@ import "fyne.io/fyne/v2"
 //export bibleTextReadingScrolled
 func bibleTextReadingScrolled() {
 	if state := activeAIState; state != nil {
+		// A genuine user scroll (this callback only fires on drag/decelerate end,
+		// never on our own programmatic restore) means any pending restore target is
+		// now obsolete — drop it so a later same-chapter re-push won't yank the
+		// reader back. The native side already disarmed its copy in scrollViewDidScroll.
+		state.restore = nil
 		flushReadingStateAsync(state)
 	}
 }
