@@ -60,6 +60,12 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		rebuildWindow(state)
 	}
 	state.surfaceReading = gotoReadTab
+	// "Back to results" returns to the real Search tab (restoring its query, results
+	// and scroll position) rather than showing results inline in the reading pane.
+	state.surfaceSearch = func() {
+		state.CurrentTab = 2
+		rebuildWindow(state)
+	}
 
 	// On mobile we don't have a sidebar to re-highlight; syncSidebar is a no-op.
 	state.syncSidebar = func() {}
@@ -289,6 +295,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		if q == "" {
 			return
 		}
+		state.searchScrollY = 0 // new results start at the top
 		if !hasAIKey(state) {
 			resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
 			resultsHost.Refresh()

@@ -40,6 +40,9 @@ type AppState struct {
 	aiSearchActive  bool
 	aiSearchQuery   string
 	aiSearchResults []Verse
+	// searchScrollY remembers the results list's scroll offset so returning to the
+	// Search tab lands where you left off. Reset to 0 when a new search runs.
+	searchScrollY float32
 
 	HighlightedBook     string
 	HighlightedChapter  int
@@ -83,6 +86,9 @@ type AppState struct {
 	// focus. No-op on desktop (the reading pane is always visible alongside);
 	// on mobile it switches the bottom tab bar to Read.
 	surfaceReading func()
+	// surfaceSearch returns to the real Search tab (mobile only; nil on desktop,
+	// where search results live in the reading pane). Used by "back to results".
+	surfaceSearch func()
 	// hideReadingOverlay / showReadingOverlay let shared code (e.g. the chapter
 	// picker popup) temporarily hide the iOS native reading overlay (a
 	// UITextView that floats above the Fyne canvas, so it would otherwise cover
@@ -479,6 +485,7 @@ func newSearchDebouncer(state *AppState) (onChanged func(string), stop func()) {
 func runSearch(state *AppState, trimmed string) {
 	state.ActiveSearchQuery = trimmed
 	state.aiSearchActive = false // a keyword search switches the results context
+	state.searchScrollY = 0      // new results start at the top
 	state.IsSearching = true
 	state.CanReturnToSearchResults = false
 	clearHighlightedVerse(state)

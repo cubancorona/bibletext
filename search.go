@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"sort"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -13,6 +14,19 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// trackSearchScroll remembers a results list's scroll position in state and restores
+// it once the list has laid out — so returning to the Search tab lands where you left
+// off. A new search resets state.searchScrollY to 0, so live/typed results start at top.
+func trackSearchScroll(state *AppState, scroll *container.Scroll) {
+	scroll.OnScrolled = func(p fyne.Position) { state.searchScrollY = p.Y }
+	if state.searchScrollY > 0 {
+		target := state.searchScrollY
+		time.AfterFunc(60*time.Millisecond, func() {
+			fyne.Do(func() { scroll.ScrollToOffset(fyne.NewPos(0, target)) })
+		})
+	}
+}
 
 func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	// When the current results context is the AI search, render its (state-held)
@@ -62,6 +76,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 
 	column := container.New(&readingColumn{maxWidth: 820}, container.NewVBox(rows...))
 	scroll := container.NewVScroll(column)
+	trackSearchScroll(state, scroll)
 	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
 
 	head := container.NewVBox(title, subLabel, widget.NewSeparator())
@@ -125,6 +140,7 @@ func aiResultsView(state *AppState, query string, verses []Verse) fyne.CanvasObj
 	}
 	column := container.New(&readingColumn{maxWidth: 820}, container.NewVBox(rows...))
 	scroll := container.NewVScroll(column)
+	trackSearchScroll(state, scroll)
 	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
 
 	note := canvas.NewText("AI-suggested passages — read each in context.", pal.TextMuted)
