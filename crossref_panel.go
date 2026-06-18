@@ -52,7 +52,18 @@ func showCrossRefs(state *AppState, text string) {
 	body := container.NewStack(scroll)
 
 	var popup *widget.PopUp
+	// Stop the spinner on every exit from the thinking state — a running
+	// ProgressBarInfinite pins the canvas dirty and repaints the whole tree every
+	// frame, which lingers past dismissal and competes with scrolling.
+	var thinkingBar *widget.ProgressBarInfinite
+	stopThinking := func() {
+		if thinkingBar != nil {
+			thinkingBar.Stop()
+			thinkingBar = nil
+		}
+	}
 	closePanel := func() {
+		stopThinking()
 		if popup != nil {
 			popup.Hide()
 		}
@@ -72,6 +83,7 @@ func showCrossRefs(state *AppState, text string) {
 		body.Refresh()
 	}
 	setMessage := func(msg string) {
+		stopThinking()
 		lbl := widget.NewLabel(msg)
 		lbl.Wrapping = fyne.TextWrapWord
 		lbl.Alignment = fyne.TextAlignCenter
@@ -79,11 +91,13 @@ func showCrossRefs(state *AppState, text string) {
 	}
 	setThinking := func() {
 		bar := widget.NewProgressBarInfinite()
+		thinkingBar = bar
 		msg := widget.NewLabel("Finding related passages…")
 		msg.Alignment = fyne.TextAlignCenter
 		setCentered(container.NewVBox(msg, bar))
 	}
 	showRefs := func(refs []crossRef) {
+		stopThinking()
 		if len(refs) == 0 {
 			setMessage("No cross-references for this selection.")
 			return

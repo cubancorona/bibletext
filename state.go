@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 )
 
 // AppState holds everything the UI renders from, plus hooks the widgets install
@@ -98,6 +99,22 @@ type AppState struct {
 	// every rebuild forces a full canvas theme-walk + relayout (a real cost on a
 	// phone, on every tab tap / navigation).
 	appliedTheme fyne.Theme
+
+	// loadingBar is the startup spinner (buildLoadingView). It animates every frame,
+	// which pins the canvas dirty and forces full-tree repaints; once the Bible has
+	// loaded and the reading view replaces it, the orphaned animation would keep
+	// running (and the canvas repainting) until renderer-cache expiry. stopLoadingBar
+	// halts it the moment we leave the loading phase.
+	loadingBar *widget.ProgressBarInfinite
+}
+
+// stopLoadingBar halts the startup spinner's animation (safe to call repeatedly /
+// when absent) so it stops pinning the canvas dirty once loading is done.
+func (s *AppState) stopLoadingBar() {
+	if s.loadingBar != nil {
+		s.loadingBar.Stop()
+		s.loadingBar = nil
+	}
 }
 
 // loadPhase is the startup state machine for the background Bible load.

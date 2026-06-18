@@ -88,6 +88,9 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 	go func() {
 		loaded, err := loadStateData()
 		fyne.Do(func() {
+			// Leaving the loading phase either way — stop the spinner so its
+			// animation doesn't keep the canvas repainting after it's off-screen.
+			state.stopLoadingBar()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "BibleText failed to load:", err)
 				state.loadPhase = loadFailed

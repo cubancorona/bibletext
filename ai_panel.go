@@ -84,6 +84,19 @@ func showAIPanel(state *AppState, action, selectedText string) {
 	var current string
 	var popup *widget.PopUp
 
+	// A running ProgressBarInfinite ticks an animation every frame, which keeps the
+	// whole canvas marked dirty and forces a full-tree repaint at ~20fps — that
+	// competes with scrolling and lingers (until renderer-cache expiry) if the panel
+	// is dismissed mid-spin. Track the live spinner and Stop() it on every exit from
+	// the thinking state so the animation never outlives the panel.
+	var thinkingBar *widget.ProgressBarInfinite
+	stopThinking := func() {
+		if thinkingBar != nil {
+			thinkingBar.Stop()
+			thinkingBar = nil
+		}
+	}
+
 	copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), func() {
 		if current != "" {
 			state.window.Clipboard().SetContent(current)
@@ -93,6 +106,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 	copyBtn.Disable()
 
 	closeBtn := widget.NewButton("Close", func() {
+		stopThinking()
 		if popup != nil {
 			popup.Hide()
 		}
@@ -112,6 +126,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 	// the (empty) answer scroll; setResult fills the scroll and drops the overlay.
 	setThinking := func() {
 		bar := widget.NewProgressBarInfinite()
+		thinkingBar = bar
 		msg := widget.NewLabel("Reading the passage…")
 		msg.Alignment = fyne.TextAlignCenter
 		body.Objects = []fyne.CanvasObject{
@@ -121,6 +136,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 		body.Refresh()
 	}
 	setResult := func(text string) {
+		stopThinking()
 		current = text
 		copyBtn.Enable()
 		answer.ParseMarkdown(text)
@@ -158,6 +174,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 
 	var startFetch func()
 	setError := func(msg string, needsSettings bool) {
+		stopThinking()
 		copyBtn.Disable()
 		answer.ParseMarkdown("")
 		lbl := widget.NewLabel(msg)
@@ -166,6 +183,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 		var actBtn *widget.Button
 		if needsSettings {
 			actBtn = widget.NewButton("Open AI settings", func() {
+				stopThinking()
 				if popup != nil {
 					popup.Hide()
 				}

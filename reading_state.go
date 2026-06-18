@@ -28,6 +28,7 @@ package bibletext
 
 import (
 	"encoding/json"
+	"sync/atomic"
 
 	"fyne.io/fyne/v2"
 )
@@ -174,6 +175,14 @@ func updateCurrentVisitAnchor(s *AppState, verse int, delta, frac float64) {
 	h.Verse, h.Delta, h.Frac = verse, delta, frac
 }
 
+// readingStateWriting bounds the background prefs writes to one at a time. A fast
+// scroller lifts their finger many times; without this, each scroll-end spawned a
+// new writeReadingState goroutine, so several JSON-encode+write passes could pile
+// up and race on the same preference key. When a write is already in flight we drop
+// the newer one — the next scroll-end (or the synchronous lifecycle flush) persists
+// the latest position anyway.
+var readingStateWriting atomic.Bool
+
 // flushReadingStateAsync captures on the calling (main) thread but writes the
 // prefs blob on a goroutine, so a scroll-end never blocks the main thread with a
 // synchronous JSON encode + preference write — which made scrolling feel laggy.
@@ -184,8 +193,14 @@ func flushReadingStateAsync(s *AppState) {
 		return
 	}
 	p := appPrefs()
-	snap := captureSnapshot(s, p)
-	go writeReadingState(p, snap)
+	snap := captureSnapshot(s, p) // also refreshes the current history entry's anchor
+	if !readingStateWriting.CompareAndSwap(false, true) {
+		return // a write is already running; drop this one (position is captured above)
+	}
+	go func() {
+		writeReadingState(p, snap)
+		readingStateWriting.Store(false)
+	}()
 }
 
 // applyRestoredState validates a persisted state against the loaded Bible and,
