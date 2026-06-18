@@ -226,39 +226,62 @@ static BOOL gReadingSuppressed = NO;
 // which UIKit doesn't expose) works uniformly and the run's text is the digits.
 #define BT_VERSE_FONT_MAX 15.0
 
-// btIOSLocForVerse returns the character location of `verse`'s number run, or
-// NSNotFound.
-static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse) {
-    __block NSUInteger found = NSNotFound;
+// The chapter's verse-number runs, captured once per render as a {verse, charLoc}
+// table in document order (so it's sorted by both location and verse number). The
+// scroll-end anchor capture binary-searches this instead of re-enumerating the whole
+// text storage on every finger-lift — that O(n) main-thread walk landed exactly at
+// scroll-settle and was the felt scroll lag (worst on long chapters).
+typedef struct { NSInteger verse; NSUInteger loc; } BTVerseLoc;
+static BTVerseLoc *gVerseIndex = NULL;
+static NSUInteger  gVerseIndexCount = 0;
+
+// btIOSBuildVerseIndex captures every verse-number run (the only sub-15pt runs) into
+// gVerseIndex. Called on every text assignment; the single buffer is reused for the
+// app's life. ts==nil (plain-text fallback) clears the table.
+static void btIOSBuildVerseIndex(NSTextStorage *ts) {
+    const NSUInteger CAP = 512; // far above any chapter's verse count (max ~176)
+    if (gVerseIndex == NULL) gVerseIndex = malloc(CAP * sizeof(BTVerseLoc));
+    if (ts == nil) { gVerseIndexCount = 0; return; }
+    __block NSUInteger n = 0;
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
                    options:0
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (n >= CAP) { *stop = YES; return; }
         if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
-        if ([[ts.string substringWithRange:r] integerValue] == verse) {
-            found = r.location;
-            *stop = YES;
-        }
+        NSInteger v = [[ts.string substringWithRange:r] integerValue];
+        if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; n++; }
     }];
-    return found;
+    gVerseIndexCount = n;
+}
+
+// btIOSLocForVerse returns the character location of `verse`'s number run, or
+// NSNotFound. Binary search by verse number over the prebuilt table.
+static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse) {
+    (void)ts;
+    NSUInteger lo = 0, hi = gVerseIndexCount;
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        if (gVerseIndex[mid].verse < verse) lo = mid + 1; else hi = mid;
+    }
+    if (lo < gVerseIndexCount && gVerseIndex[lo].verse == verse) return gVerseIndex[lo].loc;
+    return NSNotFound;
 }
 
 // btIOSVerseAtIndex returns the verse whose number run is the last at or before
 // character index ci (the top-visible verse), writing its location to *outLoc.
+// Binary search by location over the prebuilt table.
 static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc) {
-    __block NSInteger verse = 0;
-    __block NSUInteger loc = 0;
-    [ts enumerateAttribute:NSFontAttributeName
-                   inRange:NSMakeRange(0, ts.length)
-                   options:0
-                usingBlock:^(id val, NSRange r, BOOL *stop) {
-        if (r.location > ci) { *stop = YES; return; }
-        if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
-        NSInteger n = [[ts.string substringWithRange:r] integerValue];
-        if (n > 0) { verse = n; loc = r.location; }
-    }];
-    if (outLoc) *outLoc = loc;
-    return verse;
+    (void)ts;
+    NSUInteger lo = 0, hi = gVerseIndexCount; // first entry with loc > ci
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        if (gVerseIndex[mid].loc <= ci) lo = mid + 1; else hi = mid;
+    }
+    if (lo == 0) { if (outLoc) *outLoc = 0; return 0; } // above the first verse
+    BTVerseLoc e = gVerseIndex[lo - 1];
+    if (outLoc) *outLoc = e.loc;
+    return e.verse;
 }
 
 // bibleTextScrollReadingTV positions the chapter, in priority order: the
@@ -448,12 +471,23 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // keeps the recognizer out of the touch path (and off the scroll) when reading.
     if (gHighlightTap) gHighlightTap.enabled = (gReadingHighlightRange.location != NSNotFound);
     gReadingTV.attributedText = as;
-    // Aggressive re-assert of the scroll position across the relayout + frame push.
+    btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
+    // Re-assert the scroll position across the relayout + frame push.
     [gReadingTV layoutIfNeeded];
     bibleTextScrollReadingTV();
-    dispatch_async(dispatch_get_main_queue(), ^{ bibleTextScrollReadingTV(); });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ bibleTextScrollReadingTV(); });
+    // The deferred re-asserts re-place a highlight / restore target after the relayout
+    // settles. They are pointless for a plain top-pin (verse 1 is already at the top),
+    // and must never fight a flick the reader started in the 200ms window — so only
+    // schedule them when a target is armed, and skip if the user is already scrolling.
+    if (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!gReadingTV.dragging && !gReadingTV.decelerating) bibleTextScrollReadingTV();
+        });
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (!gReadingTV.dragging && !gReadingTV.decelerating) bibleTextScrollReadingTV();
+        });
+    }
     return YES;
 }
 
@@ -488,7 +522,10 @@ void bibleTextTVSetHTML(const char *html) {
                            dispatch_get_main_queue(), ^{
                 if (bibleTextApplyHTML(data)) return;
                 NSLog(@"bibletext: HTML import failed after retries; showing plain text");
-                if (gReadingTV != nil) gReadingTV.text = bibleTextPlainFromHTML(s);
+                if (gReadingTV != nil) {
+                    gReadingTV.text = bibleTextPlainFromHTML(s);
+                    btIOSBuildVerseIndex(nil); // plain text has no verse runs — clear the stale table
+                }
             });
         });
     });
