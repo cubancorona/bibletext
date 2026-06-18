@@ -442,10 +442,14 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 	if state.aiSearchActive {
 		label = state.aiSearchQuery
 	}
-	if label == "" {
-		label = "results"
+	// The query can be long (especially an AI question); Fyne buttons don't truncate,
+	// so a full label overruns the bar. Keep the button short and fixed; the query is
+	// shown truncated only if it's brief enough to fit.
+	text := "Back to results"
+	if r := []rune(label); len(r) > 0 && len(r) <= 18 {
+		text = fmt.Sprintf("Results: %q", label)
 	}
-	back := widget.NewButtonWithIcon(fmt.Sprintf("Back to results for %q", label), theme.NavigateBackIcon(), func() {
+	back := widget.NewButtonWithIcon(text, theme.NavigateBackIcon(), func() {
 		clearHighlightedVerse(state)
 		if state.surfaceSearch != nil {
 			state.surfaceSearch() // mobile: jump to the real Search tab (restores its state)
@@ -928,6 +932,40 @@ func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
 		if h < 300 {
 			h = 300
 		}
+	}
+	return w, h
+}
+
+// pickerVerseSize sizes the Goto (verse) picker for a TOP-anchored, non-modal popup:
+// it occupies the upper ~55% of the screen so the lower portion stays clear for the
+// iOS keyboard. The verse box lives at the card's bottom edge and must remain visible
+// while the user types, which a centered modal can't guarantee (it can't be moved and
+// the canvas doesn't shrink for the keyboard).
+//
+// Unlike pickerSplitSize (which feeds a MODAL popup whose renderer clamps content down
+// to the canvas, so an over-wide value is harmless), the non-modal renderer grows the
+// popup to its content's min size with NO clamp — so we MUST size against the real
+// canvas width to avoid running off the right edge. cnv.Size() is what that renderer
+// clamps against; basing width on it guarantees the card fits.
+func pickerVerseSize(cnv fyne.Canvas) (float32, float32) {
+	cw := cnv.Size().Width
+	ch := cnv.Size().Height
+	if _, sz := cnv.InteractiveArea(); sz.Height > 0 {
+		ch = sz.Height
+	}
+	w := cw - 24
+	if w > 560 {
+		w = 560
+	}
+	if w < 300 {
+		w = 300
+	}
+	h := ch * 0.55
+	if h > 520 {
+		h = 520
+	}
+	if h < 300 {
+		h = 300
 	}
 	return w, h
 }

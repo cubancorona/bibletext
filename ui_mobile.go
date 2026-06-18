@@ -337,10 +337,29 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 
 	// --- Mode toggle + field swap (no window rebuild, so the keyboard survives). ---
 	fieldHost := container.NewStack()
-	applyMode := func() {
+	var applyMode func()
+
+	// X buttons clear the field and its results.
+	clearKwBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		searchEntry.SetText("")
+		stopSearchDebounce()
+		executeSearch(state, "") // clears results immediately
+		applyMode()
+	})
+	clearKwBtn.Importance = widget.LowImportance
+	clearAskBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		aiEntry.SetText("")
+		stopAIBar()
+		state.aiSearchResults = nil
+		state.aiSearchQuery = ""
+		applyMode()
+	})
+	clearAskBtn.Importance = widget.LowImportance
+
+	applyMode = func() {
 		if state.aiSearchMode {
 			fieldHost.Objects = []fyne.CanvasObject{
-				container.NewBorder(nil, nil, nil, askBtn, inputFrame(withCaret(state, aiEntry), pal.Border)),
+				container.NewBorder(nil, nil, nil, container.NewHBox(clearAskBtn, askBtn), inputFrame(withCaret(state, aiEntry), pal.Border)),
 			}
 			switch {
 			case !hasAIKey(state):
@@ -353,7 +372,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			}
 		} else {
 			stopAIBar()
-			fieldHost.Objects = []fyne.CanvasObject{inputFrame(withCaret(state, searchEntry), pal.Border)}
+			fieldHost.Objects = []fyne.CanvasObject{
+				container.NewBorder(nil, nil, nil, clearKwBtn, inputFrame(withCaret(state, searchEntry), pal.Border)),
+			}
 			resultsHost.Objects = []fyne.CanvasObject{buildSearchResultsView(state)}
 		}
 		fieldHost.Refresh()
