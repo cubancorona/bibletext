@@ -198,34 +198,45 @@ func showGotoPicker(state *AppState)    { gotoPickerModal(state, true) }
 func showChapterPicker(state *AppState) { gotoPickerModal(state, false) }
 
 // goToChapterWithVerse navigates to book+chapter, honoring the optional verse box:
-// empty → chapter top; "16" → highlight v16; a range → highlight its first verse. An
-// out-of-range or unparseable verse silently falls back to the chapter top.
+// empty → chapter top; "16" → highlight v16; "16-18" → highlight verses 16 through 18.
+// An out-of-range start or unparseable input silently falls back to the chapter top.
 func goToChapterWithVerse(state *AppState, book string, chapter int, verseText string) {
-	if v, ok := parseVerseBox(verseText); ok && state.Bible != nil {
-		if match := state.Bible.GetVerse(book, chapter, v); match != nil {
-			goToVerse(state, *match) // sets the highlight + scrolls to it
+	if start, end, ok := parseVerseBox(verseText); ok && state.Bible != nil {
+		if match := state.Bible.GetVerse(book, chapter, start); match != nil {
+			goToVerseRange(state, book, chapter, start, end) // wash the whole range, scroll to start
 			return
 		}
 	}
 	navigateToReference(state, book, chapter)
 }
 
-// parseVerseBox reads the optional verse box: "16" / " 16 " → 16; a range
-// "16-18" / "16–18" / "16:18" → its first number (16); anything else → ok=false. The
-// end of a range is intentionally ignored — we highlight where the passage begins.
-func parseVerseBox(s string) (int, bool) {
+// parseVerseBox reads the optional verse box. "16" / " 16 " → (16, 16); a range
+// "16-18" / "16–18" / "16:18" → (16, 18). The first number is the start; a missing,
+// reversed, or unparseable end collapses to a single verse (end == start). Returns
+// ok=false for empty or non-numeric input.
+func parseVerseBox(s string) (start, end int, ok bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return 0, false
+		return 0, 0, false
 	}
-	if i := strings.IndexAny(s, "-–:"); i >= 0 { // hyphen, en-dash, or colon splits a range
-		s = s[:i]
+	a, b := s, ""
+	for _, sep := range []string{"-", "–", ":"} { // hyphen, en-dash, or colon splits a range
+		if i := strings.Index(s, sep); i >= 0 {
+			a, b = s[:i], s[i+len(sep):]
+			break
+		}
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil || n < 1 {
-		return 0, false
+	start, err := strconv.Atoi(strings.TrimSpace(a))
+	if err != nil || start < 1 {
+		return 0, 0, false
 	}
-	return n, true
+	end = start
+	if b = strings.TrimSpace(b); b != "" {
+		if e, err := strconv.Atoi(b); err == nil && e >= start {
+			end = e
+		}
+	}
+	return start, end, true
 }
 
 // caretTheme re-enables the blinking Entry caret for a single field. The base theme

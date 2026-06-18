@@ -335,7 +335,7 @@ func chapterRenderFingerprint(state *AppState) string {
 	}
 	hl := "0"
 	if state.HasHighlightedVerse {
-		hl = fmt.Sprintf("%s:%d:%d", state.HighlightedBook, state.HighlightedChapter, state.HighlightedVerse)
+		hl = fmt.Sprintf("%s:%d:%d-%d", state.HighlightedBook, state.HighlightedChapter, state.HighlightedVerse, state.HighlightedVerseEnd)
 	}
 	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s",
 		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl)
