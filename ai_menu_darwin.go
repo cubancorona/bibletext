@@ -70,3 +70,25 @@ func bibleTextStudyMenuTapped(cAction, cText *C.char) {
 		dispatchSelectionAction(state, action, text)
 	})
 }
+
+// bibleTextHighlightCleared fires when the reader single-taps a highlighted verse
+// and picks "Clear highlight" from the inline native menu. It drops the highlight
+// and re-renders so the .hl background wash disappears. Runs on the native UI
+// thread, so it hops to Fyne's UI goroutine before touching state. refreshReadingOnly
+// (not refresh): the sidebar doesn't reflect highlight state, so this is the
+// narrowest correct refresh. Idempotent — a double-tap's second call is a no-op.
+//
+//export bibleTextHighlightCleared
+func bibleTextHighlightCleared() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		if !state.HasHighlightedVerse {
+			return
+		}
+		clearHighlightedVerse(state)
+		state.refreshReadingOnly()
+	})
+}

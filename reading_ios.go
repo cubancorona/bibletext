@@ -29,6 +29,10 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
 // iOS's app-background lifecycle hook is unreliable, so we save continuously
 // (on scroll-end) instead, keeping the saved position current even on a hard kill.
 extern void bibleTextReadingScrolled(void);
+// Called when the reader single-taps a highlighted verse and picks "Clear
+// highlight" from the inline native menu. Go clears the highlight state and
+// re-renders so the .hl background wash disappears.
+extern void bibleTextHighlightCleared(void);
 
 // --- Reading-position restore -------------------------------------------------
 // A one-shot scroll target applied when reopening into the last-read chapter
@@ -46,7 +50,9 @@ static BOOL      gReadingHasRestore   = NO;
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the standard selection menu and hands the selected
 // text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
-@interface HBReadingTextView : UITextView <UITextViewDelegate>
+@interface HBReadingTextView : UITextView <UITextViewDelegate,
+    UIGestureRecognizerDelegate, UIEditMenuInteractionDelegate>
+@property (nonatomic, strong) UIEditMenuInteraction *hlMenu API_AVAILABLE(ios(16.0));
 @end
 
 @implementation HBReadingTextView
@@ -102,6 +108,9 @@ static BOOL      gReadingHasRestore   = NO;
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
     if (scrollView.dragging || scrollView.decelerating) {
         gReadingHasRestore = NO;
+        // UIEditMenuInteraction already self-dismisses on scroll; this is
+        // belt-and-suspenders across iOS point releases and costs nothing.
+        if (@available(iOS 16.0, *)) [self.hlMenu dismissMenu];
     }
 }
 
@@ -112,6 +121,74 @@ static BOOL      gReadingHasRestore   = NO;
 }
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
     if (!decelerate) bibleTextReadingScrolled();
+}
+
+// --- Tap a highlighted verse to clear it ------------------------------------
+// When the reader arrives at a verse via search "see in context" or verse-of-day,
+// it's painted with a background wash (.hl run -> gReadingHighlightRange). A single
+// tap on that wash offers a one-item "Clear highlight" menu at the tap point; a tap
+// anywhere else (or a scroll) dismisses it without clearing. The menu is a native
+// UIEditMenuInteraction, so it floats above the overlay and handles tap-away,
+// scroll-dismiss, positioning and theming for us.
+
+// The single item shown when our interaction presents. Returning only our action
+// (ignoring suggestedActions) keeps this a clean, single-purpose menu.
+- (UIMenu *)editMenuInteraction:(UIEditMenuInteraction *)interaction
+           menuForConfiguration:(UIEditMenuConfiguration *)configuration
+               suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions
+           API_AVAILABLE(ios(16.0)) {
+    UIAction *clear = [UIAction actionWithTitle:@"Clear highlight" image:nil identifier:nil
+                                        handler:^(__kindof UIAction *a) {
+        bibleTextHighlightCleared(); // -> Go: clear + re-render (drops the .hl run)
+    }];
+    clear.attributes = UIMenuElementAttributesDestructive; // red — signals "removes"
+    return [UIMenu menuWithChildren:@[clear]];
+}
+
+// Recognize our single tap ALONGSIDE the text view's built-in pan (scroll),
+// double-tap (word select) and long-press (loupe) recognizers, so scrolling and
+// selection are untouched.
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES;
+}
+
+// Single tap -> if it landed on the highlighted wash, present "Clear highlight" at
+// the tap point. Otherwise do nothing (an outside tap also auto-dismisses any menu
+// already up — that's the tap-away behaviour, free from UIKit).
+- (void)btHighlightTap:(UITapGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    if (gReadingHighlightRange.location == NSNotFound || gReadingHighlightRange.length == 0) return;
+    // Guard a stale range outrunning the text (parity with bibleTextScrollReadingTV's
+    // NSMaxRange check) before any glyph-geometry call.
+    if (NSMaxRange(gReadingHighlightRange) > self.textStorage.length) return;
+    // A live selection means this tap belongs to the system/AI selection menu.
+    if (self.selectedTextRange != nil && !self.selectedTextRange.empty) return;
+
+    // locationInView: on the (scroll-view) text view already yields content
+    // coordinates (the bounds origin moves with the scroll). Subtract the text
+    // container inset (14,16) to reach the layout manager's container space.
+    CGPoint p = [g locationInView:self];
+    CGPoint inContainer = CGPointMake(p.x - self.textContainerInset.left,
+                                      p.y - self.textContainerInset.top);
+    NSLayoutManager *lm = self.layoutManager;
+    NSRange wg = [lm glyphRangeForCharacterRange:gReadingHighlightRange actualCharacterRange:NULL];
+    // Test each line fragment's glyph-tight usedRect (not the union bounding rect),
+    // so a multi-line verse never accepts taps in the blank ragged-right margin or
+    // the indent gap beside a short final line. A small inset adds tap tolerance.
+    __block BOOL hit = NO;
+    [lm enumerateLineFragmentsForGlyphRange:wg
+                                 usingBlock:^(CGRect rect, CGRect usedRect, NSTextContainer *tc,
+                                              NSRange gr, BOOL *stop) {
+        if (CGRectContainsPoint(CGRectInset(usedRect, -2, -2), inContainer)) { hit = YES; *stop = YES; }
+    }];
+    if (!hit) return;
+
+    if (@available(iOS 16.0, *)) {
+        UIEditMenuConfiguration *cfg =
+            [UIEditMenuConfiguration configurationWithIdentifier:@"btClearHL" sourcePoint:p];
+        [self.hlMenu presentEditMenuWithConfiguration:cfg];
+    }
 }
 
 @end
@@ -280,6 +357,23 @@ static void bibleTextEnsureTV(void) {
             // Start visible — the Read tab is selected at app launch and
             // AppTabs.OnSelected doesn't fire for the initial selection.
             tv.hidden = NO;
+            // Single-tap -> "Clear highlight" when the tap lands on the wash. The
+            // recognizer never swallows a touch the text view / selection wants, and
+            // recognizes simultaneously with the built-in pan/loupe gestures (see the
+            // delegate methods). Created once here so it travels with the persistent
+            // view across the re-parenting ensureTV does on every call.
+            UITapGestureRecognizer *hlTap =
+                [[UITapGestureRecognizer alloc] initWithTarget:tv action:@selector(btHighlightTap:)];
+            hlTap.numberOfTapsRequired = 1;
+            hlTap.cancelsTouchesInView = NO;
+            hlTap.delaysTouchesBegan = NO;
+            hlTap.delaysTouchesEnded = NO;
+            hlTap.delegate = tv;
+            [tv addGestureRecognizer:hlTap];
+            if (@available(iOS 16.0, *)) {
+                tv.hlMenu = [[UIEditMenuInteraction alloc] initWithDelegate:tv];
+                [tv addInteraction:tv.hlMenu];
+            }
             gReadingTV = tv;
             NSLog(@"bibletext: ensureTV — created UITextView, attaching to window %@", win);
         }
