@@ -446,12 +446,25 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 		label = "results"
 	}
 	back := widget.NewButtonWithIcon(fmt.Sprintf("Back to results for %q", label), theme.NavigateBackIcon(), func() {
-		state.IsSearching = true
+		clearHighlightedVerse(state)
+		if state.surfaceSearch != nil {
+			state.surfaceSearch() // mobile: jump to the real Search tab (restores its state)
+		} else {
+			state.IsSearching = true // desktop: results show in the reading pane
+			state.refreshReadingOnly()
+		}
+	})
+	back.Importance = widget.LowImportance
+
+	// X dismisses the back-to-results trail and clears the search highlight.
+	clear := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		state.CanReturnToSearchResults = false
 		clearHighlightedVerse(state)
 		state.refreshReadingOnly()
 	})
-	back.Importance = widget.LowImportance
-	return surface(container.NewHBox(back), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	clear.Importance = widget.LowImportance
+
+	return surface(container.NewBorder(nil, nil, nil, clear, back), pal.SurfaceAlt, pal.Border, fyne.Size{})
 }
 
 // chapterText renders an entire chapter as one read-only, selectable text block.
