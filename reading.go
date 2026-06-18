@@ -858,7 +858,11 @@ func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 
 // referenceChapterGrid is the right pane: the chapter-number grid for one book,
 // with the book name + chapter count above it. onPick fires with the chapter.
-func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) fyne.CanvasObject {
+// referenceChapterGrid returns the chapter grid plus a reselect(chapter) callback that
+// re-highlights the selected chapter IN PLACE (just the buttons' importance), so the
+// caller can change selection without rebuilding the grid — rebuilding re-creates the
+// theme override and visibly reflows the cells.
+func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(int)) {
 	nums := state.Bible.GetChapterNumbersForBook(book)
 
 	head := canvas.NewText(fmt.Sprintf("%s · %d chapters", book, len(nums)), pal.TextMuted)
@@ -867,19 +871,34 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 	// Small fixed-size cells, packed tightly (denseGrid), so most books show all their
 	// chapters without scrolling; they wrap to as many columns as the pane is wide.
 	grid := container.NewGridWrap(fyne.NewSize(34, 34))
+	btns := make(map[int]*widget.Button, len(nums))
 	for _, c := range nums {
 		ch := c
 		btn := widget.NewButton(fmt.Sprintf("%d", ch), func() { onPick(ch) })
+		btn.Importance = widget.LowImportance
 		if ch == selected {
 			btn.Importance = widget.HighImportance
-		} else {
-			btn.Importance = widget.LowImportance
 		}
+		btns[ch] = btn
 		grid.Add(btn)
 	}
 
-	return container.NewBorder(container.NewPadded(head), nil, nil, nil,
+	reselect := func(sel int) {
+		for ch, b := range btns {
+			imp := widget.LowImportance
+			if ch == sel {
+				imp = widget.HighImportance
+			}
+			if b.Importance != imp {
+				b.Importance = imp
+				b.Refresh()
+			}
+		}
+	}
+
+	obj := container.NewBorder(container.NewPadded(head), nil, nil, nil,
 		container.NewVScroll(denseGrid(state, grid)))
+	return obj, reselect
 }
 
 // pickerHeader is a stage's top row: a leading element (title, or back+title) on

@@ -100,18 +100,24 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 
 	chapterPane := container.NewStack()
 	var renderChapters func()
+	var chapterReselect func(int) // re-highlights a chapter IN PLACE (no grid rebuild)
 	renderChapters = func() {
-		chapterPane.Objects = []fyne.CanvasObject{
-			referenceChapterGrid(state, pal, selectedBook, highlightChapter(), func(ch int) {
-				selectedChapter = ch
-				if withVerse {
-					renderChapters() // select + re-highlight; Go commits
-				} else {
-					navigateToReference(state, selectedBook, ch) // usual picker: go now
-					closePicker()
+		grid, reselect := referenceChapterGrid(state, pal, selectedBook, highlightChapter(), func(ch int) {
+			selectedChapter = ch
+			if withVerse {
+				// Re-highlight in place — rebuilding the grid here reflowed it (the
+				// re-created theme override momentarily changed the cell metrics); Go
+				// commits the selection.
+				if chapterReselect != nil {
+					chapterReselect(ch)
 				}
-			}),
-		}
+			} else {
+				navigateToReference(state, selectedBook, ch) // usual picker: go now
+				closePicker()
+			}
+		})
+		chapterReselect = reselect
+		chapterPane.Objects = []fyne.CanvasObject{grid}
 		chapterPane.Refresh()
 	}
 	renderChapters()
