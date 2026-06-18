@@ -102,12 +102,24 @@ func verseOfDayButton(state *AppState) *widget.Button {
 // search result, it does not leave a "back to results" trail — this is a direct
 // jump (verse of the day, a cross-reference) into the reading view.
 func goToVerse(state *AppState, v Verse) {
-	selectBook(state, v.BookName, false)
-	state.CurrentChapter = v.Chapter
-	addRecentChapter(state, v.BookName, v.Chapter)
-	state.HighlightedBook = v.BookName
-	state.HighlightedChapter = v.Chapter
-	state.HighlightedVerse = v.Verse
+	goToVerseRange(state, v.BookName, v.Chapter, v.Verse, v.Verse)
+}
+
+// goToVerseRange navigates to book+chapter and highlights verses [start, end]
+// (end == start for a single verse), scrolling to the first highlighted verse. The
+// native overlays wash every .hl verse and scroll to the first; the Fyne reading
+// widget scrolls to the start verse.
+func goToVerseRange(state *AppState, book string, chapter, start, end int) {
+	if end < start {
+		end = start
+	}
+	selectBook(state, book, false)
+	state.CurrentChapter = chapter
+	addRecentChapter(state, book, chapter)
+	state.HighlightedBook = book
+	state.HighlightedChapter = chapter
+	state.HighlightedVerse = start
+	state.HighlightedVerseEnd = end
 	state.HasHighlightedVerse = true
 	state.IsSearching = false
 	state.CanReturnToSearchResults = false

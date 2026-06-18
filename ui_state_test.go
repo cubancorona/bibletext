@@ -362,22 +362,25 @@ func TestGoToReferenceResolvesVerseAndChapter(t *testing.T) {
 }
 
 func TestParseVerseBox(t *testing.T) {
-	ok := map[string]int{
-		"16":    16,
-		"  16 ": 16,
-		"16-18": 16, // range -> first verse
-		"16–18": 16, // en-dash range
-		"16:18": 16, // colon-separated
-		"1":     1,
+	type span struct{ start, end int }
+	ok := map[string]span{
+		"16":    {16, 16},
+		"  16 ": {16, 16},
+		"16-18": {16, 18}, // hyphen range
+		"16–18": {16, 18}, // en-dash range
+		"16:18": {16, 18}, // colon range
+		"1":     {1, 1},
+		"16-":   {16, 16}, // missing end → single
+		"18-16": {18, 18}, // reversed end → single
 	}
 	for in, want := range ok {
-		if got, valid := parseVerseBox(in); !valid || got != want {
-			t.Errorf("parseVerseBox(%q) = (%d, %v), want (%d, true)", in, got, valid, want)
+		if s, e, valid := parseVerseBox(in); !valid || s != want.start || e != want.end {
+			t.Errorf("parseVerseBox(%q) = (%d,%d,%v), want (%d,%d,true)", in, s, e, valid, want.start, want.end)
 		}
 	}
 	for _, in := range []string{"", "  ", "abc", "0", "-5", "v16"} {
-		if got, valid := parseVerseBox(in); valid {
-			t.Errorf("parseVerseBox(%q) = (%d, true), want ok=false", in, got)
+		if s, _, valid := parseVerseBox(in); valid {
+			t.Errorf("parseVerseBox(%q) start=%d ok=true, want ok=false", in, s)
 		}
 	}
 }
@@ -400,10 +403,17 @@ func TestGoToChapterWithVerse(t *testing.T) {
 		if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
 			t.Fatalf("expected verse 16 highlighted, got hv=%v v=%d", state.HasHighlightedVerse, state.HighlightedVerse)
 		}
-		// A range -> highlight its first verse.
+		// A range -> highlight the whole span 16..18.
 		goToChapterWithVerse(state, "John", 3, "16-18")
-		if state.HighlightedVerse != 16 {
-			t.Fatalf("expected range to highlight first verse 16, got %d", state.HighlightedVerse)
+		if state.HighlightedVerse != 16 || state.HighlightedVerseEnd != 18 {
+			t.Fatalf("expected range 16-18, got start=%d end=%d", state.HighlightedVerse, state.HighlightedVerseEnd)
+		}
+		hl := func(n int) bool { return isVerseHighlighted(state, Verse{BookName: "John", Chapter: 3, Verse: n}) }
+		if !hl(16) || !hl(17) || !hl(18) {
+			t.Fatal("expected verses 16, 17 and 18 all highlighted for range 16-18")
+		}
+		if hl(15) || hl(19) {
+			t.Fatal("verses just outside the range must not be highlighted")
 		}
 	}
 

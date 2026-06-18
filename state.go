@@ -35,7 +35,8 @@ type AppState struct {
 
 	HighlightedBook     string
 	HighlightedChapter  int
-	HighlightedVerse    int
+	HighlightedVerse    int // start of the highlighted range (a single verse for search/QOTD)
+	HighlightedVerseEnd int // inclusive end; 0 or < start means a single verse
 	HasHighlightedVerse bool
 
 	RecentChapters []ChapterVisit
@@ -506,6 +507,7 @@ func clearHighlightedVerse(state *AppState) {
 	state.HighlightedBook = ""
 	state.HighlightedChapter = 0
 	state.HighlightedVerse = 0
+	state.HighlightedVerseEnd = 0
 	state.HasHighlightedVerse = false
 }
 
@@ -523,7 +525,12 @@ func isVerseHighlighted(state *AppState, verse Verse) bool {
 	if !state.HasHighlightedVerse {
 		return false
 	}
-	return state.HighlightedBook == verse.BookName &&
-		state.HighlightedChapter == verse.Chapter &&
-		state.HighlightedVerse == verse.Verse
+	if state.HighlightedBook != verse.BookName || state.HighlightedChapter != verse.Chapter {
+		return false
+	}
+	end := state.HighlightedVerseEnd
+	if end < state.HighlightedVerse {
+		end = state.HighlightedVerse // 0/unset (or a single verse) → just the start
+	}
+	return verse.Verse >= state.HighlightedVerse && verse.Verse <= end
 }
