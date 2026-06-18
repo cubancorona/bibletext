@@ -139,12 +139,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	left := container.New(fixedWidthLayout{width: 152},
 		container.NewBorder(nil, nil, nil, divider, list))
 
-	// The verse/range box + Go sit at the TOP (under the header), not the bottom: a
-	// modal popup is always centered and cannot be moved (PopUp.Move is a no-op when
-	// modal), and the mobile canvas doesn't shrink for the keyboard — so a bottom
-	// field ends up under the iOS keyboard. Up top it stays well clear of it. You pick
-	// the book + chapter in the lists below, then reach up to type the verse and Go.
-	top := fyne.CanvasObject(header)
+	var bottom fyne.CanvasObject
 	if withVerse {
 		verseEntry = widget.NewEntry()
 		verseEntry.SetPlaceHolder("verse — e.g. 16 or 16-18")
@@ -157,15 +152,38 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		caret := container.NewThemeOverride(verseEntry, caretTheme{Theme: base})
 		goBtn := widget.NewButton("Go", commit)
 		goBtn.Importance = widget.HighImportance
-		verseRow := container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border))
-		top = container.NewVBox(header, container.NewPadded(verseRow))
+		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border)))
 	}
 
-	body := container.NewBorder(top, nil, left, nil, container.NewPadded(chapterPane))
-	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
-	popup.Show()
-	w, h := pickerSplitSize(cnv) // roomy, centered; the verse box is up top, above the keyboard
-	popup.Resize(fyne.NewSize(w, h))
+	body := container.NewBorder(header, bottom, left, nil, container.NewPadded(chapterPane))
+	card := surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{})
+
+	if withVerse {
+		// The verse box sits at the BOTTOM of the card, but a modal popup always
+		// centers and can't be moved (see the fyne-modal-keyboard note), so a centered
+		// card's bottom would be under the iOS keyboard. Anchor the card near the TOP
+		// via a full-canvas layout, so its bottom row clears the keyboard. The modal
+		// underlay still dims the whole screen.
+		boxW, _ := pickerSplitSize(cnv)
+		safePos, _ := cnv.InteractiveArea()
+		topY := safePos.Y + 8
+		boxH := cnv.Size().Height*0.52 - topY
+		if boxH > 520 {
+			boxH = 520
+		}
+		if boxH < 300 {
+			boxH = 300
+		}
+		content := container.New(topBoxLayout{box: fyne.NewSize(boxW, boxH), topY: topY}, card)
+		popup = widget.NewModalPopUp(content, cnv)
+		popup.Show()
+		popup.Resize(cnv.Size()) // fill the canvas so the layout gets the full size
+	} else {
+		popup = widget.NewModalPopUp(card, cnv)
+		popup.Show()
+		w, h := pickerSplitSize(cnv) // roomy + centered; no keyboard in this flavour
+		popup.Resize(fyne.NewSize(w, h))
+	}
 
 	for i, b := range books {
 		if b == selectedBook {
@@ -281,6 +299,33 @@ func (t smallChipTheme) Size(name fyne.ThemeSizeName) float32 {
 		return 5
 	}
 	return t.Theme.Size(name)
+}
+
+// topBoxLayout positions its single child as a fixed-size box, horizontally centered
+// and anchored at a given Y, within the full parent (the canvas-sized modal content).
+// It lets the Goto picker's card sit near the top — so its bottom verse box clears the
+// iOS keyboard — even though a modal PopUp itself can't be moved (it always centers).
+type topBoxLayout struct {
+	box  fyne.Size
+	topY float32
+}
+
+func (l topBoxLayout) MinSize(_ []fyne.CanvasObject) fyne.Size { return fyne.Size{} }
+
+func (l topBoxLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	if len(objs) == 0 {
+		return
+	}
+	w := l.box.Width
+	if w > size.Width {
+		w = size.Width
+	}
+	h := l.box.Height
+	if l.topY+h > size.Height {
+		h = size.Height - l.topY
+	}
+	objs[0].Resize(fyne.NewSize(w, h))
+	objs[0].Move(fyne.NewPos((size.Width-w)/2, l.topY))
 }
 
 // gotoButton is the small, quiet "Go to" chip in the header center slot that opens
