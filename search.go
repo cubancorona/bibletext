@@ -232,12 +232,19 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 
 // buildSearchModeToggle is a two-segment control switching the search UI between keyword
 // ("Find") and natural-language ("Ask") search; the active half is filled. Shared by the
-// mobile Search tab and the desktop sidebar.
+// mobile Search tab and the desktop sidebar. On desktop it renders compact and quieter
+// (smaller text/padding, flat inactive half) — touch-sized buttons are too intrusive for
+// a mouse UI.
 func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
+	compact := !fyne.CurrentDevice().IsMobile()
 	var find, ask *widget.Button
 	apply := func(ai bool) {
-		find.Importance = widget.MediumImportance
-		ask.Importance = widget.MediumImportance
+		idle := widget.MediumImportance
+		if compact {
+			idle = widget.LowImportance // flat inactive → only the active half is filled
+		}
+		find.Importance = idle
+		ask.Importance = idle
 		if ai {
 			ask.Importance = widget.HighImportance
 		} else {
@@ -249,7 +256,16 @@ func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasO
 	find = widget.NewButton("Find", func() { apply(false); onSelect(false) })
 	ask = widget.NewButton("Ask", func() { apply(true); onSelect(true) })
 	apply(state.aiSearchMode)
-	return container.NewGridWithColumns(2, find, ask)
+	grid := container.NewGridWithColumns(2, find, ask)
+	if !compact {
+		return grid
+	}
+	// Shrink the text + padding so the toggle reads as a small, elegant control.
+	var base fyne.Theme = theme.DefaultTheme()
+	if state.theme != nil {
+		base = state.theme
+	}
+	return container.NewThemeOverride(grid, smallChipTheme{Theme: base})
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {
