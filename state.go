@@ -40,6 +40,11 @@ type AppState struct {
 	aiSearchActive  bool
 	aiSearchQuery   string
 	aiSearchResults []Verse
+	// Desktop AI-search progress: results replace the reading pane, so the in-progress
+	// and error states are driven from state (mobile drives them in its own results host).
+	aiSearchLoading bool
+	aiSearchErr     error
+	retryAISearch   func() // re-runs the last AI query (the error view's "Try again")
 	// searchScrollY remembers the results list's scroll offset so returning to the
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32

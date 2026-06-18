@@ -29,11 +29,27 @@ func trackSearchScroll(state *AppState, scroll *container.Scroll) {
 }
 
 func buildSearchResultsView(state *AppState) fyne.CanvasObject {
-	// When the current results context is the AI search, render its (state-held)
-	// passages with the AI view. This is what makes "back to results" and the Read-tab
-	// inline results work for Ask-AI as well as keyword search.
+	// When the current results context is the AI search, render the matching state — the
+	// passages, or (driven from state, for desktop where results replace the reading pane)
+	// the in-progress / no-key / error / prompt states. This also powers "back to results"
+	// and the Read-tab inline results for Ask-AI.
 	if state.aiSearchActive {
-		return aiResultsView(state, state.aiSearchQuery, state.aiSearchResults)
+		switch {
+		case state.aiSearchLoading:
+			return aiSearchingView(state)
+		case !hasAIKey(state):
+			return aiNoKeyView(state)
+		case state.aiSearchErr != nil:
+			return aiSearchMessageView(friendlyAIError(state.aiSearchErr), "Try again", func() {
+				if state.retryAISearch != nil {
+					state.retryAISearch()
+				}
+			})
+		case len(state.aiSearchResults) == 0 && strings.TrimSpace(state.aiSearchQuery) == "":
+			return aiSearchPromptView(state)
+		default:
+			return aiResultsView(state, state.aiSearchQuery, state.aiSearchResults)
+		}
 	}
 	pal := state.pal()
 	trimmed := strings.TrimSpace(state.ActiveSearchQuery)
@@ -201,6 +217,39 @@ func aiSearchMessageView(msg, action string, onAction func()) fyne.CanvasObject 
 		items = append(items, spacer(12), container.NewCenter(btn))
 	}
 	return container.NewCenter(container.NewVBox(items...))
+}
+
+// aiSearchingView is the in-progress state while an AI passage search runs (used on
+// desktop, where results replace the reading pane). A plain centered line — no animated
+// ProgressBarInfinite, which would pin the whole canvas dirty (see the scroll-lag note).
+func aiSearchingView(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+	msg := canvas.NewText("Searching with AI…", pal.TextMuted)
+	msg.Alignment = fyne.TextAlignCenter
+	msg.TextSize = 16
+	return container.NewCenter(msg)
+}
+
+// buildSearchModeToggle is a two-segment control switching the search UI between keyword
+// ("Find") and natural-language ("Ask") search; the active half is filled. Shared by the
+// mobile Search tab and the desktop sidebar.
+func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
+	var find, ask *widget.Button
+	apply := func(ai bool) {
+		find.Importance = widget.MediumImportance
+		ask.Importance = widget.MediumImportance
+		if ai {
+			ask.Importance = widget.HighImportance
+		} else {
+			find.Importance = widget.HighImportance
+		}
+		find.Refresh()
+		ask.Refresh()
+	}
+	find = widget.NewButton("Find", func() { apply(false); onSelect(false) })
+	ask = widget.NewButton("Ask", func() { apply(true); onSelect(true) })
+	apply(state.aiSearchMode)
+	return container.NewGridWithColumns(2, find, ask)
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {
