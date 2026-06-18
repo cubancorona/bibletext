@@ -144,12 +144,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		verseEntry = widget.NewEntry()
 		verseEntry.SetPlaceHolder("verse — e.g. 16 or 16-18")
 		verseEntry.OnSubmitted = func(string) { commit() }
-		// Restore the blinking caret the base theme zeroes out, scoped to this field.
-		var base fyne.Theme = theme.DefaultTheme()
-		if state.theme != nil {
-			base = state.theme
-		}
-		caret := container.NewThemeOverride(verseEntry, caretTheme{Theme: base})
+		caret := withCaret(state, verseEntry)
 		goBtn := widget.NewButton("Go", commit)
 		goBtn.Importance = widget.HighImportance
 		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border)))
@@ -285,6 +280,18 @@ func (c caretTheme) Color(name fyne.ThemeColorName, v fyne.ThemeVariant) color.C
 		return color.Transparent
 	}
 	return c.Theme.Color(name, v)
+}
+
+// withCaret wraps an Entry so it shows a normal blinking iOS caret. The base theme
+// zeroes SizeNameInputBorder globally (to hide the read-only reading Entry's caret),
+// which also hides the caret in every other field; this scopes a 1px caret back to
+// just the wrapped entry. Pair with inputFrame for the visible border.
+func withCaret(state *AppState, e *widget.Entry) fyne.CanvasObject {
+	var base fyne.Theme = theme.DefaultTheme()
+	if state.theme != nil {
+		base = state.theme
+	}
+	return container.NewThemeOverride(e, caretTheme{Theme: base})
 }
 
 // smallChipTheme shrinks a button's text + padding so it reads as a small, quiet

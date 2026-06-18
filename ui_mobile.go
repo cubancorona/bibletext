@@ -273,6 +273,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	// --- Ask-AI search. ---
 	aiEntry := widget.NewEntry()
 	aiEntry.SetPlaceHolder("Ask for passages — e.g. what did God say to Jonah?")
+	aiEntry.SetText(state.aiSearchQuery) // restore the last question on tab return
 
 	var aiBar *widget.ProgressBarInfinite
 	stopAIBar := func() {
@@ -313,6 +314,11 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 					aiSearchMessageView(friendlyAIError(err), "Try again", func() { runAsk(q) }),
 				}
 			default:
+				// Persist in state so the results survive a tab switch and power
+				// "back to results".
+				state.aiSearchActive = true
+				state.aiSearchQuery = q
+				state.aiSearchResults = verses
 				resultsHost.Objects = []fyne.CanvasObject{aiResultsView(state, q, verses)}
 			}
 			resultsHost.Refresh()
@@ -327,16 +333,20 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	applyMode := func() {
 		if state.aiSearchMode {
 			fieldHost.Objects = []fyne.CanvasObject{
-				container.NewBorder(nil, nil, nil, askBtn, inputFrame(aiEntry, pal.Border)),
+				container.NewBorder(nil, nil, nil, askBtn, inputFrame(withCaret(state, aiEntry), pal.Border)),
 			}
-			if hasAIKey(state) {
-				resultsHost.Objects = []fyne.CanvasObject{aiSearchPromptView(state)}
-			} else {
+			switch {
+			case !hasAIKey(state):
 				resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
+			case len(state.aiSearchResults) > 0:
+				// Restore the last AI results on tab return.
+				resultsHost.Objects = []fyne.CanvasObject{aiResultsView(state, state.aiSearchQuery, state.aiSearchResults)}
+			default:
+				resultsHost.Objects = []fyne.CanvasObject{aiSearchPromptView(state)}
 			}
 		} else {
 			stopAIBar()
-			fieldHost.Objects = []fyne.CanvasObject{inputFrame(searchEntry, pal.Border)}
+			fieldHost.Objects = []fyne.CanvasObject{inputFrame(withCaret(state, searchEntry), pal.Border)}
 			resultsHost.Objects = []fyne.CanvasObject{buildSearchResultsView(state)}
 		}
 		fieldHost.Refresh()
@@ -345,6 +355,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 
 	toggle := buildSearchModeToggle(state, func(ai bool) {
 		state.aiSearchMode = ai
+		state.aiSearchActive = ai // switch the results context with the mode
 		applyMode()
 	})
 

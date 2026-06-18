@@ -439,6 +439,9 @@ func htmlEscape(s string) string {
 func backToResultsBar(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 	label := state.ActiveSearchQuery
+	if state.aiSearchActive {
+		label = state.aiSearchQuery
+	}
 	if label == "" {
 		label = "results"
 	}

@@ -33,6 +33,14 @@ type AppState struct {
 	IsSearching              bool
 	CanReturnToSearchResults bool
 
+	// Ask-AI search results, kept in state (like keyword results) so they survive a
+	// tab switch and so "back to results" can re-show them. aiSearchActive marks the
+	// current results context as AI vs keyword (drives buildSearchResultsView and the
+	// back-to-results label).
+	aiSearchActive  bool
+	aiSearchQuery   string
+	aiSearchResults []Verse
+
 	HighlightedBook     string
 	HighlightedChapter  int
 	HighlightedVerse    int // start of the highlighted range (a single verse for search/QOTD)
@@ -470,6 +478,7 @@ func newSearchDebouncer(state *AppState) (onChanged func(string), stop func()) {
 
 func runSearch(state *AppState, trimmed string) {
 	state.ActiveSearchQuery = trimmed
+	state.aiSearchActive = false // a keyword search switches the results context
 	state.IsSearching = true
 	state.CanReturnToSearchResults = false
 	clearHighlightedVerse(state)
@@ -518,6 +527,9 @@ func clearSearchState(state *AppState) {
 	state.SearchTruncated = false
 	state.IsSearching = false
 	state.CanReturnToSearchResults = false
+	state.aiSearchActive = false
+	state.aiSearchQuery = ""
+	state.aiSearchResults = nil
 	clearHighlightedVerse(state)
 }
 

@@ -15,6 +15,12 @@ import (
 )
 
 func buildSearchResultsView(state *AppState) fyne.CanvasObject {
+	// When the current results context is the AI search, render its (state-held)
+	// passages with the AI view. This is what makes "back to results" and the Read-tab
+	// inline results work for Ask-AI as well as keyword search.
+	if state.aiSearchActive {
+		return aiResultsView(state, state.aiSearchQuery, state.aiSearchResults)
+	}
 	pal := state.pal()
 	trimmed := strings.TrimSpace(state.ActiveSearchQuery)
 
