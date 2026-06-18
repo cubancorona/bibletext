@@ -371,6 +371,29 @@ func navigateToVisit(state *AppState, visit ChapterVisit) {
 	state.refresh()
 }
 
+// goToReference parses a free-form citation ("John 3:16", "Ps 23", "1 cor 13:4",
+// "jn 3") and navigates to it: highlighting the verse when one is given, otherwise
+// opening the chapter at the top. Returns false when the text is not a resolvable
+// reference, so a caller (the Goto box) can show a gentle hint instead of jumping.
+func goToReference(state *AppState, rawQuery string) bool {
+	if state.Bible == nil {
+		return false
+	}
+	book, chapter, verse, hasVerse, ok := state.Bible.parseReferenceQuery(rawQuery)
+	if !ok {
+		return false
+	}
+	if hasVerse {
+		if match := state.Bible.GetVerse(book, chapter, verse); match != nil {
+			goToVerse(state, *match)
+			return true
+		}
+		// Verse out of range — fall back to opening the chapter rather than failing.
+	}
+	navigateToReference(state, book, chapter)
+	return true
+}
+
 // executeSearch runs a full search (used on Enter). An exact single-verse
 // reference like "John 3:16" jumps straight to the verse in context.
 func executeSearch(state *AppState, rawQuery string) {

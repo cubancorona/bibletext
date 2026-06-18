@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -330,6 +331,49 @@ func TestUpdateCurrentVisitAnchorStampsHead(t *testing.T) {
 	updateCurrentVisitAnchor(stale, 99, 0, 0)
 	if state.RecentChapters[0].Verse != 12 {
 		t.Fatal("anchor must not be written when the head book/chapter mismatch")
+	}
+}
+
+func TestGoToReferenceResolvesVerseAndChapter(t *testing.T) {
+	state := sampleState()
+
+	if !goToReference(state, "John 3:16") {
+		t.Fatal("expected John 3:16 to resolve")
+	}
+	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
+		t.Fatalf("expected John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
+	}
+	if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
+		t.Fatalf("expected verse 16 highlighted, got verse=%d hv=%v", state.HighlightedVerse, state.HasHighlightedVerse)
+	}
+
+	if !goToReference(state, "Psalms 23") {
+		t.Fatal("expected Psalms 23 to resolve")
+	}
+	if state.CurrentBook != "Psalms" || state.CurrentChapter != 23 {
+		t.Fatalf("expected Psalms 23, got %s %d", state.CurrentBook, state.CurrentChapter)
+	}
+	if state.HasHighlightedVerse {
+		t.Fatal("a chapter-only reference should not highlight a verse")
+	}
+
+	if goToReference(state, "this is not a reference") {
+		t.Fatal("expected non-reference text to fail to resolve")
+	}
+}
+
+func TestChapterTailPatternStripsToBookPortion(t *testing.T) {
+	cases := map[string]string{
+		"John 3:16": "John",
+		"1 John 3":  "1 John",
+		"1 John":    "1 John",
+		"joh":       "joh",
+		"Psalm 23":  "Psalm",
+	}
+	for in, want := range cases {
+		if got := strings.TrimSpace(chapterTailPattern.ReplaceAllString(in, "")); got != want {
+			t.Errorf("book portion of %q = %q, want %q", in, got, want)
+		}
 	}
 }
 
