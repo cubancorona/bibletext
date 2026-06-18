@@ -50,6 +50,11 @@ type AppState struct {
 	// repaint) rather than swapping a content host in place.
 	CurrentTab int
 
+	// aiSearchMode is the Search tab's mode: false = keyword search, true = the
+	// natural-language "Ask AI" passage search. Kept on state so the chosen mode
+	// survives the window rebuilds that tab switches trigger.
+	aiSearchMode bool
+
 	// Annotations is the foundation for note/highlight + research features. It is
 	// populated/persisted by future work; the reading view already renders verses
 	// as selectable, individually-referenceable blocks.
