@@ -18,35 +18,24 @@ import (
 
 // numberEntry is an Entry that requests the iOS number pad. iOS number pads have no
 // hyphen, so the Goto picker takes a verse range as TWO number fields (start + end)
-// rather than one hyphenated field. onFocus fires on focus gain/loss so the picker can
-// lift the verse row above the soft keyboard (by growing an internal spacer — never by
-// resizing the popup, which would self-dismiss).
+// rather than one hyphenated field.
 type numberEntry struct {
 	widget.Entry
-	onFocus func(focused bool)
 }
 
 func (e *numberEntry) Keyboard() mobile.KeyboardType { return mobile.NumberKeyboard }
-
-func (e *numberEntry) FocusGained() {
-	e.Entry.FocusGained()
-	if e.onFocus != nil {
-		e.onFocus(true)
-	}
-}
-
-func (e *numberEntry) FocusLost() {
-	e.Entry.FocusLost()
-	if e.onFocus != nil {
-		e.onFocus(false)
-	}
-}
 
 func newNumberEntry() *numberEntry {
 	e := &numberEntry{}
 	e.ExtendBaseWidget(e)
 	return e
 }
+
+// gKeyboardInsetSetter is set by the open mobile verse picker to receive the iOS
+// keyboard's exact on-screen overlap (in points) from the native keyboard observer
+// (bibleTextKeyboardChanged in ai_menu_darwin.go), so it can lift the bottom verse row
+// to sit exactly above the keyboard. nil when no picker is up (other keyboards ignored).
+var gKeyboardInsetSetter func(float32)
 
 // gotoPickerModal is the shared book + chapter picker. The RIGHT pane is always the
 // chapter grid for the selected book; the LEFT pane and bottom differ by flavour:
@@ -75,6 +64,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	}
 	var popup *widget.PopUp
 	closePicker := func() {
+		gKeyboardInsetSetter = nil // stop receiving keyboard-height updates
 		if popup != nil {
 			popup.Hide()
 		}
@@ -324,42 +314,37 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		}
 		popup.ShowAtPosition(fyne.NewPos(x, topY))
 
-		// Lift the verse row above the soft keyboard while a verse field is focused, by
-		// growing kbInset — deferred off the focus event (so it doesn't re-enter layout)
-		// and guarded so it never touches a closed popup. The iOS number pad is ~a third
-		// of the screen; tuned so the verse row sits JUST above it, not floating high.
+		// Lift the verse row to sit EXACTLY above the soft keyboard, from the keyboard's
+		// real on-screen overlap reported by the native observer (bibleTextKeyboardChanged
+		// → gKeyboardInsetSetter; 0 when hidden). The card doesn't reach the screen bottom
+		// (anchored below the safe area + double-padded by surface), so the verse row
+		// already sits `belowCard + cardPad` above the screen bottom with no keyboard — lift
+		// it by exactly the rest so its bottom lands on the keyboard top. Geometry only
+		// shifts INSIDE the full-screen card (the popup is never resized), so the picker
+		// can't self-dismiss. Guarded against a closed popup.
 		if kbInset != nil {
-			kb := cnv.Size().Height * 0.33
-			if kb > 320 {
-				kb = 320
+			belowCard := cnv.Size().Height - topY - h // card bottom → screen bottom
+			cardPad := 2 * theme.Padding()            // surface wraps the body in NewPadded twice
+			gKeyboardInsetSetter = func(overlap float32) {
+				if popup == nil || !popup.Visible() {
+					return
+				}
+				inset := overlap - belowCard - cardPad
+				if inset < 0 {
+					inset = 0
+				}
+				kbInset.SetMinSize(fyne.NewSize(0, inset))
+				body.Refresh()
 			}
-			if kb < 220 {
-				kb = 220
-			}
-			startEntry.onFocus = func(bool) {
-				time.AfterFunc(50*time.Millisecond, func() {
-					fyne.Do(func() {
-						if popup == nil || !popup.Visible() {
-							return
-						}
-						h := float32(0)
-						if f := cnv.Focused(); f == startEntry || f == endEntry {
-							h = kb
-						}
-						kbInset.SetMinSize(fyne.NewSize(0, h))
-						body.Refresh()
-					})
-				})
-			}
-			endEntry.onFocus = startEntry.onFocus
 		}
 		// A non-modal popup also closes on a tap OUTSIDE the card (PopUp.Tapped → Hide),
 		// which bypasses closePicker — so the reading overlay would stay suppressed and the
 		// pane blank. Poll until the popup is gone by ANY route, then restore the overlay
-		// (idempotent with closePicker).
+		// + stop receiving keyboard updates (idempotent with closePicker).
 		var watchDismiss func()
 		watchDismiss = func() {
 			if popup == nil || !popup.Visible() {
+				gKeyboardInsetSetter = nil
 				if state.showReadingOverlay != nil {
 					state.showReadingOverlay()
 				}

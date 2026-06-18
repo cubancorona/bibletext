@@ -36,6 +36,23 @@ func bibleTextReadingScrolled() {
 	}
 }
 
+// bibleTextKeyboardChanged reports the iOS soft keyboard's on-screen overlap (its height
+// in points, 0 when hidden) from a keyboard-frame observer, so the Goto verse picker can
+// lift its bottom row to sit EXACTLY above the keyboard rather than estimating. Runs on
+// the native main thread; it hops to Fyne's goroutine and forwards to whatever inset
+// setter the open picker registered (nil when no picker is up, so other keyboards — e.g.
+// the search field — are ignored).
+//
+//export bibleTextKeyboardChanged
+func bibleTextKeyboardChanged(height C.double) {
+	h := float32(height)
+	fyne.Do(func() {
+		if gKeyboardInsetSetter != nil {
+			gKeyboardInsetSetter(h)
+		}
+	})
+}
+
 // bibleTextAIMenuTapped is called from the HBReadingTextView subclasses when the
 // user picks an AI study action. It runs on the native UI thread, so it copies the
 // C strings right away and hops onto Fyne's UI goroutine before showing anything.

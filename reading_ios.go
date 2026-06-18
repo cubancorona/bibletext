@@ -33,6 +33,10 @@ extern void bibleTextReadingScrolled(void);
 // highlight" from the inline native menu. Go clears the highlight state and
 // re-renders so the .hl background wash disappears.
 extern void bibleTextHighlightCleared(void);
+// Called from the soft-keyboard frame observer with the keyboard's on-screen overlap
+// (height in points, 0 when hidden). The Goto verse picker lifts its bottom row by this
+// to sit exactly above the keyboard.
+extern void bibleTextKeyboardChanged(double height);
 
 // --- Reading-position restore -------------------------------------------------
 // A one-shot scroll target applied when reopening into the last-read chapter
@@ -410,6 +414,23 @@ static void bibleTextEnsureTV(void) {
                 tv.hlMenu = [[UIEditMenuInteraction alloc] initWithDelegate:tv];
             }
             gReadingTV = tv;
+            // Soft-keyboard frame observer (registered once, with the persistent text
+            // view): report the keyboard's on-screen overlap so the Goto verse picker
+            // lifts its bottom row to sit EXACTLY above the keyboard (no estimate). The
+            // end frame is in screen coords; for a full-screen app that equals the Fyne
+            // canvas, so the overlap is the inset in points. WillChangeFrame covers
+            // show/move; WillHide guarantees a 0 on dismissal.
+            NSOperationQueue *mq = [NSOperationQueue mainQueue];
+            [[NSNotificationCenter defaultCenter] addObserverForName:UIKeyboardWillChangeFrameNotification
+                object:nil queue:mq usingBlock:^(NSNotification *note) {
+                    CGRect end = [note.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+                    CGFloat overlap = CGRectGetMaxY([UIScreen mainScreen].bounds) - end.origin.y;
+                    bibleTextKeyboardChanged(overlap > 0 ? (double)overlap : 0.0);
+                }];
+            [[NSNotificationCenter defaultCenter] addObserverForName:UIKeyboardWillHideNotification
+                object:nil queue:mq usingBlock:^(NSNotification *note) {
+                    bibleTextKeyboardChanged(0.0);
+                }];
             NSLog(@"bibletext: ensureTV — created UITextView, attaching to window %@", win);
         }
         // Host the text view inside the root view controller's view, NOT the bare
