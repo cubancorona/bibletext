@@ -38,7 +38,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		searchEntry.SetText("")
 	})
 	clearSearch.Importance = widget.LowImportance
-	searchRow := container.NewBorder(nil, nil, nil, clearSearch, inputFrame(searchEntry, pal.Border))
+	searchRow := container.NewBorder(nil, nil, nil, clearSearch, inputFrame(withCaret(state, searchEntry), pal.Border))
 
 	state.setSearchText = func(s string) {
 		searchEntry.SetText(s)
@@ -101,7 +101,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	clearAsk.Importance = widget.LowImportance
 	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { runAsk(aiEntry.Text) })
 	askBtn.Importance = widget.LowImportance
-	askRow := container.NewBorder(nil, nil, nil, container.NewHBox(clearAsk, askBtn), inputFrame(aiEntry, pal.Border))
+	askRow := container.NewBorder(nil, nil, nil, container.NewHBox(clearAsk, askBtn), inputFrame(withCaret(state, aiEntry), pal.Border))
 
 	// Field + caption swap with the Find/Ask toggle.
 	fieldHost := container.NewStack()
@@ -210,7 +210,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		captionHost,
 		spacer(10),
 		sectionLabel("BOOKS", pal),
-		inputFrame(bookFilter, pal.Border),
+		inputFrame(withCaret(state, bookFilter), pal.Border),
 	)
 	applyMode() // initialise the field + caption to the persisted mode
 
