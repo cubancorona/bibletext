@@ -9,9 +9,24 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// numberEntry is an Entry that requests the iOS number pad. iOS number pads have no
+// hyphen, so the Goto picker adds a "–" key beside the field for verse ranges.
+type numberEntry struct {
+	widget.Entry
+}
+
+func (e *numberEntry) Keyboard() mobile.KeyboardType { return mobile.NumberKeyboard }
+
+func newNumberEntry() *numberEntry {
+	e := &numberEntry{}
+	e.ExtendBaseWidget(e)
+	return e
+}
 
 // gotoPickerModal is the shared book + chapter picker. Two flavours:
 //
@@ -67,7 +82,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		return -1
 	}
 
-	var verseEntry *widget.Entry
+	var verseEntry *numberEntry
 	commit := func() {
 		verseText := ""
 		if verseEntry != nil {
@@ -141,42 +156,49 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 
 	var bottom fyne.CanvasObject
 	if withVerse {
-		verseEntry = widget.NewEntry()
+		verseEntry = newNumberEntry()
 		verseEntry.SetPlaceHolder("verse — e.g. 16 or 16-18")
 		verseEntry.OnSubmitted = func(string) { commit() }
 		caret := withCaret(state, verseEntry)
+		// iOS number pads have no hyphen, so a "–" key sits beside the field for ranges.
+		dashBtn := widget.NewButton("–", func() {
+			verseEntry.SetText(verseEntry.Text + "-")
+			verseEntry.CursorColumn = len([]rune(verseEntry.Text))
+			cnv.Focus(verseEntry)
+		})
+		dashBtn.Importance = widget.LowImportance
 		goBtn := widget.NewButton("Go", commit)
 		goBtn.Importance = widget.HighImportance
-		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border)))
+		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, container.NewHBox(dashBtn, goBtn), inputFrame(caret, pal.Border)))
 	}
 
 	body := container.NewBorder(header, bottom, left, nil, container.NewPadded(chapterPane))
 	card := surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{})
 
 	if withVerse {
-		// The verse box sits at the BOTTOM of the card, but a modal popup always
-		// centers and can't be moved (see the fyne-modal-keyboard note), so a centered
-		// card's bottom would be under the iOS keyboard. Anchor the card near the TOP
-		// via a full-canvas layout, so its bottom row clears the keyboard. The modal
-		// underlay still dims the whole screen.
-		boxW, _ := pickerSplitSize(cnv)
-		safePos, _ := cnv.InteractiveArea()
-		topY := safePos.Y + 8
-		boxH := cnv.Size().Height*0.52 - topY
-		if boxH > 520 {
-			boxH = 520
+		// Top-anchored, non-modal so the bottom verse box stays ABOVE the iOS
+		// keyboard. A modal popup always centers and ignores Move (so the verse box
+		// would land under the keyboard, which the canvas doesn't shrink for); a
+		// non-modal popup honors Move and dismisses on a tap outside the card.
+		popup = widget.NewPopUp(card, cnv)
+		w, h := pickerVerseSize(cnv)
+		popup.Resize(fyne.NewSize(w, h))
+		// Center horizontally on the full canvas (the renderer clamps X to the canvas
+		// anyway); anchor the top just below the safe-area inset so the card sits high
+		// and the bottom verse box clears the keyboard.
+		topY := float32(12)
+		if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+			topY = pos.Y + 12
 		}
-		if boxH < 300 {
-			boxH = 300
+		x := (cnv.Size().Width - w) / 2
+		if x < 0 {
+			x = 0
 		}
-		content := container.New(topBoxLayout{box: fyne.NewSize(boxW, boxH), topY: topY}, card)
-		popup = widget.NewModalPopUp(content, cnv)
-		popup.Show()
-		popup.Resize(cnv.Size()) // fill the canvas so the layout gets the full size
+		popup.ShowAtPosition(fyne.NewPos(x, topY))
 	} else {
 		popup = widget.NewModalPopUp(card, cnv)
 		popup.Show()
-		w, h := pickerSplitSize(cnv) // roomy + centered; no keyboard in this flavour
+		w, h := pickerSplitSize(cnv)
 		popup.Resize(fyne.NewSize(w, h))
 	}
 
@@ -286,7 +308,7 @@ func (c caretTheme) Color(name fyne.ThemeColorName, v fyne.ThemeVariant) color.C
 // zeroes SizeNameInputBorder globally (to hide the read-only reading Entry's caret),
 // which also hides the caret in every other field; this scopes a 1px caret back to
 // just the wrapped entry. Pair with inputFrame for the visible border.
-func withCaret(state *AppState, e *widget.Entry) fyne.CanvasObject {
+func withCaret(state *AppState, e fyne.CanvasObject) fyne.CanvasObject {
 	var base fyne.Theme = theme.DefaultTheme()
 	if state.theme != nil {
 		base = state.theme
@@ -306,33 +328,6 @@ func (t smallChipTheme) Size(name fyne.ThemeSizeName) float32 {
 		return 5
 	}
 	return t.Theme.Size(name)
-}
-
-// topBoxLayout positions its single child as a fixed-size box, horizontally centered
-// and anchored at a given Y, within the full parent (the canvas-sized modal content).
-// It lets the Goto picker's card sit near the top — so its bottom verse box clears the
-// iOS keyboard — even though a modal PopUp itself can't be moved (it always centers).
-type topBoxLayout struct {
-	box  fyne.Size
-	topY float32
-}
-
-func (l topBoxLayout) MinSize(_ []fyne.CanvasObject) fyne.Size { return fyne.Size{} }
-
-func (l topBoxLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
-	if len(objs) == 0 {
-		return
-	}
-	w := l.box.Width
-	if w > size.Width {
-		w = size.Width
-	}
-	h := l.box.Height
-	if l.topY+h > size.Height {
-		h = size.Height - l.topY
-	}
-	objs[0].Resize(fyne.NewSize(w, h))
-	objs[0].Move(fyne.NewPos((size.Width-w)/2, l.topY))
 }
 
 // gotoButton is the small, quiet "Go to" chip in the header center slot that opens
