@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"fyne.io/fyne/v2"
@@ -287,6 +288,22 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 			x = 0
 		}
 		popup.ShowAtPosition(fyne.NewPos(x, topY))
+		// A non-modal popup also closes on a tap OUTSIDE the card (Fyne's PopUp.Tapped →
+		// Hide), which bypasses closePicker — so without this the reading overlay would
+		// stay suppressed (hideReadingOverlay latched it down) and the reading pane would
+		// go blank until another modal cycled through closePicker. Poll until the popup is
+		// gone by ANY route, then restore the overlay (idempotent with closePicker).
+		var watchDismiss func()
+		watchDismiss = func() {
+			if popup == nil || !popup.Visible() {
+				if state.showReadingOverlay != nil {
+					state.showReadingOverlay()
+				}
+				return
+			}
+			time.AfterFunc(200*time.Millisecond, func() { fyne.Do(watchDismiss) })
+		}
+		time.AfterFunc(200*time.Millisecond, func() { fyne.Do(watchDismiss) })
 	} else {
 		popup = widget.NewModalPopUp(card, cnv)
 		popup.Show()
