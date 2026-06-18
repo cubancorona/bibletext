@@ -147,7 +147,7 @@ func showAISettings(state *AppState) {
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
 				container.NewBorder(nil, nil, heading, link),
-				entry,
+				withCaret(state, entry),
 				status,
 				// Paste + Clear + Test sit on the left; the result label fills the
 				// rest, so showing it never grows the sheet.

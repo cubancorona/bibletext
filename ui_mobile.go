@@ -226,7 +226,7 @@ func buildMobileBooksTab(state *AppState, switchToRead func()) fyne.CanvasObject
 
 	header := container.NewVBox(
 		sectionLabel("BOOKS", pal),
-		inputFrame(bookFilter, pal.Border),
+		inputFrame(withCaret(state, bookFilter), pal.Border),
 	)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, list)
 }

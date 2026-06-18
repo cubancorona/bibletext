@@ -493,16 +493,23 @@ func parseVerseBox(s string) (start, end int, ok bool) {
 	return start, end, true
 }
 
-// caretTheme re-enables the blinking Entry caret for a single field. The base theme
-// zeroes SizeNameInputBorder (theme.go) so the read-only reading Entry shows no caret
-// — in Fyne 2.7.4 that size IS the caret width (entry.go moveCursor). We restore 1px
-// here for the verse box and make Fyne's own (now 1px) Entry border transparent, so
-// only this field gets a cursor and the border isn't doubled (inputFrame draws ours).
+// caretTheme styles a single input field: it re-enables the blinking Entry caret (the
+// base theme zeroes SizeNameInputBorder to hide the read-only reading Entry's caret —
+// in Fyne 2.7.4 that size IS the caret width, entry.go moveCursor — so we restore 1px
+// and make Fyne's own Entry border transparent so it isn't doubled with inputFrame's),
+// and shrinks the field text. Fyne entries draw the placeholder + typed text at
+// SizeNameText, which the app sets to 18pt for body text — too large for a hint — so
+// fields use a smaller fieldTextSize.
 type caretTheme struct{ fyne.Theme }
 
+const fieldTextSize = 14 // input/placeholder text in search + text boxes (vs 18pt body)
+
 func (c caretTheme) Size(name fyne.ThemeSizeName) float32 {
-	if name == theme.SizeNameInputBorder {
+	switch name {
+	case theme.SizeNameInputBorder:
 		return 1
+	case theme.SizeNameText:
+		return fieldTextSize
 	}
 	return c.Theme.Size(name)
 }
