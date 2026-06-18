@@ -412,27 +412,6 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
 }
 
-// buildSearchModeToggle is a two-segment control switching the Search tab between
-// keyword ("Find") and natural-language ("Ask") search; the active half is filled.
-func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
-	var find, ask *widget.Button
-	apply := func(ai bool) {
-		find.Importance = widget.MediumImportance
-		ask.Importance = widget.MediumImportance
-		if ai {
-			ask.Importance = widget.HighImportance
-		} else {
-			find.Importance = widget.HighImportance
-		}
-		find.Refresh()
-		ask.Refresh()
-	}
-	find = widget.NewButton("Find", func() { apply(false); onSelect(false) })
-	ask = widget.NewButton("Ask", func() { apply(true); onSelect(true) })
-	apply(state.aiSearchMode)
-	return container.NewGridWithColumns(2, find, ask)
-}
-
 // ----------------------------------------------------------------------------
 // Custom bottom tab bar
 // ----------------------------------------------------------------------------
