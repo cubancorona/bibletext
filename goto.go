@@ -18,12 +18,28 @@ import (
 
 // numberEntry is an Entry that requests the iOS number pad. iOS number pads have no
 // hyphen, so the Goto picker takes a verse range as TWO number fields (start + end)
-// rather than one hyphenated field.
+// rather than one hyphenated field. onFocus fires on focus gain/loss so the picker can
+// shrink to clear the keyboard only while a field is being typed into.
 type numberEntry struct {
 	widget.Entry
+	onFocus func(focused bool)
 }
 
 func (e *numberEntry) Keyboard() mobile.KeyboardType { return mobile.NumberKeyboard }
+
+func (e *numberEntry) FocusGained() {
+	e.Entry.FocusGained()
+	if e.onFocus != nil {
+		e.onFocus(true)
+	}
+}
+
+func (e *numberEntry) FocusLost() {
+	e.Entry.FocusLost()
+	if e.onFocus != nil {
+		e.onFocus(false)
+	}
+}
 
 func newNumberEntry() *numberEntry {
 	e := &numberEntry{}
@@ -282,15 +298,46 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// would land under the keyboard, which the canvas doesn't shrink for); a
 		// non-modal popup honors Move and dismisses on a tap outside the card.
 		popup = widget.NewPopUp(card, cnv)
-		w, h := pickerVerseSize(cnv)
-		popup.Resize(fyne.NewSize(w, h))
-		// Center horizontally on the full canvas (the renderer clamps X to the canvas
-		// anyway); anchor the top just below the safe-area inset so the card sits high
-		// and the bottom verse box clears the keyboard.
+		// Anchor the top just below the safe-area inset; the card grows downward from
+		// there (the renderer clamps X to the canvas anyway).
 		topY := float32(12)
 		if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 			topY = pos.Y + 12
 		}
+		// resizePicker swaps between near-full-screen (keyboard down → the whole grids
+		// and lists are visible) and the upper ~55% (keyboard up → the bottom verse box
+		// clears the number pad), staying top-anchored + centered. A non-modal popup
+		// honors Move/Resize, so this is a cheap re-layout, not a rebuild.
+		resizePicker := func(keyboard bool) {
+			w, h := pickerVerseSize(cnv, keyboard)
+			popup.Resize(fyne.NewSize(w, h))
+			x := (cnv.Size().Width - w) / 2
+			if x < 0 {
+				x = 0
+			}
+			popup.Move(fyne.NewPos(x, topY))
+		}
+		// Shrink only while a verse field is focused (the keyboard is up). On focus loss,
+		// defer the grow so moving start↔end (FocusLost then FocusGained) doesn't flicker
+		// — only grow back when neither field still holds focus.
+		onVerseFocus := func(focused bool) {
+			if focused {
+				resizePicker(true)
+				return
+			}
+			time.AfterFunc(60*time.Millisecond, func() {
+				fyne.Do(func() {
+					if f := cnv.Focused(); f != startEntry && f != endEntry {
+						resizePicker(false)
+					}
+				})
+			})
+		}
+		startEntry.onFocus = onVerseFocus
+		endEntry.onFocus = onVerseFocus
+
+		w, h := pickerVerseSize(cnv, false) // open near full-screen
+		popup.Resize(fyne.NewSize(w, h))
 		x := (cnv.Size().Width - w) / 2
 		if x < 0 {
 			x = 0
