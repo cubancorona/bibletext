@@ -2,7 +2,6 @@ package bibletext
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -362,18 +361,56 @@ func TestGoToReferenceResolvesVerseAndChapter(t *testing.T) {
 	}
 }
 
-func TestChapterTailPatternStripsToBookPortion(t *testing.T) {
-	cases := map[string]string{
-		"John 3:16": "John",
-		"1 John 3":  "1 John",
-		"1 John":    "1 John",
-		"joh":       "joh",
-		"Psalm 23":  "Psalm",
+func TestParseVerseBox(t *testing.T) {
+	ok := map[string]int{
+		"16":    16,
+		"  16 ": 16,
+		"16-18": 16, // range -> first verse
+		"16–18": 16, // en-dash range
+		"16:18": 16, // colon-separated
+		"1":     1,
 	}
-	for in, want := range cases {
-		if got := strings.TrimSpace(chapterTailPattern.ReplaceAllString(in, "")); got != want {
-			t.Errorf("book portion of %q = %q, want %q", in, got, want)
+	for in, want := range ok {
+		if got, valid := parseVerseBox(in); !valid || got != want {
+			t.Errorf("parseVerseBox(%q) = (%d, %v), want (%d, true)", in, got, valid, want)
 		}
+	}
+	for _, in := range []string{"", "  ", "abc", "0", "-5", "v16"} {
+		if got, valid := parseVerseBox(in); valid {
+			t.Errorf("parseVerseBox(%q) = (%d, true), want ok=false", in, got)
+		}
+	}
+}
+
+func TestGoToChapterWithVerse(t *testing.T) {
+	state := sampleState()
+
+	// Empty box -> chapter top, no highlight.
+	goToChapterWithVerse(state, "John", 3, "")
+	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
+		t.Fatalf("expected John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
+	}
+	if state.HasHighlightedVerse {
+		t.Fatal("empty verse box should not highlight a verse")
+	}
+
+	// A valid verse -> highlight it.
+	if state.Bible.GetVerse("John", 3, 16) != nil {
+		goToChapterWithVerse(state, "John", 3, "16")
+		if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
+			t.Fatalf("expected verse 16 highlighted, got hv=%v v=%d", state.HasHighlightedVerse, state.HighlightedVerse)
+		}
+		// A range -> highlight its first verse.
+		goToChapterWithVerse(state, "John", 3, "16-18")
+		if state.HighlightedVerse != 16 {
+			t.Fatalf("expected range to highlight first verse 16, got %d", state.HighlightedVerse)
+		}
+	}
+
+	// An out-of-range verse -> falls back to chapter top (no highlight).
+	goToChapterWithVerse(state, "John", 3, "9999")
+	if state.HasHighlightedVerse {
+		t.Fatal("out-of-range verse should fall back to chapter top, not highlight")
 	}
 }
 

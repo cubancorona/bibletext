@@ -68,7 +68,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// opens the combined reference picker (book list + chapter grid).
 	const titleBoxH = 38
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
-		showReferencePicker(state)
+		showGotoPicker(state)
 	})
 
 	// Small copy icon tucked beside the heading — close to the text it copies.
@@ -86,7 +86,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
 	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, navBoxH, false, func() {
-		showReferencePicker(state)
+		showGotoPicker(state)
 	})
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
@@ -833,102 +833,6 @@ func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 	for _, o := range objs {
 		o.Resize(fyne.NewSize(f.width, size.Height))
 		o.Move(fyne.NewPos(0, 0))
-	}
-}
-
-func showReferencePicker(state *AppState) {
-	cnv := pickerCanvas(state)
-	if cnv == nil {
-		return
-	}
-	pal := state.pal()
-
-	// On iOS the reading view is a native UITextView overlay that floats above
-	// the Fyne canvas, so it would cover (and steal touches from) this popup.
-	// Hide it while the picker is open; restore on dismiss. No-op elsewhere.
-	if state.hideReadingOverlay != nil {
-		state.hideReadingOverlay()
-	}
-	restore := func() {
-		if state.showReadingOverlay != nil {
-			state.showReadingOverlay()
-		}
-	}
-
-	var popup *widget.PopUp
-	closePicker := func() {
-		if popup != nil {
-			popup.Hide()
-		}
-		restore()
-	}
-
-	books := state.Bible.Books
-	selected := state.CurrentBook
-
-	// Right pane: the chapter grid for the currently-selected book.
-	chapterPane := container.NewStack()
-	renderChapters := func(book string) {
-		chapterPane.Objects = []fyne.CanvasObject{referenceChapterGrid(state, pal, book, func(ch int) {
-			navigateToReference(state, book, ch)
-			closePicker()
-		})}
-		chapterPane.Refresh()
-	}
-	renderChapters(selected)
-
-	// Left pane: a scrollable list of every book; selecting one swaps the right
-	// pane to that book's chapters (without navigating yet).
-	list := widget.NewList(
-		func() int { return len(books) },
-		func() fyne.CanvasObject {
-			lbl := widget.NewLabel("")
-			lbl.Truncation = fyne.TextTruncateEllipsis
-			return lbl
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			lbl := o.(*widget.Label)
-			lbl.SetText(books[i])
-			if books[i] == selected {
-				lbl.TextStyle = fyne.TextStyle{Bold: true}
-			} else {
-				lbl.TextStyle = fyne.TextStyle{}
-			}
-			lbl.Refresh()
-		},
-	)
-	list.OnSelected = func(id widget.ListItemID) {
-		if id < 0 || id >= len(books) {
-			return
-		}
-		selected = books[id]
-		renderChapters(selected)
-		list.Refresh()
-	}
-
-	title := canvas.NewText("Go to", pal.Text)
-	title.TextStyle = fyne.TextStyle{Bold: true}
-	title.TextSize = 18
-	header := pickerHeader(title, closePicker)
-
-	divider := canvas.NewRectangle(pal.Border)
-	divider.SetMinSize(fyne.NewSize(1, 0))
-	left := container.New(fixedWidthLayout{width: 152},
-		container.NewBorder(nil, nil, nil, divider, list))
-	body := container.NewBorder(header, nil, left, nil, container.NewPadded(chapterPane))
-
-	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
-	popup.Show()
-	w, h := pickerSplitSize(cnv)
-	popup.Resize(fyne.NewSize(w, h))
-
-	// Highlight + reveal the current book (its OnSelected refreshes the chapters).
-	for i, b := range books {
-		if b == selected {
-			list.Select(i)
-			list.ScrollTo(i)
-			break
-		}
 	}
 }
 
