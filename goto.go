@@ -50,8 +50,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	// canonical Bible order.
 	books := state.Bible.Books
 	if withVerse {
-		books = append([]string(nil), books...)
-		sort.Strings(books)
+		books = alphabeticalBooks(books)
 	}
 	selectedBook := state.CurrentBook
 	selectedChapter := state.CurrentChapter
@@ -140,7 +139,12 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	left := container.New(fixedWidthLayout{width: 152},
 		container.NewBorder(nil, nil, nil, divider, list))
 
-	var bottom fyne.CanvasObject
+	// The verse/range box + Go sit at the TOP (under the header), not the bottom: a
+	// modal popup is always centered and cannot be moved (PopUp.Move is a no-op when
+	// modal), and the mobile canvas doesn't shrink for the keyboard — so a bottom
+	// field ends up under the iOS keyboard. Up top it stays well clear of it. You pick
+	// the book + chapter in the lists below, then reach up to type the verse and Go.
+	top := fyne.CanvasObject(header)
 	if withVerse {
 		verseEntry = widget.NewEntry()
 		verseEntry.SetPlaceHolder("verse — e.g. 16 or 16-18")
@@ -153,34 +157,15 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		caret := container.NewThemeOverride(verseEntry, caretTheme{Theme: base})
 		goBtn := widget.NewButton("Go", commit)
 		goBtn.Importance = widget.HighImportance
-		bottom = container.NewPadded(container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border)))
+		verseRow := container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border))
+		top = container.NewVBox(header, container.NewPadded(verseRow))
 	}
 
-	body := container.NewBorder(header, bottom, left, nil, container.NewPadded(chapterPane))
+	body := container.NewBorder(top, nil, left, nil, container.NewPadded(chapterPane))
 	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
 	popup.Show()
-
-	if withVerse {
-		// Keep the modal short and anchored near the top so its bottom row (verse box +
-		// Go) clears the iOS keyboard. PopUp.Move sets innerPos, which the renderer
-		// honors, so the anchor sticks even as the keyboard opens.
-		cw, chH := cnv.Size().Width, cnv.Size().Height
-		safePos, _ := cnv.InteractiveArea()
-		popW, _ := pickerSplitSize(cnv)
-		topY := safePos.Y + 8
-		popH := chH*0.46 - topY
-		if popH > 520 {
-			popH = 520
-		}
-		if popH < 280 {
-			popH = 280
-		}
-		popup.Resize(fyne.NewSize(popW, popH))
-		popup.Move(fyne.NewPos((cw-popW)/2, topY))
-	} else {
-		w, h := pickerSplitSize(cnv) // roomy + centered; no keyboard in this flavour
-		popup.Resize(fyne.NewSize(w, h))
-	}
+	w, h := pickerSplitSize(cnv) // roomy, centered; the verse box is up top, above the keyboard
+	popup.Resize(fyne.NewSize(w, h))
 
 	for i, b := range books {
 		if b == selectedBook {
@@ -196,6 +181,30 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 // verse box, chapter-tap navigates immediately.
 func showGotoPicker(state *AppState)    { gotoPickerModal(state, true) }
 func showChapterPicker(state *AppState) { gotoPickerModal(state, false) }
+
+// alphabeticalBooks returns the books sorted by name, treating a leading number as a
+// book ordinal rather than a sort character: "1 John"/"2 John"/"3 John" group under
+// "John" (after the gospel of John), "1 Corinthians" under "Corinthians", etc.
+func alphabeticalBooks(books []string) []string {
+	out := append([]string(nil), books...)
+	base := func(b string) (string, int) {
+		if i := strings.IndexByte(b, ' '); i > 0 {
+			if n, err := strconv.Atoi(b[:i]); err == nil {
+				return strings.ToLower(b[i+1:]), n // "1 John" -> ("john", 1)
+			}
+		}
+		return strings.ToLower(b), 0
+	}
+	sort.Slice(out, func(i, j int) bool {
+		ni, oi := base(out[i])
+		nj, oj := base(out[j])
+		if ni != nj {
+			return ni < nj
+		}
+		return oi < oj
+	})
+	return out
+}
 
 // goToChapterWithVerse navigates to book+chapter, honoring the optional verse box:
 // empty → chapter top; "16" → highlight v16; "16-18" → highlight verses 16 through 18.

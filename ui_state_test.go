@@ -424,6 +424,19 @@ func TestGoToChapterWithVerse(t *testing.T) {
 	}
 }
 
+func TestAlphabeticalBooksSortsNumberedByName(t *testing.T) {
+	in := []string{"John", "1 John", "3 John", "2 John", "Acts", "1 Corinthians", "2 Corinthians", "Jonah"}
+	got := alphabeticalBooks(in)
+	want := []string{"Acts", "1 Corinthians", "2 Corinthians", "John", "1 John", "2 John", "3 John", "Jonah"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("alphabeticalBooks:\n got %v\nwant %v", got, want)
+	}
+	// Input must not be mutated.
+	if in[0] != "John" {
+		t.Fatalf("alphabeticalBooks mutated its input: %v", in)
+	}
+}
+
 func TestFilterBooks(t *testing.T) {
 	books := []string{"Genesis", "Exodus", "John", "1 John", "2 John"}
 
