@@ -64,11 +64,15 @@ done
 note "provisioning profile: $PROFILE_NAME"
 
 # ── 4. let fyne assemble the .app bundle (Info.plist + icons + assets) ───────
-# fyne signs with manual settings and will FAIL on the managed profile — that's
-# expected; we only need the bundle it produces before that step.
-note "fyne package -os ios (assembling the app bundle; its signing step will fail — ignored)"
-( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" \
-    --certificate "$CERT_NAME" --profile "$PROFILE_NAME" >/tmp/fyne_bundle.log 2>&1 ) || true
+# We re-sign manually in step 6, so do NOT pass --certificate/--profile here.
+# Passing them makes fyne configure *manual* signing in its generated xcodeproj;
+# if the named provisioning profile is Xcode-*managed* (Xcode may flip it to managed
+# at any time), xcodebuild then aborts the ENTIRE build before assembling a bundle
+# ("… is Xcode managed, but signing settings require a manually managed profile"),
+# leaving nothing to reuse. Assembling unsigned keeps this step independent of the
+# provisioning state — fyne exits 0 and leaves the bundle, and step 6 signs it.
+note "fyne package -os ios (assembling the app bundle, unsigned; we re-sign in step 6)"
+( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >/tmp/fyne_bundle.log 2>&1 ) || true
 git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true
 APP="$APP_DIR/$APP_NAME"
 [ -f "$APP/Info.plist" ] || { tail -20 /tmp/fyne_bundle.log; fail "fyne did not leave an app bundle to reuse."; }
