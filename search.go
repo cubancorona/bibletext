@@ -44,17 +44,9 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 		return searchPromptView(state)
 	}
 
-	// Echo the query as a heading, but truncate-to-fit with an ellipsis: a
-	// width-aware Label keeps an unusually long query (a big paste, or repeated
-	// characters) from rendering as one unbroken bar that runs off the edge of
-	// the results header — on both the narrow phone column and the wide desktop
-	// pane. Colour comes from the theme foreground (= pal.Text); SizeNameHeadingText
-	// matches the other page headings.
-	title := widget.NewLabel(fmt.Sprintf("Results for %q", trimmed))
-	title.TextStyle = fyne.TextStyle{Bold: true}
-	title.SizeName = theme.SizeNameHeadingText
-	title.Truncation = fyne.TextTruncateEllipsis
-
+	// The query already shows in the search field above, so the results header is just
+	// a compact muted count line (no big "Results for …" heading) — keeps the results
+	// taking most of the pane.
 	var sub string
 	switch {
 	case len(state.SearchResults) == 0:
@@ -79,7 +71,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	trackSearchScroll(state, scroll)
 	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
 
-	head := container.NewVBox(title, subLabel, widget.NewSeparator())
+	head := container.NewVBox(subLabel, widget.NewSeparator())
 	return container.NewPadded(container.NewBorder(head, nil, nil, nil, paper))
 }
 
@@ -117,12 +109,7 @@ func searchPromptView(state *AppState) fyne.CanvasObject {
 // but the text shown is the real verse from our Bible.
 func aiResultsView(state *AppState, query string, verses []Verse) fyne.CanvasObject {
 	pal := state.pal()
-	q := strings.TrimSpace(query)
-
-	title := widget.NewLabel(fmt.Sprintf("Passages for %q", q))
-	title.TextStyle = fyne.TextStyle{Bold: true}
-	title.SizeName = theme.SizeNameHeadingText
-	title.Truncation = fyne.TextTruncateEllipsis
+	_ = query // the question shows in the Ask field above; no big heading here
 
 	sub := fmt.Sprintf("%d passages found by AI", len(verses))
 	switch len(verses) {
@@ -145,7 +132,7 @@ func aiResultsView(state *AppState, query string, verses []Verse) fyne.CanvasObj
 
 	note := canvas.NewText("AI-suggested passages — read each in context.", pal.TextMuted)
 	note.TextSize = 11
-	head := container.NewVBox(title, subLabel, note, widget.NewSeparator())
+	head := container.NewVBox(subLabel, note, widget.NewSeparator())
 	return container.NewPadded(container.NewBorder(head, nil, nil, nil, paper))
 }
 
