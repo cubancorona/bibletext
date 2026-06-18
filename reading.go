@@ -864,9 +864,9 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 	head := canvas.NewText(fmt.Sprintf("%s · %d chapters", book, len(nums)), pal.TextMuted)
 	head.TextSize = 12
 
-	// Fixed-size cells that wrap to as many columns as the pane is wide — so the
-	// grid fits without clipping on a narrow phone pane and fills out on desktop.
-	grid := container.NewGridWrap(fyne.NewSize(46, 40))
+	// Small fixed-size cells, packed tightly (denseGrid), so most books show all their
+	// chapters without scrolling; they wrap to as many columns as the pane is wide.
+	grid := container.NewGridWrap(fyne.NewSize(34, 34))
 	for _, c := range nums {
 		ch := c
 		btn := widget.NewButton(fmt.Sprintf("%d", ch), func() { onPick(ch) })
@@ -879,7 +879,7 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 	}
 
 	return container.NewBorder(container.NewPadded(head), nil, nil, nil,
-		container.NewVScroll(container.NewPadded(grid)))
+		container.NewVScroll(denseGrid(state, grid)))
 }
 
 // pickerHeader is a stage's top row: a leading element (title, or back+title) on
