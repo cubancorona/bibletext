@@ -30,19 +30,18 @@ func newNumberEntry() *numberEntry {
 	return e
 }
 
-// gotoPickerModal is the shared book + chapter picker. The LEFT pane is a two-stage
-// book navigator: an alphabet grid of the letters that have books → tap a letter →
-// that letter's books (with a back row to the alphabet). The RIGHT pane is the chapter
-// grid for the selected book. Two flavours differ only at the bottom + on chapter-tap:
+// gotoPickerModal is the shared book + chapter picker. The RIGHT pane is always the
+// chapter grid for the selected book; the LEFT pane and bottom differ by flavour:
 //
-//   - withVerse=true  (the header "Go to" button → showGotoPicker): a verse-range row
-//     (start + end number fields) + Go button sit at the bottom. Tapping a book or
-//     chapter only SELECTS it; Go commits, honoring the range. Committing via Go — not
-//     a grid tap — is deliberate: once the iOS keyboard is up it covers the grid, so Go
-//     stays reachable above it.
-//   - withVerse=false (the book-name / "Chapter N of M" tap → showChapterPicker): no
-//     verse row, and tapping a CHAPTER navigates immediately. (Tapping a BOOK still only
-//     selects it, so its chapters appear on the right.)
+//   - withVerse=true  (the header "Go to" button → showGotoPicker): the LEFT pane is a
+//     two-stage alphabet navigator (letter grid → that letter's books → back row), and a
+//     verse-range row (start + end number fields) + Go button sit at the bottom. Tapping
+//     a book or chapter only SELECTS it; Go commits, honoring the range. Committing via
+//     Go — not a grid tap — is deliberate: once the iOS keyboard is up it covers the
+//     grid, so Go stays reachable above it.
+//   - withVerse=false (the book-name / "Chapter N of M" tap → showChapterPicker): the
+//     LEFT pane is a plain scrolling book LIST in Bible order, there's no verse row, and
+//     tapping a CHAPTER navigates immediately. (Tapping a BOOK still only selects it.)
 //
 // On iOS the reading pane is a native UITextView floating above the Fyne canvas, so
 // (like every modal here) we hide it while the picker is up and restore on close.
@@ -66,11 +65,6 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		}
 	}
 
-	// The book navigator groups books alphabetically (so "1/2/3 John" sit under J,
-	// "1 Kings" under K, etc.) for both flavours; the alphabet grid shows only the
-	// letters that actually have books.
-	sortedBooks := alphabeticalBooks(state.Bible.Books)
-	letters := bookLetters(sortedBooks)
 	selectedBook := state.CurrentBook
 	selectedChapter := state.CurrentChapter
 
@@ -121,9 +115,8 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	}
 	renderChapters()
 
-	// Tapping a book SELECTS it (refreshes the chapter grid) but stays on the same
-	// letter's list, so re-picking a sibling is one tap; the user returns to the
-	// alphabet only via the back row. Never touches bookStage.
+	// Tapping a book SELECTS it and refreshes the chapter grid — it does not navigate
+	// or change the book-navigator stage. Shared by both left-pane flavours.
 	selectBookInPicker := func(book string) {
 		selectedBook = book
 		if selectedBook == state.CurrentBook {
@@ -136,67 +129,105 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		renderChapters()
 	}
 
-	// The left pane is a two-stage navigator swapped IN PLACE (bookPane.Objects +
-	// Refresh, the same idiom as renderChapters) — no popup rebuild, so the non-modal
-	// anchor and the keyboard never churn. Stage 0 = alphabet grid; stage 1 = the
-	// tapped letter's books with a back row to the alphabet.
-	bookPane := container.NewStack()
-	bookStage := 0
-	activeLetter := firstLetter(state.CurrentBook)
-	var renderBooks func()
-	renderBooks = func() {
-		if bookStage == 1 {
-			// "‹ J" back row: a chevron + the active letter, pinned above the book list.
-			back := widget.NewButtonWithIcon(string(activeLetter), theme.NavigateBackIcon(), func() {
-				bookStage = 0
-				renderBooks()
-			})
-			back.Importance = widget.LowImportance
-			back.Alignment = widget.ButtonAlignLeading
-			rows := container.NewVBox()
-			for _, b := range sortedBooks { // sortedBooks is alphabetical, so the bucket is ordered
-				if firstLetter(b) != activeLetter {
-					continue
-				}
-				book := b
-				btn := widget.NewButton(book, func() { selectBookInPicker(book) })
-				btn.Alignment = widget.ButtonAlignLeading
-				if book == selectedBook {
-					btn.Importance = widget.HighImportance
-				} else {
-					btn.Importance = widget.LowImportance
-				}
-				rows.Add(btn)
-			}
-			bookPane.Objects = []fyne.CanvasObject{
-				container.NewBorder(back, nil, nil, nil, container.NewVScroll(rows)),
-			}
-		} else {
-			head := canvas.NewText("Book", pal.TextMuted)
-			head.TextSize = 12
-			grid := container.NewGridWrap(fyne.NewSize(40, 34)) // dense → 3 cols, all letters
-			for _, r := range letters {
-				letter := r
-				btn := widget.NewButton(string(letter), func() {
-					activeLetter = letter
-					bookStage = 1
+	// Left pane: the verse "Go to" picker uses the alphabet-grid navigator (letters →
+	// books-for-letter → back). The reading-page chapter picker (withVerse=false) keeps
+	// the familiar scrolling book LIST in Bible order.
+	var leftPane fyne.CanvasObject
+	var bookList *widget.List
+	if withVerse {
+		sortedBooks := alphabeticalBooks(state.Bible.Books) // groups "1/2/3 John" under J, etc.
+		letters := bookLetters(sortedBooks)
+		// A two-stage navigator swapped IN PLACE (bookPane.Objects + Refresh, the same
+		// idiom as renderChapters) — no popup rebuild, so the non-modal anchor and the
+		// keyboard never churn. Stage 0 = alphabet grid; stage 1 = the tapped letter's
+		// books with a back row to the alphabet.
+		bookPane := container.NewStack()
+		bookStage := 0
+		activeLetter := firstLetter(state.CurrentBook)
+		var renderBooks func()
+		renderBooks = func() {
+			if bookStage == 1 {
+				// "‹ J" back row: a chevron + the active letter, pinned above the books.
+				back := widget.NewButtonWithIcon(string(activeLetter), theme.NavigateBackIcon(), func() {
+					bookStage = 0
 					renderBooks()
 				})
-				if letter == firstLetter(selectedBook) {
-					btn.Importance = widget.HighImportance // guide the eye to the current book's letter
-				} else {
-					btn.Importance = widget.LowImportance
+				back.Importance = widget.LowImportance
+				back.Alignment = widget.ButtonAlignLeading
+				rows := container.NewVBox()
+				for _, b := range sortedBooks { // alphabetical, so the bucket is ordered
+					if firstLetter(b) != activeLetter {
+						continue
+					}
+					book := b
+					btn := widget.NewButton(book, func() { selectBookInPicker(book) })
+					btn.Alignment = widget.ButtonAlignLeading
+					if book == selectedBook {
+						btn.Importance = widget.HighImportance
+					} else {
+						btn.Importance = widget.LowImportance
+					}
+					rows.Add(btn)
 				}
-				grid.Add(btn)
+				bookPane.Objects = []fyne.CanvasObject{
+					container.NewBorder(back, nil, nil, nil, container.NewVScroll(rows)),
+				}
+			} else {
+				head := canvas.NewText("Book", pal.TextMuted)
+				head.TextSize = 12
+				grid := container.NewGridWrap(fyne.NewSize(40, 34)) // dense → 3 cols, all letters
+				for _, r := range letters {
+					letter := r
+					btn := widget.NewButton(string(letter), func() {
+						activeLetter = letter
+						bookStage = 1
+						renderBooks()
+					})
+					if letter == firstLetter(selectedBook) {
+						btn.Importance = widget.HighImportance // guide the eye to the current book's letter
+					} else {
+						btn.Importance = widget.LowImportance
+					}
+					grid.Add(btn)
+				}
+				bookPane.Objects = []fyne.CanvasObject{
+					container.NewBorder(container.NewPadded(head), nil, nil, nil,
+						container.NewVScroll(denseGrid(state, grid))),
+				}
 			}
-			bookPane.Objects = []fyne.CanvasObject{
-				container.NewBorder(container.NewPadded(head), nil, nil, nil,
-					container.NewVScroll(denseGrid(state, grid))),
-			}
+			bookPane.Refresh()
 		}
-		bookPane.Refresh()
+		renderBooks()
+		leftPane = bookPane
+	} else {
+		books := state.Bible.Books // canonical Bible order
+		bookList = widget.NewList(
+			func() int { return len(books) },
+			func() fyne.CanvasObject {
+				lbl := widget.NewLabel("")
+				lbl.Truncation = fyne.TextTruncateEllipsis
+				return lbl
+			},
+			func(i widget.ListItemID, o fyne.CanvasObject) {
+				lbl := o.(*widget.Label)
+				lbl.SetText(books[i])
+				if books[i] == selectedBook {
+					lbl.TextStyle = fyne.TextStyle{Bold: true}
+				} else {
+					lbl.TextStyle = fyne.TextStyle{}
+				}
+				lbl.Refresh()
+			},
+		)
+		bookList.OnSelected = func(id widget.ListItemID) {
+			if id < 0 || id >= len(books) {
+				return
+			}
+			selectBookInPicker(books[id])
+			bookList.Refresh()
+		}
+		leftPane = bookList
 	}
-	renderBooks()
 
 	title := canvas.NewText("Go to", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -206,7 +237,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	divider := canvas.NewRectangle(pal.Border)
 	divider.SetMinSize(fyne.NewSize(1, 0))
 	left := container.New(fixedWidthLayout{width: 152},
-		container.NewBorder(nil, nil, nil, divider, bookPane))
+		container.NewBorder(nil, nil, nil, divider, leftPane))
 
 	var bottom fyne.CanvasObject
 	if withVerse {
@@ -262,11 +293,23 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		w, h := pickerSplitSize(cnv)
 		popup.Resize(fyne.NewSize(w, h))
 	}
+
+	// List flavour: reveal + highlight the current book once the popup is laid out.
+	if bookList != nil {
+		for i, b := range state.Bible.Books {
+			if b == selectedBook {
+				bookList.Select(i)
+				bookList.ScrollTo(i)
+				break
+			}
+		}
+	}
 }
 
-// showGotoPicker is the header "Go to" button's picker (alphabet navigator + a verse-
-// range row). showChapterPicker is the book-name / chapter-line tap while reading (same
-// navigator, no verse row, chapter-tap navigates immediately).
+// showGotoPicker is the header "Go to" button's picker: the alphabet-grid book
+// navigator + a verse-range row. showChapterPicker is the book-name / chapter-line tap
+// while reading: a plain scrolling book LIST in Bible order, no verse row, chapter-tap
+// navigates immediately.
 func showGotoPicker(state *AppState)    { gotoPickerModal(state, true) }
 func showChapterPicker(state *AppState) { gotoPickerModal(state, false) }
 
