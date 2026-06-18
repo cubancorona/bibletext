@@ -42,6 +42,22 @@ func TestChapterRenderFingerprintChangesOnNavigation(t *testing.T) {
 	}
 }
 
+// Clearing a highlight must change the fingerprint, or the tap-to-clear path
+// (clearHighlightedVerse + refreshReadingOnly) would be skipped by the gate and the
+// .hl background wash would linger on screen.
+func TestChapterRenderFingerprintChangesWhenHighlightCleared(t *testing.T) {
+	s := &AppState{
+		CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3,
+		HasHighlightedVerse: true, HighlightedBook: "John", HighlightedChapter: 3, HighlightedVerse: 16,
+	}
+	before := chapterRenderFingerprint(s)
+	clearHighlightedVerse(s)
+	after := chapterRenderFingerprint(s)
+	if before == after {
+		t.Fatalf("fingerprint unchanged after clearing highlight (%q) — the re-render would be skipped", after)
+	}
+}
+
 // Two different highlighted verses in the same chapter must differ, since the
 // gate decides whether a search-jump (highlight on a specific verse) re-renders.
 func TestChapterRenderFingerprintDistinguishesHighlightedVerse(t *testing.T) {
