@@ -317,19 +317,17 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 			}
 			popup.Move(fyne.NewPos(x, topY))
 		}
-		// Shrink only while a verse field is focused (the keyboard is up). On focus loss,
-		// defer the grow so moving start↔end (FocusLost then FocusGained) doesn't flicker
-		// — only grow back when neither field still holds focus.
-		onVerseFocus := func(focused bool) {
-			if focused {
-				resizePicker(true)
-				return
-			}
+		// Shrink only while a verse field is focused (the keyboard is up). ALWAYS run the
+		// resize off the event handler (AfterFunc + fyne.Do): resizing the popup
+		// synchronously inside FocusGained re-enters Fyne's layout during its own tap/focus
+		// processing AND moves the field out from under the in-flight tap, which tore the
+		// picker down ("crashes away" when tapping the verse box). The brief delay also lets
+		// moving start↔end settle so we only grow back when neither field holds focus.
+		onVerseFocus := func(bool) {
 			time.AfterFunc(60*time.Millisecond, func() {
 				fyne.Do(func() {
-					if f := cnv.Focused(); f != startEntry && f != endEntry {
-						resizePicker(false)
-					}
+					f := cnv.Focused()
+					resizePicker(f == startEntry || f == endEntry)
 				})
 			})
 		}
