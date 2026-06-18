@@ -47,6 +47,14 @@ static CGFloat   gReadingRestoreDelta = 0;
 static CGFloat   gReadingRestoreFrac  = 0;
 static BOOL      gReadingHasRestore   = NO;
 
+// Character range of the highlighted verse (set when arriving from a search
+// result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
+// lands it near the top; HBReadingTextView's btHighlightTap hit-tests a tap
+// against it. Declared up here (before the class) so the methods inside
+// @implementation can reference it — the @implementation precedes the rest of the
+// statics in this file.
+static NSRange gReadingHighlightRange = {NSNotFound, 0};
+
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation) to the standard selection menu and hands the selected
 // text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
@@ -197,12 +205,6 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 // destroy it during the app lifetime — easier to manage than re-attaching,
 // and the iOS selection state stays alive across chapter changes.
 static UITextView *gReadingTV = nil;
-
-// Character range of the highlighted verse (set when arriving from a search
-// result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
-// uses it to land the highlighted verse near the top instead of scrolling to
-// the chapter's first verse.
-static NSRange gReadingHighlightRange = {NSNotFound, 0};
 
 // gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
 // settings) is open. The UITextView floats above the whole Fyne canvas, so it
