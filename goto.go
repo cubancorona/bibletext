@@ -31,6 +31,26 @@ func newNumberEntry() *numberEntry {
 	return e
 }
 
+// searchKeyEntry is a single-line Entry whose virtual keyboard shows a "return" key
+// that SUBMITS (so OnSubmitted fires) instead of iOS's default single-line "Done" key,
+// which merely dismisses the keyboard. Fyne's plain Entry asks for mobile.SingleLineKeyboard
+// on non-multiline fields → UIReturnKeyDone → the native textFieldShouldReturn resigns the
+// responder and never delivers '\n', so OnSubmitted can never fire from the keyboard.
+// Requesting DefaultKeyboard restores the '\n' → KeyReturn → typedKeyReturn → OnSubmitted
+// path, letting the reader run a search straight from the keyboard. (No effect on desktop,
+// where the hardware Return already produces KeyReturn.)
+type searchKeyEntry struct {
+	widget.Entry
+}
+
+func (e *searchKeyEntry) Keyboard() mobile.KeyboardType { return mobile.DefaultKeyboard }
+
+func newSearchEntry() *searchKeyEntry {
+	e := &searchKeyEntry{}
+	e.ExtendBaseWidget(e)
+	return e
+}
+
 // gKeyboardInsetSetter is set by the open mobile verse picker to receive the iOS
 // keyboard's exact on-screen overlap (in points) from the native keyboard observer
 // (bibleTextKeyboardChanged in ai_menu_darwin.go), so it can lift the bottom verse row
@@ -534,16 +554,48 @@ func (c caretTheme) Color(name fyne.ThemeColorName, v fyne.ThemeVariant) color.C
 	return c.Theme.Color(name, v)
 }
 
-// withCaret wraps an Entry so it shows a normal blinking iOS caret. The base theme
-// zeroes SizeNameInputBorder globally (to hide the read-only reading Entry's caret),
-// which also hides the caret in every other field; this scopes a 1px caret back to
-// just the wrapped entry. Pair with inputFrame for the visible border.
+// vCenterLayout holds its single child at the child's natural MinSize height and
+// vertically centers it in whatever height the row hands it. Fyne's entryRenderer
+// top-aligns the text inside the field: at the field's natural height the inner padding
+// balances and the text looks centered, but when a row stretches the field taller (e.g. a
+// 14pt search box sitting beside 18pt buttons) all the extra height falls BELOW the
+// top-aligned text, so it reads as top-biased. Pinning the field to its natural height and
+// centering the whole field restores visual centering without patching Fyne internals.
+type vCenterLayout struct{}
+
+func (vCenterLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	if len(objs) == 0 {
+		return fyne.Size{}
+	}
+	return objs[0].MinSize()
+}
+
+func (vCenterLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	if len(objs) == 0 {
+		return
+	}
+	o := objs[0]
+	h := o.MinSize().Height
+	if h > size.Height {
+		h = size.Height
+	}
+	o.Resize(fyne.NewSize(size.Width, h))
+	o.Move(fyne.NewPos(0, (size.Height-h)/2))
+}
+
+// withCaret wraps an Entry so it shows a normal blinking iOS caret AND vertically centers
+// its (smaller) text within the row. The base theme zeroes SizeNameInputBorder globally (to
+// hide the read-only reading Entry's caret), which also hides the caret in every other
+// field; this scopes a 1px caret back to just the wrapped entry. The vCenterLayout keeps the
+// field at its natural height so its 14pt text doesn't top-bias when the row stretches it.
+// Pair with inputFrame for the visible border.
 func withCaret(state *AppState, e fyne.CanvasObject) fyne.CanvasObject {
 	var base fyne.Theme = theme.DefaultTheme()
 	if state.theme != nil {
 		base = state.theme
 	}
-	return container.NewThemeOverride(e, caretTheme{Theme: base})
+	centered := container.New(vCenterLayout{}, e)
+	return container.NewThemeOverride(centered, caretTheme{Theme: base})
 }
 
 // denseGridTheme tightens the inter-cell gap (SizeNamePadding) and button inner

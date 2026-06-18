@@ -12,6 +12,16 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// dismissKeyboard drops focus from whatever field owns the soft keyboard, which makes
+// Fyne's mobile driver hide it (canvas OnUnfocus → hideVirtualKeyboard). Used after a
+// search/ask is submitted from the keyboard so the results get the full pane instead of
+// sitting behind the keyboard.
+func dismissKeyboard(state *AppState) {
+	if state != nil && state.window != nil {
+		state.window.Canvas().Unfocus()
+	}
+}
+
 // CreateMainUI (mobile) lays the app out as three full-screen tabs across the
 // bottom: Read, Books, Search. Phones don't have room for the desktop's HSplit,
 // and iOS users don't expect a persistent sidebar — tapping a book or a search
@@ -242,7 +252,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	resultsHost := container.NewStack()
 
 	// --- Keyword search. ---
-	searchEntry := widget.NewEntry()
+	searchEntry := newSearchEntry() // keyboard "return" submits (see searchKeyEntry)
 	searchEntry.SetPlaceHolder("Search…")
 	searchEntry.SetText(state.SearchQuery)
 
@@ -264,6 +274,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		stopSearchDebounce() // Enter searches now; cancel the pending debounced run
 		wasSearching := state.IsSearching
 		executeSearch(state, s)
+		dismissKeyboard(state) // keyboard is done; drop it so results get the full pane
 		if wasSearching && !state.IsSearching {
 			switchToRead() // an exact ref jumped to a verse — show it
 		}
@@ -277,7 +288,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	state.setSearchText = func(s string) { searchEntry.SetText(s) }
 
 	// --- Ask-AI search. ---
-	aiEntry := widget.NewEntry()
+	aiEntry := newSearchEntry() // keyboard "return" submits (see searchKeyEntry)
 	aiEntry.SetPlaceHolder("Ask for passages…")
 	aiEntry.SetText(state.aiSearchQuery) // restore the last question on tab return
 
@@ -310,6 +321,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		if q == "" {
 			return
 		}
+		dismissKeyboard(state)  // question submitted; drop the keyboard so results are visible
 		aiDisclaimer.Hide()     // leaving the prompt state → collapse the disclaimer
 		state.searchScrollY = 0 // new results start at the top
 		if !hasAIKey(state) {

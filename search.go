@@ -166,7 +166,7 @@ func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 	title.TextSize = 20
 	title.Alignment = fyne.TextAlignCenter
 
-	hint := canvas.NewText("e.g. “what did God say to Jonah?”", pal.TextMuted)
+	hint := canvas.NewText(`e.g. "what did God say to Jonah?"`, pal.TextMuted)
 	hint.TextSize = subheadingTextSize
 	hint.Alignment = fyne.TextAlignCenter
 
