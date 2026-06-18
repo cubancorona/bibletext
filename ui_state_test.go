@@ -255,7 +255,7 @@ func TestGroupVisitsByBookConsolidates(t *testing.T) {
 	}
 	got := groupVisitsByBook(visits)
 	want := []bookChapters{
-		{Book: "John", Chapters: []int{1, 3, 5}}, // sorted + de-duped, book kept first (most recent)
+		{Book: "John", Chapters: []int{5, 1, 3}}, // most-recently-read first, de-duped; book kept first
 		{Book: "Genesis", Chapters: []int{1}},
 	}
 	if !reflect.DeepEqual(got, want) {
