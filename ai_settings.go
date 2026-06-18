@@ -50,15 +50,9 @@ func showAISettings(state *AppState) {
 		idToName[p.ID] = p.Name
 	}
 
-	// pending holds in-progress edits per provider so switching the picker never
-	// loses what you typed; it's flushed to the store on Save.
-	pending := map[string]string{}
-	for _, p := range providers {
-		pending[p.ID] = store.apiKey(p.ID)
-	}
-
 	// keyArea shows only the selected provider's key + status; it rebuilds when the
-	// picker changes.
+	// picker changes. Everything auto-saves straight to the on-device store — there
+	// is no Save/Cancel — so there's no pending-edits buffer to flush.
 	keyArea := container.NewStack()
 	var renderKey func(id string)
 	renderKey = func(id string) {
@@ -77,7 +71,7 @@ func showAISettings(state *AppState) {
 
 		entry := widget.NewPasswordEntry()
 		entry.SetPlaceHolder("Paste your " + info.Name + " key")
-		entry.SetText(pending[id])
+		entry.SetText(store.apiKey(id))
 
 		// status + the Clear button are kept in step with what's in the field and
 		// what's saved by refreshStatus (defined below, once the button exists).
@@ -121,42 +115,31 @@ func showAISettings(state *AppState) {
 				return
 			}
 			if v := strings.TrimSpace(clip.Content()); v != "" {
-				entry.SetText(v) // fires OnChanged, which records pending[id]
+				entry.SetText(v) // fires OnChanged, which auto-saves the key
 			}
 		})
 
-		// Clear empties the field; with the field empty, Save removes the saved key
-		// (Cancel keeps it). An X icon makes the intent obvious.
+		// Clear empties the field, which (auto-save) removes the stored key. The X
+		// icon makes the intent obvious.
 		clearBtn := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), func() {
-			entry.SetText("") // fires OnChanged → pending[id] = "" → refreshStatus
+			entry.SetText("") // fires OnChanged → clears the saved key
 		})
 
 		refreshStatus := func() {
-			cur := strings.TrimSpace(entry.Text)
-			saved := strings.TrimSpace(store.apiKey(id))
-			switch {
-			case cur == "" && saved != "":
-				status.Text = "Key cleared — tap Save to remove it (Cancel keeps it)."
-				status.Color = pal.TextMuted
-			case cur != "" && cur == saved:
-				status.Text = "✓ A key is saved. Clear it, or paste a new one to replace it."
+			if strings.TrimSpace(entry.Text) != "" {
+				status.Text = "✓ Saved on this device."
 				status.Color = pal.Accent
-			case cur != "":
-				status.Text = "New key — tap Save to store it."
-				status.Color = pal.TextMuted
-			default:
-				status.Text = info.KeyHint
-				status.Color = pal.TextMuted
-			}
-			status.Refresh()
-			if cur != "" || saved != "" {
 				clearBtn.Enable()
 			} else {
+				status.Text = info.KeyHint
+				status.Color = pal.TextMuted
 				clearBtn.Disable()
 			}
+			status.Refresh()
 		}
+		// Auto-save: every edit writes straight to the on-device key store.
 		entry.OnChanged = func(s string) {
-			pending[id] = s
+			store.setAPIKey(id, strings.TrimSpace(s))
 			refreshStatus()
 		}
 		refreshStatus()
@@ -176,6 +159,7 @@ func showAISettings(state *AppState) {
 
 	active := widget.NewRadioGroup(names, func(name string) {
 		if id, ok := nameToID[name]; ok {
+			store.setActiveProvider(id) // auto-save
 			renderKey(id)
 		}
 	})
@@ -191,9 +175,11 @@ func showAISettings(state *AppState) {
 	intro.Wrapping = fyne.TextWrapWord
 	header := container.NewVBox(title, intro, widget.NewSeparator())
 
-	// Reading options.
+	// Reading options. Auto-save: toggle writes the pref immediately; the chapter
+	// re-renders when the panel closes (Done).
 	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
 	redLetter.SetChecked(redLetterEnabled())
+	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
 
 	// Assistant + key first so the key field sits high in the sheet — on a phone
 	// the soft keyboard covers the lower half, and this keeps the field above it.
@@ -207,38 +193,25 @@ func showAISettings(state *AppState) {
 	)
 	body := container.NewVScroll(container.NewPadded(form))
 
+	// No Save/Cancel — every change is already saved. Done just closes the panel
+	// and re-renders the chapter so a red-letter toggle takes effect.
 	var popup *widget.PopUp
-	save := func() {
-		for id, v := range pending {
-			store.setAPIKey(id, v)
-		}
-		if id, ok := nameToID[active.Selected]; ok {
-			store.setActiveProvider(id)
-		}
-		setRedLetterEnabled(redLetter.Checked)
+	done := func() {
 		if popup != nil {
 			popup.Hide()
 		}
 		restore()
-		// Re-render the chapter so red-letter turns on/off immediately.
 		state.refreshReadingOnly()
 	}
-	cancel := func() {
-		if popup != nil {
-			popup.Hide()
-		}
-		restore()
-	}
-	saveBtn := widget.NewButton("Save", save)
-	saveBtn.Importance = widget.HighImportance
-	cancelBtn := widget.NewButton("Cancel", cancel)
+	doneBtn := widget.NewButton("Done", done)
+	doneBtn.Importance = widget.HighImportance
 
-	note := canvas.NewText("Keys are stored only on this device.", pal.TextMuted)
+	note := canvas.NewText("Changes save automatically.", pal.TextMuted)
 	note.TextSize = 11
 	footer := container.NewVBox(
 		widget.NewSeparator(),
 		note,
-		container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, saveBtn)),
+		container.NewBorder(nil, nil, nil, doneBtn),
 	)
 
 	content := container.NewBorder(header, footer, nil, nil, body)
