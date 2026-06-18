@@ -36,7 +36,11 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	controls := container.NewHBox(verseOfDayButton(state), gear)
 	right := container.NewVBox(layout.NewSpacer(), controls, layout.NewSpacer())
 
-	row := container.NewBorder(nil, nil, left, right, nil)
+	// A single centered "Go to" button opens the citation popup (showGotoPopup). It
+	// sits in the Border's center slot — shorter than the title+subtitle column, so
+	// it never grows the header — instead of an inline row that reserved layout space.
+	center := container.NewVBox(layout.NewSpacer(), gotoButton(state), layout.NewSpacer())
+	row := container.NewBorder(nil, nil, left, right, center)
 
 	rule := canvas.NewLine(pal.Border)
 	rule.StrokeWidth = 1

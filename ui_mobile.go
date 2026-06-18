@@ -84,10 +84,9 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 			// former, or it paints on top of the results.
 			notifyReadingOverlay(overlayShouldShow(state))
 		}
-		// A slim citation Goto field sits at the top of the reading view (above the
-		// native UITextView overlay, which tracks readingHost's frame and so just
-		// shifts down to make room).
-		content = container.NewBorder(buildGotoBar(state), nil, nil, nil, readingHost)
+		// The Goto field is now a popup opened from the header's centered button
+		// (showGotoPopup), so the reading view reserves no inline row.
+		content = readingHost
 		// When a search is active the Read tab shows the results list (Fyne), so
 		// the native overlay has to stay hidden to avoid overlapping it.
 		notifyReadingOverlay(overlayShouldShow(state))
