@@ -109,10 +109,18 @@ const (
 	loadFailed                   // first-run fetch failed (offline); show retry
 )
 
-// ChapterVisit is one entry in the reading history.
+// ChapterVisit is one entry in the reading history. The scroll anchor (top
+// verse + within-verse delta, with a whole-chapter Frac fallback) records where
+// the reader was when they left this chapter, so tapping it in the history bar
+// returns them there instead of to the top. A zero anchor means top-of-chapter.
+// The anchor fields are omitempty so plain (top-of-chapter) entries and pre-anchor
+// saved blobs stay compact and backward-compatible.
 type ChapterVisit struct {
 	Book    string
 	Chapter int
+	Verse   int     `json:"v,omitempty"`
+	Delta   float64 `json:"d,omitempty"`
+	Frac    float64 `json:"f,omitempty"`
 }
 
 func (s *AppState) pal() palette {
@@ -253,6 +261,11 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 	if chapter < 1 || book == "" {
 		return
 	}
+	// Plain navigation (arrows, picker, reference, search-jump) lands at the top of
+	// the new chapter, so drop any pending restore target. navigateToVisit re-arms
+	// one *after* calling us when the reader taps a history entry. (The launch
+	// restore is set directly on AppState and never routes through here.)
+	state.restore = nil
 	updated := make([]ChapterVisit, 0, maxRecent)
 	updated = append(updated, ChapterVisit{Book: book, Chapter: chapter})
 	for _, v := range state.RecentChapters {
@@ -324,7 +337,20 @@ func clearHistory(state *AppState) {
 func navigateToVisit(state *AppState, visit ChapterVisit) {
 	selectBook(state, visit.Book, false)
 	state.CurrentChapter = visit.Chapter
-	addRecentChapter(state, visit.Book, visit.Chapter)
+	addRecentChapter(state, visit.Book, visit.Chapter) // clears state.restore
+	// Return the reader to where they left off in this chapter, not the top, when
+	// the visit carries a scroll anchor. Gated to this exact chapter; the native
+	// overlay applies it on the next push (armPendingRestore) and the first user
+	// scroll drops it (bibleTextReadingScrolled).
+	if visit.Verse > 0 || visit.Frac > 0 {
+		state.restore = &restoreAnchor{
+			Book:    visit.Book,
+			Chapter: visit.Chapter,
+			Verse:   visit.Verse,
+			Delta:   visit.Delta,
+			Frac:    visit.Frac,
+		}
+	}
 	state.refresh()
 }
 

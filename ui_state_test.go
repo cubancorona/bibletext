@@ -280,6 +280,59 @@ func TestClearHistoryKeepsCurrentChapter(t *testing.T) {
 	}
 }
 
+func TestNavigateToVisitRestoresAnchor(t *testing.T) {
+	state := sampleState()
+	// The reader had left John 3 scrolled to verse 12; tapping it should re-arm
+	// that position rather than landing at the top.
+	navigateToVisit(state, ChapterVisit{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5})
+
+	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
+		t.Fatalf("expected navigation to John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
+	}
+	if state.restore == nil {
+		t.Fatal("expected a restore anchor to be armed")
+	}
+	if state.restore.Book != "John" || state.restore.Chapter != 3 || state.restore.Verse != 12 {
+		t.Fatalf("unexpected restore anchor: %+v", state.restore)
+	}
+}
+
+func TestNavigateToVisitWithoutAnchorGoesToTop(t *testing.T) {
+	state := sampleState()
+	state.restore = &restoreAnchor{Book: "John", Chapter: 9, Verse: 5} // stale, must be cleared
+	navigateToVisit(state, ChapterVisit{Book: "John", Chapter: 1})
+	if state.restore != nil {
+		t.Fatalf("a visit with no anchor should land at the top (no restore), got %+v", state.restore)
+	}
+}
+
+func TestAddRecentChapterClearsPendingRestore(t *testing.T) {
+	state := &AppState{restore: &restoreAnchor{Book: "John", Chapter: 3, Verse: 5}}
+	addRecentChapter(state, "Genesis", 1)
+	if state.restore != nil {
+		t.Fatalf("plain navigation should clear the restore target, got %+v", state.restore)
+	}
+}
+
+func TestUpdateCurrentVisitAnchorStampsHead(t *testing.T) {
+	state := &AppState{
+		CurrentBook:    "John",
+		CurrentChapter: 3,
+		RecentChapters: []ChapterVisit{{Book: "John", Chapter: 3}, {Book: "Genesis", Chapter: 1}},
+	}
+	updateCurrentVisitAnchor(state, 12, 4, 0.25)
+	if h := state.RecentChapters[0]; h.Verse != 12 || h.Delta != 4 || h.Frac != 0.25 {
+		t.Fatalf("expected the current entry's anchor stamped, got %+v", h)
+	}
+	// A capture that arrives after navigation (head no longer the captured chapter)
+	// must not overwrite the wrong entry.
+	stale := &AppState{CurrentBook: "Mark", CurrentChapter: 1, RecentChapters: state.RecentChapters}
+	updateCurrentVisitAnchor(stale, 99, 0, 0)
+	if state.RecentChapters[0].Verse != 12 {
+		t.Fatal("anchor must not be written when the head book/chapter mismatch")
+	}
+}
+
 func TestFilterBooks(t *testing.T) {
 	books := []string{"Genesis", "Exodus", "John", "1 John", "2 John"}
 

@@ -153,7 +153,25 @@ func captureSnapshot(s *AppState, p prefStore) readingState {
 			verse, delta, frac = 0, 0, 0
 		}
 	}
+	// Mirror the position onto the current history entry so that, once the reader
+	// navigates away, tapping this chapter in the history bar returns them here
+	// (navigateToVisit reads the visit's anchor). Runs on the main thread.
+	updateCurrentVisitAnchor(s, verse, delta, frac)
 	return snapshotReadingState(s, verse, delta, frac)
+}
+
+// updateCurrentVisitAnchor stamps the live scroll position onto the head of the
+// history (the current chapter, by addRecentChapter's invariant). The book/chapter
+// guard keeps a late capture from writing the wrong entry after a fast navigation.
+func updateCurrentVisitAnchor(s *AppState, verse int, delta, frac float64) {
+	if len(s.RecentChapters) == 0 {
+		return
+	}
+	h := &s.RecentChapters[0]
+	if h.Book != s.CurrentBook || h.Chapter != s.CurrentChapter {
+		return
+	}
+	h.Verse, h.Delta, h.Frac = verse, delta, frac
 }
 
 // flushReadingStateAsync captures on the calling (main) thread but writes the
