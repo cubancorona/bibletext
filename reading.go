@@ -68,7 +68,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// opens the combined reference picker (book list + chapter grid).
 	const titleBoxH = 38
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
-		showGotoPicker(state)
+		showChapterPicker(state)
 	})
 
 	// Small copy icon tucked beside the heading — close to the text it copies.
@@ -86,7 +86,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
 	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, navBoxH, false, func() {
-		showGotoPicker(state)
+		showChapterPicker(state)
 	})
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
