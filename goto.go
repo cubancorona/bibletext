@@ -14,12 +14,14 @@ import (
 )
 
 // showGotoPicker is the "Go to" modal: a scrolling alphabetical book list (left), a
-// calendar-style chapter grid (right), and an optional verse/range box at the bottom.
-// Tapping a chapter is the only commit — it navigates immediately, honoring the verse
-// box if it has a value ("16" → highlight v16; "16-18" → highlight the range's first
-// verse; empty → chapter top). The box is never auto-focused, so the common
-// book+chapter case is two taps with no keyboard. It's also opened by the header
-// "Go to" button and by tapping the book name / "Chapter N of M" line.
+// calendar-style chapter grid (right), and an optional verse/range box + a Go button
+// at the bottom. Tapping a book or chapter SELECTS it (highlights, no navigation);
+// Go (or Return in the verse box) commits — to the selected book+chapter, honoring
+// the verse box ("16" → highlight v16; "16-18"/"16:18" → highlight the range's first
+// verse; empty → chapter top). Committing via Go (not a grid tap) is deliberate: once
+// you type a verse the iOS keyboard covers the grid, so the Go button — which stays
+// above the keyboard — is how you go. It's opened by the header "Go to" button and by
+// tapping the book name / "Chapter N of M" line in the reading view.
 //
 // On iOS the reading pane is a native UITextView floating above the Fyne canvas, so
 // (like every modal here) we hide it while the picker is up and restore on close.
@@ -46,27 +48,32 @@ func showGotoPicker(state *AppState) {
 	// Books alphabetically, so a known book is quick to find by name.
 	books := append([]string(nil), state.Bible.Books...)
 	sort.Strings(books)
-	selected := state.CurrentBook
+	selectedBook := state.CurrentBook
+	selectedChapter := state.CurrentChapter
 
-	// Verse / range box (bottom). It is never auto-focused — the chapter grid is the
-	// commit, so the keyboard only ever rises if the reader chooses to type a verse.
+	// Verse / range box (bottom). caretTheme restores the blinking caret the base
+	// theme zeroes out; inputFrame draws the visible border.
 	verseEntry := widget.NewEntry()
 	verseEntry.SetPlaceHolder("verse — e.g. 16 or 16-18")
-	verseEntry.OnSubmitted = func(string) {
-		// Return just lowers the keyboard so the (now fully visible) grid is tappable;
-		// committing is always a chapter tap, which consults this box's value.
-		cnv.Unfocus()
+
+	commit := func() {
+		goToChapterWithVerse(state, selectedBook, selectedChapter, verseEntry.Text)
+		closePicker()
 	}
+	verseEntry.OnSubmitted = func(string) { commit() }
 
 	chapterPane := container.NewStack()
-	renderChapters := func(book string) {
-		chapterPane.Objects = []fyne.CanvasObject{referenceChapterGrid(state, pal, book, func(ch int) {
-			goToChapterWithVerse(state, book, ch, verseEntry.Text)
-			closePicker()
-		})}
+	var renderChapters func()
+	renderChapters = func() {
+		chapterPane.Objects = []fyne.CanvasObject{
+			referenceChapterGrid(state, pal, selectedBook, selectedChapter, func(ch int) {
+				selectedChapter = ch
+				renderChapters() // re-highlight the newly selected chapter
+			}),
+		}
 		chapterPane.Refresh()
 	}
-	renderChapters(selected)
+	renderChapters()
 
 	list := widget.NewList(
 		func() int { return len(books) },
@@ -78,7 +85,7 @@ func showGotoPicker(state *AppState) {
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			lbl := o.(*widget.Label)
 			lbl.SetText(books[i])
-			if books[i] == selected {
+			if books[i] == selectedBook {
 				lbl.TextStyle = fyne.TextStyle{Bold: true}
 			} else {
 				lbl.TextStyle = fyne.TextStyle{}
@@ -90,8 +97,17 @@ func showGotoPicker(state *AppState) {
 		if id < 0 || id >= len(books) {
 			return
 		}
-		selected = books[id]
-		renderChapters(selected)
+		selectedBook = books[id]
+		// Default the chapter: keep the reader's chapter if they re-picked the book
+		// they're in, else the new book's first chapter.
+		if selectedBook == state.CurrentBook {
+			selectedChapter = state.CurrentChapter
+		} else if nums := state.Bible.GetChapterNumbersForBook(selectedBook); len(nums) > 0 {
+			selectedChapter = nums[0]
+		} else {
+			selectedChapter = 1
+		}
+		renderChapters()
 		list.Refresh()
 	}
 
@@ -102,7 +118,10 @@ func showGotoPicker(state *AppState) {
 		base = state.theme
 	}
 	caret := container.NewThemeOverride(verseEntry, caretTheme{Theme: base})
-	verseBox := inputFrame(caret, pal.Border)
+
+	goBtn := widget.NewButton("Go", commit)
+	goBtn.Importance = widget.HighImportance
+	bottomRow := container.NewBorder(nil, nil, nil, goBtn, inputFrame(caret, pal.Border))
 
 	title := canvas.NewText("Go to", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -115,7 +134,7 @@ func showGotoPicker(state *AppState) {
 		container.NewBorder(nil, nil, nil, divider, list))
 	body := container.NewBorder(
 		header,                           // top
-		container.NewPadded(verseBox),    // bottom: verse/range box
+		container.NewPadded(bottomRow),   // bottom: verse/range box + Go
 		left,                             // left: book list
 		nil,                              // right
 		container.NewPadded(chapterPane), // center: chapter grid
@@ -124,27 +143,26 @@ func showGotoPicker(state *AppState) {
 	popup = widget.NewModalPopUp(surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{}), cnv)
 	popup.Show()
 
-	// Size + anchor near the top so the bottom verse box stays above the iOS soft
-	// keyboard when focused. A *widget.PopUp re-centres on Refresh (which keyboard-open
-	// triggers), so we re-pin on cursor changes.
+	// Keep the modal short and anchored near the top so its bottom row (the verse box
+	// + Go) stays clear of the iOS keyboard, which can cover the lower ~half of the
+	// screen. PopUp.Move sets innerPos, which the renderer honors, so this sticks.
 	cw, chH := cnv.Size().Width, cnv.Size().Height
 	safePos, _ := cnv.InteractiveArea()
 	popW, _ := pickerSplitSize(cnv)
-	popH := chH*0.52 - safePos.Y
-	if popH > 560 {
-		popH = 560
+	topY := safePos.Y + 8
+	popH := chH*0.46 - topY // bottom edge lands ~46% down — above a tall soft keyboard
+	if popH > 520 {
+		popH = 520
 	}
-	if popH < 300 {
-		popH = 300
+	if popH < 280 {
+		popH = 280
 	}
 	popup.Resize(fyne.NewSize(popW, popH))
-	pinTop := func() { popup.Move(fyne.NewPos((cw-popW)/2, safePos.Y+8)) }
-	pinTop()
-	verseEntry.OnCursorChanged = pinTop
+	popup.Move(fyne.NewPos((cw-popW)/2, topY))
 
 	// Reveal + select the current book.
 	for i, b := range books {
-		if b == selected {
+		if b == selectedBook {
 			list.Select(i)
 			list.ScrollTo(i)
 			break
@@ -205,11 +223,12 @@ func (c caretTheme) Color(name fyne.ThemeColorName, v fyne.ThemeVariant) color.C
 }
 
 // gotoButton is the small "Go to" button in the header center slot that opens
-// showGotoPicker. MediumImportance gives it a themed outline so it reads as a button
-// (not flat text); it's still shorter than the title+subtitle column, so the header
-// height is unchanged.
+// showGotoPicker. HighImportance fills it with the accent so it reads clearly as a
+// button against the (same-coloured) header surface — a Medium/Low button's fill
+// matches the header and looks like flat text. It stays short, so the header height
+// is unchanged.
 func gotoButton(state *AppState) fyne.CanvasObject {
 	btn := widget.NewButtonWithIcon("Go to", theme.NavigateNextIcon(), func() { showGotoPicker(state) })
-	btn.Importance = widget.MediumImportance
+	btn.Importance = widget.HighImportance
 	return container.NewCenter(btn)
 }
