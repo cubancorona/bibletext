@@ -91,6 +91,109 @@ func searchPromptView(state *AppState) fyne.CanvasObject {
 	return container.NewCenter(col)
 }
 
+// aiResultsView renders AI-found passages as the same tappable cards as keyword
+// search (no term highlight), with an honesty note — the passages are AI-suggested,
+// but the text shown is the real verse from our Bible.
+func aiResultsView(state *AppState, query string, verses []Verse) fyne.CanvasObject {
+	pal := state.pal()
+	q := strings.TrimSpace(query)
+
+	title := widget.NewLabel(fmt.Sprintf("Passages for %q", q))
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.SizeName = theme.SizeNameHeadingText
+	title.Truncation = fyne.TextTruncateEllipsis
+
+	sub := fmt.Sprintf("%d passages found by AI", len(verses))
+	switch len(verses) {
+	case 0:
+		sub = "AI didn’t find matching passages — try rephrasing."
+	case 1:
+		sub = "1 passage found by AI"
+	}
+	subLabel := canvas.NewText(sub, pal.TextMuted)
+	subLabel.TextSize = subheadingTextSize
+
+	rows := make([]fyne.CanvasObject, 0, len(verses))
+	for _, v := range verses {
+		rows = append(rows, searchResultRow(state, v, nil, pal))
+	}
+	column := container.New(&readingColumn{maxWidth: 820}, container.NewVBox(rows...))
+	scroll := container.NewVScroll(column)
+	paper := surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
+
+	note := canvas.NewText("AI-suggested passages — read each in context.", pal.TextMuted)
+	note.TextSize = 11
+	head := container.NewVBox(title, subLabel, note, widget.NewSeparator())
+	return container.NewPadded(container.NewBorder(head, nil, nil, nil, paper))
+}
+
+// aiSearchPromptView is the calm empty state for Ask-AI mode, shown before a
+// question is asked.
+func aiSearchPromptView(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+
+	icon := canvas.NewImageFromResource(theme.NewColoredResource(theme.SearchIcon(), colorNameMuted))
+	icon.FillMode = canvas.ImageFillContain
+	icon.SetMinSize(fyne.NewSize(44, 44))
+
+	title := canvas.NewText("Ask in your own words", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 20
+	title.Alignment = fyne.TextAlignCenter
+
+	hint := canvas.NewText("e.g. “what did God say to Jonah?”", pal.TextMuted)
+	hint.TextSize = subheadingTextSize
+	hint.Alignment = fyne.TextAlignCenter
+
+	col := container.NewVBox(
+		container.NewCenter(icon), spacer(12),
+		container.NewCenter(title), spacer(4),
+		container.NewCenter(hint),
+	)
+	return container.NewCenter(col)
+}
+
+// aiNoKeyView is the clean, non-intrusive explanation shown in Ask-AI mode when no
+// provider key is set: what it does, that it needs the reader's own key, and a quiet
+// route into settings. No error styling.
+func aiNoKeyView(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+
+	title := canvas.NewText("AI search needs your own key", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 18
+	title.Alignment = fyne.TextAlignCenter
+
+	body := widget.NewLabel("Ask for passages in plain words and AI finds them. It uses your own AI provider key, stored only on this device.")
+	body.Wrapping = fyne.TextWrapWord
+	body.Alignment = fyne.TextAlignCenter
+
+	setup := widget.NewButton("Set up AI", func() { showAISettings(state) })
+	setup.Importance = widget.HighImportance
+
+	col := container.NewVBox(
+		container.NewCenter(title), spacer(6),
+		container.NewGridWrap(fyne.NewSize(300, body.MinSize().Height), body), spacer(14),
+		container.NewCenter(setup),
+	)
+	return container.NewCenter(col)
+}
+
+// aiSearchMessageView centres a short message with an optional action button —
+// used for AI-search errors (with a Try again retry).
+func aiSearchMessageView(msg, action string, onAction func()) fyne.CanvasObject {
+	lbl := widget.NewLabel(msg)
+	lbl.Wrapping = fyne.TextWrapWord
+	lbl.Alignment = fyne.TextAlignCenter
+
+	items := []fyne.CanvasObject{container.NewGridWrap(fyne.NewSize(300, lbl.MinSize().Height+8), lbl)}
+	if action != "" && onAction != nil {
+		btn := widget.NewButton(action, onAction)
+		items = append(items, spacer(12), container.NewCenter(btn))
+	}
+	return container.NewCenter(container.NewVBox(items...))
+}
+
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {
 	ref := canvas.NewText(fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse), pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}

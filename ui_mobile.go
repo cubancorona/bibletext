@@ -3,6 +3,8 @@
 package bibletext
 
 import (
+	"strings"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -224,30 +226,31 @@ func buildMobileBooksTab(state *AppState, switchToRead func()) fyne.CanvasObject
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, list)
 }
 
-// buildMobileSearchTab is the full-screen search experience. Live results
-// populate as the user types; tapping a hit jumps to that verse in context and
-// switches to the Read tab. An exact reference (e.g. "John 3:16") on Submit
-// also jumps directly.
+// buildMobileSearchTab is the full-screen search experience. A "Find / Ask AI"
+// toggle switches the single field between keyword search (live results as you
+// type; an exact reference like "John 3:16" jumps on Submit) and natural-language
+// AI search ("what did God say to Jonah?"), which returns relevant passages.
+// Tapping any hit jumps to that verse in context and switches to the Read tab.
 func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	pal := state.pal()
 
+	resultsHost := container.NewStack()
+
+	// --- Keyword search. ---
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("Search…")
 	searchEntry.SetText(state.SearchQuery)
 
-	resultsHost := container.NewStack(buildSearchResultsView(state))
-
-	// Reroute showReading so live, as-you-type search repaints the results panel
-	// here. We deliberately do NOT chain to the Read tab's previous showReading
-	// closure: that closure drives the native reading overlay, and invoking it
-	// from the Search tab (with stale, off-tab state) is exactly what could leave
-	// the UITextView floating over the results as a blank rectangle. The Read tab
-	// is rebuilt fresh from state when the user switches to it, so there's nothing
-	// to "prime" here — we just keep the overlay hidden and repaint the list.
+	// Reroute showReading so live, as-you-type keyword search repaints the results
+	// panel here. We deliberately do NOT chain to the Read tab's showReading (which
+	// drives the native overlay); the Read tab rebuilds fresh from state on switch.
+	// In AI mode the results are rendered by the Ask handler, not live search.
 	state.showReading = func() {
 		notifyReadingOverlay(overlayShouldShow(state))
-		resultsHost.Objects = []fyne.CanvasObject{buildSearchResultsView(state)}
-		resultsHost.Refresh()
+		if !state.aiSearchMode {
+			resultsHost.Objects = []fyne.CanvasObject{buildSearchResultsView(state)}
+			resultsHost.Refresh()
+		}
 	}
 
 	onSearchChanged, stopSearchDebounce := newSearchDebouncer(state)
@@ -256,11 +259,8 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		stopSearchDebounce() // Enter searches now; cancel the pending debounced run
 		wasSearching := state.IsSearching
 		executeSearch(state, s)
-		// executeSearch jumps to a verse only when an exact ref was matched;
-		// in that case IsSearching becomes false. Switch to Read so the jump
-		// is visible.
 		if wasSearching && !state.IsSearching {
-			switchToRead()
+			switchToRead() // an exact ref jumped to a verse — show it
 		}
 	}
 
@@ -269,17 +269,110 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			state.window.Canvas().Focus(searchEntry)
 		}
 	}
-	state.setSearchText = func(s string) {
-		searchEntry.SetText(s)
+	state.setSearchText = func(s string) { searchEntry.SetText(s) }
+
+	// --- Ask-AI search. ---
+	aiEntry := widget.NewEntry()
+	aiEntry.SetPlaceHolder("Ask for passages — e.g. what did God say to Jonah?")
+
+	var aiBar *widget.ProgressBarInfinite
+	stopAIBar := func() {
+		if aiBar != nil {
+			aiBar.Stop()
+			aiBar = nil
+		}
 	}
 
-	// The "what to type" hint now lives in the centred empty state
-	// (searchPromptView), so the header stays clean: just the label + field.
-	header := container.NewVBox(
-		sectionLabel("SEARCH", pal),
-		inputFrame(searchEntry, pal.Border),
-	)
+	var runAsk func(string)
+	runAsk = func(q string) {
+		q = strings.TrimSpace(q)
+		if q == "" {
+			return
+		}
+		if !hasAIKey(state) {
+			resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
+			resultsHost.Refresh()
+			return
+		}
+		bar := widget.NewProgressBarInfinite()
+		aiBar = bar
+		msg := canvas.NewText("Searching with AI…", pal.TextMuted)
+		msg.Alignment = fyne.TextAlignCenter
+		resultsHost.Objects = []fyne.CanvasObject{container.NewCenter(container.NewVBox(
+			msg, spacer(8),
+			container.NewGridWrap(fyne.NewSize(220, bar.MinSize().Height), bar),
+		))}
+		resultsHost.Refresh()
+
+		startAISearch(state, q, func(verses []Verse, err error) {
+			stopAIBar()
+			switch {
+			case err != nil && isNoKeyError(err):
+				resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
+			case err != nil:
+				resultsHost.Objects = []fyne.CanvasObject{
+					aiSearchMessageView(friendlyAIError(err), "Try again", func() { runAsk(q) }),
+				}
+			default:
+				resultsHost.Objects = []fyne.CanvasObject{aiResultsView(state, q, verses)}
+			}
+			resultsHost.Refresh()
+		})
+	}
+	aiEntry.OnSubmitted = runAsk
+	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { runAsk(aiEntry.Text) })
+	askBtn.Importance = widget.LowImportance
+
+	// --- Mode toggle + field swap (no window rebuild, so the keyboard survives). ---
+	fieldHost := container.NewStack()
+	applyMode := func() {
+		if state.aiSearchMode {
+			fieldHost.Objects = []fyne.CanvasObject{
+				container.NewBorder(nil, nil, nil, askBtn, inputFrame(aiEntry, pal.Border)),
+			}
+			if hasAIKey(state) {
+				resultsHost.Objects = []fyne.CanvasObject{aiSearchPromptView(state)}
+			} else {
+				resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
+			}
+		} else {
+			stopAIBar()
+			fieldHost.Objects = []fyne.CanvasObject{inputFrame(searchEntry, pal.Border)}
+			resultsHost.Objects = []fyne.CanvasObject{buildSearchResultsView(state)}
+		}
+		fieldHost.Refresh()
+		resultsHost.Refresh()
+	}
+
+	toggle := buildSearchModeToggle(state, func(ai bool) {
+		state.aiSearchMode = ai
+		applyMode()
+	})
+
+	header := container.NewVBox(toggle, fieldHost)
+	applyMode() // initialise to the persisted mode
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
+}
+
+// buildSearchModeToggle is a two-segment control switching the Search tab between
+// keyword ("Find") and natural-language ("Ask AI") search; the active half is filled.
+func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
+	var find, ask *widget.Button
+	apply := func(ai bool) {
+		find.Importance = widget.MediumImportance
+		ask.Importance = widget.MediumImportance
+		if ai {
+			ask.Importance = widget.HighImportance
+		} else {
+			find.Importance = widget.HighImportance
+		}
+		find.Refresh()
+		ask.Refresh()
+	}
+	find = widget.NewButton("Find", func() { apply(false); onSelect(false) })
+	ask = widget.NewButton("Ask AI", func() { apply(true); onSelect(true) })
+	apply(state.aiSearchMode)
+	return container.NewGridWithColumns(2, find, ask)
 }
 
 // ----------------------------------------------------------------------------
