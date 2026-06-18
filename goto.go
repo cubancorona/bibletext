@@ -108,8 +108,9 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	chapterPane := container.NewStack()
 	var renderChapters func()
 	var chapterReselect func(int) // re-highlights a chapter IN PLACE (no grid rebuild)
+	var scrollChapterIntoView func()
 	renderChapters = func() {
-		grid, reselect := referenceChapterGrid(state, pal, selectedBook, highlightChapter(), func(ch int) {
+		grid, reselect, scrollSel := referenceChapterGrid(state, pal, selectedBook, highlightChapter(), func(ch int) {
 			selectedChapter = ch
 			if withVerse {
 				// Re-highlight in place — rebuilding the grid here reflowed it (the
@@ -124,6 +125,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 			}
 		})
 		chapterReselect = reselect
+		scrollChapterIntoView = scrollSel
 		chapterPane.Objects = []fyne.CanvasObject{grid}
 		chapterPane.Refresh()
 	}
@@ -148,9 +150,12 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	// the familiar scrolling book LIST in Bible order.
 	var leftPane fyne.CanvasObject
 	var bookList *widget.List
+	var scrollBookIntoView func() // scrolls the nav to the selected book/letter (keyboard)
 	if withVerse {
 		sortedBooks := alphabeticalBooks(state.Bible.Books) // groups "1/2/3 John" under J, etc.
 		letters := bookLetters(sortedBooks)
+		var bookScroll *container.Scroll
+		var selectedBookBtn fyne.CanvasObject
 		// A two-stage navigator swapped IN PLACE (bookPane.Objects + Refresh, the same
 		// idiom as renderChapters) — no popup rebuild, so the non-modal anchor and the
 		// keyboard never churn. Stage 0 = alphabet grid; stage 1 = the tapped letter's
@@ -169,6 +174,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 				back.Importance = widget.LowImportance
 				back.Alignment = widget.ButtonAlignLeading
 				rows := container.NewVBox()
+				selectedBookBtn = nil
 				for _, b := range sortedBooks { // alphabetical, so the bucket is ordered
 					if firstLetter(b) != activeLetter {
 						continue
@@ -180,18 +186,21 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 					btn.Alignment = widget.ButtonAlignLeading
 					if book == selectedBook {
 						btn.Importance = widget.HighImportance
+						selectedBookBtn = btn
 					} else {
 						btn.Importance = widget.LowImportance
 					}
 					rows.Add(btn)
 				}
+				bookScroll = container.NewVScroll(rows)
 				bookPane.Objects = []fyne.CanvasObject{
-					container.NewBorder(back, nil, nil, nil, container.NewVScroll(rows)),
+					container.NewBorder(back, nil, nil, nil, bookScroll),
 				}
 			} else {
 				head := canvas.NewText("Book", pal.TextMuted)
 				head.TextSize = 12
 				grid := container.NewGridWrap(fyne.NewSize(40, 34)) // dense → 3 cols, all letters
+				selectedBookBtn = nil
 				for _, r := range letters {
 					letter := r
 					btn := widget.NewButton(string(letter), func() {
@@ -201,19 +210,21 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 					})
 					if letter == firstLetter(selectedBook) {
 						btn.Importance = widget.HighImportance // guide the eye to the current book's letter
+						selectedBookBtn = btn
 					} else {
 						btn.Importance = widget.LowImportance
 					}
 					grid.Add(btn)
 				}
+				bookScroll = container.NewVScroll(denseGrid(state, grid))
 				bookPane.Objects = []fyne.CanvasObject{
-					container.NewBorder(container.NewPadded(head), nil, nil, nil,
-						container.NewVScroll(denseGrid(state, grid))),
+					container.NewBorder(container.NewPadded(head), nil, nil, nil, bookScroll),
 				}
 			}
 			bookPane.Refresh()
 		}
 		renderBooks()
+		scrollBookIntoView = func() { scrollChildIntoView(bookScroll, selectedBookBtn) }
 		leftPane = bookPane
 	} else {
 		books := state.Bible.Books // canonical Bible order
@@ -335,6 +346,23 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 				}
 				kbInset.SetMinSize(fyne.NewSize(0, inset))
 				body.Refresh()
+				if inset > 0 {
+					// The panes just shrank — keep the selected book + chapter on screen.
+					// Deferred so the new (smaller) viewport + cell positions have settled.
+					time.AfterFunc(60*time.Millisecond, func() {
+						fyne.Do(func() {
+							if popup == nil || !popup.Visible() {
+								return
+							}
+							if scrollChapterIntoView != nil {
+								scrollChapterIntoView()
+							}
+							if scrollBookIntoView != nil {
+								scrollBookIntoView()
+							}
+						})
+					})
+				}
 			}
 		}
 		// A non-modal popup also closes on a tap OUTSIDE the card (PopUp.Tapped → Hide),
