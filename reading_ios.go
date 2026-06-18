@@ -769,7 +769,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// height makes it a comfortable touch target.
 	const titleBoxH = 40
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
-		showGotoPicker(state)
+		showChapterPicker(state)
 	})
 
 	// Small copy icon tucked after the heading — lighter than the chapter-nav
@@ -789,7 +789,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
 	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, navBoxH, false, func() {
-		showGotoPicker(state)
+		showChapterPicker(state)
 	})
 
 	idx := indexOf(chapterNumbers, state.CurrentChapter)
