@@ -403,17 +403,17 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         CGRect r = CGRectMake(x + safe.left, y + safe.top, w, h);
         BOOL changed = !CGRectEqualToRect(r, gReadingTV.frame);
         gReadingTV.frame = r;
-        // When the frame changes, the UITextView re-lays out the text. If the
-        // previous chapter happened to scroll mid-paragraph, the offset can
-        // carry over and land in the middle of the new chapter. Re-assert the
-        // intended position (top, or the highlighted verse on a search jump);
-        // layoutIfNeeded first so the glyph geometry matches the new width.
-        if (changed) {
+        // Only re-resolve the scroll position when a highlight (search jump) or a
+        // pending restore is armed: those were computed at the old width and must be
+        // re-placed after the rewrap. Without a target, bibleTextScrollReadingTV
+        // snaps to the top (line ~229), so re-asserting on every frame change yanked
+        // a mid-chapter reader back to the top on any Resize/Move (rotation, keyboard,
+        // a stray layout pass) and ran a full layoutIfNeeded + a doubled scroll each
+        // time. Gating it (and dropping the redundant nested re-scroll) mirrors
+        // bibleTextMacTVSetFrame and leaves a plain reader exactly where they are.
+        if (changed && (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore)) {
             [gReadingTV layoutIfNeeded];
             bibleTextScrollReadingTV();
-            dispatch_async(dispatch_get_main_queue(), ^{
-                bibleTextScrollReadingTV();
-            });
         }
     });
 }

@@ -64,6 +64,7 @@ func buildLoadingView(state *AppState) fyne.CanvasObject {
 	msg.Alignment = fyne.TextAlignCenter
 
 	bar := widget.NewProgressBarInfinite()
+	state.loadingBar = bar // so stopLoadingBar can halt it once loading finishes
 
 	// A fixed-width column keeps the bar from stretching edge-to-edge on a wide
 	// desktop window while still centering on a phone.
