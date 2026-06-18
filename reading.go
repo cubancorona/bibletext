@@ -955,19 +955,17 @@ func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
 	return w, h
 }
 
-// pickerVerseSize sizes the Goto (verse) picker for a TOP-anchored, non-modal popup.
-// keyboard=false → near full-screen so the alphabet grid, book list and chapter grid are
-// all visible without scrolling. keyboard=true → only the upper ~55%, so the verse box
-// at the card's bottom edge stays above the iOS number pad (the canvas doesn't shrink for
-// the keyboard, and a centered modal couldn't be moved up). The caller resizes between
-// the two as a verse field gains/loses focus.
+// pickerVerseSize sizes the MOBILE Goto (verse) picker: a TOP-anchored, non-modal popup
+// opened near full-screen so the alphabet grid, book list and chapter grid are all
+// visible. The verse row lives at the top of the card (above the soft keyboard), so the
+// popup is never resized after opening.
 //
 // Unlike pickerSplitSize (which feeds a MODAL popup whose renderer clamps content down
 // to the canvas, so an over-wide value is harmless), the non-modal renderer grows the
 // popup to its content's min size with NO clamp — so we MUST size against the real
 // canvas width to avoid running off the right edge. cnv.Size() is what that renderer
 // clamps against; basing width on it guarantees the card fits.
-func pickerVerseSize(cnv fyne.Canvas, keyboard bool) (float32, float32) {
+func pickerVerseSize(cnv fyne.Canvas) (float32, float32) {
 	cw := cnv.Size().Width
 	ch := cnv.Size().Height
 	if _, sz := cnv.InteractiveArea(); sz.Height > 0 {
@@ -980,15 +978,7 @@ func pickerVerseSize(cnv fyne.Canvas, keyboard bool) (float32, float32) {
 	if w < 300 {
 		w = 300
 	}
-	var h float32
-	if keyboard {
-		h = ch * 0.55
-		if h > 520 {
-			h = 520
-		}
-	} else {
-		h = ch - 24 // near full-screen; show the whole grids/lists
-	}
+	h := ch - 24 // near full-screen; show the whole grids/lists
 	if h < 300 {
 		h = 300
 	}
