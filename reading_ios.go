@@ -546,6 +546,22 @@ static NSString *bibleTextPlainFromHTML(NSString *html) {
     return t;
 }
 
+// bibleTextTVSetReadingBG paints the reading view's background with the theme's
+// "paper" colour and marks the view OPAQUE. The text view used to be clearColor so
+// the Fyne-painted paper rectangle showed through — but a transparent, full-screen,
+// SCROLLING view forces the compositor to alpha-blend it over the GL canvas on every
+// frame, a constant scroll cost regardless of chapter length. Painting the same paper
+// colour into an OPAQUE view lets the compositor skip the per-frame blend (and skip
+// drawing the canvas beneath it entirely), which is the classic iOS scroll-perf win.
+void bibleTextTVSetReadingBG(double r, double g, double b) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        bibleTextEnsureTV();
+        if (gReadingTV == nil) return;
+        gReadingTV.backgroundColor = [UIColor colorWithRed:r green:g blue:b alpha:1.0];
+        gReadingTV.opaque = YES;
+    });
+}
+
 void bibleTextTVSetHTML(const char *html) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
@@ -1083,6 +1099,14 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	c := C.CString(html)
 	defer C.free(unsafe.Pointer(c))
 	C.bibleTextTVSetHTML(c)
+
+	// Keep the native text view OPAQUE with the current theme's paper colour (the
+	// same pal.Surface the Fyne layer paints behind it) so scrolling doesn't pay a
+	// per-frame alpha blend. Set on every real render, so a light/dark switch (which
+	// changes the fingerprint above and thus reaches here) updates the paper too.
+	bg := state.pal().Surface
+	C.bibleTextTVSetReadingBG(
+		C.double(float64(bg.R)/255), C.double(float64(bg.G)/255), C.double(float64(bg.B)/255))
 }
 
 // captureReadingAnchor / armReadingRestore bridge the reading-position restore
