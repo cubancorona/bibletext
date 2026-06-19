@@ -126,12 +126,19 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 // points (desktop Run and cmd/mobile) can install it.
 func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppState) {
 	lc := myApp.Lifecycle()
-	lc.SetOnStopped(func() { flushReadingState(state) })
+	lc.SetOnStopped(func() {
+		state.stopping.Store(true)
+		flushReadingState(state)
+	})
 	lc.SetOnExitedForeground(func() { flushReadingState(state) }) // iOS/Android background
 	if window != nil && !fyne.CurrentDevice().IsMobile() {
 		// Desktop: the window-close button bypasses the lifecycle "stopped" hook
 		// until teardown, so capture here while the NSTextView is still alive.
 		window.SetCloseIntercept(func() {
+			// Mark teardown BEFORE Close() drains the main loop, so an in-flight
+			// background apply (e.g. a version download) drops itself rather than
+			// running inline off the main thread during exit.
+			state.stopping.Store(true)
 			flushReadingState(state)
 			window.Close()
 		})

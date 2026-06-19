@@ -67,6 +67,11 @@ var registeredVersions = []BibleVersion{
 		source: webSource{},
 	},
 	{
+		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
+		Publisher: "Public Domain (CC0)", PublicDomain: true,
+		source: bsbSource{},
+	},
+	{
 		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",
 		Publisher: "© National Council of the Churches of Christ — license required",
 		source:    newLicensedSource("nrsv"),
@@ -281,14 +286,24 @@ func switchVersion(state *AppState, id string) {
 			return
 		}
 		data, mode = d, m
-		if state.loadedVersions == nil {
-			state.loadedVersions = map[string]*BibleData{}
-		}
-		state.loadedVersions[id] = data
 	}
 
+	applyLoadedVersion(state, v, data, mode)
+}
+
+// applyLoadedVersion swaps an already-loaded translation into the reader: it
+// caches the data in memory, points AppState.Bible at it, records the data mode,
+// keeps the open book/chapter valid, persists the choice, and rebuilds the
+// window. Shared by switchVersion (synchronous) and the picker's async path
+// (switchVersionInteractive), so both apply identically once the data is in hand.
+func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode) {
+	if state.loadedVersions == nil {
+		state.loadedVersions = map[string]*BibleData{}
+	}
+	state.loadedVersions[v.ID] = data
+
 	state.Bible = data
-	state.CurrentVersion = id
+	state.CurrentVersion = v.ID
 	state.currentMode = mode
 	clampToCurrentVersion(state)
 	// Remember the chosen translation (and current location) across launches.

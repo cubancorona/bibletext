@@ -86,9 +86,16 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   in README → "AI study"). Settings sheet: `ai_settings.go` (header gear). Result
   panel: `ai_panel.go`.
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
-  registry (WEB public-domain, NRSV/LSB licensed) and a `bibleSource` per version
-  (`webSource` = bible-api.com; `licensedAPISource` = scaffold gated on a license
-  opt-in + `BIBLE_API_KEY`). **Not-yet-licensed versions are NOT user-selectable**
+  registry (WEB + BSB public-domain, NRSV/LSB licensed) and a `bibleSource` per
+  version (`webSource` = bible-api.com, per-chapter; `bsbSource` (`bsb.go`) = the
+  Berean Standard Bible, public-domain/CC0, fetched as ONE ~7 MB `complete.json`
+  from the free, key-less bible.helloao.org and decoded via `decodeBSBComplete`
+  mapping helloao's USFM `order` → the app's canonical book names; `licensedAPISource`
+  = scaffold gated on a license opt-in + `BIBLE_API_KEY`). The version picker calls
+  `switchVersionInteractive` (`versions_ui.go`): in-memory/placeholder versions swap
+  synchronously, but a first-time real fetch (the BSB download) runs on a goroutine
+  behind a spinner modal so the iOS main-thread watchdog is never at risk — the
+  shared apply tail is `applyLoadedVersion`. **Not-yet-licensed versions are NOT user-selectable**
   (`canSelect` = real text available, i.e. `!isTesting()`): the picker
   (`versions_ui.go`) renders them de-emphasized and non-tappable as "evaluation in
   progress", and `switchVersion` refuses them — so no copyrighted placeholder text
