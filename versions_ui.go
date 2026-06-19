@@ -5,7 +5,9 @@ package bibletext
 // AppState.Bible and rebuilds the window (see switchVersion in versions.go).
 
 import (
+	"fmt"
 	"image/color"
+	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -103,7 +105,7 @@ func showVersionPicker(state *AppState) {
 		ver := v // capture
 		rows.Add(versionRow(state, ver, func() {
 			closePicker()
-			switchVersion(state, ver.ID)
+			switchVersionInteractive(state, ver.ID)
 		}))
 	}
 
@@ -231,3 +233,144 @@ func (b *tapBox) CreateRenderer() fyne.WidgetRenderer {
 }
 
 var _ fyne.Tappable = (*tapBox)(nil)
+
+// switchVersionInteractive is the version picker's entry point. It keeps the UI
+// thread free when a translation isn't loaded yet: versions already in memory (or
+// instant testing placeholders) swap synchronously, but a first-time real fetch —
+// notably the Berean Standard Bible's one-time ~7 MB download — runs on a
+// goroutine behind a small loading modal. This matters most on iOS, where a
+// multi-second network call on the main thread would freeze the UI and risk the
+// launch/run-loop watchdog. On failure the current version is kept and a brief
+// message is shown; the synchronous switchVersion remains the shared core (and is
+// what unit tests drive directly).
+func switchVersionInteractive(state *AppState, id string) {
+	if state == nil || id == state.CurrentVersion {
+		return
+	}
+	v, ok := versionByID(id)
+	if !ok || !v.canSelect() {
+		return
+	}
+	// Loaded earlier this session, or an instant base-derived placeholder → swap
+	// synchronously; neither touches the network.
+	if _, inMem := state.loadedVersions[id]; inMem || v.isTesting() {
+		switchVersion(state, id)
+		return
+	}
+
+	// A real source not yet in memory may hit the on-disk cache (fast) or the
+	// network (slow). Load off the UI thread either way, behind a spinner.
+	base := state.baseBible()
+	dismiss := showVersionLoading(state, v.Name)
+	go func() {
+		data, mode, err := loadVersionData(v, base)
+		fyne.Do(func() {
+			// If the app began tearing down while the download ran, the desktop
+			// (glfw) driver runs this inline on THIS goroutine after the main loop
+			// drained — drop the result rather than mutate state / write Preferences
+			// off the main thread during exit. (Mobile always enqueues, so this is a
+			// no-op there.)
+			if state.stopping.Load() {
+				return
+			}
+			dismiss()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)
+				showVersionLoadError(state, v.Name)
+				return
+			}
+			applyLoadedVersion(state, v, data, mode)
+		})
+	}()
+}
+
+// showVersionLoading puts up a modal spinner while a translation downloads, and
+// returns a dismiss func. It hides the native reading overlay for the duration
+// (the overlay floats above the Fyne canvas); on success the follow-up
+// rebuildWindow re-pins it, and the dismiss func restores it on the error path so
+// the reader is never left blank.
+func showVersionLoading(state *AppState, name string) func() {
+	if state == nil || state.window == nil {
+		return func() {}
+	}
+	cnv := state.window.Canvas()
+	if cnv == nil {
+		return func() {}
+	}
+	pal := state.pal()
+	if state.hideReadingOverlay != nil {
+		state.hideReadingOverlay()
+	}
+
+	title := canvas.NewText("Downloading "+name+"…", pal.Text)
+	title.Alignment = fyne.TextAlignCenter
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	sub := canvas.NewText("One-time download — it's cached after this.", pal.TextMuted)
+	sub.TextSize = 11
+	sub.Alignment = fyne.TextAlignCenter
+	bar := widget.NewProgressBarInfinite()
+
+	content := container.NewVBox(
+		title, spacer(10),
+		container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar),
+		spacer(8), sub,
+	)
+	popup := widget.NewModalPopUp(
+		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
+		cnv,
+	)
+	popup.Show()
+
+	dismissed := false
+	return func() {
+		if dismissed {
+			return
+		}
+		dismissed = true
+		bar.Stop()
+		popup.Hide()
+		if state.showReadingOverlay != nil {
+			state.showReadingOverlay()
+		}
+	}
+}
+
+// showVersionLoadError reports a failed translation download (e.g. offline) and
+// leaves the current version untouched.
+func showVersionLoadError(state *AppState, name string) {
+	if state == nil || state.window == nil {
+		return
+	}
+	cnv := state.window.Canvas()
+	if cnv == nil {
+		return
+	}
+	pal := state.pal()
+
+	// Hide the native reading overlay while the dialog is up — it floats above the
+	// Fyne canvas and would otherwise paint over the message and OK button (the
+	// same hide/restore dance every other modal does). Restore it on dismiss.
+	if state.hideReadingOverlay != nil {
+		state.hideReadingOverlay()
+	}
+
+	msg := widget.NewLabel("Couldn't download " + name + ".\nCheck your connection and try again.")
+	msg.Wrapping = fyne.TextWrapWord
+	msg.Alignment = fyne.TextAlignCenter
+
+	var popup *widget.PopUp
+	okBtn := widget.NewButton("OK", func() {
+		if popup != nil {
+			popup.Hide()
+		}
+		if state.showReadingOverlay != nil {
+			state.showReadingOverlay()
+		}
+	})
+	content := container.NewVBox(msg, container.NewCenter(okBtn))
+	popup = widget.NewModalPopUp(
+		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
+		cnv,
+	)
+	popup.Show()
+}

@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -118,6 +119,15 @@ type AppState struct {
 	// and the native reading overlay is NOT attached. See StartBackgroundLoad.
 	loadPhase loadPhase
 	loadErr   error
+
+	// stopping is set when the app is tearing down (window close / lifecycle stop)
+	// so a late background result (e.g. a version download that finishes during
+	// shutdown) can drop itself instead of mutating state off the main thread. On
+	// desktop, fyne.Do runs its callback INLINE on the caller's goroutine once the
+	// main loop has drained, so an unguarded apply would write state/Preferences
+	// off-main during exit; this flag lets that callback bail. Read/written across
+	// goroutines, hence atomic. See switchVersionInteractive + InstallReadingStateFlush.
+	stopping atomic.Bool
 
 	// appliedTheme tracks the theme object last handed to app.Settings().SetTheme
 	// so CreateMainUI re-applies it only when it actually changes — re-applying on
