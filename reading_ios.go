@@ -216,6 +216,17 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 // and the iOS selection state stays alive across chapter changes.
 static UITextView *gReadingTV = nil;
 
+// Cached reading "paper" colour (pal.Surface as 0..1 components), so the OPAQUE
+// background can be re-asserted right after EVERY attributedText assignment.
+// Setting attributedText (and especially the WebKit HTML importer's retry path)
+// can land after bibleTextTVSetReadingBG and revert the view toward a transparent,
+// non-opaque state — which brings back the per-frame compositor blend and the
+// scroll lag. Re-asserting from these cached values inside bibleTextApplyHTML makes
+// opaque the LAST word after any content change, immune to the runloop ordering.
+static CGFloat gReadingPaperR = 1.0, gReadingPaperG = 1.0, gReadingPaperB = 1.0;
+static BOOL gReadingPaperSet = NO;
+static void btIOSApplyReadingBG(void); // defined below; used in bibleTextApplyHTML above it
+
 // gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
 // settings) is open. The UITextView floats above the whole Fyne canvas, so it
 // must stay down for the duration of the modal — not merely be hidden once. A
@@ -513,6 +524,15 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // entirely, so they add nothing to scrolling.
     btIOSSetHighlightUIEnabled(gReadingHighlightRange.location != NSNotFound);
     gReadingTV.attributedText = as;
+    // Re-assert the opaque paper background: assigning attributedText (HTML import)
+    // can revert the view toward clearColor/non-opaque, which brings back the
+    // per-frame compositor blend and the scroll lag. The NSLog fires ONLY when the
+    // assignment actually dropped opaque, so the device console confirms (or rules
+    // out) that this is the lag's cause.
+    if (gReadingPaperSet && !gReadingTV.opaque) {
+        NSLog(@"bibletext: attributedText assignment dropped opaque — re-asserting paper bg");
+    }
+    btIOSApplyReadingBG();
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
     // Re-assert the scroll position across the relayout + frame push.
     [gReadingTV layoutIfNeeded];
@@ -553,12 +573,27 @@ static NSString *bibleTextPlainFromHTML(NSString *html) {
 // frame, a constant scroll cost regardless of chapter length. Painting the same paper
 // colour into an OPAQUE view lets the compositor skip the per-frame blend (and skip
 // drawing the canvas beneath it entirely), which is the classic iOS scroll-perf win.
+// btIOSApplyReadingBG paints the cached paper colour into the text view and marks
+// it opaque. Called both from bibleTextTVSetReadingBG (when the theme pushes a new
+// colour) AND from bibleTextApplyHTML right after attributedText is set, so the
+// opaque state always survives the content assignment. Main-thread only.
+static void btIOSApplyReadingBG(void) {
+    if (gReadingTV == nil || !gReadingPaperSet) return;
+    gReadingTV.backgroundColor = [UIColor colorWithRed:gReadingPaperR
+                                                 green:gReadingPaperG
+                                                  blue:gReadingPaperB alpha:1.0];
+    gReadingTV.opaque = YES;
+}
+
 void bibleTextTVSetReadingBG(double r, double g, double b) {
     dispatch_async(dispatch_get_main_queue(), ^{
         bibleTextEnsureTV();
         if (gReadingTV == nil) return;
-        gReadingTV.backgroundColor = [UIColor colorWithRed:r green:g blue:b alpha:1.0];
-        gReadingTV.opaque = YES;
+        gReadingPaperR = r;
+        gReadingPaperG = g;
+        gReadingPaperB = b;
+        gReadingPaperSet = YES;
+        btIOSApplyReadingBG();
     });
 }
 
@@ -582,6 +617,7 @@ void bibleTextTVSetHTML(const char *html) {
                 NSLog(@"bibletext: HTML import failed after retries; showing plain text");
                 if (gReadingTV != nil) {
                     gReadingTV.text = bibleTextPlainFromHTML(s);
+                    btIOSApplyReadingBG(); // keep the view opaque on the fallback path too
                     btIOSBuildVerseIndex(nil); // plain text has no verse runs — clear the stale table
                 }
             });
@@ -1016,6 +1052,13 @@ func (h *nativeReadingHost) Move(p fyne.Position) {
 // detached widget and overwrite the new host's correct frame. currentHost is
 // the latest one; only it gets to push.
 func (h *nativeReadingHost) pushFrame() {
+	// Only the latest host may write the singleton overlay frame. A stale host
+	// (e.g. the previous chapter's, swapped out by showReading) can still receive
+	// a Resize/Move during the relayout and would otherwise clobber the current
+	// frame — the immediate write needs the same guard the deferred one has.
+	if currentHost != h {
+		return
+	}
 	setFrameFromObject(h)
 	time.AfterFunc(50*time.Millisecond, func() {
 		fyne.Do(func() {
