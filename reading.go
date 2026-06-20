@@ -306,6 +306,17 @@ func rebuildWindow(state *AppState) {
 	if state.app == nil || state.window == nil {
 		return
 	}
+	// Belt-and-braces: drain any lingering overlays before swapping content. On
+	// mobile, SetContent only reassigns the content tree — it never touches the
+	// overlay stack — so a modal still on the stack at rebuild time would be
+	// stranded (its widget subtree kept alive, and any ProgressBarInfinite inside
+	// it left spinning, repainting the canvas forever). Every modal already closes
+	// before navigating, so this is normally a no-op; it makes the invariant
+	// explicit and survives any future path that rebuilds without closing first.
+	cnv := state.window.Canvas()
+	for o := cnv.Overlays().Top(); o != nil; o = cnv.Overlays().Top() {
+		cnv.Overlays().Remove(o)
+	}
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)
 }

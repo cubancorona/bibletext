@@ -67,6 +67,15 @@ func buildLoadingView(state *AppState) fyne.CanvasObject {
 	msg.TextSize = 13
 	msg.Alignment = fyne.TextAlignCenter
 
+	// Stop any previous spinner before replacing it. A ProgressBarInfinite runs a
+	// RepeatForever animation that calls canvas.Refresh every ~50ms; if the loading
+	// view is rebuilt while still loading (the system light/dark watcher is the one
+	// rebuild that can fire during the 5-10s background load), overwriting loadingBar
+	// without stopping the old bar ORPHANS its animation — it keeps repainting the
+	// whole canvas at ~20fps off-screen, pinning the GPU/main thread and making even
+	// short text scroll laggy until GC reclaims it (a force-quit is what cleared it).
+	// Stopping first guarantees at most one live loading animation.
+	state.stopLoadingBar()
 	bar := widget.NewProgressBarInfinite()
 	state.loadingBar = bar // so stopLoadingBar can halt it once loading finishes
 
