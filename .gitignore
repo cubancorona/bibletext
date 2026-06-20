@@ -19,3 +19,5 @@ bibletext-cache.json
 
 # macOS / editor cruft
 .DS_Store
+third_party/
+icon_work/

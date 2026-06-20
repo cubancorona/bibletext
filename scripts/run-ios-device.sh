@@ -35,6 +35,16 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
+# ── 0. apply the iOS-only Fyne scroll-lag patch for this build ───────────────
+# go.mod ships STOCK (so `go build` / `go run ./cmd/desktop` stay one-line); the
+# fix is a one-line change to Fyne's iOS drawloop (see patches/README.md). We
+# regenerate a patched Fyne and inject a temporary `replace` just for this build,
+# restoring stock go.mod on exit (success, failure, or Ctrl-C).
+trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
+note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
+"${REPO_ROOT}/scripts/setup-fyne-patch.sh"
+( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
+
 # ── 1. signing certificate ──────────────────────────────────────────────────
 CERT_LINE="$(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Development' | head -1 || true)"
 CERT_HASH="$(printf '%s' "$CERT_LINE" | awk '{print $2}')"

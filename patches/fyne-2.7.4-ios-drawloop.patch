@@ -1,0 +1,22 @@
+--- a/internal/driver/mobile/app/darwin_ios.go
++++ b/internal/driver/mobile/app/darwin_ios.go
+@@ -230,7 +230,18 @@
+ 		case <-theApp.publish:
+ 			theApp.publishResult <- PublishResult{}
+ 			return
+-		case <-time.After(100 * time.Millisecond): // in case the method blocked!!
++		case <-time.After(2 * time.Millisecond): // BibleText patch: was 100ms.
++			// drawloop runs on the MAIN THREAD every CADisplayLink tick (render: ->
++			// [glview display] -> drawInRect -> drawloop). On an idle frame (Fyne has
++			// no GL work and isn't publishing — e.g. while a NATIVE UITextView /
++			// UITableView overlay scrolls over a static Fyne canvas) neither case above
++			// fires, so the original 100ms fallback parked the main run loop for ~100ms
++			// every tick, back-to-back, starving the native scroll view's gesture/CA
++			// commit on that same thread. An on-device runloop trace showed ~95% of a
++			// scroll spent in ~100ms main-thread iterations. A 2ms fallback frees the
++			// main thread between ticks; dirty frames still return instantly via the
++			// work/publish cases (so Fyne's own rendering is unaffected — at worst an
++			// idle frame's late publish presents one tick later).
+ 			return
+ 		}
+ 	}
