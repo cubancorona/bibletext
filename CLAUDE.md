@@ -24,6 +24,18 @@ cd cmd/desktop && fyne package -os darwin       --app-id com.willow.bibletextdes
 cd cmd/mobile  && fyne package -os iossimulator --app-id com.willow.bibletext
 ```
 
+**Patched Fyne (iOS scroll-lag fix).** `go.mod` ships **stock** Fyne, so
+`go build ./...` / `go run ./cmd/desktop` / `go test ./...` are one-line with no
+setup step. The fix is a one-line change to Fyne's iOS `drawloop` idle timeout
+(100ms→2ms) that only matters on iOS (`//go:build darwin && ios`), so it is
+applied ONLY on the iOS packaging path: `scripts/run-ios-device.sh` and
+`run-ios-sim.sh` regenerate a patched Fyne (`scripts/setup-fyne-patch.sh` →
+`third_party/fyne`, gitignored) and inject a temporary `replace fyne.io/fyne/v2
+=> ./third_party/fyne` for just that build, restoring stock `go.mod` on exit. Do
+**not** run a bare `fyne package -os ios` yourself — it would ship the unpatched
+(laggy) build; use the scripts. Rationale + the one-line patch + removal steps:
+[`patches/README.md`](patches/README.md).
+
 VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
 "Debug Desktop App" runs it under the debugger.
 

@@ -25,6 +25,12 @@ DEVICE_NAME="${BIBLETEXT_SIM_DEVICE:-iPhone 15}"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
 
+# Apply the iOS-only Fyne scroll-lag patch for this build, then restore stock
+# go.mod on exit so `go build` / desktop stay one-line. See patches/README.md.
+trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
+"${REPO_ROOT}/scripts/setup-fyne-patch.sh"
+( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
+
 echo "==> fyne package -os iossimulator"
 (cd "$APP_DIR" && fyne package -os iossimulator --app-id "$APP_ID")
 
