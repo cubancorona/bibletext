@@ -53,16 +53,16 @@ var lightPalette = palette{
 	Border:        color.NRGBA{R: 224, G: 217, B: 205, A: 255},
 	Text:          color.NRGBA{R: 37, G: 34, B: 29, A: 255},
 	TextMuted:     color.NRGBA{R: 132, G: 124, B: 111, A: 255},
-	Accent:        color.NRGBA{R: 146, G: 107, B: 51, A: 255},
-	AccentText:    color.NRGBA{R: 253, G: 251, B: 246, A: 255},
-	Highlight:     color.NRGBA{R: 249, G: 238, B: 206, A: 255},
-	HighlightText: color.NRGBA{R: 116, G: 80, B: 28, A: 255},
-	VerseNumber:   color.NRGBA{R: 162, G: 122, B: 64, A: 255},
-	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255}, // deep crimson on parchment
+	Accent:        color.NRGBA{R: 47, G: 76, B: 134, A: 255}, // lapis / sapphire — the sacred manuscript blue
+	AccentText:    color.NRGBA{R: 244, G: 247, B: 252, A: 255},
+	Highlight:     color.NRGBA{R: 221, G: 231, B: 247, A: 255}, // soft lapis wash behind a found verse
+	HighlightText: color.NRGBA{R: 36, G: 60, B: 112, A: 255},
+	VerseNumber:   color.NRGBA{R: 92, G: 116, B: 165, A: 255}, // muted slate-blue superscripts
+	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255},  // deep crimson on parchment
 	Input:         color.NRGBA{R: 252, G: 251, B: 247, A: 255},
 }
 
-// Dark: warm near-black with a soft gold accent — illuminated, not stark.
+// Dark: warm near-black with a luminous sapphire accent — illuminated, not stark.
 var darkPalette = palette{
 	Background:    color.NRGBA{R: 25, G: 23, B: 21, A: 255},
 	Surface:       color.NRGBA{R: 34, G: 31, B: 28, A: 255},
@@ -70,11 +70,11 @@ var darkPalette = palette{
 	Border:        color.NRGBA{R: 57, G: 52, B: 46, A: 255},
 	Text:          color.NRGBA{R: 233, G: 227, B: 217, A: 255},
 	TextMuted:     color.NRGBA{R: 157, G: 148, B: 135, A: 255},
-	Accent:        color.NRGBA{R: 215, G: 179, B: 119, A: 255},
-	AccentText:    color.NRGBA{R: 26, G: 22, B: 18, A: 255},
-	Highlight:     color.NRGBA{R: 61, G: 51, B: 35, A: 255},
-	HighlightText: color.NRGBA{R: 240, G: 214, B: 162, A: 255},
-	VerseNumber:   color.NRGBA{R: 207, G: 171, B: 113, A: 255},
+	Accent:        color.NRGBA{R: 124, G: 160, B: 228, A: 255}, // luminous sapphire on near-black
+	AccentText:    color.NRGBA{R: 17, G: 24, B: 40, A: 255},
+	Highlight:     color.NRGBA{R: 34, G: 45, B: 66, A: 255}, // deep lapis wash behind a found verse
+	HighlightText: color.NRGBA{R: 182, G: 205, B: 240, A: 255},
+	VerseNumber:   color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
 	RedLetter:     color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
 	Input:         color.NRGBA{R: 38, G: 35, B: 31, A: 255},
 }
@@ -129,9 +129,9 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 		return p.Accent
 	case theme.ColorNameForegroundOnPrimary:
 		// The label/icon on accent-filled (primary) buttons. Use the palette's
-		// AccentText — a warm cream on the light-mode brown accent, near-black on
-		// the lighter dark-mode accent — rather than the default stark white (which
-		// would be unreadable on the dark-mode accent).
+		// AccentText — a cool near-white on the light-mode lapis accent, deep navy on
+		// the lighter dark-mode sapphire accent — rather than the default stark white
+		// (which would be unreadable on the dark-mode accent).
 		return p.AccentText
 	case theme.ColorNameButton:
 		return p.SurfaceAlt
