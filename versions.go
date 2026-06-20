@@ -39,6 +39,14 @@ type BibleVersion struct {
 	// PublicDomain marks freely-distributable text (no license required).
 	PublicDomain bool
 
+	// cacheEpoch invalidates this version's on-disk cache when its DECODING
+	// changes (not the cache file format — that is cacheSchemaVersion). The cache
+	// stores already-decoded text, so a decoder fix would otherwise stay masked by
+	// a stale cache. Bumping the epoch versions the cache path
+	// (bibletext-<id>-v<epoch>.json), so existing installs re-fetch and re-decode
+	// only THIS version; others keep their caches. 0 = legacy unversioned path.
+	cacheEpoch int
+
 	// source fetches the real, licensed text. When it is unavailable (no
 	// license/credentials configured), the app falls back to a clearly-labeled
 	// testing placeholder. nil is treated as "never available" (testing only).
@@ -69,7 +77,11 @@ var registeredVersions = []BibleVersion{
 	{
 		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
 		Publisher: "Public Domain (CC0)", PublicDomain: true,
-		source: bsbSource{},
+		// epoch 1: the v1 decoder fixed punctuation spacing (helloao trims the
+		// whitespace around footnote/line-break/clause boundaries — see
+		// bsbVerseText). Bumped so installs holding the v0 cache re-decode.
+		cacheEpoch: 1,
+		source:     bsbSource{},
 	},
 	{
 		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",
@@ -195,6 +207,7 @@ const (
 // realistically.
 func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 	if v.source != nil && v.source.available() {
+		purgeSupersededCaches(v) // drop pre-epoch cache files (best-effort)
 		data, _, err := loadBibleData(v.source.fetch, cachePathForVersion(v.ID), currentUTCTime)
 		if err != nil {
 			return nil, modeReal, err
@@ -242,13 +255,38 @@ func placeholderVerseText(abbrev, book string, chapter, verse int) string {
 
 // cachePathForVersion is the on-disk cache for a version. The default (web) stays
 // at the legacy path (honoring BIBLETEXT_CACHE_PATH) for backwards
-// compatibility; other versions live beside it as bibletext-<id>.json.
+// compatibility; other versions live beside it as bibletext-<id>.json. A version
+// with a non-zero cacheEpoch (its decoder changed) gets a versioned filename,
+// bibletext-<id>-v<epoch>.json, so a stale pre-epoch cache is bypassed.
 func cachePathForVersion(id string) string {
 	base := defaultCachePath()
 	if id == defaultVersionID {
 		return base
 	}
-	return filepath.Join(filepath.Dir(base), "bibletext-"+id+".json")
+	name := "bibletext-" + id
+	if v, ok := versionByID(id); ok && v.cacheEpoch > 0 {
+		name += fmt.Sprintf("-v%d", v.cacheEpoch)
+	}
+	return filepath.Join(filepath.Dir(base), name+".json")
+}
+
+// purgeSupersededCaches best-effort removes cache files written by older
+// cacheEpochs of v, so a bumped decoder doesn't strand a stale (multi-MB) cache.
+// It only ever targets THIS version's own earlier epochs — never the current
+// epoch's file, never another version's — so it cannot drop live data. iOS may
+// evict Library/Caches on its own; this just keeps the directory tidy.
+func purgeSupersededCaches(v BibleVersion) {
+	if v.cacheEpoch <= 0 || v.ID == defaultVersionID {
+		return
+	}
+	dir := filepath.Dir(defaultCachePath())
+	for k := 0; k < v.cacheEpoch; k++ {
+		name := "bibletext-" + v.ID
+		if k > 0 {
+			name += fmt.Sprintf("-v%d", k)
+		}
+		_ = os.Remove(filepath.Join(dir, name+".json"))
+	}
 }
 
 // --- Switching --------------------------------------------------------------

@@ -6,11 +6,11 @@ import (
 )
 
 // TestBSBVerseTextSpacing locks in the verse-text flattening rules that the
-// real helloao data exercises: footnote markers between prose runs must NOT
-// introduce a space (so closing punctuation/quotes stay attached), a footnote
-// that splits a sentence keeps its single space (the run carries its own leading
-// space), poetry clauses are single-space-joined, and a prose intro followed by
-// poetry clauses (≈667 verses, e.g. Genesis 2:23) keeps the space between them.
+// real helloao data exercises. helloao trims the whitespace around every boundary
+// it introduces (dropped footnote/line-break nodes and poetry clauses all abut
+// with nothing between them), so every contributing piece is joined with one
+// synthesized space — EXCEPT where the next piece opens with closing punctuation
+// or a quote, which must stay attached to the preceding text.
 func TestBSBVerseTextSpacing(t *testing.T) {
 	cases := []struct{ name, contentJSON, want string }{
 		{
@@ -22,6 +22,30 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 			"footnote splitting a sentence keeps a single space (John 1:1 shape)",
 			`["In the beginning was the Word,",{"noteId":0}," and the Word was with God."]`,
 			"In the beginning was the Word, and the Word was with God.",
+		},
+		{
+			// Real data trims the boundary: the runs are "...Eve," + {noteId} +
+			// "because..." with NO baked space, so a space must be synthesized.
+			"footnote between trimmed prose runs gets a space (Genesis 3:20 shape)",
+			`["And Adam named his wife Eve,",{"noteId":16},"because she would be the mother of all the living."]`,
+			"And Adam named his wife Eve, because she would be the mother of all the living.",
+		},
+		{
+			"line break between trimmed prose runs gets a space (Genesis 10:2 shape)",
+			`["The sons of Japheth:",{"lineBreak":true},"Gomer, Magog, Madai, Javan, Tubal, Meshech, and Tiras."]`,
+			"The sons of Japheth: Gomer, Magog, Madai, Javan, Tubal, Meshech, and Tiras.",
+		},
+		{
+			// A footnote between a poetry clause and a clause that is pure closing
+			// punctuation: the "?" / "”" must abut, not get a synthesized space.
+			"clause then footnote then closing punctuation abuts (Job 6:6 shape)",
+			`[{"text":"or is there flavor in the white of an egg","poem":2},{"noteId":8},{"text":"?","poem":2}]`,
+			"or is there flavor in the white of an egg?",
+		},
+		{
+			"clause then footnote then closing quote abuts (Genesis 3:15 shape)",
+			`[{"text":"and you will strike his heel.","poem":2},{"noteId":14},{"text":"”","poem":2}]`,
+			"and you will strike his heel.”",
 		},
 		{
 			"prose intro then poetry clauses (Genesis 2:23 shape)",

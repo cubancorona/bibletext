@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,6 +53,44 @@ func TestCachePathForVersion(t *testing.T) {
 	wantNRSV := filepath.Join(dir, "bibletext-nrsv.json")
 	if got := cachePathForVersion("nrsv"); got != wantNRSV {
 		t.Errorf("nrsv cache = %q, want %q", got, wantNRSV)
+	}
+
+	// BSB carries a cacheEpoch (its decoder fixed punctuation spacing), so its
+	// cache path is versioned — the stale v0 cache is bypassed.
+	wantBSB := filepath.Join(dir, "bibletext-bsb-v1.json")
+	if got := cachePathForVersion("bsb"); got != wantBSB {
+		t.Errorf("bsb cache = %q, want %q", got, wantBSB)
+	}
+}
+
+// TestPurgeSupersededCaches verifies a cacheEpoch bump cleans up the stale
+// pre-epoch cache file while leaving the current epoch's file and other versions'
+// caches untouched.
+func TestPurgeSupersededCaches(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "bibletext-cache.json")
+	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
+
+	stale := filepath.Join(dir, "bibletext-bsb.json")      // v0 (superseded)
+	current := filepath.Join(dir, "bibletext-bsb-v1.json") // v1 (active)
+	web := legacy                                          // web cache (other version)
+	for _, p := range []string{stale, current, web} {
+		if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	bsb, _ := versionByID("bsb")
+	purgeSupersededCaches(bsb)
+
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale v0 cache should have been removed (err=%v)", err)
+	}
+	if _, err := os.Stat(current); err != nil {
+		t.Errorf("current v1 cache must be kept: %v", err)
+	}
+	if _, err := os.Stat(web); err != nil {
+		t.Errorf("other version's (web) cache must be untouched: %v", err)
 	}
 }
 
