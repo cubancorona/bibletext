@@ -554,10 +554,9 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 
 	host := newMacReadingHost(state, verses)
 
-	paper := canvas.NewRectangle(pal.Surface)
-	paper.StrokeColor = pal.Border
-	paper.StrokeWidth = 1
-	paper.CornerRadius = 8
+	// Flat parchment reading surface (matches iOS): the NSTextView floats over this
+	// pal.Background rectangle (it has drawsBackground=NO) with no bordered card.
+	paper := canvas.NewRectangle(pal.Background)
 	return container.NewStack(paper, host)
 }
 

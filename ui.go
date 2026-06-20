@@ -46,7 +46,9 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	rule.StrokeWidth = 1
 
 	bg := canvas.NewRectangle(pal.SurfaceAlt)
-	content := container.NewVBox(container.NewPadded(row), rule)
+	// Tight top/bottom padding (vs the theme's full inset) keeps the app header
+	// compact so more of the screen is reading text.
+	content := container.NewVBox(container.New(layout.NewCustomPaddedLayout(2, 2, theme.Padding(), theme.Padding()), row), rule)
 	return container.NewStack(bg, content)
 }
 
