@@ -377,9 +377,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	b.WriteString("<html><head><style>")
 	fmt.Fprintf(&b, `body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 19px;
+		font-size: 21px;
 		color: %s;
-		line-height: 1.72;
+		line-height: 2.0;
 		letter-spacing: 0.004em;
 		margin: 0; padding: 0;
 		-webkit-text-size-adjust: 100%%;
@@ -388,7 +388,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	}`, textHex)
 	fmt.Fprintf(&b, `p {
 		margin: 0 0 24px 0;
-		text-align: left;
+		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
 	}`)

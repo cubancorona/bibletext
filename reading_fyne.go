@@ -38,7 +38,7 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 		chapter.parentScroll = scroll
 	}
 
-	return surface(container.NewPadded(scroll), pal.Surface, pal.Border, fyne.Size{})
+	return surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{})
 }
 
 // setReadingOverlayVisible is a no-op where there's no native text overlay.

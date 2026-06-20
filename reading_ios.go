@@ -388,7 +388,7 @@ static void bibleTextEnsureTV(void) {
             tv.scrollEnabled = YES;
             tv.alwaysBounceVertical = YES;
             tv.backgroundColor = UIColor.clearColor;
-            tv.textContainerInset = UIEdgeInsetsMake(14, 16, 14, 16);
+            tv.textContainerInset = UIEdgeInsetsMake(14, 10, 14, 10);
             // Stop iOS from auto-adjusting the content inset for the safe
             // area — we already position the textView below it via the Fyne
             // layout, and the auto-adjust would push verse 1 off the top.
@@ -910,7 +910,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// "John 10 ⌄" — one cohesive tap target (text + a clear dropdown chevron) that
 	// opens the combined reference picker (book list + chapter grid). A roomy box
 	// height makes it a comfortable touch target.
-	const titleBoxH = 40
+	const titleBoxH = 32
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
 		showChapterPicker(state)
 	})
@@ -922,8 +922,8 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	})
 	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
 
-	// Chapter arrows get the full 44pt touch target so they're easy to tap.
-	navBoxH := minTapTarget
+	// Chapter arrows use a slightly tighter box to keep the top chrome compact.
+	navBoxH := float32(38)
 
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
