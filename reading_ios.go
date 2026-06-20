@@ -859,10 +859,11 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 	host := newNativeReadingHost(state, verses)
 
-	paper := canvas.NewRectangle(pal.Surface)
-	paper.StrokeColor = pal.Border
-	paper.StrokeWidth = 1
-	paper.CornerRadius = 8
+	// Flat reading surface: a plain parchment (pal.Background) fill — the native
+	// UITextView paints the same colour — with no bordered "card" or rounded frame,
+	// so the verse text sits directly on the warm parchment ground as one
+	// continuous plane with the header.
+	paper := canvas.NewRectangle(pal.Background)
 
 	// Full-screen reading: no chrome at all except a small exit affordance.
 	// Tabs and the top "BibleText" header are skipped in ui_mobile.go for this
@@ -967,9 +968,10 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, left, right, nil)
 
-	rule := canvas.NewLine(pal.Border)
-	rule.StrokeWidth = 1
-	return container.NewVBox(row, rule)
+	// No divider under the header — the flat reading surface separates the chapter
+	// toolbar from the verses with whitespace (the text view's top inset) instead
+	// of a hard rule.
+	return row
 }
 
 // afterRebuild (iOS) re-pins the native UITextView overlay after the window
@@ -1143,11 +1145,11 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	defer C.free(unsafe.Pointer(c))
 	C.bibleTextTVSetHTML(c)
 
-	// Keep the native text view OPAQUE with the current theme's paper colour (the
-	// same pal.Surface the Fyne layer paints behind it) so scrolling doesn't pay a
-	// per-frame alpha blend. Set on every real render, so a light/dark switch (which
-	// changes the fingerprint above and thus reaches here) updates the paper too.
-	bg := state.pal().Surface
+	// Keep the native text view OPAQUE with the current theme's reading-ground colour
+	// (the same pal.Background parchment the Fyne layer paints behind it) so scrolling
+	// doesn't pay a per-frame alpha blend. Set on every real render, so a light/dark
+	// switch (which changes the fingerprint above and thus reaches here) updates it too.
+	bg := state.pal().Background
 	C.bibleTextTVSetReadingBG(
 		C.double(float64(bg.R)/255), C.double(float64(bg.G)/255), C.double(float64(bg.B)/255))
 }
