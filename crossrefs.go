@@ -244,6 +244,26 @@ var osisBookNames = map[string]string{
 	"Jude": "Jude", "Rev": "Revelation",
 }
 
+// bookAbbrevByName is the reverse of osisBookNames: canonical book name -> a compact
+// OSIS-style abbreviation ("Genesis"->"Gen", "1 Corinthians"->"1Cor",
+// "Revelation"->"Rev"). Built once at startup.
+var bookAbbrevByName = func() map[string]string {
+	m := make(map[string]string, len(osisBookNames))
+	for abbr, full := range osisBookNames {
+		m[full] = abbr
+	}
+	return m
+}()
+
+// bookAbbrev returns a short label for a canonical book name (for compact UI such
+// as the recent-chapters bar), falling back to the full name for anything unknown.
+func bookAbbrev(name string) string {
+	if a, ok := bookAbbrevByName[name]; ok {
+		return a
+	}
+	return name
+}
+
 // crossRefsForSelection aggregates the cross-references for the verse(s) the
 // selection spans, resolving target book names against the loaded translation
 // and merging duplicates (keeping the highest vote). Highest-voted first.

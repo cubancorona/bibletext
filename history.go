@@ -19,9 +19,11 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 	}
 	pal := state.pal()
 
-	label := canvas.NewText("Recent", pal.TextMuted)
-	label.TextSize = 11
-	label.TextStyle = fyne.TextStyle{Bold: true}
+	// A small "history" glyph stands in for the old "Recent" label — compact, and
+	// it reads as recents/history.
+	recentIcon := canvas.NewImageFromResource(theme.NewColoredResource(theme.HistoryIcon(), colorNameMuted))
+	recentIcon.FillMode = canvas.ImageFillContain
+	recentIcon.SetMinSize(fyne.NewSize(16, 16))
 
 	// Consolidate by book: one book name followed by its chapter numbers, each
 	// number individually clickable — e.g. "John 1 3 5   Genesis 1".
@@ -29,7 +31,7 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 	for _, g := range groupVisitsByBook(targets) {
 		book := g.Book
 
-		name := canvas.NewText(book, pal.Text)
+		name := canvas.NewText(bookAbbrev(book), pal.Text)
 		name.TextSize = 13
 		name.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -54,7 +56,7 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 
 	row := container.NewBorder(
 		nil, nil,
-		container.NewCenter(label),
+		container.NewHBox(container.NewCenter(recentIcon), hgap(6)),
 		container.NewCenter(clear),
 		container.NewHScroll(chips),
 	)
