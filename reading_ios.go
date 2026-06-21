@@ -45,11 +45,37 @@ extern void bibleTextKeyboardChanged(double height);
 // `ok` distinguishes "read the live scroll" (1, even when at the top) from
 // "couldn't read it — view gone" (0).
 typedef struct { int verse; double delta; double frac; int ok; } BTAnchor;
+// The last scroll's initial-touch point, mapped to a verse. ok=1 only when a verse
+// was resolved (the reader scrolled and we located the grabbed line).
+typedef struct { int verse; double delta; int ok; } BTTouch;
 
 static NSInteger gReadingRestoreVerse = 0;
 static CGFloat   gReadingRestoreDelta = 0;
 static CGFloat   gReadingRestoreFrac  = 0;
 static BOOL      gReadingHasRestore   = NO;
+
+// gLastTouch* records where the reader's finger first landed on the CURRENT scroll
+// (content-y of the initial touch). Set once per gesture in
+// scrollViewWillBeginDragging — NOT per frame — and read at scroll-end /
+// lifecycle flush as "the last scroll's initial touch". Reset on each chapter
+// render (bibleTextApplyHTML) so a touch never carries across chapters. The verse
+// mapping is deferred to bibleTextTVCaptureTouch (one place); the content-y is
+// stable through a gesture (no re-layout mid-scroll).
+static CGFloat gLastTouchContentY = 0;
+static BOOL    gHasLastTouch      = NO;
+
+// The "you left off here" marker. On reopen, the last-touched verse's number is
+// recoloured in the accent colour until the reader scrolls. gMarkerVerse is the
+// intent; once applied, the run [gMarkerLoc, +gMarkerLen) is recoloured and its
+// original colour saved (gMarkerOrig*) so it is restored live, with no re-render.
+static NSInteger  gMarkerVerse = 0;
+static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
+static NSUInteger gMarkerLoc = 0, gMarkerLen = 0;
+static CGFloat    gMarkerOrigR = 0, gMarkerOrigG = 0, gMarkerOrigB = 0, gMarkerOrigA = 1;
+static BOOL       gMarkerApplied = NO;
+static void btIOSApplyMarker(void); // defined below; used in bibleTextApplyHTML + arm
+static void btIOSClearMarker(void); // forward decl: scrollViewDidScroll clears on drag
+static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used by btIOSApplyMarker
 
 // Character range of the highlighted verse (set when arriving from a search
 // result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
@@ -123,12 +149,24 @@ static UITapGestureRecognizer *gHighlightTap = nil;
 // When the user drags the chapter, drop any pending restore target so the
 // reopen-position logic stops re-pinning and the reader scrolls freely. A
 // programmatic contentOffset change (our own restore) sets neither flag.
+// Record where the finger first grabbed the text at the START of a scroll — the
+// content-y of the initial touch. Fires once per gesture (not per frame), so it is
+// cheap; the verse mapping is deferred to scroll-end (bibleTextTVCaptureTouch).
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    gLastTouchContentY = [scrollView.panGestureRecognizer locationInView:scrollView].y;
+    gHasLastTouch = YES;
+}
+
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
     if (scrollView.dragging || scrollView.decelerating) {
         // Disarm a pending restore the moment the user takes over the scroll. (We do
         // NOT poke the edit menu here — it self-dismisses on scroll, and calling it
         // every scroll frame is needless main-thread work during the gesture.)
         gReadingHasRestore = NO;
+        // The "you left off here" marker has served its purpose once the reader
+        // starts scrolling — clear it. After the first drag frame gMarkerVerse is 0,
+        // so this is a single cheap comparison per frame thereafter.
+        if (gMarkerVerse != 0) btIOSClearMarker();
     }
 }
 
@@ -246,7 +284,7 @@ static BOOL gReadingSuppressed = NO;
 // scroll-end anchor capture binary-searches this instead of re-enumerating the whole
 // text storage on every finger-lift — that O(n) main-thread walk landed exactly at
 // scroll-settle and was the felt scroll lag (worst on long chapters).
-typedef struct { NSInteger verse; NSUInteger loc; } BTVerseLoc;
+typedef struct { NSInteger verse; NSUInteger loc; NSUInteger len; } BTVerseLoc;
 static BTVerseLoc *gVerseIndex = NULL;
 static NSUInteger  gVerseIndexCount = 0;
 
@@ -265,9 +303,57 @@ static void btIOSBuildVerseIndex(NSTextStorage *ts) {
         if (n >= CAP) { *stop = YES; return; }
         if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
         NSInteger v = [[ts.string substringWithRange:r] integerValue];
-        if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; n++; }
+        if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; gVerseIndex[n].len = r.length; n++; }
     }];
     gVerseIndexCount = n;
+}
+
+// btIOSApplyMarker recolours the marked verse's number run in the accent colour,
+// saving the original colour so it can be restored when the reader scrolls. Runs
+// once per render (only when a marker is set), on the main thread — cheap. The
+// run length comes from the verse index (built just before this).
+static void btIOSApplyMarker(void) {
+    if (gMarkerVerse <= 0 || gReadingTV == nil) return;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    NSUInteger loc = btIOSLocForVerse(ts, gMarkerVerse);
+    if (loc == NSNotFound) return;
+    NSUInteger len = 0;
+    for (NSUInteger i = 0; i < gVerseIndexCount; i++) {
+        if (gVerseIndex[i].loc == loc) { len = gVerseIndex[i].len; break; }
+    }
+    if (len == 0 || loc + len > ts.length) return;
+    UIColor *orig = [ts attribute:NSForegroundColorAttributeName atIndex:loc effectiveRange:NULL];
+    if (orig) { [orig getRed:&gMarkerOrigR green:&gMarkerOrigG blue:&gMarkerOrigB alpha:&gMarkerOrigA]; }
+    else { gMarkerOrigR = gMarkerOrigG = gMarkerOrigB = 0; gMarkerOrigA = 1; }
+    gMarkerLoc = loc; gMarkerLen = len;
+    UIColor *c = [UIColor colorWithRed:gMarkerR green:gMarkerG blue:gMarkerB alpha:1.0];
+    [ts addAttribute:NSForegroundColorAttributeName value:c range:NSMakeRange(loc, len)];
+    gMarkerApplied = YES;
+}
+
+// btIOSClearMarker restores the marked verse number's original colour and forgets
+// the marker. Called when the reader takes over the scroll (the resume hint is
+// done) — and is a no-op if no marker is currently applied.
+//
+// gMarkerApplied==YES implies gMarkerLoc/Len are valid for the CURRENT text storage:
+// the only thing that replaces textStorage is bibleTextApplyHTML, which resets
+// gMarkerApplied=NO before touching it. So the bounds check below never fails while
+// applied; it is a crash-guard, not a real branch. The metadata is forgotten
+// UNCONDITIONALLY (outside the guard) on purpose: dropping the marker is always the
+// safe outcome, and keeping gMarkerVerse set on a bounds miss could let a later
+// render re-apply the marker to the wrong place. Any theoretical orphaned tint is
+// transient — the next render repaints verse-number colours from the CSS.
+static void btIOSClearMarker(void) {
+    if (gMarkerApplied && gReadingTV != nil) {
+        NSTextStorage *ts = gReadingTV.textStorage;
+        if (gMarkerLen > 0 && gMarkerLoc + gMarkerLen <= ts.length) {
+            UIColor *c = [UIColor colorWithRed:gMarkerOrigR green:gMarkerOrigG
+                                          blue:gMarkerOrigB alpha:gMarkerOrigA];
+            [ts addAttribute:NSForegroundColorAttributeName value:c
+                       range:NSMakeRange(gMarkerLoc, gMarkerLen)];
+        }
+    }
+    gMarkerApplied = NO; gMarkerVerse = 0; gMarkerLoc = 0; gMarkerLen = 0;
 }
 
 // btIOSLocForVerse returns the character location of `verse`'s number run, or
@@ -534,6 +620,14 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     }
     btIOSApplyReadingBG();
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
+    // New text: the prior chapter's initial-touch is no longer valid, and the fresh
+    // attributed string carries the original verse-number colours (the marker is not
+    // applied to it yet). Reset both, then (re-)apply the marker if one is intended —
+    // bibleTextApplyHTML can run several times during a restore, so re-applying here
+    // keeps the "you left off here" tint pinned through the relayouts.
+    gHasLastTouch = NO;
+    gMarkerApplied = NO;
+    btIOSApplyMarker();
     // Re-assert the scroll position across the relayout + frame push.
     [gReadingTV layoutIfNeeded];
     bibleTextScrollReadingTV();
@@ -811,6 +905,56 @@ void bibleTextTVArmRestore(int verse, double delta, double frac) {
         gReadingRestoreFrac = frac;
         gReadingHasRestore = YES;
     });
+}
+
+// bibleTextTVCaptureTouch maps the last scroll's initial-touch content-y (recorded
+// in scrollViewWillBeginDragging) to the verse the finger grabbed, plus the
+// within-verse offset of the touch. ok=0 when no touch was recorded for the live
+// chapter or it couldn't be mapped. Synchronous on the main thread.
+BTTouch bibleTextTVCaptureTouch(void) {
+    __block BTTouch out = {0, 0, 0};
+    dispatch_block_t block = ^{
+        if (!gHasLastTouch || gReadingTV == nil) return;
+        UITextView *tv = gReadingTV;
+        NSLayoutManager *lm = tv.layoutManager;
+        NSTextStorage *ts = tv.textStorage;
+        if (ts.length == 0) return;
+        CGFloat tcY = gLastTouchContentY - tv.textContainerInset.top;
+        if (tcY < 0) tcY = 0;
+        NSUInteger gi = [lm glyphIndexForPoint:CGPointMake(4, tcY) inTextContainer:tv.textContainer];
+        NSUInteger ci = [lm characterIndexForGlyphAtIndex:gi];
+        NSUInteger loc = 0;
+        NSInteger v = btIOSVerseAtIndex(ts, ci, &loc);
+        if (v <= 0) return;
+        NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1) actualCharacterRange:NULL];
+        CGRect rr = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
+        out.ok = 1;
+        out.verse = (int)v;
+        out.delta = tcY - rr.origin.y; // within-verse offset of the touch (content space)
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
+    return out;
+}
+
+// bibleTextTVArmMarker sets (verse>0) or clears (verse<=0) the "you left off here"
+// marker on the given verse, in the accent colour (r,g,b in 0..1). Applied
+// immediately if the chapter is already laid out, and re-applied by
+// bibleTextApplyHTML across restore relayouts.
+//
+// SYNCHRONOUS on the main thread (mirrors bibleTextTVCaptureAnchor): pushChapterHTML
+// arms the marker and THEN submits the chapter text (bibleTextTVSetHTML) in the same
+// pass. Running the arm inline sets/clears gMarkerVerse BEFORE that text is queued,
+// so bibleTextApplyHTML can never observe a stale marker from the previous chapter —
+// correctness does not rely on main-queue ordering between the two async submissions.
+void bibleTextTVArmMarker(int verse, double r, double g, double b) {
+    dispatch_block_t block = ^{
+        if (verse <= 0) { btIOSClearMarker(); return; }
+        gMarkerVerse = verse; gMarkerR = r; gMarkerG = g; gMarkerB = b;
+        btIOSApplyMarker();
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
 }
 */
 import "C"
@@ -1163,6 +1307,18 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 
 func armReadingRestore(verse int, delta, frac float64) {
 	C.bibleTextTVArmRestore(C.int(verse), C.double(delta), C.double(frac))
+}
+
+// captureLastTouch reports the verse the reader's finger first grabbed on the last
+// scroll (+ the within-verse offset of the touch). ok is false when no touch was
+// recorded for the live chapter. armReadingMarker sets/clears the reopen marker.
+func captureLastTouch() (verse int, delta float64, ok bool) {
+	t := C.bibleTextTVCaptureTouch()
+	return int(t.verse), float64(t.delta), t.ok != 0
+}
+
+func armReadingMarker(verse int, r, g, b float64) {
+	C.bibleTextTVArmMarker(C.int(verse), C.double(r), C.double(g), C.double(b))
 }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS

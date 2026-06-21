@@ -28,6 +28,8 @@ func TestReadingStateRoundTrip(t *testing.T) {
 		AnchorVerse: 16,
 		AnchorDelta: 12.5,
 		ScrollFrac:  0.42,
+		TouchVerse:  14,
+		TouchDelta:  6.5,
 		Recent: []ChapterVisit{
 			{Book: "John", Chapter: 3},
 			{Book: "Genesis", Chapter: 1},
@@ -44,6 +46,9 @@ func TestReadingStateRoundTrip(t *testing.T) {
 	}
 	if got.AnchorVerse != 16 || got.AnchorDelta != 12.5 || got.ScrollFrac != 0.42 {
 		t.Errorf("scroll anchor mismatch: verse=%d delta=%v frac=%v", got.AnchorVerse, got.AnchorDelta, got.ScrollFrac)
+	}
+	if got.TouchVerse != 14 || got.TouchDelta != 6.5 {
+		t.Errorf("touch anchor mismatch: verse=%d delta=%v", got.TouchVerse, got.TouchDelta)
 	}
 	if len(got.Recent) != 2 || got.Recent[1].Book != "Genesis" {
 		t.Errorf("recent mismatch: %+v", got.Recent)
@@ -91,8 +96,45 @@ func TestApplyRestoredStateValid(t *testing.T) {
 	if state.restore == nil || state.restore.Verse != 2 || state.restore.Book != book || state.restore.Chapter != ch {
 		t.Errorf("pending restore anchor not set correctly: %+v", state.restore)
 	}
+	// No touch was recorded, so reopen uses the exact top-visible anchor (delta
+	// preserved) and shows NO marker.
+	if state.restore.Delta != 8 || state.restore.Marker != 0 {
+		t.Errorf("no-touch restore should keep the anchor delta and set no marker: %+v", state.restore)
+	}
 	if len(state.RecentChapters) == 0 || state.RecentChapters[0].Book != book || state.RecentChapters[0].Chapter != ch {
 		t.Errorf("current chapter must be at history head: %+v", state.RecentChapters)
+	}
+}
+
+// TestApplyRestoredStatePrefersTouch verifies that when the last scroll recorded
+// an initial-touch verse, reopen anchors on THAT verse (brought to the top, delta
+// 0) and marks it, in preference to the top-visible anchor.
+func TestApplyRestoredStatePrefersTouch(t *testing.T) {
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base},
+	}
+	rs := readingState{
+		Version: defaultVersionID, Book: book, Chapter: ch,
+		AnchorVerse: 2, AnchorDelta: 8, // top-visible anchor (should be overridden)
+		TouchVerse: 5, TouchDelta: 4, // the verse the finger grabbed
+		Recent: []ChapterVisit{{Book: book, Chapter: ch}},
+	}
+	if !applyRestoredState(state, rs, base) {
+		t.Fatal("applyRestoredState should succeed")
+	}
+	if state.restore == nil {
+		t.Fatal("expected a pending restore")
+	}
+	if state.restore.Verse != 5 || state.restore.Delta != 0 {
+		t.Errorf("reopen should anchor on the touched verse at the top: verse=%d delta=%v (want 5, 0)",
+			state.restore.Verse, state.restore.Delta)
+	}
+	if state.restore.Marker != 5 {
+		t.Errorf("the touched verse should be marked: marker=%d, want 5", state.restore.Marker)
 	}
 }
 

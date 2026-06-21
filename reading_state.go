@@ -38,13 +38,20 @@ const prefReadingState = "reading.state"
 // readingState is the persisted "where the reader left off" plus history. JSON
 // fields are stable on-disk keys; keep them backward-compatible.
 type readingState struct {
-	Version     string         `json:"version"`
-	Book        string         `json:"book"`
-	Chapter     int            `json:"chapter"`
-	AnchorVerse int            `json:"anchorVerse,omitempty"` // top-visible verse (0 = top/unknown)
-	AnchorDelta float64        `json:"anchorDelta,omitempty"` // px scrolled into the anchor verse
-	ScrollFrac  float64        `json:"scrollFrac,omitempty"`  // fallback: 0..1 of scrollable height
-	Recent      []ChapterVisit `json:"recent,omitempty"`      // history, newest first
+	Version     string  `json:"version"`
+	Book        string  `json:"book"`
+	Chapter     int     `json:"chapter"`
+	AnchorVerse int     `json:"anchorVerse,omitempty"` // top-visible verse (0 = top/unknown)
+	AnchorDelta float64 `json:"anchorDelta,omitempty"` // px scrolled into the anchor verse
+	ScrollFrac  float64 `json:"scrollFrac,omitempty"`  // fallback: 0..1 of scrollable height
+	// TouchVerse/Delta record where the reader's finger first landed on the LAST
+	// scroll — the verse they grabbed to push the text (≈ the line they were
+	// reading), with the within-verse pixel offset of the touch. Captured at
+	// pan-begin (iOS only; no touch on desktop). On reopen this verse is preferred
+	// over the top-visible anchor and softly marked. 0 = none recorded.
+	TouchVerse int            `json:"touchVerse,omitempty"`
+	TouchDelta float64        `json:"touchDelta,omitempty"`
+	Recent     []ChapterVisit `json:"recent,omitempty"` // history, newest first
 }
 
 // restoreAnchor is a pending one-shot scroll target carried on AppState from
@@ -56,11 +63,13 @@ type restoreAnchor struct {
 	Verse   int
 	Delta   float64
 	Frac    float64
+	Marker  int // verse to softly mark on reopen ("you left off here"); 0 = none
 }
 
 // snapshotReadingState captures the live position + history. anchorVerse/Delta/
-// frac come from the platform scroll capture (0 / false ⇒ top of chapter).
-func snapshotReadingState(s *AppState, verse int, delta, frac float64) readingState {
+// frac come from the platform scroll capture (0 / false ⇒ top of chapter);
+// touchVerse/Delta come from the last scroll's initial-touch capture (0 ⇒ none).
+func snapshotReadingState(s *AppState, verse int, delta, frac float64, touchVerse int, touchDelta float64) readingState {
 	return readingState{
 		Version:     s.CurrentVersion,
 		Book:        s.CurrentBook,
@@ -68,6 +77,8 @@ func snapshotReadingState(s *AppState, verse int, delta, frac float64) readingSt
 		AnchorVerse: verse,
 		AnchorDelta: delta,
 		ScrollFrac:  frac,
+		TouchVerse:  touchVerse,
+		TouchDelta:  touchDelta,
 		Recent:      append([]ChapterVisit(nil), s.RecentChapters...),
 	}
 }
@@ -121,7 +132,7 @@ func persistReadingPosition(s *AppState) {
 	if s == nil {
 		return
 	}
-	writeReadingState(appPrefs(), snapshotReadingState(s, 0, 0, 0))
+	writeReadingState(appPrefs(), snapshotReadingState(s, 0, 0, 0, 0, 0))
 }
 
 // flushReadingState captures the exact native scroll position and persists the
@@ -141,24 +152,44 @@ func flushReadingState(s *AppState) {
 	writeReadingState(p, captureSnapshot(s, p))
 }
 
-// captureSnapshot reads the live scroll position (captureReadingAnchor uses
-// TextKit and MUST run on the main thread) and builds the snapshot, preserving
-// the previously-saved anchor for this chapter when the live read fails.
+// captureSnapshot reads the live scroll position (captureReadingAnchor /
+// captureLastTouch use TextKit and MUST run on the main thread) and builds the
+// snapshot, preserving the previously-saved values for this chapter when a live
+// read fails (e.g. the native view is already gone, or a lifecycle flush fires
+// after a navigation with no fresh scroll).
 func captureSnapshot(s *AppState, p prefStore) readingState {
 	verse, delta, frac, ok := captureReadingAnchor()
+	touchVerse, touchDelta, touchOK := captureLastTouch()
+
+	// Read the previously-saved state once if either live read failed, and only
+	// reuse it when it is for the chapter we're currently in.
+	var prev readingState
+	prevSameChapter := false
+	if !ok || !touchOK {
+		if pr, had := readReadingState(p); had &&
+			pr.Book == s.CurrentBook && pr.Chapter == s.CurrentChapter {
+			prev, prevSameChapter = pr, true
+		}
+	}
 	if !ok {
-		if prev, had := readReadingState(p); had &&
-			prev.Book == s.CurrentBook && prev.Chapter == s.CurrentChapter {
+		if prevSameChapter {
 			verse, delta, frac = prev.AnchorVerse, prev.AnchorDelta, prev.ScrollFrac
 		} else {
 			verse, delta, frac = 0, 0, 0
+		}
+	}
+	if !touchOK {
+		if prevSameChapter {
+			touchVerse, touchDelta = prev.TouchVerse, prev.TouchDelta
+		} else {
+			touchVerse, touchDelta = 0, 0
 		}
 	}
 	// Mirror the position onto the current history entry so that, once the reader
 	// navigates away, tapping this chapter in the history bar returns them here
 	// (navigateToVisit reads the visit's anchor). Runs on the main thread.
 	updateCurrentVisitAnchor(s, verse, delta, frac)
-	return snapshotReadingState(s, verse, delta, frac)
+	return snapshotReadingState(s, verse, delta, frac, touchVerse, touchDelta)
 }
 
 // updateCurrentVisitAnchor stamps the live scroll position onto the head of the
@@ -240,14 +271,21 @@ func applyRestoredState(state *AppState, rs readingState, base *BibleData) bool 
 	state.CurrentChapter = chapter
 	state.RecentChapters = restoreRecent(rs.Recent, bible, book, chapter)
 
-	if rs.AnchorVerse > 0 || rs.ScrollFrac > 0 {
-		state.restore = &restoreAnchor{
-			Book:    book,
-			Chapter: chapter,
-			Verse:   rs.AnchorVerse,
-			Delta:   rs.AnchorDelta,
-			Frac:    rs.ScrollFrac,
+	if rs.TouchVerse > 0 || rs.AnchorVerse > 0 || rs.ScrollFrac > 0 {
+		a := &restoreAnchor{Book: book, Chapter: chapter, Frac: rs.ScrollFrac}
+		if rs.TouchVerse > 0 {
+			// Prefer the verse the reader's finger last grabbed: bring it to the top
+			// (a predictable "resume where I was reading") and softly mark it.
+			a.Verse = rs.TouchVerse
+			a.Delta = 0
+			a.Marker = rs.TouchVerse
+		} else {
+			// No recorded touch (older state, or a scroll we couldn't map): fall back
+			// to reproducing the exact top-visible screen.
+			a.Verse = rs.AnchorVerse
+			a.Delta = rs.AnchorDelta
 		}
+		state.restore = a
 	}
 	return true
 }
@@ -319,10 +357,25 @@ func armPendingRestore(state *AppState) {
 	switch {
 	case r == nil:
 		armReadingRestore(0, 0, 0)
+		armReadingMarkerFor(state, 0)
 	case r.Book == state.CurrentBook && r.Chapter == state.CurrentChapter:
 		armReadingRestore(r.Verse, r.Delta, r.Frac)
+		armReadingMarkerFor(state, r.Marker)
 	default:
 		state.restore = nil
 		armReadingRestore(0, 0, 0)
+		armReadingMarkerFor(state, 0)
 	}
+}
+
+// armReadingMarkerFor arms (or clears, when verse<=0) the native "you left off
+// here" marker on the given verse, passing the palette's accent colour. The
+// marker is an iOS-only render concern; armReadingMarker is a no-op elsewhere.
+func armReadingMarkerFor(state *AppState, verse int) {
+	if verse <= 0 {
+		armReadingMarker(0, 0, 0, 0)
+		return
+	}
+	c := state.pal().Accent
+	armReadingMarker(verse, float64(c.R)/255, float64(c.G)/255, float64(c.B)/255)
 }

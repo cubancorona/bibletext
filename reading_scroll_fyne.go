@@ -17,3 +17,10 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 
 // armReadingRestore is a no-op: there is no native scroll target to arm.
 func armReadingRestore(verse int, delta, frac float64) {}
+
+// captureLastTouch / armReadingMarker back the initial-touch ("where I left off")
+// feature, which is iOS-only (it needs a touch gesture and native verse geometry).
+// On the Fyne fallback platforms there is nothing to record or draw.
+func captureLastTouch() (verse int, delta float64, ok bool) { return 0, 0, false }
+
+func armReadingMarker(verse int, r, g, b float64) {}

@@ -632,6 +632,13 @@ func armReadingRestore(verse int, delta, frac float64) {
 	C.bibleTextMacArmRestore(C.int(verse), C.double(delta), C.double(frac))
 }
 
+// captureLastTouch / armReadingMarker are the initial-touch ("where I left off")
+// bridge — an iOS-only feature (it needs touch). Desktop has no touch gesture and
+// no marker, so these are inert here: nothing is recorded, nothing is drawn.
+func captureLastTouch() (verse int, delta float64, ok bool) { return 0, 0, false }
+
+func armReadingMarker(verse int, r, g, b float64) {}
+
 func (h *macReadingHost) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(canvas.NewRectangle(color.Transparent))
 }
