@@ -1025,7 +1025,10 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 	top := container.NewVBox()
 	if bar := buildHistoryBar(state); bar != nil {
-		top.Add(bar)
+		// Margin AROUND the recents card (not inside it) so it floats clear of the
+		// app-header divider above and the chapter heading below, rather than sitting
+		// cramped against them.
+		top.Add(container.New(layout.NewCustomPaddedLayout(6, 4, 0, 0), bar))
 	}
 	if state.CanReturnToSearchResults {
 		top.Add(backToResultsBar(state))
@@ -1279,14 +1282,45 @@ func nativeShareImage(path string) {
 	C.bibleTextShareImageFile(c)
 }
 
+// lastPushedBookChapter is the "book|chapter" of the chapter currently held by the
+// native text view — distinct from lastPushedChapterFP (which also folds in theme,
+// red-letter and highlight). It lets pushChapterHTML tell a genuine chapter change
+// (pin to top) from a same-chapter re-render (preserve the reader's scroll).
+var lastPushedBookChapter string
+
 // pushChapterHTML builds the chapter as HTML (so NSAttributedString gets nice
 // inline styling — superscript verse numbers, accent color, serif font) and
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
-	// Arm any pending one-shot scroll restore for this chapter (reopening where
-	// the reader left off) before pushing the text, so bibleTextScrollReadingTV
-	// lands on the saved position rather than the top. A normal push disarms it.
-	// (Done before the skip check below so a pending restore always re-arms.)
+	fp := chapterRenderFingerprint(state)
+	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
+
+	// Same-chapter RE-render — the fingerprint changed but the book+chapter did not.
+	// This fires on a light/dark flip, a red-letter toggle, and (the common one) when
+	// iOS forces an appearance change to snapshot the BACKGROUNDED app for the app
+	// switcher: the reader takes a screenshot, shares it, comes back, and the trait
+	// flip rebuilds the view. The bibleTextTVSetHTML below replaces the text view's
+	// content, which snaps the scroll to the TOP. If the reader is mid-chapter with
+	// nothing else pending, capture their live position now and arm it as a one-shot
+	// restore so the post-setHTML scroll cadence returns them to where they were
+	// instead of the top. (This is also what keeps a manual dark-mode toggle from
+	// jumping the reader to the top of the chapter.)
+	if state.restore == nil && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
+		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
+			state.restore = &restoreAnchor{
+				Book:    state.CurrentBook,
+				Chapter: state.CurrentChapter,
+				Verse:   v,
+				Delta:   d,
+				Frac:    f,
+			}
+		}
+	}
+
+	// Arm any pending one-shot scroll restore for this chapter (reopening where the
+	// reader left off, or the position just captured above) before pushing the text,
+	// so bibleTextScrollReadingTV lands on it rather than the top. A normal push
+	// disarms it. (Done before the skip check below so a pending restore always re-arms.)
 	armPendingRestore(state)
 
 	// Skip the costly HTML rebuild + NSAttributedString re-import when the
@@ -1294,11 +1328,11 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// Books tab and back, or a refresh that didn't change the text). A pending
 	// scroll restore forces the push so the scroll cadence runs. The fingerprint
 	// includes highlight + theme so a search-jump or light/dark flip still pushes.
-	fp := chapterRenderFingerprint(state)
 	if state.restore == nil && fp == lastPushedChapterFP {
 		return
 	}
 	lastPushedChapterFP = fp
+	lastPushedBookChapter = bc
 
 	html := buildChapterHTML(state, verses)
 	c := C.CString(html)
