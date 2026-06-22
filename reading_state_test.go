@@ -106,10 +106,14 @@ func TestApplyRestoredStateValid(t *testing.T) {
 	}
 }
 
-// TestApplyRestoredStatePrefersTouch verifies that when the last scroll recorded
-// an initial-touch verse, reopen anchors on THAT verse (brought to the top, delta
-// 0) and marks it, in preference to the top-visible anchor.
+// TestApplyRestoredStatePrefersTouch verifies that WHEN THE FEATURE IS ON and the
+// last scroll recorded an initial-touch verse, reopen anchors on THAT verse
+// (brought to the top, delta 0) and marks it, in preference to the top-visible
+// anchor.
 func TestApplyRestoredStatePrefersTouch(t *testing.T) {
+	touchResumeEnabled = true
+	defer func() { touchResumeEnabled = false }()
+
 	base := baseSampleBible()
 	book, ch := firstBookChapter(t, base)
 	state := &AppState{
@@ -135,6 +139,41 @@ func TestApplyRestoredStatePrefersTouch(t *testing.T) {
 	}
 	if state.restore.Marker != 5 {
 		t.Errorf("the touched verse should be marked: marker=%d, want 5", state.restore.Marker)
+	}
+}
+
+// TestApplyRestoredStateTouchDisabledUsesAnchor verifies that with the feature OFF
+// (the default), a recorded touch verse is ignored: reopen uses the top-visible
+// anchor and shows no marker.
+func TestApplyRestoredStateTouchDisabledUsesAnchor(t *testing.T) {
+	if touchResumeEnabled {
+		t.Skip("feature is enabled in this build; this test covers the off path")
+	}
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base},
+	}
+	rs := readingState{
+		Version: defaultVersionID, Book: book, Chapter: ch,
+		AnchorVerse: 2, AnchorDelta: 8,
+		TouchVerse: 5, TouchDelta: 4, // present, but must be ignored while off
+		Recent: []ChapterVisit{{Book: book, Chapter: ch}},
+	}
+	if !applyRestoredState(state, rs, base) {
+		t.Fatal("applyRestoredState should succeed")
+	}
+	if state.restore == nil {
+		t.Fatal("expected a pending restore from the top-visible anchor")
+	}
+	if state.restore.Verse != 2 || state.restore.Delta != 8 {
+		t.Errorf("feature off should use the top-visible anchor: verse=%d delta=%v (want 2, 8)",
+			state.restore.Verse, state.restore.Delta)
+	}
+	if state.restore.Marker != 0 {
+		t.Errorf("feature off should set no marker: marker=%d", state.restore.Marker)
 	}
 }
 
