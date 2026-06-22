@@ -46,9 +46,14 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	rule.StrokeWidth = 1
 
 	bg := canvas.NewRectangle(pal.SurfaceAlt)
-	// Tight top/bottom padding (vs the theme's full inset) keeps the app header
-	// compact so more of the screen is reading text.
-	content := container.NewVBox(container.New(layout.NewCustomPaddedLayout(2, 2, theme.Padding(), theme.Padding()), row), rule)
+	// Tight, BALANCED top/bottom padding keeps the app header compact (more screen
+	// for reading) without the band going bottom-heavy. The rule is stacked with a
+	// ZERO inter-element gap: a plain VBox(row, rule) inserts a full theme.Padding()
+	// (~7pt) between the row and the rule, which pooled empty band under the version
+	// line while "BibleText" sat almost flush to the top. A zero-gap VBox plus a hair
+	// more headroom up top evens the two margins.
+	rowWrap := container.New(layout.NewCustomPaddedLayout(7, 5, theme.Padding(), theme.Padding()), row)
+	content := container.New(layout.NewCustomPaddedVBoxLayout(0), rowWrap, rule)
 	return container.NewStack(bg, content)
 }
 

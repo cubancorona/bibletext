@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -61,5 +62,8 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 		container.NewHScroll(chips),
 	)
 
-	return surface(row, pal.SurfaceAlt, pal.Border, fyne.Size{})
+	// A little vertical breathing room around the chips (on top of surface's own
+	// padding) so the recents strip isn't cramped against its top and bottom edges.
+	padded := container.New(layout.NewCustomPaddedLayout(4, 4, 0, 0), row)
+	return surface(padded, pal.SurfaceAlt, pal.Border, fyne.Size{})
 }
