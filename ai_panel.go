@@ -217,7 +217,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 
 	content := container.NewBorder(header, footer, nil, nil, body)
 	popup = widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
+		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
 		cnv,
 	)
 	popup.Show()

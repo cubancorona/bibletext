@@ -229,9 +229,16 @@ func (t *tapText) CreateRenderer() fyne.WidgetRenderer {
 	lbl.TextSize = t.size
 	lbl.TextStyle = fyne.TextStyle{Bold: t.bold}
 	// Pad the hit box well beyond the glyphs so the heading is an easy phone
-	// target, not a thin strip the width of the text.
+	// target, not a thin strip the width of the text. The extra width goes on the
+	// RIGHT — the text is pinned to the box's LEFT edge (and vertically centred),
+	// the same way referenceButton pins the book heading, so the "Chapter N of M"
+	// line sits flush under the book title above it instead of drifting ~half the
+	// pad to the right the way a centred label would.
 	w := fyne.MeasureText(t.text, t.size, lbl.TextStyle).Width + tapTextHPad
-	box := container.NewGridWrap(fyne.NewSize(w, t.boxH), container.NewCenter(lbl))
+	box := container.NewGridWrap(fyne.NewSize(w, t.boxH),
+		container.NewVBox(layout.NewSpacer(),
+			container.NewHBox(container.NewCenter(lbl), layout.NewSpacer()),
+			layout.NewSpacer()))
 	return widget.NewSimpleRenderer(box)
 }
 
@@ -286,11 +293,14 @@ func (b *referenceButton) CreateRenderer() fyne.WidgetRenderer {
 	chev.FillMode = canvas.ImageFillContain
 	chev.SetMinSize(fyne.NewSize(chevSize, chevSize))
 
-	// Text then chevron, tight (one theme pad between them — not a wide gap), with
-	// just a little symmetric breathing room as the hit box.
+	// Text then chevron, tight (one theme pad between them — not a wide gap). The
+	// content is pinned to the LEFT (and vertically centred) inside the fixed-height
+	// hit box, so the heading's left edge is flush with the box — it doesn't drift
+	// right the way a centred layout would.
 	inner := container.NewHBox(container.NewCenter(lbl), container.NewCenter(chev))
-	w := textW + chevSize + theme.Padding() + 8
-	box := container.NewGridWrap(fyne.NewSize(w, b.boxH), container.NewCenter(inner))
+	w := textW + chevSize + theme.Padding()
+	box := container.NewGridWrap(fyne.NewSize(w, b.boxH),
+		container.NewVBox(layout.NewSpacer(), container.NewHBox(inner, layout.NewSpacer()), layout.NewSpacer()))
 	return widget.NewSimpleRenderer(box)
 }
 

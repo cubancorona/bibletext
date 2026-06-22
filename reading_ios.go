@@ -1032,8 +1032,20 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
 
-	body := container.NewBorder(top, nil, nil, nil, container.NewStack(paper, host))
-	return container.NewPadded(body)
+	// Inset the whole header column (history bar, back-to-results bar, and the
+	// chapter heading) by one theme pad on the LEFT so its text lines up directly
+	// under the app header's "BibleText" / version column, which carries the same
+	// left pad (ui.go buildHeader). This is applied to the header band only — the
+	// body's own left pad stays 0 — so the native verse text below keeps its own
+	// reading inset and isn't pushed in with the chrome.
+	header := container.New(layout.NewCustomPaddedLayout(0, 0, theme.Padding(), 0), top)
+
+	body := container.NewBorder(header, nil, nil, nil, container.NewStack(paper, host))
+	// No top padding (the app header's rule + the border gap already separate it) and
+	// no LEFT padding (the header band above is inset on its own; the verse column keeps
+	// its native inset). Keep the RIGHT pad (so the fullscreen control lines up under the
+	// gear) and a bottom margin above the tab bar.
+	return container.New(layout.NewCustomPaddedLayout(0, theme.Padding(), 0, theme.Padding()), body)
 }
 
 // chapterHeaderMobile is a compact, low-chrome chapter toolbar tuned for the
@@ -1054,20 +1066,22 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// "John 10 ⌄" — one cohesive tap target (text + a clear dropdown chevron) that
 	// opens the combined reference picker (book list + chapter grid). A roomy box
 	// height makes it a comfortable touch target.
-	const titleBoxH = 32
-	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
+	// One even box height for BOTH rows, so the title row and the chapter/nav row
+	// share the same vertical rhythm and the toolbar stays compact. A slightly
+	// smaller heading (vs the 26px page heading) keeps it closer in scale to the
+	// chapter line below, so that line no longer floats in an over-tall box.
+	const boxH = 30
+	const headSize = 22
+	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headSize, boxH, func() {
 		showChapterPicker(state)
 	})
 
 	// Small copy icon tucked after the heading — lighter than the chapter-nav
 	// arrows but still a full-height (finger-friendly) hit box.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, titleBoxH, func() {
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
 		copyChapter(state)
 	})
 	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
-
-	// Chapter arrows use a slightly tighter box to keep the top chrome compact.
-	navBoxH := float32(38)
 
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
@@ -1075,7 +1089,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	if total <= 1 {
 		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
-	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, navBoxH, false, func() {
+	chapterLine := newTapTextStyled(chapText, pal.TextMuted, subheadingTextSize, boxH, false, func() {
 		showChapterPicker(state)
 	})
 
@@ -1083,14 +1097,14 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 
 	// Prev/next as compact icon buttons sitting next to the chapter line, so
 	// they're close to the book + chapter text rather than floating far right.
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, navBoxH, func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, boxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
 
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, navBoxH, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, boxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
@@ -1108,7 +1122,9 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	})
 	fullScreenBtn.Importance = widget.LowImportance
 
-	left := container.NewVBox(titleRow, chapterRow)
+	// Tighter-than-default gap between the two rows so the book heading and the
+	// chapter/nav line read as one compact block, not two airy lines.
+	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
 	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, left, right, nil)
 

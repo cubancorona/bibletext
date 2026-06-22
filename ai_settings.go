@@ -63,6 +63,7 @@ func showAISettings(state *AppState) {
 
 		heading := canvas.NewText(info.Name+" key", pal.Text)
 		heading.TextStyle = fyne.TextStyle{Bold: true}
+		heading.TextSize = 18 // match the standard chrome text size
 
 		var link fyne.CanvasObject = layout.NewSpacer()
 		if u, err := url.Parse(info.KeyURL); err == nil {
@@ -167,70 +168,120 @@ func showAISettings(state *AppState) {
 	active.SetSelected(idToName[store.activeProvider()])
 	renderKey(store.activeProvider())
 
-	// --- Chrome.
-	title := canvas.NewText("Settings", pal.Text)
-	title.TextStyle = fyne.TextStyle{Bold: true}
-	title.TextSize = 22
-	intro := widget.NewLabel("Reading options, and optional AI study with your own key. Everything stays on this device.")
-	intro.Wrapping = fyne.TextWrapWord
-	header := container.NewVBox(title, intro, widget.NewSeparator())
-
-	// Reading options. Auto-save: toggle writes the pref immediately; the chapter
-	// re-renders when the panel closes (Done).
-	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
-	redLetter.SetChecked(redLetterEnabled())
-	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
-
-	// Assistant + key first so the key field sits high in the sheet — on a phone
-	// the soft keyboard covers the lower half, and this keeps the field above it.
-	form := container.NewVBox(
-		sectionLabel("ASSISTANT", pal),
-		active,
-		keyArea,
-		widget.NewSeparator(),
-		sectionLabel("READING", pal),
-		redLetter,
-	)
-	body := container.NewVScroll(container.NewPadded(form))
-
-	// No Save/Cancel — every change is already saved. Done just closes the panel
-	// and re-renders the chapter so a red-letter toggle takes effect.
+	// --- Chrome. A compact sheet: a small title + ✕, then the form. There is no
+	// Done button — every change auto-saves, so the ✕ or a tap anywhere outside the
+	// card dismisses it. done() runs the cleanup either way (re-show the native
+	// reading overlay + re-render so a red-letter toggle takes effect).
 	var popup *widget.PopUp
+	closed := false
 	done := func() {
+		if closed {
+			return
+		}
+		closed = true
 		if popup != nil {
 			popup.Hide()
 		}
 		restore()
 		state.refreshReadingOnly()
 	}
-	doneBtn := widget.NewButton("Done", done)
-	doneBtn.Importance = widget.HighImportance
 
-	note := canvas.NewText("Changes save automatically.", pal.TextMuted)
-	note.TextSize = 11
-	footer := container.NewVBox(
-		widget.NewSeparator(),
-		note,
-		container.NewBorder(nil, nil, nil, doneBtn),
+	title := canvas.NewText("Settings", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 22
+	closeBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), done)
+	closeBtn.Importance = widget.LowImportance
+	header := container.NewBorder(nil, nil, container.NewCenter(title), container.NewCenter(closeBtn))
+
+	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
+	redLetter.SetChecked(redLetterEnabled())
+	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
+
+	// Assistant + key first so the key field sits high in the sheet — on a phone
+	// the soft keyboard covers the lower half, and this keeps the field above it.
+	// Section labels (not separators) divide the groups, keeping the sheet tight.
+	form := container.NewVBox(
+		sectionLabel("ASSISTANT", pal),
+		active,
+		keyArea,
+		sectionLabel("READING", pal),
+		redLetter,
 	)
 
-	content := container.NewBorder(header, footer, nil, nil, body)
-	popup = widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
-		cnv,
+	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
+	hint.TextSize = 11
+
+	inner := container.NewBorder(
+		container.NewVBox(header, widget.NewSeparator()),
+		container.NewPadded(hint),
+		nil, nil,
+		form,
 	)
-	popup.Show()
-	// Size to the form's natural height so there's no empty space below it,
-	// capped to the screen (the body scrolls if a small window forces it).
+	// Chrome text at the standard 18px (the tighter layout — not a smaller font —
+	// does the de-cluttering). compactTheme stays as the one knob if we ever want to
+	// nudge just the sheet's text size.
+	themed := container.NewThemeOverride(inner, compactTheme{Theme: state.theme, text: 18})
+
+	// A CARD-sized sheet at a fixed width, auto-sizing its height to the content. Two
+	// things this buys us: the popup's overlay-background rectangle is only as big as
+	// the card (hidden behind the surface fill), so it never shows as a white wall;
+	// and there is no scroll view, so a stray scrollbar is impossible.
 	ps := aiPanelSize(cnv.Size())
-	h := header.MinSize().Height + form.MinSize().Height + footer.MinSize().Height + 84
-	if h > ps.Height {
-		h = ps.Height
+	card := container.New(fixedWidthLayout{width: ps.Width},
+		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
+
+	// A NON-modal popup dismisses on a tap outside its content (Fyne built-in) and
+	// leaves the reading page visible (undimmed) behind it. dismissPopUp runs done()
+	// — the overlay-restore cleanup — when that outside tap closes it.
+	dp := newDismissPopUp(card, cnv, done)
+	popup = &dp.PopUp
+	x := (cnv.Size().Width - ps.Width) / 2
+	if x < 0 {
+		x = 0
 	}
-	// Phone: ride tall so the sheet sits near the top of the screen, keeping the
-	// key field above the soft keyboard (the form scrolls inside if it overflows).
-	if fyne.CurrentDevice().IsMobile() {
-		h = ps.Height
+	y := float32(28)
+	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+		y = pos.Y + 16
 	}
-	popup.Resize(fyne.NewSize(ps.Width, h))
+	dp.ShowAtPosition(fyne.NewPos(x, y))
+}
+
+// compactTheme shrinks only the base text size of a subtree (applied via
+// container.NewThemeOverride), delegating everything else to the app theme. It
+// renders the settings sheet's chrome tighter than the 18px reading text size.
+type compactTheme struct {
+	fyne.Theme
+	text float32
+}
+
+func (c compactTheme) Size(name fyne.ThemeSizeName) float32 {
+	if name == theme.SizeNameText {
+		return c.text
+	}
+	return c.Theme.Size(name)
+}
+
+// dismissPopUp is a non-modal popup that runs onDismiss when a tap outside its
+// content dismisses it — Fyne's PopUp offers no such callback. The settings sheet
+// uses it so an outside tap restores the native reading overlay + re-renders (the
+// cleanup the old Done button ran).
+type dismissPopUp struct {
+	widget.PopUp
+	onDismiss func()
+}
+
+func newDismissPopUp(content fyne.CanvasObject, cnv fyne.Canvas, onDismiss func()) *dismissPopUp {
+	p := &dismissPopUp{onDismiss: onDismiss}
+	p.Content = content
+	p.Canvas = cnv
+	p.ExtendBaseWidget(p)
+	return p
+}
+
+func (p *dismissPopUp) Tapped(e *fyne.PointEvent) {
+	wasVisible := p.Visible()
+	p.PopUp.Tapped(e) // hides when the tap was outside the content (non-modal)
+	if wasVisible && !p.Visible() && p.onDismiss != nil {
+		p.onDismiss()
+	}
 }

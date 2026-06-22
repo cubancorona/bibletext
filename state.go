@@ -519,6 +519,17 @@ func runSearch(state *AppState, trimmed string) {
 }
 
 func openSearchResult(state *AppState, verse Verse) {
+	// Drop the search field's focus (and the soft keyboard) BEFORE rebuilding. When a
+	// result is tapped the Search-tab field is usually still focused; jumping to the
+	// Read tab then dismissing the keyboard can leave the field's pixels ghosting over
+	// the reading header (Fyne doesn't always fully repaint the strip above the native
+	// text overlay). Unfocusing first removes the field cleanly.
+	if state.window != nil {
+		if c := state.window.Canvas(); c != nil {
+			c.Unfocus()
+		}
+	}
+
 	selectBook(state, verse.BookName, false)
 	state.CurrentChapter = verse.Chapter
 	addRecentChapter(state, verse.BookName, verse.Chapter)
@@ -531,6 +542,21 @@ func openSearchResult(state *AppState, verse Verse) {
 	state.refresh()
 	if state.surfaceReading != nil {
 		state.surfaceReading()
+	}
+
+	// Belt-and-braces: force one full repaint a beat after the rebuild so any stale
+	// paint of the now-removed search field is cleared from the header strip.
+	if state.window != nil {
+		time.AfterFunc(160*time.Millisecond, func() {
+			fyne.Do(func() {
+				if state.window == nil {
+					return
+				}
+				if c := state.window.Canvas(); c != nil && c.Content() != nil {
+					c.Content().Refresh()
+				}
+			})
+		})
 	}
 }
 

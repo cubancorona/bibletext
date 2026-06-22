@@ -25,6 +25,66 @@ iterations**. Shrinking the fallback to **2 ms** frees the main thread between
 ticks; dirty frames still return instantly via the work/publish cases, so Fyne's
 own rendering is unaffected. (Full investigation: the project's scroll-lag notes.)
 
+## Relationship to upstream (PR #5422 / issue #2506)
+
+We reported the iOS symptom upstream ([fyne-io/fyne#6368]) and Andy
+(maintainer) declined it — *"not a common pattern… we do not support
+multiplexing with other toolkits"* — but pointed at the open desktop draft
+**[fyne-io/fyne#5422] "Implement more efficient run loop"** as *"related in
+concept not in the actual file."* He's right:
+
+- **Same bug class:** a fixed-cadence, dirty-agnostic render timer that should
+  go event-driven (idle until something is actually dirty; wake on demand).
+  #5422 fixes it for desktop GLFW (#2506, an idle-CPU complaint) by blocking in
+  `glfw.WaitEvents()` when idle and waking via `glfw.PostEmptyEvent()`.
+- **Different file, no shared loop code:** #5422 is `internal/driver/glfw/loop.go`;
+  ours is `internal/driver/mobile/app/darwin_ios.go`. #5422 is a *design
+  template*, not a portable patch — and it's an **unmerged draft** (its
+  `WaitEvents`/`WakeUp` code is **not** in our vendored tree; it lives only on
+  upstream's branch).
+- **Two loops on iOS (the non-obvious bit):** `drawloop()` runs on the **main
+  thread** per CADisplayLink tick and is what our 2 ms patch touches; the actual
+  structural twin of glfw's `eventTick` is the unconditional 60 Hz `draw` ticker
+  in `internal/driver/mobile/driver.go` (dirty-gated in `handlePaint`). A real
+  #5422-style port would target both, and must **yield** (pause the CADisplayLink),
+  never **block** — UIKit owns the iOS main run loop; Fyne is a guest.
+
+**Our 2 ms change is a mitigation, not the architectural fix** — idle frames
+still enter `drawloop` at the display rate (~12% main-thread occupancy vs.
+saturation at 100 ms). The principled event-driven fix is a larger redesign with
+real iOS hazards (main-thread dispatch for every wake; an `app.Publish()` ↔
+`drawloop` deadlock if the link is paused without a reader). The upstream door is
+currently closed, so this stays a local patch.
+
+If a mobile-driver efficiency effort ever opens upstream, this is the payload
+worth handing them (info only, no pitch):
+
+> Mobile driver has the same idle-loop pattern as #2506/#5422 — and on iOS it
+> surfaces as a responsiveness bug, not just idle CPU.
+>
+> - `drawloop()` (`internal/driver/mobile/app/darwin_ios.go`) runs on the MAIN
+>   thread, entered once per CADisplayLink tick. On an idle frame (no
+>   `workAvailable`, no `publish`) the select falls through to
+>   `case <-time.After(100ms)`, parking the main thread back-to-back.
+> - UIKit's run loop is on that same thread, so the park starves a co-resident
+>   UIKit view's touch + CoreAnimation commit. Measured on iPhone 16 Pro Max
+>   (Instruments `runloop-events`): ~95% of a scroll inside ~100 ms main-thread
+>   iterations, with a native `UIScrollView` over a static Fyne canvas.
+> - `100ms → 2ms` on that fallback removes the lag. Mitigation only — idle frames
+>   still enter `drawloop` at display rate.
+> - The structural twin of glfw's `eventTick` on mobile is the 60 Hz `draw`
+>   ticker in `internal/driver/mobile/driver.go` (dirty-gated in `handlePaint`,
+>   unconditional cadence). A #5422-style event-driven idle would target that +
+>   the CADisplayLink.
+> - iOS port gotchas: must **yield** (pause CADisplayLink / `enableSetNeedsDisplay`),
+>   not block — UIKit owns the main run loop; `paused`/`setNeedsDisplay` mutations
+>   need main-thread dispatch; and since `startloop`/`loop()` is unused on iOS, all
+>   GL work (incl. `swapBuffers`) is pumped inside `drawloop` gated by
+>   `app.Publish()`, so pausing the link naively deadlocks publish (un-pause first).
+
+[fyne-io/fyne#6368]: https://github.com/fyne-io/fyne/issues/6368
+[fyne-io/fyne#5422]: https://github.com/fyne-io/fyne/pull/5422
+
 ## How the build uses it (iOS-only, applied by the iOS scripts)
 
 `go.mod` ships **stock** Fyne with **no `replace`**, so `go build ./...`,

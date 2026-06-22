@@ -83,7 +83,8 @@ var darkPalette = palette{
 // vs. dark is driven by the OS variant Fyne hands to Color() — there is no
 // explicit in-app toggle; we follow the system setting.
 type bibleTheme struct {
-	fonts *bookFonts // book-like serif; nil falls back to Fyne's bundled font
+	fonts   *bookFonts // book-like serif (scripture / share images); nil → Fyne's bundled font
+	uiFonts *bookFonts // chrome typeface (Atkinson Hyperlegible); nil → fall back to fonts
 }
 
 // isDark reports whether the app should currently render with the dark
@@ -120,6 +121,14 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 	p := paletteFor(variant)
 	switch name {
 	case theme.ColorNameBackground:
+		return p.Background
+	case theme.ColorNameOverlayBackground:
+		// Fyne's popup renderer paints this rectangle a few px (SizeNameInnerPadding/2)
+		// BEYOND the popup's content on every side. The default is near-white, which
+		// shows as a thin white border around our parchment popup cards. Painting it
+		// the page parchment makes that frame blend into the reading ground (and gives
+		// the native verse menu — the one popup that uses this as its own fill — a
+		// parchment background instead of white).
 		return p.Background
 	case theme.ColorNameHeaderBackground:
 		return p.SurfaceAlt
@@ -170,10 +179,17 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 }
 
 func (t *bibleTheme) Font(style fyne.TextStyle) fyne.Resource {
-	// Keep monospace/symbol text on the default faces; everything else uses the
-	// book-like serif when available for a warmer, more page-like feel.
-	if t.fonts != nil && !style.Monospace && !style.Symbol {
-		return t.fonts.face(style)
+	// Monospace/symbol stay on the default faces. Everything else is UI chrome — the
+	// scripture text is a native overlay (iOS/macOS) or wrapped separately — so it
+	// uses the chrome typeface (Atkinson Hyperlegible) when present, then the serif,
+	// then Fyne's default.
+	if !style.Monospace && !style.Symbol {
+		if t.uiFonts != nil {
+			return t.uiFonts.face(style)
+		}
+		if t.fonts != nil {
+			return t.fonts.face(style)
+		}
 	}
 	return theme.DefaultTheme().Font(style)
 }
