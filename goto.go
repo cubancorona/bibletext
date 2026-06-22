@@ -322,7 +322,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	// Verse row at the BOTTOM (above the inset spacer). Full-screen card; the popup is
 	// never resized — see the popup section.
 	body := container.NewBorder(header, verseRow, left, nil, container.NewPadded(chapterPane))
-	card := surface(container.NewPadded(body), pal.Surface, pal.Border, fyne.Size{})
+	card := surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
 
 	if withVerse && fyne.CurrentDevice().IsMobile() {
 		// MOBILE verse picker: a non-modal popup anchored at the top, opened near

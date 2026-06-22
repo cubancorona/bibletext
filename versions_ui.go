@@ -122,7 +122,7 @@ func showVersionPicker(state *AppState) {
 	content := container.NewBorder(header, footer, nil, nil, body)
 
 	popup = widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
+		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
 		cnv,
 	)
 	popup.Show()
@@ -316,7 +316,7 @@ func showVersionLoading(state *AppState, name string) func() {
 		spacer(8), sub,
 	)
 	popup := widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
+		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
 		cnv,
 	)
 	popup.Show()
@@ -369,7 +369,7 @@ func showVersionLoadError(state *AppState, name string) {
 	})
 	content := container.NewVBox(msg, container.NewCenter(okBtn))
 	popup = widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{}),
+		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
 		cnv,
 	)
 	popup.Show()

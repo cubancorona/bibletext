@@ -203,7 +203,7 @@ func showVerseOfDay(state *AppState) {
 		widget.NewSeparator(),
 		container.NewHBox(layout.NewSpacer(), closeBtn, readBtn),
 	)
-	card := surface(container.NewPadded(content), pal.Surface, pal.Border, fyne.Size{})
+	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
 	popup.Resize(fyne.NewSize(w, bodyH+150))
