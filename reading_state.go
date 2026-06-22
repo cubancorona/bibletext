@@ -35,6 +35,17 @@ import (
 
 const prefReadingState = "reading.state"
 
+// touchResumeEnabled is the single on/off switch for the "resume at the verse your
+// finger last grabbed" feature (iOS): recording the last scroll's initial-touch
+// verse, preferring it over the top-visible anchor on reopen, and the accent
+// "you left off here" marker. Flip to true to turn the whole feature on.
+//
+// When false (the default): the touch is never recorded or persisted, reopen uses
+// the original top-visible-verse anchor, and no marker is shown — i.e. behaviour is
+// exactly as it was before the feature landed. (A var, not a const, only so tests
+// can exercise the on-path; flipping this one line is the intended control.)
+var touchResumeEnabled = false
+
 // readingState is the persisted "where the reader left off" plus history. JSON
 // fields are stable on-disk keys; keep them backward-compatible.
 type readingState struct {
@@ -48,7 +59,8 @@ type readingState struct {
 	// scroll — the verse they grabbed to push the text (≈ the line they were
 	// reading), with the within-verse pixel offset of the touch. Captured at
 	// pan-begin (iOS only; no touch on desktop). On reopen this verse is preferred
-	// over the top-visible anchor and softly marked. 0 = none recorded.
+	// over the top-visible anchor and softly marked. 0 = none recorded. Gated by
+	// touchResumeEnabled — left unset (and ignored on reopen) while that is off.
 	TouchVerse int            `json:"touchVerse,omitempty"`
 	TouchDelta float64        `json:"touchDelta,omitempty"`
 	Recent     []ChapterVisit `json:"recent,omitempty"` // history, newest first
@@ -159,7 +171,14 @@ func flushReadingState(s *AppState) {
 // after a navigation with no fresh scroll).
 func captureSnapshot(s *AppState, p prefStore) readingState {
 	verse, delta, frac, ok := captureReadingAnchor()
-	touchVerse, touchDelta, touchOK := captureLastTouch()
+
+	// Initial-touch capture only runs when the feature is on; otherwise the touch
+	// stays unset (0) so it is never persisted. touchOK=true here means "resolved
+	// to none", which skips the preserve-previous branch below.
+	touchVerse, touchDelta, touchOK := 0, 0.0, true
+	if touchResumeEnabled {
+		touchVerse, touchDelta, touchOK = captureLastTouch()
+	}
 
 	// Read the previously-saved state once if either live read failed, and only
 	// reuse it when it is for the chapter we're currently in.
@@ -271,17 +290,18 @@ func applyRestoredState(state *AppState, rs readingState, base *BibleData) bool 
 	state.CurrentChapter = chapter
 	state.RecentChapters = restoreRecent(rs.Recent, bible, book, chapter)
 
-	if rs.TouchVerse > 0 || rs.AnchorVerse > 0 || rs.ScrollFrac > 0 {
+	useTouch := touchResumeEnabled && rs.TouchVerse > 0
+	if useTouch || rs.AnchorVerse > 0 || rs.ScrollFrac > 0 {
 		a := &restoreAnchor{Book: book, Chapter: chapter, Frac: rs.ScrollFrac}
-		if rs.TouchVerse > 0 {
+		if useTouch {
 			// Prefer the verse the reader's finger last grabbed: bring it to the top
 			// (a predictable "resume where I was reading") and softly mark it.
 			a.Verse = rs.TouchVerse
 			a.Delta = 0
 			a.Marker = rs.TouchVerse
 		} else {
-			// No recorded touch (older state, or a scroll we couldn't map): fall back
-			// to reproducing the exact top-visible screen.
+			// Feature off, or no recorded touch (older state, or a scroll we couldn't
+			// map): reproduce the exact top-visible screen, no marker.
 			a.Verse = rs.AnchorVerse
 			a.Delta = rs.AnchorDelta
 		}
