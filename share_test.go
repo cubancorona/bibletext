@@ -107,11 +107,11 @@ func TestFormatBibleQuote(t *testing.T) {
 
 func TestFormatBibleQuoteBlockThreshold(t *testing.T) {
 	// Bluebook Rule 5: 50+ words is a block quotation — no surrounding marks.
-	long49 := strings.TrimSpace(strings.Repeat("word ", 49))
+	long49 := strings.Repeat("word ", 48) + "word." // 49 words, ends on a period
 	if got := formatBibleQuote(long49); got != "“"+long49+"”" {
 		t.Errorf("49 words should be an inline (quoted) passage, got unquoted: %q", got[:20])
 	}
-	long50 := strings.TrimSpace(strings.Repeat("word ", 50))
+	long50 := strings.Repeat("word ", 49) + "word." // 50 words
 	if got := formatBibleQuote(long50); got != long50 {
 		t.Errorf("50 words should be a block quote (no outer marks):\n got %q", got[:20])
 	}

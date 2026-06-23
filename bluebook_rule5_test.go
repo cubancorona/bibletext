@@ -7,48 +7,37 @@ import (
 
 // TestBluebookRule5PreservesEditorialMarks is an INDEPENDENT property check (not a
 // restatement of the formatting rule): because a share quotes a contiguous, verbatim
-// selection, the app must never FABRICATE an omission (Rule 5.3 ellipsis) or
-// alteration (Rule 5.2 brackets / [sic]) — and must never delete one already present.
-// It may only apply the quotation-mark / block rules around them. Inputs are
-// representative of the harvested corpus (sfbar.org, mitchellhamline.edu, lawprose.org).
+// selection, the app must never FABRICATE an *interior* omission or alteration — and
+// must never delete one already present. (It DOES add a Rule 5.3 end-of-quote omission
+// mark when the selection is cut off mid-sentence; that is tested in bluebook_test.go.)
+// Inputs are representative of the harvested corpus.
 func TestBluebookRule5PreservesEditorialMarks(t *testing.T) {
 	inputs := []string{
 		"Standard poodles generally look great in . . . sweaters, and can rock a winter coat.",
-		"National borders are less of a barrier . . . now than at almost any other point.",
 		"[T]his presumptive privilege must be considered in light of our historic commitment.",
 		"Plaintiff appeal[ed] the trial court's order granting summary judgment.",
 		"This list of statutes are [sic] necessarily incomplete.",
 		"[The two heirs] never bother about me in life.",
-		"staffers on the Temple Law Review are pleasant . . . . They . . . get along.",
 	}
 	for _, in := range inputs {
 		out := formatBibleQuote(in)
-		for _, mark := range []string{"…", ". . .", "[", "]", "sic"} {
+		for _, mark := range []string{"[", "]", "sic"} {
 			if strings.Count(out, mark) != strings.Count(in, mark) {
-				t.Errorf("the app must not insert or delete %q (Rule 5.2/5.3):\n in:  %q\n out: %q", mark, in, out)
+				t.Errorf("the app must not insert or delete %q (Rule 5.2):\n in:  %q\n out: %q", mark, in, out)
 			}
 		}
 	}
 }
 
-// Bluebook Rule 5 quotation conformance — a large corpus of REAL, sourced examples
-// (block quotes; quotation marks + American punctuation placement; nested / internal
-// quotes; omissions / ellipses; alterations / brackets / [sic]; and quiz items),
-// harvested from law-library guides, legal-writing resources, CALI / practice
-// materials, and grammar/style quizzes, then adversarially verified (high confidence).
-//
-// Bible-agnostic: the app's quote handling (formatBibleQuote / balanceQuoteMarks) is
-// general text formatting. For the OMISSION and ALTERATION rules the app never
-// auto-inserts an editorial mark (it shares a contiguous verbatim selection) — those
-// rows therefore assert it PRESERVES any pre-existing ellipsis/brackets unchanged and
-// applies only the quotation-mark + 50-word block rules.
-//
-// Sources are noted per row (domain); full URLs in the harvest record.
+// Bluebook Rule 5 quotation conformance — a large corpus of REAL, sourced examples,
+// harvested from law-library guides and quizzes, then adversarially verified. The
+// expected values apply the app's quote rule (balancing, end-omission per Rule 5.3,
+// the 50-word block threshold, and double-mark wrapping). Source domain per row.
 func TestBluebookRule5Corpus(t *testing.T) {
 	cases := []struct{ rule, src, in, want string }{
 		// --- block quotations (Rule 5.1 — 50-word threshold) ---
 		{"block-quote-threshold", "mitchellhamline.edu", "[T]his presumptive privilege must be considered in light of our historic commitment to the rule of law. This is nowhere more profoundly manifest than in our view that \"the twofold aim [of criminal justice] is that guilt shall not escape or innocence suffer.\" We have elected to employ an adversary system of criminal justice in which the parties contest all issues before a court of law. . . . To ensure that justice is done, it is imperative to the function of courts that compulsory process be available for the production of evidence needed either by the prosecution or by the defense.", "[T]his presumptive privilege must be considered in light of our historic commitment to the rule of law. This is nowhere more profoundly manifest than in our view that \"the twofold aim [of criminal justice] is that guilt shall not escape or innocence suffer.\" We have elected to employ an adversary system of criminal justice in which the parties contest all issues before a court of law. . . . To ensure that justice is done, it is imperative to the function of courts that compulsory process be available for the production of evidence needed either by the prosecution or by the defense."},
-		{"block-quote-threshold", "mitchellhamline.edu", "A quotation of fifty or more words should be single spaced, indented on both sides, justified, and without quotation marks. This is known as a block quotation. Quotation marks within a block quotation should appear as they do in the quoted material. The citation following a block quotation should not be indented but should begin at the left margin on the line following the quotation", "A quotation of fifty or more words should be single spaced, indented on both sides, justified, and without quotation marks. This is known as a block quotation. Quotation marks within a block quotation should appear as they do in the quoted material. The citation following a block quotation should not be indented but should begin at the left margin on the line following the quotation"},
+		{"block-quote-threshold", "mitchellhamline.edu", "A quotation of fifty or more words should be single spaced, indented on both sides, justified, and without quotation marks. This is known as a block quotation. Quotation marks within a block quotation should appear as they do in the quoted material. The citation following a block quotation should not be indented but should begin at the left margin on the line following the quotation", "A quotation of fifty or more words should be single spaced, indented on both sides, justified, and without quotation marks. This is known as a block quotation. Quotation marks within a block quotation should appear as they do in the quoted material. The citation following a block quotation should not be indented but should begin at the left margin on the line following the quotation . . ."},
 		{"block-quote-threshold", "ubalt.edu", "According to the Bluebook rules, any quotation that is 50 words or longer must be formatted as a block quote.", "“According to the Bluebook rules, any quotation that is 50 words or longer must be formatted as a block quote.”"},
 		{"block-quote-threshold", "sfbar.org", "[T]his must be pronounced a case of gross and wanton outrage, without any just provocation or excuse …. [The owners] are bound to repair all the real injuries and personal wrongs sustained by the libellants, but they are not bound to the extent of vindictive damages.", "“[T]his must be pronounced a case of gross and wanton outrage, without any just provocation or excuse …. [The owners] are bound to repair all the real injuries and personal wrongs sustained by the libellants, but they are not bound to the extent of vindictive damages.”"},
 		{"block-quote-threshold", "sfbar.org", "Occasionally, you will need to quote four or more lines (50 or more words) of text from a key source.", "“Occasionally, you will need to quote four or more lines (50 or more words) of text from a key source.”"},
@@ -90,21 +79,21 @@ func TestBluebookRule5Corpus(t *testing.T) {
 		// --- quote-mark balancing (dangling open/close) ---
 		{"balancing", "legalbluebook.com", "For God so loved the world, that he gave his only begotten Son.”", "“For God so loved the world, that he gave his only begotten Son.”"},
 		{"balancing", "legalbluebook.com", "“For God so loved the world, that he gave his only begotten Son.", "“For God so loved the world, that he gave his only begotten Son.”"},
-		{"balancing", "lawprose.org", "“Reliable,” “kind,” and “trustworthy”", "“Reliable,” “kind,” and “trustworthy”"},
+		{"balancing", "lawprose.org", "“Reliable,” “kind,” and “trustworthy”", "“Reliable,” “kind,” and “trustworthy . . .”"},
 		{"balancing", "legalbluebook.com", "   For God so loved the world.   ", "“For God so loved the world.”"},
-		// --- omissions / ellipses (preserved, never auto-inserted) ---
+		// --- omissions / ellipses (Rule 5.3: mid-sentence cut adds " . . .") ---
 		{"ellipsis-omission", "legalbluebook.com", "An omission of a word or words is generally indicated by the insertion of an ellipsis, three periods separated by spaces and set off by a space before the first and after the last period ('. . .').", "“An omission of a word or words is generally indicated by the insertion of an ellipsis, three periods separated by spaces and set off by a space before the first and after the last period ('. . .').”"},
 		{"ellipsis-omission", "cmlawlibraryblog.classcaster.net", "Standard poodles generally look great in . . . sweaters, and can rock the booties, too.", "“Standard poodles generally look great in . . . sweaters, and can rock the booties, too.”"},
 		{"ellipsis-omission", "legalbluebook.com", "National borders are less of a barrier . . . now than at almost any other time in history.", "“National borders are less of a barrier . . . now than at almost any other time in history.”"},
 		{"ellipsis-omission", "cmlawlibraryblog.classcaster.net", "Standard poodles generally look great in chunky winter sweaters . . . .", "“Standard poodles generally look great in chunky winter sweaters . . . .”"},
 		{"ellipsis-omission", "baronofthebluebook.wordpress.com", "[B]orders are less of a barrier to economic exchange now . . .", "“[B]orders are less of a barrier to economic exchange now . . .”"},
-		{"ellipsis-omission", "templelawreview.org", "staffers on the Temple Law Review are pleasant . . . . They . . . get along", "“staffers on the Temple Law Review are pleasant . . . . They . . . get along”"},
+		{"ellipsis-omission", "templelawreview.org", "staffers on the Temple Law Review are pleasant . . . . They . . . get along", "“staffers on the Temple Law Review are pleasant . . . . They . . . get along . . .”"},
 		{"ellipsis-omission", "ww1.up.edu", "Othello is characterized by '…first, a sense of violent energies and passions … and secondly, a single-mindedness of intention and desire.'", "“Othello is characterized by '…first, a sense of violent energies and passions … and secondly, a single-mindedness of intention and desire.'”"},
 		{"ellipsis-omission", "ubalt.edu", "Mr. Moore has requested that Volant extend an offer of employment to him and Volant has agreed to do so, but only if said offer of employment does not violate any non-compete or other restrictive covenants existing between Mr. Moore and CAI.", "“Mr. Moore has requested that Volant extend an offer of employment to him and Volant has agreed to do so, but only if said offer of employment does not violate any non-compete or other restrictive covenants existing between Mr. Moore and CAI.”"},
 		// --- alterations / brackets / [sic] (preserved, never auto-inserted) ---
 		{"bracket-alteration", "cmlawlibraryblog.classcaster.net", "[P]oodles generally look great in chunky winter sweaters, and can rock the booties, too.", "“[P]oodles generally look great in chunky winter sweaters, and can rock the booties, too.”"},
 		{"bracket-alteration", "monmouth.edu", "[T]his presumptive privilege must be considered in light of our historic commitment to the rule of law.", "“[T]his presumptive privilege must be considered in light of our historic commitment to the rule of law.”"},
-		{"bracket-alteration", "ubalt.edu", "the drug-addled, intoxicated, 5'10\", 155 pound Johnson [c]ould have [performed] an athletic feat of nearly Olympic proportions [by moving] Klein from the bedroom doorway to the couch", "the drug-addled, intoxicated, 5'10\", 155 pound Johnson [c]ould have [performed] an athletic feat of nearly Olympic proportions [by moving] Klein from the bedroom doorway to the couch"},
+		{"bracket-alteration", "ubalt.edu", "the drug-addled, intoxicated, 5'10\", 155 pound Johnson [c]ould have [performed] an athletic feat of nearly Olympic proportions [by moving] Klein from the bedroom doorway to the couch", "the drug-addled, intoxicated, 5'10\", 155 pound Johnson [c]ould have [performed] an athletic feat of nearly Olympic proportions [by moving] Klein from the bedroom doorway to the couch . . ."},
 		{"bracket-alteration", "michiganlawreview.org", "[The two heirs] never bother about me in life.", "“[The two heirs] never bother about me in life.”"},
 		{"bracket-alteration", "michiganlawreview.org", "They [two heirs] never bother about me in life.", "“They [two heirs] never bother about me in life.”"},
 		{"bracket-alteration", "blog.legaleasecitations.com", "Plaintiff appeal[ed] the trial court's order granting summary judgment for Defendants.", "“Plaintiff appeal[ed] the trial court's order granting summary judgment for Defendants.”"},
@@ -114,7 +103,7 @@ func TestBluebookRule5Corpus(t *testing.T) {
 		{"bracket-alteration", "libguides.law.gsu.edu", "This list of statutes are [sic] necessarily incomplete.", "“This list of statutes are [sic] necessarily incomplete.”"},
 		{"bracket-alteration", "ww1.up.edu", "…In 1592 [sic] Columbus crossed the Atlantic…", "“…In 1592 [sic] Columbus crossed the Atlantic…”"},
 		{"bracket-alteration", "michiganlawreview.org", "Many people love watching football but hate watching soccer.", "“Many people love watching football but hate watching soccer.”"},
-		{"bracket-alteration", "michiganlawreview.org", "certain fundamental rights are \"deeply rooted in this Nation's history and tradition\"", "certain fundamental rights are \"deeply rooted in this Nation's history and tradition\""},
+		{"bracket-alteration", "michiganlawreview.org", "certain fundamental rights are \"deeply rooted in this Nation's history and tradition\"", "certain fundamental rights are \"deeply rooted in this Nation's history and tradition . . .\""},
 		// --- quotation quizzes / practice questions ---
 		{"quiz", "syntaxis.com", "Did you hear that Ruth called Robby a 'perpetual plagiarizer'?", "“Did you hear that Ruth called Robby a 'perpetual plagiarizer'?”"},
 		{"quiz", "grammarbook.com", "Is it almost over? he asked.", "“Is it almost over? he asked.”"},

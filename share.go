@@ -120,8 +120,11 @@ func formatBibleQuote(text string) string {
 	if text == "" {
 		return text
 	}
-	// Balance the verse's OWN quotation marks first. A reading-view selection can
-	// begin or end inside a longer quotation, so the partner of a mark may sit in the
+	// Mark an omission when the selection is cut off mid-sentence (Bluebook Rule 5.3),
+	// before balancing the marks so the ellipsis sits inside the closing quote.
+	text = addEndOmission(text)
+	// Balance the verse's OWN quotation marks. A reading-view selection can begin or
+	// end inside a longer quotation, so the partner of a mark may sit in the
 	// surrounding (unselected) verse text — leaving a dangling closing or opening
 	// mark. Add the missing marks so the shared fragment is a complete, well-formed
 	// quotation (see balanceQuoteMarks).
@@ -134,6 +137,33 @@ func formatBibleQuote(text string) string {
 		return text
 	}
 	return "“" + text + "”"
+}
+
+// endOmission is the Bluebook Rule 5.3 omission mark — three periods, each separated
+// by a space and preceded by a space ( . . . ), NEVER the single-glyph ellipsis "…".
+const endOmission = " . . ."
+
+// addEndOmission marks an omission when the quoted text is cut off MID-SENTENCE — the
+// reader's selection ends before the original sentence does, so the rest of the
+// sentence is omitted (Bluebook Rule 5.3). It appends the ellipsis just inside any
+// trailing closing quotation mark. A quotation that already ends on sentence-terminal
+// punctuation (. ! ? …) is treated as complete and gets no mark. A selection that
+// merely begins mid-sentence is NOT marked — the Bluebook does not use a leading
+// ellipsis (it would use a bracketed capital instead, which a verbatim share avoids).
+func addEndOmission(s string) string {
+	trimmed := strings.TrimRight(s, " \t\n")
+	core := strings.TrimRight(trimmed, " \t\n”’\"'")
+	if core == "" {
+		return s
+	}
+	switch r := []rune(core); r[len(r)-1] {
+	case '.', '!', '?', '…':
+		return s // a complete sentence — nothing omitted at the end
+	}
+	if strings.HasSuffix(core, endOmission) {
+		return s // already marked
+	}
+	return core + endOmission + trimmed[len(core):]
 }
 
 // balanceQuoteMarks repairs unbalanced curly double-quotation marks in a shared
