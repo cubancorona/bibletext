@@ -55,12 +55,10 @@ func schemeForRef(ref string) shareScheme {
 // renderVerseImage writes a square share card to a temp PNG and returns its path.
 func renderVerseImage(state *AppState, verseText, citation, abbrev string) (string, error) {
 	const (
-		dim       = 1080
-		marginX   = 120
-		topInset  = 150
-		botInset  = 230 // room for citation + wordmark
-		quoteOpen = "“"
-		quoteClos = "”"
+		dim      = 1080
+		marginX  = 120
+		topInset = 150
+		botInset = 230 // room for citation + wordmark
 	)
 	sc := schemeForRef(citation + "|" + abbrev)
 
@@ -76,7 +74,9 @@ func renderVerseImage(state *AppState, verseText, citation, abbrev string) (stri
 		bold = regular
 	}
 
-	quoted := quoteOpen + collapseSpaces(verseText) + quoteClos
+	// verseText is already cleaned + quoted by shareVerse (formatBibleQuote): verse
+	// numbers stripped, and outer quotation marks added only when appropriate.
+	quoted := collapseSpaces(verseText)
 	contentW := dim - 2*marginX
 	maxBlockH := dim - topInset - botInset
 
