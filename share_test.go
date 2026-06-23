@@ -27,7 +27,7 @@ func TestCitationForSelection(t *testing.T) {
 		want string
 	}{
 		{"single", "For God so loved the world, that he gave his one and only Son.", "John 3:16"},
-		{"span", "For God so loved the world, that he gave his one and only Son. For God didn't send his Son into the world to judge the world.", "John 3:16-17"},
+		{"span", "For God so loved the world, that he gave his one and only Son. For God didn't send his Son into the world to judge the world.", "John 3:16–17"},
 		{"unmatched", "a phrase not present anywhere here", "John 3"},
 	}
 	for _, c := range cases {
@@ -102,6 +102,18 @@ func TestFormatBibleQuote(t *testing.T) {
 		if got := formatBibleQuote(tc.in); got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestFormatBibleQuoteBlockThreshold(t *testing.T) {
+	// Bluebook Rule 5: 50+ words is a block quotation — no surrounding marks.
+	long49 := strings.TrimSpace(strings.Repeat("word ", 49))
+	if got := formatBibleQuote(long49); got != "“"+long49+"”" {
+		t.Errorf("49 words should be an inline (quoted) passage, got unquoted: %q", got[:20])
+	}
+	long50 := strings.TrimSpace(strings.Repeat("word ", 50))
+	if got := formatBibleQuote(long50); got != long50 {
+		t.Errorf("50 words should be a block quote (no outer marks):\n got %q", got[:20])
 	}
 }
 

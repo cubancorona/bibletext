@@ -41,20 +41,22 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 	}
 }
 
-// shareVerse formats the selection with a citation and hands it to the native
-// share sheet, as text or as a rendered image. The quote is cleaned to proper
-// Bible-quotation form first (verse numbers removed, quotation marks handled).
+// shareVerse formats the selection in Bluebook style (see formatBibleQuote /
+// citationForSelection) and hands it to the native share sheet, as text or a
+// rendered image. The translation is spelled OUT in the parenthetical, not given as
+// an initialism — the Bluebook always names the version in full (e.g. "(King
+// James)"), so we use "(World English Bible)" / "(Berean Standard Bible)".
 func shareVerse(state *AppState, text string, asImage bool) {
 	cite := citationForSelection(state, text)
-	abbrev := state.currentVersion().Abbrev
+	version := state.currentVersion().Name
 	quote := formatBibleQuote(cleanQuoteText(state, text))
 	if asImage {
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
-		showShareImagePreview(state, quote, cite, abbrev)
+		showShareImagePreview(state, quote, cite, version)
 		return
 	}
-	nativeShareText(fmt.Sprintf("%s\n— %s (%s)", quote, cite, abbrev))
+	nativeShareText(fmt.Sprintf("%s\n— %s (%s)", quote, cite, version))
 }
 
 // cleanQuoteText turns a raw reading-view selection into clean, quotable verse
@@ -81,21 +83,34 @@ func cleanQuoteText(state *AppState, raw string) string {
 	return strings.TrimSpace(s)
 }
 
-// formatBibleQuote prepares a clean verse string for sharing. It is deliberately
-// FAITHFUL to the selection: it never removes or alters the verse's own quotation
-// marks. A verse may legitimately open or close a longer quotation — e.g. Matthew
-// 5:3 opens the Beatitudes, and John 18:38 reads «“What is truth?” … told them, “I
-// find…» (two opens, one close) — and the reader may select those marks on purpose;
-// dropping any of them would misquote the text. The ONLY change made here is to add
-// decorative outer quotation marks, and only when the passage contains no double
-// quotes of its own, so a verse that already has dialogue isn't wrapped into broken
-// nesting. The citation line marks the whole thing as a quotation either way.
+// blockQuoteWords is the Bluebook Rule 5 threshold: a quotation of 50 or more words
+// is set off as a block quotation rather than run inline in quotation marks.
+const blockQuoteWords = 50
+
+// formatBibleQuote prepares a clean verse string for sharing, in Bluebook style. It
+// is deliberately FAITHFUL to the selection: it never removes or alters the verse's
+// own quotation marks. A verse may legitimately open or close a longer quotation —
+// e.g. Matthew 5:3 opens the Beatitudes, and John 18:38 reads «“What is truth?” …
+// told them, “I find…» (two opens, one close) — and the reader may select those
+// marks on purpose; dropping any would misquote the text.
+//
+// Quotation marks are handled per Bluebook Rule 5:
+//   - 50+ words → a BLOCK quotation: set off WITHOUT surrounding quotation marks
+//     (the set-off itself, plus the citation line, marks it as a quotation; the
+//     image card's centered, wide-margined block is the faithful analog of the
+//     "indented both sides" block form).
+//   - under 50 words → an INLINE quotation: add outer double quotes — but only when
+//     the verse has no double quotes of its own, so dialogue isn't wrapped into
+//     broken nesting.
 func formatBibleQuote(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
 	}
-	// Has its own double quotes (curly or straight)? Leave them exactly as selected.
+	if len(strings.Fields(text)) >= blockQuoteWords {
+		return text // block quotation: no surrounding quotation marks
+	}
+	// Inline: has its own double quotes (curly or straight)? Leave them as selected.
 	if strings.ContainsAny(text, "“”\"") {
 		return text
 	}
@@ -135,6 +150,7 @@ func citationForSelection(state *AppState, text string) string {
 	case lo == hi:
 		return fmt.Sprintf("%s %d:%d", book, ch, lo)
 	default:
-		return fmt.Sprintf("%s %d:%d-%d", book, ch, lo, hi)
+		// Bluebook uses an en dash (not a hyphen) for a span of verses.
+		return fmt.Sprintf("%s %d:%d–%d", book, ch, lo, hi)
 	}
 }
