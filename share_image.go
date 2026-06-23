@@ -122,7 +122,7 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 	// out in full (Bluebook style: "(World English Bible)", not "(WEB)"), so the line
 	// can be long — shrink the type until it fits the content width rather than
 	// overflowing the card edges.
-	citeStr := "— " + citation + " (" + version + ")"
+	citeStr := citationLine(citation, version)
 	var citeFace font.Face
 	for pt := 34; pt >= 20; pt -= 2 {
 		citeFace = newFace(bold, float64(pt))
