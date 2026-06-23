@@ -1,0 +1,22 @@
+BibleText
+Copyright 2026 Willow White Noonan
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes or makes use of the following third-party content, each under its
+own terms:
+
+- Scripture text:
+  - World English Bible (WEB) — public domain.
+  - Berean Standard Bible (BSB) — public domain / CC0, via bible.helloao.org.
+- Cross-references: Treasury of Scripture Knowledge dataset from OpenBible.info,
+  used under the Creative Commons Attribution (CC BY) license
+  (https://www.openbible.info/labs/cross-references/).
+- Gospel parallels: a synopsis (harmony) of the four Gospels, embedded in
+  assets/parallels/.
+- UI typeface: Atkinson Hyperlegible by the Braille Institute of America, Inc.,
+  used under the SIL Open Font License 1.1 (see assets/fonts/atkinson/OFL.txt).
+- Built with the Fyne toolkit (https://fyne.io), BSD 3-Clause License.
+
+The Apache 2.0 license applies to the application's own source code. The bundled
+data and font remain governed by their respective licenses above.

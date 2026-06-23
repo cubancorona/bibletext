@@ -1,9 +1,53 @@
 # BibleText
 
 A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, and
-iOS** from a single Go codebase, built with [Fyne](https://fyne.io/). It
-presents the **World English Bible (WEB)**, a public domain translation, in a
-calm, responsive reading layout.
+iOS** from a single Go codebase, built with [Fyne](https://fyne.io/). It presents
+public-domain translations — the **World English Bible (WEB)** and **Berean
+Standard Bible (BSB)** — in a calm, responsive reading layout.
+
+| Reading | Cross-references & Gospel parallels | Go to | Share as image |
+|:---:|:---:|:---:|:---:|
+| ![Reading view](docs/screenshots/reading.png) | ![Cross-references and Gospel parallels](docs/screenshots/cross-references.png) | ![Go to navigator](docs/screenshots/goto.png) | ![Share as image](docs/screenshots/share-image.png) |
+
+## Build
+
+You need [Go](https://go.dev/dl/) 1.21 or newer. Then, from the repo root:
+
+```bash
+go run ./cmd/desktop
+```
+
+That's the whole thing. On first launch it downloads the Bible text (~30 seconds)
+and caches it locally, so every launch after that is instant and works offline.
+
+**iOS simulator** (needs macOS + Xcode): `./scripts/run-ios-sim.sh`
+
+<details>
+<summary>Release builds, iOS device, Android, cross-compile, tests</summary>
+
+```bash
+# A standalone desktop binary
+go build -o bibletext ./cmd/desktop
+
+# Cross-compile for other desktop OSes
+GOOS=linux   GOARCH=amd64 go build -o bibletext-linux   ./cmd/desktop
+GOOS=windows GOARCH=amd64 go build -o bibletext.exe     ./cmd/desktop
+GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos   ./cmd/desktop
+
+# iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest)
+cd cmd/mobile && fyne package -os iossimulator --app-id com.willow.bibletext
+fyne package -os android -appID com.willow.bibletext -src ./cmd/mobile
+
+# Tests
+go test ./...
+```
+
+iOS device installs need Xcode signing; `scripts/run-ios-device.sh` wraps it (set
+`BIBLETEXT_DEVICE_ID`). The iOS scripts also apply a one-line scroll-lag patch to a
+local copy of Fyne — see [`patches/README.md`](patches/README.md); `go.mod` ships
+stock Fyne so plain `go` commands need no setup.
+
+</details>
 
 ## Features
 
@@ -27,20 +71,23 @@ calm, responsive reading layout.
   **Explain**, **Analyze context**, or **Analyze translation** it, using your own
   Gemini / ChatGPT / Claude / Grok API key. See
   [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
-- 🔗 **Cross-references** — select a verse and choose **Cross-references** to see
-  the related passages (vote-ranked), each a tap away in context. Data is the
+- 🔗 **Cross-references & Gospel parallels** — select a verse and choose
+  **Cross-references** to see related passages (vote-ranked), each a tap away. For a
+  Gospel verse, the same event in the other Gospels appears first, tagged
+  **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
-  set, fetched once and cached for offline use.
+  set, fetched once and cached.
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
 - 📤 **Share a verse** — from the selection menu: **Share with citation** (text +
-  reference, ready to paste into a message) or **Share as image** (a clean,
-  text-only card with a dynamic colour treatment — no imagery). Both open your
-  device's native share sheet.
-- 📚 **Multiple translations** — read the public-domain **World English Bible**,
-  and switch to **NRSV** or **LSB** once licensed (a clearly-labeled testing mode
-  runs until then). See [Bible versions](#bible-versions).
+  reference) or **Share as image** (a clean, text-only card with a dynamic colour
+  treatment — no imagery; preview and regenerate before sharing). Quote and citation
+  follow Bluebook style (spelled-out translation, en-dash ranges, block-quote rule).
+  Both open your device's native share sheet.
+- 📚 **Multiple translations** — read the public-domain **World English Bible** and
+  **Berean Standard Bible**, switchable from the header; **NRSV** and **LSB** are
+  wired in and become selectable once licensed. See [Bible versions](#bible-versions).
 
 ## Bible versions
 
@@ -221,97 +268,16 @@ on `ui_desktop.go` / `ui_mobile.go` make the linker pick the platform-appropriat
 `CreateMainUI` implementation. Pure data files (`bible.go`, `cache.go`,
 `fetch_bible_data.go`, `annotation.go`) have no UI deps and compile everywhere.
 
-## Requirements
-
-- Go 1.21 or newer
-- Fyne v2.7.4 (pinned in `go.mod`) and its [system dependencies](https://docs.fyne.io/started/)
-- For iOS packaging: macOS, **Xcode** (full install, not just Command Line
-  Tools), and an Apple Developer account for signing
-- For Android packaging: the Android SDK + NDK
-
-## Build & run
-
-### Desktop (macOS / Windows / Linux)
-
-```bash
-go mod download
-go build -o bibletext ./cmd/desktop
-./bibletext
-```
-
-Cross-compile for other desktop OSes:
-
-```bash
-GOOS=linux   GOARCH=amd64 go build -o bibletext-linux  ./cmd/desktop
-GOOS=windows GOARCH=amd64 go build -o bibletext.exe    ./cmd/desktop
-GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos  ./cmd/desktop
-```
-
-### iOS
-
-```bash
-# one-time setup
-go install fyne.io/tools/cmd/fyne@latest    # NB: the new tools repo, not the
-                                            # deprecated fyne.io/fyne/v2/cmd/fyne
-# install Xcode (the full app from the App Store, not just CLT) and download an
-# iOS simulator runtime once: `xcodebuild -downloadPlatform iOS` (several GB)
-
-# Before the first iOS build, sign into Xcode with your Apple ID
-# (Xcode → Settings → Accounts → +) so an "Apple Development" certificate is
-# created in your keychain. Fyne uses it to extract a team ID and to satisfy
-# xcodebuild; the simulator build is ad-hoc re-signed at the end so no paid
-# Apple Developer Program membership is needed for local testing.
-
-# Build & run on the iOS simulator (`-src` must point to the directory with
-# main.go + FyneApp.toml + Icon.png — i.e. ./cmd/mobile, or just cd into it):
-cd cmd/mobile
-fyne package -os iossimulator --app-id com.willow.bibletext
-
-# Boot a simulator and install:
-xcrun simctl boot "iPhone 15" 2>/dev/null   # or any simulator name from `simctl list devices`
-open -a Simulator
-xcrun simctl install booted "BibleText.app"
-xcrun simctl launch booted com.willow.bibletext
-
-# Build a signed .ipa for a real device (paid Developer Program required):
-fyne package -os ios --app-id com.willow.bibletext \
-             --certificate "Apple Development: Your Name (TEAMID)" \
-             --profile "Your Provisioning Profile Name"
-```
-
-> **Icon.** The bundled `Icon.png` is a placeholder (a solid parchment colour).
-> Replace it with a real 1024×1024 PNG before submitting to the App Store.
-
-### Android
-
-```bash
-fyne package -os android -appID com.willow.bibletext -src ./cmd/mobile
-```
-
-On first launch the app downloads the World English Bible from
-[bible-api.com](https://bible-api.com/) (about 30–60 seconds) and saves a local
-cache in the OS cache directory (on iOS, inside the app's container). Every
-later launch loads instantly from cache and works offline. Set
-`BIBLETEXT_CACHE_PATH` to override the cache location on desktop.
-
-## Tests
-
-```bash
-go test ./...           # everything, including in-memory UI render tests
-go test -race ./...     # logic tests (UI-render tests are skipped — see below)
-```
-
-The widget tests that use `fyne.io/fyne/v2/test` are excluded under `-race`
-because Fyne's test app clears its font cache on a background goroutine, which
-the race detector flags against text measurement. That race is in Fyne's test
-harness, not in this app or the real renderer.
-
 ## License
 
-Application code is provided for educational and devotional use. The bundled
-scripture text is the **World English Bible**, which is in the public domain.
-Cross-reference data is from **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
-(Treasury of Scripture Knowledge), used under **CC BY**.
+The application's source code is licensed under the **[Apache License 2.0](LICENSE)**.
+
+Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
+
+- Scripture: **World English Bible** and **Berean Standard Bible** — public domain.
+- Cross-references: **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
+  Treasury of Scripture Knowledge — **CC BY**.
+- UI font: **Atkinson Hyperlegible** (Braille Institute) — **SIL Open Font License 1.1**.
 
 ---
 
