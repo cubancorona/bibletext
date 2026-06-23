@@ -28,7 +28,7 @@
       "label": "Package Desktop (.app)",
       "detail": "fyne package -> cmd/desktop/BibleText.app",
       "type": "shell",
-      "command": "fyne package -os darwin --app-id io.github.cubancorona.bibletextdesktop",
+      "command": "fyne package -os darwin --app-id io.github.cubancorona.bibletext.desktop",
       "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
       "group": "build",
       "problemMatcher": ["$go"]
