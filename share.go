@@ -56,7 +56,20 @@ func shareVerse(state *AppState, text string, asImage bool) {
 		showShareImagePreview(state, quote, cite, version)
 		return
 	}
-	nativeShareText(fmt.Sprintf("%s\n— %s (%s)", quote, cite, version))
+	nativeShareText(composeShareText(quote, cite, version))
+}
+
+// citationLine is the Bluebook reference line shown under both the plain-text share
+// and the image card: an em dash, the reference, and the translation spelled out in
+// parentheses — e.g. "— John 3:16 (World English Bible)".
+func citationLine(cite, version string) string {
+	return "— " + cite + " (" + version + ")"
+}
+
+// composeShareText builds the plain-text share: the already-formatted quote, a line
+// break, then the citation line.
+func composeShareText(quote, cite, version string) string {
+	return quote + "\n" + citationLine(cite, version)
 }
 
 // cleanQuoteText turns a raw reading-view selection into clean, quotable verse
