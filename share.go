@@ -49,11 +49,10 @@ func shareVerse(state *AppState, text string, asImage bool) {
 	abbrev := state.currentVersion().Abbrev
 	quote := formatBibleQuote(cleanQuoteText(state, text))
 	if asImage {
-		if path, err := renderVerseImage(state, quote, cite, abbrev); err == nil {
-			nativeShareImage(path)
-			return
-		}
-		// If image rendering fails for any reason, share the text instead.
+		// Don't share blind: show the rendered card for review (with Regenerate)
+		// and only hand it to the OS share sheet once the reader taps Share.
+		showShareImagePreview(state, quote, cite, abbrev)
+		return
 	}
 	nativeShareText(fmt.Sprintf("%s\n— %s (%s)", quote, cite, abbrev))
 }
