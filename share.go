@@ -120,6 +120,12 @@ func formatBibleQuote(text string) string {
 	if text == "" {
 		return text
 	}
+	// Balance the verse's OWN quotation marks first. A reading-view selection can
+	// begin or end inside a longer quotation, so the partner of a mark may sit in the
+	// surrounding (unselected) verse text — leaving a dangling closing or opening
+	// mark. Add the missing marks so the shared fragment is a complete, well-formed
+	// quotation (see balanceQuoteMarks).
+	text = balanceQuoteMarks(text)
 	if len(strings.Fields(text)) >= blockQuoteWords {
 		return text // block quotation: no surrounding quotation marks
 	}
@@ -130,36 +136,59 @@ func formatBibleQuote(text string) string {
 	return "“" + text + "”"
 }
 
+// balanceQuoteMarks repairs unbalanced curly double-quotation marks in a shared
+// fragment. Scanning left to right, every closing mark that appears with no open
+// quotation in progress means the opener is in the text BEFORE the selection — so we
+// prepend an opening mark; any quotation still open at the end means the closer is in
+// the text AFTER the selection — so we append a closing mark. Result: a self-contained,
+// balanced quotation. Examples:
+//
+//	“What is truth?” … told them, “I find…   (open, close, open)  -> append one ”
+//	What is truth?” … told them, “I find…     (close, open)        -> prepend “, append ”
+//	“Blessed are the poor in spirit…           (open, no close)    -> append one ”
+func balanceQuoteMarks(s string) string {
+	depth, minDepth := 0, 0
+	for _, r := range s {
+		switch r {
+		case '“':
+			depth++
+		case '”':
+			depth--
+			if depth < minDepth {
+				minDepth = depth
+			}
+		}
+	}
+	leadOpens := -minDepth           // closing marks with no opener → opens to prepend
+	trailCloses := depth + leadOpens // opening marks left unclosed → closes to append
+	if leadOpens > 0 {
+		s = strings.Repeat("“", leadOpens) + s
+	}
+	if trailCloses > 0 {
+		s = s + strings.Repeat("”", trailCloses)
+	}
+	return s
+}
+
 // citationForSelection derives a "Book C:V" (or "…:V-W") reference for the
 // selected text by matching it against the verses of the current chapter, so a
 // shared selection carries an accurate citation. Falls back to "Book C" when the
 // selection can't be pinned to specific verses (e.g. a partial phrase).
 func citationForSelection(state *AppState, text string) string {
 	book, ch := state.CurrentBook, state.CurrentChapter
-	if state.Bible == nil {
+	if state == nil || state.Bible == nil {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
-	norm := collapseSpaces(text)
-	lo, hi := 0, 0
-	for _, v := range state.Bible.GetChapter(book, ch) {
-		vt := collapseSpaces(v.Text)
-		if len([]rune(vt)) < 8 {
-			continue
-		}
-		probe := vt
-		if r := []rune(vt); len(r) > 24 {
-			probe = string(r[:24])
-		}
-		if strings.Contains(norm, probe) {
-			if lo == 0 {
-				lo = v.Verse
-			}
-			hi = v.Verse
-		}
+	// selectionVerses matches in BOTH directions (the selection contains a verse, or a
+	// verse contains the selection) so a partial selection — e.g. one that omits the
+	// verse's leading quotation mark — still pins to the verse it falls within, rather
+	// than dropping to the chapter-only fallback.
+	matched := selectionVerses(state, text)
+	if len(matched) == 0 {
+		return fmt.Sprintf("%s %d", book, ch)
 	}
+	lo, hi := matched[0].Verse, matched[len(matched)-1].Verse
 	switch {
-	case lo == 0:
-		return fmt.Sprintf("%s %d", book, ch)
 	case lo == hi:
 		return fmt.Sprintf("%s %d:%d", book, ch, lo)
 	default:

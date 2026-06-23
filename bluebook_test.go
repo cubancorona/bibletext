@@ -200,16 +200,16 @@ func TestBluebookQuotationRule5(t *testing.T) {
 			"grammarbook.com (US nesting) — app avoids stacking double quotes",
 		},
 		{
-			"verse that OPENS a quotation keeps its leading mark (selected on purpose)",
+			"verse that OPENS a quotation keeps its leading mark, gains a balancing closer",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"faithful-to-selection; matches the user's reported John 18:38 fix",
+			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
+			"user-reported (IMG_0335): leading mark must survive; balanced for a self-contained share",
 		},
 		{
-			"unbalanced opens (Pilate, John 18:38) all preserved",
+			"John 18:38: open/close/open -> the dangling opener gains a closing mark",
 			"“What is truth?” Pilate asked. And having said this, he told them, “I find no basis for a charge against Him.",
-			"“What is truth?” Pilate asked. And having said this, he told them, “I find no basis for a charge against Him.",
-			"user-reported case; verbatim quotation fidelity",
+			"“What is truth?” Pilate asked. And having said this, he told them, “I find no basis for a charge against Him.”",
+			"user-reported (IMG_0336): the share must be a balanced, well-formed quotation",
 		},
 		{
 			"apostrophes are not double quotes, so the verse is still wrapped",
@@ -327,6 +327,54 @@ func TestBluebookSharePipeline(t *testing.T) {
 			t.Errorf("\n got %q\nwant %q", got, want)
 		}
 	})
+}
+
+// TestBluebookQuoteMarkBalancing covers the rule that a shared fragment must be a
+// balanced, self-contained quotation: a closing mark whose opener is in the
+// surrounding (unselected) text gains a leading opener; an opener whose closer is in
+// the surrounding text gains a trailing closer. (User-reported: IMG_0335 / IMG_0336.)
+func TestBluebookQuoteMarkBalancing(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"already balanced is unchanged", "“Let there be light,” he said.", "“Let there be light,” he said."},
+		{"no quotation marks is unchanged", "Jesus wept.", "Jesus wept."},
+		{"dangling closer gains a leading opener", "truth?” Pilate asked.", "“truth?” Pilate asked."},
+		{"dangling opener gains a trailing closer", "he said, “Follow me.", "he said, “Follow me.”"},
+		{"close-then-open (John 18:38 fragment) gains both marks", "What is truth?” He told them, “I find no basis.", "“What is truth?” He told them, “I find no basis.”"},
+		{"verse opening a multi-verse quotation gains a closer", "“Blessed are the poor in spirit.", "“Blessed are the poor in spirit.”"},
+	}
+	for _, c := range cases {
+		if got := balanceQuoteMarks(c.in); got != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestBluebookFragmentPinsToVerse is the citation half of the IMG_0336 bug: a
+// selection that OMITS the verse's leading quotation mark must still pin to its verse
+// (bidirectional match), not fall back to the chapter-only "John 18".
+func TestBluebookFragmentPinsToVerse(t *testing.T) {
+	full := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
+	st := bbChapter("John", 18, map[int]string{38: full})
+	frag := "What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him." // leading “ omitted
+	if got := citationForSelection(st, frag); got != "John 18:38" {
+		t.Errorf("a fragment must still pin to John 18:38, got %q", got)
+	}
+}
+
+// TestBluebookFragmentSharePipeline is the full IMG_0336 case end to end: a fragment
+// that omits the leading quote and ends mid-quotation produces a balanced quotation
+// and the correct verse citation.
+func TestBluebookFragmentSharePipeline(t *testing.T) {
+	full := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
+	st := bbChapter("John", 18, map[int]string{38: full})
+	frag := "What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
+	quote := formatBibleQuote(cleanQuoteText(st, frag))
+	cite := citationForSelection(st, frag)
+	got := composeShareText(quote, cite, "Berean Standard Bible")
+	want := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.”\n— John 18:38 (Berean Standard Bible)"
+	if got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
 }
 
 // TestBluebookOutOfScope documents — and pins — that the app produces its single
