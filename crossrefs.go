@@ -31,8 +31,10 @@ const (
 type crossRef struct {
 	Book           string
 	Chapter, Verse int
-	EndCh, EndV    int // 0 when it's a single verse
-	Votes          int
+	EndCh, EndV    int    // 0 when it's a single verse
+	Votes          int    // TSK agreement count (0 for parallels)
+	Parallel       bool   // true = a Gospel-synopsis parallel (parallels.go), not a TSK cross-ref
+	Title          string // synopsis pericope title, for parallels (e.g. "The Beatitudes")
 }
 
 func (c crossRef) label() string {
@@ -268,34 +270,65 @@ func bookAbbrev(name string) string {
 // selection spans, resolving target book names against the loaded translation
 // and merging duplicates (keeping the highest vote). Highest-voted first.
 func crossRefsForSelection(state *AppState, text string) []crossRef {
-	if crossRefIndex == nil {
+	if state == nil || state.Bible == nil {
 		return nil
 	}
-	seen := map[string]int{} // label -> index into out
-	var out []crossRef
-	for _, v := range selectionVerses(state, text) {
-		for _, c := range crossRefIndex[crossRefKey(v.BookName, v.Chapter, v.Verse)] {
+	verses := selectionVerses(state, text)
+	shown := map[string]bool{} // label -> already emitted
+
+	// Gospel synopsis parallels first (parallels.go): the same event in the other
+	// Gospels, tagged. Embedded, so these appear even when the TSK cross-references
+	// failed to load (offline). Kept in synopsis order, not sorted by votes.
+	var parallels []crossRef
+	for _, v := range verses {
+		for _, c := range gospelParallelsForVerse(v.BookName, v.Chapter, v.Verse) {
 			name, ok := resolveBookName(state.Bible.Books, c.Book)
 			if !ok {
 				continue
 			}
 			c.Book = name
 			lbl := c.label()
-			if i, dup := seen[lbl]; dup {
-				if c.Votes > out[i].Votes {
-					out[i].Votes = c.Votes
-				}
+			if shown[lbl] {
 				continue
 			}
-			seen[lbl] = len(out)
-			out = append(out, c)
+			shown[lbl] = true
+			parallels = append(parallels, c)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Votes > out[j].Votes })
-	if len(out) > 40 {
-		out = out[:40]
+
+	// Treasury-of-Scripture-Knowledge cross-references, highest-voted first, minus
+	// anything already shown as a parallel.
+	var tsk []crossRef
+	if crossRefIndex != nil {
+		seen := map[string]int{} // label -> index into tsk
+		for _, v := range verses {
+			for _, c := range crossRefIndex[crossRefKey(v.BookName, v.Chapter, v.Verse)] {
+				name, ok := resolveBookName(state.Bible.Books, c.Book)
+				if !ok {
+					continue
+				}
+				c.Book = name
+				lbl := c.label()
+				if shown[lbl] {
+					continue
+				}
+				if i, dup := seen[lbl]; dup {
+					if c.Votes > tsk[i].Votes {
+						tsk[i].Votes = c.Votes
+					}
+					continue
+				}
+				seen[lbl] = len(tsk)
+				tsk = append(tsk, c)
+			}
+		}
+		sort.SliceStable(tsk, func(i, j int) bool { return tsk[i].Votes > tsk[j].Votes })
+		if len(tsk) > 40 {
+			tsk = tsk[:40]
+		}
 	}
-	return out
+
+	return append(parallels, tsk...)
 }
 
 // selectionVerses returns the verses of the current chapter that the selection

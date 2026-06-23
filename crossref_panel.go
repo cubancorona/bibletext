@@ -70,7 +70,7 @@ func showCrossRefs(state *AppState, text string) {
 		restore()
 	}
 	closeBtn := widget.NewButton("Close", closePanel)
-	credit := canvas.NewText("Cross-references: OpenBible.info (CC-BY)", pal.TextMuted)
+	credit := canvas.NewText("Cross-references: OpenBible.info (CC-BY) · Gospel parallels: synopsis", pal.TextMuted)
 	credit.TextSize = 11
 	footer := container.NewVBox(
 		widget.NewSeparator(),
@@ -129,12 +129,12 @@ func showCrossRefs(state *AppState, text string) {
 	setThinking()
 	go func() {
 		err := ensureCrossRefs()
-		var refs []crossRef
-		if err == nil {
-			refs = crossRefsForSelection(state, text)
-		}
+		// crossRefsForSelection always returns the embedded Gospel parallels (offline),
+		// plus the TSK cross-references when they loaded — so a TSK fetch failure still
+		// shows parallels, and we only surface the error when there's nothing at all.
+		refs := crossRefsForSelection(state, text)
 		fyne.Do(func() {
-			if err != nil {
+			if len(refs) == 0 && err != nil {
 				setMessage("Couldn't load cross-references.\nCheck your connection and try again.")
 				return
 			}
@@ -148,6 +148,22 @@ func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef))
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 16
 
+	// The reference line, with a "Parallel" tag for Gospel-synopsis entries.
+	var refLine fyne.CanvasObject = ref
+	if c.Parallel {
+		refLine = container.NewHBox(container.NewCenter(ref), container.NewCenter(parallelBadge(pal)))
+	}
+	lines := []fyne.CanvasObject{refLine}
+
+	// For a parallel, the pericope title ("The Beatitudes") is the useful context,
+	// so show it above the verse preview.
+	if c.Parallel && c.Title != "" {
+		t := canvas.NewText(c.Title, pal.TextMuted)
+		t.TextSize = 12
+		t.TextStyle = fyne.TextStyle{Italic: true}
+		lines = append(lines, t)
+	}
+
 	snippet := ""
 	if v := state.Bible.GetVerse(c.Book, c.Chapter, c.Verse); v != nil {
 		full := collapseSpaces(v.Text)
@@ -158,10 +174,21 @@ func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef))
 	}
 	snip := widget.NewLabel(snippet)
 	snip.Wrapping = fyne.TextWrapWord
+	lines = append(lines, snip)
 
-	inner := container.NewPadded(container.NewVBox(ref, snip))
+	inner := container.NewPadded(container.NewVBox(lines...))
 	card := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
 	return container.NewVBox(card, widget.NewSeparator())
+}
+
+// parallelBadge is the small accent pill that marks a Gospel-synopsis parallel row.
+func parallelBadge(pal palette) fyne.CanvasObject {
+	t := canvas.NewText("PARALLEL", pal.AccentText)
+	t.TextStyle = fyne.TextStyle{Bold: true}
+	t.TextSize = 9
+	bg := canvas.NewRectangle(pal.Accent)
+	bg.CornerRadius = 5
+	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(2, 2, 7, 7), t))
 }
 
 // tapCard makes an arbitrary content block one tap target, with a desktop hover
