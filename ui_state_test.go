@@ -250,13 +250,19 @@ func TestGroupVisitsByBookConsolidates(t *testing.T) {
 		{Book: "John", Chapter: 5},
 		{Book: "Genesis", Chapter: 1},
 		{Book: "John", Chapter: 1},
-		{Book: "John", Chapter: 3},
-		{Book: "John", Chapter: 5}, // duplicate
+		{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5}, // carries a saved scroll anchor
+		{Book: "John", Chapter: 5},                                 // duplicate
 	}
 	got := groupVisitsByBook(visits)
+	// Most-recently-read first, de-duped, book kept first — and each chapter keeps its
+	// full visit (incl. the scroll anchor) so a history tap can restore the position.
 	want := []bookChapters{
-		{Book: "John", Chapters: []int{5, 1, 3}}, // most-recently-read first, de-duped; book kept first
-		{Book: "Genesis", Chapters: []int{1}},
+		{Book: "John", Chapters: []ChapterVisit{
+			{Book: "John", Chapter: 5},
+			{Book: "John", Chapter: 1},
+			{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5},
+		}},
+		{Book: "Genesis", Chapters: []ChapterVisit{{Book: "Genesis", Chapter: 1}}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("groupVisitsByBook mismatch:\n got %+v\nwant %+v", got, want)
