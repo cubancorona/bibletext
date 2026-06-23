@@ -3,6 +3,7 @@
 package bibletext
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -10,6 +11,27 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 )
+
+// skipIfNativeReadingOverlay skips on macOS, where the reading pane is a native
+// NSTextView overlay (reading_macos.go) rather than the Fyne chapterText widget —
+// so buildReadingView builds no chapterText there. The Fyne path (reading_fyne.go,
+// //go:build ios || !darwin) is exercised on Linux/Windows.
+func skipIfNativeReadingOverlay(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("reading pane is a native NSTextView overlay on macOS; chapterText is the Linux/Windows path")
+	}
+}
+
+// themedTestApp returns a Fyne test app with the app's real theme installed, so
+// rendering tests resolve the custom colours (bibleTextMuted, …) and fonts that Fyne's
+// bare "Default Test Theme" leaves undefined — which otherwise logs nil-colour errors
+// and panics on a nil font during text measurement. Fonts are nil here, so bibleTheme
+// falls back to Fyne's bundled default faces (enough for layout assertions).
+func themedTestApp() fyne.App {
+	app := test.NewApp()
+	app.Settings().SetTheme(&bibleTheme{})
+	return app
+}
 
 func findChapterText(o fyne.CanvasObject) *chapterText {
 	switch v := o.(type) {
@@ -36,7 +58,8 @@ func findChapterText(o fyne.CanvasObject) *chapterText {
 // one selectable, read-only block (so selection/copy spans the whole chapter) and
 // uses manual wrapping (no internal scroll area).
 func TestChapterTextIsSelectableReadOnlyWholeChapter(t *testing.T) {
-	app := test.NewApp()
+	skipIfNativeReadingOverlay(t)
+	app := themedTestApp()
 	defer app.Quit()
 
 	state := sampleState() // John 1: verses 1-3 in the sample data
@@ -61,7 +84,8 @@ func TestChapterTextIsSelectableReadOnlyWholeChapter(t *testing.T) {
 }
 
 func TestChapterTextLocatesHighlightedVerse(t *testing.T) {
-	app := test.NewApp()
+	skipIfNativeReadingOverlay(t)
+	app := themedTestApp()
 	defer app.Quit()
 
 	state := sampleState()
