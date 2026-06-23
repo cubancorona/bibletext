@@ -11,6 +11,7 @@ package bibletext
 // the card comfortably regardless of the passage length.
 
 import (
+	"fmt"
 	"hash/fnv"
 	"image"
 	"image/color"
@@ -46,21 +47,30 @@ var shareSchemes = []shareScheme{
 	{color.NRGBA{46, 27, 34, 255}, color.NRGBA{26, 14, 19, 255}, color.NRGBA{251, 234, 240, 255}, color.NRGBA{240, 201, 214, 255}},   // rose
 }
 
-func schemeForRef(ref string) shareScheme {
+// schemeForRef picks a colour treatment from a stable hash of the reference, so a
+// given verse looks consistent — offset by variant, which the share preview bumps
+// on each "Regenerate" to cycle through the other treatments.
+func schemeForRef(ref string, variant int) shareScheme {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(ref))
-	return shareSchemes[int(h.Sum32())%len(shareSchemes)]
+	idx := (int(h.Sum32()) + variant) % len(shareSchemes)
+	if idx < 0 {
+		idx += len(shareSchemes)
+	}
+	return shareSchemes[idx]
 }
 
 // renderVerseImage writes a square share card to a temp PNG and returns its path.
-func renderVerseImage(state *AppState, verseText, citation, abbrev string) (string, error) {
+// variant selects the colour treatment (0 = the verse's default; the preview's
+// Regenerate increments it).
+func renderVerseImage(state *AppState, verseText, citation, abbrev string, variant int) (string, error) {
 	const (
 		dim      = 1080
 		marginX  = 120
 		topInset = 150
 		botInset = 230 // room for citation + wordmark
 	)
-	sc := schemeForRef(citation + "|" + abbrev)
+	sc := schemeForRef(citation+"|"+abbrev, variant)
 
 	img := image.NewRGBA(image.Rect(0, 0, dim, dim))
 	paintGradient(img, sc.top, sc.bottom)
@@ -111,17 +121,14 @@ func renderVerseImage(state *AppState, verseText, citation, abbrev string) (stri
 	// Citation, centred a little below the verse block.
 	citeFace := newFace(bold, 34)
 	citeY := topInset + (maxBlockH+blockH)/2 + 70
-	if citeY > dim-150 {
-		citeY = dim - 150
+	if citeY > dim-110 {
+		citeY = dim - 110
 	}
 	drawCentered(img, citeFace, "— "+citation+" ("+abbrev+")", sc.accent, dim, citeY)
 
-	// Subtle wordmark.
-	markFace := newFace(regular, 26)
-	markCol := blend(sc.text, sc.bottom, 0.45)
-	drawCentered(img, markFace, "BibleText", markCol, dim, dim-70)
-
-	path := filepath.Join(os.TempDir(), "bibletext-verse.png")
+	// A fresh file per variant so the preview's canvas.Image reloads on Regenerate
+	// (a stable path would be served from Fyne's image cache).
+	path := filepath.Join(os.TempDir(), fmt.Sprintf("bibletext-verse-%d.png", variant))
 	f, err := os.Create(path)
 	if err != nil {
 		return "", err

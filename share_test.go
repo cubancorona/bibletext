@@ -38,7 +38,7 @@ func TestCitationForSelection(t *testing.T) {
 }
 
 func TestRenderVerseImage(t *testing.T) {
-	path, err := renderVerseImage(&AppState{}, "For God so loved the world, that he gave his one and only Son.", "John 3:16", "WEB")
+	path, err := renderVerseImage(&AppState{}, "For God so loved the world, that he gave his one and only Son.", "John 3:16", "WEB", 0)
 	if err != nil {
 		t.Fatalf("renderVerseImage: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestRenderVerseImage(t *testing.T) {
 
 func TestRenderVerseImageLongPassage(t *testing.T) {
 	long := strings.Repeat("For God so loved the world that he gave his one and only Son. ", 12)
-	path, err := renderVerseImage(&AppState{}, long, "John 3:16-18", "WEB")
+	path, err := renderVerseImage(&AppState{}, long, "John 3:16-18", "WEB", 0)
 	if err != nil {
 		t.Fatalf("long render: %v", err)
 	}
