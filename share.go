@@ -81,34 +81,25 @@ func cleanQuoteText(state *AppState, raw string) string {
 	return strings.TrimSpace(s)
 }
 
-// formatBibleQuote applies sensible quotation conventions to a clean verse string:
-//   - strips an orphan opening or closing curly double-quote left over from quoting
-//     a fragment of a longer quotation (e.g. a single Beatitude verse opens a quote
-//     that only closes several verses later), so the share doesn't start/end on a
-//     dangling mark;
-//   - adds decorative outer quotation marks ONLY when the passage has no double
-//     quotes of its own — otherwise the nesting (a quote within the quote) reads as
-//     broken. Dialogue already in the text is left exactly as printed, and the
-//     citation line marks the whole thing as a quotation regardless.
+// formatBibleQuote prepares a clean verse string for sharing. It is deliberately
+// FAITHFUL to the selection: it never removes or alters the verse's own quotation
+// marks. A verse may legitimately open or close a longer quotation — e.g. Matthew
+// 5:3 opens the Beatitudes, and John 18:38 reads «“What is truth?” … told them, “I
+// find…» (two opens, one close) — and the reader may select those marks on purpose;
+// dropping any of them would misquote the text. The ONLY change made here is to add
+// decorative outer quotation marks, and only when the passage contains no double
+// quotes of its own, so a verse that already has dialogue isn't wrapped into broken
+// nesting. The citation line marks the whole thing as a quotation either way.
 func formatBibleQuote(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
 	}
-	opens := strings.Count(text, "“")
-	closes := strings.Count(text, "”")
-	if opens > closes && strings.HasPrefix(text, "“") {
-		text = strings.TrimSpace(text[len("“"):])
-		opens--
+	// Has its own double quotes (curly or straight)? Leave them exactly as selected.
+	if strings.ContainsAny(text, "“”\"") {
+		return text
 	}
-	if closes > opens && strings.HasSuffix(text, "”") {
-		text = strings.TrimSpace(text[:len(text)-len("”")])
-		closes--
-	}
-	if opens == 0 && closes == 0 && !strings.ContainsRune(text, '"') {
-		return "“" + text + "”"
-	}
-	return text
+	return "“" + text + "”"
 }
 
 // citationForSelection derives a "Book C:V" (or "…:V-W") reference for the

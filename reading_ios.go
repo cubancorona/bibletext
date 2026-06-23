@@ -130,20 +130,36 @@ static UITapGestureRecognizer *gHighlightTap = nil;
             bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
         }];
     };
-    UIMenu *share = [UIMenu menuWithTitle:@"Share verse" image:nil identifier:nil options:0
+    UIMenu *share = [UIMenu menuWithTitle:@"Share" image:nil identifier:nil options:0
                                  children:@[
                                      study(@"Share with citation", @"share-cite"),
                                      study(@"Share as image", @"share-image"),
                                  ]];
     UIAction *xref = study(@"Cross-references", @"crossref");
 
-    // Now that the text view is hosted in a view controller (see bibleTextEnsureTV),
-    // the system's suggestedActions — Copy, Look Up, Translate, Define — present
-    // correctly instead of crashing, and the ▸ overflow + our submenus navigate
-    // properly. Lead with "Study with AI" (the flagship), then the standard system
-    // actions, then our secondary study/share actions.
-    NSArray *tail = [suggestedActions arrayByAddingObjectsFromArray:@[xref, share]];
-    return [UIMenu menuWithChildren:[@[ai] arrayByAddingObjectsFromArray:tail]];
+    // Keep the three BibleText actions together as ONE group instead of scattering
+    // them before and after the system actions (the old layout led with "Study with
+    // AI" but trailed Cross-references + Share after Copy/Look Up/Translate). Order:
+    // the standard edit commands (Copy/Cut/Paste) first, then our cluster —
+    // Cross-references, Study with AI, Share — then the remaining system actions
+    // (Look Up, Translate, Define). If the system hands us no identifiable
+    // standard-edit group, our cluster simply leads and the system actions follow
+    // (still grouped, never scattered).
+    NSMutableArray<UIMenuElement *> *editGroup = [NSMutableArray array];
+    NSMutableArray<UIMenuElement *> *systemRest = [NSMutableArray array];
+    for (UIMenuElement *el in suggestedActions) {
+        if ([el isKindOfClass:[UIMenu class]] &&
+            [((UIMenu *)el).identifier isEqualToString:UIMenuStandardEdit]) {
+            [editGroup addObject:el];
+        } else {
+            [systemRest addObject:el];
+        }
+    }
+    NSMutableArray<UIMenuElement *> *children = [NSMutableArray array];
+    [children addObjectsFromArray:editGroup];
+    [children addObjectsFromArray:@[xref, ai, share]];
+    [children addObjectsFromArray:systemRest];
+    return [UIMenu menuWithChildren:children];
 }
 
 // When the user drags the chapter, drop any pending restore target so the

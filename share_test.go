@@ -77,14 +77,19 @@ func TestFormatBibleQuote(t *testing.T) {
 			"Jesus said to him, “I am the way, the truth, and the life.”",
 		},
 		{
-			"orphan opening quote stripped, then wrapped",
+			"verse opening a quotation keeps its leading mark (no added outer quotes)",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
+			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
 		},
 		{
-			"orphan closing quote stripped, then wrapped",
+			"verse ending on a closing mark is left intact",
 			"why have you forsaken me?”",
-			"“why have you forsaken me?”",
+			"why have you forsaken me?”",
+		},
+		{
+			"unbalanced opens are all preserved (John 18:38)",
+			"“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.",
+			"“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.",
 		},
 		{
 			"nested quotes within balanced dialogue left intact",
@@ -140,8 +145,10 @@ func TestShareQuotePipelineBeatitude(t *testing.T) {
 	}}
 	state := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 5}
 
+	// The selection includes the verse number and the opening quote; the number is
+	// stripped, the quote is kept (no outer quotes added — the verse has its own).
 	raw := "3 “Blessed are the poor in spirit, for theirs is the Kingdom of Heaven."
-	want := "“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”"
+	want := "“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven."
 	if got := formatBibleQuote(cleanQuoteText(state, raw)); got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
