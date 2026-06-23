@@ -35,8 +35,8 @@ GOOS=windows GOARCH=amd64 go build -o bibletext.exe     ./cmd/desktop
 GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos   ./cmd/desktop
 
 # iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest)
-cd cmd/mobile && fyne package -os iossimulator --app-id com.willow.bibletext
-fyne package -os android -appID com.willow.bibletext -src ./cmd/mobile
+cd cmd/mobile && fyne package -os iossimulator --app-id io.github.cubancorona.bibletext
+fyne package -os android -appID io.github.cubancorona.bibletext -src ./cmd/mobile
 
 # Tests
 go test ./...

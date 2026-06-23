@@ -130,8 +130,8 @@ the right CGO toolchain (iOS SDK or Android NDK) and assembles a `.app`/`.ipa`
 or `.apk`/`.aab` together with `FyneApp.toml` and `Icon.png`:
 
 ```bash
-fyne package -os ios       -appID com.willow.bibletext -src ./cmd/mobile
-fyne package -os android   -appID com.willow.bibletext -src ./cmd/mobile
+fyne package -os ios       -appID io.github.cubancorona.bibletext -src ./cmd/mobile
+fyne package -os android   -appID io.github.cubancorona.bibletext -src ./cmd/mobile
 ```
 
 Fyne needs a C toolchain and the platform's graphics/dev libraries on every

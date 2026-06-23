@@ -16,7 +16,7 @@
 #   • iPhone: connect by cable, unlock, Trust This Computer, and enable
 #     Settings → Privacy & Security → Developer Mode.
 #   • Xcode → Settings → Accounts → sign in with your Apple ID (free).
-#   • Create the cert + a provisioning profile for com.willow.bibletext once, by
+#   • Create the cert + a provisioning profile for io.github.cubancorona.bibletext once, by
 #     building any app with that bundle id + your Personal Team to the phone in
 #     Xcode (a throwaway "Signer" project works). The cert + profile then persist
 #     and this script reuses them.
@@ -28,7 +28,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
-APP_ID="${BIBLETEXT_APP_ID:-com.willow.bibletext}"
+APP_ID="${BIBLETEXT_APP_ID:-io.github.cubancorona.bibletext}"
 IOS_MIN="13.0"
 
 export PATH="$(go env GOPATH)/bin:$PATH"

@@ -2,10 +2,10 @@
 // It is built and packaged by the `fyne` CLI:
 //
 //	# iOS device or simulator (requires Xcode + an Apple Developer profile):
-//	fyne package -os ios -appID com.willow.bibletext -src ./cmd/mobile
+//	fyne package -os ios -appID io.github.cubancorona.bibletext -src ./cmd/mobile
 //
 //	# Android (requires the Android SDK + NDK):
-//	fyne package -os android -appID com.willow.bibletext -src ./cmd/mobile
+//	fyne package -os android -appID io.github.cubancorona.bibletext -src ./cmd/mobile
 //
 // On phones the mobile layout (bottom tabs: Read / Books / Search) is selected
 // automatically via the `//go:build ios || android` tag on ui_mobile.go.
@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	myApp := app.NewWithID("com.willow.bibletext")
+	myApp := app.NewWithID("io.github.cubancorona.bibletext")
 	// The Bible loads on a background goroutine so the window appears instantly
 	// with a loading spinner — crucial on iOS, where a slow first-run fetch on
 	// the main thread would trip the launch watchdog and get the app SIGKILLed.

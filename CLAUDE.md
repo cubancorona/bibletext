@@ -20,8 +20,8 @@ go test -race ./...                 # tests live in the root package
 gofmt -w .  &&  go vet ./...        # format + vet before committing
 
 # Packaged bundles (run from the cmd dir, not the repo root):
-cd cmd/desktop && fyne package -os darwin       --app-id com.willow.bibletextdesktop
-cd cmd/mobile  && fyne package -os iossimulator --app-id com.willow.bibletext
+cd cmd/desktop && fyne package -os darwin       --app-id io.github.cubancorona.bibletext.desktop
+cd cmd/mobile  && fyne package -os iossimulator --app-id io.github.cubancorona.bibletext
 ```
 
 **Patched Fyne (iOS scroll-lag fix).** `go.mod` ships **stock** Fyne, so

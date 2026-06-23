@@ -1,8 +1,8 @@
-Website = "https://github.com/willownoonan/bibletext"
+Website = "https://github.com/cubancorona/bibletext"
 
 [Details]
 Icon = "Icon.png"
 Name = "BibleText"
-ID = "com.willow.bibletext"
+ID = "io.github.cubancorona.bibletext"
 Version = "1.0.0"
 Build = 87

@@ -28,7 +28,7 @@
       "label": "Package Desktop (.app)",
       "detail": "fyne package -> cmd/desktop/BibleText.app",
       "type": "shell",
-      "command": "fyne package -os darwin --app-id com.willow.bibletextdesktop",
+      "command": "fyne package -os darwin --app-id io.github.cubancorona.bibletext.desktop",
       "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -37,7 +37,7 @@
       "label": "Package iOS Simulator",
       "detail": "fyne package -> cmd/mobile (iossimulator)",
       "type": "shell",
-      "command": "fyne package -os iossimulator --app-id com.willow.bibletext",
+      "command": "fyne package -os iossimulator --app-id io.github.cubancorona.bibletext",
       "options": { "cwd": "${workspaceFolder}/cmd/mobile" },
       "group": "build",
       "problemMatcher": ["$go"]
