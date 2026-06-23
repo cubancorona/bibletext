@@ -1,5 +1,7 @@
 # BibleText
 
+[![CI](https://github.com/cubancorona/bibletext/actions/workflows/ci.yml/badge.svg)](https://github.com/cubancorona/bibletext/actions/workflows/ci.yml)
+
 A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, and
 iOS** from a single Go codebase, built with [Fyne](https://fyne.io/). It presents
 public-domain translations — the **World English Bible (WEB)** and **Berean
