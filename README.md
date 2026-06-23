@@ -5,9 +5,20 @@ iOS** from a single Go codebase, built with [Fyne](https://fyne.io/). It present
 public-domain translations — the **World English Bible (WEB)** and **Berean
 Standard Bible (BSB)** — in a calm, responsive reading layout.
 
-| Reading | Cross-references & Gospel parallels | Go to | Share as image |
-|:---:|:---:|:---:|:---:|
-| ![Reading view](docs/screenshots/reading.png) | ![Cross-references and Gospel parallels](docs/screenshots/cross-references.png) | ![Go to navigator](docs/screenshots/goto.png) | ![Share as image](docs/screenshots/share-image.png) |
+| Reading | Study with AI | Share as image |
+|:---:|:---:|:---:|
+| ![Reading view with the words of Christ in red](docs/screenshots/reading.png) | ![Study any verse with AI](docs/screenshots/ai-study.png) | ![Share a verse as an image](docs/screenshots/share-image.png) |
+| Distraction-free reading — words of Christ in red | Explain, context & translation notes, with your own AI key | Any verse as shareable art with a clean citation |
+
+<details>
+<summary><b>More:</b> cross-references &amp; Gospel parallels</summary>
+
+![Cross-references and Gospel parallels](docs/screenshots/cross-references.png)
+
+Tap a verse to surface its cross-references (Treasury of Scripture Knowledge) and,
+for a Gospel passage, the parallel accounts in the other Gospels.
+
+</details>
 
 ## Build
 
