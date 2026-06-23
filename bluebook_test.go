@@ -188,28 +188,28 @@ func TestBluebookQuotationRule5(t *testing.T) {
 			"monmouth.edu bluebook-quotations.pdf (short quote, inline, double marks)",
 		},
 		{
-			"verse with internal double quotes is left intact (no double-wrap)",
+			"verse with internal double quotes nests them to single inside the outer pair",
 			"He answered, “It is written, ‘Man shall not live by bread alone.’”",
-			"He answered, “It is written, ‘Man shall not live by bread alone.’”",
-			"ubalt.edu Due Diligence Guide (nesting: double outside, single inside)",
+			"“He answered, ‘It is written, ‘Man shall not live by bread alone.’’”",
+			"ubalt.edu Due Diligence Guide (Rule 5.1(b): double outside, single inside)",
 		},
 		{
-			"straight double quotes also suppress added outer marks",
+			"straight double quotes are out-of-domain (scripture is curly) — left verbatim",
 			"He said, \"Peace be with you.\"",
 			"He said, \"Peace be with you.\"",
-			"grammarbook.com (US nesting) — app avoids stacking double quotes",
+			"grammarbook.com — a straight \" may be an inch/ditto mark, so the app won't re-nest it",
 		},
 		{
-			"verse that OPENS a quotation keeps its leading mark, gains a balancing closer",
+			"verse that OPENS a quotation is balanced, then nested + wrapped",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
+			"“‘Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.’”",
 			"user-reported (IMG_0335): leading mark must survive; balanced for a self-contained share",
 		},
 		{
-			"John 18:38: open/close/open -> the dangling opener gains a closing mark",
+			"John 18:38: internal quotations nest to single inside the outer double",
 			"“What is truth?” Pilate asked. And having said this, he told them, “I find no basis for a charge against Him.",
-			"“What is truth?” Pilate asked. And having said this, he told them, “I find no basis for a charge against Him.”",
-			"user-reported (IMG_0336): the share must be a balanced, well-formed quotation",
+			"“‘What is truth?’ Pilate asked. And having said this, he told them, ‘I find no basis for a charge against Him.’”",
+			"user-reported (IMG_0336/IMG_0339): nested quotations take single marks (Rule 5.1(b))",
 		},
 		{
 			"apostrophes are not double quotes, so the verse is still wrapped",
@@ -373,7 +373,7 @@ func TestBluebookFragmentSharePipeline(t *testing.T) {
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
 	cite := citationForSelection(st, frag)
 	got := composeShareText(quote, cite, "Berean Standard Bible")
-	want := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.”\n— John 18:38 (Berean Standard Bible)"
+	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no basis for a charge against Him.’”\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
@@ -403,10 +403,11 @@ func TestBluebookEndOmission(t *testing.T) {
 	}
 }
 
-// TestBluebookEndOmissionPipeline is the IMG_0337 case end to end: John 18:38 (BSB),
-// the selection cut at "...I find no" (mid-sentence) and missing the leading quote.
-// Expect the leading quote restored, the omission ellipsis, the trailing quote
-// balanced, and the correct verse citation.
+// TestBluebookEndOmissionPipeline is the IMG_0337/IMG_0339 case end to end: John 18:38
+// (BSB), the selection cut at "...I find no" (mid-sentence) and missing the leading
+// quote. Expect the leading quote balanced, the omission ellipsis added, the verse's
+// internal quotations nested down to single marks inside an outer double pair (Rule
+// 5.1(b)), and the correct verse citation.
 func TestBluebookEndOmissionPipeline(t *testing.T) {
 	full := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
 	st := bbChapter("John", 18, map[int]string{38: full})
@@ -414,7 +415,7 @@ func TestBluebookEndOmissionPipeline(t *testing.T) {
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
 	cite := citationForSelection(st, frag)
 	got := composeShareText(quote, cite, "Berean Standard Bible")
-	want := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no . . .”\n— John 18:38 (Berean Standard Bible)"
+	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . .’”\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}

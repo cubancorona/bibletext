@@ -31,8 +31,12 @@ func TestBluebookRule5PreservesEditorialMarks(t *testing.T) {
 
 // Bluebook Rule 5 quotation conformance — a large corpus of REAL, sourced examples,
 // harvested from law-library guides and quizzes, then adversarially verified. The
-// expected values apply the app's quote rule (balancing, end-omission per Rule 5.3,
-// the 50-word block threshold, and double-mark wrapping). Source domain per row.
+// expected values apply the app's quote rule: the 50-word block threshold (Rule 5.1),
+// quote-mark balancing, the Rule 5.3 end-omission mark, and inline wrapping with
+// single-mark nesting of internal quotations (Rule 5.1(b)). The app targets SCRIPTURE,
+// which is always written with CURLY quotation marks; examples that use STRAIGHT quotes
+// (a source-page artifact never seen in the WEB/BSB data) are left verbatim rather than
+// risk mis-nesting straight marks (which also serve as inch/ditto marks). Source per row.
 func TestBluebookRule5Corpus(t *testing.T) {
 	cases := []struct{ rule, src, in, want string }{
 		// --- block quotations (Rule 5.1 — 50-word threshold) ---
@@ -77,9 +81,9 @@ func TestBluebookRule5Corpus(t *testing.T) {
 		{"internal-marks", "syntaxis.com", "My mother told me, \"In the middle of lunch, Richard looked up 'garrulous' in the dictionary.\"", "My mother told me, \"In the middle of lunch, Richard looked up 'garrulous' in the dictionary.\""},
 		{"internal-marks", "grammarist.com", "We don't all have the same 'privilege' as you, Karen exclaimed.", "“We don't all have the same 'privilege' as you, Karen exclaimed.”"},
 		// --- quote-mark balancing (dangling open/close) ---
-		{"balancing", "legalbluebook.com", "For God so loved the world, that he gave his only begotten Son.”", "“For God so loved the world, that he gave his only begotten Son.”"},
-		{"balancing", "legalbluebook.com", "“For God so loved the world, that he gave his only begotten Son.", "“For God so loved the world, that he gave his only begotten Son.”"},
-		{"balancing", "lawprose.org", "“Reliable,” “kind,” and “trustworthy”", "“Reliable,” “kind,” and “trustworthy . . .”"},
+		{"balancing", "legalbluebook.com", "For God so loved the world, that he gave his only begotten Son.”", "“‘For God so loved the world, that he gave his only begotten Son.’”"},
+		{"balancing", "legalbluebook.com", "“For God so loved the world, that he gave his only begotten Son.", "“‘For God so loved the world, that he gave his only begotten Son.’”"},
+		{"balancing", "lawprose.org", "“Reliable,” “kind,” and “trustworthy”", "“‘Reliable,’ ‘kind,’ and ‘trustworthy . . .’”"},
 		{"balancing", "legalbluebook.com", "   For God so loved the world.   ", "“For God so loved the world.”"},
 		// --- omissions / ellipses (Rule 5.3: mid-sentence cut adds " . . .") ---
 		{"ellipsis-omission", "legalbluebook.com", "An omission of a word or words is generally indicated by the insertion of an ellipsis, three periods separated by spaces and set off by a space before the first and after the last period ('. . .').", "“An omission of a word or words is generally indicated by the insertion of an ellipsis, three periods separated by spaces and set off by a space before the first and after the last period ('. . .').”"},

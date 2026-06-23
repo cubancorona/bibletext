@@ -96,47 +96,63 @@ func cleanQuoteText(state *AppState, raw string) string {
 	return strings.TrimSpace(s)
 }
 
-// blockQuoteWords is the Bluebook Rule 5 threshold: a quotation of 50 or more words
-// is set off as a block quotation rather than run inline in quotation marks.
+// blockQuoteWords is the Bluebook Rule 5.1 threshold: a quotation of 50 or more
+// words is set off as a block quotation rather than run inline in quotation marks.
 const blockQuoteWords = 50
 
-// formatBibleQuote prepares a clean verse string for sharing, in Bluebook style. It
-// is deliberately FAITHFUL to the selection: it never removes or alters the verse's
-// own quotation marks. A verse may legitimately open or close a longer quotation —
-// e.g. Matthew 5:3 opens the Beatitudes, and John 18:38 reads «“What is truth?” …
-// told them, “I find…» (two opens, one close) — and the reader may select those
-// marks on purpose; dropping any would misquote the text.
+// formatBibleQuote prepares a clean verse string for sharing, in Bluebook style, per
+// Rule 5.1:
+//   - 50+ words → a BLOCK quotation: set off WITHOUT surrounding quotation marks (the
+//     card's centered, wide-margined block is the faithful analog of the "indented
+//     both sides" block form). The verse's own marks are reproduced exactly as in the
+//     source — including internal DOUBLE marks, since a block has no enclosing pair to
+//     nest inside.
+//   - under 50 words → an INLINE quotation: wrap the whole fragment in outer DOUBLE
+//     quotation marks. Any quotation that appears WITHIN the verse is a
+//     quote-within-a-quote, so its marks drop one level to SINGLE (“ ” → ‘ ’) before
+//     the outer pair is added (Rule 5.1(b) nesting) — e.g. John 18:38 becomes
+//     “‘truth?’ Pilate asked … told them, ‘I find no basis…’”.
 //
-// Quotation marks are handled per Bluebook Rule 5:
-//   - 50+ words → a BLOCK quotation: set off WITHOUT surrounding quotation marks
-//     (the set-off itself, plus the citation line, marks it as a quotation; the
-//     image card's centered, wide-margined block is the faithful analog of the
-//     "indented both sides" block form).
-//   - under 50 words → an INLINE quotation: add outer double quotes — but only when
-//     the verse has no double quotes of its own, so dialogue isn't wrapped into
-//     broken nesting.
+// It stays faithful to the SELECTION otherwise: balanceQuoteMarks repairs marks whose
+// partner sits in the unselected surrounding text, and addEndOmission marks a
+// mid-sentence cut, but no words are added or dropped.
 func formatBibleQuote(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
 	}
-	// Mark an omission when the selection is cut off mid-sentence (Bluebook Rule 5.3),
-	// before balancing the marks so the ellipsis sits inside the closing quote.
+	// Mark a mid-sentence cut (Rule 5.3) and balance the verse's own double marks
+	// before nesting, so the omission and any added marks sit at the right level.
 	text = addEndOmission(text)
-	// Balance the verse's OWN quotation marks. A reading-view selection can begin or
-	// end inside a longer quotation, so the partner of a mark may sit in the
-	// surrounding (unselected) verse text — leaving a dangling closing or opening
-	// mark. Add the missing marks so the shared fragment is a complete, well-formed
-	// quotation (see balanceQuoteMarks).
 	text = balanceQuoteMarks(text)
 	if len(strings.Fields(text)) >= blockQuoteWords {
-		return text // block quotation: no surrounding quotation marks
+		return text // block quotation: reproduce the source's marks, no outer marks
 	}
-	// Inline: has its own double quotes (curly or straight)? Leave them as selected.
-	if strings.ContainsAny(text, "“”\"") {
+	// Inline: a verse's own CURLY double quotations are nested down to single marks
+	// (Rule 5.1(b)) and the whole fragment is wrapped in outer double marks. Text that
+	// carries STRAIGHT double quotes is out-of-domain — scripture (WEB/BSB) is always
+	// curly, and a straight " may be an inch or ditto mark (5'10") rather than a
+	// quotation — so it is left verbatim rather than risk mis-nesting it.
+	switch {
+	case strings.ContainsAny(text, "“”"):
+		return "“" + nestInlineQuotes(text) + "”"
+	case strings.Contains(text, "\""):
 		return text
+	default:
+		return "“" + text + "”"
 	}
-	return "“" + text + "”"
+}
+
+// nestInlineQuotes drops a verse's own DOUBLE quotation marks one nesting level
+// (“ ” → ‘ ’) so that, once the fragment is wrapped in outer double marks, its internal
+// quotations read as single marks — Bluebook Rule 5.1(b) (a quotation within a quotation
+// takes single marks). Only the unambiguous curly double glyphs are converted: the
+// closing single glyph ’ doubles as the apostrophe (God’s, didn’t), so existing single
+// marks are left untouched — a rare second internal level (Jesus quoting scripture,
+// “… ‘…’ …”) is therefore not further alternated back to double, which a shareable
+// fragment almost never needs.
+func nestInlineQuotes(s string) string {
+	return strings.NewReplacer("“", "‘", "”", "’").Replace(s)
 }
 
 // endOmission is the Bluebook Rule 5.3 omission mark — three periods, each separated
