@@ -63,3 +63,86 @@ func TestRenderVerseImageLongPassage(t *testing.T) {
 	}
 	os.Remove(path)
 }
+
+func TestFormatBibleQuote(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{
+			"plain verse gets outer quotes",
+			"For God so loved the world, that he gave his one and only Son.",
+			"“For God so loved the world, that he gave his one and only Son.”",
+		},
+		{
+			"balanced dialogue kept as-is, no outer quotes",
+			"Jesus said to him, “I am the way, the truth, and the life.”",
+			"Jesus said to him, “I am the way, the truth, and the life.”",
+		},
+		{
+			"orphan opening quote stripped, then wrapped",
+			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
+			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
+		},
+		{
+			"orphan closing quote stripped, then wrapped",
+			"why have you forsaken me?”",
+			"“why have you forsaken me?”",
+		},
+		{
+			"nested quotes within balanced dialogue left intact",
+			"But he answered, “It is written, ‘Man shall not live by bread alone.’”",
+			"But he answered, “It is written, ‘Man shall not live by bread alone.’”",
+		},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		if got := formatBibleQuote(tc.in); got != tc.want {
+			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestCleanQuoteTextStripsVerseNumbers(t *testing.T) {
+	bd := NewBibleData()
+	bd.Books = []string{"John"}
+	bd.Verses["John"] = map[int][]Verse{3: {
+		{BookName: "John", Chapter: 3, Verse: 16, Text: "\nFor God so loved the world, that he gave his one and only Son,\n"},
+		{BookName: "John", Chapter: 3, Verse: 17, Text: "\nFor God didn’t send his Son into the world to judge the world,\n"},
+	}}
+	state := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3}
+
+	raw := "16 For God so loved the world, that he gave his one and only Son, 17 For God didn’t send his Son into the world to judge the world,"
+	want := "For God so loved the world, that he gave his one and only Son, For God didn’t send his Son into the world to judge the world,"
+	if got := cleanQuoteText(state, raw); got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestCleanQuoteTextKeepsNumbersInsideText(t *testing.T) {
+	bd := NewBibleData()
+	bd.Books = []string{"Revelation"}
+	bd.Verses["Revelation"] = map[int][]Verse{7: {
+		{BookName: "Revelation", Chapter: 7, Verse: 4, Text: "I heard the number of those who were sealed, 144,000,"},
+	}}
+	state := &AppState{Bible: bd, CurrentBook: "Revelation", CurrentChapter: 7}
+
+	// The leading "4" is the verse number and must go; "144,000" is real text, stays.
+	raw := "4 I heard the number of those who were sealed, 144,000,"
+	want := "I heard the number of those who were sealed, 144,000,"
+	if got := cleanQuoteText(state, raw); got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestShareQuotePipelineBeatitude(t *testing.T) {
+	bd := NewBibleData()
+	bd.Books = []string{"Matthew"}
+	bd.Verses["Matthew"] = map[int][]Verse{5: {
+		{BookName: "Matthew", Chapter: 5, Verse: 3, Text: "\n“Blessed are the poor in spirit,\nfor theirs is the Kingdom of Heaven.\n"},
+	}}
+	state := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 5}
+
+	raw := "3 “Blessed are the poor in spirit, for theirs is the Kingdom of Heaven."
+	want := "“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”"
+	if got := formatBibleQuote(cleanQuoteText(state, raw)); got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+}
