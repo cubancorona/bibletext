@@ -63,14 +63,14 @@ func schemeForRef(ref string, variant int) shareScheme {
 // renderVerseImage writes a square share card to a temp PNG and returns its path.
 // variant selects the colour treatment (0 = the verse's default; the preview's
 // Regenerate increments it).
-func renderVerseImage(state *AppState, verseText, citation, abbrev string, variant int) (string, error) {
+func renderVerseImage(state *AppState, verseText, citation, version string, variant int) (string, error) {
 	const (
 		dim      = 1080
 		marginX  = 120
 		topInset = 150
 		botInset = 230 // room for citation + wordmark
 	)
-	sc := schemeForRef(citation+"|"+abbrev, variant)
+	sc := schemeForRef(citation+"|"+version, variant)
 
 	img := image.NewRGBA(image.Rect(0, 0, dim, dim))
 	paintGradient(img, sc.top, sc.bottom)
@@ -118,13 +118,23 @@ func renderVerseImage(state *AppState, verseText, citation, abbrev string, varia
 		y += lineH
 	}
 
-	// Citation, centred a little below the verse block.
-	citeFace := newFace(bold, 34)
+	// Citation, centred a little below the verse block. The translation is spelled
+	// out in full (Bluebook style: "(World English Bible)", not "(WEB)"), so the line
+	// can be long — shrink the type until it fits the content width rather than
+	// overflowing the card edges.
+	citeStr := "— " + citation + " (" + version + ")"
+	var citeFace font.Face
+	for pt := 34; pt >= 20; pt -= 2 {
+		citeFace = newFace(bold, float64(pt))
+		if font.MeasureString(citeFace, citeStr).Ceil() <= contentW {
+			break
+		}
+	}
 	citeY := topInset + (maxBlockH+blockH)/2 + 70
 	if citeY > dim-110 {
 		citeY = dim - 110
 	}
-	drawCentered(img, citeFace, "— "+citation+" ("+abbrev+")", sc.accent, dim, citeY)
+	drawCentered(img, citeFace, citeStr, sc.accent, dim, citeY)
 
 	// A fresh file per variant so the preview's canvas.Image reloads on Regenerate
 	// (a stable path would be served from Fyne's image cache).

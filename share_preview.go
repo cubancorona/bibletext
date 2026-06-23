@@ -14,7 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func showShareImagePreview(state *AppState, quote, cite, abbrev string) {
+func showShareImagePreview(state *AppState, quote, cite, version string) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -48,7 +48,7 @@ func showShareImagePreview(state *AppState, quote, cite, abbrev string) {
 	variant := 0
 	curPath := ""
 	render := func() {
-		path, err := renderVerseImage(state, quote, cite, abbrev, variant)
+		path, err := renderVerseImage(state, quote, cite, version, variant)
 		if err != nil {
 			return
 		}
@@ -70,7 +70,7 @@ func showShareImagePreview(state *AppState, quote, cite, abbrev string) {
 	title := canvas.NewText("Share as image", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 22
-	sub := canvas.NewText(cite+" ("+abbrev+")", pal.Accent)
+	sub := canvas.NewText(cite+" ("+version+")", pal.Accent)
 	sub.TextStyle = fyne.TextStyle{Bold: true}
 	sub.TextSize = subheadingTextSize
 	header := container.NewVBox(title, sub, widget.NewSeparator())
