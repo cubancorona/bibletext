@@ -232,7 +232,9 @@ func TestBluebookQuotationRule5(t *testing.T) {
 // the boundary the rule describes.
 func TestBluebookBlockQuoteThreshold(t *testing.T) {
 	const src = "monmouth.edu bluebook-quotations.pdf; ubalt.edu Due Diligence Guide; legaleasecitations.com"
-	w := func(n int) string { return strings.TrimSpace(strings.Repeat("word ", n)) }
+	// n words ending on a period, so the count is the only variable (a complete
+	// sentence gets no end-omission mark — see TestBluebookEndOmission).
+	w := func(n int) string { return strings.Repeat("word ", n-1) + "word." }
 
 	if got, in := formatBibleQuote(w(49)), w(49); got != "“"+in+"”" {
 		t.Errorf("49 words must be inline-quoted [%s]:\n got %q", src, got)
@@ -372,6 +374,47 @@ func TestBluebookFragmentSharePipeline(t *testing.T) {
 	cite := citationForSelection(st, frag)
 	got := composeShareText(quote, cite, "Berean Standard Bible")
 	want := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.”\n— John 18:38 (Berean Standard Bible)"
+	if got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestBluebookEndOmission covers Rule 5.3 end-of-quotation omissions: a selection cut
+// off MID-SENTENCE gains a three-period spaced ellipsis " . . ." (never the single
+// glyph "…"); a complete sentence (ends on . ! ?) gets nothing; the mark sits inside a
+// trailing closing quote; and a selection that merely begins mid-sentence gets NO
+// leading ellipsis (the Bluebook uses a bracketed capital there instead).
+// Sources: legalbluebook.com Rule 5.3; templelawreview.org; cmlawlibraryblog.classcaster.net.
+func TestBluebookEndOmission(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"mid-sentence cut (ends on a word) gains three dots", "told them, I find no", "told them, I find no . . ."},
+		{"ends on a comma (sentence continues) gains three dots", "For God so loved the world,", "For God so loved the world, . . ."},
+		{"complete sentence (period) gets nothing", "Jesus wept.", "Jesus wept."},
+		{"ends on a question mark gets nothing", "What is truth?", "What is truth?"},
+		{"ends on an exclamation gets nothing", "Fire!", "Fire!"},
+		{"mark goes INSIDE a trailing closing quote", "he told them, I find no”", "he told them, I find no . . .”"},
+		{"complete sentence inside a closing quote gets nothing", "a charge against Him.”", "a charge against Him.”"},
+		{"already-marked text is not doubled", "I find no . . .", "I find no . . ."},
+	}
+	for _, c := range cases {
+		if got := addEndOmission(c.in); got != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestBluebookEndOmissionPipeline is the IMG_0337 case end to end: John 18:38 (BSB),
+// the selection cut at "...I find no" (mid-sentence) and missing the leading quote.
+// Expect the leading quote restored, the omission ellipsis, the trailing quote
+// balanced, and the correct verse citation.
+func TestBluebookEndOmissionPipeline(t *testing.T) {
+	full := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
+	st := bbChapter("John", 18, map[int]string{38: full})
+	frag := "What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no"
+	quote := formatBibleQuote(cleanQuoteText(st, frag))
+	cite := citationForSelection(st, frag)
+	got := composeShareText(quote, cite, "Berean Standard Bible")
+	want := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no . . .”\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
