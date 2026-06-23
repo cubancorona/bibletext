@@ -29,6 +29,15 @@ func findEntry(obj fyne.CanvasObject, placeholder string) *widget.Entry {
 				return e
 			}
 		}
+	case fyne.Widget:
+		// Custom wrapper widgets (e.g. the container.ThemeOverride around the caret
+		// field) aren't bare containers — walk their rendered children too. A
+		// *widget.Entry is caught by the case above, so this only descends wrappers.
+		for _, child := range test.WidgetRenderer(o).Objects() {
+			if e := findEntry(child, placeholder); e != nil {
+				return e
+			}
+		}
 	}
 	return nil
 }
@@ -37,7 +46,7 @@ func findEntry(obj fyne.CanvasObject, placeholder string) *widget.Entry {
 // keystroke rebuilt the sidebar and stole focus. The fix is that the filter only
 // refreshes the list, leaving the entry (and its focus) intact.
 func TestBookFilterKeepsFocusWhileTyping(t *testing.T) {
-	app := test.NewApp()
+	app := themedTestApp()
 	defer app.Quit()
 
 	state := sampleState()
@@ -67,7 +76,7 @@ func TestBookFilterKeepsFocusWhileTyping(t *testing.T) {
 // TestSidebarHasSearchAndFilterEntries is a light smoke test that the persistent
 // sidebar builds with both entry widgets present.
 func TestSidebarHasSearchAndFilterEntries(t *testing.T) {
-	app := test.NewApp()
+	app := themedTestApp()
 	defer app.Quit()
 
 	state := sampleState()
