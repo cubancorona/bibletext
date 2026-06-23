@@ -56,25 +56,28 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
         [ai addItem:it];
     }
 
+    // Keep the three BibleText actions together as one group at the end of the
+    // system menu, in the same order as iOS: Cross-references, Study with AI, Share.
     [menu addItem:[NSMenuItem separatorItem]];
-    NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
-    aiItem.submenu = ai;
-    [menu addItem:aiItem];
 
-    // Cross-references → related passages for the selection.
+    // Cross-references → related passages for the selection (the flagship; first).
     NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
     xref.target = self;
     [menu addItem:xref];
 
-    // Share verse → with citation / as image (both go to the macOS share sheet).
-    NSMenu *share = [[NSMenu alloc] initWithTitle:@"Share verse"];
+    NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
+    aiItem.submenu = ai;
+    [menu addItem:aiItem];
+
+    // Share → with citation / as image (both go to the macOS share sheet).
+    NSMenu *share = [[NSMenu alloc] initWithTitle:@"Share"];
     NSMenuItem *sc = [[NSMenuItem alloc] initWithTitle:@"Share with citation" action:@selector(hbShare_cite:) keyEquivalent:@""];
     sc.target = self;
     [share addItem:sc];
     NSMenuItem *si = [[NSMenuItem alloc] initWithTitle:@"Share as image" action:@selector(hbShare_image:) keyEquivalent:@""];
     si.target = self;
     [share addItem:si];
-    NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share verse" action:nil keyEquivalent:@""];
+    NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share" action:nil keyEquivalent:@""];
     shareItem.submenu = share;
     [menu addItem:shareItem];
     return menu;
