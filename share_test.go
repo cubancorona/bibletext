@@ -72,29 +72,29 @@ func TestFormatBibleQuote(t *testing.T) {
 			"“For God so loved the world, that he gave his one and only Son.”",
 		},
 		{
-			"balanced dialogue kept as-is, no outer quotes",
+			"dialogue nests to single marks inside an outer pair (Rule 5.1(b))",
 			"Jesus said to him, “I am the way, the truth, and the life.”",
-			"Jesus said to him, “I am the way, the truth, and the life.”",
+			"“Jesus said to him, ‘I am the way, the truth, and the life.’”",
 		},
 		{
-			"verse opening a quotation gets a balancing closing mark",
+			"verse that is itself a quotation: balance the close, then nest + wrap",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
+			"“‘Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.’”",
 		},
 		{
-			"verse ending on a closing mark gets a balancing opening mark",
+			"verse ending a quotation: balance the open, then nest + wrap",
 			"why have you forsaken me?”",
-			"“why have you forsaken me?”",
+			"“‘why have you forsaken me?’”",
 		},
 		{
-			"John 18:38 fragment: leading mark preserved, trailing quote balanced",
+			"John 18:38 fragment: internal quotations nest to single inside the outer double",
 			"“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.",
-			"“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him.”",
+			"“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no basis for a charge against Him.’”",
 		},
 		{
-			"nested quotes within balanced dialogue left intact",
+			"two-level nesting: the outer double drops to single (the rare 2nd level stays single)",
 			"But he answered, “It is written, ‘Man shall not live by bread alone.’”",
-			"But he answered, “It is written, ‘Man shall not live by bread alone.’”",
+			"“But he answered, ‘It is written, ‘Man shall not live by bread alone.’’”",
 		},
 		{"empty", "", ""},
 	}
@@ -158,10 +158,10 @@ func TestShareQuotePipelineBeatitude(t *testing.T) {
 	state := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 5}
 
 	// The selection includes the verse number and the opening quote; the number is
-	// stripped, the leading quote kept, and a balancing closing quote added (the
-	// Beatitudes quotation continues past this verse, so its closer is outside).
+	// stripped, the quotation is balanced (its closer lies past this verse), then the
+	// verse's own marks nest to single inside the outer pair (Rule 5.1(b)).
 	raw := "3 “Blessed are the poor in spirit, for theirs is the Kingdom of Heaven."
-	want := "“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”"
+	want := "“‘Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.’”"
 	if got := formatBibleQuote(cleanQuoteText(state, raw)); got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
