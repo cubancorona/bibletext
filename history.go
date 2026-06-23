@@ -37,9 +37,10 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 
 		group := container.NewHBox(container.NewCenter(name))
 		for _, ch := range g.Chapters {
-			chapter := ch
-			num := widget.NewButton(fmt.Sprintf("%d", chapter), func() {
-				navigateToVisit(state, ChapterVisit{Book: book, Chapter: chapter})
+			visit := ch // capture the FULL visit, so the tap restores the saved
+			// within-chapter scroll position (anchor), not just the chapter top.
+			num := widget.NewButton(fmt.Sprintf("%d", visit.Chapter), func() {
+				navigateToVisit(state, visit)
 			})
 			num.Importance = widget.LowImportance
 			group.Add(num)

@@ -348,10 +348,12 @@ func recentJumpTargets(state *AppState, limit int) []ChapterVisit {
 	return out
 }
 
-// bookChapters groups recently visited chapters of one book.
+// bookChapters groups recently visited chapters of one book. Chapters are the full
+// visits (not bare numbers) so a history tap can restore the saved within-chapter
+// scroll anchor, not just land at the top.
 type bookChapters struct {
 	Book     string
-	Chapters []int
+	Chapters []ChapterVisit
 }
 
 // groupVisitsByBook consolidates visits so each book appears once with its
@@ -373,7 +375,7 @@ func groupVisitsByBook(visits []ChapterVisit) []bookChapters {
 		}
 		if !seen[v.Book][v.Chapter] {
 			seen[v.Book][v.Chapter] = true
-			groups[gi].Chapters = append(groups[gi].Chapters, v.Chapter)
+			groups[gi].Chapters = append(groups[gi].Chapters, v)
 		}
 	}
 	return groups
