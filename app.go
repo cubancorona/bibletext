@@ -81,11 +81,12 @@ func loadStateData() (*AppState, error) {
 	return state, nil
 }
 
-// loadProgressFn, when non-nil, is called once per book during the first-run API fetch
-// (fetch_bible_data.go) so the loading screen can show download progress. It is
-// installed for the duration of a single background load and read only from that same
-// goroutine, so it needs no synchronisation.
-var loadProgressFn func(loadedBooks, totalBooks int, book string)
+// loadProgressFn, when non-nil, is called during the first-run API fetch
+// (fetch_bible_data.go) — once as each book starts (chapter == 0) and once per chapter
+// that lands — so the loading screen can show live download progress. It is installed
+// for the duration of a single background load and read only from that same goroutine,
+// so it needs no synchronisation.
+var loadProgressFn func(book string, bookNum, totalBooks, chapter int)
 
 // StartBackgroundLoad kicks off the Bible load on a background goroutine and
 // swaps the result into the live state on the UI thread when it's ready. The
@@ -101,10 +102,15 @@ var loadProgressFn func(loadedBooks, totalBooks int, book string)
 func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 	go func() {
 		// Show per-book download progress on the loading spinner during a first-run fetch.
-		loadProgressFn = func(loadedBooks, totalBooks int, book string) {
+		loadProgressFn = func(book string, bookNum, totalBooks, chapter int) {
+			ref := book
+			if chapter > 0 {
+				ref = fmt.Sprintf("%s %d", book, chapter)
+			}
+			text := fmt.Sprintf("Downloading… %s  ·  %d of %d books", ref, bookNum, totalBooks)
 			fyne.Do(func() {
 				if state.loadingMsg != nil {
-					state.loadingMsg.Text = fmt.Sprintf("Downloading the Bible… %s (%d of %d)", book, loadedBooks, totalBooks)
+					state.loadingMsg.Text = text
 					state.loadingMsg.Refresh()
 				}
 			})

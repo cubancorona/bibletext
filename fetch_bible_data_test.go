@@ -207,11 +207,15 @@ func TestFetchBibleFromAPIWithClientRecoversFromRateLimiting(t *testing.T) {
 // TestFetchReportsProgressPerBook verifies the first-run fetch reports per-book
 // progress to loadProgressFn, which the loading screen renders (see app.go).
 func TestFetchReportsProgressPerBook(t *testing.T) {
-	var books []string
-	var lastTotal int
-	loadProgressFn = func(loaded, total int, book string) {
-		books = append(books, book)
-		lastTotal = total
+	var bookStarts, chapterReports, lastTotal int
+	var lastBook string
+	loadProgressFn = func(book string, bookNum, total, chapter int) {
+		if chapter == 0 {
+			bookStarts++
+		} else {
+			chapterReports++
+		}
+		lastBook, lastTotal = book, total
 	}
 	defer func() { loadProgressFn = nil }()
 
@@ -225,11 +229,14 @@ func TestFetchReportsProgressPerBook(t *testing.T) {
 	if _, err := fetchBibleFromAPIWithClient([]string{"Jude"}, client, func(time.Duration) {}); err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if len(books) != 1 || books[0] != "Jude" {
-		t.Fatalf("expected one progress report for Jude, got %v", books)
+	if bookStarts != 1 {
+		t.Errorf("expected 1 book-start report, got %d", bookStarts)
 	}
-	if lastTotal != 1 {
-		t.Errorf("expected total books = 1, got %d", lastTotal)
+	if chapterReports != 1 {
+		t.Errorf("expected 1 per-chapter report (Jude 1), got %d", chapterReports)
+	}
+	if lastBook != "Jude" || lastTotal != 1 {
+		t.Errorf("expected book=Jude total=1, got book=%q total=%d", lastBook, lastTotal)
 	}
 }
 
