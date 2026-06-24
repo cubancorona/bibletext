@@ -49,7 +49,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	// buildSearchResultsView), with the in-progress / no-key / error states driven from
 	// state so the shared results view can render them. ---
 	aiEntry := widget.NewEntry()
-	aiEntry.SetPlaceHolder("Find passages…")
+	aiEntry.SetPlaceHolder("Describe a passage…")
 	aiEntry.SetText(state.aiSearchQuery)
 
 	var runAsk func(string)
