@@ -57,13 +57,8 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     }
 
     // Keep the three BibleText actions together as one group at the end of the
-    // system menu, in the same order as iOS: Cross-references, Study with AI, Share.
+    // system menu, in the same order as iOS: Study with AI, Share, Cross-references.
     [menu addItem:[NSMenuItem separatorItem]];
-
-    // Cross-references → related passages for the selection (the flagship; first).
-    NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
-    xref.target = self;
-    [menu addItem:xref];
 
     NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
     aiItem.submenu = ai;
@@ -80,6 +75,11 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share" action:nil keyEquivalent:@""];
     shareItem.submenu = share;
     [menu addItem:shareItem];
+
+    // Cross-references → related passages for the selection (last, below AI and Share).
+    NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
+    xref.target = self;
+    [menu addItem:xref];
     return menu;
 }
 
