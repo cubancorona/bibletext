@@ -75,6 +75,7 @@ func buildLoadingView(state *AppState) fyne.CanvasObject {
 	msg := canvas.NewText("Preparing the Bible…", pal.TextMuted)
 	msg.TextSize = 13
 	msg.Alignment = fyne.TextAlignCenter
+	state.loadingMsg = msg // loadProgressFn updates this with per-book download progress
 
 	// Stop any previous spinner before replacing it. A ProgressBarInfinite runs a
 	// RepeatForever animation that calls canvas.Refresh every ~50ms; if the loading
@@ -113,7 +114,7 @@ func buildLoadErrorView(state *AppState) fyne.CanvasObject {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.Alignment = fyne.TextAlignCenter
 
-	msg := widget.NewLabel("The first run needs an internet connection to download the text. Check your connection and try again.")
+	msg := widget.NewLabel("Something went wrong while loading the Bible. Check your connection and try again.")
 	msg.Wrapping = fyne.TextWrapWord
 	msg.Alignment = fyne.TextAlignCenter
 
@@ -129,9 +130,19 @@ func buildLoadErrorView(state *AppState) fyne.CanvasObject {
 		container.NewCenter(title),
 		spacer(8),
 		container.NewGridWrap(fyne.NewSize(300, msg.MinSize().Height), msg),
-		spacer(14),
-		container.NewCenter(retry),
 	)
+	// Surface the actual cause (timeout, rate-limit, DNS, decode error) so the failure
+	// is diagnosable rather than a generic guess.
+	if state.loadErr != nil {
+		detail := widget.NewLabel(state.loadErr.Error())
+		detail.Wrapping = fyne.TextWrapWord
+		detail.Alignment = fyne.TextAlignCenter
+		detail.Importance = widget.LowImportance
+		col.Add(spacer(6))
+		col.Add(container.NewGridWrap(fyne.NewSize(300, detail.MinSize().Height), detail))
+	}
+	col.Add(spacer(14))
+	col.Add(container.NewCenter(retry))
 
 	base := canvas.NewRectangle(pal.Background)
 	return container.NewStack(base, container.NewCenter(col))

@@ -44,7 +44,15 @@ func loadStateData() (*AppState, error) {
 	version, _ := versionByID(defaultVersionID)
 	bibleData, mode, err := loadVersionData(version, nil)
 	if err != nil {
-		return nil, err
+		// Offline first run (no cache, no network): fall back to the embedded WEB
+		// Gospels so the app still opens to readable scripture instead of a dead-end
+		// error. The seed is held in memory only — never written to the cache — so the
+		// next launch with a connection fetches and caches the complete Bible.
+		seed, serr := loadSeedGospels()
+		if serr != nil {
+			return nil, err // even the seed failed (should never happen) — surface the real error
+		}
+		bibleData, mode = seed, modeReal
 	}
 
 	state := &AppState{
@@ -73,6 +81,12 @@ func loadStateData() (*AppState, error) {
 	return state, nil
 }
 
+// loadProgressFn, when non-nil, is called once per book during the first-run API fetch
+// (fetch_bible_data.go) so the loading screen can show download progress. It is
+// installed for the duration of a single background load and read only from that same
+// goroutine, so it needs no synchronisation.
+var loadProgressFn func(loadedBooks, totalBooks int, book string)
+
 // StartBackgroundLoad kicks off the Bible load on a background goroutine and
 // swaps the result into the live state on the UI thread when it's ready. The
 // caller shows the window FIRST (with state.loadPhase == loadPending, so
@@ -86,7 +100,17 @@ func loadStateData() (*AppState, error) {
 // Exported so both entry points (desktop Run, cmd/mobile) use the same path.
 func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 	go func() {
+		// Show per-book download progress on the loading spinner during a first-run fetch.
+		loadProgressFn = func(loadedBooks, totalBooks int, book string) {
+			fyne.Do(func() {
+				if state.loadingMsg != nil {
+					state.loadingMsg.Text = fmt.Sprintf("Downloading the Bible… %s (%d of %d)", book, loadedBooks, totalBooks)
+					state.loadingMsg.Refresh()
+				}
+			})
+		}
 		loaded, err := loadStateData()
+		loadProgressFn = nil
 		fyne.Do(func() {
 			// Leaving the loading phase either way — stop the spinner so its
 			// animation doesn't keep the canvas repainting after it's off-screen.

@@ -79,6 +79,9 @@ func fetchBibleFromAPIWithClient(books []string, client httpClient, sleepFn func
 
 	for bookIdx, book := range bd.Books {
 		fmt.Printf("\n[%d/%d] 📖 Loading %s", bookIdx+1, len(bd.Books), book)
+		if loadProgressFn != nil {
+			loadProgressFn(bookIdx+1, len(bd.Books), book)
+		}
 
 		// Try to fetch each chapter (most books have 1-150 chapters)
 		chaptersLoaded := 0
