@@ -204,6 +204,35 @@ func TestFetchBibleFromAPIWithClientRecoversFromRateLimiting(t *testing.T) {
 	}
 }
 
+// TestFetchReportsProgressPerBook verifies the first-run fetch reports per-book
+// progress to loadProgressFn, which the loading screen renders (see app.go).
+func TestFetchReportsProgressPerBook(t *testing.T) {
+	var books []string
+	var lastTotal int
+	loadProgressFn = func(loaded, total int, book string) {
+		books = append(books, book)
+		lastTotal = total
+	}
+	defer func() { loadProgressFn = nil }()
+
+	client := newMockClient(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/Jude+1" {
+			return jsonResponse(http.StatusOK, `{"verses":[{"verse":1,"text":"Jude 1:1"}]}`), nil
+		}
+		return jsonResponse(http.StatusNotFound, `{"error":"not found"}`), nil
+	})
+
+	if _, err := fetchBibleFromAPIWithClient([]string{"Jude"}, client, func(time.Duration) {}); err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(books) != 1 || books[0] != "Jude" {
+		t.Fatalf("expected one progress report for Jude, got %v", books)
+	}
+	if lastTotal != 1 {
+		t.Errorf("expected total books = 1, got %d", lastTotal)
+	}
+}
+
 func jsonResponse(status int, body string) *http.Response {
 	return jsonResponseWithHeaders(status, body, nil)
 }

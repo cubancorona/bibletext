@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -141,6 +142,11 @@ type AppState struct {
 	// running (and the canvas repainting) until renderer-cache expiry. stopLoadingBar
 	// halts it the moment we leave the loading phase.
 	loadingBar *widget.ProgressBarInfinite
+
+	// loadingMsg is the loading-screen status line (buildLoadingView). The first-run
+	// fetch updates it per book via loadProgressFn so the spinner shows real progress
+	// ("Downloading the Bible… John (43 of 66)") instead of a blind indeterminate bar.
+	loadingMsg *canvas.Text
 }
 
 // stopLoadingBar halts the startup spinner's animation (safe to call repeatedly /
@@ -150,6 +156,7 @@ func (s *AppState) stopLoadingBar() {
 		s.loadingBar.Stop()
 		s.loadingBar = nil
 	}
+	s.loadingMsg = nil
 }
 
 // loadPhase is the startup state machine for the background Bible load.
