@@ -23,6 +23,7 @@ const (
 	aiActionExplain     = "explain"
 	aiActionContext     = "context"
 	aiActionTranslation = "translation"
+	aiActionAsk         = "ask" // free-form question about the selection → narrative answer
 )
 
 // errNoAPIKey is a low-level "client constructed without a key" guard. The
@@ -80,6 +81,8 @@ func aiActionTitle(action string) string {
 		return "Context"
 	case aiActionTranslation:
 		return "Translation"
+	case aiActionAsk:
+		return "Answer"
 	default:
 		return "Explanation"
 	}
@@ -110,6 +113,24 @@ func buildAIPrompt(action, book string, chapter int, text, version string) strin
 	return fmt.Sprintf("%s\n\n%s\n\nPassage (%s %d):\n%q", preamble, task, book, chapter, text)
 }
 
+// buildAskPrompt turns a reader's free-form question about the selected passage into a
+// prompt for a narrative answer. This is the reading-menu "Ask" — distinct from the search
+// page's "Find", which returns matching verses. The answer is grounded in the passage and
+// may draw on directly relevant Scripture, but stays focused on the question, and says so
+// plainly when the passage doesn't address it rather than speculating.
+func buildAskPrompt(book string, chapter int, text, version, question string) string {
+	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
+		"Answer the reader's question directly and clearly in plain language, and keep it " +
+		"concise — a few short paragraphs at most. Ground your answer in the passage below " +
+		"and its context; you may draw on directly relevant Scripture, but stay focused on " +
+		"the question. If the passage does not address the question, say so plainly rather " +
+		"than speculating. Where scholars disagree or a point is uncertain, say so briefly. " +
+		"Do not use markdown headings or bullet lists."
+
+	return fmt.Sprintf("%s\n\nThe passage is from the %s.\n\nReader's question: %q\n\nPassage (%s %d):\n%q",
+		preamble, version, question, book, chapter, text)
+}
+
 // --- Orchestration + cache --------------------------------------------------
 
 var (
@@ -138,7 +159,7 @@ func aiCacheSet(key, value string) {
 // runAIAction returns the analysis for a selection using the active provider and
 // the user's key. Results are cached (keyed by provider+action+passage) so
 // re-opening the same thing doesn't spend another request.
-func runAIAction(ctx context.Context, state *AppState, action, selectedText string) (string, error) {
+func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
 	store := state.keys()
 	id := store.activeProvider()
 	info, ok := providerByID(id)
@@ -148,7 +169,19 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText stri
 	}
 
 	book, chapter := state.CurrentBook, state.CurrentChapter
-	cacheKey := aiCacheKey(id+"|"+action, book, chapter, selectedText)
+	version := state.currentVersion().Name
+
+	// The fixed actions (Explain / Context / Translation) build their prompt from the
+	// action alone; "ask" carries a free-form question, so it builds a different prompt and
+	// folds the question into the cache scope (same passage, new question → fresh answer).
+	scope := id + "|" + action
+	prompt := buildAIPrompt(action, book, chapter, selectedText, version)
+	if action == aiActionAsk {
+		scope = id + "|ask|" + question
+		prompt = buildAskPrompt(book, chapter, selectedText, version, question)
+	}
+
+	cacheKey := aiCacheKey(scope, book, chapter, selectedText)
 	if cached, ok := aiCacheGet(cacheKey); ok {
 		return cached, nil
 	}
@@ -158,7 +191,7 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText stri
 		return "", &noKeyError{provider: info}
 	}
 
-	out, err := info.New(key).generate(ctx, buildAIPrompt(action, book, chapter, selectedText, state.currentVersion().Name))
+	out, err := info.New(key).generate(ctx, prompt)
 	if err != nil {
 		return "", err
 	}
@@ -176,5 +209,11 @@ func dispatchAIAction(state *AppState, action, selectedText string) {
 	if selectedText == "" {
 		return
 	}
-	showAIPanel(state, action, selectedText)
+	// "Ask" first collects a free-form question (a small input sheet), then opens the
+	// answer panel; the fixed actions go straight to the panel.
+	if action == aiActionAsk {
+		promptAskQuestion(state, selectedText)
+		return
+	}
+	showAIPanel(state, action, selectedText, "")
 }

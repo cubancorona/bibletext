@@ -28,9 +28,9 @@ extern void bibleTextAIMenuTapped(char *action, char *text);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
 extern void bibleTextStudyMenuTapped(char *action, char *text);
 
-// HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
-// Analyze translation) to the right-click selection menu and hands the selected
-// text to Go.
+// HBReadingTextView adds a "Study with AI" submenu (Ask a question / Explain /
+// Analyze context / Analyze translation) to the right-click selection menu and
+// hands the selected text to Go.
 @interface HBReadingTextView : NSTextView
 @end
 
@@ -47,7 +47,8 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     if (menu == nil || self.selectedRange.length == 0) return menu;
 
     NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
-    for (NSArray *pair in @[@[@"Explain", @"explain"],
+    for (NSArray *pair in @[@[@"Ask a question…", @"ask"],
+                            @[@"Explain", @"explain"],
                             @[@"Analyze context", @"context"],
                             @[@"Analyze translation", @"translation"]]) {
         SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
@@ -83,6 +84,9 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     return menu;
 }
 
+- (void)hbAI_ask:(id)sender {
+    bibleTextAIMenuTapped((char *)"ask", (char *)self.hbSelectedText.UTF8String);
+}
 - (void)hbAI_explain:(id)sender {
     bibleTextAIMenuTapped((char *)"explain", (char *)self.hbSelectedText.UTF8String);
 }

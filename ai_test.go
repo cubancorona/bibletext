@@ -267,10 +267,35 @@ func TestBuildAIPromptVariesByAction(t *testing.T) {
 	}
 }
 
+func TestBuildAskPrompt(t *testing.T) {
+	const book, chap, sel = "John", 3, "For God so loved the world"
+	const version = "Berean Standard Bible"
+	const question = "Who is the world here?"
+	p := buildAskPrompt(book, chap, sel, version, question)
+
+	if !strings.Contains(p, question) {
+		t.Errorf("ask prompt should carry the reader's question, got: %q", p)
+	}
+	for _, want := range []string{"John 3", sel, version} {
+		if !strings.Contains(p, want) {
+			t.Errorf("ask prompt missing %q: %q", want, p)
+		}
+	}
+	// It must instruct a direct answer (not the fixed Explain task) and stay honest when
+	// the passage doesn't address the question.
+	low := strings.ToLower(p)
+	if !strings.Contains(low, "question") || !strings.Contains(low, "does not address") {
+		t.Errorf("ask prompt should answer the question and admit when unaddressed: %q", p)
+	}
+	if p == buildAIPrompt(aiActionExplain, book, chap, sel, version) {
+		t.Errorf("ask prompt should differ from the Explain prompt")
+	}
+}
+
 func TestAIActionTitle(t *testing.T) {
 	for action, want := range map[string]string{
 		aiActionExplain: "Explanation", aiActionContext: "Context",
-		aiActionTranslation: "Translation", "unknown": "Explanation",
+		aiActionTranslation: "Translation", aiActionAsk: "Answer", "unknown": "Explanation",
 	} {
 		if got := aiActionTitle(action); got != want {
 			t.Errorf("aiActionTitle(%q) = %q, want %q", action, got, want)
@@ -288,7 +313,7 @@ func TestRunAIActionUsesCache(t *testing.T) {
 		aiCacheMu.Unlock()
 	})
 
-	got, err := runAIAction(context.Background(), state, aiActionExplain, "the beginning")
+	got, err := runAIAction(context.Background(), state, aiActionExplain, "the beginning", "")
 	if err != nil || got != "cached answer" {
 		t.Fatalf("cache hit: got (%q, %v)", got, err)
 	}
@@ -297,7 +322,7 @@ func TestRunAIActionUsesCache(t *testing.T) {
 func TestRunAIActionNoKeyError(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "") // ensure no ambient dev key
 	state := &AppState{CurrentBook: "Acts", CurrentChapter: 2}
-	_, err := runAIAction(context.Background(), state, aiActionExplain, "unique selection no cache")
+	_, err := runAIAction(context.Background(), state, aiActionExplain, "unique selection no cache", "")
 	if !isNoKeyError(err) {
 		t.Fatalf("want noKeyError, got %v", err)
 	}
