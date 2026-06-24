@@ -1,22 +1,96 @@
+--- a/internal/driver/mobile/app/app.go
++++ b/internal/driver/mobile/app/app.go
+@@ -7,6 +7,8 @@
+ package app
+ 
+ import (
++	"sync/atomic"
++
+ 	"fyne.io/fyne/v2/internal/async"
+ 	"fyne.io/fyne/v2/internal/driver/mobile/event/lifecycle"
+ 	"fyne.io/fyne/v2/internal/driver/mobile/event/size"
+@@ -16,6 +18,22 @@
+ 	_ "fyne.io/fyne/v2/internal/driver/mobile/mobileinit"
+ )
+ 
++// framePainting (BibleText) is set by the driver while it walks the tree to paint a frame
++// (before paintWindow, cleared after Publish). On iOS, drawloop reads it so its idle
++// timeout never returns mid-paint — returning would let the GLKView present a half-drawn
++// frame (the border edges, drawn last, flash to the clear color = scroll flicker).
++// Harmless on other platforms (write-only).
++var framePainting int32
++
++// SetFramePainting marks whether the driver is mid-way through painting a frame.
++func SetFramePainting(on bool) {
++	if on {
++		atomic.StoreInt32(&framePainting, 1)
++	} else {
++		atomic.StoreInt32(&framePainting, 0)
++	}
++}
++
+ // Main is called by the main.main function to run the mobile application.
+ //
+ // It calls f on the App, in a separate goroutine, as some OS-specific
 --- a/internal/driver/mobile/app/darwin_ios.go
 +++ b/internal/driver/mobile/app/darwin_ios.go
-@@ -230,7 +230,18 @@
+@@ -38,6 +38,7 @@
+ 	"log"
+ 	"runtime"
+ 	"strings"
++	"sync/atomic"
+ 	"time"
+ 	"unsafe"
+ 
+@@ -223,14 +224,34 @@
+ 	runtime.LockOSThread()
+ 	defer runtime.UnlockOSThread()
+ 
++	stalls := 0
+ 	for workAvailable := theApp.worker.WorkAvailable(); ; {
+ 		select {
+ 		case <-workAvailable:
+ 			theApp.worker.DoWork()
++			stalls = 0 // frame is making progress; reset the no-progress cap
  		case <-theApp.publish:
  			theApp.publishResult <- PublishResult{}
  			return
 -		case <-time.After(100 * time.Millisecond): // in case the method blocked!!
 +		case <-time.After(2 * time.Millisecond): // BibleText patch: was 100ms.
 +			// drawloop runs on the MAIN THREAD every CADisplayLink tick (render: ->
-+			// [glview display] -> drawInRect -> drawloop). On an idle frame (Fyne has
-+			// no GL work and isn't publishing — e.g. while a NATIVE UITextView /
-+			// UITableView overlay scrolls over a static Fyne canvas) neither case above
-+			// fires, so the original 100ms fallback parked the main run loop for ~100ms
-+			// every tick, back-to-back, starving the native scroll view's gesture/CA
-+			// commit on that same thread. An on-device runloop trace showed ~95% of a
-+			// scroll spent in ~100ms main-thread iterations. A 2ms fallback frees the
-+			// main thread between ticks; dirty frames still return instantly via the
-+			// work/publish cases (so Fyne's own rendering is unaffected — at worst an
-+			// idle frame's late publish presents one tick later).
++			// [glview display] -> drawInRect -> drawloop), and the GLKView PRESENTS once
++			// drawloop returns. Two problems the original 100ms fallback hid:
++			//   1. Idle frames (native UITextView/UITableView scrolling over a static Fyne
++			//      canvas): neither case above fires, so 100ms parked the main run loop
++			//      back-to-back, starving the native scroll's gesture/CA commit (~95% of a
++			//      scroll in ~100ms iterations, per an on-device trace). 2ms frees it.
++			//   2. But returning on the timeout while the driver is still PAINTING a frame
++			//      lets the GLKView present a HALF-DRAWN frame — the border edges, walked
++			//      last (header / nav bar), flash to the clear color = scroll flicker.
++			// So: while a paint is in progress (framePainting, set by the driver around
++			// paintWindow→Publish) keep waiting for the complete frame instead of presenting
++			// a partial one; only return fast when Fyne is genuinely idle. The stalls cap
++			// (~48ms with no progress) is a safety backstop against a stuck flag.
++			if atomic.LoadInt32(&framePainting) != 0 && stalls < 24 {
++				stalls++
++				continue
++			}
  			return
  		}
  	}
+--- a/internal/driver/mobile/driver.go
++++ b/internal/driver/mobile/driver.go
+@@ -349,8 +349,13 @@
+ 			w.Resize(newSize)
+ 		}
+ 
++		// BibleText: bracket the paint so iOS drawloop won't present a half-drawn frame
++		// on its idle timeout (see drawloop in app/darwin_ios.go). Cleared after Publish so
++		// the cache.Clean GL work below doesn't make drawloop wait.
++		app.SetFramePainting(true)
+ 		d.paintWindow(w, newSize)
+ 		d.app.Publish()
++		app.SetFramePainting(false)
+ 	}
+ 	cache.Clean(canvasNeedRefresh)
+ }
