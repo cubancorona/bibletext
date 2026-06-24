@@ -35,7 +35,7 @@ type AppState struct {
 	IsSearching              bool
 	CanReturnToSearchResults bool
 
-	// Ask-AI search results, kept in state (like keyword results) so they survive a
+	// AI Find (passage search) results, kept in state (like keyword results) so they survive a
 	// tab switch and so "back to results" can re-show them. aiSearchActive marks the
 	// current results context as AI vs keyword (drives buildSearchResultsView and the
 	// back-to-results label).
@@ -70,7 +70,7 @@ type AppState struct {
 	CurrentTab int
 
 	// aiSearchMode is the Search tab's mode: false = keyword search, true = the
-	// natural-language "Ask" passage search. Kept on state so the chosen mode
+	// natural-language "Find" passage search. Kept on state so the chosen mode
 	// survives the window rebuilds that tab switches trigger.
 	aiSearchMode bool
 

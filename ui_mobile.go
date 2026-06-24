@@ -241,11 +241,12 @@ func buildMobileBooksTab(state *AppState, switchToRead func()) fyne.CanvasObject
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, list)
 }
 
-// buildMobileSearchTab is the full-screen search experience. A "Find / Ask"
+// buildMobileSearchTab is the full-screen search experience. A "Search / Find"
 // toggle switches the single field between keyword search (live results as you
-// type; an exact reference like "John 3:16" jumps on Submit) and natural-language
-// AI search ("what did God say to Jonah?"), which returns relevant passages.
-// Tapping any hit jumps to that verse in context and switches to the Read tab.
+// type; an exact reference like "John 3:16" jumps on Submit) and AI passage
+// search ("the fruit of the Spirit"), which returns relevant passages. Tapping
+// any hit jumps to that verse in context and switches to the Read tab. (The
+// narrative-answer "Ask" lives on the reading selection menu, not here.)
 func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	pal := state.pal()
 
@@ -259,7 +260,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	// Reroute showReading so live, as-you-type keyword search repaints the results
 	// panel here. We deliberately do NOT chain to the Read tab's showReading (which
 	// drives the native overlay); the Read tab rebuilds fresh from state on switch.
-	// In AI mode the results are rendered by the Ask handler, not live search.
+	// In AI mode the results are rendered by the Find handler, not live search.
 	state.showReading = func() {
 		notifyReadingOverlay(overlayShouldShow(state))
 		if !state.aiSearchMode {
@@ -287,9 +288,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	}
 	state.setSearchText = func(s string) { searchEntry.SetText(s) }
 
-	// --- Ask-AI search. ---
+	// --- AI Find (passage search). ---
 	aiEntry := newSearchEntry() // keyboard "return" submits (see searchKeyEntry)
-	aiEntry.SetPlaceHolder("Ask for passages…")
+	aiEntry.SetPlaceHolder("Find passages…")
 	aiEntry.SetText(state.aiSearchQuery) // restore the last question on tab return
 
 	// A disclaimer beneath the Ask field, shown only BEFORE results (the prompt state).

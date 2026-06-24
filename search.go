@@ -32,7 +32,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	// When the current results context is the AI search, render the matching state — the
 	// passages, or (driven from state, for desktop where results replace the reading pane)
 	// the in-progress / no-key / error / prompt states. This also powers "back to results"
-	// and the Read-tab inline results for Ask-AI.
+	// and the Read-tab inline results for AI Find.
 	if state.aiSearchActive {
 		switch {
 		case state.aiSearchLoading:
@@ -125,7 +125,7 @@ func searchPromptView(state *AppState) fyne.CanvasObject {
 // but the text shown is the real verse from our Bible.
 func aiResultsView(state *AppState, query string, verses []Verse) fyne.CanvasObject {
 	pal := state.pal()
-	_ = query // the question shows in the Ask field above; no big heading here
+	_ = query // the request shows in the Find field above; no big heading here
 
 	sub := fmt.Sprintf("%d passages found by AI", len(verses))
 	switch len(verses) {
@@ -152,8 +152,8 @@ func aiResultsView(state *AppState, query string, verses []Verse) fyne.CanvasObj
 	return container.NewPadded(container.NewBorder(head, nil, nil, nil, paper))
 }
 
-// aiSearchPromptView is the calm empty state for Ask-AI mode, shown before a
-// question is asked.
+// aiSearchPromptView is the calm empty state for the AI Find (passage search)
+// mode, shown before a request is entered.
 func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
@@ -161,12 +161,12 @@ func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 	icon.FillMode = canvas.ImageFillContain
 	icon.SetMinSize(fyne.NewSize(44, 44))
 
-	title := canvas.NewText("Ask in your own words", pal.Text)
+	title := canvas.NewText("Find passages by meaning", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
 	title.Alignment = fyne.TextAlignCenter
 
-	hint := canvas.NewText(`e.g. "what did God say to Jonah?"`, pal.TextMuted)
+	hint := canvas.NewText(`e.g. "the fruit of the Spirit"`, pal.TextMuted)
 	hint.TextSize = subheadingTextSize
 	hint.Alignment = fyne.TextAlignCenter
 
@@ -178,18 +178,18 @@ func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 	return container.NewCenter(col)
 }
 
-// aiNoKeyView is the clean, non-intrusive explanation shown in Ask-AI mode when no
+// aiNoKeyView is the clean, non-intrusive explanation shown in AI Find mode when no
 // provider key is set: what it does, that it needs the reader's own key, and a quiet
 // route into settings. No error styling.
 func aiNoKeyView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
-	title := canvas.NewText("AI search needs your own key", pal.Text)
+	title := canvas.NewText("AI passage search needs your own key", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 18
 	title.Alignment = fyne.TextAlignCenter
 
-	body := widget.NewLabel("Ask for passages in plain words and AI finds them. It uses your own AI provider key, stored only on this device.")
+	body := widget.NewLabel("Describe what you're looking for and AI finds the passages. It uses your own AI provider key, stored only on this device.")
 	body.Wrapping = fyne.TextWrapWord
 	body.Alignment = fyne.TextAlignCenter
 
@@ -231,32 +231,32 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 }
 
 // buildSearchModeToggle is a two-segment control switching the search UI between keyword
-// ("Find") and natural-language ("Ask") search; the active half is filled. Shared by the
+// ("Search") and AI passage ("Find") search; the active half is filled. Shared by the
 // mobile Search tab and the desktop sidebar. On desktop it renders compact and quieter
 // (smaller text/padding, flat inactive half) — touch-sized buttons are too intrusive for
-// a mouse UI.
+// a mouse UI. (The narrative-answer "Ask" lives on the reading selection menu, not here.)
 func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
 	compact := !fyne.CurrentDevice().IsMobile()
-	var find, ask *widget.Button
+	var kwBtn, aiBtn *widget.Button
 	apply := func(ai bool) {
 		idle := widget.MediumImportance
 		if compact {
 			idle = widget.LowImportance // flat inactive → only the active half is filled
 		}
-		find.Importance = idle
-		ask.Importance = idle
+		kwBtn.Importance = idle
+		aiBtn.Importance = idle
 		if ai {
-			ask.Importance = widget.HighImportance
+			aiBtn.Importance = widget.HighImportance
 		} else {
-			find.Importance = widget.HighImportance
+			kwBtn.Importance = widget.HighImportance
 		}
-		find.Refresh()
-		ask.Refresh()
+		kwBtn.Refresh()
+		aiBtn.Refresh()
 	}
-	find = widget.NewButton("Find", func() { apply(false); onSelect(false) })
-	ask = widget.NewButton("Ask", func() { apply(true); onSelect(true) })
+	kwBtn = widget.NewButton("Search", func() { apply(false); onSelect(false) })
+	aiBtn = widget.NewButton("Find", func() { apply(true); onSelect(true) })
 	apply(state.aiSearchMode)
-	grid := container.NewGridWithColumns(2, find, ask)
+	grid := container.NewGridWithColumns(2, kwBtn, aiBtn)
 	if !compact {
 		return grid
 	}
