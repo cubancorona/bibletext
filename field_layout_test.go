@@ -65,26 +65,27 @@ func collectText(o fyne.CanvasObject) []string {
 	return nil
 }
 
-// TestAskPromptHintUsesStraightQuotes locks in the Jonah-example formatting fix: the hint
-// must quote the example with straight ASCII quotes, not curly quotes (the custom serif
-// font has no curly-quote glyphs, so they rendered as missing-glyph boxes).
-func TestAskPromptHintUsesStraightQuotes(t *testing.T) {
+// TestFindPromptHintUsesStraightQuotes locks in the example formatting fix on the AI Find
+// (passage search) empty state: the hint must quote its example with straight ASCII quotes,
+// not curly quotes (the custom serif font has no curly-quote glyphs, so they rendered as
+// missing-glyph boxes).
+func TestFindPromptHintUsesStraightQuotes(t *testing.T) {
 	texts := collectText(aiSearchPromptView(sampleState()))
 
 	var hint string
 	for _, s := range texts {
-		if strings.Contains(s, "Jonah") {
+		if strings.Contains(s, "e.g.") {
 			hint = s
 			break
 		}
 	}
 	if hint == "" {
-		t.Fatal("Ask prompt view has no Jonah example hint")
+		t.Fatal("Find prompt view has no example hint")
 	}
 	if strings.ContainsAny(hint, "“”") {
-		t.Errorf("Jonah hint %q still uses curly quotes (no glyphs in the serif font)", hint)
+		t.Errorf("Find hint %q still uses curly quotes (no glyphs in the serif font)", hint)
 	}
-	if !strings.Contains(hint, `"what did God say to Jonah?"`) {
-		t.Errorf("Jonah hint %q is missing the straight-quoted example", hint)
+	if !strings.Contains(hint, `"the fruit of the Spirit"`) {
+		t.Errorf("Find hint %q is missing the straight-quoted example", hint)
 	}
 }
