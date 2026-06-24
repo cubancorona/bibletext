@@ -42,17 +42,22 @@ func NewLoadingState() *AppState {
 // than surfacing an in-app retry view.
 func loadStateData() (*AppState, error) {
 	version, _ := versionByID(defaultVersionID)
-	bibleData, mode, err := loadVersionData(version, nil)
+	// Try the on-disk cache first (fast). On a cache miss, open INSTANTLY on the
+	// embedded Gospels seed and download the complete Bible in the background
+	// (StartBackgroundLoad → fetchFullInBackground) rather than blocking on the
+	// chapter-by-chapter API fetch — which can take minutes and is at the mercy of
+	// bible-api.com rate-limiting. The seed is never cached, so once the background
+	// fetch lands it caches the full text for every later launch.
+	bibleData, mode, err := loadVersionFromCacheOnly(version)
+	seeded := false
 	if err != nil {
-		// Offline first run (no cache, no network): fall back to the embedded WEB
-		// Gospels so the app still opens to readable scripture instead of a dead-end
-		// error. The seed is held in memory only — never written to the cache — so the
-		// next launch with a connection fetches and caches the complete Bible.
-		seed, serr := loadSeedGospels()
-		if serr != nil {
-			return nil, err // even the seed failed (should never happen) — surface the real error
+		if seed, serr := loadSeedGospels(); serr == nil {
+			bibleData, mode, seeded = seed, modeReal, true
+		} else if full, fmode, ferr := loadVersionData(version, nil); ferr == nil {
+			bibleData, mode = full, fmode // last resort, if the embedded seed is somehow unusable
+		} else {
+			return nil, ferr
 		}
-		bibleData, mode = seed, modeReal
 	}
 
 	state := &AppState{
@@ -62,6 +67,7 @@ func loadStateData() (*AppState, error) {
 		loadedVersions: map[string]*BibleData{version.ID: bibleData},
 		Annotations:    NewAnnotationStore(),
 		loadPhase:      loadReady,
+		fullPending:    seeded,
 	}
 
 	// Reopen exactly where the reader left off — translation, book, chapter, the
@@ -139,13 +145,46 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			state.CurrentChapter = loaded.CurrentChapter
 			state.RecentChapters = loaded.RecentChapters
 			state.restore = loaded.restore // carry the one-shot scroll target
+			state.fullPending = loaded.fullPending
 			state.loadPhase = loadReady
 			// Full rebuild (not just refresh) so afterRebuild re-pins/re-asserts
 			// the iOS native overlay and armPendingRestore re-arms the saved
 			// scroll position on the freshly-built reading view.
 			rebuildWindow(state)
+			if state.fullPending {
+				// Opened on the embedded Gospels; download the complete Bible in the
+				// background and swap it in when it lands.
+				go fetchFullInBackground(state)
+			}
 		})
 	}()
+}
+
+// fetchFullInBackground downloads the complete default-version Bible after the app has
+// already opened on the embedded Gospels seed (loadStateData), then swaps the full text
+// into the live state on the UI thread. On failure — offline, or the API rate-limiting
+// to death — it leaves the Gospels in place; the reader is already reading.
+func fetchFullInBackground(state *AppState) {
+	version, _ := versionByID(defaultVersionID)
+	full, mode, err := loadVersionData(version, nil) // slow per-chapter fetch; caches on success
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "BibleText: background full-Bible fetch failed (keeping Gospels):", err)
+		return
+	}
+	fyne.Do(func() {
+		if state.loadedVersions != nil {
+			state.loadedVersions[version.ID] = full
+		}
+		// Only swap the live view if the reader is still on the default version (they
+		// may have switched translations while it downloaded).
+		if state.CurrentVersion != version.ID {
+			return
+		}
+		state.Bible = full
+		state.currentMode = mode
+		state.fullPending = false
+		rebuildWindow(state)
+	})
 }
 
 // InstallReadingStateFlush captures the precise within-chapter scroll position
