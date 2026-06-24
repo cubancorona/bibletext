@@ -1,6 +1,71 @@
+--- a/internal/driver/mobile/app/app.go
++++ b/internal/driver/mobile/app/app.go
+@@ -7,6 +7,8 @@
+ package app
+ 
+ import (
++	"sync/atomic"
++
+ 	"fyne.io/fyne/v2/internal/async"
+ 	"fyne.io/fyne/v2/internal/driver/mobile/event/lifecycle"
+ 	"fyne.io/fyne/v2/internal/driver/mobile/event/size"
+@@ -16,6 +18,14 @@
+ 	_ "fyne.io/fyne/v2/internal/driver/mobile/mobileinit"
+ )
+ 
++// presentPending is the BibleText on-demand-present flag (iOS). Publish() sets it
++// (the driver only calls Publish for genuinely dirty frames — driver.go gates it on
++// canvasNeedRefresh), and the iOS CADisplayLink callback reads+clears it via
++// iosTakePresent (darwin_ios.go) to decide whether to drive a GL draw this tick. On
++// idle ticks the GLKView is NOT asked to display, so it can't swap its double buffer
++// to a stale frame (the scroll flicker). Harmless on other platforms (write-only).
++var presentPending int32
++
+ // Main is called by the main.main function to run the mobile application.
+ //
+ // It calls f on the App, in a separate goroutine, as some OS-specific
+@@ -126,6 +136,7 @@
+ 	// This enforces that the final receive (for this paint cycle) on
+ 	// gl.WorkAvailable happens before the send on endPaint.
+ 	a.glctx.Flush()
++	atomic.StoreInt32(&presentPending, 1) // BibleText: a real frame is ready — let render: drive a GL draw.
+ 	a.publish <- struct{}{}
+ 	return <-a.publishResult
+ }
 --- a/internal/driver/mobile/app/darwin_ios.go
 +++ b/internal/driver/mobile/app/darwin_ios.go
-@@ -230,7 +230,18 @@
+@@ -38,6 +38,7 @@
+ 	"log"
+ 	"runtime"
+ 	"strings"
++	"sync/atomic"
+ 	"time"
+ 	"unsafe"
+ 
+@@ -216,6 +217,22 @@
+ //export lifecycleMemoryWarning
+ func lifecycleMemoryWarning() {
+ 	cleanCaches()
++}
++
++// iosTakePresent reports (and clears) whether Fyne has a real frame to present this
++// CADisplayLink tick — set by Publish() in app.go on dirty frames only. render: (in
++// darwin_ios.m) calls [glview display] ONLY when this returns 1, so idle ticks don't
++// swap the GLKView's double buffer to a stale frame (the scroll flicker) and leave the
++// main thread free for native UIScrollView compositing. Deadlock-safe: render: fires
++// every tick, so a Publish() that set the flag (then blocks on publishResult) is
++// serviced — drawloop runs, consumes theApp.publish — within one frame.
++//
++//export iosTakePresent
++func iosTakePresent() C.int {
++	if atomic.SwapInt32(&presentPending, 0) != 0 {
++		return 1
++	}
++	return 0
+ }
+ 
+ //export drawloop
+@@ -230,7 +247,18 @@
  		case <-theApp.publish:
  			theApp.publishResult <- PublishResult{}
  			return
@@ -20,3 +85,23 @@
  			return
  		}
  	}
+--- a/internal/driver/mobile/app/darwin_ios.m
++++ b/internal/driver/mobile/app/darwin_ios.m
+@@ -170,7 +170,16 @@
+ }
+ 
+ - (void)render:(CADisplayLink*)displayLink {
+-    [self.glview display];
++    // BibleText on-demand present: only drive Fyne's GL draw when it actually has a new
++    // frame (Fyne sets the flag in Publish(), which the driver calls for dirty frames
++    // only). On an idle tick we skip [glview display], so the GLKView does NOT swap its
++    // double buffer to a stale frame — that stale swap is the scroll flicker seen while a
++    // Fyne VScroll/List updates — and the main thread stays free for native scroll
++    // compositing. Safe: this fires every tick, so a pending Publish() is serviced within
++    // one frame (drawloop then consumes the publish).
++    if (iosTakePresent()) {
++        [self.glview display];
++    }
+ }
+ 
+ - (void)glkView:(GLKView *)view drawInRect:(CGRect)rect {
