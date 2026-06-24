@@ -89,14 +89,21 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `fyne.Do`. `Verse.Ref` and `BibleData.chapterNums` are precomputed in
   `PrepareSearchIndex` (on the load goroutine) so search/nav don't re-format or
   re-sort per keystroke.
-- **AI study (BYOK).** Select text → native "Study with AI" menu → Explain /
-  Analyze context / Analyze translation. Providers (Gemini / OpenAI / Anthropic
-  / Grok) live in `ai_providers.go`; keys are stored on-device via `keyStore`
-  (`ai_keystore.go`) over `fyne.Preferences`, with `<PROVIDER>_API_KEY` env vars
-  overriding. The exact prompt sent per action is built by `buildAIPrompt` in
-  `ai.go` (shared preamble + per-action task + the quoted selection; documented
-  in README → "AI study"). Settings sheet: `ai_settings.go` (header gear). Result
-  panel: `ai_panel.go`.
+- **AI study (BYOK).** Select text → native "Study with AI" menu → Ask a question /
+  Explain / Analyze context / Analyze translation. **Three search/AI verbs, kept
+  distinct on purpose:** *Search* = keyword / reference lookup (Search tab), *Find* =
+  AI passage search that returns verses (Search-tab toggle, `ai_search.go`), *Ask* =
+  AI narrative answer about a selection (reading menu). "Ask a question…" opens a small
+  input sheet (`ai_ask.go`, `promptAskQuestion` — full-canvas top-anchored non-modal
+  popup on iOS so the field clears the soft keyboard; centered modal on desktop), then
+  shows a prose answer grounded in the selection (`buildAskPrompt`). Providers (Gemini /
+  OpenAI / Anthropic / Grok) live in `ai_providers.go`; keys are stored on-device via
+  `keyStore` (`ai_keystore.go`) over `fyne.Preferences`, with `<PROVIDER>_API_KEY` env
+  vars overriding. Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
+  `ai.go` (shared preamble + per-action task + the quoted selection; the fixed actions
+  documented in README → "AI study"). `runAIAction` threads the Ask question and folds
+  it into the cache scope. Settings sheet: `ai_settings.go` (header gear). Result panel:
+  `ai_panel.go`.
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
   registry (WEB + BSB public-domain, NRSV/LSB licensed) and a `bibleSource` per
   version (`webSource` = bible-api.com, per-chapter; `bsbSource` (`bsb.go`) = the

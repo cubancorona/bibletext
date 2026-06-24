@@ -20,7 +20,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func showAIPanel(state *AppState, action, selectedText string) {
+func showAIPanel(state *AppState, action, selectedText, question string) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -65,7 +65,21 @@ func showAIPanel(state *AppState, action, selectedText string) {
 	quote.Wrapping = fyne.TextWrapOff
 	quote.Truncation = fyne.TextTruncateEllipsis
 
-	header := container.NewVBox(title, ref, quote, widget.NewSeparator())
+	// For "Ask", the title is the generic "Answer", so show the reader's actual question
+	// (word-wrapped, bold) above the grounding passage preview.
+	headerItems := []fyne.CanvasObject{title, ref}
+	if action == aiActionAsk {
+		if q := strings.TrimSpace(question); q != "" {
+			ql := widget.NewRichText(&widget.TextSegment{
+				Text:  q,
+				Style: widget.RichTextStyle{TextStyle: fyne.TextStyle{Bold: true}},
+			})
+			ql.Wrapping = fyne.TextWrapWord
+			headerItems = append(headerItems, ql)
+		}
+	}
+	headerItems = append(headerItems, quote, widget.NewSeparator())
+	header := container.NewVBox(headerItems...)
 
 	// --- Body: a vertical scroll holds the answer, with the thinking and error
 	// states layered on top of it. The panel grows to fit the answer (capped at
@@ -204,7 +218,7 @@ func showAIPanel(state *AppState, action, selectedText string) {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 			defer cancel()
-			result, err := runAIAction(ctx, state, action, selectedText)
+			result, err := runAIAction(ctx, state, action, selectedText, question)
 			fyne.Do(func() {
 				if err != nil {
 					setError(friendlyAIError(err), isNoKeyError(err))
