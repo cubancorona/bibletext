@@ -85,7 +85,7 @@ func aiActionTitle(action string) string {
 	}
 }
 
-func buildAIPrompt(action, book string, chapter int, text string) string {
+func buildAIPrompt(action, book string, chapter int, text, version string) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
 		"Write in clear, plain language for a general reader and keep it concise — a " +
 		"few short paragraphs at most. Where scholars disagree or a point is uncertain, " +
@@ -101,7 +101,7 @@ func buildAIPrompt(action, book string, chapter int, text string) string {
 		task = "Discuss translation considerations for the passage below: notable Hebrew or " +
 			"Greek words behind the English, how major English translations render it " +
 			"differently, and nuances that are hard to carry into English. The quoted text " +
-			"is from the World English Bible."
+			"is from the " + version + "."
 	default:
 		task = "Explain what the passage below means: its main idea, any imagery or terms a " +
 			"general reader might not know, and how its parts connect."
@@ -158,7 +158,7 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText stri
 		return "", &noKeyError{provider: info}
 	}
 
-	out, err := info.New(key).generate(ctx, buildAIPrompt(action, book, chapter, selectedText))
+	out, err := info.New(key).generate(ctx, buildAIPrompt(action, book, chapter, selectedText, state.currentVersion().Name))
 	if err != nil {
 		return "", err
 	}

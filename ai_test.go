@@ -241,9 +241,12 @@ func TestProviderAPIKeyPrefersEnv(t *testing.T) {
 
 func TestBuildAIPromptVariesByAction(t *testing.T) {
 	const book, chap, sel = "John", 3, "For God so loved the world"
-	explain := buildAIPrompt(aiActionExplain, book, chap, sel)
-	ctx := buildAIPrompt(aiActionContext, book, chap, sel)
-	trans := buildAIPrompt(aiActionTranslation, book, chap, sel)
+	// A non-default version proves the translation prompt names the ACTIVE version
+	// rather than a hardcoded "World English Bible".
+	const version = "Berean Standard Bible"
+	explain := buildAIPrompt(aiActionExplain, book, chap, sel, version)
+	ctx := buildAIPrompt(aiActionContext, book, chap, sel, version)
+	trans := buildAIPrompt(aiActionTranslation, book, chap, sel, version)
 
 	for _, p := range []string{explain, ctx, trans} {
 		if !strings.Contains(p, "John 3") || !strings.Contains(p, sel) {
@@ -253,8 +256,11 @@ func TestBuildAIPromptVariesByAction(t *testing.T) {
 	if !strings.Contains(strings.ToLower(ctx), "context") {
 		t.Errorf("context prompt should mention context")
 	}
-	if !strings.Contains(trans, "World English Bible") {
-		t.Errorf("translation prompt should mention WEB")
+	if !strings.Contains(trans, version) {
+		t.Errorf("translation prompt should name the active version (%q), got: %q", version, trans)
+	}
+	if strings.Contains(trans, "World English Bible") {
+		t.Errorf("translation prompt must not hardcode WEB when another version is active")
 	}
 	if explain == ctx || ctx == trans {
 		t.Errorf("prompts should differ by action")
