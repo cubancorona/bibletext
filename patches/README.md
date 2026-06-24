@@ -7,12 +7,27 @@ Fyne library*, which can't live in our own source.
 | | |
 |---|---|
 | **Patch** | [`fyne-2.7.4-ios-drawloop.patch`](fyne-2.7.4-ios-drawloop.patch) |
-| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.go` |
-| **Change** | `drawloop()`'s idle fallback timeout: **`100ms` → `2ms`** (one `case` line; the rest of the hunk is an explanatory comment) |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/{darwin_ios.go, app.go}` + `internal/driver/mobile/driver.go` |
+| **Change 1 (scroll lag)** | `drawloop()`'s idle fallback timeout: **`100ms` → `2ms`** (frees the main thread between ticks so native scroll views aren't starved). |
+| **Change 2 (scroll flicker)** | `drawloop()` won't return on its idle timeout **while a paint is in progress** — so the GLKView never presents a half-drawn frame. The driver sets a `framePainting` flag around `paintWindow`→`Publish` (`SetFramePainting`); `drawloop` keeps waiting for the complete frame while it's set, and returns fast only when Fyne is genuinely idle. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Build wiring** | `replace fyne.io/fyne/v2 => ./third_party/fyne` in `go.mod` |
 
-## Why the patch is needed
+## Why change 2 (no half-drawn frames) is needed
+
+The CADisplayLink calls `render:` → `[glview display]` every tick, and the GLKView
+**presents once `drawloop` returns**. With the 2ms idle timeout, if the painter
+stalls mid-frame for >2ms (e.g. rasterizing glyph textures as new list rows scroll
+in), `drawloop` times out and returns → the GLKView presents a **half-drawn frame**.
+`paintWindow` (`driver.go`) does `glClear` then walks the tree, and `container.NewBorder`
+draws the **center first, then the edges**, so a half-drawn present shows the list but
+the header / bottom bar (drawn last) flash to the clear color = the scroll flicker on
+static elements. The fix gates the timeout on `framePainting`: keep waiting for the
+complete frame while painting, return fast only when idle (native scroll preserved). It
+doesn't change the present cadence, so there's no scroll lag. The old 100ms timeout hid
+this by waiting long enough that frames always finished first.
+
+## Why change 1 is needed
 
 On iOS, Fyne runs its draw routine (`drawloop`) **on the main thread** every
 display tick. `drawloop` waits for GL work or a "present" signal and, if neither
