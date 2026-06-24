@@ -1,9 +1,21 @@
 package bibletext
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestLoadVersionFromCacheOnlyMiss verifies the cache-only loader returns an error
+// (without any network fetch) on a cache miss — the trigger for the Gospels seed-instant
+// path in loadStateData.
+func TestLoadVersionFromCacheOnlyMiss(t *testing.T) {
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), "no-such-cache.json"))
+	v, _ := versionByID(defaultVersionID)
+	if _, _, err := loadVersionFromCacheOnly(v); err == nil {
+		t.Fatal("expected a cache-miss error (and no fetch), got nil")
+	}
+}
 
 // TestLoadSeedGospels verifies the embedded offline-fallback Gospels decode into a
 // usable, search-indexed BibleData (Matthew–John with real WEB text).

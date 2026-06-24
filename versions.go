@@ -205,6 +205,20 @@ const (
 // without an available source get a clearly-labeled testing placeholder that
 // mirrors base's book/chapter/verse structure so navigation and search behave
 // realistically.
+// loadVersionFromCacheOnly returns a version's data from the on-disk cache WITHOUT any
+// network fetch — used for the instant first paint before deciding whether to seed the
+// Gospels. It returns an error (never a fetch) on a cache miss.
+func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
+	if v.source == nil || !v.source.available() {
+		return nil, modeTesting, errCacheNotFound
+	}
+	data, _, err := loadBibleData(func() (*BibleData, error) { return nil, errCacheNotFound }, cachePathForVersion(v.ID), currentUTCTime)
+	if err != nil {
+		return nil, modeReal, err
+	}
+	return data, modeReal, nil
+}
+
 func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 	if v.source != nil && v.source.available() {
 		purgeSupersededCaches(v) // drop pre-epoch cache files (best-effort)

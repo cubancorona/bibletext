@@ -121,6 +121,11 @@ type AppState struct {
 	loadPhase loadPhase
 	loadErr   error
 
+	// fullPending is true when the app opened on the embedded Gospels seed (no cache
+	// yet) and the complete Bible is still downloading in the background; it flips to
+	// false once fetchFullInBackground swaps the full text in.
+	fullPending bool
+
 	// stopping is set when the app is tearing down (window close / lifecycle stop)
 	// so a late background result (e.g. a version download that finishes during
 	// shutdown) can drop itself instead of mutating state off the main thread. On
