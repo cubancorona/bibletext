@@ -1,16 +1,32 @@
 # Vendored Fyne patch
 
-This directory holds a **single, surgical patch to Fyne** plus the documentation
-for it. It exists because the iOS scroll-lag fix is a one-line change *inside the
-Fyne library*, which can't live in our own source.
+This directory holds a **small, surgical patch to Fyne** plus the documentation
+for it. It exists because the iOS scroll-lag + flicker fixes live *inside the
+Fyne library*, which can't be changed from our own source.
 
 | | |
 |---|---|
 | **Patch** | [`fyne-2.7.4-ios-drawloop.patch`](fyne-2.7.4-ios-drawloop.patch) |
-| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.go` |
-| **Change** | `drawloop()`'s idle fallback timeout: **`100ms` → `2ms`** (one `case` line; the rest of the hunk is an explanatory comment) |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/{darwin_ios.go, darwin_ios.m, app.go}` |
+| **Change 1 (scroll lag)** | `drawloop()`'s idle fallback timeout: **`100ms` → `2ms`** (frees the main thread between ticks so native scroll views aren't starved). |
+| **Change 2 (scroll flicker)** | **on-demand present** — `render:` calls `[glview display]` only when Fyne actually produced a new frame (`Publish()` sets a flag, `iosTakePresent()` reads it), so idle display ticks don't swap the GLKView to an undefined buffer. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Build wiring** | `replace fyne.io/fyne/v2 => ./third_party/fyne` in `go.mod` |
+
+## Why change 2 (on-demand present) is needed
+
+The CADisplayLink calls `render:` → `[glview display]` every display tick, and the
+GLKView **presents** (the CAEAGLLayer renderbuffer is discarded after each present).
+On a tick where Fyne drew nothing — Fyne paints on its own fixed **60 Hz** ticker
+(`driver.go`), which drifts against the display link — the present swaps in an
+**undefined/stale** buffer: the **flicker** seen while a Fyne `VScroll`/`List`
+scrolls. The fix gates the present: `Publish()` (called by the driver only for
+dirty frames) sets `presentPending`; `render:` skips `[glview display]` unless
+`iosTakePresent()` returns it set. Idle ticks then leave the last good frame on
+screen. Trade-off: Fyne's own scroll now presents only on its paint ticks (still
+60 Hz, slightly less fluid than the old present-every-tick) — flicker-free, with
+native scroll still smooth. Deadlock-safe: `render:` fires every tick, so a pending
+`Publish()` is serviced within one frame.
 
 ## Why the patch is needed
 
