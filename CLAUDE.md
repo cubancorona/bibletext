@@ -59,8 +59,8 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   Define) all need one, and the system actions *crash* without it. A bare
   window-subview has no VC in its chain, so those silently fail / crash while only
   flat top-level taps (Copy) work. The custom selection menu is built in
-  `HBReadingTextView`'s `editMenuForTextInRange:` (Study with AI submenu +
-  Cross-references + Share, prepended before iOS's suggestedActions).
+  `HBReadingTextView`'s `editMenuForTextInRange:` (Study with AI submenu + Share +
+  Cross-references, prepended before iOS's suggestedActions).
 - **Native → Go bridge.** `ai_menu_darwin.go` has the repo's only `//export`
   callback (`bibleTextAIMenuTapped`); its cgo preamble must stay empty of C
   *definitions* (only declarations allowed alongside `//export`).

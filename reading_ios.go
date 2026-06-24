@@ -141,7 +141,7 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     // them before and after the system actions (the old layout led with "Study with
     // AI" but trailed Cross-references + Share after Copy/Look Up/Translate). Order:
     // the standard edit commands (Copy/Cut/Paste) first, then our cluster —
-    // Cross-references, Study with AI, Share — then the remaining system actions
+    // Study with AI, Share, Cross-references — then the remaining system actions
     // (Look Up, Translate, Define). If the system hands us no identifiable
     // standard-edit group, our cluster simply leads and the system actions follow
     // (still grouped, never scattered).
@@ -157,7 +157,7 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     }
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray array];
     [children addObjectsFromArray:editGroup];
-    [children addObjectsFromArray:@[xref, ai, share]];
+    [children addObjectsFromArray:@[ai, share, xref]];
     [children addObjectsFromArray:systemRest];
     return [UIMenu menuWithChildren:children];
 }
