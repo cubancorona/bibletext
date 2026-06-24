@@ -184,7 +184,7 @@ func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 func aiNoKeyView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
-	title := canvas.NewText("AI passage search needs your own key", pal.Text)
+	title := canvas.NewText("Find needs your own AI key", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 18
 	title.Alignment = fyne.TextAlignCenter
