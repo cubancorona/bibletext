@@ -502,8 +502,15 @@ BTAnchor bibleTextMacCaptureAnchor(void) {
         out.verse = (int)verse;
         out.delta = offY - (rr.origin.y + insetH);
     };
+    // AppKit is main-thread-only, so this read must run on main. We deliberately do NOT
+    // dispatch_sync to the main queue when off-main: Fyne runs the OnStopped reading-state
+    // flush off the main thread during shutdown (runOnMainWithWait executes the callback
+    // inline once the main func-queue is drained), and by then the main run loop is gone —
+    // a dispatch_sync(main) would block forever and hang the process on quit. So read only
+    // when already on main; otherwise return a zero anchor (ok=0) and let captureSnapshot
+    // keep the previously-saved one. The normal window-close flush (SetCloseIntercept) runs
+    // on the main thread, so it still records the exact scroll position.
     if ([NSThread isMainThread]) block();
-    else dispatch_sync(dispatch_get_main_queue(), block);
     return out;
 }
 
