@@ -5,8 +5,9 @@ package bibletext
 // versions share the canonical 66-book structure (see bible.go), so navigation,
 // search and the UI need no per-version special-casing.
 //
-// Licensing. The World English Bible is public domain and comes from the free
-// bible-api.com source. NRSV and LSB are copyrighted and require a distribution
+// Licensing. The World English Bible and Berean Standard Bible are public domain
+// and come from the free, key-less bible.helloao.org (one request each). NRSV and
+// LSB are copyrighted and require a distribution
 // license (see README → "Bible versions"). Until a license + credentials are
 // configured they are NOT user-selectable: the picker shows them as "evaluation
 // in progress" and tapping is disabled, so a shipped build never exposes
@@ -116,11 +117,15 @@ type bibleSource interface {
 	fetch() (*BibleData, error)
 }
 
-// webSource serves the public-domain World English Bible from bible-api.com.
+// webSource serves the public-domain World English Bible from bible.helloao.org in a
+// SINGLE request (decoded by the same helloao path as the BSB — see fetchWEBFromHelloAO
+// in bsb.go). It replaced the original bible-api.com per-chapter fetch (~1189 rate-limited
+// requests, FetchBibleFromAPI), which often never completed and left first-run readers
+// stuck on the embedded Gospels seed.
 type webSource struct{}
 
 func (webSource) available() bool            { return true }
-func (webSource) fetch() (*BibleData, error) { return FetchBibleFromAPI() }
+func (webSource) fetch() (*BibleData, error) { return fetchWEBFromHelloAO() }
 
 // licensedAPISource is the structured path for a copyrighted translation served
 // by a licensed Bible API (e.g. scripture.api.bible). It activates only when

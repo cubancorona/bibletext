@@ -34,22 +34,38 @@ func (bsbSource) available() bool { return true }
 func (bsbSource) fetch() (*BibleData, error) {
 	// 120s timeout: the whole translation is one ~7 MB body, so this must cover a
 	// slow connection's full download, not a per-chapter request.
-	return fetchBSBFromHelloAO(bsbCompleteURL, &http.Client{Timeout: 120 * time.Second})
+	return fetchHelloAOComplete("BSB", bsbCompleteURL, &http.Client{Timeout: 120 * time.Second})
 }
 
-func fetchBSBFromHelloAO(url string, client httpClient) (*BibleData, error) {
+// webCompleteURL is helloao's whole-translation endpoint for the 66-book World English
+// Bible (Protestant — the "P"). One request for the entire Bible, vs. bible-api.com's
+// ~1189 chapter-by-chapter, rate-limited requests that often never finished, leaving a
+// first-run reader stuck on the embedded Gospels seed. The WEB is public domain.
+const webCompleteURL = "https://bible.helloao.org/api/ENGWEBP/complete.json"
+
+// fetchWEBFromHelloAO downloads the complete World English Bible from helloao in ONE
+// request, decoded by the same path as the BSB (decodeBSBComplete maps any helloao
+// complete.json by canonical book order). It backs webSource (versions.go).
+func fetchWEBFromHelloAO() (*BibleData, error) {
+	return fetchHelloAOComplete("WEB", webCompleteURL, &http.Client{Timeout: 120 * time.Second})
+}
+
+// fetchHelloAOComplete fetches one of helloao's whole-translation complete.json bodies
+// and decodes it into BibleData. Shared by the BSB and WEB sources; label only flavours
+// the error messages.
+func fetchHelloAOComplete(label, url string, client httpClient) (*BibleData, error) {
 	body, err := fetchWithRetry(client, url, maxRetries)
 	if err != nil {
-		return nil, fmt.Errorf("fetch BSB: %w", err)
+		return nil, fmt.Errorf("fetch %s: %w", label, err)
 	}
 	bd, err := decodeBSBComplete(body, NewBibleData().Books)
 	if err != nil {
-		return nil, fmt.Errorf("decode BSB: %w", err)
+		return nil, fmt.Errorf("decode %s: %w", label, err)
 	}
-	// Guard against a truncated/partial parse silently caching an incomplete BSB:
+	// Guard against a truncated/partial parse silently caching an incomplete Bible:
 	// every canonical book must have come through with chapters and verses.
 	if err := validateBibleData(bd); err != nil {
-		return nil, fmt.Errorf("BSB data incomplete: %w", err)
+		return nil, fmt.Errorf("%s data incomplete: %w", label, err)
 	}
 	return bd, nil
 }
