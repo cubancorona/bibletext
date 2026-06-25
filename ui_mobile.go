@@ -290,7 +290,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 
 	// --- AI Find (passage search). ---
 	aiEntry := newSearchEntry() // keyboard "return" submits (see searchKeyEntry)
-	aiEntry.SetPlaceHolder("Find passages…")
+	aiEntry.SetPlaceHolder("In your own words…")
 	aiEntry.SetText(state.aiSearchQuery) // restore the last question on tab return
 
 	// A disclaimer beneath the Ask field, shown only BEFORE results (the prompt state).

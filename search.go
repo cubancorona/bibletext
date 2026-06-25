@@ -166,7 +166,7 @@ func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 	title.TextSize = 20
 	title.Alignment = fyne.TextAlignCenter
 
-	hint := canvas.NewText(`e.g. "the fruit of the Spirit"`, pal.TextMuted)
+	hint := canvas.NewText(`e.g. "what did God say to Jonah?"`, pal.TextMuted)
 	hint.TextSize = subheadingTextSize
 	hint.Alignment = fyne.TextAlignCenter
 
@@ -184,7 +184,7 @@ func aiSearchPromptView(state *AppState) fyne.CanvasObject {
 func aiNoKeyView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
-	title := canvas.NewText("AI passage search needs your own key", pal.Text)
+	title := canvas.NewText("Find needs your own AI key", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 18
 	title.Alignment = fyne.TextAlignCenter
