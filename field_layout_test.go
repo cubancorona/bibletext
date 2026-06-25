@@ -85,7 +85,7 @@ func TestFindPromptHintUsesStraightQuotes(t *testing.T) {
 	if strings.ContainsAny(hint, "“”") {
 		t.Errorf("Find hint %q still uses curly quotes (no glyphs in the serif font)", hint)
 	}
-	if !strings.Contains(hint, `"the fruit of the Spirit"`) {
+	if !strings.Contains(hint, `"what did God say to Jonah?"`) {
 		t.Errorf("Find hint %q is missing the straight-quoted example", hint)
 	}
 }
