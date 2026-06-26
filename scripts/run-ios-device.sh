@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build BibleText for a PHYSICAL iPhone and install it, using FREE provisioning
-# (a personal Apple ID, no paid Developer Program). Works on an Intel Mac.
+# Build BibleText for a PHYSICAL iPhone and install it, signed with your paid
+# Apple Developer Program team (BIBLETEXT_TEAM_ID). Works on an Intel Mac.
 #
 # Why this is more than `fyne package -os ios`:
 #   On an Intel host, fyne's (and gomobile's) iOS packaging compile the app for
@@ -16,19 +16,20 @@
 #   • iPhone: connect by cable, unlock, Trust This Computer, and enable
 #     Settings → Privacy & Security → Developer Mode.
 #   • Xcode → Settings → Accounts → sign in with your Apple ID (free).
-#   • Create the cert + a provisioning profile for io.github.cubancorona.bibletext once, by
+#   • Create the cert + a provisioning profile for uk.co.bibletext once, by
 #     building any app with that bundle id + your Personal Team to the phone in
 #     Xcode (a throwaway "Signer" project works). The cert + profile then persist
 #     and this script reuses them.
 #
-# After that: just run this script. The free signature lapses after ~7 days —
-# re-run to reinstall.
+# After that: just run this script. A paid-team development profile is valid for
+# ~1 year (vs a free team's 7 days) — re-run any time to reinstall.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
-APP_ID="${BIBLETEXT_APP_ID:-io.github.cubancorona.bibletext}"
+APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
+TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"   # paid Apple Developer Program team
 IOS_MIN="13.0"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
@@ -45,32 +46,44 @@ note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
-# ── 1. signing certificate ──────────────────────────────────────────────────
-CERT_LINE="$(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Development' | head -1 || true)"
-CERT_HASH="$(printf '%s' "$CERT_LINE" | awk '{print $2}')"
-CERT_NAME="$(printf '%s' "$CERT_LINE" | sed -E 's/.*"(.*)"/\1/')"
-[ -n "$CERT_HASH" ] || fail "No 'Apple Development' certificate. Sign into Xcode and run a throwaway app to the phone once (one-time setup above)."
-note "signing identity: $CERT_NAME"
+# ── 1. signing certificate (the Apple Development cert under TEAM_ID) ─────────
+# There may be several "Apple Development" certs (e.g. an old free team's). A
+# cert's team is the OU of its subject — match THAT to TEAM_ID, not the per-cert
+# id Xcode shows in parentheses after the name (that is NOT the team).
+CERT_HASH=""; CERT_NAME=""
+while IFS= read -r line; do
+    h="$(printf '%s' "$line" | awk '{print $2}')"
+    n="$(printf '%s' "$line" | sed -E 's/.*"(.*)"/\1/')"
+    ou="$(security find-certificate -c "$n" -p 2>/dev/null | openssl x509 -noout -subject -nameopt sep_multiline 2>/dev/null | awk -F= '/OU/{print $2; exit}' | tr -d ' ')"
+    if [ "$ou" = "$TEAM_ID" ]; then CERT_HASH="$h"; CERT_NAME="$n"; break; fi
+done < <(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Development')
+[ -n "$CERT_HASH" ] || fail "No 'Apple Development' cert for team $TEAM_ID. Sign into Xcode with that account and mint one (header)."
+note "signing identity: $CERT_NAME  (team $TEAM_ID)"
 
 # ── 2. connected device ─────────────────────────────────────────────────────
 DEVICE_ID="${BIBLETEXT_DEVICE_ID:-$(xcrun devicectl list devices 2>/dev/null | awk '/(iPhone|iPad)/ && /connected/ {print $(NF-1); exit}')}"
 [ -n "$DEVICE_ID" ] || { xcrun devicectl list devices 2>&1 | sed 's/^/  /'; fail "No connected iPhone. Plug it in, unlock, Trust, enable Developer Mode."; }
 note "target device: $DEVICE_ID"
 
-# ── 3. provisioning profile for this app id (Xcode 16 uses the UserData dir) ──
-PROFILE_FILE=""; PROFILE_NAME=""
+# ── 3. provisioning profile under TEAM_ID covering this app id ───────────────
+# Match by the profile's application-identifier ("<TEAM>.<bundle>", or the team
+# wildcard "<TEAM>.*"), so we pick the RIGHT team's profile and accept the wildcard
+# "iOS Team Provisioning Profile: *". An explicit bundle-id profile wins if present.
+PROFILE_FILE=""; PROFILE_NAME=""; WILD_FILE=""; WILD_NAME=""
 for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
     [ -d "$dir" ] || continue
     while IFS= read -r -d '' p; do
         plist="$(security cms -D -i "$p" 2>/dev/null || true)"
-        if printf '%s' "$plist" | grep -q "$APP_ID"; then
-            PROFILE_FILE="$p"
-            PROFILE_NAME="$(printf '%s' "$plist" | python3 -c 'import sys,plistlib;print(plistlib.loads(sys.stdin.buffer.read()).get("Name",""))')"
-            break 2
-        fi
+        appid="$(printf '%s' "$plist" | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)"
+        name="$(printf '%s' "$plist" | plutil -extract Name raw -o - - 2>/dev/null || true)"
+        case "$appid" in
+            "$TEAM_ID.$APP_ID") PROFILE_FILE="$p"; PROFILE_NAME="$name"; break 2 ;;
+            "$TEAM_ID."\*)      WILD_FILE="$p"; WILD_NAME="$name" ;;
+        esac
     done < <(find "$dir" -name '*.mobileprovision' -print0 2>/dev/null)
 done
-[ -n "$PROFILE_FILE" ] || fail "No provisioning profile for $APP_ID. Do the one-time Xcode run with that exact bundle id."
+[ -n "$PROFILE_FILE" ] || { PROFILE_FILE="$WILD_FILE"; PROFILE_NAME="$WILD_NAME"; }
+[ -n "$PROFILE_FILE" ] || fail "No provisioning profile for $APP_ID under team $TEAM_ID. Mint one (header)."
 note "provisioning profile: $PROFILE_NAME"
 
 # ── 4. let fyne assemble the .app bundle (Info.plist + icons + assets) ───────
@@ -121,5 +134,5 @@ cat <<EOF
   • If launch said "Locked", just unlock the phone and tap the BibleText icon.
   • First ever install: Settings → General → VPN & Device Management → (your
     Apple ID) → Trust.
-  • The signature expires in ~7 days — re-run this script to reinstall.
+  • The development profile is valid ~1 year (paid team) — re-run any time.
 EOF
