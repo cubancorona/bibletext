@@ -81,9 +81,10 @@ stock Fyne so plain `go` commands need no setup.
 - 📱 **Touch UI** (iOS) — bottom-tab layout (Read / Books / Search) with full-size
   touch targets; the same data, search and theme code as the desktop build.
 - 🤖 **AI study** (bring your own key) — select any passage and ask an AI to
-  **Explain**, **Analyze context**, or **Analyze translation** it, using your own
-  Gemini / ChatGPT / Claude / Grok API key. See
-  [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
+  **Ask a question…**, **Explain**, **Analyze context**, or **Analyze translation**,
+  using your own Gemini / ChatGPT / Claude / Grok API key. There's also an AI
+  **Find** that turns a plain-language request into matching passages on the Search
+  tab. See [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
 - 🔗 **Cross-references & Gospel parallels** — select a verse and choose
   **Cross-references** to see related passages (vote-ranked), each a tap away. For a
   Gospel verse, the same event in the other Gospels appears first, tagged
@@ -104,16 +105,18 @@ stock Fyne so plain `go` commands need no setup.
 
 ## Bible versions
 
-The reader ships with the **World English Bible (WEB)** — a public-domain
-translation, free to distribute, fetched from
-[bible-api.com](https://bible-api.com/). Use the **translation switcher in the
-header** (the version name beneath "BibleText") to change versions.
+The reader ships with two public-domain translations — the **World English Bible
+(WEB)** and the **Berean Standard Bible (BSB)** — both free to distribute and
+fetched in a single request each from the free, key-less
+[bible.helloao.org](https://bible.helloao.org/). Use the **translation switcher in
+the header** (the version name beneath "BibleText") to change versions.
 
 Two more translations are wired in:
 
 | Version | Abbrev | Rights holder | Status |
 |---|---|---|---|
 | World English Bible | WEB | Public domain | ✅ Real text |
+| Berean Standard Bible | BSB | Public domain (CC0) | ✅ Real text |
 | New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 Evaluation in progress |
 | Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
 
@@ -202,9 +205,16 @@ real text only loads once you've dropped the licensed file in place.
 ## AI study (bring your own key)
 
 Select a passage in the reader and the native selection menu gains a **Study with
-AI** submenu with three actions — **Explain**, **Analyze context**, and **Analyze
-translation**. The chosen action plus the selected text are sent to an AI provider
-of your choice, and the answer appears in a panel.
+AI** submenu with four actions — **Ask a question…**, **Explain**, **Analyze
+context**, and **Analyze translation**. The chosen action plus the selected text
+are sent to an AI provider of your choice, and the answer appears in a panel.
+**Ask a question…** opens a small input sheet for a free-form question about the
+selection; the other three run fixed prompts. A separate AI **Find** on the Search
+tab (the **Search / Find** toggle) takes a plain-language request and returns
+matching passages — using only the references the model names, with the verse text
+coming from the app's own Bible data. AI answers carry a **Report** button (to flag
+any output) and the AI-settings sheet shows an in-app note explaining what leaves
+the device.
 
 You supply your own API key per provider. Keys are stored **only on this device**
 (via the OS preferences store) — nothing is embedded in the app. Open the header
@@ -249,8 +259,9 @@ Passage ({Book} {Chapter}):
   historical, literary, and theological themes of `{Book}`."
 - **Analyze translation** — "Discuss translation considerations for the passage
   below: notable Hebrew or Greek words behind the English, how major English
-  translations render it differently, and nuances that are hard to carry into
-  English. The quoted text is from the World English Bible."
+  translations render it differently, and nuances that are hard to carry into English. The quoted text is
+  from the {Version}." (the name of the active translation — e.g. the World English
+  Bible or the Berean Standard Bible)
 
 The reference sent is the **book and chapter only** (e.g. `Passage (John 1)`), not
 the specific verse number. The separate **Test key** button in settings sends just
@@ -287,7 +298,8 @@ The application's source code is licensed under the **[Apache License 2.0](LICEN
 
 Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
 
-- Scripture: **World English Bible** and **Berean Standard Bible** — public domain.
+- Scripture: **World English Bible** and **Berean Standard Bible** — public domain
+  (via [bible.helloao.org](https://bible.helloao.org/)).
 - Cross-references: **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
   Treasury of Scripture Knowledge — **CC BY**.
 - UI font: **Atkinson Hyperlegible** (Braille Institute) — **SIL Open Font License 1.1**.
