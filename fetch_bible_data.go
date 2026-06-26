@@ -259,7 +259,7 @@ func fetchWithRetry(client httpClient, url string, maxRetries int) ([]byte, erro
 		}
 
 		// Set user agent to be polite to the server
-		req.Header.Set("User-Agent", "BibleText-Go/1.0 (Learning Project)")
+		req.Header.Set("User-Agent", "BibleText/1.0")
 
 		// Make the request
 		resp, err := client.Do(req)
