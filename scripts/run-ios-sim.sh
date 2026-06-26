@@ -20,7 +20,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
-APP_ID="io.github.cubancorona.bibletext"
+APP_ID="uk.co.bibletext"
 DEVICE_NAME="${BIBLETEXT_SIM_DEVICE:-iPhone 15}"
 
 export PATH="$(go env GOPATH)/bin:$PATH"

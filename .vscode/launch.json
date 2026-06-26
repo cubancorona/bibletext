@@ -26,7 +26,7 @@
       // shipped artifact (proper app-id, icon, bundle behaviour).
       "type": "node-terminal",
       "request": "launch",
-      "command": "fyne package -os darwin --app-id io.github.cubancorona.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop'",
+      "command": "fyne package -os darwin --app-id uk.co.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop'",
       "cwd": "${workspaceFolder}/cmd/desktop"
     },
     {
