@@ -123,8 +123,14 @@ type AppState struct {
 
 	// fullPending is true when the app opened on the embedded Gospels seed (no cache
 	// yet) and the complete Bible is still downloading in the background; it flips to
-	// false once fetchFullInBackground swaps the full text in.
+	// false once triggerFullDownload swaps the full text in. Drives the "downloading the
+	// full Bible" banner on the book lists (incompleteBibleBanner).
 	fullPending bool
+
+	// fullDownloading guards triggerFullDownload to ONE in-flight fetch: the foreground
+	// re-trigger and the post-failure auto-retry all funnel through it, so a flaky
+	// connection can never stack overlapping full-Bible downloads. UI-goroutine only.
+	fullDownloading bool
 
 	// stopping is set when the app is tearing down (window close / lifecycle stop)
 	// so a late background result (e.g. a version download that finishes during

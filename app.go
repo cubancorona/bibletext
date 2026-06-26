@@ -44,7 +44,7 @@ func loadStateData() (*AppState, error) {
 	version, _ := versionByID(defaultVersionID)
 	// Try the on-disk cache first (fast). On a cache miss, open INSTANTLY on the
 	// embedded Gospels seed and download the complete Bible in the background
-	// (StartBackgroundLoad → fetchFullInBackground) rather than blocking on the
+	// (StartBackgroundLoad → triggerFullDownload) rather than blocking on the
 	// chapter-by-chapter API fetch — which can take minutes and is at the mercy of
 	// bible-api.com rate-limiting. The seed is never cached, so once the background
 	// fetch lands it caches the full text for every later launch.
@@ -153,38 +153,55 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			rebuildWindow(state)
 			if state.fullPending {
 				// Opened on the embedded Gospels; download the complete Bible in the
-				// background and swap it in when it lands.
-				go fetchFullInBackground(state)
+				// background (resilient + self-retrying) and swap it in when it lands.
+				triggerFullDownload(state)
 			}
 		})
 	}()
 }
 
-// fetchFullInBackground downloads the complete default-version Bible after the app has
-// already opened on the embedded Gospels seed (loadStateData), then swaps the full text
-// into the live state on the UI thread. On failure — offline, or the API rate-limiting
-// to death — it leaves the Gospels in place; the reader is already reading.
-func fetchFullInBackground(state *AppState) {
-	version, _ := versionByID(defaultVersionID)
-	full, mode, err := loadVersionData(version, nil) // slow per-chapter fetch; caches on success
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "BibleText: background full-Bible fetch failed (keeping Gospels):", err)
+// triggerFullDownload fetches the complete default-version Bible in the background after
+// the app opened on the embedded Gospels seed (loadStateData), then swaps the full text
+// into the live state on the UI thread. It is resilient + self-healing: a single-flight
+// guard (fullDownloading) prevents overlapping fetches, and on failure it auto-retries
+// after a short delay — so a stalled, dropped, or backgrounded download can't leave the
+// reader permanently stuck on the Gospels. The app-foreground hook and a manual retry
+// also funnel through here. MUST be called on the Fyne UI goroutine.
+func triggerFullDownload(state *AppState) {
+	if state == nil || state.stopping.Load() || !state.fullPending || state.fullDownloading {
 		return
 	}
-	fyne.Do(func() {
-		if state.loadedVersions != nil {
-			state.loadedVersions[version.ID] = full
-		}
-		// Only swap the live view if the reader is still on the default version (they
-		// may have switched translations while it downloaded).
-		if state.CurrentVersion != version.ID {
-			return
-		}
-		state.Bible = full
-		state.currentMode = mode
-		state.fullPending = false
-		rebuildWindow(state)
-	})
+	state.fullDownloading = true
+	go func() {
+		version, _ := versionByID(defaultVersionID)
+		full, mode, err := loadVersionData(version, nil) // one helloao request; caches on success
+		fyne.Do(func() {
+			state.fullDownloading = false
+			if state.stopping.Load() {
+				return // tearing down — don't mutate state or schedule timers
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "BibleText: full-Bible download failed, will retry:", err)
+				// Self-heal: try again shortly (also retried on app-foreground). The guard
+				// above keeps retries from stacking; fullPending gates it to "still needed".
+				time.AfterFunc(20*time.Second, func() { fyne.Do(func() { triggerFullDownload(state) }) })
+				return
+			}
+			if state.loadedVersions != nil {
+				state.loadedVersions[version.ID] = full
+			}
+			// Only swap the live view if the reader is still on the default version (they
+			// may have switched translations while it downloaded); the cache is warm either way.
+			if state.CurrentVersion != version.ID {
+				state.fullPending = false
+				return
+			}
+			state.Bible = full
+			state.currentMode = mode
+			state.fullPending = false
+			rebuildWindow(state)
+		})
+	}()
 }
 
 // InstallReadingStateFlush captures the precise within-chapter scroll position
@@ -200,6 +217,10 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 		flushReadingState(state)
 	})
 	lc.SetOnExitedForeground(func() { flushReadingState(state) }) // iOS/Android background
+	// Retry the full-Bible download whenever the app returns to the foreground — covers a
+	// fetch that stalled or dropped while backgrounded. No-op once the full text has landed
+	// (triggerFullDownload guards on fullPending + single-flight).
+	lc.SetOnEnteredForeground(func() { fyne.Do(func() { triggerFullDownload(state) }) })
 	if window != nil && !fyne.CurrentDevice().IsMobile() {
 		// Desktop: the window-close button bypasses the lifecycle "stopped" hook
 		// until teardown, so capture here while the NSTextView is still alive.
