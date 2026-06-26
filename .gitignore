@@ -21,3 +21,4 @@ bibletext-cache.json
 .DS_Store
 third_party/
 icon_work/
+build/
