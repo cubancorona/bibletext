@@ -69,11 +69,19 @@ note "target device: $DEVICE_ID"
 # Match by the profile's application-identifier ("<TEAM>.<bundle>", or the team
 # wildcard "<TEAM>.*"), so we pick the RIGHT team's profile and accept the wildcard
 # "iOS Team Provisioning Profile: *". An explicit bundle-id profile wins if present.
+# Only DEVELOPMENT profiles are eligible: once an App Store *distribution* profile
+# for this exact bundle id exists (e.g. "iOS Team Store Provisioning Profile:
+# uk.co.bibletext", minted for release), it would win the explicit match but cannot
+# install directly on a device — it fails with MIInstallerErrorDomain 13 "Attempted
+# to install a Beta profile without the proper entitlement". Distribution profiles
+# have no ProvisionedDevices key, so we skip any profile lacking one.
 PROFILE_FILE=""; PROFILE_NAME=""; WILD_FILE=""; WILD_NAME=""
 for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
     [ -d "$dir" ] || continue
     while IFS= read -r -d '' p; do
         plist="$(security cms -D -i "$p" 2>/dev/null || true)"
+        # skip distribution/App Store profiles (no ProvisionedDevices) — dev installs only
+        printf '%s' "$plist" | plutil -extract ProvisionedDevices raw -o - - >/dev/null 2>&1 || continue
         appid="$(printf '%s' "$plist" | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)"
         name="$(printf '%s' "$plist" | plutil -extract Name raw -o - - 2>/dev/null || true)"
         case "$appid" in
