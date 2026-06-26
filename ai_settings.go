@@ -197,6 +197,19 @@ func showAISettings(state *AppState) {
 	redLetter.SetChecked(redLetterEnabled())
 	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
 
+	// In-app disclosure of where AI prompts go, shown right under the key field
+	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
+	// mirrors the privacy policy and links to it.
+	aiNote := widget.NewRichText(&widget.TextSegment{
+		Text:  "When you use AI study, the passage you select and your question are sent to the AI provider you choose, using your key.",
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+	})
+	aiNote.Wrapping = fyne.TextWrapWord
+	aiDisclosure := container.NewVBox(aiNote)
+	if u, err := url.Parse("https://cubancorona.github.io/bibletext/"); err == nil {
+		aiDisclosure.Add(container.NewHBox(widget.NewHyperlink("Privacy Policy ↗", u), layout.NewSpacer()))
+	}
+
 	// Assistant + key first so the key field sits high in the sheet — on a phone
 	// the soft keyboard covers the lower half, and this keeps the field above it.
 	// Section labels (not separators) divide the groups, keeping the sheet tight.
@@ -204,6 +217,7 @@ func showAISettings(state *AppState) {
 		sectionLabel("ASSISTANT", pal),
 		active,
 		keyArea,
+		aiDisclosure,
 		sectionLabel("READING", pal),
 		redLetter,
 	)

@@ -9,6 +9,7 @@ package bibletext
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -119,6 +120,27 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	copyBtn.Importance = widget.LowImportance
 	copyBtn.Disable()
 
+	// Report lets a reader flag AI output (Guideline 1.2): it opens a pre-filled
+	// email to support with the question + the generated answer. Enabled once an
+	// answer is shown. Only this panel renders free-form AI prose — "Find" shows
+	// canonical scripture only — so this is the one surface that needs it.
+	reportBtn := widget.NewButton("Report", func() {
+		if current == "" {
+			return
+		}
+		mailBody := fmt.Sprintf(
+			"I'd like to report AI-generated content shown in BibleText.\n\nReference: %s %d\nQuestion: %s\n\nResponse:\n%s\n\nMy concern:\n",
+			state.CurrentBook, state.CurrentChapter, strings.TrimSpace(question), current)
+		mu := &url.URL{
+			Scheme:   "mailto",
+			Opaque:   "cubancorona@gmail.com",
+			RawQuery: url.Values{"subject": {"BibleText: report AI content"}, "body": {mailBody}}.Encode(),
+		}
+		fyne.CurrentApp().OpenURL(mu)
+	})
+	reportBtn.Importance = widget.LowImportance
+	reportBtn.Disable()
+
 	closeBtn := widget.NewButton("Close", func() {
 		stopThinking()
 		if popup != nil {
@@ -133,7 +155,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	footer := container.NewVBox(
 		widget.NewSeparator(),
 		disclaimer,
-		container.NewHBox(layout.NewSpacer(), copyBtn, closeBtn),
+		container.NewHBox(reportBtn, layout.NewSpacer(), copyBtn, closeBtn),
 	)
 
 	// --- State transitions. setThinking/setError layer their content on top of
@@ -153,6 +175,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		stopThinking()
 		current = text
 		copyBtn.Enable()
+		reportBtn.Enable()
 		answer.ParseMarkdown(text)
 		// A word-wrapped RichText only reports its true height once it has wrapped
 		// at a known width. Pre-wrap at the body width so the height is right, then
