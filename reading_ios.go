@@ -1035,7 +1035,13 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 			rebuildWindow(state)
 		})
 		exit.Importance = widget.LowImportance
-		exitRow := container.NewBorder(nil, nil, nil, exit, nil)
+		// A quiet "Book Chapter" marker on the LEFT of the exit row so the reader keeps
+		// their place in distraction-free mode. Muted so it never competes with the
+		// verse text, and vertically centred against the minimize button on the right.
+		ref := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.TextMuted)
+		ref.TextSize = 16
+		refBox := container.NewVBox(layout.NewSpacer(), ref, layout.NewSpacer())
+		exitRow := container.NewBorder(nil, nil, refBox, exit, nil)
 		body := container.NewBorder(exitRow, nil, nil, nil, container.NewStack(paper, host))
 		return container.NewPadded(body)
 	}
