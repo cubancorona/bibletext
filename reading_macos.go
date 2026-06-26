@@ -46,6 +46,17 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     NSMenu *menu = [super menuForEvent:event];
     if (menu == nil || self.selectedRange.length == 0) return menu;
 
+    // Curate the default selection menu down to the essentials. macOS auto-adds a
+    // long list a Bible reader doesn't need — Translate, Search-the-web, Speech,
+    // Services, and its own Share (which duplicates ours below). Keep only Copy and
+    // Look Up; drop the rest (and the now-stray separators), then append our group.
+    NSMutableArray<NSMenuItem *> *drop = [NSMutableArray array];
+    for (NSMenuItem *it in menu.itemArray) {
+        if (it.action == @selector(copy:) || [it.title hasPrefix:@"Look Up"]) continue;
+        [drop addObject:it];
+    }
+    for (NSMenuItem *it in drop) [menu removeItem:it];
+
     NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
     for (NSArray *pair in @[@[@"Ask a question…", @"ask"],
                             @[@"Explain", @"explain"],
@@ -57,9 +68,9 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
         [ai addItem:it];
     }
 
-    // Keep the three BibleText actions together as one group at the end of the
-    // system menu, in the same order as iOS: Study with AI, Share, Cross-references.
-    [menu addItem:[NSMenuItem separatorItem]];
+    // Our group below — Study with AI, Share, Cross-references (same order as iOS) —
+    // set off by a separator, but only if Copy / Look Up survived the curation above.
+    if (menu.numberOfItems > 0) [menu addItem:[NSMenuItem separatorItem]];
 
     NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
     aiItem.submenu = ai;
