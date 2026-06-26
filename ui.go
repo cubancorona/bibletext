@@ -59,6 +59,24 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	return container.NewStack(bg, content)
 }
 
+// incompleteBibleBanner is the status strip shown above the book lists while the app is
+// still on the embedded Gospels seed — the full default-version Bible is downloading in the
+// background (triggerFullDownload, which self-retries). It returns nil once the full text
+// has landed (or the reader is on a different, complete version); the Books tab / sidebar
+// rebuild after the swap drops it automatically.
+func incompleteBibleBanner(state *AppState) fyne.CanvasObject {
+	if state == nil || !state.fullPending || state.CurrentVersion != defaultVersionID {
+		return nil
+	}
+	pal := state.pal()
+	icon := canvas.NewImageFromResource(theme.NewColoredResource(theme.DownloadIcon(), colorNameMuted))
+	icon.FillMode = canvas.ImageFillContain
+	icon.SetMinSize(fyne.NewSize(15, 15))
+	msg := caption("Downloading the full Bible… showing the Gospels for now.")
+	row := container.NewBorder(nil, nil, container.NewPadded(icon), nil, msg)
+	return surface(container.NewPadded(row), pal.SurfaceAlt, pal.Border, fyne.Size{})
+}
+
 // buildLoadingView is the startup screen shown while the Bible loads on a
 // background goroutine (state.loadPhase == loadPending). It is pure Fyne — no
 // native reading overlay — so it renders identically on every platform and never
