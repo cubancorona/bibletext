@@ -1,5 +1,10 @@
 # BibleText — project guide for AI assistants
 
+> **Note for humans:** this file is an internal guide for AI coding assistants.
+> If you're here to use or contribute to the project, start with
+> [README.md](README.md) (features & usage) and [ARCHITECTURE.md](ARCHITECTURE.md)
+> (how it's built).
+
 A cross-platform Bible reader (macOS / Windows / Linux / iOS) from one Go
 codebase, built with [Fyne](https://fyne.io/). Module name: `bibletext`.
 
