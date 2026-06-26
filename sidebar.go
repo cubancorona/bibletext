@@ -203,15 +203,21 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		scrollToCurrent()
 	}
 
-	header := container.NewVBox(
+	headerItems := []fyne.CanvasObject{
 		sectionLabel("READ", pal),
 		toggle,
 		fieldHost,
 		captionHost,
 		spacer(10),
+	}
+	if b := incompleteBibleBanner(state); b != nil {
+		headerItems = append(headerItems, b, spacer(8))
+	}
+	headerItems = append(headerItems,
 		sectionLabel("BOOKS", pal),
 		inputFrame(withCaret(state, bookFilter), pal.Border),
 	)
+	header := container.NewVBox(headerItems...)
 	applyMode() // initialise the field + caption to the persisted mode
 
 	body := container.NewBorder(header, nil, nil, nil, list)
