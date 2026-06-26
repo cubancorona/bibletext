@@ -234,10 +234,15 @@ func buildMobileBooksTab(state *AppState, switchToRead func()) fyne.CanvasObject
 		list.Refresh()
 	}
 
-	header := container.NewVBox(
+	headerItems := make([]fyne.CanvasObject, 0, 4)
+	if b := incompleteBibleBanner(state); b != nil {
+		headerItems = append(headerItems, b, spacer(8))
+	}
+	headerItems = append(headerItems,
 		sectionLabel("BOOKS", pal),
 		inputFrame(withCaret(state, bookFilter), pal.Border),
 	)
+	header := container.NewVBox(headerItems...)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, list)
 }
 
