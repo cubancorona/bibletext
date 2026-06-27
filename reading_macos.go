@@ -48,8 +48,10 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
 
     // Curate the default selection menu down to the essentials. macOS auto-adds a
     // long list a Bible reader doesn't need — Translate, Search-the-web, Speech,
-    // Services, and its own Share (which duplicates ours below). Keep only Copy and
-    // Look Up; drop the rest (and the now-stray separators), then append our group.
+    // Font/Spelling/Substitutions, and its own Share (which duplicates ours below).
+    // Keep only Copy and Look Up; drop the rest (and the now-stray separators), then
+    // append our group. (The "Services" submenu is injected later, at display time,
+    // so it can't be removed here — validRequestorForSendType: below suppresses it.)
     NSMutableArray<NSMenuItem *> *drop = [NSMutableArray array];
     for (NSMenuItem *it in menu.itemArray) {
         if (it.action == @selector(copy:) || [it.title hasPrefix:@"Look Up"]) continue;
@@ -93,6 +95,17 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
     xref.target = self;
     [menu addItem:xref];
     return menu;
+}
+
+// AppKit appends a "Services" submenu to a text view's contextual menu at display
+// time — after menuForEvent: returns — so the curation above can never remove it.
+// That submenu is only inserted when the responder chain offers a valid Services
+// requestor, and NSTextView claims to be one (so Services can act on the selection).
+// This read-only reading pane has no use for Services, so we opt out by claiming we
+// neither send nor receive anything; with no requestor in the chain, AppKit never
+// inserts the submenu. Copy / Look Up / our own actions don't go through Services.
+- (id)validRequestorForSendType:(NSPasteboardType)sendType returnType:(NSPasteboardType)returnType {
+    return nil;
 }
 
 - (void)hbAI_ask:(id)sender {
