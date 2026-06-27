@@ -879,32 +879,50 @@ func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 
 // referenceChapterGrid is the right pane: the chapter-number grid for one book, with the
 // book name + chapter count above it. onPick fires with the chapter. It returns the grid,
-// a reselect(chapter) callback that re-highlights the selected chapter IN PLACE (just the
-// buttons' importance — rebuilding would re-create the theme override and reflow the
-// cells), and scrollToSelected() which scrolls the grid so the selected chapter is visible
-// (used when the keyboard shrinks the pane).
-func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(int), func()) {
-	nums := state.Bible.GetChapterNumbersForBook(book)
-
-	head := canvas.NewText(fmt.Sprintf("%s · %d chapters", book, len(nums)), pal.TextMuted)
+// a setBook(book, selected) that repopulates it for a different book IN PLACE, a
+// reselect(chapter) callback that re-highlights the selected chapter IN PLACE (just the
+// buttons' importance), and scrollToSelected() which scrolls the grid so the selected
+// chapter is visible (used when the keyboard shrinks the pane). setBook and reselect both
+// reuse the same grid + scroll + theme override, so neither a book change nor a chapter
+// re-highlight re-creates the override (which would reflow the cells — a visible shrink).
+func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(string, int), func(int), func()) {
+	head := canvas.NewText("", pal.TextMuted)
 	head.TextSize = 12
 
 	// Small fixed-size cells, packed tightly (denseGrid), so most books show all their
-	// chapters without scrolling; they wrap to as many columns as the pane is wide.
+	// chapters without scrolling; they wrap to as many columns as the pane is wide. The
+	// grid, scroll, and dense theme override are created ONCE here and reused by setBook —
+	// rebuilding them per book would re-create the override, whose next layout pass shifts
+	// the cell metrics and reads as the grid jumping/shrinking.
 	grid := container.NewGridWrap(fyne.NewSize(34, 34))
-	btns := make(map[int]*widget.Button, len(nums))
-	for _, c := range nums {
-		ch := c
-		btn := widget.NewButton(fmt.Sprintf("%d", ch), func() { onPick(ch) })
-		btn.Importance = widget.LowImportance
-		if ch == selected {
-			btn.Importance = widget.HighImportance
-		}
-		btns[ch] = btn
-		grid.Add(btn)
-	}
-
+	scroll := container.NewVScroll(denseGrid(state, grid))
+	btns := map[int]*widget.Button{}
 	cur := selected
+
+	// setBook fills the grid for one book IN PLACE: just the buttons + heading change.
+	setBook := func(bk string, sel int) {
+		nums := state.Bible.GetChapterNumbersForBook(bk)
+		head.Text = fmt.Sprintf("%s · %d chapters", bk, len(nums))
+		head.Refresh()
+		cur = sel
+		btns = make(map[int]*widget.Button, len(nums))
+		objs := make([]fyne.CanvasObject, 0, len(nums))
+		for _, c := range nums {
+			ch := c
+			btn := widget.NewButton(fmt.Sprintf("%d", ch), func() { onPick(ch) })
+			btn.Importance = widget.LowImportance
+			if ch == sel {
+				btn.Importance = widget.HighImportance
+			}
+			btns[ch] = btn
+			objs = append(objs, btn)
+		}
+		grid.Objects = objs
+		grid.Refresh()
+		scroll.ScrollToOffset(fyne.NewPos(0, 0)) // a new book starts at the top
+	}
+	setBook(book, selected)
+
 	reselect := func(sel int) {
 		cur = sel
 		for ch, b := range btns {
@@ -919,11 +937,10 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 		}
 	}
 
-	scroll := container.NewVScroll(denseGrid(state, grid))
 	scrollToSelected := func() { scrollChildIntoView(scroll, btns[cur]) }
 
 	obj := container.NewBorder(container.NewPadded(head), nil, nil, nil, scroll)
-	return obj, reselect, scrollToSelected
+	return obj, setBook, reselect, scrollToSelected
 }
 
 // scrollChildIntoView scrolls a VScroll so target (a descendant of its content) is
