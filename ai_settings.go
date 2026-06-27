@@ -82,7 +82,7 @@ func showAISettings(state *AppState) {
 		result := widget.NewLabel("")
 		result.Wrapping = fyne.TextWrapWord
 		result.Hide()
-		testBtn := widget.NewButton("Test key", func() {
+		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
 			key := strings.TrimSpace(entry.Text)
 			result.Show()
 			if key == "" {
@@ -103,7 +103,11 @@ func showAISettings(state *AppState) {
 				})
 			}()
 		})
-		testBtn.Importance = widget.LowImportance
+		// A normal-weight button with an icon, so it clearly reads as tappable. A
+		// low-importance button is borderless — it looks like a plain bold label and
+		// hides that it's interactive (and on touch there's no hover state to reveal
+		// it). Fyne's principle is that every interaction should be visually hinted, so
+		// the icon + button background match the Paste / Clear buttons beside it.
 
 		// API keys are pasted, not typed — a one-tap Paste avoids fighting the
 		// on-screen keyboard (which otherwise covers this field on a phone).
