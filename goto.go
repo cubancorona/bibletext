@@ -125,17 +125,16 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		closePicker()
 	}
 
-	chapterPane := container.NewStack()
-	var renderChapters func()
 	var chapterReselect func(int) // re-highlights a chapter IN PLACE (no grid rebuild)
 	var scrollChapterIntoView func()
-	renderChapters = func() {
-		grid, reselect, scrollSel := referenceChapterGrid(state, pal, selectedBook, highlightChapter(), func(ch int) {
+	// The chapter grid is built ONCE; picking a book repopulates it in place via
+	// setChapterBook. Rebuilding it would re-create its dense theme override, whose next
+	// layout pass shifts the cell metrics — the visible shrink/jump when a book is tapped.
+	gridObj, setChapterBook, reselectFn, scrollSelFn := referenceChapterGrid(
+		state, pal, selectedBook, highlightChapter(), func(ch int) {
 			selectedChapter = ch
 			if withVerse {
-				// Re-highlight in place — rebuilding the grid here reflowed it (the
-				// re-created theme override momentarily changed the cell metrics); Go
-				// commits the selection.
+				// Re-highlight in place — Go commits the selection.
 				if chapterReselect != nil {
 					chapterReselect(ch)
 				}
@@ -144,15 +143,12 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 				closePicker()
 			}
 		})
-		chapterReselect = reselect
-		scrollChapterIntoView = scrollSel
-		chapterPane.Objects = []fyne.CanvasObject{grid}
-		chapterPane.Refresh()
-	}
-	renderChapters()
+	chapterReselect = reselectFn
+	scrollChapterIntoView = scrollSelFn
+	chapterPane := container.NewStack(gridObj)
 
-	// Tapping a book SELECTS it and refreshes the chapter grid — it does not navigate
-	// or change the book-navigator stage. Shared by both left-pane flavours.
+	// Tapping a book SELECTS it and updates the chapter grid IN PLACE — it does not
+	// navigate or change the book-navigator stage. Shared by both left-pane flavours.
 	selectBookInPicker := func(book string) {
 		selectedBook = book
 		if selectedBook == state.CurrentBook {
@@ -162,7 +158,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		} else {
 			selectedChapter = 1
 		}
-		renderChapters()
+		setChapterBook(selectedBook, highlightChapter())
 	}
 
 	// Left pane: the verse "Go to" picker uses the alphabet-grid navigator (letters →
@@ -176,9 +172,10 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		letters := bookLetters(sortedBooks)
 		var bookScroll *container.Scroll
 		var selectedBookBtn fyne.CanvasObject
-		// A two-stage navigator swapped IN PLACE (bookPane.Objects + Refresh, the same
-		// idiom as renderChapters) — no popup rebuild, so the non-modal anchor and the
-		// keyboard never churn. Stage 0 = alphabet grid; stage 1 = the tapped letter's
+		// A two-stage navigator swapped IN PLACE (bookPane.Objects + Refresh) — no popup
+		// rebuild, so the non-modal anchor and the keyboard never churn. The chapter grid
+		// updates in place too (setChapterBook). Stage 0 = alphabet grid; stage 1 = the
+		// tapped letter's
 		// books with a back row to the alphabet.
 		bookPane := container.NewStack()
 		bookStage := 0
