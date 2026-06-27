@@ -60,8 +60,12 @@ done < <(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Deve
 [ -n "$CERT_HASH" ] || fail "No 'Apple Development' cert for team $TEAM_ID. Sign into Xcode with that account and mint one (header)."
 note "signing identity: $CERT_NAME  (team $TEAM_ID)"
 
-# ── 2. connected device ─────────────────────────────────────────────────────
-DEVICE_ID="${BIBLETEXT_DEVICE_ID:-$(xcrun devicectl list devices 2>/dev/null | awk '/(iPhone|iPad)/ && /connected/ {print $(NF-1); exit}')}"
+# ── 2. reachable device ─────────────────────────────────────────────────────
+# devicectl reports a usable phone as "connected" (USB) OR "available (paired)"
+# (CoreDevice network tunnel) — install works in either state. Match any reachable
+# iPhone/iPad and pull the UDID by its UUID shape, not column position (the State
+# column is one or two words, which shifts the positional fields).
+DEVICE_ID="${BIBLETEXT_DEVICE_ID:-$(xcrun devicectl list devices 2>/dev/null | awk '/(iPhone|iPad)/ && (/connected/ || /available/ || /paired/) { for (i=1; i<=NF; i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) { print $i; exit } }')}"
 [ -n "$DEVICE_ID" ] || { xcrun devicectl list devices 2>&1 | sed 's/^/  /'; fail "No connected iPhone. Plug it in, unlock, Trust, enable Developer Mode."; }
 note "target device: $DEVICE_ID"
 
