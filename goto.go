@@ -613,7 +613,7 @@ func (t denseGridTheme) Size(name fyne.ThemeSizeName) float32 {
 }
 
 // denseGrid wraps a picker grid so its cells pack tightly (see denseGridTheme).
-func denseGrid(state *AppState, obj fyne.CanvasObject) *container.ThemeOverride {
+func denseGrid(state *AppState, obj fyne.CanvasObject) fyne.CanvasObject {
 	var base fyne.Theme = theme.DefaultTheme()
 	if state.theme != nil {
 		base = state.theme

@@ -877,29 +877,79 @@ func (f fixedWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 	}
 }
 
+// denseGridPadding is the chapter grid's fixed inter-cell gap (the tight look the dense
+// theme used to give via 3pt padding). It is baked into denseGridWrapLayout instead of
+// read from theme.Padding() on purpose: a LAYOUT resolves theme.Padding() from the
+// rendering-theme stack, which only holds the override's dense value WHILE the override's
+// own renderer.Layout is running. Swapping a book re-lays the grid out without that push,
+// so theme.Padding() returned the app's loose 7pt default and the grid visibly spread —
+// the "grid changes size when you pick a book" bug. A constant can't drift. (Widgets, by
+// contrast, DO see a theme override through the per-widget cache; only layouts miss it,
+// which is why no amount of Refresh() on the override fixed this.)
+const denseGridPadding = 3
+
+// denseGridWrapLayout mirrors Fyne's gridWrapLayout — fixed-size cells flowing left to
+// right and wrapping to the available width — but spaces them with the constant
+// denseGridPadding rather than theme.Padding(), so the spacing is identical on every relayout.
+type denseGridWrapLayout struct {
+	cell fyne.Size
+	rows int
+}
+
+func (g *denseGridWrapLayout) cols(width float32) int {
+	if width <= g.cell.Width {
+		return 1
+	}
+	return int((width + denseGridPadding) / (g.cell.Width + denseGridPadding))
+}
+
+func (g *denseGridWrapLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	cols := g.cols(size.Width)
+	g.rows = 0
+	i, x, y := 0, float32(0), float32(0)
+	for _, child := range objects {
+		if !child.Visible() {
+			continue
+		}
+		if i%cols == 0 {
+			g.rows++
+		}
+		child.Move(fyne.NewPos(x, y))
+		child.Resize(g.cell)
+		if (i+1)%cols == 0 {
+			x, y = 0, y+g.cell.Height+denseGridPadding
+		} else {
+			x += g.cell.Width + denseGridPadding
+		}
+		i++
+	}
+}
+
+func (g *denseGridWrapLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	rows := g.rows
+	if rows < 1 {
+		rows = 1
+	}
+	return fyne.NewSize(g.cell.Width, g.cell.Height*float32(rows)+float32(rows-1)*denseGridPadding)
+}
+
 // referenceChapterGrid is the right pane: the chapter-number grid for one book, with the
 // book name + chapter count above it. onPick fires with the chapter. It returns the grid,
 // a setBook(book, selected) that repopulates it for a different book IN PLACE, a
 // reselect(chapter) callback that re-highlights the selected chapter IN PLACE (just the
 // buttons' importance), and scrollToSelected() which scrolls the grid so the selected
-// chapter is visible (used when the keyboard shrinks the pane). setBook and reselect both
-// reuse the same grid + scroll + theme override, so neither a book change nor a chapter
-// re-highlight re-creates the override (which would reflow the cells — a visible shrink).
+// chapter is visible (used when the keyboard shrinks the pane). setBook and reselect reuse
+// the same grid + scroll, so a book change never rebuilds them.
 func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(string, int), func(int), func()) {
 	head := canvas.NewText("", pal.TextMuted)
 	head.TextSize = 12
 
-	// Small fixed-size cells, packed tightly (denseGrid), so most books show all their
-	// chapters without scrolling; they wrap to as many columns as the pane is wide. The
-	// grid, scroll, and dense theme override (`dense`) are created ONCE and reused by
-	// setBook. The override packs the cells with tight (3pt) padding, but it only themes
-	// the children present at its last Refresh: when setBook swaps in a new book's buttons
-	// it MUST call dense.Refresh() (not grid.Refresh()), or the new buttons fall back to
-	// the app's loose 7pt default padding and the whole grid visibly spreads out — the
-	// "grid changes size when you pick a book" bug. (Documented on container.ThemeOverride.)
-	grid := container.NewGridWrap(fyne.NewSize(34, 34))
-	dense := denseGrid(state, grid)
-	scroll := container.NewVScroll(dense)
+	// Fixed 34pt cells laid out by denseGridWrapLayout, which spaces them with a constant
+	// gap (denseGridPadding) — so the grid keeps identical spacing whenever setBook swaps a
+	// book's buttons in. (The old theme-override approach lost its tight padding on a swap
+	// because layouts read theme.Padding() from the rendering stack, not the widget cache.)
+	grid := container.New(&denseGridWrapLayout{cell: fyne.NewSize(34, 34)})
+	scroll := container.NewVScroll(grid)
 	btns := map[int]*widget.Button{}
 	cur := selected
 
@@ -922,9 +972,7 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 			objs = append(objs, btn)
 		}
 		grid.Objects = objs
-		// Re-theme the new buttons THROUGH the override (required when its content's
-		// children change); a bare grid.Refresh() leaves them at the loose default padding.
-		dense.Refresh()
+		grid.Refresh()
 		scroll.ScrollToOffset(fyne.NewPos(0, 0)) // a new book starts at the top
 	}
 	setBook(book, selected)
