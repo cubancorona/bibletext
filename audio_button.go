@@ -16,8 +16,8 @@ import (
 // rebuilds the cheap Fyne header without re-pushing chapter HTML to the overlay
 // (the push path skips on an unchanged chapterRenderFingerprint, which an audio
 // toggle never changes).
-func audioButton(state *AppState, boxH float32) fyne.CanvasObject {
-	btn := newIconTapButton(state, audioButtonIcon(state), 20, boxH, func() {
+func audioButton(state *AppState, iconSize, boxH float32) fyne.CanvasObject {
+	btn := newIconTapButton(state, audioButtonIcon(state), iconSize, boxH, func() {
 		gAudio.playPauseCurrent(state)
 	})
 	gAudio.setOnChange(func() { state.refreshReadingOnly() })

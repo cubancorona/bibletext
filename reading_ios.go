@@ -1102,12 +1102,14 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		showChapterPicker(state)
 	})
 
-	// Small copy icon tucked after the heading — lighter than the chapter-nav
-	// arrows but still a full-height (finger-friendly) hit box.
+	// Small copy icon + the play/listen button tucked after the heading — both
+	// lighter than the chapter-nav arrows but full-height (finger-friendly) hit
+	// boxes. Audio sits beside copy as the chapter's other "act on this text" verb
+	// (recorded play triangle, or the voice glyph for read-aloud).
 	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
 		copyChapter(state)
 	})
-	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
+	titleRow := container.NewHBox(ref, hgap(6), copyBtn, hgap(6), audioButton(state, 18, boxH))
 
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
@@ -1141,8 +1143,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS).
 	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next)
 
-	// Right cluster: play this chapter's audio (recorded where available, otherwise
-	// read aloud) beside the full-screen toggle.
+	// Full-screen is the lone control on the right.
 	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
 		state.IsFullScreen = true
 		rebuildWindow(state)
@@ -1152,9 +1153,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// Tighter-than-default gap between the two rows so the book heading and the
 	// chapter/nav line read as one compact block, not two airy lines.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
-	right := container.NewVBox(layout.NewSpacer(),
-		container.NewHBox(audioButton(state, boxH), hgap(8), fullScreenBtn),
-		layout.NewSpacer())
+	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, left, right, nil)
 
 	// No divider under the header — the flat reading surface separates the chapter
