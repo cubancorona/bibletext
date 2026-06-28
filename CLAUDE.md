@@ -138,6 +138,12 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   (cross-refs, red-letter, verse-of-day) simply skip the deuterocanon. Docs: README →
   "Bible versions".
 
+- **Two reading headers — edit BOTH.** The reading toolbar is built per platform:
+  desktop + Android use `chapterHeader` (`reading.go`, via `buildReadingView`),
+  but **iOS uses its own `chapterHeaderMobile`** (`reading_ios.go`, via
+  `buildReadingViewMobile`). A header control (e.g. the audio play button) must be
+  added to *both* or it won't appear on the phone — `reading.go` alone is not the
+  iOS path.
 - **Per-chapter audio (iOS only).** `audio.go` resolves what to play for the
   current chapter: a streamed public-domain WEB MP3 from eBible.org
   (`ebibleAudioBooks`, range-seekable) when the version is WEB/WEB-Catholic *and*
