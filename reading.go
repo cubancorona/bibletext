@@ -127,7 +127,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// focus toggle. Clustered with the focus toggle, sharing the arrows' baseline.
 	var rightControls fyne.CanvasObject = focusBtn
 	if audioSupported() {
-		rightControls = container.NewHBox(audioButton(state, 20, navBoxH), hgap(8), focusBtn)
+		rightControls = container.NewHBox(audioButton(state, navBoxH), hgap(8), focusBtn)
 	}
 
 	left := container.NewVBox(titleRow, chapterRow)
@@ -166,6 +166,7 @@ type iconTapButton struct {
 	iconSize float32
 	boxH     float32
 	disabled bool
+	filled   bool // render an accent-filled disc behind the glyph (the listen control)
 	onTapped func()
 }
 
@@ -183,7 +184,13 @@ func (b *iconTapButton) Tapped(*fyne.PointEvent) {
 }
 
 func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
-	img := canvas.NewImageFromResource(theme.NewColoredResource(b.icon, colorNameMuted))
+	// A filled control draws its glyph in the on-accent colour over an accent disc;
+	// a plain control is a muted glyph on no background.
+	tint := colorNameMuted
+	if b.filled {
+		tint = theme.ColorNameForegroundOnPrimary
+	}
+	img := canvas.NewImageFromResource(theme.NewColoredResource(b.icon, tint))
 	img.FillMode = canvas.ImageFillContain
 	img.SetMinSize(fyne.NewSize(b.iconSize, b.iconSize))
 	if b.disabled {
@@ -197,7 +204,18 @@ func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
 	if w < b.boxH {
 		w = b.boxH
 	}
-	box := container.NewGridWrap(fyne.NewSize(w, b.boxH), container.NewCenter(img))
+	var content fyne.CanvasObject = container.NewCenter(img)
+	if b.filled {
+		// An accent-filled disc marks this as the one obviously-tappable control
+		// among the flat header glyphs.
+		disc := canvas.NewCircle(b.state.pal().Accent)
+		d := b.iconSize + 12
+		content = container.NewStack(
+			container.NewCenter(container.NewGridWrap(fyne.NewSize(d, d), disc)),
+			container.NewCenter(img),
+		)
+	}
+	box := container.NewGridWrap(fyne.NewSize(w, b.boxH), content)
 	return widget.NewSimpleRenderer(box)
 }
 

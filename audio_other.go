@@ -15,3 +15,4 @@ func nativeAudioStartTTS(text, title, artist string) {}
 func nativeAudioToggle()                             {}
 func nativeAudioStop()                               {}
 func nativeAudioSkip(seconds float64)                {}
+func nativeAudioSetArtwork(path string)              {}

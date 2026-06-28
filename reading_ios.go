@@ -1109,7 +1109,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
 		copyChapter(state)
 	})
-	titleRow := container.NewHBox(ref, hgap(6), copyBtn, hgap(6), audioButton(state, 18, boxH))
+	titleRow := container.NewHBox(ref, hgap(6), copyBtn, hgap(6), audioButton(state, boxH))
 
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
