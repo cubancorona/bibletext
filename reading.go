@@ -127,7 +127,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// focus toggle. Clustered with the focus toggle, sharing the arrows' baseline.
 	var rightControls fyne.CanvasObject = focusBtn
 	if audioSupported() {
-		rightControls = container.NewHBox(audioButton(state, navBoxH), hgap(8), focusBtn)
+		rightControls = container.NewHBox(audioButton(state, 20, navBoxH), hgap(8), focusBtn)
 	}
 
 	left := container.NewVBox(titleRow, chapterRow)
