@@ -1,9 +1,10 @@
 package bibletext
 
 // Bible translations (versions). The reader can switch between translations; the
-// active one's text lives in AppState.Bible and is swapped on switch. All
-// versions share the canonical 66-book structure (see bible.go), so navigation,
-// search and the UI need no per-version special-casing.
+// active one's text lives in AppState.Bible and is swapped on switch. Most versions
+// are the 66-book Protestant canon; the World English Bible (Catholic) adds the
+// 73-book deuterocanon (see catholic.go). Navigation, search and the UI are data-driven
+// off BibleData.Books, so they need no per-version special-casing either way.
 //
 // Licensing. The World English Bible and Berean Standard Bible are public domain
 // and come from the free, key-less bible.helloao.org (one request each). NRSV and
@@ -83,6 +84,13 @@ var registeredVersions = []BibleVersion{
 		// bsbVerseText). Bumped so installs holding the v0 cache re-decode.
 		cacheEpoch: 1,
 		source:     bsbSource{},
+	},
+	{
+		ID: "webc", Name: "World English Bible (Catholic)", Abbrev: "WEBC",
+		Publisher: "Public Domain", PublicDomain: true,
+		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
+		// USFM id into traditional Catholic order — see catholic.go.
+		source: webCatholicSource{},
 	},
 	{
 		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",

@@ -129,8 +129,14 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   configured the version flips to selectable with real text automatically.
   `switchVersion` swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
   `bibletext-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
-  shared → both platforms). All versions share the canonical 66-book structure,
-  so reading/search/AI need no per-version code. Docs: README → "Bible versions".
+  shared → both platforms). Most versions are the canonical 66-book Protestant canon;
+  the **World English Bible (Catholic)** (`webCatholicSource`, `catholic.go`) adds the
+  73-book deuterocanon — decoded by USFM **id** (helloao appends the deuterocanon and
+  gives the Greek Esther/Daniel, so the order-based `decodeBSBComplete` can't be reused)
+  and emitted in traditional Catholic order. Reading/search/AI/navigation are data-driven
+  off `BibleData.Books`, so they need no per-version code; 66-book-only features
+  (cross-refs, red-letter, verse-of-day) simply skip the deuterocanon. Docs: README →
+  "Bible versions".
 
 - **Reading-position + history persistence.** `reading_state.go` persists *where
   the reader left off* — translation, book, chapter, the within-chapter **scroll
