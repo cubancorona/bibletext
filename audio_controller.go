@@ -85,6 +85,20 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	default: // audioTTS
 		nativeAudioStartTTS(a.Text, a.Title, a.Subtitle)
 	}
+
+	// Lock-screen / Control Center artwork: a "Book Chapter" card in the share-image
+	// style. Rendered off the UI goroutine; the fonts are captured here (on the UI
+	// goroutine) so the render never touches the live AppState. nativeAudioSetArtwork
+	// is safe to call from any goroutine (it hops to the main thread).
+	title, subtitle := a.Title, a.Subtitle
+	regTTF := serifFontBytes(state, fyne.TextStyle{})
+	boldTTF := serifFontBytes(state, fyne.TextStyle{Bold: true})
+	go func() {
+		if path, err := renderChapterArtwork(title, subtitle, regTTF, boldTTF); err == nil {
+			nativeAudioSetArtwork(path)
+		}
+	}()
+
 	c.fireChange()
 }
 

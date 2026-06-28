@@ -23,8 +23,9 @@ package bibletext
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework AVFoundation -framework MediaPlayer -framework CoreMedia -framework Foundation
+#cgo LDFLAGS: -framework AVFoundation -framework MediaPlayer -framework CoreMedia -framework UIKit -framework Foundation
 
+#import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <math.h>
@@ -49,6 +50,7 @@ static void btAudioUpdateNowPlaying(void);
 @property (nonatomic, strong) AVSpeechSynthesizer *synth;
 @property (nonatomic, copy)   NSString *title;
 @property (nonatomic, copy)   NSString *artist;
+@property (nonatomic, strong) MPMediaItemArtwork *artwork;   // lock-screen card; persists across now-playing refreshes
 @property (nonatomic, assign) BOOL kvoRegistered;
 @property (nonatomic, assign) int  gen;   // bumped on every teardown; cancels stale watchdogs
 @end
@@ -298,6 +300,7 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     if (self.synth != nil && self.synth.isSpeaking) {
         [self.synth stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
     }
+    self.artwork = nil;
     self.mode = BT_MODE_NONE;
 }
 @end
@@ -386,9 +389,16 @@ static void btAudioSetupCommands(void) {
 // ---- MPNowPlayingInfoCenter: title, translation, elapsed/duration, rate ----
 static void btAudioUpdateNowPlaying(void) {
     BTAudioController *c = [BTAudioController shared];
+    if (c.mode == BT_MODE_NONE) {
+        // Nothing loaded (e.g. a late artwork callback arriving after stop) — leave
+        // the lock screen clear instead of resurrecting a ghost card.
+        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
+        return;
+    }
     NSMutableDictionary *info = [NSMutableDictionary dictionary];
-    if (c.title)  info[MPMediaItemPropertyTitle]  = c.title;
-    if (c.artist) info[MPMediaItemPropertyArtist] = c.artist;
+    if (c.title)   info[MPMediaItemPropertyTitle]    = c.title;
+    if (c.artist)  info[MPMediaItemPropertyArtist]   = c.artist;
+    if (c.artwork) info[MPMediaItemPropertyArtwork]  = c.artwork;   // survives every refresh
 
     if (c.mode == BT_MODE_URL && c.player && c.item) {
         double elapsed = CMTimeGetSeconds(c.player.currentTime);
@@ -446,6 +456,21 @@ void bibleTextAudioStop(void) {
         // which would be undesirable on the shutdown path — is unnecessary.
     });
 }
+
+// Set the lock-screen / Control Center artwork from a PNG file (rendered in Go).
+// Stored on the controller so it survives the periodic now-playing refreshes; a
+// late call after stop is absorbed by the mode==NONE guard in btAudioUpdateNowPlaying.
+void bibleTextAudioSetArtwork(const char *path) {
+    NSString *p = path ? [NSString stringWithUTF8String:path] : @"";
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIImage *img = [UIImage imageWithContentsOfFile:p];
+        if (img == nil) return;
+        BTAudioController *c = [BTAudioController shared];
+        c.artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:img.size
+            requestHandler:^UIImage *(CGSize sz){ return img; }];
+        btAudioUpdateNowPlaying();
+    });
+}
 */
 import "C"
 
@@ -474,3 +499,9 @@ func nativeAudioStartTTS(text, title, artist string) {
 func nativeAudioToggle()              { C.bibleTextAudioToggle() }
 func nativeAudioStop()                { C.bibleTextAudioStop() }
 func nativeAudioSkip(seconds float64) { C.bibleTextAudioSkip(C.double(seconds)) }
+
+func nativeAudioSetArtwork(path string) {
+	cp := C.CString(path)
+	defer C.free(unsafe.Pointer(cp))
+	C.bibleTextAudioSetArtwork(cp)
+}
