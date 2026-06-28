@@ -1,3 +1,9 @@
+//go:build !race
+
+// This test builds Fyne widgets via themedTestApp, which is defined only in the
+// !race test helpers (the Fyne test app doesn't run cleanly under -race), so this
+// file must carry the same tag or `go test -race ./...` fails to compile.
+
 package bibletext
 
 import "testing"
