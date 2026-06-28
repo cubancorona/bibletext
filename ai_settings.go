@@ -297,9 +297,20 @@ func newDismissPopUp(content fyne.CanvasObject, cnv fyne.Canvas, onDismiss func(
 }
 
 func (p *dismissPopUp) Tapped(e *fyne.PointEvent) {
-	wasVisible := p.Visible()
-	p.PopUp.Tapped(e) // hides when the tap was outside the content (non-modal)
-	if wasVisible && !p.Visible() && p.onDismiss != nil {
+	// Only a tap OUTSIDE the card dismisses. Fyne's non-modal PopUp.Tapped closes on any
+	// tap its child widgets don't consume — which includes blank space, plain labels and
+	// the card's own surface — so gate on the card's bounds first. (e.Position and
+	// Content's position are both in the popup's coordinate space.)
+	pos, sz := p.Content.Position(), p.Content.Size()
+	if e.Position.X >= pos.X && e.Position.X < pos.X+sz.Width &&
+		e.Position.Y >= pos.Y && e.Position.Y < pos.Y+sz.Height {
+		return // tap landed on the card (even a blank area) — keep the sheet open
+	}
+	// Outside: dismiss via onDismiss (done()) — the SAME path as the ✕ button, so the
+	// reading overlay is always restored. The old code called PopUp.Tapped() and only ran
+	// onDismiss once Visible() had flipped to false, a race that frequently skipped the
+	// restore and left the reading pane blank after an outside-tap close.
+	if p.onDismiss != nil {
 		p.onDismiss()
 	}
 }
