@@ -362,6 +362,9 @@ func switchVersion(state *AppState, id string) {
 // window. Shared by switchVersion (synchronous) and the picker's async path
 // (switchVersionInteractive), so both apply identically once the data is in hand.
 func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode) {
+	// A new translation's text (and recordings) no longer match what's playing, and
+	// a version switch doesn't route through addRecentChapter, so stop here.
+	gAudio.stop()
 	if state.loadedVersions == nil {
 		state.loadedVersions = map[string]*BibleData{}
 	}

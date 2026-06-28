@@ -33,6 +33,10 @@ trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
 
 echo "==> fyne package -os iossimulator"
 (cd "$APP_DIR" && fyne package -os iossimulator --app-id "$APP_ID")
+# Match the device build: add UIBackgroundModes=[audio] so the audio path is exercised.
+# (No codesign on the sim path, so post-package is fine; true background behavior is
+# only reliably testable on a device via run-ios-device.sh.)
+plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.plist"
 
 # Boot the requested simulator if not already booted.
 BOOTED=$(xcrun simctl list devices booted | awk -F'[()]' '/\(Booted\)/ {print $2; exit}')

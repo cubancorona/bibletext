@@ -133,3 +133,16 @@ func chapterSpeechText(state *AppState) string {
 	}
 	return b.String()
 }
+
+// chapterAudioFingerprint identifies the audio appropriate for the reader's
+// current position: version + book + chapter. Theme, highlight and red-letter
+// (which chapterRenderFingerprint folds in) don't change the audio, so they're
+// deliberately excluded — a light/dark flip must NOT count as "the chapter
+// changed" and stop playback. Used to tell whether the loaded audio still matches
+// where the reader is.
+func chapterAudioFingerprint(state *AppState) string {
+	if state == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s|%s|%d", state.CurrentVersion, state.CurrentBook, state.CurrentChapter)
+}

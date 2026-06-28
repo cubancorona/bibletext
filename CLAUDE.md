@@ -138,6 +138,29 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   (cross-refs, red-letter, verse-of-day) simply skip the deuterocanon. Docs: README →
   "Bible versions".
 
+- **Per-chapter audio (iOS only).** `audio.go` resolves what to play for the
+  current chapter: a streamed public-domain WEB MP3 from eBible.org
+  (`ebibleAudioBooks`, range-seekable) when the version is WEB/WEB-Catholic *and*
+  the book/chapter is recorded, else on-device TTS of the displayed verses
+  (`chapterSpeechText`). `audioController` (`audio_controller.go`, the package
+  singleton `gAudio`, untagged) tracks play state and drives the per-platform
+  `nativeAudio*` shims; the reading-header play button is `audio_button.go`
+  (recorded → MediaPlay/Pause; TTS → the bundled `iconSpeak` voice glyph in
+  `icons_embed.go`/`assets/icons/speak.svg`), shown only where `audioSupported()`.
+  The engine is **iOS-only**: `audio_ios.go` (cgo, `//go:build ios`) wraps
+  AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) + MPNowPlayingInfoCenter
+  + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no track-skip); state posts
+  back via `bibleTextAudioStateChanged` (`audio_export_ios.go`, the empty-preamble
+  `//export` twin) → `applyNativeState` → `fyne.Do`. Everything else (macOS desktop,
+  Linux, Windows, Android) gets no-op `nativeAudio*` stubs (`audio_other.go`,
+  `//go:build !ios`) so the host build/tests stay cgo-free. Background playback needs
+  **`UIBackgroundModes=audio`** in Info.plist, which Fyne's iOS packager never emits —
+  it's injected by `plutil` in `scripts/run-ios-device.sh`, `release-ios.sh`, and
+  `run-ios-sim.sh`, **before** their codesign step. Audio auto-stops on any
+  chapter/book/version change (one fingerprint-guarded `stopAudioForNav` hook in
+  `addRecentChapter`, plus `applyLoadedVersion`) and on app stop/window-close (raw
+  `nativeAudioStop()` from the lifecycle hooks — never `gAudio.stop()`, to avoid
+  `fyne.Do` on the off-main shutdown path).
 - **Reading-position + history persistence.** `reading_state.go` persists *where
   the reader left off* — translation, book, chapter, the within-chapter **scroll
   position**, and the recent-chapters history — as one JSON blob in

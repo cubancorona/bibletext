@@ -126,6 +126,15 @@ note "binary arch: $(lipo -archs "$APP/$EXE")"
 /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion $IOS_MIN" "$APP/Info.plist" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string $IOS_MIN" "$APP/Info.plist"
 
+# ── 5b. enable background audio + Now Playing / Control Center ───────────────
+# Fyne's iOS packager hardcodes Info.plist and never adds UIBackgroundModes, so
+# inject it here — BEFORE the step-6 codesign, or the mutation invalidates the
+# signature. fyne regenerates Info.plist on every `fyne package` run, so this must
+# run each build (it does — it's inline). plutil -replace upserts (no entitlement
+# is needed for background audio; the plist key is the only requirement).
+note "adding UIBackgroundModes=[audio] (background playback + Now Playing)"
+plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
+
 # ── 6. re-sign with the dev cert + managed profile + its entitlements ───────
 note "re-signing"
 rm -rf "$APP/_CodeSignature"

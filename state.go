@@ -331,6 +331,12 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 	if chapter < 1 || book == "" {
 		return
 	}
+	// Chapter audio is bound to the displayed text, so stop it when the reader moves
+	// off the chapter that's playing. This single hook covers every navigation path
+	// (arrows, picker, reference, search-jump, book select, history, VOTD/cross-ref),
+	// since they all funnel through here; the fingerprint guard leaves a same-chapter
+	// re-add (e.g. a history tap restoring a scroll anchor) playing.
+	stopAudioForNav(state)
 	// Plain navigation (arrows, picker, reference, search-jump) lands at the top of
 	// the new chapter, so drop any pending restore target. navigateToVisit re-arms
 	// one *after* calling us when the reader taps a history entry. (The launch

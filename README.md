@@ -91,6 +91,12 @@ stock Fyne so plain `go` commands need no setup.
   **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
   set, fetched once and cached.
+- 🎧 **Listen** (iOS) — play the current chapter aloud from the reading header: a
+  streamed public-domain **World English Bible** recording (from
+  [eBible.org](https://ebible.org), fetched only when you press play) where one
+  exists, otherwise on-device **text-to-speech** of the verses on screen — a distinct
+  "voice" icon marks read-aloud vs. a recording. Audio keeps playing when the app is
+  backgrounded, with lock-screen / Control Center controls and ±15-second skip.
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
