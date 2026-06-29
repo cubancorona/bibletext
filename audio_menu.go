@@ -30,7 +30,10 @@ func showAudioSourceMenu(state *AppState) {
 	}
 	pal := state.pal()
 	fp := chapterAudioFingerprint(state)
-	_, curKind := gAudio.indicator(fp)
+	// loadedHere is false when nothing is playing for this chapter yet; in that case
+	// curKind is just the zero default (audioRecorded) and must NOT be treated as
+	// "already current", or tapping that row would no-op instead of starting it.
+	loadedHere, curKind := gAudio.indicator(fp)
 	hasRec := chapterHasRecording(state)
 
 	if state.hideReadingOverlay != nil {
@@ -72,14 +75,15 @@ func showAudioSourceMenu(state *AppState) {
 	rows := container.NewVBox()
 	addSource := func(kind audioKind, icon fyne.Resource, label string) {
 		k := kind
+		isCurrent := loadedHere && k == curKind
 		btn := widget.NewButtonWithIcon(label, icon, func() {
-			if k != curKind {
+			if !isCurrent { // (re)start unless this exact source is already playing
 				gAudio.playSource(state, k)
 			}
 			done()
 		})
 		btn.Alignment = widget.ButtonAlignLeading
-		if k == curKind {
+		if isCurrent {
 			btn.Importance = widget.HighImportance // the source currently playing
 		}
 		rows.Add(btn)

@@ -213,7 +213,14 @@ func (c *audioController) fireChange() {
 func (c *audioController) applyNativeState(s audioPlayState) {
 	c.mu.Lock()
 	c.state = s
-	if s == audioIdle || s == audioEnded {
+	switch s {
+	case audioPlaying, audioPaused:
+		// The engine reports it's actively producing (or holding) sound, so a source
+		// IS loaded — re-assert it. Belt-and-suspenders against a stale teardown
+		// callback having just cleared the flag a moment before this one lands; the
+		// native mode guards (audio_ios.go) are the primary defense.
+		c.loaded = true
+	case audioIdle, audioEnded:
 		// Chapter ended (or the session was torn down): nothing is actively loaded
 		// for play/pause purposes, so a tap re-starts cleanly.
 		c.loaded = false
