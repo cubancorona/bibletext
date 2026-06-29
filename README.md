@@ -91,12 +91,17 @@ stock Fyne so plain `go` commands need no setup.
   **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
   set, fetched once and cached.
-- 🎧 **Listen** (iOS) — play the current chapter aloud from the reading header: a
-  streamed public-domain **World English Bible** recording (from
-  [eBible.org](https://ebible.org), fetched only when you press play) where one
-  exists, otherwise on-device **text-to-speech** of the verses on screen — a distinct
-  "voice" icon marks read-aloud vs. a recording. Audio keeps playing when the app is
-  backgrounded, with lock-screen / Control Center controls and ±15-second skip.
+- 🎧 **Listen** (iOS & macOS) — play the current chapter from the reading header as a
+  recorded human **narration** or on-device **read-aloud** (text-to-speech) of the
+  verses on screen. The **Berean Standard Bible** has a complete public-domain
+  narration (Barry Hays); the **World English Bible** uses public-domain
+  [eBible.org](https://ebible.org) recordings for the chapters they cover; everything
+  else falls back to read-aloud — all fetched only when you press play. A **person**
+  icon marks a recording and a **waveform** marks read-aloud; tap it to choose the
+  source. When a chapter finishes, playback continues to the **next chapter**
+  automatically, the page following along, until you pause. On iOS the audio keeps
+  playing while the app is backgrounded, with lock-screen / Control Center controls and
+  ±15-second skip.
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
@@ -105,24 +110,27 @@ stock Fyne so plain `go` commands need no setup.
   treatment — no imagery; preview and regenerate before sharing). Quote and citation
   follow Bluebook style (spelled-out translation, en-dash ranges, block-quote rule).
   Both open your device's native share sheet.
-- 📚 **Multiple translations** — read the public-domain **World English Bible** and
-  **Berean Standard Bible**, switchable from the header; **NRSV** and **LSB** are
-  wired in and become selectable once licensed. See [Bible versions](#bible-versions).
+- 📚 **Multiple translations** — read three public-domain translations: the **World
+  English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
+  Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
+  **NRSV** and **LSB** are wired in and become selectable once licensed. See
+  [Bible versions](#bible-versions).
 
 ## Bible versions
 
-The reader ships with two public-domain translations — the **World English Bible
-(WEB)** and the **Berean Standard Bible (BSB)** — both free to distribute and
-fetched in a single request each from the free, key-less
+The reader ships with three public-domain translations — the **World English Bible
+(WEB)**, the **Berean Standard Bible (BSB)**, and the **World English Bible
+(Catholic)** (WEB plus the 73-book deuterocanon) — all free to distribute and fetched
+in a single request each from the free, key-less
 [bible.helloao.org](https://bible.helloao.org/). Use the **translation switcher in
-the header** (the version name beneath "BibleText") to change versions.
-
-Two more translations are wired in:
+the header** (the version name beneath "BibleText") to change versions. Two licensed
+translations (**NRSV**, **LSB**) are wired in and become selectable once licensed:
 
 | Version | Abbrev | Rights holder | Status |
 |---|---|---|---|
 | World English Bible | WEB | Public domain | ✅ Real text |
 | Berean Standard Bible | BSB | Public domain (CC0) | ✅ Real text |
+| World English Bible (Catholic) | WEBC | Public domain | ✅ Real text |
 | New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 Evaluation in progress |
 | Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
 
