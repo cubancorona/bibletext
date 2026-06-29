@@ -232,6 +232,7 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
 }
 
 - (void)btItemDidEnd:(NSNotification *)n {
+    if (self.mode != BT_MODE_URL) return;   // ignore a stale end from a torn-down player
     bibleTextAudioStateChanged(BT_AUDIO_ENDED);
     btAudioUpdateNowPlaying();
 }
@@ -266,19 +267,35 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     });
 }
 
-// AVSpeechSynthesizerDelegate
+// AVSpeechSynthesizerDelegate. Every callback is gated on mode==TTS: when the
+// reader switches to a recorded narration, teardownEngines stops the synth but
+// (unlike the AVPlayer's KVO observer) the synth delegate stays wired, so a
+// stopped utterance's didFinish/didCancel can still fire LATE — after the new
+// AVPlayer has started. Posting that stale ENDED would wipe the freshly-loaded
+// chapter and desync the play/pause button. The mode guard drops it.
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)s didStartSpeechUtterance:(AVSpeechUtterance *)u {
+    if (self.mode != BT_MODE_TTS) return;
     bibleTextAudioStateChanged(BT_AUDIO_PLAYING);
 }
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)s didFinishSpeechUtterance:(AVSpeechUtterance *)u {
+    if (self.mode != BT_MODE_TTS) return;
+    bibleTextAudioStateChanged(BT_AUDIO_ENDED);
+    btAudioUpdateNowPlaying();
+}
+- (void)speechSynthesizer:(AVSpeechSynthesizer *)s didCancelSpeechUtterance:(AVSpeechUtterance *)u {
+    // stopSpeakingAtBoundary fires this (not didFinish) on some iOS versions; same
+    // staleness risk, so it's gated identically and treated as a clean stop.
+    if (self.mode != BT_MODE_TTS) return;
     bibleTextAudioStateChanged(BT_AUDIO_ENDED);
     btAudioUpdateNowPlaying();
 }
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)s didPauseSpeechUtterance:(AVSpeechUtterance *)u {
+    if (self.mode != BT_MODE_TTS) return;
     bibleTextAudioStateChanged(BT_AUDIO_PAUSED);
     btAudioUpdateNowPlaying();
 }
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)s didContinueSpeechUtterance:(AVSpeechUtterance *)u {
+    if (self.mode != BT_MODE_TTS) return;
     bibleTextAudioStateChanged(BT_AUDIO_PLAYING);
     btAudioUpdateNowPlaying();
 }

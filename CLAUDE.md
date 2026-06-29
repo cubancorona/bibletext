@@ -162,7 +162,15 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) + MPNowPlayingInfoCenter
   + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no track-skip); state posts
   back via `bibleTextAudioStateChanged` (`audio_export_ios.go`, the empty-preamble
-  `//export` twin) → `applyNativeState` → `fyne.Do`. Everything else (macOS desktop,
+  `//export` twin) → `applyNativeState` → `fyne.Do`. **Stale-callback gotcha:** every
+  native delegate/KVO callback is gated on the controller's current `mode`
+  (`if (self.mode != BT_MODE_TTS) return;` etc.). The AVPlayer's KVO observer is
+  removed in `teardownEngines`, but the `AVSpeechSynthesizer` delegate stays wired, so
+  after switching TTS→recording a stopped utterance's `didFinish/didCancel` could still
+  fire LATE and post a spurious `ENDED` that wiped the freshly-loaded chapter — leaving
+  audio playing but the button stuck on ▶. The mode guard drops it; `applyNativeState`
+  also re-asserts `loaded` on any playing/paused report as belt-and-suspenders.
+  Everything else (macOS desktop,
   Linux, Windows, Android) gets no-op `nativeAudio*` stubs (`audio_other.go`,
   `//go:build !ios`) so the host build/tests stay cgo-free. Background playback needs
   **`UIBackgroundModes=audio`** in Info.plist, which Fyne's iOS packager never emits —
