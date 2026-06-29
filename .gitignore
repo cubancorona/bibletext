@@ -22,3 +22,4 @@ bibletext-cache.json
 third_party/
 icon_work/
 build/
+/desktop
