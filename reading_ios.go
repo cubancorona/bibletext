@@ -1151,23 +1151,11 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// chapter/nav line read as one compact block, not two airy lines.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
 
-	// The audio control lives in the gap to the right of the chapter block.
-	// Collapsed (a speaker) it sits in the Border CENTRE with the full-screen button
-	// on the right. Expanded (the mini-player box) it takes the right slot and the
-	// full-screen button steps aside — collapse to get it back — so the box has room
-	// and its ✕ annex lands cleanly at the right edge instead of overlapping.
-	audio := audioControl(state, boxH)
-	vcenter := func(o fyne.CanvasObject) fyne.CanvasObject {
-		return container.NewVBox(layout.NewSpacer(), o, layout.NewSpacer())
-	}
-	var right, center fyne.CanvasObject
-	if audioPanelOpen {
-		right = vcenter(audio)
-	} else {
-		right = vcenter(fullScreenBtn)
-		center = container.NewCenter(audio)
-	}
-	row := container.NewBorder(nil, nil, left, right, center)
+	// The audio control sits in the Border CENTRE — the gap between the chapter block
+	// (left) and the full-screen button (right), vertically centred. Collapsed it's a
+	// speaker; expanded it's a compact two-row card that fits the gap.
+	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
+	row := container.NewBorder(nil, nil, left, right, container.NewCenter(audioControl(state, boxH)))
 
 	// No divider under the header — the flat reading surface separates the chapter
 	// toolbar from the verses with whitespace (the text view's top inset) instead
