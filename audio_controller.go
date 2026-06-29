@@ -102,6 +102,21 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	c.fireChange()
 }
 
+// playSource starts the chapter from a specific source, overriding the default
+// recording-preferred pick — used by the source menu so the reader can force
+// read-aloud on a chapter that also has a recording (or pick a recording).
+func (c *audioController) playSource(state *AppState, kind audioKind) {
+	if state == nil {
+		return
+	}
+	fp := chapterAudioFingerprint(state)
+	a := ttsAudioForChapter(state)
+	if kind == audioRecorded && chapterHasRecording(state) {
+		a = audioForChapter(state) // the recording
+	}
+	c.startChapter(state, a, fp)
+}
+
 // stop tears playback down. Idempotent; only notifies the UI if something was
 // actually playing, so it's cheap to call on every navigation. Safe to call from
 // the Fyne goroutine (nav/version change); the lifecycle teardown path calls the

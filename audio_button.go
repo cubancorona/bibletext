@@ -12,7 +12,6 @@ package bibletext
 
 import (
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 )
@@ -29,15 +28,19 @@ func audioButton(state *AppState, boxH float32) fyne.CanvasObject {
 	if playing {
 		glyph = theme.MediaPauseIcon()
 	}
-	play := newIconTapButton(state, glyph, 18, boxH, func() {
+	play := newIconTapButton(state, glyph, 20, boxH, func() {
 		gAudio.playPauseCurrent(state)
 	})
 	gAudio.setOnChange(func() { state.refreshReadingOnly() })
 
 	// Source indicator: only while a source is loaded for this chapter; the glyph
 	// reflects what is actually loaded (person = recording, waveform = read-aloud).
+	// Tapping it opens the source menu (explain + switch).
 	if show, kind := gAudio.indicator(fp); show {
-		return container.NewHBox(play, hgap(4), audioSourceTag(audioSourceIconForKind(kind), 16, boxH))
+		ind := newIconTapButton(state, audioSourceIconForKind(kind), 18, boxH, func() {
+			showAudioSourceMenu(state)
+		})
+		return container.NewHBox(play, hgap(4), ind)
 	}
 	return play
 }
@@ -49,13 +52,4 @@ func audioSourceIconForKind(kind audioKind) fyne.Resource {
 		return theme.AccountIcon()
 	}
 	return iconAudioWave
-}
-
-// audioSourceTag renders the source glyph flat and muted. (The tap-to-explain
-// menu is added in a follow-up; for now it's a passive indicator.)
-func audioSourceTag(res fyne.Resource, size, boxH float32) fyne.CanvasObject {
-	img := canvas.NewImageFromResource(theme.NewColoredResource(res, colorNameMuted))
-	img.FillMode = canvas.ImageFillContain
-	img.SetMinSize(fyne.NewSize(size, size))
-	return container.NewGridWrap(fyne.NewSize(size+6, boxH), container.NewCenter(img))
 }

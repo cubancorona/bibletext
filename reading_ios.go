@@ -1102,14 +1102,11 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		showChapterPicker(state)
 	})
 
-	// Small copy icon + the play/listen button tucked after the heading — both
-	// lighter than the chapter-nav arrows but full-height (finger-friendly) hit
-	// boxes. Audio sits beside copy as the chapter's other "act on this text" verb
-	// (recorded play triangle, or the voice glyph for read-aloud).
+	// Small copy icon tucked after the heading.
 	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
 		copyChapter(state)
 	})
-	titleRow := container.NewHBox(ref, hgap(6), copyBtn, hgap(6), audioButton(state, boxH))
+	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
 
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
@@ -1140,8 +1137,11 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	next.disabled = idx < 0 || idx >= total-1
 
 	// Controls sit directly in the HBox so the picker anchor keeps a first-class
-	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS).
-	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next)
+	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS). The audio
+	// play/listen control sits on this same row after the prev/next arrows — a tidy
+	// transport line — with a wider gap so the chapter arrows don't read as audio
+	// controls. The source indicator joins it (to its right) while audio plays.
+	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next, hgap(16), audioButton(state, boxH))
 
 	// Full-screen is the lone control on the right.
 	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
