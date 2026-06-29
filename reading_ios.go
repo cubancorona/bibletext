@@ -1137,11 +1137,8 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	next.disabled = idx < 0 || idx >= total-1
 
 	// Controls sit directly in the HBox so the picker anchor keeps a first-class
-	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS). The audio
-	// play/listen control sits on this same row after the prev/next arrows — a tidy
-	// transport line — with a wider gap so the chapter arrows don't read as audio
-	// controls. The source indicator joins it (to its right) while audio plays.
-	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next, hgap(16), audioButton(state, boxH))
+	// hit box (a nested spacer-VBox left it unresponsive to taps on iOS).
+	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next)
 
 	// Full-screen is the lone control on the right.
 	fullScreenBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
@@ -1151,10 +1148,13 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	fullScreenBtn.Importance = widget.LowImportance
 
 	// Tighter-than-default gap between the two rows so the book heading and the
-	// chapter/nav line read as one compact block, not two airy lines.
+	// chapter/nav line read as one compact block, not two airy lines. The audio
+	// control lives in the Border CENTRE — the blank space between the chapter block
+	// (left) and the full-screen button (right) — vertically centred. It's a single
+	// speaker that expands in place to a mini-player.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
 	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
-	row := container.NewBorder(nil, nil, left, right, nil)
+	row := container.NewBorder(nil, nil, left, right, container.NewCenter(audioControl(state, boxH)))
 
 	// No divider under the header — the flat reading surface separates the chapter
 	// toolbar from the verses with whitespace (the text view's top inset) instead

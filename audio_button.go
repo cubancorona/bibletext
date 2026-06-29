@@ -1,14 +1,14 @@
 package bibletext
 
-// The reader's per-chapter listen control, in the shared header builders
-// (reading.go chapterHeader + reading_ios.go chapterHeaderMobile), recomputed on
-// every navigation. Plain Fyne chrome above the native text overlay's frame, so
-// it's never occluded and needs no hide/restore dance.
+// The reader's audio control, in the blank space between the chapter navigation
+// and the full-screen button (the shared header builders place it there). It's
+// plain Fyne chrome above the native text overlay's frame, so it's never occluded.
 //
-//   - a plain play/pause button (same muted style as the copy/arrow glyphs);
-//   - a source indicator that appears ONLY while a source is loaded for this
-//     chapter (playing or paused): a person for a recorded narration, a waveform
-//     for read-aloud. It is hidden when nothing is playing.
+// Collapsed it's a single speaker icon. Tapping it expands, in place, into a
+// compact mini-player: [speaker(collapse) · skip-back 15s · play/pause ·
+// skip-forward 15s · source indicator]. The skips dim for read-aloud (speech can't
+// seek); the source indicator (person = recording, waveform = read-aloud) opens
+// the source menu.
 
 import (
 	"fyne.io/fyne/v2"
@@ -16,33 +16,49 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
-// audioButton builds the play/pause control plus, while audio is loaded, the
-// source indicator. It installs gAudio.onChange so a native state change (chapter
-// finished, a phone-call interruption, or a lock-screen / Control Center toggle)
-// re-renders the cluster — refreshReadingOnly rebuilds the cheap Fyne header
-// without re-pushing chapter HTML to the overlay.
-func audioButton(state *AppState, boxH float32) fyne.CanvasObject {
-	fp := chapterAudioFingerprint(state)
-	playing, _ := gAudio.buttonState(fp)
-	glyph := theme.MediaPlayIcon()
-	if playing {
-		glyph = theme.MediaPauseIcon()
-	}
-	play := newIconTapButton(state, glyph, 20, boxH, func() {
-		gAudio.playPauseCurrent(state)
-	})
-	gAudio.setOnChange(func() { state.refreshReadingOnly() })
+// audioPanelOpen tracks the control's collapsed/expanded state. Touched only on
+// the UI goroutine; persists across header rebuilds.
+var audioPanelOpen bool
 
-	// Source indicator: only while a source is loaded for this chapter; the glyph
-	// reflects what is actually loaded (person = recording, waveform = read-aloud).
-	// Tapping it opens the source menu (explain + switch).
-	if show, kind := gAudio.indicator(fp); show {
-		ind := newIconTapButton(state, audioSourceIconForKind(kind), 18, boxH, func() {
-			showAudioSourceMenu(state)
+func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
+	gAudio.setOnChange(func() { state.refreshReadingOnly() })
+	fp := chapterAudioFingerprint(state)
+
+	if !audioPanelOpen {
+		return newIconTapButton(state, theme.VolumeUpIcon(), 20, boxH, func() {
+			audioPanelOpen = true
+			state.refreshReadingOnly()
 		})
-		return container.NewHBox(play, hgap(4), ind)
 	}
-	return play
+
+	playing, _ := gAudio.buttonState(fp)
+	playGlyph := theme.MediaPlayIcon()
+	if playing {
+		playGlyph = theme.MediaPauseIcon()
+	}
+
+	// Skip + source reflect what's loaded while playing, else the chapter's default.
+	displayKind := audioTTS
+	if chapterHasRecording(state) {
+		displayKind = audioRecorded
+	}
+	if show, k := gAudio.indicator(fp); show {
+		displayKind = k
+	}
+	canSeek := displayKind == audioRecorded
+
+	collapse := newIconTapButton(state, theme.VolumeUpIcon(), 18, boxH, func() {
+		audioPanelOpen = false
+		state.refreshReadingOnly()
+	})
+	back := newIconTapButton(state, iconSkipBack15, 18, boxH, func() { gAudio.skip(-15) })
+	back.disabled = !canSeek
+	play := newIconTapButton(state, playGlyph, 18, boxH, func() { gAudio.playPauseCurrent(state) })
+	fwd := newIconTapButton(state, iconSkipFwd15, 18, boxH, func() { gAudio.skip(15) })
+	fwd.disabled = !canSeek
+	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 18, boxH, func() { showAudioSourceMenu(state) })
+
+	return container.NewHBox(collapse, back, play, fwd, src)
 }
 
 // audioSourceIconForKind maps the loaded audio kind to its source glyph: a person
