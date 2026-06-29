@@ -31,6 +31,12 @@ func showAISettings(state *AppState) {
 	pal := state.pal()
 	store := state.keys()
 
+	// The only sheet control that affects the reading pane is the red-letter
+	// toggle. Capture it now so closing the sheet re-renders ONLY when it actually
+	// changed — refreshing unconditionally rebuilds the reading pane (re-pinning
+	// the native text overlay) and flickers the screen for an AI-key-only change.
+	redLetterAtOpen := redLetterEnabled()
+
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
 	}
@@ -187,7 +193,9 @@ func showAISettings(state *AppState) {
 			popup.Hide()
 		}
 		restore()
-		state.refreshReadingOnly()
+		if redLetterEnabled() != redLetterAtOpen {
+			state.refreshReadingOnly() // red-letter changed → re-render the verses
+		}
 	}
 
 	title := canvas.NewText("Settings", pal.Text)
