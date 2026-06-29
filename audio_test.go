@@ -56,8 +56,34 @@ func TestAudioForChapter(t *testing.T) {
 	if a.Kind != audioTTS || a.Text != "The book of the words of Tobit" {
 		t.Errorf("webc Tobit 1: got %+v, want TTS of the verse", a)
 	}
-	// BSB John 20 → TTS (different translation, recordings wouldn't match).
-	if a := audioForChapter(&AppState{CurrentVersion: "bsb", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioTTS {
-		t.Errorf("BSB John 20: want TTS, got kind %d", a.Kind)
+	// BSB John 20 → recorded (the BSB has its own complete narration).
+	if a := audioForChapter(&AppState{CurrentVersion: "bsb", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded || a.URL != "https://openbible.com/audio/hays/BSB_43_Jhn_020_H.mp3" {
+		t.Errorf("BSB John 20: got %+v, want recorded BSB_43_Jhn_020_H.mp3", a)
+	}
+}
+
+func TestBSBAudioURL(t *testing.T) {
+	cases := []struct {
+		book    string
+		chapter int
+		want    string
+		ok      bool
+	}{
+		{"John", 3, "https://openbible.com/audio/hays/BSB_43_Jhn_003_H.mp3", true},
+		{"Genesis", 1, "https://openbible.com/audio/hays/BSB_01_Gen_001_H.mp3", true},
+		{"Psalms", 23, "https://openbible.com/audio/hays/BSB_19_Psa_023_H.mp3", true},
+		{"Titus", 2, "https://openbible.com/audio/hays/BSB_56_Tts_002_H.mp3", true}, // non-obvious abbr
+		{"Revelation", 22, "https://openbible.com/audio/hays/BSB_66_Rev_022_H.mp3", true},
+		{"Tobit", 1, "", false}, // deuterocanon: no BSB recording
+	}
+	for _, c := range cases {
+		got, ok := bsbAudioURL(c.book, c.chapter)
+		if got != c.want || ok != c.ok {
+			t.Errorf("bsbAudioURL(%q,%d) = (%q,%v), want (%q,%v)", c.book, c.chapter, got, ok, c.want, c.ok)
+		}
+	}
+	// Every canonical 66-book name must map (complete coverage).
+	if n := len(bsbAudioBooks); n != 66 {
+		t.Errorf("bsbAudioBooks has %d entries, want 66", n)
 	}
 }
