@@ -114,6 +114,18 @@ func audioForChapter(state *AppState) chapterAudio {
 	return chapterAudio{Kind: audioTTS, Text: chapterSpeechText(state), Title: title, Subtitle: sub}
 }
 
+// ttsAudioForChapter forces a text-to-speech rendering of the current chapter
+// regardless of whether a recording exists — used when the reader picks "Read
+// aloud" from the source menu on a chapter that also has a recording.
+func ttsAudioForChapter(state *AppState) chapterAudio {
+	title := fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter)
+	sub := state.CurrentVersion
+	if v, ok := versionByID(state.CurrentVersion); ok {
+		sub = v.Name
+	}
+	return chapterAudio{Kind: audioTTS, Text: chapterSpeechText(state), Title: title, Subtitle: sub}
+}
+
 // chapterSpeechText is the plain text fed to TTS: the current chapter's verses in order,
 // joined into flowing prose (no spoken verse numbers), matching what's on screen.
 func chapterSpeechText(state *AppState) string {
