@@ -1148,13 +1148,26 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	fullScreenBtn.Importance = widget.LowImportance
 
 	// Tighter-than-default gap between the two rows so the book heading and the
-	// chapter/nav line read as one compact block, not two airy lines. The audio
-	// control lives in the Border CENTRE — the blank space between the chapter block
-	// (left) and the full-screen button (right) — vertically centred. It's a single
-	// speaker that expands in place to a mini-player.
+	// chapter/nav line read as one compact block, not two airy lines.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
-	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
-	row := container.NewBorder(nil, nil, left, right, container.NewCenter(audioControl(state, boxH)))
+
+	// The audio control lives in the gap to the right of the chapter block.
+	// Collapsed (a speaker) it sits in the Border CENTRE with the full-screen button
+	// on the right. Expanded (the mini-player box) it takes the right slot and the
+	// full-screen button steps aside — collapse to get it back — so the box has room
+	// and its ✕ annex lands cleanly at the right edge instead of overlapping.
+	audio := audioControl(state, boxH)
+	vcenter := func(o fyne.CanvasObject) fyne.CanvasObject {
+		return container.NewVBox(layout.NewSpacer(), o, layout.NewSpacer())
+	}
+	var right, center fyne.CanvasObject
+	if audioPanelOpen {
+		right = vcenter(audio)
+	} else {
+		right = vcenter(fullScreenBtn)
+		center = container.NewCenter(audio)
+	}
+	row := container.NewBorder(nil, nil, left, right, center)
 
 	// No divider under the header — the flat reading surface separates the chapter
 	// toolbar from the verses with whitespace (the text view's top inset) instead
