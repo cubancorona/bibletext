@@ -16,17 +16,24 @@
       "name": "Run Desktop (no debugger)",
       "type": "node-terminal",
       "request": "launch",
-      "command": "go run ./cmd/desktop",
+      // `&& exit` closes the integrated terminal when the app exits cleanly (you
+      // close the window), which ends the debug session so VS Code's Stop button
+      // disappears on its own. A node-terminal session stays "running" as long as
+      // its terminal is open, so WITHOUT this the app quits but the Stop button
+      // lingers until you click it. On a COMPILE error `go run` exits non-zero, so
+      // `&& exit` is skipped and the terminal stays open with the error visible.
+      "command": "go run ./cmd/desktop && exit",
       "cwd": "${workspaceFolder}"
     },
     {
       "name": "Run Packaged Desktop (.app, no debugger)",
       // Builds the macOS .app bundle, then runs its binary in the foreground
       // (so VS Code's Stop button controls it). Use this to exercise the real
-      // shipped artifact (proper app-id, icon, bundle behaviour).
+      // shipped artifact (proper app-id, icon, bundle behaviour). Trailing
+      // `&& exit` closes the terminal on a clean quit (see note above).
       "type": "node-terminal",
       "request": "launch",
-      "command": "fyne package -os darwin --app-id uk.co.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop'",
+      "command": "fyne package -os darwin --app-id uk.co.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop' && exit",
       "cwd": "${workspaceFolder}/cmd/desktop"
     },
     {
