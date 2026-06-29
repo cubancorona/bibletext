@@ -30,14 +30,32 @@ import (
 // the UI goroutine; persists across header rebuilds.
 var audioPanelOpen bool
 
+// audioControl returns a self-refreshing host: audio state changes (play/pause,
+// end, source pick) and expand/collapse re-render ONLY this small control, never
+// the whole reading pane. Rebuilding the pane (state.refreshReadingOnly) re-pins
+// the native text overlay and visibly FLICKERS the screen — so the play button
+// must not trigger it. The collapsed↔expanded card is sized to fit within the
+// header, so swapping it doesn't change the header height (no overlay re-pin).
 func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
-	gAudio.setOnChange(func() { state.refreshReadingOnly() })
+	host := container.NewStack()
+	var rebuild func()
+	rebuild = func() {
+		host.Objects = []fyne.CanvasObject{audioControlContent(state, boxH, rebuild)}
+		host.Refresh()
+	}
+	// fireChange marshals onChange onto the UI goroutine, so rebuild runs there.
+	gAudio.setOnChange(rebuild)
+	rebuild()
+	return host
+}
+
+func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.CanvasObject {
 	fp := chapterAudioFingerprint(state)
 
 	if !audioPanelOpen {
 		return newIconTapButton(state, theme.VolumeUpIcon(), 20, boxH, func() {
 			audioPanelOpen = true
-			state.refreshReadingOnly()
+			rebuild()
 		})
 	}
 
@@ -87,7 +105,7 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 	xGlyph.SetMinSize(fyne.NewSize(10, 10))
 	xCell := newTappableArea(
 		container.NewGridWrap(fyne.NewSize(22, 22), container.NewStack(xBg, container.NewCenter(xGlyph))),
-		func() { audioPanelOpen = false; state.refreshReadingOnly() },
+		func() { audioPanelOpen = false; rebuild() },
 	)
 	corner := container.NewVBox(container.NewHBox(layout.NewSpacer(), xCell), layout.NewSpacer())
 
