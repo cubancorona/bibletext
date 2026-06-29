@@ -160,6 +160,18 @@ func (c *audioController) buttonState(fp string) (playing, loadedHere bool) {
 	return
 }
 
+// indicator reports whether the source indicator should show for the chapter
+// identified by fp (true while a source is loaded here — playing or paused) and,
+// if so, the loaded kind so the glyph can reflect recording vs read-aloud.
+func (c *audioController) indicator(fp string) (show bool, kind audioKind) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.loaded && c.loadedFP == fp {
+		return true, c.kind
+	}
+	return false, audioRecorded
+}
+
 // setOnChange installs the button's refresh closure (re-set on each header build).
 func (c *audioController) setOnChange(fn func()) {
 	c.mu.Lock()

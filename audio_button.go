@@ -1,14 +1,14 @@
 package bibletext
 
-// The reader's per-chapter listen control. It lives in the shared header builders
-// (reading.go chapterHeader + reading_ios.go chapterHeaderMobile), so the glyph is
-// recomputed on every navigation. It's plain Fyne chrome above the native text
-// overlay's frame, so it's never occluded and needs no hide/restore dance.
+// The reader's per-chapter listen control, in the shared header builders
+// (reading.go chapterHeader + reading_ios.go chapterHeaderMobile), recomputed on
+// every navigation. Plain Fyne chrome above the native text overlay's frame, so
+// it's never occluded and needs no hide/restore dance.
 //
-// Two decoupled signals (so neither ever disappears):
-//   - an accent-filled play/pause button — the one obviously-tappable control;
-//   - a flat, NON-interactive source tag beside it — headphones for a streamed
-//     recording, the voice glyph for read-aloud — persistent across play/pause.
+//   - a plain play/pause button (same muted style as the copy/arrow glyphs);
+//   - a source indicator that appears ONLY while a source is loaded for this
+//     chapter (playing or paused): a person for a recorded narration, a waveform
+//     for read-aloud. It is hidden when nothing is playing.
 
 import (
 	"fyne.io/fyne/v2"
@@ -17,41 +17,42 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
-// audioButton builds the [play/pause] + [source tag] cluster. It installs
-// gAudio.onChange so a native state change (chapter finished, a phone-call
-// interruption, or a lock-screen / Control Center toggle) re-renders the button —
-// refreshReadingOnly rebuilds the cheap Fyne header without re-pushing chapter
-// HTML to the overlay (the push path skips on an unchanged chapterRenderFingerprint,
-// which an audio toggle never changes).
+// audioButton builds the play/pause control plus, while audio is loaded, the
+// source indicator. It installs gAudio.onChange so a native state change (chapter
+// finished, a phone-call interruption, or a lock-screen / Control Center toggle)
+// re-renders the cluster — refreshReadingOnly rebuilds the cheap Fyne header
+// without re-pushing chapter HTML to the overlay.
 func audioButton(state *AppState, boxH float32) fyne.CanvasObject {
-	playing, _ := gAudio.buttonState(chapterAudioFingerprint(state))
+	fp := chapterAudioFingerprint(state)
+	playing, _ := gAudio.buttonState(fp)
 	glyph := theme.MediaPlayIcon()
 	if playing {
 		glyph = theme.MediaPauseIcon()
 	}
-	play := newIconTapButton(state, glyph, 15, boxH, func() {
+	play := newIconTapButton(state, glyph, 18, boxH, func() {
 		gAudio.playPauseCurrent(state)
 	})
-	play.filled = true
 	gAudio.setOnChange(func() { state.refreshReadingOnly() })
 
-	return container.NewHBox(play, hgap(3), audioSourceTag(audioSourceIcon(state), 15, boxH))
-}
-
-// audioSourceIcon is the persistent source glyph for the current chapter:
-// headphones for a streamed recording, the voice glyph for read-aloud. It uses the
-// cheap chapterHasRecording lookup (NOT audioForChapter, which would build the whole
-// chapter's speech text) and never changes with play/pause state.
-func audioSourceIcon(state *AppState) fyne.Resource {
-	if chapterHasRecording(state) {
-		return iconHeadphones
+	// Source indicator: only while a source is loaded for this chapter; the glyph
+	// reflects what is actually loaded (person = recording, waveform = read-aloud).
+	if show, kind := gAudio.indicator(fp); show {
+		return container.NewHBox(play, hgap(4), audioSourceTag(audioSourceIconForKind(kind), 16, boxH))
 	}
-	return iconSpeak
+	return play
 }
 
-// audioSourceTag renders the source glyph flat and muted, and — deliberately — NOT
-// wrapped in any Tappable widget, so a tap passes through it. Only the accent play
-// control reads as pressable; this is visibly a label, not a button.
+// audioSourceIconForKind maps the loaded audio kind to its source glyph: a person
+// for a recorded human narration, a waveform for on-device read-aloud (TTS).
+func audioSourceIconForKind(kind audioKind) fyne.Resource {
+	if kind == audioRecorded {
+		return theme.AccountIcon()
+	}
+	return iconAudioWave
+}
+
+// audioSourceTag renders the source glyph flat and muted. (The tap-to-explain
+// menu is added in a follow-up; for now it's a passive indicator.)
 func audioSourceTag(res fyne.Resource, size, boxH float32) fyne.CanvasObject {
 	img := canvas.NewImageFromResource(theme.NewColoredResource(res, colorNameMuted))
 	img.FillMode = canvas.ImageFillContain
