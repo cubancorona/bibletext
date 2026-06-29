@@ -38,6 +38,14 @@ type audioController struct {
 	kind     audioKind      // recorded vs TTS of the loaded chapter
 	state    audioPlayState // last state reported by the native layer / set on start
 
+	// The reader's chosen source for a chapter, set from the source menu. It only
+	// records the PREFERENCE — selecting never starts playback (that's the play
+	// button's job). preferredFP scopes it to one chapter so navigating away falls
+	// back to the per-chapter default (recording if available, else read-aloud).
+	preferred    audioKind
+	hasPreferred bool
+	preferredFP  string
+
 	// onChange re-renders the play button when the play state changes. The reading
 	// header installs it (a refreshReadingOnly closure); nil in unit tests, where
 	// fireChange must therefore stay a no-op (it never reaches fyne.Do).
@@ -47,8 +55,10 @@ type audioController struct {
 // gAudio is the process-wide controller. Single-window app.
 var gAudio = &audioController{state: audioIdle}
 
-// playPauseCurrent is the play button's tap handler: (re)load the current
-// chapter's audio if nothing matching is loaded, otherwise toggle play/pause.
+// playPauseCurrent is the play button's tap handler — the ONLY thing that starts
+// audio. If the chapter is already loaded it toggles play/pause; otherwise it
+// starts the reader's chosen source (effectiveKind: the source-menu preference,
+// or the per-chapter default).
 func (c *audioController) playPauseCurrent(state *AppState) {
 	if state == nil {
 		return
@@ -65,7 +75,61 @@ func (c *audioController) playPauseCurrent(state *AppState) {
 		nativeAudioToggle()
 		return
 	}
-	c.startChapter(state, audioForChapter(state), fp)
+	c.playSource(state, c.effectiveKind(state))
+}
+
+// effectiveKind is the source the play button will start for the current chapter:
+// the reader's source-menu preference when they set one for THIS chapter, else the
+// default (a recording if the chapter has one, otherwise read-aloud). A preference
+// for the recorded source is honoured only where a recording actually exists.
+func (c *audioController) effectiveKind(state *AppState) audioKind {
+	fp := chapterAudioFingerprint(state)
+	c.mu.Lock()
+	pref, has, pfp := c.preferred, c.hasPreferred, c.preferredFP
+	c.mu.Unlock()
+	if has && pfp == fp {
+		if pref == audioRecorded && !chapterHasRecording(state) {
+			return audioTTS
+		}
+		return pref
+	}
+	if chapterHasRecording(state) {
+		return audioRecorded
+	}
+	return audioTTS
+}
+
+// resolveAudio turns a desired source kind into the concrete chapterAudio to play,
+// falling back to read-aloud when a recording is asked for but none exists.
+func resolveAudio(state *AppState, kind audioKind) chapterAudio {
+	if kind == audioRecorded && chapterHasRecording(state) {
+		return audioForChapter(state)
+	}
+	return ttsAudioForChapter(state)
+}
+
+// selectSource records the reader's chosen source for the current chapter WITHOUT
+// starting playback — the play button is the only thing that begins audio. If a
+// different source is already loaded for this chapter, that now-stale audio is
+// stopped so a Play tap starts the chosen one cleanly; selecting the source that's
+// already loaded leaves it playing/paused. Either way the indicator refreshes.
+func (c *audioController) selectSource(state *AppState, kind audioKind) {
+	if state == nil {
+		return
+	}
+	fp := chapterAudioFingerprint(state)
+	c.mu.Lock()
+	c.preferred = kind
+	c.hasPreferred = true
+	c.preferredFP = fp
+	staleLoaded := c.loaded && c.loadedFP == fp && c.kind != kind
+	c.mu.Unlock()
+
+	if staleLoaded {
+		c.stop() // a different source is loaded; drop it (stop() fires the change)
+		return
+	}
+	c.fireChange() // just refresh the indicator + skip-enabled state
 }
 
 // startChapter hands the resolved chapterAudio to the right native player and
@@ -102,19 +166,14 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	c.fireChange()
 }
 
-// playSource starts the chapter from a specific source, overriding the default
-// recording-preferred pick — used by the source menu so the reader can force
-// read-aloud on a chapter that also has a recording (or pick a recording).
+// playSource starts the chapter from a specific source immediately. Not used by
+// the source menu (which only sets the preference via selectSource); kept for
+// callers that want to force-start a given source.
 func (c *audioController) playSource(state *AppState, kind audioKind) {
 	if state == nil {
 		return
 	}
-	fp := chapterAudioFingerprint(state)
-	a := ttsAudioForChapter(state)
-	if kind == audioRecorded && chapterHasRecording(state) {
-		a = audioForChapter(state) // the recording
-	}
-	c.startChapter(state, a, fp)
+	c.startChapter(state, resolveAudio(state, kind), chapterAudioFingerprint(state))
 }
 
 // stop tears playback down. Idempotent; only notifies the UI if something was

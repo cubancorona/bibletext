@@ -48,11 +48,9 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 		playGlyph = theme.MediaPauseIcon()
 	}
 
-	// Skip + source reflect what's loaded while playing, else the chapter's default.
-	displayKind := audioTTS
-	if chapterHasRecording(state) {
-		displayKind = audioRecorded
-	}
+	// Skip + source reflect what's loaded while playing, else the reader's chosen
+	// source for this chapter (effectiveKind: source-menu preference or default).
+	displayKind := gAudio.effectiveKind(state)
 	if show, k := gAudio.indicator(fp); show {
 		displayKind = k
 	}
