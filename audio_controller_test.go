@@ -50,6 +50,40 @@ func TestStopAudioForNav(t *testing.T) {
 	}
 }
 
+func TestAdvanceToNextChapter(t *testing.T) {
+	gAudio.stop() // the controller is a shared global; start clean
+	defer gAudio.stop()
+
+	bd := &BibleData{
+		Books: []string{"BookA", "BookB"},
+		Verses: map[string]map[int][]Verse{
+			"BookA": {1: {}, 2: {}},
+			"BookB": {1: {}, 2: {}},
+		},
+	}
+	state := &AppState{Bible: bd, CurrentVersion: "web", CurrentBook: "BookA", CurrentChapter: 1}
+
+	// Within a book: ch1 → ch2.
+	if !advanceToNextChapter(state) || state.CurrentBook != "BookA" || state.CurrentChapter != 2 {
+		t.Fatalf("within-book advance = %s %d, want BookA 2", state.CurrentBook, state.CurrentChapter)
+	}
+	// Across a book boundary: BookA's last chapter → BookB ch1.
+	if !advanceToNextChapter(state) || state.CurrentBook != "BookB" || state.CurrentChapter != 1 {
+		t.Fatalf("cross-book advance = %s %d, want BookB 1", state.CurrentBook, state.CurrentChapter)
+	}
+	// Within BookB: ch1 → ch2.
+	if !advanceToNextChapter(state) || state.CurrentBook != "BookB" || state.CurrentChapter != 2 {
+		t.Fatalf("BookB advance = %s %d, want BookB 2", state.CurrentBook, state.CurrentChapter)
+	}
+	// End of the Bible (last book, last chapter): no next, state unchanged.
+	if advanceToNextChapter(state) {
+		t.Fatal("advancing past the last chapter of the last book should return false")
+	}
+	if state.CurrentBook != "BookB" || state.CurrentChapter != 2 {
+		t.Fatalf("end-of-Bible advance mutated state to %s %d", state.CurrentBook, state.CurrentChapter)
+	}
+}
+
 func TestAudioSourceIconForKind(t *testing.T) {
 	// Read-aloud (TTS) → the waveform glyph; recorded → something else (the person).
 	if got := audioSourceIconForKind(audioTTS); got != iconAudioWave {

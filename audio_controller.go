@@ -13,6 +13,7 @@ package bibletext
 
 import (
 	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 )
@@ -50,6 +51,10 @@ type audioController struct {
 	// native end-of-chapter callback can drive continuous playback (advance to the
 	// next chapter + keep going). nil until something has played.
 	boundState *AppState
+
+	// startedAt is when the loaded chapter began — used to ignore a near-instant
+	// ENDED (an empty/failed chapter) so continuous playback can't race ahead.
+	startedAt time.Time
 
 	// onChange re-renders the play button when the play state changes. The reading
 	// header installs it (a refreshReadingOnly closure); nil in unit tests, where
@@ -147,6 +152,7 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	c.kind = a.Kind
 	c.state = audioPlaying
 	c.boundState = state // so the end-of-chapter callback can advance + keep playing
+	c.startedAt = time.Now()
 	c.mu.Unlock()
 
 	switch a.Kind {
@@ -277,6 +283,11 @@ func (c *audioController) fireChange() {
 // interruption, or toggled from the lock screen / Control Center.
 func (c *audioController) applyNativeState(s audioPlayState) {
 	c.mu.Lock()
+	// Capture identity BEFORE the switch clears it: the chapter that's ending, and
+	// whether it ended suspiciously fast (an empty / failed chapter that produced no
+	// real audio — guards continuous playback against racing through chapters).
+	endedFP := c.loadedFP
+	tooFast := time.Since(c.startedAt) < 2*time.Second
 	c.state = s
 	switch s {
 	case audioPlaying, audioPaused:
@@ -299,17 +310,23 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	// pause or a manual stop, which post PAUSED / go through gAudio.stop()) rolls
 	// onto the next chapter and keeps playing in the same mode, carrying the reading
 	// pane with it, until the reader pauses or the Bible ends.
-	if s == audioEnded && endedState != nil {
-		c.advanceAndContinue(endedState, endedKind)
+	if s == audioEnded && endedState != nil && !tooFast {
+		c.advanceAndContinue(endedState, endedKind, endedFP)
 	}
 }
 
 // advanceAndContinue moves the reader to the next chapter (across book boundaries)
 // and starts its audio in the same mode the previous chapter was using. Runs the
 // navigation + start on the Fyne goroutine (applyNativeState arrives on the native
-// thread). Stops silently at the end of the Bible.
-func (c *audioController) advanceAndContinue(state *AppState, kind audioKind) {
+// thread). Stops silently at the end of the Bible. endedFP is the chapter that just
+// finished: if the reader has since navigated elsewhere (a manual jump that raced
+// the chapter's end), we must NOT hijack their new position — so bail unless they're
+// still on the chapter that ended.
+func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, endedFP string) {
 	fyne.Do(func() {
+		if chapterAudioFingerprint(state) != endedFP {
+			return // reader moved on while the chapter was finishing — don't yank them
+		}
 		if !advanceToNextChapter(state) {
 			return
 		}
