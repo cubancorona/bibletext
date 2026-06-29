@@ -58,29 +58,37 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 	}
 	canSeek := displayKind == audioRecorded
 
-	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 18, boxH, func() { showAudioSourceMenu(state) })
-	back := newIconTapButton(state, iconSkipBack15, 20, boxH, func() { gAudio.skip(-15) })
+	// Compact rows so the two-row card stays SHORTER than the header's two text
+	// lines — expanding it must not grow the header and push the reading lane down.
+	const rh = 25
+	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 16, rh, func() { showAudioSourceMenu(state) })
+	back := newIconTapButton(state, iconSkipBack15, 18, rh, func() { gAudio.skip(-15) })
 	back.disabled = !canSeek
-	play := newIconTapButton(state, playGlyph, 20, boxH, func() { gAudio.playPauseCurrent(state) })
-	fwd := newIconTapButton(state, iconSkipFwd15, 20, boxH, func() { gAudio.skip(15) })
+	play := newIconTapButton(state, playGlyph, 18, rh, func() { gAudio.playPauseCurrent(state) })
+	fwd := newIconTapButton(state, iconSkipFwd15, 18, rh, func() { gAudio.skip(15) })
 	fwd.disabled = !canSeek
 
 	// The box hugs the player icons: the source centred on top (so it sits above the
-	// play button), the skip/play/skip transport below.
+	// play button), the skip/play/skip transport below. A tight manual frame (not
+	// surface(), which adds NewPadded theme padding) keeps it short.
 	top := container.NewHBox(layout.NewSpacer(), src, layout.NewSpacer())
 	bottom := container.NewHBox(back, play, fwd)
-	box := surface(container.NewVBox(top, bottom), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	rows := container.New(layout.NewCustomPaddedVBoxLayout(0), top, bottom)
+	frame := canvas.NewRectangle(pal.SurfaceAlt)
+	frame.StrokeColor = pal.Border
+	frame.StrokeWidth = 1
+	frame.CornerRadius = 8
+	box := container.NewStack(frame, container.New(layout.NewCustomPaddedLayout(1, 1, 6, 6), rows))
 
 	// Close ✕ with OPPOSITE shading (a muted-grey fill — the chapter-arrow colour —
-	// with the glyph in the page colour), tucked in the upper-right corner outside
-	// the box.
+	// with the glyph in the page colour), tucked in the upper-right corner.
 	xBg := canvas.NewRectangle(pal.TextMuted)
-	xBg.CornerRadius = 6
+	xBg.CornerRadius = 5
 	xGlyph := canvas.NewImageFromResource(theme.NewColoredResource(theme.CancelIcon(), theme.ColorNameBackground))
 	xGlyph.FillMode = canvas.ImageFillContain
-	xGlyph.SetMinSize(fyne.NewSize(12, 12))
+	xGlyph.SetMinSize(fyne.NewSize(10, 10))
 	xCell := newTappableArea(
-		container.NewGridWrap(fyne.NewSize(26, 26), container.NewStack(xBg, container.NewCenter(xGlyph))),
+		container.NewGridWrap(fyne.NewSize(22, 22), container.NewStack(xBg, container.NewCenter(xGlyph))),
 		func() { audioPanelOpen = false; state.refreshReadingOnly() },
 	)
 	corner := container.NewVBox(container.NewHBox(layout.NewSpacer(), xCell), layout.NewSpacer())
