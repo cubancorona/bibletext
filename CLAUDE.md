@@ -144,8 +144,8 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `buildReadingViewMobile`). A header control (e.g. the audio play button) must be
   added to *both* or it won't appear on the phone — `reading.go` alone is not the
   iOS path.
-- **Per-chapter audio (iOS only).** `audio.go` `recordedURLFor` resolves what to
-  play, dispatched by translation so each version plays a recording made from its
+- **Per-chapter audio (Apple platforms — iOS + macOS).** `audio.go` `recordedURLFor`
+  resolves what to play, dispatched by translation so each version plays a recording made from its
   own text: the **BSB** has a COMPLETE CC0 narration (Barry Hays) streamed
   per-chapter from openbible.com (`bsb_audio.go`, all 66 books); **WEB /
   WEB-Catholic** use the *partial* public-domain eBible WEB set (`ebibleAudioBooks`);
@@ -160,38 +160,37 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   default). `audioController` (`audio_controller.go`, the package
   singleton `gAudio`, untagged) tracks play state and drives the per-platform
   `nativeAudio*` shims; the reading-header play button is `audio_button.go`
-  (recorded → MediaPlay/Pause; TTS → the bundled `iconSpeak` voice glyph in
-  `icons_embed.go`/`assets/icons/speak.svg`), shown only where `audioSupported()`.
-  The engine is **iOS-only**: `audio_ios.go` (cgo, `//go:build ios`) wraps
-  AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) + MPNowPlayingInfoCenter
-  + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no track-skip); state posts
-  back via `bibleTextAudioStateChanged` (`audio_export_apple.go`, the empty-preamble
-  `//export` twin, `//go:build darwin` so it serves both Apple engines) →
-  `applyNativeState` → `fyne.Do`. **Stale-callback gotcha:** every
-  native delegate/KVO callback is gated on the controller's current `mode`
-  (`if (self.mode != BT_MODE_TTS) return;` etc.). The AVPlayer's KVO observer is
-  removed in `teardownEngines`, but the `AVSpeechSynthesizer` delegate stays wired, so
-  after switching TTS→recording a stopped utterance's `didFinish/didCancel` could still
-  fire LATE and post a spurious `ENDED` that wiped the freshly-loaded chapter — leaving
-  audio playing but the button stuck on ▶. The mode guard drops it; `applyNativeState`
-  also re-asserts `loaded` on any playing/paused report as belt-and-suspenders.
-  **The engine runs on BOTH Apple platforms.** `audio_ios.go` (`//go:build ios`) is
-  the iOS engine; `audio_macos.go` (`//go:build darwin && !ios`) is the desktop twin
-  — the same AVPlayer + AVSpeechSynthesizer + MPNowPlayingInfoCenter/MPRemoteCommandCenter
-  code, MINUS AVAudioSession (macOS has none — no session activation, no interruption
-  handler) and using AppKit/NSImage for the Now Playing artwork. `audioSupported()` is
-  true on `darwin` (`audio_supported_apple.go`). Linux/Windows/Android get no-op
-  `nativeAudio*` stubs (`audio_other.go`, `//go:build !darwin`) so those builds stay
-  cgo-free and show no audio control. **Build-tag trap:** a file named `*_ios.go` is
-  GOOS=ios-only and `*_darwin.go` is GOOS=darwin-only (which EXCLUDES ios) — so the
-  files shared by both Apple platforms (`audio_export_apple.go`, `audio_supported_apple.go`)
-  carry NO GOOS filename suffix and use an explicit `//go:build darwin` (the `darwin`
-  build *tag* is set for ios AND macos). iOS Background playback needs
+  (recorded → MediaPlay/Pause; TTS → the bundled `iconAudioWave` waveform glyph in
+  `icons_embed.go`), shown only where `audioSupported()`.
+  **The native engine runs on both Apple platforms.** `audio_ios.go` (cgo,
+  `//go:build ios`) wraps AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) +
+  MPNowPlayingInfoCenter + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no
+  track-skip); `audio_macos.go` (`//go:build darwin && !ios`) is the desktop twin —
+  the same code MINUS AVAudioSession (macOS has none: no session activation, no
+  interruption handler) and using AppKit/NSImage for the Now Playing artwork. State
+  posts back via `bibleTextAudioStateChanged` (`audio_export_apple.go`, the
+  empty-preamble `//export` twin, `//go:build darwin` so it serves both engines) →
+  `applyNativeState` → `fyne.Do`. `audioSupported()` is true on `darwin`
+  (`audio_supported_apple.go`); Linux/Windows/Android get no-op `nativeAudio*` stubs
+  (`audio_other.go`, `//go:build !darwin`) so those builds stay cgo-free and show no
+  audio control. **Stale-callback gotcha:** every native delegate/KVO callback is
+  gated on the controller's current `mode` (`if (self.mode != BT_MODE_TTS) return;`
+  etc.). The AVPlayer's KVO observer is removed in `teardownEngines`, but the
+  `AVSpeechSynthesizer` delegate stays wired, so after switching TTS→recording a
+  stopped utterance's `didFinish/didCancel` could still fire LATE and post a spurious
+  `ENDED` that wiped the freshly-loaded chapter — leaving audio playing but the button
+  stuck on ▶. The mode guard drops it; `applyNativeState` also re-asserts `loaded` on
+  any playing/paused report as belt-and-suspenders. **Build-tag trap:** a file named
+  `*_ios.go` is GOOS=ios-only and `*_darwin.go` is GOOS=darwin-only (which EXCLUDES
+  ios) — so the files shared by both Apple platforms (`audio_export_apple.go`,
+  `audio_supported_apple.go`) carry NO GOOS filename suffix and use an explicit
+  `//go:build darwin` (the `darwin` build *tag* is set for ios AND macos). iOS Background playback needs
   **`UIBackgroundModes=audio`** in Info.plist, which Fyne's iOS packager never emits —
   it's injected by `plutil` in `scripts/run-ios-device.sh`, `release-ios.sh`, and
   `run-ios-sim.sh`, **before** their codesign step. Audio auto-stops on any
-  chapter/book/version change (one fingerprint-guarded `stopAudioForNav` hook in
-  `addRecentChapter`, plus `applyLoadedVersion`) and on app stop/window-close (raw
+  chapter/book/version change (one fingerprint-guarded `stopAudioForNav`,
+  `audio_controller.go`, called from `addRecentChapter` in `state.go`, plus
+  `applyLoadedVersion`) and on app stop/window-close (raw
   `nativeAudioStop()` from the lifecycle hooks — never `gAudio.stop()`, to avoid
   `fyne.Do` on the off-main shutdown path). **Continuous playback:** when a chapter
   finishes on its own the controller rolls onto the next one and keeps playing in the
