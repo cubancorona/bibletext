@@ -50,19 +50,12 @@ func TestStopAudioForNav(t *testing.T) {
 	}
 }
 
-func TestAudioSourceIcon(t *testing.T) {
-	bd := &BibleData{
-		Books:  []string{"John"},
-		Verses: map[string]map[int][]Verse{"John": {20: {{Text: "Now on the first day"}}}},
+func TestAudioSourceIconForKind(t *testing.T) {
+	// Read-aloud (TTS) → the waveform glyph; recorded → something else (the person).
+	if got := audioSourceIconForKind(audioTTS); got != iconAudioWave {
+		t.Fatalf("TTS source icon = %v, want iconAudioWave", got)
 	}
-	// BSB (not WEB) → TTS chapter → the voice glyph.
-	bsb := &AppState{CurrentVersion: "bsb", CurrentBook: "John", CurrentChapter: 20, Bible: bd}
-	if got := audioSourceIcon(bsb); got != iconSpeak {
-		t.Fatalf("TTS chapter source icon = %v, want iconSpeak", got)
-	}
-	// WEB John 20 → recorded → the headphones glyph.
-	web := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20, Bible: bd}
-	if got := audioSourceIcon(web); got != iconHeadphones {
-		t.Fatalf("recorded chapter source icon = %v, want iconHeadphones", got)
+	if got := audioSourceIconForKind(audioRecorded); got == iconAudioWave {
+		t.Fatal("recorded source icon should not be the waveform glyph")
 	}
 }
