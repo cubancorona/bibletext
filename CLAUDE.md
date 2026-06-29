@@ -152,8 +152,12 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   any other version, plus unrecorded books / the deuterocanon, falls back to
   on-device TTS of the displayed verses (`chapterSpeechText`). All recordings are
   range-seekable (the ±15s skip). The source menu (`audio_menu.go`) lets the reader
-  switch recording ↔ read-aloud and is where additional narrators/recordings would
-  surface as rows. `audioController` (`audio_controller.go`, the package
+  CHOOSE between recording ↔ read-aloud and is where additional narrators/recordings
+  would surface as rows. **Selecting a source never starts playback** —
+  `selectSource` only records the per-chapter preference (`gAudio.preferred`/
+  `preferredFP`) and stops any now-stale loaded audio; the play button is the only
+  thing that begins audio, via `effectiveKind` (the chosen source, or the per-chapter
+  default). `audioController` (`audio_controller.go`, the package
   singleton `gAudio`, untagged) tracks play state and drives the per-platform
   `nativeAudio*` shims; the reading-header play button is `audio_button.go`
   (recorded → MediaPlay/Pause; TTS → the bundled `iconSpeak` voice glyph in

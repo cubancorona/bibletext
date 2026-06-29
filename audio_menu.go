@@ -29,11 +29,10 @@ func showAudioSourceMenu(state *AppState) {
 		return
 	}
 	pal := state.pal()
-	fp := chapterAudioFingerprint(state)
-	// loadedHere is false when nothing is playing for this chapter yet; in that case
-	// curKind is just the zero default (audioRecorded) and must NOT be treated as
-	// "already current", or tapping that row would no-op instead of starting it.
-	loadedHere, curKind := gAudio.indicator(fp)
+	// curKind is the source the play button will use — the reader's current choice
+	// (or the per-chapter default). The menu only CHANGES this choice; it never
+	// starts playback (that's the play button's job).
+	curKind := gAudio.effectiveKind(state)
 	hasRec := chapterHasRecording(state)
 
 	if state.hideReadingOverlay != nil {
@@ -70,21 +69,21 @@ func showAudioSourceMenu(state *AppState) {
 		versionName = v.Name
 	}
 
-	// Selectable sources, current one highlighted. Tapping a different one switches
-	// (restarts the chapter from that source); tapping the current one just closes.
+	// Selectable sources, the chosen one highlighted. Tapping a different one just
+	// CHOOSES it (the play button then plays it); tapping the current one closes.
 	rows := container.NewVBox()
 	addSource := func(kind audioKind, icon fyne.Resource, label string) {
 		k := kind
-		isCurrent := loadedHere && k == curKind
+		isCurrent := k == curKind
 		btn := widget.NewButtonWithIcon(label, icon, func() {
-			if !isCurrent { // (re)start unless this exact source is already playing
-				gAudio.playSource(state, k)
+			if !isCurrent {
+				gAudio.selectSource(state, k) // set the source; does NOT start playback
 			}
 			done()
 		})
 		btn.Alignment = widget.ButtonAlignLeading
 		if isCurrent {
-			btn.Importance = widget.HighImportance // the source currently playing
+			btn.Importance = widget.HighImportance // the chosen source
 		}
 		rows.Add(btn)
 	}
