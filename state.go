@@ -323,6 +323,27 @@ func moveChapter(state *AppState, step int) bool {
 	return true
 }
 
+// advanceToNextChapter moves to the next chapter in reading order, crossing into
+// the first chapter of the next book at a book boundary. Returns false at the very
+// end of the Bible (nothing after Revelation 22). Used by continuous audio
+// playback to roll onto the next chapter when one finishes.
+func advanceToNextChapter(state *AppState) bool {
+	if state == nil || state.Bible == nil {
+		return false
+	}
+	if moveChapter(state, 1) {
+		return true // next chapter within the current book
+	}
+	// At the last chapter of the book → first chapter of the next book.
+	books := state.Bible.Books
+	idx := indexOfBook(books, state.CurrentBook)
+	if idx < 0 || idx+1 >= len(books) {
+		return false // end of the Bible
+	}
+	selectBook(state, books[idx+1], true) // sets chapter 1 + history + clears highlight
+	return true
+}
+
 // maxRecent caps the reading history. The slim history bar shows all but the
 // current chapter, so this bounds how far back you can jump.
 const maxRecent = 7
