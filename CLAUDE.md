@@ -165,8 +165,9 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   The engine is **iOS-only**: `audio_ios.go` (cgo, `//go:build ios`) wraps
   AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) + MPNowPlayingInfoCenter
   + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no track-skip); state posts
-  back via `bibleTextAudioStateChanged` (`audio_export_ios.go`, the empty-preamble
-  `//export` twin) → `applyNativeState` → `fyne.Do`. **Stale-callback gotcha:** every
+  back via `bibleTextAudioStateChanged` (`audio_export_apple.go`, the empty-preamble
+  `//export` twin, `//go:build darwin` so it serves both Apple engines) →
+  `applyNativeState` → `fyne.Do`. **Stale-callback gotcha:** every
   native delegate/KVO callback is gated on the controller's current `mode`
   (`if (self.mode != BT_MODE_TTS) return;` etc.). The AVPlayer's KVO observer is
   removed in `teardownEngines`, but the `AVSpeechSynthesizer` delegate stays wired, so
@@ -174,9 +175,18 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   fire LATE and post a spurious `ENDED` that wiped the freshly-loaded chapter — leaving
   audio playing but the button stuck on ▶. The mode guard drops it; `applyNativeState`
   also re-asserts `loaded` on any playing/paused report as belt-and-suspenders.
-  Everything else (macOS desktop,
-  Linux, Windows, Android) gets no-op `nativeAudio*` stubs (`audio_other.go`,
-  `//go:build !ios`) so the host build/tests stay cgo-free. Background playback needs
+  **The engine runs on BOTH Apple platforms.** `audio_ios.go` (`//go:build ios`) is
+  the iOS engine; `audio_macos.go` (`//go:build darwin && !ios`) is the desktop twin
+  — the same AVPlayer + AVSpeechSynthesizer + MPNowPlayingInfoCenter/MPRemoteCommandCenter
+  code, MINUS AVAudioSession (macOS has none — no session activation, no interruption
+  handler) and using AppKit/NSImage for the Now Playing artwork. `audioSupported()` is
+  true on `darwin` (`audio_supported_apple.go`). Linux/Windows/Android get no-op
+  `nativeAudio*` stubs (`audio_other.go`, `//go:build !darwin`) so those builds stay
+  cgo-free and show no audio control. **Build-tag trap:** a file named `*_ios.go` is
+  GOOS=ios-only and `*_darwin.go` is GOOS=darwin-only (which EXCLUDES ios) — so the
+  files shared by both Apple platforms (`audio_export_apple.go`, `audio_supported_apple.go`)
+  carry NO GOOS filename suffix and use an explicit `//go:build darwin` (the `darwin`
+  build *tag* is set for ios AND macos). iOS Background playback needs
   **`UIBackgroundModes=audio`** in Info.plist, which Fyne's iOS packager never emits —
   it's injected by `plutil` in `scripts/run-ios-device.sh`, `release-ios.sh`, and
   `run-ios-sim.sh`, **before** their codesign step. Audio auto-stops on any
