@@ -46,6 +46,11 @@ type audioController struct {
 	hasPreferred bool
 	preferredFP  string
 
+	// boundState is the live AppState of whatever is loaded, captured on start so the
+	// native end-of-chapter callback can drive continuous playback (advance to the
+	// next chapter + keep going). nil until something has played.
+	boundState *AppState
+
 	// onChange re-renders the play button when the play state changes. The reading
 	// header installs it (a refreshReadingOnly closure); nil in unit tests, where
 	// fireChange must therefore stay a no-op (it never reaches fyne.Do).
@@ -141,6 +146,7 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	c.loadedFP = fp
 	c.kind = a.Kind
 	c.state = audioPlaying
+	c.boundState = state // so the end-of-chapter callback can advance + keep playing
 	c.mu.Unlock()
 
 	switch a.Kind {
@@ -285,8 +291,31 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		c.loaded = false
 		c.loadedFP = ""
 	}
+	endedKind, endedState := c.kind, c.boundState
 	c.mu.Unlock()
 	c.fireChange()
+
+	// Continuous playback: a chapter that finishes on its own (ENDED — NOT a user
+	// pause or a manual stop, which post PAUSED / go through gAudio.stop()) rolls
+	// onto the next chapter and keeps playing in the same mode, carrying the reading
+	// pane with it, until the reader pauses or the Bible ends.
+	if s == audioEnded && endedState != nil {
+		c.advanceAndContinue(endedState, endedKind)
+	}
+}
+
+// advanceAndContinue moves the reader to the next chapter (across book boundaries)
+// and starts its audio in the same mode the previous chapter was using. Runs the
+// navigation + start on the Fyne goroutine (applyNativeState arrives on the native
+// thread). Stops silently at the end of the Bible.
+func (c *audioController) advanceAndContinue(state *AppState, kind audioKind) {
+	fyne.Do(func() {
+		if !advanceToNextChapter(state) {
+			return
+		}
+		state.refresh() // carry the reading pane onto the new chapter
+		c.startChapter(state, resolveAudio(state, kind), chapterAudioFingerprint(state))
+	})
 }
 
 // stopAudioForNav stops playback when the reader navigates to a DIFFERENT chapter

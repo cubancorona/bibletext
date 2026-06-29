@@ -193,7 +193,18 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   chapter/book/version change (one fingerprint-guarded `stopAudioForNav` hook in
   `addRecentChapter`, plus `applyLoadedVersion`) and on app stop/window-close (raw
   `nativeAudioStop()` from the lifecycle hooks — never `gAudio.stop()`, to avoid
-  `fyne.Do` on the off-main shutdown path).
+  `fyne.Do` on the off-main shutdown path). **Continuous playback:** when a chapter
+  finishes on its own the controller rolls onto the next one and keeps playing in the
+  same mode, carrying the reading pane along, until the reader pauses or the Bible
+  ends. The native ENDED callback → `applyNativeState(audioEnded)` → `advanceAndContinue`
+  → `advanceToNextChapter` (next chapter, crossing book boundaries; stops after
+  Revelation 22) → `state.refresh()` (pane follows) → `startChapter` for the new
+  chapter. The controller caches the live `boundState` on each start so the
+  native-thread callback can reach navigation. It advances ONLY on a natural end
+  (a pause posts PAUSED; a manual nav stops via `stopAudioForNav` — neither posts
+  ENDED), so there's no runaway. NOTE: the advance hops through `fyne.Do`, so it's
+  verified in the foreground; screen-off background continuation would want a
+  native-side queue (AVQueuePlayer / queued utterances) instead.
 - **Reading-position + history persistence.** `reading_state.go` persists *where
   the reader left off* — translation, book, chapter, the within-chapter **scroll
   position**, and the recent-chapters history — as one JSON blob in
