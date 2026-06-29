@@ -90,13 +90,31 @@ func versionUsesEBibleAudio(versionID string) bool {
 	return versionID == "web" || versionID == "webc"
 }
 
-// chapterHasRecording reports whether the current chapter has a recorded WEB MP3 (vs.
-// TTS), so the reader can pick the right button icon.
-func chapterHasRecording(state *AppState) bool {
-	if state == nil || !versionUsesEBibleAudio(state.CurrentVersion) {
-		return false
+// recordedURLFor returns the recorded-narration MP3 URL for the current chapter
+// and whether one exists, dispatching by translation so each version plays a
+// recording made from its own text:
+//   - BSB: a COMPLETE CC0 narration (Barry Hays) from openbible.com — all 66 books.
+//   - WEB / WEB-Catholic: public-domain WEB narration from eBible.org (partial; the
+//     deuterocanon and the books eBible hasn't recorded fall back to TTS).
+//
+// Any other version has no matching recording and uses TTS.
+func recordedURLFor(state *AppState) (string, bool) {
+	if state == nil {
+		return "", false
 	}
-	_, ok := ebibleAudioURL(state.CurrentBook, state.CurrentChapter)
+	if state.CurrentVersion == "bsb" {
+		return bsbAudioURL(state.CurrentBook, state.CurrentChapter)
+	}
+	if versionUsesEBibleAudio(state.CurrentVersion) {
+		return ebibleAudioURL(state.CurrentBook, state.CurrentChapter)
+	}
+	return "", false
+}
+
+// chapterHasRecording reports whether the current chapter has a recorded MP3 (vs.
+// TTS), so the reader can pick the right source glyph.
+func chapterHasRecording(state *AppState) bool {
+	_, ok := recordedURLFor(state)
 	return ok
 }
 
@@ -107,8 +125,7 @@ func audioForChapter(state *AppState) chapterAudio {
 	if v, ok := versionByID(state.CurrentVersion); ok {
 		sub = v.Name
 	}
-	if chapterHasRecording(state) {
-		url, _ := ebibleAudioURL(state.CurrentBook, state.CurrentChapter)
+	if url, ok := recordedURLFor(state); ok {
 		return chapterAudio{Kind: audioRecorded, URL: url, Title: title, Subtitle: sub}
 	}
 	return chapterAudio{Kind: audioTTS, Text: chapterSpeechText(state), Title: title, Subtitle: sub}

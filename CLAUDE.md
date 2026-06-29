@@ -144,11 +144,16 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `buildReadingViewMobile`). A header control (e.g. the audio play button) must be
   added to *both* or it won't appear on the phone — `reading.go` alone is not the
   iOS path.
-- **Per-chapter audio (iOS only).** `audio.go` resolves what to play for the
-  current chapter: a streamed public-domain WEB MP3 from eBible.org
-  (`ebibleAudioBooks`, range-seekable) when the version is WEB/WEB-Catholic *and*
-  the book/chapter is recorded, else on-device TTS of the displayed verses
-  (`chapterSpeechText`). `audioController` (`audio_controller.go`, the package
+- **Per-chapter audio (iOS only).** `audio.go` `recordedURLFor` resolves what to
+  play, dispatched by translation so each version plays a recording made from its
+  own text: the **BSB** has a COMPLETE CC0 narration (Barry Hays) streamed
+  per-chapter from openbible.com (`bsb_audio.go`, all 66 books); **WEB /
+  WEB-Catholic** use the *partial* public-domain eBible WEB set (`ebibleAudioBooks`);
+  any other version, plus unrecorded books / the deuterocanon, falls back to
+  on-device TTS of the displayed verses (`chapterSpeechText`). All recordings are
+  range-seekable (the ±15s skip). The source menu (`audio_menu.go`) lets the reader
+  switch recording ↔ read-aloud and is where additional narrators/recordings would
+  surface as rows. `audioController` (`audio_controller.go`, the package
   singleton `gAudio`, untagged) tracks play state and drives the per-platform
   `nativeAudio*` shims; the reading-header play button is `audio_button.go`
   (recorded → MediaPlay/Pause; TTS → the bundled `iconSpeak` voice glyph in
