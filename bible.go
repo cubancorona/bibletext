@@ -510,6 +510,13 @@ var bookAliases = map[string]string{
 	"jas": "James", "jam": "James", "1 pet": "1 Peter", "2 pet": "2 Peter",
 	"1 pt": "1 Peter", "2 pt": "2 Peter", "1 jn": "1 John", "2 jn": "2 John",
 	"3 jn": "3 John", "rev": "Revelation",
+	// Deuterocanon (Catholic editions). Harmless for 66-book versions: resolveBookName
+	// only returns a name that's actually in the loaded BibleData.Books, so these never
+	// resolve there.
+	"tob": "Tobit", "tb": "Tobit", "jdt": "Judith", "jth": "Judith",
+	"wis": "Wisdom", "wisd": "Wisdom", "sir": "Sirach", "ecclus": "Sirach",
+	"bar": "Baruch", "1 macc": "1 Maccabees", "2 macc": "2 Maccabees",
+	"1 mac": "1 Maccabees", "2 mac": "2 Maccabees",
 }
 
 // resolveBookName matches user input to a canonical book name via exact match,

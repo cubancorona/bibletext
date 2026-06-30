@@ -87,6 +87,10 @@ note "binary arch: $(lipo -archs "$APP/$EXE")"
 PB() { /usr/libexec/PlistBuddy -c "$1" "$APP/Info.plist"; }
 PB "Set :MinimumOSVersion $IOS_MIN" 2>/dev/null || PB "Add :MinimumOSVersion string $IOS_MIN"
 PB "Set :CFBundleShortVersionString $SHORT_VERSION" 2>/dev/null || PB "Add :CFBundleShortVersionString string $SHORT_VERSION"
+# Background audio + Now Playing / Control Center. fyne never emits UIBackgroundModes,
+# so inject it here (before the step-6 codesign, or the signature breaks); a shipped
+# build without it loses background playback + lock-screen controls. plutil -replace upserts.
+plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 # Declare no non-exempt encryption (HTTPS only) so the upload skips export-compliance.
 PB "Set :ITSAppUsesNonExemptEncryption false" 2>/dev/null || PB "Add :ITSAppUsesNonExemptEncryption bool false"
 # Device family for the App Store listing. Default = iPhone-only (UIDeviceFamily=[1]) so the

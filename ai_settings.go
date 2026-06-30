@@ -31,6 +31,12 @@ func showAISettings(state *AppState) {
 	pal := state.pal()
 	store := state.keys()
 
+	// The only sheet control that affects the reading pane is the red-letter
+	// toggle. Capture it now so closing the sheet re-renders ONLY when it actually
+	// changed — refreshing unconditionally rebuilds the reading pane (re-pinning
+	// the native text overlay) and flickers the screen for an AI-key-only change.
+	redLetterAtOpen := redLetterEnabled()
+
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
 	}
@@ -187,7 +193,9 @@ func showAISettings(state *AppState) {
 			popup.Hide()
 		}
 		restore()
-		state.refreshReadingOnly()
+		if redLetterEnabled() != redLetterAtOpen {
+			state.refreshReadingOnly() // red-letter changed → re-render the verses
+		}
 	}
 
 	title := canvas.NewText("Settings", pal.Text)
@@ -248,11 +256,13 @@ func showAISettings(state *AppState) {
 	card := container.New(fixedWidthLayout{width: ps.Width},
 		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
 
-	// A NON-modal popup dismisses on a tap outside its content (Fyne built-in) and
-	// leaves the reading page visible (undimmed) behind it. dismissPopUp runs done()
-	// — the overlay-restore cleanup — when that outside tap closes it.
-	dp := newDismissPopUp(card, cnv, done)
-	popup = &dp.PopUp
+	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
+	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
+	// the tap-to-dismiss on PopUp.isInsideContent, which reads innerSize, and without an
+	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
+	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
+	popup = widget.NewPopUp(card, cnv)
+	popup.Resize(card.MinSize())
 	x := (cnv.Size().Width - ps.Width) / 2
 	if x < 0 {
 		x = 0
@@ -261,7 +271,22 @@ func showAISettings(state *AppState) {
 	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 		y = pos.Y + 16
 	}
-	dp.ShowAtPosition(fyne.NewPos(x, y))
+	popup.ShowAtPosition(fyne.NewPos(x, y))
+
+	// done() (overlay-restore cleanup) is called directly by the ✕. An outside-tap close
+	// goes through Fyne's built-in PopUp.Hide, which does NOT call done() — and a PopUp
+	// subclass can't intercept it (PopUp.Show registers the embedded *PopUp, so a Tapped
+	// override is never dispatched). So poll until the popup is gone by ANY route, then run
+	// done(); its `closed` guard keeps the ✕ path idempotent. (Same approach as Goto.)
+	var watchDismiss func()
+	watchDismiss = func() {
+		if popup == nil || !popup.Visible() {
+			done()
+			return
+		}
+		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
+	}
+	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
 }
 
 // compactTheme shrinks only the base text size of a subtree (applied via
@@ -277,29 +302,4 @@ func (c compactTheme) Size(name fyne.ThemeSizeName) float32 {
 		return c.text
 	}
 	return c.Theme.Size(name)
-}
-
-// dismissPopUp is a non-modal popup that runs onDismiss when a tap outside its
-// content dismisses it — Fyne's PopUp offers no such callback. The settings sheet
-// uses it so an outside tap restores the native reading overlay + re-renders (the
-// cleanup the old Done button ran).
-type dismissPopUp struct {
-	widget.PopUp
-	onDismiss func()
-}
-
-func newDismissPopUp(content fyne.CanvasObject, cnv fyne.Canvas, onDismiss func()) *dismissPopUp {
-	p := &dismissPopUp{onDismiss: onDismiss}
-	p.Content = content
-	p.Canvas = cnv
-	p.ExtendBaseWidget(p)
-	return p
-}
-
-func (p *dismissPopUp) Tapped(e *fyne.PointEvent) {
-	wasVisible := p.Visible()
-	p.PopUp.Tapped(e) // hides when the tap was outside the content (non-modal)
-	if wasVisible && !p.Visible() && p.onDismiss != nil {
-		p.onDismiss()
-	}
 }

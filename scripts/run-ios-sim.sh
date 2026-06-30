@@ -33,6 +33,18 @@ trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
 
 echo "==> fyne package -os iossimulator"
 (cd "$APP_DIR" && fyne package -os iossimulator --app-id "$APP_ID")
+# Match the device build: add UIBackgroundModes=[audio] so the audio path is exercised.
+# (No codesign on the sim path, so post-package is fine; true background behavior is
+# only reliably testable on a device via run-ios-device.sh.)
+plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.plist"
+
+# Fyne builds the simulator binary for min iOS 7.0, which modern Simulator
+# runtimes reject ("This app needs to be updated by the developer"). Rewrite the
+# Mach-O build-version to a current minimum and re-sign (ad-hoc) so it installs.
+xcrun vtool -arch "$(uname -m)" -set-build-version 7 15.0 18.0 -replace \
+    -output "$APP_DIR/$APP_NAME/main" "$APP_DIR/$APP_NAME/main" 2>/dev/null \
+    || echo "==> vtool min-version bump skipped (older Simulator? continuing)" >&2
+codesign --force --sign - "$APP_DIR/$APP_NAME" >/dev/null 2>&1 || true
 
 # Boot the requested simulator if not already booted.
 BOOTED=$(xcrun simctl list devices booted | awk -F'[()]' '/\(Booted\)/ {print $2; exit}')
