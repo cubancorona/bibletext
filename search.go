@@ -198,7 +198,7 @@ func aiNoKeyView(state *AppState) fyne.CanvasObject {
 
 	col := container.NewVBox(
 		container.NewCenter(title), spacer(6),
-		container.NewGridWrap(fyne.NewSize(300, body.MinSize().Height), body), spacer(14),
+		wrappedParagraph(body, 300), spacer(14),
 		container.NewCenter(setup),
 	)
 	return container.NewCenter(col)
@@ -211,7 +211,7 @@ func aiSearchMessageView(msg, action string, onAction func()) fyne.CanvasObject 
 	lbl.Wrapping = fyne.TextWrapWord
 	lbl.Alignment = fyne.TextAlignCenter
 
-	items := []fyne.CanvasObject{container.NewGridWrap(fyne.NewSize(300, lbl.MinSize().Height+8), lbl)}
+	items := []fyne.CanvasObject{wrappedParagraph(lbl, 300)}
 	if action != "" && onAction != nil {
 		btn := widget.NewButton(action, onAction)
 		items = append(items, spacer(12), container.NewCenter(btn))
