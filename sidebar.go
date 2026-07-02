@@ -254,6 +254,18 @@ func spacer(h float32) fyne.CanvasObject {
 	return r
 }
 
+// wrappedParagraph lays out a word-wrapping label at a fixed width, reserving its
+// TRUE wrapped height. A widget.Label reports only its single-line MinSize until it
+// has been laid out at some width, so the naive
+// container.NewGridWrap(fyne.NewSize(w, lbl.MinSize().Height), lbl) reserves just one
+// line — and any following sibling (a button, more text) then overlaps the wrapped
+// text. We first Resize the label to the target width (RichText.Resize recomputes the
+// wrap), then read the now-correct height for the GridWrap cell.
+func wrappedParagraph(lbl *widget.Label, width float32) fyne.CanvasObject {
+	lbl.Resize(fyne.NewSize(width, lbl.MinSize().Height))
+	return container.NewGridWrap(fyne.NewSize(width, lbl.MinSize().Height), lbl)
+}
+
 func hgap(w float32) fyne.CanvasObject {
 	r := canvas.NewRectangle(color.Transparent)
 	r.SetMinSize(fyne.NewSize(w, 0))
