@@ -31,11 +31,34 @@ trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
+# fyne's iOS packager requires an "Apple Development" certificate even for the
+# simulator (it reads the team id from the cert). Fail early with the remedy
+# instead of dying inside fyne with a cryptic "exit status 44".
+if ! security find-certificate -c "Apple Development" >/dev/null 2>&1; then
+    echo "No 'Apple Development' certificate in your keychain (fyne needs one even for the simulator)." >&2
+    echo "Either: Xcode → Settings → Accounts → sign in with any free Apple ID and mint one," >&2
+    echo "or (no Apple account needed): ./scripts/install-fake-dev-cert.sh" >&2
+    exit 1
+fi
+
 echo "==> fyne package -os iossimulator"
 (cd "$APP_DIR" && fyne package -os iossimulator --app-id "$APP_ID")
+# Match the device build: add UIBackgroundModes=[audio] so the audio path is exercised.
+# (No codesign on the sim path, so post-package is fine; true background behavior is
+# only reliably testable on a device via run-ios-device.sh.)
+plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.plist"
 
-# Boot the requested simulator if not already booted.
-BOOTED=$(xcrun simctl list devices booted | awk -F'[()]' '/\(Booted\)/ {print $2; exit}')
+# Fyne builds the simulator binary for min iOS 7.0, which modern Simulator
+# runtimes reject ("This app needs to be updated by the developer"). Rewrite the
+# Mach-O build-version to a current minimum and re-sign (ad-hoc) so it installs.
+xcrun vtool -arch "$(uname -m)" -set-build-version 7 15.0 18.0 -replace \
+    -output "$APP_DIR/$APP_NAME/main" "$APP_DIR/$APP_NAME/main" 2>/dev/null \
+    || echo "==> vtool min-version bump skipped (older Simulator? continuing)" >&2
+codesign --force --sign - "$APP_DIR/$APP_NAME" >/dev/null 2>&1 || true
+
+# Boot the requested simulator if not already booted. Match only devices in the
+# iOS runtime sections — a booted watchOS/tvOS simulator must not hijack the install.
+BOOTED=$(xcrun simctl list devices booted | awk -F'[()]' '/^-- iOS/{ios=1; next} /^--/{ios=0} ios && /\(Booted\)/ {print $2; exit}')
 if [ -z "${BOOTED:-}" ]; then
     DEVICE_UDID=$(xcrun simctl list devices available | awk -F'[()]' -v name="$DEVICE_NAME" '
         $0 ~ name "[[:space:]]*\\(" { print $2; exit }')

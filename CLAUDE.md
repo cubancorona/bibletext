@@ -19,7 +19,7 @@ codebase, built with [Fyne](https://fyne.io/). Module name: `bibletext`.
 ## Build / run / test
 
 ```bash
-go build ./...                      # compile-check everything (host = macOS)
+go build ./...                      # compile-check everything (for your host OS)
 go run ./cmd/desktop                # fast launch of the desktop reader
 go test -race ./...                 # tests live in the root package
 gofmt -w .  &&  go vet ./...        # format + vet before committing
@@ -66,8 +66,10 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   flat top-level taps (Copy) work. The custom selection menu is built in
   `HBReadingTextView`'s `editMenuForTextInRange:` (Study with AI submenu + Share +
   Cross-references, prepended before iOS's suggestedActions).
-- **Native → Go bridge.** `ai_menu_darwin.go` has the repo's only `//export`
-  callback (`bibleTextAIMenuTapped`); its cgo preamble must stay empty of C
+- **Native → Go bridge.** The `//export` callbacks live in exactly two files —
+  `ai_menu_darwin.go` (reading/AI callbacks: `bibleTextAIMenuTapped`,
+  `bibleTextReadingScrolled`, etc.) and `audio_export_apple.go`
+  (`bibleTextAudioStateChanged`); their cgo preambles must stay empty of C
   *definitions* (only declarations allowed alongside `//export`).
 - **Background load + loading screen.** The Bible (~6.4 MB JSON parse +
   `PrepareSearchIndex` over ~31k verses, or a multi-minute first-run API fetch)
@@ -111,7 +113,9 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `ai_panel.go`.
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
   registry (WEB + BSB public-domain, NRSV/LSB licensed) and a `bibleSource` per
-  version (`webSource` = bible-api.com, per-chapter; `bsbSource` (`bsb.go`) = the
+  version (`webSource` = the WEB as ONE request from bible.helloao.org (it replaced
+  the old per-chapter bible-api.com walk, which remains only as the seed/fallback);
+  `bsbSource` (`bsb.go`) = the
   Berean Standard Bible, public-domain/CC0, fetched as ONE ~7 MB `complete.json`
   from the free, key-less bible.helloao.org and decoded via `decodeBSBComplete`
   mapping helloao's USFM `order` → the app's canonical book names; `licensedAPISource`
@@ -129,9 +133,81 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   configured the version flips to selectable with real text automatically.
   `switchVersion` swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
   `bibletext-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
-  shared → both platforms). All versions share the canonical 66-book structure,
-  so reading/search/AI need no per-version code. Docs: README → "Bible versions".
+  shared → both platforms). Most versions are the canonical 66-book Protestant canon;
+  the **World English Bible (Catholic)** (`webCatholicSource`, `catholic.go`) adds the
+  73-book deuterocanon — decoded by USFM **id** (helloao appends the deuterocanon and
+  gives the Greek Esther/Daniel, so the order-based `decodeBSBComplete` can't be reused)
+  and emitted in traditional Catholic order. Reading/search/AI/navigation are data-driven
+  off `BibleData.Books`, so they need no per-version code; 66-book-only features
+  (cross-refs, red-letter, verse-of-day) simply skip the deuterocanon. Docs: README →
+  "Bible versions".
 
+- **Two reading headers — edit BOTH.** The reading toolbar is built per platform:
+  desktop + Android use `chapterHeader` (`reading.go`, via `buildReadingView`),
+  but **iOS uses its own `chapterHeaderMobile`** (`reading_ios.go`, via
+  `buildReadingViewMobile`). A header control (e.g. the audio play button) must be
+  added to *both* or it won't appear on the phone — `reading.go` alone is not the
+  iOS path.
+- **Per-chapter audio (Apple platforms — iOS + macOS).** `audio.go` `recordedURLFor`
+  resolves what to play, dispatched by translation so each version plays a recording made from its
+  own text: the **BSB** has a COMPLETE CC0 narration (Barry Hays) streamed
+  per-chapter from openbible.com (`bsb_audio.go`, all 66 books); **WEB /
+  WEB-Catholic** use the *partial* public-domain eBible WEB set (`ebibleAudioBooks`);
+  any other version, plus unrecorded books / the deuterocanon, falls back to
+  on-device TTS of the displayed verses (`chapterSpeechText`). All recordings are
+  range-seekable (the ±15s skip). The source menu (`audio_menu.go`) lets the reader
+  CHOOSE between recording ↔ read-aloud and is where additional narrators/recordings
+  would surface as rows. **Selecting a source never starts playback** —
+  `selectSource` only records the per-chapter preference (`gAudio.preferred`/
+  `preferredFP`) and stops any now-stale loaded audio; the play button is the only
+  thing that begins audio, via `effectiveKind` (the chosen source, or the per-chapter
+  default). `audioController` (`audio_controller.go`, the package
+  singleton `gAudio`, untagged) tracks play state and drives the per-platform
+  `nativeAudio*` shims; the reading-header play button is `audio_button.go`
+  (recorded → MediaPlay/Pause; TTS → the bundled `iconAudioWave` waveform glyph in
+  `icons_embed.go`), shown only where `audioSupported()`.
+  **The native engine runs on both Apple platforms.** `audio_ios.go` (cgo,
+  `//go:build ios`) wraps AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) +
+  MPNowPlayingInfoCenter + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no
+  track-skip); `audio_macos.go` (`//go:build darwin && !ios`) is the desktop twin —
+  the same code MINUS AVAudioSession (macOS has none: no session activation, no
+  interruption handler) and using AppKit/NSImage for the Now Playing artwork. State
+  posts back via `bibleTextAudioStateChanged` (`audio_export_apple.go`, the
+  empty-preamble `//export` twin, `//go:build darwin` so it serves both engines) →
+  `applyNativeState` → `fyne.Do`. `audioSupported()` is true on `darwin`
+  (`audio_supported_apple.go`); Linux/Windows/Android get no-op `nativeAudio*` stubs
+  (`audio_other.go`, `//go:build !darwin`) so those builds stay cgo-free and show no
+  audio control. **Stale-callback gotcha:** every native delegate/KVO callback is
+  gated on the controller's current `mode` (`if (self.mode != BT_MODE_TTS) return;`
+  etc.). The AVPlayer's KVO observer is removed in `teardownEngines`, but the
+  `AVSpeechSynthesizer` delegate stays wired, so after switching TTS→recording a
+  stopped utterance's `didFinish/didCancel` could still fire LATE and post a spurious
+  `ENDED` that wiped the freshly-loaded chapter — leaving audio playing but the button
+  stuck on ▶. The mode guard drops it; `applyNativeState` also re-asserts `loaded` on
+  any playing/paused report as belt-and-suspenders. **Build-tag trap:** a file named
+  `*_ios.go` is GOOS=ios-only and `*_darwin.go` is GOOS=darwin-only (which EXCLUDES
+  ios) — so the files shared by both Apple platforms (`audio_export_apple.go`,
+  `audio_supported_apple.go`) carry NO GOOS filename suffix and use an explicit
+  `//go:build darwin` (the `darwin` build *tag* is set for ios AND macos). iOS Background playback needs
+  **`UIBackgroundModes=audio`** in Info.plist, which Fyne's iOS packager never emits —
+  it's injected by `plutil` in `scripts/run-ios-device.sh`, `release-ios.sh`, and
+  `run-ios-sim.sh`, **before** their codesign step. Audio auto-stops on any
+  chapter/book/version change (one fingerprint-guarded `stopAudioForNav`,
+  `audio_controller.go`, called from `addRecentChapter` in `state.go`, plus
+  `applyLoadedVersion`) and on app stop/window-close (raw
+  `nativeAudioStop()` from the lifecycle hooks — never `gAudio.stop()`, to avoid
+  `fyne.Do` on the off-main shutdown path). **Continuous playback:** when a chapter
+  finishes on its own the controller rolls onto the next one and keeps playing in the
+  same mode, carrying the reading pane along, until the reader pauses or the Bible
+  ends. The native ENDED callback → `applyNativeState(audioEnded)` → `advanceAndContinue`
+  → `advanceToNextChapter` (next chapter, crossing book boundaries; stops after
+  Revelation 22) → `state.refresh()` (pane follows) → `startChapter` for the new
+  chapter. The controller caches the live `boundState` on each start so the
+  native-thread callback can reach navigation. It advances ONLY on a natural end
+  (a pause posts PAUSED; a manual nav stops via `stopAudioForNav` — neither posts
+  ENDED), so there's no runaway. NOTE: the advance hops through `fyne.Do`, so it's
+  verified in the foreground; screen-off background continuation would want a
+  native-side queue (AVQueuePlayer / queued utterances) instead.
 - **Reading-position + history persistence.** `reading_state.go` persists *where
   the reader left off* — translation, book, chapter, the within-chapter **scroll
   position**, and the recent-chapters history — as one JSON blob in

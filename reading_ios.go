@@ -1102,8 +1102,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		showChapterPicker(state)
 	})
 
-	// Small copy icon tucked after the heading — lighter than the chapter-nav
-	// arrows but still a full-height (finger-friendly) hit box.
+	// Small copy icon tucked after the heading.
 	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
 		copyChapter(state)
 	})
@@ -1151,8 +1150,12 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// Tighter-than-default gap between the two rows so the book heading and the
 	// chapter/nav line read as one compact block, not two airy lines.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
+
+	// The audio control sits in the Border CENTRE — the gap between the chapter block
+	// (left) and the full-screen button (right), vertically centred. Collapsed it's a
+	// speaker; expanded it's a compact two-row card that fits the gap.
 	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
-	row := container.NewBorder(nil, nil, left, right, nil)
+	row := container.NewBorder(nil, nil, left, right, container.NewCenter(audioControl(state, boxH)))
 
 	// No divider under the header — the flat reading surface separates the chapter
 	// toolbar from the verses with whitespace (the text view's top inset) instead

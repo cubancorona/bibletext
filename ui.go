@@ -147,7 +147,7 @@ func buildLoadErrorView(state *AppState) fyne.CanvasObject {
 	col := container.NewVBox(
 		container.NewCenter(title),
 		spacer(8),
-		container.NewGridWrap(fyne.NewSize(300, msg.MinSize().Height), msg),
+		wrappedParagraph(msg, 300),
 	)
 	// Surface the actual cause (timeout, rate-limit, DNS, decode error) so the failure
 	// is diagnosable rather than a generic guess.
@@ -157,7 +157,7 @@ func buildLoadErrorView(state *AppState) fyne.CanvasObject {
 		detail.Alignment = fyne.TextAlignCenter
 		detail.Importance = widget.LowImportance
 		col.Add(spacer(6))
-		col.Add(container.NewGridWrap(fyne.NewSize(300, detail.MinSize().Height), detail))
+		col.Add(wrappedParagraph(detail, 300))
 	}
 	col.Add(spacer(14))
 	col.Add(container.NewCenter(retry))

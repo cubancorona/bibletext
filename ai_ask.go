@@ -8,6 +8,7 @@ package bibletext
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -148,4 +149,20 @@ func promptAskQuestion(state *AppState, selectedText string) {
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
 	focusEntry()
+
+	// Catch an outside-tap close. The sheet is non-modal and sized to the
+	// interactive area, so the safe-inset bands (status bar / home indicator —
+	// and after a rotation, much more) are still tappable canvas: Fyne's
+	// PopUp.Tapped runs Hide() directly there, bypassing closeAsk, which would
+	// leave the reading overlay latched hidden (blank verse pane). Same 150ms
+	// Visible() poll as the audio source menu; closeAsk is idempotent.
+	var watch func()
+	watch = func() {
+		if popup == nil || !popup.Visible() {
+			closeAsk()
+			return
+		}
+		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+	}
+	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
 }

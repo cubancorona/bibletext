@@ -14,11 +14,17 @@
 *.out
 coverage.*
 
-# Local Bible cache (normally lives in the OS cache dir; ignore any local copy)
+# Local Bible caches (normally live in the OS cache dir; ignore any local copy —
+# the app writes one bibletext-<version-id>.json per translation)
 bibletext-cache.json
+bibletext-*.json
+
+# Claude Code local (per-machine) settings
+.claude/settings.local.json
 
 # macOS / editor cruft
 .DS_Store
 third_party/
 icon_work/
 build/
+/desktop

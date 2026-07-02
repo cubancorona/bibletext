@@ -157,7 +157,12 @@ func persistReadingPosition(s *AppState) {
 // must NOT overwrite a good anchor saved moments earlier with "top": preserve
 // the previously-saved anchor when it is for this same chapter.
 func flushReadingState(s *AppState) {
-	if s == nil {
+	// Never flush before the state is actually loaded: during loadPending (and on
+	// the loadFailed/Retry screen) CurrentBook is empty, so a background/stop in
+	// that window would overwrite the reader's good saved position + history with
+	// an empty snapshot — losing their place if iOS jetsams the app before a
+	// later good flush.
+	if s == nil || s.loadPhase != loadReady || s.CurrentBook == "" {
 		return
 	}
 	p := appPrefs()

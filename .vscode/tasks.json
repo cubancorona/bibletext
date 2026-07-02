@@ -28,7 +28,7 @@
       "label": "Package Desktop (.app)",
       "detail": "fyne package -> cmd/desktop/BibleText.app",
       "type": "shell",
-      "command": "fyne package -os darwin --app-id uk.co.bibletext.desktop",
+      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext.desktop",
       "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -37,7 +37,7 @@
       "label": "Package iOS Simulator",
       "detail": "fyne package -> cmd/mobile (iossimulator)",
       "type": "shell",
-      "command": "fyne package -os iossimulator --app-id uk.co.bibletext",
+      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os iossimulator --app-id uk.co.bibletext",
       "options": { "cwd": "${workspaceFolder}/cmd/mobile" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -87,8 +87,9 @@
     },
     {
       "label": "Lint (golangci-lint)",
+      "detail": "optional — needs golangci-lint installed (flag-compatible with v1 and v2)",
       "type": "shell",
-      "command": "golangci-lint run --fast",
+      "command": "golangci-lint run",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "test",
       "problemMatcher": ["$go"]

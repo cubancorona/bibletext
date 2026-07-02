@@ -6,9 +6,13 @@ This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 It includes or makes use of the following third-party content, each under its
 own terms:
 
-- Scripture text:
-  - World English Bible (WEB) — public domain.
-  - Berean Standard Bible (BSB) — public domain / CC0, via bible.helloao.org.
+- Scripture text (fetched on demand from bible.helloao.org):
+  - World English Bible (WEB), including the Catholic edition with the
+    deuterocanon (WEBC) — public domain.
+  - Berean Standard Bible (BSB) — public domain / CC0.
+- Audio narration (streamed on demand when you press play; not bundled):
+  - Berean Standard Bible recording by Barry Hays — CC0, via openbible.com.
+  - World English Bible recordings — public domain, via eBible.org.
 - Cross-references: Treasury of Scripture Knowledge dataset from OpenBible.info,
   used under the Creative Commons Attribution (CC BY) license
   (https://www.openbible.info/labs/cross-references/).
