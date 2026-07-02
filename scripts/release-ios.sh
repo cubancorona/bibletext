@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Build BibleText as an uploadable App Store .ipa, signed for DISTRIBUTION under the
-# paid Apple Developer Program team (R8PC7239T2). Works on an Intel Mac.
+# paid Apple Developer Program team (BIBLETEXT_TEAM_ID). Works on Intel and Apple
+# Silicon Macs.
 #
 # Why this is more than `fyne release -os ios`:
-#   • On Intel, fyne/gomobile compile for the host arch (x86_64); the App Store
-#     requires arm64 — so we cross-compile the Go binary to ios/arm64 and swap it in
-#     (same trick as run-ios-device.sh).
+#   • fyne/gomobile compile for the HOST arch; the App Store requires arm64 — so we
+#     cross-compile the Go binary to ios/arm64 explicitly and swap it in, which is
+#     correct on any host (same trick as run-ios-device.sh).
 #   • Xcode 26 mints a CLOUD-MANAGED "Apple Distribution" cert whose private key never
 #     lands in the local keychain, so plain `codesign` / `fyne release` cannot use it.
 #     Instead we hand-assemble an .xcarchive around BibleText.app and let
@@ -50,19 +51,29 @@ while IFS= read -r line; do
     ou="$(security find-certificate -c "$n" -p 2>/dev/null | openssl x509 -noout -subject -nameopt sep_multiline 2>/dev/null | awk -F= '/OU/{print $2; exit}' | tr -d ' ')"
     if [ "$ou" = "$TEAM_ID" ]; then CERT_HASH="$h"; CERT_NAME="$n"; break; fi
 done < <(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Development')
-[ -n "$CERT_HASH" ] || fail "No 'Apple Development' cert for team $TEAM_ID."
+[ -n "$CERT_HASH" ] || fail "No 'Apple Development' cert for team $TEAM_ID. Set BIBLETEXT_TEAM_ID if that isn't your team; mint the cert by signing into Xcode."
 note "dev signing identity: $CERT_NAME"
 
-# ── 2. wildcard dev profile (satisfies the pre-export signature) ─────────────
-WILD_FILE=""
+# ── 2. dev profile (satisfies the pre-export signature) ──────────────────────
+# Prefer the explicit dev profile for this app id (what modern Xcode mints —
+# "iOS Team Provisioning Profile: uk.co.bibletext"); accept a legacy team
+# wildcard ("<TEAM>.*") as a fallback. Distribution profiles (no
+# ProvisionedDevices) are skipped — exportArchive supplies the store profile.
+DEV_FILE=""; WILD_FILE=""
 for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
     [ -d "$dir" ] || continue
     while IFS= read -r -d '' p; do
-        appid="$(security cms -D -i "$p" 2>/dev/null | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)"
-        case "$appid" in "$TEAM_ID."\*) WILD_FILE="$p"; break 2;; esac
+        plist="$(security cms -D -i "$p" 2>/dev/null || true)"
+        printf '%s' "$plist" | plutil -extract ProvisionedDevices raw -o - - >/dev/null 2>&1 || continue
+        appid="$(printf '%s' "$plist" | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)"
+        case "$appid" in
+            "$TEAM_ID.$APP_ID") DEV_FILE="$p"; break 2 ;;
+            "$TEAM_ID."\*)      WILD_FILE="$p" ;;
+        esac
     done < <(find "$dir" -name '*.mobileprovision' -print0 2>/dev/null)
 done
-[ -n "$WILD_FILE" ] || fail "No wildcard dev profile $TEAM_ID.* found."
+[ -n "$DEV_FILE" ] || DEV_FILE="$WILD_FILE"
+[ -n "$DEV_FILE" ] || fail "No development profile for $TEAM_ID.$APP_ID (or wildcard $TEAM_ID.*) found. Run scripts/run-ios-device.sh once (or build any app for this id in Xcode) to mint one; set BIBLETEXT_TEAM_ID if $TEAM_ID isn't your team."
 
 # ── 3. fyne assembles the bundle (unsigned; we set version + re-sign below) ───
 note "fyne package -os ios (assembling bundle)"
@@ -106,12 +117,13 @@ BUILD_NUM="$(PB 'Print :CFBundleVersion' 2>/dev/null || echo 1)"
 # ── 6. dev re-sign so the archived bundle has a valid signature ──────────────
 note "dev re-signing the bundle"
 rm -rf "$APP/_CodeSignature"
-cp "$WILD_FILE" "$APP/embedded.mobileprovision"
-security cms -D -i "$WILD_FILE" > "$WORK/prof.plist"
+cp "$DEV_FILE" "$APP/embedded.mobileprovision"
+security cms -D -i "$DEV_FILE" > "$WORK/prof.plist"
 plutil -extract Entitlements xml1 -o "$WORK/ent.plist" "$WORK/prof.plist"
-# The wildcard dev profile yields application-identifier "<TEAM>.*"; exportArchive later
-# re-signs with the CONCRETE App Store profile ("<TEAM>.uk.co.bibletext") and aborts if
-# the archived app's entitlement is the wildcard. Pin it to the concrete id now so they match.
+# exportArchive later re-signs with the CONCRETE App Store profile
+# ("<TEAM>.uk.co.bibletext") and aborts if the archived app's entitlement doesn't
+# match. A legacy wildcard dev profile yields "<TEAM>.*", so pin the concrete id
+# here; with an explicit dev profile this is an idempotent no-op.
 /usr/libexec/PlistBuddy -c "Set :application-identifier $TEAM_ID.$APP_ID" "$WORK/ent.plist" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Add :application-identifier string $TEAM_ID.$APP_ID" "$WORK/ent.plist"
 codesign -f -s "$CERT_HASH" --entitlements "$WORK/ent.plist" --generate-entitlement-der "$APP"

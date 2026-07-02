@@ -24,7 +24,15 @@ for a Gospel passage, the parallel accounts in the other Gospels.
 
 ## Build
 
-You need [Go](https://go.dev/dl/) 1.21 or newer. Then, from the repo root:
+You need [Go](https://go.dev/dl/) 1.21 or newer, plus a C compiler (Fyne uses cgo):
+on macOS the Xcode Command Line Tools (`xcode-select --install` — Intel and Apple
+Silicon both work); on Linux also the GL/X11 headers:
+
+```bash
+sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev   # Debian/Ubuntu
+```
+
+Then, from the repo root:
 
 ```bash
 go run ./cmd/desktop
@@ -33,30 +41,35 @@ go run ./cmd/desktop
 That's the whole thing. On first launch it downloads the Bible text (~30 seconds)
 and caches it locally, so every launch after that is instant and works offline.
 
-**iOS simulator** (needs macOS + Xcode): `./scripts/run-ios-sim.sh`
+**iOS simulator** (needs macOS with full Xcode, an iOS simulator runtime, and the
+Fyne CLI — the script checks and tells you what's missing): `./scripts/run-ios-sim.sh`
 
 <details>
 <summary>Release builds, iOS device, Android, cross-compile, tests</summary>
 
 ```bash
-# A standalone desktop binary
+# A standalone desktop binary (native for your OS/arch — Intel and Apple Silicon both fine)
 go build -o bibletext ./cmd/desktop
 
-# Cross-compile for other desktop OSes
-GOOS=linux   GOARCH=amd64 go build -o bibletext-linux   ./cmd/desktop
-GOOS=windows GOARCH=amd64 go build -o bibletext.exe     ./cmd/desktop
-GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos   ./cmd/desktop
+# macOS: build for the other Mac architecture (cgo needs the explicit opt-in)
+CGO_ENABLED=1 GOARCH=arm64 go build -o bibletext-macos-arm64 ./cmd/desktop
+CGO_ENABLED=1 GOARCH=amd64 go build -o bibletext-macos-amd64 ./cmd/desktop
 
-# iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest)
+# Linux/Windows builds: Fyne uses cgo, so a bare GOOS=… cross-build won't work —
+# build natively on each OS, or use fyne-cross (https://github.com/fyne-io/fyne-cross).
+
+# iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest;
+# Android additionally needs the Android SDK + NDK)
 cd cmd/mobile && fyne package -os iossimulator --app-id uk.co.bibletext
-fyne package -os android -appID uk.co.bibletext -src ./cmd/mobile
+cd cmd/mobile && fyne package -os android --app-id uk.co.bibletext
 
 # Tests
 go test ./...
 ```
 
 iOS device installs need Xcode signing; `scripts/run-ios-device.sh` wraps it (set
-`BIBLETEXT_DEVICE_ID`). The iOS scripts also apply a one-line scroll-lag patch to a
+`BIBLETEXT_TEAM_ID` to your own Apple Developer team id, and optionally
+`BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply a one-line scroll-lag patch to a
 local copy of Fyne — see [`patches/README.md`](patches/README.md); `go.mod` ships
 stock Fyne so plain `go` commands need no setup.
 

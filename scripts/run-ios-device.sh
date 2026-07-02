@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Build BibleText for a PHYSICAL iPhone and install it, signed with your paid
-# Apple Developer Program team (BIBLETEXT_TEAM_ID). Works on an Intel Mac.
+# Apple Developer Program team (BIBLETEXT_TEAM_ID). Works on Intel and Apple
+# Silicon Macs.
 #
 # Why this is more than `fyne package -os ios`:
-#   On an Intel host, fyne's (and gomobile's) iOS packaging compile the app for
-#   the host arch (x86_64), which a real arm64 iPhone rejects ("IncorrectArchitecture").
+#   fyne's (and gomobile's) iOS packaging compile the app for the HOST arch —
+#   on an Intel host that's x86_64, which a real arm64 iPhone rejects
+#   ("IncorrectArchitecture"); the explicit ios/arm64 cross-compile below
+#   guarantees a correct binary on any host.
 #   They also use manual code-signing, which clashes with the Xcode-managed
 #   profile a free account issues. So instead we:
 #     1. let fyne assemble the .app bundle (Info.plist, icons, asset catalog),
@@ -57,7 +60,7 @@ while IFS= read -r line; do
     ou="$(security find-certificate -c "$n" -p 2>/dev/null | openssl x509 -noout -subject -nameopt sep_multiline 2>/dev/null | awk -F= '/OU/{print $2; exit}' | tr -d ' ')"
     if [ "$ou" = "$TEAM_ID" ]; then CERT_HASH="$h"; CERT_NAME="$n"; break; fi
 done < <(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Development')
-[ -n "$CERT_HASH" ] || fail "No 'Apple Development' cert for team $TEAM_ID. Sign into Xcode with that account and mint one (header)."
+[ -n "$CERT_HASH" ] || fail "No 'Apple Development' cert for team $TEAM_ID. If that isn't YOUR team, set BIBLETEXT_TEAM_ID to your own Apple Developer team id; then sign into Xcode with that account and mint a cert (header)."
 note "signing identity: $CERT_NAME  (team $TEAM_ID)"
 
 # ── 2. reachable device ─────────────────────────────────────────────────────

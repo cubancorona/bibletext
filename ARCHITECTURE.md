@@ -368,9 +368,11 @@ plain keyword **Search**. The three search/AI verbs are kept distinct on purpose
   `<PROVIDER>_API_KEY` env var overrides. Settings sheet:
   [ai_settings.go](ai_settings.go) (header gear). Result panel with a **Report**
   button and an in-app disclosure line: [ai_panel.go](ai_panel.go).
-- `ai_menu_darwin.go` holds the repo's only `//export` callback
-  (`bibleTextAIMenuTapped`); its cgo preamble must contain only C *declarations*
-  (no definitions), as required alongside `//export`.
+- The `//export` callbacks are confined to two files: [ai_menu_darwin.go](ai_menu_darwin.go)
+  (`bibleTextAIMenuTapped`, `bibleTextReadingScrolled`, and the other reading/AI
+  callbacks) and [audio_export_apple.go](audio_export_apple.go)
+  (`bibleTextAudioStateChanged`); their cgo preambles must contain only C
+  *declarations* (no definitions), as required alongside `//export`.
 
 See README → "AI study" for exactly what is sent.
 
