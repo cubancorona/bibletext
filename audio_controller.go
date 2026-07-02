@@ -27,6 +27,7 @@ const (
 	audioPlaying                       // actively producing sound
 	audioPaused                        // loaded but paused
 	audioEnded                         // reached the end of the chapter
+	audioFailed                        // recorded stream failed (404 / dead network / stall)
 )
 
 // audioController is the single Go-side owner of playback. Created at package
@@ -296,9 +297,9 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		// callback having just cleared the flag a moment before this one lands; the
 		// native mode guards (audio_ios.go) are the primary defense.
 		c.loaded = true
-	case audioIdle, audioEnded:
-		// Chapter ended (or the session was torn down): nothing is actively loaded
-		// for play/pause purposes, so a tap re-starts cleanly.
+	case audioIdle, audioEnded, audioFailed:
+		// Chapter ended, stream failed, or the session was torn down: nothing is
+		// actively loaded for play/pause purposes, so a tap re-starts cleanly.
 		c.loaded = false
 		c.loadedFP = ""
 	}
@@ -313,6 +314,28 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	if s == audioEnded && endedState != nil && !tooFast {
 		c.advanceAndContinue(endedState, endedKind, endedFP)
 	}
+
+	// A recorded stream that failed (404, dead network, hung buffer) restarts the
+	// SAME chapter as on-device read-aloud — TTS needs no network, so the reader
+	// hears the chapter instead of watching the button silently revert. One-shot by
+	// construction: FAILED is only posted from the recorded (AVPlayer) paths, so a
+	// TTS retry can never re-enter here.
+	if s == audioFailed && endedState != nil && endedKind == audioRecorded {
+		c.fallbackToTTS(endedState, endedFP)
+	}
+}
+
+// fallbackToTTS restarts the chapter whose recorded stream just failed as
+// read-aloud. Runs on the Fyne goroutine (the FAILED report arrives on the
+// native thread; ttsAudioForChapter reads live state). Bails if the reader has
+// navigated away since the failure — don't speak a chapter they left.
+func (c *audioController) fallbackToTTS(state *AppState, failedFP string) {
+	fyne.Do(func() {
+		if chapterAudioFingerprint(state) != failedFP {
+			return
+		}
+		c.startChapter(state, ttsAudioForChapter(state), failedFP)
+	})
 }
 
 // advanceAndContinue moves the reader to the next chapter (across book boundaries)

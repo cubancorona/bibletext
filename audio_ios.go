@@ -36,7 +36,7 @@ package bibletext
 // lock-screen / Control Center toggle. Codes: 0 idle, 1 playing, 2 paused, 3 ended.
 extern void bibleTextAudioStateChanged(int code);
 
-enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3 };
+enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3, BT_AUDIO_FAILED = 4 };
 typedef enum { BT_MODE_NONE = 0, BT_MODE_URL = 1, BT_MODE_TTS = 2 } BTAudioMode;
 
 static BOOL btAudioSetupSession(void);
@@ -53,6 +53,7 @@ static void btAudioUpdateNowPlaying(void);
 @property (nonatomic, strong) MPMediaItemArtwork *artwork;   // lock-screen card; persists across now-playing refreshes
 @property (nonatomic, assign) BOOL kvoRegistered;
 @property (nonatomic, assign) int  gen;   // bumped on every teardown; cancels stale watchdogs
+@property (nonatomic, assign) BOOL userPaused;   // reader (or lock screen) paused — gates interruption auto-resume
 @end
 
 // The one, forever-retained controller (strong static → ARC keeps it alive, so
@@ -90,6 +91,7 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
 - (void)startURL:(NSString *)urlStr title:(NSString *)t artist:(NSString *)a {
     [self teardownEngines];
     self.mode = BT_MODE_URL;
+    self.userPaused = NO;
     self.title = t; self.artist = a;
 
     NSURL *url = [NSURL URLWithString:urlStr];
@@ -132,7 +134,7 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
         if (c.item.status != AVPlayerItemStatusReadyToPlay &&
             c.player.timeControlStatus != AVPlayerTimeControlStatusPlaying) {
             [c teardownEngines];
-            bibleTextAudioStateChanged(BT_AUDIO_IDLE);
+            bibleTextAudioStateChanged(BT_AUDIO_FAILED);   // stalled stream → Go falls back to read-aloud
         }
     });
 }
@@ -141,6 +143,7 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
 - (void)startTTS:(NSString *)text title:(NSString *)t artist:(NSString *)a {
     [self teardownEngines];
     self.mode = BT_MODE_TTS;
+    self.userPaused = NO;
     self.title = t; self.artist = a;
 
     if (self.synth == nil) {
@@ -167,16 +170,20 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     if (self.mode == BT_MODE_URL) {
         if (self.player.timeControlStatus == AVPlayerTimeControlStatusPaused) {
             btAudioSetupSession();   // re-activate in case an interruption deactivated us
+            self.userPaused = NO;
             [self.player play];
         } else {
+            self.userPaused = YES;
             [self.player pause];
         }
         btAudioUpdateNowPlaying();
     } else if (self.mode == BT_MODE_TTS) {
         if (self.synth.isPaused) {
             btAudioSetupSession();
+            self.userPaused = NO;
             [self.synth continueSpeaking];
         } else if (self.synth.isSpeaking) {
+            self.userPaused = YES;
             [self.synth pauseSpeakingAtBoundary:AVSpeechBoundaryWord];
         }
         btAudioUpdateNowPlaying();
@@ -216,7 +223,10 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
         if (self.item.status == AVPlayerItemStatusReadyToPlay) {
             btAudioUpdateNowPlaying();   // duration now known
         } else if (self.item.status == AVPlayerItemStatusFailed) {
-            bibleTextAudioStateChanged(BT_AUDIO_IDLE);
+            // 404 / unreachable stream. FAILED (not IDLE) so the Go controller can
+            // restart the same chapter as on-device read-aloud instead of the button
+            // silently reverting to ▶ with no sound.
+            bibleTextAudioStateChanged(BT_AUDIO_FAILED);
         }
     } else if (context == kBTRateCtx) {
         AVPlayerTimeControlStatus tcs = self.player.timeControlStatus;
@@ -251,7 +261,11 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
             // The system paused us (phone call, etc.); reflect it on the button.
             bibleTextAudioStateChanged(BT_AUDIO_PAUSED);
         } else if (t == AVAudioSessionInterruptionTypeEnded) {
-            if ((opts & AVAudioSessionInterruptionOptionShouldResume) && c.mode != BT_MODE_NONE) {
+            // Resume ONLY when the reader hadn't manually paused first: a paused
+            // session can still be interrupted (pause never deactivates it), and
+            // auto-resuming then would start narration from the pocket after a
+            // phone call, against the reader's explicit pause.
+            if ((opts & AVAudioSessionInterruptionOptionShouldResume) && c.mode != BT_MODE_NONE && !c.userPaused) {
                 // The session was deactivated by the interruption — re-activate, then resume.
                 if (btAudioSetupSession()) {
                     if (c.mode == BT_MODE_URL) {

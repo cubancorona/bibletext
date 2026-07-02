@@ -336,6 +336,14 @@ func rebuildWindow(state *AppState) {
 	for o := cnv.Overlays().Top(); o != nil; o = cnv.Overlays().Top() {
 		cnv.Overlays().Remove(o)
 	}
+	// OverlayStack.Remove never runs a popup's close path, so any modal drained
+	// above already called state.hideReadingOverlay() on open but its matching
+	// restore will never fire — leaving the native reading view latched hidden
+	// (a blank verse pane that survives tab switches). Clear the latch here;
+	// afterRebuild re-asserts the correct visibility for the rebuilt view.
+	if state.showReadingOverlay != nil {
+		state.showReadingOverlay()
+	}
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)
 }

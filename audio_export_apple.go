@@ -18,6 +18,7 @@ const (
 	cAudioPlaying = 1
 	cAudioPaused  = 2
 	cAudioEnded   = 3
+	cAudioFailed  = 4
 )
 
 // bibleTextAudioStateChanged is posted by the AVPlayer/AVSpeechSynthesizer
@@ -36,6 +37,8 @@ func bibleTextAudioStateChanged(code C.int) {
 		s = audioPaused
 	case cAudioEnded:
 		s = audioEnded
+	case cAudioFailed:
+		s = audioFailed
 	default:
 		s = audioIdle
 	}

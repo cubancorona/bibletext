@@ -49,19 +49,26 @@ type ebibleAudio struct {
 	code   string
 	pad    int
 	single bool
+	// maxChapter bounds the recorded coverage where eBible's set is incomplete
+	// (0 = every chapter of the book is recorded). The server 404s chapters
+	// beyond the bound (verified by HEAD-probing every chapter), and a mapped
+	// URL that 404s means a silently dead play button — so chapters past the
+	// bound must report "no recording" and take the TTS path instead.
+	maxChapter int
 }
 
 // ebibleAudioBooks is the set of books eBible streams clean per-chapter public-domain
-// WEB recordings for (verified by probing https://ebible.org/webaudio). It is a partial,
-// irregular subset of the canon — the rest falls back to TTS — and can grow as more
-// clean sources are wired without touching anything else.
+// WEB recordings for, with per-book bounds where the server's coverage stops mid-book
+// (every chapter verified against https://ebible.org/webaudio, 2026-07). It is a
+// partial, irregular subset of the canon — the rest falls back to TTS — and can grow
+// as more clean sources are wired without touching anything else.
 var ebibleAudioBooks = map[string]ebibleAudio{
 	"Matthew":  {code: "Mat", pad: 2},
-	"Mark":     {code: "Mark", pad: 2},
+	"Mark":     {code: "Mark", pad: 2, maxChapter: 7},
 	"John":     {code: "John", pad: 2},
-	"Romans":   {code: "Romans", pad: 2},
+	"Romans":   {code: "Romans", pad: 2, maxChapter: 5},
 	"Hebrews":  {code: "Heb", pad: 2},
-	"Psalms":   {code: "Psalm", pad: 3},
+	"Psalms":   {code: "Psalm", pad: 3, maxChapter: 2},
 	"Philemon": {code: "Philemon", single: true},
 	"Jude":     {code: "Jude", single: true},
 	"2 John":   {code: "2John", single: true},
@@ -78,6 +85,9 @@ func ebibleAudioURL(book string, chapter int) (string, bool) {
 	}
 	if e.single {
 		return ebibleAudioBase + e.code + ".mp3", true
+	}
+	if e.maxChapter > 0 && chapter > e.maxChapter {
+		return "", false // beyond eBible's recorded coverage — TTS instead
 	}
 	return fmt.Sprintf("%s%s%0*d.mp3", ebibleAudioBase, e.code, e.pad, chapter), true
 }
