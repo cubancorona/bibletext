@@ -46,25 +46,37 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 	// fireChange marshals onChange onto the UI goroutine, so rebuild runs there.
 	gAudio.setOnChange(rebuild)
 	rebuild()
-	return host
+	// Reserve the EXPANDED card's footprint permanently. The collapsed↔expanded
+	// swap happens in place (host.Objects mutation) and deliberately never
+	// re-lays the surrounding header — but Fyne hit-testing only reaches objects
+	// within their ancestors' laid-out rects, so a card bigger than the host
+	// would DRAW beyond the host while its buttons are untappable (the shipped
+	// bug: the visible ▶ hit skip-back / nothing). A fixed cell sized to the
+	// card makes expansion geometry-neutral: taps land, header never reflows.
+	probe := buildAudioCard(state, audioTTS, false, false, audioCardCallbacks{})
+	return container.NewGridWrap(probe.MinSize(), host)
 }
 
 func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.CanvasObject {
 	fp := chapterAudioFingerprint(state)
 
 	if !audioPanelOpen {
-		return newIconTapButton(state, theme.VolumeUpIcon(), 20, boxH, func() {
+		speaker := newIconTapButton(state, theme.VolumeUpIcon(), 20, boxH, func() {
 			audioPanelOpen = true
 			rebuild()
 		})
+		if fyne.CurrentDevice().IsMobile() {
+			// iOS centres the control in the header gap — keep the collapsed
+			// speaker in the middle of the reserved cell.
+			return container.NewCenter(speaker)
+		}
+		// Desktop: the cell's right edge abuts the focus toggle, so pin the
+		// collapsed speaker there (where it has always sat); the card grows
+		// leftward into the empty header gap when expanded.
+		return container.NewHBox(layout.NewSpacer(), container.NewCenter(speaker))
 	}
 
-	pal := state.pal()
 	playing, _ := gAudio.buttonState(fp)
-	playGlyph := theme.MediaPlayIcon()
-	if playing {
-		playGlyph = theme.MediaPauseIcon()
-	}
 
 	// Skip + source reflect what's loaded while playing, else the reader's chosen
 	// source for this chapter (effectiveKind: source-menu preference or default).
@@ -72,16 +84,40 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	if show, k := gAudio.indicator(fp); show {
 		displayKind = k
 	}
-	canSeek := displayKind == audioRecorded
+
+	return buildAudioCard(state, displayKind, playing, displayKind == audioRecorded, audioCardCallbacks{
+		onSrc:   func() { showAudioSourceMenu(state) },
+		onBack:  func() { gAudio.skip(-15) },
+		onPlay:  func() { gAudio.playPauseCurrent(state) },
+		onFwd:   func() { gAudio.skip(15) },
+		onClose: func() { audioPanelOpen = false; rebuild() },
+	})
+}
+
+// audioCardCallbacks routes the expanded card's taps. Injected (rather than the
+// buttons calling gAudio directly) so the hit-region layout test can probe the
+// card's tap targets without starting real audio.
+type audioCardCallbacks struct {
+	onSrc, onBack, onPlay, onFwd, onClose func()
+}
+
+// buildAudioCard assembles the expanded transport card: source indicator centred
+// on top, skip/play/skip below, close ✕ tucked in the upper-right corner.
+func buildAudioCard(state *AppState, displayKind audioKind, playing, canSeek bool, cb audioCardCallbacks) fyne.CanvasObject {
+	pal := state.pal()
+	playGlyph := theme.MediaPlayIcon()
+	if playing {
+		playGlyph = theme.MediaPauseIcon()
+	}
 
 	// Compact rows so the two-row card stays SHORTER than the header's two text
 	// lines — expanding it must not grow the header and push the reading lane down.
 	const rh = 25
-	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 16, rh, func() { showAudioSourceMenu(state) })
-	back := newIconTapButton(state, iconSkipBack15, 18, rh, func() { gAudio.skip(-15) })
+	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 16, rh, cb.onSrc)
+	back := newIconTapButton(state, iconSkipBack15, 18, rh, cb.onBack)
 	back.disabled = !canSeek
-	play := newIconTapButton(state, playGlyph, 18, rh, func() { gAudio.playPauseCurrent(state) })
-	fwd := newIconTapButton(state, iconSkipFwd15, 18, rh, func() { gAudio.skip(15) })
+	play := newIconTapButton(state, playGlyph, 18, rh, cb.onPlay)
+	fwd := newIconTapButton(state, iconSkipFwd15, 18, rh, cb.onFwd)
 	fwd.disabled = !canSeek
 
 	// The box hugs the player icons: the source centred on top (so it sits above the
@@ -105,7 +141,7 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	xGlyph.SetMinSize(fyne.NewSize(10, 10))
 	xCell := newTappableArea(
 		container.NewGridWrap(fyne.NewSize(22, 22), container.NewStack(xBg, container.NewCenter(xGlyph))),
-		func() { audioPanelOpen = false; rebuild() },
+		cb.onClose,
 	)
 	corner := container.NewVBox(container.NewHBox(layout.NewSpacer(), xCell), layout.NewSpacer())
 
