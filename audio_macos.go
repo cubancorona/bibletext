@@ -33,7 +33,7 @@ package bibletext
 // 2 paused, 3 ended.
 extern void bibleTextAudioStateChanged(int code);
 
-enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3 };
+enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3, BT_AUDIO_FAILED = 4 };
 typedef enum { BT_MODE_NONE = 0, BT_MODE_URL = 1, BT_MODE_TTS = 2 } BTAudioMode;
 
 static void btAudioSetupCommands(void);
@@ -113,7 +113,7 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
         if (c.item.status != AVPlayerItemStatusReadyToPlay &&
             c.player.timeControlStatus != AVPlayerTimeControlStatusPlaying) {
             [c teardownEngines];
-            bibleTextAudioStateChanged(BT_AUDIO_IDLE);
+            bibleTextAudioStateChanged(BT_AUDIO_FAILED);   // stalled stream → Go falls back to read-aloud
         }
     });
 }
@@ -188,7 +188,10 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
         if (self.item.status == AVPlayerItemStatusReadyToPlay) {
             btAudioUpdateNowPlaying();   // duration now known
         } else if (self.item.status == AVPlayerItemStatusFailed) {
-            bibleTextAudioStateChanged(BT_AUDIO_IDLE);
+            // 404 / unreachable stream. FAILED (not IDLE) so the Go controller can
+            // restart the same chapter as on-device read-aloud instead of the button
+            // silently reverting to ▶ with no sound.
+            bibleTextAudioStateChanged(BT_AUDIO_FAILED);
         }
     } else if (context == kBTRateCtx) {
         AVPlayerTimeControlStatus tcs = self.player.timeControlStatus;

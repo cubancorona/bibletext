@@ -11,12 +11,20 @@ func TestEbibleAudioURL(t *testing.T) {
 	}{
 		{"John", 20, "https://ebible.org/webaudio/John20.mp3", true},
 		{"Matthew", 5, "https://ebible.org/webaudio/Mat05.mp3", true},
-		{"Psalms", 5, "https://ebible.org/webaudio/Psalm005.mp3", true},   // 3-digit pad
-		{"Psalms", 119, "https://ebible.org/webaudio/Psalm119.mp3", true}, // 3-digit pad
-		{"Jude", 1, "https://ebible.org/webaudio/Jude.mp3", true},         // single-file
-		{"3 John", 1, "https://ebible.org/webaudio/3John.mp3", true},      // single-file
-		{"Genesis", 1, "", false},                                         // not recorded
-		{"Tobit", 1, "", false},                                           // deuterocanon
+		{"Psalms", 2, "https://ebible.org/webaudio/Psalm002.mp3", true}, // 3-digit pad; last recorded psalm
+		{"Jude", 1, "https://ebible.org/webaudio/Jude.mp3", true},       // single-file
+		{"3 John", 1, "https://ebible.org/webaudio/3John.mp3", true},    // single-file
+		{"Genesis", 1, "", false},                                       // not recorded
+		{"Tobit", 1, "", false},                                         // deuterocanon
+		// Chapters beyond eBible's actual coverage must report "no recording" —
+		// the server 404s them, which used to leave a silently dead play button
+		// (the source menu claimed a narration and TTS never took over).
+		{"Psalms", 3, "", false},                                        // Ps 3-150 not on the server
+		{"Psalms", 119, "", false},                                      // ditto
+		{"Mark", 7, "https://ebible.org/webaudio/Mark07.mp3", true},     // last recorded Mark chapter
+		{"Mark", 8, "", false},                                          // Mark 8-16 not on the server
+		{"Romans", 5, "https://ebible.org/webaudio/Romans05.mp3", true}, // last recorded Romans chapter
+		{"Romans", 6, "", false},                                        // Romans 6-16 not on the server
 	}
 	for _, c := range cases {
 		got, ok := ebibleAudioURL(c.book, c.chapter)
