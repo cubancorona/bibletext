@@ -18,6 +18,10 @@
 # distribution cert (minted by archiving+exporting the throwaway Signer project).
 #
 # Output: build/BibleText.ipa  →  upload via Transporter.app or `xcrun altool`.
+# OR: set BIBLETEXT_UPLOAD=1 to have xcodebuild UPLOAD straight to App Store
+# Connect using the Xcode-authenticated account (no .ipa lands locally, no
+# Transporter / API keys needed) — the build then appears under TestFlight
+# after ~5-30 min of processing.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -151,8 +155,12 @@ cat > "$ARCH_DIR/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
-# ── 8. exportArchive → App Store .ipa (Xcode re-signs with the distribution cert) ──
-note "xcodebuild -exportArchive (App Store distribution)"
+# ── 8. exportArchive → App Store .ipa or direct upload (Xcode re-signs with the
+# distribution cert; BIBLETEXT_UPLOAD=1 sends it straight to App Store Connect
+# over the Xcode-authenticated session instead of writing build/BibleText.ipa) ──
+DESTINATION="export"
+[ "${BIBLETEXT_UPLOAD:-0}" = "1" ] && DESTINATION="upload"
+note "xcodebuild -exportArchive (App Store distribution, destination: $DESTINATION)"
 cat > "$WORK/exportOptions.plist" <<EOPL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -160,7 +168,7 @@ cat > "$WORK/exportOptions.plist" <<EOPL
   <key>method</key><string>app-store-connect</string>
   <key>teamID</key><string>${TEAM_ID}</string>
   <key>signingStyle</key><string>automatic</string>
-  <key>destination</key><string>export</string>
+  <key>destination</key><string>${DESTINATION}</string>
   <key>uploadSymbols</key><false/>
   <key>manageAppVersionAndBuildNumber</key><false/>
 </dict></plist>
@@ -169,6 +177,16 @@ rm -rf "$WORK/export"
 xcodebuild -exportArchive -archivePath "$ARCH_DIR" \
     -exportOptionsPlist "$WORK/exportOptions.plist" \
     -exportPath "$WORK/export" -allowProvisioningUpdates 2>&1 | tail -25
+
+if [ "$DESTINATION" = "upload" ]; then
+    cat <<EOF
+
+✓ Uploaded to App Store Connect (version ${SHORT_VERSION}, build ${BUILD_NUM}).
+  Processing takes ~5-30 min; the build then appears under TestFlight /
+  the version's Build picker in App Store Connect.
+EOF
+    exit 0
+fi
 
 IPA="$(ls "$WORK/export"/*.ipa 2>/dev/null | head -1)"
 [ -n "$IPA" ] || fail "exportArchive did not produce an .ipa (see log above)."
