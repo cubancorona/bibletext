@@ -34,7 +34,7 @@ func (bsbSource) available() bool { return true }
 func (bsbSource) fetch() (*BibleData, error) {
 	// 120s timeout: the whole translation is one ~7 MB body, so this must cover a
 	// slow connection's full download, not a per-chapter request.
-	return fetchHelloAOComplete("BSB", bsbCompleteURL, &http.Client{Timeout: 120 * time.Second})
+	return fetchHelloAOComplete("BSB", bsbCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeCanonical66)
 }
 
 // webCompleteURL is helloao's whole-translation endpoint for the 66-book World English
@@ -44,57 +44,102 @@ func (bsbSource) fetch() (*BibleData, error) {
 const webCompleteURL = "https://bible.helloao.org/api/ENGWEBP/complete.json"
 
 // fetchWEBFromHelloAO downloads the complete World English Bible from helloao in ONE
-// request, decoded by the same path as the BSB (decodeBSBComplete maps any helloao
+// request, decoded by the same path as the BSB (decodeBSBComplete maps a 66-book helloao
 // complete.json by canonical book order). It backs webSource (versions.go).
 func fetchWEBFromHelloAO() (*BibleData, error) {
-	return fetchHelloAOComplete("WEB", webCompleteURL, &http.Client{Timeout: 120 * time.Second})
+	return fetchHelloAOComplete("WEB", webCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeCanonical66)
+}
+
+// decodeCanonical66 decodes a 66-book helloao complete.json (BSB, WEB) by canonical book
+// order. The Catholic edition has 73 books in a different arrangement, so it uses
+// decodeHelloAOCatholic (id-based) — see catholic.go.
+func decodeCanonical66(body []byte) (*BibleData, error) {
+	return decodeBSBComplete(body, NewBibleData().Books)
 }
 
 // fetchHelloAOComplete fetches one of helloao's whole-translation complete.json bodies
-// and decodes it into BibleData. Shared by the BSB and WEB sources; label only flavours
-// the error messages.
-func fetchHelloAOComplete(label, url string, client httpClient) (*BibleData, error) {
+// and decodes it with the given decoder. Shared by the BSB, WEB and WEB-Catholic
+// sources; label only flavours the error messages. validateBibleData checks against the
+// DECODED book list, so it adapts to each edition's canon (66 vs. 73).
+func fetchHelloAOComplete(label, url string, client httpClient, decode func([]byte) (*BibleData, error)) (*BibleData, error) {
 	body, err := fetchWithRetry(client, url, maxRetries)
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", label, err)
 	}
-	bd, err := decodeBSBComplete(body, NewBibleData().Books)
+	bd, err := decode(body)
 	if err != nil {
 		return nil, fmt.Errorf("decode %s: %w", label, err)
 	}
 	// Guard against a truncated/partial parse silently caching an incomplete Bible:
-	// every canonical book must have come through with chapters and verses.
+	// every book in the decoded list must have come through with chapters and verses.
 	if err := validateBibleData(bd); err != nil {
 		return nil, fmt.Errorf("%s data incomplete: %w", label, err)
 	}
 	return bd, nil
 }
 
-// decodeBSBComplete maps bible.helloao.org's complete-translation JSON into a
-// BibleData using the app's canonical book NAMES. helloao identifies books by a
-// USFM code and a canonical `order` (1=Genesis … 66=Revelation); the app's book
-// list (appBooks) is that same canonical sequence, so books are matched by order
-// — the decoded data therefore carries the app's own book names, keeping
-// navigation, search, caching and reading-state aligned across versions.
-//
-// Each chapter's `content` is a flat array of typed nodes; only `verse` nodes
-// carry reader text. Headings and line breaks are editorial layout the app
-// doesn't render (it shows one wrapped block per chapter). Hebrew subtitles
-// (Psalm superscriptions like "A Psalm of David") are also dropped — the WEB
-// source folds them out of its verse text too, so dropping them here keeps the
-// reader consistent across translations.
+// helloAOBook mirrors one book in a bible.helloao.org complete.json. Shared by the
+// order-based 66-book decoder (decodeBSBComplete) and the id-based Catholic decoder
+// (decodeHelloAOCatholic, catholic.go).
+type helloAOBook struct {
+	ID       string `json:"id"`
+	Order    int    `json:"order"`
+	Chapters []struct {
+		Chapter struct {
+			Number  int               `json:"number"`
+			Content []json.RawMessage `json:"content"`
+		} `json:"chapter"`
+	} `json:"chapters"`
+}
+
+// decodeHelloAOChapters turns one helloao book's chapters into the app's chapter→[]Verse
+// map under book. Each chapter's `content` is a flat array of typed nodes; only `verse`
+// nodes carry reader text (bsbVerseText flattens them). Headings, line breaks and Hebrew
+// subtitles (Psalm superscriptions like "A Psalm of David") are editorial layout the app
+// doesn't render — the WEB source folds them out of its verse text too, so dropping them
+// keeps the reader consistent across translations. Shared by both decoders.
+func decodeHelloAOChapters(book string, b helloAOBook) map[int][]Verse {
+	chapters := make(map[int][]Verse, len(b.Chapters))
+	for _, cj := range b.Chapters {
+		num := cj.Chapter.Number
+		var verses []Verse
+		for _, node := range cj.Chapter.Content {
+			var head struct {
+				Type    string            `json:"type"`
+				Number  int               `json:"number"`
+				Content []json.RawMessage `json:"content"`
+			}
+			if err := json.Unmarshal(node, &head); err != nil || head.Type != "verse" {
+				continue
+			}
+			text := bsbVerseText(head.Content)
+			if text == "" {
+				continue
+			}
+			verses = append(verses, Verse{
+				BookName: book,
+				Book:     book,
+				Chapter:  num,
+				Verse:    head.Number,
+				Text:     text,
+			})
+		}
+		if len(verses) > 0 {
+			chapters[num] = verses
+		}
+	}
+	return chapters
+}
+
+// decodeBSBComplete maps a 66-book bible.helloao.org complete.json into a BibleData
+// using the app's canonical book NAMES. helloao identifies books by a USFM code and a
+// canonical `order` (1=Genesis … 66=Revelation); appBooks is that same canonical
+// sequence, so books are matched by order — the decoded data therefore carries the app's
+// own book names, keeping navigation, search, caching and reading-state aligned. Backs
+// the BSB and (Protestant) WEB; the Catholic edition maps by id (decodeHelloAOCatholic).
 func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 	var doc struct {
-		Books []struct {
-			ID       string `json:"id"`
-			Order    int    `json:"order"`
-			Chapters []struct {
-				Chapter struct {
-					Number  int               `json:"number"`
-					Content []json.RawMessage `json:"content"`
-				} `json:"chapter"`
-			} `json:"chapters"`
-		} `json:"books"`
+		Books []helloAOBook `json:"books"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
@@ -109,39 +154,10 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 	}
 	for _, b := range doc.Books {
 		if b.Order < 1 || b.Order > len(appBooks) {
-			continue // outside the canonical 66 (not expected for the BSB)
+			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		chapters := make(map[int][]Verse, len(b.Chapters))
-		for _, cj := range b.Chapters {
-			num := cj.Chapter.Number
-			var verses []Verse
-			for _, node := range cj.Chapter.Content {
-				var head struct {
-					Type    string            `json:"type"`
-					Number  int               `json:"number"`
-					Content []json.RawMessage `json:"content"`
-				}
-				if err := json.Unmarshal(node, &head); err != nil || head.Type != "verse" {
-					continue
-				}
-				text := bsbVerseText(head.Content)
-				if text == "" {
-					continue
-				}
-				verses = append(verses, Verse{
-					BookName: book,
-					Book:     book,
-					Chapter:  num,
-					Verse:    head.Number,
-					Text:     text,
-				})
-			}
-			if len(verses) > 0 {
-				chapters[num] = verses
-			}
-		}
-		if len(chapters) > 0 {
+		if chapters := decodeHelloAOChapters(book, b); len(chapters) > 0 {
 			bd.Verses[book] = chapters
 		}
 	}

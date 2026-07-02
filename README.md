@@ -24,7 +24,15 @@ for a Gospel passage, the parallel accounts in the other Gospels.
 
 ## Build
 
-You need [Go](https://go.dev/dl/) 1.21 or newer. Then, from the repo root:
+You need [Go](https://go.dev/dl/) 1.21 or newer, plus a C compiler (Fyne uses cgo):
+on macOS the Xcode Command Line Tools (`xcode-select --install` — Intel and Apple
+Silicon both work); on Linux also the GL/X11 headers:
+
+```bash
+sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev   # Debian/Ubuntu
+```
+
+Then, from the repo root:
 
 ```bash
 go run ./cmd/desktop
@@ -33,30 +41,35 @@ go run ./cmd/desktop
 That's the whole thing. On first launch it downloads the Bible text (~30 seconds)
 and caches it locally, so every launch after that is instant and works offline.
 
-**iOS simulator** (needs macOS + Xcode): `./scripts/run-ios-sim.sh`
+**iOS simulator** (needs macOS with full Xcode, an iOS simulator runtime, and the
+Fyne CLI — the script checks and tells you what's missing): `./scripts/run-ios-sim.sh`
 
 <details>
 <summary>Release builds, iOS device, Android, cross-compile, tests</summary>
 
 ```bash
-# A standalone desktop binary
+# A standalone desktop binary (native for your OS/arch — Intel and Apple Silicon both fine)
 go build -o bibletext ./cmd/desktop
 
-# Cross-compile for other desktop OSes
-GOOS=linux   GOARCH=amd64 go build -o bibletext-linux   ./cmd/desktop
-GOOS=windows GOARCH=amd64 go build -o bibletext.exe     ./cmd/desktop
-GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos   ./cmd/desktop
+# macOS: build for the other Mac architecture (cgo needs the explicit opt-in)
+CGO_ENABLED=1 GOARCH=arm64 go build -o bibletext-macos-arm64 ./cmd/desktop
+CGO_ENABLED=1 GOARCH=amd64 go build -o bibletext-macos-amd64 ./cmd/desktop
 
-# iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest)
+# Linux/Windows builds: Fyne uses cgo, so a bare GOOS=… cross-build won't work —
+# build natively on each OS, or use fyne-cross (https://github.com/fyne-io/fyne-cross).
+
+# iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest;
+# Android additionally needs the Android SDK + NDK)
 cd cmd/mobile && fyne package -os iossimulator --app-id uk.co.bibletext
-fyne package -os android -appID uk.co.bibletext -src ./cmd/mobile
+cd cmd/mobile && fyne package -os android --app-id uk.co.bibletext
 
 # Tests
 go test ./...
 ```
 
 iOS device installs need Xcode signing; `scripts/run-ios-device.sh` wraps it (set
-`BIBLETEXT_DEVICE_ID`). The iOS scripts also apply a one-line scroll-lag patch to a
+`BIBLETEXT_TEAM_ID` to your own Apple Developer team id, and optionally
+`BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply a one-line scroll-lag patch to a
 local copy of Fyne — see [`patches/README.md`](patches/README.md); `go.mod` ships
 stock Fyne so plain `go` commands need no setup.
 
@@ -91,6 +104,17 @@ stock Fyne so plain `go` commands need no setup.
   **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
   set, fetched once and cached.
+- 🎧 **Listen** (iOS & macOS) — play the current chapter from the reading header as a
+  recorded human **narration** or on-device **read-aloud** (text-to-speech) of the
+  verses on screen. The **Berean Standard Bible** has a complete public-domain
+  narration (Barry Hays); the **World English Bible** uses public-domain
+  [eBible.org](https://ebible.org) recordings for the chapters they cover; everything
+  else falls back to read-aloud — all fetched only when you press play. A **person**
+  icon marks a recording and a **waveform** marks read-aloud; tap it to choose the
+  source. When a chapter finishes, playback continues to the **next chapter**
+  automatically, the page following along, until you pause. On iOS the audio keeps
+  playing while the app is backgrounded, with lock-screen / Control Center controls and
+  ±15-second skip.
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
@@ -99,24 +123,27 @@ stock Fyne so plain `go` commands need no setup.
   treatment — no imagery; preview and regenerate before sharing). Quote and citation
   follow Bluebook style (spelled-out translation, en-dash ranges, block-quote rule).
   Both open your device's native share sheet.
-- 📚 **Multiple translations** — read the public-domain **World English Bible** and
-  **Berean Standard Bible**, switchable from the header; **NRSV** and **LSB** are
-  wired in and become selectable once licensed. See [Bible versions](#bible-versions).
+- 📚 **Multiple translations** — read three public-domain translations: the **World
+  English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
+  Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
+  **NRSV** and **LSB** are wired in and become selectable once licensed. See
+  [Bible versions](#bible-versions).
 
 ## Bible versions
 
-The reader ships with two public-domain translations — the **World English Bible
-(WEB)** and the **Berean Standard Bible (BSB)** — both free to distribute and
-fetched in a single request each from the free, key-less
+The reader ships with three public-domain translations — the **World English Bible
+(WEB)**, the **Berean Standard Bible (BSB)**, and the **World English Bible
+(Catholic)** (WEB plus the 73-book deuterocanon) — all free to distribute and fetched
+in a single request each from the free, key-less
 [bible.helloao.org](https://bible.helloao.org/). Use the **translation switcher in
-the header** (the version name beneath "BibleText") to change versions.
-
-Two more translations are wired in:
+the header** (the version name beneath "BibleText") to change versions. Two licensed
+translations (**NRSV**, **LSB**) are wired in and become selectable once licensed:
 
 | Version | Abbrev | Rights holder | Status |
 |---|---|---|---|
 | World English Bible | WEB | Public domain | ✅ Real text |
 | Berean Standard Bible | BSB | Public domain (CC0) | ✅ Real text |
+| World English Bible (Catholic) | WEBC | Public domain | ✅ Real text |
 | New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 Evaluation in progress |
 | Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
 

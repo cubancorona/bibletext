@@ -2,6 +2,10 @@
 /bibletext
 /cmd/desktop/desktop
 /cmd/mobile/mobile
+# fyne's android packaging also drops the gomobile binary at the REPO ROOT,
+# which the /cmd/mobile/mobile rule above does not cover — it was tracked by
+# accident on 19 Aug and rode six commits at 37 MB a revision.
+/mobile
 
 # Fyne mobile packaging output (.app, .ipa, .apk, .aab and bundle dirs)
 *.app
@@ -14,11 +18,27 @@
 *.out
 coverage.*
 
-# Local Bible cache (normally lives in the OS cache dir; ignore any local copy)
+# Local Bible caches (normally live in the OS cache dir; ignore any local copy —
+# the app writes one bibletext-<version-id>.json per translation)
 bibletext-cache.json
+bibletext-*.json
+
+# Local per-machine tool settings
+.claude/
 
 # macOS / editor cruft
 .DS_Store
 third_party/
 icon_work/
+build/
+/desktop
+
+# Android bridge build output (compiled by scripts/build-android.sh)
+android/classes/
+*.idsig
+*.dm
+*.dex
+
+# Local AI provider keys for testing (never committed) — see ai_live_test.go
+.env.local
 build/

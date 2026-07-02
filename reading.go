@@ -122,8 +122,17 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	})
 	focusBtn.Importance = widget.LowImportance
 
+	// Play this chapter's audio (recorded where available, otherwise read aloud).
+	// Apple platforms (iOS + macOS) — audioSupported() is true on darwin, false on
+	// Linux/Windows/Android, which show just the focus toggle. Clustered with the
+	// focus toggle, sharing the arrows' baseline.
+	var rightControls fyne.CanvasObject = focusBtn
+	if audioSupported() {
+		rightControls = container.NewHBox(audioControl(state, navBoxH), hgap(8), focusBtn)
+	}
+
 	left := container.NewVBox(titleRow, chapterRow)
-	right := container.NewVBox(layout.NewSpacer(), focusBtn, layout.NewSpacer())
+	right := container.NewVBox(layout.NewSpacer(), rightControls, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, left, right, nil)
 
 	rule := canvas.NewLine(pal.Border)
@@ -326,6 +335,14 @@ func rebuildWindow(state *AppState) {
 	cnv := state.window.Canvas()
 	for o := cnv.Overlays().Top(); o != nil; o = cnv.Overlays().Top() {
 		cnv.Overlays().Remove(o)
+	}
+	// OverlayStack.Remove never runs a popup's close path, so any modal drained
+	// above already called state.hideReadingOverlay() on open but its matching
+	// restore will never fire — leaving the native reading view latched hidden
+	// (a blank verse pane that survives tab switches). Clear the latch here;
+	// afterRebuild re-asserts the correct visibility for the rebuilt view.
+	if state.showReadingOverlay != nil {
+		state.showReadingOverlay()
 	}
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)

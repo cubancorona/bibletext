@@ -214,6 +214,13 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	lc := myApp.Lifecycle()
 	lc.SetOnStopped(func() {
 		state.stopping.Store(true)
+		// Release the audio session / player on quit. Call the raw native stop, NOT
+		// gAudio.stop(): OnStopped can run off the main thread during shutdown, and
+		// the native stop is fire-and-forget (dispatch_async) with no UI callback, so
+		// it can't hang the way a fyne.Do / dispatch_sync(main) would. (Background —
+		// SetOnExitedForeground — deliberately does NOT stop: lock-screen controls and
+		// background playback are the whole point.)
+		nativeAudioStop()
 		flushReadingState(state)
 	})
 	lc.SetOnExitedForeground(func() { flushReadingState(state) }) // iOS/Android background
@@ -229,6 +236,7 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 			// background apply (e.g. a version download) drops itself rather than
 			// running inline off the main thread during exit.
 			state.stopping.Store(true)
+			nativeAudioStop() // release any audio session before the window goes away
 			flushReadingState(state)
 			window.Close()
 		})
