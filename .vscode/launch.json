@@ -33,7 +33,7 @@
       // `&& exit` closes the terminal on a clean quit (see note above).
       "type": "node-terminal",
       "request": "launch",
-      "command": "fyne package -os darwin --app-id uk.co.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop' && exit",
+      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop' && exit",
       "cwd": "${workspaceFolder}/cmd/desktop"
     },
     {
@@ -59,10 +59,10 @@
       "program": "${workspaceFolder}/cmd/desktop",
       "cwd": "${workspaceFolder}",
       "showLog": true,
-      // To exercise AI study with a key while debugging, set a provider key here
-      // (overrides the on-device stored key), e.g.:
-      //   "GEMINI_API_KEY": "AIza...", "OPENAI_API_KEY": "sk-...",
-      //   "ANTHROPIC_API_KEY": "sk-ant-...", "XAI_API_KEY": "xai-..."
+      // To exercise AI study with a key while debugging, export a provider env var
+      // in the SHELL you launch VS Code from (GEMINI_API_KEY / OPENAI_API_KEY /
+      // ANTHROPIC_API_KEY / XAI_API_KEY — they override the on-device stored key).
+      // Do NOT paste a real key into this committed file.
       "env": {}
     },
     {

@@ -9,8 +9,8 @@
   },
   "go.useLanguageServer": true,
   "go.formatTool": "default",
-  "go.lintTool": "golangci-lint",
-  "go.lintFlags": ["--fast"],
+  // Default lint (staticcheck via the Go extension) so a fresh clone works without
+  // extra tools. golangci-lint stays available as the opt-in "Lint" task.
   "go.lintOnSave": "package",
   "go.vetOnSave": "package",
 

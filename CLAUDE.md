@@ -19,7 +19,7 @@ codebase, built with [Fyne](https://fyne.io/). Module name: `bibletext`.
 ## Build / run / test
 
 ```bash
-go build ./...                      # compile-check everything (host = macOS)
+go build ./...                      # compile-check everything (for your host OS)
 go run ./cmd/desktop                # fast launch of the desktop reader
 go test -race ./...                 # tests live in the root package
 gofmt -w .  &&  go vet ./...        # format + vet before committing
@@ -66,8 +66,10 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   flat top-level taps (Copy) work. The custom selection menu is built in
   `HBReadingTextView`'s `editMenuForTextInRange:` (Study with AI submenu + Share +
   Cross-references, prepended before iOS's suggestedActions).
-- **Native → Go bridge.** `ai_menu_darwin.go` has the repo's only `//export`
-  callback (`bibleTextAIMenuTapped`); its cgo preamble must stay empty of C
+- **Native → Go bridge.** The `//export` callbacks live in exactly two files —
+  `ai_menu_darwin.go` (reading/AI callbacks: `bibleTextAIMenuTapped`,
+  `bibleTextReadingScrolled`, etc.) and `audio_export_apple.go`
+  (`bibleTextAudioStateChanged`); their cgo preambles must stay empty of C
   *definitions* (only declarations allowed alongside `//export`).
 - **Background load + loading screen.** The Bible (~6.4 MB JSON parse +
   `PrepareSearchIndex` over ~31k verses, or a multi-minute first-run API fetch)
@@ -111,7 +113,9 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   `ai_panel.go`.
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
   registry (WEB + BSB public-domain, NRSV/LSB licensed) and a `bibleSource` per
-  version (`webSource` = bible-api.com, per-chapter; `bsbSource` (`bsb.go`) = the
+  version (`webSource` = the WEB as ONE request from bible.helloao.org (it replaced
+  the old per-chapter bible-api.com walk, which remains only as the seed/fallback);
+  `bsbSource` (`bsb.go`) = the
   Berean Standard Bible, public-domain/CC0, fetched as ONE ~7 MB `complete.json`
   from the free, key-less bible.helloao.org and decoded via `decodeBSBComplete`
   mapping helloao's USFM `order` → the app's canonical book names; `licensedAPISource`
