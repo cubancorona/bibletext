@@ -32,6 +32,7 @@ package bibletext
 // Implemented in Go (audio_export_apple.go, //export). Codes: 0 idle, 1 playing,
 // 2 paused, 3 ended.
 extern void bibleTextAudioStateChanged(int code);
+extern void bibleTextAudioTimeUpdate(double seconds);
 
 enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3, BT_AUDIO_FAILED = 4 };
 typedef enum { BT_MODE_NONE = 0, BT_MODE_URL = 1, BT_MODE_TTS = 2 } BTAudioMode;
@@ -49,6 +50,7 @@ static void btAudioUpdateNowPlaying(void);
 @property (nonatomic, strong) MPMediaItemArtwork *artwork;
 @property (nonatomic, assign) BOOL kvoRegistered;
 @property (nonatomic, assign) int  gen;   // bumped on every teardown; cancels stale watchdogs
+@property (nonatomic, strong) id   timeObserver;   // AVPlayer periodic observer (read-along)
 @end
 
 static BTAudioController *gBTAudio = nil;
@@ -98,6 +100,18 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     [[NSNotificationCenter defaultCenter] addObserver:self
         selector:@selector(btItemDidEnd:)
         name:AVPlayerItemDidPlayToEndTimeNotification object:it];
+
+    // Read-along: report playback position ~5×/sec (main queue, so it can drive the
+    // native NSTextView highlight directly) → bibleTextAudioTimeUpdate → onTimeUpdate.
+    // __weak avoids a retain cycle (the player retains the block).
+    __weak BTAudioController *weakSelf = self;
+    self.timeObserver = [p addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.2, NSEC_PER_SEC)
+                                                        queue:dispatch_get_main_queue()
+                                                   usingBlock:^(CMTime time) {
+        BTAudioController *s = weakSelf;
+        if (s == nil || s.mode != BT_MODE_URL) return;
+        bibleTextAudioTimeUpdate(CMTimeGetSeconds(time));
+    }];
 
     btAudioSetupCommands();
     int g = self.gen;
@@ -251,6 +265,8 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     [[NSNotificationCenter defaultCenter] removeObserver:self
         name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
 
+    if (self.timeObserver && self.player) { [self.player removeTimeObserver:self.timeObserver]; }
+    self.timeObserver = nil;
     if (self.player) { [self.player pause]; self.player = nil; }
     self.item = nil;
     if (self.synth != nil && self.synth.isSpeaking) {
