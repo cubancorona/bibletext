@@ -61,6 +61,12 @@ type audioController struct {
 	// header installs it (a refreshReadingOnly closure); nil in unit tests, where
 	// fireChange must therefore stay a no-op (it never reaches fyne.Do).
 	onChange func()
+
+	// Read-along: the loaded chapter's verse timing table (recorded audio only) and
+	// the verse currently highlighted, so a playback-time tick only touches the native
+	// text view when the verse actually changes. Set on start, cleared on stop.
+	readAlong      []verseTiming
+	readAlongVerse int
 }
 
 // gAudio is the process-wide controller. Single-window app.
@@ -163,6 +169,10 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 		nativeAudioStartTTS(a.Text, a.Title, a.Subtitle)
 	}
 
+	// Read-along: arm the verse timing table for this chapter (recorded only) so the
+	// native time-observer ticks can highlight the verse being narrated + follow-scroll.
+	c.armReadAlong(state, a.Kind)
+
 	// Lock-screen / Control Center artwork: a "Book Chapter" card in the share-image
 	// style. Rendered off the UI goroutine; the fonts are captured here (on the UI
 	// goroutine) so the render never touches the live AppState. nativeAudioSetArtwork
@@ -205,6 +215,56 @@ func (c *audioController) stop() {
 		nativeAudioStop()
 		c.fireChange()
 	}
+	c.clearReadAlong()
+}
+
+// armReadAlong loads the chapter's verse timing table (recorded audio that has bundled
+// timings) so onTimeUpdate can highlight the narrated verse. Clears any prior highlight;
+// a chapter without timings (TTS, or a version we don't bundle) simply arms nothing.
+func (c *audioController) armReadAlong(state *AppState, kind audioKind) {
+	var vs []verseTiming
+	if kind == audioRecorded && state != nil {
+		vs = chapterTimings(state.CurrentVersion, state.CurrentBook, state.CurrentChapter)
+	}
+	c.mu.Lock()
+	c.readAlong = vs
+	c.readAlongVerse = 0
+	c.mu.Unlock()
+	readAlongClear()
+}
+
+// clearReadAlong drops the table and removes the on-screen highlight.
+func (c *audioController) clearReadAlong() {
+	c.mu.Lock()
+	had := c.readAlong != nil
+	c.readAlong = nil
+	c.readAlongVerse = 0
+	c.mu.Unlock()
+	if had {
+		readAlongClear()
+	}
+}
+
+// onTimeUpdate is posted from the native player's periodic time observer (recorded
+// audio) with the current playback position. It runs on the native main thread, so it
+// may call the native highlight directly. Only touches the text view when the narrated
+// verse actually changes.
+func (c *audioController) onTimeUpdate(t float64) {
+	c.mu.Lock()
+	vs := c.readAlong
+	last := c.readAlongVerse
+	c.mu.Unlock()
+	if len(vs) == 0 {
+		return
+	}
+	v := verseAtTime(vs, t)
+	if v == last {
+		return
+	}
+	c.mu.Lock()
+	c.readAlongVerse = v
+	c.mu.Unlock()
+	readAlongHighlight(v)
 }
 
 // skip seeks the recorded player by ±seconds (the ±15s controls). A no-op for
