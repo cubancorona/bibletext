@@ -291,10 +291,22 @@ static void btIOSApplyReadingBG(void); // defined below; used in bibleTextApplyH
 static BOOL gReadingSuppressed = NO;
 
 // Verse numbers are the only small-font runs in the chapter: buildChapterHTML
-// renders them as <sup class="v"> at font-size 0.66em (~12.5px) while body text
-// is 19px. Detecting them by font size (rather than a superscript attribute,
-// which UIKit doesn't expose) works uniformly and the run's text is the digits.
-#define BT_VERSE_FONT_MAX 15.0
+// renders them as <sup class="v"> at 0.66em of the body size. Detecting them by
+// font size (rather than a superscript attribute, which UIKit doesn't expose)
+// works uniformly and the run's text is the digits. The threshold is DERIVED
+// from the rendered text (80% of the largest font in the storage) rather than a
+// constant, because the reader can scale the scripture text: superscripts stay
+// 0.66× the body at every size, so 0.8× cleanly separates them.
+static CGFloat btIOSVerseFontThreshold(NSTextStorage *ts) {
+    __block CGFloat maxSize = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val != nil && ((UIFont *)val).pointSize > maxSize) maxSize = ((UIFont *)val).pointSize;
+    }];
+    return maxSize > 0 ? maxSize * 0.8 : 15.0;
+}
 
 // The chapter's verse-number runs, captured once per render as a {verse, charLoc}
 // table in document order (so it's sorted by both location and verse number). The
@@ -312,13 +324,14 @@ static void btIOSBuildVerseIndex(NSTextStorage *ts) {
     const NSUInteger CAP = 512; // far above any chapter's verse count (max ~176)
     if (gVerseIndex == NULL) gVerseIndex = malloc(CAP * sizeof(BTVerseLoc));
     if (ts == nil) { gVerseIndexCount = 0; return; }
+    CGFloat thr = btIOSVerseFontThreshold(ts);
     __block NSUInteger n = 0;
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
                    options:0
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (n >= CAP) { *stop = YES; return; }
-        if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= thr) return;
         NSInteger v = [[ts.string substringWithRange:r] integerValue];
         if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; gVerseIndex[n].len = r.length; n++; }
     }];
@@ -1186,10 +1199,10 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// share the same vertical rhythm and the toolbar stays compact. A slightly
 	// smaller heading (vs the 26px page heading) keeps it closer in scale to the
 	// chapter line below, so that line no longer floats in an over-tall box.
-	// boxH 34 (was 30): taller boxes = taller tap targets for every control in both
+	// boxH 36 (was 30): taller boxes = taller tap targets for every control in both
 	// header rows, and it raises the ceiling the expanded audio card must fit under
-	// (2×boxH+2 = 70 > the card's 66 — see buildAudioCard's row comment).
-	const boxH = 34
+	// (2×boxH+2 = 74 > the card's 72 — see buildAudioCard's row comment).
+	const boxH = 36
 	const headSize = 22
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headSize, boxH, func() {
 		showChapterPicker(state)

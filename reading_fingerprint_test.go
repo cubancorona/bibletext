@@ -1,6 +1,10 @@
 package bibletext
 
-import "testing"
+import (
+	"testing"
+
+	"fyne.io/fyne/v2/test"
+)
 
 // chapterRenderFingerprint is the gate that lets the native reading overlay skip
 // re-importing identical chapter HTML. These tests pin the load-bearing property:
@@ -69,5 +73,22 @@ func TestChapterRenderFingerprintDistinguishesHighlightedVerse(t *testing.T) {
 	}
 	if chapterRenderFingerprint(mk(16)) == chapterRenderFingerprint(mk(17)) {
 		t.Fatal("fingerprint should differ for different highlighted verses")
+	}
+}
+
+// The reading text-size setting must be part of the render fingerprint — a size
+// change with a stale fingerprint would show the old text at the old size.
+func TestFingerprintIncludesTextSize(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	s := sampleState()
+	a := chapterRenderFingerprint(s)
+	setReadingTextSizeID("xl")
+	defer setReadingTextSizeID("normal")
+	if b := chapterRenderFingerprint(s); a == b {
+		t.Fatal("fingerprint unchanged after text-size change")
+	}
+	if got := readingTextScale(); got != 1.3 {
+		t.Fatalf("readingTextScale() = %v, want 1.3", got)
 	}
 }
