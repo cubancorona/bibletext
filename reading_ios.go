@@ -1186,14 +1186,17 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// share the same vertical rhythm and the toolbar stays compact. A slightly
 	// smaller heading (vs the 26px page heading) keeps it closer in scale to the
 	// chapter line below, so that line no longer floats in an over-tall box.
-	const boxH = 30
+	// boxH 34 (was 30): taller boxes = taller tap targets for every control in both
+	// header rows, and it raises the ceiling the expanded audio card must fit under
+	// (2×boxH+2 = 70 > the card's 66 — see buildAudioCard's row comment).
+	const boxH = 34
 	const headSize = 22
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headSize, boxH, func() {
 		showChapterPicker(state)
 	})
 
 	// Small copy icon tucked after the heading.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 18, boxH, func() {
 		copyChapter(state)
 	})
 	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
@@ -1212,14 +1215,14 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 
 	// Prev/next as compact icon buttons sitting next to the chapter line, so
 	// they're close to the book + chapter text rather than floating far right.
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, boxH, func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 22, boxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
 
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, boxH, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 22, boxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
