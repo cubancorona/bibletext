@@ -29,11 +29,11 @@ func showAudioSourceMenu(state *AppState) {
 		return
 	}
 	pal := state.pal()
-	// curKind is the source the play button will use — the reader's current choice
-	// (or the per-chapter default). The menu only CHANGES this choice; it never
-	// starts playback (that's the play button's job).
-	curKind := gAudio.effectiveKind(state)
-	hasRec := chapterHasRecording(state)
+	// curKind/curRecID is the source the play button will use — the reader's current
+	// choice (or the per-chapter default). The menu only CHANGES this choice; it
+	// never starts playback (that's the play button's job).
+	curKind, curRecID := gAudio.effectiveSource(state)
+	recs := chapterRecordings(state)
 
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
@@ -64,20 +64,17 @@ func showAudioSourceMenu(state *AppState) {
 	closeBtn.Importance = widget.LowImportance
 	header := container.NewBorder(nil, nil, container.NewCenter(title), container.NewCenter(closeBtn))
 
-	versionName := state.CurrentVersion
-	if v, ok := versionByID(state.CurrentVersion); ok {
-		versionName = v.Name
-	}
-
-	// Selectable sources, the chosen one highlighted. Tapping a different one just
-	// CHOOSES it (the play button then plays it); tapping the current one closes.
+	// Selectable sources, the chosen one highlighted — one row per recording the
+	// chapter has (named after its narrator), plus read-aloud. Tapping a different
+	// one just CHOOSES it (the play button then plays it); tapping the current one
+	// closes.
 	rows := container.NewVBox()
-	addSource := func(kind audioKind, icon fyne.Resource, label string) {
-		k := kind
-		isCurrent := k == curKind
+	addSource := func(kind audioKind, recID string, icon fyne.Resource, label string) {
+		k, id := kind, recID
+		isCurrent := k == curKind && (k != audioRecorded || id == curRecID)
 		btn := widget.NewButtonWithIcon(label, icon, func() {
 			if !isCurrent {
-				gAudio.selectSource(state, k) // set the source; does NOT start playback
+				gAudio.selectSource(state, k, id) // set the source; does NOT start playback
 			}
 			done()
 		})
@@ -87,13 +84,16 @@ func showAudioSourceMenu(state *AppState) {
 		}
 		rows.Add(btn)
 	}
-	if hasRec {
-		addSource(audioRecorded, theme.AccountIcon(), "Recorded · "+versionName)
+	for _, r := range recs {
+		addSource(audioRecorded, r.id, theme.AccountIcon(), "Recorded · "+r.narrator)
 	}
-	addSource(audioTTS, iconAudioWave, "Read aloud · text to speech")
+	addSource(audioTTS, "", iconAudioWave, "Read aloud · text to speech")
 
 	explain := "Your device is reading this chapter aloud (text to speech). No recorded narration is available for it yet."
-	if hasRec {
+	switch {
+	case len(recs) > 1:
+		explain = "This chapter has several public-domain recorded narrations. Pick a narrator, or have your device read it aloud instead."
+	case len(recs) == 1:
 		explain = "This chapter has a public-domain recorded narration. You can switch to your device reading it aloud instead."
 	}
 	note := widget.NewLabel(explain)

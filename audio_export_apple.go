@@ -54,3 +54,13 @@ func bibleTextAudioStateChanged(code C.int) {
 func bibleTextAudioTimeUpdate(seconds C.double) {
 	gAudio.onTimeUpdate(float64(seconds))
 }
+
+// bibleTextAudioSpeechRange is posted by the speech synthesizer's
+// willSpeakRangeOfSpeechString delegate (both engines) with the UTF-16 offset of
+// the utterance text about to be spoken — the TTS twin of the time observer,
+// driving read-along verse highlighting for read-aloud chapters.
+//
+//export bibleTextAudioSpeechRange
+func bibleTextAudioSpeechRange(location C.int) {
+	gAudio.onSpeechRange(int(location))
+}

@@ -227,6 +227,12 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
 }
 
 void bibleTextMacReadAlongClear(void) {
+    // Reachable from the Fyne goroutine (main on macOS) but also from AVSpeechSynthesizer
+    // delegate callbacks, whose thread is not documented — marshal to main like the iOS twin.
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacReadAlongClear(); });
+        return;
+    }
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
     if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length) {
@@ -246,6 +252,10 @@ void bibleTextMacReadAlongClear(void) {
 // follow-scrolls only when the verse has drifted out of a comfortable band, so the
 // text isn't yanked on every verse. verse<=0 just clears (recording's intro).
 void bibleTextMacHighlightVerse(int verse) {
+    if (![NSThread isMainThread]) {   // see bibleTextMacReadAlongClear
+        dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacHighlightVerse(verse); });
+        return;
+    }
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
     [ts beginEditing];

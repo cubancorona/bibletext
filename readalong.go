@@ -4,14 +4,13 @@ package bibletext
 // of the recorded narration (scripts/audio-align/). Drives highlighting the verse
 // being narrated + auto-scroll. Bundled tiny (~0.5 MB per translation).
 //
-// Both complete recordings the app streams are covered: the BSB (Barry Hays) and
-// the WEB (David Williams) — the tables were aligned against the exact audio bytes
-// on the project's own host (see audio.go), so they can't drift. The WEB-Catholic
-// shares the WEB tables for its 66 protocanonical books (same text, same verse
-// numbers); the deuterocanon has no recording. chapterTimings returns nil for
-// anything without a bundled table, so those chapters simply don't highlight
-// (recorded audio still plays; TTS read-along is a separate, timing-free path via
-// the speech synthesizer's word callback).
+// Tables are keyed by RECORDING id (see recordingsFor in audio.go): timings are
+// aligned against a specific recording's exact audio bytes on the project's own
+// host, so they belong to the recording, not the translation. Both recordings the
+// app streams are covered — "bsb-hays" (Barry Hays) and "web-williams" (David
+// Williams; also serves the WEB-Catholic, whose 66 protocanonical books are the
+// same WEB text). chapterTimings returns nil for anything without a bundled table,
+// so those chapters simply don't highlight while recorded audio still plays.
 
 import (
 	_ "embed"
@@ -34,13 +33,13 @@ type verseTiming struct {
 
 var (
 	timingsOnce sync.Once
-	allTimings  map[string]map[string]map[string][]verseTiming // version -> book -> chapter(str) -> verses
+	allTimings  map[string]map[string]map[string][]verseTiming // recording id -> book -> chapter(str) -> verses
 )
 
 func loadTimings() {
 	timingsOnce.Do(func() {
 		allTimings = make(map[string]map[string]map[string][]verseTiming, 2)
-		for version, blob := range map[string][]byte{"bsb": bsbTimingsJSON, "web": webTimingsJSON} {
+		for recID, blob := range map[string][]byte{"bsb-hays": bsbTimingsJSON, "web-williams": webTimingsJSON} {
 			var raw map[string]map[string][][]float64 // [[verse,start,end], ...]
 			if err := json.Unmarshal(blob, &raw); err != nil {
 				continue
@@ -59,19 +58,16 @@ func loadTimings() {
 				}
 				books[book] = m
 			}
-			allTimings[version] = books
+			allTimings[recID] = books
 		}
 	})
 }
 
-// chapterTimings returns the verse timing table for a chapter (sorted by start), or
-// nil when the version's recording has no bundled timings.
-func chapterTimings(version, book string, chapter int) []verseTiming {
-	if version == "webc" {
-		version = "web" // the WEB-Catholic's 66 recorded books are the same WEB text
-	}
+// chapterTimings returns a recording's verse timing table for a chapter (sorted by
+// start), or nil when that recording has no bundled timings.
+func chapterTimings(recordingID, book string, chapter int) []verseTiming {
 	loadTimings()
-	if m, ok := allTimings[version]; ok {
+	if m, ok := allTimings[recordingID]; ok {
 		if b, ok := m[book]; ok {
 			return b[strconv.Itoa(chapter)]
 		}
