@@ -32,8 +32,11 @@ func TestStopAudioForNav(t *testing.T) {
 		chapterAudio{Kind: audioRecorded, URL: "https://github.com/cubancorona/bibletext-audio/releases/download/web-williams-nt-v1/WEB_43_020.mp3"},
 		"web|John|20",
 	)
-	if !gAudio.isPlaying() || gAudio.playingFingerprint() != "web|John|20" {
-		t.Fatalf("startChapter did not load: playing=%v fp=%q", gAudio.isPlaying(), gAudio.playingFingerprint())
+	// A recorded start starts life BUFFERING (spinner) until the native layer
+	// reports audible playback — but it is loaded and bound to its chapter.
+	if !gAudio.buffering("web|John|20") || gAudio.playingFingerprint() != "web|John|20" {
+		t.Fatalf("startChapter did not load: buffering=%v fp=%q",
+			gAudio.buffering("web|John|20"), gAudio.playingFingerprint())
 	}
 
 	// Re-landing on the SAME chapter must leave playback alone.

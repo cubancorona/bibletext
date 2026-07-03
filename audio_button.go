@@ -10,12 +10,13 @@ package bibletext
 //
 //	            ✕
 //	┌───────────────────┐
-//	│        (source)   │   top: source indicator, centred above play
+//	│    Narrator ▾     │   top: labeled source chip, centred above play
 //	│   ⟲15  ▶/⏸  15⟳  │   bottom: skip · play/pause · skip
 //	└───────────────────┘
 //
-// The skips dim for read-aloud (speech can't seek); the source indicator
-// (person = recording, waveform = read-aloud) opens the source menu.
+// The skips dim for read-aloud (speech can't seek); the source chip (person =
+// recording, waveform = read-aloud, labeled "Narrator ▾"/"Read aloud ▾") opens
+// the source menu.
 
 import (
 	"fyne.io/fyne/v2"
@@ -53,7 +54,7 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 	// would DRAW beyond the host while its buttons are untappable (the shipped
 	// bug: the visible ▶ hit skip-back / nothing). A fixed cell sized to the
 	// card makes expansion geometry-neutral: taps land, header never reflows.
-	probe := buildAudioCard(state, audioTTS, false, false, audioCardCallbacks{})
+	probe := buildAudioCard(state, audioTTS, false, false, false, audioCardCallbacks{})
 	return container.NewGridWrap(probe.MinSize(), host)
 }
 
@@ -66,8 +67,9 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 		// every close AND every audio state change (fireChange → rebuild), so it
 		// catches both orders: pausing then closing the card, and closing the card
 		// then pausing from the lock screen / Now Playing. While audio still PLAYS
-		// with the card collapsed, the highlight keeps following the narration.
-		if playing, _ := gAudio.buttonState(fp); !playing {
+		// (or is buffering toward playing) with the card collapsed, the highlight
+		// keeps following the narration.
+		if playing, _ := gAudio.buttonState(fp); !playing && !gAudio.buffering(fp) {
 			gAudio.clearReadAlong()
 		}
 		speaker := newIconTapButton(state, theme.VolumeUpIcon(), 24, boxH, func() {
@@ -86,6 +88,7 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	}
 
 	playing, _ := gAudio.buttonState(fp)
+	buffering := gAudio.buffering(fp)
 
 	// Skip + source reflect what's loaded while playing, else the reader's chosen
 	// source for this chapter (effectiveSource: source-menu preference or default).
@@ -94,7 +97,7 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 		displayKind = k
 	}
 
-	return buildAudioCard(state, displayKind, playing, displayKind == audioRecorded, audioCardCallbacks{
+	return buildAudioCard(state, displayKind, playing, buffering, displayKind == audioRecorded, audioCardCallbacks{
 		onSrc:   func() { showAudioSourceMenu(state) },
 		onBack:  func() { gAudio.skip(-15) },
 		onPlay:  func() { gAudio.playPauseCurrent(state) },
@@ -110,30 +113,48 @@ type audioCardCallbacks struct {
 	onSrc, onBack, onPlay, onFwd, onClose func()
 }
 
-// buildAudioCard assembles the expanded transport card: source indicator centred
-// on top, skip/play/skip below, close ✕ tucked in the upper-right corner.
-func buildAudioCard(state *AppState, displayKind audioKind, playing, canSeek bool, cb audioCardCallbacks) fyne.CanvasObject {
+// buildAudioCard assembles the expanded transport card: labeled source chip
+// centred on top, skip/play/skip below, close ✕ tucked in the upper-right corner.
+// While buffering, the play slot shows a SPINNER instead of a glyph — silence
+// behind a pause glyph reads as "broken" — and the slot ignores taps until the
+// stream resolves to playing/paused/failed.
+func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, canSeek bool, cb audioCardCallbacks) fyne.CanvasObject {
 	pal := state.pal()
 	playGlyph := theme.MediaPlayIcon()
 	if playing {
 		playGlyph = theme.MediaPauseIcon()
 	}
 
-	// Two row heights: a compact source-indicator row on top, and a TALLER transport
-	// row (skip · play · skip) below. The transport controls are the ones the reader
+	// Two row heights: a labeled source chip on top, and a TALLER transport row
+	// (skip · play · skip) below. The transport controls are the ones the reader
 	// actually taps mid-listen, so they get the full Apple-HIG minTapTarget height
 	// with correspondingly larger glyphs. srcRowH + transportRowH + the box's 2px
 	// vertical padding must stay within the header's two-text-line height (mobile
-	// boxH 34 ×2 +2 = 70; desktop 38+7+34 = 79), so the reserved card footprint never
+	// boxH 36 ×2 +2 = 74; desktop 38+7+34 = 79), so the reserved card footprint never
 	// grows the header / pushes the reading lane down.
 	const (
-		srcRowH       = 20
+		srcRowH       = 26
 		transportRowH = minTapTarget // 44
 	)
-	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 16, srcRowH, cb.onSrc)
+	// The source selector is a LABELED chip, not a bare glyph: a 16px person/waveform
+	// icon alone (the old control) signalled neither "this is a button" nor "narrators
+	// live here" — the narrator menu was effectively undiscoverable. Text + ▾ fixes
+	// both, and the wide chip pulls mis-taps away from the play button beneath it.
+	srcLabel := "Read aloud ▾"
+	if displayKind == audioRecorded {
+		srcLabel = "Narrator ▾"
+	}
+	src := newLabeledTapChip(state, audioSourceIconForKind(displayKind), srcLabel, srcRowH, cb.onSrc)
 	back := newIconTapButton(state, iconSkipBack15, 26, transportRowH, cb.onBack)
 	back.disabled = !canSeek
-	play := newIconTapButton(state, playGlyph, 28, transportRowH, cb.onPlay)
+	var play fyne.CanvasObject
+	if buffering {
+		spin := widget.NewActivity()
+		spin.Start()
+		play = container.NewGridWrap(fyne.NewSize(transportRowH, transportRowH), container.NewCenter(spin))
+	} else {
+		play = newIconTapButton(state, playGlyph, 28, transportRowH, cb.onPlay)
+	}
 	fwd := newIconTapButton(state, iconSkipFwd15, 26, transportRowH, cb.onFwd)
 	fwd.disabled = !canSeek
 
@@ -173,6 +194,44 @@ func audioSourceIconForKind(kind audioKind) fyne.Resource {
 	}
 	return iconAudioWave
 }
+
+// labeledTapChip is the audio card's source selector: a small icon + muted text
+// label in one tappable pill. Its own type (rather than a reused tappableArea) so
+// the hit-region test can find it unambiguously.
+type labeledTapChip struct {
+	widget.BaseWidget
+	state *AppState
+	icon  fyne.Resource
+	label string
+	boxH  float32
+	onTap func()
+}
+
+func newLabeledTapChip(state *AppState, icon fyne.Resource, label string, boxH float32, onTap func()) *labeledTapChip {
+	c := &labeledTapChip{state: state, icon: icon, label: label, boxH: boxH, onTap: onTap}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *labeledTapChip) Tapped(*fyne.PointEvent) {
+	if c.onTap != nil {
+		c.onTap()
+	}
+}
+
+func (c *labeledTapChip) CreateRenderer() fyne.WidgetRenderer {
+	img := canvas.NewImageFromResource(theme.NewColoredResource(c.icon, colorNameMuted))
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(14, 14))
+	lbl := canvas.NewText(c.label, c.state.pal().TextMuted)
+	lbl.TextSize = 13
+	w := fyne.MeasureText(c.label, 13, lbl.TextStyle).Width + 14 + 6 + 16
+	row := container.NewHBox(container.NewCenter(img), hgap(6), container.NewCenter(lbl))
+	box := container.NewGridWrap(fyne.NewSize(w, c.boxH), container.NewCenter(row))
+	return widget.NewSimpleRenderer(box)
+}
+
+var _ fyne.Tappable = (*labeledTapChip)(nil)
 
 // tappableArea makes an arbitrary composed object tappable — used for the close ✕
 // cell, which is a styled rectangle + glyph rather than a plain icon button.

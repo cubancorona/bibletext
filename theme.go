@@ -47,17 +47,23 @@ type palette struct {
 
 // Light: warm parchment ground so the crisp near-white "page" appears to glow.
 var lightPalette = palette{
-	Background:    color.NRGBA{R: 237, G: 233, B: 224, A: 255},
-	Surface:       color.NRGBA{R: 253, G: 252, B: 248, A: 255},
-	SurfaceAlt:    color.NRGBA{R: 244, G: 240, B: 232, A: 255},
-	Border:        color.NRGBA{R: 224, G: 217, B: 205, A: 255},
+	Background: color.NRGBA{R: 237, G: 233, B: 224, A: 255},
+	Surface:    color.NRGBA{R: 253, G: 252, B: 248, A: 255},
+	SurfaceAlt: color.NRGBA{R: 244, G: 240, B: 232, A: 255},
+	// Border/TextMuted/VerseNumber are tuned for older eyes: TextMuted holds ≥4.5:1
+	// (WCAG AA for normal-size text) against ALL three grounds it appears on (4.8 on
+	// Background, 5.2 on SurfaceAlt, 5.7 on Surface — was 3.4–4.0:1), VerseNumber is
+	// 5.5:1 on the reading paper (was a borderline 4.55), and Border is dark enough
+	// (~1.8:1) that chips and inputs read as controls instead of dissolving into the
+	// parchment (was 1.16:1). The dark palette already passed AA and is untouched.
+	Border:        color.NRGBA{R: 189, G: 178, B: 159, A: 255},
 	Text:          color.NRGBA{R: 37, G: 34, B: 29, A: 255},
-	TextMuted:     color.NRGBA{R: 132, G: 124, B: 111, A: 255},
+	TextMuted:     color.NRGBA{R: 107, G: 100, B: 86, A: 255},
 	Accent:        color.NRGBA{R: 47, G: 76, B: 134, A: 255}, // lapis / sapphire — the sacred manuscript blue
 	AccentText:    color.NRGBA{R: 244, G: 247, B: 252, A: 255},
 	Highlight:     color.NRGBA{R: 221, G: 231, B: 247, A: 255}, // soft lapis wash behind a found verse
 	HighlightText: color.NRGBA{R: 36, G: 60, B: 112, A: 255},
-	VerseNumber:   color.NRGBA{R: 92, G: 116, B: 165, A: 255}, // muted slate-blue superscripts
+	VerseNumber:   color.NRGBA{R: 83, G: 104, B: 143, A: 255}, // muted slate-blue superscripts
 	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255},  // deep crimson on parchment
 	Input:         color.NRGBA{R: 252, G: 251, B: 247, A: 255},
 }

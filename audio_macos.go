@@ -35,7 +35,7 @@ extern void bibleTextAudioStateChanged(int code);
 extern void bibleTextAudioTimeUpdate(double seconds);
 extern void bibleTextAudioSpeechRange(int location);
 
-enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3, BT_AUDIO_FAILED = 4 };
+enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3, BT_AUDIO_FAILED = 4, BT_AUDIO_BUFFERING = 5 };
 typedef enum { BT_MODE_NONE = 0, BT_MODE_URL = 1, BT_MODE_TTS = 2 } BTAudioMode;
 
 static void btAudioSetupCommands(void);
@@ -224,8 +224,14 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
         }
     } else if (context == kBTRateCtx) {
         AVPlayerTimeControlStatus tcs = self.player.timeControlStatus;
-        if (btTCSIsActive(tcs)) {
+        if (tcs == AVPlayerTimeControlStatusPlaying) {
             bibleTextAudioStateChanged(BT_AUDIO_PLAYING);
+        } else if (tcs == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate) {
+            // Buffering: sound is intended but not audible yet. Reported separately so
+            // the play button can show a spinner instead of a silent pause glyph —
+            // "⏸ but no sound" reads as broken and invites the double-tap that used to
+            // cancel the still-loading stream.
+            bibleTextAudioStateChanged(BT_AUDIO_BUFFERING);
         } else if (tcs == AVPlayerTimeControlStatusPaused) {
             bibleTextAudioStateChanged(BT_AUDIO_PAUSED);
         }
