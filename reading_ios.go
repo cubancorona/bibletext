@@ -1368,12 +1368,8 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	}
 	state.chromeBand = nil
 	if len(band.Objects) > 0 {
-		// Wrap in a collapsible so it animates with the app header + tab bar when
-		// the Safari-style chrome collapses (top-anchored: it slides up as it
-		// shrinks). gChromeSetHidden animates state.chromeBand alongside the others.
-		bandC := newCollapsible(band, collapseAnchorTop)
-		top.Add(bandC)
-		state.chromeBand = bandC
+		top.Add(band)
+		state.chromeBand = band
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
 
