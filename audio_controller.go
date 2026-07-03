@@ -12,11 +12,25 @@ package bibletext
 // bibleTextAudioStateChanged (audio_export_ios.go) → applyNativeState.
 
 import (
+	"log"
+	"os"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 )
+
+// raDebug logs read-along diagnostics (arm/tick/verse) when BIBLETEXT_DEBUG_READALONG
+// is set — off in normal use. Kept because sync bugs here are otherwise invisible: a
+// failed stream silently falls back to TTS (no timings), which looks identical to
+// "highlighting is broken" until you see the arm/tick trace.
+var raDebugOn = os.Getenv("BIBLETEXT_DEBUG_READALONG") != ""
+
+func raDebug(format string, args ...interface{}) {
+	if raDebugOn {
+		log.Printf("[readalong] "+format, args...)
+	}
+}
 
 // audioPlayState is the controller's view of the native player. It drives the
 // play button's glyph and whether "this chapter is the one playing".
@@ -226,6 +240,9 @@ func (c *audioController) armReadAlong(state *AppState, kind audioKind) {
 	if kind == audioRecorded && state != nil {
 		vs = chapterTimings(state.CurrentVersion, state.CurrentBook, state.CurrentChapter)
 	}
+	if state != nil {
+		raDebug("arm kind=%d version=%q book=%q ch=%d -> %d verses", kind, state.CurrentVersion, state.CurrentBook, state.CurrentChapter, len(vs))
+	}
 	c.mu.Lock()
 	c.readAlong = vs
 	c.readAlongVerse = 0
@@ -254,6 +271,9 @@ func (c *audioController) onTimeUpdate(t float64) {
 	vs := c.readAlong
 	last := c.readAlongVerse
 	c.mu.Unlock()
+	if raDebugOn {
+		raDebug("tick t=%.2f armed=%d last=%d", t, len(vs), last)
+	}
 	if len(vs) == 0 {
 		return
 	}

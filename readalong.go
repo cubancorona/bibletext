@@ -2,14 +2,16 @@ package bibletext
 
 // Read-along timing tables: per-chapter verse start/end times from forced alignment
 // of the recorded narration (scripts/audio-align/). Drives highlighting the verse
-// being narrated + auto-scroll. Bundled tiny (~0.5 MB for the whole Bible).
+// being narrated + auto-scroll. Bundled tiny (~0.5 MB per translation).
 //
-// Only the BSB (Barry Hays / openbible) recording is bundled today, because that's
-// the recording the app streams. The complete WEB (David Williams) recording is
-// aligned too, but we'd host that audio ourselves, so its timings ship once hosting
-// lands — chapterTimings just returns nil for versions without a bundled table, so
-// those chapters simply don't highlight (recorded audio still plays; TTS read-along
-// is a separate, timing-free path via the speech synthesizer's word callback).
+// Both complete recordings the app streams are covered: the BSB (Barry Hays) and
+// the WEB (David Williams) — the tables were aligned against the exact audio bytes
+// on the project's own host (see audio.go), so they can't drift. The WEB-Catholic
+// shares the WEB tables for its 66 protocanonical books (same text, same verse
+// numbers); the deuterocanon has no recording. chapterTimings returns nil for
+// anything without a bundled table, so those chapters simply don't highlight
+// (recorded audio still plays; TTS read-along is a separate, timing-free path via
+// the speech synthesizer's word callback).
 
 import (
 	_ "embed"
@@ -21,6 +23,9 @@ import (
 //go:embed assets/timings/bsb.json
 var bsbTimingsJSON []byte
 
+//go:embed assets/timings/web.json
+var webTimingsJSON []byte
+
 // verseTiming is one verse's span within its chapter's recording (seconds).
 type verseTiming struct {
 	verse      int
@@ -29,28 +34,32 @@ type verseTiming struct {
 
 var (
 	timingsOnce sync.Once
-	bsbTimings  map[string]map[string][]verseTiming // book -> chapter(str) -> verses
+	allTimings  map[string]map[string]map[string][]verseTiming // version -> book -> chapter(str) -> verses
 )
 
 func loadTimings() {
 	timingsOnce.Do(func() {
-		var raw map[string]map[string][][]float64 // [[verse,start,end], ...]
-		if err := json.Unmarshal(bsbTimingsJSON, &raw); err != nil {
-			return
-		}
-		bsbTimings = make(map[string]map[string][]verseTiming, len(raw))
-		for book, chs := range raw {
-			m := make(map[string][]verseTiming, len(chs))
-			for ch, rows := range chs {
-				vs := make([]verseTiming, 0, len(rows))
-				for _, r := range rows {
-					if len(r) == 3 {
-						vs = append(vs, verseTiming{int(r[0]), r[1], r[2]})
-					}
-				}
-				m[ch] = vs
+		allTimings = make(map[string]map[string]map[string][]verseTiming, 2)
+		for version, blob := range map[string][]byte{"bsb": bsbTimingsJSON, "web": webTimingsJSON} {
+			var raw map[string]map[string][][]float64 // [[verse,start,end], ...]
+			if err := json.Unmarshal(blob, &raw); err != nil {
+				continue
 			}
-			bsbTimings[book] = m
+			books := make(map[string]map[string][]verseTiming, len(raw))
+			for book, chs := range raw {
+				m := make(map[string][]verseTiming, len(chs))
+				for ch, rows := range chs {
+					vs := make([]verseTiming, 0, len(rows))
+					for _, r := range rows {
+						if len(r) == 3 {
+							vs = append(vs, verseTiming{int(r[0]), r[1], r[2]})
+						}
+					}
+					m[ch] = vs
+				}
+				books[book] = m
+			}
+			allTimings[version] = books
 		}
 	})
 }
@@ -58,15 +67,14 @@ func loadTimings() {
 // chapterTimings returns the verse timing table for a chapter (sorted by start), or
 // nil when the version's recording has no bundled timings.
 func chapterTimings(version, book string, chapter int) []verseTiming {
-	if version != "bsb" {
-		return nil
+	if version == "webc" {
+		version = "web" // the WEB-Catholic's 66 recorded books are the same WEB text
 	}
 	loadTimings()
-	if bsbTimings == nil {
-		return nil
-	}
-	if m, ok := bsbTimings[book]; ok {
-		return m[strconv.Itoa(chapter)]
+	if m, ok := allTimings[version]; ok {
+		if b, ok := m[book]; ok {
+			return b[strconv.Itoa(chapter)]
+		}
 	}
 	return nil
 }

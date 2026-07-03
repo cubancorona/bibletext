@@ -1,12 +1,13 @@
 package bibletext
 
 // Recorded audio for the Berean Standard Bible. The BSB has a COMPLETE
-// public-domain (CC0) narration by Barry Hays, streamed per-chapter from
-// openbible.com with HTTP range support (so the ±15s skip works). Unlike the WEB
-// eBible set (partial coverage), this covers all 66 books, so BSB chapters play a
-// real recording instead of falling back to text-to-speech.
+// public-domain (CC0) narration by Barry Hays (originally from openbible.com),
+// streamed per-chapter from the project's own audio host with HTTP range support
+// (so the ±15s skip works) — all 66 books, so BSB chapters play a real recording
+// instead of falling back to text-to-speech. Self-hosting pins the exact audio
+// bytes the bundled read-along verse timings were aligned against.
 //
-// File scheme (confirmed from the openbible.com/audio/hays/ directory):
+// File scheme (openbible.com's original names, kept verbatim on our mirror):
 //   BSB_{book:02}_{Abbr3}_{chapter:03}_H.mp3
 // e.g. BSB_43_Jhn_003_H.mp3 (John 3), BSB_19_Psa_023_H.mp3 (Psalm 23).
 //
@@ -15,8 +16,6 @@ package bibletext
 // so the map below was taken verbatim from the live directory listing.
 
 import "fmt"
-
-const bsbAudioBase = "https://openbible.com/audio/hays/"
 
 // bsbAudioBook is a book's BSB-audio identity: its 1–66 number and openbible's
 // 3-letter abbreviation.
@@ -103,5 +102,5 @@ func bsbAudioURL(book string, chapter int) (string, bool) {
 	if !ok || chapter < 1 {
 		return "", false
 	}
-	return fmt.Sprintf("%sBSB_%02d_%s_%03d_H.mp3", bsbAudioBase, b.num, b.abbr, chapter), true
+	return fmt.Sprintf("%s%s/BSB_%02d_%s_%03d_H.mp3", audioHostBase, audioReleaseTag("bsb-hays", b.num), b.num, b.abbr, chapter), true
 }

@@ -106,7 +106,7 @@ real files; `*_test.go` files are omitted.
 | `bsb.go` | helloao `complete.json` client + decoder (backs both WEB and BSB) |
 | `catholic.go` | WEB-Catholic decoder: maps helloao USFM **id** → traditional Catholic order (73-book deuterocanon) |
 | `audio.go` | Per-chapter audio resolution: `recordedURLFor` (BSB/WEB/TTS dispatch), `chapterHasRecording`, the `chapterAudio` struct, `chapterSpeechText` (TTS text), `chapterAudioFingerprint` |
-| `bsb_audio.go` | BSB recorded-narration URLs (Barry Hays, openbible.com, all 66 books) |
+| `bsb_audio.go` | BSB recorded-narration URLs (Barry Hays, all 66 books, streamed from the project's audio mirror) |
 | `fetch_bible_data.go` | Generic chapter-walk HTTP client (retry/backoff/rate-limit) — fallback only |
 | `seed.go` | Embedded WEB-Gospels seed for an offline first launch |
 | `versions.go` | `BibleVersion` registry + `bibleSource` interface (web/BSB/licensed), `canSelect`, switching |
@@ -288,10 +288,12 @@ appear.
 
 **Source resolution** ([audio.go](audio.go)) is dispatched by translation so each
 version plays a recording made from its own text: **BSB** has a complete CC0 narration
-(Barry Hays, streamed per-chapter from openbible.com — [bsb_audio.go](bsb_audio.go),
-all 66 books); **WEB / WEB-Catholic** use the *partial* public-domain eBible WEB set
-(`ebibleAudioBooks`); everything else (other versions, unrecorded books, the
-deuterocanon) falls back to TTS of the on-screen verses (`chapterSpeechText`).
+(Barry Hays — [bsb_audio.go](bsb_audio.go), all 66 books) and **WEB / WEB-Catholic**
+a complete public-domain narration (David Williams — `webAudioURL`, all 66 books);
+everything else (other versions, the deuterocanon) falls back to TTS of the on-screen
+verses (`chapterSpeechText`). Both recordings stream from the project's own audio
+mirror (github.com/cubancorona/bibletext-audio, GitHub release assets), which pins the
+exact bytes the bundled read-along timings (`assets/timings/`) were aligned against.
 Recordings are HTTP-range-seekable (the ±15-second skip). The reader **chooses** the
 source from a popup ([audio_menu.go](audio_menu.go)); choosing only sets a per-chapter
 preference — the **play button** is the only thing that starts audio.
@@ -452,7 +454,7 @@ test harness, not the app.
   and surface it in [ai_settings.go](ai_settings.go).
 - **Add a recorded-audio source:** add a version case in `recordedURLFor`
   ([audio.go](audio.go)) returning the per-chapter URL (see `bsbAudioURL` /
-  `ebibleAudioURL`); chapters without a recording fall back to TTS automatically.
+  `webAudioURL`); chapters without a recording fall back to TTS automatically.
   Extra narrators for the same chapter would surface as additional rows in
   [audio_menu.go](audio_menu.go).
 
@@ -498,6 +500,7 @@ assets keep their own licenses ([NOTICE](NOTICE)):
 - Scripture: **World English Bible** (incl. the Catholic deuterocanon edition) and
   **Berean Standard Bible** — public domain.
 - Audio narration: **Berean Standard Bible** recording (Barry Hays) — CC0;
-  **World English Bible** recordings ([eBible.org](https://ebible.org)) — public domain.
+  **World English Bible** recording (David Williams) — public domain; both streamed
+  from the project's [audio mirror](https://github.com/cubancorona/bibletext-audio).
 - Cross-references: **OpenBible.info** Treasury of Scripture Knowledge — **CC BY**.
 - UI font: **Atkinson Hyperlegible** (Braille Institute) — **SIL OFL 1.1**.

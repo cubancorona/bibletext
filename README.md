@@ -106,9 +106,10 @@ stock Fyne so plain `go` commands need no setup.
   set, fetched once and cached.
 - 🎧 **Listen** (iOS & macOS) — play the current chapter from the reading header as a
   recorded human **narration** or on-device **read-aloud** (text-to-speech) of the
-  verses on screen. The **Berean Standard Bible** has a complete public-domain
-  narration (Barry Hays); the **World English Bible** uses public-domain
-  [eBible.org](https://ebible.org) recordings for the chapters they cover; everything
+  verses on screen. The **Berean Standard Bible** (Barry Hays) and the **World
+  English Bible** (David Williams) both have complete public-domain narrations,
+  streamed from the project's own
+  [audio mirror](https://github.com/cubancorona/bibletext-audio); everything
   else falls back to read-aloud — all fetched only when you press play. A **person**
   icon marks a recording and a **waveform** marks read-aloud; tap it to choose the
   source. When a chapter finishes, playback continues to the **next chapter**
@@ -327,6 +328,9 @@ Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
 
 - Scripture: **World English Bible** and **Berean Standard Bible** — public domain
   (via [bible.helloao.org](https://bible.helloao.org/)).
+- Audio narration: **BSB** by Barry Hays (**CC0**) and **WEB** by David Williams
+  (**public domain**), streamed from the project's
+  [audio mirror](https://github.com/cubancorona/bibletext-audio).
 - Cross-references: **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
   Treasury of Scripture Knowledge — **CC BY**.
 - UI font: **Atkinson Hyperlegible** (Braille Institute) — **SIL Open Font License 1.1**.
