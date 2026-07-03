@@ -233,6 +233,11 @@ void bibleTextMacReadAlongClear(void) {
         [ts beginEditing];
         [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
         [ts endEditing];
+        // Unlike the per-tick highlight (always mid-playback, window active), this
+        // clear can fire after long idle — e.g. closing the audio card much later —
+        // where a coalesced/napped display update can drop the attribute change's
+        // invalidation. Force the repaint so the tint never visibly lingers.
+        [gTextView setNeedsDisplayInRect:gTextView.visibleRect];
     }
     gReadAlongRange = NSMakeRange(NSNotFound, 0);
 }

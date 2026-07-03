@@ -257,6 +257,7 @@ func (c *audioController) clearReadAlong() {
 	c.readAlong = nil
 	c.readAlongVerse = 0
 	c.mu.Unlock()
+	raDebug("clearReadAlong had=%v", had)
 	if had {
 		readAlongClear()
 	}
