@@ -115,3 +115,57 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 		}
 	}
 }
+
+// TestCollapsedControlClearsStaleReadAlong locks in the rule that the read-along
+// tint only outlives playback while the audio card is open: rendering the
+// COLLAPSED control with nothing actively playing must drop the armed timing
+// table (and with it the on-screen highlight), while a still-playing collapsed
+// control must leave it armed so the highlight keeps following the narration.
+// The collapsed render runs on every close and every audio state change, so this
+// covers both orders (pause → close, and close → pause from the lock screen).
+func TestCollapsedControlClearsStaleReadAlong(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	state := sampleState()
+	fp := chapterAudioFingerprint(state)
+
+	setAudio := func(s audioPlayState, armed bool) {
+		gAudio.mu.Lock()
+		gAudio.loaded = true
+		gAudio.loadedFP = fp
+		gAudio.kind = audioRecorded
+		gAudio.state = s
+		if armed {
+			gAudio.readAlong = []verseTiming{{1, 0, 1}}
+			gAudio.readAlongVerse = 1
+		}
+		gAudio.mu.Unlock()
+	}
+	armedNow := func() bool {
+		gAudio.mu.Lock()
+		defer gAudio.mu.Unlock()
+		return gAudio.readAlong != nil
+	}
+	defer func() { // reset the package singleton for other tests
+		gAudio.mu.Lock()
+		gAudio.loaded, gAudio.loadedFP, gAudio.state = false, "", audioIdle
+		gAudio.readAlong, gAudio.readAlongVerse = nil, 0
+		gAudio.mu.Unlock()
+	}()
+
+	audioPanelOpen = false
+
+	// Paused + collapsed → stale tint must clear.
+	setAudio(audioPaused, true)
+	_ = audioControlContent(state, 34, func() {})
+	if armedNow() {
+		t.Fatal("collapsed control with paused audio kept the read-along table armed")
+	}
+
+	// Playing + collapsed → the highlight keeps following; table must survive.
+	setAudio(audioPlaying, true)
+	_ = audioControlContent(state, 34, func() {})
+	if !armedNow() {
+		t.Fatal("collapsed control cleared the read-along table while audio was still playing")
+	}
+}

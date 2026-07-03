@@ -61,6 +61,15 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	fp := chapterAudioFingerprint(state)
 
 	if !audioPanelOpen {
+		// Card closed + nothing actively narrating = the reader is done with audio,
+		// so a lingering read-along tint is stale markup — drop it. This runs on
+		// every close AND every audio state change (fireChange → rebuild), so it
+		// catches both orders: pausing then closing the card, and closing the card
+		// then pausing from the lock screen / Now Playing. While audio still PLAYS
+		// with the card collapsed, the highlight keeps following the narration.
+		if playing, _ := gAudio.buttonState(fp); !playing {
+			gAudio.clearReadAlong()
+		}
 		speaker := newIconTapButton(state, theme.VolumeUpIcon(), 20, boxH, func() {
 			audioPanelOpen = true
 			rebuild()
