@@ -9,3 +9,4 @@ package bibletext
 // exist only so the untagged audio_controller.go compiles everywhere.
 func readAlongHighlight(verse int, follow bool) {}
 func readAlongClear()                           {}
+func readAlongFollowButton(show bool)           {}

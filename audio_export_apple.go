@@ -70,9 +70,19 @@ func bibleTextAudioSpeechRange(location C.int) {
 
 // bibleTextReadAlongUserScrolled is posted by the native reading views when the
 // reader scrolls by hand while read-along is live — suspends the follow-scroll
-// (the highlight keeps tracking) until the "Follow narration" chip is tapped.
+// (the highlight keeps tracking) until the floating "Follow narration" button
+// is tapped.
 //
 //export bibleTextReadAlongUserScrolled
 func bibleTextReadAlongUserScrolled() {
 	gAudio.onReadAlongUserScroll()
+}
+
+// bibleTextReadAlongFollowTapped is posted by the floating "Follow narration"
+// button (a native view at the bottom of the reading pane) — the reader wants
+// the view re-attached to the narration. Runs on the native main thread.
+//
+//export bibleTextReadAlongFollowTapped
+func bibleTextReadAlongFollowTapped() {
+	gAudio.resumeReadAlongFollow()
 }

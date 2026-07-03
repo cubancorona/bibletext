@@ -84,7 +84,7 @@ type audioController struct {
 	// text view when the verse actually changes. Set on start, cleared on stop.
 	// followSuspended is raised when the reader scrolls away mid-narration: the
 	// highlight keeps tracking the voice, but auto-scroll stops fighting them until
-	// they tap the "Follow narration" chip (resumeReadAlongFollow).
+	// they tap the floating "Follow narration" button (resumeReadAlongFollow).
 	readAlong       []verseTiming
 	readAlongVerse  int
 	followSuspended bool
@@ -92,6 +92,11 @@ type audioController struct {
 
 // gAudio is the process-wide controller. Single-window app.
 var gAudio = &audioController{state: audioIdle}
+
+// showFollowButton drives the floating "Follow narration" pill. An indirection
+// (not a direct call) so TestReadAlongFollowSuspend can record the pill
+// transitions the shipped UI actually performs; production never swaps it.
+var showFollowButton = readAlongFollowButton
 
 // playPauseCurrent is the play button's tap handler — the ONLY thing that starts
 // audio. If the chapter is already loaded it toggles play/pause; otherwise it
@@ -292,6 +297,7 @@ func (c *audioController) armReadAlong(state *AppState, a chapterAudio) {
 	c.followSuspended = false
 	c.mu.Unlock()
 	readAlongClear()
+	showFollowButton(false) // a fresh chapter always starts out following
 }
 
 // clearReadAlong drops the table and removes the on-screen highlight.
@@ -306,6 +312,7 @@ func (c *audioController) clearReadAlong() {
 	if had {
 		readAlongClear()
 	}
+	showFollowButton(false) // nothing to follow → no way-back button
 }
 
 // onTimeUpdate is posted from the native player's periodic time observer (recorded
@@ -340,18 +347,21 @@ func (c *audioController) onTimeUpdate(t float64) {
 // until resumeReadAlongFollow. Runs on the native main thread.
 func (c *audioController) onReadAlongUserScroll() {
 	c.mu.Lock()
-	fresh := c.readAlong != nil && !c.followSuspended
+	// Gate on loaded too (the old chip's followSuspendedFor did): a scroll that
+	// lands just after playback ended must not raise a pill with no narration
+	// behind it.
+	fresh := c.loaded && c.readAlong != nil && !c.followSuspended
 	if fresh {
 		c.followSuspended = true
 	}
 	c.mu.Unlock()
 	if fresh {
-		c.fireChange() // surface the "Follow narration" chip
+		showFollowButton(true) // surface the floating "Follow narration" button
 	}
 }
 
 // followSuspendedFor reports whether the loaded chapter's read-along is armed but
-// no longer steering the scroll — the state the "Follow narration" chip renders in.
+// no longer steering the scroll — i.e. the floating "Follow narration" button is up.
 func (c *audioController) followSuspendedFor(fp string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -360,6 +370,8 @@ func (c *audioController) followSuspendedFor(fp string) bool {
 
 // resumeReadAlongFollow re-attaches the view to the narration: scrolls the current
 // verse back into the comfortable band and lets subsequent ticks steer again.
+// Reached from the floating button's native tap (main thread) via the
+// bibleTextReadAlongFollowTapped export.
 func (c *audioController) resumeReadAlongFollow() {
 	c.mu.Lock()
 	if !c.followSuspended {
@@ -372,7 +384,7 @@ func (c *audioController) resumeReadAlongFollow() {
 	if v > 0 {
 		readAlongHighlight(v, true)
 	}
-	c.fireChange() // drop the chip
+	showFollowButton(false) // way back taken — drop the button
 }
 
 // onSpeechRange is posted from the speech synthesizer's willSpeakRangeOfSpeechString
@@ -486,10 +498,20 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		// actively loaded for play/pause purposes, so a tap re-starts cleanly.
 		c.loaded = false
 		c.loadedFP = ""
+		c.followSuspended = false
 	}
 	endedKind, endedRecID, endedState := c.kind, c.loadedRecID, c.boundState
 	c.mu.Unlock()
 	c.fireChange()
+
+	// The floating "Follow narration" pill must not outlive playback: the old
+	// card chip derived its visibility from c.loaded and vanished on this
+	// rebuild; the imperative pill needs the explicit drop. Harmless on the
+	// self-healing paths — a continuation or TTS fallback re-arms via
+	// armReadAlong, which starts the fresh chapter following anyway.
+	if s == audioIdle || s == audioEnded || s == audioFailed {
+		showFollowButton(false)
+	}
 
 	// Continuous playback: a chapter that finishes on its own (ENDED — NOT a user
 	// pause or a manual stop, which post PAUSED / go through gAudio.stop()) rolls

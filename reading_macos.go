@@ -29,6 +29,8 @@ extern void bibleTextAIMenuTapped(char *action, char *text);
 extern void bibleTextStudyMenuTapped(char *action, char *text);
 // Posted when the reader scrolls by hand while read-along is live (audio_export_apple.go).
 extern void bibleTextReadAlongUserScrolled(void);
+// Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
+extern void bibleTextReadAlongFollowTapped(void);
 
 // HBReadingTextView adds a "Study with AI" submenu (Ask a question / Explain /
 // Analyze context / Analyze translation) to the right-click selection menu and
@@ -130,6 +132,11 @@ extern void bibleTextReadAlongUserScrolled(void);
 }
 - (void)hbShare_image:(id)sender {
     bibleTextStudyMenuTapped((char *)"share-image", (char *)self.hbSelectedText.UTF8String);
+}
+// Target of the floating "Follow narration" button (btMacEnsureFollowBtn) — the
+// text view doubles as its action target so no extra controller object is needed.
+- (void)hbFollowTapped:(id)sender {
+    bibleTextReadAlongFollowTapped();
 }
 
 @end
@@ -233,6 +240,108 @@ static NSColor *gReadAlongColor = nil;
 static BOOL gReadAlongActive = NO;
 static BOOL gReadAlongUserLatch = NO;
 static BOOL gReadAlongOwnScroll = NO;
+
+// --- Floating "Follow narration" button -------------------------------------
+// A semi-transparent pill floated bottom-centre over the reading pane while the
+// reader has scrolled away mid-narration (follow suspended). Native (AppKit)
+// because the NSTextView overlay paints ABOVE the whole Fyne canvas — a Fyne
+// widget could never float over the verses. Shown/hidden by the Go controller
+// via bibleTextMacFollowButton; its colours arrive from the app palette via
+// bibleTextMacSetFollowButtonColors (re-pushed on every reading-view build, so
+// a light/dark flip restyles it).
+static NSButton *gMacFollowBtn = nil;
+static BOOL      gMacFollowWanted = NO;
+static CGFloat   gMacFollowBg[3] = {0.18, 0.30, 0.53}; // lapis fallback
+static CGFloat   gMacFollowFg[3] = {0.96, 0.97, 0.99};
+
+static void btMacStyleFollowBtn(void) {
+    if (gMacFollowBtn == nil) return;
+    // attributedTitle REPLACES the cell's default centred alignment — without an
+    // explicit centred paragraph style the label renders left-aligned in the pill.
+    NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
+    ps.alignment = NSTextAlignmentCenter;
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold],
+        NSForegroundColorAttributeName: [NSColor colorWithCalibratedRed:gMacFollowFg[0]
+                                                                  green:gMacFollowFg[1]
+                                                                   blue:gMacFollowFg[2] alpha:1.0],
+        NSParagraphStyleAttributeName: ps,
+    };
+    gMacFollowBtn.attributedTitle =
+        [[NSAttributedString alloc] initWithString:@"Follow narration" attributes:attrs];
+    gMacFollowBtn.layer.backgroundColor =
+        [NSColor colorWithCalibratedRed:gMacFollowBg[0] green:gMacFollowBg[1]
+                                   blue:gMacFollowBg[2] alpha:0.78].CGColor; // semi-transparent
+}
+
+// btMacLayoutFollowBtn centres the pill over the reading pane's bottom edge.
+// The superview is non-flipped (bottom-left origin), so "18pt above the pane's
+// bottom" is frame.origin.y + 18.
+static void btMacLayoutFollowBtn(void) {
+    if (gMacFollowBtn == nil || gScroll == nil) return;
+    NSSize sz = gMacFollowBtn.frame.size;
+    NSRect sf = gScroll.frame;
+    gMacFollowBtn.frame = NSMakeRect(NSMidX(sf) - sz.width / 2,
+                                     sf.origin.y + 18, sz.width, sz.height);
+}
+
+static void btMacEnsureFollowBtn(void) {
+    if (gScroll == nil || gScroll.superview == nil) return;
+    if (gMacFollowBtn == nil) {
+        NSButton *b = [[NSButton alloc] initWithFrame:NSZeroRect];
+        b.bordered = NO;
+        b.wantsLayer = YES;
+        [b setButtonType:NSButtonTypeMomentaryChange];
+        b.target = gTextView;
+        b.action = @selector(hbFollowTapped:);
+        b.layer.cornerRadius = 15;
+        b.hidden = YES;
+        gMacFollowBtn = b;
+        btMacStyleFollowBtn();
+        [b sizeToFit];
+        // A roomier pill than sizeToFit's tight text box: ~14pt side padding, 30pt tall.
+        b.frame = NSMakeRect(0, 0, b.frame.size.width + 28, 30);
+    }
+    if (gMacFollowBtn.superview != gScroll.superview) {
+        [gMacFollowBtn removeFromSuperview];
+        [gScroll.superview addSubview:gMacFollowBtn positioned:NSWindowAbove relativeTo:nil];
+    }
+}
+
+// btMacFrontFollowBtn keeps the pill above the scroll view — EnsureTV/TVShow
+// re-add gScroll at the top of the sibling order on every call.
+static void btMacFrontFollowBtn(void) {
+    if (gMacFollowBtn != nil && gMacFollowBtn.superview != nil) {
+        [gMacFollowBtn.superview addSubview:gMacFollowBtn positioned:NSWindowAbove relativeTo:nil];
+    }
+}
+
+// btMacApplyFollowVisibility resolves the pill's actual visibility: wanted by
+// the controller AND the reading overlay itself is up (a modal or tab switch
+// that hides the verses must take the pill down with them).
+static void btMacApplyFollowVisibility(void) {
+    if (gMacFollowBtn == nil) return;
+    BOOL show = gMacFollowWanted && gScroll != nil && !gScroll.hidden && !gReadingSuppressed;
+    gMacFollowBtn.hidden = !show;
+    if (show) { btMacLayoutFollowBtn(); btMacFrontFollowBtn(); }
+}
+
+void bibleTextMacFollowButton(int show) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gMacFollowWanted = (show != 0);
+        if (gMacFollowWanted) btMacEnsureFollowBtn();
+        btMacApplyFollowVisibility();
+    });
+}
+
+void bibleTextMacSetFollowButtonColors(double bgR, double bgG, double bgB,
+                                       double fgR, double fgG, double fgB) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gMacFollowBg[0] = bgR; gMacFollowBg[1] = bgG; gMacFollowBg[2] = bgB;
+        gMacFollowFg[0] = fgR; gMacFollowFg[1] = fgG; gMacFollowFg[2] = fgB;
+        btMacStyleFollowBtn();
+    });
+}
 
 // btMacReadAlongRange returns verse's number-run start through just before the next
 // verse's number run (or end of text) — i.e. the whole verse, number + words.
@@ -452,6 +561,7 @@ static void bibleTextMacEnsureTV(void) {
             [win.contentView addSubview:gScroll];
         }
         [gScroll.superview addSubview:gScroll positioned:NSWindowAbove relativeTo:nil];
+        btMacFrontFollowBtn(); // keep the follow pill above the re-fronted overlay
     };
     if ([NSThread isMainThread]) block();
     else dispatch_sync(dispatch_get_main_queue(), block);
@@ -537,6 +647,7 @@ void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
         NSRect r = NSMakeRect(x, ph - y - h, w, h);
         BOOL changed = !NSEqualRects(r, gScroll.frame);
         gScroll.frame = r;
+        btMacLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
         // SetHTML may have scrolled to the highlighted verse / restore target
         // while the overlay was still at its initial width; once the real frame
         // lands the text rewraps, so re-assert that position. Only when a
@@ -560,6 +671,7 @@ void bibleTextMacTVShow(void) {
         if (gScroll == nil) return;
         gScroll.hidden = NO;
         [gScroll.superview addSubview:gScroll positioned:NSWindowAbove relativeTo:nil];
+        btMacApplyFollowVisibility(); // pill returns with the verses (if still wanted)
     });
 }
 
@@ -567,6 +679,7 @@ void bibleTextMacTVHide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gScroll == nil) return;
         gScroll.hidden = YES;
+        btMacApplyFollowVisibility(); // pill never floats over search results / other views
     });
 }
 
@@ -577,6 +690,7 @@ void bibleTextMacTVSuppress(void) {
         gReadingSuppressed = YES;
         if (gScroll == nil) return;
         gScroll.hidden = YES;
+        btMacApplyFollowVisibility(); // pill goes down with the overlay behind modals
     });
 }
 
@@ -796,6 +910,9 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		C.bibleTextMacTVSetHTML(c)
 		C.free(unsafe.Pointer(c))
 	}
+	// Keep the floating "Follow narration" pill styled for the current palette
+	// (this build runs on every theme flip).
+	pushFollowButtonColors(state.pal())
 	// Push the frame so the (possibly already-populated) text view shows.
 	C.bibleTextMacTVShow()
 	return h
@@ -823,6 +940,24 @@ func readAlongHighlight(verse int, follow bool) {
 	C.bibleTextMacHighlightVerse(C.int(verse), f)
 }
 func readAlongClear() { C.bibleTextMacReadAlongClear() }
+
+// readAlongFollowButton shows/hides the native floating "Follow narration" pill
+// over the reading pane (audio_controller drives it around follow suspension).
+func readAlongFollowButton(show bool) {
+	s := C.int(0)
+	if show {
+		s = 1
+	}
+	C.bibleTextMacFollowButton(s)
+}
+
+// pushFollowButtonColors styles the pill from the app palette (accent ground,
+// accent-text label). Called on every reading-view build so theme flips restyle it.
+func pushFollowButtonColors(p palette) {
+	C.bibleTextMacSetFollowButtonColors(
+		C.double(float64(p.Accent.R)/255), C.double(float64(p.Accent.G)/255), C.double(float64(p.Accent.B)/255),
+		C.double(float64(p.AccentText.R)/255), C.double(float64(p.AccentText.G)/255), C.double(float64(p.AccentText.B)/255))
+}
 
 // captureLastTouch / armReadingMarker are the initial-touch ("where I left off")
 // bridge — an iOS-only feature (it needs touch). Desktop has no touch gesture and
