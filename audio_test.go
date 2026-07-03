@@ -2,42 +2,36 @@ package bibletext
 
 import "testing"
 
-func TestEbibleAudioURL(t *testing.T) {
+const testAudioHost = "https://github.com/cubancorona/bibletext-audio/releases/download/"
+
+func TestWEBAudioURL(t *testing.T) {
 	cases := []struct {
 		book    string
 		chapter int
 		want    string
 		ok      bool
 	}{
-		{"John", 20, "https://ebible.org/webaudio/John20.mp3", true},
-		{"Matthew", 5, "https://ebible.org/webaudio/Mat05.mp3", true},
-		{"Psalms", 2, "https://ebible.org/webaudio/Psalm002.mp3", true}, // 3-digit pad; last recorded psalm
-		{"Jude", 1, "https://ebible.org/webaudio/Jude.mp3", true},       // single-file
-		{"3 John", 1, "https://ebible.org/webaudio/3John.mp3", true},    // single-file
-		{"Genesis", 1, "", false},                                       // not recorded
-		{"Tobit", 1, "", false},                                         // deuterocanon
-		// Chapters beyond eBible's actual coverage must report "no recording" —
-		// the server 404s them, which used to leave a silently dead play button
-		// (the source menu claimed a narration and TTS never took over).
-		{"Psalms", 3, "", false},                                        // Ps 3-150 not on the server
-		{"Psalms", 119, "", false},                                      // ditto
-		{"Mark", 7, "https://ebible.org/webaudio/Mark07.mp3", true},     // last recorded Mark chapter
-		{"Mark", 8, "", false},                                          // Mark 8-16 not on the server
-		{"Romans", 5, "https://ebible.org/webaudio/Romans05.mp3", true}, // last recorded Romans chapter
-		{"Romans", 6, "", false},                                        // Romans 6-16 not on the server
+		{"John", 20, testAudioHost + "web-williams-nt-v1/WEB_43_020.mp3", true},
+		{"Matthew", 5, testAudioHost + "web-williams-nt-v1/WEB_40_005.mp3", true},
+		{"Genesis", 1, testAudioHost + "web-williams-ot-v1/WEB_01_001.mp3", true},
+		{"Psalms", 119, testAudioHost + "web-williams-ot-v1/WEB_19_119.mp3", true}, // complete — no per-book bounds anymore
+		{"Jude", 1, testAudioHost + "web-williams-nt-v1/WEB_65_001.mp3", true},
+		{"Revelation", 22, testAudioHost + "web-williams-nt-v1/WEB_66_022.mp3", true},
+		{"Tobit", 1, "", false}, // deuterocanon: no WEB recording
+		{"John", 0, "", false},  // nonsense chapter
 	}
 	for _, c := range cases {
-		got, ok := ebibleAudioURL(c.book, c.chapter)
+		got, ok := webAudioURL(c.book, c.chapter)
 		if got != c.want || ok != c.ok {
-			t.Errorf("ebibleAudioURL(%q,%d) = (%q,%v), want (%q,%v)", c.book, c.chapter, got, ok, c.want, c.ok)
+			t.Errorf("webAudioURL(%q,%d) = (%q,%v), want (%q,%v)", c.book, c.chapter, got, ok, c.want, c.ok)
 		}
 	}
 }
 
-func TestVersionUsesEBibleAudio(t *testing.T) {
+func TestVersionUsesWEBAudio(t *testing.T) {
 	for v, want := range map[string]bool{"web": true, "webc": true, "bsb": false, "nrsv": false} {
-		if got := versionUsesEBibleAudio(v); got != want {
-			t.Errorf("versionUsesEBibleAudio(%q) = %v, want %v", v, got, want)
+		if got := versionUsesWEBAudio(v); got != want {
+			t.Errorf("versionUsesWEBAudio(%q) = %v, want %v", v, got, want)
 		}
 	}
 }
@@ -52,8 +46,8 @@ func TestAudioForChapter(t *testing.T) {
 	}
 	// WEB John 20 → recorded.
 	a := audioForChapter(&AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20, Bible: bd})
-	if a.Kind != audioRecorded || a.URL != "https://ebible.org/webaudio/John20.mp3" || a.Title != "John 20" {
-		t.Errorf("WEB John 20: got %+v, want recorded John20.mp3", a)
+	if a.Kind != audioRecorded || a.URL != testAudioHost+"web-williams-nt-v1/WEB_43_020.mp3" || a.Title != "John 20" {
+		t.Errorf("WEB John 20: got %+v, want recorded WEB_43_020.mp3", a)
 	}
 	// WEB-Catholic John 20 → recorded too (same WEB text).
 	if a := audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded {
@@ -65,7 +59,7 @@ func TestAudioForChapter(t *testing.T) {
 		t.Errorf("webc Tobit 1: got %+v, want TTS of the verse", a)
 	}
 	// BSB John 20 → recorded (the BSB has its own complete narration).
-	if a := audioForChapter(&AppState{CurrentVersion: "bsb", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded || a.URL != "https://openbible.com/audio/hays/BSB_43_Jhn_020_H.mp3" {
+	if a := audioForChapter(&AppState{CurrentVersion: "bsb", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded || a.URL != testAudioHost+"bsb-hays-nt-v1/BSB_43_Jhn_020_H.mp3" {
 		t.Errorf("BSB John 20: got %+v, want recorded BSB_43_Jhn_020_H.mp3", a)
 	}
 }
@@ -77,11 +71,11 @@ func TestBSBAudioURL(t *testing.T) {
 		want    string
 		ok      bool
 	}{
-		{"John", 3, "https://openbible.com/audio/hays/BSB_43_Jhn_003_H.mp3", true},
-		{"Genesis", 1, "https://openbible.com/audio/hays/BSB_01_Gen_001_H.mp3", true},
-		{"Psalms", 23, "https://openbible.com/audio/hays/BSB_19_Psa_023_H.mp3", true},
-		{"Titus", 2, "https://openbible.com/audio/hays/BSB_56_Tts_002_H.mp3", true}, // non-obvious abbr
-		{"Revelation", 22, "https://openbible.com/audio/hays/BSB_66_Rev_022_H.mp3", true},
+		{"John", 3, testAudioHost + "bsb-hays-nt-v1/BSB_43_Jhn_003_H.mp3", true},
+		{"Genesis", 1, testAudioHost + "bsb-hays-ot-v1/BSB_01_Gen_001_H.mp3", true},
+		{"Psalms", 23, testAudioHost + "bsb-hays-ot-v1/BSB_19_Psa_023_H.mp3", true},
+		{"Titus", 2, testAudioHost + "bsb-hays-nt-v1/BSB_56_Tts_002_H.mp3", true}, // non-obvious abbr
+		{"Revelation", 22, testAudioHost + "bsb-hays-nt-v1/BSB_66_Rev_022_H.mp3", true},
 		{"Tobit", 1, "", false}, // deuterocanon: no BSB recording
 	}
 	for _, c := range cases {
@@ -93,5 +87,50 @@ func TestBSBAudioURL(t *testing.T) {
 	// Every canonical 66-book name must map (complete coverage).
 	if n := len(bsbAudioBooks); n != 66 {
 		t.Errorf("bsbAudioBooks has %d entries, want 66", n)
+	}
+}
+
+func TestChapterTimings(t *testing.T) {
+	// Both bundled tables must load and cover the full canon.
+	for _, version := range []string{"bsb", "web"} {
+		vs := chapterTimings(version, "Genesis", 1)
+		if len(vs) == 0 {
+			t.Fatalf("chapterTimings(%q, Genesis, 1) is empty", version)
+		}
+		if vs[0].verse != 1 || vs[0].start <= 0 {
+			t.Errorf("%s Genesis 1 first entry = %+v, want verse 1 with a positive start", version, vs[0])
+		}
+		if got := chapterTimings(version, "Revelation", 22); len(got) == 0 {
+			t.Errorf("chapterTimings(%q, Revelation, 22) is empty — table incomplete?", version)
+		}
+	}
+	// The WEB-Catholic shares the WEB tables (same text, same verse numbers).
+	if got, want := chapterTimings("webc", "John", 3), chapterTimings("web", "John", 3); len(got) == 0 || len(got) != len(want) {
+		t.Errorf("webc John 3 timings (%d entries) should mirror web (%d)", len(got), len(want))
+	}
+	// Versions without a bundled recording table highlight nothing.
+	if got := chapterTimings("nrsv", "John", 3); got != nil {
+		t.Errorf("chapterTimings(nrsv) = %v, want nil", got)
+	}
+}
+
+func TestVerseAtTime(t *testing.T) {
+	vs := []verseTiming{{1, 4.1, 13.5}, {2, 14.4, 25.2}, {3, 26.2, 40.9}}
+	for _, c := range []struct {
+		t    float64
+		want int
+	}{
+		{0.0, 0},  // intro — nothing highlighted yet
+		{4.1, 1},  // exactly at verse 1's start
+		{13.9, 1}, // in the gap before verse 2 — hold the previous verse
+		{20.0, 2},
+		{99.0, 3}, // past the last verse — hold it to the end
+	} {
+		if got := verseAtTime(vs, c.t); got != c.want {
+			t.Errorf("verseAtTime(%.1f) = %d, want %d", c.t, got, c.want)
+		}
+	}
+	if got := verseAtTime(nil, 5); got != 0 {
+		t.Errorf("verseAtTime(nil) = %d, want 0", got)
 	}
 }

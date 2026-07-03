@@ -85,7 +85,19 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     NSURL *url = [NSURL URLWithString:urlStr];
     if (url == nil) { self.mode = BT_MODE_NONE; bibleTextAudioStateChanged(BT_AUDIO_IDLE); return; }
 
-    AVPlayerItem *it = [AVPlayerItem playerItemWithURL:url];
+    // Declare the format up front. The audio host's download URLs 302-redirect to a
+    // signed CDN URL with no file extension and Content-Type: application/octet-stream,
+    // so AVPlayer must otherwise SNIFF the format — which intermittently fails with
+    // -11828 "Cannot Open" and kicks the reader to the TTS fallback. All recorded
+    // narration is MP3, so say so and skip the sniffing entirely.
+    AVPlayerItem *it;
+    if (@available(macOS 14.0, *)) {
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url
+                                                options:@{AVURLAssetOverrideMIMETypeKey: @"audio/mpeg"}];
+        it = [AVPlayerItem playerItemWithAsset:asset];
+    } else {
+        it = [AVPlayerItem playerItemWithURL:url];
+    }
     self.item = it;
     AVPlayer *p = [AVPlayer playerWithPlayerItem:it];
     p.automaticallyWaitsToMinimizeStalling = YES;
@@ -205,6 +217,8 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
             // 404 / unreachable stream. FAILED (not IDLE) so the Go controller can
             // restart the same chapter as on-device read-aloud instead of the button
             // silently reverting to ▶ with no sound.
+            NSLog(@"[audio] item FAILED: %@ (underlying: %@)", self.item.error,
+                  self.item.error.userInfo[NSUnderlyingErrorKey]);
             bibleTextAudioStateChanged(BT_AUDIO_FAILED);
         }
     } else if (context == kBTRateCtx) {

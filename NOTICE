@@ -10,9 +10,12 @@ own terms:
   - World English Bible (WEB), including the Catholic edition with the
     deuterocanon (WEBC) — public domain.
   - Berean Standard Bible (BSB) — public domain / CC0.
-- Audio narration (streamed on demand when you press play; not bundled):
-  - Berean Standard Bible recording by Barry Hays — CC0, via openbible.com.
-  - World English Bible recordings — public domain, via eBible.org.
+- Audio narration (streamed on demand when you press play from the project's
+  audio mirror, github.com/cubancorona/bibletext-audio; not bundled):
+  - Berean Standard Bible recording by Barry Hays — CC0, originally from
+    openbible.com.
+  - World English Bible recording by David Williams — public domain, originally
+    from audiotreasure.com.
 - Cross-references: Treasury of Scripture Knowledge dataset from OpenBible.info,
   used under the Creative Commons Attribution (CC BY) license
   (https://www.openbible.info/labs/cross-references/).

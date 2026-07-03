@@ -2,14 +2,16 @@ package bibletext
 
 // Per-chapter audio. Each chapter can be played two ways:
 //
-//   - RECORDED: a public-domain MP3 streamed from bible.helloao.org's sibling,
-//     eBible.org (https://ebible.org/webaudio). These are World English Bible
-//     recordings, so they line up only with WEB text — the WEB version and the
-//     WEB-Catholic's 66 protocanonical books (same text). They stream with HTTP
-//     range support, so the native player can seek (the ±15s skip).
+//   - RECORDED: a public-domain MP3 streamed from the project's own audio host
+//     (github.com/cubancorona/bibletext-audio, GitHub release assets with HTTP
+//     range support, so the native player can seek — the ±15s skip). Each
+//     translation plays a narration made from its own text: the BSB (Barry Hays)
+//     and the WEB (David Williams) are both complete. Self-hosting pins the exact
+//     audio bytes the bundled read-along verse timings were aligned against, so
+//     the highlight can never drift out of sync with the recording.
 //   - TTS: on-device text-to-speech of the chapter's own verses. Always available
-//     and always matches the displayed version exactly (BSB, the deuterocanon, any
-//     future translation, and the WEB chapters eBible hasn't recorded).
+//     and always matches the displayed version exactly (the deuterocanon and any
+//     future translation without a recording).
 //
 // audioForChapter resolves which applies; the reader shows a play icon for recorded
 // audio and a "voice" icon for TTS. The native players (AVPlayer / AVSpeechSynthesizer
@@ -40,72 +42,52 @@ type chapterAudio struct {
 	Subtitle string // version name, e.g. "World English Bible"
 }
 
-const ebibleAudioBase = "https://ebible.org/webaudio/"
+// audioHostBase is the project's own audio host: GitHub release assets on the
+// companion bibletext-audio repo (public domain MP3s, HTTP range-seekable). Each
+// recording is split across TWO releases — Old Testament (929 chapters) and New
+// Testament (260) — because GitHub caps a release at 1000 assets; audioReleaseTag
+// picks the right one by canonical book number.
+const audioHostBase = "https://github.com/cubancorona/bibletext-audio/releases/download/"
 
-// ebibleAudio is one book's eBible audio file naming: code is the book's file prefix,
-// pad the chapter zero-pad width, and single marks a whole-book one-file recording with
-// no chapter number (the tiny one-chapter epistles).
-type ebibleAudio struct {
-	code   string
-	pad    int
-	single bool
-	// maxChapter bounds the recorded coverage where eBible's set is incomplete
-	// (0 = every chapter of the book is recorded). The server 404s chapters
-	// beyond the bound (verified by HEAD-probing every chapter), and a mapped
-	// URL that 404s means a silently dead play button — so chapters past the
-	// bound must report "no recording" and take the TTS path instead.
-	maxChapter int
+// audioReleaseTag returns the release tag holding a book's recording: <corpus>-ot-v1
+// for books 1–39, <corpus>-nt-v1 for 40–66.
+func audioReleaseTag(corpus string, bookNum int) string {
+	if bookNum >= 40 {
+		return corpus + "-nt-v1"
+	}
+	return corpus + "-ot-v1"
 }
 
-// ebibleAudioBooks is the set of books eBible streams clean per-chapter public-domain
-// WEB recordings for, with per-book bounds where the server's coverage stops mid-book
-// (every chapter verified against https://ebible.org/webaudio, 2026-07). It is a
-// partial, irregular subset of the canon — the rest falls back to TTS — and can grow
-// as more clean sources are wired without touching anything else.
-var ebibleAudioBooks = map[string]ebibleAudio{
-	"Matthew":  {code: "Mat", pad: 2},
-	"Mark":     {code: "Mark", pad: 2, maxChapter: 7},
-	"John":     {code: "John", pad: 2},
-	"Romans":   {code: "Romans", pad: 2, maxChapter: 5},
-	"Hebrews":  {code: "Heb", pad: 2},
-	"Psalms":   {code: "Psalm", pad: 3, maxChapter: 2},
-	"Philemon": {code: "Philemon", single: true},
-	"Jude":     {code: "Jude", single: true},
-	"2 John":   {code: "2John", single: true},
-	"3 John":   {code: "3John", single: true},
-}
-
-// ebibleAudioURL returns the recorded WEB-audio URL for a book + chapter and whether one
-// is mapped. The caller must also confirm the active version's text is the WEB (see
-// versionUsesEBibleAudio) before treating it as a match.
-func ebibleAudioURL(book string, chapter int) (string, bool) {
-	e, ok := ebibleAudioBooks[book]
-	if !ok {
+// webAudioURL returns the WEB recorded-narration MP3 URL for a book + chapter and
+// whether one is mapped (all 66 canonical books are — a COMPLETE public-domain
+// narration by David Williams, via audiotreasure.com; it replaced the partial
+// eBible.org set the app launched with, so no WEB chapter falls back to TTS
+// anymore). The caller must also confirm the active version's text is the WEB (see
+// versionUsesWEBAudio) before treating it as a match. File scheme:
+// WEB_{book:02d}_{chapter:03d}.mp3, e.g. WEB_43_003.mp3 (John 3) — the canonical
+// 1–66 numbering shared with the BSB set, so no per-book naming table is needed.
+func webAudioURL(book string, chapter int) (string, bool) {
+	b, ok := bsbAudioBooks[book]
+	if !ok || chapter < 1 {
 		return "", false
 	}
-	if e.single {
-		return ebibleAudioBase + e.code + ".mp3", true
-	}
-	if e.maxChapter > 0 && chapter > e.maxChapter {
-		return "", false // beyond eBible's recorded coverage — TTS instead
-	}
-	return fmt.Sprintf("%s%s%0*d.mp3", ebibleAudioBase, e.code, e.pad, chapter), true
+	return fmt.Sprintf("%s%s/WEB_%02d_%03d.mp3", audioHostBase, audioReleaseTag("web-williams", b.num), b.num, chapter), true
 }
 
-// versionUsesEBibleAudio reports whether a version's text is the World English Bible, so
-// the eBible WEB recordings line up with it: the WEB itself and the WEB-Catholic (whose
-// 66 protocanonical books are the same WEB text). The BSB is a different translation, and
-// the deuterocanon isn't recorded — both take the TTS path.
-func versionUsesEBibleAudio(versionID string) bool {
+// versionUsesWEBAudio reports whether a version's text is the World English Bible, so
+// the Williams WEB narration lines up with it: the WEB itself and the WEB-Catholic
+// (whose 66 protocanonical books are the same WEB text). The BSB is a different
+// translation, and the deuterocanon isn't recorded — both take the TTS path.
+func versionUsesWEBAudio(versionID string) bool {
 	return versionID == "web" || versionID == "webc"
 }
 
 // recordedURLFor returns the recorded-narration MP3 URL for the current chapter
 // and whether one exists, dispatching by translation so each version plays a
 // recording made from its own text:
-//   - BSB: a COMPLETE CC0 narration (Barry Hays) from openbible.com — all 66 books.
-//   - WEB / WEB-Catholic: public-domain WEB narration from eBible.org (partial; the
-//     deuterocanon and the books eBible hasn't recorded fall back to TTS).
+//   - BSB: a COMPLETE CC0 narration (Barry Hays) — all 66 books.
+//   - WEB / WEB-Catholic: a COMPLETE public-domain narration (David Williams) —
+//     all 66 books (the deuterocanon isn't recorded; it falls back to TTS).
 //
 // Any other version has no matching recording and uses TTS.
 func recordedURLFor(state *AppState) (string, bool) {
@@ -115,8 +97,8 @@ func recordedURLFor(state *AppState) (string, bool) {
 	if state.CurrentVersion == "bsb" {
 		return bsbAudioURL(state.CurrentBook, state.CurrentChapter)
 	}
-	if versionUsesEBibleAudio(state.CurrentVersion) {
-		return ebibleAudioURL(state.CurrentBook, state.CurrentChapter)
+	if versionUsesWEBAudio(state.CurrentVersion) {
+		return webAudioURL(state.CurrentBook, state.CurrentChapter)
 	}
 	return "", false
 }
