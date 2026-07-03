@@ -12,11 +12,25 @@ package bibletext
 // bibleTextAudioStateChanged (audio_export_ios.go) → applyNativeState.
 
 import (
+	"log"
+	"os"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 )
+
+// raDebug logs read-along diagnostics (arm/tick/verse) when BIBLETEXT_DEBUG_READALONG
+// is set — off in normal use. Kept because sync bugs here are otherwise invisible: a
+// failed stream silently falls back to TTS (no timings), which looks identical to
+// "highlighting is broken" until you see the arm/tick trace.
+var raDebugOn = os.Getenv("BIBLETEXT_DEBUG_READALONG") != ""
+
+func raDebug(format string, args ...interface{}) {
+	if raDebugOn {
+		log.Printf("[readalong] "+format, args...)
+	}
+}
 
 // audioPlayState is the controller's view of the native player. It drives the
 // play button's glyph and whether "this chapter is the one playing".
@@ -35,18 +49,20 @@ const (
 type audioController struct {
 	mu sync.Mutex
 
-	loaded   bool           // something is loaded in the native player
-	loadedFP string         // chapterAudioFingerprint of the loaded chapter
-	kind     audioKind      // recorded vs TTS of the loaded chapter
-	state    audioPlayState // last state reported by the native layer / set on start
+	loaded      bool           // something is loaded in the native player
+	loadedFP    string         // chapterAudioFingerprint of the loaded chapter
+	kind        audioKind      // recorded vs TTS of the loaded chapter
+	loadedRecID string         // which recording is loaded (empty for TTS)
+	state       audioPlayState // last state reported by the native layer / set on start
 
 	// The reader's chosen source for a chapter, set from the source menu. It only
 	// records the PREFERENCE — selecting never starts playback (that's the play
 	// button's job). preferredFP scopes it to one chapter so navigating away falls
 	// back to the per-chapter default (recording if available, else read-aloud).
-	preferred    audioKind
-	hasPreferred bool
-	preferredFP  string
+	preferred      audioKind
+	preferredRecID string // the chosen recording when preferred == audioRecorded
+	hasPreferred   bool
+	preferredFP    string
 
 	// boundState is the live AppState of whatever is loaded, captured on start so the
 	// native end-of-chapter callback can drive continuous playback (advance to the
@@ -61,6 +77,12 @@ type audioController struct {
 	// header installs it (a refreshReadingOnly closure); nil in unit tests, where
 	// fireChange must therefore stay a no-op (it never reaches fyne.Do).
 	onChange func()
+
+	// Read-along: the loaded chapter's verse timing table (recorded audio only) and
+	// the verse currently highlighted, so a playback-time tick only touches the native
+	// text view when the verse actually changes. Set on start, cleared on stop.
+	readAlong      []verseTiming
+	readAlongVerse int
 }
 
 // gAudio is the process-wide controller. Single-window app.
@@ -68,7 +90,7 @@ var gAudio = &audioController{state: audioIdle}
 
 // playPauseCurrent is the play button's tap handler — the ONLY thing that starts
 // audio. If the chapter is already loaded it toggles play/pause; otherwise it
-// starts the reader's chosen source (effectiveKind: the source-menu preference,
+// starts the reader's chosen source (effectiveSource: the source-menu preference,
 // or the per-chapter default).
 func (c *audioController) playPauseCurrent(state *AppState) {
 	if state == nil {
@@ -86,35 +108,46 @@ func (c *audioController) playPauseCurrent(state *AppState) {
 		nativeAudioToggle()
 		return
 	}
-	c.playSource(state, c.effectiveKind(state))
+	kind, recID := c.effectiveSource(state)
+	c.playSource(state, kind, recID)
 }
 
-// effectiveKind is the source the play button will start for the current chapter:
+// effectiveSource is the source the play button will start for the current chapter:
 // the reader's source-menu preference when they set one for THIS chapter, else the
-// default (a recording if the chapter has one, otherwise read-aloud). A preference
-// for the recorded source is honoured only where a recording actually exists.
-func (c *audioController) effectiveKind(state *AppState) audioKind {
+// default (the version's first recording if it covers the chapter, otherwise
+// read-aloud). A recorded preference is honoured only where that recording actually
+// exists; recID is empty whenever kind is audioTTS.
+func (c *audioController) effectiveSource(state *AppState) (kind audioKind, recID string) {
 	fp := chapterAudioFingerprint(state)
 	c.mu.Lock()
-	pref, has, pfp := c.preferred, c.hasPreferred, c.preferredFP
+	pref, prefRec, has, pfp := c.preferred, c.preferredRecID, c.hasPreferred, c.preferredFP
 	c.mu.Unlock()
 	if has && pfp == fp {
-		if pref == audioRecorded && !chapterHasRecording(state) {
-			return audioTTS
+		if pref != audioRecorded {
+			return audioTTS, ""
 		}
-		return pref
+		if rec, ok := recordingByID(state.CurrentVersion, prefRec); ok {
+			if _, ok := rec.urlFor(state.CurrentBook, state.CurrentChapter); ok {
+				return audioRecorded, rec.id
+			}
+		}
+		return audioTTS, "" // the chosen recording doesn't cover this chapter
 	}
-	if chapterHasRecording(state) {
-		return audioRecorded
+	if recs := chapterRecordings(state); len(recs) > 0 {
+		return audioRecorded, recs[0].id
 	}
-	return audioTTS
+	return audioTTS, ""
 }
 
-// resolveAudio turns a desired source kind into the concrete chapterAudio to play,
-// falling back to read-aloud when a recording is asked for but none exists.
-func resolveAudio(state *AppState, kind audioKind) chapterAudio {
-	if kind == audioRecorded && chapterHasRecording(state) {
-		return audioForChapter(state)
+// resolveAudio turns a desired source (kind + recording) into the concrete
+// chapterAudio to play, falling back to read-aloud when the recording is asked
+// for but doesn't exist (or doesn't cover this chapter).
+func resolveAudio(state *AppState, kind audioKind, recID string) chapterAudio {
+	if kind == audioRecorded && state != nil {
+		if rec, ok := recordingByID(state.CurrentVersion, recID); ok {
+			return audioForRecording(state, rec) // falls to TTS if the chapter is uncovered
+		}
+		return audioForChapter(state) // unknown id — the version default
 	}
 	return ttsAudioForChapter(state)
 }
@@ -124,16 +157,18 @@ func resolveAudio(state *AppState, kind audioKind) chapterAudio {
 // different source is already loaded for this chapter, that now-stale audio is
 // stopped so a Play tap starts the chosen one cleanly; selecting the source that's
 // already loaded leaves it playing/paused. Either way the indicator refreshes.
-func (c *audioController) selectSource(state *AppState, kind audioKind) {
+func (c *audioController) selectSource(state *AppState, kind audioKind, recID string) {
 	if state == nil {
 		return
 	}
 	fp := chapterAudioFingerprint(state)
 	c.mu.Lock()
 	c.preferred = kind
+	c.preferredRecID = recID
 	c.hasPreferred = true
 	c.preferredFP = fp
-	staleLoaded := c.loaded && c.loadedFP == fp && c.kind != kind
+	staleLoaded := c.loaded && c.loadedFP == fp &&
+		(c.kind != kind || (kind == audioRecorded && c.loadedRecID != recID))
 	c.mu.Unlock()
 
 	if staleLoaded {
@@ -151,6 +186,7 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	c.loaded = true
 	c.loadedFP = fp
 	c.kind = a.Kind
+	c.loadedRecID = a.RecordingID
 	c.state = audioPlaying
 	c.boundState = state // so the end-of-chapter callback can advance + keep playing
 	c.startedAt = time.Now()
@@ -162,6 +198,10 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	default: // audioTTS
 		nativeAudioStartTTS(a.Text, a.Title, a.Subtitle)
 	}
+
+	// Read-along: arm the verse timing table for this chapter (recorded only) so the
+	// native time-observer ticks can highlight the verse being narrated + follow-scroll.
+	c.armReadAlong(state, a)
 
 	// Lock-screen / Control Center artwork: a "Book Chapter" card in the share-image
 	// style. Rendered off the UI goroutine; the fonts are captured here (on the UI
@@ -182,11 +222,11 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 // playSource starts the chapter from a specific source immediately. Not used by
 // the source menu (which only sets the preference via selectSource); kept for
 // callers that want to force-start a given source.
-func (c *audioController) playSource(state *AppState, kind audioKind) {
+func (c *audioController) playSource(state *AppState, kind audioKind, recID string) {
 	if state == nil {
 		return
 	}
-	c.startChapter(state, resolveAudio(state, kind), chapterAudioFingerprint(state))
+	c.startChapter(state, resolveAudio(state, kind, recID), chapterAudioFingerprint(state))
 }
 
 // stop tears playback down. Idempotent; only notifies the UI if something was
@@ -199,12 +239,84 @@ func (c *audioController) stop() {
 	c.loaded = false
 	c.loadedFP = ""
 	c.kind = audioRecorded
+	c.loadedRecID = ""
 	c.state = audioIdle
 	c.mu.Unlock()
 	if wasLoaded {
 		nativeAudioStop()
 		c.fireChange()
 	}
+	c.clearReadAlong()
+}
+
+// armReadAlong loads the chapter's verse timing table (recorded audio that has bundled
+// timings) so onTimeUpdate can highlight the narrated verse. Clears any prior highlight;
+// a chapter without timings (TTS, or a version we don't bundle) simply arms nothing.
+func (c *audioController) armReadAlong(state *AppState, a chapterAudio) {
+	var vs []verseTiming
+	switch {
+	case a.Kind == audioRecorded && state != nil:
+		vs = chapterTimings(a.RecordingID, state.CurrentBook, state.CurrentChapter)
+	case a.Kind == audioTTS && state != nil:
+		// Read-aloud needs no timing table: the synthesizer reports the utterance
+		// range it's about to speak, so the "timings" are per-verse UTF-16 offsets
+		// into the spoken text (onSpeechRange does the lookup).
+		vs = speechVerseOffsets(state)
+	}
+	if state != nil {
+		raDebug("arm kind=%d rec=%q book=%q ch=%d -> %d verses", a.Kind, a.RecordingID, state.CurrentBook, state.CurrentChapter, len(vs))
+	}
+	c.mu.Lock()
+	c.readAlong = vs
+	c.readAlongVerse = 0
+	c.mu.Unlock()
+	readAlongClear()
+}
+
+// clearReadAlong drops the table and removes the on-screen highlight.
+func (c *audioController) clearReadAlong() {
+	c.mu.Lock()
+	had := c.readAlong != nil
+	c.readAlong = nil
+	c.readAlongVerse = 0
+	c.mu.Unlock()
+	raDebug("clearReadAlong had=%v", had)
+	if had {
+		readAlongClear()
+	}
+}
+
+// onTimeUpdate is posted from the native player's periodic time observer (recorded
+// audio) with the current playback position. It runs on the native main thread, so it
+// may call the native highlight directly. Only touches the text view when the narrated
+// verse actually changes.
+func (c *audioController) onTimeUpdate(t float64) {
+	c.mu.Lock()
+	vs := c.readAlong
+	last := c.readAlongVerse
+	c.mu.Unlock()
+	if raDebugOn {
+		raDebug("tick t=%.2f armed=%d last=%d", t, len(vs), last)
+	}
+	if len(vs) == 0 {
+		return
+	}
+	v := verseAtTime(vs, t)
+	if v == last {
+		return
+	}
+	c.mu.Lock()
+	c.readAlongVerse = v
+	c.mu.Unlock()
+	readAlongHighlight(v)
+}
+
+// onSpeechRange is posted from the speech synthesizer's willSpeakRangeOfSpeechString
+// delegate (TTS read-along) with the UTF-16 offset of the text about to be spoken.
+// The armed table holds per-verse offsets in the same unit, so the recorded path's
+// last-start-at-or-before lookup applies unchanged.
+func (c *audioController) onSpeechRange(loc int) {
+	c.onTimeUpdate(float64(loc))
 }
 
 // skip seeks the recorded player by ±seconds (the ±15s controls). A no-op for
@@ -303,7 +415,7 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		c.loaded = false
 		c.loadedFP = ""
 	}
-	endedKind, endedState := c.kind, c.boundState
+	endedKind, endedRecID, endedState := c.kind, c.loadedRecID, c.boundState
 	c.mu.Unlock()
 	c.fireChange()
 
@@ -312,7 +424,7 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	// onto the next chapter and keeps playing in the same mode, carrying the reading
 	// pane with it, until the reader pauses or the Bible ends.
 	if s == audioEnded && endedState != nil && !tooFast {
-		c.advanceAndContinue(endedState, endedKind, endedFP)
+		c.advanceAndContinue(endedState, endedKind, endedRecID, endedFP)
 	}
 
 	// A recorded stream that failed (404, dead network, hung buffer) restarts the
@@ -345,7 +457,7 @@ func (c *audioController) fallbackToTTS(state *AppState, failedFP string) {
 // finished: if the reader has since navigated elsewhere (a manual jump that raced
 // the chapter's end), we must NOT hijack their new position — so bail unless they're
 // still on the chapter that ended.
-func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, endedFP string) {
+func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, recID, endedFP string) {
 	fyne.Do(func() {
 		if chapterAudioFingerprint(state) != endedFP {
 			return // reader moved on while the chapter was finishing — don't yank them
@@ -354,7 +466,7 @@ func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, en
 			return
 		}
 		state.refresh() // carry the reading pane onto the new chapter
-		c.startChapter(state, resolveAudio(state, kind), chapterAudioFingerprint(state))
+		c.startChapter(state, resolveAudio(state, kind, recID), chapterAudioFingerprint(state))
 	})
 }
 

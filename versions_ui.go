@@ -56,7 +56,10 @@ func (a *versionPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
 	lbl := canvas.NewText(a.text, a.tint)
 	lbl.TextSize = a.size
 	w := fyne.MeasureText(a.text, a.size, lbl.TextStyle).Width
-	box := container.NewGridWrap(fyne.NewSize(w, a.size+12), container.NewCenter(lbl))
+	// a.size+12 made this the smallest tap target in the app (~22pt). Pad the box
+	// well past the text instead — the header has the room, and the translation
+	// switcher is a primary control on a phone.
+	box := container.NewGridWrap(fyne.NewSize(w+tapTextHPad, a.size+22), container.NewCenter(lbl))
 	return widget.NewSimpleRenderer(box)
 }
 

@@ -61,7 +61,16 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	fp := chapterAudioFingerprint(state)
 
 	if !audioPanelOpen {
-		speaker := newIconTapButton(state, theme.VolumeUpIcon(), 20, boxH, func() {
+		// Card closed + nothing actively narrating = the reader is done with audio,
+		// so a lingering read-along tint is stale markup — drop it. This runs on
+		// every close AND every audio state change (fireChange → rebuild), so it
+		// catches both orders: pausing then closing the card, and closing the card
+		// then pausing from the lock screen / Now Playing. While audio still PLAYS
+		// with the card collapsed, the highlight keeps following the narration.
+		if playing, _ := gAudio.buttonState(fp); !playing {
+			gAudio.clearReadAlong()
+		}
+		speaker := newIconTapButton(state, theme.VolumeUpIcon(), 24, boxH, func() {
 			audioPanelOpen = true
 			rebuild()
 		})
@@ -79,8 +88,8 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	playing, _ := gAudio.buttonState(fp)
 
 	// Skip + source reflect what's loaded while playing, else the reader's chosen
-	// source for this chapter (effectiveKind: source-menu preference or default).
-	displayKind := gAudio.effectiveKind(state)
+	// source for this chapter (effectiveSource: source-menu preference or default).
+	displayKind, _ := gAudio.effectiveSource(state)
 	if show, k := gAudio.indicator(fp); show {
 		displayKind = k
 	}
@@ -110,14 +119,22 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, canSeek boo
 		playGlyph = theme.MediaPauseIcon()
 	}
 
-	// Compact rows so the two-row card stays SHORTER than the header's two text
-	// lines — expanding it must not grow the header and push the reading lane down.
-	const rh = 25
-	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 16, rh, cb.onSrc)
-	back := newIconTapButton(state, iconSkipBack15, 18, rh, cb.onBack)
+	// Two row heights: a compact source-indicator row on top, and a TALLER transport
+	// row (skip · play · skip) below. The transport controls are the ones the reader
+	// actually taps mid-listen, so they get the full Apple-HIG minTapTarget height
+	// with correspondingly larger glyphs. srcRowH + transportRowH + the box's 2px
+	// vertical padding must stay within the header's two-text-line height (mobile
+	// boxH 34 ×2 +2 = 70; desktop 38+7+34 = 79), so the reserved card footprint never
+	// grows the header / pushes the reading lane down.
+	const (
+		srcRowH       = 20
+		transportRowH = minTapTarget // 44
+	)
+	src := newIconTapButton(state, audioSourceIconForKind(displayKind), 16, srcRowH, cb.onSrc)
+	back := newIconTapButton(state, iconSkipBack15, 26, transportRowH, cb.onBack)
 	back.disabled = !canSeek
-	play := newIconTapButton(state, playGlyph, 18, rh, cb.onPlay)
-	fwd := newIconTapButton(state, iconSkipFwd15, 18, rh, cb.onFwd)
+	play := newIconTapButton(state, playGlyph, 28, transportRowH, cb.onPlay)
+	fwd := newIconTapButton(state, iconSkipFwd15, 26, transportRowH, cb.onFwd)
 	fwd.disabled = !canSeek
 
 	// The box hugs the player icons: the source centred on top (so it sits above the
@@ -138,9 +155,9 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, canSeek boo
 	xBg.CornerRadius = 5
 	xGlyph := canvas.NewImageFromResource(theme.NewColoredResource(theme.CancelIcon(), theme.ColorNameBackground))
 	xGlyph.FillMode = canvas.ImageFillContain
-	xGlyph.SetMinSize(fyne.NewSize(10, 10))
+	xGlyph.SetMinSize(fyne.NewSize(12, 12))
 	xCell := newTappableArea(
-		container.NewGridWrap(fyne.NewSize(22, 22), container.NewStack(xBg, container.NewCenter(xGlyph))),
+		container.NewGridWrap(fyne.NewSize(26, 26), container.NewStack(xBg, container.NewCenter(xGlyph))),
 		cb.onClose,
 	)
 	corner := container.NewVBox(container.NewHBox(layout.NewSpacer(), xCell), layout.NewSpacer())

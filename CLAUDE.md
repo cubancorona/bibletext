@@ -150,18 +150,22 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   iOS path.
 - **Per-chapter audio (Apple platforms — iOS + macOS).** `audio.go` `recordedURLFor`
   resolves what to play, dispatched by translation so each version plays a recording made from its
-  own text: the **BSB** has a COMPLETE CC0 narration (Barry Hays) streamed
-  per-chapter from openbible.com (`bsb_audio.go`, all 66 books); **WEB /
-  WEB-Catholic** use the *partial* public-domain eBible WEB set (`ebibleAudioBooks`);
-  any other version, plus unrecorded books / the deuterocanon, falls back to
+  own text: the **BSB** has a COMPLETE CC0 narration (Barry Hays,
+  `bsb_audio.go`) and **WEB / WEB-Catholic** a COMPLETE public-domain narration
+  (David Williams, `webAudioURL` in `audio.go`) — both all 66 books, streamed from
+  the project's own mirror (github.com/cubancorona/bibletext-audio, release assets
+  pinning the exact bytes the bundled read-along timings were aligned against);
+  any other version, plus the deuterocanon, falls back to
   on-device TTS of the displayed verses (`chapterSpeechText`). All recordings are
-  range-seekable (the ±15s skip). The source menu (`audio_menu.go`) lets the reader
-  CHOOSE between recording ↔ read-aloud and is where additional narrators/recordings
-  would surface as rows. **Selecting a source never starts playback** —
-  `selectSource` only records the per-chapter preference (`gAudio.preferred`/
-  `preferredFP`) and stops any now-stale loaded audio; the play button is the only
-  thing that begins audio, via `effectiveKind` (the chosen source, or the per-chapter
-  default). `audioController` (`audio_controller.go`, the package
+  range-seekable (the ±15s skip). Recordings are NAMED per version
+  (`recordingsFor` in `audio.go`: id like "bsb-hays" keys the bundled timing tables,
+  narrator is the display name) — adding a narrator there is all it takes for a new
+  "Recorded · <name>" row to appear in the source menu (`audio_menu.go`), which lets
+  the reader CHOOSE between recordings ↔ read-aloud. **Selecting a source never
+  starts playback** — `selectSource` only records the per-chapter preference
+  (`gAudio.preferred`/`preferredRecID`/`preferredFP`) and stops any now-stale loaded
+  audio; the play button is the only thing that begins audio, via `effectiveSource`
+  (the chosen source, or the per-chapter default). `audioController` (`audio_controller.go`, the package
   singleton `gAudio`, untagged) tracks play state and drives the per-platform
   `nativeAudio*` shims; the reading-header play button is `audio_button.go`
   (recorded → MediaPlay/Pause; TTS → the bundled `iconAudioWave` waveform glyph in

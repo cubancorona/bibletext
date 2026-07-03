@@ -29,7 +29,7 @@ func TestStopAudioForNav(t *testing.T) {
 
 	gAudio.startChapter(
 		&AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20},
-		chapterAudio{Kind: audioRecorded, URL: "https://ebible.org/webaudio/John20.mp3"},
+		chapterAudio{Kind: audioRecorded, URL: "https://github.com/cubancorona/bibletext-audio/releases/download/web-williams-nt-v1/WEB_43_020.mp3"},
 		"web|John|20",
 	)
 	if !gAudio.isPlaying() || gAudio.playingFingerprint() != "web|John|20" {
@@ -91,5 +91,60 @@ func TestAudioSourceIconForKind(t *testing.T) {
 	}
 	if got := audioSourceIconForKind(audioRecorded); got == iconAudioWave {
 		t.Fatal("recorded source icon should not be the waveform glyph")
+	}
+}
+
+// TestSelectSourceNarratorStaleness locks the narrator-aware staleness rule:
+// choosing a DIFFERENT recording of the same kind for the loaded chapter must
+// stop the now-stale audio (so Play starts the chosen narrator cleanly), while
+// re-choosing the recording that's already loaded leaves it playing.
+func TestSelectSourceNarratorStaleness(t *testing.T) {
+	state := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20}
+	fp := chapterAudioFingerprint(state)
+	load := func() {
+		gAudio.mu.Lock()
+		gAudio.loaded = true
+		gAudio.loadedFP = fp
+		gAudio.kind = audioRecorded
+		gAudio.loadedRecID = "web-williams"
+		gAudio.state = audioPlaying
+		gAudio.mu.Unlock()
+	}
+	reset := func() {
+		gAudio.mu.Lock()
+		gAudio.loaded, gAudio.loadedFP, gAudio.loadedRecID = false, "", ""
+		gAudio.kind, gAudio.state = audioRecorded, audioIdle
+		gAudio.hasPreferred, gAudio.preferredFP, gAudio.preferredRecID = false, "", ""
+		gAudio.mu.Unlock()
+	}
+	defer reset()
+
+	// Same recording re-chosen → stays loaded.
+	load()
+	gAudio.selectSource(state, audioRecorded, "web-williams")
+	if !gAudio.isPlaying() {
+		t.Fatal("re-choosing the loaded recording must not stop it")
+	}
+
+	// A different narrator chosen → the loaded audio is stale and stops.
+	gAudio.selectSource(state, audioRecorded, "web-somebody-else")
+	if gAudio.isPlaying() {
+		t.Fatal("choosing a different recording must stop the stale loaded audio")
+	}
+
+	// And the preference survives for the play button.
+	if kind, recID := gAudio.effectiveSource(state); kind != audioTTS && recID == "web-williams" {
+		t.Fatalf("effectiveSource after choosing another narrator = (%v, %q)", kind, recID)
+	}
+	reset()
+
+	// effectiveSource default: the version's recording where it covers the chapter…
+	if kind, recID := gAudio.effectiveSource(state); kind != audioRecorded || recID != "web-williams" {
+		t.Fatalf("default effectiveSource = (%v, %q), want (recorded, web-williams)", kind, recID)
+	}
+	// …and TTS where it doesn't (deuterocanon).
+	tobit := &AppState{CurrentVersion: "webc", CurrentBook: "Tobit", CurrentChapter: 1}
+	if kind, recID := gAudio.effectiveSource(tobit); kind != audioTTS || recID != "" {
+		t.Fatalf("deuterocanon effectiveSource = (%v, %q), want (TTS, \"\")", kind, recID)
 	}
 }
