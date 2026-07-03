@@ -52,6 +52,13 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
+	// Every rebuild starts with the chrome up: a rebuild means navigation, a tab
+	// switch, a fullscreen toggle or settings — all places the toolbars belong.
+	// The native scroll tracker is told, or it would still think the chrome is
+	// hidden and never post the next collapse.
+	state.chromeHidden = false
+	chromeSyncNative(false)
+
 	// Distraction-free reading mode: the entire window becomes the reading
 	// pane plus a small exit affordance — no top header, no bottom tabs.
 	// On iOS the native UITextView overlay therefore fills nearly the whole
@@ -99,6 +106,12 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 			// search-results list; the native overlay must only show over the
 			// former, or it paints on top of the results.
 			notifyReadingOverlay(overlayShouldShow(state))
+			// A pane swap means navigation (new chapter, search toggle) — bring
+			// the collapsed chrome back up like any other rebuild does.
+			if gChromeSetHidden != nil {
+				gChromeSetHidden(false)
+			}
+			chromeSyncNative(false)
 		}
 		// The Goto field is now a popup opened from the header's centered button
 		// (showGotoPopup), so the reading view reserves no inline row.
@@ -108,11 +121,44 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		notifyReadingOverlay(overlayShouldShow(state))
 	}
 
+	header := buildHeader(state)
 	tabBar := buildMobileTabBar(state)
-	body := container.NewBorder(buildHeader(state), tabBar, nil, nil, content)
+	body := container.NewBorder(header, tabBar, nil, nil, content)
 
 	base := canvas.NewRectangle(pal.Background)
-	return container.NewStack(base, body)
+	root := container.NewStack(base, body)
+
+	// Safari-style collapsing chrome: the native reading overlay posts the scroll
+	// direction (bibleTextChromeScrolled), and this closure — over the LIVE tree's
+	// header/tab bar — hides or restores the toolbars in place. No rebuild: the
+	// Border re-lays around the hidden objects and the reading host's Resize/Move
+	// re-pins the native text view into the reclaimed space. The chapter toolbar
+	// inside the reading view stays up as the essential information.
+	gChromeSetHidden = func(hidden bool) {
+		if state.chromeHidden == hidden {
+			return
+		}
+		// Collapse only while the reading view is the content on screen — and
+		// never in fullscreen, which has no chrome (and whose CreateMainUI pass
+		// leaves this closure holding the previous tree). Restoring is always safe.
+		if hidden && (!overlayShouldShow(state) || state.IsFullScreen) {
+			return
+		}
+		state.chromeHidden = hidden
+		for _, o := range []fyne.CanvasObject{header, tabBar, state.chromeBand} {
+			if o == nil {
+				continue
+			}
+			if hidden {
+				o.Hide()
+			} else {
+				o.Show()
+			}
+		}
+		root.Refresh()
+	}
+
+	return root
 }
 
 // overlayShouldShow is the single source of truth for native reading-overlay

@@ -54,7 +54,7 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 	// would DRAW beyond the host while its buttons are untappable (the shipped
 	// bug: the visible ▶ hit skip-back / nothing). A fixed cell sized to the
 	// card makes expansion geometry-neutral: taps land, header never reflows.
-	probe := buildAudioCard(state, audioTTS, false, false, false, false, audioCardCallbacks{})
+	probe := buildAudioCard(state, audioTTS, false, false, false, audioCardCallbacks{})
 	return container.NewGridWrap(probe.MinSize(), host)
 }
 
@@ -76,23 +76,15 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 			audioPanelOpen = true
 			rebuild()
 		})
-		var row fyne.CanvasObject = container.NewCenter(speaker)
-		if gAudio.followSuspendedFor(fp) {
-			// The reader scrolled away mid-narration: the highlight is still
-			// tracking the voice somewhere off-screen. Offer the way back.
-			follow := newLabeledTapChip(state, theme.MenuDropDownIcon(), "Follow narration", boxH,
-				func() { gAudio.resumeReadAlongFollow() })
-			row = container.NewHBox(container.NewCenter(follow), container.NewCenter(speaker))
-		}
 		if fyne.CurrentDevice().IsMobile() {
 			// iOS centres the control in the header gap — keep the collapsed
 			// control in the middle of the reserved cell.
-			return container.NewCenter(row)
+			return container.NewCenter(speaker)
 		}
 		// Desktop: the cell's right edge abuts the focus toggle, so pin the
 		// collapsed control there (where it has always sat); the card grows
 		// leftward into the empty header gap when expanded.
-		return container.NewHBox(layout.NewSpacer(), row)
+		return container.NewHBox(layout.NewSpacer(), container.NewCenter(speaker))
 	}
 
 	playing, _ := gAudio.buttonState(fp)
@@ -106,13 +98,12 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	}
 
 	return buildAudioCard(state, displayKind, playing, buffering, displayKind == audioRecorded,
-		gAudio.followSuspendedFor(fp), audioCardCallbacks{
-			onSrc:    func() { showAudioSourceMenu(state) },
-			onBack:   func() { gAudio.skip(-15) },
-			onPlay:   func() { gAudio.playPauseCurrent(state) },
-			onFwd:    func() { gAudio.skip(15) },
-			onFollow: func() { gAudio.resumeReadAlongFollow() },
-			onClose:  func() { audioPanelOpen = false; rebuild() },
+		audioCardCallbacks{
+			onSrc:   func() { showAudioSourceMenu(state) },
+			onBack:  func() { gAudio.skip(-15) },
+			onPlay:  func() { gAudio.playPauseCurrent(state) },
+			onFwd:   func() { gAudio.skip(15) },
+			onClose: func() { audioPanelOpen = false; rebuild() },
 		})
 }
 
@@ -120,7 +111,7 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 // buttons calling gAudio directly) so the hit-region layout test can probe the
 // card's tap targets without starting real audio.
 type audioCardCallbacks struct {
-	onSrc, onBack, onPlay, onFwd, onFollow, onClose func()
+	onSrc, onBack, onPlay, onFwd, onClose func()
 }
 
 // buildAudioCard assembles the expanded transport card: labeled source chip
@@ -128,7 +119,7 @@ type audioCardCallbacks struct {
 // While buffering, the play slot shows a SPINNER instead of a glyph — silence
 // behind a pause glyph reads as "broken" — and the slot ignores taps until the
 // stream resolves to playing/paused/failed.
-func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, canSeek, followSuspended bool, cb audioCardCallbacks) fyne.CanvasObject {
+func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, canSeek bool, cb audioCardCallbacks) fyne.CanvasObject {
 	pal := state.pal()
 	playGlyph := theme.MediaPlayIcon()
 	if playing {
@@ -155,11 +146,6 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, 
 		srcLabel = "Narrator ▾"
 	}
 	src := newLabeledTapChip(state, audioSourceIconForKind(displayKind), srcLabel, srcRowH, cb.onSrc)
-	if followSuspended {
-		// The reader scrolled away mid-narration — the way back to the voice
-		// outranks narrator switching until they take it (or nav/stop clears it).
-		src = newLabeledTapChip(state, theme.MenuDropDownIcon(), "Follow narration", srcRowH, cb.onFollow)
-	}
 	back := newIconTapButton(state, iconSkipBack15, 26, transportRowH, cb.onBack)
 	back.disabled = !canSeek
 	var play fyne.CanvasObject

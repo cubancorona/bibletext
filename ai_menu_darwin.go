@@ -53,6 +53,23 @@ func bibleTextKeyboardChanged(height C.double) {
 	})
 }
 
+// bibleTextChromeScrolled is posted by the iOS reading overlay when the reader's
+// scroll direction commits past the collapse threshold — Safari-style chrome:
+// hidden=1 while scrolling down (reclaim the screen for verses), hidden=0 on
+// scrolling up or reaching either end of the chapter. It runs on the native main
+// thread and hops to the Fyne goroutine; gChromeSetHidden is installed by the
+// mobile CreateMainUI (nil on desktop, where nothing posts this).
+//
+//export bibleTextChromeScrolled
+func bibleTextChromeScrolled(hidden C.int) {
+	h := int(hidden) != 0
+	fyne.Do(func() {
+		if gChromeSetHidden != nil {
+			gChromeSetHidden(h)
+		}
+	})
+}
+
 // bibleTextAIMenuTapped is called from the HBReadingTextView subclasses when the
 // user picks an AI study action. It runs on the native UI thread, so it copies the
 // C strings right away and hops onto Fyne's UI goroutine before showing anything.

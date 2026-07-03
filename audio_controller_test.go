@@ -153,11 +153,20 @@ func TestSelectSourceNarratorStaleness(t *testing.T) {
 }
 
 // TestReadAlongFollowSuspend locks the scroll-tug-of-war contract: a user scroll
-// during read-along suspends the follow (highlight keeps tracking), the chip
-// state reports it, resume re-attaches, and arming a new chapter resets it.
+// during read-along suspends the follow (highlight keeps tracking) and surfaces
+// the floating "Follow narration" pill, resume re-attaches and drops it, arming
+// a new chapter resets it, and playback ending takes the pill down with it. The
+// pill transitions are recorded through the showFollowButton seam — the exact
+// calls the shipped UI performs.
 func TestReadAlongFollowSuspend(t *testing.T) {
 	state := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20}
 	fp := chapterAudioFingerprint(state)
+
+	var pill []bool
+	showFollowButton = func(show bool) { pill = append(pill, show) }
+	defer func() { showFollowButton = readAlongFollowButton }()
+	lastPill := func() bool { return len(pill) > 0 && pill[len(pill)-1] }
+
 	reset := func() {
 		gAudio.mu.Lock()
 		gAudio.loaded, gAudio.loadedFP, gAudio.loadedRecID = false, "", ""
@@ -172,14 +181,21 @@ func TestReadAlongFollowSuspend(t *testing.T) {
 	gAudio.readAlong = []verseTiming{{1, 0, 1}, {2, 10, 20}}
 	gAudio.mu.Unlock()
 
-	// A user scroll suspends the follow; a second report is a no-op.
+	// A user scroll suspends the follow and shows the pill exactly once; a
+	// second report is a no-op (no duplicate show).
 	gAudio.onReadAlongUserScroll()
 	if !gAudio.followSuspendedFor(fp) {
 		t.Fatal("user scroll did not suspend the follow")
 	}
+	if len(pill) != 1 || !pill[0] {
+		t.Fatalf("pill transitions after first scroll = %v, want [true]", pill)
+	}
 	gAudio.onReadAlongUserScroll()
 	if !gAudio.followSuspendedFor(fp) {
 		t.Fatal("second scroll report flipped the suspension")
+	}
+	if len(pill) != 1 {
+		t.Fatalf("second scroll re-showed the pill: transitions %v", pill)
 	}
 
 	// Ticks keep updating the tracked verse while suspended.
@@ -191,23 +207,52 @@ func TestReadAlongFollowSuspend(t *testing.T) {
 		t.Fatalf("verse tracking stopped while suspended: verse=%d, want 2", v)
 	}
 
-	// Resume re-attaches.
+	// Resume re-attaches and drops the pill.
 	gAudio.resumeReadAlongFollow()
 	if gAudio.followSuspendedFor(fp) {
 		t.Fatal("resume did not clear the suspension")
 	}
+	if lastPill() {
+		t.Fatalf("resume left the pill up: transitions %v", pill)
+	}
 
-	// Arming a new chapter always starts attached.
+	// Arming a new chapter always starts attached (pill down).
 	gAudio.onReadAlongUserScroll()
 	gAudio.armReadAlong(state, chapterAudio{Kind: audioTTS})
 	if gAudio.followSuspendedFor(fp) {
 		t.Fatal("armReadAlong did not reset the suspension")
 	}
+	if lastPill() {
+		t.Fatalf("armReadAlong left the pill up: transitions %v", pill)
+	}
 
-	// No read-along armed → scroll reports are ignored entirely.
+	// Playback ending on its own takes the pill (and the suspension) down —
+	// the pill must never advertise a narration that is no longer playing.
+	gAudio.mu.Lock()
+	gAudio.loaded, gAudio.loadedFP, gAudio.state = true, fp, audioPlaying
+	gAudio.readAlong, gAudio.followSuspended = []verseTiming{{1, 0, 1}}, false
+	gAudio.boundState = nil // no continuation in unit tests
+	gAudio.mu.Unlock()
+	gAudio.onReadAlongUserScroll()
+	if !lastPill() {
+		t.Fatalf("scroll during playback did not show the pill: transitions %v", pill)
+	}
+	gAudio.applyNativeState(audioEnded)
+	if lastPill() {
+		t.Fatalf("playback end left the pill up: transitions %v", pill)
+	}
+	if gAudio.followSuspendedFor(fp) {
+		t.Fatal("playback end left the follow suspended")
+	}
+
+	// No read-along armed (or nothing loaded) → scroll reports are ignored.
 	reset()
+	pill = nil
 	gAudio.onReadAlongUserScroll()
 	if gAudio.followSuspendedFor(fp) {
 		t.Fatal("scroll with no read-along armed suspended something")
+	}
+	if len(pill) != 0 {
+		t.Fatalf("scroll with nothing armed touched the pill: transitions %v", pill)
 	}
 }

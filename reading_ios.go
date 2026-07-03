@@ -30,6 +30,12 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
 // (on scroll-end) instead, keeping the saved position current even on a hard kill.
 extern void bibleTextReadingScrolled(void);
 extern void bibleTextReadAlongUserScrolled(void);
+// Posted when the floating "Follow narration" button is tapped (audio_export_apple.go).
+extern void bibleTextReadAlongFollowTapped(void);
+// Posted when the reader's scroll direction crosses the collapse threshold —
+// Safari-style chrome: hidden=1 scrolling down (reclaim the screen for verses),
+// hidden=0 scrolling up / at the edges (bring the toolbars back).
+extern void bibleTextChromeScrolled(int hidden);
 // Called when the reader single-taps a highlighted verse and picks "Clear
 // highlight" from the inline native menu. Go clears the highlight state and
 // re-renders so the .hl background wash disappears.
@@ -75,6 +81,23 @@ static BOOL    gHasLastTouch      = NO;
 // the read-along statics live with the highlight code further down.
 static BOOL gReadAlongActive = NO;
 static BOOL gReadAlongUserLatch = NO;
+
+// Safari-style collapsing chrome: while the reader drags/coasts, accumulate the
+// scroll direction and post bibleTextChromeScrolled when it commits past a
+// threshold — down hides the toolbars, up (or reaching either edge) restores
+// them. gChromeHiddenNative mirrors the last value posted (the Go side owns the
+// real state and re-syncs it via bibleTextChromeSync after rebuilds force the
+// chrome back up). Programmatic scrolls (follow-scroll, restores) never enter
+// the dragging/decelerating branch, so they can't collapse the chrome.
+static CGFloat gChromeLastY = 0;
+static CGFloat gChromeAcc = 0;
+static BOOL    gChromeHiddenNative = NO;
+// One-way-per-gesture latch for the always-show-at-bottom rule: showing the
+// chrome GROWS the pane, which shrinks maxY and would immediately re-qualify a
+// hide (toolbar flapping at the end of every chapter). Once the bottom shows
+// the chrome, it stays up for the rest of that drag/deceleration; the next
+// gesture re-baselines.
+static BOOL    gChromeBottomLatch = NO;
 
 static NSInteger  gMarkerVerse = 0;
 static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
@@ -180,6 +203,12 @@ static UITapGestureRecognizer *gHighlightTap = nil;
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
     gLastTouchContentY = [scrollView.panGestureRecognizer locationInView:scrollView].y;
     gHasLastTouch = YES;
+    // New gesture → re-baseline the chrome direction tracker (the offset may have
+    // moved programmatically since the last drag; a stale baseline would read as a
+    // huge phantom swipe).
+    gChromeLastY = scrollView.contentOffset.y;
+    gChromeAcc = 0;
+    gChromeBottomLatch = NO;
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
@@ -189,6 +218,28 @@ static UITapGestureRecognizer *gHighlightTap = nil;
         if (gReadAlongActive && !gReadAlongUserLatch) {
             gReadAlongUserLatch = YES;
             bibleTextReadAlongUserScrolled();
+        }
+        // Safari-style chrome: commit a direction once it accumulates past the
+        // threshold; a direction flip restarts the count so finger wobble can't
+        // toggle. Near the top (or pinned at the very bottom) the chrome always
+        // returns, so the reader is never trapped bar-less at an edge.
+        CGFloat y = scrollView.contentOffset.y;
+        CGFloat delta = y - gChromeLastY;
+        gChromeLastY = y;
+        if ((delta > 0) != (gChromeAcc > 0)) gChromeAcc = 0;
+        gChromeAcc += delta;
+        CGFloat maxY = scrollView.contentSize.height - scrollView.bounds.size.height;
+        BOOL wantHidden = gChromeHiddenNative;
+        if (maxY > 0 && y >= maxY) { gChromeBottomLatch = YES; gChromeAcc = 0; }
+        if (y <= 32 || gChromeBottomLatch) wantHidden = NO;
+        // Hide only when there is real scrollable depth (maxY > 32): a chapter
+        // that (almost) fits on screen has nothing to reclaim, and its
+        // rubber-band bounce would otherwise read as a qualifying swipe.
+        else if (gChromeAcc > 28 && maxY > 32)  wantHidden = YES;
+        else if (gChromeAcc < -28) wantHidden = NO;
+        if (wantHidden != gChromeHiddenNative) {
+            gChromeHiddenNative = wantHidden;
+            bibleTextChromeScrolled(wantHidden ? 1 : 0);
         }
         // Disarm a pending restore the moment the user takes over the scroll. (We do
         // NOT poke the edit menu here — it self-dismisses on scroll, and calling it
@@ -208,6 +259,12 @@ static UITapGestureRecognizer *gHighlightTap = nil;
 }
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
     if (!decelerate) bibleTextReadingScrolled();
+}
+
+// Target of the floating "Follow narration" button (btIOSEnsureFollowBtn) — the
+// text view doubles as its action target so no extra controller object is needed.
+- (void)btFollowTapped:(id)sender {
+    bibleTextReadAlongFollowTapped();
 }
 
 // --- Tap a highlighted verse to clear it ------------------------------------
@@ -434,6 +491,103 @@ static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
 // before the next verse's), so each tick can clear the previous verse cheaply.
 static NSRange  gReadAlongRange = {NSNotFound, 0};
 static UIColor *gReadAlongColor = nil;
+
+// --- Floating "Follow narration" button -------------------------------------
+// A semi-transparent pill floated bottom-centre over the reading pane while the
+// reader has scrolled away mid-narration (follow suspended). Native (UIKit)
+// because the UITextView overlay paints ABOVE the whole Fyne canvas — a Fyne
+// widget could never float over the verses. Shown/hidden by the Go controller
+// via bibleTextIOSFollowButton; colours arrive from the app palette via
+// bibleTextSetFollowButtonColors (re-pushed on every chapter render, so a
+// light/dark flip restyles it).
+static UIButton *gFollowBtn = nil;
+static BOOL      gFollowBtnWanted = NO;
+static CGFloat   gFollowBg[3] = {0.18, 0.30, 0.53}; // lapis fallback
+static CGFloat   gFollowFg[3] = {0.96, 0.97, 0.99};
+
+static void btIOSStyleFollowBtn(void) {
+    if (gFollowBtn == nil) return;
+    gFollowBtn.backgroundColor = [UIColor colorWithRed:gFollowBg[0] green:gFollowBg[1]
+                                                  blue:gFollowBg[2] alpha:0.78]; // semi-transparent
+    [gFollowBtn setTitleColor:[UIColor colorWithRed:gFollowFg[0] green:gFollowFg[1]
+                                                blue:gFollowFg[2] alpha:1.0]
+                     forState:UIControlStateNormal];
+}
+
+// btIOSLayoutFollowBtn centres the pill 18pt above the reading pane's bottom edge
+// (UIKit coords are top-left origin, so that's maxY - height - 18).
+static void btIOSLayoutFollowBtn(void) {
+    if (gFollowBtn == nil || gReadingTV == nil) return;
+    CGSize sz = gFollowBtn.frame.size;
+    CGRect tf = gReadingTV.frame;
+    gFollowBtn.frame = CGRectMake(CGRectGetMidX(tf) - sz.width / 2,
+                                  CGRectGetMaxY(tf) - sz.height - 18, sz.width, sz.height);
+}
+
+static void btIOSEnsureFollowBtn(void) {
+    if (gReadingTV == nil || gReadingTV.superview == nil) return;
+    if (gFollowBtn == nil) {
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        [b setTitle:@"Follow narration" forState:UIControlStateNormal];
+        b.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+        [b addTarget:gReadingTV action:@selector(btFollowTapped:)
+            forControlEvents:UIControlEventTouchUpInside];
+        b.layer.cornerRadius = 19;
+        b.hidden = YES;
+        gFollowBtn = b;
+        btIOSStyleFollowBtn();
+        [b sizeToFit];
+        // A roomier pill than sizeToFit's tight text box: ~16pt side padding and a
+        // 38pt height, close to the HIG comfortable-tap size without dominating the page.
+        b.frame = CGRectMake(0, 0, b.frame.size.width + 32, 38);
+    }
+    if (gFollowBtn.superview != gReadingTV.superview) {
+        [gFollowBtn removeFromSuperview];
+        [gReadingTV.superview addSubview:gFollowBtn];
+    }
+    [gFollowBtn.superview bringSubviewToFront:gFollowBtn];
+}
+
+// btIOSApplyFollowVisibility resolves the pill's actual visibility: wanted by the
+// controller AND the reading overlay itself is up (a modal or tab switch that
+// hides the verses must take the pill down with them).
+static void btIOSApplyFollowVisibility(void) {
+    if (gFollowBtn == nil) return;
+    BOOL show = gFollowBtnWanted && gReadingTV != nil && !gReadingTV.hidden && !gReadingSuppressed;
+    gFollowBtn.hidden = !show;
+    if (show) {
+        btIOSLayoutFollowBtn();
+        [gFollowBtn.superview bringSubviewToFront:gFollowBtn];
+    }
+}
+
+void bibleTextIOSFollowButton(int show) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gFollowBtnWanted = (show != 0);
+        if (gFollowBtnWanted) btIOSEnsureFollowBtn();
+        btIOSApplyFollowVisibility();
+    });
+}
+
+void bibleTextSetFollowButtonColors(double bgR, double bgG, double bgB,
+                                    double fgR, double fgG, double fgB) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gFollowBg[0] = bgR; gFollowBg[1] = bgG; gFollowBg[2] = bgB;
+        gFollowFg[0] = fgR; gFollowFg[1] = fgG; gFollowFg[2] = fgB;
+        btIOSStyleFollowBtn();
+    });
+}
+
+// bibleTextChromeSync aligns the native collapse latch with the Go-side chrome
+// state — Go forces the chrome visible on rebuilds (new chapter, tab return),
+// and without this the native side would still think it's hidden and never
+// re-post the next collapse.
+void bibleTextChromeSync(int hidden) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gChromeHiddenNative = (hidden != 0);
+        gChromeAcc = 0;
+    });
+}
 
 // btIOSReadAlongRange returns verse's number-run start through just before the next
 // verse's number run (or end of text) — i.e. the whole verse, number + words. The
@@ -679,6 +833,15 @@ static void bibleTextEnsureTV(void) {
             [host addSubview:gReadingTV];
         }
         [host bringSubviewToFront:gReadingTV];
+        // Keep the floating follow pill above the re-fronted overlay (and carry it
+        // across a window re-parent with the text view).
+        if (gFollowBtn != nil) {
+            if (gFollowBtn.superview != host) {
+                [gFollowBtn removeFromSuperview];
+                [host addSubview:gFollowBtn];
+            }
+            [host bringSubviewToFront:gFollowBtn];
+        }
     };
     if ([NSThread isMainThread]) {
         block();
@@ -873,9 +1036,11 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         if (gReadingTV.superview != nil) {
             safe = gReadingTV.superview.safeAreaInsets;
         }
+        CGRect old = gReadingTV.frame;
         CGRect r = CGRectMake(x + safe.left, y + safe.top, w, h);
-        BOOL changed = !CGRectEqualToRect(r, gReadingTV.frame);
+        BOOL changed = !CGRectEqualToRect(r, old);
         gReadingTV.frame = r;
+        btIOSLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
         // Only re-resolve the scroll position when a highlight (search jump) or a
         // pending restore is armed: those were computed at the old width and must be
         // re-placed after the rewrap. Without a target, bibleTextScrollReadingTV
@@ -884,7 +1049,14 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         // a stray layout pass) and ran a full layoutIfNeeded + a doubled scroll each
         // time. Gating it (and dropping the redundant nested re-scroll) mirrors
         // bibleTextMacTVSetFrame and leaves a plain reader exactly where they are.
-        if (changed && (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore)) {
+        // WIDTH-only: a rewrap needs a width change. The Safari-style chrome collapse
+        // resizes the pane in y/height ON EVERY QUALIFYING SCROLL — re-asserting the
+        // highlight there yanked the reader back to the wash mid-gesture (and the
+        // yank's own delta flapped the chrome right back). Height-only changes never
+        // rewrap, so they never need a re-place; and never steal a live gesture.
+        if (changed && r.size.width != old.size.width &&
+            !gReadingTV.dragging && !gReadingTV.decelerating &&
+            (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore)) {
             [gReadingTV layoutIfNeeded];
             bibleTextScrollReadingTV();
         }
@@ -898,6 +1070,7 @@ void bibleTextTVShow(void) {
         if (gReadingTV == nil) return;
         gReadingTV.hidden = NO;
         [gReadingTV.superview bringSubviewToFront:gReadingTV];
+        btIOSApplyFollowVisibility(); // pill returns with the verses (if still wanted)
     });
 }
 
@@ -919,6 +1092,7 @@ void bibleTextTVHide(void) {
         if (gReadingTV == nil) return;
         bibleTextDismissMenu();
         gReadingTV.hidden = YES;
+        btIOSApplyFollowVisibility(); // pill never floats over search results / other tabs
     });
 }
 
@@ -930,6 +1104,7 @@ void bibleTextTVSuppress(void) {
         if (gReadingTV == nil) return;
         bibleTextDismissMenu();
         gReadingTV.hidden = YES;
+        btIOSApplyFollowVisibility(); // pill goes down with the overlay behind modals
     });
 }
 
@@ -1154,6 +1329,7 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	// Tabs and the top "BibleText" header are skipped in ui_mobile.go for this
 	// case, so the UITextView fills almost the whole device screen.
 	if state.IsFullScreen {
+		state.chromeBand = nil // fullscreen has no chrome band; drop the stale ref
 		exit := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
 			state.IsFullScreen = false
 			rebuildWindow(state)
@@ -1171,14 +1347,23 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	}
 
 	top := container.NewVBox()
+	// The history + back-to-results rows collapse with the Safari-style chrome
+	// (gChromeSetHidden); the chapter toolbar below stays — it IS the essential
+	// information the minimized state keeps.
+	band := container.NewVBox()
 	if bar := buildHistoryBar(state); bar != nil {
 		// Margin AROUND the recents card (not inside it) so it floats clear of the
 		// app-header divider above and the chapter heading below, rather than sitting
 		// cramped against them.
-		top.Add(container.New(layout.NewCustomPaddedLayout(6, 4, 0, 0), bar))
+		band.Add(container.New(layout.NewCustomPaddedLayout(6, 4, 0, 0), bar))
 	}
 	if state.CanReturnToSearchResults {
-		top.Add(backToResultsBar(state))
+		band.Add(backToResultsBar(state))
+	}
+	state.chromeBand = nil
+	if len(band.Objects) > 0 {
+		top.Add(band)
+		state.chromeBand = band
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
 
@@ -1499,6 +1684,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	bg := state.pal().Background
 	C.bibleTextTVSetReadingBG(
 		C.double(float64(bg.R)/255), C.double(float64(bg.G)/255), C.double(float64(bg.B)/255))
+	// Keep the floating "Follow narration" pill styled for the current palette
+	// (this render runs on every theme flip — the fingerprint folds the variant in).
+	pushFollowButtonColors(state.pal())
 }
 
 // captureReadingAnchor / armReadingRestore bridge the reading-position restore
@@ -1535,6 +1723,37 @@ func readAlongHighlight(verse int, follow bool) {
 	C.bibleTextIOSHighlightVerse(C.int(verse), f)
 }
 func readAlongClear() { C.bibleTextIOSReadAlongClear() }
+
+// readAlongFollowButton shows/hides the native floating "Follow narration" pill
+// over the reading pane (audio_controller drives it around follow suspension).
+func readAlongFollowButton(show bool) {
+	s := C.int(0)
+	if show {
+		s = 1
+	}
+	C.bibleTextIOSFollowButton(s)
+}
+
+// pushFollowButtonColors styles the pill from the app palette (accent ground,
+// accent-text label). Called on every real chapter render so theme flips restyle it.
+func pushFollowButtonColors(p palette) {
+	C.bibleTextSetFollowButtonColors(
+		C.double(float64(p.Accent.R)/255), C.double(float64(p.Accent.G)/255), C.double(float64(p.Accent.B)/255),
+		C.double(float64(p.AccentText.R)/255), C.double(float64(p.AccentText.G)/255), C.double(float64(p.AccentText.B)/255))
+}
+
+// gChromeSyncNative keeps the native scroll-collapse latch aligned with the Go
+// chrome state (ui_mobile.go forces the chrome visible on rebuilds). Installed
+// via init so the shared mobile UI code needs no iOS-only reference.
+func init() {
+	gChromeSyncNative = func(hidden bool) {
+		h := C.int(0)
+		if hidden {
+			h = 1
+		}
+		C.bibleTextChromeSync(h)
+	}
+}
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS
 // NSTextView overlay shares the exact same chapter HTML as the iOS UITextView.
