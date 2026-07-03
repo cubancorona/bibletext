@@ -217,8 +217,9 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   position**, and the recent-chapters history — as one JSON blob in
   `fyne.Preferences` (key `reading.state`). Scroll is stored as a **verse anchor**
   (top-visible verse + within-verse delta, with a whole-chapter `scrollFrac`
-  fallback) so it survives re-wrap on width/orientation/translation changes (font
-  is fixed at 19px). Saving: continuously on navigation (`addRecentChapter` /
+  fallback) so it survives re-wrap on width/orientation/translation/text-size
+  changes (the scripture font scales with the Settings → Reading → Text size
+  choice, `textsize.go`; base 21px). Saving: continuously on navigation (`addRecentChapter` /
   `clearHistory` / `switchVersion` → `persistReadingPosition`, chapter pinned to
   top) **and** the precise scroll via `flushReadingState` — on iOS from a native
   scroll-end callback (`bibleTextReadingScrolled`, an `//export` in
@@ -229,7 +230,9 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
   arms a one-shot scroll target (`armPendingRestore` → `armReadingRestore`) that
   `bibleTextScrollReadingTV` / `bibleTextMacScrollTV` apply through their existing
   re-assert cadence and drop on the first user scroll. Verse numbers are located
-  in the attributed string by font size (the only sub-19px runs). Per-platform
+  in the attributed string by font size (the only runs under 80% of the body
+  size — the threshold is derived from the rendered text, not a constant, so it
+  tracks the reader's text-size setting). Per-platform
   scroll hooks live in `reading_ios.go` (cgo), `reading_macos.go` (cgo), and a
   no-op `reading_scroll_fyne.go` (Linux/Windows/Android restore book/chapter only).
 

@@ -165,20 +165,33 @@ static CGFloat   gMacRestoreFrac  = 0;
 static BOOL      gMacHasRestore   = NO;
 
 // Verse numbers are the only small-font runs: buildChapterHTML renders them as
-// <sup class="v"> at font-size 0.66em (~12.5px) while body text is 19px.
+// <sup class="v"> at font-size 0.66em of the body size (which the reader can scale).
 // Detecting them by font size (rather than a superscript attribute) matches the
-// iOS overlay and reads the run's digits directly.
-#define BT_VERSE_FONT_MAX 15.0
+// iOS overlay and reads the run's digits directly. The threshold is DERIVED from
+// the rendered text (80% of the largest font in the storage) rather than a
+// constant, because the reader can now scale the scripture text: superscripts
+// are 0.66× the body at every size, so 0.8× cleanly separates them.
+static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {
+    __block CGFloat maxSize = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val != nil && ((NSFont *)val).pointSize > maxSize) maxSize = ((NSFont *)val).pointSize;
+    }];
+    return maxSize > 0 ? maxSize * 0.8 : 15.0;
+}
 
 // btMacLocForVerse returns the character location of `verse`'s number run, or
 // NSNotFound.
 static NSUInteger btMacLocForVerse(NSTextStorage *ts, NSInteger verse) {
     __block NSUInteger found = NSNotFound;
+    CGFloat thr = btMacVerseFontThreshold(ts);
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
                    options:0
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
-        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
         if ([[ts.string substringWithRange:r] integerValue] == verse) {
             found = r.location;
             *stop = YES;
@@ -192,12 +205,13 @@ static NSUInteger btMacLocForVerse(NSTextStorage *ts, NSInteger verse) {
 static NSInteger btMacVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc) {
     __block NSInteger verse = 0;
     __block NSUInteger loc = 0;
+    CGFloat thr = btMacVerseFontThreshold(ts);
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
                    options:0
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (r.location > ci) { *stop = YES; return; }
-        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
         NSInteger n = [[ts.string substringWithRange:r] integerValue];
         if (n > 0) { verse = n; loc = r.location; }
     }];
@@ -217,10 +231,11 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     NSUInteger start = btMacLocForVerse(ts, verse);
     if (start == NSNotFound) return NSMakeRange(NSNotFound, 0);
     __block NSUInteger nextLoc = ts.length;
+    CGFloat thr = btMacVerseFontThreshold(ts);
     [ts enumerateAttribute:NSFontAttributeName inRange:NSMakeRange(start, ts.length - start)
                    options:0 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (r.location <= start || val == nil || r.length == 0 ||
-            ((NSFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+            ((NSFont *)val).pointSize >= thr) return;
         if ([[ts.string substringWithRange:r] integerValue] > 0) { nextLoc = r.location; *stop = YES; }
     }];
     return NSMakeRange(start, nextLoc - start);
