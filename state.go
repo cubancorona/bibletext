@@ -69,18 +69,6 @@ type AppState struct {
 	// repaint) rather than swapping a content host in place.
 	CurrentTab int
 
-	// chromeHidden is the mobile Safari-style collapsing chrome: scrolling the
-	// chapter down hides the app header, history bar and tab bar (the chapter
-	// toolbar stays — the essential information); scrolling up, or reaching
-	// either end of the chapter, brings them back. Driven by the native scroll
-	// direction via bibleTextChromeScrolled → gChromeSetHidden; every window
-	// rebuild resets it to false (chrome up). UI-goroutine only.
-	chromeHidden bool
-	// chromeBand is the reading view's hide-with-the-chrome sub-container (the
-	// history bar + back-to-results rows). Re-set by each buildReadingViewMobile;
-	// nil when the pane has no such band (or on desktop).
-	chromeBand fyne.CanvasObject
-
 	// aiSearchMode is the Search tab's mode: false = keyword search, true = the
 	// natural-language "Find" passage search. Kept on state so the chosen mode
 	// survives the window rebuilds that tab switches trigger.
@@ -240,26 +228,6 @@ func (s *AppState) baseBible() *BibleData {
 		}
 	}
 	return s.Bible
-}
-
-// gChromeSetHidden applies the mobile Safari-style chrome collapse (see
-// AppState.chromeHidden). Installed by CreateMainUI on mobile — it closes over
-// the live window tree's header/tab-bar containers — and invoked on the Fyne
-// goroutine by the bibleTextChromeScrolled export (ai_menu_darwin.go). nil on
-// desktop and before the first mobile build.
-var gChromeSetHidden func(hidden bool)
-
-// gChromeSyncNative tells the native scroll-direction tracker what the Go-side
-// chrome state is after a rebuild forces the chrome visible (without this the
-// native latch would still read "hidden" and never re-post the next collapse).
-// Installed by reading_ios.go's init; nil elsewhere.
-var gChromeSyncNative func(hidden bool)
-
-// chromeSyncNative is the nil-safe wrapper the mobile UI calls.
-func chromeSyncNative(hidden bool) {
-	if gChromeSyncNative != nil {
-		gChromeSyncNative(hidden)
-	}
 }
 
 func (s *AppState) refresh() {

@@ -32,10 +32,6 @@ extern void bibleTextReadingScrolled(void);
 extern void bibleTextReadAlongUserScrolled(void);
 // Posted when the floating "Follow narration" button is tapped (audio_export_apple.go).
 extern void bibleTextReadAlongFollowTapped(void);
-// Posted when the reader's scroll direction crosses the collapse threshold —
-// Safari-style chrome: hidden=1 scrolling down (reclaim the screen for verses),
-// hidden=0 scrolling up / at the edges (bring the toolbars back).
-extern void bibleTextChromeScrolled(int hidden);
 // Called when the reader single-taps a highlighted verse and picks "Clear
 // highlight" from the inline native menu. Go clears the highlight state and
 // re-renders so the .hl background wash disappears.
@@ -81,23 +77,6 @@ static BOOL    gHasLastTouch      = NO;
 // the read-along statics live with the highlight code further down.
 static BOOL gReadAlongActive = NO;
 static BOOL gReadAlongUserLatch = NO;
-
-// Safari-style collapsing chrome: while the reader drags/coasts, accumulate the
-// scroll direction and post bibleTextChromeScrolled when it commits past a
-// threshold — down hides the toolbars, up (or reaching either edge) restores
-// them. gChromeHiddenNative mirrors the last value posted (the Go side owns the
-// real state and re-syncs it via bibleTextChromeSync after rebuilds force the
-// chrome back up). Programmatic scrolls (follow-scroll, restores) never enter
-// the dragging/decelerating branch, so they can't collapse the chrome.
-static CGFloat gChromeLastY = 0;
-static CGFloat gChromeAcc = 0;
-static BOOL    gChromeHiddenNative = NO;
-// gChromeBottomRetry marks a drag that BEGAN while already resting at the bottom
-// of the chapter. Reaching the end the first time leaves the toolbars hidden (so
-// the last verses stay full-screen); a SECOND deliberate pull that starts at the
-// bottom is the "hit the bottom again" that brings them back — the way Safari
-// does it. Set once per gesture in scrollViewWillBeginDragging.
-static BOOL    gChromeBottomRetry = NO;
 
 static NSInteger  gMarkerVerse = 0;
 static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
@@ -203,15 +182,6 @@ static UITapGestureRecognizer *gHighlightTap = nil;
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
     gLastTouchContentY = [scrollView.panGestureRecognizer locationInView:scrollView].y;
     gHasLastTouch = YES;
-    // New gesture → re-baseline the chrome direction tracker (the offset may have
-    // moved programmatically since the last drag; a stale baseline would read as a
-    // huge phantom swipe).
-    gChromeLastY = scrollView.contentOffset.y;
-    gChromeAcc = 0;
-    // A pull that STARTS at the bottom of a scrollable chapter is the deliberate
-    // "hit the bottom again" that restores the toolbars (see gChromeBottomRetry).
-    CGFloat maxY = scrollView.contentSize.height - scrollView.bounds.size.height;
-    gChromeBottomRetry = (maxY > 32 && scrollView.contentOffset.y >= maxY - 1);
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
@@ -221,31 +191,6 @@ static UITapGestureRecognizer *gHighlightTap = nil;
         if (gReadAlongActive && !gReadAlongUserLatch) {
             gReadAlongUserLatch = YES;
             bibleTextReadAlongUserScrolled();
-        }
-        // Safari-style chrome: commit a direction once it accumulates past the
-        // threshold; a direction flip restarts the count so finger wobble can't
-        // toggle. Near the top (or pinned at the very bottom) the chrome always
-        // returns, so the reader is never trapped bar-less at an edge.
-        CGFloat y = scrollView.contentOffset.y;
-        CGFloat delta = y - gChromeLastY;
-        gChromeLastY = y;
-        if ((delta > 0) != (gChromeAcc > 0)) gChromeAcc = 0;
-        gChromeAcc += delta;
-        CGFloat maxY = scrollView.contentSize.height - scrollView.bounds.size.height;
-        BOOL wantHidden = gChromeHiddenNative;
-        if (y <= 32) wantHidden = NO;                 // the top always restores
-        // A gesture that began at the bottom (the deliberate second pull) restores
-        // the toolbars and holds them up for the rest of that gesture — the pane
-        // growth would otherwise let the down-drag re-qualify a hide (flapping).
-        else if (gChromeBottomRetry) wantHidden = NO;
-        // Hide only when there is real scrollable depth (maxY > 32): a chapter
-        // that (almost) fits on screen has nothing to reclaim, and its
-        // rubber-band bounce would otherwise read as a qualifying swipe.
-        else if (gChromeAcc > 28 && maxY > 32)  wantHidden = YES;
-        else if (gChromeAcc < -28) wantHidden = NO;
-        if (wantHidden != gChromeHiddenNative) {
-            gChromeHiddenNative = wantHidden;
-            bibleTextChromeScrolled(wantHidden ? 1 : 0);
         }
         // Disarm a pending restore the moment the user takes over the scroll. (We do
         // NOT poke the edit menu here — it self-dismisses on scroll, and calling it
@@ -581,17 +526,6 @@ void bibleTextSetFollowButtonColors(double bgR, double bgG, double bgB,
         gFollowBg[0] = bgR; gFollowBg[1] = bgG; gFollowBg[2] = bgB;
         gFollowFg[0] = fgR; gFollowFg[1] = fgG; gFollowFg[2] = fgB;
         btIOSStyleFollowBtn();
-    });
-}
-
-// bibleTextChromeSync aligns the native collapse latch with the Go-side chrome
-// state — Go forces the chrome visible on rebuilds (new chapter, tab return),
-// and without this the native side would still think it's hidden and never
-// re-post the next collapse.
-void bibleTextChromeSync(int hidden) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        gChromeHiddenNative = (hidden != 0);
-        gChromeAcc = 0;
     });
 }
 
@@ -1055,11 +989,9 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         // a stray layout pass) and ran a full layoutIfNeeded + a doubled scroll each
         // time. Gating it (and dropping the redundant nested re-scroll) mirrors
         // bibleTextMacTVSetFrame and leaves a plain reader exactly where they are.
-        // WIDTH-only: a rewrap needs a width change. The Safari-style chrome collapse
-        // resizes the pane in y/height ON EVERY QUALIFYING SCROLL — re-asserting the
-        // highlight there yanked the reader back to the wash mid-gesture (and the
-        // yank's own delta flapped the chrome right back). Height-only changes never
-        // rewrap, so they never need a re-place; and never steal a live gesture.
+        // WIDTH-only + not mid-gesture: a rewrap needs a width change (rotation), so a
+        // height-only Resize/Move never needs a re-place, and we never yank the reader
+        // while their finger owns the scroll.
         if (changed && r.size.width != old.size.width &&
             !gReadingTV.dragging && !gReadingTV.decelerating &&
             (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore)) {
@@ -1335,7 +1267,6 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	// Tabs and the top "BibleText" header are skipped in ui_mobile.go for this
 	// case, so the UITextView fills almost the whole device screen.
 	if state.IsFullScreen {
-		state.chromeBand = nil // fullscreen has no chrome band; drop the stale ref
 		exit := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
 			state.IsFullScreen = false
 			rebuildWindow(state)
@@ -1353,23 +1284,14 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	}
 
 	top := container.NewVBox()
-	// The history + back-to-results rows collapse with the Safari-style chrome
-	// (gChromeSetHidden); the chapter toolbar below stays — it IS the essential
-	// information the minimized state keeps.
-	band := container.NewVBox()
 	if bar := buildHistoryBar(state); bar != nil {
 		// Margin AROUND the recents card (not inside it) so it floats clear of the
 		// app-header divider above and the chapter heading below, rather than sitting
 		// cramped against them.
-		band.Add(container.New(layout.NewCustomPaddedLayout(6, 4, 0, 0), bar))
+		top.Add(container.New(layout.NewCustomPaddedLayout(6, 4, 0, 0), bar))
 	}
 	if state.CanReturnToSearchResults {
-		band.Add(backToResultsBar(state))
-	}
-	state.chromeBand = nil
-	if len(band.Objects) > 0 {
-		top.Add(band)
-		state.chromeBand = band
+		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
 
@@ -1746,19 +1668,6 @@ func pushFollowButtonColors(p palette) {
 	C.bibleTextSetFollowButtonColors(
 		C.double(float64(p.Accent.R)/255), C.double(float64(p.Accent.G)/255), C.double(float64(p.Accent.B)/255),
 		C.double(float64(p.AccentText.R)/255), C.double(float64(p.AccentText.G)/255), C.double(float64(p.AccentText.B)/255))
-}
-
-// gChromeSyncNative keeps the native scroll-collapse latch aligned with the Go
-// chrome state (ui_mobile.go forces the chrome visible on rebuilds). Installed
-// via init so the shared mobile UI code needs no iOS-only reference.
-func init() {
-	gChromeSyncNative = func(hidden bool) {
-		h := C.int(0)
-		if hidden {
-			h = 1
-		}
-		C.bibleTextChromeSync(h)
-	}
 }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS
