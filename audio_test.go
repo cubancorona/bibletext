@@ -28,11 +28,32 @@ func TestWEBAudioURL(t *testing.T) {
 	}
 }
 
-func TestVersionUsesWEBAudio(t *testing.T) {
-	for v, want := range map[string]bool{"web": true, "webc": true, "bsb": false, "nrsv": false} {
-		if got := versionUsesWEBAudio(v); got != want {
-			t.Errorf("versionUsesWEBAudio(%q) = %v, want %v", v, got, want)
+func TestRecordingsFor(t *testing.T) {
+	for v, want := range map[string][]string{
+		"web":  {"web-williams"},
+		"webc": {"web-williams"}, // same WEB text for the 66 recorded books
+		"bsb":  {"bsb-hays"},
+		"nrsv": nil,
+	} {
+		recs := recordingsFor(v)
+		if len(recs) != len(want) {
+			t.Errorf("recordingsFor(%q) returned %d recordings, want %d", v, len(recs), len(want))
+			continue
 		}
+		for i, r := range recs {
+			if r.id != want[i] {
+				t.Errorf("recordingsFor(%q)[%d].id = %q, want %q", v, i, r.id, want[i])
+			}
+			if r.narrator == "" || r.urlFor == nil {
+				t.Errorf("recordingsFor(%q)[%d] missing narrator or urlFor", v, i)
+			}
+		}
+	}
+	if _, ok := recordingByID("web", "bsb-hays"); ok {
+		t.Error("recordingByID must not resolve another version's recording")
+	}
+	if r, ok := recordingByID("webc", "web-williams"); !ok || r.narrator != "David Williams" {
+		t.Errorf("recordingByID(webc, web-williams) = (%+v, %v), want the Williams recording", r, ok)
 	}
 }
 
@@ -44,10 +65,13 @@ func TestAudioForChapter(t *testing.T) {
 			"Tobit": {1: {{Text: "The book of the words of Tobit"}}},
 		},
 	}
-	// WEB John 20 → recorded.
+	// WEB John 20 → recorded, carrying the recording id + narrator credit.
 	a := audioForChapter(&AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20, Bible: bd})
 	if a.Kind != audioRecorded || a.URL != testAudioHost+"web-williams-nt-v1/WEB_43_020.mp3" || a.Title != "John 20" {
 		t.Errorf("WEB John 20: got %+v, want recorded WEB_43_020.mp3", a)
+	}
+	if a.RecordingID != "web-williams" || a.Subtitle != "World English Bible · David Williams" {
+		t.Errorf("WEB John 20: RecordingID=%q Subtitle=%q, want web-williams / narrator credit", a.RecordingID, a.Subtitle)
 	}
 	// WEB-Catholic John 20 → recorded too (same WEB text).
 	if a := audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded {
@@ -91,26 +115,28 @@ func TestBSBAudioURL(t *testing.T) {
 }
 
 func TestChapterTimings(t *testing.T) {
-	// Both bundled tables must load and cover the full canon.
-	for _, version := range []string{"bsb", "web"} {
-		vs := chapterTimings(version, "Genesis", 1)
+	// Both bundled tables must load (keyed by recording id) and cover the full canon.
+	for _, recID := range []string{"bsb-hays", "web-williams"} {
+		vs := chapterTimings(recID, "Genesis", 1)
 		if len(vs) == 0 {
-			t.Fatalf("chapterTimings(%q, Genesis, 1) is empty", version)
+			t.Fatalf("chapterTimings(%q, Genesis, 1) is empty", recID)
 		}
 		if vs[0].verse != 1 || vs[0].start <= 0 {
-			t.Errorf("%s Genesis 1 first entry = %+v, want verse 1 with a positive start", version, vs[0])
+			t.Errorf("%s Genesis 1 first entry = %+v, want verse 1 with a positive start", recID, vs[0])
 		}
-		if got := chapterTimings(version, "Revelation", 22); len(got) == 0 {
-			t.Errorf("chapterTimings(%q, Revelation, 22) is empty — table incomplete?", version)
+		if got := chapterTimings(recID, "Revelation", 22); len(got) == 0 {
+			t.Errorf("chapterTimings(%q, Revelation, 22) is empty — table incomplete?", recID)
 		}
 	}
-	// The WEB-Catholic shares the WEB tables (same text, same verse numbers).
-	if got, want := chapterTimings("webc", "John", 3), chapterTimings("web", "John", 3); len(got) == 0 || len(got) != len(want) {
-		t.Errorf("webc John 3 timings (%d entries) should mirror web (%d)", len(got), len(want))
+	// The WEB-Catholic reaches the Williams tables through the registry, not an alias.
+	if rec, ok := recordingByID("webc", "web-williams"); !ok {
+		t.Error("webc should register the web-williams recording")
+	} else if got := chapterTimings(rec.id, "John", 3); len(got) == 0 {
+		t.Errorf("webc's recording %q has no John 3 timings", rec.id)
 	}
-	// Versions without a bundled recording table highlight nothing.
-	if got := chapterTimings("nrsv", "John", 3); got != nil {
-		t.Errorf("chapterTimings(nrsv) = %v, want nil", got)
+	// Unknown recording ids highlight nothing.
+	if got := chapterTimings("nope", "John", 3); got != nil {
+		t.Errorf("chapterTimings(nope) = %v, want nil", got)
 	}
 }
 
@@ -132,5 +158,46 @@ func TestVerseAtTime(t *testing.T) {
 	}
 	if got := verseAtTime(nil, 5); got != 0 {
 		t.Errorf("verseAtTime(nil) = %d, want 0", got)
+	}
+}
+
+func TestSpeechVerseOffsets(t *testing.T) {
+	bd := &BibleData{
+		Books: []string{"John"},
+		Verses: map[string]map[int][]Verse{
+			"John": {3: {
+				{Verse: 1, Text: "  First verse.  "},  // trimmed
+				{Verse: 2, Text: "   "},               // empty after trim — skipped entirely
+				{Verse: 3, Text: "Third — “quoted”."}, // non-ASCII, still 1 UTF-16 unit each
+				{Verse: 4, Text: "Then 𝕏 spoke."},     // astral char = 2 UTF-16 units
+				{Verse: 5, Text: "Last."},
+			}},
+		},
+	}
+	state := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3, Bible: bd}
+
+	got := speechVerseOffsets(state)
+	// Mirror chapterSpeechText: "First verse." + " " + "Third — “quoted”." + " " + "Then 𝕏 spoke." + " " + "Last."
+	want := []verseTiming{
+		{verse: 1, start: 0},
+		{verse: 3, start: float64(utf16Len("First verse.") + 1)},
+		{verse: 4, start: float64(utf16Len("First verse.") + 1 + utf16Len("Third — “quoted”.") + 1)},
+		{verse: 5, start: float64(utf16Len("First verse.") + 1 + utf16Len("Third — “quoted”.") + 1 + utf16Len("Then 𝕏 spoke.") + 1)},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d offsets, want %d (%+v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i].verse != want[i].verse || got[i].start != want[i].start {
+			t.Errorf("offset[%d] = {v%d @%v}, want {v%d @%v}", i, got[i].verse, got[i].start, want[i].verse, want[i].start)
+		}
+	}
+	// The astral char must count 2 units: sanity-pin utf16Len itself.
+	if utf16Len("𝕏") != 2 || utf16Len("“x”") != 3 {
+		t.Errorf("utf16Len wrong: 𝕏=%d (want 2), “x”=%d (want 3)", utf16Len("𝕏"), utf16Len("“x”"))
+	}
+	// The lookup treats offsets like times: mid-verse-3 range reports verse 3.
+	if v := verseAtTime(got, float64(utf16Len("First verse.")+1+2)); v != 3 {
+		t.Errorf("verseAtTime(mid verse 3) = %d, want 3", v)
 	}
 }

@@ -36,6 +36,7 @@ package bibletext
 // lock-screen / Control Center toggle. Codes: 0 idle, 1 playing, 2 paused, 3 ended.
 extern void bibleTextAudioStateChanged(int code);
 extern void bibleTextAudioTimeUpdate(double seconds);
+extern void bibleTextAudioSpeechRange(int location);
 
 enum { BT_AUDIO_IDLE = 0, BT_AUDIO_PLAYING = 1, BT_AUDIO_PAUSED = 2, BT_AUDIO_ENDED = 3, BT_AUDIO_FAILED = 4 };
 typedef enum { BT_MODE_NONE = 0, BT_MODE_URL = 1, BT_MODE_TTS = 2 } BTAudioMode;
@@ -338,6 +339,12 @@ static BOOL btTCSIsActive(AVPlayerTimeControlStatus tcs) {
     if (self.mode != BT_MODE_TTS) return;
     bibleTextAudioStateChanged(BT_AUDIO_PLAYING);
     btAudioUpdateNowPlaying();
+}
+// Read-along for read-aloud: report where in the utterance the voice is, so Go can
+// highlight the verse being spoken (the armed table holds per-verse UTF-16 offsets).
+- (void)speechSynthesizer:(AVSpeechSynthesizer *)s willSpeakRangeOfSpeechString:(NSRange)r utterance:(AVSpeechUtterance *)u {
+    if (self.mode != BT_MODE_TTS) return;
+    bibleTextAudioSpeechRange((int)r.location);
 }
 
 - (void)teardownEngines {

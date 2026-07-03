@@ -452,11 +452,12 @@ test harness, not the app.
   (`reading_macos.go` / `reading_ios.go`).
 - **Different AI provider:** add a client in [ai_providers.go](ai_providers.go)
   and surface it in [ai_settings.go](ai_settings.go).
-- **Add a recorded-audio source:** add a version case in `recordedURLFor`
-  ([audio.go](audio.go)) returning the per-chapter URL (see `bsbAudioURL` /
-  `webAudioURL`); chapters without a recording fall back to TTS automatically.
-  Extra narrators for the same chapter would surface as additional rows in
-  [audio_menu.go](audio_menu.go).
+- **Add a recorded-audio source:** register a `recording` in `recordingsFor`
+  ([audio.go](audio.go)) — an id (also the read-along timing-table key), the
+  narrator's display name, and a per-chapter URL func (see `bsbAudioURL` /
+  `webAudioURL`). It appears as its own "Recorded · <narrator>" row in
+  [audio_menu.go](audio_menu.go) automatically; chapters the recording doesn't
+  cover fall back to TTS.
 
 ## Cross-platform builds
 

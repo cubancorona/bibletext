@@ -88,8 +88,8 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 	playing, _ := gAudio.buttonState(fp)
 
 	// Skip + source reflect what's loaded while playing, else the reader's chosen
-	// source for this chapter (effectiveKind: source-menu preference or default).
-	displayKind := gAudio.effectiveKind(state)
+	// source for this chapter (effectiveSource: source-menu preference or default).
+	displayKind, _ := gAudio.effectiveSource(state)
 	if show, k := gAudio.indicator(fp); show {
 		displayKind = k
 	}
