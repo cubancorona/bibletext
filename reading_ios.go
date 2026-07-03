@@ -29,6 +29,7 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
 // iOS's app-background lifecycle hook is unreliable, so we save continuously
 // (on scroll-end) instead, keeping the saved position current even on a hard kill.
 extern void bibleTextReadingScrolled(void);
+extern void bibleTextReadAlongUserScrolled(void);
 // Called when the reader single-taps a highlighted verse and picks "Clear
 // highlight" from the inline native menu. Go clears the highlight state and
 // re-renders so the .hl background wash disappears.
@@ -68,6 +69,13 @@ static BOOL    gHasLastTouch      = NO;
 // recoloured in the accent colour until the reader scrolls. gMarkerVerse is the
 // intent; once applied, the run [gMarkerLoc, +gMarkerLen) is recoloured and its
 // original colour saved (gMarkerOrig*) so it is restored live, with no re-render.
+// gReadAlongActive marks a live read-along; gReadAlongUserLatch makes the
+// user-scrolled callback one-shot (reset when following resumes or read-along
+// ends). Declared here — above the scroll delegate that reads them; the rest of
+// the read-along statics live with the highlight code further down.
+static BOOL gReadAlongActive = NO;
+static BOOL gReadAlongUserLatch = NO;
+
 static NSInteger  gMarkerVerse = 0;
 static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
 static NSUInteger gMarkerLoc = 0, gMarkerLen = 0;
@@ -176,6 +184,12 @@ static UITapGestureRecognizer *gHighlightTap = nil;
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
     if (scrollView.dragging || scrollView.decelerating) {
+        // Reader took over during read-along → stop steering (the highlight keeps
+        // tracking); one-shot until following resumes.
+        if (gReadAlongActive && !gReadAlongUserLatch) {
+            gReadAlongUserLatch = YES;
+            bibleTextReadAlongUserScrolled();
+        }
         // Disarm a pending restore the moment the user takes over the scroll. (We do
         // NOT poke the edit menu here — it self-dismisses on scroll, and calling it
         // every scroll frame is needless main-thread work during the gesture.)
@@ -450,6 +464,8 @@ void bibleTextIOSReadAlongClear(void) {
             [ts endEditing];
         }
         gReadAlongRange = NSMakeRange(NSNotFound, 0);
+        gReadAlongActive = NO;
+        gReadAlongUserLatch = NO;
     };
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
@@ -461,7 +477,7 @@ void bibleTextIOSReadAlongClear(void) {
 // scroll (dragging/decelerating). The plain contentOffset assignment sets neither of
 // those flags, so the scroll-restore/marker machinery in scrollViewDidScroll is
 // untouched. verse<=0 just clears (the recording's intro).
-void bibleTextIOSHighlightVerse(int verse) {
+void bibleTextIOSHighlightVerse(int verse, int follow) {
     void (^block)(void) = ^{
         if (gReadingTV == nil) return;
         UITextView *tv = gReadingTV;
@@ -480,7 +496,10 @@ void bibleTextIOSHighlightVerse(int verse) {
             }
         }
         [ts endEditing];
+        gReadAlongActive = (verse > 0);
+        if (follow) gReadAlongUserLatch = NO;   // following again → re-arm the one-shot
 
+        if (!follow) return;   // reader scrolled away; tint only, never yank the view
         if (gReadAlongRange.location == NSNotFound) return;
         if (tv.dragging || tv.decelerating) return;   // never fight the reader's finger
         NSLayoutManager *lm = tv.layoutManager;
@@ -717,6 +736,8 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // New chapter text: a read-along tint from the previous chapter must not be
     // "cleared" against the new storage (audio already stopped via stopAudioForNav).
     gReadAlongRange = NSMakeRange(NSNotFound, 0);
+    gReadAlongActive = NO;
+    gReadAlongUserLatch = NO;
     // Find the highlighted verse (the .hl span becomes a background-coloured run)
     // so we scroll to it rather than the top when arriving from a search result.
     gReadingHighlightRange = (NSRange){NSNotFound, 0};
@@ -1506,8 +1527,14 @@ func armReadingMarker(verse int, r, g, b float64) {
 // readAlongHighlight / readAlongClear drive the audio read-along tint (see
 // audio_controller.go). The C side marshals to the main thread itself, so these
 // are safe from both the AVPlayer time observer and the Fyne goroutine.
-func readAlongHighlight(verse int) { C.bibleTextIOSHighlightVerse(C.int(verse)) }
-func readAlongClear()              { C.bibleTextIOSReadAlongClear() }
+func readAlongHighlight(verse int, follow bool) {
+	f := C.int(0)
+	if follow {
+		f = 1
+	}
+	C.bibleTextIOSHighlightVerse(C.int(verse), f)
+}
+func readAlongClear() { C.bibleTextIOSReadAlongClear() }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS
 // NSTextView overlay shares the exact same chapter HTML as the iOS UITextView.

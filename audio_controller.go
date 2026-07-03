@@ -82,8 +82,12 @@ type audioController struct {
 	// Read-along: the loaded chapter's verse timing table (recorded audio only) and
 	// the verse currently highlighted, so a playback-time tick only touches the native
 	// text view when the verse actually changes. Set on start, cleared on stop.
-	readAlong      []verseTiming
-	readAlongVerse int
+	// followSuspended is raised when the reader scrolls away mid-narration: the
+	// highlight keeps tracking the voice, but auto-scroll stops fighting them until
+	// they tap the "Follow narration" chip (resumeReadAlongFollow).
+	readAlong       []verseTiming
+	readAlongVerse  int
+	followSuspended bool
 }
 
 // gAudio is the process-wide controller. Single-window app.
@@ -285,6 +289,7 @@ func (c *audioController) armReadAlong(state *AppState, a chapterAudio) {
 	c.mu.Lock()
 	c.readAlong = vs
 	c.readAlongVerse = 0
+	c.followSuspended = false
 	c.mu.Unlock()
 	readAlongClear()
 }
@@ -295,6 +300,7 @@ func (c *audioController) clearReadAlong() {
 	had := c.readAlong != nil
 	c.readAlong = nil
 	c.readAlongVerse = 0
+	c.followSuspended = false
 	c.mu.Unlock()
 	raDebug("clearReadAlong had=%v", had)
 	if had {
@@ -310,6 +316,7 @@ func (c *audioController) onTimeUpdate(t float64) {
 	c.mu.Lock()
 	vs := c.readAlong
 	last := c.readAlongVerse
+	follow := !c.followSuspended
 	c.mu.Unlock()
 	if raDebugOn {
 		raDebug("tick t=%.2f armed=%d last=%d", t, len(vs), last)
@@ -324,7 +331,48 @@ func (c *audioController) onTimeUpdate(t float64) {
 	c.mu.Lock()
 	c.readAlongVerse = v
 	c.mu.Unlock()
-	readAlongHighlight(v)
+	readAlongHighlight(v, follow)
+}
+
+// onReadAlongUserScroll is posted from the native reading views when the READER
+// scrolls (a gesture — never our own programmatic follow) while read-along is
+// live. The highlight keeps tracking the narration; the view stops chasing it
+// until resumeReadAlongFollow. Runs on the native main thread.
+func (c *audioController) onReadAlongUserScroll() {
+	c.mu.Lock()
+	fresh := c.readAlong != nil && !c.followSuspended
+	if fresh {
+		c.followSuspended = true
+	}
+	c.mu.Unlock()
+	if fresh {
+		c.fireChange() // surface the "Follow narration" chip
+	}
+}
+
+// followSuspendedFor reports whether the loaded chapter's read-along is armed but
+// no longer steering the scroll — the state the "Follow narration" chip renders in.
+func (c *audioController) followSuspendedFor(fp string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loaded && c.loadedFP == fp && c.readAlong != nil && c.followSuspended
+}
+
+// resumeReadAlongFollow re-attaches the view to the narration: scrolls the current
+// verse back into the comfortable band and lets subsequent ticks steer again.
+func (c *audioController) resumeReadAlongFollow() {
+	c.mu.Lock()
+	if !c.followSuspended {
+		c.mu.Unlock()
+		return
+	}
+	c.followSuspended = false
+	v := c.readAlongVerse
+	c.mu.Unlock()
+	if v > 0 {
+		readAlongHighlight(v, true)
+	}
+	c.fireChange() // drop the chip
 }
 
 // onSpeechRange is posted from the speech synthesizer's willSpeakRangeOfSpeechString
