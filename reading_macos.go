@@ -27,6 +27,8 @@ package bibletext
 extern void bibleTextAIMenuTapped(char *action, char *text);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
 extern void bibleTextStudyMenuTapped(char *action, char *text);
+// Posted when the reader scrolls by hand while read-along is live (audio_export_apple.go).
+extern void bibleTextReadAlongUserScrolled(void);
 
 // HBReadingTextView adds a "Study with AI" submenu (Ask a question / Explain /
 // Analyze context / Analyze translation) to the right-click selection menu and
@@ -224,6 +226,13 @@ static NSInteger btMacVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
 // before the next verse's), so each tick can clear the previous verse cheaply.
 static NSRange  gReadAlongRange = {NSNotFound, 0};
 static NSColor *gReadAlongColor = nil;
+// gReadAlongActive marks a live read-along; gReadAlongUserLatch makes the
+// user-scrolled callback one-shot (reset when following resumes or read-along ends);
+// gReadAlongOwnScroll is raised around OUR OWN follow-scroll so the bounds-change
+// observer below can tell the reader's scrolling from ours.
+static BOOL gReadAlongActive = NO;
+static BOOL gReadAlongUserLatch = NO;
+static BOOL gReadAlongOwnScroll = NO;
 
 // btMacReadAlongRange returns verse's number-run start through just before the next
 // verse's number run (or end of text) — i.e. the whole verse, number + words.
@@ -261,14 +270,16 @@ void bibleTextMacReadAlongClear(void) {
         [gTextView setNeedsDisplayInRect:gTextView.visibleRect];
     }
     gReadAlongRange = NSMakeRange(NSNotFound, 0);
+    gReadAlongActive = NO;
+    gReadAlongUserLatch = NO;
 }
 
 // bibleTextMacHighlightVerse tints the narrated verse (clearing the previous one) and
 // follow-scrolls only when the verse has drifted out of a comfortable band, so the
 // text isn't yanked on every verse. verse<=0 just clears (recording's intro).
-void bibleTextMacHighlightVerse(int verse) {
+void bibleTextMacHighlightVerse(int verse, int follow) {
     if (![NSThread isMainThread]) {   // see bibleTextMacReadAlongClear
-        dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacHighlightVerse(verse); });
+        dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacHighlightVerse(verse, follow); });
         return;
     }
     if (gTextView == nil) return;
@@ -287,6 +298,10 @@ void bibleTextMacHighlightVerse(int verse) {
         }
     }
     [ts endEditing];
+    gReadAlongActive = (verse > 0);
+    if (follow) gReadAlongUserLatch = NO;   // following again → re-arm the one-shot
+
+    if (!follow) return;   // reader scrolled away; tint only, never yank the view
 
     // Follow-scroll: keep the narrated verse in a comfortable band. All geometry stays in
     // the text view's OWN bounds space — visibleRect for "where are we" and -scrollPoint:
@@ -304,7 +319,9 @@ void bibleTextMacHighlightVerse(int verse) {
         if (vTop < vis.origin.y || vTop > vis.origin.y + vis.size.height * 0.70) {
             CGFloat y = vTop - vis.size.height * 0.30;
             if (y < 0) y = 0;
+            gReadAlongOwnScroll = YES;   // our scroll — not the reader taking over
             [gTextView scrollPoint:NSMakePoint(0, y)];
+            gReadAlongOwnScroll = NO;
         }
     }
 }
@@ -411,6 +428,21 @@ static void bibleTextMacEnsureTV(void) {
 
             sv.documentView = tv;
             sv.hidden = YES;
+
+            // Any scroll moves the clip view's bounds. Our own follow-scroll raises
+            // gReadAlongOwnScroll around its scrollPoint call, so a bounds change
+            // WITHOUT that flag while read-along is live = the reader scrolling
+            // (trackpad, mouse wheel, scroller drag — the live-scroll notification
+            // alone misses discrete wheel events).
+            sv.contentView.postsBoundsChangedNotifications = YES;
+            [[NSNotificationCenter defaultCenter]
+                addObserverForName:NSViewBoundsDidChangeNotification
+                            object:sv.contentView queue:nil usingBlock:^(NSNotification *n) {
+                if (gReadAlongActive && !gReadAlongOwnScroll && !gReadAlongUserLatch) {
+                    gReadAlongUserLatch = YES;
+                    bibleTextReadAlongUserScrolled();
+                }
+            }];
 
             gScroll = sv;
             gTextView = tv;
@@ -783,8 +815,14 @@ func armReadingRestore(verse int, delta, frac float64) {
 // readAlongHighlight tints the verse being narrated (0 clears) and follow-scrolls it
 // into view; readAlongClear removes the tint. Both run on the macOS main thread — the
 // audio time-observer's main queue, or the Fyne UI goroutine (which is that thread).
-func readAlongHighlight(verse int) { C.bibleTextMacHighlightVerse(C.int(verse)) }
-func readAlongClear()              { C.bibleTextMacReadAlongClear() }
+func readAlongHighlight(verse int, follow bool) {
+	f := C.int(0)
+	if follow {
+		f = 1
+	}
+	C.bibleTextMacHighlightVerse(C.int(verse), f)
+}
+func readAlongClear() { C.bibleTextMacReadAlongClear() }
 
 // captureLastTouch / armReadingMarker are the initial-touch ("where I left off")
 // bridge — an iOS-only feature (it needs touch). Desktop has no touch gesture and

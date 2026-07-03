@@ -61,7 +61,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 
 	var fired []string
 	rec := func(name string) func() { return func() { fired = append(fired, name) } }
-	card := buildAudioCard(state, audioRecorded, false, false, true, audioCardCallbacks{
+	card := buildAudioCard(state, audioRecorded, false, false, true, false, audioCardCallbacks{
 		onSrc: rec("src"), onBack: rec("back"), onPlay: rec("play"),
 		onFwd: rec("fwd"), onClose: rec("close"),
 	})
@@ -74,7 +74,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 	// the geometry contract under test is that the swap changes nothing.
 	speaker := newIconTapButton(state, theme.VolumeUpIcon(), 20, 34, func() {})
 	host := container.NewStack(container.NewHBox(layout.NewSpacer(), container.NewCenter(speaker)))
-	probe := buildAudioCard(state, audioTTS, false, false, false, audioCardCallbacks{})
+	probe := buildAudioCard(state, audioTTS, false, false, false, false, audioCardCallbacks{})
 	cell := container.NewGridWrap(probe.MinSize(), host)
 	focusBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {})
 	focusBtn.Importance = widget.LowImportance

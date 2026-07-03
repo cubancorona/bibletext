@@ -151,3 +151,63 @@ func TestSelectSourceNarratorStaleness(t *testing.T) {
 		t.Fatalf("deuterocanon effectiveSource = (%v, %q), want (TTS, \"\")", kind, recID)
 	}
 }
+
+// TestReadAlongFollowSuspend locks the scroll-tug-of-war contract: a user scroll
+// during read-along suspends the follow (highlight keeps tracking), the chip
+// state reports it, resume re-attaches, and arming a new chapter resets it.
+func TestReadAlongFollowSuspend(t *testing.T) {
+	state := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20}
+	fp := chapterAudioFingerprint(state)
+	reset := func() {
+		gAudio.mu.Lock()
+		gAudio.loaded, gAudio.loadedFP, gAudio.loadedRecID = false, "", ""
+		gAudio.kind, gAudio.state = audioRecorded, audioIdle
+		gAudio.readAlong, gAudio.readAlongVerse, gAudio.followSuspended = nil, 0, false
+		gAudio.mu.Unlock()
+	}
+	defer reset()
+
+	gAudio.mu.Lock()
+	gAudio.loaded, gAudio.loadedFP, gAudio.state = true, fp, audioPlaying
+	gAudio.readAlong = []verseTiming{{1, 0, 1}, {2, 10, 20}}
+	gAudio.mu.Unlock()
+
+	// A user scroll suspends the follow; a second report is a no-op.
+	gAudio.onReadAlongUserScroll()
+	if !gAudio.followSuspendedFor(fp) {
+		t.Fatal("user scroll did not suspend the follow")
+	}
+	gAudio.onReadAlongUserScroll()
+	if !gAudio.followSuspendedFor(fp) {
+		t.Fatal("second scroll report flipped the suspension")
+	}
+
+	// Ticks keep updating the tracked verse while suspended.
+	gAudio.onTimeUpdate(12)
+	gAudio.mu.Lock()
+	v := gAudio.readAlongVerse
+	gAudio.mu.Unlock()
+	if v != 2 {
+		t.Fatalf("verse tracking stopped while suspended: verse=%d, want 2", v)
+	}
+
+	// Resume re-attaches.
+	gAudio.resumeReadAlongFollow()
+	if gAudio.followSuspendedFor(fp) {
+		t.Fatal("resume did not clear the suspension")
+	}
+
+	// Arming a new chapter always starts attached.
+	gAudio.onReadAlongUserScroll()
+	gAudio.armReadAlong(state, chapterAudio{Kind: audioTTS})
+	if gAudio.followSuspendedFor(fp) {
+		t.Fatal("armReadAlong did not reset the suspension")
+	}
+
+	// No read-along armed → scroll reports are ignored entirely.
+	reset()
+	gAudio.onReadAlongUserScroll()
+	if gAudio.followSuspendedFor(fp) {
+		t.Fatal("scroll with no read-along armed suspended something")
+	}
+}
