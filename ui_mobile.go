@@ -4,6 +4,7 @@ package bibletext
 
 import (
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -121,19 +122,27 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		notifyReadingOverlay(overlayShouldShow(state))
 	}
 
-	header := buildHeader(state)
-	tabBar := buildMobileTabBar(state)
-	body := container.NewBorder(header, tabBar, nil, nil, content)
+	// The app header and bottom tab bar collapse Safari-style on scroll. They are
+	// wrapped in a collapsible so the transition can ANIMATE (the height fraction
+	// eases 1↔0) rather than popping. The header is bottom-anchored so its content
+	// slides up off the top as it shrinks; the tab bar is top-anchored so it slides
+	// down off the bottom — either way the shrinking bar's overflow leaves the
+	// screen (the opaque native reading pane covers the rest), so nothing overlaps.
+	headerC := newCollapsible(buildHeader(state), collapseAnchorBottom)
+	tabBarC := newCollapsible(buildMobileTabBar(state), collapseAnchorTop)
+	body := container.NewBorder(headerC, tabBarC, nil, nil, content)
 
 	base := canvas.NewRectangle(pal.Background)
 	root := container.NewStack(base, body)
 
 	// Safari-style collapsing chrome: the native reading overlay posts the scroll
 	// direction (bibleTextChromeScrolled), and this closure — over the LIVE tree's
-	// header/tab bar — hides or restores the toolbars in place. No rebuild: the
-	// Border re-lays around the hidden objects and the reading host's Resize/Move
-	// re-pins the native text view into the reclaimed space. The chapter toolbar
-	// inside the reading view stays up as the essential information.
+	// header/tab bar — animates the toolbars in or out in place. No rebuild: as the
+	// collapsibles' heights ease, the Border re-lays each tick and the reading
+	// host's Resize/Move re-pins the native text view into the reclaimed space, so
+	// the verses follow the toolbars smoothly. The chapter toolbar inside the
+	// reading view stays up as the essential information.
+	var chromeAnim *fyne.Animation
 	gChromeSetHidden = func(hidden bool) {
 		if state.chromeHidden == hidden {
 			return
@@ -145,21 +154,101 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 			return
 		}
 		state.chromeHidden = hidden
-		for _, o := range []fyne.CanvasObject{header, tabBar, state.chromeBand} {
-			if o == nil {
-				continue
-			}
-			if hidden {
-				o.Hide()
-			} else {
-				o.Show()
-			}
+		bandC, _ := state.chromeBand.(*collapsible)
+		if chromeAnim != nil {
+			chromeAnim.Stop() // a reversal mid-flight picks up from the current fraction
 		}
-		root.Refresh()
+		from := headerC.frac
+		to := float32(1)
+		if hidden {
+			to = 0
+		}
+		chromeAnim = fyne.NewAnimation(chromeAnimDuration, func(p float32) {
+			f := from + (to-from)*p
+			headerC.setFraction(f)
+			tabBarC.setFraction(f)
+			if bandC != nil {
+				bandC.setFraction(f)
+			}
+			root.Refresh() // re-lay the Border so the native pane follows the bars
+		})
+		chromeAnim.Curve = fyne.AnimationEaseInOut
+		chromeAnim.Start()
 	}
 
 	return root
 }
+
+// chromeAnimDuration is how long the Safari-style toolbar collapse/restore takes —
+// a short iOS-standard ease.
+const chromeAnimDuration = 220 * time.Millisecond
+
+// collapseAnchor controls which edge a collapsible pins its content to as it
+// shrinks, so the overflow slides off the correct side of the screen.
+type collapseAnchor int
+
+const (
+	collapseAnchorTop    collapseAnchor = iota // content pinned to the top; overflow exits the bottom
+	collapseAnchorBottom                       // content pinned to the bottom; overflow exits the top
+)
+
+// collapsible wraps one chrome bar so its allotted height can be animated from
+// full (frac 1) to nothing (frac 0). It reports a fraction of its content's
+// natural height as MinSize — so a surrounding Border gives it less room as it
+// collapses — while still laying its content out at FULL height, anchored to one
+// edge, so the part that no longer fits slides off-screen instead of squashing.
+// Fyne doesn't clip, but the anchoring aims the overflow off the screen edge and
+// the opaque native reading pane covers whatever is left, so nothing shows through.
+type collapsible struct {
+	widget.BaseWidget
+	content fyne.CanvasObject
+	anchor  collapseAnchor
+	frac    float32
+}
+
+func newCollapsible(content fyne.CanvasObject, anchor collapseAnchor) *collapsible {
+	c := &collapsible{content: content, anchor: anchor, frac: 1}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+// MinSize is overridden (not left to BaseWidget's cache) so every layout pass
+// reads the live fraction — that's what drives the animation.
+func (c *collapsible) MinSize() fyne.Size {
+	m := c.content.MinSize()
+	return fyne.NewSize(m.Width, m.Height*c.frac)
+}
+
+func (c *collapsible) setFraction(f float32) {
+	if f < 0 {
+		f = 0
+	} else if f > 1 {
+		f = 1
+	}
+	c.frac = f
+	c.Refresh()
+}
+
+func (c *collapsible) CreateRenderer() fyne.WidgetRenderer {
+	return &collapsibleRenderer{c: c}
+}
+
+type collapsibleRenderer struct{ c *collapsible }
+
+func (r *collapsibleRenderer) Layout(size fyne.Size) {
+	m := r.c.content.MinSize()
+	r.c.content.Resize(fyne.NewSize(size.Width, m.Height)) // full natural height
+	if r.c.anchor == collapseAnchorBottom {
+		r.c.content.Move(fyne.NewPos(0, size.Height-m.Height)) // overflow off the top
+	} else {
+		r.c.content.Move(fyne.NewPos(0, 0)) // overflow off the bottom
+	}
+}
+
+func (r *collapsibleRenderer) MinSize() fyne.Size           { return r.c.MinSize() }
+func (r *collapsibleRenderer) Refresh()                     { r.Layout(r.c.Size()); canvas.Refresh(r.c) }
+func (r *collapsibleRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.c.content} }
+func (r *collapsibleRenderer) Destroy()                     {}
 
 // overlayShouldShow is the single source of truth for native reading-overlay
 // visibility on mobile: the iOS UITextView must be visible exactly when the

@@ -92,12 +92,12 @@ static BOOL gReadAlongUserLatch = NO;
 static CGFloat gChromeLastY = 0;
 static CGFloat gChromeAcc = 0;
 static BOOL    gChromeHiddenNative = NO;
-// One-way-per-gesture latch for the always-show-at-bottom rule: showing the
-// chrome GROWS the pane, which shrinks maxY and would immediately re-qualify a
-// hide (toolbar flapping at the end of every chapter). Once the bottom shows
-// the chrome, it stays up for the rest of that drag/deceleration; the next
-// gesture re-baselines.
-static BOOL    gChromeBottomLatch = NO;
+// gChromeBottomRetry marks a drag that BEGAN while already resting at the bottom
+// of the chapter. Reaching the end the first time leaves the toolbars hidden (so
+// the last verses stay full-screen); a SECOND deliberate pull that starts at the
+// bottom is the "hit the bottom again" that brings them back — the way Safari
+// does it. Set once per gesture in scrollViewWillBeginDragging.
+static BOOL    gChromeBottomRetry = NO;
 
 static NSInteger  gMarkerVerse = 0;
 static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
@@ -208,7 +208,10 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     // huge phantom swipe).
     gChromeLastY = scrollView.contentOffset.y;
     gChromeAcc = 0;
-    gChromeBottomLatch = NO;
+    // A pull that STARTS at the bottom of a scrollable chapter is the deliberate
+    // "hit the bottom again" that restores the toolbars (see gChromeBottomRetry).
+    CGFloat maxY = scrollView.contentSize.height - scrollView.bounds.size.height;
+    gChromeBottomRetry = (maxY > 32 && scrollView.contentOffset.y >= maxY - 1);
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
@@ -230,8 +233,11 @@ static UITapGestureRecognizer *gHighlightTap = nil;
         gChromeAcc += delta;
         CGFloat maxY = scrollView.contentSize.height - scrollView.bounds.size.height;
         BOOL wantHidden = gChromeHiddenNative;
-        if (maxY > 0 && y >= maxY) { gChromeBottomLatch = YES; gChromeAcc = 0; }
-        if (y <= 32 || gChromeBottomLatch) wantHidden = NO;
+        if (y <= 32) wantHidden = NO;                 // the top always restores
+        // A gesture that began at the bottom (the deliberate second pull) restores
+        // the toolbars and holds them up for the rest of that gesture — the pane
+        // growth would otherwise let the down-drag re-qualify a hide (flapping).
+        else if (gChromeBottomRetry) wantHidden = NO;
         // Hide only when there is real scrollable depth (maxY > 32): a chapter
         // that (almost) fits on screen has nothing to reclaim, and its
         // rubber-band bounce would otherwise read as a qualifying swipe.
@@ -1362,8 +1368,12 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	}
 	state.chromeBand = nil
 	if len(band.Objects) > 0 {
-		top.Add(band)
-		state.chromeBand = band
+		// Wrap in a collapsible so it animates with the app header + tab bar when
+		// the Safari-style chrome collapses (top-anchored: it slides up as it
+		// shrinks). gChromeSetHidden animates state.chromeBand alongside the others.
+		bandC := newCollapsible(band, collapseAnchorTop)
+		top.Add(bandC)
+		state.chromeBand = bandC
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
 
