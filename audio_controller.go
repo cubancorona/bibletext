@@ -37,11 +37,12 @@ func raDebug(format string, args ...interface{}) {
 type audioPlayState int
 
 const (
-	audioIdle    audioPlayState = iota // nothing loaded / stopped
-	audioPlaying                       // actively producing sound
-	audioPaused                        // loaded but paused
-	audioEnded                         // reached the end of the chapter
-	audioFailed                        // recorded stream failed (404 / dead network / stall)
+	audioIdle      audioPlayState = iota // nothing loaded / stopped
+	audioPlaying                         // actively producing sound
+	audioPaused                          // loaded but paused
+	audioEnded                           // reached the end of the chapter
+	audioFailed                          // recorded stream failed (404 / dead network / stall)
+	audioBuffering                       // recorded stream loading — intended sound, not audible yet
 )
 
 // audioController is the single Go-side owner of playback. Created at package
@@ -103,6 +104,15 @@ func (c *audioController) playPauseCurrent(state *AppState) {
 	c.mu.Unlock()
 
 	if sameChapter {
+		c.mu.Lock()
+		buffering := c.state == audioBuffering
+		c.mu.Unlock()
+		if buffering {
+			// The stream is still loading (spinner showing). A tap here used to pause
+			// the not-yet-audible player — the reader heard nothing, saw ▶ again, and
+			// concluded audio was broken. Ignore it; nav away still stops cleanly.
+			return
+		}
 		// Native flips playing<->paused and posts bibleTextAudioStateChanged, which
 		// updates the glyph via applyNativeState.
 		nativeAudioToggle()
@@ -187,7 +197,13 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	c.loadedFP = fp
 	c.kind = a.Kind
 	c.loadedRecID = a.RecordingID
-	c.state = audioPlaying
+	// A recorded stream starts life BUFFERING (the button shows a spinner until the
+	// native layer reports actual playback); on-device speech is audible immediately.
+	if a.Kind == audioRecorded {
+		c.state = audioBuffering
+	} else {
+		c.state = audioPlaying
+	}
 	c.boundState = state // so the end-of-chapter callback can advance + keep playing
 	c.startedAt = time.Now()
 	c.mu.Unlock()
@@ -337,6 +353,14 @@ func (c *audioController) isPlaying() bool {
 	return c.state == audioPlaying
 }
 
+// buffering reports whether the loaded chapter's recorded stream is still coming
+// up — the card shows a spinner and play taps are ignored until it resolves.
+func (c *audioController) buffering(fp string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loaded && c.loadedFP == fp && c.state == audioBuffering
+}
+
 // playingFingerprint is the fingerprint of the loaded chapter, or "" when idle —
 // so a caller can tell whether a given chapter is the one playing.
 func (c *audioController) playingFingerprint() string {
@@ -403,7 +427,7 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	tooFast := time.Since(c.startedAt) < 2*time.Second
 	c.state = s
 	switch s {
-	case audioPlaying, audioPaused:
+	case audioPlaying, audioPaused, audioBuffering:
 		// The engine reports it's actively producing (or holding) sound, so a source
 		// IS loaded — re-assert it. Belt-and-suspenders against a stale teardown
 		// callback having just cleared the flag a moment before this one lands; the

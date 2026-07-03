@@ -146,10 +146,10 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 // header; they're shared here so the desktop chapter toolbar can use the same
 // small, low-chrome controls.
 
-// minTapTarget is the smallest comfortable touch target (Apple HIG ~44pt). The
-// reading header passes it as the box height for the small icon buttons (the
-// chapter arrows, the copy icon) so they're easy to hit on a phone; the picker
-// text anchors get generous horizontal padding (tapTextHPad) for the same reason.
+// minTapTarget is the smallest comfortable touch target (Apple HIG ~44pt) —
+// the audio card's transport row is sized to it. The reading header's own boxes
+// are smaller (boxH 36 on iOS; the two-line header can't fit 44pt rows); the
+// picker text anchors get generous horizontal padding (tapTextHPad) instead.
 const (
 	minTapTarget float32 = 44
 	tapTextHPad  float32 = 18
@@ -375,8 +375,8 @@ func chapterRenderFingerprint(state *AppState) string {
 	if state.HasHighlightedVerse {
 		hl = fmt.Sprintf("%s:%d:%d-%d", state.HighlightedBook, state.HighlightedChapter, state.HighlightedVerse, state.HighlightedVerseEnd)
 	}
-	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s",
-		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl)
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID())
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------
@@ -400,11 +400,15 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	redLetterHex := nrgbaToHex(pal.RedLetter)
 	redLetter := redLetterEnabled()
 
+	// The reader's chosen text size scales the whole page: body px here, and the
+	// verse-number superscripts via their em sizing. 21px is the "Normal" base.
+	bodyPx := int(math.Round(21 * readingTextScale()))
+
 	var b strings.Builder
 	b.WriteString("<html><head><style>")
 	fmt.Fprintf(&b, `body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: %dpx;
 		color: %s;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -412,7 +416,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		-webkit-text-size-adjust: 100%%;
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
-	}`, textHex)
+	}`, bodyPx, textHex)
 	fmt.Fprintf(&b, `p {
 		margin: 0 0 24px 0;
 		text-align: justify;

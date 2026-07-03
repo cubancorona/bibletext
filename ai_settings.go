@@ -31,11 +31,13 @@ func showAISettings(state *AppState) {
 	pal := state.pal()
 	store := state.keys()
 
-	// The only sheet control that affects the reading pane is the red-letter
-	// toggle. Capture it now so closing the sheet re-renders ONLY when it actually
-	// changed — refreshing unconditionally rebuilds the reading pane (re-pinning
-	// the native text overlay) and flickers the screen for an AI-key-only change.
+	// The only sheet controls that affect the reading pane are the red-letter
+	// toggle and the text-size choice. Capture them now so closing the sheet
+	// re-renders ONLY when one actually changed — refreshing unconditionally
+	// rebuilds the reading pane (re-pinning the native text overlay) and flickers
+	// the screen for an AI-key-only change.
 	redLetterAtOpen := redLetterEnabled()
+	textSizeAtOpen := readingTextSizeID()
 
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
@@ -193,8 +195,8 @@ func showAISettings(state *AppState) {
 			popup.Hide()
 		}
 		restore()
-		if redLetterEnabled() != redLetterAtOpen {
-			state.refreshReadingOnly() // red-letter changed → re-render the verses
+		if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
+			state.refreshReadingOnly() // red-letter / text size changed → re-render the verses
 		}
 	}
 
@@ -208,6 +210,32 @@ func showAISettings(state *AppState) {
 	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
 	redLetter.SetChecked(redLetterEnabled())
 	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
+
+	// Scripture text size — the app can't inherit the phone's Larger Text setting
+	// (Fyne renders its own canvas), so this is the reader's size control. Radio
+	// rows (not a slider): three named steps are easier to hit and to reason about.
+	sizeLabels := make([]string, len(textSizeOptions))
+	labelToID := map[string]string{}
+	currentLabel := ""
+	for i, o := range textSizeOptions {
+		sizeLabels[i] = o.Label
+		labelToID[o.Label] = o.ID
+		if o.ID == readingTextSizeID() {
+			currentLabel = o.Label
+		}
+	}
+	textSize := widget.NewRadioGroup(sizeLabels, func(sel string) {
+		if id, ok := labelToID[sel]; ok && sel != "" {
+			setReadingTextSizeID(id)
+		}
+	})
+	textSize.Horizontal = true
+	textSize.Required = true
+	textSize.SetSelected(currentLabel)
+	textSizeRow := container.NewVBox(
+		widget.NewLabel("Text size"),
+		textSize,
+	)
 
 	// In-app disclosure of where AI prompts go, shown right under the key field
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
@@ -231,6 +259,7 @@ func showAISettings(state *AppState) {
 		keyArea,
 		aiDisclosure,
 		sectionLabel("READING", pal),
+		textSizeRow,
 		redLetter,
 	)
 

@@ -14,11 +14,12 @@ import "C"
 // Codes posted by the native engines (BT_AUDIO_*), kept in sync with
 // audioPlayState in audio_controller.go.
 const (
-	cAudioIdle    = 0
-	cAudioPlaying = 1
-	cAudioPaused  = 2
-	cAudioEnded   = 3
-	cAudioFailed  = 4
+	cAudioIdle      = 0
+	cAudioPlaying   = 1
+	cAudioPaused    = 2
+	cAudioEnded     = 3
+	cAudioFailed    = 4
+	cAudioBuffering = 5
 )
 
 // bibleTextAudioStateChanged is posted by the AVPlayer/AVSpeechSynthesizer
@@ -39,6 +40,8 @@ func bibleTextAudioStateChanged(code C.int) {
 		s = audioEnded
 	case cAudioFailed:
 		s = audioFailed
+	case cAudioBuffering:
+		s = audioBuffering
 	default:
 		s = audioIdle
 	}

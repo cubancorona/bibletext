@@ -595,25 +595,26 @@ func withCaret(state *AppState, e fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewThemeOverride(centered, caretTheme{Theme: base})
 }
 
-// smallChipTheme shrinks a button's text + padding so it reads as a small, quiet
-// chip rather than a full-size button.
+// smallChipTheme sizes the "Go to" button as a compact — but comfortably
+// tappable — chip. It was 12pt text with 5pt padding (a ~26pt-tall target, 59%
+// of Apple's 44pt touch minimum, on a primary navigation control); older
+// readers need both the bigger label and the taller hit box.
 type smallChipTheme struct{ fyne.Theme }
 
 func (t smallChipTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
 	case theme.SizeNameText:
-		return 12
+		return 15
 	case theme.SizeNameInnerPadding:
-		return 5
+		return 9
 	}
 	return t.Theme.Size(name)
 }
 
-// gotoButton is the small, quiet "Go to" chip in the header center slot that opens
-// showGotoPicker. A low-importance button (no loud fill) with shrunk text inside a
-// thin rounded outline reads as a small, elegant, barely-there button — not a flat
-// label (which a plain low-importance button looks like) and not an intrusive
-// accent-filled block. It stays short, so the header height is unchanged.
+// gotoButton is the "Go to" chip in the header center slot that opens
+// showGotoPicker. A low-importance button (no loud fill) inside a rounded
+// outline reads as a quiet chip rather than an accent-filled block; the outline
+// (pal.Border, darkened in the light palette) is what marks it as a control.
 func gotoButton(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 	btn := widget.NewButton("Go to", func() { showGotoPicker(state) })

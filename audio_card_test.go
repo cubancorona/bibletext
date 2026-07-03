@@ -17,6 +17,21 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// findLabeledChip walks the object tree for the card's *labeledTapChip.
+func findLabeledChip(o fyne.CanvasObject) *labeledTapChip {
+	switch v := o.(type) {
+	case *labeledTapChip:
+		return v
+	case *fyne.Container:
+		for _, c := range v.Objects {
+			if got := findLabeledChip(c); got != nil {
+				return got
+			}
+		}
+	}
+	return nil
+}
+
 // collectIconButtons walks the object tree gathering every *iconTapButton.
 func collectIconButtons(o fyne.CanvasObject) []*iconTapButton {
 	switch v := o.(type) {
@@ -46,7 +61,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 
 	var fired []string
 	rec := func(name string) func() { return func() { fired = append(fired, name) } }
-	card := buildAudioCard(state, audioRecorded, false, true, audioCardCallbacks{
+	card := buildAudioCard(state, audioRecorded, false, false, true, audioCardCallbacks{
 		onSrc: rec("src"), onBack: rec("back"), onPlay: rec("play"),
 		onFwd: rec("fwd"), onClose: rec("close"),
 	})
@@ -59,7 +74,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 	// the geometry contract under test is that the swap changes nothing.
 	speaker := newIconTapButton(state, theme.VolumeUpIcon(), 20, 34, func() {})
 	host := container.NewStack(container.NewHBox(layout.NewSpacer(), container.NewCenter(speaker)))
-	probe := buildAudioCard(state, audioTTS, false, false, audioCardCallbacks{})
+	probe := buildAudioCard(state, audioTTS, false, false, false, audioCardCallbacks{})
 	cell := container.NewGridWrap(probe.MinSize(), host)
 	focusBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {})
 	focusBtn.Importance = widget.LowImportance
@@ -80,8 +95,8 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 	host.Refresh()
 
 	buttons := collectIconButtons(card)
-	if len(buttons) != 4 {
-		t.Fatalf("expected 4 icon buttons in the card, found %d", len(buttons))
+	if len(buttons) != 3 {
+		t.Fatalf("expected 3 icon buttons in the card (transport), found %d", len(buttons))
 	}
 	byIcon := func(sub string) *iconTapButton {
 		for _, b := range buttons {
@@ -92,6 +107,10 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 		t.Fatalf("no button with icon containing %q", sub)
 		return nil
 	}
+	srcChip := findLabeledChip(card)
+	if srcChip == nil {
+		t.Fatal("no labeledTapChip (the narrator/source selector) in the card")
+	}
 	targets := []struct {
 		name string
 		obj  fyne.CanvasObject
@@ -99,7 +118,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 		{"back", byIcon("skip_back")},
 		{"play", byIcon("play")},
 		{"fwd", byIcon("skip_fwd")},
-		{"src", byIcon("account")},
+		{"src", srcChip},
 	}
 
 	for _, tgt := range targets {
@@ -167,5 +186,12 @@ func TestCollapsedControlClearsStaleReadAlong(t *testing.T) {
 	_ = audioControlContent(state, 34, func() {})
 	if !armedNow() {
 		t.Fatal("collapsed control cleared the read-along table while audio was still playing")
+	}
+
+	// Buffering + collapsed → about to play; the armed table must survive too.
+	setAudio(audioBuffering, true)
+	_ = audioControlContent(state, 34, func() {})
+	if !armedNow() {
+		t.Fatal("collapsed control cleared the read-along table while the stream was buffering")
 	}
 }
