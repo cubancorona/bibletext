@@ -205,12 +205,107 @@ static NSInteger btMacVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
     return verse;
 }
 
+// ---- Read-along: highlight the verse being narrated + gently follow-scroll -------
+// gReadAlongRange is the char range currently tinted (its number run through just
+// before the next verse's), so each tick can clear the previous verse cheaply.
+static NSRange  gReadAlongRange = {NSNotFound, 0};
+static NSColor *gReadAlongColor = nil;
+
+// btMacReadAlongRange returns verse's number-run start through just before the next
+// verse's number run (or end of text) — i.e. the whole verse, number + words.
+static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
+    NSUInteger start = btMacLocForVerse(ts, verse);
+    if (start == NSNotFound) return NSMakeRange(NSNotFound, 0);
+    __block NSUInteger nextLoc = ts.length;
+    [ts enumerateAttribute:NSFontAttributeName inRange:NSMakeRange(start, ts.length - start)
+                   options:0 usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (r.location <= start || val == nil || r.length == 0 ||
+            ((NSFont *)val).pointSize >= BT_VERSE_FONT_MAX) return;
+        if ([[ts.string substringWithRange:r] integerValue] > 0) { nextLoc = r.location; *stop = YES; }
+    }];
+    return NSMakeRange(start, nextLoc - start);
+}
+
+void bibleTextMacReadAlongClear(void) {
+    // Reachable from the Fyne goroutine (main on macOS) but also from AVSpeechSynthesizer
+    // delegate callbacks, whose thread is not documented — marshal to main like the iOS twin.
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacReadAlongClear(); });
+        return;
+    }
+    if (gTextView == nil) return;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length) {
+        [ts beginEditing];
+        [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
+        [ts endEditing];
+        // Unlike the per-tick highlight (always mid-playback, window active), this
+        // clear can fire after long idle — e.g. closing the audio card much later —
+        // where a coalesced/napped display update can drop the attribute change's
+        // invalidation. Force the repaint so the tint never visibly lingers.
+        [gTextView setNeedsDisplayInRect:gTextView.visibleRect];
+    }
+    gReadAlongRange = NSMakeRange(NSNotFound, 0);
+}
+
+// bibleTextMacHighlightVerse tints the narrated verse (clearing the previous one) and
+// follow-scrolls only when the verse has drifted out of a comfortable band, so the
+// text isn't yanked on every verse. verse<=0 just clears (recording's intro).
+void bibleTextMacHighlightVerse(int verse) {
+    if (![NSThread isMainThread]) {   // see bibleTextMacReadAlongClear
+        dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacHighlightVerse(verse); });
+        return;
+    }
+    if (gTextView == nil) return;
+    NSTextStorage *ts = gTextView.textStorage;
+    [ts beginEditing];
+    if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length)
+        [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
+    gReadAlongRange = NSMakeRange(NSNotFound, 0);
+    if (verse > 0) {
+        NSRange r = btMacReadAlongRange(ts, verse);
+        if (r.location != NSNotFound && NSMaxRange(r) <= ts.length) {
+            if (gReadAlongColor == nil)
+                gReadAlongColor = [NSColor colorWithCalibratedRed:1.0 green:0.80 blue:0.30 alpha:0.32];
+            [ts addAttribute:NSBackgroundColorAttributeName value:gReadAlongColor range:r];
+            gReadAlongRange = r;
+        }
+    }
+    [ts endEditing];
+
+    // Follow-scroll: keep the narrated verse in a comfortable band. All geometry stays in
+    // the text view's OWN bounds space — visibleRect for "where are we" and -scrollPoint:
+    // for the move — so it's immune to the text view's frame origin, which the layout can
+    // leave non-zero inside the clip view. (A raw clip-view scrollToPoint:0 assumes the
+    // document sits at origin 0; when it doesn't, the content lands offset below the top,
+    // leaving a stale gap above verse 1.) Only scrolls when the verse drifts above the top
+    // or past 70% down, so the text isn't yanked on every verse.
+    if (gReadAlongRange.location != NSNotFound) {
+        NSLayoutManager *lm = gTextView.layoutManager;
+        NSRange g = [lm glyphRangeForCharacterRange:gReadAlongRange actualCharacterRange:NULL];
+        NSRect rect = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
+        CGFloat vTop = rect.origin.y + gTextView.textContainerInset.height;
+        NSRect vis = gTextView.visibleRect;
+        if (vTop < vis.origin.y || vTop > vis.origin.y + vis.size.height * 0.70) {
+            CGFloat y = vTop - vis.size.height * 0.30;
+            if (y < 0) y = 0;
+            [gTextView scrollPoint:NSMakePoint(0, y)];
+        }
+    }
+}
+
 // bibleTextMacScrollTV positions the chapter, in priority order: the highlighted
 // verse (a search jump), then a one-shot restore target (reopening where the
 // reader left off), otherwise the very top. NSTextView is flipped, so larger y is
 // further down; we scroll the clip view to the target glyph rect.
 static void bibleTextMacScrollTV(void) {
     if (gTextView == nil || gScroll == nil) return;
+    // Programmatic scrolling (e.g. read-along follow-scroll) can leave the
+    // verticallyResizable text view's frame origin non-zero inside the clip view.
+    // Every case below computes its target in frame space and scrolls the clip view,
+    // which assumes the document sits at origin 0 — a stale origin would land the
+    // content offset below the top (a gap above verse 1). Normalize it first.
+    { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
     if (gMacHighlightRange.location != NSNotFound &&
         gMacHighlightRange.length > 0 &&
         NSMaxRange(gMacHighlightRange) <= gTextView.textStorage.length) {
@@ -669,6 +764,12 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 func armReadingRestore(verse int, delta, frac float64) {
 	C.bibleTextMacArmRestore(C.int(verse), C.double(delta), C.double(frac))
 }
+
+// readAlongHighlight tints the verse being narrated (0 clears) and follow-scrolls it
+// into view; readAlongClear removes the tint. Both run on the macOS main thread — the
+// audio time-observer's main queue, or the Fyne UI goroutine (which is that thread).
+func readAlongHighlight(verse int) { C.bibleTextMacHighlightVerse(C.int(verse)) }
+func readAlongClear()              { C.bibleTextMacReadAlongClear() }
 
 // captureLastTouch / armReadingMarker are the initial-touch ("where I left off")
 // bridge — an iOS-only feature (it needs touch). Desktop has no touch gesture and

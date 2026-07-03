@@ -402,6 +402,93 @@ static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
     return e.verse;
 }
 
+// ---- Read-along: highlight the verse being narrated + gently follow-scroll -------
+// gReadAlongRange is the char range currently tinted (its number run through just
+// before the next verse's), so each tick can clear the previous verse cheaply.
+static NSRange  gReadAlongRange = {NSNotFound, 0};
+static UIColor *gReadAlongColor = nil;
+
+// btIOSReadAlongRange returns verse's number-run start through just before the next
+// verse's number run (or end of text) — i.e. the whole verse, number + words. The
+// prebuilt index is in document order, so the entry after `verse` IS the next run
+// (no storage enumeration, unlike the macOS twin).
+static NSRange btIOSReadAlongRange(NSTextStorage *ts, NSInteger verse) {
+    NSUInteger lo = 0, hi = gVerseIndexCount;
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        if (gVerseIndex[mid].verse < verse) lo = mid + 1; else hi = mid;
+    }
+    if (lo >= gVerseIndexCount || gVerseIndex[lo].verse != verse) return NSMakeRange(NSNotFound, 0);
+    NSUInteger start = gVerseIndex[lo].loc;
+    NSUInteger end = (lo + 1 < gVerseIndexCount) ? gVerseIndex[lo + 1].loc : ts.length;
+    return NSMakeRange(start, end - start);
+}
+
+// bibleTextIOSReadAlongClear removes the tint. Reachable from the Fyne goroutine
+// (clearReadAlong on stop/nav) as well as the main-queue time observer, hence the
+// dispatch guard.
+void bibleTextIOSReadAlongClear(void) {
+    void (^block)(void) = ^{
+        if (gReadingTV == nil) return;
+        NSTextStorage *ts = gReadingTV.textStorage;
+        if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length) {
+            [ts beginEditing];
+            [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
+            [ts endEditing];
+        }
+        gReadAlongRange = NSMakeRange(NSNotFound, 0);
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
+}
+
+// bibleTextIOSHighlightVerse tints the narrated verse (clearing the previous one) and
+// follow-scrolls only when the verse has drifted out of a comfortable band, so the
+// text isn't yanked on every verse — and never while the reader's finger owns the
+// scroll (dragging/decelerating). The plain contentOffset assignment sets neither of
+// those flags, so the scroll-restore/marker machinery in scrollViewDidScroll is
+// untouched. verse<=0 just clears (the recording's intro).
+void bibleTextIOSHighlightVerse(int verse) {
+    void (^block)(void) = ^{
+        if (gReadingTV == nil) return;
+        UITextView *tv = gReadingTV;
+        NSTextStorage *ts = tv.textStorage;
+        [ts beginEditing];
+        if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length)
+            [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
+        gReadAlongRange = NSMakeRange(NSNotFound, 0);
+        if (verse > 0) {
+            NSRange r = btIOSReadAlongRange(ts, verse);
+            if (r.location != NSNotFound && NSMaxRange(r) <= ts.length) {
+                if (gReadAlongColor == nil)
+                    gReadAlongColor = [UIColor colorWithRed:1.0 green:0.80 blue:0.30 alpha:0.32];
+                [ts addAttribute:NSBackgroundColorAttributeName value:gReadAlongColor range:r];
+                gReadAlongRange = r;
+            }
+        }
+        [ts endEditing];
+
+        if (gReadAlongRange.location == NSNotFound) return;
+        if (tv.dragging || tv.decelerating) return;   // never fight the reader's finger
+        NSLayoutManager *lm = tv.layoutManager;
+        NSRange g = [lm glyphRangeForCharacterRange:gReadAlongRange actualCharacterRange:NULL];
+        CGRect rect = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
+        CGFloat vTop = rect.origin.y + tv.textContainerInset.top;
+        CGFloat offY = tv.contentOffset.y;
+        CGFloat visH = tv.bounds.size.height;
+        if (vTop < offY || vTop > offY + visH * 0.70) {
+            CGFloat y = vTop - visH * 0.30;
+            CGFloat maxY = tv.contentSize.height - visH;
+            if (maxY < 0) maxY = 0;
+            if (y < 0) y = 0;
+            if (y > maxY) y = maxY;
+            tv.contentOffset = CGPointMake(0, y);
+        }
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
+}
+
 // bibleTextScrollReadingTV positions the chapter, in priority order: the
 // highlighted verse (a search jump), then a one-shot restore target (reopening
 // where the reader left off), otherwise pinned to the top. Centralised so the
@@ -614,6 +701,9 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
     }];
     as = mas;
+    // New chapter text: a read-along tint from the previous chapter must not be
+    // "cleared" against the new storage (audio already stopped via stopAudioForNav).
+    gReadAlongRange = NSMakeRange(NSNotFound, 0);
     // Find the highlighted verse (the .hl span becomes a background-coloured run)
     // so we scroll to it rather than the top when arriving from a search result.
     gReadingHighlightRange = (NSRange){NSNotFound, 0};
@@ -1096,14 +1186,17 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// share the same vertical rhythm and the toolbar stays compact. A slightly
 	// smaller heading (vs the 26px page heading) keeps it closer in scale to the
 	// chapter line below, so that line no longer floats in an over-tall box.
-	const boxH = 30
+	// boxH 34 (was 30): taller boxes = taller tap targets for every control in both
+	// header rows, and it raises the ceiling the expanded audio card must fit under
+	// (2×boxH+2 = 70 > the card's 66 — see buildAudioCard's row comment).
+	const boxH = 34
 	const headSize = 22
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headSize, boxH, func() {
 		showChapterPicker(state)
 	})
 
 	// Small copy icon tucked after the heading.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 16, boxH, func() {
+	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 18, boxH, func() {
 		copyChapter(state)
 	})
 	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
@@ -1122,14 +1215,14 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 
 	// Prev/next as compact icon buttons sitting next to the chapter line, so
 	// they're close to the book + chapter text rather than floating far right.
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, boxH, func() {
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 22, boxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
 
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, boxH, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 22, boxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
@@ -1396,6 +1489,12 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 func armReadingMarker(verse int, r, g, b float64) {
 	C.bibleTextTVArmMarker(C.int(verse), C.double(r), C.double(g), C.double(b))
 }
+
+// readAlongHighlight / readAlongClear drive the audio read-along tint (see
+// audio_controller.go). The C side marshals to the main thread itself, so these
+// are safe from both the AVPlayer time observer and the Fyne goroutine.
+func readAlongHighlight(verse int) { C.bibleTextIOSHighlightVerse(C.int(verse)) }
+func readAlongClear()              { C.bibleTextIOSReadAlongClear() }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS
 // NSTextView overlay shares the exact same chapter HTML as the iOS UITextView.
