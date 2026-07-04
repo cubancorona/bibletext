@@ -52,8 +52,15 @@ APK) — NOT bare `fyne package`, which drops the `classes2.dex` bridge and fall
 back to the Fyne-widget reading pane. Android has a native selectable-TextView
 reading overlay (a `Dialog` over the GL surface; `android/BtBridge.java` +
 `reading_android.go`) giving iOS-parity text selection + the study context menu,
-but NO audio (Apple-only). `reading_mobile.go`'s `buildReadingViewMobileFyne` is
-the fallback when the bridge dex is absent.
+AND full audio parity (`android/BtAudio.java` + `audio_android.go`: MediaPlayer
+recordings + TextToSpeech read-aloud + read-along + ±15s, PLUS background/
+lock-screen playback via `android/BtAudioService.java` — a mediaPlayback
+foreground service + framework MediaSession + MediaStyle notification, enabled
+by the custom `cmd/mobile/AndroidManifest.xml` on fyne's aapt2 resource path,
+which the adaptive-icon layers `cmd/mobile/Icon-foreground/-background.png`
+trigger; that manifest must NOT declare versionCode/uses-sdk — fyne passes
+those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
+`buildReadingViewMobileFyne` is the fallback when the bridge dex is absent.
 
 ## Architecture notes (the non-obvious bits)
 

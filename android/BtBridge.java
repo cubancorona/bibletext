@@ -5,12 +5,17 @@ import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Html;
+import android.text.Layout;
 import android.text.Selection;
 import android.text.Spannable;
+import android.text.Spanned;
+import android.text.style.BackgroundColorSpan;
+import android.text.style.SuperscriptSpan;
 import android.provider.MediaStore;
 import android.view.ActionMode;
 import android.view.Gravity;
@@ -21,9 +26,11 @@ import android.view.SubMenu;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import java.util.Arrays;
 
 /**
  * BtBridge is BibleText's native Android reading overlay — the twin of the iOS
@@ -63,12 +70,45 @@ public final class BtBridge {
 
     private static Activity activity;
     private static Dialog dialog;
+    private static FrameLayout root;   // hosts the ScrollView + the floating pill
     private static ScrollView scroll;
     private static TextView text;
 
-    // Pending frame (device pixels, Fyne coordinates) and whether the overlay
-    // should be visible. The Dialog is only shown once a real frame has
-    // arrived; wantShown remembers a show() that landed before that. UI-thread.
+    // --- Read-along (audio) state ------------------------------------------
+    // The floating "Follow narration" pill, a child of the overlay window (the
+    // reading text paints ABOVE the Fyne canvas, so only a native view in this
+    // same window can float over the verses). Shown/hidden by the Go controller.
+    private static Button followBtn;
+    private static boolean followWanted = false;
+
+    // Verse index for the current chapter's Spanned, built in setHtml by scanning
+    // the verse-number SuperscriptSpans (Html.fromHtml turns <sup> into one).
+    // verseNums[i] is the verse number; [verseStarts[i], verseEnds[i]) is its whole
+    // span (number + words), so highlighting matches the iOS read-along range.
+    private static int[] verseNums = new int[0];
+    private static int[] verseStarts = new int[0];
+    private static int[] verseEnds = new int[0];
+
+    // The verse currently tinted and the span painting it (kept so each tick can
+    // clear the previous cheaply — and so we remove OUR span, never the search
+    // highlight's BackgroundColorSpan). raActive marks a live read-along;
+    // raFollowing mirrors iOS's !gReadAlongUserLatch (auto-scroll armed vs the
+    // reader has taken the scroll over).
+    private static int raVerse = 0;
+    private static BackgroundColorSpan raSpan;
+    private static boolean raActive = false;
+    private static boolean raFollowing = true;
+
+    // Colors pushed from the app palette (setReadAlongColors): the amber verse
+    // wash, and the pill's semi-transparent ground + label. Sensible fallbacks.
+    private static int raHighlightColor = 0x52FFCC4D;   // amber @ ~0.32 alpha
+    private static int followBgColor = 0xC72E4C87;       // lapis @ ~0.78 alpha
+    private static int followFgColor = 0xFFF5F7FC;
+
+    // Pending frame: RAW Fyne pixel coords relative to the activity window (the
+    // decor's on-screen origin is added late, in applyFrame) + size, and whether
+    // the overlay should be visible. The Dialog is only shown once a real frame
+    // has arrived; wantShown remembers a show() that landed before that. UI-thread.
     private static int frameX, frameY, frameW = 1, frameH = 1;
     private static boolean wantShown = false;
 
@@ -87,9 +127,25 @@ public final class BtBridge {
     private static volatile float lastFrac = 0f;
 
     // Set while OUR code drives scrollTo, so the scroll listener can tell a
-    // restore from a reader gesture (a reader gesture disarms pendingFrac and
-    // schedules a position save).
+    // restore/follow-scroll from a reader gesture (a reader gesture disarms
+    // pendingFrac and schedules a position save). NOTE: ViewTreeObserver's
+    // OnScrollChangedListener fires on the NEXT traversal, not synchronously
+    // inside scrollTo — so ownScroll must stay latched for a short window AFTER a
+    // programmatic scroll (endOwnScroll), or the async callback lands with
+    // ownScroll already cleared and our own follow-scroll is misread as a reader
+    // gesture (spuriously raising the "Follow narration" pill).
     private static boolean ownScroll = false;
+    private static final Runnable clearOwnScroll = new Runnable() {
+        @Override public void run() { ownScroll = false; }
+    };
+    // The Y of the last programmatic scrollTo. The 200ms ownScroll window can
+    // expire before the async listener fires when the UI thread is throttled
+    // (screen off / doze) — verified live: a lock-screen +15 skip's follow-scroll
+    // was misread as a reader gesture and raised the pill. Position-compare is
+    // timing-independent: scrollTo lands exactly on its target, so a callback at
+    // that Y is ours. (A reader gesture landing on the same pixel just skips one
+    // suspend — harmless.)
+    private static int lastOwnScrollY = -1;
 
     // Quiet-timer for "scroll ended": Android has no deceleration-end callback
     // on ScrollView, so each scroll change re-arms a short timer and the save
@@ -103,6 +159,10 @@ public final class BtBridge {
     private static native void nativeSelectionAction(String action, String text);
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
     private static native void nativeScrolled(float frac);
+    // Called on the UI thread when the reader scrolls by hand during read-along
+    // (suspends follow) and when they tap the "Follow narration" pill (resumes it).
+    private static native void nativeReadAlongUserScrolled();
+    private static native void nativeReadAlongFollowTapped();
 
     private BtBridge() {}
 
@@ -123,14 +183,26 @@ public final class BtBridge {
                     try { dialog.dismiss(); } catch (Throwable ignored) {}
                 }
                 dialog = null;
+                root = null;
                 scroll = null;
                 text = null;
+                followBtn = null;
                 frameW = 1;
                 frameH = 1;
                 // wantShown/suppressed are re-asserted by the Go side after the
                 // rebuild (notifyReadingOverlay / show/hide), so start neutral.
                 wantShown = false;
                 suppressed = false;
+                // Read-along spans/index belonged to the destroyed view; reset. The
+                // Go controller re-drives highlight/pill on the next audio tick.
+                raSpan = null;
+                raVerse = 0;
+                raActive = false;
+                raFollowing = true;
+                followWanted = false;
+                verseNums = new int[0];
+                verseStarts = new int[0];
+                verseEnds = new int[0];
                 activity = act;
                 ensureView();
             }
@@ -209,8 +281,31 @@ public final class BtBridge {
         scroll.addView(text, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
 
+        // The floating "Follow narration" pill, laid out bottom-centre over the
+        // verses, hidden until read-along suspends follow. Semi-transparent rounded
+        // ground, tap resumes following. Built once; colors set by setReadAlongColors.
+        followBtn = new Button(activity);
+        followBtn.setText("Follow narration");
+        followBtn.setAllCaps(false);
+        followBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f);
+        followBtn.setVisibility(View.GONE);
+        followBtn.setElevation(8f);
+        styleFollowBtn();
+        followBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { nativeReadAlongFollowTapped(); }
+        });
+        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        fp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        fp.bottomMargin = dp(18);
+
+        root = new FrameLayout(activity);
+        root.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(followBtn, fp);
+
         dialog = new Dialog(activity, android.R.style.Theme_Translucent_NoTitleBar);
-        dialog.setContentView(scroll);
+        dialog.setContentView(root);
         dialog.setCancelable(false); // BACK is forwarded to the activity, not consumed
         Window w = dialog.getWindow();
         w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -237,13 +332,25 @@ public final class BtBridge {
             new android.view.ViewTreeObserver.OnScrollChangedListener() {
                 @Override public void onScrollChanged() {
                     int range = Math.max(1, scrollRange());
-                    lastFrac = clamp01((float) scroll.getScrollY() / range);
+                    int y = scroll.getScrollY();
+                    lastFrac = clamp01((float) y / range);
                     if (ownScroll) return;
+                    if (lastOwnScrollY >= 0 && Math.abs(y - lastOwnScrollY) <= 2) {
+                        return; // our own scrollTo arriving after the timed latch expired
+                    }
                     // A reader gesture obsoletes any pending restore, and the
                     // idle timer persists the new position once still.
+                    lastOwnScrollY = -1;
                     pendingFrac = -1f;
                     UI.removeCallbacks(scrollIdle);
                     UI.postDelayed(scrollIdle, 200);
+                    // Read-along: a hand scroll while following suspends the
+                    // follow (the highlight keeps tracking; the pill offers a way
+                    // back). Fire once per suspension — iOS's gReadAlongUserLatch.
+                    if (raActive && raFollowing) {
+                        raFollowing = false;
+                        nativeReadAlongUserScrolled();
+                    }
                 }
             });
 
@@ -258,6 +365,205 @@ public final class BtBridge {
     }
 
     private static float clamp01(float f) { return f < 0 ? 0 : (f > 1 ? 1 : f); }
+
+    private static int dp(int v) {
+        float d = activity != null ? activity.getResources().getDisplayMetrics().density : 2f;
+        return Math.round(v * d);
+    }
+
+    // beginOwnScroll/endOwnScroll bracket a programmatic scrollTo. endOwnScroll
+    // keeps the latch up briefly so the async OnScrollChangedListener that the
+    // scroll triggers still sees ownScroll==true (see the field comment).
+    private static void beginOwnScroll() {
+        UI.removeCallbacks(clearOwnScroll);
+        ownScroll = true;
+    }
+    private static void endOwnScroll() {
+        UI.removeCallbacks(clearOwnScroll);
+        UI.postDelayed(clearOwnScroll, 200);
+    }
+
+    // ownScrollTo is the ONLY way our code scrolls the view: it records the
+    // target (the timing-independent guard) and brackets the timed latch.
+    private static void ownScrollTo(int y) {
+        lastOwnScrollY = y;
+        beginOwnScroll();
+        scroll.scrollTo(0, y);
+        endOwnScroll();
+    }
+
+    // ---- Read-along (audio): highlight the narrated verse + the "Follow" pill ----
+
+    private static void styleFollowBtn() {
+        if (followBtn == null) return;
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(19));
+        bg.setColor(followBgColor);
+        followBtn.setBackground(bg);
+        followBtn.setTextColor(followFgColor);
+        int px = dp(18), py = dp(8);
+        followBtn.setPadding(px, py, px, py);
+    }
+
+    // buildVerseIndex records each verse's number and char span for the current
+    // chapter's Spanned by scanning the verse-number SuperscriptSpans (Html.fromHtml
+    // turns each <sup> into one), in document order. A verse's span runs from its
+    // number through just before the next verse's number (or end of text) — number +
+    // words, so the tint covers the whole verse, matching the iOS read-along range.
+    private static void buildVerseIndex(CharSequence cs) {
+        verseNums = new int[0];
+        verseStarts = new int[0];
+        verseEnds = new int[0];
+        if (!(cs instanceof Spanned)) return;
+        Spanned sp = (Spanned) cs;
+        SuperscriptSpan[] sups = sp.getSpans(0, sp.length(), SuperscriptSpan.class);
+        if (sups == null || sups.length == 0) return;
+        int n = sups.length;
+        int[] starts = new int[n];
+        for (int i = 0; i < n; i++) starts[i] = sp.getSpanStart(sups[i]);
+        Arrays.sort(starts);
+        int[] nums = new int[n];
+        int[] ends = new int[n];
+        int count = 0;
+        for (int i = 0; i < n; i++) {
+            int st = starts[i];
+            int en = (i + 1 < n) ? starts[i + 1] : sp.length();
+            int num = parseLeadingInt(sp, st, en);
+            if (num <= 0) continue;
+            nums[count] = num;
+            starts[count] = st;
+            ends[count] = en;
+            count++;
+        }
+        verseNums = Arrays.copyOf(nums, count);
+        verseStarts = Arrays.copyOf(starts, count);
+        verseEnds = Arrays.copyOf(ends, count);
+    }
+
+    // parseLeadingInt reads the run of digits starting at `from` (the verse number
+    // sits at the very start of the superscript run); returns -1 if none.
+    private static int parseLeadingInt(CharSequence cs, int from, int to) {
+        int i = from, val = 0;
+        boolean any = false;
+        while (i < to) {
+            char c = cs.charAt(i);
+            if (c < '0' || c > '9') break;
+            val = val * 10 + (c - '0');
+            any = true;
+            i++;
+        }
+        return any ? val : -1;
+    }
+
+    // verseRange returns {start,end} for a verse number, or null if not indexed.
+    private static int[] verseRange(int verse) {
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseNums[i] == verse) return new int[]{verseStarts[i], verseEnds[i]};
+        }
+        return null;
+    }
+
+    /** readAlongHighlight tints the narrated verse (clearing the previous) and, when
+     *  follow is set, scrolls it into a comfortable band. verse<=0 just clears. */
+    public static void readAlongHighlight(final int verse, final boolean follow) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                if (text == null) return;
+                CharSequence cs = text.getText();
+                if (!(cs instanceof Spannable)) return;
+                Spannable sp = (Spannable) cs;
+                if (raSpan != null) {
+                    try { sp.removeSpan(raSpan); } catch (Throwable ignored) {}
+                    raSpan = null;
+                }
+                raVerse = 0;
+                if (verse > 0) {
+                    int[] r = verseRange(verse);
+                    if (r != null && r[0] >= 0 && r[1] <= sp.length() && r[0] < r[1]) {
+                        raSpan = new BackgroundColorSpan(raHighlightColor);
+                        sp.setSpan(raSpan, r[0], r[1], Spannable.SPAN_INCLUSIVE_EXCLUSIVE);
+                        raVerse = verse;
+                    }
+                }
+                raActive = (verse > 0);
+                if (follow) raFollowing = true;   // following again → re-arm the latch
+                if (!follow || raVerse == 0) return;
+                followScrollTo(raVerse);
+            }
+        });
+    }
+
+    // followScrollTo nudges the verse into view only when it has drifted out of a
+    // comfortable band (above the fold, or past 70% down), so the text isn't yanked
+    // on every verse. ownScroll marks it as our scroll so the listener won't treat
+    // it as a reader gesture.
+    private static void followScrollTo(int verse) {
+        if (text == null || scroll == null) return;
+        Layout layout = text.getLayout();
+        if (layout == null) return;   // not laid out yet — the next tick catches it
+        int[] r = verseRange(verse);
+        if (r == null) return;
+        int line = layout.getLineForOffset(r[0]);
+        int verseY = text.getTotalPaddingTop() + layout.getLineTop(line);
+        int scrollY = scroll.getScrollY();
+        int visH = scroll.getHeight();
+        if (visH <= 0) return;
+        if (verseY < scrollY || verseY > scrollY + visH * 0.70f) {
+            int target = Math.round(verseY - visH * 0.30f);
+            int maxY = scrollRange();
+            if (target < 0) target = 0;
+            if (target > maxY) target = maxY;
+            ownScrollTo(target);
+        }
+    }
+
+    /** readAlongClear removes the tint (stop/nav). */
+    public static void readAlongClear() {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                if (text != null && text.getText() instanceof Spannable && raSpan != null) {
+                    try { ((Spannable) text.getText()).removeSpan(raSpan); } catch (Throwable ignored) {}
+                }
+                raSpan = null;
+                raVerse = 0;
+                raActive = false;
+                raFollowing = true;
+            }
+        });
+    }
+
+    /** readAlongFollow shows/hides the floating "Follow narration" pill. */
+    public static void readAlongFollow(final boolean show) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                followWanted = show;
+                applyFollowVisibility();
+            }
+        });
+    }
+
+    // applyFollowVisibility resolves the pill's real visibility: wanted by the
+    // controller AND the reading overlay itself is up (a modal or tab switch that
+    // hides the verses must take the pill down too).
+    private static void applyFollowVisibility() {
+        if (followBtn == null) return;
+        boolean up = dialog != null && dialog.isShowing() && !suppressed;
+        followBtn.setVisibility((followWanted && up) ? View.VISIBLE : View.GONE);
+        if (followWanted && up) followBtn.bringToFront();
+    }
+
+    /** setReadAlongColors pushes the palette-derived amber wash + pill colors. */
+    public static void setReadAlongColors(final int highlight, final int followBg, final int followFg) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                raHighlightColor = highlight;
+                followBgColor = followBg;
+                followFgColor = followFg;
+                styleFollowBtn();
+            }
+        });
+    }
 
     /**
      * setStyle pushes the palette + typography (all sizes in PIXELS — the Go
@@ -297,18 +603,17 @@ public final class BtBridge {
                     s = Html.fromHtml(html);
                 }
                 text.setText(s, TextView.BufferType.SPANNABLE);
+                // The prior chapter's highlight span belonged to the old text; drop
+                // the reference (the span itself went with the replaced Spanned) and
+                // re-index the verses for read-along on the fresh content.
+                raSpan = null;
+                raVerse = 0;
+                buildVerseIndex(text.getText());
                 pendingFrac = frac >= 0 ? frac : -1f;
                 // Apply top-pin / restore after the text has been laid out.
                 scroll.post(new Runnable() {
                     @Override public void run() {
-                        ownScroll = true;
-                        try {
-                            if (pendingFrac >= 0) {
-                                scroll.scrollTo(0, Math.round(pendingFrac * scrollRange()));
-                            } else {
-                                scroll.scrollTo(0, 0);
-                            }
-                        } finally { ownScroll = false; }
+                        ownScrollTo(pendingFrac >= 0 ? Math.round(pendingFrac * scrollRange()) : 0);
                     }
                 });
             }
@@ -321,9 +626,7 @@ public final class BtBridge {
             @Override public void run() {
                 pendingFrac = frac;
                 if (text == null || frac < 0) return;
-                ownScroll = true;
-                try { scroll.scrollTo(0, Math.round(frac * scrollRange())); }
-                finally { ownScroll = false; }
+                ownScrollTo(Math.round(frac * scrollRange()));
             }
         });
     }
@@ -331,23 +634,13 @@ public final class BtBridge {
     /** getScrollFrac is read by the Go side when persisting the reading position. */
     public static float getScrollFrac() { return lastFrac; }
 
-    /** setFrame positions the overlay window (device pixels, window coordinates). */
+    /** setFrame stores the RAW Fyne pixel frame; applyFrame adds the screen origin. */
     public static void setFrame(final int x, final int y, final int w, final int h) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (dialog == null) return;
-                // The Fyne canvas is laid out BELOW the system insets (status
-                // bar) while this window's coordinates are screen-absolute
-                // (FLAG_LAYOUT_IN_SCREEN) — add the insets back, the Android
-                // analog of the iOS safe-area shift in bibleTextTVSetFrame.
-                int insetTop = 0, insetLeft = 0;
-                View decor = activity.getWindow().getDecorView();
-                if (decor.getRootWindowInsets() != null) {
-                    insetTop = decor.getRootWindowInsets().getSystemWindowInsetTop();
-                    insetLeft = decor.getRootWindowInsets().getSystemWindowInsetLeft();
-                }
-                frameX = x + insetLeft;
-                frameY = y + insetTop;
+                frameX = x;   // RAW Fyne pixel coords (relative to the activity window).
+                frameY = y;   // The decor's on-screen origin is added in applyFrame.
                 frameW = w;
                 frameH = h;
                 if (dialog.isShowing()) {
@@ -362,10 +655,11 @@ public final class BtBridge {
     private static void applyFrame() {
         if (dialog == null || !dialog.isShowing()) return;
         try {
+            int[] o = windowContentOrigin();
             Window w = dialog.getWindow();
             WindowManager.LayoutParams lp = w.getAttributes();
-            lp.x = frameX;
-            lp.y = frameY;
+            lp.x = frameX + o[0];
+            lp.y = frameY + o[1];
             lp.width = frameW;
             lp.height = frameH;
             w.setAttributes(lp);
@@ -373,6 +667,36 @@ public final class BtBridge {
             // Window torn down mid-update (activity recreation) — harmless.
         }
     }
+
+    // windowContentOrigin returns the ON-SCREEN origin of the Fyne GL canvas, which
+    // this screen-absolute overlay (FLAG_LAYOUT_IN_SCREEN) must add to the raw Fyne
+    // frame coords. Fyne insets its canvas below the status bar + display cutout
+    // (e.g. y=136). Computed as decorTop + systemWindowInsetTop so it's correct in
+    // BOTH window modes seen on Android 15 / target 35:
+    //   - inset window (decor at [0,136]): 136 + 0 = 136
+    //   - edge-to-edge window (decor at [0,0], enforced by target 35): 0 + 136 = 136
+    // Resolved at apply time (not cached in setFrame) + re-asserted from applyShow,
+    // because on a COLD START both terms read 0 until the window settles — caching
+    // then would freeze the overlay 136px too high (over the header / audio transport).
+    private static int[] windowContentOrigin() {
+        int[] loc = new int[2];
+        int addTop = 0, addLeft = 0;
+        try {
+            View decor = activity.getWindow().getDecorView();
+            decor.getLocationOnScreen(loc);
+            android.view.WindowInsets wi = decor.getRootWindowInsets();
+            if (wi != null) {
+                addTop = wi.getSystemWindowInsetTop();
+                addLeft = wi.getSystemWindowInsetLeft();
+            }
+        } catch (Throwable ignored) {}
+        return new int[]{ loc[0] + addLeft, loc[1] + addTop };
+    }
+
+    // Re-assert the frame after the decor settles (see applyFrame's cold-start note).
+    private static final Runnable reassertFrame = new Runnable() {
+        @Override public void run() { applyFrame(); }
+    };
 
     public static void show() {
         UI.post(new Runnable() {
@@ -393,6 +717,13 @@ public final class BtBridge {
             }
             applyFrame();
             text.requestFocus(); // selection needs the view to hold focus in its window
+            applyFollowVisibility(); // re-assert the pill after the overlay comes up
+            // Cold start: the decor may not be at its final on-screen origin yet, so
+            // the applyFrame above can resolve a too-high position; re-assert once the
+            // window has settled so a later apply captures the real origin.
+            UI.removeCallbacks(reassertFrame);
+            UI.postDelayed(reassertFrame, 250);
+            UI.postDelayed(reassertFrame, 700);
         } catch (Throwable t) {
             // Stale window token during an activity teardown — init() rebuilds
             // the Dialog against the next activity, and Go re-drives visibility.

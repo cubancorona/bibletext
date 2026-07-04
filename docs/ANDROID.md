@@ -6,9 +6,14 @@ selectable `TextView` in a `Dialog` floated over the Fyne GL surface —
 `UITextView`, so readers get real long-press selection with drag handles, the
 floating toolbar, and BibleText's study menu (Ask AI / Explain / Analyze
 context / Analyze translation / Cross-references / Share with citation) — the
-same Go dispatch as iOS. Android has **no audio** (the AVFoundation engine is
-`darwin`-only; `audio_other.go` stubs it), so the audio control and read-along
-don't appear. Everything else (reading, search, Find/Ask AI, navigation,
+same Go dispatch as iOS. Android now has **full audio parity** (`android/BtAudio.java`
++ `audio_android.go`): a `MediaPlayer` streams recorded chapters (±15s skip) and
+`TextToSpeech` reads aloud, with read-along verse highlight + the floating
+"Follow narration" pill painted on the reading overlay — the twin of the iOS
+AVFoundation engine, driven by the SAME cross-platform `audio_controller.go` —
+**including background playback and lock-screen transport** (a `mediaPlayback`
+foreground service + framework `MediaSession` + MediaStyle notification; see
+the Audio section). Everything else (reading, search, Find/Ask AI, navigation,
 versions, history, text size) is data-driven off the same code.
 
 **Build with [`scripts/build-android.sh`](../scripts/build-android.sh), NOT a
@@ -58,7 +63,101 @@ OS's. This is native Android behaviour and matching iOS exactly isn't possible.
 (Note for testing: `adb input tap` hits the floating toolbar's popup window
 unreliably — verify menu taps with a real finger, not synthetic input.)
 
+## Audio (BtAudio + read-along)
+
+The Android audio engine (`android/BtAudio.java`, driven from `audio_android.go`
+over JNI) is the twin of the iOS `BTAudioController` and implements the SAME
+interface the cross-platform `audio_controller.go` calls
+(`nativeAudioStartURL/StartTTS/Toggle/Stop/Skip/SetArtwork`), so recorded ↔
+read-aloud, ±15s skip, continuous playback and the source menu are all shared Go:
+
+- **Recorded MP3** → `android.media.MediaPlayer`, streamed from the same
+  self-hosted audio releases as iOS. **No MIME override needed** (unlike
+  AVPlayer): MediaPlayer's extractor sniffs MP3 by content, so the CDN's
+  extension-less `application/octet-stream` and its 302 redirect are handled
+  natively. `seekTo(long, SEEK_CLOSEST)` on API 26+ for the ±15s. Buffering →
+  `OnInfoListener` `BUFFERING_START/END`; a stream error posts FAILED, and Go
+  restarts the chapter as read-aloud (the iOS fallback).
+- **Read-aloud** → `android.speech.tts.TextToSpeech`. TextToSpeech can't pause,
+  so toggle re-speaks from the current verse's offset on resume. Long chapters
+  exceed `getMaxSpeechInputLength()` (~4000), so the text is split at spaces into
+  `QUEUE_ADD` utterances; each carries a global base offset so
+  `onRangeStart` (API 26+) maps to a whole-chapter offset (word-level read-along
+  needs API 26+; below that, no per-word highlight). A generation counter drops
+  late callbacks from a stopped utterance (the Android twin of the iOS mode guard).
+- **Audio focus** (`AudioFocusRequest`, API 26+) gives phone-call parity: a
+  transient loss pauses, GAIN resumes unless the reader paused first.
+
+**Read-along highlight + "Follow narration" pill** live on the reading overlay
+(`BtBridge.java`), driven via `reading_android.go`'s `readAlong*` wrappers. The
+verse index is built in `setHtml` by scanning the verse-number `SuperscriptSpan`s
+(`Html.fromHtml` makes one per `<sup>`) and parsing the digits — so a verse maps
+to its char range with no HTML changes. Highlighting applies a
+`BackgroundColorSpan` (kept as a reference so it's removed cleanly, never the
+search highlight's own span); follow-scroll uses the `Layout` line geometry into
+a comfortable band, exactly like iOS. The pill is a `Button` child of the overlay
+window (only a view in that window can float over the GL-drawn verses), and a
+hand scroll during narration suspends follow (fires `nativeReadAlongUserScrolled`,
+gated once per suspension by `raFollowing` — the iOS `gReadAlongUserLatch` twin).
+
+**Background + lock screen (Phase 2 — DONE, emulator-verified 2026-07-04).**
+Narration keeps playing with the screen off / app backgrounded, with the full
+Now Playing card (title · "World English Bible · David Williams", the rendered
+chapter artwork, a scrubber, play/pause + ±15) on the lock screen and in the
+quick-settings media carousel, and phone-parity continuous playback: chapters
+roll over while the device sleeps (verified 117→118→119 asleep; `fyne.Do` runs
+while backgrounded — the mobile driver's func queue is drained by the always-on
+run loop — so the SAME Go `advanceAndContinue` drives it). The pieces:
+
+- **`android/BtAudioService.java`** — a `mediaPlayback` foreground service; its
+  MediaStyle notification anchors the process (no cached-app freeze) and hosts
+  pre-13 transport actions. Swiping the app from recents (`onTaskRemoved`)
+  stops playback outright, matching iOS.
+- **`BtAudio`** owns a framework `android.media.session.MediaSession` (no
+  androidx): PlaybackState (Android 13+ renders lock-screen buttons from its
+  actions — REWIND/FAST_FORWARD are the ±15s, SEEK_TO the scrubber; TTS omits
+  them), MediaMetadata (duration only for recorded → no TTS scrubber, like
+  iOS), a partial wake lock while audible, and the `POST_NOTIFICATIONS` runtime
+  prompt at first play (33+; safe — `GoNativeActivity` overrides no
+  `onRequestPermissionsResult`).
+- **`cmd/mobile/AndroidManifest.xml`** — a CUSTOM manifest (fyne uses it
+  verbatim), which required flipping fyne onto its **aapt2** resource path:
+  fyne's legacy binres AXML encoder can't encode `foregroundServiceType` (an
+  API-29 attribute vs its baked-in API-21 table — the same limit that forced
+  MediaStore over FileProvider). The flip is triggered by
+  **`cmd/mobile/Icon-foreground.png`/`Icon-background.png`** (the adaptive-icon
+  layers, generated from Icon.png). Rules for editing the manifest: do NOT add
+  versionCode/versionName/`<uses-sdk>` (fyne passes them as aapt2 link flags —
+  hardcoding freezes them); keep `org.golang.app.GoNativeActivity` + the
+  `android.app.lib_name` meta-data (fyne validates both); the icon must be
+  `@mipmap/ic_launcher` (what fyne compiles the layers into).
+- The build script asserts the aapt2 path was taken (adaptive-icon resources in
+  the output) in BOTH the debug and release branches.
+
 ## Known quirks
+
+- **Debug builds link `--target-sdk-version 29`** (fyne hardcodes 29 for
+  `package`, 35 for `release`). Practical effects on an Android 13+ device:
+  the notification-permission flow differs (auto-prompt vs our runtime request)
+  and API-34 FGS-type enforcement is relaxed. Always re-verify
+  background-audio behavior on the RELEASE universal APK, not just the debug
+  APK (both were verified 2026-07-04).
+- **Debug APKs are not JDWP-debuggable**: the custom AndroidManifest.xml omits
+  `android:debuggable` (fyne's template set it per build type; ours is used
+  verbatim for both). Diagnosis is logcat-based anyway; if a debugger is ever
+  needed, temporarily add `android:debuggable="true"` to the `<application>`.
+
+- **Landscape / rotation (native overlay geometry).** The reading overlay is a
+  separate window positioned to the Fyne reading pane's rect
+  (`setFrameFromObject` → `BtBridge.setFrame`, offset by the decor view's
+  on-screen origin). On an orientation change the Fyne UI reflows but the overlay
+  doesn't always re-fit cleanly to the new geometry until the next layout-
+  triggering interaction (scroll / chapter nav / version switch re-pushes the
+  frame). Audio, read-along and text all survive rotation; the visual is just a
+  transiently-stale overlay rect in landscape / right after rotating back. This is
+  a general native-overlay limitation (not audio-specific); the app is portrait-
+  first. If it becomes a priority, add an explicit frame re-push on the Android
+  configuration-change hook.
 
 - **Bible cache**: `os.UserCacheDir()` has no writable target on Android, so
   `defaultCachePath()` uses Fyne's per-app storage there

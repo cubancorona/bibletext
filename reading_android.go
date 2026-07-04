@@ -23,7 +23,8 @@ package bibletext
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
-                 btaShareTextM, btaShareImageM;
+                 btaShareTextM, btaShareImageM,
+                 btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -58,6 +59,13 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaUnsuppressM = (*env)->GetStaticMethodID(env, btaClass, "unsuppress", "()V");
 	btaShareTextM  = (*env)->GetStaticMethodID(env, btaClass, "shareText", "(Ljava/lang/String;)V");
 	btaShareImageM = (*env)->GetStaticMethodID(env, btaClass, "shareImage", "(Ljava/lang/String;)V");
+	// Read-along (audio): highlight the narrated verse + the floating "Follow
+	// narration" pill, both painted on this same overlay (reading_android.go owns
+	// the BtBridge handle, so the audio read-along calls route through here).
+	btaRAHighlightM = (*env)->GetStaticMethodID(env, btaClass, "readAlongHighlight", "(IZ)V");
+	btaRAClearM     = (*env)->GetStaticMethodID(env, btaClass, "readAlongClear", "()V");
+	btaRAFollowM    = (*env)->GetStaticMethodID(env, btaClass, "readAlongFollow", "(Z)V");
+	btaRAColorsM    = (*env)->GetStaticMethodID(env, btaClass, "setReadAlongColors", "(III)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -68,7 +76,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaInitM == NULL || btaSetStyleM == NULL || btaSetHtmlM == NULL ||
 	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
-	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL) {
+	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
+	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
+	    btaRAColorsM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -144,6 +154,31 @@ static void btaShareImage(uintptr_t jni_env, const char *path) {
 	(*env)->CallStaticVoidMethod(env, btaClass, btaShareImageM, s);
 	(*env)->DeleteLocalRef(env, s);
 }
+
+// --- Read-along (audio) wrappers on the reading overlay ---------------------
+static void btaRAHighlight(uintptr_t jni_env, int verse, int follow) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaRAHighlightM, verse, follow ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaRAClear(uintptr_t jni_env) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaRAClearM);
+}
+
+static void btaRAFollow(uintptr_t jni_env, int show) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaRAFollowM, show ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaRAColors(uintptr_t jni_env, int highlight, int followBg, int followFg) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaRAColorsM, highlight, followBg, followFg);
+}
 */
 import "C"
 
@@ -153,6 +188,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -172,6 +208,14 @@ var btaAvailable = false
 var btaInitTried = false
 var btaCtx uintptr // the activity jobject the bridge was last (re-)initialised for
 
+// btaRecreated is raised when runBta detects Android handed us a NEW activity
+// (recreation: swipe-away-with-live-process relaunch, rotation, memory pressure).
+// BtBridge.init rebuilt its Dialog with a BLANK TextView, but pushChapterHTML's
+// fingerprint gate doesn't know that — so foregroundOverlayRecovery consumes this
+// flag on re-entry and forces a full re-render. Atomic: set on RunNative's JNI
+// goroutine, consumed on the recovery goroutine.
+var btaRecreated atomic.Bool
+
 // runBta wraps driver.RunNative: hands the callback an attached JNIEnv, after
 // making sure the bridge class + activity are initialised. RunNative surfaces
 // pending Java exceptions as errors — log them (Go's log reaches logcat under
@@ -189,6 +233,7 @@ func runBta(fn func(env uintptr)) {
 		// BadTokenException on show(). The C class + method IDs are cached, so
 		// re-init is just a BtBridge.init(newActivity) call.
 		if !btaInitTried || ac.Ctx != btaCtx {
+			recreated := btaInitTried // a CHANGED Ctx = activity recreation, not first init
 			btaInitTried = true
 			btaCtx = ac.Ctx
 			btaAvailable = C.btaInit(C.uintptr_t(ac.Env), C.uintptr_t(ac.Ctx)) == 1
@@ -196,6 +241,8 @@ func runBta(fn func(env uintptr)) {
 				// Bridge dex missing (plain `fyne package` build) — the reading
 				// pane fell back to the Fyne widget path; note it once.
 				log.Printf("bibletext: BtBridge dex not present; using Fyne reading fallback")
+			} else if recreated {
+				btaRecreated.Store(true) // fresh (blank) Dialog — needs a re-render
 			}
 		}
 		if btaAvailable {
@@ -288,6 +335,56 @@ func notifyReadingOverlay(visible bool) {
 	}
 }
 
+// foregroundOverlayRecovery runs on every return to the foreground (the
+// OnEnteredForeground lifecycle hook, app.go). Android may have RECREATED the
+// activity while we were away — swipe-away with the process kept alive by the
+// audio service, rotation, memory pressure — in which case BtBridge rebuilt its
+// Dialog with a blank TextView while the Go side's fingerprint gate still says
+// the chapter is pushed. Probe (a no-op runBta forces the Ctx-change detection),
+// then, if a recreation was flagged, drop the fingerprint and rebuild the
+// reading view so the chapter re-renders, the frame/visibility re-pin, and a
+// live read-along re-asserts (afterRebuild does all three). Without this, the
+// reading pane comes back BLANK after a swipe-away relaunch — background audio
+// made that path common (the foreground service keeps the process alive).
+func foregroundOverlayRecovery(state *AppState) {
+	if state == nil {
+		return
+	}
+	go func() {
+		runBta(func(env uintptr) {}) // ensure the new-activity detection has run
+		if !btaRecreated.CompareAndSwap(true, false) {
+			return // same activity as before — nothing was lost
+		}
+		fyne.Do(func() {
+			if state.Bible == nil {
+				return // still on the loading screen — rebuildWindow will render fresh anyway
+			}
+			// Preserve the reader's place: BtBridge.lastFrac is a static that
+			// SURVIVES the Dialog rebuild, so it still holds the pre-recreation
+			// scroll. Capture it as a one-shot restore anchor for the re-render
+			// (else the fingerprint reset below would re-open pinned to the top).
+			if v, d, f, ok := captureReadingAnchor(); ok {
+				state.restore = &restoreAnchor{
+					Book:    state.CurrentBook,
+					Chapter: state.CurrentChapter,
+					Verse:   v,
+					Delta:   d,
+					Frac:    f,
+				}
+			}
+			// The Java TextView is empty; force pushChapterHTML past its gate.
+			lastPushedChapterFP = ""
+			lastPushedBookChapter = ""
+			// Full rebuild — the same (live-verified) path a tab switch takes: it
+			// drains any stranded modal, clears the suppress latch, handles the
+			// full-screen reading mode, and afterRebuild re-pins the frame,
+			// re-asserts visibility, and re-issues a live read-along highlight +
+			// follow pill (state.refresh() would do none of that).
+			rebuildWindow(state)
+		})
+	}()
+}
+
 // afterRebuild re-pins the overlay after the window tree is swapped, then
 // re-asserts visibility LAST so a stray async show can't leave the overlay
 // floating over the Books/Search tabs (same cadence as iOS).
@@ -298,6 +395,10 @@ func afterRebuild(state *AppState) {
 				setFrameFromObject(currentHost)
 			}
 			notifyReadingOverlay(overlayShouldShow(state))
+			// The rebuilt overlay reset its read-along state; re-issue the live
+			// highlight + follow pill so narration in progress isn't left un-tinted
+			// with no way back to follow (Android activity recreation / rotation).
+			gAudio.reassertReadAlong()
 		})
 	})
 }
@@ -354,6 +455,10 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac))
 		C.free(unsafe.Pointer(ch))
 	})
+
+	// Restyle the read-along highlight + "Follow narration" pill for this palette,
+	// so a light/dark flip mid-narration recolors them (mirrors the iOS render).
+	pushFollowButtonColors(pal)
 }
 
 // buildChapterHTMLAndroid emits the Html.fromHtml-safe dialect of the chapter:
@@ -449,6 +554,53 @@ func nativeShareImage(path string) {
 	})
 }
 
+// --- Read-along (audio) — highlight the narrated verse + the "Follow narration"
+//     pill, both on the reading overlay (audio_controller.go drives these). The
+//     Java side hops to the main thread, so they're safe from the BtAudio
+//     position-poll/TTS-range callbacks as well as the Fyne goroutine. -----------
+
+// readAlongHighlight tints the verse being narrated (clearing the previous one) and,
+// when follow is set, gently scrolls it into a comfortable band. verse<=0 just clears.
+func readAlongHighlight(verse int, follow bool) {
+	runBta(func(env uintptr) {
+		f := C.int(0)
+		if follow {
+			f = 1
+		}
+		C.btaRAHighlight(C.uintptr_t(env), C.int(verse), f)
+	})
+}
+
+// readAlongClear removes the read-along tint (stop/nav).
+func readAlongClear() {
+	runBta(func(env uintptr) { C.btaRAClear(C.uintptr_t(env)) })
+}
+
+// readAlongFollowButton shows/hides the floating "Follow narration" pill over the
+// reading pane (audio_controller drives it around follow suspension).
+func readAlongFollowButton(show bool) {
+	runBta(func(env uintptr) {
+		s := C.int(0)
+		if show {
+			s = 1
+		}
+		C.btaRAFollow(C.uintptr_t(env), s)
+	})
+}
+
+// pushFollowButtonColors styles the read-along highlight + the pill from the app
+// palette (fixed amber wash like iOS; accent ground, accent-text label). Called on
+// every real chapter render so theme flips restyle them.
+func pushFollowButtonColors(p palette) {
+	// Fixed amber wash at ~0.32 alpha, matching the iOS read-along tint.
+	const highlight = int32(0x52<<24 | 0xFF<<16 | 0xCC<<8 | 0x4D)
+	followBg := argbAlpha(p.Accent, 0xC7) // ~0.78 alpha, semi-transparent like iOS
+	followFg := argbAlpha(p.AccentText, 0xFF)
+	runBta(func(env uintptr) {
+		C.btaRAColors(C.uintptr_t(env), C.int(highlight), C.int(followBg), C.int(followFg))
+	})
+}
+
 // --- buildReadingViewMobile (Android) — the iOS shape, minus audio ----------
 
 func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
@@ -518,4 +670,10 @@ func btaBridgePresent() bool {
 // argbInt packs an NRGBA palette color into Android's ARGB int.
 func argbInt(c color.NRGBA) int32 {
 	return int32(c.A)<<24 | int32(c.R)<<16 | int32(c.G)<<8 | int32(c.B)
+}
+
+// argbAlpha packs an NRGBA color with an explicit alpha byte — used for the
+// semi-transparent "Follow narration" pill (ignore the palette color's own alpha).
+func argbAlpha(c color.NRGBA, alpha uint8) int32 {
+	return int32(alpha)<<24 | int32(c.R)<<16 | int32(c.G)<<8 | int32(c.B)
 }

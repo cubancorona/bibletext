@@ -49,3 +49,22 @@ func btaScrolled(frac C.float) {
 		})
 	}
 }
+
+// btaReadAlongUserScrolled fires when the reader scrolls BY HAND while read-along
+// is live (BtBridge distinguishes it from our own follow-scroll). It suspends the
+// follow (the highlight keeps tracking the voice) until the "Follow narration"
+// pill is tapped — the Android twin of bibleTextReadAlongUserScrolled.
+//
+//export btaReadAlongUserScrolled
+func btaReadAlongUserScrolled() {
+	gAudio.onReadAlongUserScroll()
+}
+
+// btaReadAlongFollowTapped fires when the reader taps the floating "Follow
+// narration" pill — re-attach the view to the narration. The Android twin of
+// bibleTextReadAlongFollowTapped.
+//
+//export btaReadAlongFollowTapped
+func btaReadAlongFollowTapped() {
+	gAudio.resumeReadAlongFollow()
+}
