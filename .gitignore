@@ -28,3 +28,8 @@ third_party/
 icon_work/
 build/
 /desktop
+
+# Android bridge build output (compiled by scripts/build-android.sh)
+android/classes/
+*.idsig
+*.dm
