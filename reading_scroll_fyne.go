@@ -1,4 +1,4 @@
-//go:build !ios && !darwin
+//go:build !ios && !darwin && !android
 
 package bibletext
 

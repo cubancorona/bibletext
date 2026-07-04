@@ -15,23 +15,18 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// afterRebuild is a no-op on Android (no native text overlay to re-pin).
-func afterRebuild(*AppState) {}
-
-// buildReadingViewMobile is the mobile reading pane.
+// buildReadingViewMobileFyne is the FALLBACK Android reading pane, used only
+// when the native overlay's Java bridge (classes2.dex) is absent — i.e. a
+// plain `fyne package` build that skipped scripts/build-android.sh. The
+// primary Android reading pane is the native TextView overlay
+// (reading_android.go), which delegates here when the bridge is missing.
 //
 // Each paragraph is rendered as one widget.RichText (verses flow inline with
 // superscript verse numbers, exactly like the desktop chapterText), then wrapped
 // in a selectableParagraph widget that detects long-press and shows a context
 // menu with the standard reading actions — Copy / Look Up / Share — much like
 // long-pressing a paragraph in Mail.
-//
-// We do NOT use widget.Entry per-paragraph or chapterText here: on iOS those
-// claim a huge hit area (Entry sized to its full content) and intercept taps
-// destined for the bottom tab bar, plus they pop the soft keyboard on touch.
-// RichText is not a Tappable, so plain taps fall through to the parent scroll
-// (preserving native iOS scroll) and only long-press triggers our menu.
-func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
+func buildReadingViewMobileFyne(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
 	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
