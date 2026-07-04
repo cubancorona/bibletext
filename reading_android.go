@@ -22,7 +22,8 @@ package bibletext
 
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
-                 btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM, btaShareTextM;
+                 btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
+                 btaShareTextM, btaShareImageM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -56,6 +57,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaSuppressM   = (*env)->GetStaticMethodID(env, btaClass, "suppress", "()V");
 	btaUnsuppressM = (*env)->GetStaticMethodID(env, btaClass, "unsuppress", "()V");
 	btaShareTextM  = (*env)->GetStaticMethodID(env, btaClass, "shareText", "(Ljava/lang/String;)V");
+	btaShareImageM = (*env)->GetStaticMethodID(env, btaClass, "shareImage", "(Ljava/lang/String;)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -66,7 +68,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaInitM == NULL || btaSetStyleM == NULL || btaSetHtmlM == NULL ||
 	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
-	    btaUnsuppressM == NULL || btaShareTextM == NULL) {
+	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -132,6 +134,14 @@ static void btaShareText(uintptr_t jni_env, const char *body) {
 	if (btaClass == NULL) return;
 	jstring s = (*env)->NewStringUTF(env, body);
 	(*env)->CallStaticVoidMethod(env, btaClass, btaShareTextM, s);
+	(*env)->DeleteLocalRef(env, s);
+}
+
+static void btaShareImage(uintptr_t jni_env, const char *path) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jstring s = (*env)->NewStringUTF(env, path);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaShareImageM, s);
 	(*env)->DeleteLocalRef(env, s);
 }
 */
@@ -432,8 +442,11 @@ func nativeShareText(s string) {
 }
 
 func nativeShareImage(path string) {
-	// Needs a FileProvider (manifest + res xml) — deferred. The share-image
-	// menu item is not offered on Android (BtBridge.java's menu omits it).
+	runBta(func(env uintptr) {
+		cs := C.CString(path)
+		C.btaShareImage(C.uintptr_t(env), cs)
+		C.free(unsafe.Pointer(cs))
+	})
 }
 
 // --- buildReadingViewMobile (Android) — the iOS shape, minus audio ----------

@@ -43,7 +43,20 @@ through; BACK is forwarded to the activity. Go drives the bridge over JNI via
 activity's classloader (a `FindClass` on the RunNative background thread can't
 see app dex classes). Selection actions call back via
 `reading_jni_android.c` → `reading_android_export.go` into the shared
-`dispatchAIAction` / `dispatchSelectionAction`.
+`dispatchAIAction` / `dispatchSelectionAction` — the SAME action strings and
+downstream code as iOS. "Share as image" publishes the rendered card through
+**MediaStore** (no FileProvider/androidx needed — that would require a custom
+manifest we don't ship), which also drops the card into the user's Pictures.
+
+**Menu-parity limits vs iOS (platform, not fixable):** iOS nests the actions
+under labeled *Study with AI* / *Share* submenus. Android's floating-selection
+toolbar **flattens submenus** — `menu.addSubMenu` collapses into one flat,
+scrollable overflow list — so grouping doesn't render; and the toolbar only
+shows ~3 items inline (we promote Cross-references), pushing the rest behind ⋮.
+The dark pill styling and system items (Copy / Select all / OEM extras) are the
+OS's. This is native Android behaviour and matching iOS exactly isn't possible.
+(Note for testing: `adb input tap` hits the floating toolbar's popup window
+unreliably — verify menu taps with a real finger, not synthetic input.)
 
 ## Known quirks
 
