@@ -31,7 +31,7 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
 BT="$ANDROID_HOME/build-tools/35.0.0"
 WORK="$(mktemp -d /tmp/bibletext-android.XXXXXX)"
-trap 'rm -rf "$WORK"; git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true' EXIT
+trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex"; git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true' EXIT
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 

@@ -1,16 +1,49 @@
 # BibleText on Android — build, sign, distribute
 
-Companion to the iOS notes. Android uses the **Fyne RichText reading view**
-(`reading_mobile.go`), NOT the native text overlay iOS/macOS use, and has **no
-audio** (the AVFoundation engine is `darwin`-only; `audio_other.go` stubs it), so
-the audio control and read-along simply don't appear on Android. Everything else
-(reading, search, Find/Ask AI, navigation, versions, history, text size) is
-data-driven and works from the same code.
+Companion to the iOS notes. Android has a **native reading overlay** (a
+selectable `TextView` in a `Dialog` floated over the Fyne GL surface —
+`android/BtBridge.java` + `reading_android.go`), the twin of the iOS
+`UITextView`, so readers get real long-press selection with drag handles, the
+floating toolbar, and BibleText's study menu (Ask AI / Explain / Analyze
+context / Analyze translation / Cross-references / Share with citation) — the
+same Go dispatch as iOS. Android has **no audio** (the AVFoundation engine is
+`darwin`-only; `audio_other.go` stubs it), so the audio control and read-along
+don't appear. Everything else (reading, search, Find/Ask AI, navigation,
+versions, history, text size) is data-driven off the same code.
 
-**Verified 2026-07-04** on the API-35 arm64 emulator: reading (John 1), Books,
-live Search ("sheep" → 120 matches, highlighted), and the Bible cache
-(cache_path_android.go — see Known quirks). Not exercised: AI features (BYOK
-keys) and Android hardware keyboards.
+**Build with [`scripts/build-android.sh`](../scripts/build-android.sh), NOT a
+bare `fyne package`** — the overlay's Java half ships as `classes2.dex`, which
+that script compiles and injects. A plain `fyne package` build still runs, but
+silently falls back to the old Fyne-widget reading pane (no native selection).
+
+**Verified 2026-07-04** on the API-35 arm64 emulator: native selection (handles
++ floating toolbar), each study action reaching the Go panel (Explain →
+Explanation panel), overlay hide on tab switch + suppress behind the AI modal,
+scroll-position persistence, reading, Books, live Search, and the Bible cache.
+
+## Native overlay (BtBridge)
+
+The overlay MUST be a **Dialog** at **TYPE_APPLICATION**, not a
+`WindowManager.addView` root or a sub-window, for two hard Android reasons:
+1. NativeActivity's `Window.takeSurface()` means the activity's Java view
+   hierarchy never draws — a separate window is required to show anything over
+   the GL. (A `WindowManager.addView` window draws, but…)
+2. Text selection's floating toolbar is created by
+   `DecorView.startActionModeForChild`; a bare `WindowManager` root has no
+   DecorView, so `ViewRootImpl` returns null and no toolbar appears. A Dialog
+   has a real decor. And the Editor **force-disables selection handles** for
+   sub-windows (types 1000–1999, `windowSupportsHandles`), so TYPE_APPLICATION
+   (2) it is.
+
+Other essentials: a **NO_OP `TextClassifier`** keeps selection synchronous (the
+async smart-selection round-trip fails to raise the toolbar in the overlay
+window); `FLAG_NOT_TOUCH_MODAL` + non-dim lets Fyne header/tab taps fall
+through; BACK is forwarded to the activity. Go drives the bridge over JNI via
+`fyne driver.RunNative`, resolving `org.bibletext.BtBridge` through the
+activity's classloader (a `FindClass` on the RunNative background thread can't
+see app dex classes). Selection actions call back via
+`reading_jni_android.c` → `reading_android_export.go` into the shared
+`dispatchAIAction` / `dispatchSelectionAction`.
 
 ## Known quirks
 
@@ -42,44 +75,36 @@ keys) and Android hardware keyboards.
 
 ## Build
 
-The Fyne CLI (`fyne-io/tools` v1.7.2 — this IS current; the CLI versions
-separately from the v2.7 toolkit) drives it. No patched Fyne needed (the iOS
-drawloop patch is iOS-only).
+Use **`scripts/build-android.sh`** — it compiles `android/BtBridge.java` to
+`classes2.dex`, runs the Fyne CLI (`fyne-io/tools` v1.7.2 — current; the CLI
+versions separately from the v2.7 toolkit; no patched Fyne needed, the iOS
+drawloop patch is iOS-only), injects the dex, and re-signs.
 
 ```bash
-cd cmd/mobile
+# Debug/test APK (signed with the upload key, target 29) → cmd/mobile/BibleText.apk
+scripts/build-android.sh
 
-# Debug/test APK — installable on emulator or by sideload. Target API 29, min 15.
-fyne package -os android -app-id uk.co.bibletext -icon Icon.png
-#  → BibleText.apk  (a "fat" APK with all ABIs; ~120 MB)
-
-# Signed RELEASE Android App Bundle (.aab) for Google Play. Target API 35 (meets
-# Play's current floor), min 15. Emits an .aab via bundletool.
-fyne release -os android \
-  -app-id uk.co.bibletext -icon Icon.png \
-  -app-version 1.0.0 -app-build <N> \
-  -keyStore   ~/Library/Android/bibletext-signing/bibletext-upload.keystore \
-  -keyName    bibletext \
-  -keyStorePass "$(cat ~/Library/Android/bibletext-signing/keystore-password.txt)" \
-  -keyPass      "$(cat ~/Library/Android/bibletext-signing/keystore-password.txt)"
-#  → BibleText.aab
+# Signed release AAB (Play, target 35) + universal APK (sideload/Firebase)
+# → ~/Library/Android/bibletext-dist/{BibleText.aab, BibleText-universal.apk}
+BIBLETEXT_ANDROID_BUILD=<versionCode> scripts/build-android.sh --release
 ```
 
-`-app-build <N>` = Android `versionCode`; it MUST strictly increase with every
-Play upload. There is no `-targetSdk` flag (Fyne hardcodes 35); `-androidapi <n>`
-raises `minSdkVersion` if desired (e.g. `-androidapi 24` for Android 7.0).
+The release path: `fyne release -os android` emits a signed `.aab` via
+bundletool, then the script adds `base/dex/classes2.dex` and re-signs
+(jarsigner for the AAB; apksigner v1+v2+v3 for the debug APK, after zipalign).
+`versionCode` MUST strictly increase per Play upload. There is no `-targetSdk`
+flag (Fyne hardcodes 35); pass `-androidapi <n>` inside the script to raise
+`minSdkVersion`.
 
-To get a **signed installable APK from the AAB** (for Firebase/sideload):
+**Gotcha:** the debug APK is signed with the *upload key*, not Fyne's built-in
+debug key, so `adb install` fails against a previously-installed differently-
+signed build — `adb uninstall uk.co.bibletext` first.
 
-```bash
-bundletool build-apks --mode=universal \
-  --bundle=BibleText.aab --output=BibleText.apks \
-  --ks=~/Library/Android/bibletext-signing/bibletext-upload.keystore \
-  --ks-key-alias=bibletext \
-  --ks-pass=file:~/Library/Android/bibletext-signing/keystore-password.txt \
-  --key-pass=file:~/Library/Android/bibletext-signing/keystore-password.txt
-unzip -p BibleText.apks universal.apk > BibleText-universal.apk
-```
+`Html.fromHtml` can't do CSS classes, so Android has its own chapter emitter
+(`buildChapterHTMLAndroid`): verse numbers are `<sup><small><font><b>`, red
+letter is `<font color>`, the search highlight is an inline `style=` span. Body
+typography (serif, size, line spacing, justify) is set on the TextView, not in
+HTML.
 
 ## Signing key — READ THIS
 
