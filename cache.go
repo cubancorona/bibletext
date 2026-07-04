@@ -27,6 +27,15 @@ func defaultCachePath() string {
 		return custom
 	}
 
+	// On Android os.UserCacheDir() has no valid target ($HOME/.cache is read-only),
+	// so without this the cache would fall back to an unwritable CWD-relative path
+	// and the whole Bible would re-download every launch (and never work offline).
+	// appStorageDir returns Fyne's per-app writable storage there, and "" elsewhere
+	// (iOS + desktop already get a proper writable dir from os.UserCacheDir).
+	if dir := appStorageDir(); dir != "" {
+		return filepath.Join(dir, cacheFileName)
+	}
+
 	cacheDir, err := os.UserCacheDir()
 	if err != nil || cacheDir == "" {
 		return cacheFileName
