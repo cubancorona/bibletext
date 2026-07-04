@@ -104,11 +104,31 @@ public final class BtBridge {
 
     private BtBridge() {}
 
-    /** init stores the activity and builds the view lazily on the UI thread. */
+    /**
+     * init stores the activity and builds the view lazily on the UI thread.
+     * Called on every RunNative init AND whenever the activity changes: Android
+     * recreates the activity (rotation, background→foreground), and a Dialog
+     * cached against the destroyed activity's window token throws
+     * BadTokenException on show(). So when a new activity arrives, tear the old
+     * Dialog down and rebuild against the live one; the Go afterRebuild re-pushes
+     * the frame + visibility, so we don't auto-show here.
+     */
     public static void init(final Activity act) {
         UI.post(new Runnable() {
             @Override public void run() {
-                if (activity == act && text != null) return;
+                if (activity == act && dialog != null) return;
+                if (dialog != null) {
+                    try { dialog.dismiss(); } catch (Throwable ignored) {}
+                }
+                dialog = null;
+                scroll = null;
+                text = null;
+                frameW = 1;
+                frameH = 1;
+                // wantShown/suppressed are re-asserted by the Go side after the
+                // rebuild (notifyReadingOverlay / show/hide), so start neutral.
+                wantShown = false;
+                suppressed = false;
                 activity = act;
                 ensureView();
             }
@@ -332,13 +352,18 @@ public final class BtBridge {
     }
 
     private static void applyFrame() {
-        Window w = dialog.getWindow();
-        WindowManager.LayoutParams lp = w.getAttributes();
-        lp.x = frameX;
-        lp.y = frameY;
-        lp.width = frameW;
-        lp.height = frameH;
-        w.setAttributes(lp);
+        if (dialog == null || !dialog.isShowing()) return;
+        try {
+            Window w = dialog.getWindow();
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.x = frameX;
+            lp.y = frameY;
+            lp.width = frameW;
+            lp.height = frameH;
+            w.setAttributes(lp);
+        } catch (Throwable ignored) {
+            // Window torn down mid-update (activity recreation) — harmless.
+        }
     }
 
     public static void show() {
@@ -353,11 +378,17 @@ public final class BtBridge {
     private static void applyShow() {
         if (dialog == null || suppressed || !wantShown) return;
         if (frameW <= 1 || frameH <= 1) return; // no real frame yet — setFrame retries
-        if (!dialog.isShowing()) {
-            dialog.show();
+        if (activity == null || activity.isFinishing()) return;
+        try {
+            if (!dialog.isShowing()) {
+                dialog.show();
+            }
+            applyFrame();
+            text.requestFocus(); // selection needs the view to hold focus in its window
+        } catch (Throwable t) {
+            // Stale window token during an activity teardown — init() rebuilds
+            // the Dialog against the next activity, and Go re-drives visibility.
         }
-        applyFrame();
-        text.requestFocus(); // selection needs the view to hold focus in its window
     }
 
     public static void hide() {

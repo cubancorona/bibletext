@@ -56,6 +56,22 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaSuppressM   = (*env)->GetStaticMethodID(env, btaClass, "suppress", "()V");
 	btaUnsuppressM = (*env)->GetStaticMethodID(env, btaClass, "unsuppress", "()V");
 	btaShareTextM  = (*env)->GetStaticMethodID(env, btaClass, "shareText", "(Ljava/lang/String;)V");
+	// A missing method (a dex/JNI signature skew from editing BtBridge.java
+	// without updating these descriptors) returns NULL and leaves a pending
+	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
+	// unchecked NULL jmethodID would later SIGSEGV in CallStatic*Method. Treat any
+	// skew as "bridge absent" — clear the exception, drop the class, fall back to
+	// the Fyne reading pane (mirrors Fyne's own find_static_method helper).
+	if ((*env)->ExceptionCheck(env) ||
+	    btaInitM == NULL || btaSetStyleM == NULL || btaSetHtmlM == NULL ||
+	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
+	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
+	    btaUnsuppressM == NULL || btaShareTextM == NULL) {
+		(*env)->ExceptionClear(env);
+		(*env)->DeleteGlobalRef(env, btaClass);
+		btaClass = NULL;
+		return 0;
+	}
 	return 1;
 }
 
@@ -144,6 +160,7 @@ import (
 // case the reading pane falls back to the Fyne widget path.
 var btaAvailable = false
 var btaInitTried = false
+var btaCtx uintptr // the activity jobject the bridge was last (re-)initialised for
 
 // runBta wraps driver.RunNative: hands the callback an attached JNIEnv, after
 // making sure the bridge class + activity are initialised. RunNative surfaces
@@ -155,8 +172,15 @@ func runBta(fn func(env uintptr)) {
 		if !ok {
 			return nil
 		}
-		if !btaInitTried {
+		// (Re-)init when first seen OR when the activity changed. Android
+		// recreates the activity (rotation, background→foreground), handing a
+		// new Ctx; BtBridge.init then rebuilds its Dialog against the live
+		// activity — a Dialog cached against a dead activity would throw
+		// BadTokenException on show(). The C class + method IDs are cached, so
+		// re-init is just a BtBridge.init(newActivity) call.
+		if !btaInitTried || ac.Ctx != btaCtx {
 			btaInitTried = true
+			btaCtx = ac.Ctx
 			btaAvailable = C.btaInit(C.uintptr_t(ac.Env), C.uintptr_t(ac.Ctx)) == 1
 			if !btaAvailable {
 				// Bridge dex missing (plain `fyne package` build) — the reading

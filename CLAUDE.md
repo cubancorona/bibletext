@@ -45,11 +45,15 @@ VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
 "Debug Desktop App" runs it under the debugger.
 
 **Android:** toolchain (JDK 21, SDK/NDK r27, bundletool — all under `$HOME`),
-build/sign/emulator/distribution commands, and Android-specific quirks (cache
-path via `cache_path_android.go`, Fyne hardware-key doubling) live in
-[`docs/ANDROID.md`](docs/ANDROID.md). Debug APK: `fyne package -os android`
-from `cmd/mobile`; Play-ready signed `.aab`: `fyne release -os android` (needs
-`bundletool` on PATH; keystore outside the repo).
+the native selection overlay, build/sign/emulator/distribution, and quirks live
+in [`docs/ANDROID.md`](docs/ANDROID.md). **Build with `scripts/build-android.sh`**
+(debug APK) or `scripts/build-android.sh --release` (signed `.aab` + universal
+APK) — NOT bare `fyne package`, which drops the `classes2.dex` bridge and falls
+back to the Fyne-widget reading pane. Android has a native selectable-TextView
+reading overlay (a `Dialog` over the GL surface; `android/BtBridge.java` +
+`reading_android.go`) giving iOS-parity text selection + the study context menu,
+but NO audio (Apple-only). `reading_mobile.go`'s `buildReadingViewMobileFyne` is
+the fallback when the bridge dex is absent.
 
 ## Architecture notes (the non-obvious bits)
 
