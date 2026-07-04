@@ -44,6 +44,13 @@ applied ONLY on the iOS packaging path: `scripts/run-ios-device.sh` and
 VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
 "Debug Desktop App" runs it under the debugger.
 
+**Android:** toolchain (JDK 21, SDK/NDK r27, bundletool — all under `$HOME`),
+build/sign/emulator/distribution commands, and Android-specific quirks (cache
+path via `cache_path_android.go`, Fyne hardware-key doubling) live in
+[`docs/ANDROID.md`](docs/ANDROID.md). Debug APK: `fyne package -os android`
+from `cmd/mobile`; Play-ready signed `.aab`: `fyne release -os android` (needs
+`bundletool` on PATH; keystore outside the repo).
+
 ## Architecture notes (the non-obvious bits)
 
 - **Build tags select the UI per platform.** Files are tagged
