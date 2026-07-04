@@ -11,11 +11,13 @@ import android.os.Looper;
 import android.text.Html;
 import android.text.Selection;
 import android.text.Spannable;
+import android.provider.MediaStore;
 import android.view.ActionMode;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.SubMenu;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -159,15 +161,20 @@ public final class BtBridge {
         // keep a sane default here.
         text.setCustomSelectionActionModeCallback(new ActionMode.Callback2() {
             @Override public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-                // Keep the system items (Copy / Select All / Share…) and add the
-                // BibleText study cluster; the floating toolbar shows ours in
-                // the overflow. Order values place them after the system's.
-                menu.add(0, 101, 100, "Ask AI a question…");
-                menu.add(0, 102, 101, "Explain");
-                menu.add(0, 103, 102, "Analyze context");
-                menu.add(0, 104, 103, "Analyze translation");
-                menu.add(0, 105, 104, "Cross-references");
-                menu.add(0, 106, 105, "Share with citation");
+                // Mirror the iOS selection menu: a "Study with AI" submenu, a
+                // "Share" submenu (with-citation + as-image), and Cross-references.
+                // Keep Copy/Select all; drop the system plain-text Share (ours,
+                // with the reference, supersedes it) so there aren't two Shares.
+                menu.removeItem(android.R.id.shareText);
+                SubMenu ai = menu.addSubMenu(0, 200, 100, "Study with AI");
+                ai.add(0, 101, 0, "Ask a question…");
+                ai.add(0, 102, 1, "Explain");
+                ai.add(0, 103, 2, "Analyze context");
+                ai.add(0, 104, 3, "Analyze translation");
+                SubMenu sh = menu.addSubMenu(0, 201, 101, "Share");
+                sh.add(0, 106, 0, "Share with citation");
+                sh.add(0, 107, 1, "Share as image");
+                menu.add(0, 105, 102, "Cross-references");
                 return true;
             }
             @Override public boolean onPrepareActionMode(ActionMode mode, Menu menu) { return false; }
@@ -180,7 +187,8 @@ public final class BtBridge {
                     case 104: action = "translation"; break;
                     case 105: action = "crossref"; break;
                     case 106: action = "share-cite"; break;
-                    default: return false; // system item — let Android handle it
+                    case 107: action = "share-image"; break;
+                    default: return false; // submenu header (200/201) or system item
                 }
                 int a = text.getSelectionStart(), b = text.getSelectionEnd();
                 if (a < 0 || b < 0) return true;
@@ -438,6 +446,50 @@ public final class BtBridge {
                 i.setType("text/plain");
                 i.putExtra(Intent.EXTRA_TEXT, body);
                 activity.startActivity(Intent.createChooser(i, null));
+            }
+        });
+    }
+
+    /**
+     * shareImage opens the system share sheet with the rendered verse card (a
+     * PNG the Go side wrote to the app cache at `path`). Sharing a file needs a
+     * content:// URI; rather than ship a FileProvider (which would need a custom
+     * manifest + androidx we don't bundle), we publish the PNG through
+     * MediaStore and share that URI. Side effect: the card also lands in the
+     * user's Pictures — which is reasonable for an image the user is exporting.
+     */
+    public static void shareImage(final String path) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                if (activity == null) return;
+                android.net.Uri uri = null;
+                try {
+                    java.io.File f = new java.io.File(path);
+                    android.content.ContentValues cv = new android.content.ContentValues();
+                    cv.put(MediaStore.Images.Media.DISPLAY_NAME,
+                            f.getName().isEmpty() ? "bibletext-verse.png" : f.getName());
+                    cv.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                    android.content.ContentResolver cr = activity.getContentResolver();
+                    uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
+                    if (uri == null) return;
+                    java.io.InputStream in = new java.io.FileInputStream(f);
+                    java.io.OutputStream out = cr.openOutputStream(uri);
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                    in.close();
+                    out.close();
+                    Intent i = new Intent(Intent.ACTION_SEND);
+                    i.setType("image/png");
+                    i.putExtra(Intent.EXTRA_STREAM, uri);
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    activity.startActivity(Intent.createChooser(i, null));
+                } catch (Throwable t) {
+                    android.util.Log.w("BtBridge", "shareImage failed", t);
+                    if (uri != null) {
+                        try { activity.getContentResolver().delete(uri, null, null); } catch (Throwable ignored) {}
+                    }
+                }
             }
         });
     }
