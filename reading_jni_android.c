@@ -15,6 +15,8 @@
 // only valid for the duration of the call — Go copies them immediately.
 extern void btaSelectionAction(char *action, char *text);
 extern void btaScrolled(float frac);
+extern void btaReadAlongUserScrolled(void);
+extern void btaReadAlongFollowTapped(void);
 
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText) {
@@ -28,4 +30,14 @@ Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jst
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeScrolled(JNIEnv *env, jclass clazz, jfloat frac) {
 	btaScrolled((float)frac);
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeReadAlongUserScrolled(JNIEnv *env, jclass clazz) {
+	btaReadAlongUserScrolled();
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeReadAlongFollowTapped(JNIEnv *env, jclass clazz) {
+	btaReadAlongFollowTapped();
 }

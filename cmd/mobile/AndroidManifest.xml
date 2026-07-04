@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Custom Android manifest — required for BACKGROUND AUDIO, which needs a
+  <service android:foregroundServiceType="mediaPlayback"> that Fyne's generated
+  manifest can't declare. Fyne (fyne-io/tools v1.7.2) uses this file VERBATIM
+  when it sits next to main.go, so it must carry everything the app needs; it
+  replicates fyne's own template (templates/data/AndroidManifest.xml) exactly,
+  plus the BtAudioService block. Ground rules, all source-verified:
+
+  - The presence of Icon-foreground.png (same dir) flips fyne onto its aapt2
+    resource path — REQUIRED: the legacy binres encoder can't encode the
+    android:foregroundServiceType attribute (API 29 attr vs its baked-in API 21
+    table) and would fail the build on this file.
+  - Do NOT add android:versionCode / android:versionName or <uses-sdk> here:
+    fyne passes them as aapt2 link flags (-app-build / -app-version, min 21,
+    target 35 release / 29 debug), and flag values only apply when the manifest
+    doesn't already declare them — hardcoding here would freeze the versionCode.
+  - The activity MUST stay org.golang.app.GoNativeActivity with the
+    android.app.lib_name meta-data (value = fyne's sanitized app name,
+    "BibleText" → libBibleText.so) — fyne parses + validates both.
+  - android:icon must be @mipmap/ic_launcher (the adaptive icon fyne compiles
+    from Icon-foreground.png / Icon-background.png on the aapt2 path).
+-->
+<manifest
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	package="uk.co.bibletext">
+
+	<application android:label="BibleText"
+				 android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round">
+	<activity android:name="org.golang.app.GoNativeActivity"
+		android:label="BibleText"
+		android:configChanges="orientation|keyboardHidden|uiMode"
+		android:exported="true"
+		android:theme="@android:style/Theme">
+		<meta-data android:name="android.app.lib_name" android:value="BibleText" />
+		<intent-filter>
+			<action android:name="android.intent.action.MAIN" />
+			<category android:name="android.intent.category.LAUNCHER" />
+		</intent-filter>
+	</activity>
+
+	<receiver android:name="org.golang.app.FyneNotificationReceiver"
+			  android:exported="false" />
+
+	<!-- Background audio: the foreground-service anchor (android/BtAudioService.java,
+	     shipped in classes2.dex) that keeps narration alive with the screen off and
+	     hosts the MediaStyle notification / lock-screen transport. -->
+	<service android:name="org.bibletext.BtAudioService"
+		android:exported="false"
+		android:foregroundServiceType="mediaPlayback" />
+	</application>
+
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.INTERNET" />
+
+	<!-- Background audio (Phase 2) -->
+	<uses-permission android:name="android.permission.WAKE_LOCK" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>

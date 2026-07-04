@@ -31,14 +31,17 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
 BT="$ANDROID_HOME/build-tools/35.0.0"
 WORK="$(mktemp -d /tmp/bibletext-android.XXXXXX)"
-trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex"; git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true' EXIT
+# The trap reverts fyne's Build++ writeback to FyneApp.toml — but ONLY when the
+# file was clean at start, so it can never destroy uncommitted manual edits.
+TOML_WAS_DIRTY="$(git -C "$REPO_ROOT" status --porcelain -- cmd/mobile/FyneApp.toml 2>/dev/null || true)"
+trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex"; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
-note "compiling BtBridge.java -> classes2.dex"
+note "compiling android/*.java (BtBridge + BtAudio) -> classes2.dex"
 mkdir -p "$WORK/classes"
 javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d "$WORK/classes" \
-  "$REPO_ROOT/android/BtBridge.java"
+  "$REPO_ROOT"/android/*.java
 mkdir -p "$WORK/dexout"
 "$BT/d8" --min-api 21 --lib "$ANDROID_JAR" --output "$WORK/dexout" \
   "$WORK/classes/org/bibletext/"*.class
@@ -70,6 +73,10 @@ if [ "${1:-}" = "--release" ]; then
     --ks="$KS" --ks-key-alias="$KEY_ALIAS" \
     --ks-pass="pass:$KS_PASS" --key-pass="pass:$KS_PASS"
   unzip -p "$WORK/BibleText.apks" universal.apk > "$DIST_DIR/BibleText-universal.apk"
+  # Same aapt2-path assertion as the debug branch (background audio's <service>
+  # only exists if the adaptive-icon resources flipped fyne onto aapt2).
+  unzip -l "$DIST_DIR/BibleText-universal.apk" | grep "mipmap-anydpi" >/dev/null \
+    || { echo "ERROR: adaptive-icon resources missing from release APK"; exit 1; }
   mv "$APP_DIR/BibleText.aab" "$DIST_DIR/BibleText.aab"
   note "done: $DIST_DIR/BibleText.aab + BibleText-universal.apk"
   ls -lh "$DIST_DIR"
@@ -78,6 +85,16 @@ else
   cd "$APP_DIR"
   rm -f BibleText.apk
   fyne package -os android -app-id uk.co.bibletext -icon Icon.png
+
+  note "verifying the aapt2 resource path was taken (adaptive icon present)"
+  # The custom AndroidManifest.xml (background-audio <service>) only compiles on
+  # fyne's aapt2 path, which is triggered by cmd/mobile/Icon-foreground.png. If
+  # that file went missing, fyne would silently fall back to the legacy binres
+  # encoder — which errors on foregroundServiceType — so assert positively here.
+  # (plain grep >/dev/null, NOT grep -q: -q exits on first match, unzip takes a
+  #  SIGPIPE, and pipefail turns the successful check into a build failure)
+  unzip -l "$APP_DIR/BibleText.apk" | grep "res/mipmap-anydpi-v26/ic_launcher.xml" >/dev/null \
+    || { echo "ERROR: adaptive-icon resources missing — aapt2 path not taken"; exit 1; }
 
   note "injecting classes2.dex + zipalign + apksigner"
   cp "$WORK/classes2.dex" "$APP_DIR"  # zip stores the path as given — add from cwd

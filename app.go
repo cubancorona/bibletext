@@ -227,7 +227,14 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	// Retry the full-Bible download whenever the app returns to the foreground — covers a
 	// fetch that stalled or dropped while backgrounded. No-op once the full text has landed
 	// (triggerFullDownload guards on fullPending + single-flight).
-	lc.SetOnEnteredForeground(func() { fyne.Do(func() { triggerFullDownload(state) }) })
+	// foregroundOverlayRecovery (Android-only) re-renders the native reading
+	// overlay when Android recreated the activity while we were away — without
+	// it the reading pane comes back blank after a swipe-away relaunch (common
+	// now that the audio foreground service keeps the process alive).
+	lc.SetOnEnteredForeground(func() {
+		foregroundOverlayRecovery(state)
+		fyne.Do(func() { triggerFullDownload(state) })
+	})
 	if window != nil && !fyne.CurrentDevice().IsMobile() {
 		// Desktop: the window-close button bypasses the lifecycle "stopped" hook
 		// until teardown, so capture here while the NSTextView is still alive.

@@ -387,6 +387,27 @@ func (c *audioController) resumeReadAlongFollow() {
 	showFollowButton(false) // way back taken — drop the button
 }
 
+// reassertReadAlong re-issues the current highlight + follow-pill state to the
+// native reading overlay after it was rebuilt from scratch — Android recreates the
+// activity (rotation, background→foreground) and BtBridge resets its read-along
+// state (verse index, current span, pill) while the controller's copy stays intact.
+// Called from afterRebuild (reading_android.go). No-op when nothing is armed. On the
+// Apple platforms the overlay isn't torn down this way, so it's simply never called.
+func (c *audioController) reassertReadAlong() {
+	c.mu.Lock()
+	armed := c.loaded && c.readAlong != nil
+	v := c.readAlongVerse
+	suspended := c.followSuspended
+	c.mu.Unlock()
+	if !armed {
+		return
+	}
+	if v > 0 {
+		readAlongHighlight(v, !suspended)
+	}
+	showFollowButton(suspended) // restore the "Follow narration" pill if it was up
+}
+
 // onSpeechRange is posted from the speech synthesizer's willSpeakRangeOfSpeechString
 // delegate (TTS read-along) with the UTF-16 offset of the text about to be spoken.
 // The armed table holds per-verse offsets in the same unit, so the recorded path's
@@ -491,8 +512,14 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		// The engine reports it's actively producing (or holding) sound, so a source
 		// IS loaded — re-assert it. Belt-and-suspenders against a stale teardown
 		// callback having just cleared the flag a moment before this one lands; the
-		// native mode guards (audio_ios.go) are the primary defense.
-		c.loaded = true
+		// native mode guards (audio_ios.go) are the primary defense. Only when a
+		// chapter identity survives, though: re-asserting with loadedFP=="" would
+		// manufacture the inconsistent "loaded but anonymous" state (nav-stop can't
+		// match it, the button can't either) if a native surface ever resumes a
+		// session this controller already disowned.
+		if c.loadedFP != "" {
+			c.loaded = true
+		}
 	case audioIdle, audioEnded, audioFailed:
 		// Chapter ended, stream failed, or the session was torn down: nothing is
 		// actively loaded for play/pause purposes, so a tap re-starts cleanly.
@@ -519,6 +546,13 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	// pane with it, until the reader pauses or the Bible ends.
 	if s == audioEnded && endedState != nil && !tooFast {
 		c.advanceAndContinue(endedState, endedKind, endedRecID, endedFP)
+	} else if s == audioEnded {
+		// Ended with no continuation possible (no bound state, or a suspiciously
+		// instant end) — the listening session is over. Release the native side
+		// explicitly: it can't tell a between-chapters ENDED from a final one, so
+		// without this the lock-screen card (and, on Android, the foreground
+		// service + notification) would sit parked forever.
+		nativeAudioStop()
 	}
 
 	// A recorded stream that failed (404, dead network, hung buffer) restarts the
@@ -528,6 +562,11 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	// TTS retry can never re-enter here.
 	if s == audioFailed && endedState != nil && endedKind == audioRecorded {
 		c.fallbackToTTS(endedState, endedFP)
+	} else if s == audioFailed {
+		// FAILED with no fallback possible — end the session on the native side
+		// (Android holds its foreground service through FAILED expecting the
+		// fallback; without one it must be told the session is over).
+		nativeAudioStop()
 	}
 }
 
@@ -538,6 +577,10 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 func (c *audioController) fallbackToTTS(state *AppState, failedFP string) {
 	fyne.Do(func() {
 		if chapterAudioFingerprint(state) != failedFP {
+			// Reader left the failed chapter — no fallback. Release the native
+			// session surfaces (Android keeps its service up through FAILED
+			// precisely so this fallback could reuse it; tell it we won't).
+			nativeAudioStop()
 			return
 		}
 		c.startChapter(state, ttsAudioForChapter(state), failedFP)
@@ -554,9 +597,16 @@ func (c *audioController) fallbackToTTS(state *AppState, failedFP string) {
 func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, recID, endedFP string) {
 	fyne.Do(func() {
 		if chapterAudioFingerprint(state) != endedFP {
-			return // reader moved on while the chapter was finishing — don't yank them
+			// Reader moved on while the chapter was finishing — don't yank them.
+			// Their navigation already stopped any mismatched playback, but the
+			// native session surfaces may still be up; release them (idempotent).
+			nativeAudioStop()
+			return
 		}
 		if !advanceToNextChapter(state) {
+			// End of the Bible: nothing follows Revelation 22 — end the session so
+			// the lock-screen card / Android foreground service don't sit parked.
+			nativeAudioStop()
 			return
 		}
 		state.refresh() // carry the reading pane onto the new chapter
