@@ -1,7 +1,7 @@
 # Architecture
 
-BibleText is a cross-platform Bible reader — **macOS, Windows, Linux, and iOS** —
-built from a single Go codebase on [Fyne](https://fyne.io/) (v2.7.4). This
+BibleText is a cross-platform Bible reader — **macOS, Windows, Linux, iOS, and
+Android** — built from a single Go codebase on [Fyne](https://fyne.io/) (v2.7.4). This
 document covers how the pieces fit together. See [README.md](README.md) for
 features and usage, and [CLAUDE.md](CLAUDE.md) for the day-to-day developer
 guide and the non-obvious invariants.
@@ -25,12 +25,14 @@ runtime, so each target links only the drivers and native code it needs:
 | `ios \|\| android` | mobile | `ui_mobile.go` |
 | `darwin && !ios` | macOS only | `reading_macos.go` (cgo) |
 | `ios` | iOS only | `reading_ios.go` (cgo) |
-| `ios \|\| !darwin` | iOS + Linux/Win/Android | `reading_fyne.go` |
-| `!ios && !darwin` | Linux/Win/Android | `reading_scroll_fyne.go` |
-| `!darwin` | non-Apple | `share_other.go` |
+| `android` | Android only | `reading_android.go`, `audio_android.go` (cgo/JNI) |
+| `ios \|\| !darwin` | everything but macOS | `reading_fyne.go` (fallback pane) |
+| `!ios && !darwin && !android` | Linux/Win | `reading_scroll_fyne.go` |
+| `!darwin && !android` | Linux/Win | `share_other.go`, `audio_other.go` (no-op stubs) |
 
-> Note: gopls analyses only the host build, so iOS/cgo-tagged files look
-> greyed-out in the editor. Validate them with `fyne package -os iossimulator`.
+> Note: gopls analyses only the host build, so iOS/Android/cgo-tagged files look
+> greyed-out in the editor. Validate them with `fyne package -os iossimulator`
+> (iOS) or `scripts/build-android.sh` (Android).
 
 ## Data pipeline
 
@@ -95,7 +97,7 @@ real files; `*_test.go` files are omitted.
 | File | Responsibility |
 | --- | --- |
 | `cmd/desktop/main.go` | Desktop entry — calls `bibletext.Run()` |
-| `cmd/mobile/main.go` | Mobile entry — `app.NewWithID`, show window + spinner, `StartBackgroundLoad`; packaged via `fyne package -os ios/android -src ./cmd/mobile` |
+| `cmd/mobile/main.go` | Mobile entry — `app.NewWithID`, show window + spinner, `StartBackgroundLoad`; packaged via the iOS scripts (`scripts/run-ios-*.sh` / `release-ios.sh`) and `scripts/build-android.sh` |
 
 ### Data layer (no UI deps; compile everywhere)
 
@@ -125,7 +127,7 @@ real files; `*_test.go` files are omitted.
 | `reading_state.go` | Reading-position + history persistence (translation/book/chapter/scroll anchor) in `fyne.Preferences` |
 | `history.go` | Recent-chapters history list/bar |
 | `theme.go` | `palette`, light/dark `bibleTheme`, custom colour names, `surface` modal helper |
-| `font.go` | OS-serif loading (Georgia / DejaVuSerif), used for share-image rendering |
+| `font.go` | OS-serif discovery (Georgia / DejaVuSerif) — fallback faces for the card/artwork renderers |
 | `fonts_embed.go` | Embedded **Atkinson Hyperlegible** UI font family (`//go:embed`, OFL) |
 
 ### Shared UI / widgets
@@ -149,10 +151,12 @@ real files; `*_test.go` files are omitted.
 | --- | --- | --- |
 | `reading_macos.go` | `darwin && !ios` | cgo: native `NSTextView` overlay + scroll capture/restore |
 | `reading_ios.go` | `ios` | cgo: native `UITextView` overlay, custom selection menu, scroll hooks |
-| `reading_fyne.go` | `ios \|\| !darwin` | Fyne `RichText` fallback reading pane (Linux/Win/Android; also iOS-buildable) |
-| `reading_scroll_fyne.go` | `!ios && !darwin` | No-op scroll capture/restore for the Fyne fallback |
-| `reading_mobile.go` | `android` | Android-specific reading glue |
-| `reading_ios_visibility.go` / `reading_android_visibility.go` | `ios` / `android` | overlay show/hide on lifecycle |
+| `reading_ios_visibility.go` | `ios` | overlay show/hide on lifecycle |
+| `reading_android.go` | `android` | cgo/JNI: native selectable `TextView` overlay (a `Dialog` over the GL surface), selection menu, native share, scroll capture/restore — Java half in `android/BtBridge.java` |
+| `reading_android_export.go` + `reading_jni_android.c` | `android` | Native → Go callbacks for the Android overlay (the `//export` twin of `ai_menu_darwin.go`) + the JNI thunk definitions |
+| `reading_fyne.go` | `ios \|\| !darwin` | Fyne `RichText` fallback reading pane (Linux/Win; on Android the fallback when the bridge dex is absent) |
+| `reading_scroll_fyne.go` | `!ios && !darwin && !android` | No-op scroll capture/restore for the Fyne fallback |
+| `reading_mobile.go` / `reading_scroll_android.go` | `android` | Fallback-pane glue + the inert initial-touch hooks |
 | `ai_menu_darwin.go` | `darwin` | Native → Go `//export` callbacks: AI-menu tap, iOS scroll-end, highlight clear, keyboard frame (audio has its own `//export` in `audio_export_apple.go`) |
 
 ### Audio (per-chapter playback)
@@ -162,10 +166,14 @@ real files; `*_test.go` files are omitted.
 | `audio_controller.go` | (untagged) | `gAudio` — the cross-platform play-state owner: source preference, `playPauseCurrent` / `selectSource` / `effectiveKind`, continuous playback (`advanceToNextChapter`), drives the `nativeAudio*` shims |
 | `audio_ios.go` | `ios` | cgo engine: AVPlayer + AVSpeechSynthesizer + AVAudioSession + MPNowPlayingInfoCenter + MPRemoteCommandCenter |
 | `audio_macos.go` | `darwin && !ios` | cgo engine twin (same, minus AVAudioSession; AppKit/NSImage artwork) |
-| `audio_other.go` | `!darwin` | No-op `nativeAudio*` stubs (Linux/Windows/Android stay cgo-free) |
+| `audio_android.go` | `android` | cgo/JNI engine: drives `android/BtAudio.java` — MediaPlayer (recordings) + TextToSpeech (read-aloud) + audio-focus + a 200 ms read-along position poll |
+| `audio_export_android.go` + `audio_jni_android.c` | `android` | Java → JNI thunk → Go `//export` state callbacks (twin of `audio_export_apple.go`) |
+| `audio_other.go` | `!darwin && !android` | No-op `nativeAudio*` stubs (Linux/Windows stay cgo-free) |
 | `audio_export_apple.go` | `darwin` | The `bibleTextAudioStateChanged` `//export` (serves both Apple engines) |
-| `audio_supported_apple.go` / `audio_supported_other.go` | `darwin` / `!darwin` | `audioSupported()` → true on Apple, false elsewhere |
+| `audio_supported_apple.go` / `audio_supported_android.go` / `audio_supported_other.go` | `darwin` / `android` / rest | `audioSupported()` → true on Apple + Android, false elsewhere |
 | `audio_artwork.go` | (untagged) | Renders the lock-screen "Book Chapter" art card (share-image style) |
+| `readalong.go` / `readalong_stub.go` | untagged / `!darwin && !android` | Bundled read-along timing tables (`assets/timings/`, keyed by recording id) driving verse highlight + follow-scroll; no-op stub on Linux/Windows |
+| `android/BtAudio.java` + `android/BtAudioService.java` | (dex) | The Java engine + the `mediaPlayback` foreground service (MediaSession + MediaStyle notification) for background/lock-screen playback |
 
 ### AI study (bring your own key)
 
@@ -184,10 +192,10 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
-| `share.go` | Selection-action dispatcher; "Share with citation" text (Bluebook-style quote/citation) |
-| `share_image.go` | "Share as image" renderer — text-only card, dynamic gradient, serif typesetting |
+| `share.go` | Selection-action dispatcher; "Share with citation" text (Bluebook Rule 5 quote formatting + citation) |
+| `share_image.go` | "Share as image" renderer — text-only card, 13 colour schemes × 7 embedded OFL serifs |
 | `share_preview.go` | Preview-and-regenerate sheet before sharing |
-| `share_other.go` | `!darwin` no-op stubs for `nativeShareText` / `nativeShareImage` |
+| `share_other.go` | `!darwin && !android` no-op stubs for `nativeShareText` / `nativeShareImage` (Android's live in `reading_android.go`) |
 
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
 build — the Go build tag picks the layout with no runtime branching.
@@ -214,7 +222,7 @@ re-running it per build would force a full canvas theme-walk (an iOS perf gate).
 ## Reading view
 
 The reading pane is a **native text view floating above the Fyne GL canvas**, not
-a Fyne widget, on the two Apple platforms:
+a Fyne widget, on macOS, iOS, and Android:
 
 - **macOS** ([reading_macos.go](reading_macos.go), `darwin && !ios`): a real
   AppKit `NSTextView` (editable=NO, selectable=YES) inside an `NSScrollView`,
@@ -226,10 +234,19 @@ a Fyne widget, on the two Apple platforms:
   the system Look Up / Translate / Define actions *crash* without one. The custom
   selection menu (Study with AI submenu + Share + Cross-references) is built in
   `HBReadingTextView`'s `editMenuForTextInRange:`.
-- **Linux / Windows / Android** ([reading_fyne.go](reading_fyne.go),
+- **Android** ([reading_android.go](reading_android.go), `android`): a real
+  selectable `android.widget.TextView` in a `ScrollView`, floated over the GL
+  surface inside a `Dialog`. The Java half
+  ([android/BtBridge.java](android/BtBridge.java)) is compiled to a
+  `classes2.dex` that `scripts/build-android.sh` injects into the APK — a bare
+  `fyne package -os android` omits it, and the app then degrades to the Fyne
+  fallback below. The selection action-mode menu carries the same Study with
+  AI / Share / Cross-references actions as iOS.
+- **Linux / Windows** ([reading_fyne.go](reading_fyne.go),
   `ios || !darwin`): a Fyne `RichText` fallback in a vertical scroll. Verse
   numbers are superscript segments coloured via custom theme colour names so they
-  track the active palette.
+  track the active palette. (This is also Android's no-dex fallback, via
+  `reading_mobile.go`.)
 
 Chapter content is produced as **HTML** (`buildChapterHTML` in
 [reading.go](reading.go)) and imported as an attributed string on the native
@@ -282,9 +299,9 @@ reading / search / AI need no per-version code. See README → "Bible versions".
 ## Per-chapter audio (recorded narration & read-aloud)
 
 A reading-header control plays the current chapter as a recorded human **narration**
-or on-device **read-aloud** (text-to-speech). Available on the **Apple platforms**
-(iOS + macOS desktop); `audioSupported()` is false elsewhere, so the control doesn't
-appear.
+or on-device **read-aloud** (text-to-speech). Available on **iOS, Android, and
+macOS**; `audioSupported()` is false on Linux/Windows, so the control doesn't
+appear there.
 
 **Source resolution** ([audio.go](audio.go)) is dispatched by translation so each
 version plays a recording made from its own text: **BSB** has a complete CC0 narration
@@ -305,9 +322,10 @@ glyph. **Continuous playback:** when a chapter finishes on its own it rolls onto
 next chapter (crossing book boundaries, stopping after Revelation 22), carrying the
 reading pane along, until the reader pauses or the Bible ends — driven by the native
 ENDED callback, gated so a pause / manual nav (which don't post ENDED) can't trigger
-it. (Verified in the **foreground**; locked/backgrounded continuation is a planned
-follow-up — the chapter→chapter hand-off currently hops through `fyne.Do`, which iOS
-suspends in the background.)
+it. The hand-off hops through `fyne.Do`: on **Android** the foreground audio service
+keeps the run loop draining, so chapters roll on with the screen off
+(emulator-verified); on **iOS** backgrounded continuation is still a planned
+follow-up, since iOS suspends the UI loop in the background.
 
 **The native engine** is cgo, on both Apple platforms: [audio_ios.go](audio_ios.go)
 (`ios`) and [audio_macos.go](audio_macos.go) (`darwin && !ios`) wrap AVPlayer (recorded
@@ -317,8 +335,21 @@ MP3) + AVSpeechSynthesizer (TTS) + MPNowPlayingInfoCenter + MPRemoteCommandCente
 scripts); macOS has neither (a desktop app plays in the background for free). State
 posts back through one `//export`, `bibleTextAudioStateChanged`
 ([audio_export_apple.go](audio_export_apple.go), `//go:build darwin` so it serves both
-engines) → `applyNativeState` → `fyne.Do`. Non-Apple targets get no-op
-[audio_other.go](audio_other.go) stubs (`//go:build !darwin`) so they stay cgo-free.
+engines) → `applyNativeState` → `fyne.Do`.
+
+**Android** has its own full engine: [audio_android.go](audio_android.go) drives
+[android/BtAudio.java](android/BtAudio.java) over JNI — MediaPlayer for recordings,
+TextToSpeech for read-aloud, AudioManager focus handling, and a 200 ms position poll
+for read-along. Callbacks travel Java `native` method → JNI thunk
+([audio_jni_android.c](audio_jni_android.c)) → the `//export`s in
+[audio_export_android.go](audio_export_android.go) → the same `applyNativeState`.
+Background / lock-screen playback runs through
+[android/BtAudioService.java](android/BtAudioService.java): a `mediaPlayback`
+foreground service + framework `MediaSession` + MediaStyle notification (play/pause,
+±15s, artwork), enabled by the custom `cmd/mobile/AndroidManifest.xml` on Fyne's
+aapt2 resource path — build details in [docs/ANDROID.md](docs/ANDROID.md).
+Linux/Windows get no-op [audio_other.go](audio_other.go) stubs
+(`//go:build !darwin && !android`) so they stay cgo-free.
 
 **Build-tag trap:** a `*_ios.go` filename is GOOS=ios-only and `*_darwin.go` is
 GOOS=darwin-only (which *excludes* iOS), so files shared by both Apple platforms
@@ -359,6 +390,13 @@ plain keyword **Search**. The three search/AI verbs are kept distinct on purpose
 *Search* = keyword/reference lookup, *Find* = AI passage search returning verses,
 *Ask* = AI narrative answer about a selection.
 
+Both search paths are **supersession-safe**: Find submissions are
+generation-stamped (`aiSearchSession`, [ai_search.go](ai_search.go)) so a slow
+completion for an abandoned query can never clobber a newer search, and the
+keyword debouncer (`newTrailingDebouncer`, [state.go](state.go)) carries the same
+stamp so a fired-but-not-yet-marshalled run drops itself when Enter or a newer
+keystroke supersedes it (pinned in `search_race_test.go`).
+
 - Prompts are built by `buildAIPrompt` / `buildAskPrompt` ([ai.go](ai.go),
   [ai_ask.go](ai_ask.go)): a shared even-handed preamble + per-action task + the
   quoted selection. Only the selected text plus its **book and chapter** (not the
@@ -384,14 +422,28 @@ From the selection menu ([share.go](share.go), dispatched by
 `dispatchSelectionAction`):
 
 - **Share with citation** — plain text: the formatted quote + a reference line.
-  Quote and citation follow **Bluebook** style (spelled-out translation, en-dash
-  ranges, block-quote rule).
+  Quote and citation follow **Bluebook** style: spelled-out translation, en-dash
+  ranges, and the Rule 5 quotation rules — the 50-word block-quote threshold
+  (counting quoted words only), quotation-mark nesting (5.1(b)),
+  wholly-enclosed quotations (5.2(f)(i)), bracketed initial capitals
+  (5.3(b)(i)), and " . . . ." end omissions that preserve the original
+  sentence's terminal punctuation (5.3(b)(iii)). The formatter is pinned by
+  corpus-grounded tests plus a real-world sweep over the embedded Gospels seed
+  (`bluebook_test.go`, `share_realworld_test.go`).
 - **Share as image** ([share_image.go](share_image.go)) — a text-only card
-  (no imagery) with a dynamic gradient treatment, serif typesetting, and a clean
+  (no imagery) with a dynamic colour treatment, serif typesetting, and a clean
   citation; preview/regenerate via [share_preview.go](share_preview.go).
+  13 colour schemes × 7 embedded book serifs (Gelasio, Cardo, Crimson Text,
+  Spectral, Libre Baskerville, Prata, DM Serif Display — all SIL OFL 1.1,
+  `assets/fonts/share/`), so cards render identically on every platform. Scheme
+  and typeface are picked per-verse by independent FNV hashes of the reference;
+  the counts are **coprime**, so Regenerate walks all 91 pairings before any
+  repeat.
 
-Both hand off to the device's native share sheet on Apple platforms;
-[share_other.go](share_other.go) provides graceful no-ops elsewhere.
+Both hand off to the device's native share sheet on iOS / macOS / Android (the
+Android share `Intent` goes through the bridge — `nativeShareText` /
+`nativeShareImage` in [reading_android.go](reading_android.go));
+[share_other.go](share_other.go) provides graceful no-ops on Linux/Windows.
 
 ## Reading-position + history persistence
 
@@ -414,9 +466,11 @@ attributed string).
   against the loaded Bible); the native overlay arms a one-shot scroll target
   (`armPendingRestore` → `armReadingRestore`) applied through the existing
   re-assert cadence and dropped on the first user scroll.
-- **Platform split:** scroll hooks are real cgo on iOS/macOS; the Fyne
-  platforms ([reading_scroll_fyne.go](reading_scroll_fyne.go), Linux/Win/Android)
-  restore translation/book/chapter/history only — not the precise scroll.
+- **Platform split:** scroll hooks are real cgo on iOS/macOS and JNI on Android
+  (`captureReadingAnchor` / `armReadingRestore` in
+  [reading_android.go](reading_android.go)); the Fyne platforms
+  ([reading_scroll_fyne.go](reading_scroll_fyne.go), Linux/Win) restore
+  translation/book/chapter/history only — not the precise scroll.
 
 ## Threading
 
@@ -432,7 +486,9 @@ during shutdown, so any cgo on the reading-state flush path must not
 `dispatch_sync(main)` or the app hangs on quit. The audio engine posts state from
 the native audio thread through its `//export` → `applyNativeState` → `fyne.Do`;
 continuous playback's chapter→chapter advance also hops through `fyne.Do`, which is
-why it's foreground-only today (iOS suspends the UI loop in the background).
+why it's foreground-only on iOS (iOS suspends the UI loop in the background); on
+Android the foreground audio service keeps the run loop draining, so the same
+advance works with the screen off.
 
 Widget tests using `fyne.io/fyne/v2/test` are tagged `//go:build !race` because
 Fyne's *test app* clears its font cache on a background goroutine when settings
@@ -478,8 +534,16 @@ iOS SDK / Android NDK CGO toolchain and assembles the bundle with `FyneApp.toml`
 
 ```bash
 cd cmd/mobile && fyne package -os iossimulator --app-id uk.co.bibletext
-fyne package -os android -appID uk.co.bibletext -src ./cmd/mobile
+./scripts/build-android.sh                # Android debug APK
+./scripts/build-android.sh --release      # signed .aab + universal APK
 ```
+
+**Android must be built with `scripts/build-android.sh`**, not a bare
+`fyne package -os android`: the script compiles `android/*.java` to a
+`classes2.dex` and injects it into the APK (the native reading overlay + the
+background-audio service live there) and carries the custom
+`cmd/mobile/AndroidManifest.xml`. Toolchain setup (JDK 21, SDK/NDK under
+`$HOME`), signing, and distribution: [docs/ANDROID.md](docs/ANDROID.md).
 
 **Patched Fyne (iOS scroll-lag fix).** A one-line change to Fyne's iOS drawloop
 idle timeout (100ms→2ms, `//go:build darwin && ios`) is applied **only** on the
@@ -505,3 +569,6 @@ assets keep their own licenses ([NOTICE](NOTICE)):
   from the project's [audio mirror](https://github.com/cubancorona/bibletext-audio).
 - Cross-references: **OpenBible.info** Treasury of Scripture Knowledge — **CC BY**.
 - UI font: **Atkinson Hyperlegible** (Braille Institute) — **SIL OFL 1.1**.
+- Share-card serifs: **Gelasio, Cardo, Crimson Text, Spectral, Libre Baskerville,
+  Prata, DM Serif Display** — all **SIL OFL 1.1**
+  (`assets/fonts/share/OFL-LICENSES.txt`).

@@ -5,8 +5,8 @@
 > [README.md](README.md) (features & usage) and [ARCHITECTURE.md](ARCHITECTURE.md)
 > (how it's built).
 
-A cross-platform Bible reader (macOS / Windows / Linux / iOS) from one Go
-codebase, built with [Fyne](https://fyne.io/). Module name: `bibletext`.
+A cross-platform Bible reader (macOS / Windows / Linux / iOS / Android) from one
+Go codebase, built with [Fyne](https://fyne.io/). Module name: `bibletext`.
 
 ## Layout
 
@@ -166,7 +166,7 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   `buildReadingViewMobile`). A header control (e.g. the audio play button) must be
   added to *both* or it won't appear on the phone — `reading.go` alone is not the
   iOS path.
-- **Per-chapter audio (Apple platforms — iOS + macOS).** `audio.go` `recordedURLFor`
+- **Per-chapter audio (iOS + macOS + Android).** `audio.go` `recordedURLFor`
   resolves what to play, dispatched by translation so each version plays a recording made from its
   own text: the **BSB** has a COMPLETE CC0 narration (Barry Hays,
   `bsb_audio.go`) and **WEB / WEB-Catholic** a COMPLETE public-domain narration
@@ -197,9 +197,12 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   posts back via `bibleTextAudioStateChanged` (`audio_export_apple.go`, the
   empty-preamble `//export` twin, `//go:build darwin` so it serves both engines) →
   `applyNativeState` → `fyne.Do`. `audioSupported()` is true on `darwin`
-  (`audio_supported_apple.go`); Linux/Windows/Android get no-op `nativeAudio*` stubs
-  (`audio_other.go`, `//go:build !darwin`) so those builds stay cgo-free and show no
-  audio control. **Stale-callback gotcha:** every native delegate/KVO callback is
+  (`audio_supported_apple.go`) and `android` (`audio_supported_android.go` —
+  Android has its own full engine: `audio_android.go` + `android/BtAudio.java`,
+  callbacks via `audio_export_android.go` / `audio_jni_android.c`; see the Layout
+  note and `docs/ANDROID.md`); Linux/Windows get no-op `nativeAudio*` stubs
+  (`audio_other.go`, `//go:build !darwin && !android`) so those builds stay
+  cgo-free and show no audio control. **Stale-callback gotcha:** every native delegate/KVO callback is
   gated on the controller's current `mode` (`if (self.mode != BT_MODE_TTS) return;`
   etc.). The AVPlayer's KVO observer is removed in `teardownEngines`, but the
   `AVSpeechSynthesizer` delegate stays wired, so after switching TTS→recording a
@@ -251,8 +254,9 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   in the attributed string by font size (the only runs under 80% of the body
   size — the threshold is derived from the rendered text, not a constant, so it
   tracks the reader's text-size setting). Per-platform
-  scroll hooks live in `reading_ios.go` (cgo), `reading_macos.go` (cgo), and a
-  no-op `reading_scroll_fyne.go` (Linux/Windows/Android restore book/chapter only).
+  scroll hooks live in `reading_ios.go` (cgo), `reading_macos.go` (cgo),
+  `reading_android.go`/`reading_scroll_android.go` (the JNI bridge), and a no-op
+  `reading_scroll_fyne.go` (Linux/Windows restore book/chapter only).
 
 ## Conventions
 
