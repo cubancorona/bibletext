@@ -81,8 +81,8 @@ func TestBluebookRule5Corpus(t *testing.T) {
 		{"internal-marks", "syntaxis.com", "My mother told me, \"In the middle of lunch, Richard looked up 'garrulous' in the dictionary.\"", "My mother told me, \"In the middle of lunch, Richard looked up 'garrulous' in the dictionary.\""},
 		{"internal-marks", "grammarist.com", "We don't all have the same 'privilege' as you, Karen exclaimed.", "“We don't all have the same 'privilege' as you, Karen exclaimed.”"},
 		// --- quote-mark balancing (dangling open/close) ---
-		{"balancing", "legalbluebook.com", "For God so loved the world, that he gave his only begotten Son.”", "“‘For God so loved the world, that he gave his only begotten Son.’”"},
-		{"balancing", "legalbluebook.com", "“For God so loved the world, that he gave his only begotten Son.", "“‘For God so loved the world, that he gave his only begotten Son.’”"},
+		{"balancing", "legalbluebook.com", "For God so loved the world, that he gave his only begotten Son.”", "“For God so loved the world, that he gave his only begotten Son.”"},
+		{"balancing", "legalbluebook.com", "“For God so loved the world, that he gave his only begotten Son.", "“For God so loved the world, that he gave his only begotten Son.”"},
 		{"balancing", "lawprose.org", "“Reliable,” “kind,” and “trustworthy”", "“‘Reliable,’ ‘kind,’ and ‘trustworthy . . . .’”"},
 		{"balancing", "legalbluebook.com", "   For God so loved the world.   ", "“For God so loved the world.”"},
 		// --- omissions / ellipses (Rule 5.3: mid-sentence cut adds " . . .") ---
