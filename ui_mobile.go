@@ -322,12 +322,18 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		}
 	}
 
+	// askSession drops stale completions: a slow response for an abandoned query
+	// must never clobber the search the reader actually submitted (observed in practice:
+	// edit the query, resubmit, progress flashes, then the OLD results reappear).
+	var askSession aiSearchSession
+
 	var runAsk func(string)
 	runAsk = func(q string) {
 		q = strings.TrimSpace(q)
 		if q == "" {
 			return
 		}
+		gen := askSession.Start()
 		dismissKeyboard(state)  // question submitted; drop the keyboard so results are visible
 		aiDisclaimer.Hide()     // leaving the prompt state → collapse the disclaimer
 		state.searchScrollY = 0 // new results start at the top
@@ -336,6 +342,13 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			resultsHost.Refresh()
 			return
 		}
+		// The submitted query is the live context NOW: persist it and drop the
+		// previous results immediately, so anything that re-renders this pane
+		// mid-flight (a tab return, a mode re-apply, a window rebuild) shows the
+		// in-progress state — never the previous query's results.
+		state.aiSearchActive = true
+		state.aiSearchQuery = q
+		state.aiSearchResults = nil
 		bar := widget.NewProgressBarInfinite()
 		aiBar = bar
 		msg := canvas.NewText("Searching with AI…", pal.TextMuted)
@@ -347,6 +360,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		resultsHost.Refresh()
 
 		startAISearch(state, q, func(verses []Verse, err error) {
+			if !askSession.Current(gen) {
+				return // superseded: a newer ask/clear/toggle owns the pane now
+			}
 			stopAIBar()
 			switch {
 			case err != nil && isNoKeyError(err):
@@ -358,8 +374,6 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			default:
 				// Persist in state so the results survive a tab switch and power
 				// "back to results".
-				state.aiSearchActive = true
-				state.aiSearchQuery = q
 				state.aiSearchResults = verses
 				resultsHost.Objects = []fyne.CanvasObject{aiResultsView(state, q, verses)}
 			}
@@ -383,6 +397,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	})
 	clearKwBtn.Importance = widget.LowImportance
 	clearAskBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		askSession.Invalidate() // an in-flight ask must not resurrect after the clear
 		aiEntry.SetText("")
 		stopAIBar()
 		state.aiSearchResults = nil
@@ -421,6 +436,8 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	}
 
 	toggle := buildSearchModeToggle(state, func(ai bool) {
+		askSession.Invalidate() // an in-flight ask must not stomp the other mode's pane
+		stopAIBar()
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai // switch the results context with the mode
 		applyMode()
