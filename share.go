@@ -145,10 +145,16 @@ func formatBibleQuote(text string, terminal ...rune) string {
 	// Mark a mid-sentence cut (Rule 5.3(b)(iii)), balance the verse's own double
 	// marks so the omission and any added marks sit at the right level, then give a
 	// mid-sentence START its bracketed capital (Rule 5.3(b)(i) + 5.2(a)).
+	// Count the QUOTED words before any marks are added: "[o]mitted words and
+	// ellipses should not be considered in the word count" (Yale S.R. 5.1(a),
+	// implementing Rule 5.1) — the four-dot mark alone would otherwise push a
+	// 46–49-word cut selection into block form.
+	quotedWords := len(strings.Fields(text))
 	text = addEndOmission(text, term)
+	text = resolveEnclosingQuotes(text)
 	text = balanceQuoteMarks(text)
 	text = bracketStartCapital(text)
-	if len(strings.Fields(text)) >= blockQuoteWords {
+	if quotedWords >= blockQuoteWords {
 		return text // block quotation: reproduce the source's marks, no outer marks
 	}
 	// Inline: a verse's own CURLY double quotations are nested down to single marks
@@ -273,8 +279,91 @@ func originalSentenceTerminal(state *AppState, sel string) rune {
 	return '.'
 }
 
+// resolveEnclosingQuotes implements Bluebook Rule 5.2(f)(i): when the ENTIRE
+// selection lies inside one quotation in the source — Jesus' speech selected with
+// its opening “ but not the closing mark (which sits chapters away), or ending
+// exactly on the speech's closer whose opener precedes the selection — the
+// enclosing marks are OMITTED and the share is presented as a first-degree
+// quotation ("only one set of quotation marks need be employed"). Detection is
+// structural: unmatched marks make the selection partially-quoted; if, treating
+// each unmatched closer as closing a quotation open since the selection's start,
+// NO letter of the selection sits OUTSIDE a quotation, then the quotation IS the
+// whole share — so its unmatched (enclosing/continuation) marks are stripped,
+// while matched pairs remain as genuine inner quotations. If any narration sits
+// outside (a mixed selection), everything is left for balanceQuoteMarks to
+// repair instead — Rule 5.2(f)(ii): marks of a PARTIAL embedded quotation are
+// retained. Before this the Beatitudes (whose continued-speech paragraphs
+// re-open “ without closing) shared with a spurious doubled closer ("…you.””").
+func resolveEnclosingQuotes(s string) string {
+	// Pass 1: virtual depth — unmatched closers count as closing a quotation
+	// that opened before the selection.
+	depth, minDepth := 0, 0
+	for _, r := range s {
+		switch r {
+		case '“':
+			depth++
+		case '”':
+			depth--
+			if depth < minDepth {
+				minDepth = depth
+			}
+		}
+	}
+	lead := -minDepth
+	if lead == 0 && depth == 0 {
+		return s // balanced — no enclosing marks in play
+	}
+
+	// Pass 2: any letter at virtual depth 0 is narration OUTSIDE the
+	// quotation(s) → the quote is only part of the selection → keep marks.
+	d := lead
+	for _, r := range s {
+		switch {
+		case r == '“':
+			d++
+		case r == '”':
+			d--
+		case d == 0 && (unicode.IsLetter(r) || unicode.IsDigit(r)):
+			return s
+		}
+	}
+
+	// Wholly inside one quotation: strip the unmatched marks, keep matched pairs.
+	rs := []rune(s)
+	drop := make(map[int]bool)
+	var opens []int
+	real := 0
+	for i, r := range rs {
+		switch r {
+		case '“':
+			opens = append(opens, i)
+			real++
+		case '”':
+			if real == 0 {
+				drop[i] = true // unmatched closer — the enclosing quotation's end
+			} else {
+				real--
+				opens = opens[:len(opens)-1]
+			}
+		}
+	}
+	for _, i := range opens {
+		drop[i] = true // unmatched opens — the enclosing / continuation marks
+	}
+	var b strings.Builder
+	for i, r := range rs {
+		if drop[i] {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // balanceQuoteMarks repairs unbalanced curly double-quotation marks in a shared
-// fragment. Scanning left to right, every closing mark that appears with no open
+// fragment whose quotation is only PART of the selection (Rule 5.2(f)(ii) retains
+// such marks; resolveEnclosingQuotes has already handled the wholly-enclosed
+// case). Scanning left to right, every closing mark that appears with no open
 // quotation in progress means the opener is in the text BEFORE the selection — so we
 // prepend an opening mark; any quotation still open at the end means the closer is in
 // the text AFTER the selection — so we append a closing mark. Result: a self-contained,
@@ -282,7 +371,6 @@ func originalSentenceTerminal(state *AppState, sel string) rune {
 //
 //	“What is truth?” … told them, “I find…   (open, close, open)  -> append one ”
 //	What is truth?” … told them, “I find…     (close, open)        -> prepend “, append ”
-//	“Blessed are the poor in spirit…           (open, no close)    -> append one ”
 func balanceQuoteMarks(s string) string {
 	depth, minDepth := 0, 0
 	for _, r := range s {

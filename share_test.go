@@ -79,12 +79,12 @@ func TestFormatBibleQuote(t *testing.T) {
 		{
 			"verse that is itself a quotation: balance the close, then nest + wrap",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"“‘Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.’”",
+			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
 		},
 		{
 			"verse ending a quotation: balance the open, then nest + wrap",
 			"why have you forsaken me?”",
-			"“‘[W]hy have you forsaken me?’”",
+			"“[W]hy have you forsaken me?”",
 		},
 		{
 			"John 18:38 fragment: internal quotations nest to single inside the outer double",
@@ -161,7 +161,7 @@ func TestShareQuotePipelineBeatitude(t *testing.T) {
 	// stripped, the quotation is balanced (its closer lies past this verse), then the
 	// verse's own marks nest to single inside the outer pair (Rule 5.1(b)).
 	raw := "3 “Blessed are the poor in spirit, for theirs is the Kingdom of Heaven."
-	want := "“‘Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.’”"
+	want := "“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”"
 	if got := formatBibleQuote(cleanQuoteText(state, raw)); got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}

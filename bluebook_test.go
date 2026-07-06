@@ -202,7 +202,7 @@ func TestBluebookQuotationRule5(t *testing.T) {
 		{
 			"verse that OPENS a quotation is balanced, then nested + wrapped",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
-			"“‘Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.’”",
+			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
 
 		},
 		{
