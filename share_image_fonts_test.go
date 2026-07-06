@@ -20,7 +20,7 @@ import (
 
 func TestShareTypefacesAllParse(t *testing.T) {
 	faces := loadShareTypefaces()
-	const want = 6
+	const want = 7
 	if len(faces) != want {
 		names := make([]string, 0, len(faces))
 		for _, f := range faces {

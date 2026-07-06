@@ -41,8 +41,8 @@ type shareScheme struct {
 // shareSchemes are calm, high-contrast treatments. The chosen one is picked by a
 // stable hash of the reference, so each verse keeps its own look.
 //
-// The count (13) is deliberately COPRIME with the typeface count (6): both
-// indices step by one per Regenerate, so the reader walks all 13×6 = 78
+// The count (13) is deliberately COPRIME with the typeface count (7): both
+// indices step by one per Regenerate, so the reader walks all 13×7 = 91
 // scheme×typeface pairings before any repeats.
 var shareSchemes = []shareScheme{
 	{color.NRGBA{251, 247, 238, 255}, color.NRGBA{238, 228, 210, 255}, color.NRGBA{42, 38, 32, 255}, color.NRGBA{138, 106, 51, 255}}, // parchment
@@ -108,6 +108,9 @@ var shareFontPrata []byte
 //go:embed assets/fonts/share/DMSerifDisplay-Regular.ttf
 var shareFontDMSerif []byte
 
+//go:embed assets/fonts/share/Gelasio-Regular.ttf
+var shareFontGelasio []byte
+
 // shareTypeface is one card typeface: the verse face plus the citation face
 // (a heavier cut where the family ships one; single-weight display families
 // reuse the regular — their regular already carries display weight).
@@ -140,6 +143,10 @@ func loadShareTypefaces() []shareTypeface {
 			}
 			shareTypefaces = append(shareTypefaces, shareTypeface{name, r, b})
 		}
+		// Gelasio is the metrics-compatible OFL equivalent of Georgia — the card
+		// look the app shipped with on desktop, now embedded so EVERY platform
+		// has it (the phones never actually had Georgia; they fell back to a sans).
+		add("Gelasio", shareFontGelasio, nil)
 		add("Cardo", shareFontCardo, shareFontCardoBold)
 		add("Crimson Text", shareFontCrimson, shareFontCrimsonSemi)
 		add("Spectral", shareFontSpectral, shareFontSpectralBold)
