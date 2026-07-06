@@ -11,6 +11,7 @@ package bibletext
 // the card comfortably regardless of the passage length.
 
 import (
+	_ "embed"
 	"fmt"
 	"hash/fnv"
 	"image"
@@ -19,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -38,6 +40,10 @@ type shareScheme struct {
 
 // shareSchemes are calm, high-contrast treatments. The chosen one is picked by a
 // stable hash of the reference, so each verse keeps its own look.
+//
+// The count (13) is deliberately COPRIME with the typeface count (6): both
+// indices step by one per Regenerate, so the reader walks all 13×6 = 78
+// scheme×typeface pairings before any repeats.
 var shareSchemes = []shareScheme{
 	{color.NRGBA{251, 247, 238, 255}, color.NRGBA{238, 228, 210, 255}, color.NRGBA{42, 38, 32, 255}, color.NRGBA{138, 106, 51, 255}}, // parchment
 	{color.NRGBA{27, 42, 74, 255}, color.NRGBA{12, 22, 44, 255}, color.NRGBA{233, 240, 255, 255}, color.NRGBA{201, 214, 255, 255}},   // dusk blue
@@ -45,6 +51,13 @@ var shareSchemes = []shareScheme{
 	{color.NRGBA{42, 27, 51, 255}, color.NRGBA{22, 14, 28, 255}, color.NRGBA{243, 234, 250, 255}, color.NRGBA{224, 201, 255, 255}},   // plum
 	{color.NRGBA{36, 31, 27, 255}, color.NRGBA{20, 17, 14, 255}, color.NRGBA{239, 230, 215, 255}, color.NRGBA{215, 179, 119, 255}},   // warm dark
 	{color.NRGBA{46, 27, 34, 255}, color.NRGBA{26, 14, 19, 255}, color.NRGBA{251, 234, 240, 255}, color.NRGBA{240, 201, 214, 255}},   // rose
+	{color.NRGBA{16, 20, 32, 255}, color.NRGBA{6, 8, 16, 255}, color.NRGBA{244, 238, 224, 255}, color.NRGBA{212, 175, 109, 255}},     // midnight gold
+	{color.NRGBA{58, 22, 32, 255}, color.NRGBA{32, 10, 18, 255}, color.NRGBA{250, 238, 236, 255}, color.NRGBA{232, 180, 168, 255}},   // burgundy
+	{color.NRGBA{44, 52, 64, 255}, color.NRGBA{24, 29, 38, 255}, color.NRGBA{235, 240, 246, 255}, color.NRGBA{166, 190, 214, 255}},   // slate
+	{color.NRGBA{16, 50, 52, 255}, color.NRGBA{8, 26, 28, 255}, color.NRGBA{228, 244, 242, 255}, color.NRGBA{150, 214, 200, 255}},    // deep teal
+	{color.NRGBA{70, 40, 28, 255}, color.NRGBA{40, 22, 16, 255}, color.NRGBA{250, 238, 226, 255}, color.NRGBA{236, 178, 128, 255}},   // terracotta dusk
+	{color.NRGBA{240, 243, 246, 255}, color.NRGBA{219, 226, 233, 255}, color.NRGBA{30, 36, 44, 255}, color.NRGBA{90, 110, 140, 255}}, // mist (light)
+	{color.NRGBA{36, 32, 84, 255}, color.NRGBA{18, 15, 44, 255}, color.NRGBA{238, 238, 252, 255}, color.NRGBA{178, 172, 255, 255}},   // indigo
 }
 
 // schemeForRef picks a colour treatment from a stable hash of the reference, so a
@@ -58,6 +71,101 @@ func schemeForRef(ref string, variant int) shareScheme {
 		idx += len(shareSchemes)
 	}
 	return shareSchemes[idx]
+}
+
+// --- Share typefaces ---------------------------------------------------------
+//
+// A small library of elegant, highly readable book serifs for the card, all
+// SIL OFL 1.1 (licences: assets/fonts/share/OFL-LICENSES.txt) and EMBEDDED so
+// the cards look identical on every platform (the phones have no system serif
+// the renderer could reach — previously they fell back to Fyne's default sans).
+// Regenerate cycles the typeface together with the colour scheme.
+
+//go:embed assets/fonts/share/Cardo-Regular.ttf
+var shareFontCardo []byte
+
+//go:embed assets/fonts/share/Cardo-Bold.ttf
+var shareFontCardoBold []byte
+
+//go:embed assets/fonts/share/CrimsonText-Regular.ttf
+var shareFontCrimson []byte
+
+//go:embed assets/fonts/share/CrimsonText-SemiBold.ttf
+var shareFontCrimsonSemi []byte
+
+//go:embed assets/fonts/share/Spectral-Regular.ttf
+var shareFontSpectral []byte
+
+//go:embed assets/fonts/share/Spectral-Bold.ttf
+var shareFontSpectralBold []byte
+
+//go:embed assets/fonts/share/LibreBaskerville-Regular.ttf
+var shareFontBaskerville []byte
+
+//go:embed assets/fonts/share/Prata-Regular.ttf
+var shareFontPrata []byte
+
+//go:embed assets/fonts/share/DMSerifDisplay-Regular.ttf
+var shareFontDMSerif []byte
+
+// shareTypeface is one card typeface: the verse face plus the citation face
+// (a heavier cut where the family ships one; single-weight display families
+// reuse the regular — their regular already carries display weight).
+type shareTypeface struct {
+	name    string
+	regular *opentype.Font
+	bold    *opentype.Font
+}
+
+var (
+	shareTypefacesOnce sync.Once
+	shareTypefaces     []shareTypeface
+)
+
+// loadShareTypefaces parses the embedded faces once. A face that fails to parse
+// is skipped (never expected — the assets are fixed — but a corrupt asset must
+// degrade to fewer typefaces, not a broken share sheet).
+func loadShareTypefaces() []shareTypeface {
+	shareTypefacesOnce.Do(func() {
+		add := func(name string, reg, bold []byte) {
+			r, err := opentype.Parse(reg)
+			if err != nil {
+				return
+			}
+			b := r
+			if len(bold) > 0 {
+				if pb, err := opentype.Parse(bold); err == nil {
+					b = pb
+				}
+			}
+			shareTypefaces = append(shareTypefaces, shareTypeface{name, r, b})
+		}
+		add("Cardo", shareFontCardo, shareFontCardoBold)
+		add("Crimson Text", shareFontCrimson, shareFontCrimsonSemi)
+		add("Spectral", shareFontSpectral, shareFontSpectralBold)
+		add("Libre Baskerville", shareFontBaskerville, nil)
+		add("Prata", shareFontPrata, nil)
+		add("DM Serif Display", shareFontDMSerif, nil)
+	})
+	return shareTypefaces
+}
+
+// typefaceForRef picks the card typeface the same way schemeForRef picks the
+// colours — a stable per-verse default, stepped by Regenerate — but from an
+// independent hash (the "|face" salt) so verses don't pair the same typeface
+// with the same scheme across the whole Bible.
+func typefaceForRef(ref string, variant int) (shareTypeface, bool) {
+	faces := loadShareTypefaces()
+	if len(faces) == 0 {
+		return shareTypeface{}, false
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(ref + "|face"))
+	idx := (int(h.Sum32()) + variant) % len(faces)
+	if idx < 0 {
+		idx += len(faces)
+	}
+	return faces[idx], true
 }
 
 // renderVerseImage writes a square share card to a temp PNG and returns its path.
@@ -75,13 +183,22 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 	img := image.NewRGBA(image.Rect(0, 0, dim, dim))
 	paintGradient(img, sc.top, sc.bottom)
 
-	regular, err := opentype.Parse(serifFontBytes(state, fyne.TextStyle{}))
-	if err != nil {
-		return "", err
-	}
-	bold, err := opentype.Parse(serifFontBytes(state, fyne.TextStyle{Bold: true}))
-	if err != nil {
-		bold = regular
+	// The verse + citation faces: one of the embedded share serifs, cycled with
+	// the colour scheme by Regenerate. The reading-serif path survives only as a
+	// fallback for the never-expected case that every embedded face fails to parse.
+	var regular, bold *opentype.Font
+	if tf, ok := typefaceForRef(citation+"|"+version, variant); ok {
+		regular, bold = tf.regular, tf.bold
+	} else {
+		var err error
+		regular, err = opentype.Parse(serifFontBytes(state, fyne.TextStyle{}))
+		if err != nil {
+			return "", err
+		}
+		bold, err = opentype.Parse(serifFontBytes(state, fyne.TextStyle{Bold: true}))
+		if err != nil {
+			bold = regular
+		}
 	}
 
 	// verseText is already cleaned + quoted by shareVerse (formatBibleQuote): verse
