@@ -84,7 +84,7 @@ func TestFormatBibleQuote(t *testing.T) {
 		{
 			"verse ending a quotation: balance the open, then nest + wrap",
 			"why have you forsaken me?”",
-			"“‘why have you forsaken me?’”",
+			"“‘[W]hy have you forsaken me?’”",
 		},
 		{
 			"John 18:38 fragment: internal quotations nest to single inside the outer double",
@@ -108,11 +108,11 @@ func TestFormatBibleQuote(t *testing.T) {
 func TestFormatBibleQuoteBlockThreshold(t *testing.T) {
 	// Bluebook Rule 5: 50+ words is a block quotation — no surrounding marks.
 	long49 := strings.Repeat("word ", 48) + "word." // 49 words, ends on a period
-	if got := formatBibleQuote(long49); got != "“"+long49+"”" {
+	if got := formatBibleQuote(long49); got != "“[W]"+long49[1:]+"”" {
 		t.Errorf("49 words should be an inline (quoted) passage, got unquoted: %q", got[:20])
 	}
 	long50 := strings.Repeat("word ", 49) + "word." // 50 words
-	if got := formatBibleQuote(long50); got != long50 {
+	if got := formatBibleQuote(long50); got != "[W]"+long50[1:] {
 		t.Errorf("50 words should be a block quote (no outer marks):\n got %q", got[:20])
 	}
 }

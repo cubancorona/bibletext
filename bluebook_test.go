@@ -236,13 +236,13 @@ func TestBluebookBlockQuoteThreshold(t *testing.T) {
 	// sentence gets no end-omission mark — see TestBluebookEndOmission).
 	w := func(n int) string { return strings.Repeat("word ", n-1) + "word." }
 
-	if got, in := formatBibleQuote(w(49)), w(49); got != "“"+in+"”" {
+	if got, in := formatBibleQuote(w(49)), w(49); got != "“[W]"+in[1:]+"”" {
 		t.Errorf("49 words must be inline-quoted [%s]:\n got %q", src, got)
 	}
-	if got, in := formatBibleQuote(w(50)), w(50); got != in {
+	if got, in := formatBibleQuote(w(50)), w(50); got != "[W]"+in[1:] {
 		t.Errorf("50 words must be a block quote with NO marks [%s]:\n got %q", src, got)
 	}
-	if got, in := formatBibleQuote(w(51)), w(51); got != in {
+	if got, in := formatBibleQuote(w(51)), w(51); got != "[W]"+in[1:] {
 		t.Errorf("51 words must be a block quote with NO marks [%s]:\n got %q", src, got)
 	}
 	if blockQuoteWords != 50 {
@@ -401,9 +401,70 @@ func TestBluebookEndOmission(t *testing.T) {
 		{"legacy three-dot text is not re-marked", "I find no . . .", "I find no . . ."},
 	}
 	for _, c := range cases {
-		if got := addEndOmission(c.in); got != c.want {
+		if got := addEndOmission(c.in, '.'); got != c.want {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
 		}
+	}
+}
+
+// TestBluebookBracketedCapital covers Rule 5.3(b)(i) + 5.2(a): a share stands as its
+// own sentence, so a selection that begins MID-SENTENCE must not open with an
+// ellipsis — instead "capitalize the first letter of the quoted language and place
+// it in brackets if it is not already capitalized". Scripture capitalizes every
+// sentence opening, so a lowercase first letter reliably signals a mid-sentence
+// start. Sources: law.georgetown.edu Basic Bluebook Rules (R5.3); Indigo Book
+// R8.3.2 ("[T]he actual knowledge provision turns on . . . ."); Baron of the
+// Bluebook R5.3(b) ("[B]orders are less of a barrier . . .").
+func TestBluebookBracketedCapital(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"lowercase start is bracket-capitalized", "raised Him from the dead", "[R]aised Him from the dead"},
+		{"already-capital start is untouched", "Raised Him from the dead", "Raised Him from the dead"},
+		{"leading quotation mark is skipped", "“come to me, all you who labor", "“[C]ome to me, all you who labor"},
+		{"leading single mark is skipped too", "‘why have you forsaken me?’", "‘[W]hy have you forsaken me?’"},
+		{"digit start is left verbatim", "40 days and 40 nights", "40 days and 40 nights"},
+		{"existing bracket is left verbatim", "[T]he Lord is my shepherd", "[T]he Lord is my shepherd"},
+		{"empty stays empty", "", ""},
+	}
+	for _, c := range cases {
+		if got := bracketStartCapital(c.in); got != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestBluebookTerminalPunctuation covers the Rule 5.3(b)(iii) detail that the
+// four-dot form retains "the final punctuation of the sentence being quoted" — a
+// question cut short ends " . . . ?", not " . . . .". Source: Baron of the Bluebook
+// R5.3(b) ("Why, then, are certain scholars advocating less . . . ?").
+func TestBluebookTerminalPunctuation(t *testing.T) {
+	if got := addEndOmission("Why, then, are certain scholars advocating less", '?'); got != "Why, then, are certain scholars advocating less . . . ?" {
+		t.Errorf("question terminal: got %q", got)
+	}
+	if got := addEndOmission("he said unto them", '!'); got != "he said unto them . . . !" {
+		t.Errorf("exclamation terminal: got %q", got)
+	}
+	if got := addEndOmission("an unknown terminal falls back to a period", 'x'); got != "an unknown terminal falls back to a period . . . ." {
+		t.Errorf("fallback terminal: got %q", got)
+	}
+
+	// originalSentenceTerminal reads the chapter itself: a selection cut inside a
+	// question-ending sentence reports '?'.
+	st := bbChapter("John", 11, map[int]string{
+		25: "Jesus said to her, “I am the resurrection and the life. He who believes in me will still live, even if he dies.",
+		26: "Whoever lives and believes in me will never die. Do you believe this?”",
+	})
+	if got := originalSentenceTerminal(st, "Whoever lives and believes in me will never die. Do you believe"); got != '?' {
+		t.Errorf("cut inside a question: got %q, want '?'", got)
+	}
+	if got := originalSentenceTerminal(st, "text that appears nowhere"); got != '.' {
+		t.Errorf("unmatched selection must fall back to '.': got %q", got)
+	}
+
+	// End to end: the whole pipeline renders “…never die. Do you believe . . . ?”.
+	sel := "Whoever lives and believes in me will never die. Do you believe"
+	quote := formatBibleQuote(cleanQuoteText(st, sel), originalSentenceTerminal(st, sel))
+	if want := "“Whoever lives and believes in me will never die. Do you believe . . . ?”"; quote != want {
+		t.Errorf("pipeline:\n got %q\nwant %q", quote, want)
 	}
 }
 

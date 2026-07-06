@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -49,7 +50,8 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 func shareVerse(state *AppState, text string, asImage bool) {
 	cite := citationForSelection(state, text)
 	version := state.currentVersion().Name
-	quote := formatBibleQuote(cleanQuoteText(state, text))
+	cleaned := cleanQuoteText(state, text)
+	quote := formatBibleQuote(cleaned, originalSentenceTerminal(state, cleaned))
 	if asImage {
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
@@ -100,31 +102,52 @@ func cleanQuoteText(state *AppState, raw string) string {
 // words is set off as a block quotation rather than run inline in quotation marks.
 const blockQuoteWords = 50
 
-// formatBibleQuote prepares a clean verse string for sharing, in Bluebook style, per
-// Rule 5.1:
+// formatBibleQuote prepares a clean verse string for sharing, in Bluebook style. A
+// share always presents the quotation STANDING AS ITS OWN SENTENCE(S) — Rule 5.3(b)
+// therefore governs both ends: a selection that begins mid-sentence takes a
+// bracketed capital, never a leading ellipsis (5.3(b)(i)); one that ends
+// mid-sentence takes the four-dot form (5.3(b)(iii)). Formatting per Rule 5.1:
 //   - 50+ words → a BLOCK quotation: set off WITHOUT surrounding quotation marks (the
 //     card's centered, wide-margined block is the faithful analog of the "indented
 //     both sides" block form). The verse's own marks are reproduced exactly as in the
 //     source — including internal DOUBLE marks, since a block has no enclosing pair to
-//     nest inside.
+//     nest inside (B5.2).
 //   - under 50 words → an INLINE quotation: wrap the whole fragment in outer DOUBLE
 //     quotation marks. Any quotation that appears WITHIN the verse is a
 //     quote-within-a-quote, so its marks drop one level to SINGLE (“ ” → ‘ ’) before
 //     the outer pair is added (Rule 5.1(b) nesting) — e.g. John 18:38 becomes
 //     “‘truth?’ Pilate asked … told them, ‘I find no basis…’”.
+//   - a selection lying ENTIRELY inside a quotation in the source (Jesus speaking)
+//     correctly gets ONE set of plain double marks — Rule 5.2(f)(i): omit the
+//     enclosing internal marks when the whole quotation is itself a quotation.
+//
+// Documented deviations (deliberate, for a chat/card medium): the original's
+// paragraph breaks are flattened in 50+ word blocks (Rule 5.1(a)(iii) would keep
+// them); a third nesting level is not re-alternated back to double (5.1(b)(i)) —
+// the closing single glyph ’ doubles as the apostrophe, so auto-flipping is
+// unreliable; and the card centers its citation rather than starting it at the
+// left margin on the following line.
 //
 // It stays faithful to the SELECTION otherwise: balanceQuoteMarks repairs marks whose
-// partner sits in the unselected surrounding text, and addEndOmission marks a
-// mid-sentence cut, but no words are added or dropped.
-func formatBibleQuote(text string) string {
+// partner sits in the unselected surrounding text; no words are added or dropped.
+// terminal, when given, is the punctuation that ends the sentence the selection was
+// cut from — Rule 5.3(b)(iii) retains it in the four-dot slot (" . . . ?" for a
+// question cut short); it defaults to a period.
+func formatBibleQuote(text string, terminal ...rune) string {
+	term := '.'
+	if len(terminal) > 0 && terminal[0] != 0 {
+		term = terminal[0]
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
 	}
-	// Mark a mid-sentence cut (Rule 5.3) and balance the verse's own double marks
-	// before nesting, so the omission and any added marks sit at the right level.
-	text = addEndOmission(text)
+	// Mark a mid-sentence cut (Rule 5.3(b)(iii)), balance the verse's own double
+	// marks so the omission and any added marks sit at the right level, then give a
+	// mid-sentence START its bracketed capital (Rule 5.3(b)(i) + 5.2(a)).
+	text = addEndOmission(text, term)
 	text = balanceQuoteMarks(text)
+	text = bracketStartCapital(text)
 	if len(strings.Fields(text)) >= blockQuoteWords {
 		return text // block quotation: reproduce the source's marks, no outer marks
 	}
@@ -155,24 +178,24 @@ func nestInlineQuotes(s string) string {
 	return strings.NewReplacer("“", "‘", "”", "’").Replace(s)
 }
 
-// endOmission is the Bluebook Rule 5.3 mark for material omitted at the END of the
-// final quoted sentence when the quotation stands as its own sentence — which a
-// share always does. That is the FOUR-dot form: the spaced three-period ellipsis
-// marking the omission, plus the period that closes the sentence ( . . . .). The
-// bare three-dot form marks a quotation that trails into the QUOTER'S surrounding
-// sentence, which a standalone card never has. Never the single-glyph "…".
-const endOmission = " . . . ."
+// endOmissionEllipsis is the Bluebook Rule 5.3 spaced ellipsis — three periods, one
+// space between each and one before the first. Never the single-glyph "…". In the
+// four-dot form it is followed by a space and the sentence's final punctuation.
+const endOmissionEllipsis = " . . ."
 
 // addEndOmission marks an omission when the quoted text is cut off MID-SENTENCE — the
 // reader's selection ends before the original sentence does, so the rest of the
-// sentence is omitted (Bluebook Rule 5.3). It appends the four-dot mark (the spaced
-// ellipsis plus the sentence's closing period) just inside any trailing closing
-// quotation mark. A quotation that already ends on sentence-terminal punctuation
-// (. ! ? …) is treated as complete and gets no mark — which also makes the function
-// idempotent, since the mark itself ends on a period. A selection that merely begins
-// mid-sentence is NOT marked — the Bluebook does not use a leading ellipsis (it
-// would use a bracketed capital instead, which a verbatim share avoids).
-func addEndOmission(s string) string {
+// sentence is omitted. A share stands as its own sentence, so Rule 5.3(b)(iii)
+// applies: insert the spaced ellipsis between the last quoted word and "the final
+// punctuation of the sentence being quoted" — the four-dot form " . . . .", or
+// " . . . ?" / " . . . !" when the sentence the selection was cut from ends that way
+// (terminal carries it; see originalSentenceTerminal). The mark sits just inside any
+// trailing closing quotation mark. A quotation already ending on sentence-terminal
+// punctuation (. ! ? …) is complete and gets no mark — which also makes the function
+// idempotent, since the mark itself ends on terminal punctuation. A selection that
+// merely BEGINS mid-sentence takes no ellipsis either — Rule 5.3(b)(i) uses the
+// bracketed capital instead (bracketStartCapital).
+func addEndOmission(s string, terminal rune) string {
 	trimmed := strings.TrimRight(s, " \t\n")
 	core := strings.TrimRight(trimmed, " \t\n”’\"'")
 	if core == "" {
@@ -182,10 +205,72 @@ func addEndOmission(s string) string {
 	case '.', '!', '?', '…':
 		return s // a complete sentence — nothing omitted at the end
 	}
-	if strings.HasSuffix(core, endOmission) {
-		return s // already marked
+	switch terminal {
+	case '.', '!', '?':
+	default:
+		terminal = '.'
 	}
-	return core + endOmission + trimmed[len(core):]
+	return core + endOmissionEllipsis + " " + string(terminal) + trimmed[len(core):]
+}
+
+// bracketStartCapital gives a share that BEGINS mid-sentence its Rule 5.3(b)(i)
+// treatment: quoted language used as a full sentence must not open with an ellipsis;
+// instead "capitalize the first letter of the quoted language and place it in
+// brackets if it is not already capitalized" (the bracket disclosing the alteration
+// per Rule 5.2(a)) — "raised Him from the dead" shares as "[R]aised Him from the
+// dead . . . ." Scripture capitalizes every sentence opening, so a lowercase first
+// letter reliably means the selection started mid-sentence. Leading quotation marks
+// (including ones balanceQuoteMarks prepended) are skipped; a first letter that is
+// already capital — or a digit, bracket, or other non-letter — is left verbatim.
+func bracketStartCapital(s string) string {
+	rs := []rune(s)
+	for i, r := range rs {
+		switch {
+		case r == '“' || r == '‘' || r == '"' || r == '\'':
+			continue // opening quotation marks — the letter we care about is inside
+		case unicode.IsLower(r):
+			return string(rs[:i]) + "[" + string(unicode.ToUpper(r)) + "]" + string(rs[i+1:])
+		}
+		break // already capital, a digit, an existing bracket, … — verbatim
+	}
+	return s
+}
+
+// originalSentenceTerminal finds the punctuation that ends the sentence the
+// selection stops inside, by locating the selection in the chapter's own prose and
+// scanning forward — Rule 5.3(b)(iii) retains "the final punctuation of the sentence
+// being quoted" in the four-dot slot, so a question cut short shares as " . . . ?".
+// Falls back to a period when the selection can't be pinned in the chapter.
+func originalSentenceTerminal(state *AppState, sel string) rune {
+	if state == nil || state.Bible == nil {
+		return '.'
+	}
+	var b strings.Builder
+	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+		t := collapseSpaces(v.Text)
+		if t == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(t)
+	}
+	chapter := b.String()
+	s := collapseSpaces(sel)
+	idx := strings.Index(chapter, s)
+	if idx < 0 {
+		return '.'
+	}
+	for _, r := range chapter[idx+len(s):] {
+		switch r {
+		case '.', '…':
+			return '.'
+		case '!', '?':
+			return r
+		}
+	}
+	return '.'
 }
 
 // balanceQuoteMarks repairs unbalanced curly double-quotation marks in a shared
