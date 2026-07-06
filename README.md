@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/cubancorona/bibletext/actions/workflows/ci.yml/badge.svg)](https://github.com/cubancorona/bibletext/actions/workflows/ci.yml)
 
-A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, and
-iOS** from a single Go codebase, built with [Fyne](https://fyne.io/). It presents
+A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, iOS,
+and Android** from a single Go codebase, built with [Fyne](https://fyne.io/). It presents
 public-domain translations — the **World English Bible (WEB)** and **Berean
 Standard Bible (BSB)** — in a calm, responsive reading layout.
 
@@ -44,6 +44,10 @@ and caches it locally, so every launch after that is instant and works offline.
 **iOS simulator** (needs macOS with full Xcode, an iOS simulator runtime, and the
 Fyne CLI — the script checks and tells you what's missing): `./scripts/run-ios-sim.sh`
 
+**Android** (needs a JDK, the Android SDK + NDK, and the Fyne CLI — setup in
+[docs/ANDROID.md](docs/ANDROID.md)): `./scripts/build-android.sh` produces an
+installable debug APK.
+
 <details>
 <summary>Release builds, iOS device, Android, cross-compile, tests</summary>
 
@@ -58,10 +62,13 @@ CGO_ENABLED=1 GOARCH=amd64 go build -o bibletext-macos-amd64 ./cmd/desktop
 # Linux/Windows builds: Fyne uses cgo, so a bare GOOS=… cross-build won't work —
 # build natively on each OS, or use fyne-cross (https://github.com/fyne-io/fyne-cross).
 
-# iOS / Android packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest;
-# Android additionally needs the Android SDK + NDK)
+# iOS packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest)
 cd cmd/mobile && fyne package -os iossimulator --app-id uk.co.bibletext
-cd cmd/mobile && fyne package -os android --app-id uk.co.bibletext
+
+# Android — always via the wrapper script (a bare `fyne package -os android`
+# drops the native reading overlay and the background-audio service):
+./scripts/build-android.sh              # debug APK
+./scripts/build-android.sh --release    # signed .aab + universal APK
 
 # Tests
 go test ./...
@@ -72,6 +79,10 @@ iOS device installs need Xcode signing; `scripts/run-ios-device.sh` wraps it (se
 `BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply a one-line scroll-lag patch to a
 local copy of Fyne — see [`patches/README.md`](patches/README.md); `go.mod` ships
 stock Fyne so plain `go` commands need no setup.
+
+Android toolchain setup (JDK 21, SDK + NDK — all installable under `$HOME`, no
+root), signing, emulator use, and distribution are covered in
+[docs/ANDROID.md](docs/ANDROID.md).
 
 </details>
 
@@ -91,8 +102,10 @@ stock Fyne so plain `go` commands need no setup.
   dark theme.
 - 📋 **Copy** — copy the current chapter to the clipboard.
 - ⌨️ **Keyboard shortcuts** (desktop) — `Cmd/Ctrl+F` focuses search, `Esc` clears.
-- 📱 **Touch UI** (iOS) — bottom-tab layout (Read / Books / Search) with full-size
-  touch targets; the same data, search and theme code as the desktop build.
+- 📱 **Touch UI** (iOS & Android) — bottom-tab layout (Read / Books / Search) with
+  full-size touch targets and native text selection (a real `UITextView` /
+  `TextView` reading pane); the same data, search and theme code as the desktop
+  build.
 - 🤖 **AI study** (bring your own key) — select any passage and ask an AI to
   **Ask a question…**, **Explain**, **Analyze context**, or **Analyze translation**,
   using your own Gemini / ChatGPT / Claude / Grok API key. There's also an AI
@@ -104,26 +117,32 @@ stock Fyne so plain `go` commands need no setup.
   **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
   set, fetched once and cached.
-- 🎧 **Listen** (iOS & macOS) — play the current chapter from the reading header as a
-  recorded human **narration** or on-device **read-aloud** (text-to-speech) of the
-  verses on screen. The **Berean Standard Bible** (Barry Hays) and the **World
-  English Bible** (David Williams) both have complete public-domain narrations,
-  streamed from the project's own
+- 🎧 **Listen** (iOS, Android & macOS) — play the current chapter from the reading
+  header as a recorded human **narration** or on-device **read-aloud**
+  (text-to-speech) of the verses on screen. The **Berean Standard Bible** (Barry
+  Hays) and the **World English Bible** (David Williams) both have complete
+  public-domain narrations, streamed from the project's own
   [audio mirror](https://github.com/cubancorona/bibletext-audio); everything
   else falls back to read-aloud — all fetched only when you press play. A **person**
   icon marks a recording and a **waveform** marks read-aloud; tap it to choose the
-  source. When a chapter finishes, playback continues to the **next chapter**
-  automatically, the page following along, until you pause. On iOS the audio keeps
-  playing while the app is backgrounded, with lock-screen / Control Center controls and
-  ±15-second skip.
+  source. **Read-along**: a floating *Follow narration* button keeps the page in
+  sync, highlighting each verse as it is spoken. When a chapter finishes, playback
+  continues to the **next chapter** automatically until you pause. On the phones
+  (iOS and Android) audio keeps playing while the app is backgrounded or the screen
+  is locked, with lock-screen / notification controls and ±15-second skip.
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
 - 📤 **Share a verse** — from the selection menu: **Share with citation** (text +
-  reference) or **Share as image** (a clean, text-only card with a dynamic colour
-  treatment — no imagery; preview and regenerate before sharing). Quote and citation
-  follow Bluebook style (spelled-out translation, en-dash ranges, block-quote rule).
-  Both open your device's native share sheet.
+  reference) or **Share as image** (a clean, text-only card — no imagery — with a
+  dynamic colour treatment and elegant serif typesetting; preview first, and
+  **Regenerate** walks 13 colour schemes × 7 embedded book serifs — Gelasio, Cardo,
+  Crimson Text, Spectral, Libre Baskerville, Prata, and DM Serif Display — 91
+  distinct pairings, identical on every platform). Quote and citation follow
+  **Bluebook** style: spelled-out translation, en-dash ranges, and the Rule 5
+  quotation rules (the 50-word block-quote threshold, quotation nesting, bracketed
+  capitals, and " . . . ." end omissions). Both open your device's native share
+  sheet.
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
@@ -306,13 +325,23 @@ bibletext/
 │   ├── sidebar.go reading.go search.go history.go ui.go       (shared widgets)
 │   ├── ui_desktop.go    # //go:build !ios && !android  — HSplit + keyboard shortcuts
 │   ├── ui_mobile.go     # //go:build ios  || android   — bottom tabs + touch drawer
+│   ├── reading_macos.go reading_ios.go reading_android.go     (native reading overlays)
+│   ├── audio_macos.go audio_ios.go audio_android.go           (native audio engines)
 │   └── app.go              # Run() + LoadAndPrepareState() shared entry helpers
+├── android/                # Java half of the Android bridge (compiled to
+│   │                       # classes2.dex by scripts/build-android.sh)
+│   ├── BtBridge.java       # selectable reading overlay + selection menu + share
+│   ├── BtAudio.java        # MediaPlayer + TextToSpeech engine
+│   └── BtAudioService.java # foreground service — background/lock-screen playback
+├── scripts/                # build wrappers: build-android.sh, run-ios-*.sh, release-ios.sh
+├── docs/ANDROID.md         # Android toolchain, build, signing, distribution
 └── cmd/
     ├── desktop/main.go     # `go build ./cmd/desktop`
-    └── mobile/                # `cd cmd/mobile && fyne package -os ios`
+    └── mobile/                # iOS: scripts/run-ios-*.sh · Android: scripts/build-android.sh
         ├── main.go
-        ├── FyneApp.toml      # bundle ID, version (read by `fyne package`)
-        └── Icon.png          # 1024×1024 app icon — replace before App Store
+        ├── FyneApp.toml         # bundle ID, version/build (read by `fyne package`)
+        ├── AndroidManifest.xml  # custom manifest — media service + session permissions
+        └── Icon*.png            # app icon + Android adaptive-icon layers
 ```
 
 The same `bibletext` package is consumed by both `cmd/` entry points; build tags
@@ -334,6 +363,8 @@ Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
 - Cross-references: **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
   Treasury of Scripture Knowledge — **CC BY**.
 - UI font: **Atkinson Hyperlegible** (Braille Institute) — **SIL Open Font License 1.1**.
+- Share-card serifs: **Gelasio, Cardo, Crimson Text, Spectral, Libre Baskerville,
+  Prata, DM Serif Display** — all **SIL OFL 1.1** (`assets/fonts/share/OFL-LICENSES.txt`).
 
 ---
 
