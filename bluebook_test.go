@@ -380,21 +380,25 @@ func TestBluebookFragmentSharePipeline(t *testing.T) {
 }
 
 // TestBluebookEndOmission covers Rule 5.3 end-of-quotation omissions: a selection cut
-// off MID-SENTENCE gains a three-period spaced ellipsis " . . ." (never the single
-// glyph "…"); a complete sentence (ends on . ! ?) gets nothing; the mark sits inside a
+// off MID-SENTENCE gains the FOUR-dot form " . . . ." — the spaced ellipsis marking
+// the omission PLUS the period closing the sentence, because a shared quotation
+// always stands as its own sentence (the bare three-dot form is for a quotation that
+// trails into the quoter's own sentence, which a card never has). Never the single
+// glyph "…". A complete sentence (ends on . ! ?) gets nothing; the mark sits inside a
 // trailing closing quote; and a selection that merely begins mid-sentence gets NO
 // leading ellipsis (the Bluebook uses a bracketed capital there instead).
 // Sources: legalbluebook.com Rule 5.3; templelawreview.org; cmlawlibraryblog.classcaster.net.
 func TestBluebookEndOmission(t *testing.T) {
 	cases := []struct{ name, in, want string }{
-		{"mid-sentence cut (ends on a word) gains three dots", "told them, I find no", "told them, I find no . . ."},
-		{"ends on a comma (sentence continues) gains three dots", "For God so loved the world,", "For God so loved the world, . . ."},
+		{"mid-sentence cut (ends on a word) gains ellipsis + period", "told them, I find no", "told them, I find no . . . ."},
+		{"ends on a comma (sentence continues) gains ellipsis + period", "For God so loved the world,", "For God so loved the world, . . . ."},
 		{"complete sentence (period) gets nothing", "Jesus wept.", "Jesus wept."},
 		{"ends on a question mark gets nothing", "What is truth?", "What is truth?"},
 		{"ends on an exclamation gets nothing", "Fire!", "Fire!"},
-		{"mark goes INSIDE a trailing closing quote", "he told them, I find no”", "he told them, I find no . . .”"},
+		{"mark goes INSIDE a trailing closing quote", "he told them, I find no”", "he told them, I find no . . . .”"},
 		{"complete sentence inside a closing quote gets nothing", "a charge against Him.”", "a charge against Him.”"},
-		{"already-marked text is not doubled", "I find no . . .", "I find no . . ."},
+		{"already-marked text is not doubled", "I find no . . . .", "I find no . . . ."},
+		{"legacy three-dot text is not re-marked", "I find no . . .", "I find no . . ."},
 	}
 	for _, c := range cases {
 		if got := addEndOmission(c.in); got != c.want {
@@ -415,7 +419,7 @@ func TestBluebookEndOmissionPipeline(t *testing.T) {
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
 	cite := citationForSelection(st, frag)
 	got := composeShareText(quote, cite, "Berean Standard Bible")
-	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . .’”\n— John 18:38 (Berean Standard Bible)"
+	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . . .’”\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}

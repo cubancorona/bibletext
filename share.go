@@ -155,17 +155,23 @@ func nestInlineQuotes(s string) string {
 	return strings.NewReplacer("“", "‘", "”", "’").Replace(s)
 }
 
-// endOmission is the Bluebook Rule 5.3 omission mark — three periods, each separated
-// by a space and preceded by a space ( . . . ), NEVER the single-glyph ellipsis "…".
-const endOmission = " . . ."
+// endOmission is the Bluebook Rule 5.3 mark for material omitted at the END of the
+// final quoted sentence when the quotation stands as its own sentence — which a
+// share always does. That is the FOUR-dot form: the spaced three-period ellipsis
+// marking the omission, plus the period that closes the sentence ( . . . .). The
+// bare three-dot form marks a quotation that trails into the QUOTER'S surrounding
+// sentence, which a standalone card never has. Never the single-glyph "…".
+const endOmission = " . . . ."
 
 // addEndOmission marks an omission when the quoted text is cut off MID-SENTENCE — the
 // reader's selection ends before the original sentence does, so the rest of the
-// sentence is omitted (Bluebook Rule 5.3). It appends the ellipsis just inside any
-// trailing closing quotation mark. A quotation that already ends on sentence-terminal
-// punctuation (. ! ? …) is treated as complete and gets no mark. A selection that
-// merely begins mid-sentence is NOT marked — the Bluebook does not use a leading
-// ellipsis (it would use a bracketed capital instead, which a verbatim share avoids).
+// sentence is omitted (Bluebook Rule 5.3). It appends the four-dot mark (the spaced
+// ellipsis plus the sentence's closing period) just inside any trailing closing
+// quotation mark. A quotation that already ends on sentence-terminal punctuation
+// (. ! ? …) is treated as complete and gets no mark — which also makes the function
+// idempotent, since the mark itself ends on a period. A selection that merely begins
+// mid-sentence is NOT marked — the Bluebook does not use a leading ellipsis (it
+// would use a bracketed capital instead, which a verbatim share avoids).
 func addEndOmission(s string) string {
 	trimmed := strings.TrimRight(s, " \t\n")
 	core := strings.TrimRight(trimmed, " \t\n”’\"'")

@@ -46,7 +46,7 @@ func TestRenderAllSchemesAndTypefaces(t *testing.T) {
 	}
 	dump := os.Getenv("BIBLETEXT_SHARE_SAMPLES")
 
-	verse := "“Come to me, all you who labor and are heavily burdened, and I will give you rest . . .”"
+	verse := "“Come to me, all you who labor and are heavily burdened, and I will give you rest . . . .”"
 	var paths []string
 	for v := 0; v < len(shareSchemes); v++ {
 		p, err := renderVerseImage(nil, verse, "Matthew 11:28", "World English Bible", v)
