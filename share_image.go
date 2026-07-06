@@ -298,7 +298,19 @@ func newFace(ft *opentype.Font, pt float64) font.Face {
 
 // wrapText greedily wraps to the given pixel width using the face's metrics.
 func wrapText(face font.Face, s string, maxW int) []string {
-	words := strings.Fields(s)
+	raw := strings.Fields(s)
+	// Re-glue the Bluebook omission marks: Rule 5.3's spaced dots (" . . . ." etc.)
+	// must never wrap across lines — law-review practice universally sets them with
+	// non-breaking spaces. Fields split them into bare "."/"?"/"!" tokens; fold
+	// those back onto the preceding word so each mark wraps as one unit.
+	var words []string
+	for _, w := range raw {
+		if len(words) > 0 && (w == "." || w == "?" || w == "!") {
+			words[len(words)-1] += " " + w
+			continue
+		}
+		words = append(words, w)
+	}
 	var lines []string
 	cur := ""
 	for _, w := range words {
