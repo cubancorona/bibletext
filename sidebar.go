@@ -52,12 +52,18 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	aiEntry.SetPlaceHolder("In your own words…")
 	aiEntry.SetText(state.aiSearchQuery)
 
+	// askSession drops stale completions — a slow response for an abandoned query
+	// must never clobber the search the reader actually submitted (see the mobile
+	// twin in ui_mobile.go, where this was field-reported).
+	var askSession aiSearchSession
+
 	var runAsk func(string)
 	runAsk = func(q string) {
 		q = strings.TrimSpace(q)
 		if q == "" {
 			return
 		}
+		gen := askSession.Start()
 		state.searchScrollY = 0
 		state.aiSearchActive = true
 		state.aiSearchQuery = q
@@ -73,6 +79,9 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		state.aiSearchLoading = true
 		state.refresh() // → aiSearchingView
 		startAISearch(state, q, func(verses []Verse, err error) {
+			if !askSession.Current(gen) {
+				return // superseded: a newer ask/clear owns the results now
+			}
 			state.aiSearchLoading = false
 			switch {
 			case err != nil && isNoKeyError(err):
@@ -90,10 +99,12 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	aiEntry.OnSubmitted = runAsk
 
 	clearAsk := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		askSession.Invalidate() // an in-flight ask must not resurrect after the clear
 		aiEntry.SetText("")
 		state.aiSearchQuery = ""
 		state.aiSearchResults = nil
 		state.aiSearchErr = nil
+		state.aiSearchLoading = false
 		if state.IsSearching {
 			state.refresh() // → prompt
 		}

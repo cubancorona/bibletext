@@ -22,6 +22,25 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) {
 	}()
 }
 
+// aiSearchSession serializes Find submissions: every submission (and anything
+// that abandons one — clearing the field, toggling the search mode) calls
+// Invalidate/Start, and a completion callback is honored only if it is still the
+// LATEST via Current. Without this, a slow provider response for an abandoned
+// query lands late and clobbers the newer search — the reader edits the query,
+// resubmits, sees the progress bar flash, and then watches the OLD results
+// reappear (a field-reported bug). All methods run on the Fyne UI goroutine
+// (Entry/Button callbacks and fyne.Do-marshalled completions), so no lock.
+type aiSearchSession struct{ gen int }
+
+// Start registers a new submission and returns its token.
+func (s *aiSearchSession) Start() int { s.gen++; return s.gen }
+
+// Invalidate abandons any in-flight submission without starting a new one.
+func (s *aiSearchSession) Invalidate() { s.gen++ }
+
+// Current reports whether the given token is still the latest submission.
+func (s *aiSearchSession) Current(g int) bool { return g == s.gen }
+
 // AI semantic search: the reader asks for passages in their own words
 // ("what did God say to Jonah?") and the active AI provider returns the most
 // relevant references. We use ONLY the references it returns — the verse text shown

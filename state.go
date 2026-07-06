@@ -522,23 +522,46 @@ const searchDebounceDelay = 150 * time.Millisecond
 // newSearchDebouncer returns an OnChanged handler that defers the search until
 // typing pauses, plus a stop() to cancel a pending run. The trailing timer fires
 // on its own goroutine, so the search (which mutates state + repaints widgets) is
-// marshaled back to the UI goroutine with fyne.Do. Both returned closures are
-// only ever called from the UI goroutine (Entry callbacks), so the timer pointer
-// needs no lock. Call stop() from OnSubmitted, which searches immediately.
+// marshaled back to the UI goroutine. Call stop() from OnSubmitted, which
+// searches immediately.
 func newSearchDebouncer(state *AppState) (onChanged func(string), stop func()) {
+	return newTrailingDebouncer(searchDebounceDelay, fyne.Do, func(s string) {
+		searchResultsOnly(state, s)
+	})
+}
+
+// newTrailingDebouncer is the mechanism behind newSearchDebouncer, split out so
+// its STALE-FIRE guard is testable: timer.Stop() cannot cancel a timer whose
+// callback has already fired and queued its marshalled run — without the
+// generation check, a debounced search for an OLDER prefix could land AFTER an
+// Enter-submitted search and silently overwrite its results. Every keystroke
+// and every stop() bumps the generation; a queued run re-checks it inside the
+// marshalled closure (the UI goroutine) and drops itself if superseded.
+// onChanged/stop run on the UI goroutine (Entry callbacks) and gen is only read
+// back inside the marshalled closure, so the counter needs no lock.
+func newTrailingDebouncer(delay time.Duration, marshal func(func()), fire func(string)) (onChanged func(string), stop func()) {
 	var timer *time.Timer
+	gen := 0
 	stop = func() {
+		gen++
 		if timer != nil {
 			timer.Stop()
 			timer = nil
 		}
 	}
 	onChanged = func(s string) {
+		gen++
+		g := gen
 		if timer != nil {
 			timer.Stop()
 		}
-		timer = time.AfterFunc(searchDebounceDelay, func() {
-			fyne.Do(func() { searchResultsOnly(state, s) })
+		timer = time.AfterFunc(delay, func() {
+			marshal(func() {
+				if g != gen {
+					return // superseded by a newer keystroke or a submit
+				}
+				fire(s)
+			})
 		})
 	}
 	return onChanged, stop
