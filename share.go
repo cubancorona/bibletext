@@ -164,12 +164,39 @@ func formatBibleQuote(text string, terminal ...rune) string {
 	// quotation — so it is left verbatim rather than risk mis-nesting it.
 	switch {
 	case strings.ContainsAny(text, "“”"):
-		return "“" + nestInlineQuotes(text) + "”"
+		return "“" + closeInnerSingles(nestInlineQuotes(text)) + "”"
 	case strings.Contains(text, "\""):
 		return text
 	default:
-		return "“" + text + "”"
+		return "“" + closeInnerSingles(text) + "”"
 	}
+}
+
+// closeInnerSingles closes an inner SINGLE quotation (Rule 5.1(b): a quote within
+// a quote takes single marks, and marks must be matched) whose closer sits in the
+// unselected text — the single-mark twin of balanceQuoteMarks' trailing repair.
+// Scripture quotes an embedded speaker's citation in single marks that can span
+// several verses (Acts 2:25 opens David's psalm ‘I saw the Lord…’, which does not
+// close until v28), so a selection of just the opening verse carries an OPENING
+// single with no partner — the app used to wrap it in outer doubles and ship the
+// dangling ‘ (“…: ‘I saw … shaken.”), an unbalanced-marks violation.
+//
+// It appends one closing ’ per unmatched opener and is apostrophe-SAFE by
+// construction: only the OPENING glyph ‘ (U+2018) is counted as an opener — it is
+// never an apostrophe — while EVERY ’ (U+2019) is counted as a potential closer,
+// including apostrophes (God’s, can’t). So the append count (opens − all ’) can
+// never exceed the number of genuinely-unclosed openers: it adds a mark only to
+// close a real dangling citation and never a spurious one. The cost is a rare
+// under-close (an opener followed by a curly apostrophe before the cut, e.g.
+// ‘God’s people…), which merely preserves the prior behaviour — no regression.
+// Runs only on the inline branches, after nestInlineQuotes, so a balanced pair
+// derived from source double marks contributes 0 and is never double-closed; a
+// block quotation reproduces the source's marks verbatim and is left untouched.
+func closeInnerSingles(s string) string {
+	if n := strings.Count(s, "‘") - strings.Count(s, "’"); n > 0 {
+		return s + strings.Repeat("’", n)
+	}
+	return s
 }
 
 // nestInlineQuotes drops a verse's own DOUBLE quotation marks one nesting level
