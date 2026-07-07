@@ -217,6 +217,18 @@ func TestBluebookQuotationRule5(t *testing.T) {
 			"“Don't be afraid; only believe.”",
 			"monmouth.edu (single marks/apostrophes don't conflict with outer doubles)",
 		},
+		{
+			"verse that OPENS an embedded single-quoted citation is closed, not left dangling",
+			"David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.",
+			"“David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.’”",
+
+		},
+		{
+			"a curly apostrophe (God’s) is never mistaken for an unclosed inner single",
+			"He was delivered up by God’s set plan and foreknowledge.",
+			"“He was delivered up by God’s set plan and foreknowledge.”",
+			"Acts 2:23 (BSB): closeInnerSingles counts the unambiguous opener ‘ only, so ’ apostrophes add no spurious mark",
+		},
 		{"empty stays empty", "", "", "degenerate guard"},
 	}
 	for _, c := range cases {
@@ -483,6 +495,41 @@ func TestBluebookEndOmissionPipeline(t *testing.T) {
 	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . . .’”\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestBluebookActsShareCards pins the two user-reported Acts 2 (BSB) share cards
+
+// citation, whose closing single mark lives in v28 — the inner single must be
+// CLOSED, not left dangling (Rule 5.1(b)). Card B (Acts 2:22 through a mid-sentence
+// cut in v24) is a 69-word BLOCK quotation with NO enclosing marks and a four-dot
+// end omission (Rule 5.1(a) + 5.3(b)(iii)) — the deployed build wrongly showed three
+// dots.
+func TestBluebookActsShareCards(t *testing.T) {
+	acts2 := map[int]string{
+		22: "Men of Israel, listen to this message: Jesus of Nazareth was a man certified by God to you by miracles, wonders, and signs, which God did among you through Him, as you yourselves know.",
+		23: "He was delivered up by God’s set plan and foreknowledge, and you, by the hands of the lawless, put Him to death by nailing Him to the cross.",
+		24: "But God raised Him from the dead, releasing Him from the agony of death, because it was impossible for death to keep Him in its grip.",
+		25: "David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.",
+	}
+	st := bbChapter("Acts", 2, acts2)
+
+	// Card A — Acts 2:25 alone (inline; inner single closed).
+	selA := acts2[25]
+	quoteA := formatBibleQuote(cleanQuoteText(st, selA), originalSentenceTerminal(st, selA))
+	gotA := composeShareText(quoteA, citationForSelection(st, selA), "Berean Standard Bible")
+	wantA := "“David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.’”\n— Acts 2:25 (Berean Standard Bible)"
+	if gotA != wantA {
+		t.Errorf("Card A (Acts 2:25):\n got %q\nwant %q", gotA, wantA)
+	}
+
+	// Card B — Acts 2:22 through a mid-sentence cut in v24 (block; four dots).
+	selB := acts2[22] + " " + acts2[23] + " But God raised Him from the dead"
+	quoteB := formatBibleQuote(cleanQuoteText(st, selB), originalSentenceTerminal(st, selB))
+	gotB := composeShareText(quoteB, citationForSelection(st, selB), "Berean Standard Bible")
+	wantB := "Men of Israel, listen to this message: Jesus of Nazareth was a man certified by God to you by miracles, wonders, and signs, which God did among you through Him, as you yourselves know. He was delivered up by God’s set plan and foreknowledge, and you, by the hands of the lawless, put Him to death by nailing Him to the cross. But God raised Him from the dead . . . .\n— Acts 2:22–24 (Berean Standard Bible)"
+	if gotB != wantB {
+		t.Errorf("Card B (Acts 2:22–24):\n got %q\nwant %q", gotB, wantB)
 	}
 }
 
