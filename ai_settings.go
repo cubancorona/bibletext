@@ -101,7 +101,7 @@ func showAISettings(state *AppState) {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancel()
-				_, err := info.New(key).generate(ctx, "Reply with the single word: OK")
+				_, err := info.New(store, key).generate(ctx, "Reply with the single word: OK")
 				fyne.Do(func() {
 					if err != nil {
 						result.SetText("✗ " + friendlyAIError(err))
@@ -157,6 +157,22 @@ func showAISettings(state *AppState) {
 		}
 		refreshStatus()
 
+		// Optional model override. Blank = the recommended model, which self-heals
+		// if the provider retires it (ai_model_resolve.go); a specific id here pins
+		// it. The placeholder shows the model currently in effect (a self-healed one
+		// if discovery has run, otherwise the built-in default) so it's never a
+		// mystery. Rarely needed — kept quiet, below the key.
+		effModel := store.resolvedModel(id)
+		if effModel == "" {
+			effModel = info.Model
+		}
+		modelEntry := widget.NewEntry()
+		modelEntry.SetPlaceHolder(effModel)
+		modelEntry.SetText(store.overrideModel(id))
+		modelEntry.OnChanged = func(s string) { store.setOverrideModel(id, strings.TrimSpace(s)) }
+		modelCaption := canvas.NewText("Model (optional) — blank uses the recommended one.", pal.TextMuted)
+		modelCaption.TextSize = 12
+
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
 				container.NewBorder(nil, nil, heading, link),
@@ -165,6 +181,9 @@ func showAISettings(state *AppState) {
 				// Paste + Clear + Test sit on the left; the result label fills the
 				// rest, so showing it never grows the sheet.
 				container.NewBorder(nil, nil, container.NewHBox(pasteBtn, clearBtn, testBtn), nil, result),
+				spacer(8),
+				modelCaption,
+				withCaret(state, modelEntry),
 			),
 		}
 		keyArea.Refresh()

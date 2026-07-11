@@ -93,7 +93,7 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 	cacheKey := aiCacheKey(id+"|search", "", 0, strings.ToLower(q))
 	raw, cached := aiCacheGet(cacheKey)
 	if !cached {
-		out, err := info.New(key).generate(ctx, buildAISearchPrompt(q))
+		out, err := info.New(store, key).generate(ctx, buildAISearchPrompt(q))
 		if err != nil {
 			return nil, err
 		}
