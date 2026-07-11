@@ -31,7 +31,10 @@ type providerInfo struct {
 	Model   string
 	KeyURL  string
 	KeyHint string
-	New     func(apiKey string) aiClient
+	// New builds a client for this provider. It takes the on-device key store so
+	// the returned client can self-heal its model (override → discovered → default,
+	// re-discovering on a model-not-found error). See modelResolver.
+	New func(store *keyStore, apiKey string) aiClient
 }
 
 const (
@@ -41,11 +44,15 @@ const (
 	providerGrok      = "grok"
 	defaultProviderID = providerGemini
 
-	// Default model per provider. These move fast — update them as providers
-	// ship new models. (A per-provider model override in settings is a follow-up.)
+	// Default model per provider — a starting point, not a hard dependency. These
+	// are the model actually sent only until the provider retires it; on a
+	// model-not-found error the client self-heals to a current model in the same
+	// tier (see ai_model_resolve.go), and a per-provider override in Settings can
+	// pin a specific one. Update them when convenient, but a stale default no
+	// longer breaks the feature on shipped installs.
 	geminiModel    = "gemini-2.5-flash"
 	openAIModel    = "gpt-4o-mini"
-	anthropicModel = "claude-3-5-haiku-latest"
+	anthropicModel = "claude-haiku-4-5"
 	grokModel      = "grok-2-latest"
 
 	geminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
@@ -67,23 +74,47 @@ func aiProviders() []providerInfo {
 	return []providerInfo{
 		{
 			ID: providerGemini, Name: "Google Gemini", Model: geminiModel,
-			KeyURL: "https://aistudio.google.com/apikey", KeyHint: "key starts with “AIza”",
-			New: func(k string) aiClient { return newGeminiClient(k) },
+			KeyURL: "https://aistudio.google.com/apikey", KeyHint: "key from Google AI Studio (starts with “AIza” or “AQ.”)",
+			New: func(store *keyStore, k string) aiClient {
+				return &modelResolver{
+					store: store, id: providerGemini, def: geminiModel, tier: "flash", apiKey: k,
+					list:  listGeminiModels(geminiBaseURL),
+					build: func(m string) aiClient { return newGeminiClient(k, m) },
+				}
+			},
 		},
 		{
 			ID: providerOpenAI, Name: "ChatGPT (OpenAI)", Model: openAIModel,
 			KeyURL: "https://platform.openai.com/api-keys", KeyHint: "key starts with “sk-”",
-			New: func(k string) aiClient { return newOpenAIClient(k, openAIBaseURL, openAIModel) },
+			New: func(store *keyStore, k string) aiClient {
+				return &modelResolver{
+					store: store, id: providerOpenAI, def: openAIModel, tier: "mini", apiKey: k,
+					list:  listOpenAIModels(openAIBaseURL),
+					build: func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
+				}
+			},
 		},
 		{
 			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel,
 			KeyURL: "https://console.anthropic.com/settings/keys", KeyHint: "key starts with “sk-ant-”",
-			New: func(k string) aiClient { return newAnthropicClient(k) },
+			New: func(store *keyStore, k string) aiClient {
+				return &modelResolver{
+					store: store, id: providerAnthropic, def: anthropicModel, tier: "haiku", apiKey: k,
+					list:  listAnthropicModels(anthropicBaseURL),
+					build: func(m string) aiClient { return newAnthropicClient(k, m) },
+				}
+			},
 		},
 		{
 			ID: providerGrok, Name: "Grok (xAI)", Model: grokModel,
 			KeyURL: "https://console.x.ai", KeyHint: "key starts with “xai-”",
-			New: func(k string) aiClient { return newOpenAIClient(k, grokBaseURL, grokModel) },
+			New: func(store *keyStore, k string) aiClient {
+				return &modelResolver{
+					store: store, id: providerGrok, def: grokModel, tier: "grok", apiKey: k,
+					list:  listOpenAIModels(grokBaseURL),
+					build: func(m string) aiClient { return newOpenAIClient(k, grokBaseURL, m) },
+				}
+			},
 		},
 	}
 }
@@ -130,8 +161,8 @@ type geminiClient struct {
 	http    httpClient
 }
 
-func newGeminiClient(apiKey string) *geminiClient {
-	return &geminiClient{apiKey: apiKey, model: geminiModel, baseURL: geminiBaseURL, http: newHTTPClient()}
+func newGeminiClient(apiKey, model string) *geminiClient {
+	return &geminiClient{apiKey: apiKey, model: model, baseURL: geminiBaseURL, http: newHTTPClient()}
 }
 
 type geminiRequest struct {
@@ -291,8 +322,8 @@ type anthropicClient struct {
 	http    httpClient
 }
 
-func newAnthropicClient(apiKey string) *anthropicClient {
-	return &anthropicClient{apiKey: apiKey, model: anthropicModel, baseURL: anthropicBaseURL, http: newHTTPClient()}
+func newAnthropicClient(apiKey, model string) *anthropicClient {
+	return &anthropicClient{apiKey: apiKey, model: model, baseURL: anthropicBaseURL, http: newHTTPClient()}
 }
 
 type anthropicRequest struct {

@@ -34,3 +34,6 @@ android/classes/
 *.idsig
 *.dm
 *.dex
+
+# Local AI provider keys for testing (never committed) — see ai_live_test.go
+.env.local

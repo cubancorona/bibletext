@@ -271,7 +271,7 @@ You supply your own API key per provider. Keys are stored **only on this device*
 |---|---|---|
 | Google Gemini | `gemini-2.5-flash` | <https://aistudio.google.com/apikey> |
 | ChatGPT (OpenAI) | `gpt-4o-mini` | <https://platform.openai.com/api-keys> |
-| Claude (Anthropic) | `claude-3-5-haiku-latest` | <https://console.anthropic.com/settings/keys> |
+| Claude (Anthropic) | `claude-haiku-4-5` | <https://console.anthropic.com/settings/keys> |
 | Grok (xAI) | `grok-2-latest` | <https://console.x.ai> |
 
 A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,

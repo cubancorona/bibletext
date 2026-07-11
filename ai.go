@@ -48,6 +48,10 @@ func friendlyAIError(err error) string {
 	if errors.As(err, &nk) {
 		return "No API key for " + nk.provider.Name + " yet. Open AI settings to add one."
 	}
+	var mg modelGoneError
+	if errors.As(err, &mg) {
+		return "The AI model is no longer available. Open AI settings to pick a current model, or update the app."
+	}
 	if errors.Is(err, errNoAPIKey) {
 		return "No API key configured. Open AI settings to add one."
 	}
@@ -191,7 +195,7 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 		return "", &noKeyError{provider: info}
 	}
 
-	out, err := info.New(key).generate(ctx, prompt)
+	out, err := info.New(store, key).generate(ctx, prompt)
 	if err != nil {
 		return "", err
 	}

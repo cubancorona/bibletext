@@ -30,6 +30,12 @@ type keyStore struct {
 const (
 	prefActiveProvider = "ai.activeProvider"
 	prefKeyPrefix      = "ai.key."
+	// prefModelOverridePrefix holds a user-pinned model per provider (blank =
+	// use the recommended/self-healed model). prefModelResolvedPrefix caches the
+	// model that self-heal discovered when the default was retired, so the swap is
+	// remembered across launches. Both are per-provider (suffix = provider id).
+	prefModelOverridePrefix = "ai.model.override."
+	prefModelResolvedPrefix = "ai.model.resolved."
 )
 
 // newKeyStore binds to the running app's Preferences. Returns an inert store
@@ -76,4 +82,35 @@ func (k *keyStore) setAPIKey(id, key string) {
 		return
 	}
 	k.prefs.SetString(prefKeyPrefix+id, strings.TrimSpace(key))
+}
+
+// overrideModel is the user-pinned model for a provider (blank = none).
+func (k *keyStore) overrideModel(id string) string {
+	if k == nil || k.prefs == nil {
+		return ""
+	}
+	return strings.TrimSpace(k.prefs.String(prefModelOverridePrefix + id))
+}
+
+func (k *keyStore) setOverrideModel(id, model string) {
+	if k == nil || k.prefs == nil {
+		return
+	}
+	k.prefs.SetString(prefModelOverridePrefix+id, strings.TrimSpace(model))
+}
+
+// resolvedModel is the model self-heal discovered for a provider when the default
+// was retired (blank = none discovered yet).
+func (k *keyStore) resolvedModel(id string) string {
+	if k == nil || k.prefs == nil {
+		return ""
+	}
+	return strings.TrimSpace(k.prefs.String(prefModelResolvedPrefix + id))
+}
+
+func (k *keyStore) setResolvedModel(id, model string) {
+	if k == nil || k.prefs == nil {
+		return
+	}
+	k.prefs.SetString(prefModelResolvedPrefix+id, strings.TrimSpace(model))
 }
