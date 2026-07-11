@@ -13,6 +13,20 @@ func TestVerseOfDayRefsAreWellFormed(t *testing.T) {
 	}
 }
 
+func TestVerseOfDayRefsAreUniqueAndAmple(t *testing.T) {
+	seen := make(map[dayVerseRef]bool, len(verseOfDayRefs))
+	for _, r := range verseOfDayRefs {
+		if seen[r] {
+			t.Errorf("duplicate reference %+v — a repeat wastes a slot in the daily rotation", r)
+		}
+		seen[r] = true
+	}
+	// A year's worth is the whole point; guard against an accidental truncation.
+	if n := len(verseOfDayRefs); n < 300 {
+		t.Errorf("verseOfDayRefs shrank to %d; expected a full-year rotation", n)
+	}
+}
+
 func TestVerseOfTheDayNilOrEmpty(t *testing.T) {
 	if _, ok := verseOfTheDay(nil); ok {
 		t.Error("nil state should yield no verse")
