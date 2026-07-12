@@ -104,16 +104,16 @@ func TestBuildSearchResultsView(t *testing.T) {
 	win := app.NewWindow("Search Results Test")
 	state := sampleState()
 	state.window = win
-	
+
 	// Test normal search state
 	state.ActiveSearchQuery = "god"
 	runSearch(state, "god")
-	
+
 	view := buildSearchResultsView(state)
 	if view == nil {
 		t.Fatal("expected search results view")
 	}
-	
+
 	// Test AI Search Error State
 	state.aiSearchActive = true
 	state.aiSearchErr = fmt.Errorf("fake error")
@@ -121,7 +121,7 @@ func TestBuildSearchResultsView(t *testing.T) {
 	if errView == nil {
 		t.Fatal("expected AI error view")
 	}
-	
+
 	// Test AI Search Loading State
 	state.aiSearchErr = nil
 	state.aiSearchLoading = true
