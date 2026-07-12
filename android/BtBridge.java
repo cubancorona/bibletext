@@ -1,6 +1,7 @@
 package org.bibletext;
 
 import android.app.Activity;
+import android.app.Application;
 import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Color;
@@ -69,6 +70,7 @@ public final class BtBridge {
     private static final Handler UI = new Handler(Looper.getMainLooper());
 
     private static Activity activity;
+    private static Application.ActivityLifecycleCallbacks lifecycleCallbacks;
     private static Dialog dialog;
     private static FrameLayout root;   // hosts the ScrollView + the floating pill
     private static ScrollView scroll;
@@ -204,6 +206,37 @@ public final class BtBridge {
                 verseStarts = new int[0];
                 verseEnds = new int[0];
                 activity = act;
+
+                if (lifecycleCallbacks == null && act != null) {
+                    lifecycleCallbacks = new Application.ActivityLifecycleCallbacks() {
+                        @Override public void onActivityCreated(Activity a, android.os.Bundle b) {}
+                        @Override public void onActivityStarted(Activity a) {}
+                        @Override public void onActivityResumed(Activity a) {}
+                        @Override public void onActivityPaused(Activity a) {}
+                        @Override public void onActivityStopped(Activity a) {}
+                        @Override public void onActivitySaveInstanceState(Activity a, android.os.Bundle b) {}
+                        @Override public void onActivityDestroyed(final Activity a) {
+                            UI.post(new Runnable() {
+                                @Override public void run() {
+                                    if (activity == a) {
+                                        if (dialog != null) {
+                                            try { dialog.dismiss(); } catch (Throwable ignored) {}
+                                        }
+                                        dialog = null;
+                                        root = null;
+                                        scroll = null;
+                                        text = null;
+                                        followBtn = null;
+                                        raSpan = null;
+                                        activity = null;
+                                    }
+                                }
+                            });
+                        }
+                    };
+                    act.getApplication().registerActivityLifecycleCallbacks(lifecycleCallbacks);
+                }
+
                 ensureView();
             }
         });

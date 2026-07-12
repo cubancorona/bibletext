@@ -1,9 +1,11 @@
 package bibletext
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -94,6 +96,59 @@ func TestResolveBookName(t *testing.T) {
 			t.Errorf("resolveBookName(%q) = (%q, %v), want (%q, %v)", c.in, got, ok, c.want, c.ok)
 		}
 	}
+}
+
+func TestBuildSearchResultsView(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	win := app.NewWindow("Search Results Test")
+	state := sampleState()
+	state.window = win
+	
+	// Test normal search state
+	state.ActiveSearchQuery = "god"
+	runSearch(state, "god")
+	
+	view := buildSearchResultsView(state)
+	if view == nil {
+		t.Fatal("expected search results view")
+	}
+	
+	// Test AI Search Error State
+	state.aiSearchActive = true
+	state.aiSearchErr = fmt.Errorf("fake error")
+	errView := buildSearchResultsView(state)
+	if errView == nil {
+		t.Fatal("expected AI error view")
+	}
+	
+	// Test AI Search Loading State
+	state.aiSearchErr = nil
+	state.aiSearchLoading = true
+	loadingView := buildSearchResultsView(state)
+	if loadingView == nil {
+		t.Fatal("expected AI loading view")
+	}
+}
+
+func TestSearchToggleUI(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	state := sampleState()
+
+	var selectedAI bool
+	toggle := buildSearchModeToggle(state, func(ai bool) {
+		selectedAI = ai
+	})
+	_ = selectedAI
+
+	if toggle == nil {
+		t.Fatal("expected toggle control")
+	}
+
+	// This is typically a Grid containing two buttons.
+	// Since we can't easily extract the buttons without type assertion deep into the widget tree,
+	// we just ensure the toggle can be built without panicking.
 }
 
 func TestParseReferenceQueryWithAliases(t *testing.T) {

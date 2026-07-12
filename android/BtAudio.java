@@ -22,6 +22,7 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,7 +68,7 @@ public final class BtAudio {
                              ST_ENDED = 3, ST_FAILED = 4, ST_BUFFERING = 5;
     private static final int MODE_NONE = 0, MODE_URL = 1, MODE_TTS = 2;
 
-    private static Activity activity;
+    private static WeakReference<Activity> activityRef;
     private static Context appContext;
     private static AudioManager audioManager;
     private static int mode = MODE_NONE;
@@ -144,7 +145,7 @@ public final class BtAudio {
     public static void init(final Activity act) {
         UI.post(new Runnable() {
             @Override public void run() {
-                activity = act;
+                activityRef = new WeakReference<>(act);
                 if (act != null) appContext = act.getApplicationContext();
                 if (audioManager == null && appContext != null) {
                     audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
@@ -804,7 +805,7 @@ public final class BtAudio {
     // lands in Activity's no-op.
     private static void maybeRequestNotifPermission() {
         if (Build.VERSION.SDK_INT < 33 || notifPermAsked) return;
-        Activity act = activity;
+        Activity act = activityRef != null ? activityRef.get() : null;
         if (act == null || appContext == null) return;
         notifPermAsked = true;
         try {
