@@ -1,6 +1,7 @@
 package org.bibletext;
 
 import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -22,7 +23,6 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +68,8 @@ public final class BtAudio {
                              ST_ENDED = 3, ST_FAILED = 4, ST_BUFFERING = 5;
     private static final int MODE_NONE = 0, MODE_URL = 1, MODE_TTS = 2;
 
-    private static WeakReference<Activity> activityRef;
+    private static Activity activity;
+    private static Application.ActivityLifecycleCallbacks lifecycleCallbacks;
     private static Context appContext;
     private static AudioManager audioManager;
     private static int mode = MODE_NONE;
@@ -145,8 +146,31 @@ public final class BtAudio {
     public static void init(final Activity act) {
         UI.post(new Runnable() {
             @Override public void run() {
-                activityRef = new WeakReference<>(act);
+                activity = act;
                 if (act != null) appContext = act.getApplicationContext();
+
+                // Clear the Activity when it's destroyed so a rotation / background
+                // teardown doesn't leak it (the same pattern BtBridge uses; BtAudio
+                // holds no views, so there's nothing else to release here — playback
+                // lives in the foreground service, not the Activity).
+                if (lifecycleCallbacks == null && act != null) {
+                    lifecycleCallbacks = new Application.ActivityLifecycleCallbacks() {
+                        @Override public void onActivityCreated(Activity a, android.os.Bundle b) {}
+                        @Override public void onActivityStarted(Activity a) {}
+                        @Override public void onActivityResumed(Activity a) {}
+                        @Override public void onActivityPaused(Activity a) {}
+                        @Override public void onActivityStopped(Activity a) {}
+                        @Override public void onActivitySaveInstanceState(Activity a, android.os.Bundle b) {}
+                        @Override public void onActivityDestroyed(final Activity a) {
+                            UI.post(new Runnable() {
+                                @Override public void run() {
+                                    if (activity == a) activity = null;
+                                }
+                            });
+                        }
+                    };
+                    act.getApplication().registerActivityLifecycleCallbacks(lifecycleCallbacks);
+                }
                 if (audioManager == null && appContext != null) {
                     audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
                 }
@@ -805,7 +829,7 @@ public final class BtAudio {
     // lands in Activity's no-op.
     private static void maybeRequestNotifPermission() {
         if (Build.VERSION.SDK_INT < 33 || notifPermAsked) return;
-        Activity act = activityRef != null ? activityRef.get() : null;
+        Activity act = activity;
         if (act == null || appContext == null) return;
         notifPermAsked = true;
         try {
