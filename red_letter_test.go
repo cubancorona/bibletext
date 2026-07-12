@@ -1,7 +1,11 @@
 package bibletext
 
-import "testing"
+import (
+	"testing"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+)
 func TestIsWordsOfChrist(t *testing.T) {
 	in := []struct {
 		book string
@@ -35,5 +39,23 @@ func TestIsWordsOfChrist(t *testing.T) {
 		if isWordsOfChrist(c.book, c.ch, c.v) {
 			t.Errorf("%s %d:%d should NOT be words of Christ", c.book, c.ch, c.v)
 		}
+	}
+}
+
+func TestRedLetterPreferences(t *testing.T) {
+	app := fyne.CurrentApp()
+	if app == nil {
+		app = test.NewApp()
+		defer app.Quit()
+	}
+
+	setRedLetterEnabled(true)
+	if !redLetterEnabled() {
+		t.Fatal("expected red letter to be enabled")
+	}
+
+	setRedLetterEnabled(false)
+	if redLetterEnabled() {
+		t.Fatal("expected red letter to be disabled")
 	}
 }
