@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 )
+
 func TestIsWordsOfChrist(t *testing.T) {
 	in := []struct {
 		book string
