@@ -38,6 +38,11 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 		chapter.parentScroll = scroll
 	}
 
+	// Register the pane for within-chapter scroll capture/restore (position
+	// persistence + history-tap restore). Real on Linux/Windows, a no-op on the
+	// native-overlay platforms, where this pane is only the inert fallback.
+	wireFyneReadingScroll(state, scroll, chapter)
+
 	return surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{})
 }
 

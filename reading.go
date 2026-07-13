@@ -533,6 +533,18 @@ type chapterText struct {
 	lastWidth     float32
 	highlightLine int // line of the highlighted verse after wrapping (-1 = none)
 	totalLines    int
+
+	// verseLines records each verse's first wrapped line, in chapter order —
+	// the Fyne twin of the native overlays' per-verse glyph geometry. It powers
+	// the within-chapter scroll anchor (capture: top-visible verse; restore:
+	// scroll back to it) on the platforms without a native text view.
+	verseLines []verseLine
+}
+
+// verseLine pairs a verse number with the wrapped line its text begins on.
+type verseLine struct {
+	verse int
+	line  int
 }
 
 // entryScrollNone is widget.ScrollNone, assignable to Entry.Scroll as an untyped
@@ -572,6 +584,7 @@ func (c *chapterText) rewrap(width float32) {
 	spaceW := fyne.MeasureText(" ", textSize, style).Width
 
 	c.highlightLine = -1
+	c.verseLines = c.verseLines[:0]
 	lineNo := 0
 	paras := make([]string, 0, len(c.paragraphs))
 
@@ -583,9 +596,17 @@ func (c *chapterText) rewrap(width float32) {
 		var cur strings.Builder
 		curW := float32(0)
 		for _, v := range para {
-			if c.hasHighlight && refOf(v) == c.highlightRef {
+			hl := c.hasHighlight && refOf(v) == c.highlightRef
+			if hl {
 				c.highlightLine = lineNo + len(lines)
 			}
+			// Provisionally record the line under construction for the scroll
+			// anchor; the first-token placement below PATCHES it (and the
+			// highlight) when the token wraps onto a fresh line instead of
+			// joining the previous verse's partial line.
+			c.verseLines = append(c.verseLines, verseLine{verse: v.Verse, line: lineNo + len(lines)})
+			vlIdx := len(c.verseLines) - 1
+			first := true
 			for _, w := range verseTokens(v) {
 				ww := fyne.MeasureText(w, textSize, style).Width
 				add := ww
@@ -603,6 +624,16 @@ func (c *chapterText) rewrap(width float32) {
 					}
 					cur.WriteString(w)
 					curW += add
+				}
+				if first {
+					// The line the verse's first token ACTUALLY landed on (the
+					// wrap branch above starts it one line later than recorded).
+					line := lineNo + len(lines)
+					c.verseLines[vlIdx].line = line
+					if hl {
+						c.highlightLine = line
+					}
+					first = false
 				}
 			}
 		}
@@ -647,6 +678,51 @@ func (c *chapterText) highlightY() float32 {
 		return 0
 	}
 	return float32(c.highlightLine) / float32(c.totalLines) * c.MinSize().Height
+}
+
+// lineY is the approximate top Y of a wrapped line — the same proportional
+// model as highlightY (every Entry line renders at one height, so line/total
+// of the content height is exact up to rounding).
+func (c *chapterText) lineY(line int) float32 {
+	if line <= 0 || c.totalLines <= 0 {
+		return 0
+	}
+	return float32(line) / float32(c.totalLines) * c.MinSize().Height
+}
+
+// verseAtY reports the top-visible verse at content offset y — the last verse
+// whose first line starts at or above y — plus how far past that verse's top
+// the offset sits. This is the same anchor shape the native overlays capture
+// (verse + delta), so the persisted position round-trips across platforms.
+func (c *chapterText) verseAtY(y float32) (verse int, delta float64) {
+	if y <= 0 || len(c.verseLines) == 0 {
+		return 0, 0
+	}
+	best := verseLine{}
+	for _, vl := range c.verseLines {
+		if c.lineY(vl.line) <= y {
+			best = vl
+		} else {
+			break
+		}
+	}
+	if best.verse == 0 {
+		return 0, 0
+	}
+	return best.verse, float64(y - c.lineY(best.line))
+}
+
+// yForVerse is verseAtY's inverse: the content Y where a verse's text begins.
+// ok is false when the verse isn't in this chapter's wrap index (stale anchor
+// after a translation switch trimmed the chapter, say) — callers fall back to
+// the fraction anchor.
+func (c *chapterText) yForVerse(verse int) (float32, bool) {
+	for _, vl := range c.verseLines {
+		if vl.verse == verse {
+			return c.lineY(vl.line), true
+		}
+	}
+	return 0, false
 }
 
 // Read-only: ignore typed input but keep cursor movement, selection and copy.
@@ -787,6 +863,14 @@ func (l *readingColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 		l.scroll.Offset = fyne.NewPos(0, y)
 		l.scrolled = true
 		l.scroll.Refresh()
+	}
+
+	// Apply any pending within-chapter scroll restore (reopening where the
+	// reader left off / a history tap) now that sizes are real. A per-platform
+	// hook: the Fyne-scroll platforms (Linux/Windows) implement it; the native-
+	// overlay platforms no-op — their overlays restore themselves.
+	if l.scroll != nil && l.chapter != nil {
+		applyFyneReadingRestore(l)
 	}
 }
 
