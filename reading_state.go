@@ -28,6 +28,7 @@ package bibletext
 
 import (
 	"encoding/json"
+	"sync"
 	"sync/atomic"
 
 	"fyne.io/fyne/v2"
@@ -144,7 +145,7 @@ func persistReadingPosition(s *AppState) {
 	if s == nil {
 		return
 	}
-	writeReadingState(appPrefs(), snapshotReadingState(s, 0, 0, 0, 0, 0))
+	writeReadingStateSeq(appPrefs(), snapshotReadingState(s, 0, 0, 0, 0, 0), readingStateSeq.Add(1))
 }
 
 // flushReadingState captures the exact native scroll position and persists the
@@ -166,7 +167,7 @@ func flushReadingState(s *AppState) {
 		return
 	}
 	p := appPrefs()
-	writeReadingState(p, captureSnapshot(s, p))
+	writeReadingStateSeq(p, captureSnapshot(s, p), readingStateSeq.Add(1))
 }
 
 // captureSnapshot reads the live scroll position (captureReadingAnchor /
@@ -238,6 +239,28 @@ func updateCurrentVisitAnchor(s *AppState, verse int, delta, frac float64) {
 // the latest position anyway.
 var readingStateWriting atomic.Bool
 
+// Writes are additionally serialized latest-wins: every snapshot takes a sequence
+// number on the UI goroutine at capture time, and a writer persists it only if no
+// NEWER snapshot has already been written. Without this, an in-flight async write
+// (spawned by a scroll moments before close) could land AFTER the synchronous
+// close-time flush and resurrect the older position.
+var (
+	readingStateSeq     atomic.Uint64
+	readingStateWriteMu sync.Mutex
+	readingStateWritten uint64 // highest seq persisted; guarded by readingStateWriteMu
+)
+
+// writeReadingStateSeq persists a snapshot unless a newer one already landed.
+func writeReadingStateSeq(p prefStore, snap readingState, seq uint64) {
+	readingStateWriteMu.Lock()
+	defer readingStateWriteMu.Unlock()
+	if seq <= readingStateWritten {
+		return // stale: a newer snapshot has already been persisted
+	}
+	readingStateWritten = seq
+	writeReadingState(p, snap)
+}
+
 // flushReadingStateAsync captures on the calling (main) thread but writes the
 // prefs blob on a goroutine, so a scroll-end never blocks the main thread with a
 // synchronous JSON encode + preference write — which made scrolling feel laggy.
@@ -249,11 +272,12 @@ func flushReadingStateAsync(s *AppState) {
 	}
 	p := appPrefs()
 	snap := captureSnapshot(s, p) // also refreshes the current history entry's anchor
+	seq := readingStateSeq.Add(1) // stamped on the UI goroutine, before the hop
 	if !readingStateWriting.CompareAndSwap(false, true) {
 		return // a write is already running; drop this one (position is captured above)
 	}
 	go func() {
-		writeReadingState(p, snap)
+		writeReadingStateSeq(p, snap, seq)
 		readingStateWriting.Store(false)
 	}()
 }
