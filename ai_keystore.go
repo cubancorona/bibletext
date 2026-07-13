@@ -29,7 +29,13 @@ type keyStore struct {
 
 const (
 	prefActiveProvider = "ai.activeProvider"
-	prefKeyPrefix      = "ai.key."
+	// prefAIEnabled holds the Settings → Assistant choice of "None": "off" hides
+	// every AI feature (the Study-with-AI selection menu, the Find passage search,
+	// the key/model fields); "" or anything else means AI is available (the
+	// default). Stored keys are kept while off, so re-choosing a provider restores
+	// the previous setup untouched.
+	prefAIEnabled = "ai.enabled"
+	prefKeyPrefix = "ai.key."
 	// prefModelOverridePrefix holds a user-pinned model per provider (blank =
 	// use the recommended/self-healed model). prefModelResolvedPrefix caches the
 	// model that self-heal discovered when the default was retired, so the swap is
@@ -68,6 +74,26 @@ func (k *keyStore) setActiveProvider(id string) {
 		return
 	}
 	k.prefs.SetString(prefActiveProvider, id)
+}
+
+// aiEnabled reports whether AI features are available at all — false when the
+// reader chose "None" in Settings → Assistant. Defaults to true.
+func (k *keyStore) aiEnabled() bool {
+	if k == nil || k.prefs == nil {
+		return true
+	}
+	return k.prefs.StringWithFallback(prefAIEnabled, "") != "off"
+}
+
+func (k *keyStore) setAIEnabled(on bool) {
+	if k == nil || k.prefs == nil {
+		return
+	}
+	v := ""
+	if !on {
+		v = "off"
+	}
+	k.prefs.SetString(prefAIEnabled, v)
 }
 
 func (k *keyStore) apiKey(id string) string {

@@ -41,6 +41,13 @@ extern void bibleTextHighlightCleared(void);
 // to sit exactly above the keyboard.
 extern void bibleTextKeyboardChanged(double height);
 
+// Selection-menu AI gate, mirroring the Settings → Assistant choice ("None" turns
+// AI off). Set from Go (btIOSSetAIEnabled) when the reading host is built and
+// whenever the setting changes; editMenuForTextInRange: reads it to include or
+// omit the "Study with AI" submenu. Defaults to on, matching the preference.
+static int gBTAIEnabled = 1;
+void btIOSSetAIEnabled(int on) { gBTAIEnabled = on; }
+
 // --- Reading-position restore -------------------------------------------------
 // A one-shot scroll target applied when reopening into the last-read chapter
 // (see reading_state.go). Declared before the text-view class so its
@@ -167,7 +174,10 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     }
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray array];
     [children addObjectsFromArray:editGroup];
-    [children addObjectsFromArray:@[ai, share, xref]];
+    // With AI on (an assistant chosen in Settings): Study with AI, Share,
+    // Cross-references. With AI off ("None"): Cross-references takes the study
+    // slot, then Share. (The ai menu is still built above; it's just not attached.)
+    [children addObjectsFromArray:(gBTAIEnabled ? @[ai, share, xref] : @[xref, share])];
     [children addObjectsFromArray:systemRest];
     return [UIMenu menuWithChildren:children];
 }
@@ -1343,10 +1353,22 @@ type nativeReadingHost struct {
 	state *AppState
 }
 
+// syncNativeAIMenu mirrors the Settings → Assistant choice ("None" = off) into
+// the native selection menu's AI gate (gBTAIEnabled in the C preamble), so the
+// "Study with AI" submenu appears or disappears with the setting.
+func syncNativeAIMenu(state *AppState) {
+	on := C.int(0)
+	if aiFeaturesEnabled(state) {
+		on = 1
+	}
+	C.btIOSSetAIEnabled(on)
+}
+
 func newNativeReadingHost(state *AppState, verses []Verse) *nativeReadingHost {
 	h := &nativeReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	currentHost = h
+	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
 	// Push the HTML into the UITextView right away (it'll appear on the next
 	// frame once Resize has set the frame). Doing this in the constructor
 	// rather than in CreateRenderer means tab-switches that rebuild the

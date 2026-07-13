@@ -33,7 +33,10 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	// passages, or (driven from state, for desktop where results replace the reading pane)
 	// the in-progress / no-key / error / prompt states. This also powers "back to results"
 	// and the Read-tab inline results for AI Find.
-	if state.aiSearchActive {
+	// The aiFeaturesEnabled guard keeps a leftover aiSearchActive (set before the
+	// reader switched the assistant to "None") from routing into the AI result
+	// views — it falls through to plain keyword results below.
+	if aiFeaturesEnabled(state) && state.aiSearchActive {
 		switch {
 		case state.aiSearchLoading:
 			return aiSearchingView(state)
@@ -236,6 +239,12 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 // (smaller text/padding, flat inactive half) — touch-sized buttons are too intrusive for
 // a mouse UI. (The narrative-answer "Ask" lives on the reading selection menu, not here.)
 func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
+	if !aiFeaturesEnabled(state) {
+		// Settings → Assistant is "None": there is no Search/Find switch. The
+		// callers already omit this from their layouts; this keeps the constructor
+		// self-safe if it's ever invoked directly.
+		return spacer(0)
+	}
 	compact := !fyne.CurrentDevice().IsMobile()
 	var kwBtn, aiBtn *widget.Button
 	apply := func(ai bool) {

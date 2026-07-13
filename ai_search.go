@@ -18,7 +18,12 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 		defer cancel()
 		verses, err := runAISearch(ctx, state, query)
-		fyne.Do(func() { done(verses, err) })
+		fyne.Do(func() {
+			if !aiFeaturesEnabled(state) {
+				return // the assistant was switched to "None" mid-flight — drop the result
+			}
+			done(verses, err)
+		})
 	}()
 }
 
@@ -52,6 +57,39 @@ func (s *aiSearchSession) Current(g int) bool { return g == s.gen }
 func hasAIKey(state *AppState) bool {
 	store := state.keys()
 	return strings.TrimSpace(providerAPIKey(store, store.activeProvider())) != ""
+}
+
+// aiFeaturesEnabled reports whether AI features should be offered at all — false
+// when the reader chose "None" in Settings → Assistant. Every AI entry point
+// (the Search-tab Find toggle, the native Study-with-AI selection menus, the
+// key/model settings) checks this; the AI code itself stays intact so choosing a
+// provider again restores everything.
+func aiFeaturesEnabled(state *AppState) bool {
+	if state == nil {
+		return true
+	}
+	return state.keys().aiEnabled()
+}
+
+// clearAISearchContext drops any live or leftover Find state — the results
+// context replacing the reading pane, the query/results/error fields, a pending
+// loading flag — so nothing AI survives the assistant flipping to "None". The
+// IsSearching reset is gated on aiSearchActive: a plain keyword search in
+// progress is not ours to tear down.
+func clearAISearchContext(state *AppState) {
+	if state == nil {
+		return
+	}
+	if state.aiSearchActive {
+		state.IsSearching = false
+		state.CanReturnToSearchResults = false
+	}
+	state.aiSearchActive = false
+	state.aiSearchMode = false
+	state.aiSearchQuery = ""
+	state.aiSearchResults = nil
+	state.aiSearchErr = nil
+	state.aiSearchLoading = false
 }
 
 // aiListMarkerPattern strips a leading list bullet or "1." / "2)" numbering the

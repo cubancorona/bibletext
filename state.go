@@ -648,6 +648,8 @@ func clearSearchState(state *AppState) {
 	state.aiSearchActive = false
 	state.aiSearchQuery = ""
 	state.aiSearchResults = nil
+	state.aiSearchErr = nil
+	state.aiSearchLoading = false
 	clearHighlightedVerse(state)
 }
 

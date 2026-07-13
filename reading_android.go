@@ -23,7 +23,7 @@ package bibletext
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
-                 btaShareTextM, btaShareImageM,
+                 btaShareTextM, btaShareImageM, btaSetAIEnabledM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
@@ -59,6 +59,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaUnsuppressM = (*env)->GetStaticMethodID(env, btaClass, "unsuppress", "()V");
 	btaShareTextM  = (*env)->GetStaticMethodID(env, btaClass, "shareText", "(Ljava/lang/String;)V");
 	btaShareImageM = (*env)->GetStaticMethodID(env, btaClass, "shareImage", "(Ljava/lang/String;)V");
+	// Selection-menu AI gate — mirrors the Settings → Assistant choice; when off,
+	// onCreateActionMode omits the "Study with AI" submenu (Share/Cross-refs stay).
+	btaSetAIEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setAIEnabled", "(Z)V");
 	// Read-along (audio): highlight the narrated verse + the floating "Follow
 	// narration" pill, both painted on this same overlay (reading_android.go owns
 	// the BtBridge handle, so the audio read-along calls route through here).
@@ -77,6 +80,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
+	    btaSetAIEnabledM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL) {
 		(*env)->ExceptionClear(env);
@@ -153,6 +157,12 @@ static void btaShareImage(uintptr_t jni_env, const char *path) {
 	jstring s = (*env)->NewStringUTF(env, path);
 	(*env)->CallStaticVoidMethod(env, btaClass, btaShareImageM, s);
 	(*env)->DeleteLocalRef(env, s);
+}
+
+static void btaSetAIEnabled(uintptr_t jni_env, int on) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetAIEnabledM, on ? JNI_TRUE : JNI_FALSE);
 }
 
 // --- Read-along (audio) wrappers on the reading overlay ---------------------
@@ -264,10 +274,26 @@ type nativeReadingHost struct {
 
 var currentHost *nativeReadingHost
 
+// syncNativeAIMenu mirrors the Settings → Assistant choice ("None" = off) into
+// BtBridge's selection-menu AI gate, so the "Study with AI" submenu appears or
+// disappears with the setting. Runs through runBta, which (re-)inits the bridge
+// and hands us an attached JNIEnv; a missing bridge dex makes it a silent no-op
+// (the Fyne fallback pane has no AI menu to gate anyway).
+func syncNativeAIMenu(state *AppState) {
+	on := C.int(0)
+	if aiFeaturesEnabled(state) {
+		on = 1
+	}
+	runBta(func(env uintptr) {
+		C.btaSetAIEnabled(C.uintptr_t(env), on)
+	})
+}
+
 func newNativeReadingHost(state *AppState, verses []Verse) *nativeReadingHost {
 	h := &nativeReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	currentHost = h
+	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
 	pushChapterHTML(state, verses)
 	return h
 }

@@ -83,6 +83,15 @@ public final class BtBridge {
     private static Button followBtn;
     private static boolean followWanted = false;
 
+    // Selection-menu AI gate, mirroring the app's Settings → Assistant choice
+    // ("None" turns AI off). Pushed from Go via setAIEnabled on init and whenever
+    // the setting changes; onCreateActionMode reads it (on the UI thread) to
+    // include or omit the "Study with AI" submenu. Defaults to on, matching the
+    // preference's default. volatile: the write arrives on the Go/JNI-attached
+    // thread, not the UI thread, so this is what formally guarantees the UI
+    // thread sees the new value on the next selection.
+    private static volatile boolean aiEnabled = true;
+
     // Verse index for the current chapter's Spanned, built in setHtml by scanning
     // the verse-number SuperscriptSpans (Html.fromHtml turns <sup> into one).
     // verseNums[i] is the verse number; [verseStarts[i], verseEnds[i]) is its whole
@@ -167,6 +176,11 @@ public final class BtBridge {
     private static native void nativeReadAlongFollowTapped();
 
     private BtBridge() {}
+
+    // setAIEnabled mirrors the app's Settings → Assistant choice; called from Go
+    // on init and on change (from the Go/JNI thread — the volatile on aiEnabled
+    // makes the write visible to the UI thread's onCreateActionMode read).
+    public static void setAIEnabled(boolean on) { aiEnabled = on; }
 
     /**
      * init stores the activity and builds the view lazily on the UI thread.
@@ -271,14 +285,21 @@ public final class BtBridge {
                 // Keep Copy/Select all; drop the system plain-text Share (ours,
                 // with the reference, supersedes it) so there aren't two Shares.
                 menu.removeItem(android.R.id.shareText);
-                SubMenu ai = menu.addSubMenu(0, 200, 100, "Study with AI");
-                ai.add(0, 102, 1, "Explain");
-                ai.add(0, 103, 2, "Analyze context");
-                ai.add(0, 104, 3, "Analyze translation");
+                // Snapshot the volatile gate once so the menu is structurally
+                // consistent even if it flips mid-build (read twice below).
+                final boolean aiOn = aiEnabled;
+                if (aiOn) {
+                    SubMenu ai = menu.addSubMenu(0, 200, 100, "Study with AI");
+                    ai.add(0, 102, 1, "Explain");
+                    ai.add(0, 103, 2, "Analyze context");
+                    ai.add(0, 104, 3, "Analyze translation");
+                }
                 SubMenu sh = menu.addSubMenu(0, 201, 101, "Share");
                 sh.add(0, 106, 0, "Share with citation");
                 sh.add(0, 107, 1, "Share as image");
-                menu.add(0, 105, 102, "Cross-references");
+                // Cross-references: below Share (its usual spot) when AI is on; in
+                // the AI submenu's place, ahead of Share, when AI is off.
+                menu.add(0, 105, aiOn ? 102 : 100, "Cross-references");
                 return true;
             }
             @Override public boolean onPrepareActionMode(ActionMode mode, Menu menu) { return false; }

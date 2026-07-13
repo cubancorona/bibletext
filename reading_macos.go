@@ -32,6 +32,13 @@ extern void bibleTextReadAlongUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
 extern void bibleTextReadAlongFollowTapped(void);
 
+// Selection-menu AI gate, mirroring the Settings → Assistant choice ("None" turns
+// AI off). Set from Go (btMacSetAIEnabled) when the reading host is built and
+// whenever the setting changes; menuForEvent: reads it to include or omit the
+// "Study with AI" submenu. Defaults to on, matching the preference's default.
+static int gBTAIEnabled = 1;
+void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
+
 // HBReadingTextView adds a "Study with AI" submenu (Ask a question / Explain /
 // Analyze context / Analyze translation) to the right-click selection menu and
 // hands the selected text to Go.
@@ -50,6 +57,11 @@ extern void bibleTextReadAlongFollowTapped(void);
     NSMenu *menu = [super menuForEvent:event];
     if (menu == nil || self.selectedRange.length == 0) return menu;
 
+    // Snapshot the AI gate once so the menu is structurally consistent even if
+    // the flag flips mid-build (it's read twice below: the AI-vs-xref slot and
+    // the trailing xref add).
+    BOOL aiOn = gBTAIEnabled != 0;
+
     // Curate the default selection menu down to the essentials. macOS auto-adds a
     // long list a Bible reader doesn't need — Translate, Search-the-web, Speech,
     // Font/Spelling/Substitutions, and its own Share (which duplicates ours below).
@@ -63,23 +75,31 @@ extern void bibleTextReadAlongFollowTapped(void);
     }
     for (NSMenuItem *it in drop) [menu removeItem:it];
 
-    NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
-    for (NSArray *pair in @[@[@"Explain", @"explain"],
-                            @[@"Analyze context", @"context"],
-                            @[@"Analyze translation", @"translation"]]) {
-        SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
-        NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:pair[0] action:action keyEquivalent:@""];
-        it.target = self;
-        [ai addItem:it];
-    }
-
-    // Our group below — Study with AI, Share, Cross-references (same order as iOS) —
-    // set off by a separator, but only if Copy / Look Up survived the curation above.
+    // Our group below — set off by a separator, but only if Copy / Look Up survived
+    // the curation above. With AI on (an assistant chosen in Settings): Study with
+    // AI, Share, Cross-references (same order as iOS). With AI off ("None"):
+    // Cross-references takes the study slot at the top, then Share.
     if (menu.numberOfItems > 0) [menu addItem:[NSMenuItem separatorItem]];
 
-    NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
-    aiItem.submenu = ai;
-    [menu addItem:aiItem];
+    NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
+    xref.target = self;
+
+    if (aiOn) {
+        NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
+        for (NSArray *pair in @[@[@"Explain", @"explain"],
+                                @[@"Analyze context", @"context"],
+                                @[@"Analyze translation", @"translation"]]) {
+            SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
+            NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:pair[0] action:action keyEquivalent:@""];
+            it.target = self;
+            [ai addItem:it];
+        }
+        NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
+        aiItem.submenu = ai;
+        [menu addItem:aiItem];
+    } else {
+        [menu addItem:xref];
+    }
 
     // Share → with citation / as image (both go to the macOS share sheet).
     NSMenu *share = [[NSMenu alloc] initWithTitle:@"Share"];
@@ -93,10 +113,9 @@ extern void bibleTextReadAlongFollowTapped(void);
     shareItem.submenu = share;
     [menu addItem:shareItem];
 
-    // Cross-references → related passages for the selection (last, below AI and Share).
-    NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
-    xref.target = self;
-    [menu addItem:xref];
+    // Cross-references sits last (below AI and Share) when AI is on — its usual
+    // spot; with AI off it was already added in the study slot above.
+    if (aiOn) [menu addItem:xref];
     return menu;
 }
 
@@ -886,10 +905,22 @@ type macReadingHost struct {
 // macCurrentHost guards stale deferred re-pins after a window rebuild.
 var macCurrentHost *macReadingHost
 
+// syncNativeAIMenu mirrors the Settings → Assistant choice ("None" = off) into
+// the native selection menu's AI gate (gBTAIEnabled in the C preamble), so the
+// "Study with AI" submenu appears or disappears with the setting.
+func syncNativeAIMenu(state *AppState) {
+	on := C.int(0)
+	if aiFeaturesEnabled(state) {
+		on = 1
+	}
+	C.btMacSetAIEnabled(on)
+}
+
 func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	macCurrentHost = h
+	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
 	// Arm any pending one-shot scroll restore for this chapter (reopening where
 	// the reader left off) before pushing the text, so bibleTextMacScrollTV lands
 	// on the saved position rather than the top. A normal push disarms it.

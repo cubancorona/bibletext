@@ -256,6 +256,15 @@ func buildMobileBooksTab(state *AppState, switchToRead func()) fyne.CanvasObject
 func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	pal := state.pal()
 
+	// Settings → Assistant "None" hides AI Find. Force keyword mode so a leftover
+	// aiSearchMode from before the switch can't strand the tab in a hidden Find
+	// mode; the Search/Find toggle is omitted from the header below.
+	aiOn := aiFeaturesEnabled(state)
+	if !aiOn {
+		state.aiSearchMode = false
+		state.aiSearchActive = false
+	}
+
 	resultsHost := container.NewStack()
 
 	// --- Keyword search. ---
@@ -329,6 +338,11 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 
 	var runAsk func(string)
 	runAsk = func(q string) {
+		// Defense in depth (mirrors dispatchAIAction): with the assistant on
+		// "None" no caller should reach this, but never start an AI search then.
+		if !aiFeaturesEnabled(state) {
+			return
+		}
 		q = strings.TrimSpace(q)
 		if q == "" {
 			return
@@ -363,7 +377,19 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear/toggle owns the pane now
 			}
+			// Stop the progress bar BEFORE the context check below: a completion
+			// dropped because the assistant flipped to "None" mid-flight must
+			// still halt the spinner, or an orphaned ProgressBarInfinite keeps
+			// animating (and repainting the canvas) until something rebuilds the
+			// tab. (After the session check, though — a superseded completion
+			// must never stop a NEWER ask's bar.)
 			stopAIBar()
+			if !state.aiSearchActive {
+				// The AI results context was torn down mid-flight (the assistant
+				// flipped to "None" — clearAISearchContext): drop the result
+				// instead of painting it into a pane that no longer owns it.
+				return
+			}
 			switch {
 			case err != nil && isNoKeyError(err):
 				resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
@@ -443,7 +469,12 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		applyMode()
 	})
 
-	header := container.NewVBox(toggle, fieldHost, aiDisclaimer)
+	var header *fyne.Container
+	if aiOn {
+		header = container.NewVBox(toggle, fieldHost, aiDisclaimer)
+	} else {
+		header = container.NewVBox(fieldHost, aiDisclaimer) // no Search/Find toggle
+	}
 	applyMode() // initialise to the persisted mode (also shows/hides the AI disclaimer)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
 }
