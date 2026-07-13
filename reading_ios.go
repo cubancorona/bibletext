@@ -128,7 +128,6 @@ static UITapGestureRecognizer *gHighlightTap = nil;
 
     UIMenu *ai = [UIMenu menuWithTitle:@"Study with AI" image:nil identifier:nil options:0
                               children:@[
-                                  make(@"Ask a question…", @"ask"),
                                   make(@"Explain", @"explain"),
                                   make(@"Analyze context", @"context"),
                                   make(@"Analyze translation", @"translation"),

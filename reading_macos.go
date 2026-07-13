@@ -64,8 +64,7 @@ extern void bibleTextReadAlongFollowTapped(void);
     for (NSMenuItem *it in drop) [menu removeItem:it];
 
     NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
-    for (NSArray *pair in @[@[@"Ask a question…", @"ask"],
-                            @[@"Explain", @"explain"],
+    for (NSArray *pair in @[@[@"Explain", @"explain"],
                             @[@"Analyze context", @"context"],
                             @[@"Analyze translation", @"translation"]]) {
         SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
@@ -112,9 +111,6 @@ extern void bibleTextReadAlongFollowTapped(void);
     return nil;
 }
 
-- (void)hbAI_ask:(id)sender {
-    bibleTextAIMenuTapped((char *)"ask", (char *)self.hbSelectedText.UTF8String);
-}
 - (void)hbAI_explain:(id)sender {
     bibleTextAIMenuTapped((char *)"explain", (char *)self.hbSelectedText.UTF8String);
 }
