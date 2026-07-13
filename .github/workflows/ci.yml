@@ -69,3 +69,27 @@ jobs:
             CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=13.0" \
             CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=13.0" \
             go build -o /tmp/bibletext-ios ./cmd/mobile
+
+  # Windows is a supported desktop target (the Fyne fallback reading pane, not the
+  # native overlay). This job builds + runs the full suite on real Windows; the
+  # runner image ships a mingw gcc, so Fyne's cgo/OpenGL bindings compile. gofmt is
+  # intentionally left to the linux job — running it here would false-positive on
+  # the CRLF checkout.
+  build-test-windows:
+    name: build & test (windows)
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
