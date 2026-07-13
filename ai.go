@@ -209,6 +209,13 @@ func dispatchAIAction(state *AppState, action, selectedText string) {
 	if state == nil {
 		return
 	}
+	// Defense in depth: with Settings → Assistant on "None" the native menus omit
+	// the Study-with-AI items (syncNativeAIMenu), so this is normally unreachable —
+	// but if a stale native menu ever delivered an AI action, drop it rather than
+	// open an AI panel.
+	if !aiFeaturesEnabled(state) {
+		return
+	}
 	selectedText = strings.TrimSpace(selectedText)
 	if selectedText == "" {
 		return

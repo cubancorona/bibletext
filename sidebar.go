@@ -19,6 +19,15 @@ const bookRowHeight = 28
 func buildSidebar(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
+	// Settings → Assistant "None" hides AI Find. Force keyword mode so a leftover
+	// aiSearchMode from before the switch can't strand the reader in a hidden Find
+	// mode; the Search/Find toggle is omitted from the header below.
+	aiOn := aiFeaturesEnabled(state)
+	if !aiOn {
+		state.aiSearchMode = false
+		state.aiSearchActive = false
+	}
+
 	// --- Search ---
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("Search…")
@@ -59,6 +68,11 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 
 	var runAsk func(string)
 	runAsk = func(q string) {
+		// Defense in depth (mirrors dispatchAIAction): with the assistant on
+		// "None" no caller should reach this, but never start an AI search then.
+		if !aiFeaturesEnabled(state) {
+			return
+		}
 		q = strings.TrimSpace(q)
 		if q == "" {
 			return
@@ -81,6 +95,12 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		startAISearch(state, q, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear owns the results now
+			}
+			if !state.aiSearchActive {
+				// The AI results context was torn down mid-flight (the assistant
+				// flipped to "None" — clearAISearchContext — or the toggle went
+				// back to keyword): drop the result instead of repopulating state.
+				return
 			}
 			state.aiSearchLoading = false
 			switch {
@@ -214,13 +234,11 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		scrollToCurrent()
 	}
 
-	headerItems := []fyne.CanvasObject{
-		sectionLabel("READ", pal),
-		toggle,
-		fieldHost,
-		captionHost,
-		spacer(10),
+	headerItems := []fyne.CanvasObject{sectionLabel("READ", pal)}
+	if aiOn {
+		headerItems = append(headerItems, toggle) // Search/Find switch — AI only
 	}
+	headerItems = append(headerItems, fieldHost, captionHost, spacer(10))
 	if b := incompleteBibleBanner(state); b != nil {
 		headerItems = append(headerItems, b, spacer(8))
 	}

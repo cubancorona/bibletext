@@ -38,6 +38,10 @@ func showAISettings(state *AppState) {
 	// the screen for an AI-key-only change.
 	redLetterAtOpen := redLetterEnabled()
 	textSizeAtOpen := readingTextSizeID()
+	// Choosing "None" (or leaving it) changes which whole surfaces exist — the
+	// Search-tab Find toggle, the native selection menus — so closing the sheet
+	// after that change rebuilds the window rather than just re-rendering verses.
+	aiOnAtOpen := store.aiEnabled()
 
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
@@ -51,9 +55,14 @@ func showAISettings(state *AppState) {
 	providers := aiProviders()
 	nameToID := map[string]string{}
 	idToName := map[string]string{}
-	names := make([]string, len(providers))
-	for i, p := range providers {
-		names[i] = p.Name
+	// "None" leads the assistant picker: choosing it turns every AI feature off
+	// (no Study-with-AI selection menu, no Find search, no key fields) while
+	// keeping any saved keys, so picking a provider again restores the old setup.
+	const noAssistantName = "None"
+	names := make([]string, 0, len(providers)+1)
+	names = append(names, noAssistantName)
+	for _, p := range providers {
+		names = append(names, p.Name)
 		nameToID[p.Name] = p.ID
 		idToName[p.ID] = p.Name
 	}
@@ -189,15 +198,28 @@ func showAISettings(state *AppState) {
 		keyArea.Refresh()
 	}
 
+	// applyAssistant re-renders the sheet's key/disclosure area for the current
+	// choice and mirrors it into the native selection menus immediately (so the
+	// Study-with-AI submenu appears/disappears without waiting for the sheet to
+	// close). Assigned below, once the disclosure widget exists; the radio callback
+	// only persists the choice and delegates here.
+	var applyAssistant func()
 	active := widget.NewRadioGroup(names, func(name string) {
-		if id, ok := nameToID[name]; ok {
+		if name == noAssistantName {
+			store.setAIEnabled(false) // auto-save; keys are kept
+			// Drop any live Find context (an open results pane, an in-flight
+			// query) so no stale AI state — IsSearching, the back-to-results
+			// label, a late error — survives the switch to "None".
+			clearAISearchContext(state)
+		} else if id, ok := nameToID[name]; ok {
+			store.setAIEnabled(true)
 			store.setActiveProvider(id) // auto-save
-			renderKey(id)
+		}
+		if applyAssistant != nil {
+			applyAssistant()
 		}
 	})
 	active.Required = true
-	active.SetSelected(idToName[store.activeProvider()])
-	renderKey(store.activeProvider())
 
 	// --- Chrome. A compact sheet: a small title + ✕, then the form. There is no
 	// Done button — every change auto-saves, so the ✕ or a tap anywhere outside the
@@ -214,7 +236,11 @@ func showAISettings(state *AppState) {
 			popup.Hide()
 		}
 		restore()
-		if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
+		if store.aiEnabled() != aiOnAtOpen {
+			// The assistant flipped between "None" and a provider: whole surfaces
+			// (the sidebar/tab Find toggle) come or go, so rebuild the window.
+			rebuildWindow(state)
+		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
 			state.refreshReadingOnly() // red-letter / text size changed → re-render the verses
 		}
 	}
@@ -269,6 +295,44 @@ func showAISettings(state *AppState) {
 		aiDisclosure.Add(container.NewHBox(widget.NewHyperlink("Privacy Policy ↗", u), layout.NewSpacer()))
 	}
 
+	var card *fyne.Container // assigned below, before the popup shows
+	applyAssistant = func() {
+		// Mirror the choice into the native selection menus right away, so the
+		// Study-with-AI submenu is gone (or back) on the very next selection.
+		syncNativeAIMenu(state)
+		if store.aiEnabled() {
+			renderKey(store.activeProvider())
+			aiDisclosure.Show()
+		} else {
+			keyArea.Objects = []fyne.CanvasObject{caption(
+				"AI features are off — text selection keeps Share and Cross-references, " +
+					"and Search keeps keyword search. Choose an assistant to bring them back.")}
+			keyArea.Refresh()
+			aiDisclosure.Hide()
+		}
+		// The card's height changes between the one-line hint (None) and the full
+		// key+model form — and fyne's PopUp uses its Resize-time innerSize both to
+		// paint and as the tap-outside-to-dismiss boundary. Without re-measuring,
+		// a mid-sheet flip leaves that boundary stale: taps on the grown card
+		// phantom-dismiss the sheet mid-key-entry (grow case), or a dead band
+		// below the shrunken card swallows outside-taps (shrink case).
+		//
+		// Resize twice: a wrapping RichText that was hidden (the disclosure on a
+		// None-state open) reports a single-line MinSize until it has been laid
+		// out at its real width — which the FIRST Resize's layout pass does — so
+		// only the second measurement is wrap-accurate on the grow flip.
+		if popup != nil && card != nil {
+			popup.Resize(card.MinSize())
+			popup.Resize(card.MinSize())
+		}
+	}
+	if store.aiEnabled() {
+		active.SetSelected(idToName[store.activeProvider()])
+	} else {
+		active.SetSelected(noAssistantName)
+	}
+	applyAssistant() // initial render (SetSelected fires it too; idempotent)
+
 	// Assistant + key first so the key field sits high in the sheet — on a phone
 	// the soft keyboard covers the lower half, and this keeps the field above it.
 	// Section labels (not separators) divide the groups, keeping the sheet tight.
@@ -301,7 +365,7 @@ func showAISettings(state *AppState) {
 	// the card (hidden behind the surface fill), so it never shows as a white wall;
 	// and there is no scroll view, so a stray scrollbar is impossible.
 	ps := aiPanelSize(cnv.Size())
-	card := container.New(fixedWidthLayout{width: ps.Width},
+	card = container.New(fixedWidthLayout{width: ps.Width},
 		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
 
 	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
@@ -326,9 +390,23 @@ func showAISettings(state *AppState) {
 	// subclass can't intercept it (PopUp.Show registers the embedded *PopUp, so a Tapped
 	// override is never dispatched). So poll until the popup is gone by ANY route, then run
 	// done(); its `closed` guard keeps the ✕ path idempotent. (Same approach as Goto.)
+	// onOverlayStack: rebuildWindow's overlay drain evicts via OverlayStack.Remove,
+	// which never runs PopUp.Hide — so Visible() alone would stay true forever and
+	// this watchdog would poll for the life of the process. Treat eviction from the
+	// stack as dismissal too (done() is then largely redundant — the drain caller
+	// re-reads prefs and re-shows the overlay — but it stops the timer and is
+	// idempotent via the closed guard).
+	onOverlayStack := func() bool {
+		for _, o := range cnv.Overlays().List() {
+			if o == popup {
+				return true
+			}
+		}
+		return false
+	}
 	var watchDismiss func()
 	watchDismiss = func() {
-		if popup == nil || !popup.Visible() {
+		if popup == nil || !popup.Visible() || !onOverlayStack() {
 			done()
 			return
 		}

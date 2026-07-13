@@ -481,7 +481,9 @@ func htmlEscape(s string) string {
 func backToResultsBar(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 	label := state.ActiveSearchQuery
-	if state.aiSearchActive {
+	// Same guard as buildSearchResultsView: with the assistant on "None" a
+	// leftover aiSearchActive must not surface the stale AI query as the label.
+	if aiFeaturesEnabled(state) && state.aiSearchActive {
 		label = state.aiSearchQuery
 	}
 	// The query can be long (especially an AI question); Fyne buttons don't truncate,
