@@ -272,7 +272,6 @@ public final class BtBridge {
                 // with the reference, supersedes it) so there aren't two Shares.
                 menu.removeItem(android.R.id.shareText);
                 SubMenu ai = menu.addSubMenu(0, 200, 100, "Study with AI");
-                ai.add(0, 101, 0, "Ask a question…");
                 ai.add(0, 102, 1, "Explain");
                 ai.add(0, 103, 2, "Analyze context");
                 ai.add(0, 104, 3, "Analyze translation");
@@ -286,7 +285,6 @@ public final class BtBridge {
             @Override public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
                 String action;
                 switch (item.getItemId()) {
-                    case 101: action = "ask"; break;
                     case 102: action = "explain"; break;
                     case 103: action = "context"; break;
                     case 104: action = "translation"; break;
