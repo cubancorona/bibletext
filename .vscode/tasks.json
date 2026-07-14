@@ -52,6 +52,35 @@
       "problemMatcher": ["$go"]
     },
     {
+      "label": "Build Android APK (debug)",
+      "detail": "scripts/build-android.sh -> cmd/mobile/BibleText.apk (with the BtBridge/BtAudio dex; NOT bare fyne package)",
+      "type": "shell",
+      "command": "./scripts/build-android.sh",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run on Android Emulator",
+      "detail": "build + boot the bibletext_test AVD (API 35 arm64) if needed + install + launch",
+      "type": "shell",
+      "command": "source \"$HOME/Library/Android/env.sh\" && if ! adb devices | grep -qE 'emulator-[0-9]+[[:space:]]+device'; then (emulator -avd bibletext_test >/dev/null 2>&1 &) fi && adb wait-for-device && until [ \"$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')\" = \"1\" ]; do sleep 2; done && adb install -r cmd/mobile/BibleText.apk && adb shell am start -n uk.co.bibletext/org.golang.app.GoNativeActivity",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": ["Build Android APK (debug)"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Android Logcat (BibleText)",
+      "detail": "app log stream — Go's log.Printf arrives under the GoLog tag",
+      "type": "shell",
+      "command": "source \"$HOME/Library/Android/env.sh\" && adb logcat -T 1 -s GoLog:V Fyne:V AndroidRuntime:E ActivityManager:W",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
       "label": "Test (race)",
       "detail": "go test -race ./...",
       "type": "shell",
