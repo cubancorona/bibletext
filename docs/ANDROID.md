@@ -238,9 +238,15 @@ emulator -avd bibletext_test -no-window -no-audio -no-boot-anim \
   -gpu swiftshader_indirect &   # headless; works with the Mac display asleep
 adb wait-for-device
 adb install -r cmd/mobile/BibleText.apk
-adb shell monkey -p uk.co.bibletext 1     # launch
+adb shell am start -n uk.co.bibletext/org.golang.app.GoNativeActivity  # launch
+#   (monkey -p uk.co.bibletext 1 now exits 251 against the current manifest)
 adb exec-out screencap -p > shot.png      # capture without a visible screen
 ```
+
+VS Code: **Run Task → "Run on Android Emulator"** does the whole loop —
+`scripts/build-android.sh`, boots the `bibletext_test` AVD when no emulator is
+online, installs, launches. "Android Logcat (BibleText)" tails the app's log
+(Go's `log.Printf` arrives under the `GoLog` tag).
 
 ## Getting it to Android testers — two paths
 
