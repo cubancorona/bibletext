@@ -47,12 +47,13 @@ Graphics are in [`docs/play-assets/`](play-assets/). Build to upload:
 > • Results shown in context, with your search highlighted
 >
 > STUDY (optional, bring your own key)
-> • Ask questions about a passage, explore context and translation notes,
+> • Explore a passage's context and translation notes, have it explained,
 >   or describe a half-remembered verse and let Find locate it
 > • Works with your own API key from Gemini, OpenAI, Anthropic, or Grok —
 >   your key stays on your device, and nothing is sent anywhere unless you
->   ask a question
-> • Entirely optional: every reading and search feature works without it
+>   use a study feature
+> • Entirely optional: turn the study features off completely, or just leave
+>   them unused — every reading and search feature works without them
 >
 > PRIVATE BY DESIGN
 > • No ads, no analytics, no account, no tracking

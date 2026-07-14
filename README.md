@@ -106,11 +106,12 @@ root), signing, emulator use, and distribution are covered in
   full-size touch targets and native text selection (a real `UITextView` /
   `TextView` reading pane); the same data, search and theme code as the desktop
   build.
-- 🤖 **AI study** (bring your own key) — select any passage and ask an AI to
-  **Ask a question…**, **Explain**, **Analyze context**, or **Analyze translation**,
-  using your own Gemini / ChatGPT / Claude / Grok API key. There's also an AI
-  **Find** that turns a plain-language request into matching passages on the Search
-  tab. See [AI study](#ai-study-bring-your-own-key) for exactly what is sent.
+- 🤖 **AI study** (bring your own key) — select any passage and have an AI
+  **Explain** it, **Analyze context**, or **Analyze translation**, using your own
+  Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
+  a plain-language request into matching passages on the Search tab. Optional and
+  off-able (Settings → Assistant → None). See [AI study](#ai-study-bring-your-own-key)
+  for exactly what is sent.
 - 🔗 **Cross-references & Gospel parallels** — select a verse and choose
   **Cross-references** to see related passages (vote-ranked), each a tap away. For a
   Gospel verse, the same event in the other Gospels appears first, tagged
@@ -252,11 +253,12 @@ real text only loads once you've dropped the licensed file in place.
 ## AI study (bring your own key)
 
 Select a passage in the reader and the native selection menu gains a **Study with
-AI** submenu with four actions — **Ask a question…**, **Explain**, **Analyze
-context**, and **Analyze translation**. The chosen action plus the selected text
-are sent to an AI provider of your choice, and the answer appears in a panel.
-**Ask a question…** opens a small input sheet for a free-form question about the
-selection; the other three run fixed prompts. A separate AI **Find** on the Search
+AI** submenu with three actions — **Explain**, **Analyze context**, and **Analyze
+translation**. The chosen action plus the selected text are sent to an AI provider
+of your choice, and the answer appears in a panel. (A free-form **Ask a question…**
+verb also exists in the code but is not currently surfaced in the menu.) The whole
+AI surface can be turned off in Settings → Assistant → **None**. A separate AI
+**Find** on the Search
 tab (the **Search / Find** toggle) takes a plain-language request and returns
 matching passages — using only the references the model names, with the verse text
 coming from the app's own Bible data. AI answers carry a **Report** button (to flag
