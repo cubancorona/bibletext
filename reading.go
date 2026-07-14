@@ -529,6 +529,15 @@ type chapterText struct {
 	hasHighlight bool
 	clipboard    fyne.Clipboard
 	parentScroll *container.Scroll
+	state        *AppState // drives the selection study menu (TappedSecondary)
+
+	// The scripture body renders at the reader's chosen size (Settings → Text
+	// size) — matching the native platforms' scaled HTML. Rendering comes from
+	// readingScrollArea's size-only theme override; rewrap measures at the SAME
+	// size so the wrap is exact. (The face stays the app font on purpose — see
+	// readingPaneTheme for why a per-widget font override is unsound on stock
+	// fyne.)
+	textSize float32 // 0 ⇒ theme default (bare test constructions)
 
 	lastWidth     float32
 	highlightLine int // line of the highlighted verse after wrapping (-1 = none)
@@ -555,6 +564,8 @@ func newChapterText(state *AppState, verses []Verse) *chapterText {
 	c := &chapterText{
 		paragraphs:    groupVersesIntoParagraphs(verses),
 		highlightLine: -1,
+		state:         state,
+		textSize:      theme.TextSize() * float32(readingTextScale()),
 	}
 	if state.HasHighlightedVerse {
 		c.hasHighlight = true
@@ -579,9 +590,17 @@ func (c *chapterText) rewrap(width float32) {
 	if avail < 80 {
 		avail = 80
 	}
-	textSize := theme.TextSize()
+	textSize := c.textSize
+	if textSize <= 0 {
+		textSize = theme.TextSize() // bare construction (tests) — theme default
+	}
 	var style fyne.TextStyle
-	spaceW := fyne.MeasureText(" ", textSize, style).Width
+	// Measure at the same size the pane renders with (the reading theme
+	// override); the face is the app font on both sides, so the wrap is exact.
+	measure := func(s string) float32 {
+		return fyne.MeasureText(s, textSize, style).Width
+	}
+	spaceW := measure(" ")
 
 	c.highlightLine = -1
 	c.verseLines = c.verseLines[:0]
@@ -608,7 +627,7 @@ func (c *chapterText) rewrap(width float32) {
 			vlIdx := len(c.verseLines) - 1
 			first := true
 			for _, w := range verseTokens(v) {
-				ww := fyne.MeasureText(w, textSize, style).Width
+				ww := measure(w)
 				add := ww
 				if cur.Len() > 0 {
 					add += spaceW
@@ -757,6 +776,104 @@ func cleanCopy(s string) string {
 	s = strings.ReplaceAll(s, "\n\n", para)
 	s = strings.ReplaceAll(s, "\n", " ")
 	return strings.ReplaceAll(s, para, "\n\n")
+}
+
+// superToDigit reverses superscriptNumber's mapping, so a selection's rendered
+// verse markers (⁴²) become plain digits (42) before matching or prompting.
+var superToDigit = map[rune]rune{
+	'⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+	'⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+}
+
+// plainSelection converts the pane's rendered selection into the shape the
+// native overlays hand the study actions: soft wraps back to spaces and the
+// superscript verse digits back to plain digits — so citation matching
+// (selectionVerses), cross-references, and the AI prompts see ordinary text,
+// identical to what a macOS/iOS/Android selection produces.
+func plainSelection(s string) string {
+	s = cleanCopy(strings.TrimSpace(s))
+	return strings.Map(func(r rune) rune {
+		if d, ok := superToDigit[r]; ok {
+			return d
+		}
+		return r
+	}, s)
+}
+
+// selectionMenu builds the study menu for the current selection — the Fyne
+// twin of the native selection menus. Layout mirrors them exactly: Copy +
+// Select all, then Study with AI (only when an assistant is chosen in
+// Settings), Share (with citation / as image), Cross-references — and with AI
+// off, Cross-references takes the study slot ahead of Share.
+func (c *chapterText) selectionMenu() *fyne.Menu {
+	return c.menuForSelection(plainSelection(c.SelectedText()))
+}
+
+func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
+	state := c.state
+
+	copyItem := fyne.NewMenuItem("Copy", func() {
+		if c.clipboard != nil {
+			c.clipboard.SetContent(cleanCopy(c.SelectedText()))
+		}
+	})
+	copyItem.Disabled = sel == ""
+	selectAll := fyne.NewMenuItem("Select all", func() {
+		c.TypedShortcut(&fyne.ShortcutSelectAll{})
+	})
+	items := []*fyne.MenuItem{copyItem, selectAll}
+
+	if sel != "" {
+		items = append(items, fyne.NewMenuItemSeparator())
+
+		shareItem := fyne.NewMenuItem("Share", nil)
+		shareItem.ChildMenu = fyne.NewMenu("",
+			fyne.NewMenuItem("Share with citation", func() {
+				dispatchSelectionAction(state, selActionShareCite, sel)
+			}),
+			fyne.NewMenuItem("Share as image", func() {
+				dispatchSelectionAction(state, selActionShareImage, sel)
+			}),
+		)
+		xrefItem := fyne.NewMenuItem("Cross-references", func() {
+			dispatchSelectionAction(state, selActionCrossRef, sel)
+		})
+
+		if aiFeaturesEnabled(state) {
+			aiItem := fyne.NewMenuItem("Study with AI", nil)
+			aiItem.ChildMenu = fyne.NewMenu("",
+				fyne.NewMenuItem("Explain", func() {
+					dispatchAIAction(state, aiActionExplain, sel)
+				}),
+				fyne.NewMenuItem("Analyze context", func() {
+					dispatchAIAction(state, aiActionContext, sel)
+				}),
+				fyne.NewMenuItem("Analyze translation", func() {
+					dispatchAIAction(state, aiActionTranslation, sel)
+				}),
+			)
+			items = append(items, aiItem, shareItem, xrefItem)
+		} else {
+			items = append(items, xrefItem, shareItem)
+		}
+	}
+
+	return fyne.NewMenu("", items...)
+}
+
+// TappedSecondary replaces Entry's stock Cut/Copy/Paste menu with the study
+// menu above. Cut and Paste made no sense in a read-only pane (they were
+// silently inert), and this is where Share / Cross-references / Study with AI
+// become reachable on the platforms without a native selection menu.
+func (c *chapterText) TappedSecondary(ev *fyne.PointEvent) {
+	if c.state == nil || c.state.window == nil {
+		return
+	}
+	cnv := c.state.window.Canvas()
+	if cnv == nil {
+		return
+	}
+	widget.ShowPopUpMenuAtPosition(c.selectionMenu(), cnv, ev.AbsolutePosition)
 }
 
 // Scrolled forwards the wheel to the page so the whole chapter scrolls.
