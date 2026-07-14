@@ -37,6 +37,10 @@ func findChapterText(o fyne.CanvasObject) *chapterText {
 	switch v := o.(type) {
 	case *chapterText:
 		return v
+	case *container.ThemeOverride:
+		// The reading pane wraps the chapterText in a size-only theme override
+		// (readingPaneTheme) — its child hangs off Content, not Objects.
+		return findChapterText(v.Content)
 	case *container.Scroll:
 		return findChapterText(v.Content)
 	case *container.Split:
