@@ -114,8 +114,13 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   `fyne.Do`. `Verse.Ref` and `BibleData.chapterNums` are precomputed in
   `PrepareSearchIndex` (on the load goroutine) so search/nav don't re-format or
   re-sort per keystroke.
-- **AI study (BYOK).** Select text → native "Study with AI" menu → Ask a question /
-  Explain / Analyze context / Analyze translation. **Three search/AI verbs, kept
+- **AI study (BYOK).** Select text → native "Study with AI" menu → Explain /
+  Analyze context / Analyze translation. (The free-form **"Ask a question…"** verb
+  was removed from the selection menu in build 94/1.0.2 — its code — `aiActionAsk`,
+  `ai_ask.go`, `promptAskQuestion`, `buildAskPrompt` — remains but is not wired to
+  the menu.) The whole AI surface is also runtime-disableable: Settings → Assistant
+  → **None** (`keyStore.aiEnabled`, gates the native menus + the Find toggle).
+  **Three search/AI verbs, kept
   distinct on purpose:** *Search* = keyword / reference lookup (Search tab), *Find* =
   AI passage search that returns verses (Search-tab toggle, `ai_search.go`), *Ask* =
   AI narrative answer about a selection (reading menu). "Ask a question…" opens a small
