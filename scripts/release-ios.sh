@@ -108,10 +108,15 @@ PB "Set :CFBundleShortVersionString $SHORT_VERSION" 2>/dev/null || PB "Add :CFBu
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 # Declare no non-exempt encryption (HTTPS only) so the upload skips export-compliance.
 PB "Set :ITSAppUsesNonExemptEncryption false" 2>/dev/null || PB "Add :ITSAppUsesNonExemptEncryption bool false"
-# Device family for the App Store listing. Default = iPhone-only (UIDeviceFamily=[1]) so the
-# v1.0 submission needs no iPad screenshots and Apple won't review an iPad layout (the app
-# still runs on iPad in compatibility mode). Set BIBLETEXT_IPAD=1 to ship universal later.
-if [ "${BIBLETEXT_IPAD:-0}" != "1" ]; then
+# Device family for the App Store listing. Since 1.1.0 the app ships UNIVERSAL
+# (UIDeviceFamily=[1,2] — iPhone + iPad, the runtime width-adaptive layout in
+# docs/IPAD.md), set explicitly rather than trusting fyne's default plist. App
+# Review does NOT allow an update to remove a shipped device family, so
+# iPhone-only (BIBLETEXT_IPAD=0) exists only for local experiments — an
+# iPhone-only upload would be rejected now that 1.1.0 is out.
+if [ "${BIBLETEXT_IPAD:-1}" != "0" ]; then
+    plutil -replace UIDeviceFamily -json '[1, 2]' "$APP/Info.plist"
+else
     PB "Delete :UIDeviceFamily" 2>/dev/null || true
     PB "Add :UIDeviceFamily array"
     PB "Add :UIDeviceFamily:0 integer 1"

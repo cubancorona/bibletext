@@ -96,16 +96,17 @@ the regular layout never appears. (The **App Store** device family is separate �
 see below.) `simctl io <udid> screenshot out.png` grabs the sim framebuffer
 directly, which is handy for capturing the layout.
 
-## Shipping to the App Store — still pending
+## Shipping to the App Store
 
-The App Store build is **still iPhone-only** (`UIDeviceFamily=[1]`), set by
-[`scripts/release-ios.sh`](../scripts/release-ios.sh). To ship the universal
-(iPad) build:
+Since **1.1.0** the release build ships **universal** (`UIDeviceFamily=[1,2]`):
+[`scripts/release-ios.sh`](../scripts/release-ios.sh) sets it explicitly, by
+default. App Review does **not** allow an update to remove a shipped device
+family, so the `BIBLETEXT_IPAD=0` iPhone-only escape hatch is for local
+experiments only — an iPhone-only upload would now be rejected.
 
-1. Build the release with `BIBLETEXT_IPAD=1` so `release-ios.sh` writes
-   `UIDeviceFamily=[1,2]`.
-2. Add **iPad screenshots** to App Store Connect (a new required display size).
-3. Re-check the layout on the iPad screen sizes ASC requires (12.9"/13" and 11").
+An App Store version with iPad support needs **iPad screenshots** in App Store
+Connect (the 13" display size is required; `simctl io <udid> screenshot` on an
+iPad Pro 13-inch simulator produces the right 2064×2752 PNGs directly, no bezel).
 
 ## Verified / not-yet-verified
 
