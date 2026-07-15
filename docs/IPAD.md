@@ -66,11 +66,14 @@ classifyLayout(width, isTablet):
 ### Reacting to width changes
 
 On a tablet, `CreateMainUI` wraps the root in **`layoutWatcher`** (`ui_regular.go`),
-a transparent widget that, on `Resize`, rebuilds the window if the new width
-crosses the breakpoint — rotation, Split View, or Stage Manager resizing. A burst
-of resizes during a live drag is coalesced into one rebuild. Phones are never
-wrapped (they never cross the breakpoint), so the phone path is byte-for-byte
-unchanged.
+a transparent widget that, on `Resize`, rebuilds the window on either of two
+triggers: the new width **crosses the compact/regular breakpoint** (Split View or
+Stage Manager resizing), or — while the layout is regular — the canvas **flips
+between portrait and landscape** (a full-screen iPad rotation never crosses the
+700pt breakpoint, so this second trigger is what re-applies the orientation-driven
+sidebar default and recomputes the split offset on rotation). A burst of resizes
+during a live drag is coalesced into one rebuild. Phones are never wrapped (they
+never hit either trigger), so the phone path is byte-for-byte unchanged.
 
 ## Why the native overlay "just works" in a split
 
