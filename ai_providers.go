@@ -35,6 +35,17 @@ type providerInfo struct {
 	// the returned client can self-heal its model (override → discovered → default,
 	// re-discovering on a model-not-found error). See modelResolver.
 	New func(store *keyStore, apiKey string) aiClient
+	// ListModels fetches the provider's CURRENT model list with the user's key —
+	// the same lister the self-heal uses. The settings sheet's model dropdown is
+	// populated from it live, so new models appear as soon as the provider
+	// publishes them, with no app update (and no free-typing of model ids).
+	ListModels modelLister
+	// ExtraModelExclude are provider-specific id substrings to keep OUT of the
+	// dropdown on top of the shared modelExcludeSubstrings — for models a provider
+	// lists but that don't work on its chat endpoint. Kept per-provider because
+	// the same token can be valid elsewhere (OpenAI "-pro" is Responses-only and
+	// 404s on chat, but Gemini's "gemini-2.5-pro" is a fine chat model).
+	ExtraModelExclude []string
 }
 
 const (
@@ -82,6 +93,7 @@ func aiProviders() []providerInfo {
 					build: func(m string) aiClient { return newGeminiClient(k, m) },
 				}
 			},
+			ListModels: listGeminiModels(geminiBaseURL),
 		},
 		{
 			ID: providerOpenAI, Name: "ChatGPT (OpenAI)", Model: openAIModel,
@@ -93,6 +105,10 @@ func aiProviders() []providerInfo {
 					build: func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
 				}
 			},
+			ListModels: listOpenAIModels(openAIBaseURL),
+			// OpenAI's "-pro" reasoning tier (gpt-5.x-pro, o*-pro) is Responses-API
+			// only and 404s on /chat/completions — keep it out of the dropdown.
+			ExtraModelExclude: []string{"-pro"},
 		},
 		{
 			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel,
@@ -104,6 +120,7 @@ func aiProviders() []providerInfo {
 					build: func(m string) aiClient { return newAnthropicClient(k, m) },
 				}
 			},
+			ListModels: listAnthropicModels(anthropicBaseURL),
 		},
 		{
 			ID: providerGrok, Name: "Grok (xAI)", Model: grokModel,
@@ -115,6 +132,7 @@ func aiProviders() []providerInfo {
 					build: func(m string) aiClient { return newOpenAIClient(k, grokBaseURL, m) },
 				}
 			},
+			ListModels: listOpenAIModels(grokBaseURL),
 		},
 	}
 }
