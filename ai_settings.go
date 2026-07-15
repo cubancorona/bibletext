@@ -196,21 +196,97 @@ func showAISettings(state *AppState) {
 
 		// Until (or unless) the live list arrives, the choices are Recommended
 		// plus any model already pinned, so the control is honest offline too.
-		startOptions := []string{recommended}
+		options := []string{recommended}
+		selected := recommended
 		if ov := store.overrideModel(id); ov != "" {
-			startOptions = append(startOptions, ov)
+			options = append(options, ov)
+			selected = ov
 		}
-		modelSelect := widget.NewSelect(startOptions, func(sel string) {
+
+		// The model control is a button that opens a MODAL picker (title + ✕ +
+		// a scrollable list), NOT a raw widget.Select: with ~20 live models the
+		// Select's popup fills the entire phone screen, leaving no visible
+		// "outside" to tap and no way to back out without picking something
+		// (observed in practice on iPhone). The modal matches the app's chapter-picker
+		// convention and always shows an explicit close.
+		var pickerPop *widget.PopUp
+		var pickerList *widget.List
+		modelBtn := widget.NewButtonWithIcon(selected, theme.MenuDropDownIcon(), nil)
+		modelBtn.Alignment = widget.ButtonAlignLeading
+		applyChoice := func(sel string) {
 			if sel == recommended {
 				store.setOverrideModel(id, "")
 			} else if sel != "" {
 				store.setOverrideModel(id, sel)
 			}
-		})
-		if ov := store.overrideModel(id); ov != "" {
-			modelSelect.SetSelected(ov)
-		} else {
-			modelSelect.SetSelected(recommended)
+			selected = sel
+			modelBtn.SetText(sel)
+		}
+		closePicker := func() {
+			if pickerPop != nil {
+				pickerPop.Hide()
+				pickerPop = nil
+			}
+			pickerList = nil
+		}
+		modelBtn.OnTapped = func() {
+			const rowHeight = 44 // touch-sized rows, like the mobile book list
+			list := widget.NewList(
+				func() int { return len(options) },
+				func() fyne.CanvasObject {
+					l := canvas.NewText("", pal.Text)
+					l.TextSize = 14
+					return container.NewPadded(l)
+				},
+				func(i widget.ListItemID, o fyne.CanvasObject) {
+					if i < 0 || i >= len(options) {
+						return
+					}
+					l := o.(*fyne.Container).Objects[0].(*canvas.Text)
+					l.Text = options[i]
+					if options[i] == selected {
+						l.Color = pal.Accent
+						l.TextStyle = fyne.TextStyle{Bold: true}
+					} else {
+						l.Color = pal.Text
+						l.TextStyle = fyne.TextStyle{}
+					}
+					l.Refresh()
+				})
+			for i := 0; i < len(options); i++ {
+				list.SetItemHeight(widget.ListItemID(i), rowHeight)
+			}
+			list.OnSelected = func(i widget.ListItemID) {
+				if i < 0 || i >= len(options) {
+					return
+				}
+				applyChoice(options[i])
+				closePicker()
+			}
+			pickerList = list
+
+			title := canvas.NewText("Model", pal.Text)
+			title.TextSize = 16
+			title.TextStyle = fyne.TextStyle{Bold: true}
+			x := widget.NewButtonWithIcon("", theme.CancelIcon(), closePicker)
+			x.Importance = widget.LowImportance
+			hdr := container.NewBorder(nil, nil, container.NewCenter(title), x)
+			card := surface(container.NewBorder(hdr, nil, nil, nil, list), pal.Surface, pal.Border, fyne.Size{})
+
+			pickerPop = widget.NewModalPopUp(card, cnv)
+			pickerPop.Show()
+			// Size to the content but ALWAYS leave a margin, so it reads as a
+			// sheet floating over the settings — never a full-screen takeover.
+			cs := cnv.Size()
+			w := min(cs.Width-48, 420)
+			h := min(cs.Height-140, float32(len(options))*rowHeight+72)
+			pickerPop.Resize(fyne.NewSize(w, h))
+			for i, o := range options {
+				if o == selected {
+					list.ScrollTo(widget.ListItemID(i))
+					break
+				}
+			}
 		}
 
 		// fetchModels populates the dropdown from the provider's live list. Guards:
@@ -252,13 +328,16 @@ func showAISettings(state *AppState) {
 						opts = append(opts, cur) // a pin the provider no longer lists stays visible
 					}
 					opts = append(opts, ids...)
-					modelSelect.Options = opts
+					options = opts
 					if cur != "" {
-						modelSelect.Selected = cur
+						selected = cur
 					} else {
-						modelSelect.Selected = recommended
+						selected = recommended
 					}
-					modelSelect.Refresh()
+					modelBtn.SetText(selected)
+					if pickerList != nil {
+						pickerList.Refresh() // live list landed while the picker is open
+					}
 				})
 			}()
 		}
@@ -287,7 +366,7 @@ func showAISettings(state *AppState) {
 				result,
 				spacer(8),
 				modelCaption,
-				modelSelect,
+				modelBtn,
 			),
 		}
 		keyArea.Refresh()
