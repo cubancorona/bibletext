@@ -48,6 +48,14 @@ echo "==> fyne package -os iossimulator"
 # only reliably testable on a device via run-ios-device.sh.)
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.plist"
 
+# Ship the sim build as universal (iPhone + iPad) so it runs NATIVELY on an iPad
+# simulator — otherwise the iPad runs it in iPhone compatibility mode, where the
+# interface idiom reports iPhone and the regular-width (tablet) layout never
+# appears. The App Store device family is controlled separately by release-ios.sh
+# (BIBLETEXT_IPAD), so this only affects local simulator runs. Test the iPad
+# layout with e.g. BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)".
+plutil -replace UIDeviceFamily -json '[1, 2]' "$APP_DIR/$APP_NAME/Info.plist"
+
 # Fyne builds the simulator binary for min iOS 7.0, which modern Simulator
 # runtimes reject ("This app needs to be updated by the developer"). Rewrite the
 # Mach-O build-version to a current minimum and re-sign (ad-hoc) so it installs.
@@ -56,17 +64,22 @@ xcrun vtool -arch "$(uname -m)" -set-build-version 7 15.0 18.0 -replace \
     || echo "==> vtool min-version bump skipped (older Simulator? continuing)" >&2
 codesign --force --sign - "$APP_DIR/$APP_NAME" >/dev/null 2>&1 || true
 
+# A simulator UDID is a 36-char dashed hex string. We extract it by that pattern
+# rather than by field position: device names can contain parentheses (e.g.
+# "iPad Pro 11-inch (M5)"), which broke a naive `-F'[()]'` split — it grabbed the
+# "M5" chip token instead of the UDID.
+udid_re='[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}'
+
 # Boot the requested simulator if not already booted. Match only devices in the
 # iOS runtime sections — a booted watchOS/tvOS simulator must not hijack the install.
-BOOTED=$(xcrun simctl list devices booted | awk -F'[()]' '/^-- iOS/{ios=1; next} /^--/{ios=0} ios && /\(Booted\)/ {print $2; exit}')
+BOOTED=$(xcrun simctl list devices booted | awk '/^-- iOS/{ios=1; next} /^--/{ios=0} ios && /\(Booted\)/ {print; exit}' | grep -oE "$udid_re" | head -1)
 if [ -z "${BOOTED:-}" ]; then
-    DEVICE_UDID=$(xcrun simctl list devices available | awk -F'[()]' -v name="$DEVICE_NAME" '
-        $0 ~ name "[[:space:]]*\\(" { print $2; exit }')
+    DEVICE_UDID=$(xcrun simctl list devices available | grep -F "$DEVICE_NAME (" | grep -oE "$udid_re" | head -1)
     if [ -z "${DEVICE_UDID:-}" ]; then
         # Requested device isn't available (e.g. a newer Xcode ships newer
         # models and dropped "$DEVICE_NAME"). Fall back to the first available
         # iPhone simulator so the script keeps working across Xcode versions.
-        DEVICE_UDID=$(xcrun simctl list devices available | awk -F'[()]' '/iPhone.*\(/ {print $2; exit}')
+        DEVICE_UDID=$(xcrun simctl list devices available | grep -E 'iPhone.*\(' | grep -oE "$udid_re" | head -1)
         [ -n "${DEVICE_UDID:-}" ] && echo "==> '$DEVICE_NAME' unavailable; using first available iPhone" >&2
     fi
     if [ -z "${DEVICE_UDID:-}" ]; then
