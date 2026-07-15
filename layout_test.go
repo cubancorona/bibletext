@@ -36,3 +36,33 @@ func TestClassifyLayoutPhoneNeverRegular(t *testing.T) {
 		}
 	}
 }
+
+func TestRegularSplitOffset(t *testing.T) {
+	// Across every regular-layout width the resulting sidebar stays within a
+	// sensible band — never a sliver, never a crushing majority.
+	for _, w := range []float32{700, 744, 834, 1024, 1194, 1366, 2048} {
+		off := regularSplitOffset(w)
+		if off < regularSidebarMinFrac-1e-9 || off > regularSidebarMaxFrac+1e-9 {
+			t.Errorf("width %v: offset %v out of [%v,%v]", w, off, regularSidebarMinFrac, regularSidebarMaxFrac)
+		}
+		sidebarPt := off * float64(w)
+		if sidebarPt < 200 {
+			t.Errorf("width %v: sidebar %vpt too narrow", w, sidebarPt)
+		}
+	}
+	// A big canvas is clamped to the max fraction, not left as a sliver.
+	if got := regularSplitOffset(4000); got != regularSidebarMaxFrac && got != regularSidebarMinFrac {
+		// 250/4000 = 0.0625 < min → clamps to the min fraction.
+		if got != regularSidebarMinFrac {
+			t.Errorf("huge canvas should clamp to min frac, got %v", got)
+		}
+	}
+	// A mid canvas hits the target width (~250pt) exactly, not a clamp.
+	if got := regularSplitOffset(1000); got != float64(regularSidebarTargetPt/1000) {
+		t.Errorf("mid canvas should target ~250pt, got frac %v (=%vpt)", got, got*1000)
+	}
+	// Unknown width (pre-layout) falls back to the max fraction.
+	if got := regularSplitOffset(0); got != regularSidebarMaxFrac {
+		t.Errorf("width 0 should fall back to max frac, got %v", got)
+	}
+}

@@ -50,9 +50,42 @@ func classifyLayout(width float32, isTablet bool) layoutClass {
 // the device idiom. Safe before the window/canvas exists (treated as unknown
 // width → the idiom decides).
 func (s *AppState) layoutClass() layoutClass {
-	var width float32
+	return classifyLayout(s.canvasWidth(), deviceIsTablet())
+}
+
+// canvasWidth is the current canvas width in logical points, or 0 before the
+// window/canvas exists.
+func (s *AppState) canvasWidth() float32 {
 	if s != nil && s.window != nil {
-		width = s.window.Canvas().Size().Width
+		return s.window.Canvas().Size().Width
 	}
-	return classifyLayout(width, deviceIsTablet())
+	return 0
+}
+
+// Sidebar sizing for the regular layout. We aim for a fixed ~logical-point width
+// rather than a fixed fraction, so the navigation panel stays a comfortable,
+// consistent size whether it's an iPad mini or a 13" iPad in landscape — a fixed
+// fraction would make the sidebar balloon on the big canvases.
+const (
+	regularSidebarTargetPt float32 = 250
+	regularSidebarMinFrac  float64 = 0.18
+	regularSidebarMaxFrac  float64 = 0.30
+)
+
+// regularSplitOffset returns the HSplit offset (sidebar fraction of width) that
+// yields ~regularSidebarTargetPt of sidebar, clamped so it is never a sliver on a
+// huge canvas nor a crushing majority on a small one. width<=0 (canvas not sized
+// yet) falls back to the max fraction, matching the small-canvas default.
+func regularSplitOffset(width float32) float64 {
+	if width <= 0 {
+		return regularSidebarMaxFrac
+	}
+	frac := float64(regularSidebarTargetPt / width)
+	if frac < regularSidebarMinFrac {
+		return regularSidebarMinFrac
+	}
+	if frac > regularSidebarMaxFrac {
+		return regularSidebarMaxFrac
+	}
+	return frac
 }
