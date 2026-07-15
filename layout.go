@@ -62,6 +62,36 @@ func (s *AppState) canvasWidth() float32 {
 	return 0
 }
 
+// canvasIsLandscape reports whether the canvas is wider than it is tall. Before
+// the canvas is sized it reports true (landscape) so the sidebar defaults to
+// shown rather than flashing collapsed. See resolveSidebarDefault.
+func (s *AppState) canvasIsLandscape() bool {
+	if s == nil || s.window == nil {
+		return true
+	}
+	sz := s.window.Canvas().Size()
+	if sz.Width <= 0 || sz.Height <= 0 {
+		return true
+	}
+	return sz.Width >= sz.Height
+}
+
+// resolveSidebarDefault applies the orientation-driven sidebar default for the
+// regular layout: shown in landscape, collapsed in portrait. It is applied only
+// the first time the regular layout is built and thereafter whenever the
+// orientation flips — so a rotation re-asserts the default, while an explicit
+// toggle of state.sidebarCollapsed (same orientation) is preserved. Returns the
+// resolved collapsed state and records the orientation it was resolved for.
+func (s *AppState) resolveSidebarDefault() bool {
+	landscape := s.canvasIsLandscape()
+	if !s.sidebarInit || landscape != s.sidebarLandscape {
+		s.sidebarCollapsed = !landscape // portrait → collapsed by default
+		s.sidebarLandscape = landscape
+		s.sidebarInit = true
+	}
+	return s.sidebarCollapsed
+}
+
 // Sidebar sizing for the regular layout. We aim for a fixed ~logical-point width
 // rather than a fixed fraction, so the navigation panel stays a comfortable,
 // consistent size whether it's an iPad mini or a 13" iPad in landscape — a fixed

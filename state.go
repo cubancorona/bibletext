@@ -69,6 +69,17 @@ type AppState struct {
 	// repaint) rather than swapping a content host in place.
 	CurrentTab int
 
+	// Regular (iPad) layout sidebar visibility. sidebarCollapsed hides the
+	// navigation sidebar so the reading pane gets the full width; the header's
+	// sidebar-toggle button (iconSidebarLeft) flips it. By DEFAULT it follows
+	// orientation — shown in landscape, collapsed in portrait — re-applied
+	// whenever the orientation changes (sidebarInit / sidebarLandscape track
+	// that), while an explicit toggle sticks until the next rotation. Only
+	// meaningful in the regular layout; the compact and desktop layouts ignore it.
+	sidebarCollapsed bool
+	sidebarInit      bool // has the orientation default been applied at least once?
+	sidebarLandscape bool // the orientation the current default/choice was set for
+
 	// aiSearchMode is the Search tab's mode: false = keyword search, true = the
 	// natural-language "Find" passage search. Kept on state so the chosen mode
 	// survives the window rebuilds that tab switches trigger.

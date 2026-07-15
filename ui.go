@@ -28,6 +28,23 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// TESTING badge when a version is showing placeholder text (see versions.go).
 	left := container.NewVBox(title, versionSelector(state))
 
+	// On the regular (iPad) layout, a leading sidebar-toggle button (the platform
+	// sidebar.left convention) hides/shows the navigation sidebar so the reader can
+	// reclaim the full width. Only there: desktop has its own always-on sidebar,
+	// and the compact layout uses bottom tabs. Toggling flips state.sidebarCollapsed
+	// and rebuilds (buildRegularWidthUI reads it); resolveSidebarDefault preserves
+	// the choice within the current orientation.
+	if state.layoutClass() == layoutRegular {
+		sidebarBtn := widget.NewButtonWithIcon("", iconSidebarLeft, func() {
+			state.sidebarCollapsed = !state.sidebarCollapsed
+			rebuildWindow(state)
+		})
+		sidebarBtn.Importance = widget.LowImportance
+		// Vertically centre the toggle against the title + version stack.
+		btnCol := container.NewVBox(layout.NewSpacer(), sidebarBtn, layout.NewSpacer())
+		left = container.NewHBox(btnCol, left)
+	}
+
 	// Settings gear (AI study: pick a provider + paste your key) sits beside the
 	// subtle verse-of-the-day sparkle. Both are low-importance so the chrome stays
 	// quiet next to the reading text.
