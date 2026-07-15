@@ -13,8 +13,12 @@ The whole shared codebase is **one Go library package, `bibletext`** (every
 `go run .` here. Two thin entry points under `cmd/` consume it:
 
 - `cmd/desktop/main.go` — desktop window (HSplit + sidebar + keyboard shortcuts).
-- `cmd/mobile/main.go` — iOS / Android (bottom tabs + touch); the OS owns the
-  window size and the Bible loads on a background goroutine behind a spinner.
+- `cmd/mobile/main.go` — iOS / Android; the OS owns the window size and the
+  Bible loads on a background goroutine behind a spinner. The mobile build picks
+  its chrome **at runtime** by canvas width: phones (and narrow iPad
+  multitasking columns) get the compact bottom-tab layout, a wide iPad gets the
+  regular sidebar+split layout (see UI architecture below and
+  [docs/IPAD.md](docs/IPAD.md)).
 
 Per-platform behaviour is selected at compile time by **Go build tags**, not at
 runtime, so each target links only the drivers and native code it needs:
@@ -22,7 +26,7 @@ runtime, so each target links only the drivers and native code it needs:
 | Tag | Platforms | Examples |
 | --- | --- | --- |
 | `!ios && !android` | desktop (macOS/Win/Linux) | `ui_desktop.go` |
-| `ios \|\| android` | mobile | `ui_mobile.go` |
+| `ios \|\| android` | mobile | `ui_mobile.go`, `ui_regular.go` |
 | `darwin && !ios` | macOS only | `reading_macos.go` (cgo) |
 | `ios` | iOS only | `reading_ios.go` (cgo) |
 | `android` | Android only | `reading_android.go`, `audio_android.go` (cgo/JNI) |
@@ -134,10 +138,13 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
-| `ui.go` | Shared header, theme toggle, loading/error views |
+| `ui.go` | Shared header (incl. the iPad sidebar-toggle button), loading/error views |
 | `ui_desktop.go` | `!ios && !android` — `CreateMainUI` (HSplit + sidebar) + keyboard shortcuts |
-| `ui_mobile.go` | `ios \|\| android` — `CreateMainUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
-| `sidebar.go` | Desktop sidebar: search box, book filter, book list |
+| `ui_mobile.go` | `ios \|\| android` — `CreateMainUI` picks compact vs regular at runtime; `buildCompactUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
+| `ui_regular.go` | `ios \|\| android` — `buildRegularWidthUI`, the iPad sidebar+split layout (native reading overlay in the right pane) + `layoutWatcher` (rebuild on breakpoint crossing, or orientation flip while regular) |
+| `layout.go` | Untagged: `classifyLayout` (compact vs regular by width+idiom, breakpoint 700pt), `regularSplitOffset` (~250pt sidebar), the orientation-driven sidebar default (`resolveSidebarDefault`) |
+| `device_ios.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; false elsewhere |
+| `sidebar.go` | Navigation sidebar (desktop + iPad regular layout): search box, AI Find, book filter, book list |
 | `reading.go` | Reading-pane scaffolding: header (incl. the audio control on Apple platforms), chapter HTML build, `chapterRenderFingerprint`, `rebuildWindow` |
 | `audio_button.go` | The reading-header audio control: collapsed speaker → expanded mini-player (source indicator + ±15s skip + play/pause), self-refreshing host (no pane rebuild) |
 | `audio_menu.go` | Source picker popup — choose recorded narration ↔ read-aloud (sets the preference; never auto-plays) |
@@ -198,13 +205,22 @@ real files; `*_test.go` files are omitted.
 | `share_other.go` | `!darwin && !android` no-op stubs for `nativeShareText` / `nativeShareImage` (Android's live in `reading_android.go`) |
 
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
-build — the Go build tag picks the layout with no runtime branching.
+build — the Go build tag picks the *platform*. The mobile build then branches
+**at runtime** between the compact (phone) and regular (iPad sidebar+split)
+layouts by live canvas width (`classifyLayout`, `layout.go`); a `layoutWatcher`
+rebuilds the window when a resize crosses the 700pt breakpoint, or — while the
+regular layout is up — flips orientation. Desktop has no runtime branching.
 
 ## UI architecture
 
 The window is built once by `CreateMainUI`. On desktop the split, header, and
 **sidebar are persistent**; only the reading/results pane is swapped on
-navigation. `AppState` holds function hooks that the widgets install:
+navigation. The iPad regular layout reuses the same sidebar and header beside
+the mobile **native** reading overlay, with a header toggle (and an
+orientation-driven default: shown in landscape, collapsed in portrait) that
+hides the sidebar for full-width reading — collapsing while a search is active
+ends the search, since the search field lives in the sidebar. `AppState` holds
+function hooks that the widgets install:
 
 - `showReading()` — rebuild only the reading/results pane.
 - `syncSidebar()` — re-highlight the current book (no entry rebuilds).

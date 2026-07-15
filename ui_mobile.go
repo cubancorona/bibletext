@@ -55,11 +55,37 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	// Distraction-free reading mode: the entire window becomes the reading
 	// pane plus a small exit affordance — no top header, no bottom tabs.
 	// On iOS the native UITextView overlay therefore fills nearly the whole
-	// screen.
+	// screen. (Layout-agnostic: a tablet in full-screen reading looks the same
+	// as a phone, so there is no sidebar to add here.)
 	if state.IsFullScreen {
 		base := canvas.NewRectangle(pal.Background)
 		return container.NewStack(base, buildReadingViewMobile(state))
 	}
+
+	// Pick the layout from the live canvas width: a wide-enough tablet gets the
+	// regular sidebar+split layout (ui_regular.go); everything else (phones, and
+	// a tablet squeezed into a narrow multitasking column) gets the compact
+	// bottom-tab layout below.
+	var root fyne.CanvasObject
+	if state.layoutClass() == layoutRegular {
+		root = buildRegularWidthUI(state)
+	} else {
+		root = buildCompactUI(state)
+	}
+
+	// On a tablet, wrap the root so a width change that crosses the breakpoint
+	// (rotation, or resizing a Split View / Stage Manager column) rebuilds into
+	// the other layout. Phones never cross it, so their path is unchanged.
+	if deviceIsTablet() {
+		return newLayoutWatcher(state, root)
+	}
+	return root
+}
+
+// buildCompactUI is the phone (and narrow-tablet) layout: the app header on top,
+// a full-screen tab body (Read / Books / Search), and the compact bottom tab bar.
+func buildCompactUI(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
 
 	// gotoReadTab is used by Books/Search to jump back to the reading pane after
 	// the user picks a book or a search result. We rebuild the window on every
@@ -77,7 +103,8 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		rebuildWindow(state)
 	}
 
-	// On mobile we don't have a sidebar to re-highlight; syncSidebar is a no-op.
+	// In the compact layout there is no sidebar to re-highlight; syncSidebar is a
+	// no-op. (The regular layout's buildSidebar wires a real one.)
 	state.syncSidebar = func() {}
 
 	// Build only the active tab's content — the others are constructed on
@@ -118,15 +145,23 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 
 // overlayShouldShow is the single source of truth for native reading-overlay
 // visibility on mobile: the iOS UITextView must be visible exactly when the
-// reading view is the content actually on screen — the Read tab with no active
-// search, or distraction-free full-screen reading. Every place that toggles the
+// reading view is the content actually on screen. Every place that toggles the
 // overlay derives the answer from here, and afterRebuild re-asserts it as the
 // last word after each window rebuild, so a stray async show/hide during the
-// rebuild can't leave the overlay floating over the Books/Search tabs as a
-// blank (black) rectangle.
+// rebuild can't leave the overlay floating over the wrong content as a blank
+// (black) rectangle.
+//
+//   - Full-screen (distraction-free) reading: always show.
+//   - Regular (tablet) layout: the reading pane is always beside the sidebar, so
+//     show whenever a search's results aren't occupying it.
+//   - Compact layout: only the Read tab hosts the reading pane, and only when no
+//     search is active.
 func overlayShouldShow(state *AppState) bool {
 	if state.IsFullScreen {
 		return true
+	}
+	if state.layoutClass() == layoutRegular {
+		return !state.IsSearching
 	}
 	return state.CurrentTab == 0 && !state.IsSearching
 }
