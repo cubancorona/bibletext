@@ -50,7 +50,15 @@ func friendlyAIError(err error) string {
 	}
 	var mg modelGoneError
 	if errors.As(err, &mg) {
-		return "The AI model is no longer available. Open AI settings to pick a current model, or update the app."
+		// Most often a PINNED model the key can't invoke (providers list models —
+		// e.g. Gemini's pro tier — that some keys aren't entitled to call), or a
+		// retired default with no discoverable replacement. Name the model and
+		// point at the fix; the model picker sits in AI settings (and right below
+		// this message when it appears in the settings sheet's Test key result).
+		if mg.tried != "" {
+			return "The model “" + mg.tried + "” isn't available with your key. In AI settings, pick a different model — or “Recommended”, which keeps itself current."
+		}
+		return "That AI model isn't available with your key. In AI settings, pick a different model — or “Recommended”, which keeps itself current."
 	}
 	if errors.Is(err, errNoAPIKey) {
 		return "No API key configured. Open AI settings to add one."
@@ -61,6 +69,12 @@ func friendlyAIError(err error) string {
 		case http.StatusTooManyRequests:
 			return "The AI service is busy right now — please try again in a moment."
 		case http.StatusBadRequest:
+			// Google rejects an invalid key with 400 ("API key not valid…"), not
+			// 401 — sniff the detail so a bad key doesn't read as "selection too
+			// long" (observed in practice from the settings sheet's Test key).
+			if strings.Contains(strings.ToLower(apiErr.Details), "api key") {
+				return "That API key was rejected. Check it in AI settings."
+			}
 			return "The AI couldn't process that selection. It may be too long — try a shorter passage."
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return "That API key was rejected. Check it in AI settings."
