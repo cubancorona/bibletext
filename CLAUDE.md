@@ -69,6 +69,37 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   `darwin` / `darwin && !ios` for native code. gopls only analyses the host
   build, so iOS-tagged files look greyed-out in the editor — that's expected;
   validate them with the `fyne package -os iossimulator` task.
+- **The mobile UI picks its layout at RUNTIME, not by build tag (iPad).** The one
+  mobile binary serves phones and tablets. `CreateMainUI` (`ui_mobile.go`) calls
+  `state.layoutClass()` (`layout.go`): a wide-enough iPad gets the **regular**
+  layout — a persistent sidebar beside the reading pane (`buildRegularWidthUI`,
+  `ui_regular.go`: an `HSplit` + the app header, structurally the desktop layout)
+  — while phones, and an iPad squeezed into a narrow multitasking column, get the
+  **compact** bottom-tab layout (`buildCompactUI`). `classifyLayout(width,
+  isTablet)` decides: tablets (`deviceIsTablet()` = the iOS UIKit idiom,
+  `device_ios.go`; false elsewhere so Android tablets/desktop are untouched) at
+  ≥ `tabletLayoutMinWidth` (700pt) are regular. **The regular layout still uses
+  the mobile NATIVE reading overlay** (`buildReadingViewMobile` via
+  `rebuildMobileReadingPane`), so selection / Study-with-AI / scroll persistence
+  are unchanged; the overlay tracks the reading host's real absolute rect
+  (`setFrameFromObject`), so it sits over just the right pane with no
+  split-specific frame math. On a tablet, `layoutWatcher` wraps the root and
+  rebuilds the window when a width change crosses the breakpoint (rotation /
+  Split View / Stage Manager); phones never cross it, so their path is unchanged.
+  `overlayShouldShow` is layout-aware (regular → visible whenever search results
+  aren't occupying the pane). The regular layout's sidebar is **hideable**: a
+  header toggle (`iconSidebarLeft`) flips `state.sidebarCollapsed`, and the
+  default follows orientation (landscape shown / portrait collapsed,
+  `resolveSidebarDefault` — re-asserted on rotation, an explicit toggle sticks
+  within an orientation). **Invariant:** the search/Find field lives only in the
+  sidebar, so collapsing while `IsSearching` clears the search (also discarding
+  any in-flight AI Find via `aiSearchActive`), and `surfaceSearch` re-shows the
+  sidebar. To exercise the iPad layout in the simulator:
+  `BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)" scripts/run-ios-sim.sh` (the sim
+  build is packaged universal so the iPad runs it natively, idiom=pad, not iPhone
+  compatibility mode). Sim quirk: synthetic `type` into Fyne entries is flaky —
+  use per-key presses. Release builds ship universal (`release-ios.sh`) — see
+  [`docs/IPAD.md`](docs/IPAD.md).
 - **Native text overlays (cgo).** On macOS the reading pane is a native
   `NSTextView` and on iOS a `UITextView`, floating *above* the Fyne canvas
   (`reading_macos.go` / `reading_ios.go`, Objective-C in the cgo preamble).
@@ -129,7 +160,7 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   shows a prose answer grounded in the selection (`buildAskPrompt`). Providers (Gemini /
   OpenAI / Anthropic / Grok) live in `ai_providers.go`; keys are stored on-device via
   `keyStore` (`ai_keystore.go`) over `fyne.Preferences`, with `<PROVIDER>_API_KEY` env
-  vars overriding. Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
+  vars overriding (Grok's is `XAI_API_KEY`, not GROK_). Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
   `ai.go` (shared preamble + per-action task + the quoted selection; the fixed actions
   documented in README → "AI study"). `runAIAction` threads the Ask question and folds
   it into the cache scope. Settings sheet: `ai_settings.go` (header gear). Result panel:

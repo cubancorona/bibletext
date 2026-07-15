@@ -21,6 +21,9 @@ var skipBack15SVG []byte
 //go:embed assets/icons/skip_fwd_15.svg
 var skipFwd15SVG []byte
 
+//go:embed assets/icons/sidebar_left.svg
+var sidebarLeftSVG []byte
+
 // iconAudioWave is the "read aloud / text-to-speech" source glyph (a small
 // equalizer-style waveform), marking a chapter played by on-device speech as
 // distinct from a recorded human narration (which uses theme.AccountIcon, a
@@ -47,4 +50,16 @@ var iconSkipFwd15 fyne.Resource = func() fyne.Resource {
 		return theme.MediaFastForwardIcon()
 	}
 	return fyne.NewStaticResource("skip_fwd_15.svg", skipFwd15SVG)
+}()
+
+// iconSidebarLeft is the iPad "toggle navigation sidebar" glyph (a rounded frame
+// with a filled left column — the platform sidebar.left convention). Wrapped as a
+// themed resource so it tints to the chrome foreground like the built-in header
+// icons (the gear, etc.). Falls back to the hamburger MenuIcon if the asset is
+// missing. Used only by the regular-width (tablet) header (ui.go).
+var iconSidebarLeft fyne.Resource = func() fyne.Resource {
+	if len(sidebarLeftSVG) == 0 {
+		return theme.MenuIcon()
+	}
+	return theme.NewThemedResource(fyne.NewStaticResource("sidebar_left.svg", sidebarLeftSVG))
 }()

@@ -1,0 +1,121 @@
+package bibletext
+
+// Responsive layout classification. The mobile binary (iOS/Android) runs on both
+// phones and tablets; which chrome it shows is decided at runtime from the live
+// canvas width, not a build tag. An iPad at full width (or a wide multitasking
+// split) gets the regular layout — a persistent sidebar beside the reading pane,
+// like the desktop — while a phone, or an iPad squeezed into a narrow Slide
+// Over / Split View column, gets the compact bottom-tab layout.
+//
+// classifyLayout is pure so it can be unit-tested on the host; the AppState
+// method feeds it the real canvas width and device idiom.
+
+type layoutClass int
+
+const (
+	// layoutCompact is the phone layout: full-screen tabs (Read / Books / Search)
+	// across the bottom. Used on all phones and on tablets too narrow for a split.
+	layoutCompact layoutClass = iota
+	// layoutRegular is the tablet layout: a persistent navigation sidebar beside
+	// the reading pane (an HSplit), with the app header on top.
+	layoutRegular
+)
+
+// tabletLayoutMinWidth is the canvas width (in logical points) at or above which
+// a tablet switches to the regular sidebar+split layout. Below it, even on an
+// iPad (e.g. a 1/2 or 1/3 multitasking column), the sidebar would crowd the
+// reading column, so the compact layout is used instead.
+//
+// Chosen so an iPad mini in portrait (744pt) clears the bar while a typical
+// half-width multitasking column on an 11" iPad (~397pt portrait, ~507pt
+// landscape) stays compact.
+const tabletLayoutMinWidth float32 = 700
+
+// classifyLayout decides the layout class from the current canvas width and
+// whether the device is a tablet. Phones are always compact. A tablet is regular
+// when it has the width for it; the width<=0 case (before the first layout pass,
+// when the canvas has no size yet) trusts the tablet idiom so an iPad's first
+// real frame is already the regular layout.
+func classifyLayout(width float32, isTablet bool) layoutClass {
+	if !isTablet {
+		return layoutCompact
+	}
+	if width <= 0 || width >= tabletLayoutMinWidth {
+		return layoutRegular
+	}
+	return layoutCompact
+}
+
+// layoutClass reports the layout to use right now, from the live canvas width and
+// the device idiom. Safe before the window/canvas exists (treated as unknown
+// width → the idiom decides).
+func (s *AppState) layoutClass() layoutClass {
+	return classifyLayout(s.canvasWidth(), deviceIsTablet())
+}
+
+// canvasWidth is the current canvas width in logical points, or 0 before the
+// window/canvas exists.
+func (s *AppState) canvasWidth() float32 {
+	if s != nil && s.window != nil {
+		return s.window.Canvas().Size().Width
+	}
+	return 0
+}
+
+// canvasIsLandscape reports whether the canvas is wider than it is tall. Before
+// the canvas is sized it reports true (landscape) so the sidebar defaults to
+// shown rather than flashing collapsed. See resolveSidebarDefault.
+func (s *AppState) canvasIsLandscape() bool {
+	if s == nil || s.window == nil {
+		return true
+	}
+	sz := s.window.Canvas().Size()
+	if sz.Width <= 0 || sz.Height <= 0 {
+		return true
+	}
+	return sz.Width >= sz.Height
+}
+
+// resolveSidebarDefault applies the orientation-driven sidebar default for the
+// regular layout: shown in landscape, collapsed in portrait. It is applied only
+// the first time the regular layout is built and thereafter whenever the
+// orientation flips — so a rotation re-asserts the default, while an explicit
+// toggle of state.sidebarCollapsed (same orientation) is preserved. Returns the
+// resolved collapsed state and records the orientation it was resolved for.
+func (s *AppState) resolveSidebarDefault() bool {
+	landscape := s.canvasIsLandscape()
+	if !s.sidebarInit || landscape != s.sidebarLandscape {
+		s.sidebarCollapsed = !landscape // portrait → collapsed by default
+		s.sidebarLandscape = landscape
+		s.sidebarInit = true
+	}
+	return s.sidebarCollapsed
+}
+
+// Sidebar sizing for the regular layout. We aim for a fixed ~logical-point width
+// rather than a fixed fraction, so the navigation panel stays a comfortable,
+// consistent size whether it's an iPad mini or a 13" iPad in landscape — a fixed
+// fraction would make the sidebar balloon on the big canvases.
+const (
+	regularSidebarTargetPt float32 = 250
+	regularSidebarMinFrac  float64 = 0.18
+	regularSidebarMaxFrac  float64 = 0.30
+)
+
+// regularSplitOffset returns the HSplit offset (sidebar fraction of width) that
+// yields ~regularSidebarTargetPt of sidebar, clamped so it is never a sliver on a
+// huge canvas nor a crushing majority on a small one. width<=0 (canvas not sized
+// yet) falls back to the max fraction, matching the small-canvas default.
+func regularSplitOffset(width float32) float64 {
+	if width <= 0 {
+		return regularSidebarMaxFrac
+	}
+	frac := float64(regularSidebarTargetPt / width)
+	if frac < regularSidebarMinFrac {
+		return regularSidebarMinFrac
+	}
+	if frac > regularSidebarMaxFrac {
+		return regularSidebarMaxFrac
+	}
+	return frac
+}
