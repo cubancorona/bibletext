@@ -293,7 +293,8 @@ A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 ### What gets sent
 
 Each action builds one prompt (`buildAIPrompt` in `ai.go`) and sends it as a
-single user message at temperature `0.4`, capped at `4096` output tokens.
+single user message capped at `4096` output tokens (Gemini / ChatGPT / Grok
+requests are sent at temperature `0.4`; Claude uses the provider's default).
 Identical requests are cached in memory, so re-opening the same analysis does not
 re-send. Only the text you selected — plus the book and chapter it came from — and
 the fixed instructions below ever leave the device:
@@ -342,7 +343,7 @@ bibletext/
 │   ├── layout.go device_ios.go device_other.go               (compact/regular runtime classifier)
 │   ├── reading_macos.go reading_ios.go reading_android.go     (native reading overlays)
 │   ├── audio_macos.go audio_ios.go audio_android.go           (native audio engines)
-│   └── app.go              # Run() + LoadAndPrepareState() shared entry helpers
+│   └── app.go              # Run() / NewLoadingState() / StartBackgroundLoad() entry helpers
 ├── android/                # Java half of the Android bridge (compiled to
 │   │                       # classes2.dex by scripts/build-android.sh)
 │   ├── BtBridge.java       # selectable reading overlay + selection menu + share

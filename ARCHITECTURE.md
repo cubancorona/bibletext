@@ -138,10 +138,10 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
-| `ui.go` | Shared header (incl. the iPad sidebar-toggle button), theme toggle, loading/error views |
+| `ui.go` | Shared header (incl. the iPad sidebar-toggle button), loading/error views |
 | `ui_desktop.go` | `!ios && !android` — `CreateMainUI` (HSplit + sidebar) + keyboard shortcuts |
 | `ui_mobile.go` | `ios \|\| android` — `CreateMainUI` picks compact vs regular at runtime; `buildCompactUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
-| `ui_regular.go` | `ios \|\| android` — `buildRegularWidthUI`, the iPad sidebar+split layout (native reading overlay in the right pane) + `layoutWatcher` (rebuild on breakpoint/orientation change) |
+| `ui_regular.go` | `ios \|\| android` — `buildRegularWidthUI`, the iPad sidebar+split layout (native reading overlay in the right pane) + `layoutWatcher` (rebuild on breakpoint crossing, or orientation flip while regular) |
 | `layout.go` | Untagged: `classifyLayout` (compact vs regular by width+idiom, breakpoint 700pt), `regularSplitOffset` (~250pt sidebar), the orientation-driven sidebar default (`resolveSidebarDefault`) |
 | `device_ios.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; false elsewhere |
 | `sidebar.go` | Navigation sidebar (desktop + iPad regular layout): search box, AI Find, book filter, book list |
@@ -208,8 +208,8 @@ real files; `*_test.go` files are omitted.
 build — the Go build tag picks the *platform*. The mobile build then branches
 **at runtime** between the compact (phone) and regular (iPad sidebar+split)
 layouts by live canvas width (`classifyLayout`, `layout.go`); a `layoutWatcher`
-rebuilds the window when a resize crosses the 700pt breakpoint or flips
-orientation. Desktop has no runtime branching.
+rebuilds the window when a resize crosses the 700pt breakpoint, or — while the
+regular layout is up — flips orientation. Desktop has no runtime branching.
 
 ## UI architecture
 

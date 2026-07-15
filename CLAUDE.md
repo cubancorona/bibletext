@@ -160,7 +160,7 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   shows a prose answer grounded in the selection (`buildAskPrompt`). Providers (Gemini /
   OpenAI / Anthropic / Grok) live in `ai_providers.go`; keys are stored on-device via
   `keyStore` (`ai_keystore.go`) over `fyne.Preferences`, with `<PROVIDER>_API_KEY` env
-  vars overriding. Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
+  vars overriding (Grok's is `XAI_API_KEY`, not GROK_). Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
   `ai.go` (shared preamble + per-action task + the quoted selection; the fixed actions
   documented in README → "AI study"). `runAIAction` threads the Ask question and folds
   it into the cache scope. Settings sheet: `ai_settings.go` (header gear). Result panel:
