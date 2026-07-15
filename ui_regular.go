@@ -9,12 +9,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// regularSidebarOffset is the initial split position (fraction of width given to
-// the sidebar) for the tablet layout. A touch wider than the desktop's 0.2 so the
-// book list and search field are comfortable on a tablet, while the reading
-// column still gets the lion's share. The user can drag the divider from here.
-const regularSidebarOffset = 0.26
-
 // buildRegularWidthUI is the tablet (regular-width) layout: a persistent
 // navigation sidebar beside the reading pane, with the app header on top —
 // structurally the desktop layout, but the reading pane is the mobile native
@@ -57,7 +51,9 @@ func buildRegularWidthUI(state *AppState) fyne.CanvasObject {
 	sidebar := buildSidebar(state)
 
 	split := container.NewHSplit(sidebar, readingHost)
-	split.SetOffset(regularSidebarOffset)
+	// Aim for a consistent ~250pt sidebar regardless of iPad size (see
+	// regularSplitOffset); the user can still drag the divider from here.
+	split.SetOffset(regularSplitOffset(state.canvasWidth()))
 
 	body := container.NewBorder(buildHeader(state), nil, nil, nil, split)
 
