@@ -64,13 +64,27 @@ func (r *modelResolver) currentModel() string {
 	return r.def
 }
 
+// isPinned reports whether model is the user's explicit Settings override (not
+// the built-in default or a previously self-healed pick).
+func (r *modelResolver) isPinned(model string) bool {
+	return model != "" && r.store != nil && strings.TrimSpace(r.store.overrideModel(r.id)) == model
+}
+
 func (r *modelResolver) generate(ctx context.Context, prompt string) (string, error) {
 	model := r.currentModel()
 	out, err := r.build(model).generate(ctx, prompt)
 	if err == nil || !isModelNotFound(err) {
 		return out, err
 	}
-	// The configured model is gone — try to self-heal to a current in-tier model.
+	// The configured model is gone. If the user EXPLICITLY pinned it in Settings,
+	// do NOT silently answer from a different-tier model behind their back (a
+	// "flash"/"mini" default when they chose a "pro") — surface it so the panel /
+	// Test-key can say the pinned model no longer works, pick another or
+	// Recommended. Self-heal is only for the Recommended path (default / prior
+	// self-healed pick), where staying working matters more than the exact model.
+	if r.isPinned(model) {
+		return "", modelGoneError{provider: r.id, tried: model}
+	}
 	fresh, listErr := r.rediscover(ctx, model)
 	if fresh == "" {
 		// If discovery couldn't even list the models (bad key, no credits, offline),
@@ -140,6 +154,13 @@ func (e modelGoneError) Error() string {
 var modelExcludeSubstrings = []string{
 	"audio", "realtime", "tts", "transcribe", "search", "embedding",
 	"moderation", "image", "vision", "whisper", "dall", "guard", "rerank",
+	// Non-chat families that pass the providers' own "supports generateContent" /
+	// listing flags but can't answer a Bible-study prompt (some 404 on the chat
+	// endpoint, some return media-timeline gibberish with no error):
+	"video", "imagine", // xAI grok-imagine-* (image/video)
+	"lyria", "banana", // Gemini music (lyria) / image (nano-banana)
+	"robotics", "computer-use", "antigravity", // Gemini agent/robotics previews
+	"codex", "deep-research", // OpenAI Responses-API-only coding/research models
 }
 
 // modelUnstableSubstrings are de-prioritized (used only when nothing stable is in
@@ -150,6 +171,73 @@ var modelUnstableSubstrings = []string{"preview", "-exp", "experimental", "night
 // dropping non-chat variants, preferring stable over preview and newer over older.
 // It NEVER falls back to an out-of-tier model, so self-heal can't silently swap a
 // cheap default for a pricier one.
+// dropdownModelCap bounds the settings dropdown: enough to show every current
+// chat model a provider offers without the popup becoming an endless scroll
+// (Gemini alone lists dozens of variants).
+const dropdownModelCap = 24
+
+// dropdownModelIDs turns a provider's live model list into the settings
+// dropdown's choices: non-chat variants dropped (the shared exclude list plus a
+// per-provider `extra` list, e.g. OpenAI's "-pro" Responses-only tier that would
+// 404 on the chat endpoint — kept per-provider because Gemini's "gemini-2.5-pro"
+// IS a valid chat model), de-duplicated, then ordered: the provider's own model
+// family first (so "gemini" leads over "gemma"/"learnlm"), stable before preview,
+// newest first, capped. Unlike pickInTier this is NOT tier-limited — pinning a
+// bigger or different-family model is exactly what the picker is for.
+func dropdownModelIDs(models []discoveredModel, extra []string, family string) []string {
+	family = strings.ToLower(family)
+	type cand struct {
+		id          string
+		stable, fam bool
+		rank        int64
+	}
+	seen := map[string]bool{}
+	var cands []cand
+	for _, m := range models {
+		low := strings.ToLower(m.id)
+		if m.id == "" || seen[m.id] ||
+			containsAnySubstr(low, modelExcludeSubstrings) || containsAnySubstr(low, extra) {
+			continue
+		}
+		seen[m.id] = true
+		cands = append(cands, cand{
+			id:     m.id,
+			stable: !containsAnySubstr(low, modelUnstableSubstrings),
+			fam:    family != "" && strings.HasPrefix(low, family),
+			rank:   m.rank,
+		})
+	}
+	sort.SliceStable(cands, func(i, j int) bool {
+		if cands[i].fam != cands[j].fam {
+			return cands[i].fam // the provider's own family first (gemini before gemma)
+		}
+		if cands[i].stable != cands[j].stable {
+			return cands[i].stable // stable before preview
+		}
+		if cands[i].rank != cands[j].rank {
+			return cands[i].rank > cands[j].rank // newer first
+		}
+		return cands[i].id > cands[j].id // deterministic tiebreak
+	})
+	if len(cands) > dropdownModelCap {
+		cands = cands[:dropdownModelCap]
+	}
+	out := make([]string, len(cands))
+	for i, c := range cands {
+		out[i] = c.id
+	}
+	return out
+}
+
+// modelFamilyOf returns the leading family token of a model id ("gemini-2.5-flash"
+// → "gemini"), used to sort a provider's own family to the top of its dropdown.
+func modelFamilyOf(defaultModel string) string {
+	if i := strings.IndexByte(defaultModel, '-'); i > 0 {
+		return defaultModel[:i]
+	}
+	return defaultModel
+}
+
 func pickInTier(models []discoveredModel, tier string) (string, bool) {
 	tier = strings.ToLower(tier)
 	if tier == "" {

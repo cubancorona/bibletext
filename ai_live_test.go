@@ -57,3 +57,51 @@ func TestLiveAIProviders(t *testing.T) {
 		})
 	}
 }
+
+// TestLiveModelDropdown exercises the settings dropdown's data path against the
+// REAL providers: list models with the user's key, shape them with
+// dropdownModelIDs, and require a non-empty, sane result. Same key-gating as
+// TestLiveAIProviders — skips (free) wherever a key is absent.
+func TestLiveModelDropdown(t *testing.T) {
+	store := newKeyStoreWith(newFakePrefs())
+
+	for _, p := range aiProviders() {
+		p := p
+		t.Run(p.Name, func(t *testing.T) {
+			key := providerAPIKey(store, p.ID)
+			if key == "" {
+				t.Skipf("no key in %s — skipping (fill it in .env.local to run)", envVarFor(p.ID))
+			}
+			if p.ListModels == nil {
+				t.Fatal("provider must expose ListModels for the dropdown")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			models, err := p.ListModels(ctx, key)
+			if err != nil {
+				t.Fatalf("ListModels: %v", err)
+			}
+			ids := dropdownModelIDs(models, p.ExtraModelExclude, modelFamilyOf(p.Model))
+			// Every offered model must actually be usable on the chat endpoint —
+			// the whole point of curating the dropdown. Excludes should have
+			// removed the globally non-chat families. ("-pro" is NOT here: it's
+			// chat-capable on Gemini and only Responses-only on OpenAI, which the
+			// per-provider p.ExtraModelExclude already applied above.)
+			for _, badSub := range []string{"lyria", "codex", "robotics", "computer-use", "imagine", "embedding", "banana", "video"} {
+				for _, mid := range ids {
+					if strings.Contains(strings.ToLower(mid), badSub) {
+						t.Errorf("%s dropdown offers non-chat model %q (matched %q)", p.Name, mid, badSub)
+					}
+				}
+			}
+			if len(ids) == 0 {
+				t.Fatalf("dropdown would be empty for %s (raw list had %d)", p.Name, len(models))
+			}
+			if len(ids) > dropdownModelCap {
+				t.Fatalf("dropdown over cap: %d", len(ids))
+			}
+			t.Logf("%s → %d choices, first: %v", p.Name, len(ids), ids[:min(3, len(ids))])
+		})
+	}
+}

@@ -25,6 +25,42 @@ func (s stubClient) generate(_ context.Context, _ string) (string, error) {
 	return "", &apiHTTPError{StatusCode: http.StatusNotFound, Details: `model: "` + s.model + `" not found`}
 }
 
+func TestResolverDoesNotHealAnExplicitPin(t *testing.T) {
+	store := newTestKeyStore()
+	store.setOverrideModel(providerOpenAI, "gpt-5.5-pro") // user pinned this in Settings
+	listed := false
+	r := &modelResolver{
+		store: store, id: providerOpenAI, def: "gpt-4o-mini", tier: "mini",
+		list: func(_ context.Context, _ string) ([]discoveredModel, error) {
+			listed = true
+			return []discoveredModel{{"gpt-4o-mini", 400}}, nil
+		},
+		// The pinned gpt-5.5-pro 404s on the chat endpoint (Responses-only). The
+		// mini-tier default WOULD answer — but we must NOT silently substitute it.
+		build: func(m string) aiClient {
+			return stubClient{model: m, reply: map[string]string{"gpt-4o-mini": "OK"}}
+		},
+	}
+
+	out, err := r.generate(context.Background(), "hi")
+	var mg modelGoneError
+	if !errors.As(err, &mg) {
+		t.Fatalf("a failed PIN must surface modelGoneError, got out=%q err=%v", out, err)
+	}
+	if listed {
+		t.Error("must not re-list / self-heal a user's explicit pin")
+	}
+	if got := store.overrideModel(providerOpenAI); got != "gpt-5.5-pro" {
+		t.Errorf("pin must be preserved for the user to change, got %q", got)
+	}
+
+	// Clearing the pin (choosing Recommended) restores self-heal to the default.
+	store.setOverrideModel(providerOpenAI, "")
+	if out, err := r.generate(context.Background(), "hi"); err != nil || out != "OK" {
+		t.Fatalf("after unpinning, default must answer: out=%q err=%v", out, err)
+	}
+}
+
 func TestIsModelNotFound(t *testing.T) {
 	cases := []struct {
 		name string

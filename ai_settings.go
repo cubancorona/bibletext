@@ -71,12 +71,21 @@ func showAISettings(state *AppState) {
 	// picker changes. Everything auto-saves straight to the on-device store — there
 	// is no Save/Cancel — so there's no pending-edits buffer to flush.
 	keyArea := container.NewStack()
+	// renderGen invalidates in-flight async work (the model-list fetch) when the
+	// key area re-renders for another provider — a slow response for Gemini must
+	// never repopulate the dropdown now showing Anthropic.
+	renderGen := 0
 	var renderKey func(id string)
 	renderKey = func(id string) {
 		info, ok := providerByID(id)
 		if !ok {
 			return
 		}
+		renderGen++
+		gen := renderGen
+		// Assigned below with the model dropdown; the key field calls it so
+		// pasting a key populates the model list immediately.
+		var fetchModels func()
 
 		heading := canvas.NewText(info.Name+" key", pal.Text)
 		heading.TextStyle = fyne.TextStyle{Bold: true}
@@ -159,28 +168,107 @@ func showAISettings(state *AppState) {
 			}
 			status.Refresh()
 		}
-		// Auto-save: every edit writes straight to the on-device key store.
+		// Auto-save: every edit writes straight to the on-device key store. A new
+		// key also (re-)fetches the provider's model list for the dropdown below.
 		entry.OnChanged = func(s string) {
 			store.setAPIKey(id, strings.TrimSpace(s))
 			refreshStatus()
+			if fetchModels != nil {
+				fetchModels()
+			}
 		}
 		refreshStatus()
 
-		// Optional model override. Blank = the recommended model, which self-heals
-		// if the provider retires it (ai_model_resolve.go); a specific id here pins
-		// it. The placeholder shows the model currently in effect (a self-healed one
-		// if discovery has run, otherwise the built-in default) so it's never a
-		// mystery. Rarely needed — kept quiet, below the key.
+		// Model picker (a dropdown — nothing to mistype). "Recommended" pins
+		// nothing: it uses the model currently in effect — the built-in default,
+		// or the self-healed replacement if the provider retired it — and keeps
+		// healing itself (ai_model_resolve.go). The other choices are the
+		// provider's OWN current model list, fetched live with the user's key
+		// whenever this area renders or a key is pasted — so new models appear as
+		// soon as the provider publishes them, with no app update.
 		effModel := store.resolvedModel(id)
 		if effModel == "" {
 			effModel = info.Model
 		}
-		modelEntry := widget.NewEntry()
-		modelEntry.SetPlaceHolder(effModel)
-		modelEntry.SetText(store.overrideModel(id))
-		modelEntry.OnChanged = func(s string) { store.setOverrideModel(id, strings.TrimSpace(s)) }
-		modelCaption := canvas.NewText("Model (optional) — blank uses the recommended one.", pal.TextMuted)
+		recommended := "Recommended (" + effModel + ")"
+		modelCaption := canvas.NewText("Model — Recommended keeps itself current automatically.", pal.TextMuted)
 		modelCaption.TextSize = 12
+
+		// Until (or unless) the live list arrives, the choices are Recommended
+		// plus any model already pinned, so the control is honest offline too.
+		startOptions := []string{recommended}
+		if ov := store.overrideModel(id); ov != "" {
+			startOptions = append(startOptions, ov)
+		}
+		modelSelect := widget.NewSelect(startOptions, func(sel string) {
+			if sel == recommended {
+				store.setOverrideModel(id, "")
+			} else if sel != "" {
+				store.setOverrideModel(id, sel)
+			}
+		})
+		if ov := store.overrideModel(id); ov != "" {
+			modelSelect.SetSelected(ov)
+		} else {
+			modelSelect.SetSelected(recommended)
+		}
+
+		// fetchModels populates the dropdown from the provider's live list. Guards:
+		//   • fetchedKey — only refetch when the key CHANGES (set on success, and
+		//     reset on failure so a transient blip/rate-limit doesn't latch the
+		//     dropdown to [Recommended] with no retry);
+		//   • fetchSeq — only the most recently STARTED fetch may apply, so a slow
+		//     response for an old key can't overwrite a newer key's list;
+		//   • gen — a fetch for a different provider render never applies.
+		// A short debounce coalesces the per-keystroke burst when a key is typed
+		// (rather than pasted), so we don't fire dozens of doomed partial-key
+		// requests that could trip the provider's rate limit.
+		fetchedKey, fetchSeq := "", 0
+		var debounce *time.Timer
+		doFetch := func() {
+			key := strings.TrimSpace(providerAPIKey(store, id))
+			if key == "" || info.ListModels == nil || key == fetchedKey {
+				return
+			}
+			fetchSeq++
+			seq := fetchSeq
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				models, err := info.ListModels(ctx, key)
+				ids := dropdownModelIDs(models, info.ExtraModelExclude, modelFamilyOf(info.Model))
+				fyne.Do(func() {
+					if gen != renderGen || seq != fetchSeq {
+						return // superseded by a newer render or a newer fetch
+					}
+					if err != nil || len(ids) == 0 {
+						fetchedKey = "" // let the next paste/keystroke retry
+						return
+					}
+					fetchedKey = key
+					opts := []string{recommended}
+					cur := store.overrideModel(id)
+					if cur != "" && !containsExact(ids, cur) {
+						opts = append(opts, cur) // a pin the provider no longer lists stays visible
+					}
+					opts = append(opts, ids...)
+					modelSelect.Options = opts
+					if cur != "" {
+						modelSelect.Selected = cur
+					} else {
+						modelSelect.Selected = recommended
+					}
+					modelSelect.Refresh()
+				})
+			}()
+		}
+		fetchModels = func() {
+			if debounce != nil {
+				debounce.Stop()
+			}
+			debounce = time.AfterFunc(400*time.Millisecond, func() { fyne.Do(doFetch) })
+		}
+		doFetch() // initial populate immediately (no key change to debounce)
 
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
@@ -192,7 +280,7 @@ func showAISettings(state *AppState) {
 				container.NewBorder(nil, nil, container.NewHBox(pasteBtn, clearBtn, testBtn), nil, result),
 				spacer(8),
 				modelCaption,
-				withCaret(state, modelEntry),
+				modelSelect,
 			),
 		}
 		keyArea.Refresh()
@@ -326,12 +414,18 @@ func showAISettings(state *AppState) {
 			popup.Resize(card.MinSize())
 		}
 	}
+	// Set the radio's visual selection WITHOUT firing its OnChanged (which would
+	// call applyAssistant → renderKey → a live model-list fetch), then render once
+	// explicitly. SetSelected here would double the initial fetch on every sheet
+	// open (the callback's render is discarded by the gen guard, but the HTTP
+	// request still fires) — the single most common path, so worth avoiding.
 	if store.aiEnabled() {
-		active.SetSelected(idToName[store.activeProvider()])
+		active.Selected = idToName[store.activeProvider()]
 	} else {
-		active.SetSelected(noAssistantName)
+		active.Selected = noAssistantName
 	}
-	applyAssistant() // initial render (SetSelected fires it too; idempotent)
+	active.Refresh()
+	applyAssistant() // single initial render → single model-list fetch
 
 	// Assistant + key first so the key field sits high in the sheet — on a phone
 	// the soft keyboard covers the lower half, and this keeps the field above it.
