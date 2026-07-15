@@ -21,6 +21,24 @@ pane is the mobile **native overlay** (iOS `UITextView` / Android selectable
 `TextView`), so text selection, the Study-with-AI menu, audio, and scroll
 persistence are all unchanged from the phone.
 
+## Hiding the sidebar (the iPad convention)
+
+A leading **sidebar-toggle button** in the header (the `sidebar.left` glyph,
+`iconSidebarLeft`) hides/shows the sidebar so the reader can reclaim the full
+width — the standard iPad affordance. Shown only in the regular layout (desktop
+has its own always-on sidebar; the compact layout uses bottom tabs).
+
+The **default follows orientation**: shown in landscape, collapsed in portrait,
+so a portrait iPad reads full-width like Books. `resolveSidebarDefault`
+(`layout.go`) applies that default on the first regular build and re-applies it
+whenever the orientation flips, while an explicit toggle **within the same
+orientation is preserved** (`sidebarInit` / `sidebarLandscape` track this).
+Toggling flips `state.sidebarCollapsed` and rebuilds; when collapsed the reading
+pane is built full-width (no `HSplit`) and the sidebar-widget hooks
+(`syncSidebar` / `focusSearch` / `setSearchText`) become no-ops. The native
+overlay re-clips to whichever rectangle the reading pane occupies (full width or
+the split's right pane) automatically.
+
 ## How the layout is chosen
 
 `CreateMainUI` (`ui_mobile.go`) → `state.layoutClass()` (`layout.go`):
@@ -91,11 +109,15 @@ The App Store build is **still iPhone-only** (`UIDeviceFamily=[1]`), set by
 
 ## Verified / not-yet-verified
 
-- **Verified:** the regular layout renders on an iPad Pro 11" simulator (portrait)
-  with the native overlay correctly clipped to the reading pane; the compact
-  (iPhone) layout is unregressed; `classifyLayout` / `regularSplitOffset` unit
-  tests; `-race` suite; iOS + Android cross-compile.
-- **Not yet runtime-verified (covered by unit tests + logic):** landscape and the
-  `layoutWatcher` rebuild on a live rotation / Split-View resize; hardware-keyboard
-  shortcuts on iPad (not wired — the desktop `Cmd-F` / `Esc` shortcuts live in
-  `installShortcuts`, which is desktop-only).
+- **Verified on an iPad Pro 11" simulator (interactive):** the regular layout in
+  both portrait and landscape, the native overlay correctly clipped to the reading
+  pane (full-width and split); the sidebar toggle expand/collapse in both
+  orientations; the orientation default re-asserting on a live rotation both
+  directions (which also exercises the `layoutWatcher` orientation-flip rebuild);
+  the compact (iPhone) layout unregressed. Plus `classifyLayout` /
+  `regularSplitOffset` unit tests, `-race` suite, `go vet`, iOS + Android
+  cross-compile.
+- **Not yet runtime-verified (covered by unit tests + logic):** the
+  compact↔regular breakpoint crossing on a live Split-View / Stage-Manager resize;
+  hardware-keyboard shortcuts on iPad (not wired — the desktop `Cmd-F` / `Esc`
+  shortcuts live in `installShortcuts`, which is desktop-only).
