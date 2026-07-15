@@ -87,11 +87,19 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   rebuilds the window when a width change crosses the breakpoint (rotation /
   Split View / Stage Manager); phones never cross it, so their path is unchanged.
   `overlayShouldShow` is layout-aware (regular → visible whenever search results
-  aren't occupying the pane). To exercise the iPad layout in the simulator:
+  aren't occupying the pane). The regular layout's sidebar is **hideable**: a
+  header toggle (`iconSidebarLeft`) flips `state.sidebarCollapsed`, and the
+  default follows orientation (landscape shown / portrait collapsed,
+  `resolveSidebarDefault` — re-asserted on rotation, an explicit toggle sticks
+  within an orientation). **Invariant:** the search/Find field lives only in the
+  sidebar, so collapsing while `IsSearching` clears the search (also discarding
+  any in-flight AI Find via `aiSearchActive`), and `surfaceSearch` re-shows the
+  sidebar. To exercise the iPad layout in the simulator:
   `BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)" scripts/run-ios-sim.sh` (the sim
   build is packaged universal so the iPad runs it natively, idiom=pad, not iPhone
-  compatibility mode). App Store device family is still controlled by
-  `release-ios.sh` (`BIBLETEXT_IPAD`) — see [`docs/IPAD.md`](docs/IPAD.md).
+  compatibility mode). Sim quirk: synthetic `type` into Fyne entries is flaky —
+  use per-key presses. Release builds ship universal (`release-ios.sh`) — see
+  [`docs/IPAD.md`](docs/IPAD.md).
 - **Native text overlays (cgo).** On macOS the reading pane is a native
   `NSTextView` and on iOS a `UITextView`, floating *above* the Fyne canvas
   (`reading_macos.go` / `reading_ios.go`, Objective-C in the cgo preamble).

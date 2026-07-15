@@ -106,6 +106,12 @@ root), signing, emulator use, and distribution are covered in
   full-size touch targets and native text selection (a real `UITextView` /
   `TextView` reading pane); the same data, search and theme code as the desktop
   build.
+- 🖥️ **iPad layout** — on a wide iPad canvas the app switches at runtime to a
+  desktop-style two-pane layout: a navigation sidebar (search, Find, book list)
+  beside the reading pane, with a header toggle to hide the sidebar for
+  full-width reading (shown in landscape, tucked away in portrait by default).
+  Narrow Split View / Slide Over columns fall back to the phone layout
+  automatically. See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI
   **Explain** it, **Analyze context**, or **Analyze translation**, using your own
   Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
@@ -276,6 +282,11 @@ You supply your own API key per provider. Keys are stored **only on this device*
 | Claude (Anthropic) | `claude-haiku-4-5` | <https://console.anthropic.com/settings/keys> |
 | Grok (xAI) | `grok-2-latest` | <https://console.x.ai> |
 
+The **Model** dropdown in the same sheet is populated live from your provider's
+own model list (fetched with your key), so new models appear the day they ship —
+pick one to pin it, or leave **Recommended** to use the default above, which
+self-heals automatically if the provider retires it.
+
 A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`) overrides the stored key when set.
 
@@ -326,7 +337,9 @@ bibletext/
 │   ├── state.go theme.go font.go                              (cross-platform UI scaffolding)
 │   ├── sidebar.go reading.go search.go history.go ui.go       (shared widgets)
 │   ├── ui_desktop.go    # //go:build !ios && !android  — HSplit + keyboard shortcuts
-│   ├── ui_mobile.go     # //go:build ios  || android   — bottom tabs + touch drawer
+│   ├── ui_mobile.go     # //go:build ios  || android   — bottom tabs (compact) + runtime layout pick
+│   ├── ui_regular.go    # //go:build ios  || android   — iPad sidebar+split (regular) layout
+│   ├── layout.go device_ios.go device_other.go               (compact/regular runtime classifier)
 │   ├── reading_macos.go reading_ios.go reading_android.go     (native reading overlays)
 │   ├── audio_macos.go audio_ios.go audio_android.go           (native audio engines)
 │   └── app.go              # Run() + LoadAndPrepareState() shared entry helpers
@@ -337,6 +350,7 @@ bibletext/
 │   └── BtAudioService.java # foreground service — background/lock-screen playback
 ├── scripts/                # build wrappers: build-android.sh, run-ios-*.sh, release-ios.sh
 ├── docs/ANDROID.md         # Android toolchain, build, signing, distribution
+├── docs/IPAD.md            # the iPad regular-width layout: design, testing, shipping
 └── cmd/
     ├── desktop/main.go     # `go build ./cmd/desktop`
     └── mobile/                # iOS: scripts/run-ios-*.sh · Android: scripts/build-android.sh
