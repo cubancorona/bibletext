@@ -275,9 +275,16 @@ func showAISettings(state *AppState) {
 				container.NewBorder(nil, nil, heading, link),
 				withCaret(state, entry),
 				status,
-				// Paste + Clear + Test sit on the left; the result label fills the
-				// rest, so showing it never grows the sheet.
-				container.NewBorder(nil, nil, container.NewHBox(pasteBtn, clearBtn, testBtn), nil, result),
+				// Paste + Clear + Test on one row; the result label gets its OWN
+				// full-width row below. It must NOT share the row as a Border
+				// center: on a phone the three buttons leave only a sliver of
+				// width, and a word-wrapped label in that sliver wraps at a few
+				// characters per line and balloons the row into a tall text
+				// column (field-reported on iPhone with the long model-gone
+				// message). Hidden until a test runs, so the sheet only grows by
+				// a line or two when there's something to say.
+				container.NewHBox(pasteBtn, clearBtn, testBtn),
+				result,
 				spacer(8),
 				modelCaption,
 				modelSelect,

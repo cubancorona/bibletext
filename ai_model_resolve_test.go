@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -245,5 +246,35 @@ func TestParseVersionRank(t *testing.T) {
 		if got := parseVersionRank(id); got != want {
 			t.Errorf("parseVersionRank(%q)=%d want %d", id, got, want)
 		}
+	}
+}
+
+// The model-gone message must NAME the failing model and point at the model
+// picker (with the self-healing "Recommended" escape) — a pinned model a key
+// can't invoke is the common case (field-reported: a pinned gemini-2.5-pro on
+// an un-entitled key), and "update the app" advice would be stale now that
+// models are discovered live.
+func TestFriendlyModelGoneNamesModelAndFix(t *testing.T) {
+	msg := friendlyAIError(modelGoneError{provider: providerGemini, tried: "gemini-2.5-pro"})
+	for _, want := range []string{"gemini-2.5-pro", "Recommended", "AI settings"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("model-gone message missing %q: %q", want, msg)
+		}
+	}
+}
+
+// Google rejects an invalid key with 400 + "API key not valid…" (not 401) —
+// the friendly message must say key-rejected, not "selection too long"
+// (field-reported via the settings sheet's Test key).
+func TestFriendlyBadKey400SaysKeyRejected(t *testing.T) {
+	err := &apiHTTPError{StatusCode: http.StatusBadRequest,
+		Details: "API key not valid. Please pass a valid API key."}
+	if msg := friendlyAIError(err); !strings.Contains(msg, "key was rejected") {
+		t.Errorf("400 bad-key message = %q, want key-rejected", msg)
+	}
+	// A genuine 400 (oversized input) still reads as the selection message.
+	err2 := &apiHTTPError{StatusCode: http.StatusBadRequest, Details: "input too long"}
+	if msg := friendlyAIError(err2); !strings.Contains(msg, "shorter passage") {
+		t.Errorf("400 too-long message = %q, want shorter-passage", msg)
 	}
 }
