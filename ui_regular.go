@@ -143,13 +143,26 @@ func (w *layoutWatcher) CreateRenderer() fyne.WidgetRenderer {
 // thread — not run inline, since we're mid-layout. pending coalesces the burst of
 // Resize calls during a live divider/rotation into a single rebuild; the watcher
 // is recreated by that rebuild, which resets the guard.
+//
+// CRITICAL: orientation must be derived from the WINDOW CANVAS size
+// (state.canvasIsLandscape), NEVER from this Resize's size argument. When the
+// soft keyboard rises, Fyne lays the content out at the canvas size MINUS the
+// keyboard — on an iPad in portrait that squeezed height makes width >= height,
+// which read as a landscape flip here and triggered a rebuild; the rebuild's
+// fresh watcher then sampled the UNsqueezed canvas (portrait), so the next
+// layout pass "flipped" again, rebuilding forever — a visible reading-pane
+// flicker whenever the search/Find field had the keyboard up (field-reported
+// on iPad, reproduced in the sim: 3,000+ rebuilds in under a minute). Canvas
+// size ignores the keyboard, and it is the SAME source newLayoutWatcher
+// samples, so the two can never disagree and oscillate. The layout-class check
+// keys off width, which the keyboard never changes.
 func (w *layoutWatcher) Resize(size fyne.Size) {
 	w.BaseWidget.Resize(size)
 	if w.pending {
 		return
 	}
 	want := classifyLayout(size.Width, deviceIsTablet())
-	landscape := size.Width >= size.Height
+	landscape := w.state.canvasIsLandscape()
 	changed := want != w.builtAs || (want == layoutRegular && landscape != w.builtLandscape)
 	if changed {
 		w.pending = true
