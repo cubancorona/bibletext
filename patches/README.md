@@ -1,15 +1,19 @@
-# Vendored Fyne patch
+# Vendored Fyne patches
 
-This directory holds a **single, surgical patch to Fyne** plus the documentation
-for it. It exists because the iOS scroll-lag fix is a one-line change *inside the
-Fyne library*, which can't live in our own source.
+This directory holds **two surgical patches to Fyne** plus the documentation
+for them. It exists because both fixes are small changes *inside the Fyne
+library*, which can't live in our own source: the iOS scroll-lag fix (the
+drawloop patch) and the focused-Entry CPU fix (the caret-blink patch).
 
 | | |
 |---|---|
-| **Patch** | [`fyne-2.7.4-ios-drawloop.patch`](fyne-2.7.4-ios-drawloop.patch) |
+| **Patch 1** | [`fyne-2.7.4-ios-drawloop.patch`](fyne-2.7.4-ios-drawloop.patch) |
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/{darwin_ios.go, app.go}` + `internal/driver/mobile/driver.go` |
 | **Change 1 (scroll lag)** | `drawloop()`'s idle fallback timeout: **`100ms` → `2ms`** (frees the main thread between ticks so native scroll views aren't starved). |
 | **Change 2 (scroll flicker)** | `drawloop()` won't return on its idle timeout **while a paint is in progress** — so the GLKView never presents a half-drawn frame. The driver sets a `framePainting` flag around `paintWindow`→`Publish` (`SetFramePainting`); `drawloop` keeps waiting for the complete frame while it's set, and returns fast only when Fyne is genuinely idle. |
+| **Patch 2** | [`fyne-2.7.4-caret-blink.patch`](fyne-2.7.4-caret-blink.patch) |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `widget/entry_cursor_anim.go` |
+| **Change 3 (caret CPU burn)** | The Entry caret's smooth fade → a **discrete blink** (snap dim↔opaque at the half-cycle). Cuts a focused-but-idle Entry from ~8 full-canvas repaints/s to 2/s: **~50% CPU → ~22%** (iPad Pro 13" sim, ambient ~20%). Cadence and typing-interrupt behaviour unchanged. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Build wiring** | `replace fyne.io/fyne/v2 => ./third_party/fyne` in `go.mod` |
 
@@ -39,6 +43,50 @@ on-device run-loop trace showed **~95% of a scroll spent inside ~100 ms main-thr
 iterations**. Shrinking the fallback to **2 ms** frees the main thread between
 ticks; dirty frames still return instantly via the work/publish cases, so Fyne's
 own rendering is unaffected. (Full investigation: the project's scroll-lag notes.)
+
+## Why the caret-blink patch is needed
+
+Fyne's Entry caret "blink" is a smooth alpha fade: a forever-repeating 500 ms
+`fyne.Animation` (`widget/entry_cursor_anim.go`) whose callback calls
+`cursor.Refresh()` on **every animation frame inside the fade band** (the
+ease-in-out middle of each half-cycle) — roughly 8 refreshes/second, forever,
+while any Entry has focus. Fyne has no partial repaints: each `Refresh()` marks
+the canvas dirty, and the next `handlePaint` walks the **entire** widget tree
+and re-issues the full GL command stream. So an idle, focused search field kept
+the whole canvas repainting ~8×/s.
+
+Measured on the iPad Pro 13" simulator (iPad regular layout, sidebar search
+field, `top -l N -pid $(pgrep -f BibleText.app/main)`, 12-sample means):
+
+| state | stock caret fade | discrete blink |
+|---|---|---|
+| entry focused, idle | **50.4%** (35-57) | **41.9%** (40-49) |
+| unfocused ambient | ~24% | ~25.5% |
+
+The patch snaps the caret between dim and opaque at the half-cycle instead of
+fading — same 1 s cadence, same typing-interrupt behaviour (caret goes solid
+while typing), but only **2 refreshes/second**. Frame-capture verification shows
+exactly two caret states (no intermediate alphas).
+
+Two caveats the numbers above teach:
+
+- The **simulator exaggerates the per-repaint cost** — its GL is a software
+  rasterizer (JIT-compiled shader code on the CPU), so one full-canvas repaint
+  of a 2064×2752 iPad frame costs ~50-100 ms of CPU. On a real device the
+  repaint is mostly GPU. The patch removes ~6 repaints/s on **both**.
+- Roughly **14 points of the focused-state cost are NOT the caret**: comparing
+  deltas across the two builds (+25 pts at ~8 repaints/s vs +16.5 pts at
+  2 repaints/s) leaves a fixed, repaint-rate-independent overhead that appears
+  the moment an iOS text-input session opens (the hidden native `GoInputView`
+  becomes first responder). That's UIKit machinery outside Fyne, also
+  sim-inflated; it ends when focus is dismissed.
+
+**Why not Fyne's own animation switch?** v2.7 has `Settings().ShowAnimations()`
+(`no_animations` build tag / `fyne_settings` schema): entry.go then skips the
+cursor animation entirely. But it's all-or-nothing — it also kills button-tap
+feedback, Select popup animation, etc., and the caret stops blinking entirely
+(a static caret reads as "stuck" on iOS). The surgical patch keeps the blink
+and every other animation.
 
 ## Relationship to upstream (PR #5422 / issue #2506)
 
@@ -97,6 +145,14 @@ worth handing them (info only, no pitch):
 >   GL work (incl. `swapBuffers`) is pumped inside `drawloop` gated by
 >   `app.Publish()`, so pausing the link naively deadlocks publish (un-pause first).
 
+**The caret-blink patch, unlike the drawloop one, is a clean upstream
+candidate.** It is platform-neutral (`widget/entry_cursor_anim.go`, no driver
+code), strictly reduces work on every platform (desktop repaints the window for
+those fade frames too — same bug class as #2506), and changes nothing
+user-visible but the fade's smoothness. If it's ever proposed upstream, note the
+alternative framings: keep the fade but only Refresh when the *quantized* alpha
+actually changed, or respect `ShowAnimations()` with a discrete fallback.
+
 [fyne-io/fyne#6368]: https://github.com/fyne-io/fyne/issues/6368
 [fyne-io/fyne#5422]: https://github.com/fyne-io/fyne/pull/5422
 
@@ -104,18 +160,19 @@ worth handing them (info only, no pitch):
 
 `go.mod` ships **stock** Fyne with **no `replace`**, so `go build ./...`,
 `go run ./cmd/desktop`, and `go test ./...` are one-line with no setup — correct,
-because the bug is iOS-only (`//go:build darwin && ios`) and desktop builds are
-byte-identical to stock.
+because the drawloop bug is iOS-only (`//go:build darwin && ios`) and desktop
+builds don't get either patch (the caret-blink fix *would* apply to desktop, but
+the desktop CPU cost is far smaller and stock keeps those builds byte-identical).
 
-The patch is applied **only on the iOS packaging path**. `scripts/run-ios-device.sh`
+The patches are applied **only on the iOS packaging path**. `scripts/run-ios-device.sh`
 and `scripts/run-ios-sim.sh` each:
 
 1. run `scripts/setup-fyne-patch.sh` → regenerate `third_party/fyne` (a patched
    copy of stock Fyne v2.7.4; `third_party/` is `.gitignore`d, ~22 MB, never
    committed);
-2. `go mod edit -replace fyne.io/fyne/v2=./third_party/fyne` — inject the patch
+2. `go mod edit -replace fyne.io/fyne/v2=./third_party/fyne` — inject the patches
    for just this build;
-3. build/package the iOS app (which now ships the 2 ms fix);
+3. build/package the iOS app (which now ships both fixes);
 4. restore stock `go.mod` via an `EXIT` trap (success, failure, or Ctrl-C).
 
 So your working tree's `go.mod` is always stock; the `replace` exists only for the
@@ -125,13 +182,16 @@ would build against stock Fyne and ship the laggy version. Use the scripts.
 ## Setup
 
 Nothing to do for desktop. For iOS, just run `scripts/run-ios-device.sh` (or
-`run-ios-sim.sh`) — they apply the patch automatically. `setup-fyne-patch.sh` is
+`run-ios-sim.sh`) — they apply the patches automatically. `setup-fyne-patch.sh` is
 safe to run standalone too (it regenerates `third_party/fyne` from the module
-cache + this patch, fetching stock v2.7.4 if it isn't cached).
+cache + these patches, fetching stock v2.7.4 if it isn't cached).
 
-## How to remove the patch entirely (surgical)
+## How to remove the patches entirely (surgical)
 
-When Fyne ships the fix upstream (or you bump to a version that includes it):
+The two patches are independent — to drop just one (e.g. upstream ships one fix),
+delete its `.patch` file and its `patch -p1` + verify-grep lines in
+`setup-fyne-patch.sh`. To remove everything when upstream ships both (or you bump
+to a version that includes them):
 
 1. **Un-hook the iOS scripts:** delete the "apply the iOS-only Fyne patch" block
    (the `setup-fyne-patch.sh` + `go mod edit -replace` + the `EXIT` trap) from
@@ -140,24 +200,31 @@ When Fyne ships the fix upstream (or you bump to a version that includes it):
    (and the `third_party/` line in `.gitignore` if nothing else needs it).
 3. **Verify:** `go build ./...` and the iOS scripts both build against stock Fyne.
 
-`go.mod` is already stock, and nothing in the app's own code references the patch,
-so removal touches only the items above. (Until upstream lands it, removing the
-patch re-introduces the iOS scroll lag.)
+`go.mod` is already stock, and nothing in the app's own code references the patches,
+so removal touches only the items above. (Until upstream lands them, removing the
+drawloop patch re-introduces the iOS scroll lag, and removing the caret patch
+re-introduces the 30-60% focused-Entry CPU burn.)
 
-## Updating the patch for a new Fyne version
+## Updating the patches for a new Fyne version
 
-If `go.mod`'s `fyne.io/fyne/v2` version changes, regenerate the patch against the
+If `go.mod`'s `fyne.io/fyne/v2` version changes, regenerate each patch against the
 new version:
 
 ```bash
-# 1. point the script's FYNE_VERSION + this patch's filename at the new version
-# 2. apply by hand to a fresh copy, re-make the one-line edit, then:
+# 1. point the script's FYNE_VERSION + the patch filenames at the new version
+# 2. apply by hand to a fresh copy, re-make the edits, then (per patch):
 diff -u --label a/internal/driver/mobile/app/darwin_ios.go \
         --label b/internal/driver/mobile/app/darwin_ios.go \
         "$(go env GOMODCACHE)/fyne.io/fyne/v2@<NEWVER>/internal/driver/mobile/app/darwin_ios.go" \
         third_party/fyne/internal/driver/mobile/app/darwin_ios.go \
         > patches/fyne-<NEWVER>-ios-drawloop.patch
+diff -u --label a/widget/entry_cursor_anim.go \
+        --label b/widget/entry_cursor_anim.go \
+        "$(go env GOMODCACHE)/fyne.io/fyne/v2@<NEWVER>/widget/entry_cursor_anim.go" \
+        third_party/fyne/widget/entry_cursor_anim.go \
+        > patches/fyne-<NEWVER>-caret-blink.patch
 ```
 
 Then confirm the upstream `drawloop` still has the `time.After(100 * time.Millisecond)`
-fallback (it may have changed structure between releases).
+fallback, and that `entry_cursor_anim.go` still drives the caret via the fade-band
+animation (either may have changed structure between releases).
