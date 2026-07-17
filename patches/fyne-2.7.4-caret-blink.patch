@@ -1,0 +1,69 @@
+--- a/widget/entry_cursor_anim.go
++++ b/widget/entry_cursor_anim.go
+@@ -31,24 +31,17 @@
+ // creates fyne animation
+ func (a *entryCursorAnimation) createAnim(inverted bool) *fyne.Animation {
+ 	cursorOpaque := theme.Color(theme.ColorNamePrimary)
+-	ri, gi, bi, ai := col.ToNRGBA(cursorOpaque)
++	ri, gi, bi, _ := col.ToNRGBA(cursorOpaque)
+ 	r := uint8(ri >> 8)
+ 	g := uint8(gi >> 8)
+ 	b := uint8(bi >> 8)
+-	endA := uint8(ai >> 8)
+-	startA := cursorFadeAlpha
+ 	cursorDim := color.NRGBA{R: r, G: g, B: b, A: cursorFadeAlpha}
+ 	if inverted {
+ 		a.cursor.FillColor = cursorOpaque
+-		startA, endA = endA, startA
+ 	} else {
+ 		a.cursor.FillColor = cursorDim
+ 	}
+ 
+-	deltaA := endA - startA
+-	fadeStart := float32(0.5 - cursorFadeRatio)
+-	fadeStop := float32(0.5 + cursorFadeRatio)
+-
+ 	interrupted := false
+ 	anim := fyne.NewAnimation(time.Second/2, func(f float32) {
+ 		shouldInterrupt := timeNow().Sub(a.lastInterruptTime) <= cursorInterruptTime
+@@ -73,23 +66,29 @@
+ 			return
+ 		}
+ 
+-		alpha := uint8(0)
+-		if f < fadeStart {
+-			if _, _, _, al := a.cursor.FillColor.RGBA(); uint8(al>>8) == cursorFadeAlpha {
+-				return
+-			}
+-
+-			a.cursor.FillColor = cursorDim
+-		} else if f >= fadeStop {
++		// BibleText patch: discrete caret blink. The stock smooth fade calls
++		// cursor.Refresh() — a FULL-canvas repaint (tree walk + complete GL
++		// re-stream on mobile) — on every animation frame inside its fade band,
++		// ~8 repaints/s for as long as any Entry has focus. On iOS that burned
++		// 30-60% CPU with an idle focused field. Snapping between dim and opaque
++		// at the half-cycle keeps the blink cadence and the typing-interrupt
++		// behaviour but refreshes only twice per second.
++		opaque := f >= 0.5
++		if inverted {
++			opaque = f < 0.5
++		}
++		if opaque {
+ 			if _, _, _, al := a.cursor.FillColor.RGBA(); al == 0xffff {
+ 				return
+ 			}
+ 
+ 			a.cursor.FillColor = cursorOpaque
+ 		} else {
+-			fade := (f + cursorFadeRatio - 0.5) * (1 / (cursorFadeRatio * 2))
+-			alpha = uint8(float32(deltaA) * fade)
+-			a.cursor.FillColor = color.NRGBA{R: r, G: g, B: b, A: alpha}
++			if _, _, _, al := a.cursor.FillColor.RGBA(); uint8(al>>8) == cursorFadeAlpha {
++				return
++			}
++
++			a.cursor.FillColor = cursorDim
+ 		}
+ 
+ 		a.cursor.Refresh()
