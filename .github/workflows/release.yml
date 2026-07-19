@@ -1,0 +1,112 @@
+# Desktop release builds. Pushing a tag like v1.1.2 builds BibleText for
+# macOS (Apple Silicon + Intel), Windows, and Linux on GitHub's runners (the
+# Fyne GL/cgo toolchains can't cross-compile from one host OS to another) and
+# attaches the artifacts to a GitHub Release. The download page on GitHub Pages
+# links to .../releases/latest/download/<asset>, so asset NAMES here are a
+# stable public contract — don't rename them casually.
+#
+# iOS is NOT built here: the App Store pipeline is scripts/release-ios.sh
+# (signing + the patched-Fyne step live on the Mac).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: create release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: create the release (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "BibleText ${GITHUB_REF_NAME#v}" \
+            --notes "Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351
+
+macOS note: the app is unsigned — on first launch, right-click the app and choose Open."
+
+  macos:
+    name: build macOS (arm64 + intel)
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
+      - name: package both architectures
+        run: |
+          cd cmd/desktop
+          # Apple Silicon
+          CGO_ENABLED=1 GOARCH=arm64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext.desktop
+          ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-AppleSilicon.zip
+          rm -rf BibleText.app
+          # Intel
+          CGO_ENABLED=1 GOARCH=amd64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext.desktop
+          ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-Intel.zip
+          rm -rf BibleText.app
+      - name: upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-macOS-AppleSilicon.zip BibleText-macOS-Intel.zip --clobber
+
+  linux:
+    name: build Linux (amd64)
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install GL/X11 headers + fyne CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+          go install fyne.io/tools/cmd/fyne@latest
+      - name: package
+        run: |
+          cd cmd/desktop
+          $(go env GOPATH)/bin/fyne package -os linux --app-id uk.co.bibletext.desktop
+          mv BibleText.tar.xz ../../BibleText-Linux-amd64.tar.xz
+      - name: upload asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Linux-amd64.tar.xz --clobber
+
+  windows:
+    name: build Windows (amd64)
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
+      - name: package
+        shell: bash
+        run: |
+          cd cmd/desktop
+          "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext.desktop
+          cd ../..
+          7z a BibleText-Windows-amd64.zip ./cmd/desktop/BibleText.exe
+      - name: upload asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Windows-amd64.zip --clobber
