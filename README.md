@@ -22,6 +22,18 @@ for a Gospel passage, the parallel accounts in the other Gospels.
 
 </details>
 
+## Download
+
+**[bibletext download page](https://cubancorona.github.io/bibletext/)** — all
+platforms in one place, or directly:
+
+- **iPhone & iPad** — [App Store](https://apps.apple.com/app/id6784567351)
+- **macOS / Windows / Linux** — grab the latest build from
+  [Releases](https://github.com/cubancorona/bibletext/releases/latest)
+  (the desktop apps are unsigned: on macOS, right-click → **Open** the first
+  time). Desktop artifacts are built by
+  [`release.yml`](.github/workflows/release.yml) on every `v*` tag.
+
 ## Build
 
 You need [Go](https://go.dev/dl/) 1.21 or newer, plus a C compiler (Fyne uses cgo):

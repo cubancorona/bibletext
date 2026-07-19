@@ -4,5 +4,5 @@ Website = "https://github.com/cubancorona/bibletext"
 Icon = "Icon.png"
 Name = "BibleText"
 ID = "uk.co.bibletext.desktop"
-Version = "1.0.0"
-Build = 29
+Version = "1.1.2"
+Build = 30
