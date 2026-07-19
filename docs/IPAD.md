@@ -113,14 +113,17 @@ iPad Pro 13-inch simulator produces the right 2064×2752 PNGs directly, no bezel
 
 ## Verified / not-yet-verified
 
-- **Verified on an iPad Pro 11" simulator (interactive):** the regular layout in
+- **Verified on iPad simulators (interactive, 11" + 13"):** the regular layout in
   both portrait and landscape, the native overlay correctly clipped to the reading
   pane (full-width and split); the sidebar toggle expand/collapse in both
   orientations; the orientation default re-asserting on a live rotation both
   directions (which also exercises the `layoutWatcher` orientation-flip rebuild);
-  the compact (iPhone) layout unregressed. Plus `classifyLayout` /
-  `regularSplitOffset` unit tests, `-race` suite, `go vet`, iOS + Android
-  cross-compile.
+  search / Find with the soft keyboard up (incl. the 1.1.1 fix for the
+  keyboard-height rebuild loop — see the CRITICAL note on `layoutWatcher.Resize`
+  in `ui_regular.go`); the compact (iPhone) layout unregressed. Plus
+  `classifyLayout` / `regularSplitOffset` unit tests, `-race` suite, `go vet`,
+  iOS + Android cross-compile. Shipped: 1.1.0 (universal) and the 1.1.1 fixes
+  are live on the App Store.
 - **Not yet runtime-verified (covered by unit tests + logic):** the
   compact↔regular breakpoint crossing on a live Split-View / Stage-Manager resize;
   hardware-keyboard shortcuts on iPad (not wired — the desktop `Cmd-F` / `Esc`
