@@ -26,12 +26,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nmacOS note: the apps are unsigned - on first launch, right-click the app and choose Open.')"
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
           gh release create "${GITHUB_REF_NAME}" \
             --title "BibleText ${GITHUB_REF_NAME#v}" \
-            --notes "Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351
-
-macOS note: the app is unsigned — on first launch, right-click the app and choose Open."
+            --notes "$NOTES"
 
   macos:
     name: build macOS (arm64 + intel)
