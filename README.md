@@ -76,9 +76,10 @@ go test ./...
 
 iOS device installs need Xcode signing; `scripts/run-ios-device.sh` wraps it (set
 `BIBLETEXT_TEAM_ID` to your own Apple Developer team id, and optionally
-`BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply a one-line scroll-lag patch to a
-local copy of Fyne — see [`patches/README.md`](patches/README.md); `go.mod` ships
-stock Fyne so plain `go` commands need no setup.
+`BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply two
+small Fyne patches to a local copy (a scroll-lag fix and a caret-blink battery
+fix) — see [`patches/README.md`](patches/README.md); `go.mod` ships stock Fyne so
+plain `go` commands need no setup.
 
 Android toolchain setup (JDK 21, SDK + NDK — all installable under `$HOME`, no
 root), signing, emulator use, and distribution are covered in
