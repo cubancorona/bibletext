@@ -24,7 +24,7 @@ for a Gospel passage, the parallel accounts in the other Gospels.
 
 ## Download
 
-**[bibletext download page](https://cubancorona.github.io/bibletext/)** — all
+**[bibletext download page](https://bibletext.co.uk/)** — all
 platforms in one place, or directly:
 
 - **iPhone & iPad** — [App Store](https://apps.apple.com/app/id6784567351)

@@ -19,8 +19,8 @@ Graphics are in [`docs/play-assets/`](play-assets/). Build to upload:
 | Tags | Bible, Reference |
 | Contact email | the address on the Play account (Apple side uses [redacted-private-email]) |
 | Website | `https://github.com/cubancorona/bibletext` |
-| Privacy policy URL | `https://cubancorona.github.io/bibletext/privacy.html` |
-| Support page (optional) | `https://cubancorona.github.io/bibletext/support.html` |
+| Privacy policy URL | `https://bibletext.co.uk/privacy.html` |
+| Support page (optional) | `https://bibletext.co.uk/support.html` |
 
 ## Short description (80 chars max — this one is 76)
 

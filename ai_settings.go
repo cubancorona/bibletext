@@ -468,7 +468,7 @@ func showAISettings(state *AppState) {
 	// Deep-link the policy itself — the site ROOT is the download landing page
 	// since 2026-07 (the policy moved to privacy.html when the site gained a
 	// download page; keep this in sync with gh-pages).
-	if u, err := url.Parse("https://cubancorona.github.io/bibletext/privacy.html"); err == nil {
+	if u, err := url.Parse("https://bibletext.co.uk/privacy.html"); err == nil {
 		aiDisclosure.Add(container.NewHBox(widget.NewHyperlink("Privacy Policy ↗", u), layout.NewSpacer()))
 	}
 
