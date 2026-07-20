@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BibleText — a clean, fast Bible reader</title>
-<meta name="description" content="Download BibleText — a clean, fast, distraction-free Bible reader for iPhone, iPad, macOS, Windows, and Linux.">
+<meta name="description" content="Download BibleText — a free, open-source, distraction-free Bible reader for iPhone, iPad, macOS, Windows, and Linux. AI study, verse sharing, narrated audio.">
+<meta property="og:title" content="BibleText — a clean, fast Bible reader">
+<meta property="og:description" content="Free and open source. Distraction-free reading, AI study, verse sharing, and narrated audio — on iPhone, iPad, macOS, Windows, and Linux.">
+<meta property="og:url" content="https://bibletext.co.uk/">
+<meta property="og:type" content="website">
 <style>
   :root { color-scheme: light dark;
     --paper:#f7f3ea; --ink:#2b2620; --muted:#7a7264; --accent:#3c5a86; --border:#ddd5c4; --card:#fffdf7; }
@@ -30,6 +34,11 @@
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn.primary .sub { color: #e8eefb; }
   .note { font-size: .85rem; color: var(--muted); max-width: 460px; margin: 18px auto 0; }
+  .features { max-width: 480px; margin: 0 auto; text-align: left; list-style: none; padding: 0; }
+  .features li { margin: 10px 0; padding-left: 2em; text-indent: -2em; }
+  .features .emoji { display: inline-block; width: 1.6em; text-indent: 0; }
+  .oss { font-size: .95rem; margin: 26px auto 0; max-width: 460px; }
+  .oss a { color: var(--accent); text-decoration: none; }
   footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
     font-size: .9rem; color: var(--muted); }
   footer a { color: var(--accent); text-decoration: none; margin: 0 10px; }
@@ -41,6 +50,17 @@
   <h1>BibleText</h1>
   <p class="tagline">A clean, fast, distraction-free way to read and study the Bible.</p>
   <p class="verse">“Your word is a lamp to my feet, and a light for my path.” — Psalm 119:105</p>
+
+  <ul class="features">
+    <li><span class="emoji">📖</span>Distraction-free reading of the World English Bible and Berean
+        Standard Bible — words of Christ in red, light &amp; dark themes.</li>
+    <li><span class="emoji">🤖</span><strong>AI study</strong> — select any passage and have it explained,
+        its context unpacked, or its translation discussed. Bring your own AI key; entirely optional.</li>
+    <li><span class="emoji">📤</span><strong>Share</strong> — any verse as a clean, typeset image card,
+        or as text with a proper citation.</li>
+    <li><span class="emoji">🎧</span><strong>Narration</strong> — complete human-recorded audio with
+        read-along verse highlighting, or on-device read-aloud. Keeps playing with the screen locked.</li>
+  </ul>
 
   <h2>iPhone &amp; iPad</h2>
   <a class="btn primary" href="https://apps.apple.com/app/id6784567351">
@@ -67,7 +87,11 @@
   </a>
 
   <p class="note">The desktop apps are unsigned — on macOS, right-click the app and choose
-  <em>Open</em> the first time. All versions are free and open source.</p>
+  <em>Open</em> the first time.</p>
+
+  <p class="oss">BibleText is <strong>free and open source</strong> (Apache-2.0) —
+  no ads, no accounts, no tracking.<br>
+  <a href="https://github.com/cubancorona/bibletext">Browse the source on GitHub&nbsp;↗</a></p>
 
   <footer>
     <a href="https://github.com/cubancorona/bibletext">Source on GitHub</a> ·
