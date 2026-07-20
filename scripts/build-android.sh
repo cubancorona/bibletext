@@ -52,8 +52,11 @@ if [ "${1:-}" = "--release" ]; then
   note "fyne release -os android (signed AAB)"
   cd "$APP_DIR"
   rm -f BibleText.aab
+  # Marketing version defaults to the Version in FyneApp.toml (override with
+  # BIBLETEXT_ANDROID_VERSION); the build number stays explicit per upload.
+  APP_VERSION="${BIBLETEXT_ANDROID_VERSION:-$(sed -n 's/^Version = "\(.*\)"/\1/p' FyneApp.toml)}"
   fyne release -os android -app-id uk.co.bibletext -icon Icon.png \
-    -app-version 1.0.0 -app-build "${BIBLETEXT_ANDROID_BUILD:-1}" \
+    -app-version "${APP_VERSION:-1.0.0}" -app-build "${BIBLETEXT_ANDROID_BUILD:-1}" \
     -keyStore "$KS" -keyName "$KEY_ALIAS" -keyStorePass "$KS_PASS" -keyPass "$KS_PASS"
 
   note "injecting classes2.dex into the AAB (base/dex/) + re-signing"

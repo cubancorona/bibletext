@@ -28,6 +28,10 @@ for a Gospel passage, the parallel accounts in the other Gospels.
 platforms in one place, or directly:
 
 - **iPhone & iPad** — [App Store](https://apps.apple.com/app/id6784567351)
+- **Android** — [sideload APK](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk)
+  from Releases (built + signed locally by `scripts/build-android.sh --release`,
+  uploaded per release; Play Store listing prepared in
+  [docs/PLAY_LISTING.md](docs/PLAY_LISTING.md), pending a Play Console account)
 - **macOS / Windows / Linux** — grab the latest build from
   [Releases](https://github.com/cubancorona/bibletext/releases/latest)
   (the desktop apps are unsigned: on macOS, right-click → **Open** the first
