@@ -28,13 +28,23 @@ KEY_ALIAS=bibletext
 source "$HOME/Library/Android/env.sh"
 export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 
+# Build against the patched Fyne, like the iOS scripts (see patches/README.md).
+# Android benefits from the caret-blink battery fix (widget/entry_cursor_anim.go,
+# cross-platform); the iOS drawloop patch is inert here — its shared-file hunks
+# are a write-only flag and the 2ms timing change lives in darwin_ios.go, which
+# Android never compiles. go.mod is restored on exit so plain `go` commands stay
+# stock. (The go.mod restore lives in the single EXIT trap below — bash keeps
+# only the LAST trap per signal, so it must not be registered separately here.)
+"$REPO_ROOT/scripts/setup-fyne-patch.sh"
+( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
+
 ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
 BT="$ANDROID_HOME/build-tools/35.0.0"
 WORK="$(mktemp -d /tmp/bibletext-android.XXXXXX)"
 # The trap reverts fyne's Build++ writeback to FyneApp.toml — but ONLY when the
 # file was clean at start, so it can never destroy uncommitted manual edits.
 TOML_WAS_DIRTY="$(git -C "$REPO_ROOT" status --porcelain -- cmd/mobile/FyneApp.toml 2>/dev/null || true)"
-trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex"; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
+trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex"; git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
