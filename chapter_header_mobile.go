@@ -4,9 +4,10 @@ package bibletext
 
 // The compact mobile chapter toolbar, shared by the iOS and Android native
 // reading views (each platform's buildReadingViewMobile calls it). Split out
-// of reading_ios.go when Android grew its own native overlay. The audio
-// control renders only where audioSupported() — the narration engine is
-// Apple-only, so Android shows the gap empty rather than a dead speaker.
+// of reading_ios.go when Android grew its own native overlay. Both platforms
+// have full native audio engines (AVFoundation / BtAudio.java), so the audio
+// control — gated on chapterAudioAvailable() — is effectively always present
+// here (TTS covers chapters with no recording).
 
 import (
 	"fmt"

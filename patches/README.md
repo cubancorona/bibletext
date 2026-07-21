@@ -156,7 +156,7 @@ actually changed, or respect `ShowAnimations()` with a discrete fallback.
 [fyne-io/fyne#6368]: https://github.com/fyne-io/fyne/issues/6368
 [fyne-io/fyne#5422]: https://github.com/fyne-io/fyne/pull/5422
 
-## How the build uses it (iOS-only, applied by the iOS scripts)
+## How the build uses it (applied by the mobile packaging scripts)
 
 `go.mod` ships **stock** Fyne with **no `replace`**, so `go build ./...`,
 `go run ./cmd/desktop`, and `go test ./...` are one-line with no setup — correct,
@@ -164,8 +164,10 @@ because the drawloop bug is iOS-only (`//go:build darwin && ios`) and desktop
 builds don't get either patch (the caret-blink fix *would* apply to desktop, but
 the desktop CPU cost is far smaller and stock keeps those builds byte-identical).
 
-The patches are applied **only on the iOS packaging path**. `scripts/run-ios-device.sh`
-and `scripts/run-ios-sim.sh` each:
+The patches are applied on **every mobile packaging path**:
+`scripts/run-ios-device.sh`, `scripts/run-ios-sim.sh`, `scripts/release-ios.sh`
+(the App Store pipeline), and `scripts/build-android.sh` (the caret-blink fix
+is a real battery win on Android; the drawloop hunk is inert off-iOS). Each:
 
 1. run `scripts/setup-fyne-patch.sh` → regenerate `third_party/fyne` (a patched
    copy of stock Fyne v2.7.4; `third_party/` is `.gitignore`d, ~22 MB, never
@@ -175,14 +177,16 @@ and `scripts/run-ios-sim.sh` each:
 3. build/package the iOS app (which now ships both fixes);
 4. restore stock `go.mod` via an `EXIT` trap (success, failure, or Ctrl-C).
 
-So your working tree's `go.mod` is always stock; the `replace` exists only for the
-seconds an iOS build runs. **Don't run a bare `fyne package -os ios` yourself** — it
-would build against stock Fyne and ship the laggy version. Use the scripts.
+So your working tree's `go.mod` is always stock; the `replace` exists only
+while a packaging script runs. **Don't run a bare `fyne package -os
+ios|android` yourself** — it would build against stock Fyne and ship the
+laggy / hot-caret version. Use the scripts.
 
 ## Setup
 
-Nothing to do for desktop. For iOS, just run `scripts/run-ios-device.sh` (or
-`run-ios-sim.sh`) — they apply the patches automatically. `setup-fyne-patch.sh` is
+Nothing to do for desktop. For iOS run `scripts/run-ios-device.sh` /
+`run-ios-sim.sh` / `release-ios.sh`, for Android `scripts/build-android.sh` —
+they all apply the patches automatically. `setup-fyne-patch.sh` is
 safe to run standalone too (it regenerates `third_party/fyne` from the module
 cache + these patches, fetching stock v2.7.4 if it isn't cached).
 
@@ -193,9 +197,10 @@ delete its `.patch` file and its `patch -p1` + verify-grep lines in
 `setup-fyne-patch.sh`. To remove everything when upstream ships both (or you bump
 to a version that includes them):
 
-1. **Un-hook the iOS scripts:** delete the "apply the iOS-only Fyne patch" block
-   (the `setup-fyne-patch.sh` + `go mod edit -replace` + the `EXIT` trap) from
-   `scripts/run-ios-device.sh` and `scripts/run-ios-sim.sh`.
+1. **Un-hook the packaging scripts:** delete the Fyne-patch block (the
+   `setup-fyne-patch.sh` call + `go mod edit -replace` + the `EXIT`-trap
+   restore) from `scripts/run-ios-device.sh`, `scripts/run-ios-sim.sh`,
+   `scripts/release-ios.sh`, **and** `scripts/build-android.sh`.
 2. **Delete the tooling:** `rm -rf third_party/fyne patches/ scripts/setup-fyne-patch.sh`
    (and the `third_party/` line in `.gitignore` if nothing else needs it).
 3. **Verify:** `go build ./...` and the iOS scripts both build against stock Fyne.

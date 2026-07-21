@@ -122,10 +122,12 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	})
 	focusBtn.Importance = widget.LowImportance
 
-	// Play this chapter's audio (recorded where available, otherwise read aloud).
-	// Apple platforms (iOS + macOS) — audioSupported() is true on darwin, false on
-	// Linux/Windows/Android, which show just the focus toggle. Clustered with the
-	// focus toggle, sharing the arrows' baseline.
+	// Play this chapter's audio (recorded where available, otherwise read aloud
+	// where a speech engine exists). Every platform has an audio engine now —
+	// native on iOS/macOS/Android, oto (recordings only) on Windows/Linux — so
+	// the button hides only when chapterAudioAvailable() says this chapter has
+	// nothing playable. Clustered with the focus toggle, sharing the arrows'
+	// baseline.
 	var rightControls fyne.CanvasObject = focusBtn
 	if chapterAudioAvailable(state) {
 		rightControls = container.NewHBox(audioControl(state, navBoxH), hgap(8), focusBtn)

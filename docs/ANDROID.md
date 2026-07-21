@@ -4,9 +4,9 @@ Companion to the iOS notes. Android has a **native reading overlay** (a
 selectable `TextView` in a `Dialog` floated over the Fyne GL surface —
 `android/BtBridge.java` + `reading_android.go`), the twin of the iOS
 `UITextView`, so readers get real long-press selection with drag handles, the
-floating toolbar, and BibleText's study menu (Ask AI / Explain / Analyze
-context / Analyze translation / Cross-references / Share with citation) — the
-same Go dispatch as iOS. Android now has **full audio parity** (`android/BtAudio.java`
+floating toolbar, and BibleText's study menu (Explain / Analyze context /
+Analyze translation / Cross-references / Share with citation / Share as
+image) — the same Go dispatch as iOS. Android now has **full audio parity** (`android/BtAudio.java`
 + `audio_android.go`): a `MediaPlayer` streams recorded chapters (±15s skip) and
 `TextToSpeech` reads aloud, with read-along verse highlight + the floating
 "Follow narration" pill painted on the reading overlay — the twin of the iOS
@@ -189,8 +189,11 @@ run loop — so the SAME Go `advanceAndContinue` drives it). The pieces:
 
 Use **`scripts/build-android.sh`** — it compiles `android/BtBridge.java` to
 `classes2.dex`, runs the Fyne CLI (`fyne-io/tools` v1.7.2 — current; the CLI
-versions separately from the v2.7 toolkit; no patched Fyne needed, the iOS
-drawloop patch is iOS-only), injects the dex, and re-signs.
+versions separately from the v2.7 toolkit), **builds against the patched
+Fyne** (the script runs `setup-fyne-patch.sh` and injects the temporary
+`replace`, exactly like the iOS scripts — the caret-blink fix is a real
+battery win on Android; the iOS drawloop hunk is inert here), injects the
+dex, and re-signs.
 
 ```bash
 # Debug/test APK (signed with the upload key, target 29) → cmd/mobile/BibleText.apk
@@ -293,3 +296,15 @@ gate takes two calendar weeks regardless.
   target 35, so we'd bump Fyne or supply a custom `AndroidManifest.xml` then.
 - The debug APK is ~120 MB (all ABIs bundled); the Play `.aab` splits per device
   so real downloads are far smaller.
+
+## Tablets
+
+The one mobile binary serves phones and tablets: `deviceIsTablet()` on Android
+(`device_android.go`) applies the sw600dp convention to the live canvas — a
+window whose smallest dimension is ≥ 600 logical units (`isTabletDimensions`,
+`layout.go`) is tablet-class, and at ≥ 700pt width `classifyLayout` gives it
+the **regular** sidebar+split layout (the iPad layout — hideable sidebar,
+orientation-driven default, native overlay clipped to the reading pane).
+Because the canvas has no size until after the first build, `layoutMayChange()`
+is always true on Android, so the `layoutWatcher` is installed on phones too —
+they just never cross the breakpoint. Verified on the Pixel Tablet AVD.
