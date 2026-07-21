@@ -2,6 +2,26 @@ package bibletext
 
 import "testing"
 
+// muteEngines swaps the per-platform audio engines for no-ops so controller
+// tests are deterministic: the real engines would fetch and play the chapter,
+// and how far they get before an assert is runner-dependent (network + audio
+// device). Restores the real engines when the test ends.
+func muteEngines(t *testing.T) {
+	t.Helper()
+	origURL, origTTS, origToggle := engineStartURL, engineStartTTS, engineToggle
+	origStop, origSkip, origArt := engineStop, engineSkip, engineSetArtwork
+	engineStartURL = func(string, string, string) {}
+	engineStartTTS = func(string, string, string) {}
+	engineToggle = func() {}
+	engineStop = func() {}
+	engineSkip = func(float64) {}
+	engineSetArtwork = func(string) {}
+	t.Cleanup(func() {
+		engineStartURL, engineStartTTS, engineToggle = origURL, origTTS, origToggle
+		engineStop, engineSkip, engineSetArtwork = origStop, origSkip, origArt
+	})
+}
+
 func TestChapterAudioFingerprint(t *testing.T) {
 	got := chapterAudioFingerprint(&AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20})
 	if got != "web|John|20" {
@@ -24,6 +44,7 @@ func TestAudioControllerStop(t *testing.T) {
 }
 
 func TestStopAudioForNav(t *testing.T) {
+	muteEngines(t)
 	gAudio.stop() // clean slate (other tests share the global)
 	defer gAudio.stop()
 
@@ -54,6 +75,7 @@ func TestStopAudioForNav(t *testing.T) {
 }
 
 func TestAdvanceToNextChapter(t *testing.T) {
+	muteEngines(t)
 	gAudio.stop() // the controller is a shared global; start clean
 	defer gAudio.stop()
 
@@ -264,6 +286,7 @@ func TestReadAlongFollowSuspend(t *testing.T) {
 // through selectBook, which reset IsSearching/CanReturnToSearchResults and
 // yanked the results the reader was browsing.
 func TestAdvanceToNextChapterPreservesSearchContext(t *testing.T) {
+	muteEngines(t)
 	gAudio.stop()
 	defer gAudio.stop()
 
