@@ -1,0 +1,81 @@
+# Windows visual smoke test — runs the real Windows desktop build with Mesa's
+# software OpenGL (llvmpipe, the same rasterizer the Linux smoke uses) and
+# captures screenshots as artifacts.
+# Manual trigger: gh workflow run windows-visual-smoke.yml
+#
+# Why this exists: no Mac-local way to see the Windows build render (cgo + GL
+# can't cross-compile), and GitHub's Windows runners have no GPU — Windows
+# ships only an OpenGL 1.1 software fallback, far below Fyne's 2.0 floor. The
+# fix is the standard mesa-dist-win trick: drop llvmpipe's opengl32.dll beside
+# the exe and the app gets OpenGL 4.x in pure software — the genuine WGL path
+# real Windows desktops use, just with a software rasterizer behind it. (The
+# same deployment works for humans running the app in GPU-less VMs.)
+name: Windows visual smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: build the Windows desktop binary
+        run: go build -o bibletext.exe ./cmd/desktop
+
+      - name: deploy Mesa llvmpipe (software OpenGL) beside the exe
+        shell: pwsh
+        run: |
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -like '*release-msvc.7z' } | Select-Object -First 1
+          Write-Host "Using $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile mesa.7z
+          7z x mesa.7z -omesa | Out-Null
+          Copy-Item mesa\x64\*.dll .
+          Get-ChildItem *.dll | Format-Table Name, Length
+
+      - name: launch and capture
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath .\bibletext.exe -PassThru -NoNewWindow `
+            -RedirectStandardOutput app-stdout.log -RedirectStandardError app-stderr.log
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          function Shot([string]$name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save($name, [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+            Write-Host "captured $name"
+          }
+          Start-Sleep 20; Shot "shot-1-startup.png"
+          Start-Sleep 45; Shot "shot-2-loaded.png"
+          Start-Sleep 10; Shot "shot-3-settled.png"
+          if ($app.HasExited) {
+            Write-Host "::warning::app exited early (code $($app.ExitCode))"
+          } else {
+            Stop-Process -Id $app.Id -Force
+          }
+          Write-Host "--- stdout ---"; Get-Content app-stdout.log -ErrorAction SilentlyContinue
+          Write-Host "--- stderr ---"; Get-Content app-stderr.log -ErrorAction SilentlyContinue
+
+      - name: upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-visual-smoke
+          path: |
+            shot-*.png
+            app-*.log
+          if-no-files-found: error
