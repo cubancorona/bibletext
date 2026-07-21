@@ -32,11 +32,19 @@ func TestFullUIBuildsAndExercisesPaths(t *testing.T) {
 	if len(state.SearchResults) == 0 {
 		t.Fatal("expected results for 'god' from sample data")
 	}
+	// The live window content must actually swap to the results view: one
+	// tappable card per match in the reading pane.
+	if got := len(collectResultCards(win.Canvas().Content())); got != len(state.SearchResults) {
+		t.Fatalf("window renders %d result cards, want %d", got, len(state.SearchResults))
+	}
 
 	// Open a result -> reading view with a highlighted, scrolled-to verse.
 	openSearchResult(state, state.SearchResults[0])
 	if !state.HasHighlightedVerse {
 		t.Fatal("expected a highlighted verse after opening a result")
+	}
+	if left := len(collectResultCards(win.Canvas().Content())); left != 0 {
+		t.Fatalf("reading view must replace the results, still %d cards rendered", left)
 	}
 
 	// Navigate so the recent-history bar has something to render.

@@ -124,7 +124,7 @@ func (c *audioController) playPauseCurrent(state *AppState) {
 		}
 		// Native flips playing<->paused and posts bibleTextAudioStateChanged, which
 		// updates the glyph via applyNativeState.
-		nativeAudioToggle()
+		engineToggle()
 		return
 	}
 	kind, recID := c.effectiveSource(state)
@@ -219,7 +219,7 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 
 	switch a.Kind {
 	case audioRecorded:
-		nativeAudioStartURL(a.URL, a.Title, a.Subtitle)
+		engineStartURL(a.URL, a.Title, a.Subtitle)
 	default: // audioTTS
 		if !ttsSupported() {
 			// Defense in depth: chapterAudioAvailable hides the button and the
@@ -233,7 +233,7 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 			c.mu.Unlock()
 			return
 		}
-		nativeAudioStartTTS(a.Text, a.Title, a.Subtitle)
+		engineStartTTS(a.Text, a.Title, a.Subtitle)
 	}
 
 	// Read-along: arm the verse timing table for this chapter (recorded only) so the
@@ -249,7 +249,7 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	boldTTF := serifFontBytes(state, fyne.TextStyle{Bold: true})
 	go func() {
 		if path, err := renderChapterArtwork(title, subtitle, regTTF, boldTTF); err == nil {
-			nativeAudioSetArtwork(path)
+			engineSetArtwork(path)
 		}
 	}()
 
@@ -280,7 +280,7 @@ func (c *audioController) stop() {
 	c.state = audioIdle
 	c.mu.Unlock()
 	if wasLoaded {
-		nativeAudioStop()
+		engineStop()
 		c.fireChange()
 	}
 	c.clearReadAlong()
@@ -435,7 +435,7 @@ func (c *audioController) skip(seconds float64) {
 	canSeek := c.loaded && c.kind == audioRecorded
 	c.mu.Unlock()
 	if canSeek {
-		nativeAudioSkip(seconds)
+		engineSkip(seconds)
 	}
 }
 
@@ -571,7 +571,7 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		// explicitly: it can't tell a between-chapters ENDED from a final one, so
 		// without this the lock-screen card (and, on Android, the foreground
 		// service + notification) would sit parked forever.
-		nativeAudioStop()
+		engineStop()
 	}
 
 	// A recorded stream that failed (404, dead network, hung buffer) restarts the
@@ -585,7 +585,7 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 		// FAILED with no fallback possible — end the session on the native side
 		// (Android holds its foreground service through FAILED expecting the
 		// fallback; without one it must be told the session is over).
-		nativeAudioStop()
+		engineStop()
 	}
 }
 
@@ -599,7 +599,7 @@ func (c *audioController) fallbackToTTS(state *AppState, failedFP string) {
 			// Reader left the failed chapter — no fallback. Release the native
 			// session surfaces (Android keeps its service up through FAILED
 			// precisely so this fallback could reuse it; tell it we won't).
-			nativeAudioStop()
+			engineStop()
 			return
 		}
 		c.startChapter(state, ttsAudioForChapter(state), failedFP)
@@ -619,19 +619,33 @@ func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, re
 			// Reader moved on while the chapter was finishing — don't yank them.
 			// Their navigation already stopped any mismatched playback, but the
 			// native session surfaces may still be up; release them (idempotent).
-			nativeAudioStop()
+			engineStop()
 			return
 		}
 		if !advanceToNextChapter(state) {
 			// End of the Bible: nothing follows Revelation 22 — end the session so
 			// the lock-screen card / Android foreground service don't sit parked.
-			nativeAudioStop()
+			engineStop()
 			return
 		}
 		state.refresh() // carry the reading pane onto the new chapter
 		c.startChapter(state, resolveAudio(state, kind, recID), chapterAudioFingerprint(state))
 	})
 }
+
+// The per-platform engine entry points, indirected so unit tests can swap in
+// no-op engines: the real ones (AVFoundation / BtAudio / oto) would otherwise
+// actually fetch and play a chapter from a test process — timing- and
+// device-dependent on CI (the oto engine reached PLAYING inside 0.4s on a
+// Windows runner and broke TestStopAudioForNav's buffering assert).
+var (
+	engineStartURL   = nativeAudioStartURL
+	engineStartTTS   = nativeAudioStartTTS
+	engineToggle     = nativeAudioToggle
+	engineStop       = nativeAudioStop
+	engineSkip       = nativeAudioSkip
+	engineSetArtwork = nativeAudioSetArtwork
+)
 
 // stopAudioForNav stops playback when the reader navigates to a DIFFERENT chapter
 // than the one playing (the audio is bound to the displayed text). Re-landing on
