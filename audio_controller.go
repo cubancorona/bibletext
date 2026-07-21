@@ -639,13 +639,26 @@ func (c *audioController) advanceAndContinue(state *AppState, kind audioKind, re
 // device-dependent on CI (the oto engine reached PLAYING inside 0.4s on a
 // Windows runner and broke TestStopAudioForNav's buffering assert).
 var (
-	engineStartURL   = nativeAudioStartURL
-	engineStartTTS   = nativeAudioStartTTS
-	engineToggle     = nativeAudioToggle
-	engineStop       = nativeAudioStop
-	engineSkip       = nativeAudioSkip
-	engineSetArtwork = nativeAudioSetArtwork
+	engineStartURL   func(url, title, artist string)
+	engineStartTTS   func(text, title, artist string)
+	engineToggle     func()
+	engineStop       func()
+	engineSkip       func(seconds float64)
+	engineSetArtwork func(path string)
 )
+
+// Assigned in init(), not at declaration: on the oto build the engine calls
+// back into the controller (post → applyNativeState → fallbackToTTS →
+// startChapter → engineStartURL), which the compiler rejects as an
+// initialization cycle if the vars reference the engine in their initializers.
+func init() {
+	engineStartURL = nativeAudioStartURL
+	engineStartTTS = nativeAudioStartTTS
+	engineToggle = nativeAudioToggle
+	engineStop = nativeAudioStop
+	engineSkip = nativeAudioSkip
+	engineSetArtwork = nativeAudioSetArtwork
+}
 
 // stopAudioForNav stops playback when the reader navigates to a DIFFERENT chapter
 // than the one playing (the audio is bound to the displayed text). Re-landing on
