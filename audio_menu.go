@@ -87,7 +87,9 @@ func showAudioSourceMenu(state *AppState) {
 	for _, r := range recs {
 		addSource(audioRecorded, r.id, theme.AccountIcon(), "Recorded · "+r.narrator)
 	}
-	addSource(audioTTS, "", iconAudioWave, "Read aloud · text to speech")
+	if ttsSupported() {
+		addSource(audioTTS, "", iconAudioWave, "Read aloud · text to speech")
+	}
 
 	explain := "Your device is reading this chapter aloud (text to speech). No recorded narration is available for it yet."
 	switch {

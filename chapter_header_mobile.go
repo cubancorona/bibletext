@@ -103,7 +103,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// speaker; expanded it's a compact two-row card that fits the gap.
 	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
 	var centre fyne.CanvasObject
-	if audioSupported() {
+	if chapterAudioAvailable(state) {
 		centre = container.NewCenter(audioControl(state, boxH))
 	}
 	row := container.NewBorder(nil, nil, left, right, centre)
