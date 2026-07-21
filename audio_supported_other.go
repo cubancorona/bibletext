@@ -2,8 +2,15 @@
 
 package bibletext
 
-// audioSupported is false on the desktop hosts with no native audio engine
-// (Linux, Windows), so the reading header omits the play button entirely rather
-// than show a dead control. (iOS + macOS get true via audio_supported_apple.go;
-// Android via audio_supported_android.go.)
-func audioSupported() bool { return false }
+import "runtime"
+
+// audioSupported: Windows and Linux now have a real recorded-narration engine
+// (audio_other.go — oto + go-mp3), so the play button appears wherever the
+// chapter has a recording. js/wasm is a compile-check target only — no audio.
+func audioSupported() bool { return runtime.GOOS != "js" }
+
+// ttsSupported: no read-aloud engine on these hosts (no cross-platform TTS
+// worth shipping). Gates the "Read aloud" source row and, via
+// chapterAudioAvailable, hides the audio button entirely for chapters that
+// have no recording (licensed versions, the deuterocanon).
+func ttsSupported() bool { return false }

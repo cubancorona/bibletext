@@ -221,6 +221,18 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	case audioRecorded:
 		nativeAudioStartURL(a.URL, a.Title, a.Subtitle)
 	default: // audioTTS
+		if !ttsSupported() {
+			// Defense in depth: chapterAudioAvailable hides the button and the
+			// source menu omits read-aloud where TTS doesn't exist (desktop
+			// Windows/Linux), so this should be unreachable — but never hand the
+			// engine a job it can't do.
+			c.mu.Lock()
+			c.state = audioIdle
+			c.loaded = false
+			c.loadedFP = ""
+			c.mu.Unlock()
+			return
+		}
 		nativeAudioStartTTS(a.Text, a.Title, a.Subtitle)
 	}
 

@@ -137,6 +137,18 @@ func chapterHasRecording(state *AppState) bool {
 	return len(chapterRecordings(state)) > 0
 }
 
+// chapterAudioAvailable reports whether the current chapter can actually be
+// played on THIS platform — the gate for showing the reading-header audio
+// control. Where TTS exists (Apple, Android) every chapter qualifies; on the
+// desktop-other engine (Windows/Linux, recordings only) a chapter with no
+// recording shows no control at all rather than a dead button.
+func chapterAudioAvailable(state *AppState) bool {
+	if !audioSupported() {
+		return false
+	}
+	return ttsSupported() || chapterHasRecording(state)
+}
+
 // audioForRecording resolves the current chapter as a specific recording, falling
 // back to TTS when that recording doesn't cover the chapter. The Subtitle credits
 // the narrator on the lock screen / Control Center.
