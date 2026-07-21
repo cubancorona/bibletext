@@ -526,6 +526,7 @@ type chapterText struct {
 
 	paragraphs   [][]Verse
 	highlightRef VerseRef
+	highlightEnd int // last verse of the highlighted range (== .Verse for one verse)
 	hasHighlight bool
 	clipboard    fyne.Clipboard
 	parentScroll *container.Scroll
@@ -539,9 +540,10 @@ type chapterText struct {
 	// fyne.)
 	textSize float32 // 0 ⇒ theme default (bare test constructions)
 
-	lastWidth     float32
-	highlightLine int // line of the highlighted verse after wrapping (-1 = none)
-	totalLines    int
+	lastWidth        float32
+	highlightLine    int // first line of the highlighted range after wrapping (-1 = none)
+	highlightEndLine int // last line of the highlighted range (drives the band height)
+	totalLines       int
 
 	// verseLines records each verse's first wrapped line, in chapter order —
 	// the Fyne twin of the native overlays' per-verse glyph geometry. It powers
@@ -570,6 +572,10 @@ func newChapterText(state *AppState, verses []Verse) *chapterText {
 	if state.HasHighlightedVerse {
 		c.hasHighlight = true
 		c.highlightRef = VerseRef{Book: state.HighlightedBook, Chapter: state.HighlightedChapter, Verse: state.HighlightedVerse}
+		c.highlightEnd = state.HighlightedVerse
+		if state.HighlightedVerseEnd > c.highlightEnd {
+			c.highlightEnd = state.HighlightedVerseEnd
+		}
 	}
 	if state.window != nil {
 		c.clipboard = state.window.Clipboard()
@@ -603,6 +609,7 @@ func (c *chapterText) rewrap(width float32) {
 	spaceW := measure(" ")
 
 	c.highlightLine = -1
+	c.highlightEndLine = -1
 	c.verseLines = c.verseLines[:0]
 	lineNo := 0
 	paras := make([]string, 0, len(c.paragraphs))
@@ -615,7 +622,10 @@ func (c *chapterText) rewrap(width float32) {
 		var cur strings.Builder
 		curW := float32(0)
 		for _, v := range para {
-			hl := c.hasHighlight && refOf(v) == c.highlightRef
+			inRange := c.hasHighlight &&
+				v.BookName == c.highlightRef.Book && v.Chapter == c.highlightRef.Chapter &&
+				v.Verse >= c.highlightRef.Verse && v.Verse <= c.highlightEnd
+			hl := inRange && v.Verse == c.highlightRef.Verse
 			if hl {
 				c.highlightLine = lineNo + len(lines)
 			}
@@ -654,6 +664,11 @@ func (c *chapterText) rewrap(width float32) {
 					}
 					first = false
 				}
+			}
+			if inRange {
+				// The line under construction holds this verse's final token —
+				// the running end of the highlight band (extends per range verse).
+				c.highlightEndLine = lineNo + len(lines)
 			}
 		}
 		if cur.Len() > 0 {
@@ -697,6 +712,23 @@ func (c *chapterText) highlightY() float32 {
 		return 0
 	}
 	return float32(c.highlightLine) / float32(c.totalLines) * c.MinSize().Height
+}
+
+// highlightBand is the Y offset and height (content coordinates) of the wrapped
+// lines the highlighted verse range occupies — the geometry behind the Fyne
+// pane's visible highlight wash (the platforms with native text views color the
+// verse itself; a single-style Entry can't, so readingColumn draws a translucent
+// band over these lines instead). ok=false when nothing is highlighted.
+func (c *chapterText) highlightBand() (y, h float32, ok bool) {
+	if c.highlightLine < 0 || c.totalLines <= 0 {
+		return 0, 0, false
+	}
+	end := c.highlightEndLine
+	if end < c.highlightLine {
+		end = c.highlightLine
+	}
+	lineH := c.MinSize().Height / float32(c.totalLines)
+	return float32(c.highlightLine) * lineH, float32(end-c.highlightLine+1) * lineH, true
 }
 
 // lineY is the approximate top Y of a wrapped line — the same proportional
@@ -945,6 +977,7 @@ type readingColumn struct {
 	maxWidth float32
 	scroll   *container.Scroll
 	chapter  *chapterText
+	band     *canvas.Rectangle // translucent wash over the highlighted verse (objects[1])
 	scrolled bool
 }
 
@@ -972,6 +1005,20 @@ func (l *readingColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	child.Resize(fyne.NewSize(w, child.MinSize().Height))
 	child.Move(fyne.NewPos(x, 0))
 
+	// The highlight band tracks the wrapped lines of the highlighted verse. It
+	// sits ON TOP of the Entry (a translucent highlighter-pen wash) because the
+	// Entry paints an opaque input background; canvas primitives take no events,
+	// so selection and the study menu pass straight through it.
+	if l.band != nil {
+		if by, bh, ok := l.bandGeometry(); ok {
+			l.band.Move(fyne.NewPos(x, by))
+			l.band.Resize(fyne.NewSize(w, bh))
+			l.band.Show()
+		} else {
+			l.band.Hide()
+		}
+	}
+
 	if l.scroll != nil && l.chapter != nil && l.chapter.highlightLine >= 0 && !l.scrolled {
 		y := l.chapter.highlightY() - 24
 		if y < 0 {
@@ -989,6 +1036,15 @@ func (l *readingColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	if l.scroll != nil && l.chapter != nil {
 		applyFyneReadingRestore(l)
 	}
+}
+
+// bandGeometry is the highlight band's rect within the column, from the
+// chapter's wrap geometry.
+func (l *readingColumn) bandGeometry() (y, h float32, ok bool) {
+	if l.chapter == nil {
+		return 0, 0, false
+	}
+	return l.chapter.highlightBand()
 }
 
 func (l *readingColumn) MinSize(objects []fyne.CanvasObject) fyne.Size {

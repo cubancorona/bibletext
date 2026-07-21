@@ -248,3 +248,24 @@ func firstBookChapter(t *testing.T, bd *BibleData) (string, int) {
 	t.Fatal("sample Bible has no books with chapters")
 	return "", 0
 }
+
+// TestRestoreRecentKeepsHeadAnchor pins the relaunch fix: the saved head visit
+// carries the reader's mid-chapter scroll anchor (flushReadingState stamps it),
+// and restoreRecent must carry it onto the rebuilt head — dropping it meant a
+// later history-bar tap back to that chapter landed at the top unless the
+// reader had scrolled again since the relaunch.
+func TestRestoreRecentKeepsHeadAnchor(t *testing.T) {
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+	saved := []ChapterVisit{
+		{Book: book, Chapter: ch, Verse: 4, Delta: 12.5, Frac: 0.4},
+	}
+	out := restoreRecent(saved, base, book, ch)
+	if len(out) != 1 {
+		t.Fatalf("want one deduped head entry, got %+v", out)
+	}
+	head := out[0]
+	if head.Verse != 4 || head.Delta != 12.5 || head.Frac != 0.4 {
+		t.Errorf("head anchor dropped on restore: got %+v, want Verse=4 Delta=12.5 Frac=0.4", head)
+	}
+}

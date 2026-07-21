@@ -18,12 +18,13 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 		defer cancel()
 		verses, err := runAISearch(ctx, state, query)
-		fyne.Do(func() {
-			if !aiFeaturesEnabled(state) {
-				return // the assistant was switched to "None" mid-flight — drop the result
-			}
-			done(verses, err)
-		})
+		// The completion is ALWAYS delivered — even when the assistant was
+		// switched to "None" mid-flight. Both callers already drop a dead
+		// result via their session/aiSearchActive checks, and the mobile one
+		// must run its spinner-stop first: swallowing the callback here left
+		// an orphaned ProgressBarInfinite repainting a detached canvas
+		// (review finding).
+		fyne.Do(func() { done(verses, err) })
 	}()
 }
 

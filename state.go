@@ -51,6 +51,14 @@ type AppState struct {
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32
 
+	// askSession is the ONE Find-supersession guard for the whole app (review
+	// finding): it must survive window rebuilds. When it lived as a local of
+	// each buildSidebar / buildMobileSearchTab, a rebuild mid-flight (rotation,
+	// theme variant change, version switch) minted a fresh zeroed session while
+	// the old completion closure still held — and passed — the old one, letting
+	// a stale response repaint a newer query's results.
+	askSession aiSearchSession
+
 	HighlightedBook     string
 	HighlightedChapter  int
 	HighlightedVerse    int // start of the highlighted range (a single verse for search/QOTD)
@@ -351,7 +359,14 @@ func advanceToNextChapter(state *AppState) bool {
 	if idx < 0 || idx+1 >= len(books) {
 		return false // end of the Bible
 	}
-	selectBook(state, books[idx+1], true) // sets chapter 1 + history + clears highlight
+	// Mirror moveChapter, NOT selectBook: selectBook also resets IsSearching /
+	// CanReturnToSearchResults, and this runs from a background audio event —
+	// it must never yank away results the reader is browsing (within-book
+	// advances already leave them alone; review finding).
+	state.CurrentBook = books[idx+1]
+	state.CurrentChapter = clampChapter(state.Bible, state.CurrentBook, 1)
+	clearHighlightedVerse(state)
+	addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
 	return true
 }
 
