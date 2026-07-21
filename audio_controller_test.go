@@ -256,3 +256,35 @@ func TestReadAlongFollowSuspend(t *testing.T) {
 		t.Fatalf("scroll with nothing armed touched the pill: transitions %v", pill)
 	}
 }
+
+// TestAdvanceToNextChapterPreservesSearchContext pins the boundary fix: the
+// advance runs from a BACKGROUND audio event (a chapter finishing), so it must
+// never tear down foreground search state. Within-book advances go through
+// moveChapter, which leaves search alone; the book-boundary branch used to go
+// through selectBook, which reset IsSearching/CanReturnToSearchResults and
+// yanked the results the reader was browsing.
+func TestAdvanceToNextChapterPreservesSearchContext(t *testing.T) {
+	gAudio.stop()
+	defer gAudio.stop()
+
+	bd := &BibleData{
+		Books: []string{"BookA", "BookB"},
+		Verses: map[string]map[int][]Verse{
+			"BookA": {1: {}, 2: {}},
+			"BookB": {1: {}, 2: {}},
+		},
+	}
+	state := &AppState{Bible: bd, CurrentVersion: "web", CurrentBook: "BookA", CurrentChapter: 2,
+		IsSearching: true, CanReturnToSearchResults: true, ActiveSearchQuery: "shepherd"}
+
+	if !advanceToNextChapter(state) || state.CurrentBook != "BookB" || state.CurrentChapter != 1 {
+		t.Fatalf("cross-book advance = %s %d, want BookB 1", state.CurrentBook, state.CurrentChapter)
+	}
+	if !state.IsSearching || !state.CanReturnToSearchResults {
+		t.Errorf("book-boundary advance tore down search context: IsSearching=%v CanReturnToSearchResults=%v",
+			state.IsSearching, state.CanReturnToSearchResults)
+	}
+	if len(state.RecentChapters) == 0 || state.RecentChapters[0].Book != "BookB" || state.RecentChapters[0].Chapter != 1 {
+		t.Errorf("boundary advance must still record history; head = %+v", state.RecentChapters)
+	}
+}

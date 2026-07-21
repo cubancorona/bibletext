@@ -1,5 +1,7 @@
 package bibletext
 
+import "runtime"
+
 // Red-letter mode: render the words of Christ in red. Rendering is trivial (a
 // themed <span class="wj"> in buildChapterHTML); the data is a table of verse
 // ranges where Jesus is speaking.
@@ -16,6 +18,20 @@ package bibletext
 import "fyne.io/fyne/v2"
 
 const prefRedLetter = "reading.redLetter"
+
+// redLetterSupported reports whether THIS platform's reading pane can render
+// red-letter at all: the native text views (macOS NSTextView, iOS UITextView,
+// Android TextView) color the \wj runs, but the Windows/Linux pane is one
+// uniformly-styled widget.Entry — it cannot color a text range, so offering
+// the toggle there would be a silent no-op (review finding). Settings hides
+// the switch where this is false.
+func redLetterSupported() bool {
+	switch runtime.GOOS {
+	case "darwin", "ios", "android":
+		return true
+	}
+	return false
+}
 
 // redLetterEnabled reports the persisted toggle (off by default). nil-safe so it
 // works in tests with no running app.

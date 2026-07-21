@@ -10,3 +10,7 @@ package bibletext
 // `fyne package` build that skipped scripts/build-android.sh), the runBtAudio
 // JNI calls no-op safely, exactly like the reading overlay's runBta fallback.
 func audioSupported() bool { return true }
+
+// ttsSupported: Android's engine includes TextToSpeech read-aloud
+// (android/BtAudio.java), so every chapter has an audio source.
+func ttsSupported() bool { return true }

@@ -118,3 +118,31 @@ func TestTrailingDebouncerStaleFire(t *testing.T) {
 		t.Errorf("a superseded debounced run fired: %v", got)
 	}
 }
+
+// TestAISearchSessionSurvivesRebuild pins the rebuild variant of the same race:
+// the supersession guard lives on AppState (state.askSession), so the session a
+// pre-rebuild completion closure captured and the session a post-rebuild
+// submission bumps are the SAME object. When the guard was a per-build local,
+// each rebuildWindow minted a fresh zeroed session and a stale pre-rebuild
+// response passed its own (never-bumped) check and repainted the new query's
+// results.
+func TestAISearchSessionSurvivesRebuild(t *testing.T) {
+	state := &AppState{}
+
+	// Build 1's sidebar takes a pointer to the shared session and submits A.
+	build1 := &state.askSession
+	genA := build1.Start()
+
+	// The window rebuilds mid-flight (rotation / theme change / version switch);
+	// build 2 takes a pointer to the SAME state-held session and submits B.
+	build2 := &state.askSession
+	genB := build2.Start()
+
+	// A's slow completion closes over build1 — it must see itself superseded.
+	if build1.Current(genA) {
+		t.Error("a pre-rebuild submission stayed current after a post-rebuild submission — stale results would repaint the new query")
+	}
+	if !build2.Current(genB) {
+		t.Error("the post-rebuild submission must be current")
+	}
+}

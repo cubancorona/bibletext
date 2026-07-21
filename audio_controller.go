@@ -221,6 +221,18 @@ func (c *audioController) startChapter(state *AppState, a chapterAudio, fp strin
 	case audioRecorded:
 		nativeAudioStartURL(a.URL, a.Title, a.Subtitle)
 	default: // audioTTS
+		if !ttsSupported() {
+			// Defense in depth: chapterAudioAvailable hides the button and the
+			// source menu omits read-aloud where TTS doesn't exist (desktop
+			// Windows/Linux), so this should be unreachable — but never hand the
+			// engine a job it can't do.
+			c.mu.Lock()
+			c.state = audioIdle
+			c.loaded = false
+			c.loadedFP = ""
+			c.mu.Unlock()
+			return
+		}
 		nativeAudioStartTTS(a.Text, a.Title, a.Subtitle)
 	}
 
@@ -506,20 +518,27 @@ func (c *audioController) applyNativeState(s audioPlayState) {
 	// real audio — guards continuous playback against racing through chapters).
 	endedFP := c.loadedFP
 	tooFast := time.Since(c.startedAt) < 2*time.Second
+	if (s == audioPlaying || s == audioPaused || s == audioBuffering) && c.loadedFP == "" {
+		// An activity report with NO chapter identity: this controller already
+		// disowned the session (a stop/nav teardown cleared loadedFP while the
+		// report was in flight through its fyne.Do hop — engines check staleness
+		// at POST time, so a report can still land after a stop). Applying it
+		// would manufacture "playing but anonymous" — nav-stop couldn't match it
+		// and the button couldn't either — so drop it whole. Every legitimate
+		// report has identity: startChapter stamps loadedFP before any engine
+		// starts. (Caught by TestStopAudioForNav under -race on Windows, where
+		// the oto engine's PLAYING landed just after the nav stop.)
+		c.mu.Unlock()
+		return
+	}
 	c.state = s
 	switch s {
 	case audioPlaying, audioPaused, audioBuffering:
-		// The engine reports it's actively producing (or holding) sound, so a source
-		// IS loaded — re-assert it. Belt-and-suspenders against a stale teardown
-		// callback having just cleared the flag a moment before this one lands; the
-		// native mode guards (audio_ios.go) are the primary defense. Only when a
-		// chapter identity survives, though: re-asserting with loadedFP=="" would
-		// manufacture the inconsistent "loaded but anonymous" state (nav-stop can't
-		// match it, the button can't either) if a native surface ever resumes a
-		// session this controller already disowned.
-		if c.loadedFP != "" {
-			c.loaded = true
-		}
+		// The engine reports it's actively producing (or holding) sound, so a
+		// source IS loaded — re-assert it (belt-and-suspenders against a stale
+		// teardown callback having cleared the flag a moment before this lands;
+		// the native mode guards, audio_ios.go, are the primary defense).
+		c.loaded = true
 	case audioIdle, audioEnded, audioFailed:
 		// Chapter ended, stream failed, or the session was torn down: nothing is
 		// actively loaded for play/pause purposes, so a tap re-starts cleanly.

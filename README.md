@@ -141,7 +141,7 @@ root), signing, emulator use, and distribution are covered in
   **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
   set, fetched once and cached.
-- 🎧 **Listen** (iOS, Android & macOS) — play the current chapter from the reading
+- 🎧 **Listen** (all platforms) — play the current chapter from the reading
   header as a recorded human **narration** or on-device **read-aloud**
   (text-to-speech) of the verses on screen. The **Berean Standard Bible** (Barry
   Hays) and the **World English Bible** (David Williams) both have complete
@@ -153,7 +153,10 @@ root), signing, emulator use, and distribution are covered in
   sync, highlighting each verse as it is spoken. When a chapter finishes, playback
   continues to the **next chapter** automatically until you pause. On the phones
   (iOS and Android) audio keeps playing while the app is backgrounded or the screen
-  is locked, with lock-screen / notification controls and ±15-second skip.
+  is locked, with lock-screen / notification controls and ±15-second skip. On
+  Windows and Linux the recorded narrations play too (with ±15s skip and
+  continuous chapters); read-aloud and read-along highlighting are
+  native-platform features (iOS / Android / macOS).
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.

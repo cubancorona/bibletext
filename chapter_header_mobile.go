@@ -4,9 +4,10 @@ package bibletext
 
 // The compact mobile chapter toolbar, shared by the iOS and Android native
 // reading views (each platform's buildReadingViewMobile calls it). Split out
-// of reading_ios.go when Android grew its own native overlay. The audio
-// control renders only where audioSupported() — the narration engine is
-// Apple-only, so Android shows the gap empty rather than a dead speaker.
+// of reading_ios.go when Android grew its own native overlay. Both platforms
+// have full native audio engines (AVFoundation / BtAudio.java), so the audio
+// control — gated on chapterAudioAvailable() — is effectively always present
+// here (TTS covers chapters with no recording).
 
 import (
 	"fmt"
@@ -103,7 +104,7 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// speaker; expanded it's a compact two-row card that fits the gap.
 	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
 	var centre fyne.CanvasObject
-	if audioSupported() {
+	if chapterAudioAvailable(state) {
 		centre = container.NewCenter(audioControl(state, boxH))
 	}
 	row := container.NewBorder(nil, nil, left, right, centre)

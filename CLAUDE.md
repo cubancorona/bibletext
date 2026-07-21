@@ -31,17 +31,19 @@ cd cmd/mobile  && fyne package -os iossimulator --app-id uk.co.bibletext
 
 **Patched Fyne (iOS scroll-lag + caret-CPU fixes).** `go.mod` ships **stock**
 Fyne, so `go build ./...` / `go run ./cmd/desktop` / `go test ./...` are
-one-line with no setup step. Two small in-Fyne fixes matter only on the iOS
-build: the `drawloop` idle-timeout change (100ms→2ms, iOS scroll lag) and the
-Entry caret discrete-blink change (the stock smooth caret fade full-canvas
-repaints ~8×/s while any entry has focus → 30-60% CPU; the patch snaps
-dim↔opaque, 2 repaints/s). Both are applied ONLY on the iOS packaging path:
-`scripts/run-ios-device.sh` and `run-ios-sim.sh` regenerate a patched Fyne
-(`scripts/setup-fyne-patch.sh` → `third_party/fyne`, gitignored) and inject a
+one-line with no setup step. Two small in-Fyne fixes: the `drawloop`
+idle-timeout change (100ms→2ms, iOS scroll lag; inert off-iOS) and the Entry
+caret discrete-blink change (the stock smooth caret fade full-canvas repaints
+~8×/s while any entry has focus → 30-60% CPU / battery burn; the patch snaps
+dim↔opaque, 2 repaints/s — this one matters on Android too). Both are applied
+by EVERY mobile packaging script — `scripts/run-ios-device.sh`,
+`run-ios-sim.sh`, `release-ios.sh` (the App Store pipeline), and
+`build-android.sh`: each regenerates a patched Fyne
+(`scripts/setup-fyne-patch.sh` → `third_party/fyne`, gitignored) and injects a
 temporary `replace fyne.io/fyne/v2 => ./third_party/fyne` for just that build,
-restoring stock `go.mod` on exit. Do **not** run a bare `fyne package -os ios`
-yourself — it would ship the unpatched (laggy, hot-caret) build; use the
-scripts. Rationale + measurements + removal steps:
+restoring stock `go.mod` on exit. Do **not** run a bare
+`fyne package -os ios|android` yourself — it would ship the unpatched (laggy,
+hot-caret) build; use the scripts. Rationale + measurements + removal steps:
 [`patches/README.md`](patches/README.md).
 
 VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
@@ -65,6 +67,19 @@ trigger; that manifest must NOT declare versionCode/uses-sdk — fyne passes
 those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
 `buildReadingViewMobileFyne` is the fallback when the bridge dex is absent.
 
+## Website (bibletext.co.uk)
+
+The landing/download page, privacy policy, and support page live in `docs/`
+on main (`index.html`, `privacy.html`, `support.html`) — the SOURCE OF TRUTH —
+but GitHub Pages serves the **`gh-pages` branch root**, so editing `docs/` on
+main does not change the live site. To publish: copy the changed files onto a
+fresh checkout of `origin/gh-pages` (temp worktree) and push; the branch's
+`CNAME` file (`bibletext.co.uk`) must survive every push or the custom domain
+detaches. DNS/registrar is Cloudflare (4×A + 4×AAAA GitHub Pages records, www
+CNAME). `release.yml`'s asset names (BibleText-macOS-AppleSilicon.zip etc.) are
+a stable contract with the page's download links — never rename them; the
+Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
+
 ## Architecture notes (the non-obvious bits)
 
 - **Build tags select the UI per platform.** Files are tagged
@@ -79,9 +94,13 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   `ui_regular.go`: an `HSplit` + the app header, structurally the desktop layout)
   — while phones, and an iPad squeezed into a narrow multitasking column, get the
   **compact** bottom-tab layout (`buildCompactUI`). `classifyLayout(width,
-  isTablet)` decides: tablets (`deviceIsTablet()` = the iOS UIKit idiom,
-  `device_ios.go`; false elsewhere so Android tablets/desktop are untouched) at
-  ≥ `tabletLayoutMinWidth` (700pt) are regular. **The regular layout still uses
+  isTablet)` decides: tablets (`deviceIsTablet()` — the UIKit interface idiom
+  on iOS, `device_ios.go`; the sw600dp-style smallest-dimension test on Android,
+  `device_android.go` reading the live canvas via `isTabletDimensions` in
+  `layout.go`; false on desktop) at
+  ≥ `tabletLayoutMinWidth` (700pt) are regular. `layoutMayChange()` gates the
+  watcher install (iOS: only when the idiom is pad; Android: always — the
+  canvas size that makes a device a tablet arrives after the first build). **The regular layout still uses
   the mobile NATIVE reading overlay** (`buildReadingViewMobile` via
   `rebuildMobileReadingPane`), so selection / Study-with-AI / scroll persistence
   are unchanged; the overlay tracks the reading host's real absolute rect
@@ -226,7 +245,8 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   singleton `gAudio`, untagged) tracks play state and drives the per-platform
   `nativeAudio*` shims; the reading-header play button is `audio_button.go`
   (recorded → MediaPlay/Pause; TTS → the bundled `iconAudioWave` waveform glyph in
-  `icons_embed.go`), shown only where `audioSupported()`.
+  `icons_embed.go`), shown only where `chapterAudioAvailable()` (= an engine exists AND this
+  chapter has a recording or the platform has TTS).
   **The native engine runs on both Apple platforms.** `audio_ios.go` (cgo,
   `//go:build ios`) wraps AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) +
   MPNowPlayingInfoCenter + MPRemoteCommandCenter (±15s `MPSkipIntervalCommand`, no
@@ -235,13 +255,18 @@ those as aapt2 flags. See `docs/ANDROID.md`). `reading_mobile.go`'s
   interruption handler) and using AppKit/NSImage for the Now Playing artwork. State
   posts back via `bibleTextAudioStateChanged` (`audio_export_apple.go`, the
   empty-preamble `//export` twin, `//go:build darwin` so it serves both engines) →
-  `applyNativeState` → `fyne.Do`. `audioSupported()` is true on `darwin`
-  (`audio_supported_apple.go`) and `android` (`audio_supported_android.go` —
-  Android has its own full engine: `audio_android.go` + `android/BtAudio.java`,
-  callbacks via `audio_export_android.go` / `audio_jni_android.c`; see the Layout
-  note and `docs/ANDROID.md`); Linux/Windows get no-op `nativeAudio*` stubs
-  (`audio_other.go`, `//go:build !darwin && !android`) so those builds stay
-  cgo-free and show no audio control. **Stale-callback gotcha:** every native delegate/KVO callback is
+  `applyNativeState` → `fyne.Do`. Android has its own full engine:
+  `audio_android.go` + `android/BtAudio.java`, callbacks via
+  `audio_export_android.go` / `audio_jni_android.c`; see the Layout note and
+  `docs/ANDROID.md`. **Windows/Linux have an engine too** (`audio_other.go`,
+  `//go:build !darwin && !android`): recorded narration through oto
+  (WASAPI on Windows, ALSA loaded via purego on Linux — CI/dev builds on Linux
+  need `libasound2-dev`) decoding with go-mp3, same `nativeAudio*` shim +
+  `applyNativeState` transitions, natural-end detection feeding continuous
+  chapter advance, generation-counter staleness guards. No TTS there —
+  `ttsSupported()` (true only on `darwin`/`android`) hides the read-aloud
+  source, and `chapterAudioAvailable()` hides the whole button for chapters
+  with no recording. `audioSupported()` is now true everywhere except wasm. **Stale-callback gotcha:** every native delegate/KVO callback is
   gated on the controller's current `mode` (`if (self.mode != BT_MODE_TTS) return;`
   etc.). The AVPlayer's KVO observer is removed in `teardownEngines`, but the
   `AVSpeechSynthesizer` delegate stays wired, so after switching TTS→recording a

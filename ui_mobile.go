@@ -58,8 +58,23 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	// screen. (Layout-agnostic: a tablet in full-screen reading looks the same
 	// as a phone, so there is no sidebar to add here.)
 	if state.IsFullScreen {
+		// The state hooks MUST be rewired to THIS tree (review finding): with
+		// narration playing, a chapter's natural end calls state.refresh() from
+		// advanceAndContinue — if showReading still pointed at the previous
+		// build's detached host, the fresh nativeReadingHost would be built into
+		// that dead tree, steal the currentHost singleton, and leave the visible
+		// overlay unframeable (pushFrame bails on currentHost != h) with a stale
+		// corner label. Desktop installs its hooks before its full-screen branch
+		// for the same reason.
+		readingHost := container.NewStack(buildReadingViewMobile(state))
+		state.showReading = func() {
+			readingHost.Objects = []fyne.CanvasObject{buildReadingViewMobile(state)}
+			readingHost.Refresh()
+			notifyReadingOverlay(overlayShouldShow(state))
+		}
+		state.syncSidebar = func() {}
 		base := canvas.NewRectangle(pal.Background)
-		return container.NewStack(base, buildReadingViewMobile(state))
+		return container.NewStack(base, readingHost)
 	}
 
 	// Pick the layout from the live canvas width: a wide-enough tablet gets the
@@ -73,10 +88,12 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		root = buildCompactUI(state)
 	}
 
-	// On a tablet, wrap the root so a width change that crosses the breakpoint
-	// (rotation, or resizing a Split View / Stage Manager column) rebuilds into
-	// the other layout. Phones never cross it, so their path is unchanged.
-	if deviceIsTablet() {
+	// Wrap the root wherever the layout could change at runtime: iPads (static
+	// idiom), and ALL of Android — there the tablet test reads live window
+	// dimensions, which are 0×0 before the first layout, so the watcher must be
+	// armed to catch the real size (it stays inert on phones: the class never
+	// changes). iPhone paths remain unwrapped and byte-for-byte unchanged.
+	if layoutMayChange() {
 		return newLayoutWatcher(state, root)
 	}
 	return root
@@ -366,10 +383,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		}
 	}
 
-	// askSession drops stale completions: a slow response for an abandoned query
-	// must never clobber the search the reader actually submitted (field-reported:
-	// edit the query, resubmit, progress flashes, then the OLD results reappear).
-	var askSession aiSearchSession
+	// The supersession guard lives on AppState (state.askSession) so it survives
+	// window rebuilds (field-reported: edit the query, resubmit, progress flashes,
+	// then the OLD results reappear — and the rebuild variant of the same race).
+	askSession := &state.askSession
 
 	var runAsk func(string)
 	runAsk = func(q string) {

@@ -21,6 +21,22 @@ const (
 	layoutRegular
 )
 
+// androidTabletMinDim is the sw600dp-style tablet threshold used by
+// device_android.go: a window whose SMALLEST dimension is at least this many
+// logical units is tablet-class. 600 is Android's own convention for when
+// tablet resources kick in.
+const androidTabletMinDim float32 = 600
+
+// isTabletDimensions applies the smallest-width tablet test. Pure so the
+// host test suite covers it even though its only caller is Android-tagged.
+func isTabletDimensions(w, h float32) bool {
+	m := w
+	if h < m {
+		m = h
+	}
+	return m >= androidTabletMinDim
+}
+
 // tabletLayoutMinWidth is the canvas width (in logical points) at or above which
 // a tablet switches to the regular sidebar+split layout. Below it, even on an
 // iPad (e.g. a 1/2 or 1/3 multitasking column), the sidebar would crowd the

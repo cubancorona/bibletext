@@ -427,8 +427,11 @@ func balanceQuoteMarks(s string) string {
 // shared selection carries an accurate citation. Falls back to "Book C" when the
 // selection can't be pinned to specific verses (e.g. a partial phrase).
 func citationForSelection(state *AppState, text string) string {
+	if state == nil {
+		return ""
+	}
 	book, ch := state.CurrentBook, state.CurrentChapter
-	if state == nil || state.Bible == nil {
+	if state.Bible == nil {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
 	// selectionVerses matches in BOTH directions (the selection contains a verse, or a

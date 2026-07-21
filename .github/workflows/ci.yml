@@ -25,7 +25,7 @@ jobs:
       - name: Install Fyne system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libasound2-dev
 
       - name: gofmt
         run: |
@@ -38,7 +38,7 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go test ./...
+        run: go test -race ./...
 
   # The Linux job never compiles the darwin-tagged cgo (the native NSTextView
   # reading overlay + the macOS audio engine) or the ios-tagged files — i.e. the
@@ -59,7 +59,7 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go test ./...
+        run: go test -race ./...
 
       - name: iOS cross-compile (ios/arm64, no signing)
         run: |
@@ -92,4 +92,4 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go test ./...
+        run: go test -race ./...
