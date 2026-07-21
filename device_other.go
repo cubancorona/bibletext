@@ -1,10 +1,12 @@
-//go:build !ios
+//go:build !ios && !android
 
 package bibletext
 
-// deviceIsTablet is the non-iOS fallback. Desktop uses its own dedicated layout
-// (ui_desktop.go), and Android tablets are not yet opted into the regular-width
-// layout — both keep their existing behaviour, so this reports false everywhere
-// off iOS. (An Android tablet idiom check can be added here later without
-// touching the shared layout logic in layout.go.)
+// deviceIsTablet is the desktop/wasm fallback: desktop uses its own dedicated
+// layout (ui_desktop.go), so the runtime compact/regular machinery never runs
+// there. iOS answers via the UIKit idiom (device_ios.go); Android via the
+// sw600dp-style dimension heuristic (device_android.go).
 func deviceIsTablet() bool { return false }
+
+// layoutMayChange gates installing the layoutWatcher; moot off mobile.
+func layoutMayChange() bool { return false }

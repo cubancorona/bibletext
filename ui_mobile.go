@@ -73,10 +73,12 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		root = buildCompactUI(state)
 	}
 
-	// On a tablet, wrap the root so a width change that crosses the breakpoint
-	// (rotation, or resizing a Split View / Stage Manager column) rebuilds into
-	// the other layout. Phones never cross it, so their path is unchanged.
-	if deviceIsTablet() {
+	// Wrap the root wherever the layout could change at runtime: iPads (static
+	// idiom), and ALL of Android — there the tablet test reads live window
+	// dimensions, which are 0×0 before the first layout, so the watcher must be
+	// armed to catch the real size (it stays inert on phones: the class never
+	// changes). iPhone paths remain unwrapped and byte-for-byte unchanged.
+	if layoutMayChange() {
 		return newLayoutWatcher(state, root)
 	}
 	return root
