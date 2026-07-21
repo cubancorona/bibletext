@@ -46,6 +46,10 @@ jobs:
 
       - name: launch and capture
         shell: pwsh
+        env:
+          # The runner's screen is 1024x768 and the app opens wider — scale down
+          # so the full window (incl. the reading header's audio button) fits.
+          FYNE_SCALE: "0.7"
         run: |
           $app = Start-Process -FilePath .\bibletext.exe -PassThru -NoNewWindow `
             -RedirectStandardOutput app-stdout.log -RedirectStandardError app-stderr.log
