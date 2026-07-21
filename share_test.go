@@ -61,7 +61,16 @@ func TestRenderVerseImageLongPassage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("long render: %v", err)
 	}
-	os.Remove(path)
+	defer os.Remove(path)
+	// Same sanity floor as the short-passage test: a degenerate/blank render
+	// for the long-wrap path must not pass just because err was nil.
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Size() < 1000 {
+		t.Errorf("long-passage image suspiciously small: %d bytes", info.Size())
+	}
 }
 
 func TestFormatBibleQuote(t *testing.T) {

@@ -111,10 +111,32 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
+	// Positive control on a live window: with AI ON, an Ask dispatch opens the
+	// question sheet as a canvas overlay. (Ask is the safe control — unlike the
+	// fixed actions it makes no provider call until the question is submitted.)
+	// This proves the overlay channel observes the dispatch, so the AI-off
+	// assertions below can genuinely fail if the guard is ever lost.
+	onState := sampleState()
+	onState.aiKeys = newKeyStoreWith(newFakePrefs())
+	onWin := app.NewWindow("ai on")
+	onState.window = onWin
+	dispatchAIAction(onState, aiActionAsk, "In the beginning")
+	if onWin.Canvas().Overlays().Top() == nil {
+		t.Fatal("control failed: with AI on, an Ask dispatch must open the question sheet")
+	}
+	onWin.Canvas().Overlays().Remove(onWin.Canvas().Overlays().Top())
+
+	// With the assistant on "None", the same dispatches must be dropped by the
+	// aiFeaturesEnabled guard: no panel, no sheet, no overlay of any kind.
 	state := aiOffState()
-	// Must not panic and must not try to open a panel (state.window is nil, so
-	// reaching showAIPanel/promptAskQuestion would be a no-op anyway — the guard
-	// is what keeps the AI path from ever engaging).
+	win := app.NewWindow("ai off")
+	state.window = win
 	dispatchAIAction(state, aiActionExplain, "In the beginning")
+	if top := win.Canvas().Overlays().Top(); top != nil {
+		t.Fatalf("AI-off Explain dispatch opened an overlay: %T", top)
+	}
 	dispatchAIAction(state, aiActionAsk, "In the beginning")
+	if top := win.Canvas().Overlays().Top(); top != nil {
+		t.Fatalf("AI-off Ask dispatch opened an overlay: %T", top)
+	}
 }

@@ -9,10 +9,26 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// lockUnlicensedVersions pins every env switch that could make the NRSV/LSB
+// licensed sources available, so these tests always see the default build:
+// locked rows in the picker, refusals from switchVersion — and, crucially, no
+// async download path (a QA machine with the license trio set would otherwise
+// send switchVersionInteractive down the goroutine/network branch mid-test).
+func lockUnlicensedVersions(t *testing.T) {
+	t.Helper()
+	for _, v := range []string{
+		"BIBLETEXT_ENABLE_TESTING", "BIBLE_API_KEY",
+		"BIBLETEXT_LICENSE_NRSV", "BIBLETEXT_PROVIDER_ID_NRSV",
+		"BIBLETEXT_LICENSE_LSB", "BIBLETEXT_PROVIDER_ID_LSB",
+	} {
+		t.Setenv(v, "")
+	}
+}
+
 func TestVersionSelectorUI(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	t.Setenv("BIBLETEXT_ENABLE_TESTING", "") // default build: unlicensed versions stay locked
+	lockUnlicensedVersions(t)
 
 	win := app.NewWindow("Version Selector Test")
 	state := sampleState()
@@ -100,7 +116,7 @@ func TestVersionSelectorUI(t *testing.T) {
 func TestSwitchVersionInteractive(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	t.Setenv("BIBLETEXT_ENABLE_TESTING", "") // keep unlicensed versions unselectable
+	lockUnlicensedVersions(t)
 
 	state := sampleState()
 	state.CurrentVersion = defaultVersionID

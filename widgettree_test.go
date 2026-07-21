@@ -3,8 +3,12 @@ package bibletext
 // Renderer-free helpers for asserting on CONSTRUCTED widget trees. They descend
 // containers, scrolls, splits, theme overrides, popups and this package's own
 // wrapper widgets through their content fields — never via test.WidgetRenderer —
-// so they are safe in the race-enabled tests (instantiating renderers measures
-// text, which races Fyne's test-app font-cache clearing; see ui_focus_test.go).
+// so they add no renderer creation of their own on top of what the code under
+// test already does. NOTE: that alone is not what keeps the race-enabled tests
+// clean under -race. The racy font-cache clear is SETTINGS-change-driven, so the
+// real rule is that race-enabled test files must never touch app settings/theme
+// after test.NewApp() (no SetTheme, no themedTestApp — those live in the
+// //go:build !race files; see ui_focus_test.go).
 
 import (
 	"fyne.io/fyne/v2"
@@ -42,21 +46,27 @@ func walkTree(o fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 }
 
 // treeTexts gathers the user-visible strings under o: canvas texts, labels,
-// button labels, and rich-text content (segments joined per widget).
+// button labels, and rich-text content (segments joined per widget). Empty
+// strings are dropped — otherwise treeHasText(o, "") would match vacuously on
+// any blank label, letting an assertion whose expected value degenerated to ""
+// pass against an empty view.
 func treeTexts(o fyne.CanvasObject) []string {
 	var out []string
+	add := func(s string) {
+		if s != "" {
+			out = append(out, s)
+		}
+	}
 	walkTree(o, func(n fyne.CanvasObject) {
 		switch v := n.(type) {
 		case *canvas.Text:
-			out = append(out, v.Text)
+			add(v.Text)
 		case *widget.Label:
-			out = append(out, v.Text)
+			add(v.Text)
 		case *widget.Button:
-			if v.Text != "" {
-				out = append(out, v.Text)
-			}
+			add(v.Text)
 		case *widget.RichText:
-			out = append(out, segmentText(v.Segments))
+			add(segmentText(v.Segments))
 		}
 	})
 	return out

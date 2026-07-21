@@ -3,6 +3,7 @@ package bibletext
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -20,7 +21,20 @@ func TestPopulateWithSampleVerses(t *testing.T) {
 	bd.PopulateWithSampleVerses()
 	johnVerses := bd.GetChapter("John", 1)
 	if len(johnVerses) == 0 {
-		t.Error("John Chapter 1 has no verses")
+		t.Fatal("John Chapter 1 has no verses")
+	}
+	// Every populated verse must be self-consistent — the right book/chapter
+	// stamped on it and real text — since navigation and search trust these.
+	for i, v := range johnVerses {
+		if v.BookName != "John" || v.Chapter != 1 {
+			t.Fatalf("John 1 verse %d stamped %s %d", i, v.BookName, v.Chapter)
+		}
+		if v.Verse != i+1 {
+			t.Fatalf("John 1 verses out of order: index %d holds verse %d", i, v.Verse)
+		}
+		if strings.TrimSpace(v.Text) == "" {
+			t.Fatalf("John 1:%d has empty text", v.Verse)
+		}
 	}
 }
 
@@ -30,7 +44,20 @@ func TestGetVerse(t *testing.T) {
 	bd.PopulateWithSampleVerses()
 	verse := bd.GetVerse("John", 1, 1)
 	if verse == nil {
-		t.Error("GetVerse returned nil for John 1:1")
+		t.Fatal("GetVerse returned nil for John 1:1")
+	}
+	// The RIGHT verse, not just any verse.
+	if verse.BookName != "John" || verse.Chapter != 1 || verse.Verse != 1 {
+		t.Fatalf("GetVerse(John,1,1) returned %s %d:%d", verse.BookName, verse.Chapter, verse.Verse)
+	}
+	if !strings.Contains(verse.Text, "beginning") {
+		t.Fatalf("John 1:1 text looks wrong: %q", verse.Text)
+	}
+	if bd.GetVerse("John", 1, 9999) != nil {
+		t.Fatal("GetVerse must return nil for a verse that does not exist")
+	}
+	if bd.GetVerse("Nobook", 1, 1) != nil {
+		t.Fatal("GetVerse must return nil for an unknown book")
 	}
 }
 
@@ -40,7 +67,15 @@ func TestGetChapter(t *testing.T) {
 	bd.PopulateWithSampleVerses()
 	verses := bd.GetChapter("John", 1)
 	if len(verses) == 0 {
-		t.Error("GetChapter returned no verses for John 1")
+		t.Fatal("GetChapter returned no verses for John 1")
+	}
+	for _, v := range verses {
+		if v.BookName != "John" || v.Chapter != 1 {
+			t.Fatalf("GetChapter(John,1) leaked %s %d:%d", v.BookName, v.Chapter, v.Verse)
+		}
+	}
+	if got := bd.GetChapter("John", 9999); len(got) != 0 {
+		t.Fatalf("GetChapter must be empty for a missing chapter, got %d verses", len(got))
 	}
 }
 
@@ -50,7 +85,16 @@ func TestGetChaptersForBook(t *testing.T) {
 	bd.PopulateWithSampleVerses()
 	johnChapters := bd.GetChaptersForBook("John")
 	if johnChapters == 0 {
-		t.Error("John has 0 chapters")
+		t.Fatal("John has 0 chapters")
+	}
+	// The count must agree with the actual chapter list (chapters can be
+	// sparse in sample data, so count ≠ highest number).
+	nums := bd.GetChapterNumbersForBook("John")
+	if johnChapters != len(nums) {
+		t.Fatalf("GetChaptersForBook(John) = %d, but chapters present are %v", johnChapters, nums)
+	}
+	if bd.GetChaptersForBook("Nobook") != 0 {
+		t.Fatal("GetChaptersForBook must be 0 for an unknown book")
 	}
 }
 
@@ -60,7 +104,15 @@ func TestSearch(t *testing.T) {
 	bd.PopulateWithSampleVerses()
 	results := bd.Search("God")
 	if len(results) == 0 {
-		t.Error("Search for 'God' returned no results")
+		t.Fatal("Search for 'God' returned no results")
+	}
+	// Hits must actually contain the term (case-insensitively) — a regression
+	// returning arbitrary verses would otherwise pass.
+	for _, v := range results {
+		if !strings.Contains(strings.ToLower(v.Text), "god") {
+			t.Fatalf("Search(\"God\") returned a non-matching verse %s %d:%d: %q",
+				v.BookName, v.Chapter, v.Verse, v.Text)
+		}
 	}
 }
 
@@ -200,39 +252,41 @@ func BenchmarkSearchLimited(b *testing.B) {
 	}
 }
 
-// TestAppStateInitialization tests application state setup
-func TestAppStateInitialization(t *testing.T) {
-	state := &AppState{
-		Bible:          NewBibleData(),
-		CurrentBook:    "John",
-		CurrentChapter: 1,
+// TestNewLoadingState locks the pre-load state contract: the UI renders the
+// loading screen off loadPhase, and the annotation store must be usable before
+// the Bible lands.
+func TestNewLoadingState(t *testing.T) {
+	state := NewLoadingState()
+	if state.loadPhase != loadPending {
+		t.Fatalf("loadPhase = %v, want loadPending", state.loadPhase)
 	}
-	if state.CurrentBook != "John" {
-		t.Errorf("Expected book John, got %s", state.CurrentBook)
+	if state.Annotations == nil {
+		t.Fatal("a loading state must carry a ready annotation store")
 	}
 }
 
-// TestChapterNavigation tests chapter bounds
-func TestChapterNavigation(t *testing.T) {
+// TestChapterNavigationBounds drives the REAL navigation code (moveChapter) at
+// both ends of a book. (The old TestChapterNavigation reimplemented the
+// clamping inline in the test body, so it could never fail.)
+func TestChapterNavigationBounds(t *testing.T) {
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
-	state := &AppState{
-		Bible:          bd,
-		CurrentBook:    "John",
-		CurrentChapter: 1,
-	}
-	maxChapter := state.Bible.GetChaptersForBook(state.CurrentBook)
-	if state.CurrentChapter > 1 {
-		state.CurrentChapter--
+	state := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 1}
+
+	if moveChapter(state, -1) {
+		t.Fatal("moveChapter must refuse to go below the first chapter")
 	}
 	if state.CurrentChapter != 1 {
-		t.Error("Should not go below chapter 1")
+		t.Fatalf("failed backward move must not change the chapter, now %d", state.CurrentChapter)
 	}
-	state.CurrentChapter = maxChapter
-	if state.CurrentChapter < maxChapter {
-		state.CurrentChapter++
+
+	nums := bd.GetChapterNumbersForBook("John")
+	last := nums[len(nums)-1]
+	state.CurrentChapter = last
+	if moveChapter(state, 1) {
+		t.Fatal("moveChapter must refuse to go past the last chapter")
 	}
-	if state.CurrentChapter > maxChapter {
-		t.Error("Should not exceed maximum chapter")
+	if state.CurrentChapter != last {
+		t.Fatalf("failed forward move must not change the chapter, now %d", state.CurrentChapter)
 	}
 }
