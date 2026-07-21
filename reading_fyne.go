@@ -3,7 +3,10 @@
 package bibletext
 
 import (
+	"image/color"
+
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -66,7 +69,15 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 			readingPaneTheme{Theme: base, size: chapter.textSize})
 	}
 
-	scroll := container.NewVScroll(container.New(col, child))
+	paneObjects := []fyne.CanvasObject{child}
+	if chapter != nil && state.HasHighlightedVerse {
+		band := canvas.NewRectangle(highlightBandColor(state.pal()))
+		band.CornerRadius = 6
+		band.Hide() // shown by readingColumn.Layout once the geometry is real
+		col.band = band
+		paneObjects = append(paneObjects, band) // after child → drawn over it
+	}
+	scroll := container.NewVScroll(container.New(col, paneObjects...))
 	col.scroll = scroll
 	if chapter != nil {
 		chapter.parentScroll = scroll
@@ -78,6 +89,23 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	wireFyneReadingScroll(state, scroll, chapter)
 
 	return surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{})
+}
+
+// highlightBandColor is the translucent wash readingColumn draws OVER the
+// highlighted verse. It renders on top of the text (the Entry's background is
+// opaque, so behind is invisible), so it must stay light enough to read
+// through: the lapis Highlight hue on the light page, the pale HighlightText
+// hue at low alpha on the dark one (the dark Highlight wash would vanish
+// against the dark paper).
+func highlightBandColor(pal palette) color.NRGBA {
+	if int(pal.Surface.R)+int(pal.Surface.G)+int(pal.Surface.B) < 384 { // dark paper
+		c := pal.HighlightText
+		c.A = 46
+		return c
+	}
+	c := pal.Highlight
+	c.A = 110
+	return c
 }
 
 // setReadingOverlayVisible is a no-op where there's no native text overlay.

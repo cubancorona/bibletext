@@ -363,7 +363,12 @@ func restoreRecent(saved []ChapterVisit, bd *BibleData, book string, chapter int
 	out = append(out, ChapterVisit{Book: book, Chapter: chapter})
 	for _, v := range saved {
 		if v.Book == book && v.Chapter == chapter {
-			continue // already at head
+			// Already at head — but carry over its saved scroll anchor, or a
+			// later history-bar tap back to this chapter would land at the top
+			// even though a mid-chapter position was persisted (implementation verification:
+			// the anchor is only re-stamped when the reader actually scrolls).
+			out[0].Verse, out[0].Delta, out[0].Frac = v.Verse, v.Delta, v.Frac
+			continue
 		}
 		if bd.GetChaptersForBook(v.Book) == 0 {
 			continue // book gone from this build/translation
