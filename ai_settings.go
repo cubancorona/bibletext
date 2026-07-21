@@ -526,8 +526,10 @@ func showAISettings(state *AppState) {
 		aiDisclosure,
 		sectionLabel("READING", pal),
 		textSizeRow,
-		redLetter,
 	)
+	if redLetterSupported() {
+		form.Add(redLetter)
+	}
 
 	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
 	hint.TextSize = 11

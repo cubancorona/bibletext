@@ -27,7 +27,7 @@ jobs:
       - name: install GL/X11 + xvfb + capture tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev xvfb imagemagick mesa-utils
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev xvfb imagemagick mesa-utils
       - name: build the Linux desktop binary
         run: go build -o bibletext ./cmd/desktop
       - name: run under Xvfb (software GL) and capture

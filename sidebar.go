@@ -61,10 +61,10 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	aiEntry.SetPlaceHolder("In your own words…")
 	aiEntry.SetText(state.aiSearchQuery)
 
-	// askSession drops stale completions — a slow response for an abandoned query
-	// must never clobber the search the reader actually submitted (see the mobile
-	// twin in ui_mobile.go, where this was observed in practice).
-	var askSession aiSearchSession
+	// The supersession guard lives on AppState (state.askSession) so it survives
+	// window rebuilds — a local here would let a pre-rebuild completion clobber a
+	// post-rebuild query (see the observed in practice history in ai_search.go).
+	askSession := &state.askSession
 
 	var runAsk func(string)
 	runAsk = func(q string) {
@@ -151,6 +151,13 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		captionHost.Refresh()
 	}
 	toggle := buildSearchModeToggle(state, func(ai bool) {
+		// Mirror the mobile twin: abandon any in-flight Find and clear its
+		// progress state, or a completion dropped at the aiSearchActive guard
+		// would leak aiSearchLoading=true and toggling back to Find would show
+		// a permanent "Searching with AI…" pane (implementation verification).
+		askSession.Invalidate()
+		state.aiSearchLoading = false
+		state.aiSearchErr = nil
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai
 		applyMode()

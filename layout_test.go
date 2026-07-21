@@ -66,3 +66,23 @@ func TestRegularSplitOffset(t *testing.T) {
 		t.Errorf("width 0 should fall back to max frac, got %v", got)
 	}
 }
+
+func TestIsTabletDimensions(t *testing.T) {
+	cases := []struct {
+		w, h float32
+		want bool
+	}{
+		{393, 852, false},  // phone portrait
+		{852, 393, false},  // phone landscape — smallest dim still phone-class
+		{600, 960, true},   // exactly at the sw600dp threshold
+		{599, 1200, false}, // just under
+		{800, 1280, true},  // classic 10" tablet
+		{1280, 800, true},  // same, landscape
+		{0, 0, false},      // pre-layout: not a tablet yet
+	}
+	for _, c := range cases {
+		if got := isTabletDimensions(c.w, c.h); got != c.want {
+			t.Errorf("isTabletDimensions(%v,%v) = %v, want %v", c.w, c.h, got, c.want)
+		}
+	}
+}

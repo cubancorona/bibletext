@@ -32,7 +32,7 @@ runtime, so each target links only the drivers and native code it needs:
 | `android` | Android only | `reading_android.go`, `audio_android.go` (cgo/JNI) |
 | `ios \|\| !darwin` | everything but macOS | `reading_fyne.go` (fallback pane) |
 | `!ios && !darwin && !android` | Linux/Win | `reading_scroll_fyne.go` |
-| `!darwin && !android` | Linux/Win | `share_other.go`, `audio_other.go` (no-op stubs) |
+| `!darwin && !android` | Linux/Win | `share_other.go` (no-op share stubs), `audio_other.go` (the oto desktop audio engine) |
 
 > Note: gopls analyses only the host build, so iOS/Android/cgo-tagged files look
 > greyed-out in the editor. Validate them with `fyne package -os iossimulator`
@@ -143,7 +143,10 @@ real files; `*_test.go` files are omitted.
 | `ui_mobile.go` | `ios \|\| android` — `CreateMainUI` picks compact vs regular at runtime; `buildCompactUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
 | `ui_regular.go` | `ios \|\| android` — `buildRegularWidthUI`, the iPad sidebar+split layout (native reading overlay in the right pane) + `layoutWatcher` (rebuild on breakpoint crossing, or orientation flip while regular) |
 | `layout.go` | Untagged: `classifyLayout` (compact vs regular by width+idiom, breakpoint 700pt), `regularSplitOffset` (~250pt sidebar), the orientation-driven sidebar default (`resolveSidebarDefault`) |
-| `device_ios.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; false elsewhere |
+| `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Also `layoutMayChange()`, gating the `layoutWatcher` install |
+| `textsize.go` | Settings → Reading → Text size: the persisted scale (1.0/1.15/1.3) the scripture body renders at on every platform |
+| `chapter_header_mobile.go` | `ios \|\| android` — the compact mobile chapter toolbar shared by both native reading views |
+| `icons_embed.go` | Bundled icon resources (e.g. the read-aloud waveform glyph) |
 | `sidebar.go` | Navigation sidebar (desktop + iPad regular layout): search box, AI Find, book filter, book list |
 | `reading.go` | Reading-pane scaffolding: header (incl. the audio control on Apple platforms), chapter HTML build, `chapterRenderFingerprint`, `rebuildWindow` |
 | `audio_button.go` | The reading-header audio control: collapsed speaker → expanded mini-player (source indicator + ±15s skip + play/pause), self-refreshing host (no pane rebuild) |
@@ -162,7 +165,9 @@ real files; `*_test.go` files are omitted.
 | `reading_android.go` | `android` | cgo/JNI: native selectable `TextView` overlay (a `Dialog` over the GL surface), selection menu, native share, scroll capture/restore — Java half in `android/BtBridge.java` |
 | `reading_android_export.go` + `reading_jni_android.c` | `android` | Native → Go callbacks for the Android overlay (the `//export` twin of `ai_menu_darwin.go`) + the JNI thunk definitions |
 | `reading_fyne.go` | `ios \|\| !darwin` | Fyne `RichText` fallback reading pane (Linux/Win; on Android the fallback when the bridge dex is absent) |
-| `reading_scroll_fyne.go` | `!ios && !darwin && !android` | No-op scroll capture/restore for the Fyne fallback |
+| `reading_scroll_fyne.go` | `!ios && !darwin && !android` | Fyne-pane scroll capture/restore (Linux/Win): the same verse-anchor persistence as the native overlays, from `chapterText`'s wrap geometry |
+| `reading_scroll_native_stub.go` | `darwin \|\| android` | No-op Fyne-scroll shims on the native-overlay platforms (their overlays persist scroll themselves) |
+| `overlay_recovery_other.go` / `cache_path_android.go` / `cache_path_other.go` / `ai_menu_sync_other.go` | various | Small per-platform glue: the no-op twin of Android's overlay re-show after activity recreation, per-platform cache dir resolution, no-op AI-menu enabled-state sync off-Apple |
 | `reading_mobile.go` / `reading_scroll_android.go` | `android` | Fallback-pane glue + the inert initial-touch hooks |
 | `ai_menu_darwin.go` | `darwin` | Native → Go `//export` callbacks: AI-menu tap, iOS scroll-end, highlight clear, keyboard frame (audio has its own `//export` in `audio_export_apple.go`) |
 
@@ -175,9 +180,9 @@ real files; `*_test.go` files are omitted.
 | `audio_macos.go` | `darwin && !ios` | cgo engine twin (same, minus AVAudioSession; AppKit/NSImage artwork) |
 | `audio_android.go` | `android` | cgo/JNI engine: drives `android/BtAudio.java` — MediaPlayer (recordings) + TextToSpeech (read-aloud) + audio-focus + a 200 ms read-along position poll |
 | `audio_export_android.go` + `audio_jni_android.c` | `android` | Java → JNI thunk → Go `//export` state callbacks (twin of `audio_export_apple.go`) |
-| `audio_other.go` | `!darwin && !android` | No-op `nativeAudio*` stubs (Linux/Windows stay cgo-free) |
+| `audio_other.go` | `!darwin && !android` | The desktop audio engine (Windows/Linux): recorded narration via oto (WASAPI / ALSA-through-purego) + go-mp3 — same `nativeAudio*` shim and state transitions as the native engines; no TTS |
 | `audio_export_apple.go` | `darwin` | The `bibleTextAudioStateChanged` `//export` (serves both Apple engines) |
-| `audio_supported_apple.go` / `audio_supported_android.go` / `audio_supported_other.go` | `darwin` / `android` / rest | `audioSupported()` → true on Apple + Android, false elsewhere |
+| `audio_supported_apple.go` / `audio_supported_android.go` / `audio_supported_other.go` | `darwin` / `android` / rest | Capability gates: `audioSupported()` (true everywhere but wasm) + `ttsSupported()` (true only where a native speech engine exists: Apple + Android). `chapterAudioAvailable()` in `audio.go` combines them per chapter |
 | `audio_artwork.go` | (untagged) | Renders the lock-screen "Book Chapter" art card (share-image style) |
 | `readalong.go` / `readalong_stub.go` | untagged / `!darwin && !android` | Bundled read-along timing tables (`assets/timings/`, keyed by recording id) driving verse highlight + follow-scroll; no-op stub on Linux/Windows |
 | `android/BtAudio.java` + `android/BtAudioService.java` | (dex) | The Java engine + the `mediaPlayback` foreground service (MediaSession + MediaStyle notification) for background/lock-screen playback |
@@ -294,6 +299,9 @@ Three gates keep the native overlay cheap on every nav/tab tap:
   request (`fetchWEBFromHelloAO` in [bsb.go](bsb.go)).
 - `bsbSource` ([bsb.go](bsb.go)) — the public-domain/CC0 **Berean Standard Bible
   (BSB)**, one `BSB/complete.json` request from helloao.
+- `webCatholicSource` ([catholic.go](catholic.go)) — the **World English Bible
+  (Catholic)**: helloao's WEBC decoded by USFM **id** (not order) and emitted in
+  traditional Catholic order, adding the 73-book deuterocanon.
 - `licensedAPISource` — a scaffold for a licensed API provider (e.g. API.Bible),
   gated on a license opt-in **and** `BIBLE_API_KEY`. **NRSV** and **LSB** are
   wired here but copyrighted, so they are **not user-selectable**.
@@ -309,8 +317,11 @@ The header subtitle is the picker (`versions_ui.go`, shared across platforms).
 runs a first-time real fetch (the BSB download) on a goroutine behind a spinner
 modal — so the iOS main-thread watchdog is never at risk; the shared apply tail
 is `applyLoadedVersion`, ending in `switchVersion` → swap `AppState.Bible` →
-`rebuildWindow`. All versions share the canonical 66-book structure, so
-reading / search / AI need no per-version code. See README → "Bible versions".
+`rebuildWindow`. Reading / search / AI / navigation are data-driven off
+`BibleData.Books`, so they need no per-version code — most versions are the
+canonical 66-book Protestant canon, and the WEB-Catholic's 73-book deuterocanon
+simply flows through, while 66-book-only features (cross-refs, red-letter,
+verse-of-day) skip it. See README → "Bible versions".
 
 ## Per-chapter audio (recorded narration & read-aloud)
 
@@ -364,8 +375,16 @@ Background / lock-screen playback runs through
 foreground service + framework `MediaSession` + MediaStyle notification (play/pause,
 ±15s, artwork), enabled by the custom `cmd/mobile/AndroidManifest.xml` on Fyne's
 aapt2 resource path — build details in [docs/ANDROID.md](docs/ANDROID.md).
-Linux/Windows get no-op [audio_other.go](audio_other.go) stubs
-(`//go:build !darwin && !android`) so they stay cgo-free.
+**Windows/Linux** play recorded narration through their own engine,
+[audio_other.go](audio_other.go) (`//go:build !darwin && !android`): oto
+(WASAPI on Windows; ALSA loaded at runtime through purego on Linux — building
+on Linux needs `libasound2-dev`) decoding the narration MP3s with go-mp3. It
+speaks the same `nativeAudio*` shim and posts the same `applyNativeState`
+transitions — play/pause, ±15s seek, natural-end detection feeding continuous
+chapter advance, generation-counter staleness guards — so the controller and
+the whole audio UI are unchanged. Deliberately out of scope there: TTS
+(`ttsSupported()` gates every read-aloud surface), media keys / MPRIS / SMTC,
+and read-along highlight (the Fyne pane has no per-verse highlight hook).
 
 **Build-tag trap:** a `*_ios.go` filename is GOOS=ios-only and `*_darwin.go` is
 GOOS=darwin-only (which *excludes* iOS), so files shared by both Apple platforms
@@ -398,9 +417,11 @@ app stop / window-close (raw `nativeAudioStop()` from the lifecycle hooks — ne
 
 ## AI study (bring your own key)
 
-Select a passage → native "Study with AI" menu with four actions: **Ask a
-question…**, **Explain**, **Analyze context**, **Analyze translation**
-(constants `aiActionAsk/Explain/Context/Translation` in [ai.go](ai.go)). Plus an
+Select a passage → native "Study with AI" menu with three actions: **Explain**,
+**Analyze context**, **Analyze translation** (constants
+`aiActionExplain/Context/Translation` in [ai.go](ai.go); the free-form **Ask a
+question…** verb was removed from the menu in build 94/1.0.2 — its code,
+`aiActionAsk` / [ai_ask.go](ai_ask.go), remains but is unwired). Plus an
 AI **Find** passage search on the Search tab ([ai_search.go](ai_search.go)) and
 plain keyword **Search**. The three search/AI verbs are kept distinct on purpose:
 *Search* = keyword/reference lookup, *Find* = AI passage search returning verses,
@@ -468,9 +489,11 @@ translation, book, chapter, the within-chapter **scroll position**, and the
 recent-chapters history — as one JSON blob in `fyne.Preferences` (key
 `reading.state`). Scroll is stored as a **verse anchor** (top-visible verse +
 within-verse delta, with a whole-chapter `scrollFrac` fallback) so it survives
-re-wrap on width / orientation / translation changes (font is fixed at 19px;
-verse-number runs are the only sub-19px runs, used to locate verses in the
-attributed string).
+re-wrap on width / orientation / translation / text-size changes (the body
+renders at a 21px base scaled by Settings → Reading → Text size,
+[textsize.go](textsize.go); verse-number runs are located by RELATIVE size —
+the only runs under ~80% of the body size, a threshold derived from the
+rendered text — so the anchor survives the reader changing text size too).
 
 - **Saving:** continuously on navigation (`addRecentChapter` / `clearHistory` /
   `switchVersion` → `persistReadingPosition`, chapter pinned to top) **and** the
@@ -485,8 +508,9 @@ attributed string).
 - **Platform split:** scroll hooks are real cgo on iOS/macOS and JNI on Android
   (`captureReadingAnchor` / `armReadingRestore` in
   [reading_android.go](reading_android.go)); the Fyne platforms
-  ([reading_scroll_fyne.go](reading_scroll_fyne.go), Linux/Win) restore
-  translation/book/chapter/history only — not the precise scroll.
+  ([reading_scroll_fyne.go](reading_scroll_fyne.go), Linux/Win) capture and
+  restore the SAME verse anchor from `chapterText`'s wrap geometry — full
+  scroll-persistence parity with the native overlays.
 
 ## Threading
 
@@ -561,13 +585,17 @@ background-audio service live there) and carries the custom
 `cmd/mobile/AndroidManifest.xml`. Toolchain setup (JDK 21, SDK/NDK under
 `$HOME`), signing, and distribution: [docs/ANDROID.md](docs/ANDROID.md).
 
-**Patched Fyne (iOS scroll-lag fix).** A one-line change to Fyne's iOS drawloop
-idle timeout (100ms→2ms, `//go:build darwin && ios`) is applied **only** on the
-iOS packaging path by `scripts/run-ios-sim.sh` / `scripts/run-ios-device.sh`
-(which regenerate a patched Fyne into `third_party/fyne` — gitignored — and inject
-a temporary `replace` for that build, restoring stock `go.mod` on exit). Do
-**not** run a bare `fyne package -os ios` yourself; use the scripts. Rationale +
-the patch + removal steps: [`patches/README.md`](patches/README.md). iOS device
+**Patched Fyne (iOS scroll-lag + caret-CPU fixes).** Two small in-Fyne changes —
+the iOS drawloop idle timeout (100ms→2ms, `//go:build darwin && ios`; inert
+elsewhere) and the Entry caret discrete-blink fix (8→2 repaints/s while any
+entry has focus; a real CPU/battery win on iOS AND Android) — are applied by
+every mobile packaging script: `scripts/run-ios-sim.sh`,
+`scripts/run-ios-device.sh`, `scripts/release-ios.sh`, and
+`scripts/build-android.sh` (each regenerates a patched Fyne into
+`third_party/fyne` — gitignored — and injects a temporary `replace` for that
+build, restoring stock `go.mod` on exit). Do **not** run a bare
+`fyne package -os ios|android` yourself; use the scripts. Rationale + the
+patches + removal steps: [`patches/README.md`](patches/README.md). iOS device
 installs additionally need Xcode code-signing (see `scripts/run-ios-device.sh`).
 
 Fyne needs a C toolchain and the platform's graphics/dev libraries on every

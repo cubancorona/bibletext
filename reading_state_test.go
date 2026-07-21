@@ -2,6 +2,8 @@ package bibletext
 
 import (
 	"testing"
+
+	"fyne.io/fyne/v2/test"
 )
 
 // memPrefStore is an in-memory prefStore for exercising the persistence layer
@@ -247,4 +249,108 @@ func firstBookChapter(t *testing.T, bd *BibleData) (string, int) {
 	}
 	t.Fatal("sample Bible has no books with chapters")
 	return "", 0
+}
+
+// TestRestoreRecentKeepsHeadAnchor pins the relaunch fix: the saved head visit
+// carries the reader's mid-chapter scroll anchor (flushReadingState stamps it),
+// and restoreRecent must carry it onto the rebuilt head — dropping it meant a
+// later history-bar tap back to that chapter landed at the top unless the
+// reader had scrolled again since the relaunch.
+func TestRestoreRecentKeepsHeadAnchor(t *testing.T) {
+	base := baseSampleBible()
+	book, ch := firstBookChapter(t, base)
+	saved := []ChapterVisit{
+		{Book: book, Chapter: ch, Verse: 4, Delta: 12.5, Frac: 0.4},
+	}
+	out := restoreRecent(saved, base, book, ch)
+	if len(out) != 1 {
+		t.Fatalf("want one deduped head entry, got %+v", out)
+	}
+	head := out[0]
+	if head.Verse != 4 || head.Delta != 12.5 || head.Frac != 0.4 {
+		t.Errorf("head anchor dropped on restore: got %+v, want Verse=4 Delta=12.5 Frac=0.4", head)
+	}
+}
+
+// TestFlushReadingStateGuardsUnloadedState pins the jetsam guard: backgrounding
+// during loadPending (or before a book is current) must NOT overwrite the saved
+// position with an empty snapshot — that is exactly how a reader would lose
+// their place if iOS jetsams the app during a slow first load.
+func TestFlushReadingStateGuardsUnloadedState(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	good := readingState{Version: "web", Book: "John", Chapter: 3, AnchorVerse: 16, ScrollFrac: 0.4}
+	writeReadingState(appPrefs(), good)
+
+	// Still loading: the flush must be a no-op.
+	flushReadingState(&AppState{loadPhase: loadPending})
+	if got, ok := readReadingState(appPrefs()); !ok || got.Book != "John" || got.AnchorVerse != 16 {
+		t.Fatalf("flush during loadPending clobbered the saved position: %+v ok=%v", got, ok)
+	}
+
+	// Loaded but no current book (defensive) — also a no-op.
+	flushReadingState(&AppState{loadPhase: loadReady})
+	if got, ok := readReadingState(appPrefs()); !ok || got.Book != "John" {
+		t.Fatalf("flush with empty CurrentBook clobbered the saved position: %+v ok=%v", got, ok)
+	}
+}
+
+// TestCaptureSnapshotPreservesPreviousAnchor pins the shutdown rule: when the
+// live scroll capture fails (the native view is already gone), the previously-
+// saved anchor for the SAME chapter must be kept rather than clobbered with
+// top-of-chapter; a different chapter's anchor must NOT leak in. The capture is
+// stubbed to "failed" — the real one is platform-dependent and other tests may
+// have registered a live pane.
+func TestCaptureSnapshotPreservesPreviousAnchor(t *testing.T) {
+	origCapture := captureAnchorFn
+	captureAnchorFn = func() (int, float64, float64, bool) { return 0, 0, 0, false }
+	defer func() { captureAnchorFn = origCapture }()
+
+	p := newMemPrefStore()
+	writeReadingState(p, readingState{Version: "web", Book: "John", Chapter: 3,
+		AnchorVerse: 16, AnchorDelta: 12.5, ScrollFrac: 0.4})
+
+	// Same chapter → the saved anchor survives, and is re-stamped onto the
+	// history head for the history-bar return path.
+	s := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3,
+		loadPhase:      loadReady,
+		RecentChapters: []ChapterVisit{{Book: "John", Chapter: 3}}}
+	snap := captureSnapshot(s, p)
+	if snap.AnchorVerse != 16 || snap.AnchorDelta != 12.5 || snap.ScrollFrac != 0.4 {
+		t.Errorf("failed live capture must preserve the previous same-chapter anchor; got %+v", snap)
+	}
+	if s.RecentChapters[0].Verse != 16 {
+		t.Errorf("preserved anchor must be stamped onto the history head; got %+v", s.RecentChapters[0])
+	}
+
+	// Different chapter → zero anchor (never resurrect another chapter's spot).
+	s2 := &AppState{CurrentVersion: "web", CurrentBook: "Genesis", CurrentChapter: 1,
+		loadPhase:      loadReady,
+		RecentChapters: []ChapterVisit{{Book: "Genesis", Chapter: 1}}}
+	snap2 := captureSnapshot(s2, p)
+	if snap2.AnchorVerse != 0 || snap2.ScrollFrac != 0 {
+		t.Errorf("a different chapter's saved anchor leaked into the snapshot: %+v", snap2)
+	}
+}
+
+// TestWriteReadingStateSeqLatestWins pins the async-write discipline: an
+// in-flight write stamped with an OLDER sequence number must never land after
+// (and overwrite) a newer snapshot — the close-time flush must win over a
+// scroll-end write that was still in its goroutine hop.
+func TestWriteReadingStateSeqLatestWins(t *testing.T) {
+	p := newMemPrefStore()
+	oldSeq := readingStateSeq.Add(1)
+	newSeq := readingStateSeq.Add(1)
+
+	newer := readingState{Version: "web", Book: "John", Chapter: 3, AnchorVerse: 16}
+	older := readingState{Version: "web", Book: "John", Chapter: 3, AnchorVerse: 2}
+
+	writeReadingStateSeq(p, newer, newSeq) // the close-time flush lands first
+	writeReadingStateSeq(p, older, oldSeq) // the stale scroll-end write arrives late
+
+	got, ok := readReadingState(p)
+	if !ok || got.AnchorVerse != 16 {
+		t.Fatalf("a stale (older-seq) write overwrote the newer snapshot: %+v ok=%v", got, ok)
+	}
 }
