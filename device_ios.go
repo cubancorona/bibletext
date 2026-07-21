@@ -24,3 +24,7 @@ import "C"
 func deviceIsTablet() bool {
 	return C.bibleTextIsPad() != 0
 }
+
+// layoutMayChange gates installing the layoutWatcher. On iOS the idiom is
+// static and known at launch, so only actual tablets need watching.
+func layoutMayChange() bool { return deviceIsTablet() }
