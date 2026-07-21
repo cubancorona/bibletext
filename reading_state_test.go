@@ -297,11 +297,16 @@ func TestFlushReadingStateGuardsUnloadedState(t *testing.T) {
 }
 
 // TestCaptureSnapshotPreservesPreviousAnchor pins the shutdown rule: when the
-// live scroll capture fails (the native view is already gone — which is what
-// happens in this test process), the previously-saved anchor for the SAME
-// chapter must be kept rather than clobbered with top-of-chapter; a different
-// chapter's anchor must NOT leak in.
+// live scroll capture fails (the native view is already gone), the previously-
+// saved anchor for the SAME chapter must be kept rather than clobbered with
+// top-of-chapter; a different chapter's anchor must NOT leak in. The capture is
+// stubbed to "failed" — the real one is platform-dependent and other tests may
+// have registered a live pane.
 func TestCaptureSnapshotPreservesPreviousAnchor(t *testing.T) {
+	origCapture := captureAnchorFn
+	captureAnchorFn = func() (int, float64, float64, bool) { return 0, 0, 0, false }
+	defer func() { captureAnchorFn = origCapture }()
+
 	p := newMemPrefStore()
 	writeReadingState(p, readingState{Version: "web", Book: "John", Chapter: 3,
 		AnchorVerse: 16, AnchorDelta: 12.5, ScrollFrac: 0.4})

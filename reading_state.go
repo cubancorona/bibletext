@@ -170,13 +170,18 @@ func flushReadingState(s *AppState) {
 	writeReadingStateSeq(p, captureSnapshot(s, p), readingStateSeq.Add(1))
 }
 
+// captureAnchorFn indirects the per-platform live scroll capture so tests can
+// simulate a failed (or successful) capture deterministically — the real
+// functions depend on platform globals other tests may have populated.
+var captureAnchorFn = captureReadingAnchor
+
 // captureSnapshot reads the live scroll position (captureReadingAnchor /
 // captureLastTouch use TextKit and MUST run on the main thread) and builds the
 // snapshot, preserving the previously-saved values for this chapter when a live
 // read fails (e.g. the native view is already gone, or a lifecycle flush fires
 // after a navigation with no fresh scroll).
 func captureSnapshot(s *AppState, p prefStore) readingState {
-	verse, delta, frac, ok := captureReadingAnchor()
+	verse, delta, frac, ok := captureAnchorFn()
 
 	// Initial-touch capture only runs when the feature is on; otherwise the touch
 	// stays unset (0) so it is never persisted. touchOK=true here means "resolved
