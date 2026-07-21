@@ -39,7 +39,7 @@ extern void bibleTextReadAlongFollowTapped(void);
 static int gBTAIEnabled = 1;
 void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 
-// HBReadingTextView adds a "Study with AI" submenu (Ask a question / Explain /
+// HBReadingTextView adds a "Study with AI" submenu (Explain /
 // Analyze context / Analyze translation) to the right-click selection menu and
 // hands the selected text to Go.
 @interface HBReadingTextView : NSTextView

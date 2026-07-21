@@ -108,7 +108,7 @@ static NSRange gReadingHighlightRange = {NSNotFound, 0};
 // scrolling. bibleTextApplyHTML toggles it to match gReadingHighlightRange.
 static UITapGestureRecognizer *gHighlightTap = nil;
 
-// HBReadingTextView adds a "Study with AI" submenu (Ask a question / Explain /
+// HBReadingTextView adds a "Study with AI" submenu (Explain /
 // Analyze context / Analyze translation) to the standard selection menu and hands
 // the selected text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
 @interface HBReadingTextView : UITextView <UITextViewDelegate,
