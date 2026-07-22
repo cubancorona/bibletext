@@ -371,8 +371,10 @@ func advanceToNextChapter(state *AppState) bool {
 }
 
 // maxRecent caps the reading history. The slim history bar shows all but the
-// current chapter, so this bounds how far back you can jump.
-const maxRecent = 7
+// current chapter, so this bounds how far back you can jump. The bar scrolls
+// horizontally (it never wraps or truncates), so the cap is about keeping the
+// history a jump-back tool rather than an archive — not about layout.
+const maxRecent = 13
 
 func addRecentChapter(state *AppState, book string, chapter int) {
 	if chapter < 1 || book == "" {
