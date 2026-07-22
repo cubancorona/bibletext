@@ -11,6 +11,7 @@ package bibletext
 
 import (
 	"fmt"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -50,9 +51,12 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		showChapterPicker(state)
 	})
 
-	// Small copy icon tucked after the heading.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 18, boxH, func() {
+	// Small copy icon tucked after the heading. The tap flashes a checkmark —
+	// copying has no visible result of its own, so the button itself confirms.
+	var copyBtn *iconTapButton
+	copyBtn = newIconTapButton(state, theme.ContentCopyIcon(), 18, boxH, func() {
 		copyChapter(state)
+		copyBtn.flashIcon(theme.ConfirmIcon(), 1200*time.Millisecond)
 	})
 	titleRow := container.NewHBox(ref, hgap(6), copyBtn)
 
