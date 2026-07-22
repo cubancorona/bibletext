@@ -4,9 +4,14 @@ Companion to the iOS notes. Android has a **native reading overlay** (a
 selectable `TextView` in a `Dialog` floated over the Fyne GL surface —
 `android/BtBridge.java` + `reading_android.go`), the twin of the iOS
 `UITextView`, so readers get real long-press selection with drag handles, the
-floating toolbar, and BibleText's study menu (Explain / Analyze context /
-Analyze translation / Cross-references / Share with citation / Share as
-image) — the same Go dispatch as iOS. Android now has **full audio parity** (`android/BtAudio.java`
+floating toolbar, and BibleText's study menu — the same Go dispatch as iOS.
+**"Study with AI" sits INLINE on the floating toolbar** (a plain item that
+opens a popup with Explain / Analyze context / Analyze translation, anchored
+at the selection — Android's floating toolbar can't show a SubMenu inline and
+flattens SubMenus in its overflow, so a real submenu would bury the AI verbs
+while hoisting Cross-references above them). Cross-references also gets an
+inline slot when there's room; Share with citation / Share as image live in
+the ⋮ overflow. Android now has **full audio parity** (`android/BtAudio.java`
 + `audio_android.go`): a `MediaPlayer` streams recorded chapters (±15s skip) and
 `TextToSpeech` reads aloud, with read-along verse highlight + the floating
 "Follow narration" pill painted on the reading overlay — the twin of the iOS

@@ -29,6 +29,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.util.Arrays;
@@ -182,6 +183,50 @@ public final class BtBridge {
     // makes the write visible to the UI thread's onCreateActionMode read).
     public static void setAIEnabled(boolean on) { aiEnabled = on; }
 
+    // showStudyPopup presents Explain / Analyze context / Analyze translation as
+    // a popup anchored at the selection — the inline "Study with AI" bar item's
+    // second level (a floating toolbar cannot nest a real SubMenu inline). The
+    // anchor is a zero-size view placed at the selection end's coordinates in
+    // root, removed when the popup dismisses. sel was captured at tap time.
+    private static void showStudyPopup(final ActionMode mode, final String sel, int selEnd) {
+        if (activity == null || root == null || text == null) return;
+        float ax = 0; int ay = 0;
+        Layout lay = text.getLayout();
+        if (lay != null && selEnd >= 0) {
+            int line = lay.getLineForOffset(selEnd);
+            ax = lay.getPrimaryHorizontal(selEnd) + text.getLeft() - scroll.getScrollX();
+            ay = lay.getLineBottom(line) + text.getTop() - scroll.getScrollY();
+        }
+        final View anchor = new View(activity);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1, 1);
+        lp.leftMargin = Math.max(0, (int) ax);
+        lp.topMargin = Math.max(0, ay);
+        root.addView(anchor, lp);
+
+        PopupMenu pm = new PopupMenu(activity, anchor);
+        pm.getMenu().add(0, 102, 0, "Explain");
+        pm.getMenu().add(0, 103, 1, "Analyze context");
+        pm.getMenu().add(0, 104, 2, "Analyze translation");
+        pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override public boolean onMenuItemClick(MenuItem mi) {
+                String action;
+                switch (mi.getItemId()) {
+                    case 102: action = "explain"; break;
+                    case 103: action = "context"; break;
+                    case 104: action = "translation"; break;
+                    default: return false;
+                }
+                try { mode.finish(); } catch (Throwable ignored) {}
+                nativeSelectionAction(action, sel);
+                return true;
+            }
+        });
+        pm.setOnDismissListener(new PopupMenu.OnDismissListener() {
+            @Override public void onDismiss(PopupMenu m) { root.removeView(anchor); }
+        });
+        pm.show();
+    }
+
     /**
      * init stores the activity and builds the view lazily on the UI thread.
      * Called on every RunNative init AND whenever the activity changes: Android
@@ -280,43 +325,53 @@ public final class BtBridge {
         // keep a sane default here.
         text.setCustomSelectionActionModeCallback(new ActionMode.Callback2() {
             @Override public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-                // Mirror the iOS selection menu: a "Study with AI" submenu, a
-                // "Share" submenu (with-citation + as-image), and Cross-references.
-                // Keep Copy/Select all; drop the system plain-text Share (ours,
-                // with the reference, supersedes it) so there aren't two Shares.
+                // Mirror the iOS selection menu: Study with AI leads, then the
+                // Share pair, then Cross-references. Android's floating toolbar
+                // can't show a SubMenu inline (only plain leaf items are eligible
+                // for the visible bar) and it flattens SubMenus in the overflow —
+                // so "Study with AI" is a PLAIN item pinned to the bar that opens
+                // our own popup with the three actions (onActionItemClicked),
+                // giving it the same lead position the iOS menu has. Keep Copy /
+                // Select all; drop the system plain-text Share (ours, with the
+                // reference, supersedes it) so there aren't two Shares.
                 menu.removeItem(android.R.id.shareText);
                 // Snapshot the volatile gate once so the menu is structurally
                 // consistent even if it flips mid-build (read twice below).
                 final boolean aiOn = aiEnabled;
                 if (aiOn) {
-                    SubMenu ai = menu.addSubMenu(0, 200, 100, "Study with AI");
-                    ai.add(0, 102, 1, "Explain");
-                    ai.add(0, 103, 2, "Analyze context");
-                    ai.add(0, 104, 3, "Analyze translation");
+                    MenuItem ai = menu.add(0, 200, 100, "Study with AI");
+                    ai.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
                 }
                 SubMenu sh = menu.addSubMenu(0, 201, 101, "Share");
                 sh.add(0, 106, 0, "Share with citation");
                 sh.add(0, 107, 1, "Share as image");
-                // Cross-references: below Share (its usual spot) when AI is on; in
-                // the AI submenu's place, ahead of Share, when AI is off.
+                // Cross-references stays a plain root item: the toolbar may hoist
+                // it inline after Study with AI when there's room (a bonus slot on
+                // tablets), and it leads the custom items when AI is off — both
+                // consistent with the iOS ordering.
                 menu.add(0, 105, aiOn ? 102 : 100, "Cross-references");
                 return true;
             }
             @Override public boolean onPrepareActionMode(ActionMode mode, Menu menu) { return false; }
             @Override public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                int a = text.getSelectionStart(), b = text.getSelectionEnd();
+                if (a < 0 || b < 0) return true;
+                final String sel = text.getText().subSequence(Math.min(a, b), Math.max(a, b)).toString();
+                if (item.getItemId() == 200) {
+                    // The inline "Study with AI": open our popup of the three
+                    // actions, anchored at the selection. The selected text is
+                    // captured NOW — opening the popup may collapse the selection
+                    // and end the action mode.
+                    showStudyPopup(mode, sel, Math.max(a, b));
+                    return true;
+                }
                 String action;
                 switch (item.getItemId()) {
-                    case 102: action = "explain"; break;
-                    case 103: action = "context"; break;
-                    case 104: action = "translation"; break;
                     case 105: action = "crossref"; break;
                     case 106: action = "share-cite"; break;
                     case 107: action = "share-image"; break;
-                    default: return false; // submenu header (200/201) or system item
+                    default: return false; // submenu header (201) or system item
                 }
-                int a = text.getSelectionStart(), b = text.getSelectionEnd();
-                if (a < 0 || b < 0) return true;
-                String sel = text.getText().subSequence(Math.min(a, b), Math.max(a, b)).toString();
                 mode.finish();
                 nativeSelectionAction(action, sel);
                 return true;
