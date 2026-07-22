@@ -1,0 +1,32 @@
+# Windows audio smoke test — plays a REAL narration chapter through the REAL
+# desktop audio engine (oto/WASAPI) on a real Windows machine and walks the
+# whole controller state machine: download → buffering → playing → ±15s skip
+# → pause → resume → natural end → continuous-playback stop.
+# Manual trigger: gh workflow run windows-audio-smoke.yml
+#
+# This is the strongest automated Windows-audio evidence available without
+# recording sound: samples are decoded and submitted to WASAPI, playback
+# position advances in real time, and the drain at the end fires the same
+# ENDED path that drives continuous chapter playback for real listeners.
+name: Windows audio smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: end-to-end audio engine test (real download, real WASAPI)
+        run: go test -tags audiosmoke -run TestDesktopAudioEndToEnd -v -timeout 15m .
