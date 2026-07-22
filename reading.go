@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -72,8 +73,10 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	})
 
 	// Small copy icon tucked beside the heading — close to the text it copies.
-	copyBtn := newIconTapButton(state, theme.ContentCopyIcon(), 17, titleBoxH, func() {
+	var copyBtn *iconTapButton
+	copyBtn = newIconTapButton(state, theme.ContentCopyIcon(), 17, titleBoxH, func() {
 		copyChapter(state)
+		copyBtn.flashIcon(theme.ConfirmIcon(), 1200*time.Millisecond)
 	})
 	titleRow := container.NewHBox(ref, hgap(8), copyBtn)
 
@@ -170,12 +173,47 @@ type iconTapButton struct {
 	boxH     float32
 	disabled bool
 	onTapped func()
+
+	img      *canvas.Image // the rendered glyph, for in-place icon swaps
+	flashGen int           // supersession guard for overlapping flashes
 }
 
 func newIconTapButton(state *AppState, icon fyne.Resource, iconSize, boxH float32, onTapped func()) *iconTapButton {
 	b := &iconTapButton{state: state, icon: icon, iconSize: iconSize, boxH: boxH, onTapped: onTapped}
 	b.ExtendBaseWidget(b)
 	return b
+}
+
+// flashIcon swaps the glyph for d, then restores the original — the pressed
+// feedback for fire-and-forget actions with no visible result of their own
+// (the copy-chapter button: tap → checkmark → back). A generation counter
+// keeps rapid re-taps from restoring early; the timer marshals back through
+// fyne.Do. Safe if the window rebuilt meanwhile (the old widget is detached
+// and the restore touches only it).
+func (b *iconTapButton) flashIcon(res fyne.Resource, d time.Duration) {
+	b.flashGen++
+	gen := b.flashGen
+	b.setIcon(res)
+	time.AfterFunc(d, func() {
+		fyne.Do(func() {
+			if b.flashGen == gen {
+				b.setIcon(b.baseIcon())
+			}
+		})
+	})
+}
+
+// baseIcon is the glyph the button was constructed with.
+func (b *iconTapButton) baseIcon() fyne.Resource { return b.icon }
+
+// setIcon repaints the rendered image in place (CreateRenderer runs once per
+// widget, so the canvas.Image it built is the one on screen).
+func (b *iconTapButton) setIcon(res fyne.Resource) {
+	if b.img == nil {
+		return
+	}
+	b.img.Resource = theme.NewColoredResource(res, colorNameMuted)
+	b.img.Refresh()
 }
 
 func (b *iconTapButton) Tapped(*fyne.PointEvent) {
@@ -189,6 +227,7 @@ func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
 	img := canvas.NewImageFromResource(theme.NewColoredResource(b.icon, colorNameMuted))
 	img.FillMode = canvas.ImageFillContain
 	img.SetMinSize(fyne.NewSize(b.iconSize, b.iconSize))
+	b.img = img
 	if b.disabled {
 		img.Translucency = 0.6 // faint when there's no chapter to move to
 	}
