@@ -188,13 +188,13 @@ func TestOpenSearchResultSetsHighlightAndReturnContext(t *testing.T) {
 func TestAddRecentChapterDedupesAndCaps(t *testing.T) {
 	state := &AppState{}
 	addRecentChapter(state, "John", 1)
-	addRecentChapter(state, "John", 1)
-	addRecentChapter(state, "Genesis", 1)
-	addRecentChapter(state, "Psalms", 23)
-	addRecentChapter(state, "Romans", 8)
-	addRecentChapter(state, "Hebrews", 11)
-	addRecentChapter(state, "Matthew", 5)
-	addRecentChapter(state, "Revelation", 21)
+	addRecentChapter(state, "John", 1) // duplicate — must not double
+	// Overflow the cap regardless of its value: maxRecent+3 further distinct
+	// chapters (the test derives from the constant so a depth change can't
+	// silently defang it).
+	for ch := 1; ch <= maxRecent+3; ch++ {
+		addRecentChapter(state, "Psalms", ch)
+	}
 	addRecentChapter(state, "Acts", 2)
 
 	if len(state.RecentChapters) != maxRecent {

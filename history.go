@@ -13,7 +13,7 @@ import (
 // buildHistoryBar renders a single slim strip of recently read chapters. It
 // returns nil when there is nothing to show, so the reading area stays clean.
 func buildHistoryBar(state *AppState) fyne.CanvasObject {
-	targets := recentJumpTargets(state, 6)
+	targets := recentJumpTargets(state, maxRecent-1)
 	if len(targets) == 0 {
 		return nil
 	}
