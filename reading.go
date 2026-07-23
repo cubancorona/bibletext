@@ -403,6 +403,17 @@ var lastPushedChapterFP string
 // (colours are inlined) and the highlight identity (arriving at the same chapter
 // from a search hit vs. prev/next is the same book+chapter but renders the
 // highlighted verse differently).
+// reporterMeasureEm is the U.S. Reports text measure in ems, measured from a
+// Supreme Court slip opinion (302.6pt line ÷ 11pt body = 27.5em → 58-60
+// characters per line). The iPad reading pane centres a column of exactly
+// this measure — at the Normal 21px base that is ~577pt, which on an 11"
+// iPad in portrait reproduces the octavo page's ~15.7%-per-side margins
+// almost exactly (and 21px itself is within 4% of the printed page's
+// physical type size at that screen's points-per-inch). Scaling the text
+// setting scales the measure with it, so the line always wraps at the
+// reporter's character count.
+const reporterMeasureEm = 27.5
+
 func chapterRenderFingerprint(state *AppState) string {
 	var variant fyne.ThemeVariant
 	if app := fyne.CurrentApp(); app != nil {
@@ -444,6 +455,33 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// The reader's chosen text size scales the whole page: body px here, and the
 	// verse-number superscripts via their em sizing. 21px is the "Normal" base.
 	bodyPx := int(math.Round(21 * readingTextScale()))
+	reporter := reporterLayoutActive()
+
+	// Line spacing + paragraph treatment: phones keep the airy 2.0 leading with
+	// blank-line paragraph gaps; the iPad reporter layout (reporterLayoutActive)
+	// uses the book set measured from the U.S. Reports — 1.2 print leading
+	// (opened slightly to 1.3 so the raised superscript verse numbers don't
+	// perturb the line rhythm) and first-line indents with NO gap between
+	// paragraphs, the octavo page's paragraph grammar. The line LENGTH half of
+	// the reporter page (27.5em measure, centred) is native: the UITextView's
+	// textContainerInset, driven by bibleTextSetReadingMeasure.
+	lineHeight, paraCSS := "2.0", `p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}`
+	if reporter {
+		// NOTE: no text-indent here — the AppKit/UIKit HTML importer drops it
+		// (verified on the iPad sim), so the indent is a literal em+en space
+		// prepended to each paragraph's text below.
+		lineHeight, paraCSS = "1.3", `p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}`
+	}
 
 	var b strings.Builder
 	b.WriteString("<html><head><style>")
@@ -451,19 +489,14 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
 		font-size: %dpx;
 		color: %s;
-		line-height: 2.0;
+		line-height: %s;
 		letter-spacing: 0.004em;
 		margin: 0; padding: 0;
 		-webkit-text-size-adjust: 100%%;
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
-	}`, bodyPx, textHex)
-	fmt.Fprintf(&b, `p {
-		margin: 0 0 24px 0;
-		text-align: justify;
-		hyphens: auto;
-		-webkit-hyphens: auto;
-	}`)
+	}`, bodyPx, textHex, lineHeight)
+	b.WriteString(paraCSS)
 	fmt.Fprintf(&b, `sup.v {
 		color: %s;
 		font-weight: 600;
@@ -483,6 +516,12 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 
 	for _, para := range groupVersesIntoParagraphs(verses) {
 		b.WriteString("<p>")
+		if reporter {
+			// The U.S. Reports paragraph grammar: a ~1.5em first-line indent
+			// instead of a blank line. Emitted as em+en space characters
+			// because the HTML importer ignores the text-indent CSS property.
+			b.WriteString("&#8195;&#8194;")
+		}
 		for i, v := range para {
 			if i > 0 {
 				b.WriteByte(' ')
