@@ -49,6 +49,14 @@ hot-caret) build; use the scripts. Rationale + measurements + removal steps:
 VS Code: `.vscode/tasks.json` wraps all of the above; `launch.json` →
 "Debug Desktop App" runs it under the debugger.
 
+**On-demand CI smokes** (all `workflow_dispatch`, `gh workflow run <name>`):
+`linux-visual-smoke.yml` (Xvfb + llvmpipe screenshots), `windows-visual-smoke.yml`
+(mesa-dist-win llvmpipe `opengl32.dll` beside the exe + desktop screenshots —
+the same DLL trick lets humans run the app in GPU-less Windows VMs), and
+`windows-audio-smoke.yml` (the `audiosmoke`-tagged end-to-end test in
+`audio_smoke_test.go`: real narration download through the real oto/WASAPI
+engine — buffering → playing → skip → pause → resume → natural end).
+
 **Android:** toolchain (JDK 21, SDK/NDK r27, bundletool — all under `$HOME`),
 the native selection overlay, build/sign/emulator/distribution, and quirks live
 in [`docs/ANDROID.md`](docs/ANDROID.md). **Build with `scripts/build-android.sh`**
@@ -121,7 +129,10 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   build is packaged universal so the iPad runs it natively, idiom=pad, not iPhone
   compatibility mode). Sim quirk: synthetic `type` into Fyne entries is flaky —
   use per-key presses. Release builds ship universal (`release-ios.sh`) — see
-  [`docs/IPAD.md`](docs/IPAD.md).
+  [`docs/IPAD.md`](docs/IPAD.md). iPads also typeset the reading pane to the
+  U.S. Reports geometry (centred 27.5em native-inset column, 1.3 leading,
+  indented paragraphs — `reporterLayoutActive()`, `reporterMeasureEm`; phones
+  unchanged); details in docs/IPAD.md → "The reading page".
 - **Native text overlays (cgo).** On macOS the reading pane is a native
   `NSTextView` and on iOS a `UITextView`, floating *above* the Fyne canvas
   (`reading_macos.go` / `reading_ios.go`, Objective-C in the cgo preamble).

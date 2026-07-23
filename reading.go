@@ -398,11 +398,6 @@ func rebuildWindow(state *AppState) {
 // platforms without a native overlay (Linux/Windows/Android).
 var lastPushedChapterFP string
 
-// chapterRenderFingerprint captures everything buildChapterHTML's output depends
-// on, so the native push can detect a no-op. It MUST include the theme variant
-// (colours are inlined) and the highlight identity (arriving at the same chapter
-// from a search hit vs. prev/next is the same book+chapter but renders the
-// highlighted verse differently).
 // reporterMeasureEm is the U.S. Reports text measure in ems, measured from a
 // Supreme Court slip opinion (302.6pt line ÷ 11pt body = 27.5em → 58-60
 // characters per line). The iPad reading pane centres a column of exactly
@@ -414,6 +409,11 @@ var lastPushedChapterFP string
 // reporter's character count.
 const reporterMeasureEm = 27.5
 
+// chapterRenderFingerprint captures everything buildChapterHTML's output depends
+// on, so the native push can detect a no-op. It MUST include the theme variant
+// (colours are inlined) and the highlight identity (arriving at the same chapter
+// from a search hit vs. prev/next is the same book+chapter but renders the
+// highlighted verse differently).
 func chapterRenderFingerprint(state *AppState) string {
 	var variant fyne.ThemeVariant
 	if app := fyne.CurrentApp(); app != nil {
@@ -440,9 +440,10 @@ func chapterRenderFingerprint(state *AppState) string {
 //
 // The font stack leads with Georgia — a warm, screen-optimised book serif that
 // is present on both macOS and iOS and matches the desktop chrome — with Iowan
-// Old Style and Times as fallbacks. Generous line-height + paragraph spacing
-// give an unhurried, page-of-a-book feel; kerning + ligatures + old-style
-// numerals add a faint warmth.
+// Old Style and Times as fallbacks. On phones, generous line-height + blank-line
+// paragraph gaps give an unhurried feel; iPads use the U.S. Reports set — 1.3
+// leading, first-line indents (see reporterLayoutActive / reporterMeasureEm).
+// Kerning + ligatures + old-style numerals add a faint warmth on both.
 func buildChapterHTML(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	textHex := nrgbaToHex(pal.Text)

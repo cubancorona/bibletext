@@ -128,7 +128,10 @@ root), signing, emulator use, and distribution are covered in
   beside the reading pane, with a header toggle to hide the sidebar for
   full-width reading (shown in landscape, tucked away in portrait by default).
   Narrow Split View / Slide Over columns fall back to the phone layout
-  automatically. See [docs/IPAD.md](docs/IPAD.md).
+  automatically. The reading page itself is typeset like a classic book —
+  a centred text column with generous margins, comfortable line spacing, and
+  indented paragraphs, modelled on the U.S. Reports (the Supreme Court's
+  official reporter). See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI
   **Explain** it, **Analyze context**, or **Analyze translation**, using your own
   Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
