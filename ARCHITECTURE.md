@@ -143,6 +143,7 @@ real files; `*_test.go` files are omitted.
 | `ui_mobile.go` | `ios \|\| android` — `CreateMainUI` picks compact vs regular at runtime; `buildCompactUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
 | `ui_regular.go` | `ios \|\| android` — `buildRegularWidthUI`, the iPad sidebar+split layout (native reading overlay in the right pane) + `layoutWatcher` (rebuild on breakpoint crossing, or orientation flip while regular) |
 | `layout.go` | Untagged: `classifyLayout` (compact vs regular by width+idiom, breakpoint 700pt), `regularSplitOffset` (~250pt sidebar), the orientation-driven sidebar default (`resolveSidebarDefault`) |
+| `reporter_ios.go` / `reporter_other.go` | `reporterLayoutActive()` — gates the iPad U.S. Reports reading layout (true only for iOS tablets; false elsewhere) |
 | `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Also `layoutMayChange()`, gating the `layoutWatcher` install |
 | `textsize.go` | Settings → Reading → Text size: the persisted scale (1.0/1.15/1.3) the scripture body renders at on every platform |
 | `chapter_header_mobile.go` | `ios \|\| android` — the compact mobile chapter toolbar shared by both native reading views |
@@ -481,6 +482,19 @@ Both hand off to the device's native share sheet on iOS / macOS / Android (the
 Android share `Intent` goes through the bridge — `nativeShareText` /
 `nativeShareImage` in [reading_android.go](reading_android.go));
 [share_other.go](share_other.go) provides graceful no-ops on Linux/Windows.
+
+### iPad typography: the U.S. Reports layout
+
+On iPads (`reporterLayoutActive()`) the chapter renders to the measured
+geometry of the Supreme Court's official reporter: `buildChapterHTML` switches
+to 1.3 leading and first-line-indent paragraphs (literal em+en spaces — the
+HTML importer drops `text-indent`), and the centred 27.5em column
+(`reporterMeasureEm`) is implemented NATIVELY as the `UITextView`'s
+`textContainerInset` (`bibleTextSetReadingMeasure` → `btIOSApplyInsets`,
+recomputed on every frame change) — so rotation / Split View / sidebar
+toggles re-centre without re-rendering, and the em-based measure keeps
+~59 characters per line at every text-size setting. Phones and the other
+platforms keep the 2.0-leading, paragraph-gap styling.
 
 ## Reading-position + history persistence
 

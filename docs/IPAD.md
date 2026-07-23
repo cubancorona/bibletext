@@ -19,7 +19,31 @@ The regular layout is **structurally the desktop layout** — it reuses the
 platform-agnostic `buildSidebar` and `buildHeader` verbatim — but its reading
 pane is the mobile **native overlay** (iOS `UITextView` / Android selectable
 `TextView`), so text selection, the Study-with-AI menu, audio, and scroll
-persistence are all unchanged from the phone.
+persistence are all unchanged from the phone. The reading *typography*,
+however, is iPad-specific — see "The reading page" below.
+
+## The reading page: the U.S. Reports layout
+
+On iPads (and only iPads — `reporterLayoutActive()`, `reporter_ios.go`; phones
+and Android tablets keep the airy compact styling) the reading pane is typeset
+to the geometry of the Supreme Court's official reporter, measured from a slip
+opinion (*Villarreal v. Texas*, 24-43): a centred **27.5em text column**
+(58–60 characters per line — ~577pt at the Normal 21px base, which on an 11"
+iPad in portrait reproduces the octavo page's ~15.7%-per-side margins, and
+21px is within 4% of the printed page's physical type size), **1.3 leading**
+(print's 1.2, opened a touch for the superscript verse numbers), and
+**first-line paragraph indents with no blank lines between paragraphs**.
+
+Implementation split: the leading + paragraph grammar live in the chapter
+HTML (`buildChapterHTML`, `reading.go` — the indent is literal em+en spaces
+because the NSAttributedString HTML importer drops the `text-indent` CSS
+property), while the centred measure is NATIVE — `bibleTextSetReadingMeasure`
+→ `btIOSApplyInsets` (`reading_ios.go`) drive the `UITextView`'s
+`textContainerInset` from the live frame width, so rotation, Split View, and
+the sidebar toggle re-centre the column without an HTML re-render. The
+measure is em-based (`reporterMeasureEm × body px`), so the Settings → Text
+size choice scales the column with the type and the line always wraps at the
+reporter's character count.
 
 ## Hiding the sidebar (the iPad convention)
 
@@ -122,7 +146,7 @@ iPad Pro 13-inch simulator produces the right 2064×2752 PNGs directly, no bezel
   keyboard-height rebuild loop — see the CRITICAL note on `layoutWatcher.Resize`
   in `ui_regular.go`); the compact (iPhone) layout unregressed. Plus
   `classifyLayout` / `regularSplitOffset` unit tests, `-race` suite, `go vet`,
-  iOS + Android cross-compile. Shipped: 1.1.0 (universal) and the 1.1.1 fixes
+  iOS + Android cross-compile. Shipped: every release since 1.1.0 is universal; the reporter reading layout ships in 1.1.5
   are live on the App Store.
 - **Not yet runtime-verified (covered by unit tests + logic):** the
   compact↔regular breakpoint crossing on a live Split-View / Stage-Manager resize;
