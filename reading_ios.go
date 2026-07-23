@@ -48,6 +48,17 @@ extern void bibleTextKeyboardChanged(double height);
 static int gBTAIEnabled = 1;
 void btIOSSetAIEnabled(int on) { gBTAIEnabled = on; }
 
+// --- Reporter measure (iPad) ---------------------------------------------------
+// gReadingMeasure is the target text-column width in points (27.5em × body px —
+// the U.S. Reports measure; see reporterMeasureEm in reading.go), or 0 on
+// phones, which keep the legacy slim insets. The side insets centre the column:
+// they are recomputed from the live frame width here and on every SetFrame, so
+// rotation / Split View / the sidebar toggle re-centre without an HTML re-render.
+static CGFloat gReadingMeasure = 0;
+
+// btIOSApplyInsets / bibleTextSetReadingMeasure are defined below gReadingTV's
+// declaration (they touch the live view).
+
 // --- Reading-position restore -------------------------------------------------
 // A one-shot scroll target applied when reopening into the last-read chapter
 // (see reading_state.go). Declared before the text-view class so its
@@ -301,6 +312,24 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 // destroy it during the app lifetime — easier to manage than re-attaching,
 // and the iOS selection state stays alive across chapter changes.
 static UITextView *gReadingTV = nil;
+static void btIOSApplyInsets(CGFloat w) {
+    if (gReadingTV == nil || w <= 0) return;
+    CGFloat side = 10; // phone default (legacy)
+    if (gReadingMeasure > 0) {
+        side = floor((w - gReadingMeasure) / 2.0);
+        if (side < 12) side = 12; // narrow multitasking column: keep a hair of margin
+    }
+    UIEdgeInsets cur = gReadingTV.textContainerInset;
+    if (fabs(cur.left - side) < 0.5 && fabs(cur.right - side) < 0.5) return;
+    gReadingTV.textContainerInset = UIEdgeInsetsMake(14, side, 14, side);
+}
+
+void bibleTextSetReadingMeasure(double m) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gReadingMeasure = (CGFloat)m;
+        if (gReadingTV != nil) btIOSApplyInsets(gReadingTV.frame.size.width);
+    });
+}
 
 // Cached reading "paper" colour (pal.Surface as 0..1 components), so the OPAQUE
 // background can be re-asserted right after EVERY attributedText assignment.
@@ -989,6 +1018,7 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         CGRect r = CGRectMake(x + safe.left, y + safe.top, w, h);
         BOOL changed = !CGRectEqualToRect(r, old);
         gReadingTV.frame = r;
+        btIOSApplyInsets(r.size.width); // reporter column re-centres on width change
         btIOSLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
         // Only re-resolve the scroll position when a highlight (search jump) or a
         // pending restore is armed: those were computed at the old width and must be
@@ -1225,6 +1255,7 @@ import "C"
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"time"
 	"unsafe"
 
@@ -1489,6 +1520,16 @@ var lastPushedBookChapter string
 // inline styling — superscript verse numbers, accent color, serif font) and
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
+	// Keep the native reporter column in sync with the text-size setting (the
+	// measure is em-based, so Large/XL widen the column and keep the line's
+	// character count at the reporter's ~59). Phones pass 0 → legacy insets.
+	if reporterLayoutActive() {
+		bodyPx := math.Round(21 * readingTextScale())
+		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+	} else {
+		C.bibleTextSetReadingMeasure(0)
+	}
+
 	fp := chapterRenderFingerprint(state)
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
 
