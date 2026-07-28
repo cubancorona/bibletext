@@ -47,6 +47,9 @@ echo "==> fyne package -os iossimulator"
 # (No codesign on the sim path, so post-package is fine; true background behavior is
 # only reliably testable on a device via run-ios-device.sh.)
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.plist"
+# Match the device build: declare add-only Photos access so the share sheet's
+# "Save Image" action appears in the simulator too.
+plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP_DIR/$APP_NAME/Info.plist"
 
 # Ship the sim build as universal (iPhone + iPad) so it runs NATIVELY on an iPad
 # simulator — otherwise the iPad runs it in iPhone compatibility mode, where the

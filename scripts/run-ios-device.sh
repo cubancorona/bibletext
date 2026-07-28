@@ -138,6 +138,14 @@ note "binary arch: $(lipo -archs "$APP/$EXE")"
 note "adding UIBackgroundModes=[audio] (background playback + Now Playing)"
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 
+# ── 5c. declare add-only Photos access (share sheet "Save Image") ───────────
+# Without NSPhotoLibraryAddUsageDescription, iOS silently HIDES the Save Image
+# action in the share sheet for the "Share as image" cards (observed in practice:
+# only "Save to Files" appeared). Write-only access, used solely when the
+# reader taps Save Image — no read access, nothing is collected.
+note "adding NSPhotoLibraryAddUsageDescription (share-sheet Save Image)"
+plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
+
 # ── 6. re-sign with the dev cert + managed profile + its entitlements ───────
 note "re-signing"
 rm -rf "$APP/_CodeSignature"
