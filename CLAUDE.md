@@ -291,7 +291,9 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   `//go:build darwin` (the `darwin` build *tag* is set for ios AND macos). iOS Background playback needs
   **`UIBackgroundModes=audio`** in Info.plist, which Fyne's iOS packager never emits —
   it's injected by `plutil` in `scripts/run-ios-device.sh`, `release-ios.sh`, and
-  `run-ios-sim.sh`, **before** their codesign step. Audio auto-stops on any
+  `run-ios-sim.sh`, **before** their codesign step (the same block also injects
+  `NSPhotoLibraryAddUsageDescription` — without it iOS silently HIDES the share
+  sheet's "Save Image" action for the verse-image cards). Audio auto-stops on any
   chapter/book/version change (one fingerprint-guarded `stopAudioForNav`,
   `audio_controller.go`, called from `addRecentChapter` in `state.go`, plus
   `applyLoadedVersion`) and on app stop/window-close (raw

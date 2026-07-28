@@ -106,6 +106,9 @@ PB "Set :CFBundleShortVersionString $SHORT_VERSION" 2>/dev/null || PB "Add :CFBu
 # so inject it here (before the step-6 codesign, or the signature breaks); a shipped
 # build without it loses background playback + lock-screen controls. plutil -replace upserts.
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
+# Add-only Photos access: without this key iOS hides "Save Image" in the share
+# sheet for the verse-image cards. Write-only, used solely on the reader's tap.
+plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
 # Declare no non-exempt encryption (HTTPS only) so the upload skips export-compliance.
 PB "Set :ITSAppUsesNonExemptEncryption false" 2>/dev/null || PB "Add :ITSAppUsesNonExemptEncryption bool false"
 # Device family for the App Store listing. Since 1.1.0 the app ships UNIVERSAL
