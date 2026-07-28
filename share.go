@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -48,9 +49,8 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 // an initialism — the Bluebook always names the version in full (e.g. "(King
 // James)"), so we use "(World English Bible)" / "(Berean Standard Bible)".
 func shareVerse(state *AppState, text string, asImage bool) {
-	cite := citationForSelection(state, text)
+	cleaned, cite := prepareShareQuote(state, text)
 	version := state.currentVersion().Name
-	cleaned := cleanQuoteText(state, text)
 	quote := formatBibleQuote(cleaned, originalSentenceTerminal(state, cleaned))
 	if asImage {
 		// Don't share blind: show the rendered card for review (with Regenerate)
@@ -96,6 +96,218 @@ func cleanQuoteText(state *AppState, raw string) string {
 		s = strings.ReplaceAll(s, marker, probe)
 	}
 	return strings.TrimSpace(s)
+}
+
+// prepareShareQuote is the share pipeline's front half: it turns a raw
+// reading-view selection into (quotable text, citation) with the two agreeing —
+// the citation names EXACTLY the verses that contribute at least one word to
+// the text (a citation is a provenance record: any quoted word from a verse
+// puts that verse in the range, and no named verse may be absent from the
+// text). The ONLY content edit beyond stripping the verse-number markers is
+// the mid-word repair: a drag that stops (or starts) partway through a word
+// is trimmed back to the last (or forward to the next) whole word — Bluebook
+// has no notation for a fragment of a word (Rule 5.3's ellipsis omits WORDS;
+// Rule 5.2's empty brackets adapt a real root word), so a chopped word can
+// neither be quoted as-is nor marked. A dangling verse-number token whose
+// verse lost its only (partial) word is apparatus with nothing to introduce
+// and is dropped with it. Falls back to the legacy probe-based path whenever
+// the selection cannot be located in the chapter's prose.
+func prepareShareQuote(state *AppState, raw string) (text, cite string) {
+	if t, lo, hi, ok := normalizeShareSelection(state, raw); ok {
+		return t, verseRangeCitation(state, lo, hi)
+	}
+	cleaned := cleanQuoteText(state, raw)
+	return cleaned, citationForSelection(state, raw)
+}
+
+// chapterProse joins the current chapter's verses (marker-free, spaces
+// collapsed) into one string, recording each verse's [start,end) span — the
+// positional ground truth for locating a selection and attributing verses.
+type verseSpan struct{ verse, start, end int }
+
+func chapterProse(state *AppState) (string, []verseSpan) {
+	var b strings.Builder
+	var spans []verseSpan
+	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+		t := collapseSpaces(v.Text)
+		if t == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		start := b.Len()
+		b.WriteString(t)
+		spans = append(spans, verseSpan{verse: v.Verse, start: start, end: b.Len()})
+	}
+	return b.String(), spans
+}
+
+// isWordRune reports a rune that can sit INSIDE a word — the test for whether a
+// selection boundary landed mid-word.
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
+}
+
+// normalizeShareSelection cleans a raw selection for sharing and attributes it
+// to its verse range positionally. ok=false when the selection can't be pinned
+// in the chapter (caller falls back to the legacy path).
+func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi int, ok bool) {
+	if state == nil || state.Bible == nil {
+		return "", 0, 0, false
+	}
+	s := stripVerseMarkers(state, collapseSpaces(raw))
+	corpus, spans := chapterProse(state)
+	if s == "" || corpus == "" {
+		return "", 0, 0, false
+	}
+
+	// A trailing bare verse-number token (the selection stopped right after a
+	// superscript marker) never appears in the prose corpus — drop it so the
+	// locate below can succeed. Verified against the chapter's real verse
+	// numbers so a legitimate number inside verse text is never touched (that
+	// one locates fine WITH the number, so this branch is skipped).
+	validNum := make(map[string]bool, len(spans))
+	for _, sp := range spans {
+		validNum[strconv.Itoa(sp.verse)] = true
+	}
+	for strings.Index(corpus, s) < 0 {
+		i := strings.LastIndexByte(strings.TrimSpace(s), ' ')
+		last := strings.TrimSpace(s)
+		if i >= 0 {
+			last = last[i+1:]
+		}
+		if !validNum[last] {
+			break
+		}
+		if i < 0 {
+			return "", 0, 0, false // the selection was only the number
+		}
+		s = strings.TrimSpace(strings.TrimSpace(s)[:i])
+	}
+
+	idx := strings.Index(corpus, s)
+	if idx < 0 {
+		return "", 0, 0, false
+	}
+
+	// Mid-word END repair: if the character right after the selection is a
+	// word rune, the drag stopped inside a word — trim back to the last whole
+	// word (and re-drop a verse-number token left dangling by that trim).
+	for {
+		end := idx + len(s)
+		if end < len(corpus) {
+			if r, _ := utf8.DecodeRuneInString(corpus[end:]); isWordRune(r) {
+				cut := strings.LastIndexByte(s, ' ')
+				if cut <= 0 {
+					return "", 0, 0, false // a single partial word — nothing left
+				}
+				s = strings.TrimSpace(s[:cut])
+				for {
+					j := strings.LastIndexByte(s, ' ')
+					last := s
+					if j >= 0 {
+						last = s[j+1:]
+					}
+					if !validNum[last] || strings.Index(corpus, s) >= 0 {
+						break
+					}
+					if j < 0 {
+						return "", 0, 0, false
+					}
+					s = strings.TrimSpace(s[:j])
+				}
+				idx = strings.Index(corpus, s)
+				if idx < 0 {
+					return "", 0, 0, false
+				}
+				continue
+			}
+		}
+		break
+	}
+
+	// Mid-word START repair, symmetrically.
+	for idx > 0 {
+		r, _ := utf8.DecodeLastRuneInString(corpus[:idx])
+		if !isWordRune(r) {
+			break
+		}
+		cut := strings.IndexByte(s, ' ')
+		if cut < 0 {
+			return "", 0, 0, false
+		}
+		s = strings.TrimSpace(s[cut+1:])
+		if s == "" {
+			return "", 0, 0, false
+		}
+		idx = strings.Index(corpus, s)
+		if idx < 0 {
+			return "", 0, 0, false
+		}
+	}
+
+	// Attribute: every verse whose span overlaps the final selection.
+	end := idx + len(s)
+	for _, sp := range spans {
+		if sp.start < end && idx < sp.end {
+			if lo == 0 {
+				lo = sp.verse
+			}
+			hi = sp.verse
+		}
+	}
+	if lo == 0 {
+		return "", 0, 0, false
+	}
+	return s, lo, hi, true
+}
+
+// stripVerseMarkers removes the superscript verse-number tokens that ride along
+// in a selection ("… heard.” 21 After …" → "… heard.” After …"). A number is
+// treated as a marker ONLY when the text after it matches the opening of that
+// very verse — for ANY overlap length, so a verse cut two characters in ("21
+// Af") is recognized just like a whole one (the legacy 12-rune probe missed
+// short tails, which is how a marker once leaked into a shared card). A number
+// appearing inside verse prose never matches its own verse's opening, so it is
+// never touched.
+func stripVerseMarkers(state *AppState, s string) string {
+	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+		body := collapseSpaces(v.Text)
+		if body == "" {
+			continue
+		}
+		marker := strconv.Itoa(v.Verse) + " "
+		for from := 0; ; {
+			i := strings.Index(s[from:], marker)
+			if i < 0 {
+				break
+			}
+			i += from
+			atBoundary := i == 0 || s[i-1] == ' '
+			rest := s[i+len(marker):]
+			overlap := len(rest)
+			if len(body) < overlap {
+				overlap = len(body)
+			}
+			if atBoundary && overlap > 0 && rest[:overlap] == body[:overlap] {
+				s = s[:i] + rest
+				from = i
+				continue
+			}
+			from = i + len(marker)
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
+// verseRangeCitation renders "Book C:lo" / "Book C:lo–hi" (en dash per Bluebook).
+func verseRangeCitation(state *AppState, lo, hi int) string {
+	book, ch := state.CurrentBook, state.CurrentChapter
+	if lo == hi {
+		return fmt.Sprintf("%s %d:%d", book, ch, lo)
+	}
+	return fmt.Sprintf("%s %d:%d–%d", book, ch, lo, hi)
 }
 
 // blockQuoteWords is the Bluebook Rule 5.1 threshold: a quotation of 50 or more
