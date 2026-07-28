@@ -479,7 +479,15 @@ From the selection menu ([share.go](share.go), dispatched by
   published Bluebook examples asserted verbatim, the observed in practice ragged-
   selection cases, and a real-world sweep over the embedded Gospels seed
   (`bluebook_test.go`, `share_bluebook_test.go`, `share_partial_test.go`,
-  `share_realworld_test.go`).
+  `share_indigo_test.go` — the Indigo Book's public-domain Viacom worked
+  family verbatim, incl. R39.9's no-mark-after-final-punctuation rule,
+  `share_edge_test.go` — nil contracts, degenerate/sub-word drags, the '…'
+  terminal, newline-spanning selections, orphan punctuation,
+  `share_realworld_test.go`, and `share_cut_sweep_test.go` — the RAGGED-CUT
+  sweeps: every legal cut position across three real chapters, with and
+  without verse-number markers, asserting word boundaries, marker
+  containment, provenance citations, and two-directional ellipsis honesty
+  on every one of ~15k generated shares).
 - **Share as image** ([share_image.go](share_image.go)) — a text-only card
   (no imagery) with a dynamic colour treatment, serif typesetting, and a clean
   citation; preview/regenerate via [share_preview.go](share_preview.go).

@@ -227,6 +227,43 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 		break
 	}
 
+	// Orphan punctuation the drag swept in from NEIGHBORING sentences: a
+	// leading ". " (the previous sentence's terminal) or closing mark belongs
+	// to text OUTSIDE the quotation and can never open one; a trailing
+	// clause mark (comma, colon, semicolon, dash) directly at an end-cut is
+	// dropped per the usual Bluebook practice of omitting punctuation
+	// adjacent to an omission (e.g. Maizebook 5.3(d)). Terminals stay — they
+	// mark a COMPLETE sentence; opening marks stay — they introduce quoted
+	// content inside the selection.
+	for s != "" {
+		r, size := utf8.DecodeRuneInString(s)
+		if r == '.' || r == ',' || r == ';' || r == ':' || r == '!' || r == '?' ||
+			r == '…' || r == '—' || r == ')' || r == ']' || r == '”' || r == '’' {
+			s = strings.TrimSpace(s[size:])
+			idx = strings.Index(corpus, s)
+			if idx < 0 || s == "" {
+				return "", 0, 0, false
+			}
+			continue
+		}
+		break
+	}
+	for s != "" {
+		r, size := utf8.DecodeLastRuneInString(s)
+		if r == ',' || r == ';' || r == ':' || r == '—' {
+			s = strings.TrimSpace(s[:len(s)-size])
+			if s == "" {
+				return "", 0, 0, false
+			}
+			idx = strings.Index(corpus, s)
+			if idx < 0 {
+				return "", 0, 0, false
+			}
+			continue
+		}
+		break
+	}
+
 	// Mid-word START repair, symmetrically.
 	for idx > 0 {
 		r, _ := utf8.DecodeLastRuneInString(corpus[:idx])
@@ -287,14 +324,36 @@ func completeTrailingSentence(state *AppState, s string) string {
 	if idx < 0 {
 		return s
 	}
+	// Punctuation may stand between the cut and the terminal without any WORD
+	// being omitted — John 1:41 (WEB) ends "…, Christ)." and a drag stopping
+	// after "Christ" omits only ")racket-and-period". Closing parens/brackets
+	// are carried into the completion only when their opener is inside the
+	// selection (never introduce an unbalanced mark); quotation closers are
+	// traversed but left to balanceQuoteMarks; any word rune aborts — that
+	// omission is real and earns its four-dot mark.
+	surplusParen := strings.Count(s, "(") - strings.Count(s, ")")
+	surplusBrack := strings.Count(s, "[") - strings.Count(s, "]")
+	var pending strings.Builder
 	for _, r := range corpus[idx+len(s):] {
 		switch {
 		case r == '.' || r == '!' || r == '?' || r == '…':
-			return s + string(r)
+			return s + pending.String() + string(r)
 		case r == '”' || r == '’' || r == '"' || r == '\'' || r == ' ':
-			continue // closing marks / spacing between the cut and the terminal
+			continue // closing quotation marks / spacing
+		case r == ')':
+			if surplusParen > 0 {
+				surplusParen--
+				pending.WriteRune(r)
+			}
+			continue
+		case r == ']':
+			if surplusBrack > 0 {
+				surplusBrack--
+				pending.WriteRune(r)
+			}
+			continue
 		default:
-			return s // a word intervenes — the omission is real
+			return s // a word (or clause punctuation implying more words) intervenes
 		}
 	}
 	return s
