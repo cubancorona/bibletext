@@ -146,3 +146,24 @@ func TestShareSelectionFullVersesUnchanged(t *testing.T) {
 		t.Errorf("full-verse text altered: %q", text)
 	}
 }
+
+// TestShareSelectionWhollyEnclosedSinglePair pins Rule 5.2(f)(i)'s balanced
+
+// captured the speakers' own opening AND closing marks with nothing outside
+// them, so the enclosing pair is dropped and the share carries ONE plain pair
+// — "omit the enclosing internal marks when the whole quotation is itself a
+// quotation" — rather than the nested "“‘…’”" form (which remains correct,
+// and tested elsewhere, when narration sits outside the marks).
+func TestShareSelectionWhollyEnclosedSinglePair(t *testing.T) {
+	st := acts4ShareState()
+	raw := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard.” 21 Af"
+	text, cite := prepareShareQuote(st, raw)
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	want := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. For we cannot stop speaking about what we have seen and heard.”"
+	if quote != want {
+		t.Errorf("wholly-enclosed share:\n got %q\nwant %q", quote, want)
+	}
+	if cite != "Acts 4:19–20" {
+		t.Errorf("citation = %q, want Acts 4:19–20", cite)
+	}
+}

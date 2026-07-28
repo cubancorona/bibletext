@@ -171,8 +171,10 @@ root), signing, emulator use, and distribution are covered in
   distinct pairings, identical on every platform). Quote and citation follow
   **Bluebook** style: spelled-out translation, en-dash ranges, and the Rule 5
   quotation rules (the 50-word block-quote threshold, quotation nesting, bracketed
-  capitals, and " . . . ." end omissions). Both open your device's native share
-  sheet.
+  capitals, and " . . . ." end omissions). Ragged drag edges are tidied — a
+  selection cut mid-word trims to the whole word, stray verse-number markers
+  never leak into the quote, and the citation always names exactly the verses
+  the shared words come from. Both open your device's native share sheet.
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.

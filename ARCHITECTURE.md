@@ -460,14 +460,26 @@ From the selection menu ([share.go](share.go), dispatched by
 `dispatchSelectionAction`):
 
 - **Share with citation** — plain text: the formatted quote + a reference line.
-  Quote and citation follow **Bluebook** style: spelled-out translation, en-dash
-  ranges, and the Rule 5 quotation rules — the 50-word block-quote threshold
-  (counting quoted words only), quotation-mark nesting (5.1(b)),
-  wholly-enclosed quotations (5.2(f)(i)), bracketed initial capitals
-  (5.3(b)(i)), and " . . . ." end omissions that preserve the original
-  sentence's terminal punctuation (5.3(b)(iii)). The formatter is pinned by
-  corpus-grounded tests plus a real-world sweep over the embedded Gospels seed
-  (`bluebook_test.go`, `share_realworld_test.go`).
+  Before formatting, the raw drag selection is NORMALIZED positionally against
+  the chapter prose (`prepareShareQuote` / `normalizeShareSelection`,
+  [share.go](share.go)): the only content edit is the mid-word repair (a drag
+  that stops or starts inside a word trims to the whole-word boundary —
+  Bluebook has no notation for a word fragment), verse-number markers are
+  stripped at ANY overlap length, and the citation is a **provenance record**
+  — it names exactly the verses contributing at least one surviving word (one
+  word from a verse cites it; a bare dangling marker whose verse lost its only
+  partial word drops out of both). Quote and citation follow **Bluebook**
+  style: spelled-out translation, en-dash ranges, and the Rule 5 quotation
+  rules — the 50-word block-quote threshold (counting quoted words only),
+  quotation-mark nesting (5.1(b)), wholly-enclosed quotations — including a
+  selection that carries the quotation's own balanced pair — collapsing to one
+  plain pair (5.2(f)(i)), bracketed initial capitals (5.3(b)(i)), and
+  " . . . ." end omissions that preserve the original sentence's terminal
+  punctuation (5.3(b)(iii)). The formatter is pinned by corpus-grounded tests,
+  published Bluebook examples asserted verbatim, the observed in practice ragged-
+  selection cases, and a real-world sweep over the embedded Gospels seed
+  (`bluebook_test.go`, `share_bluebook_test.go`, `share_partial_test.go`,
+  `share_realworld_test.go`).
 - **Share as image** ([share_image.go](share_image.go)) — a text-only card
   (no imagery) with a dynamic colour treatment, serif typesetting, and a clean
   citation; preview/regenerate via [share_preview.go](share_preview.go).

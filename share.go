@@ -550,7 +550,36 @@ func resolveEnclosingQuotes(s string) string {
 	}
 	lead := -minDepth
 	if lead == 0 && depth == 0 {
-		return s // balanced — no enclosing marks in play
+		// Balanced marks. One more 5.2(f)(i) case hides here: the selection may
+		// CARRY the quotation's own opening and closing marks ("Judge … heard.")
+		// with nothing outside them — the quoted matter is still wholly a
+		// quotation, so the enclosing pair is dropped the same as when the
+		// marks were cut off. Applies only when ONE outermost pair spans the
+		// entire selection (depth returns to zero only at the final rune);
+		// anything at depth zero — narration before/after/between quotations —
+		// keeps the marks for nesting.
+		rs := []rune(strings.TrimSpace(s))
+		if len(rs) >= 2 && rs[0] == '“' && rs[len(rs)-1] == '”' {
+			d, whole := 0, true
+			for i, r := range rs {
+				switch r {
+				case '“':
+					d++
+				case '”':
+					d--
+					if d == 0 && i != len(rs)-1 {
+						whole = false
+					}
+				}
+				if !whole {
+					break
+				}
+			}
+			if whole {
+				return strings.TrimSpace(string(rs[1 : len(rs)-1]))
+			}
+		}
+		return s // balanced with matter outside the marks — nesting handles it
 	}
 
 	// Pass 2: any letter at virtual depth 0 is narration OUTSIDE the
