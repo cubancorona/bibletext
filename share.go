@@ -114,9 +114,9 @@ func cleanQuoteText(state *AppState, raw string) string {
 // the selection cannot be located in the chapter's prose.
 func prepareShareQuote(state *AppState, raw string) (text, cite string) {
 	if t, lo, hi, ok := normalizeShareSelection(state, raw); ok {
-		return t, verseRangeCitation(state, lo, hi)
+		return completeTrailingSentence(state, t), verseRangeCitation(state, lo, hi)
 	}
-	cleaned := cleanQuoteText(state, raw)
+	cleaned := completeTrailingSentence(state, cleanQuoteText(state, raw))
 	return cleaned, citationForSelection(state, raw)
 }
 
@@ -261,6 +261,43 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 		return "", 0, 0, false
 	}
 	return s, lo, hi, true
+}
+
+// completeTrailingSentence restores the ORIGINAL final punctuation when a
+// selection stops after a sentence's last word but before its terminal — the
+// reader quoted every word of the sentence and merely didn't drag across the
+// period. Rule 5.3's ellipsis marks omitted WORDS, so marking this case with
+// the four-dot form would claim an omission that never happened (field-
+// reported: "…seen and heard . . . ." for a selection missing only the "."
+// of Acts 4:20). The check is positional: locate the selection in the chapter
+// prose and scan forward — if nothing but closing quotation marks stands
+// between the cut and the sentence's terminal punctuation, append that
+// terminal (addEndOmission then sees a complete sentence and adds no mark);
+// if any word intervenes, leave the text alone and let the ellipsis do its
+// honest work. No-op whenever the selection can't be located.
+func completeTrailingSentence(state *AppState, s string) string {
+	if state == nil || state.Bible == nil || s == "" {
+		return s
+	}
+	if r, _ := utf8.DecodeLastRuneInString(strings.TrimRight(s, " \t”’\"'")); r == '.' || r == '!' || r == '?' || r == '…' {
+		return s // already complete
+	}
+	corpus, _ := chapterProse(state)
+	idx := strings.Index(corpus, s)
+	if idx < 0 {
+		return s
+	}
+	for _, r := range corpus[idx+len(s):] {
+		switch {
+		case r == '.' || r == '!' || r == '?' || r == '…':
+			return s + string(r)
+		case r == '”' || r == '’' || r == '"' || r == '\'' || r == ' ':
+			continue // closing marks / spacing between the cut and the terminal
+		default:
+			return s // a word intervenes — the omission is real
+		}
+	}
+	return s
 }
 
 // stripVerseMarkers removes the superscript verse-number tokens that ride along

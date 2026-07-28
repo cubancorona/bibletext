@@ -167,3 +167,54 @@ func TestShareSelectionWhollyEnclosedSinglePair(t *testing.T) {
 		t.Errorf("citation = %q, want Acts 4:19–20", cite)
 	}
 }
+
+
+// that captures every WORD of the sentence but stops short of its final
+// punctuation omits nothing — Rule 5.3's ellipsis marks omitted words, so the
+// share restores the sentence's own terminal and carries NO mark, instead of
+// the false "heard . . . ." the punctuation-blind rule produced.
+func TestShareSelectionMissingTerminalCompleted(t *testing.T) {
+	st := acts4ShareState()
+	raw := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard"
+	text, cite := prepareShareQuote(st, raw)
+	if !strings.HasSuffix(text, "heard.") {
+		t.Errorf("missing terminal must be restored: %q", text)
+	}
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	if strings.Contains(quote, ". . .") {
+		t.Errorf("no words were omitted — no ellipsis belongs: %q", quote)
+	}
+	if want := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. For we cannot stop speaking about what we have seen and heard.”"; quote != want {
+		t.Errorf("\n got %q\nwant %q", quote, want)
+	}
+	if cite != "Acts 4:19–20" {
+		t.Errorf("citation = %q, want Acts 4:19–20", cite)
+	}
+}
+
+// TestShareSelectionMissingQuestionTerminal: the restored terminal is the
+// SENTENCE'S own — a question completes with "?", and words genuinely omitted
+// before the terminal still earn the four-dot form (the two cases divide on
+// whether any WORD stands between the cut and the terminal).
+func TestShareSelectionMissingQuestionTerminal(t *testing.T) {
+	bd := &BibleData{
+		Books: []string{"John"},
+		Verses: map[string]map[int][]Verse{"John": {11: {
+			{BookName: "John", Book: "John", Chapter: 11, Verse: 26,
+				Text: "Whoever lives and believes in me will never die. Do you believe this?”"},
+		}}},
+	}
+	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 11}
+
+	// Stops after the question's last word → complete with "?", no ellipsis.
+	text, _ := prepareShareQuote(st, "Whoever lives and believes in me will never die. Do you believe this")
+	if !strings.HasSuffix(text, "this?") {
+		t.Errorf("question terminal must be restored: %q", text)
+	}
+	// Stops with a word still to come ("this") → the omission is real: four-dot.
+	text2, _ := prepareShareQuote(st, "Whoever lives and believes in me will never die. Do you believe")
+	q2 := formatBibleQuote(text2, originalSentenceTerminal(st, text2))
+	if !strings.Contains(q2, ". . . ?") {
+		t.Errorf("a word IS omitted — the four-dot question form belongs: %q", q2)
+	}
+}
