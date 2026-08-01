@@ -230,12 +230,17 @@ func TestNavigateToReference(t *testing.T) {
 		Bible: base, CurrentVersion: defaultVersionID,
 		CurrentBook: "Somewhere", CurrentChapter: 99,
 	}
+	readingSurfaced := 0
+	state.surfaceReading = func() { readingSurfaced++ }
 	navigateToReference(state, book, ch)
 	if state.CurrentBook != book || state.CurrentChapter != ch {
 		t.Fatalf("navigate set %s %d, want %s %d", state.CurrentBook, state.CurrentChapter, book, ch)
 	}
 	if len(state.RecentChapters) == 0 || state.RecentChapters[0].Book != book || state.RecentChapters[0].Chapter != ch {
 		t.Errorf("visit not recorded at history head: %+v", state.RecentChapters)
+	}
+	if readingSurfaced != 1 {
+		t.Errorf("navigation surfaced reading %d times, want 1", readingSurfaced)
 	}
 }
 
