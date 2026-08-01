@@ -1393,6 +1393,9 @@ func navigateToReference(state *AppState, book string, chapter int) {
 	clearHighlightedVerse(state)
 	addRecentChapter(state, book, chapter)
 	state.refresh()
+	if state.surfaceReading != nil {
+		state.surfaceReading()
+	}
 }
 
 // pickerCanvas returns the canvas to host a picker modal.
