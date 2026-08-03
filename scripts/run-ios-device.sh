@@ -34,6 +34,7 @@ APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"   # paid Apple Developer Program team
 IOS_MIN="13.0"
+WORK="$(mktemp -d /tmp/bibletext-device.XXXXXX)"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
@@ -42,9 +43,12 @@ fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 # ── 0. apply the iOS-only Fyne scroll-lag patch for this build ───────────────
 # go.mod ships STOCK (so `go build` / `go run ./cmd/desktop` stay one-line); the
 # fix is a one-line change to Fyne's iOS drawloop (see patches/README.md). We
-# regenerate a patched Fyne and inject a temporary `replace` just for this build,
-# restoring stock go.mod on exit (success, failure, or Ctrl-C).
-trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
+# regenerate a patched Fyne and inject a temporary `replace` just for this build.
+# Preserve the exact pre-build files (including uncommitted version/build edits)
+# because fyne increments FyneApp.toml while packaging.
+cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
+cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
@@ -111,7 +115,7 @@ note "provisioning profile: $PROFILE_NAME"
 # provisioning state — fyne exits 0 and leaves the bundle, and step 6 signs it.
 note "fyne package -os ios (assembling the app bundle, unsigned; we re-sign in step 6)"
 ( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >/tmp/fyne_bundle.log 2>&1 ) || true
-git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true
+cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml"
 APP="$APP_DIR/$APP_NAME"
 [ -f "$APP/Info.plist" ] || { tail -20 /tmp/fyne_bundle.log; fail "fyne did not leave an app bundle to reuse."; }
 
@@ -145,6 +149,14 @@ plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 # reader taps Save Image — no read access, nothing is collected.
 note "adding NSPhotoLibraryAddUsageDescription (share-sheet Save Image)"
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
+
+# Keep real-device smoke builds structurally identical to the App Store bundle.
+note "adding LaunchScreen.storyboardc + PrivacyInfo.xcprivacy"
+xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" \
+    --target-device iphone --target-device ipad --minimum-deployment-target "$IOS_MIN" \
+    --module BibleText >/dev/null
+cp "$APP_DIR/PrivacyInfo.xcprivacy" "$APP/PrivacyInfo.xcprivacy"
+plutil -lint "$APP/Info.plist" "$APP/PrivacyInfo.xcprivacy" >/dev/null
 
 # ── 6. re-sign with the dev cert + managed profile + its entitlements ───────
 note "re-signing"

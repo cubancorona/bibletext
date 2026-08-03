@@ -192,7 +192,8 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   popup on iOS so the field clears the soft keyboard; centered modal on desktop), then
   shows a prose answer grounded in the selection (`buildAskPrompt`). Providers (Gemini /
   OpenAI / Anthropic / Grok) live in `ai_providers.go`; keys are stored on-device via
-  `keyStore` (`ai_keystore.go`) over `fyne.Preferences`, with `<PROVIDER>_API_KEY` env
+  `keyStore` (`ai_keystore.go`) in Apple Keychain on iOS/macOS (with one-time migration
+  from the legacy `fyne.Preferences` value) and preferences elsewhere; `<PROVIDER>_API_KEY` env
   vars overriding (Grok's is `XAI_API_KEY`, not GROK_). Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
   `ai.go` (shared preamble + per-action task + the quoted selection; the fixed actions
   documented in README → "AI study"). `runAIAction` threads the Ask question and folds
