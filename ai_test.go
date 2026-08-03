@@ -45,6 +45,28 @@ func (f *fakePrefs) StringWithFallback(key, fb string) string {
 }
 func (f *fakePrefs) SetString(key, value string) { f.m[key] = value }
 
+type fakeSecrets struct {
+	m         map[string]string
+	failWrite bool
+}
+
+func (f *fakeSecrets) Read(account string) (string, bool) {
+	v, ok := f.m[account]
+	return v, ok
+}
+
+func (f *fakeSecrets) Write(account, value string) bool {
+	if f.failWrite {
+		return false
+	}
+	if value == "" {
+		delete(f.m, account)
+	} else {
+		f.m[account] = value
+	}
+	return true
+}
+
 // --- Gemini -----------------------------------------------------------------
 
 func geminiTestClient(m *mockHTTP) *geminiClient {
@@ -221,6 +243,56 @@ func TestKeyStore(t *testing.T) {
 	ks.setAPIKey(providerOpenAI, "  sk-123  ")
 	if ks.apiKey(providerOpenAI) != "sk-123" {
 		t.Errorf("key not trimmed/stored: %q", ks.apiKey(providerOpenAI))
+	}
+}
+
+func TestKeyStoreMigratesLegacyKeyToSecureStore(t *testing.T) {
+	prefs := newFakePrefs()
+	prefs.SetString(prefKeyPrefix+providerOpenAI, "legacy-key")
+	secrets := &fakeSecrets{m: map[string]string{}}
+	ks := &keyStore{prefs: prefs, secrets: secrets}
+
+	if got := ks.apiKey(providerOpenAI); got != "legacy-key" {
+		t.Fatalf("migrated key = %q, want legacy-key", got)
+	}
+	if got := secrets.m[providerOpenAI]; got != "legacy-key" {
+		t.Fatalf("secure copy = %q, want legacy-key", got)
+	}
+	if got := prefs.String(prefKeyPrefix + providerOpenAI); got != "" {
+		t.Fatalf("legacy preference was not erased: %q", got)
+	}
+}
+
+func TestKeyStoreWritesAndClearsSecurely(t *testing.T) {
+	prefs := newFakePrefs()
+	secrets := &fakeSecrets{m: map[string]string{}}
+	ks := &keyStore{prefs: prefs, secrets: secrets}
+
+	if !ks.setAPIKey(providerGemini, "  secure-key  ") {
+		t.Fatal("secure write failed")
+	}
+	if got := ks.apiKey(providerGemini); got != "secure-key" {
+		t.Fatalf("secure key = %q, want secure-key", got)
+	}
+	if !ks.setAPIKey(providerGemini, "") {
+		t.Fatal("secure delete failed")
+	}
+	if got := ks.apiKey(providerGemini); got != "" {
+		t.Fatalf("key survived clear: %q", got)
+	}
+}
+
+func TestKeyStoreKeepsLegacyKeyWhenSecureMigrationFails(t *testing.T) {
+	prefs := newFakePrefs()
+	prefs.SetString(prefKeyPrefix+providerAnthropic, "legacy-key")
+	secrets := &fakeSecrets{m: map[string]string{}, failWrite: true}
+	ks := &keyStore{prefs: prefs, secrets: secrets}
+
+	if got := ks.apiKey(providerAnthropic); got != "legacy-key" {
+		t.Fatalf("legacy key after failed migration = %q, want legacy-key", got)
+	}
+	if got := prefs.String(prefKeyPrefix + providerAnthropic); got != "legacy-key" {
+		t.Fatalf("failed migration erased legacy key: %q", got)
 	}
 }
 

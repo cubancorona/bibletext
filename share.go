@@ -51,13 +51,20 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 func shareVerse(state *AppState, text string, asImage bool) {
 	cleaned, cite := prepareShareQuote(state, text)
 	version := state.currentVersion().Name
-	quote := formatBibleQuote(cleaned, originalSentenceTerminal(state, cleaned))
+	terminal := originalSentenceTerminal(state, cleaned)
 	if asImage {
+		quote := formatBibleQuote(cleaned, terminal)
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
 		showShareImagePreview(state, quote, cite, version)
 		return
 	}
+	// Text shares retain only authored structure: source poetry lines and the
+	// reading view's paragraph boundaries. They are rebuilt from the chapter data,
+	// never copied from rendered wrapping, so resizing the reader cannot change the
+	// clipboard text. Image cards keep their existing continuous-text layout.
+	cleaned = restoreShareLineBreaks(state, cleaned)
+	quote := formatBibleQuote(cleaned, terminal)
 	nativeShareText(composeShareText(quote, cite, version))
 }
 
@@ -141,6 +148,120 @@ func chapterProse(state *AppState) (string, []verseSpan) {
 		spans = append(spans, verseSpan{verse: v.Verse, start: start, end: b.Len()})
 	}
 	return b.String(), spans
+}
+
+// shareTextBreak identifies a space in flattened chapter prose that represents
+// authored structure. replacement is either one newline (a source poetry line)
+// or two (a paragraph boundary).
+type shareTextBreak struct {
+	offset      int
+	replacement string
+}
+
+// verseShareStructure flattens a verse exactly as collapseSpaces does while also
+// recording source-authored newline positions. Leading/trailing whitespace from
+// API payloads is ignored; a blank source line remains a paragraph break.
+func verseShareStructure(s string) (string, []shareTextBreak) {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	lines := strings.Split(s, "\n")
+
+	var b strings.Builder
+	var breaks []shareTextBreak
+	previousContentLine := -1
+	for lineNo, line := range lines {
+		line = collapseSpaces(line)
+		if line == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			replacement := "\n"
+			if lineNo-previousContentLine > 1 {
+				replacement = "\n\n"
+			}
+			breaks = append(breaks, shareTextBreak{offset: b.Len(), replacement: replacement})
+			b.WriteByte(' ')
+		}
+		b.WriteString(line)
+		previousContentLine = lineNo
+	}
+	return b.String(), breaks
+}
+
+// chapterShareStructure is chapterProse plus its non-visual structure. Paragraph
+// breaks come from the same grouping the reader displays; line breaks inside a
+// verse come from the translation source retained in Verse.Text.
+func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
+	if state == nil || state.Bible == nil {
+		return "", nil
+	}
+	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	var b strings.Builder
+	var breaks []shareTextBreak
+	for paragraphIndex, paragraph := range groupVersesIntoParagraphs(verses) {
+		wroteInParagraph := false
+		for _, verse := range paragraph {
+			text, verseBreaks := verseShareStructure(verse.Text)
+			if text == "" {
+				continue
+			}
+			if b.Len() > 0 {
+				replacement := ""
+				if paragraphIndex > 0 && !wroteInParagraph {
+					replacement = "\n\n"
+				}
+				if replacement != "" {
+					breaks = append(breaks, shareTextBreak{offset: b.Len(), replacement: replacement})
+				}
+				b.WriteByte(' ')
+			}
+			start := b.Len()
+			b.WriteString(text)
+			for _, br := range verseBreaks {
+				breaks = append(breaks, shareTextBreak{
+					offset:      start + br.offset,
+					replacement: br.replacement,
+				})
+			}
+			wroteInParagraph = true
+		}
+	}
+	return b.String(), breaks
+}
+
+// restoreShareLineBreaks replaces only the structural spaces that fall wholly
+// inside the selected text. The selection is first located in the flattened
+// chapter, so soft wrapping from any platform is neither inspected nor retained.
+func restoreShareLineBreaks(state *AppState, text string) string {
+	flat, breaks := chapterShareStructure(state)
+	if text == "" || flat == "" || len(breaks) == 0 {
+		return text
+	}
+	start := strings.Index(flat, text)
+	if start < 0 {
+		return text
+	}
+	end := start + len(text)
+
+	var b strings.Builder
+	last := 0
+	for _, br := range breaks {
+		if br.offset <= start || br.offset >= end {
+			continue
+		}
+		rel := br.offset - start
+		if rel < last || rel >= len(text) || text[rel] != ' ' {
+			continue
+		}
+		b.WriteString(text[last:rel])
+		b.WriteString(br.replacement)
+		last = rel + 1 // replace the flattened separator space
+	}
+	if last == 0 {
+		return text
+	}
+	b.WriteString(text[last:])
+	return b.String()
 }
 
 // isWordRune reports a rune that can sit INSIDE a word — the test for whether a
@@ -429,9 +550,8 @@ const blockQuoteWords = 50
 //     correctly gets ONE set of plain double marks — Rule 5.2(f)(i): omit the
 //     enclosing internal marks when the whole quotation is itself a quotation.
 //
-// Documented deviations (deliberate, for a chat/card medium): the original's
-// paragraph breaks are flattened in 50+ word blocks (Rule 5.1(a)(iii) would keep
-// them); a third nesting level is not re-alternated back to double (5.1(b)(i)) —
+// Documented deviations (deliberate, for a chat/card medium): a third nesting
+// level is not re-alternated back to double (5.1(b)(i)) —
 // the closing single glyph ’ doubles as the apostrophe, so auto-flipping is
 // unreliable; and the card centers its citation rather than starting it at the
 // left margin on the following line.

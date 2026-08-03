@@ -175,3 +175,53 @@ func TestShareQuotePipelineBeatitude(t *testing.T) {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
 }
+
+func TestCitedTextSharePreservesSourceLineBreaks(t *testing.T) {
+	bd := NewBibleData()
+	bd.Books = []string{"Psalms"}
+	bd.Verses["Psalms"] = map[int][]Verse{19: {
+		{BookName: "Psalms", Chapter: 19, Verse: 1,
+			Text: "The heavens declare the glory of God.\nThe expanse shows his handiwork."},
+	}}
+	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 19}
+
+	raw := "1 The heavens declare the glory of God. The expanse shows his handiwork."
+	cleaned, cite := prepareShareQuote(state, raw)
+	cleaned = restoreShareLineBreaks(state, cleaned)
+	got := composeShareText(formatBibleQuote(cleaned), cite, "World English Bible")
+	want := "“The heavens declare the glory of God.\nThe expanse shows his handiwork.”\n— Psalms 19:1 (World English Bible)"
+	if got != want {
+		t.Errorf("cited share must retain the source poetry line:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestCitedTextSharePreservesParagraphsNotSoftWraps(t *testing.T) {
+	longVerse := strings.Repeat("Alpha ", 54) + "ends."
+	bd := NewBibleData()
+	bd.Books = []string{"Test"}
+	bd.Verses["Test"] = map[int][]Verse{1: {
+		{BookName: "Test", Chapter: 1, Verse: 1, Text: longVerse},
+		{BookName: "Test", Chapter: 1, Verse: 2, Text: "Second paragraph."},
+	}}
+	state := &AppState{Bible: bd, CurrentBook: "Test", CurrentChapter: 1}
+
+	// The reader intentionally starts verse 2 as a new paragraph once the first
+	// paragraph passes its measure; that structural break survives sharing.
+	flat := longVerse + " Second paragraph."
+	if got, want := restoreShareLineBreaks(state, flat), longVerse+"\n\nSecond paragraph."; got != want {
+		t.Errorf("paragraph structure:\n got %q\nwant %q", got, want)
+	}
+
+	// A newline introduced only by display wrapping is absent from chapter data,
+	// so the normalized share remains continuous prose.
+	shortBD := NewBibleData()
+	shortBD.Books = []string{"Test"}
+	shortBD.Verses["Test"] = map[int][]Verse{1: {
+		{BookName: "Test", Chapter: 1, Verse: 1, Text: "A line that wraps on a narrow screen."},
+	}}
+	shortState := &AppState{Bible: shortBD, CurrentBook: "Test", CurrentChapter: 1}
+	cleaned, _ := prepareShareQuote(shortState, "A line that wraps\non a narrow screen.")
+	if got, want := restoreShareLineBreaks(shortState, cleaned), "A line that wraps on a narrow screen."; got != want {
+		t.Errorf("soft wrap must be flattened:\n got %q\nwant %q", got, want)
+	}
+}

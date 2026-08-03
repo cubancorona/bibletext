@@ -706,22 +706,27 @@ static void bibleTextScrollReadingTV(void) {
     gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
 }
 
-// Look up the foreground UIWindow that Fyne renders into. iOS 13+ uses scenes;
-// pre-13 we fall back to the deprecated keyWindow. Fyne's mobile driver creates
-// exactly one window, so the first one we find is the right one.
+// Look up the foreground UIWindow that Fyne renders into. BibleText's minimum
+// is iOS 13, so use the scene-aware APIs throughout rather than UIApplication's
+// deprecated process-wide keyWindow. Prefer the actual key window, then a
+// visible foreground window while the scene is transitioning.
 static UIWindow *bibleTextFindWindow(void) {
-    if (@available(iOS 13.0, *)) {
-        NSSet<UIScene*> *scenes = UIApplication.sharedApplication.connectedScenes;
-        for (UIScene *scene in scenes) {
-            if ([scene isKindOfClass:[UIWindowScene class]]) {
-                UIWindowScene *ws = (UIWindowScene *)scene;
-                if (ws.windows.count > 0) {
-                    return ws.windows.firstObject;
-                }
+    UIWindow *fallback = nil;
+    NSSet<UIScene*> *scenes = UIApplication.sharedApplication.connectedScenes;
+    for (UIScene *scene in scenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]] ||
+            scene.activationState == UISceneActivationStateUnattached) {
+            continue;
+        }
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        for (UIWindow *window in ws.windows) {
+            if (window.isKeyWindow) return window;
+            if (fallback == nil && !window.hidden && window.alpha > 0) {
+                fallback = window;
             }
         }
     }
-    return UIApplication.sharedApplication.keyWindow;
+    return fallback;
 }
 
 // Ensure the UITextView exists and is parented to the current window. Called

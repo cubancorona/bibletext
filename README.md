@@ -174,7 +174,9 @@ root), signing, emulator use, and distribution are covered in
   capitals, and " . . . ." end omissions). Ragged drag edges are tidied — a
   selection cut mid-word trims to the whole word, stray verse-number markers
   never leak into the quote, and the citation always names exactly the verses
-  the shared words come from. Both open your device's native share sheet.
+  the shared words come from. Text shares retain source poetry lines and reading
+  paragraphs, but never line breaks caused only by screen wrapping. Both open
+  your device's native share sheet.
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
@@ -297,7 +299,8 @@ any output) and the AI-settings sheet shows an in-app note explaining what leave
 the device.
 
 You supply your own API key per provider. Keys are stored **only on this device**
-(via the OS preferences store) — nothing is embedded in the app. Open the header
+(in Apple Keychain on iOS/macOS; the local preferences store on other platforms)
+— nothing is embedded in the app. Open the header
 **gear → AI study** sheet to pick a provider and paste a key:
 
 | Provider | Model | Get a key |

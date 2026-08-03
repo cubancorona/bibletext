@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// TestBSBVerseTextSpacing locks in the verse-text flattening rules that the
+// TestBSBVerseTextSpacing locks in the verse-text spacing rules that the
 // real helloao data exercises. helloao trims the whitespace around every boundary
-// it introduces (dropped footnote/line-break nodes and poetry clauses all abut
-// with nothing between them), so every contributing piece is joined with one
-// synthesized space — EXCEPT where the next piece opens with closing punctuation
-// or a quote, which must stay attached to the preceding text.
+// it introduces (dropped footnote nodes and poetry clauses all abut with nothing
+// between them), so contributing pieces are joined with one synthesized space —
+// except explicit lineBreak nodes, which survive as authored newlines, and closing
+// punctuation/quotes, which stay attached to the preceding text.
 func TestBSBVerseTextSpacing(t *testing.T) {
 	cases := []struct{ name, contentJSON, want string }{
 		{
@@ -31,9 +31,9 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 			"And Adam named his wife Eve, because she would be the mother of all the living.",
 		},
 		{
-			"line break between trimmed prose runs gets a space (Genesis 10:2 shape)",
+			"source line break between trimmed prose runs is retained (Genesis 10:2 shape)",
 			`["The sons of Japheth:",{"lineBreak":true},"Gomer, Magog, Madai, Javan, Tubal, Meshech, and Tiras."]`,
-			"The sons of Japheth: Gomer, Magog, Madai, Javan, Tubal, Meshech, and Tiras.",
+			"The sons of Japheth:\nGomer, Magog, Madai, Javan, Tubal, Meshech, and Tiras.",
 		},
 		{
 			// A footnote between a poetry clause and a clause that is pure closing
@@ -50,12 +50,12 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 		{
 			"prose intro then poetry clauses (Genesis 2:23 shape)",
 			`["And the man said:",{"lineBreak":true},{"text":"“This is now bone of my bones","poem":1},{"text":"and flesh of my flesh;","poem":2}]`,
-			"And the man said: “This is now bone of my bones and flesh of my flesh;",
+			"And the man said:\n“This is now bone of my bones and flesh of my flesh;",
 		},
 		{
 			"pure poetry clauses single-spaced (Genesis 1:27 shape)",
 			`[{"text":"So God created man in His own image;","poem":1},{"text":"in the image of God He created him;","poem":2},{"lineBreak":true},{"text":"male and female He created them.","poem":2},{"noteId":4}]`,
-			"So God created man in His own image; in the image of God He created him; male and female He created them.",
+			"So God created man in His own image; in the image of God He created him;\nmale and female He created them.",
 		},
 	}
 	for _, c := range cases {
@@ -140,9 +140,9 @@ func TestDecodeBSBComplete(t *testing.T) {
 		t.Errorf("Genesis 1:1 = %q (ok=%v)", got, ok)
 	}
 
-	// Poetry: the {text} clauses join with single spaces; {lineBreak} and the
-	// trailing {noteId} contribute nothing.
-	want27 := "So God created man in His own image; in the image of God He created him; male and female He created them."
+	// Poetry: {text} clauses join with spaces, explicit {lineBreak} survives, and
+	// the trailing {noteId} contributes nothing.
+	want27 := "So God created man in His own image; in the image of God He created him;\nmale and female He created them."
 	if got, ok := verseText(gen[1], 27); !ok || got != want27 {
 		t.Errorf("Genesis 1:27 = %q\n           want %q", got, want27)
 	}
