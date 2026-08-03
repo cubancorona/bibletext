@@ -30,7 +30,8 @@ APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"
 IOS_MIN="13.0"
-SHORT_VERSION="${BIBLETEXT_SHORT_VERSION:-1.0}"   # MUST match the App Store Connect version record
+CONFIG_VERSION="$(awk -F ' *= *' '/^Version *=/{gsub(/"/, "", $2); print $2; exit}' "$APP_DIR/FyneApp.toml")"
+SHORT_VERSION="${BIBLETEXT_SHORT_VERSION:-$CONFIG_VERSION}"   # MUST match the App Store Connect version record
 OUT_DIR="${REPO_ROOT}/build"
 WORK="$(mktemp -d /tmp/bibletext-release.XXXXXX)"
 
@@ -38,9 +39,12 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-# go.mod ships STOCK; apply the iOS Fyne drawloop patch only for this build and
-# restore go.mod + FyneApp.toml (fyne bumps its Build) + scratch dir on exit.
-trap 'git -C "$REPO_ROOT" checkout -- go.mod cmd/mobile/FyneApp.toml 2>/dev/null || true; rm -rf "$WORK"' EXIT
+# go.mod ships STOCK; apply the iOS Fyne patches only for this build. Preserve
+# the exact pre-build files (including any uncommitted user edits) because fyne
+# increments FyneApp.toml's Build during packaging.
+cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
+cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
@@ -82,7 +86,7 @@ done
 # ── 3. fyne assembles the bundle (unsigned; we set version + re-sign below) ───
 note "fyne package -os ios (assembling bundle)"
 ( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >/tmp/fyne_release_bundle.log 2>&1 ) || true
-git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true
+cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml"
 APP="$APP_DIR/$APP_NAME"
 [ -f "$APP/Info.plist" ] || { tail -20 /tmp/fyne_release_bundle.log; fail "fyne did not leave an app bundle."; }
 
@@ -102,6 +106,10 @@ note "binary arch: $(lipo -archs "$APP/$EXE")"
 PB() { /usr/libexec/PlistBuddy -c "$1" "$APP/Info.plist"; }
 PB "Set :MinimumOSVersion $IOS_MIN" 2>/dev/null || PB "Add :MinimumOSVersion string $IOS_MIN"
 PB "Set :CFBundleShortVersionString $SHORT_VERSION" 2>/dev/null || PB "Add :CFBundleShortVersionString string $SHORT_VERSION"
+# Fyne 2.7.4's iOS template opts out of iPad multitasking even though BibleText's
+# layout is width-adaptive. Remove the deprecated compatibility flag so Split
+# View, Stage Manager, and iPadOS 26 window resizing deliver real size changes.
+PB "Delete :UIRequiresFullScreen" 2>/dev/null || true
 # Background audio + Now Playing / Control Center. fyne never emits UIBackgroundModes,
 # so inject it here (before the step-6 codesign, or the signature breaks); a shipped
 # build without it loses background playback + lock-screen controls. plutil -replace upserts.
@@ -111,6 +119,16 @@ plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
 # Declare no non-exempt encryption (HTTPS only) so the upload skips export-compliance.
 PB "Set :ITSAppUsesNonExemptEncryption false" 2>/dev/null || PB "Add :ITSAppUsesNonExemptEncryption bool false"
+# Fyne declares LaunchScreen in Info.plist but doesn't place a compiled storyboard
+# in the app. Compile the tracked, adaptive launch screen for iOS 13+.
+xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" \
+    --target-device iphone --target-device ipad --minimum-deployment-target "$IOS_MIN" \
+    --module BibleText >/dev/null
+# PrivacyInfo must be at the root of an iOS app bundle. It declares the optional
+# third-party AI data flow plus the required-reason APIs present in the Go/Fyne
+# executable (UserDefaults, app-container file metadata, and monotonic timers).
+cp "$APP_DIR/PrivacyInfo.xcprivacy" "$APP/PrivacyInfo.xcprivacy"
+plutil -lint "$APP/Info.plist" "$APP/PrivacyInfo.xcprivacy" >/dev/null
 # Device family for the App Store listing. Since 1.1.0 the app ships UNIVERSAL
 # (UIDeviceFamily=[1,2] — iPhone + iPad, the runtime width-adaptive layout in
 # docs/IPAD.md), set explicitly rather than trusting fyne's default plist. App
@@ -205,6 +223,18 @@ note "verifying build/BibleText.ipa"
 rm -rf "$WORK/verify"; unzip -q "$OUT_DIR/BibleText.ipa" -d "$WORK/verify"
 VAPP="$(ls -d "$WORK/verify/Payload"/*.app)"
 echo "  arch:      $(lipo -archs "$VAPP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$VAPP/Info.plist")")"
+EXPORTED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$VAPP/Info.plist")"
+EXPORTED_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$VAPP/Info.plist")"
+echo "  version:   $EXPORTED_VERSION ($EXPORTED_BUILD)"
+[ "$EXPORTED_VERSION" = "$SHORT_VERSION" ] || fail "exported version $EXPORTED_VERSION does not match requested $SHORT_VERSION"
+[ "$EXPORTED_BUILD" = "$BUILD_NUM" ] || fail "exported build $EXPORTED_BUILD does not match archived build $BUILD_NUM"
+[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$VAPP/Info.plist")" = "$APP_ID" ] || fail "exported bundle identifier is wrong"
+[ -f "$VAPP/PrivacyInfo.xcprivacy" ] || fail "exported app is missing PrivacyInfo.xcprivacy"
+plutil -lint "$VAPP/PrivacyInfo.xcprivacy" >/dev/null || fail "exported privacy manifest is invalid"
+[ -d "$VAPP/LaunchScreen.storyboardc" ] || fail "exported app is missing its compiled launch screen"
+if /usr/libexec/PlistBuddy -c 'Print :UIRequiresFullScreen' "$VAPP/Info.plist" >/dev/null 2>&1; then
+    fail "exported app still opts out of iPad multitasking"
+fi
 codesign -dvv "$VAPP" 2>&1 | grep -iE 'Authority=Apple|TeamIdentifier' | sed 's/^/  /'
 
 cat <<EOF

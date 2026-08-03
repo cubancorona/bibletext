@@ -61,9 +61,9 @@ fallback client.
 - [cache.go](cache.go) — versioned cache with an atomic write (temp file +
   rename), structure-validated on load; a corrupt/old cache is discarded and
   refetched. Each version caches to its own file `bibletext-<id>.json` (plus a
-  `-v<epoch>` suffix when a decoder change bumps `cacheEpoch`); the default WEB version
-  keeps the legacy `bibletext-cache.json` path. Location: OS cache dir, or
-  `BIBLETEXT_CACHE_PATH`.
+  `-v<epoch>` suffix when a decoder change bumps `cacheEpoch`). The default WEB
+  version also moves off its legacy `bibletext-cache.json` path when it has a
+  nonzero epoch. Location: OS cache dir, or `BIBLETEXT_CACHE_PATH`.
 - [seed.go](seed.go) — an **embedded** WEB Gospels seed
   (`assets/seed/web-gospels.json`, `//go:embed`). So a first launch with no
   network opens to Matthew–John instead of a dead-end "couldn't load" screen.
@@ -108,7 +108,7 @@ real files; `*_test.go` files are omitted.
 | File | Responsibility |
 | --- | --- |
 | `bible.go` | `BibleData` model, search ranking, reference parsing, book aliases, `PrepareSearchIndex` |
-| `cache.go` | Per-version, atomic, validated on-disk cache (`bibletext-<id>.json`; default WEB at legacy `bibletext-cache.json`) |
+| `cache.go` | Per-version, atomic, validated on-disk cache (`bibletext-<id>.json`, plus `-v<epoch>` after decoder changes) |
 | `bsb.go` | helloao `complete.json` client + decoder (backs both WEB and BSB) |
 | `catholic.go` | WEB-Catholic decoder: maps helloao USFM **id** → traditional Catholic order (73-book deuterocanon) |
 | `audio.go` | Per-chapter audio resolution: `recordedURLFor` (BSB/WEB/TTS dispatch), `chapterHasRecording`, the `chapterAudio` struct, `chapterSpeechText` (TTS text), `chapterAudioFingerprint` |
@@ -195,7 +195,7 @@ real files; `*_test.go` files are omitted.
 | `ai.go` | Action constants + `buildAIPrompt`; `runAIAction` (cache scope, dispatch) |
 | `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`) + `buildAskPrompt` |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
-| `ai_keystore.go` | On-device key storage over `fyne.Preferences` (`keyStore`); env-var override |
+| `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on iOS/macOS, preferences elsewhere; env-var override |
 | `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
@@ -442,7 +442,8 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   capped `4096` output tokens; identical requests are cached in memory.
 - Providers Gemini / OpenAI / Anthropic / Grok live in
   [ai_providers.go](ai_providers.go). Keys are stored **on-device only** via
-  `keyStore` over `fyne.Preferences` ([ai_keystore.go](ai_keystore.go)); a
+  `keyStore` ([ai_keystore.go](ai_keystore.go)): Apple Keychain on iOS/macOS
+  (migrated from the legacy preference value) and preferences elsewhere; a
   `<PROVIDER>_API_KEY` env var overrides. Settings sheet:
   [ai_settings.go](ai_settings.go) (header gear). Result panel with a **Report**
   button and an in-app disclosure line: [ai_panel.go](ai_panel.go).
@@ -475,7 +476,10 @@ From the selection menu ([share.go](share.go), dispatched by
   selection that carries the quotation's own balanced pair — collapsing to one
   plain pair (5.2(f)(i)), bracketed initial capitals (5.3(b)(i)), and
   " . . . ." end omissions that preserve the original sentence's terminal
-  punctuation (5.3(b)(iii)). The formatter is pinned by corpus-grounded tests,
+  punctuation (5.3(b)(iii)). The text share then restores only structural
+  breaks located in the chapter data: source-authored poetry lines and the
+  reader's paragraph boundaries; display wrapping is never retained. The
+  formatter is pinned by corpus-grounded tests,
   published Bluebook examples asserted verbatim, the observed in practice ragged-
   selection cases, and a real-world sweep over the embedded Gospels seed
   (`bluebook_test.go`, `share_bluebook_test.go`, `share_partial_test.go`,

@@ -156,10 +156,16 @@ func showAISettings(state *AppState) {
 			entry.SetText("") // fires OnChanged → clears the saved key
 		})
 
+		saveOK := true
 		refreshStatus := func() {
 			if strings.TrimSpace(entry.Text) != "" {
-				status.Text = "✓ Saved on this device."
-				status.Color = pal.Accent
+				if saveOK {
+					status.Text = "✓ Saved securely on this device."
+					status.Color = pal.Accent
+				} else {
+					status.Text = "Couldn't save this key securely. Please try again."
+					status.Color = theme.Color(theme.ColorNameError)
+				}
 				clearBtn.Enable()
 			} else {
 				status.Text = info.KeyHint
@@ -171,7 +177,7 @@ func showAISettings(state *AppState) {
 		// Auto-save: every edit writes straight to the on-device key store. A new
 		// key also (re-)fetches the provider's model list for the dropdown below.
 		entry.OnChanged = func(s string) {
-			store.setAPIKey(id, strings.TrimSpace(s))
+			saveOK = store.setAPIKey(id, strings.TrimSpace(s))
 			refreshStatus()
 			if fetchModels != nil {
 				fetchModels()
@@ -460,7 +466,8 @@ func showAISettings(state *AppState) {
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
 	// mirrors the privacy policy and links to it.
 	aiNote := widget.NewRichText(&widget.TextSegment{
-		Text:  "When you use AI study, the passage you select and your question are sent to the AI provider you choose, using your key.",
+		Text: "When you use AI study, your Find search or selected passage and study action are sent directly to the provider you choose, authenticated with your key. " +
+			"The provider may associate and retain the request under your account terms.",
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
 	aiNote.Wrapping = fyne.TextWrapWord

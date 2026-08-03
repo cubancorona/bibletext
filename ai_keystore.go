@@ -1,13 +1,10 @@
 package bibletext
 
-// On-device storage for the user's AI keys and provider choice. Backed by Fyne
-// Preferences (per-app, persisted across launches). Wrapped behind prefStore so
-// tests can substitute an in-memory map.
-//
-// NOTE: Fyne Preferences are NOT encrypted (iOS UserDefaults / a desktop config
-// file). That's acceptable for the user's own key on their own device, but
-// hardening to the platform Keychain is a planned follow-up — keep all key I/O
-// going through this type so that swap stays localized.
+// On-device storage for the user's AI keys and provider choice. Non-secret
+// settings use Fyne Preferences (per-app, persisted across launches). API keys
+// use the platform credential store where one is available (Apple Keychain on
+// iOS/macOS), with one-time migration from the legacy preference value.
+// Wrapped behind small interfaces so tests can substitute in-memory stores.
 
 import (
 	"strings"
@@ -23,8 +20,17 @@ type prefStore interface {
 	SetString(key, value string)
 }
 
+// secretStore is implemented by the Apple Keychain adapter. Other platforms
+// return nil from newPlatformSecretStore and retain the existing Preferences
+// storage until they gain an equivalent native credential-store adapter.
+type secretStore interface {
+	Read(account string) (string, bool)
+	Write(account, value string) bool
+}
+
 type keyStore struct {
-	prefs prefStore
+	prefs   prefStore
+	secrets secretStore
 }
 
 const (
@@ -48,7 +54,7 @@ const (
 // (no app yet / unit tests) whose getters yield defaults and setters no-op.
 func newKeyStore() *keyStore {
 	if app := fyne.CurrentApp(); app != nil {
-		return &keyStore{prefs: app.Preferences()}
+		return &keyStore{prefs: app.Preferences(), secrets: newPlatformSecretStore()}
 	}
 	return &keyStore{}
 }
@@ -100,14 +106,39 @@ func (k *keyStore) apiKey(id string) string {
 	if k == nil || k.prefs == nil {
 		return ""
 	}
+	if k.secrets != nil {
+		if key, ok := k.secrets.Read(id); ok {
+			return strings.TrimSpace(key)
+		}
+		// Builds before 1.1.6 stored keys in Preferences. Move that value into
+		// Keychain on first access, then erase the unencrypted legacy copy.
+		legacy := strings.TrimSpace(k.prefs.String(prefKeyPrefix + id))
+		if legacy != "" && k.secrets.Write(id, legacy) {
+			k.prefs.SetString(prefKeyPrefix+id, "")
+		}
+		return legacy
+	}
 	return strings.TrimSpace(k.prefs.String(prefKeyPrefix + id))
 }
 
-func (k *keyStore) setAPIKey(id, key string) {
+// setAPIKey reports whether the value was saved. Callers that do not present a
+// storage status may ignore the result; the Settings sheet uses it to avoid
+// claiming that a failed Keychain write succeeded.
+func (k *keyStore) setAPIKey(id, key string) bool {
 	if k == nil || k.prefs == nil {
-		return
+		return false
 	}
-	k.prefs.SetString(prefKeyPrefix+id, strings.TrimSpace(key))
+	key = strings.TrimSpace(key)
+	if k.secrets != nil {
+		if !k.secrets.Write(id, key) {
+			return false
+		}
+		// Remove any pre-1.1.6 preference copy after a successful secure write.
+		k.prefs.SetString(prefKeyPrefix+id, "")
+		return true
+	}
+	k.prefs.SetString(prefKeyPrefix+id, key)
+	return true
 }
 
 // overrideModel is the user-pinned model for a provider (blank = none).

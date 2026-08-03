@@ -74,15 +74,16 @@ var registeredVersions = []BibleVersion{
 	{
 		ID: "web", Name: "World English Bible", Abbrev: "WEB",
 		Publisher: "Public Domain", PublicDomain: true,
-		source: webSource{},
+		// epoch 1: retain source-authored line breaks for cited text shares.
+		cacheEpoch: 1,
+		source:     webSource{},
 	},
 	{
 		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
 		Publisher: "Public Domain (CC0)", PublicDomain: true,
-		// epoch 1: the v1 decoder fixed punctuation spacing (helloao trims the
-		// whitespace around footnote/line-break/clause boundaries — see
-		// bsbVerseText). Bumped so installs holding the v0 cache re-decode.
-		cacheEpoch: 1,
+		// epoch 2: retain source-authored line breaks. Epoch 1 fixed punctuation
+		// spacing around helloao content boundaries (see bsbVerseText).
+		cacheEpoch: 2,
 		source:     bsbSource{},
 	},
 	{
@@ -90,7 +91,8 @@ var registeredVersions = []BibleVersion{
 		Publisher: "Public Domain", PublicDomain: true,
 		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
 		// USFM id into traditional Catholic order — see catholic.go.
-		source: webCatholicSource{},
+		cacheEpoch: 1,
+		source:     webCatholicSource{},
 	},
 	{
 		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",
@@ -280,18 +282,19 @@ func placeholderVerseText(abbrev, book string, chapter, verse int) string {
 		abbrev, book, chapter, verse)
 }
 
-// cachePathForVersion is the on-disk cache for a version. The default (web) stays
-// at the legacy path (honoring BIBLETEXT_CACHE_PATH) for backwards
-// compatibility; other versions live beside it as bibletext-<id>.json. A version
-// with a non-zero cacheEpoch (its decoder changed) gets a versioned filename,
-// bibletext-<id>-v<epoch>.json, so a stale pre-epoch cache is bypassed.
+// cachePathForVersion is the on-disk cache for a version. An unversioned default
+// (web) uses the legacy path (honoring BIBLETEXT_CACHE_PATH); other unversioned
+// translations live beside it as bibletext-<id>.json. A version with a non-zero
+// cacheEpoch gets bibletext-<id>-v<epoch>.json, including the default translation,
+// so a stale cache produced by an older decoder is bypassed.
 func cachePathForVersion(id string) string {
 	base := defaultCachePath()
-	if id == defaultVersionID {
+	v, known := versionByID(id)
+	if id == defaultVersionID && (!known || v.cacheEpoch == 0) {
 		return base
 	}
 	name := "bibletext-" + id
-	if v, ok := versionByID(id); ok && v.cacheEpoch > 0 {
+	if known && v.cacheEpoch > 0 {
 		name += fmt.Sprintf("-v%d", v.cacheEpoch)
 	}
 	return filepath.Join(filepath.Dir(base), name+".json")
