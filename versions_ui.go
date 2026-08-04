@@ -114,7 +114,7 @@ func showVersionPicker(state *AppState) {
 		}))
 	}
 
-	note := widget.NewLabel("NRSV and LSB are under evaluation and not yet selectable; they unlock once licensing is complete.")
+	note := widget.NewLabel("NRSV, LSB and NKJV are under evaluation and not yet selectable; they unlock once licensing is complete.")
 	note.Wrapping = fyne.TextWrapWord
 	closeBtn := widget.NewButton("Close", closePicker)
 	footer := container.NewVBox(
