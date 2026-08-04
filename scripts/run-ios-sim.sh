@@ -51,6 +51,14 @@ plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.pli
 # "Save Image" action appears in the simulator too.
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP_DIR/$APP_NAME/Info.plist"
 
+# App Store parity (the implementation requirement): the release build deletes UIRequiresFullScreen
+# (iPad multitasking) and compiles the launch storyboard — the smoke builds must
+# match, or Split View/Stage Manager resizing ships untested.
+PBX() { /usr/libexec/PlistBuddy -c "$1" "$APPPLIST" 2>/dev/null || true; }
+APPPLIST="$APP_DIR/$APP_NAME/Info.plist"
+PBX "Delete :UIRequiresFullScreen"
+xcrun ibtool --compile "$APP_DIR/$APP_NAME/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" >/dev/null
+
 # Ship the sim build as universal (iPhone + iPad) so it runs NATIVELY on an iPad
 # simulator — otherwise the iPad runs it in iPhone compatibility mode, where the
 # interface idiom reports iPhone and the regular-width (tablet) layout never
