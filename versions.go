@@ -105,6 +105,11 @@ var registeredVersions = []BibleVersion{
 		Publisher: "© The Lockman Foundation — license required",
 		source:    newLicensedSource("lsb"),
 	},
+	{
+		ID: "nkjv", Name: "New King James Version", Abbrev: "NKJV",
+		Publisher: "© Thomas Nelson (HarperCollins Christian) — license required",
+		source:    newLicensedSource("nkjv"),
+	},
 }
 
 func bibleVersions() []BibleVersion { return registeredVersions }

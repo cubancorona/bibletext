@@ -18,6 +18,7 @@ func TestVersionRegistry(t *testing.T) {
 		"web":  {"WEB", true, false},
 		"nrsv": {"NRSV", false, true},
 		"lsb":  {"LSB", false, true},
+		"nkjv": {"NKJV", false, true},
 	}
 
 	for id, exp := range want {

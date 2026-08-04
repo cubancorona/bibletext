@@ -206,8 +206,9 @@ translations (**NRSV**, **LSB**) are wired in and become selectable once license
 | World English Bible (Catholic) | WEBC | Public domain | ✅ Real text |
 | New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 Evaluation in progress |
 | Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
+| New King James Version | NKJV | Thomas Nelson (HarperCollins Christian) | 🔒 Evaluation in progress |
 
-**NRSV and LSB are copyrighted** and can't be redistributed without permission, so
+**NRSV, LSB and NKJV are copyrighted** and can't be redistributed without permission, so
 in normal builds they appear in the switcher as **"Evaluation in progress — not yet
 available"** and are **greyed out / not selectable** — no placeholder text is ever
 shown to users. The full retrieval, cache, switching, search and AI-study path is
