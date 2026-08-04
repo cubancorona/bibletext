@@ -325,3 +325,61 @@ func TestRaggedMarkerCutSweep(t *testing.T) {
 		}
 	}
 }
+
+// poetrySweepState is a full poetic chapter for the sweep — BSB Psalm 23 with
+// authored poem-line breaks in every verse (representative line placement), so
+// every cut position exercises the restore pass (C6) against real poetic
+// structure: within-verse breaks AND poetic verse joins.
+func poetrySweepState() *AppState {
+	bd := &BibleData{
+		Books: []string{"Psalms"},
+		Verses: map[string]map[int][]Verse{"Psalms": {23: {
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 1,
+				Text: "The LORD is my shepherd;\nI shall not want."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 2,
+				Text: "He makes me lie down in green pastures;\nHe leads me beside quiet waters."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 3,
+				Text: "He restores my soul;\nHe guides me in the paths of righteousness\nfor the sake of His name."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 4,
+				Text: "Even though I walk through the valley of the shadow of death,\nI will fear no evil,\nfor You are with me;\nYour rod and Your staff,\nthey comfort me."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 5,
+				Text: "You prepare a table before me\nin the presence of my enemies.\nYou anoint my head with oil;\nmy cup overflows."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 6,
+				Text: "Surely goodness and mercy will follow me\nall the days of my life,\nand I will dwell in the house of the LORD\nforever."},
+		}}},
+	}
+	return &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
+}
+
+// TestRaggedCutSweepPoetry drags the END of a selection across every rune
+// boundary of a wholly poetic chapter — the C1-C6 invariants (including the
+// restore pass's content preservation and break placement) must hold on
+// poetry exactly as on the prose Gospels.
+func TestRaggedCutSweepPoetry(t *testing.T) {
+	st := poetrySweepState()
+	corpus, spans := chapterProse(st)
+	if corpus == "" {
+		t.Fatal("no prose for the poetry sweep")
+	}
+	step := 1
+	if testing.Short() {
+		step = 7
+	}
+	for e := 1; e <= len(corpus); e += step {
+		if e < len(corpus) && !utf8.RuneStart(corpus[e]) {
+			continue
+		}
+		wStart := 0
+		for _, sp := range spans {
+			if sp.start <= maxInt(0, e-320) {
+				wStart = sp.start
+			}
+		}
+		if wStart >= e {
+			continue
+		}
+		raw := corpus[wStart:e]
+		assertCutInvariants(t, st, corpus,
+			fmt.Sprintf("Psalms 23 poetry end-cut@%d", e), raw)
+	}
+}

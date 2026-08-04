@@ -206,12 +206,11 @@ func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
 			if text == "" {
 				continue
 			}
-			// A verse whose text carries poem line breaks is poetic. In print,
-			// every verse boundary inside a poem is also a line boundary, so a
-			// join touching a poetic verse restores as "\n" (a paragraph break
-			// still wins with "\n\n"). Limitation: a verse that is exactly ONE
-			// poem line decodes with no internal break and reads as prose here.
-			curPoetic := len(verseBreaks) > 0
+			// A join touching a poetic verse restores as "\n" (a paragraph
+			// break still wins with "\n\n") — the same verseIsPoetic rule the
+			// reading pane renders with, so displayed lines and shared lines
+			// stay identical.
+			curPoetic := verseIsPoetic(verse.Text)
 			if b.Len() > 0 {
 				replacement := ""
 				if paragraphIndex > 0 && !wroteInParagraph {

@@ -158,6 +158,31 @@ real files; `*_test.go` files are omitted.
 
 ### Native reading overlays (the reading view)
 
+**Poetry.** Verse text carries authored poem-line breaks (`"\n"`, decoded from
+helloao's `{text, poem:N}` clauses — all three fetched translations), and the
+reading view renders them as real lines. The shared rule lives in `reading.go`:
+`verseIsPoetic` (text contains a break) and `poeticJoin` (a verse boundary
+touching a poetic verse is a line boundary, as in print) — the *same* rule the
+share pipeline's `chapterShareStructure` restores with, so displayed lines and
+shared lines are identical. Five surfaces implement it in lockstep:
+`buildChapterHTML` (`reading.go`, iOS + macOS — emits `<br>`, sets poetic
+paragraphs `p.pm` ragged-right, and skips the iPad reporter first-line indent
+only for paragraphs that OPEN on a poem line — a mixed paragraph opening with
+prose keeps the indent, reporter mode's only paragraph-boundary marker),
+`buildChapterHTMLAndroid` (`android_chapter_html.go`, untagged so
+host tests pin both HTML dialects side by side; Android's `INTER_WORD`
+justification exempts hard-break lines natively — note the accepted platform
+divergence: Apple's ragged-right is paragraph-scoped via `p.pm`, Android's is
+line-scoped, so prose lines inside a mixed paragraph justify on Android but
+not on Apple), the desktop `chapterText`
+rewrap (`"\n"` sentinel tokens from `verseTokens` flow through the line
+accounting so the scroll anchor and highlight band stay truthful), the Android
+Fyne fallback (`reading_mobile.go`, `"\n"` RichText segments), and the
+verse-of-day card. The Apple plain-text import fallbacks map `<br>` → `"\n"`
+before stripping tags. Tests: `reading_poetry_test.go`. Limitation: a verse
+that is exactly one poem line decodes with no internal break and reads as
+prose.
+
 | File | Tag | Responsibility |
 | --- | --- | --- |
 | `reading_macos.go` | `darwin && !ios` | cgo: native `NSTextView` overlay + scroll capture/restore |
@@ -165,6 +190,7 @@ real files; `*_test.go` files are omitted.
 | `reading_ios_visibility.go` | `ios` | overlay show/hide on lifecycle |
 | `reading_android.go` | `android` | cgo/JNI: native selectable `TextView` overlay (a `Dialog` over the GL surface), selection menu, native share, scroll capture/restore — Java half in `android/BtBridge.java` |
 | `reading_android_export.go` + `reading_jni_android.c` | `android` | Native → Go callbacks for the Android overlay (the `//export` twin of `ai_menu_darwin.go`) + the JNI thunk definitions |
+| `android_chapter_html.go` | (untagged) | `buildChapterHTMLAndroid` — the `Html.fromHtml`-safe chapter dialect; untagged so host tests pin it alongside `buildChapterHTML` |
 | `reading_fyne.go` | `ios \|\| !darwin` | Fyne `RichText` fallback reading pane (Linux/Win; on Android the fallback when the bridge dex is absent) |
 | `reading_scroll_fyne.go` | `!ios && !darwin && !android` | Fyne-pane scroll capture/restore (Linux/Win): the same verse-anchor persistence as the native overlays, from `chapterText`'s wrap geometry |
 | `reading_scroll_native_stub.go` | `darwin \|\| android` | No-op Fyne-scroll shims on the native-overlay platforms (their overlays persist scroll themselves) |

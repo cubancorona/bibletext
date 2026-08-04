@@ -160,6 +160,11 @@ root), signing, emulator use, and distribution are covered in
   Windows and Linux the recorded narrations play too (with ±15s skip and
   continuous chapters); read-aloud and read-along highlighting are
   native-platform features (iOS / Android / macOS).
+- 📜 **Poetry as poetry** — the poetic books (Psalms, Proverbs, Job, the
+  prophets' oracles, the embedded songs) display their authored verse lines —
+  one poetic line per line, ragged-right, breaking at every verse boundary
+  inside a poem, as in print — in all three translations, on every platform.
+  Text shares, chapter copies, and the verse of the day keep the same lines.
 - 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.

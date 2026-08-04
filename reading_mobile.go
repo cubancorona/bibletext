@@ -101,8 +101,15 @@ func newSelectableParagraph(state *AppState, verses []Verse) *selectableParagrap
 	}
 	for i, v := range verses {
 		if i > 0 {
+			// A poetic verse boundary is a line boundary (RichText splits an
+			// inline segment's text on literal "\n" into separate rows, so a
+			// "\n" separator renders as exactly one hard break).
+			sep := " "
+			if poeticJoin(verses[i-1].Text, v.Text) {
+				sep = "\n"
+			}
 			segs = append(segs, &widget.TextSegment{
-				Text:  " ",
+				Text:  sep,
 				Style: widget.RichTextStyle{Inline: true, ColorName: colorNameVerseText},
 			})
 		}
@@ -117,7 +124,8 @@ func newSelectableParagraph(state *AppState, verses []Verse) *selectableParagrap
 			bodyStyle = fyne.TextStyle{Bold: true}
 		}
 		segs = append(segs, &widget.TextSegment{
-			Text: strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")),
+			// Authored poem lines kept — RichText renders each as its own row.
+			Text: strings.TrimSpace(v.Text),
 			Style: widget.RichTextStyle{
 				Inline: true, ColorName: bodyColor, TextStyle: bodyStyle,
 			},

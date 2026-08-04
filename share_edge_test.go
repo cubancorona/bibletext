@@ -123,6 +123,42 @@ func TestShareEllipsisRuneTerminal(t *testing.T) {
 	}
 }
 
+// The poetry-display selection shape: now that the reading pane renders poem
+// lines, a drag over Psalm 23 carries breaks INSIDE a verse body — as "\n"
+// (Android, and some Apple OS builds) or U+2028 LINE SEPARATOR (the classic
+// Apple HTML-importer form) — plus the U+00A0 no-break space after each verse
+// marker. All are Unicode whitespace, so normalization must flatten them and
+// locate; the text share then restores the authored lines from chapter data.
+func TestShareSelectionPoetryDisplayShape(t *testing.T) {
+	v1 := "The LORD is my shepherd;\nI shall not want."
+	v2 := "He makes me lie down in green pastures;\nHe leads me beside quiet waters."
+	bd := &BibleData{
+		Books: []string{"Psalms"},
+		Verses: map[string]map[int][]Verse{"Psalms": {23: {
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 1, Text: v1},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 2, Text: v2},
+		}}},
+	}
+	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
+
+	raw := "The LORD is my shepherd;\u2028I shall not want.\n2\u00a0He makes me lie down in green pastures;\nHe leads me beside quiet waters."
+	text, cite := prepareShareQuote(st, raw)
+	if strings.ContainsAny(text, "\n\u2028\u00a0") {
+		t.Errorf("pipeline text must be flat: %q", text)
+	}
+	if strings.Contains(text, "2 He") {
+		t.Errorf("verse marker across a poem break survived: %q", text)
+	}
+	if cite != "Psalms 23:1–2" {
+		t.Errorf("citation = %q, want Psalms 23:1–2", cite)
+	}
+	restored := restoreShareLineBreaks(st, text)
+	want := "The LORD is my shepherd;\nI shall not want.\nHe makes me lie down in green pastures;\nHe leads me beside quiet waters."
+	if restored != want {
+		t.Errorf("restored lines:\n got %q\nwant %q", restored, want)
+	}
+}
+
 // A drag spanning the reading view's line/paragraph breaks arrives with
 // newlines; normalization flattens them and everything downstream holds.
 func TestShareNewlineSpanningSelection(t *testing.T) {
@@ -181,5 +217,32 @@ func TestShareOrphanPunctuationTrimmed(t *testing.T) {
 	text2, _ := prepareShareQuote(st2, "And the prophets, wrote:")
 	if strings.HasSuffix(text2, ":") {
 		t.Errorf("trailing clause colon before an omission must be dropped: %q", text2)
+	}
+}
+
+// The mixed prose→poetry join must restore identically to how the reading
+// pane displays it (buildChapterHTML emits <br> at the same boundary —
+// TestBuildChapterHTMLMixedProsePoetryJoin): shared lines == displayed lines.
+func TestShareMixedJoinRestoreParity(t *testing.T) {
+	bd := &BibleData{
+		Books: []string{"Exodus"},
+		Verses: map[string]map[int][]Verse{"Exodus": {15: {
+			{BookName: "Exodus", Book: "Exodus", Chapter: 15, Verse: 1,
+				Text: "Then Moses and the Israelites sang this song to the LORD:"},
+			{BookName: "Exodus", Book: "Exodus", Chapter: 15, Verse: 2,
+				Text: "The LORD is my strength and my song,\nand He has become my salvation."},
+		}}},
+	}
+	st := &AppState{Bible: bd, CurrentBook: "Exodus", CurrentChapter: 15}
+
+	raw := "Then Moses and the Israelites sang this song to the LORD: 2 The LORD is my strength and my song, and He has become my salvation."
+	text, cite := prepareShareQuote(st, raw)
+	if cite != "Exodus 15:1–2" {
+		t.Errorf("citation = %q, want Exodus 15:1–2", cite)
+	}
+	restored := restoreShareLineBreaks(st, text)
+	want := "Then Moses and the Israelites sang this song to the LORD:\nThe LORD is my strength and my song,\nand He has become my salvation."
+	if restored != want {
+		t.Errorf("mixed-join restore:\n got %q\nwant %q", restored, want)
 	}
 }

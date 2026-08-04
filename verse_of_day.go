@@ -322,7 +322,9 @@ func showVerseOfDay(state *AppState) {
 	kicker.TextStyle = fyne.TextStyle{Bold: true}
 	kicker.TextSize = 12
 
-	body := widget.NewRichTextWithText(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
+	// Authored poem lines kept (a Psalm of the day reads as poetry) — RichText
+	// renders each "\n"-separated run as its own row.
+	body := widget.NewRichTextWithText(strings.TrimSpace(v.Text))
 	body.Wrapping = fyne.TextWrapWord
 
 	ref := canvas.NewText(
