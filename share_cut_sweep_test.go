@@ -160,6 +160,32 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 		t.Fatalf("%s: words omitted but no mark (…%q)", label, quote[maxInt(0, len(quote)-40):])
 	}
 	rwCheckInvariants(t, label, text, quote, len(strings.Fields(text)))
+
+	// C6: the cited-text restore pass (audit addition). Whatever structure
+	// restoreShareLineBreaks re-inserts must be EXACTLY the flattened spaces —
+	// collapsing it back must reproduce the pipeline text (content-preserving),
+	// and any inserted break must land between words, never inside one.
+	restored := restoreShareLineBreaks(st, text)
+	if collapseSpaces(strings.ReplaceAll(restored, "\n", " ")) != collapseSpaces(text) {
+		t.Fatalf("%s: restore pass altered content:\n text %q\n rest %q", label, text, restored)
+	}
+	for i := 0; i < len(restored); i++ {
+		if restored[i] != '\n' {
+			continue
+		}
+		if i == 0 || i == len(restored)-1 {
+			t.Fatalf("%s: restored break at text edge: %q", label, restored)
+		}
+		prev, _ := utf8.DecodeLastRuneInString(restored[:i])
+		switch {
+		case isWordRune(prev):
+		case prev == '\n': // second half of a paragraph (blank-line) break
+		case prev == '.' || prev == ',' || prev == ';' || prev == ':' ||
+			prev == '”' || prev == '’' || prev == '?' || prev == '!' || prev == ')':
+		default:
+			t.Fatalf("%s: break follows unexpected rune %q: %q", label, prev, restored)
+		}
+	}
 }
 
 func maxInt(a, b int) int {

@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -223,5 +224,49 @@ func TestCitedTextSharePreservesParagraphsNotSoftWraps(t *testing.T) {
 	cleaned, _ := prepareShareQuote(shortState, "A line that wraps\non a narrow screen.")
 	if got, want := restoreShareLineBreaks(shortState, cleaned), "A line that wraps on a narrow screen."; got != want {
 		t.Errorf("soft wrap must be flattened:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestShareRestoresRealPoetryLines runs the WHOLE cited-text chain on the
+// REAL captured node shape of Psalm 23:1-2 (bible.helloao.org, 2026-08-04):
+// decoder (poem clauses → lines) → prepareShareQuote (flattens for Bluebook
+// normalization) → restoreShareLineBreaks (re-inserts ONLY authored lines).
+// This replaces the earlier fixture that hand-authored newlines the decoder
+// could not produce (the implementation requirement).
+func TestShareRestoresRealPoetryLines(t *testing.T) {
+	mk := func(raw string) []json.RawMessage {
+		var c []json.RawMessage
+		if err := json.Unmarshal([]byte(raw), &c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	v1 := bsbVerseText(mk(`[{"text":"The LORD is my shepherd;","poem":1},{"noteId":1},{"text":"I shall not want.","poem":2}]`))
+	v2 := bsbVerseText(mk(`[{"text":"He makes me lie down in green pastures;","poem":1},{"text":"He leads me beside quiet waters.","poem":2}]`))
+	if !strings.Contains(v1, "\n") || !strings.Contains(v2, "\n") {
+		t.Fatalf("decoder must produce poem lines: %q / %q", v1, v2)
+	}
+
+	bd := &BibleData{
+		Books: []string{"Psalms"},
+		Verses: map[string]map[int][]Verse{"Psalms": {23: {
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 1, Text: v1},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 2, Text: v2},
+		}}},
+	}
+	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
+
+	raw := "The LORD is my shepherd; I shall not want. 2 He makes me lie down in green pastures; He leads me beside quiet waters."
+	text, cite := prepareShareQuote(st, raw)
+	if strings.Contains(text, "\n") {
+		t.Fatalf("pipeline text stays flat for Bluebook normalization: %q", text)
+	}
+	restored := restoreShareLineBreaks(st, text)
+	want := "The LORD is my shepherd;\nI shall not want.\nHe makes me lie down in green pastures;\nHe leads me beside quiet waters."
+	if restored != want {
+		t.Errorf("poetry lines:\n got %q\nwant %q", restored, want)
+	}
+	if cite != "Psalms 23:1–2" {
+		t.Errorf("citation = %q, want Psalms 23:1–2", cite)
 	}
 }
