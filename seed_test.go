@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	fynetest "fyne.io/fyne/v2/test"
 )
 
 // TestLoadVersionFromCacheOnlyMiss verifies the cache-only loader returns an error
@@ -170,5 +172,55 @@ func TestDefaultStartBookIsMatthew(t *testing.T) {
 	}
 	if got := defaultStartBook(noMatt); got != "Genesis" {
 		t.Errorf("defaultStartBook(no-Matthew canon) = %q, want Genesis", got)
+	}
+}
+
+// TestRestoreOfflineFallsBackToSupersededCache pins the audit BLOCKER: a 1.1.5
+// reader whose last translation was BSB (or WEBC) upgrades and opens the app
+// OFFLINE. The saved version's current-epoch cache does not exist yet (the
+// epoch just bumped) and the network is gone — but their previous-epoch cache
+// is a complete, valid canon on disk. The restore must serve that rather than
+// aborting the whole launch to the Retry screen, which is what shipped before
+// this fix and would have left every BSB/WEBC reader unable to open the app.
+func TestRestoreOfflineFallsBackToSupersededCache(t *testing.T) {
+	app := fynetest.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+
+	bsb, _ := versionByID("bsb")
+	seed, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// Write the PREVIOUS-epoch BSB cache (what a 1.1.5 device holds).
+	prev := supersededCachePaths(bsb)
+	if len(prev) == 0 {
+		t.Fatal("bsb must have superseded epochs")
+	}
+	if _, _, err := loadBibleData(func() (*BibleData, error) { return seed, nil }, prev[0], currentUTCTime); err != nil {
+		t.Fatalf("staging the previous-epoch cache: %v", err)
+	}
+
+	// Offline: every network fetch fails.
+	orig := loadVersionForRestore
+	loadVersionForRestore = func(BibleVersion, *BibleData) (*BibleData, dataMode, error) {
+		return nil, modeReal, errors.New("offline")
+	}
+	defer func() { loadVersionForRestore = orig }()
+
+	state := &AppState{Bible: seed, CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{}, Annotations: NewAnnotationStore()}
+	restored, err := restoreReadingState(state,
+		readingState{Version: "bsb", Book: "John", Chapter: 3}, seed)
+	if err != nil {
+		t.Fatalf("offline restore must not fail the launch: %v", err)
+	}
+	if !restored {
+		t.Fatal("offline restore must succeed from the previous-epoch cache")
+	}
+	if state.CurrentVersion != "bsb" {
+		t.Errorf("restored version = %q, want bsb", state.CurrentVersion)
 	}
 }

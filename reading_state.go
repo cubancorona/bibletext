@@ -328,7 +328,18 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 		if v, ok := versionByID(rs.Version); ok && v.canSelect() {
 			data, loadedMode, err := loadVersionForRestore(v, base)
 			if err != nil {
-				return false, fmt.Errorf("restore saved %s reading state: %w", v.ID, err)
+				// OFFLINE EPOCH-BUMP UPGRADE (audit blocker): loadVersionData
+				// resolves only the CURRENT epoch's filename, so right after a
+				// cacheEpoch bump it misses and tries the network — and with no
+				// network the whole launch aborted to Retry even though this
+				// version's own previous-epoch cache is a complete, valid canon
+				// sitting on disk. Serve that instead of refusing to open; a
+				// later online launch re-fetches and upgrades in place.
+				old, oldMode, cerr := loadVersionFromCacheOnly(v)
+				if cerr != nil {
+					return false, fmt.Errorf("restore saved %s reading state: %w", v.ID, err)
+				}
+				data, loadedMode = old, oldMode
 			}
 			if data != nil {
 				bible, versionID, mode = data, v.ID, loadedMode

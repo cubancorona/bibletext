@@ -68,14 +68,26 @@ static int btAIKeychainWrite(const char *accountUTF8, const char *valueUTF8) {
             return status == errSecSuccess || status == errSecItemNotFound;
         }
 
+        // ACCESSIBILITY: AfterFirstUnlock, NOT ...ThisDeviceOnly. Apple excludes
+        // ThisDeviceOnly items from every backup and from device migration, so
+        // migrating a key out of Preferences into a ThisDeviceOnly item and then
+        // erasing the Preferences copy would SILENTLY LOSE the reader's key when
+        // they restore a backup or move to a new iPhone — a regression against
+        // 1.1.5, where the key travelled with preferences.json (audit finding).
+        // AfterFirstUnlock keeps it encrypted at rest and backup-restorable, and
+        // also lets a background launch read it before the first unlock.
         NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding];
         OSStatus status = SecItemUpdate(
             (__bridge CFDictionaryRef)query,
-            (__bridge CFDictionaryRef)@{(__bridge id)kSecValueData: data});
+            (__bridge CFDictionaryRef)@{
+                (__bridge id)kSecValueData: data,
+                // Re-class any item an earlier build stored as ThisDeviceOnly:
+                // SecItemAdd sets accessibility once, so only an update fixes it.
+                (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlock});
         if (status == errSecItemNotFound) {
             NSMutableDictionary *item = [NSMutableDictionary dictionaryWithDictionary:query];
             item[(__bridge id)kSecValueData] = data;
-            item[(__bridge id)kSecAttrAccessible] = (__bridge id)kSecAttrAccessibleWhenUnlockedThisDeviceOnly;
+            item[(__bridge id)kSecAttrAccessible] = (__bridge id)kSecAttrAccessibleAfterFirstUnlock;
             status = SecItemAdd((__bridge CFDictionaryRef)item, NULL);
         }
         return status == errSecSuccess;

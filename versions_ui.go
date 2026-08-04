@@ -287,6 +287,15 @@ func switchVersionInteractive(state *AppState, id string) {
 			state.versionLoading = false
 			dismiss()
 			if err != nil {
+				// Offline after a cacheEpoch bump, this version's previous-epoch
+				// cache is still a complete canon — switching to it worked in
+				// 1.1.5 and must keep working (audit finding). Fall back to it
+				// rather than showing "couldn't load"; the next online load
+				// upgrades the text.
+				if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
+					applyLoadedVersion(state, v, old, oldMode)
+					return
+				}
 				fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)
 				showVersionLoadError(state, v.Name)
 				return

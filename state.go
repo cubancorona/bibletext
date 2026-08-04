@@ -146,6 +146,19 @@ type AppState struct {
 	// full Bible" banner on the book lists (incompleteBibleBanner).
 	fullPending bool
 
+	// seedOnly is true only when the displayed text really IS the 4-book
+	// embedded Gospels seed. A stale-epoch boot also sets fullPending but
+	// serves the reader's COMPLETE previous-epoch canon — the "showing the
+	// Gospels for now" banner must never claim otherwise there.
+	seedOnly bool
+
+	// fullRetryDelay is the current auto-retry backoff for triggerFullDownload.
+	// It doubles on each consecutive failure (capped), so an offline reader who
+	// already holds a complete previous-epoch Bible does not burn radio and
+	// metered data all session upgrading text they can already read. Reset when
+	// a fetch succeeds. UI-goroutine only.
+	fullRetryDelay time.Duration
+
 	// fullDownloading guards triggerFullDownload to ONE in-flight fetch: the foreground
 	// re-trigger and the post-failure auto-retry all funnel through it, so a flaky
 	// connection can never stack overlapping full-Bible downloads. UI-goroutine only.

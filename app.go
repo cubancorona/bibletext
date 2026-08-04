@@ -75,6 +75,7 @@ func loadStateData() (*AppState, error) {
 		// half, an epoch bump would be inert for every existing reader — the
 		// fallback would serve the old decode forever.
 		fullPending: seeded || !versionCacheIsCurrent(version),
+		seedOnly:    seeded,
 	}
 
 	// Reopen exactly where the reader left off — translation, book, chapter, the
@@ -197,6 +198,7 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			state.RecentChapters = loaded.RecentChapters
 			state.restore = loaded.restore // carry the one-shot scroll target
 			state.fullPending = loaded.fullPending
+			state.seedOnly = loaded.seedOnly
 			state.loadPhase = loadReady
 			// Full rebuild (not just refresh) so afterRebuild re-pins/re-asserts
 			// the iOS native overlay and armPendingRestore re-arms the saved
@@ -224,12 +226,12 @@ func triggerFullDownload(state *AppState) {
 		return
 	}
 	state.fullDownloading = true
-	// Resolve the version on the UI goroutine (CurrentVersion is UI-owned
-	// state); the worker goroutine only uses the copy.
-	version, ok := versionByID(state.CurrentVersion)
-	if !ok {
-		version, _ = versionByID(defaultVersionID)
-	}
+	// fullPending is computed for the DEFAULT version's cache, so the refresh
+	// must target THAT version. state.CurrentVersion may be a translation the
+	// saved reading state restored, which restoreReadingState already brought
+	// to its current epoch — refetching it is pure waste, and it would leave
+	// the default version's epoch bump permanently unapplied (audit finding).
+	version, _ := versionByID(defaultVersionID)
 	go func() {
 		full, mode, err := loadVersionData(version, nil) // one helloao request; caches on success
 		fyne.Do(func() {
@@ -239,11 +241,21 @@ func triggerFullDownload(state *AppState) {
 			}
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "BibleText: full-Bible download failed, will retry:", err)
-				// Self-heal: try again shortly (also retried on app-foreground). The guard
-				// above keeps retries from stacking; fullPending gates it to "still needed".
-				time.AfterFunc(20*time.Second, func() { fyne.Do(func() { triggerFullDownload(state) }) })
+				// Self-heal with BOUNDED exponential backoff (20s → 40s → … →
+				// 10m): a reader who stays offline already holds a complete
+				// previous-epoch Bible, so retrying every 20s all session only
+				// burns radio and metered data. Foreground re-entry still
+				// retries immediately via SetOnEnteredForeground.
+				switch {
+				case state.fullRetryDelay <= 0:
+					state.fullRetryDelay = 20 * time.Second
+				case state.fullRetryDelay < 10*time.Minute:
+					state.fullRetryDelay *= 2
+				}
+				time.AfterFunc(state.fullRetryDelay, func() { fyne.Do(func() { triggerFullDownload(state) }) })
 				return
 			}
+			state.fullRetryDelay = 0
 			if state.loadedVersions != nil {
 				state.loadedVersions[version.ID] = full
 			}
