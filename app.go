@@ -370,15 +370,17 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 	})
 }
 
-// defaultStartBook opens on John when available, else the first loaded book.
+// defaultStartBook opens on Matthew when available — the New Testament's
+// first page — else the first loaded book. Used for fresh installs and as
+// the fallback when a saved book no longer exists in the loaded canon.
 func defaultStartBook(bd *BibleData) string {
-	if bd.GetChaptersForBook("John") > 0 {
-		return "John"
+	if bd.GetChaptersForBook("Matthew") > 0 {
+		return "Matthew"
 	}
 	if len(bd.Books) > 0 {
 		return bd.Books[0]
 	}
-	return "John"
+	return "Matthew"
 }
 
 func currentUTCTime() time.Time {
