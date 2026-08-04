@@ -12,15 +12,18 @@ package bibletext
 //
 // Scroll position is stored as a VERSE ANCHOR (the top-visible verse number plus
 // a small within-verse pixel delta) rather than a raw pixel offset: the chapter
-// re-wraps when width / orientation / translation change (font size is fixed),
+// re-wraps when width / orientation / translation / text size change,
 // so a verse anchor re-resolves to the right place where a pixel offset would
 // drift. A whole-chapter ScrollFrac is kept as a fallback for when the anchor
 // verse can't be resolved (or on platforms without verse geometry).
 //
 // Saving happens in two places: continuously on navigation (book/chapter/version
 // + history, via addRecentChapter / switchVersion — cheap, no native call) and a
-// precise scroll flush on app stop/background (the lifecycle hooks in Run /
-// cmd/mobile), which is the only moment a pure scroll (no navigation) is caught.
+// precise scroll flush — the only thing that catches a pure scroll with no
+// navigation. That flush fires from the per-platform scroll hooks (iOS
+// scroll-end via bibleTextReadingScrolled, the macOS/desktop window-close and
+// app-stop hooks) AND from the app lifecycle hooks installed by
+// InstallReadingStateFlush.
 // Restoring happens once, in LoadAndPrepareState, with validation against the
 // loaded Bible. The native reading overlay applies the scroll anchor when it
 // first lays the chapter out (see armReadingRestore / captureReadingAnchor, which

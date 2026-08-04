@@ -172,8 +172,11 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   `newMacReadingHost` (macOS) skip the costly HTML rebuild + NSAttributedString
   re-import when `chapterRenderFingerprint` (`reading.go`) is unchanged and no
   scroll restore is pending — the fingerprint MUST include book/chapter/version,
-  theme variant, red-letter, and the highlighted-verse identity, or a search-jump
-  / light-dark flip would show stale text; (3) live search is debounced via
+  theme variant, red-letter, the highlighted-verse identity AND the `state.Bible`
+  pointer, or a search-jump / light-dark flip would show stale text and a
+  background DATA SWAP (the Gospels-seed→full download, or the stale-epoch
+  refresh) would be skipped entirely, leaving the old decode on screen until the
+  next navigation; (3) live search is debounced via
   `newSearchDebouncer` (`state.go`), whose trailing timer marshals back through
   `fyne.Do`. `Verse.Ref` and `BibleData.chapterNums` are precomputed in
   `PrepareSearchIndex` (on the load goroutine) so search/nav don't re-format or
@@ -192,15 +195,17 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   popup on iOS so the field clears the soft keyboard; centered modal on desktop), then
   shows a prose answer grounded in the selection (`buildAskPrompt`). Providers (Gemini /
   OpenAI / Anthropic / Grok) live in `ai_providers.go`; keys are stored on-device via
-  `keyStore` (`ai_keystore.go`) in Apple Keychain on iOS/macOS (with one-time migration
-  from the legacy `fyne.Preferences` value) and preferences elsewhere; `<PROVIDER>_API_KEY` env
+  `keyStore` (`ai_keystore.go`) in the Apple Keychain on **iOS only** — macOS release
+  builds are ad-hoc signed, so a keychain ACL breaks on every update — with one-time
+  migration from the legacy `fyne.Preferences` value, and preferences everywhere else
+  (macOS included); `<PROVIDER>_API_KEY` env
   vars overriding (Grok's is `XAI_API_KEY`, not GROK_). Per-action prompts are built by `buildAIPrompt` / `buildAskPrompt` in
   `ai.go` (shared preamble + per-action task + the quoted selection; the fixed actions
   documented in README → "AI study"). `runAIAction` threads the Ask question and folds
   it into the cache scope. Settings sheet: `ai_settings.go` (header gear). Result panel:
   `ai_panel.go`.
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
-  registry (WEB + BSB public-domain, NRSV/LSB licensed) and a `bibleSource` per
+  registry (WEB + WEB-Catholic + BSB public-domain; NRSV/LSB/NKJV licensed) and a `bibleSource` per
   version (`webSource` = the WEB as ONE request from bible.helloao.org (it replaced
   the old per-chapter bible-api.com walk, which remains only as the seed/fallback);
   `bsbSource` (`bsb.go`) = the
@@ -220,6 +225,13 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   `BIBLETEXT_ENABLE_TESTING=1` (`testingVersionsEnabled`); once a license is
   configured the version flips to selectable with real text automatically.
   `switchVersion` swaps `AppState.Bible` and `rebuildWindow`s; per-version cache is
+  `bibletext-<id>.json` plus a `-v<epoch>` suffix once a decoder change bumps
+  `cacheEpoch` — true of all three shipping translations today (WEB v2, BSB v3,
+  WEBC v2), so even the default WEB version has left the legacy path. A bumped
+  epoch never strands a reader: `loadVersionFromCacheOnly` and the restore/switch
+  paths fall back through `supersededCachePaths` (so an OFFLINE upgrade still
+  opens on the previous decode) and the old file is purged only AFTER a
+  successful refetch. Superseded per-version cache was
   `bibletext-<id>.json`. UI: the header subtitle is the picker (`versions_ui.go`,
   shared → both platforms). Most versions are the canonical 66-book Protestant canon;
   the **World English Bible (Catholic)** (`webCatholicSource`, `catholic.go`) adds the
@@ -377,3 +389,14 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   sizing), not a bare `canvas.Text` renderer.
 - Wrap modal content the chapter-picker way (`widget.NewModalPopUp` +
   `surface(...)`), and remember the overlay hide/restore dance above.
+- `rebuildWindow` (`reading.go`) **drains `Canvas().Overlays()` before
+  `SetContent`**: `SetContent` only reassigns the content tree, so an open sheet
+  would otherwise survive a rebuild with its build-time palette colours (the
+  field-reported half-dark Settings sheet after an overnight light/dark flip).
+  It `Hide()`s popups rather than bare-removing them, because the popup watchdog
+  timers poll `Visible()` and a bare remove leaves them polling forever, and it
+  stops descendant `ProgressBarInfinite`s so a hidden spinner stops repainting.
+- A popup's close-out work that runs on a timer must check that no OTHER overlay
+  now owns the canvas before restoring the reading overlay, and skip its own
+  "changed while open" rebuild when `windowRebuildGen` moved (a rebuild already
+  rebuilt from live prefs).

@@ -221,7 +221,8 @@ prose.
 | `ai.go` | Action constants + `buildAIPrompt`; `runAIAction` (cache scope, dispatch) |
 | `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`) + `buildAskPrompt` |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
-| `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on iOS/macOS, preferences elsewhere; env-var override |
+| `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
+| `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
 | `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
@@ -330,8 +331,8 @@ Three gates keep the native overlay cheap on every nav/tab tap:
   (Catholic)**: helloao's WEBC decoded by USFM **id** (not order) and emitted in
   traditional Catholic order, adding the 73-book deuterocanon.
 - `licensedAPISource` — a scaffold for a licensed API provider (e.g. API.Bible),
-  gated on a license opt-in **and** `BIBLE_API_KEY`. **NRSV** and **LSB** are
-  wired here but copyrighted, so they are **not user-selectable**.
+  gated on a license opt-in **and** `BIBLE_API_KEY`. **NRSV**, **LSB** and
+  **NKJV** are wired here but copyrighted, so they are **not user-selectable**.
 
 `canSelect()` is true only when real, redistributable text is available, so the
 picker renders not-yet-licensed versions de-emphasized and non-tappable
@@ -468,8 +469,11 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   capped `4096` output tokens; identical requests are cached in memory.
 - Providers Gemini / OpenAI / Anthropic / Grok live in
   [ai_providers.go](ai_providers.go). Keys are stored **on-device only** via
-  `keyStore` ([ai_keystore.go](ai_keystore.go)): Apple Keychain on iOS/macOS
-  (migrated from the legacy preference value) and preferences elsewhere; a
+  `keyStore` ([ai_keystore.go](ai_keystore.go)): the Apple Keychain on **iOS
+  only** — stored `AfterFirstUnlock` so it survives a backup restore or a move to
+  a new device — migrated once from the legacy preference value; preferences
+  everywhere else, macOS included (its release builds are ad-hoc signed, so a
+  keychain ACL would break on every update); a
   `<PROVIDER>_API_KEY` env var overrides. Settings sheet:
   [ai_settings.go](ai_settings.go) (header gear). Result panel with a **Report**
   button and an in-app disclosure line: [ai_panel.go](ai_panel.go).

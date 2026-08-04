@@ -1,7 +1,8 @@
 # App Store submission checklist — BibleText 1.1.6
 
-Prepared 1 August 2026. This is a release-preparation record, not confirmation
-that the binary has been uploaded or the version submitted for review.
+Prepared 1 August 2026; updated 4 August 2026, when build 124 was uploaded and
+version 1.1.6 was submitted for review (state: Waiting for Review, manual
+release after approval).
 
 ## Release identity
 
@@ -11,7 +12,7 @@ that the binary has been uploaded or the version submitted for review.
 | Apple app ID | `6784567351` |
 | Bundle ID | `uk.co.bibletext` |
 | Version | `1.1.6` |
-| Build | `103` |
+| Build | `124` |
 | Platform | Universal iPhone and iPad |
 | Minimum OS | iOS 13.0 |
 | Price | Free |
@@ -24,7 +25,7 @@ bundle ID or remove iPad support from this update.
 
 ## Locally verified release inputs
 
-- `cmd/mobile/FyneApp.toml` is the source of version 1.1.6/build 103.
+- `cmd/mobile/FyneApp.toml` is the source of version 1.1.6/build 124.
 - `scripts/release-ios.sh` derives the marketing version from that file, keeps
   exact copies of locally edited build files, builds arm64, creates an App Store
   archive, and does not upload unless `BIBLETEXT_UPLOAD=1` is explicitly set.
@@ -35,8 +36,10 @@ bundle ID or remove iPad support from this update.
   resizable windows are not disabled.
 - AI provider keys use Apple Keychain on iOS/macOS and migrate from the old
   preferences value on first access.
-- The App Store icon is an opaque 1024×1024 RGB image and includes the required
-  phone and tablet icon renditions.
+- The App Store icon is an opaque 1024×1024 RGB image. `release-ios.sh`
+  regenerates the whole icon asset catalog with `actool` from that single
+  source, because fyne emits no iPad Pro 167×167 rendition and App Store Connect
+  rejects the upload with error 90023 without it.
 - The release uses the App Store distribution profile for team `R8PC7239T2`,
   has `get-task-allow=false`, and declares `ITSAppUsesNonExemptEncryption=false`.
 
@@ -49,7 +52,7 @@ go vet ./...
 ```
 
 The last command must finish with `build/BibleText.ipa is ready (version 1.1.6,
-build 103)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
+build 124)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
 
 ## Store metadata prepared locally
 
@@ -65,8 +68,9 @@ ignored by Git). The prepared English (UK) values are:
 - Support URL: <https://bibletext.co.uk/support.html>
 - Marketing URL: <https://bibletext.co.uk/>
 - Privacy URL: <https://bibletext.co.uk/privacy.html>
-- What's New: Save Image, quotation correctness, Go-to navigation, and secure
-  Keychain migration
+- What's New: poetry as authored verse lines, words of Christ in red by
+  default, fresh installs opening at Matthew 1, poetry-preserving shares, the
+  light/dark re-theme fix, and history- and key-preserving upgrades
 
 `build/appstore/review_notes.txt` has current feature paths, iPad behaviour,
 the optional-AI test procedure, data flow, age-rating context, and contact
@@ -107,21 +111,23 @@ python3 build/appstore/upload_screenshots.py
 The helper resolves the current version automatically and does not submit it.
 Visually inspect the resulting order and device frame in App Store Connect.
 
-## Privacy answers that need updating in App Store Connect
+## Privacy answers to confirm in App Store Connect
 
-The public product page currently says **Data Not Collected**. That is too broad
-for the optional AI requests sent to the provider selected by the user. Use the
-same conservative disclosure as the bundled privacy manifest:
+Answer **Data Not Collected**. That matches the bundled privacy manifest
+(`cmd/mobile/PrivacyInfo.xcprivacy` declares an empty
+`NSPrivacyCollectedDataTypes`) and `docs/privacy.html`. The developer operates no
+server, no accounts and no analytics, and receives none of this data.
 
-| Data type | Linked to the user | Tracking | Purpose |
-| --- | --- | --- | --- |
+The optional AI features are not developer collection: a Find query, or a
+selected passage and study action, goes from the reader's device straight to the
+AI provider they configured, under their own API key. That provider may associate
+and retain the request under the reader's own account and terms — their
+disclosure to their own vendor, which `docs/privacy.html` states plainly. Nothing
+is routed through or retained by any BibleText server. Re-check that wording
+against the supported providers' live terms before review.
 
-The rationale is that the user's API key authenticates a provider account, and a
-Find query, or a selected passage and AI study action, leaves the device. The
-provider may associate and retain the request under that account. BibleText has
-no developer-operated server and does not use the data for tracking. Confirm
-these answers against the chosen providers' live terms before saving the
-questionnaire.
+Leave `NSPrivacyAccessedAPITypes` as declared: file timestamp (C617.1), system
+boot time (35F9.1), and user defaults (CA92.1).
 
 Publish the updated `docs/privacy.html` and `docs/support.html` to the live URLs
 before review. The source files now describe Keychain storage and the direct AI
@@ -197,7 +203,7 @@ Account Holder/App Manager must confirm each item:
 9. Release mode (manual, automatic, or phased) and the intended release date are
    selected deliberately.
 10. Upload `build/BibleText.ipa`; wait for processing and any export-compliance
-   prompts; select exactly version 1.1.6/build 103.
+   prompts; select exactly version 1.1.6/build 124.
 11. Run an installed-build smoke test on a real iPhone and iPad: first launch,
    Books/Search/Go-to, light/dark mode, rotation and Split View, Save Image and
    Photos permission, streaming/device audio with background controls, offline

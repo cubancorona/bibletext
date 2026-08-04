@@ -4,8 +4,9 @@
 
 A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, iOS,
 and Android** from a single Go codebase, built with [Fyne](https://fyne.io/). It presents
-public-domain translations — the **World English Bible (WEB)** and **Berean
-Standard Bible (BSB)** — in a calm, responsive reading layout.
+public-domain translations — the **World English Bible (WEB)**, its **Catholic
+edition (WEBC)** with the deuterocanon, and the **Berean Standard Bible (BSB)** —
+in a calm, responsive reading layout, with poetry set as poetry.
 
 | Reading | Study with AI | Share as image |
 |:---:|:---:|:---:|
@@ -54,8 +55,9 @@ Then, from the repo root:
 go run ./cmd/desktop
 ```
 
-That's the whole thing. On first launch it downloads the Bible text (~30 seconds)
-and caches it locally, so every launch after that is instant and works offline.
+That's the whole thing. A first run opens immediately on an embedded Gospels seed
+and downloads the complete Bible in the background (~30 seconds), caching it
+locally — so every launch after that is instant and works offline.
 
 **iOS simulator** (needs macOS with full Xcode, an iOS simulator runtime, and the
 Fyne CLI — the script checks and tells you what's missing): `./scripts/run-ios-sim.sh`
@@ -165,8 +167,10 @@ root), signing, emulator use, and distribution are covered in
   one poetic line per line, ragged-right, breaking at every verse boundary
   inside a poem, as in print — in all three translations, on every platform.
   Text shares, chapter copies, and the verse of the day keep the same lines.
-- 🟥 **Red-letter mode** — the words of Christ in red, on by default
-  (switchable in Settings → Reading).
+- 🟥 **Red-letter mode** — the words of Christ in red, on by default and
+  switchable in Settings → Reading (iOS, Android, and macOS; the Windows/Linux
+  reading pane is a single styled widget that cannot colour a text range, so the
+  switch is hidden there).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
 - 📤 **Share a verse** — from the selection menu: **Share with citation** (text +
@@ -186,7 +190,7 @@ root), signing, emulator use, and distribution are covered in
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
-  **NRSV** and **LSB** are wired in and become selectable once licensed. See
+  **NRSV**, **LSB** and **NKJV** are wired in and become selectable once licensed. See
   [Bible versions](#bible-versions).
 
 ## Bible versions
@@ -196,8 +200,9 @@ The reader ships with three public-domain translations — the **World English B
 (Catholic)** (WEB plus the 73-book deuterocanon) — all free to distribute and fetched
 in a single request each from the free, key-less
 [bible.helloao.org](https://bible.helloao.org/). Use the **translation switcher in
-the header** (the version name beneath "BibleText") to change versions. Two licensed
-translations (**NRSV**, **LSB**) are wired in and become selectable once licensed:
+the header** (the version name beneath "BibleText") to change versions. Three licensed
+translations (**NRSV**, **LSB**, **NKJV**) are wired in and become selectable once
+licensed:
 
 | Version | Abbrev | Rights holder | Status |
 |---|---|---|---|
@@ -306,8 +311,9 @@ any output) and the AI-settings sheet shows an in-app note explaining what leave
 the device.
 
 You supply your own API key per provider. Keys are stored **only on this device**
-(in Apple Keychain on iOS/macOS; the local preferences store on other platforms)
-— nothing is embedded in the app. Open the header
+— in the Apple Keychain on iOS (encrypted at rest, and carried across an encrypted
+backup or a move to a new device) and in the local preferences store on macOS,
+Windows, Linux, and Android — nothing is embedded in the app. Open the header
 **gear → AI study** sheet to pick a provider and paste a key:
 
 | Provider | Model | Get a key |

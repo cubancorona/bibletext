@@ -2,8 +2,10 @@ package bibletext
 
 // On-device storage for the user's AI keys and provider choice. Non-secret
 // settings use Fyne Preferences (per-app, persisted across launches). API keys
-// use the platform credential store where one is available (Apple Keychain on
-// iOS/macOS), with one-time migration from the legacy preference value.
+// use the platform credential store where one is available — the Apple Keychain
+// on iOS ONLY (macOS release builds are ad-hoc signed, so a keychain ACL would
+// break on every update; see ai_secure_store_darwin.go) — with one-time
+// migration from the legacy preference value.
 // Wrapped behind small interfaces so tests can substitute in-memory stores.
 
 import (
@@ -66,11 +68,6 @@ func newKeyStore() *keyStore {
 	return &keyStore{}
 }
 
-// migrateAllKeys sweeps EVERY provider's pre-1.1.6 Preferences key into the
-// credential store up front (audit finding: the lazy per-provider migration
-// left non-selected providers' keys in plaintext Preferences indefinitely).
-// apiKey carries the same logic per read; this just runs it for each provider
-// once at startup. Errors leave the legacy copy in place for the next try.
 // keyInSecureStore reports whether this provider's key is CURRENTLY held by the
 // platform credential store — a definitive found-and-readable answer, not
 // "this platform has a keychain". The Settings status uses it so the saved
@@ -86,6 +83,11 @@ func (k *keyStore) keyInSecureStore(id string) bool {
 	return ok && found
 }
 
+// migrateAllKeys sweeps EVERY provider's pre-1.1.6 Preferences key into the
+// credential store up front (audit finding: the lazy per-provider migration
+// left non-selected providers' keys in plaintext Preferences indefinitely).
+// apiKey carries the same logic per read; this just runs it for each provider
+// once at startup. Errors leave the legacy copy in place for the next try.
 func (k *keyStore) migrateAllKeys() {
 	if k == nil || k.prefs == nil || k.secrets == nil {
 		return
