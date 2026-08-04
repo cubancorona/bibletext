@@ -197,7 +197,6 @@ import (
 	"image/color"
 	"log"
 	"math"
-	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -485,42 +484,6 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// Restyle the read-along highlight + "Follow narration" pill for this palette,
 	// so a light/dark flip mid-narration recolors them (mirrors the iOS render).
 	pushFollowButtonColors(pal)
-}
-
-// buildChapterHTMLAndroid emits the Html.fromHtml-safe dialect of the chapter:
-// no CSS classes (fromHtml ignores <style>), so verse numbers are
-// <sup><small><font color><b>, red-letter is <font color>, and the search-jump
-// highlight is an inline style= span (honored on API 24+).
-func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
-	pal := state.pal()
-	vnum := nrgbaToHex(pal.VerseNumber)
-	red := nrgbaToHex(pal.RedLetter)
-	hlBG := nrgbaToHex(pal.Highlight)
-	hlFG := nrgbaToHex(pal.HighlightText)
-
-	redLetter := redLetterEnabled()
-	var b strings.Builder
-	for _, para := range groupVersesIntoParagraphs(verses) {
-		b.WriteString("<p>")
-		for i, v := range para {
-			if i > 0 {
-				b.WriteString(" ")
-			}
-			fmt.Fprintf(&b, `<sup><small><font color="%s"><b>%d</b></font></small></sup>&nbsp;`, vnum, v.Verse)
-			body := htmlEscape(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
-			switch {
-			case isVerseHighlighted(state, v):
-				// A search highlight wins visually over red-letter (as on iOS).
-				fmt.Fprintf(&b, `<span style="color:%s;background-color:%s"><b>%s</b></span>`, hlFG, hlBG, body)
-			case redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse):
-				fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, body)
-			default:
-				b.WriteString(body)
-			}
-		}
-		b.WriteString("</p>")
-	}
-	return b.String()
 }
 
 // --- Reading-position persistence (frac-based; see reading_scroll_android.go) --

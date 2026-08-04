@@ -230,6 +230,20 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   (cross-refs, red-letter, verse-of-day) simply skip the deuterocanon. Docs: README →
   "Bible versions".
 
+- **Poetry renders as authored lines — FIVE surfaces in lockstep.** Verse text
+  carries `"\n"` poem-line breaks (decoder: `bsbVerseText` in `bsb.go`; all
+  helloao translations). The display rule is `verseIsPoetic` / `poeticJoin` in
+  `reading.go` — any verse join touching a poetic verse is a line boundary —
+  and it is the SAME rule `chapterShareStructure` (share.go) restores with.
+  Changing poetry presentation means changing ALL of: `buildChapterHTML`
+  (reading.go; `<br>` + `p.pm` ragged-right + reporter-indent skip),
+  `buildChapterHTMLAndroid` (`android_chapter_html.go` — untagged so host
+  tests pin both dialects), the desktop rewrap (`"\n"` sentinel tokens in
+  `verseTokens`), the Android Fyne fallback (`reading_mobile.go`), and
+  `verse_of_day.go`; the ObjC `bibleTextPlainFromHTML` fallbacks map
+  `<br>`→`\n`. Tests: `reading_poetry_test.go`. A one-line poem verse has no
+  internal break and reads as prose (known limitation, shared with the share
+  pipeline).
 - **Two reading headers — edit BOTH.** The reading toolbar is built per platform:
   desktop + Android use `chapterHeader` (`reading.go`, via `buildReadingView`),
   but **iOS uses its own `chapterHeaderMobile`** (`reading_ios.go`, via

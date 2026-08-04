@@ -444,6 +444,10 @@ func chapterRenderFingerprint(state *AppState) string {
 // paragraph gaps give an unhurried feel; iPads use the U.S. Reports set — 1.3
 // leading, first-line indents (see reporterLayoutActive / reporterMeasureEm).
 // Kerning + ligatures + old-style numerals add a faint warmth on both.
+// reporterLayout is a test seam over reporterLayoutActive (constant false off
+// iOS), so host tests can exercise the iPad reporter branches of the HTML.
+var reporterLayout = reporterLayoutActive
+
 func buildChapterHTML(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	textHex := nrgbaToHex(pal.Text)
@@ -456,7 +460,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// The reader's chosen text size scales the whole page: body px here, and the
 	// verse-number superscripts via their em sizing. 21px is the "Normal" base.
 	bodyPx := int(math.Round(21 * readingTextScale()))
-	reporter := reporterLayoutActive()
+	reporter := reporterLayout()
 
 	// Line spacing + paragraph treatment: phones keep the airy 2.0 leading with
 	// blank-line paragraph gaps; the iPad reporter layout (reporterLayoutActive)
@@ -513,22 +517,49 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		border-radius: 2px;
 	}`, highlightTextHex, highlightBgHex)
 	fmt.Fprintf(&b, `.wj { color: %s; }`, redLetterHex)
+	// Poetic paragraphs set ragged-right: justification would stretch short
+	// poem lines full-width (TextKit does not reliably exempt forced-break
+	// lines the way CSS — and Android's INTER_WORD mode — do).
+	b.WriteString(`p.pm { text-align: left; }`)
 	b.WriteString("</style></head><body>")
 
 	for _, para := range groupVersesIntoParagraphs(verses) {
-		b.WriteString("<p>")
-		if reporter {
+		poetic := false
+		for _, v := range para {
+			if verseIsPoetic(v.Text) {
+				poetic = true
+				break
+			}
+		}
+		if poetic {
+			b.WriteString(`<p class="pm">`)
+		} else {
+			b.WriteString("<p>")
+		}
+		if reporter && !verseIsPoetic(para[0].Text) {
 			// The U.S. Reports paragraph grammar: a ~1.5em first-line indent
 			// instead of a blank line. Emitted as em+en space characters
 			// because the HTML importer ignores the text-indent CSS property.
+			// Poetry is never first-line indented in print, so a paragraph
+			// that OPENS on a poem line skips it — but a mixed paragraph
+			// opening with prose keeps the indent (in reporter mode it is the
+			// only paragraph-boundary marker; dropping it would visually
+			// merge the paragraph into the previous one).
 			b.WriteString("&#8195;&#8194;")
 		}
 		for i, v := range para {
 			if i > 0 {
-				b.WriteByte(' ')
+				if poeticJoin(para[i-1].Text, v.Text) {
+					b.WriteString("<br>")
+				} else {
+					b.WriteByte(' ')
+				}
 			}
 			fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
-			body := htmlEscape(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
+			// Authored poem lines become explicit <br> — a literal "\n" would
+			// be ordinary HTML whitespace (renders as a space). Escape first;
+			// htmlEscape leaves "\n" alone.
+			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
 			switch {
 			case isVerseHighlighted(state, v):
 				// A search highlight wins visually over red-letter.
@@ -631,6 +662,12 @@ type chapterText struct {
 	// the within-chapter scroll anchor (capture: top-visible verse; restore:
 	// scroll back to it) on the platforms without a native text view.
 	verseLines []verseLine
+
+	// hardBreakRows records the global row indexes whose trailing newline is
+	// an AUTHORED poem-line break (not a soft width-wrap). copySelection uses
+	// it so poetry copies as poetry while re-flowed prose copies clean — the
+	// two break kinds are byte-identical in Entry.Text.
+	hardBreakRows map[int]bool
 }
 
 // verseLine pairs a verse number with the wrapped line its text begins on.
@@ -692,6 +729,7 @@ func (c *chapterText) rewrap(width float32) {
 	c.highlightLine = -1
 	c.highlightEndLine = -1
 	c.verseLines = c.verseLines[:0]
+	c.hardBreakRows = make(map[int]bool)
 	lineNo := 0
 	paras := make([]string, 0, len(c.paragraphs))
 
@@ -702,7 +740,24 @@ func (c *chapterText) rewrap(width float32) {
 		var lines []string
 		var cur strings.Builder
 		curW := float32(0)
-		for _, v := range para {
+		// hardBreak ends the line under construction — an authored poem-line
+		// boundary rather than a width wrap. It flows through the same `lines`
+		// accumulation, so verseLines/highlight/totalLines accounting stays
+		// truthful (lineY's proportional model depends on that), and records
+		// the row in hardBreakRows so copySelection keeps the break.
+		hardBreak := func() {
+			if cur.Len() > 0 {
+				lines = append(lines, cur.String())
+				cur.Reset()
+				curW = 0
+				c.hardBreakRows[lineNo+len(lines)-1] = true
+			}
+		}
+		for vi, v := range para {
+			if vi > 0 && poeticJoin(para[vi-1].Text, v.Text) {
+				// Print poetry breaks at every verse boundary inside a poem.
+				hardBreak()
+			}
 			inRange := c.hasHighlight &&
 				v.BookName == c.highlightRef.Book && v.Chapter == c.highlightRef.Chapter &&
 				v.Verse >= c.highlightRef.Verse && v.Verse <= c.highlightEnd
@@ -718,6 +773,20 @@ func (c *chapterText) rewrap(width float32) {
 			vlIdx := len(c.verseLines) - 1
 			first := true
 			for _, w := range verseTokens(v) {
+				if w == "\n" {
+					// Poem-line sentinel from verseTokens — never measured,
+					// never emitted as text. Consecutive sentinels are an
+					// authored blank poem line ("a\n\nb"): keep the empty row
+					// so this pane matches the HTML surfaces (<br><br>) and
+					// the share restore ("\n\n").
+					if cur.Len() == 0 {
+						lines = append(lines, "")
+						c.hardBreakRows[lineNo+len(lines)-1] = true
+					} else {
+						hardBreak()
+					}
+					continue
+				}
 				ww := measure(w)
 				add := ww
 				if cur.Len() > 0 {
@@ -765,8 +834,17 @@ func (c *chapterText) rewrap(width float32) {
 
 // verseTokens splits a verse into wrap tokens, keeping the superscript number
 // attached to the first word so a number never wraps onto its own line.
+// Authored poem-line boundaries are preserved as "\n" sentinel tokens (a
+// token can never otherwise be whitespace); rewrap turns each into a hard
+// line break instead of measuring it.
 func verseTokens(v Verse) []string {
-	words := strings.Fields(strings.TrimSpace(v.Text))
+	var words []string
+	for li, line := range strings.Split(strings.TrimSpace(v.Text), "\n") {
+		if li > 0 {
+			words = append(words, "\n")
+		}
+		words = append(words, strings.Fields(line)...)
+	}
 	num := superscriptNumber(v.Verse)
 	if num == "" {
 		return words
@@ -871,9 +949,10 @@ func (c *chapterText) TypedKey(key *fyne.KeyEvent) {
 func (c *chapterText) TypedShortcut(sc fyne.Shortcut) {
 	switch sc.(type) {
 	case *fyne.ShortcutCopy:
-		// Copy clean text: drop the soft wraps we inserted, keep paragraph breaks.
+		// Copy clean text: drop the soft wraps we inserted, keep authored
+		// poem lines and paragraph breaks.
 		if c.clipboard != nil {
-			c.clipboard.SetContent(cleanCopy(c.SelectedText()))
+			c.clipboard.SetContent(c.copySelection())
 			return
 		}
 		c.Entry.TypedShortcut(sc)
@@ -883,12 +962,86 @@ func (c *chapterText) TypedShortcut(sc fyne.Shortcut) {
 }
 
 // cleanCopy turns soft-wrap newlines back into spaces while preserving the blank
-// line between paragraphs, so copied passages read naturally.
+// line between paragraphs, so copied passages read naturally. It cannot tell an
+// authored poem break from a width wrap (both are "\n" in Entry.Text) — the
+// clipboard Copy paths use copySelection, which can; this stays the shape the
+// share/AI pipeline expects (it collapses whitespace and re-derives structure).
 func cleanCopy(s string) string {
 	const para = "\x00"
 	s = strings.ReplaceAll(s, "\n\n", para)
 	s = strings.ReplaceAll(s, "\n", " ")
 	return strings.ReplaceAll(s, para, "\n\n")
+}
+
+// copySelection returns the selected text for the clipboard: soft width-wraps
+// flatten to spaces, but AUTHORED breaks survive — poem lines stay lines
+// (hardBreakRows) and paragraph blanks stay blank — so poetry copies as
+// poetry, matching the native overlays and the share restore. The selection is
+// located in Entry.Text via the cursor (it sits at one end of a selection);
+// if it cannot be located, fall back to the flatten-everything cleanCopy.
+func (c *chapterText) copySelection() string {
+	sel := c.SelectedText()
+	if sel == "" || !strings.Contains(sel, "\n") {
+		return sel
+	}
+	text := c.Entry.Text
+
+	// Byte offset of the cursor from its rune-based row/column.
+	off := 0
+	for row := 0; row < c.CursorRow && off < len(text); row++ {
+		i := strings.IndexByte(text[off:], '\n')
+		if i < 0 {
+			break
+		}
+		off += i + 1
+	}
+	rowEnd := strings.IndexByte(text[off:], '\n')
+	if rowEnd < 0 {
+		rowEnd = len(text) - off
+	}
+	rowStr := text[off : off+rowEnd]
+	col := c.CursorColumn
+	if r := []rune(rowStr); col <= len(r) {
+		off += len(string(r[:col]))
+	} else {
+		off += len(rowStr)
+	}
+
+	// The selection is the contiguous run ending or starting at the cursor.
+	start := -1
+	if off >= len(sel) && text[off-len(sel):off] == sel {
+		start = off - len(sel)
+	} else if off+len(sel) <= len(text) && text[off:off+len(sel)] == sel {
+		start = off
+	} else if i := strings.Index(text, sel); i >= 0 && strings.Index(text[i+1:], sel) < 0 {
+		start = i // unique occurrence — cursor bookkeeping mismatch fallback
+	}
+	if start < 0 {
+		return cleanCopy(sel)
+	}
+
+	row := strings.Count(text[:start], "\n")
+	var out strings.Builder
+	for i := 0; i < len(sel); i++ {
+		ch := sel[i]
+		if ch != '\n' {
+			out.WriteByte(ch)
+			continue
+		}
+		if i+1 < len(sel) && sel[i+1] == '\n' {
+			out.WriteString("\n\n") // paragraph (or authored blank line) pair
+			row += 2
+			i++
+			continue
+		}
+		if c.hardBreakRows[row] {
+			out.WriteByte('\n')
+		} else {
+			out.WriteByte(' ')
+		}
+		row++
+	}
+	return out.String()
 }
 
 // superToDigit reverses superscriptNumber's mapping, so a selection's rendered
@@ -927,7 +1080,7 @@ func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
 
 	copyItem := fyne.NewMenuItem("Copy", func() {
 		if c.clipboard != nil {
-			c.clipboard.SetContent(cleanCopy(c.SelectedText()))
+			c.clipboard.SetContent(c.copySelection())
 		}
 	})
 	copyItem.Disabled = sel == ""
@@ -1154,6 +1307,21 @@ func indexOf(values []int, target int) int {
 }
 
 // --- Paragraph grouping -----------------------------------------------------
+
+// verseIsPoetic reports whether a verse's text carries authored poem line
+// breaks (the decoder emits "\n" between poem clauses). A verse that is
+// exactly ONE poem line decodes with no internal break and reads as prose
+// here — the shared limitation, same as the share pipeline's.
+func verseIsPoetic(text string) bool { return strings.Contains(text, "\n") }
+
+// poeticJoin reports whether the boundary between two adjacent verses in a
+// paragraph is a poetry line boundary: in print, every verse boundary inside
+// a poem is also a line boundary, so a join touching a poetic verse breaks.
+// The share pipeline's chapterShareStructure applies the same rule, keeping
+// displayed lines and shared/restored lines identical.
+func poeticJoin(prevText, curText string) bool {
+	return verseIsPoetic(prevText) || verseIsPoetic(curText)
+}
 
 func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	if len(verses) == 0 {

@@ -618,6 +618,9 @@ static BOOL bibleTextMacApplyHTML(NSData *data) {
 }
 
 static NSString *bibleTextMacPlainFromHTML(NSString *html) {
+    // Poem-line <br> must become a real newline BEFORE the tag strip, or
+    // poetry lines jam together and selections there can no longer locate.
+    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n"];
     NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
     NSString *t = [re stringByReplacingMatchesInString:html options:0
                                                  range:NSMakeRange(0, html.length) withTemplate:@""];

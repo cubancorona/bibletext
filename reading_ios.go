@@ -935,8 +935,11 @@ static BOOL bibleTextApplyHTML(NSData *data) {
 }
 
 // bibleTextPlainFromHTML strips tags + the few entities buildChapterHTML emits —
-// a readable last resort so the reader never sees raw markup.
+// a readable last resort so the reader never sees raw markup. Poem-line <br>
+// must become a real newline BEFORE the tag strip, or poetry lines jam
+// together ("shepherd;I shall") and selections there can no longer locate.
 static NSString *bibleTextPlainFromHTML(NSString *html) {
+    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n"];
     NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
     NSString *t = [re stringByReplacingMatchesInString:html options:0
                                                  range:NSMakeRange(0, html.length) withTemplate:@""];
