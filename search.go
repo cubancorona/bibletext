@@ -282,7 +282,10 @@ func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) 
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 18
 
-	segs := termHighlightSegments(strings.TrimSpace(verse.Text), terms, colorNameVerseText, colorNameHighlightHi)
+	// Cards are one-snippet UI: flatten authored poem lines here (the reading
+	// pane and text shares keep them — this is presentation, not content).
+	cardText := strings.Join(strings.Fields(verse.Text), " ")
+	segs := termHighlightSegments(cardText, terms, colorNameVerseText, colorNameHighlightHi)
 	text := widget.NewRichText(segs...)
 	text.Wrapping = fyne.TextWrapWord
 

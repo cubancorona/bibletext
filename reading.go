@@ -1045,6 +1045,9 @@ func copyChapter(state *AppState) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %d\n\n", state.CurrentBook, state.CurrentChapter)
 	for _, v := range verses {
+		// Verse.Text may carry authored poem-line breaks — kept on purpose:
+		// a chapter copy is a plain-text export, and poetry copying as poetry
+		// is the same principle as the cited-text share layout.
 		fmt.Fprintf(&b, "%d %s\n", v.Verse, strings.TrimSpace(v.Text))
 	}
 	state.window.Clipboard().SetContent(b.String())

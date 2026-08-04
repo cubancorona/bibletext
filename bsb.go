@@ -198,12 +198,27 @@ func bsbVerseText(content []json.RawMessage) string {
 			continue
 		}
 		var obj struct {
-			Text      *string `json:"text"`
-			LineBreak bool    `json:"lineBreak"`
+			Text      *string         `json:"text"`
+			LineBreak bool            `json:"lineBreak"`
+			Poem      json.RawMessage `json:"poem"`
 		}
 		if err := json.Unmarshal(node, &obj); err == nil {
 			switch {
 			case obj.Text != nil && *obj.Text != "":
+				// Real helloao poetry carries NO lineBreak nodes — each
+				// {"text","poem":N} clause IS one source line (verified against
+				// live captures: Gen 1:27 = three clauses/three lines, Ps 23:2 =
+				// two, all without a single lineBreak). So a poem clause after
+				// prior content starts a new line — EXCEPT a clause that begins
+				// with closing punctuation (Job 6:6 ends with a bare "?" clause),
+				// which belongs to the previous line and must abut. An explicit
+				// lineBreak (prose lists like Gen 10:2) already broke the line,
+				// so no second break is added after one.
+				isPoem := len(obj.Poem) > 0 && string(obj.Poem) != "null"
+				prevBreak := len(pieces) > 0 && pieces[len(pieces)-1] == "\n"
+				if isPoem && len(pieces) > 0 && !prevBreak && !startsWithClosingPunct(*obj.Text) {
+					pieces = append(pieces, "\n")
+				}
 				pieces = append(pieces, *obj.Text)
 			case obj.LineBreak:
 				pieces = append(pieces, "\n")
@@ -222,6 +237,20 @@ var (
 	bsbSpaceBeforeClose = regexp.MustCompile(`\s+([,.;:!?)\]}’”])`)
 	bsbSpaceAfterOpen   = regexp.MustCompile(`([(\[{“‘])\s+`)
 )
+
+// startsWithClosingPunct reports a piece that opens with punctuation belonging
+// to the PREVIOUS clause ("?" / "”" / ")." …) — it must join that line, never
+// begin a new one; bsbTidySpacing then merges the space away.
+func startsWithClosingPunct(s string) bool {
+	for _, r := range s {
+		switch r {
+		case ')', ']', '}', '”', '’', '!', '?', ';', ':', ',', '.':
+			return true
+		}
+		return false
+	}
+	return false
+}
 
 // bsbTidySpacing collapses redundant whitespace WITHIN each source line and
 // removes spaces that the per-piece join wrongly placed adjacent to punctuation.
