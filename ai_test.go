@@ -48,11 +48,15 @@ func (f *fakePrefs) SetString(key, value string) { f.m[key] = value }
 type fakeSecrets struct {
 	m         map[string]string
 	failWrite bool
+	failRead  bool // simulate a transient credential-store error
 }
 
-func (f *fakeSecrets) Read(account string) (string, bool) {
+func (f *fakeSecrets) Read(account string) (string, bool, bool) {
+	if f.failRead {
+		return "", false, false
+	}
 	v, ok := f.m[account]
-	return v, ok
+	return v, ok, true
 }
 
 func (f *fakeSecrets) Write(account, value string) bool {
@@ -400,5 +404,37 @@ func TestRunAIActionNoKeyError(t *testing.T) {
 	}
 	if !strings.Contains(friendlyAIError(err), "settings") {
 		t.Errorf("friendly should point to settings: %q", friendlyAIError(err))
+	}
+}
+
+// A transient credential-store READ error must be indistinguishable from
+// neither "absent" nor success: the legacy Preferences copy keeps serving,
+// and the migration erase is SKIPPED (audit finding — collapsing error to
+// absent could strand a migrated key invisible or erase the only copy).
+func TestKeyStoreReadErrorKeepsLegacyCopy(t *testing.T) {
+	prefs := &fakePrefs{m: map[string]string{prefKeyPrefix + "gemini": "legacy-key"}}
+	secrets := &fakeSecrets{m: map[string]string{}, failRead: true}
+	ks := &keyStore{prefs: prefs, secrets: secrets}
+
+	if got := ks.apiKey("gemini"); got != "legacy-key" {
+		t.Fatalf("store error must fall back to the legacy copy, got %q", got)
+	}
+	if prefs.m[prefKeyPrefix+"gemini"] != "legacy-key" {
+		t.Fatal("store error must NOT trigger the migration erase")
+	}
+	if len(secrets.m) != 0 {
+		t.Fatal("store error must not attempt migration writes")
+	}
+
+	// Store recovers → migration proceeds and the legacy copy is erased.
+	secrets.failRead = false
+	if got := ks.apiKey("gemini"); got != "legacy-key" {
+		t.Fatalf("recovered store must still serve the key, got %q", got)
+	}
+	if secrets.m["gemini"] != "legacy-key" {
+		t.Fatal("recovered store must migrate the key")
+	}
+	if prefs.m[prefKeyPrefix+"gemini"] != "" {
+		t.Fatal("migration must erase the legacy copy after a successful write")
 	}
 }
