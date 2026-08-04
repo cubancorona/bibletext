@@ -77,12 +77,13 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 }
 
 // incompleteBibleBanner is the status strip shown above the book lists while the app is
-// still on the embedded Gospels seed — the full default-version Bible is downloading in the
+// still on the embedded Gospels seed (seedOnly — NOT merely a stale-epoch boot, which
+// serves the reader's complete previous-epoch canon) — the full default-version Bible is downloading in the
 // background (triggerFullDownload, which self-retries). It returns nil once the full text
 // has landed (or the reader is on a different, complete version); the Books tab / sidebar
 // rebuild after the swap drops it automatically.
 func incompleteBibleBanner(state *AppState) fyne.CanvasObject {
-	if state == nil || !state.fullPending || state.CurrentVersion != defaultVersionID {
+	if state == nil || !state.seedOnly || state.CurrentVersion != defaultVersionID {
 		return nil
 	}
 	pal := state.pal()
