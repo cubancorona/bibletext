@@ -150,3 +150,25 @@ func TestStartupBibleCacheMissWithoutSavedStateUsesSeed(t *testing.T) {
 		t.Fatalf("loader calls: seed=%d full=%d, want seed=1 full=0", seedCalls, fullCalls)
 	}
 }
+
+// A fresh install (no saved reading state) opens on Matthew 1 — the New
+// Testament's first page — in every canon that has Matthew (all of ours).
+func TestDefaultStartBookIsMatthew(t *testing.T) {
+	seed, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if got := defaultStartBook(seed); got != "Matthew" {
+		t.Errorf("defaultStartBook(seed) = %q, want Matthew", got)
+	}
+	// A canon WITHOUT Matthew (defensive fallback) opens on its first book.
+	noMatt := &BibleData{
+		Books: []string{"Genesis"},
+		Verses: map[string]map[int][]Verse{"Genesis": {1: {
+			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 1, Text: "In the beginning"},
+		}}},
+	}
+	if got := defaultStartBook(noMatt); got != "Genesis" {
+		t.Errorf("defaultStartBook(no-Matthew canon) = %q, want Genesis", got)
+	}
+}
