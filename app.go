@@ -42,22 +42,23 @@ func NewLoadingState() *AppState {
 // than surfacing an in-app retry view.
 func loadStateData() (*AppState, error) {
 	version, _ := versionByID(defaultVersionID)
+	savedReading, hasSavedReading := readReadingState(appPrefs())
 	// Try the on-disk cache first (fast). On a cache miss, open INSTANTLY on the
-	// embedded Gospels seed and download the complete Bible in the background
-	// (StartBackgroundLoad → triggerFullDownload) rather than blocking on the
-	// chapter-by-chapter API fetch — which can take minutes and is at the mercy of
-	// bible-api.com rate-limiting. The seed is never cached, so once the background
-	// fetch lands it caches the full text for every later launch.
-	bibleData, mode, err := loadVersionFromCacheOnly(version)
-	seeded := false
+	// embedded Gospels seed and download the complete Bible in the background on
+	// a genuinely new install. An existing reader's saved position/history must
+	// NEVER be restored against that partial seed: after a decoder/cache-epoch
+	// migration we wait for the complete Bible here (already off the UI thread),
+	// then validate and restore against the full canon. Otherwise the seed makes
+	// every non-Gospel visit look invalid and the fallback path overwrites it.
+	bibleData, mode, seeded, err := loadStartupBible(
+		version,
+		hasSavedReading,
+		loadVersionFromCacheOnly,
+		loadSeedGospels,
+		loadVersionData,
+	)
 	if err != nil {
-		if seed, serr := loadSeedGospels(); serr == nil {
-			bibleData, mode, seeded = seed, modeReal, true
-		} else if full, fmode, ferr := loadVersionData(version, nil); ferr == nil {
-			bibleData, mode = full, fmode // last resort, if the embedded seed is somehow unusable
-		} else {
-			return nil, ferr
-		}
+		return nil, err
 	}
 
 	state := &AppState{
@@ -74,10 +75,23 @@ func loadStateData() (*AppState, error) {
 	// within-chapter scroll position, and the recent-chapters history (see
 	// reading_state.go). Falls through to the default start position whenever
 	// nothing valid is saved (first run, or the saved book no longer exists).
-	if rs, ok := readReadingState(appPrefs()); ok && applyRestoredState(state, rs, bibleData) {
-		return state, nil
+	if hasSavedReading {
+		restored, restoreErr := restoreReadingState(state, savedReading, bibleData)
+		if restoreErr != nil {
+			return nil, restoreErr
+		}
+		if restored {
+			return state, nil
+		}
 	}
 
+	// A genuinely-gone saved book falls back to the default start — but the
+	// still-valid REST of the history survives (dropping one dead entry must
+	// not erase the reader's whole trail; incident-hardening).
+	if hasSavedReading {
+		state.RecentChapters = restoreRecent(savedReading.Recent, bibleData,
+			defaultStartBook(bibleData), clampChapter(bibleData, defaultStartBook(bibleData), 1))
+	}
 	state.CurrentBook = defaultStartBook(bibleData)
 	state.CurrentChapter = 1
 	if chapters := bibleData.GetChapterNumbersForBook(state.CurrentBook); len(chapters) > 0 {
@@ -85,6 +99,37 @@ func loadStateData() (*AppState, error) {
 	}
 	addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
 	return state, nil
+}
+
+// loadStartupBible chooses the startup data without allowing partial data to
+// participate in a durable-state migration. cacheOnly/seed/full are parameters
+// so the safety policy can be regression-tested without network access.
+func loadStartupBible(
+	version BibleVersion,
+	hasSavedReading bool,
+	cacheOnly func(BibleVersion) (*BibleData, dataMode, error),
+	seed func() (*BibleData, error),
+	full func(BibleVersion, *BibleData) (*BibleData, dataMode, error),
+) (*BibleData, dataMode, bool, error) {
+	if data, mode, err := cacheOnly(version); err == nil {
+		return data, mode, false, nil
+	}
+
+	// A saved reading state means this is an upgrade/recovery, not a true first
+	// run. Fetch the full canon before restore; on an offline failure the loading
+	// screen may show Retry, but the durable history remains untouched.
+	if hasSavedReading {
+		data, mode, err := full(version, nil)
+		return data, mode, false, err
+	}
+
+	if data, err := seed(); err == nil {
+		return data, modeReal, true, nil
+	}
+
+	// Last resort for a genuinely new install if the embedded seed is unusable.
+	data, mode, err := full(version, nil)
+	return data, mode, false, err
 }
 
 // loadProgressFn, when non-nil, is called during the first-run API fetch

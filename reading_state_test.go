@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"errors"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -108,6 +109,39 @@ func TestApplyRestoredStateValid(t *testing.T) {
 	}
 }
 
+// TestApplyRestoredStateKeepsFullHistoryAfterCacheMigration covers the exact
+// upgrade regression: once complete data is available, visits across the canon
+// must survive restoration rather than being filtered as they were by the
+// Gospel-only seed.
+func TestApplyRestoredStateKeepsFullHistoryAfterCacheMigration(t *testing.T) {
+	full := fullValidBible()
+	state := &AppState{
+		Bible:          full,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: full},
+	}
+	rs := readingState{
+		Version: defaultVersionID, Book: "Genesis", Chapter: 1,
+		Recent: []ChapterVisit{
+			{Book: "Genesis", Chapter: 1},
+			{Book: "Psalms", Chapter: 1},
+			{Book: "Revelation", Chapter: 1},
+		},
+	}
+	if !applyRestoredState(state, rs, full) {
+		t.Fatal("full-canon saved state should restore")
+	}
+	if len(state.RecentChapters) != len(rs.Recent) {
+		t.Fatalf("restored history = %+v, want all %+v", state.RecentChapters, rs.Recent)
+	}
+	for i := range rs.Recent {
+		if state.RecentChapters[i].Book != rs.Recent[i].Book ||
+			state.RecentChapters[i].Chapter != rs.Recent[i].Chapter {
+			t.Fatalf("restored history[%d] = %+v, want %+v", i, state.RecentChapters[i], rs.Recent[i])
+		}
+	}
+}
+
 // TestApplyRestoredStatePrefersTouch verifies that WHEN THE FEATURE IS ON and the
 // last scroll recorded an initial-touch verse, reopen anchors on THAT verse
 // (brought to the top, delta 0) and marks it, in preference to the top-visible
@@ -185,6 +219,87 @@ func TestApplyRestoredStateInvalidBookFallsBack(t *testing.T) {
 	rs := readingState{Version: defaultVersionID, Book: "Nonexiston", Chapter: 1}
 	if applyRestoredState(state, rs, base) {
 		t.Error("a saved book that no longer exists must not restore (caller falls back)")
+	}
+}
+
+// TestApplyRestoredStateValidatesAgainstSavedTranslation protects readers of a
+// translation whose canon is wider than the default WEB canon. The saved
+// translation must be loaded before deciding that its saved book is invalid;
+// otherwise a WEBC reader in Tobit would be reset to the default start page.
+func TestApplyRestoredStateValidatesAgainstSavedTranslation(t *testing.T) {
+	origLoad := loadVersionForRestore
+	defer func() { loadVersionForRestore = origLoad }()
+
+	catholic := &BibleData{
+		Books: []string{"Tobit"},
+		Verses: map[string]map[int][]Verse{
+			"Tobit": {
+				1: {{BookName: "Tobit", Book: "Tobit", Chapter: 1, Verse: 1, Text: "Sample."}},
+			},
+		},
+	}
+	loadVersionForRestore = func(v BibleVersion, _ *BibleData) (*BibleData, dataMode, error) {
+		if v.ID != "webc" {
+			t.Fatalf("restore requested version %q, want webc", v.ID)
+		}
+		return catholic, modeReal, nil
+	}
+
+	base := fullValidBible() // canonical 66 only: deliberately excludes Tobit
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base},
+	}
+	rs := readingState{
+		Version: "webc", Book: "Tobit", Chapter: 1,
+		Recent: []ChapterVisit{{Book: "Tobit", Chapter: 1}},
+	}
+	if !applyRestoredState(state, rs, base) {
+		t.Fatal("saved WEBC state should restore against WEBC data even when WEB lacks the book")
+	}
+	if state.CurrentVersion != "webc" || state.CurrentBook != "Tobit" || state.CurrentChapter != 1 {
+		t.Fatalf("restored state = version %q %s %d, want webc Tobit 1",
+			state.CurrentVersion, state.CurrentBook, state.CurrentChapter)
+	}
+	if len(state.RecentChapters) != 1 || state.RecentChapters[0].Book != "Tobit" {
+		t.Fatalf("restored history = %+v, want Tobit 1", state.RecentChapters)
+	}
+}
+
+// A transient refresh failure for the saved translation must not degrade to a
+// different canon and then persist a pruned history. Startup can retry later;
+// the state object and durable preference must remain eligible for a full
+// restore.
+func TestRestoreReadingStateTranslationFailureDoesNotMutate(t *testing.T) {
+	origLoad := loadVersionForRestore
+	defer func() { loadVersionForRestore = origLoad }()
+	wantErr := errors.New("offline")
+	loadVersionForRestore = func(BibleVersion, *BibleData) (*BibleData, dataMode, error) {
+		return nil, modeReal, wantErr
+	}
+
+	base := fullValidBible()
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base},
+	}
+	rs := readingState{
+		Version: "webc", Book: "Genesis", Chapter: 1,
+		Recent: []ChapterVisit{
+			{Book: "Genesis", Chapter: 1},
+			{Book: "Tobit", Chapter: 1},
+		},
+	}
+	restored, err := restoreReadingState(state, rs, base)
+	if restored || !errors.Is(err, wantErr) {
+		t.Fatalf("restore = %v, %v; want false with %v", restored, err, wantErr)
+	}
+	if state.CurrentVersion != defaultVersionID || state.CurrentBook != "" ||
+		state.CurrentChapter != 0 || len(state.RecentChapters) != 0 {
+		t.Fatalf("failed restore mutated live state: version=%q %s %d recent=%+v",
+			state.CurrentVersion, state.CurrentBook, state.CurrentChapter, state.RecentChapters)
 	}
 }
 

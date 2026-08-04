@@ -47,7 +47,7 @@ func TestCachePathForVersion(t *testing.T) {
 	legacy := filepath.Join(dir, "bibletext-cache.json")
 	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
 
-	wantWEB := filepath.Join(dir, "bibletext-web-v1.json")
+	wantWEB := filepath.Join(dir, "bibletext-web-v2.json")
 	if got := cachePathForVersion("web"); got != wantWEB {
 		t.Errorf("web cache = %q, want %q", got, wantWEB)
 	}
@@ -56,9 +56,9 @@ func TestCachePathForVersion(t *testing.T) {
 		t.Errorf("nrsv cache = %q, want %q", got, wantNRSV)
 	}
 
-	// BSB carries a cacheEpoch (its decoder changed twice), so its cache path is
-	// versioned and stale v0/v1 caches are bypassed.
-	wantBSB := filepath.Join(dir, "bibletext-bsb-v2.json")
+	// BSB carries a cacheEpoch (its decoder has changed three times), so its
+	// cache path is versioned and stale pre-epoch caches are bypassed.
+	wantBSB := filepath.Join(dir, "bibletext-bsb-v3.json")
 	if got := cachePathForVersion("bsb"); got != wantBSB {
 		t.Errorf("bsb cache = %q, want %q", got, wantBSB)
 	}
@@ -74,9 +74,10 @@ func TestPurgeSupersededCaches(t *testing.T) {
 
 	stale := filepath.Join(dir, "bibletext-bsb.json")      // v0 (superseded)
 	staleV1 := filepath.Join(dir, "bibletext-bsb-v1.json") // v1 (superseded)
-	current := filepath.Join(dir, "bibletext-bsb-v2.json") // v2 (active)
+	staleV2 := filepath.Join(dir, "bibletext-bsb-v2.json") // v2 (superseded)
+	current := filepath.Join(dir, "bibletext-bsb-v3.json") // v3 (active)
 	web := legacy                                          // web cache (other version)
-	for _, p := range []string{stale, staleV1, current, web} {
+	for _, p := range []string{stale, staleV1, staleV2, current, web} {
 		if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -91,8 +92,11 @@ func TestPurgeSupersededCaches(t *testing.T) {
 	if _, err := os.Stat(staleV1); !os.IsNotExist(err) {
 		t.Errorf("stale v1 cache should have been removed (err=%v)", err)
 	}
+	if _, err := os.Stat(staleV2); !os.IsNotExist(err) {
+		t.Errorf("stale v2 cache should have been removed (err=%v)", err)
+	}
 	if _, err := os.Stat(current); err != nil {
-		t.Errorf("current v1 cache must be kept: %v", err)
+		t.Errorf("current-epoch cache must be kept: %v", err)
 	}
 	if _, err := os.Stat(web); err != nil {
 		t.Errorf("other version's (web) cache must be untouched: %v", err)
