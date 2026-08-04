@@ -137,6 +137,64 @@ plutil -lint "$APP/Info.plist" "$APP/PrivacyInfo.xcprivacy" >/dev/null
 # iPhone-only upload would be rejected now that 1.1.0 is out.
 if [ "${BIBLETEXT_IPAD:-1}" != "0" ]; then
     plutil -replace UIDeviceFamily -json '[1, 2]' "$APP/Info.plist"
+    # REBUILD THE ICON ASSET CATALOG. fyne's iOS packager emits only
+    # 120/180/152/76 and no iPad Pro icon, so App Store Connect rejects the
+    # upload with error 90023 ("no app icon for iPad of exactly '167x167'").
+    # Adding a loose PNG + CFBundleIconFiles entry is NOT enough: the bundle
+    # sets CFBundleIconName, which points the validator at Assets.car, so the
+    # catalog itself must carry the full set. Regenerate it with actool from
+    # the single 1024px source (cmd/mobile/Icon.png).
+    note "rebuilding the icon asset catalog (adds the 167x167 iPad Pro icon)"
+    ICONSET="$WORK/Assets.xcassets/AppIcon.appiconset"
+    # actool needs BOTH the catalog's own root Contents.json and a pre-existing
+    # output directory — without either it exits 0 having produced nothing.
+    mkdir -p "$ICONSET" "$WORK/carout"
+    printf '{"info":{"version":1,"author":"bibletext"}}' > "$WORK/Assets.xcassets/Contents.json"
+    icon_json="" ; icon_sep=""
+    # px, slot-name, idiom, size(pt), scale. 120px appears TWICE (iPhone 40pt@3x
+    # and 60pt@2x), so each slot gets its own filename rather than being keyed
+    # by pixel size.
+    add_icon() {
+        sips -s format png -z "$1" "$1" "$APP_DIR/Icon.png" --out "$ICONSET/$2.png" >/dev/null 2>&1 \
+            || fail "could not scale the app icon to $1px"
+        icon_json="$icon_json$icon_sep{\"filename\":\"$2.png\",\"idiom\":\"$3\",\"size\":\"$4\",\"scale\":\"$5\"}"
+        icon_sep=","
+    }
+    add_icon 40   ip20x2   iphone 20x20     2x
+    add_icon 60   ip20x3   iphone 20x20     3x
+    add_icon 58   ip29x2   iphone 29x29     2x
+    add_icon 87   ip29x3   iphone 29x29     3x
+    add_icon 80   ip40x2   iphone 40x40     2x
+    add_icon 120  ip40x3   iphone 40x40     3x
+    add_icon 120  ip60x2   iphone 60x60     2x
+    add_icon 180  ip60x3   iphone 60x60     3x
+    add_icon 20   pad20x1  ipad   20x20     1x
+    add_icon 40   pad20x2  ipad   20x20     2x
+    add_icon 29   pad29x1  ipad   29x29     1x
+    add_icon 58   pad29x2  ipad   29x29     2x
+    add_icon 40   pad40x1  ipad   40x40     1x
+    add_icon 80   pad40x2  ipad   40x40     2x
+    add_icon 76   pad76x1  ipad   76x76     1x
+    add_icon 152  pad76x2  ipad   76x76     2x
+    add_icon 167  pad83x2  ipad   83.5x83.5 2x
+    add_icon 1024 marketing ios-marketing 1024x1024 1x
+    printf '{"images":[%s],"info":{"version":1,"author":"bibletext"}}' "$icon_json" > "$ICONSET/Contents.json"
+    # NB: `plutil -lint` cannot parse JSON (it reports "Unexpected character {"),
+    # so validate as actual JSON.
+    python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$ICONSET/Contents.json" \
+        || fail "generated Contents.json is invalid"
+    xcrun actool "$WORK/Assets.xcassets" --compile "$WORK/carout" --platform iphoneos \
+        --minimum-deployment-target "$IOS_MIN" --app-icon AppIcon \
+        --target-device iphone --target-device ipad \
+        --output-partial-info-plist "$WORK/icon-partial.plist" >/dev/null 2>&1 \
+        || fail "actool could not compile the icon asset catalog"
+    [ -f "$WORK/carout/Assets.car" ] || fail "actool produced no Assets.car"
+    cp "$WORK/carout/Assets.car" "$APP/Assets.car"
+    # Ship the 167 loose too (belt and braces for pre-catalog OS versions).
+    cp "$ICONSET/pad83x2.png" "$APP/AppIcon83.5x83.5@2x~ipad.png"
+    if ! PB 'Print :CFBundleIcons~ipad:CFBundlePrimaryIcon:CFBundleIconFiles' 2>/dev/null | grep -q 'AppIcon83.5x83.5'; then
+        PB 'Add :CFBundleIcons~ipad:CFBundlePrimaryIcon:CFBundleIconFiles: string AppIcon83.5x83.5'
+    fi
 else
     PB "Delete :UIDeviceFamily" 2>/dev/null || true
     PB "Add :UIDeviceFamily array"
