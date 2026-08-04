@@ -158,14 +158,25 @@ func showAISettings(state *AppState) {
 
 		saveOK := true
 		refreshStatus := func() {
+			savedLabel := "✓ Saved on this device."
+			if store != nil && store.secrets != nil {
+				savedLabel = "✓ Saved securely in the device keychain."
+			}
 			if strings.TrimSpace(entry.Text) != "" {
 				if saveOK {
-					status.Text = "✓ Saved securely on this device."
+					status.Text = savedLabel
 					status.Color = pal.Accent
 				} else {
 					status.Text = "Couldn't save this key securely. Please try again."
 					status.Color = theme.Color(theme.ColorNameError)
 				}
+				clearBtn.Enable()
+			} else if !saveOK {
+				// The Clear tapped but the credential-store delete FAILED: say
+				// so — a reader who believes a key is gone when it isn't has a
+				// false sense of removal (the implementation requirement).
+				status.Text = "Couldn't remove the stored key. Please try again."
+				status.Color = theme.Color(theme.ColorNameError)
 				clearBtn.Enable()
 			} else {
 				status.Text = info.KeyHint

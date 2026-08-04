@@ -1,4 +1,12 @@
-//go:build darwin
+//go:build ios
+
+// iOS-ONLY on purpose (the implementation requirement): macOS release builds ship AD-HOC
+// signed (release.yml runs bare `fyne package -os darwin`, no Developer ID),
+// so the login keychain ACL binds to a code hash that changes EVERY update —
+// after which reads prompt scarily or fail as errSecAuthFailed, and since
+// migration removed the Preferences copy the user's key would silently
+// vanish. Desktop therefore stays on fyne.Preferences until the app ships
+// with a stable signing identity.
 
 package bibletext
 
@@ -48,6 +56,7 @@ static int btAIKeychainWrite(const char *accountUTF8, const char *valueUTF8) {
         if (accountUTF8 == NULL || valueUTF8 == NULL) return 0;
         NSString *account = [NSString stringWithUTF8String:accountUTF8];
         NSString *value = [NSString stringWithUTF8String:valueUTF8];
+        if (account == nil || value == nil) return 0; // invalid UTF-8 payload
         NSDictionary *query = @{
             (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
             (__bridge id)kSecAttrService: btAIKeychainService(),
@@ -81,15 +90,22 @@ type appleKeychainStore struct{}
 
 func newPlatformSecretStore() secretStore { return appleKeychainStore{} }
 
-func (appleKeychainStore) Read(account string) (string, bool) {
+func (appleKeychainStore) Read(account string) (string, bool, bool) {
 	ca := C.CString(account)
 	defer C.free(unsafe.Pointer(ca))
 	var cv *C.char
-	if C.btAIKeychainRead(ca, &cv) != 1 || cv == nil {
-		return "", false
+	switch C.btAIKeychainRead(ca, &cv) {
+	case 1:
+		if cv == nil {
+			return "", false, false // defensive: found but no payload → treat as store error
+		}
+		defer C.free(unsafe.Pointer(cv))
+		return C.GoString(cv), true, true
+	case 0:
+		return "", false, true // definitively absent
+	default:
+		return "", false, false // Keychain error — caller keeps legacy copy, retries later
 	}
-	defer C.free(unsafe.Pointer(cv))
-	return C.GoString(cv), true
 }
 
 func (appleKeychainStore) Write(account, value string) bool {

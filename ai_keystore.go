@@ -24,7 +24,12 @@ type prefStore interface {
 // return nil from newPlatformSecretStore and retain the existing Preferences
 // storage until they gain an equivalent native credential-store adapter.
 type secretStore interface {
-	Read(account string) (string, bool)
+	// Read returns (value, found, ok). ok=false means the credential store
+	// itself failed (transient Keychain error) — CALLERS MUST NOT treat that
+	// as "no key": the legacy fallback below keeps working and the migration
+	// erase is skipped, so nothing user-entered is ever stranded or lost.
+	Read(account string) (value string, found, ok bool)
+	// Write with an empty value deletes the item.
 	Write(account, value string) bool
 }
 
@@ -54,9 +59,25 @@ const (
 // (no app yet / unit tests) whose getters yield defaults and setters no-op.
 func newKeyStore() *keyStore {
 	if app := fyne.CurrentApp(); app != nil {
-		return &keyStore{prefs: app.Preferences(), secrets: newPlatformSecretStore()}
+		k := &keyStore{prefs: app.Preferences(), secrets: newPlatformSecretStore()}
+		k.migrateAllKeys()
+		return k
 	}
 	return &keyStore{}
+}
+
+// migrateAllKeys sweeps EVERY provider's pre-1.1.6 Preferences key into the
+// credential store up front (the implementation requirement: the lazy per-provider migration
+// left non-selected providers' keys in plaintext Preferences indefinitely).
+// apiKey carries the same logic per read; this just runs it for each provider
+// once at startup. Errors leave the legacy copy in place for the next try.
+func (k *keyStore) migrateAllKeys() {
+	if k == nil || k.prefs == nil || k.secrets == nil {
+		return
+	}
+	for _, p := range aiProviders() {
+		k.apiKey(p.ID)
+	}
 }
 
 func newKeyStoreWith(p prefStore) *keyStore { return &keyStore{prefs: p} }
@@ -107,13 +128,17 @@ func (k *keyStore) apiKey(id string) string {
 		return ""
 	}
 	if k.secrets != nil {
-		if key, ok := k.secrets.Read(id); ok {
+		key, found, ok := k.secrets.Read(id)
+		if ok && found {
 			return strings.TrimSpace(key)
 		}
 		// Builds before 1.1.6 stored keys in Preferences. Move that value into
-		// Keychain on first access, then erase the unencrypted legacy copy.
+		// Keychain on first access, then erase the unencrypted legacy copy —
+		// but ONLY on a definitive not-found (ok && !found): after a store
+		// ERROR the item may exist and be temporarily unreadable, so neither
+		// migrate nor erase; serve the legacy copy and try again next call.
 		legacy := strings.TrimSpace(k.prefs.String(prefKeyPrefix + id))
-		if legacy != "" && k.secrets.Write(id, legacy) {
+		if ok && legacy != "" && k.secrets.Write(id, legacy) {
 			k.prefs.SetString(prefKeyPrefix+id, "")
 		}
 		return legacy
