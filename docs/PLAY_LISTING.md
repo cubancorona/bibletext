@@ -18,7 +18,7 @@ Graphics are in [`docs/play-assets/`](play-assets/). Build to upload:
 | Category | Books & Reference |
 | Tags | Bible, Reference |
 | Contact email | the address on the Play account (Apple side uses [redacted-private-email]) |
-| Website | `https://github.com/cubancorona/bibletext` |
+| Website | `https://bibletext.co.uk/` |
 | Privacy policy URL | `https://bibletext.co.uk/privacy.html` |
 | Support page (optional) | `https://bibletext.co.uk/support.html` |
 
@@ -37,9 +37,20 @@ Graphics are in [`docs/play-assets/`](play-assets/). Build to upload:
 >   deuterocanonical books, and the Berean Standard Bible (BSB) — complete,
 >   modern, public-domain translations
 > • Comfortable typography with adjustable text size, light and dark mode
+> • Poetry set as poetry — Psalms, Proverbs, Job and the prophets in their
+>   authored verse lines, one line per line, as in print
+> • The words of Jesus in red (on by default; switchable in Settings)
 > • Chapter-by-chapter navigation, a recent-chapters bar, and a Go-to box
 >   that jumps straight to any reference like John 3:16
 > • Works offline after the first download
+>
+> LISTEN
+> • Complete human-recorded narration for every chapter, or your device
+>   reading the page aloud
+> • Verses highlight as they are read, and playback rolls on into the next
+>   chapter
+> • Keeps playing with the screen off, with lock-screen and notification
+>   controls and ±15-second skip
 >
 > SEARCH
 > • Instant search across all 31,000+ verses as you type
@@ -136,8 +147,12 @@ user-to-user content, so answer "No" to the UGC question.
   the system setting).
 - Kill the app and reopen: it should restore your exact reading position,
   and load instantly (no re-download).
-- Note: audio narration / read-along is an iOS-only feature for now — it is
-  expected to be absent on Android.
+- Audio: tap the speaker in the reading header — a recorded narration where one
+  exists, otherwise your device reading aloud. Check ±15s skip, the "Follow
+  narration" pill, chapter rollover, and that playback continues with the screen
+  off, with lock-screen / notification transport controls.
+- Poetry: open Psalms 23 or Job 6 — each authored poem line should begin its own
+  line, and a shared or copied passage should keep those lines.
 
 ## Play Console flow (the parts only a human can do)
 

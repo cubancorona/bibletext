@@ -26,9 +26,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nmacOS note: the apps are unsigned - on first launch, right-click the app and choose Open.')"
+          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nThe Android APK is attached manually after the desktop assets land.\n\nmacOS note: the apps are unsigned - on first launch, right-click the app and choose Open.')"
+          # --draft is load-bearing: publishing immediately reassigns
+          # /releases/latest to this tag while the build jobs are still running,
+          # so the download page's links 404 until every asset lands (observed
+          # live on v1.1.6 — the Android APK link was dead for ~1 hour). The
+          # release is published by hand once all five assets are attached:
+          #   gh release upload <tag> BibleText-Android.apk --clobber
+          #   gh release edit   <tag> --draft=false
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
           gh release create "${GITHUB_REF_NAME}" \
+            --draft \
             --title "BibleText ${GITHUB_REF_NAME#v}" \
             --notes "$NOTES"
 

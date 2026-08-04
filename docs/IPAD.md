@@ -146,8 +146,9 @@ iPad Pro 13-inch simulator produces the right 2064×2752 PNGs directly, no bezel
   keyboard-height rebuild loop — see the CRITICAL note on `layoutWatcher.Resize`
   in `ui_regular.go`); the compact (iPhone) layout unregressed. Plus
   `classifyLayout` / `regularSplitOffset` unit tests, `-race` suite, `go vet`,
-  iOS + Android cross-compile. Shipped: every release since 1.1.0 is universal; the reporter reading layout ships in 1.1.5
-  are live on the App Store.
+  iOS + Android cross-compile. Shipped: every release since 1.1.0 is universal,
+  and the reporter reading layout has shipped since 1.1.5; 1.1.5 is live on the
+  App Store and 1.1.6 (build 124) is in review.
 - **Not yet runtime-verified (covered by unit tests + logic):** the
   compact↔regular breakpoint crossing on a live Split-View / Stage-Manager resize;
   hardware-keyboard shortcuts on iPad (not wired — the desktop `Cmd-F` / `Esc`
