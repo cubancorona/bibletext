@@ -427,8 +427,13 @@ func chapterRenderFingerprint(state *AppState) string {
 	if state.HasHighlightedVerse {
 		hl = fmt.Sprintf("%s:%d:%d-%d", state.HighlightedBook, state.HighlightedChapter, state.HighlightedVerse, state.HighlightedVerseEnd)
 	}
-	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s",
-		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID())
+	// state.Bible's pointer identity is part of the fingerprint: a background
+	// data swap (the Gospels-seed → full download, or the stale-epoch refresh)
+	// changes the TEXT without changing version/book/chapter, and the gate
+	// must not skip that re-render — the reader would keep the old decode
+	// (e.g. flattened poetry) until their next navigation.
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s|d%p",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID(), state.Bible)
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------

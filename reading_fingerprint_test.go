@@ -28,6 +28,10 @@ func TestChapterRenderFingerprintChangesOnNavigation(t *testing.T) {
 		{"chapter", func(s *AppState) { s.CurrentChapter = 4 }},
 		{"book", func(s *AppState) { s.CurrentBook = "Mark" }},
 		{"version", func(s *AppState) { s.CurrentVersion = "nrsv" }},
+		// A background data swap (seed→full, stale-epoch refresh) changes the
+		// text under an UNCHANGED version/book/chapter — found live when the
+		// epoch upgrade landed but the overlay kept showing flattened poetry.
+		{"data swap", func(s *AppState) { s.Bible = &BibleData{} }},
 		{"highlight on", func(s *AppState) {
 			s.HasHighlightedVerse = true
 			s.HighlightedBook = "John"

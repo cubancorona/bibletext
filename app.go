@@ -68,7 +68,13 @@ func loadStateData() (*AppState, error) {
 		loadedVersions: map[string]*BibleData{version.ID: bibleData},
 		Annotations:    NewAnnotationStore(),
 		loadPhase:      loadReady,
-		fullPending:    seeded,
+		// The background refresh runs when boot was served by the Gospels seed
+		// OR by a superseded-epoch cache (the migration fallback): either way
+		// the displayed text is not the current decoder's output, and
+		// triggerFullDownload upgrades it in place. Without the stale-epoch
+		// half, an epoch bump would be inert for every existing reader — the
+		// fallback would serve the old decode forever.
+		fullPending: seeded || !versionCacheIsCurrent(version),
 	}
 
 	// Reopen exactly where the reader left off — translation, book, chapter, the
@@ -205,20 +211,26 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 	}()
 }
 
-// triggerFullDownload fetches the complete default-version Bible in the background after
-// the app opened on the embedded Gospels seed (loadStateData), then swaps the full text
-// into the live state on the UI thread. It is resilient + self-healing: a single-flight
+// triggerFullDownload fetches the complete current-version Bible in the background after
+// the app opened on the embedded Gospels seed OR on a superseded-epoch cache
+// (loadStateData sets fullPending for both), then swaps the fresh text into the
+// live state on the UI thread. It is resilient + self-healing: a single-flight
 // guard (fullDownloading) prevents overlapping fetches, and on failure it auto-retries
 // after a short delay — so a stalled, dropped, or backgrounded download can't leave the
-// reader permanently stuck on the Gospels. The app-foreground hook and a manual retry
+// reader permanently stuck on stale text. The app-foreground hook and a manual retry
 // also funnel through here. MUST be called on the Fyne UI goroutine.
 func triggerFullDownload(state *AppState) {
 	if state == nil || state.stopping.Load() || !state.fullPending || state.fullDownloading {
 		return
 	}
 	state.fullDownloading = true
+	// Resolve the version on the UI goroutine (CurrentVersion is UI-owned
+	// state); the worker goroutine only uses the copy.
+	version, ok := versionByID(state.CurrentVersion)
+	if !ok {
+		version, _ = versionByID(defaultVersionID)
+	}
 	go func() {
-		version, _ := versionByID(defaultVersionID)
 		full, mode, err := loadVersionData(version, nil) // one helloao request; caches on success
 		fyne.Do(func() {
 			state.fullDownloading = false
