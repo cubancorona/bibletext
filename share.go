@@ -198,6 +198,7 @@ func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 	var b strings.Builder
 	var breaks []shareTextBreak
+	prevPoetic := false
 	for paragraphIndex, paragraph := range groupVersesIntoParagraphs(verses) {
 		wroteInParagraph := false
 		for _, verse := range paragraph {
@@ -205,10 +206,18 @@ func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
 			if text == "" {
 				continue
 			}
+			// A verse whose text carries poem line breaks is poetic. In print,
+			// every verse boundary inside a poem is also a line boundary, so a
+			// join touching a poetic verse restores as "\n" (a paragraph break
+			// still wins with "\n\n"). Limitation: a verse that is exactly ONE
+			// poem line decodes with no internal break and reads as prose here.
+			curPoetic := len(verseBreaks) > 0
 			if b.Len() > 0 {
 				replacement := ""
 				if paragraphIndex > 0 && !wroteInParagraph {
 					replacement = "\n\n"
+				} else if prevPoetic || curPoetic {
+					replacement = "\n"
 				}
 				if replacement != "" {
 					breaks = append(breaks, shareTextBreak{offset: b.Len(), replacement: replacement})
@@ -224,6 +233,7 @@ func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
 				})
 			}
 			wroteInParagraph = true
+			prevPoetic = curPoetic
 		}
 	}
 	return b.String(), breaks
@@ -550,7 +560,10 @@ const blockQuoteWords = 50
 //     correctly gets ONE set of plain double marks — Rule 5.2(f)(i): omit the
 //     enclosing internal marks when the whole quotation is itself a quotation.
 //
-// Documented deviations (deliberate, for a chat/card medium): a third nesting
+// Documented deviations (deliberate, for a chat/card medium): paragraph/line
+// structure is preserved only on the TEXT share path (restoreShareLineBreaks) —
+// the image card still flattens (Rule 5.1(a)(iii) would keep it in 50+ word
+// blocks); a third nesting
 // level is not re-alternated back to double (5.1(b)(i)) —
 // the closing single glyph ’ doubles as the apostrophe, so auto-flipping is
 // unreliable; and the card centers its citation rather than starting it at the
