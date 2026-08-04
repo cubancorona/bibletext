@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	fynetest "fyne.io/fyne/v2/test"
 )
 
 func TestVersionRegistry(t *testing.T) {
@@ -283,5 +285,61 @@ func TestSwitchVersionRefusesUnselectable(t *testing.T) {
 	switchVersion(state, "nrsv")
 	if state.CurrentVersion != "web" || state.Bible != base {
 		t.Errorf("switch to an unlicensed version should be a no-op; got version=%q", state.CurrentVersion)
+	}
+}
+
+func TestVersionCacheIsCurrent(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "bibletext-cache.json")
+	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
+
+	web, _ := versionByID("web")
+	if versionCacheIsCurrent(web) {
+		t.Error("no cache files at all → not current")
+	}
+	if err := os.WriteFile(legacy, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if versionCacheIsCurrent(web) {
+		t.Error("the legacy (epoch-0) file must NOT count as web's current epoch")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bibletext-web-v2.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !versionCacheIsCurrent(web) {
+		t.Error("the v2 file is web's current epoch")
+	}
+}
+
+// TestStartupStaleEpochSchedulesRefresh pins the OTHER half of the epoch
+// migration: booting from a superseded cache must not only keep the reader's
+// text and history (the fallback) — it must also mark fullPending so
+// triggerFullDownload upgrades the stored text to the current decoder.
+// Without it an epoch bump is inert for every existing reader.
+func TestStartupStaleEpochSchedulesRefresh(t *testing.T) {
+	app := fynetest.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "bibletext-cache.json")
+	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
+
+	seed, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, _, err := loadBibleData(func() (*BibleData, error) { return seed, nil }, legacy, currentUTCTime); err != nil {
+		t.Fatalf("writing the legacy cache: %v", err)
+	}
+
+	state, err := loadStateData()
+	if err != nil {
+		t.Fatalf("loadStateData: %v", err)
+	}
+	if state.Bible == nil || state.Bible.Verses["John"] == nil {
+		t.Fatal("boot must serve the fallback cache's text")
+	}
+	if !state.fullPending {
+		t.Error("a superseded-epoch boot must schedule the background refresh (fullPending)")
 	}
 }

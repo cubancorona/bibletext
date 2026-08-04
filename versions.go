@@ -319,6 +319,17 @@ func cachePathForVersion(id string) string {
 	return filepath.Join(filepath.Dir(base), name+".json")
 }
 
+// versionCacheIsCurrent reports whether v's CURRENT-epoch cache file exists on
+// disk. False right after a cacheEpoch bump, when startup was served by the
+// superseded-cache fallback (loadVersionFromCacheOnly) — the caller then
+// schedules the background refetch that upgrades the stored text to the
+// current decoder (triggerFullDownload). Every other load path goes through
+// loadVersionData, which is cache-current-or-fetch and self-heals.
+func versionCacheIsCurrent(v BibleVersion) bool {
+	_, err := os.Stat(cachePathForVersion(v.ID))
+	return err == nil
+}
+
 // purgeSupersededCaches best-effort removes cache files written by older
 // cacheEpochs of v, so a bumped decoder doesn't strand a stale (multi-MB) cache.
 // It only ever targets THIS version's own earlier epochs — never the current
