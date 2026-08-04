@@ -28,6 +28,7 @@ package bibletext
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -272,8 +273,9 @@ func writeReadingStateSeq(p prefStore, snap readingState, seq uint64) {
 // Used from the native scroll-end callback; the lifecycle hooks use the
 // synchronous flushReadingState (the write must finish before the app suspends).
 func flushReadingStateAsync(s *AppState) {
-	if s == nil {
-		return
+	if s == nil || s.loadPhase != loadReady || s.CurrentBook == "" {
+		return // same jetsam/loading guard as flushReadingState: a stray
+		// scroll-end during load must not overwrite the saved position
 	}
 	p := appPrefs()
 	snap := captureSnapshot(s, p) // also refreshes the current history entry's anchor
@@ -287,38 +289,68 @@ func flushReadingStateAsync(s *AppState) {
 	}()
 }
 
-// applyRestoredState validates a persisted state against the loaded Bible and,
-// if usable, sets the version/book/chapter/history on state and stashes a
-// pending scroll restore. Returns false when the saved book no longer exists, so
-// the caller falls back to the default start position. base is the
-// already-loaded default translation's data.
+// loadVersionForRestore is indirected so tests can prove that a saved
+// translation is loaded before its wider canon is validated without making a
+// network request.
+var loadVersionForRestore = loadVersionData
+
+// applyRestoredState is the bool-only test/helper surface. Production startup
+// uses restoreReadingState so a transient saved-translation load error can keep
+// the loading screen on Retry rather than falling back and pruning history.
 func applyRestoredState(state *AppState, rs readingState, base *BibleData) bool {
-	if base == nil || base.GetChaptersForBook(rs.Book) == 0 {
-		return false
+	restored, _ := restoreReadingState(state, rs, base)
+	return restored
+}
+
+// restoreReadingState validates a persisted state against the loaded Bible and,
+// if usable, sets the version/book/chapter/history on state and stashes a
+// pending scroll restore. It returns (false, nil) when the saved book genuinely
+// no longer exists, so the caller may establish a fresh default. A transient
+// error loading the saved translation is returned instead: callers must not
+// fall back and overwrite durable history in that case. base is the already-
+// loaded default translation's data.
+func restoreReadingState(state *AppState, rs readingState, base *BibleData) (bool, error) {
+	if base == nil {
+		return false, nil
 	}
 	bible := base
+	versionID := state.CurrentVersion
+	mode := state.currentMode
 	book := rs.Book
-	chapter := clampChapter(bible, book, rs.Chapter)
 
-	// Best-effort translation restore. Only the default is selectable today, so
-	// this branch is dormant until other versions are licensed; it must never
-	// fail the whole restore (fall through to the default version on any error).
+	// Saved-translation restore. A load ERROR aborts the whole restore (returned
+	// to the caller, which keeps the loading screen on Retry): validating durable
+	// history against the WRONG canon is exactly how the deuterocanon history of
+	// a WEBC reader would be silently pruned by the 66-book base. Only a nil
+	// data result (version genuinely unavailable) falls through to the default
+	// canon, where the saved book may still legitimately exist.
 	if rs.Version != "" && rs.Version != state.CurrentVersion {
 		if v, ok := versionByID(rs.Version); ok && v.canSelect() {
-			if data, mode, err := loadVersionData(v, base); err == nil && data != nil &&
-				data.GetChaptersForBook(book) > 0 {
-				bible = data
-				state.Bible = data
-				state.CurrentVersion = v.ID
-				state.currentMode = mode
-				if state.loadedVersions == nil {
-					state.loadedVersions = map[string]*BibleData{}
-				}
-				state.loadedVersions[v.ID] = data
-				chapter = clampChapter(bible, book, rs.Chapter)
+			data, loadedMode, err := loadVersionForRestore(v, base)
+			if err != nil {
+				return false, fmt.Errorf("restore saved %s reading state: %w", v.ID, err)
+			}
+			if data != nil {
+				bible, versionID, mode = data, v.ID, loadedMode
 			}
 		}
 	}
+
+	// Validate only after the saved translation has had a chance to load. This is
+	// essential for wider canons such as WEBC: Tobit is absent from WEB but valid
+	// in the translation that owns the saved history.
+	if bible.GetChaptersForBook(book) == 0 {
+		return false, nil
+	}
+	chapter := clampChapter(bible, book, rs.Chapter)
+
+	state.Bible = bible
+	state.CurrentVersion = versionID
+	state.currentMode = mode
+	if state.loadedVersions == nil {
+		state.loadedVersions = map[string]*BibleData{}
+	}
+	state.loadedVersions[versionID] = bible
 
 	state.CurrentBook = book
 	state.CurrentChapter = chapter
@@ -341,7 +373,7 @@ func applyRestoredState(state *AppState, rs readingState, base *BibleData) bool 
 		}
 		state.restore = a
 	}
-	return true
+	return true, nil
 }
 
 // clampChapter keeps a chapter valid for the book (all translations share the

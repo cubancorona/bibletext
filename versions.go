@@ -74,16 +74,17 @@ var registeredVersions = []BibleVersion{
 	{
 		ID: "web", Name: "World English Bible", Abbrev: "WEB",
 		Publisher: "Public Domain", PublicDomain: true,
-		// epoch 1: retain source-authored line breaks for cited text shares.
-		cacheEpoch: 1,
+		// epoch 2: poem-clause line breaks (epoch 1, unreleased, had inert
+		// lineBreak-only retention — folded into this bump).
+		cacheEpoch: 2,
 		source:     webSource{},
 	},
 	{
 		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
 		Publisher: "Public Domain (CC0)", PublicDomain: true,
-		// epoch 2: retain source-authored line breaks. Epoch 1 fixed punctuation
-		// spacing around helloao content boundaries (see bsbVerseText).
-		cacheEpoch: 2,
+		// epoch 3: poem-clause line breaks (epoch 2, unreleased, was inert).
+		// Epoch 1 fixed punctuation spacing around helloao boundaries.
+		cacheEpoch: 3,
 		source:     bsbSource{},
 	},
 	{
@@ -91,7 +92,7 @@ var registeredVersions = []BibleVersion{
 		Publisher: "Public Domain", PublicDomain: true,
 		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
 		// USFM id into traditional Catholic order — see catholic.go.
-		cacheEpoch: 1,
+		cacheEpoch: 2, // epoch 2: poem-clause line breaks (epoch 1 unreleased/inert)
 		source:     webCatholicSource{},
 	},
 	{
@@ -227,20 +228,38 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 	if v.source == nil || !v.source.available() {
 		return nil, modeTesting, errCacheNotFound
 	}
-	data, _, err := loadBibleData(func() (*BibleData, error) { return nil, errCacheNotFound }, cachePathForVersion(v.ID), currentUTCTime)
-	if err != nil {
-		return nil, modeReal, err
+	noFetch := func() (*BibleData, error) { return nil, errCacheNotFound }
+	data, _, err := loadBibleData(noFetch, cachePathForVersion(v.ID), currentUTCTime)
+	if err == nil {
+		return data, modeReal, nil
 	}
-	return data, modeReal, nil
+	// EPOCH-MIGRATION FALLBACK (incident-hardening): a cacheEpoch bump moves the
+	// cache to a new filename, so the first post-update launch misses here even
+	// though a complete, valid old-epoch cache sits on disk. Read the superseded
+	// paths rather than pretending the reader has no Bible — an offline upgrader
+	// keeps their full canon (old decoder output) and their reading history,
+	// and the background refetch upgrades the text when the network returns.
+	// This is the data-layer root of the history-erasure incident: the miss
+	// used to drop startup to the Gospels seed, whose 4-book canon made every
+	// saved non-Gospel position look invalid.
+	for _, path := range supersededCachePaths(v) {
+		if data, _, err := loadBibleData(noFetch, path, currentUTCTime); err == nil {
+			return data, modeReal, nil
+		}
+	}
+	return nil, modeReal, errCacheNotFound
 }
 
 func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 	if v.source != nil && v.source.available() {
-		purgeSupersededCaches(v) // drop pre-epoch cache files (best-effort)
 		data, _, err := loadBibleData(v.source.fetch, cachePathForVersion(v.ID), currentUTCTime)
 		if err != nil {
 			return nil, modeReal, err
 		}
+		// Purge pre-epoch cache files only AFTER the current-epoch cache exists
+		// (incident-hardening): purging first destroyed the reader's only local
+		// copy of the translation and only then discovered the network was down.
+		purgeSupersededCaches(v)
 		return data, modeReal, nil
 	}
 	if base == nil {
@@ -306,17 +325,34 @@ func cachePathForVersion(id string) string {
 // epoch's file, never another version's — so it cannot drop live data. iOS may
 // evict Library/Caches on its own; this just keeps the directory tidy.
 func purgeSupersededCaches(v BibleVersion) {
-	if v.cacheEpoch <= 0 || v.ID == defaultVersionID {
-		return
+	for _, path := range supersededCachePaths(v) {
+		_ = os.Remove(path)
+	}
+}
+
+// supersededCachePaths lists v's earlier-epoch cache files, NEWEST first (the
+// migration fallback prefers the most recent decode; the purge removes all).
+// The default translation's epoch-0 file is the legacy defaultCachePath()
+// itself — included so an epoch bump can both read it on migration and clean
+// it up afterwards (it was previously never purged: ~6 MB stranded per user).
+func supersededCachePaths(v BibleVersion) []string {
+	if v.cacheEpoch <= 0 {
+		return nil
 	}
 	dir := filepath.Dir(defaultCachePath())
-	for k := 0; k < v.cacheEpoch; k++ {
+	var paths []string
+	for k := v.cacheEpoch - 1; k >= 0; k-- {
+		if k == 0 && v.ID == defaultVersionID {
+			paths = append(paths, defaultCachePath())
+			continue
+		}
 		name := "bibletext-" + v.ID
 		if k > 0 {
 			name += fmt.Sprintf("-v%d", k)
 		}
-		_ = os.Remove(filepath.Join(dir, name+".json"))
+		paths = append(paths, filepath.Join(dir, name+".json"))
 	}
+	return paths
 }
 
 // --- Switching --------------------------------------------------------------
