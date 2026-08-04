@@ -61,7 +61,7 @@ ignored by Git). The prepared English (UK) values are:
 - Promotional text: the current private, bring-your-own-key summary
 - Description: covers WEB, WEB Catholic, BSB, search, optional AI study, audio,
   iPad, offline use, no ads, and no accounts
-- Keywords: 95 characters (within the 100-character limit)
+- Keywords: 94 characters (within the 100-character limit)
 - Support URL: <https://bibletext.co.uk/support.html>
 - Marketing URL: <https://bibletext.co.uk/>
 - Privacy URL: <https://bibletext.co.uk/privacy.html>
@@ -115,9 +115,6 @@ same conservative disclosure as the bundled privacy manifest:
 
 | Data type | Linked to the user | Tracking | Purpose |
 | --- | --- | --- | --- |
-| User ID | Yes | No | App Functionality |
-| Search History | Yes | No | App Functionality |
-| Product Interaction | Yes | No | App Functionality |
 
 The rationale is that the user's API key authenticates a provider account, and a
 Find query, or a selected passage and AI study action, leaves the device. The

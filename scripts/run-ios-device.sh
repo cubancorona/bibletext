@@ -150,6 +150,14 @@ plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 note "adding NSPhotoLibraryAddUsageDescription (share-sheet Save Image)"
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
 
+# App Store parity (audit finding): the release build deletes UIRequiresFullScreen
+# (iPad multitasking) and compiles the launch storyboard — the smoke builds must
+# match, or Split View/Stage Manager resizing ships untested.
+PBX() { /usr/libexec/PlistBuddy -c "$1" "$APPPLIST" 2>/dev/null || true; }
+APPPLIST="$APP/Info.plist"
+PBX "Delete :UIRequiresFullScreen"
+xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" >/dev/null
+
 # Keep real-device smoke builds structurally identical to the App Store bundle.
 note "adding LaunchScreen.storyboardc + PrivacyInfo.xcprivacy"
 xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" \

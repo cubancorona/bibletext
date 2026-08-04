@@ -6,45 +6,15 @@
   <false/>
   <key>NSPrivacyTrackingDomains</key>
   <array/>
+  <!-- Deliberately EMPTY (audit correction): BibleText has no accounts, no
+       server, and no analytics — the developer collects nothing. Reading
+       position/history and BYOK AI keys live ON DEVICE only; Apple's
+       nutrition-label "collection" means off-device transmission to the
+       developer or partners, which never happens. Verse text a reader
+       explicitly sends to THEIR OWN configured AI provider, under their own
+       key, is the user's disclosure to their own vendor. -->
   <key>NSPrivacyCollectedDataTypes</key>
-  <array>
-    <dict>
-      <key>NSPrivacyCollectedDataType</key>
-      <string>NSPrivacyCollectedDataTypeUserID</string>
-      <key>NSPrivacyCollectedDataTypeLinked</key>
-      <true/>
-      <key>NSPrivacyCollectedDataTypeTracking</key>
-      <false/>
-      <key>NSPrivacyCollectedDataTypePurposes</key>
-      <array>
-        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-      </array>
-    </dict>
-    <dict>
-      <key>NSPrivacyCollectedDataType</key>
-      <string>NSPrivacyCollectedDataTypeSearchHistory</string>
-      <key>NSPrivacyCollectedDataTypeLinked</key>
-      <true/>
-      <key>NSPrivacyCollectedDataTypeTracking</key>
-      <false/>
-      <key>NSPrivacyCollectedDataTypePurposes</key>
-      <array>
-        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-      </array>
-    </dict>
-    <dict>
-      <key>NSPrivacyCollectedDataType</key>
-      <string>NSPrivacyCollectedDataTypeProductInteraction</string>
-      <key>NSPrivacyCollectedDataTypeLinked</key>
-      <true/>
-      <key>NSPrivacyCollectedDataTypeTracking</key>
-      <false/>
-      <key>NSPrivacyCollectedDataTypePurposes</key>
-      <array>
-        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-      </array>
-    </dict>
-  </array>
+  <array/>
   <key>NSPrivacyAccessedAPITypes</key>
   <array>
     <dict>
