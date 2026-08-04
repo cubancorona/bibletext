@@ -10,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // TestFullUIBuildsAndExercisesPaths renders the whole UI on an in-memory test
@@ -59,4 +60,36 @@ func TestFullUIBuildsAndExercisesPaths(t *testing.T) {
 	// There's no in-app dark-mode toggle any more (we follow the OS variant).
 	// Rebuild the window once more to make sure CreateMainUI is idempotent.
 	win.SetContent(CreateMainUI(app, state, win))
+}
+
+// TestRebuildWindowHidesOverlayPopups pins the variant-flip fix: rebuildWindow
+// must DRAIN the overlay stack (an open popup would otherwise survive
+// SetContent with its build-time palette colors — the observed in practice
+// dark-on-dark Settings sheet after an overnight dark→light switch) and it
+// must HIDE each popup rather than bare-Remove it, because the popup watchdog
+// timers poll Visible() to run their close/restore duties.
+func TestRebuildWindowHidesOverlayPopups(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	state := sampleState()
+	win := app.NewWindow("rebuild")
+	state.app = app
+	state.window = win
+	win.SetContent(CreateMainUI(app, state, win))
+
+	pop := widget.NewModalPopUp(widget.NewLabel("settings stand-in"), win.Canvas())
+	pop.Show()
+	if len(win.Canvas().Overlays().List()) == 0 {
+		t.Fatal("popup must be on the overlay stack before the rebuild")
+	}
+
+	rebuildWindow(state)
+
+	if n := len(win.Canvas().Overlays().List()); n != 0 {
+		t.Errorf("rebuildWindow must drain the overlay stack, %d left", n)
+	}
+	if pop.Visible() {
+		t.Error("popup must be hidden, not bare-removed — watchdogs poll Visible() and would spin forever")
+	}
 }

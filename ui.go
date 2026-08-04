@@ -110,7 +110,6 @@ func buildLoadingView(state *AppState) fyne.CanvasObject {
 	msg := canvas.NewText("Preparing the Bible…", pal.TextMuted)
 	msg.TextSize = 13
 	msg.Alignment = fyne.TextAlignCenter
-	state.loadingMsg = msg // loadProgressFn updates this with per-book download progress
 
 	// Stop any previous spinner before replacing it. A ProgressBarInfinite runs a
 	// RepeatForever animation that calls canvas.Refresh every ~50ms; if the loading
@@ -121,6 +120,9 @@ func buildLoadingView(state *AppState) fyne.CanvasObject {
 	// short text scroll laggy until GC reclaims it (a force-quit is what cleared it).
 	// Stopping first guarantees at most one live loading animation.
 	state.stopLoadingBar()
+	// Assign AFTER stopLoadingBar — it nils loadingMsg too, and assigning first
+	// meant the per-book download progress line never rendered on any build.
+	state.loadingMsg = msg // loadProgressFn updates this with per-book download progress
 	bar := widget.NewProgressBarInfinite()
 	state.loadingBar = bar // so stopLoadingBar can halt it once loading finishes
 
