@@ -582,7 +582,10 @@ func (bd *BibleData) PrepareSearchIndex() {
 	for book, chapters := range bd.Verses {
 		for chapter, verses := range chapters {
 			for i := range verses {
-				verses[i].Search = strings.ToLower(verses[i].Text)
+				// Flatten authored poem-line breaks for matching: a phrase
+				// spanning a poetry line must still hit (Verse.Text may carry
+				// "\n" since the poem-line decoder change).
+				verses[i].Search = strings.ToLower(strings.ReplaceAll(verses[i].Text, "\n", " "))
 				verses[i].Ref = strings.ToLower(fmt.Sprintf("%s %d:%d", verses[i].BookName, verses[i].Chapter, verses[i].Verse))
 			}
 			chapters[chapter] = verses

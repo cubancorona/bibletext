@@ -36,11 +36,12 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 			"The sons of Japheth:\nGomer, Magog, Madai, Javan, Tubal, Meshech, and Tiras.",
 		},
 		{
-			// A footnote between a poetry clause and a clause that is pure closing
-			// punctuation: the "?" / "”" must abut, not get a synthesized space.
-			"clause then footnote then closing punctuation abuts (Job 6:6 shape)",
-			`[{"text":"or is there flavor in the white of an egg","poem":2},{"noteId":8},{"text":"?","poem":2}]`,
-			"or is there flavor in the white of an egg?",
+			// REAL capture (bible.helloao.org, BSB Job 6:6, 2026-08-04): the
+			// final "?" is its own poem clause — it must ABUT the line, never
+			// start one, and the footnote between them synthesizes no space.
+			"clause then footnote then closing punctuation abuts (Job 6:6, real)",
+			`[{"text":"Is tasteless food eaten without salt,","poem":1},{"text":"or is there flavor in the white of an egg","poem":2},{"noteId":8},{"text":"?","poem":2}]`,
+			"Is tasteless food eaten without salt,\nor is there flavor in the white of an egg?",
 		},
 		{
 			"clause then footnote then closing quote abuts (Genesis 3:15 shape)",
@@ -48,14 +49,28 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 			"and you will strike his heel.”",
 		},
 		{
+			// Prose intro + explicit lineBreak + poem clauses: the lineBreak
+			// already broke the line, so the first poem clause adds no second
+			// break; the next clause starts its own line.
 			"prose intro then poetry clauses (Genesis 2:23 shape)",
 			`["And the man said:",{"lineBreak":true},{"text":"“This is now bone of my bones","poem":1},{"text":"and flesh of my flesh;","poem":2}]`,
-			"And the man said:\n“This is now bone of my bones and flesh of my flesh;",
+			"And the man said:\n“This is now bone of my bones\nand flesh of my flesh;",
 		},
 		{
-			"pure poetry clauses single-spaced (Genesis 1:27 shape)",
-			`[{"text":"So God created man in His own image;","poem":1},{"text":"in the image of God He created him;","poem":2},{"lineBreak":true},{"text":"male and female He created them.","poem":2},{"noteId":4}]`,
-			"So God created man in His own image; in the image of God He created him;\nmale and female He created them.",
+			// REAL capture (BSB Genesis 1:27): three poem clauses, NO lineBreak
+			// nodes — each clause is one source line. (The previous fixture
+			// fabricated a lineBreak node and space-joined the clauses; live
+			// data disproves both.)
+			"poem clauses are lines (Genesis 1:27, real)",
+			`[{"text":"So God created man in His own image;","poem":1},{"text":"in the image of God He created him;","poem":2},{"text":"male and female He created them.","poem":2},{"noteId":4}]`,
+			"So God created man in His own image;\nin the image of God He created him;\nmale and female He created them.",
+		},
+		{
+			// REAL capture (BSB Psalm 23:1): a footnote between two poem lines
+			// must not suppress the break.
+			"footnote between poem lines keeps the break (Psalm 23:1, real)",
+			`[{"text":"The LORD is my shepherd;","poem":1},{"noteId":1},{"text":"I shall not want.","poem":2}]`,
+			"The LORD is my shepherd;\nI shall not want.",
 		},
 	}
 	for _, c := range cases {
@@ -87,8 +102,8 @@ const bsbSampleComplete = `{
           {"type":"verse","number":27,"content":[
             {"text":"So God created man in His own image;","poem":1},
             {"text":"in the image of God He created him;","poem":2},
-            {"lineBreak":true},
             {"text":"male and female He created them.","poem":2},
+            {"noteId":4},
             {"noteId":4}
           ]}
         ]}}
@@ -140,9 +155,10 @@ func TestDecodeBSBComplete(t *testing.T) {
 		t.Errorf("Genesis 1:1 = %q (ok=%v)", got, ok)
 	}
 
-	// Poetry: {text} clauses join with spaces, explicit {lineBreak} survives, and
-	// the trailing {noteId} contributes nothing.
-	want27 := "So God created man in His own image; in the image of God He created him;\nmale and female He created them."
+	// Poetry (real BSB shape): each {text,poem} clause is one authored line —
+	// live helloao poetry has NO lineBreak nodes — and the trailing {noteId}
+	// contributes nothing.
+	want27 := "So God created man in His own image;\nin the image of God He created him;\nmale and female He created them."
 	if got, ok := verseText(gen[1], 27); !ok || got != want27 {
 		t.Errorf("Genesis 1:27 = %q\n           want %q", got, want27)
 	}
