@@ -244,6 +244,26 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   `<br>`→`\n`. Tests: `reading_poetry_test.go`. A one-line poem verse has no
   internal break and reads as prose (known limitation, shared with the share
   pipeline).
+- **Simulator Keychain needs a Mach-O entitlements SECTION, not a signature.**
+  A simulator app gets entitlements from `__TEXT,__entitlements` in the binary;
+  signing one with `codesign --entitlements` makes AMFI refuse to exec it
+  ("adhoc signed app with restricted entitlements", launch dies with POSIX
+  163). `scripts/run-ios-sim.sh` therefore relinks the executable after
+  `fyne package` with
+  `-Wl,-sectcreate,__TEXT,__entitlements,<plist>` (application-identifier +
+  keychain-access-groups, both `uk.co.bibletext`) and then signs plain ad-hoc.
+  Without it `SecItemAdd` returns -34018 and `keyStore` silently falls back to
+  Preferences, so the whole Keychain path is untestable. **That string is the
+  keychain partition — changing it orphans every key saved in a simulator.**
+  `scripts/verify-sim-keychain.sh` asserts the round-trip and that the item is
+  `AfterFirstUnlock` (`pdmn='ck'`), never a ThisDeviceOnly class that backups
+  and device migration exclude. **The simulator still cannot prove:**
+  locked-device protection classes, backup/restore, lock-screen Now Playing +
+  remote commands, AVAudioSession interruptions, screen-off background audio,
+  the launch watchdog, jetsam, iOS Library/Caches eviction, data protection,
+  the silent switch, or anything below the installed runtime (only iOS 26.5 is
+  installed here, so the pre-iOS-17 audio branch has never run) — those need a
+  real device.
 - **Two reading headers — edit BOTH.** The reading toolbar is built per platform:
   desktop + Android use `chapterHeader` (`reading.go`, via `buildReadingView`),
   but **iOS uses its own `chapterHeaderMobile`** (`reading_ios.go`, via

@@ -67,6 +67,62 @@ xcrun ibtool --compile "$APP_DIR/$APP_NAME/LaunchScreen.storyboardc" "$APP_DIR/L
 # layout with e.g. BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)".
 plutil -replace UIDeviceFamily -json '[1, 2]' "$APP_DIR/$APP_NAME/Info.plist"
 
+# KEYCHAIN PARITY. A simulator app gets its entitlements from a Mach-O
+# __TEXT,__entitlements SECTION — never from the code signature. Signing a
+# simulator binary with `codesign --entitlements` looks like it works (codesign
+# exits 0) but AMFI then refuses to exec it: "adhoc signed app with restricted
+# entitlements" → launch fails with POSIX 163. This is Apple's own split:
+# Xcode's Embedded-Simulator.xcspec drops CODE_SIGN_ENTITLEMENTS for the
+# simulator and maps LD_ENTITLEMENTS_SECTION to exactly the -sectcreate flag
+# used below (the runtime's own MobileSafari carries the same section).
+#
+# Without it, SecItemAdd/SecItemUpdate return -34018 errSecMissingEntitlement
+# ("neither application-identifier nor keychain-access-groups"), so the app
+# silently falls back to Preferences — leaving the Keychain path, the pre-1.1.6
+# key migration and the "saved securely" status UNTESTABLE on the simulator
+# while working on device (audit finding).
+#
+# fyne package offers no linker hook (it sets CGO_LDFLAGS and -ldflags itself),
+# so relink just the executable with fyne's own iOS-simulator env plus the
+# section, and drop it into the packaged bundle before vtool + codesign.
+#
+# WARNING: this string IS the keychain partition. Changing it orphans every key
+# previously saved in a simulator — pick once, never churn.
+SIM_ENT="$(mktemp -t bt_sim_ent).plist"
+cat >"$SIM_ENT" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>application-identifier</key>
+    <string>${APP_ID}</string>
+    <key>keychain-access-groups</key>
+    <array>
+        <string>${APP_ID}</string>
+    </array>
+</dict>
+</plist>
+PLIST
+SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+SIM_CLANG="$(xcrun --sdk iphonesimulator --find clang)"
+SIM_CF="-isysroot $SIM_SDK -mios-simulator-version-min=15.0 -arch $(uname -m)"
+echo "==> relinking with the simulator entitlements section (Keychain)"
+# Build to a temp path: `go build -o` refuses to overwrite an existing file it
+# does not recognise as its own output ("already exists and is not an object
+# file"), and fyne has just written its own binary there.
+SIM_MAIN="$(mktemp -t bt_sim_main)"
+if ( cd "$REPO_ROOT" && CGO_ENABLED=1 GOOS=ios GOARCH="$(go env GOARCH)" \
+        CC="$SIM_CLANG" CXX="${SIM_CLANG}++" \
+        CGO_CFLAGS="$SIM_CF" CGO_CXXFLAGS="$SIM_CF" \
+        CGO_LDFLAGS="$SIM_CF -Wl,-sectcreate,__TEXT,__entitlements,$SIM_ENT" \
+        go build -tags ios -ldflags=-w -o "$SIM_MAIN" ./cmd/mobile ); then
+    mv -f "$SIM_MAIN" "$APP_DIR/$APP_NAME/main"
+else
+    echo "==> entitlements relink failed; continuing with fyne's binary (Keychain falls back to Preferences)" >&2
+    rm -f "$SIM_MAIN"
+fi
+rm -f "$SIM_ENT"
+
 # Fyne builds the simulator binary for min iOS 7.0, which modern Simulator
 # runtimes reject ("This app needs to be updated by the developer"). Rewrite the
 # Mach-O build-version to a current minimum and re-sign (ad-hoc) so it installs.
