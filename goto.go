@@ -389,9 +389,16 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		var watchDismiss func()
 		watchDismiss = func() {
 			if popup == nil || !popup.Visible() {
-				gKeyboardInsetSetter = nil
-				if state.showReadingOverlay != nil {
-					state.showReadingOverlay()
+				// Only run the close-out while NO other overlay owns the
+				// canvas: after a rebuildWindow drain the reader may already
+				// have a new sheet open by the time this poll fires, and the
+				// stale restore would un-suppress the reading view over it
+				// (and nil the new picker's keyboard-inset setter).
+				if cnv.Overlays().Top() == nil {
+					gKeyboardInsetSetter = nil
+					if state.showReadingOverlay != nil {
+						state.showReadingOverlay()
+					}
 				}
 				return
 			}

@@ -362,10 +362,17 @@ var _ fyne.Tappable = (*referenceButton)(nil)
 // reading mode, which hides/shows the sidebar (desktop) or bottom tabs and
 // header (mobile). afterRebuild is a build-tagged hook: a no-op on desktop,
 // and an overlay re-pin on iOS.
+// windowRebuildGen counts full window rebuilds (UI goroutine only). Popup
+// close-out handlers capture it at open: when a rebuild drained the popup, the
+// window was already rebuilt from live preferences, so the handler's own
+// "changed while open" rebuild/refresh work is a duplicate and is skipped.
+var windowRebuildGen uint64
+
 func rebuildWindow(state *AppState) {
 	if state.app == nil || state.window == nil {
 		return
 	}
+	windowRebuildGen++
 	// Belt-and-braces: drain any lingering overlays before swapping content. On
 	// mobile, SetContent only reassigns the content tree — it never touches the
 	// overlay stack — so a modal still on the stack at rebuild time would be
@@ -373,14 +380,47 @@ func rebuildWindow(state *AppState) {
 	// it left spinning, repainting the canvas forever). Every modal already closes
 	// before navigating, so this is normally a no-op; it makes the invariant
 	// explicit and survives any future path that rebuilds without closing first.
+	// Stop any infinite progress bars inside an overlay BEFORE evicting it:
+	// Hide() hides the popup but a running ProgressBarInfinite animation keeps
+	// marking the canvas dirty (~20fps full-tree repaints) until its owner's
+	// completion path finally lands. Stop() is idempotent, so the owner's own
+	// later stop is harmless.
+	var stopInfiniteBars func(fyne.CanvasObject)
+	stopInfiniteBars = func(o fyne.CanvasObject) {
+		switch t := o.(type) {
+		case *widget.ProgressBarInfinite:
+			t.Stop()
+		case *fyne.Container:
+			for _, c := range t.Objects {
+				stopInfiniteBars(c)
+			}
+		case *container.Scroll:
+			stopInfiniteBars(t.Content)
+		case *widget.PopUp:
+			stopInfiniteBars(t.Content)
+		}
+	}
 	cnv := state.window.Canvas()
 	for o := cnv.Overlays().Top(); o != nil; o = cnv.Overlays().Top() {
+		stopInfiniteBars(o)
+		if p, ok := o.(*widget.PopUp); ok {
+			// Hide (not bare Remove) so Visible() flips false: the popup
+			// watchdog timers (settings sheet, go-to picker, audio menu, Ask
+			// sheet) poll Visible() to run their close/restore duties — a
+			// bare Remove left them polling forever after every rebuild.
+			p.Hide()
+			if cnv.Overlays().Top() == o {
+				cnv.Overlays().Remove(o) // defensive: Hide should have done this
+			}
+			continue
+		}
 		cnv.Overlays().Remove(o)
 	}
-	// OverlayStack.Remove never runs a popup's close path, so any modal drained
-	// above already called state.hideReadingOverlay() on open but its matching
-	// restore will never fire — leaving the native reading view latched hidden
-	// (a blank verse pane that survives tab switches). Clear the latch here;
+	// A popup's own restore may not fire (or not yet — the watchdogs poll on
+	// 150-200ms timers), and a drained modal already called
+	// state.hideReadingOverlay() on open — leaving the native reading view
+	// latched hidden (a blank verse pane that survives tab switches). Clear
+	// the latch here (idempotent with any late watchdog restore);
 	// afterRebuild re-asserts the correct visibility for the rebuilt view.
 	if state.showReadingOverlay != nil {
 		state.showReadingOverlay()

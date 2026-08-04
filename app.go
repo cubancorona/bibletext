@@ -331,10 +331,18 @@ func Run() {
 var systemThemeOnce sync.Once
 
 // ObserveSystemThemeChanges subscribes to Fyne's settings-change channel so a
-// system light/dark switch rebuilds the window content. Fyne re-runs Color()
+// system light/dark switch rebuilds the window. Fyne re-runs Color()
 // automatically when the variant changes, but anything generated outside the
-// theme callback (like the HTML the iOS UITextView consumes) is stale until we
-// rebuild the tree.
+// theme callback (like the HTML the iOS UITextView consumes, or the palette
+// colors baked into canvas objects at build time) is stale until we rebuild.
+//
+// The rebuild goes through rebuildWindow, NOT a bare SetContent: SetContent
+// replaces only the content tree and never touches Canvas().Overlays(), so an
+// OPEN popup (the Settings sheet, a picker) survived a variant flip with its
+// captured colors while Fyne re-lit its stock widgets — the field-reported
+// dark-panel/dark-text sheet after an overnight dark→light switch with the
+// app suspended. rebuildWindow drains the overlay stack (popups close;
+// reopening shows fresh colors) and re-pins the native reading overlay.
 //
 // applyTheme calls app.Settings().SetTheme() the first time (and on a real theme
 // change), which ALSO fires this listener — so we guard against a rebuild loop by
@@ -352,9 +360,10 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 				}
 				lastVariant = v
 				fyne.Do(func() {
-					if state.window != nil && state.app != nil {
-						state.window.SetContent(CreateMainUI(state.app, state, state.window))
+					if state.stopping.Load() {
+						return
 					}
+					rebuildWindow(state)
 				})
 			}
 		}()

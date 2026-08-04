@@ -98,6 +98,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// --- Footer: copy, close, and an honesty note.
 	var current string
 	var popup *widget.PopUp
+	// userClosed distinguishes the reader's own Close from a rebuildWindow
+	// drain-eviction (theme-variant flip): only the latter reopens the panel
+	// when an in-flight answer lands.
+	var userClosed bool
 
 	// A running ProgressBarInfinite ticks an animation every frame, which keeps the
 	// whole canvas marked dirty and forces a full-tree repaint at ~20fps — that
@@ -142,6 +146,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	reportBtn.Disable()
 
 	closeBtn := widget.NewButton("Close", func() {
+		userClosed = true
 		stopThinking()
 		if popup != nil {
 			popup.Hide()
@@ -243,6 +248,19 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			defer cancel()
 			result, err := runAIAction(ctx, state, action, selectedText, question)
 			fyne.Do(func() {
+				// The panel may have been EVICTED (not user-closed) by a
+				// rebuildWindow drain — a theme-variant flip — while the
+				// request ran. Don't deliver the answer into the hidden,
+				// detached popup: reopen a fresh panel instead. The re-run
+				// hits aiCache, so the already-paid answer shows instantly
+				// in the new palette; an errored fetch just ends quietly.
+				if !userClosed && popup != nil && !popup.Visible() {
+					stopThinking()
+					if err == nil {
+						showAIPanel(state, action, selectedText, question)
+					}
+					return
+				}
 				if err != nil {
 					setError(friendlyAIError(err), isNoKeyError(err))
 					return

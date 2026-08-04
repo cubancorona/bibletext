@@ -831,6 +831,7 @@ void bibleTextMacArmRestore(int verse, double delta, double frac) {
 import "C"
 
 import (
+	"fmt"
 	"image/color"
 	"time"
 	"unsafe"
@@ -919,22 +920,50 @@ func syncNativeAIMenu(state *AppState) {
 	C.btMacSetAIEnabled(on)
 }
 
+// lastPushedBookChapter is the "book|chapter" held by the NSTextView — distinct
+// from lastPushedChapterFP (which also folds in theme/red-letter/highlight/data
+// identity), so a genuine chapter change (pin to top) is distinguishable from a
+// same-chapter re-render (preserve the reader's scroll). Mirrors the iOS and
+// Android twins.
+var lastPushedBookChapter string
+
 func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	macCurrentHost = h
 	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
+	fp := chapterRenderFingerprint(state)
+	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
+	// Same-chapter RE-render — the fingerprint changed but the book+chapter did
+	// not (a light/dark flip, red-letter toggle, or background data swap). The
+	// SetHTML below replaces the text view's content, which snaps the scroll to
+	// the TOP; capture the reader's live position first and arm it as a one-shot
+	// restore, exactly as the iOS twin does (pushChapterHTML). Without this a
+	// system dark→light switch yanked a mid-chapter desktop reader to the top —
+	// and the next flush then persisted that top-of-chapter position.
+	if state.restore == nil && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
+		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
+			state.restore = &restoreAnchor{
+				Book:    state.CurrentBook,
+				Chapter: state.CurrentChapter,
+				Verse:   v,
+				Delta:   d,
+				Frac:    f,
+			}
+		}
+	}
 	// Arm any pending one-shot scroll restore for this chapter (reopening where
-	// the reader left off) before pushing the text, so bibleTextMacScrollTV lands
-	// on the saved position rather than the top. A normal push disarms it.
+	// the reader left off, or the position just captured above) before pushing
+	// the text, so bibleTextMacScrollTV lands on the saved position rather than
+	// the top. A normal push disarms it.
 	armPendingRestore(state)
 	// Skip the HTML rebuild + NSAttributedString re-import when the NSTextView
 	// already holds this exact chapter render (mirrors the iOS gate in
 	// pushChapterHTML); a pending scroll restore forces the push. SetHTML consumes
 	// the C string synchronously, so freeing right after the call is safe.
-	fp := chapterRenderFingerprint(state)
 	if state.restore != nil || fp != lastPushedChapterFP {
 		lastPushedChapterFP = fp
+		lastPushedBookChapter = bc
 		html := buildChapterHTML(state, verses)
 		c := C.CString(html)
 		C.bibleTextMacTVSetHTML(c)

@@ -151,6 +151,13 @@ type AppState struct {
 	// connection can never stack overlapping full-Bible downloads. UI-goroutine only.
 	fullDownloading bool
 
+	// versionLoading guards switchVersionInteractive to ONE in-flight interactive
+	// translation load: the loading modal used to be the interaction block, but
+	// rebuildWindow (theme-variant flip, tablet rotation) can evict it
+	// mid-download, after which the picker could start a second, racing fetch.
+	// UI-goroutine only.
+	versionLoading bool
+
 	// stopping is set when the app is tearing down (window close / lifecycle stop)
 	// so a late background result (e.g. a version download that finishes during
 	// shutdown) can drop itself instead of mutating state off the main thread. On

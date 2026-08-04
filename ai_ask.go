@@ -159,7 +159,11 @@ func promptAskQuestion(state *AppState, selectedText string) {
 	var watch func()
 	watch = func() {
 		if popup == nil || !popup.Visible() {
-			closeAsk()
+			// Skip when another overlay owns the canvas (a sheet reopened
+			// within one tick of a rebuild drain) — see goto.go's watchdog.
+			if cnv.Overlays().Top() == nil {
+				closeAsk()
+			}
 			return
 		}
 		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })

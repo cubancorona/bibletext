@@ -264,7 +264,13 @@ func switchVersionInteractive(state *AppState, id string) {
 	}
 
 	// A real source not yet in memory may hit the on-disk cache (fast) or the
-	// network (slow). Load off the UI thread either way, behind a spinner.
+	// network (slow). Load off the UI thread either way, behind a spinner —
+	// single-flight: the spinner modal no longer reliably blocks interaction
+	// (a theme-flip rebuild can evict it mid-download), so the guard does.
+	if state.versionLoading {
+		return // a download is already in flight; its completion will apply
+	}
+	state.versionLoading = true
 	base := state.baseBible()
 	dismiss := showVersionLoading(state, v.Name)
 	go func() {
@@ -278,6 +284,7 @@ func switchVersionInteractive(state *AppState, id string) {
 			if state.stopping.Load() {
 				return
 			}
+			state.versionLoading = false
 			dismiss()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)

@@ -42,6 +42,10 @@ func showAISettings(state *AppState) {
 	// Search-tab Find toggle, the native selection menus — so closing the sheet
 	// after that change rebuilds the window rather than just re-rendering verses.
 	aiOnAtOpen := store.aiEnabled()
+	// If a full rebuild happens while the sheet is open (theme-variant flip,
+	// tablet rotation), the new window was already built from live prefs —
+	// done()'s own delta rebuild/refresh would be a duplicate window swap.
+	rebuildGenAtOpen := windowRebuildGen
 
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
@@ -427,6 +431,9 @@ func showAISettings(state *AppState) {
 			popup.Hide()
 		}
 		restore()
+		if windowRebuildGen != rebuildGenAtOpen {
+			return // a rebuild drained us; it already built from live prefs
+		}
 		if store.aiEnabled() != aiOnAtOpen {
 			// The assistant flipped between "None" and a provider: whole surfaces
 			// (the sidebar/tab Find toggle) come or go, so rebuild the window.
@@ -593,12 +600,12 @@ func showAISettings(state *AppState) {
 	// subclass can't intercept it (PopUp.Show registers the embedded *PopUp, so a Tapped
 	// override is never dispatched). So poll until the popup is gone by ANY route, then run
 	// done(); its `closed` guard keeps the ✕ path idempotent. (Same approach as Goto.)
-	// onOverlayStack: rebuildWindow's overlay drain evicts via OverlayStack.Remove,
-	// which never runs PopUp.Hide — so Visible() alone would stay true forever and
-	// this watchdog would poll for the life of the process. Treat eviction from the
-	// stack as dismissal too (done() is then largely redundant — the drain caller
-	// re-reads prefs and re-shows the overlay — but it stops the timer and is
-	// idempotent via the closed guard).
+	// onOverlayStack: belt-and-braces. rebuildWindow's overlay drain HIDES
+	// *widget.PopUp overlays (reading.go), which flips Visible() false — so
+	// this membership check is redundant on that path and stays only as
+	// defense against any future bare OverlayStack.Remove eviction, which
+	// never runs PopUp.Hide and would otherwise leave this watchdog polling
+	// for the life of the process.
 	onOverlayStack := func() bool {
 		for _, o := range cnv.Overlays().List() {
 			if o == popup {
@@ -610,7 +617,13 @@ func showAISettings(state *AppState) {
 	var watchDismiss func()
 	watchDismiss = func() {
 		if popup == nil || !popup.Visible() || !onOverlayStack() {
-			done()
+			// Skip the close-out when ANOTHER overlay owns the canvas by the
+			// time this poll fires (the reader reopened a sheet within one
+			// tick of a drain): done()'s restore would un-suppress the native
+			// reading view OVER the new modal.
+			if cnv.Overlays().Top() == nil {
+				done()
+			}
 			return
 		}
 		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
