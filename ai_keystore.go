@@ -71,6 +71,21 @@ func newKeyStore() *keyStore {
 // left non-selected providers' keys in plaintext Preferences indefinitely).
 // apiKey carries the same logic per read; this just runs it for each provider
 // once at startup. Errors leave the legacy copy in place for the next try.
+// keyInSecureStore reports whether this provider's key is CURRENTLY held by the
+// platform credential store — a definitive found-and-readable answer, not
+// "this platform has a keychain". The Settings status uses it so the saved
+// label describes where the key actually is: a keychain write can fail (an
+// ad-hoc-signed build has no keychain entitlement, and a device store can be
+// temporarily unreadable), in which case the key is still safely in
+// Preferences and the UI must not claim otherwise.
+func (k *keyStore) keyInSecureStore(id string) bool {
+	if k == nil || k.secrets == nil {
+		return false
+	}
+	_, found, ok := k.secrets.Read(id)
+	return ok && found
+}
+
 func (k *keyStore) migrateAllKeys() {
 	if k == nil || k.prefs == nil || k.secrets == nil {
 		return
@@ -155,11 +170,24 @@ func (k *keyStore) setAPIKey(id, key string) bool {
 	}
 	key = strings.TrimSpace(key)
 	if k.secrets != nil {
-		if !k.secrets.Write(id, key) {
+		if k.secrets.Write(id, key) {
+			// Remove any pre-1.1.6 preference copy after a successful secure write.
+			k.prefs.SetString(prefKeyPrefix+id, "")
+			return true
+		}
+		if key == "" {
+			// A failed DELETE must be reported: the key is still stored, and
+			// telling the reader it is gone would be a false assurance.
 			return false
 		}
-		// Remove any pre-1.1.6 preference copy after a successful secure write.
-		k.prefs.SetString(prefKeyPrefix+id, "")
+		// A failed WRITE falls back to Preferences — the same place builds
+		// before 1.1.6 kept keys. Refusing to store anything would leave a
+		// reader whose credential store is unavailable (no keychain
+		// entitlement, a device store that is broken or restricted) unable to
+		// use their own key at all. migrateAllKeys retries the secure write on
+		// every later launch, and the Settings status reports the REAL
+		// location (keyInSecureStore), so this never claims to be a keychain.
+		k.prefs.SetString(prefKeyPrefix+id, key)
 		return true
 	}
 	k.prefs.SetString(prefKeyPrefix+id, key)

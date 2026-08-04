@@ -163,7 +163,7 @@ func showAISettings(state *AppState) {
 		saveOK := true
 		refreshStatus := func() {
 			savedLabel := "✓ Saved on this device."
-			if store != nil && store.secrets != nil {
+			if store.keyInSecureStore(info.ID) {
 				savedLabel = "✓ Saved securely in the device keychain."
 			}
 			if strings.TrimSpace(entry.Text) != "" {

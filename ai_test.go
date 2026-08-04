@@ -438,3 +438,51 @@ func TestKeyStoreReadErrorKeepsLegacyCopy(t *testing.T) {
 		t.Fatal("migration must erase the legacy copy after a successful write")
 	}
 }
+
+// The saved-key status must describe where the key ACTUALLY is: a platform
+// with a credential store whose WRITE failed (an ad-hoc-signed build has no
+// keychain entitlement — reproduced on the iOS simulator) keeps the key in
+// Preferences, and the UI must not claim it is in the keychain.
+func TestKeyInSecureStoreReflectsRealLocation(t *testing.T) {
+	secrets := &fakeSecrets{m: map[string]string{}}
+	k := &keyStore{prefs: newFakePrefs(), secrets: secrets}
+
+	if k.keyInSecureStore(providerGemini) {
+		t.Error("no key stored anywhere → not in the secure store")
+	}
+
+	k.setAPIKey(providerGemini, "abc123")
+	if !k.keyInSecureStore(providerGemini) {
+		t.Error("a successfully written key IS in the secure store")
+	}
+
+	// Write failures (an ad-hoc-signed build has no keychain entitlement):
+	// the key lives in Preferences instead, and the label must say so.
+	failing := &fakeSecrets{m: map[string]string{}, failWrite: true}
+	k2 := &keyStore{prefs: newFakePrefs(), secrets: failing}
+	k2.setAPIKey(providerOpenAI, "xyz789")
+	if k2.keyInSecureStore(providerOpenAI) {
+		t.Error("a FAILED keychain write must not report the key as secured")
+	}
+	if got := k2.apiKey(providerOpenAI); got != "xyz789" {
+		t.Errorf("the key must still be readable from Preferences, got %q", got)
+	}
+
+	// A store that errors on read is not a definitive "found".
+	secrets.failRead = true
+	if k.keyInSecureStore(providerGemini) {
+		t.Error("a store READ error must not report the key as secured")
+	}
+}
+
+// A failed keychain DELETE must still report failure — telling a reader their
+// key is gone when it is still stored is a false assurance (the Settings sheet
+// shows "Couldn't remove the stored key").
+func TestKeyStoreFailedDeleteReportsFailure(t *testing.T) {
+	secrets := &fakeSecrets{m: map[string]string{"gemini": "stored"}}
+	k := &keyStore{prefs: newFakePrefs(), secrets: secrets}
+	secrets.failWrite = true
+	if k.setAPIKey(providerGemini, "") {
+		t.Error("a failed delete must report failure, not success")
+	}
+}
