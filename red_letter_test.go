@@ -60,3 +60,14 @@ func TestRedLetterPreferences(t *testing.T) {
 		t.Fatal("expected red letter to be disabled")
 	}
 }
+
+// The words of Christ are red BY DEFAULT: a fresh install (no stored
+// preference) enables red-letter without the reader touching Settings, while
+// an explicit off choice (previous test) is preserved by the fallback.
+func TestRedLetterDefaultOn(t *testing.T) {
+	app := test.NewApp() // fresh test app = empty preferences
+	defer app.Quit()
+	if !redLetterEnabled() {
+		t.Fatal("red letter must default ON for a fresh install")
+	}
+}

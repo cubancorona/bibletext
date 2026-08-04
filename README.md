@@ -165,7 +165,8 @@ root), signing, emulator use, and distribution are covered in
   one poetic line per line, ragged-right, breaking at every verse boundary
   inside a poem, as in print — in all three translations, on every platform.
   Text shares, chapter copies, and the verse of the day keep the same lines.
-- 🟥 **Red-letter mode** — show the words of Christ in red (Settings → Reading).
+- 🟥 **Red-letter mode** — the words of Christ in red, on by default
+  (switchable in Settings → Reading).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
 - 📤 **Share a verse** — from the selection menu: **Share with citation** (text +
