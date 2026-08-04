@@ -33,11 +33,15 @@ func redLetterSupported() bool {
 	return false
 }
 
-// redLetterEnabled reports the persisted toggle (off by default). nil-safe so it
-// works in tests with no running app.
+// redLetterEnabled reports the persisted toggle — ON by default: the words of
+// Christ render in red unless the reader turns it off. BoolWithFallback keeps
+// an EXPLICIT earlier choice either way (a reader who toggled it off stored
+// false, and the fallback never overrides a stored value); only readers who
+// never touched the switch get the new default. nil-safe so it works in tests
+// with no running app.
 func redLetterEnabled() bool {
 	if app := fyne.CurrentApp(); app != nil {
-		return app.Preferences().Bool(prefRedLetter)
+		return app.Preferences().BoolWithFallback(prefRedLetter, true)
 	}
 	return false
 }
