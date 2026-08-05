@@ -91,6 +91,10 @@ type styledReadingPane struct {
 	// Selection state (milestone 3): rune offsets into lay.Text, -1 = none.
 	selAnchor, selStart, selEnd int
 
+	// raVerse is the verse the narration is on (read-along tint), 0 = none.
+	// Driven by reading_styled_readalong.go on the UI goroutine.
+	raVerse int
+
 	clipboard fyne.Clipboard
 }
 
@@ -226,6 +230,7 @@ type styledPaneRenderer struct {
 	pane *styledReadingPane
 
 	band     *canvas.Rectangle
+	raBand   *canvas.Rectangle
 	selRects []*canvas.Rectangle
 	texts    []*canvas.Text
 	objects  []fyne.CanvasObject
@@ -238,9 +243,14 @@ func (r *styledPaneRenderer) rebuild() {
 	r.objects = r.objects[:0]
 
 	// The verse-highlight band sits BEHIND the text, like the shipping pane's;
-	// selection rects sit between the band and the glyphs.
+	// the read-along tint sits over it (the narration wash wins where the two
+	// overlap, as on the native overlays); selection rects sit between the
+	// bands and the glyphs.
 	r.band = canvas.NewRectangle(color.NRGBA{}) // transparent until positioned
 	r.objects = append(r.objects, r.band)
+	r.raBand = canvas.NewRectangle(styledReadAlongTint)
+	r.raBand.Hide()
+	r.objects = append(r.objects, r.raBand)
 
 	selColor := p.pal.Accent
 	selColor.A = 70
@@ -303,6 +313,17 @@ func (r *styledPaneRenderer) position() {
 		r.band.Show()
 	} else {
 		r.band.Hide()
+	}
+
+	// Read-along tint across the narrated verse's lines.
+	if first, last, ok := p.verseLineSpan(p.raVerse); ok {
+		top := p.lay.Lines[first].Y
+		bot := p.lay.Lines[last].Y + p.lay.Lines[last].H
+		r.raBand.Move(fyne.NewPos(0, top))
+		r.raBand.Resize(fyne.NewSize(p.lastWidth, bot-top))
+		r.raBand.Show()
+	} else {
+		r.raBand.Hide()
 	}
 
 	lh := p.styledLineHeight()
@@ -370,4 +391,32 @@ func (p *styledReadingPane) yForVerse(verse int) (float32, bool) {
 // the scroll position (mirrors chapterText.highlightLine >= 0).
 func (p *styledReadingPane) highlightOwnsScroll() bool {
 	return p.lay != nil && p.lay.HighlightStart >= 0
+}
+
+// verseLineSpan returns the [first,last] line indexes the verse's runs touch —
+// exact even when a verse shares its first or last wrapped line with a
+// neighbour (continuous prose). Drives the read-along tint band.
+func (p *styledReadingPane) verseLineSpan(verse int) (first, last int, ok bool) {
+	if verse <= 0 || p.lay == nil {
+		return 0, 0, false
+	}
+	first = -1
+	for i, ln := range p.lay.Lines {
+		for _, run := range ln.Runs {
+			if run.Verse == verse {
+				if first < 0 {
+					first = i
+				}
+				last = i
+				break
+			}
+		}
+		if first >= 0 && last < i {
+			break // past the verse's contiguous lines — done
+		}
+	}
+	if first < 0 {
+		return 0, 0, false
+	}
+	return first, last, true
 }

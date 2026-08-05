@@ -33,6 +33,9 @@ func resetStyledWiring() {
 	styledScroll, styledPane, styledState, styledFP = nil, nil, nil, ""
 	styledRestoreArmed, styledUserScrolled, styledApplyingScroll = false, false, false
 	styledRestoreVerse, styledRestoreDelta, styledRestoreFrac = 0, 0, 0
+	styledFollowPill = nil
+	styledRAFollowPending = false
+	styledHighlightCeded = false
 }
 
 func TestStyledAreaCaptureAndRestore(t *testing.T) {

@@ -372,6 +372,18 @@ func (c *audioController) onReadAlongUserScroll() {
 	}
 }
 
+// readAlongFollowActive reports whether a live read-along is still steering the
+// view. The styled desktop pane re-checks this ON THE UI GOROUTINE at apply
+// time: its follow decisions cross an async fyne.Do hop from the engine's
+// watcher goroutine, and a user scroll processed in between must win (the
+// native platforms run onTimeUpdate on the main thread, so they never need
+// this). Read-only; no other platform calls it.
+func (c *audioController) readAlongFollowActive() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loaded && c.readAlong != nil && !c.followSuspended
+}
+
 // followSuspendedFor reports whether the loaded chapter's read-along is armed but
 // no longer steering the scroll — i.e. the floating "Follow narration" button is up.
 func (c *audioController) followSuspendedFor(fp string) bool {

@@ -76,7 +76,18 @@ func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.
 
 	wireStyledReadingScroll(state, scroll, pane)
 
-	return surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{})
+	// A narration already playing for THIS chapter re-asserts its read-along
+	// state onto the fresh pane (the styled twin of Android's afterRebuild
+	// reassert): the tint returns immediately instead of waiting for the next
+	// verse boundary, and the "Follow narration" pill survives a theme flip.
+	if pane != nil && gAudio.playingFingerprint() == chapterAudioFingerprint(state) {
+		styledReassertReadAlong()
+	}
+
+	return container.NewStack(
+		surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{}),
+		styledFollowPillLayer(),
+	)
 }
 
 // wireStyledReadingScroll registers the freshly built pane for scroll
@@ -85,6 +96,8 @@ func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.
 func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *styledReadingPane) {
 	if pane == nil {
 		styledScroll, styledPane, styledState, styledFP = nil, nil, nil, ""
+		styledFollowPill = nil
+		styledRAFollowPending = false
 		return
 	}
 	newFP := styledPaneFP(state)
@@ -100,6 +113,7 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	styledScroll, styledPane, styledState = scroll, pane, state
 	styledFP = newFP
 	styledUserScrolled = false
+	styledHighlightCeded = false
 
 	switch {
 	case state.restore != nil:
@@ -110,6 +124,11 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 		armStyledRestore(0, 0, 0)
 	}
 
+	lastView := scroll.Size()
+	lastContentH := float32(0)
+	if pane != nil {
+		lastContentH = pane.MinSize().Height
+	}
 	scroll.OnScrolled = func(fyne.Position) {
 		if styledApplyingScroll || styledScroll != scroll {
 			return
@@ -118,6 +137,17 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 		styledUserScrolled = true
 		state.restore = nil
 		flushReadingStateAsync(state)
+		// A reader's own scroll during read-along stops the follow (the tint
+		// keeps tracking; the pill offers the way back). fyne also fires
+		// OnScrolled for its own offset CLAMPS (a window resize or re-wrap
+		// moving the max offset) — those carry a geometry change and are not
+		// the reader taking over, so they must not raise the pill.
+		if v, ch := scroll.Size(), pane.MinSize().Height; v != lastView || ch != lastContentH {
+			lastView, lastContentH = v, ch
+			return
+		}
+		styledRAFollowPending = false // the reader's intent wins over a queued follow
+		gAudio.onReadAlongUserScroll()
 	}
 }
 
@@ -239,7 +269,8 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	child.Resize(fyne.NewSize(w, child.MinSize().Height))
 	child.Move(fyne.NewPos(x, 0))
 
-	if l.scroll != nil && l.pane != nil && l.pane.highlightOwnsScroll() && !styledUserScrolled {
+	if l.scroll != nil && l.pane != nil && l.pane.highlightOwnsScroll() &&
+		!styledUserScrolled && !styledHighlightCeded {
 		y := l.pane.highlightY() - 24
 		if y < 0 {
 			y = 0
@@ -254,6 +285,13 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 
 	if l.scroll != nil && l.pane != nil {
 		applyStyledReadingRestore(l)
+	}
+
+	// A follow request that arrived before sizes were real (chapter rebuild
+	// mid-narration) applies as soon as geometry settles. After the restore
+	// logic: the narration's comfort-band scroll wins over a stale anchor.
+	if styledRAFollowPending && l.scroll == styledScroll {
+		styledReadAlongFollowScroll()
 	}
 }
 

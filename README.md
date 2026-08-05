@@ -159,9 +159,10 @@ root), signing, emulator use, and distribution are covered in
   continues to the **next chapter** automatically until you pause. On the phones
   (iOS and Android) audio keeps playing while the app is backgrounded or the screen
   is locked, with lock-screen / notification controls and ±15-second skip. On
-  Windows and Linux the recorded narrations play too (with ±15s skip and
-  continuous chapters); read-aloud and read-along highlighting are
-  native-platform features (iOS / Android / macOS).
+  Windows and Linux the recorded narrations play too, with ±15s skip,
+  continuous chapters, and the same read-along verse highlighting;
+  on-device read-aloud (TTS) remains a native-platform feature
+  (iOS / Android / macOS).
 - 📜 **Poetry as poetry** — the poetic books (Psalms, Proverbs, Job, the
   prophets' oracles, the embedded songs) display their authored verse lines —
   one poetic line per line, ragged-right, breaking at every verse boundary

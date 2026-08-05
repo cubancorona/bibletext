@@ -74,8 +74,9 @@ func TestStyledPaneObjects(t *testing.T) {
 	if len(r.texts) == 0 || len(r.texts) > 12 {
 		t.Fatalf("unexpected draw-segment count %d for 4 poem lines", len(r.texts))
 	}
-	if len(r.objects) != len(r.texts)+1 {
-		t.Fatalf("objects = %d, want band + %d texts", len(r.objects), len(r.texts))
+	if len(r.objects) != len(r.texts)+2 {
+		t.Fatalf("objects = %d, want highlight band + read-along band + %d texts",
+			len(r.objects), len(r.texts))
 	}
 	// First segment of line 0 is the verse-number label at the small size.
 	if r.texts[0].TextSize >= p.textSize {
