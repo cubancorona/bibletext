@@ -67,7 +67,7 @@ func TestChapterTextIsSelectableReadOnlyWholeChapter(t *testing.T) {
 	defer app.Quit()
 
 	state := sampleState() // John 1: verses 1-3 in the sample data
-	ct := findChapterText(buildReadingView(state))
+	ct := findChapterText(legacyPaneForTest(state))
 	if ct == nil {
 		t.Fatal("no chapterText found in the reading view")
 	}
@@ -98,7 +98,7 @@ func TestChapterTextLocatesHighlightedVerse(t *testing.T) {
 	state.HighlightedVerse = 2
 	state.HasHighlightedVerse = true
 
-	ct := findChapterText(buildReadingView(state))
+	ct := findChapterText(legacyPaneForTest(state))
 	if ct == nil {
 		t.Fatal("no chapterText found")
 	}

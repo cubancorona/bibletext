@@ -31,7 +31,8 @@ func longPsalmState() *AppState {
 
 func resetStyledWiring() {
 	styledScroll, styledPane, styledState, styledFP = nil, nil, nil, ""
-	styledRestoreArmed = false
+	styledRestoreArmed, styledUserScrolled, styledApplyingScroll = false, false, false
+	styledRestoreVerse, styledRestoreDelta, styledRestoreFrac = 0, 0, 0
 }
 
 func TestStyledAreaCaptureAndRestore(t *testing.T) {

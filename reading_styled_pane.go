@@ -123,11 +123,11 @@ func styledPaneTextSize() float32 {
 }
 
 // styledPaneFont resolves the scripture face ONCE per process: the same
-// family iOS renders through its HTML stack (font-family: Georgia, …) — real
-// Georgia when the OS has it (macOS and Windows both ship it), else the
-// embedded Gelasio, Georgia's metrics-compatible OFL equivalent that the
-// share cards already carry. Never nil, so drawing and measuring always use
-// the same face.
+// family iOS renders through its HTML stack (font-family: Georgia, …) — the
+// first serif loadBookFonts finds (real Georgia on Windows/macOS; on Linux
+// typically DejaVu Serif, the usual distro serif), else the embedded Gelasio,
+// Georgia's metrics-compatible OFL equivalent that the share cards already
+// carry. Never nil, so drawing and measuring always use the same face.
 func styledPaneFont() fyne.Resource {
 	styledFontOnce.Do(func() {
 		if fonts := loadBookFonts(); fonts != nil && fonts.regular != nil {

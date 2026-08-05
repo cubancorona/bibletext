@@ -19,13 +19,20 @@ import (
 // first layout pass — the one that applies a pending restore — already runs at
 // the real geometry (a post-SetContent Resize would make the first pass run at
 // min-size and the assertions accidental).
+//
+// Built via chapterTextScrollArea, NOT readingScrollArea: on this file's
+// platforms the dispatcher returns the styled pane, and these tests lock the
+// LEGACY pane's wiring (still shipping as the Android fallback and the desktop
+// burn-in fallback). The styled globals are cleared first so the capture/arm
+// delegation in reading_scroll_fyne.go stays on the legacy path.
 func buildTestPane(t *testing.T, state *AppState) fyne.Window {
 	t.Helper()
+	resetStyledWiring()
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 	if len(verses) == 0 {
 		t.Fatal("sample chapter is empty")
 	}
-	area := readingScrollArea(state, verses, state.pal())
+	area := chapterTextScrollArea(state, verses, state.pal())
 	w := fyne.CurrentApp().NewWindow("bt-scroll-test")
 	w.Resize(fyne.NewSize(260, 140)) // narrow + short → lots of wrapped lines, scrollable
 	w.SetContent(area)
