@@ -47,6 +47,12 @@ func (t readingPaneTheme) Size(name fyne.ThemeSizeName) float32 {
 // get the system selection menu (Copy / Look Up / Translate / Share). This file
 // and reading_macos.go are mutually exclusive by build tag.
 func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
+	// Windows/Linux dispatch the styled, selectable pane (reading_styled_*.go);
+	// the constant is FALSE on iOS (where this file is dead code) and on the
+	// Android bridge-absent fallback, so those paths remain byte-identical.
+	if useStyledPane() {
+		return styledReadingScrollArea(state, verses, pal)
+	}
 	col := &readingColumn{maxWidth: 760}
 	var child fyne.CanvasObject
 	var chapter *chapterText

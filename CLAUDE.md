@@ -133,6 +133,17 @@ Android APK (`BibleText-Android.apk`) is uploaded to the release manually.
   U.S. Reports geometry (centred 27.5em native-inset column, 1.3 leading,
   indented paragraphs — `reporterLayoutActive()`, `reporterMeasureEm`; phones
   unchanged); details in docs/IPAD.md → "The reading page".
+- **Desktop styled pane (Windows/Linux).** Since the milestone-4 swap the
+  Windows/Linux reading pane is `styledReadingPane` (`reading_styled_*.go`,
+  untagged so the whole engine unit-tests on the Mac): styled runs (red
+  letters, raised serif verse numbers), real selection + the SHARED
+  `selectionStudyMenu`, exact verse-anchor scroll persistence, and the iOS
+  scripture face (system Georgia, else embedded Gelasio) drawn AND measured
+  via `FontSource`/`RenderedTextSize` so glyphs and hit-tests share one
+  ruler. Dispatch is `useStyledPane()` — a per-platform constant
+  (`reading_styled_platform_on/off.go`); flipping the `on` constant reverts
+  to the legacy `chapterText` Entry pane in one line. iOS/macOS/Android
+  behaviour is untouched (false constant; macOS keeps NSTextView).
 - **Native text overlays (cgo).** On macOS the reading pane is a native
   `NSTextView` and on iOS a `UITextView`, floating *above* the Fyne canvas
   (`reading_macos.go` / `reading_ios.go`, Objective-C in the cgo preamble).

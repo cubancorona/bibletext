@@ -21,14 +21,17 @@ const prefRedLetter = "reading.redLetter"
 
 // redLetterSupported reports whether THIS platform's reading pane can render
 // red-letter at all: the native text views (macOS NSTextView, iOS UITextView,
-// Android TextView) color the \wj runs, but the Windows/Linux pane is one
-// uniformly-styled widget.Entry — it cannot color a text range, so offering
-// the toggle there would be a silent no-op (review finding). Settings hides
-// the switch where this is false.
+// Android TextView) color the \wj runs, and since the milestone-4 swap the
+// Windows/Linux styled pane colours per-run text too. Only the Android
+// bridge-absent Fyne fallback still cannot; Settings hides the switch where
+// this is false.
 func redLetterSupported() bool {
 	switch runtime.GOOS {
 	case "darwin", "ios", "android":
 		return true
+	case "windows", "linux":
+		// The styled desktop pane (milestone-4 swap) colours per-run text.
+		return styledPaneEnabledOnPlatform
 	}
 	return false
 }

@@ -1121,17 +1121,23 @@ func (c *chapterText) selectionMenu() *fyne.Menu {
 }
 
 func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
-	state := c.state
+	return selectionStudyMenu(c.state, sel,
+		func() {
+			if c.clipboard != nil {
+				c.clipboard.SetContent(c.copySelection())
+			}
+		},
+		func() { c.TypedShortcut(&fyne.ShortcutSelectAll{}) })
+}
 
-	copyItem := fyne.NewMenuItem("Copy", func() {
-		if c.clipboard != nil {
-			c.clipboard.SetContent(c.copySelection())
-		}
-	})
+// selectionStudyMenu builds the desktop selection menu — Copy / Select all,
+// then (with a selection) Study with AI, Share, Cross-references, in the same
+// order and gating as the native menus. Shared by BOTH desktop panes
+// (chapterText and the styled pane), so the verb set can never diverge.
+func selectionStudyMenu(state *AppState, sel string, copyFn, selectAllFn func()) *fyne.Menu {
+	copyItem := fyne.NewMenuItem("Copy", copyFn)
 	copyItem.Disabled = sel == ""
-	selectAll := fyne.NewMenuItem("Select all", func() {
-		c.TypedShortcut(&fyne.ShortcutSelectAll{})
-	})
+	selectAll := fyne.NewMenuItem("Select all", selectAllFn)
 	items := []*fyne.MenuItem{copyItem, selectAll}
 
 	if sel != "" {

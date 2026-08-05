@@ -348,51 +348,10 @@ func (p *styledReadingPane) copyToClipboard() {
 
 // --- The study menu ----------------------------------------------------------
 
-// studyMenu mirrors chapterText.menuForSelection verb for verb (temporary
-// duplication — unified at milestone 4; see the file header).
+// studyMenu serves the pane's right-click menu through the SAME shared
+// builder chapterText uses (selectionStudyMenu, reading.go) — the milestone-4
+// unification that retired this file's temporary duplicate.
 func (p *styledReadingPane) studyMenu() *fyne.Menu {
-	state := p.state
-	sel := plainSelection(p.selectedRaw())
-
-	copyItem := fyne.NewMenuItem("Copy", p.copyToClipboard)
-	copyItem.Disabled = sel == ""
-	selectAll := fyne.NewMenuItem("Select all", p.selectAll)
-	items := []*fyne.MenuItem{copyItem, selectAll}
-
-	if sel != "" {
-		items = append(items, fyne.NewMenuItemSeparator())
-
-		shareItem := fyne.NewMenuItem("Share", nil)
-		shareItem.ChildMenu = fyne.NewMenu("",
-			fyne.NewMenuItem("Share with citation", func() {
-				dispatchSelectionAction(state, selActionShareCite, sel)
-			}),
-			fyne.NewMenuItem("Share as image", func() {
-				dispatchSelectionAction(state, selActionShareImage, sel)
-			}),
-		)
-		xrefItem := fyne.NewMenuItem("Cross-references", func() {
-			dispatchSelectionAction(state, selActionCrossRef, sel)
-		})
-
-		if aiFeaturesEnabled(state) {
-			aiItem := fyne.NewMenuItem("Study with AI", nil)
-			aiItem.ChildMenu = fyne.NewMenu("",
-				fyne.NewMenuItem("Explain", func() {
-					dispatchAIAction(state, aiActionExplain, sel)
-				}),
-				fyne.NewMenuItem("Analyze context", func() {
-					dispatchAIAction(state, aiActionContext, sel)
-				}),
-				fyne.NewMenuItem("Analyze translation", func() {
-					dispatchAIAction(state, aiActionTranslation, sel)
-				}),
-			)
-			items = append(items, aiItem, shareItem, xrefItem)
-		} else {
-			items = append(items, xrefItem, shareItem)
-		}
-	}
-
-	return fyne.NewMenu("", items...)
+	return selectionStudyMenu(p.state, plainSelection(p.selectedRaw()),
+		p.copyToClipboard, p.selectAll)
 }
