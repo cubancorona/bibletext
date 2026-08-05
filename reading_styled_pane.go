@@ -83,15 +83,25 @@ type styledReadingPane struct {
 
 	lay       *chapterLayout
 	drawRuns  []styledDrawRun
+	lineSegs  [][]styledDrawRun // drawRuns indexed by line, for hit-testing
 	lastWidth float32
+
+	// Selection state (milestone 3): rune offsets into lay.Text, -1 = none.
+	selAnchor, selStart, selEnd int
+
+	clipboard fyne.Clipboard
 }
 
 func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 	p := &styledReadingPane{
-		state:    state,
-		verses:   verses,
-		textSize: styledPaneTextSize(),
-		pal:      state.pal(),
+		state:     state,
+		verses:    verses,
+		textSize:  styledPaneTextSize(),
+		pal:       state.pal(),
+		selAnchor: -1, selStart: -1, selEnd: -1,
+	}
+	if state.window != nil {
+		p.clipboard = state.window.Clipboard()
 	}
 	p.ExtendBaseWidget(p)
 	p.relayout(720) // provisional; corrected when the real width arrives
@@ -129,10 +139,15 @@ func (p *styledReadingPane) relayout(width float32) {
 		return measureStyled(text, kind, p.textSize)
 	})
 	p.drawRuns = p.drawRuns[:0]
+	p.lineSegs = make([][]styledDrawRun, len(p.lay.Lines))
 	for li, ln := range p.lay.Lines {
-		p.drawRuns = append(p.drawRuns, mergeDrawRuns(li, ln)...)
+		segs := mergeDrawRuns(li, ln)
+		p.lineSegs[li] = segs
+		p.drawRuns = append(p.drawRuns, segs...)
 	}
 	p.lastWidth = width
+	// Offsets shifted with the new layout — any selection is now meaningless.
+	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
 }
 
 // measureStyled is the production ruler: body text at size, verse numbers at
@@ -182,9 +197,10 @@ func (p *styledReadingPane) highlightY() float32 {
 type styledPaneRenderer struct {
 	pane *styledReadingPane
 
-	band    *canvas.Rectangle
-	texts   []*canvas.Text
-	objects []fyne.CanvasObject
+	band     *canvas.Rectangle
+	selRects []*canvas.Rectangle
+	texts    []*canvas.Text
+	objects  []fyne.CanvasObject
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -193,9 +209,22 @@ func (r *styledPaneRenderer) rebuild() {
 	r.texts = r.texts[:0]
 	r.objects = r.objects[:0]
 
-	// The verse-highlight band sits BEHIND the text, like the shipping pane's.
+	// The verse-highlight band sits BEHIND the text, like the shipping pane's;
+	// selection rects sit between the band and the glyphs.
 	r.band = canvas.NewRectangle(color.NRGBA{}) // transparent until positioned
 	r.objects = append(r.objects, r.band)
+
+	selColor := p.pal.Accent
+	selColor.A = 70
+	r.selRects = r.selRects[:0]
+	for _, span := range p.selectionSpans() {
+		ln := p.lay.Lines[span.Line]
+		rect := canvas.NewRectangle(selColor)
+		rect.Move(fyne.NewPos(span.X0, ln.Y))
+		rect.Resize(fyne.NewSize(span.X1-span.X0, ln.H))
+		r.selRects = append(r.selRects, rect)
+		r.objects = append(r.objects, rect)
+	}
 
 	for _, dr := range p.drawRuns {
 		t := canvas.NewText(dr.Text, r.runColor(dr))
