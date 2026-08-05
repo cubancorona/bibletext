@@ -64,6 +64,11 @@ type styledLine struct {
 	// like chapterText.hardBreakRows.
 	ParaFirst      bool
 	PoemBreakAfter bool
+
+	// StartOffset/EndOffset are the line's [start,end) rune range in the flat
+	// selection text model — the selection and copy layers walk lines with
+	// them.
+	StartOffset, EndOffset int
 }
 
 // chapterLayout is the laid-out chapter plus the geometry indexes the
@@ -133,6 +138,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			lay.Lines = append(lay.Lines, styledLine{
 				Runs: cur, Y: y, H: p.LineHeight,
 				ParaFirst: paraFirst, PoemBreakAfter: poemBreak,
+				StartOffset: cur[0].Offset, EndOffset: offset,
 			})
 			paraFirst = false
 			y += p.LineHeight
