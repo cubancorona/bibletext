@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 )
 
@@ -251,5 +253,80 @@ func writePNG(t *testing.T, path string, img image.Image) {
 	defer f.Close()
 	if err := png.Encode(f, img); err != nil {
 		t.Logf("snapshot: %v", err)
+	}
+}
+
+// TestStyledPaneRepresentativeSnapshots renders the pane the way SHIPPING
+// Windows/Linux builds would show it: the real bibleTheme (Atkinson
+// Hyperlegible face), the real palettes, on the real paper surface — both
+// variants. Env-gated snapshot output for human inspection; the assertions
+// keep it honest in CI (paper-coloured background, dark-on-light ink in the
+// light variant and light-on-dark in the dark one).
+func TestStyledPaneRepresentativeSnapshots(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setRedLetterEnabled(true)
+
+	// The REAL app theme, exactly as CreateMainUI constructs it.
+	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	app.Settings().SetTheme(realTheme)
+
+	for _, tc := range []struct {
+		name string
+		pal  palette
+	}{
+		{"light", lightPalette},
+		{"dark", darkPalette},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := john3RedState()
+			p := newStyledReadingPane(st, st.Bible.GetChapter("John", 3))
+			p.pal = tc.pal // deterministic variant (bypasses OS variant plumbing)
+
+			paper := canvas.NewRectangle(tc.pal.Surface)
+			w := test.NewWindow(container.NewStack(paper, p))
+			defer w.Close()
+			w.Resize(fyne.NewSize(460, 300))
+			p.Refresh() // renderer picks up the palette
+
+			img := w.Canvas().Capture()
+
+			// The paper colour must appear inside the pane region (the window
+			// paints its own theme background around the stack, so corner
+			// pixels are padding, not paper).
+			pr, pg, pb := uint32(tc.pal.Surface.R)<<8, uint32(tc.pal.Surface.G)<<8, uint32(tc.pal.Surface.B)<<8
+			foundPaper := false
+			for y := 10; y < 80 && !foundPaper; y += 4 {
+				for x := 10; x < 120 && !foundPaper; x += 4 {
+					r0, g0, b0, _ := img.At(x, y).RGBA()
+					if absDiff(r0, pr)+absDiff(g0, pg)+absDiff(b0, pb) <= 24<<8 {
+						foundPaper = true
+					}
+				}
+			}
+			if !foundPaper {
+				t.Errorf("the %s paper colour never appears in the pane region", tc.name)
+			}
+			// Red letters must still read as red on both papers.
+			if n := countReddish(img); n < 50 {
+				t.Errorf("red letters missing on %s paper (%d red px)", tc.name, n)
+			}
+
+			if dir := os.Getenv("BIBLETEXT_PANE_SNAPSHOT_DIR"); dir != "" {
+				writePNG(t, filepath.Join(dir, "styled-pane-real-"+tc.name+".png"), img)
+			}
+		})
+	}
+
+	// Psalm 23 on the light paper, the everyday reading look.
+	st := psalm23State()
+	p := newStyledReadingPane(st, st.Bible.GetChapter("Psalms", 23))
+	p.pal = lightPalette
+	w := test.NewWindow(container.NewStack(canvas.NewRectangle(lightPalette.Surface), p))
+	defer w.Close()
+	w.Resize(fyne.NewSize(460, 340))
+	p.Refresh()
+	if dir := os.Getenv("BIBLETEXT_PANE_SNAPSHOT_DIR"); dir != "" {
+		writePNG(t, filepath.Join(dir, "styled-pane-real-psalm23.png"), w.Canvas().Capture())
 	}
 }
