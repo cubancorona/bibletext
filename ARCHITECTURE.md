@@ -212,7 +212,7 @@ prose.
 | `audio_export_apple.go` | `darwin` | The `bibleTextAudioStateChanged` `//export` (serves both Apple engines) |
 | `audio_supported_apple.go` / `audio_supported_android.go` / `audio_supported_other.go` | `darwin` / `android` / rest | Capability gates: `audioSupported()` (true everywhere but wasm) + `ttsSupported()` (true only where a native speech engine exists: Apple + Android). `chapterAudioAvailable()` in `audio.go` combines them per chapter |
 | `audio_artwork.go` | (untagged) | Renders the lock-screen "Book Chapter" art card (share-image style) |
-| `readalong.go` / `readalong_stub.go` | untagged / `!darwin && !android` | Bundled read-along timing tables (`assets/timings/`, keyed by recording id) driving verse highlight + follow-scroll; no-op stub on Linux/Windows |
+| `readalong.go` / `readalong_other.go` | untagged / `!darwin && !android` | Bundled read-along timing tables (`assets/timings/`, keyed by recording id) driving verse highlight + follow-scroll; on Linux/Windows the entry points forward to the styled pane (`reading_styled_readalong.go`) via `fyne.Do` |
 | `android/BtAudio.java` + `android/BtAudioService.java` | (dex) | The Java engine + the `mediaPlayback` foreground service (MediaSession + MediaStyle notification) for background/lock-screen playback |
 
 ### AI study (bring your own key)
@@ -411,9 +411,15 @@ on Linux needs `libasound2-dev`) decoding the narration MP3s with go-mp3. It
 speaks the same `nativeAudio*` shim and posts the same `applyNativeState`
 transitions — play/pause, ±15s seek, natural-end detection feeding continuous
 chapter advance, generation-counter staleness guards — so the controller and
-the whole audio UI are unchanged. Deliberately out of scope there: TTS
-(`ttsSupported()` gates every read-aloud surface), media keys / MPRIS / SMTC,
-and read-along highlight (the Fyne pane has no per-verse highlight hook).
+the whole audio UI are unchanged. Its watcher goroutine doubles as the time
+observer: every 200ms it posts the audible position (PCM bytes handed to the
+player via `countingSeeker`, minus the player's buffer) to
+`gAudio.onTimeUpdate`, driving read-along verse highlighting on the styled
+pane (`readalong_other.go` → `reading_styled_readalong.go`: amber tint,
+comfort-band follow-scroll, floating "Follow narration" pill — the same
+behaviour as the native overlays). Deliberately out of scope there: TTS
+(`ttsSupported()` gates every read-aloud surface) and media keys / MPRIS /
+SMTC.
 
 **Build-tag trap:** a `*_ios.go` filename is GOOS=ios-only and `*_darwin.go` is
 GOOS=darwin-only (which *excludes* iOS), so files shared by both Apple platforms

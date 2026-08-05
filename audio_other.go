@@ -18,8 +18,11 @@ package bibletext
 //     chapters with no recording show no audio control at all.
 //   - Media keys / lock-screen (MPRIS, SMTC), artwork: none yet — the in-app
 //     button is the transport.
-//   - Read-along highlight: readalong_stub.go stays no-op — the Fyne reading
-//     pane has no per-verse highlight hook.
+//   - Read-along highlight: SUPPORTED on the styled pane. The watcher goroutine
+//     doubles as the time observer (the AVPlayer periodic observer's role):
+//     every 200ms it posts the audible position — PCM bytes handed to the
+//     player minus what still sits in its buffer — to gAudio.onTimeUpdate,
+//     which drives readAlongHighlight (readalong_other.go → the styled pane).
 //
 // Threading: everything runs on background goroutines; applyNativeState is
 // designed to be called off-main (the cgo engines call it from native threads).
@@ -33,6 +36,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	oto "github.com/ebitengine/oto/v3"
@@ -48,8 +52,52 @@ type otoEngine struct {
 	ctxRate int
 	player  *oto.Player
 	dec     *mp3.Decoder
+	src     *countingSeeker // the player's actual source; counts PCM bytes read
 	paused  bool
 }
+
+// countingSeeker wraps the mp3 decoder as the player's source, counting the
+// PCM bytes the player has pulled. Read-along position must NOT come from
+// player.Seek(0, io.SeekCurrent) polling — oto's Seek drops its buffered
+// audio, so calling it 5×/second would stutter the playback. The count minus
+// player.BufferedSize() is the audible position; an intentional seek (±15s)
+// goes through Seek below, which re-syncs the count to the decoder's answer.
+//
+// mu serializes the DECODER: oto's mux deliberately releases its own lock
+// around source Reads (its issue-#188 workaround) while player.Seek calls the
+// source's Seek holding it — so without this mutex a ±15s skip races the mux
+// goroutine mid-Read through go-mp3's unsynchronized internals (a pre-existing
+// hazard this wrapper now also fixes) and an in-flight Read could complete
+// after Seek's store, drifting the count by one buffer.
+type countingSeeker struct {
+	mu sync.Mutex
+	r  io.ReadSeeker // the mp3 decoder (PCM byte offsets)
+	n  int64         // atomic: PCM bytes read since start/last seek
+}
+
+func (c *countingSeeker) Read(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n, err := c.r.Read(p)
+	if n > 0 {
+		atomic.AddInt64(&c.n, int64(n))
+	}
+	return n, err
+}
+
+func (c *countingSeeker) Seek(offset int64, whence int) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	pos, err := c.r.Seek(offset, whence)
+	if err == nil {
+		atomic.StoreInt64(&c.n, pos)
+	}
+	return pos, err
+}
+
+// pos is the PCM byte position the player has READ to (running ahead of the
+// audible position by the player's buffer).
+func (c *countingSeeker) pos() int64 { return atomic.LoadInt64(&c.n) }
 
 var gOto otoEngine
 
@@ -96,13 +144,19 @@ func (e *otoEngine) ensureContext(rate int) error {
 	return nil
 }
 
-// teardownLocked closes the current player. Callers hold e.mu.
+// teardownLocked silences and drops the current player. Callers hold e.mu.
 func (e *otoEngine) teardownLocked() {
 	if e.player != nil {
+		// oto v3.4: Close() is a documented no-op (the GC finalizer reclaims
+		// the mux slot later) — Pause() is what actually stops the sound.
+		// Without it the old narration keeps playing over the next chapter's
+		// until a GC cycle collects the dropped player.
+		e.player.Pause()
 		_ = e.player.Close()
 		e.player = nil
 	}
 	e.dec = nil
+	e.src = nil
 	e.paused = false
 }
 
@@ -149,17 +203,21 @@ func nativeAudioStartURL(url, title, artist string) {
 			e.post(gen, audioFailed)
 			return
 		}
-		p := e.ctx.NewPlayer(dec)
+		cs := &countingSeeker{r: dec}
+		p := e.ctx.NewPlayer(cs)
 		e.player = p
 		e.dec = dec
+		e.src = cs
 		e.paused = false
+		rate := e.ctxRate
 		p.Play()
 		e.mu.Unlock()
 		e.post(gen, audioPlaying)
 
 		// Watcher: detect natural end (buffer drained while not paused) and
-		// player errors. It belongs to this generation only.
-		tick := time.NewTicker(500 * time.Millisecond)
+		// player errors — and, at the natives' 200ms observer cadence, post the
+		// audible position for read-along. It belongs to this generation only.
+		tick := time.NewTicker(200 * time.Millisecond)
 		defer tick.Stop()
 		for range tick.C {
 			e.mu.Lock()
@@ -171,6 +229,9 @@ func nativeAudioStartURL(url, title, artist string) {
 			e.mu.Unlock()
 			if player == nil {
 				return
+			}
+			if bytes := cs.pos() - int64(player.BufferedSize()); bytes > 0 && rate > 0 {
+				gAudio.onTimeUpdate(float64(bytes) / float64(rate*otoBytesPerFrame))
 			}
 			if err := player.Err(); err != nil {
 				e.mu.Lock()
@@ -241,12 +302,15 @@ func nativeAudioSkip(seconds float64) {
 	e := &gOto
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.player == nil || e.dec == nil {
+	if e.player == nil || e.dec == nil || e.src == nil {
 		return
 	}
-	cur, err := e.player.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return
+	// Base the jump on the AUDIBLE position (bytes read minus the player's
+	// still-buffered tail), not a Seek(0, io.SeekCurrent) probe — oto's Seek
+	// drops the buffer, which made the old probe itself nudge the position.
+	cur := e.src.pos() - int64(e.player.BufferedSize())
+	if cur < 0 {
+		cur = 0
 	}
 	total := e.dec.Length()
 	next := cur + int64(seconds*float64(e.ctxRate))*otoBytesPerFrame
