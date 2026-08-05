@@ -127,6 +127,12 @@ func wireFyneReadingScroll(state *AppState, scroll *container.Scroll, chapter *c
 // px past its top, fraction of scrollable height). ok=false only when no pane
 // is registered or laid out (0 values ⇒ top of chapter, per reading_state.go).
 func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
+	// The styled pane (the shipping Windows/Linux pane since the milestone-4
+	// swap) registers its own scroll; delegate when it is live. The
+	// chapterText path below remains for the one-line fallback flip.
+	if styledAnchorActive() {
+		return captureStyledAnchor()
+	}
 	scroll, chapter := fyneReadingScroll, fyneReadingChapter
 	if scroll == nil || chapter == nil {
 		return 0, 0, 0, false
@@ -153,6 +159,10 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 // armReadingRestore arms (or, with all-zero arguments, disarms) the restore
 // target that applyFyneReadingRestore applies on layout passes.
 func armReadingRestore(verse int, delta, frac float64) {
+	if styledAnchorActive() {
+		armStyledRestore(verse, delta, frac)
+		return
+	}
 	fyneRestoreVerse, fyneRestoreDelta, fyneRestoreFrac = verse, delta, frac
 	fyneRestoreArmed = verse > 0 || frac > 0
 }

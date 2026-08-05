@@ -332,3 +332,42 @@ func (r *styledPaneRenderer) MinSize() fyne.Size           { return r.pane.MinSi
 func (r *styledPaneRenderer) Refresh()                     { r.rebuild(); canvas.Refresh(r.pane) }
 func (r *styledPaneRenderer) Objects() []fyne.CanvasObject { return r.objects }
 func (r *styledPaneRenderer) Destroy()                     {}
+
+// --- Scroll-anchor geometry (the pane's exact-line answers to chapterText's
+// proportional model) ---------------------------------------------------------
+
+// verseAtY maps a content Y to (top-visible verse, px past its first line) —
+// the capture half of the within-chapter scroll anchor.
+func (p *styledReadingPane) verseAtY(y float32) (verse int, delta float64) {
+	if p.lay == nil || len(p.lay.VerseLines) == 0 {
+		return 0, 0
+	}
+	best := p.lay.VerseLines[0]
+	for _, vl := range p.lay.VerseLines {
+		if p.lay.Lines[vl.line].Y <= y {
+			best = vl
+		} else {
+			break
+		}
+	}
+	return best.verse, float64(y - p.lay.Lines[best.line].Y)
+}
+
+// yForVerse maps a verse number to its first line's exact Y — the restore half.
+func (p *styledReadingPane) yForVerse(verse int) (float32, bool) {
+	if p.lay == nil {
+		return 0, false
+	}
+	for _, vl := range p.lay.VerseLines {
+		if vl.verse == verse {
+			return p.lay.Lines[vl.line].Y, true
+		}
+	}
+	return 0, false
+}
+
+// highlightOwnsScroll reports whether a search/cross-ref highlight should own
+// the scroll position (mirrors chapterText.highlightLine >= 0).
+func (p *styledReadingPane) highlightOwnsScroll() bool {
+	return p.lay != nil && p.lay.HighlightStart >= 0
+}
