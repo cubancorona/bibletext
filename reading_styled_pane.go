@@ -1,0 +1,272 @@
+package bibletext
+
+// The styled, selectable desktop reading pane (Windows/Linux parity project,
+// milestone 2: rendering). A pure-Go fyne widget that draws layoutChapter's
+// styled runs as positioned canvas.Text — red letters, small raised verse
+// numbers, the verse-highlight band — everything the single-style
+// widget.Entry pane cannot do, with no native embedding and no new
+// dependencies. Selection arrives in milestone 3; the desktop dispatch swap
+// (and any change visible to other platforms) is milestone 4.
+//
+// Untagged so the widget builds and unit-tests on the dev machine; it is not
+// yet referenced by any platform's UI.
+//
+// RENDERING MODEL. layoutChapter keeps TOKEN-level runs (for wrap math and,
+// later, selection hit-testing); drawing merges adjacent same-style runs into
+// one canvas.Text per style segment, anchored at the segment's first token's
+// X. That keeps canvas object counts low (roughly one or two objects per
+// line instead of one per word — Psalm 119 stays in the hundreds, not
+// thousands) and makes the DRAWN text the geometry source of truth for the
+// selection layer: within a segment, positions come from measuring substring
+// prefixes of exactly the string being drawn, so kerning can never drift
+// between hit-testing and pixels.
+
+import (
+	"image/color"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	fyneTheme "fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
+)
+
+// styledPaneInset is the horizontal padding inside the pane. Vertical spacing
+// comes from the layout's own line geometry.
+const styledPaneInset = float32(12)
+
+// styledDrawRun is one merged, drawable style segment of a line.
+type styledDrawRun struct {
+	Text string
+	Kind runKind
+	Red  bool
+	HL   bool
+
+	X float32 // relative to the line's left edge (pane adds the inset)
+
+	// FirstOffset is the flat-model rune offset of the segment's first rune
+	// (the selection layer maps drawn positions back to the model with it).
+	FirstOffset int
+	Line        int
+}
+
+// mergeDrawRuns collapses a line's token runs into style segments. Adjacent
+// runs merge when kind, red-letter, and highlight all match; the model text
+// between two adjacent runs on one line is always a single space.
+func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
+	var out []styledDrawRun
+	for _, r := range ln.Runs {
+		if n := len(out); n > 0 {
+			prev := &out[n-1]
+			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.HL == r.Highlight {
+				prev.Text += " " + r.Text
+				continue
+			}
+		}
+		out = append(out, styledDrawRun{
+			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, HL: r.Highlight,
+			X: r.X, FirstOffset: r.Offset, Line: lineIdx,
+		})
+	}
+	return out
+}
+
+// styledReadingPane renders a chapter with styled runs. It lives inside the
+// existing readingColumn/VScroll exactly where chapterText does today.
+type styledReadingPane struct {
+	widget.BaseWidget
+
+	state  *AppState
+	verses []Verse
+
+	textSize float32
+	pal      palette
+
+	lay       *chapterLayout
+	drawRuns  []styledDrawRun
+	lastWidth float32
+}
+
+func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
+	p := &styledReadingPane{
+		state:    state,
+		verses:   verses,
+		textSize: styledPaneTextSize(),
+		pal:      state.pal(),
+	}
+	p.ExtendBaseWidget(p)
+	p.relayout(720) // provisional; corrected when the real width arrives
+	return p
+}
+
+// styledPaneTextSize matches chapterText's sizing: the theme body size scaled
+// by the reader's Settings → Text size choice, with a sane default for bare
+// test constructions (no running app).
+func styledPaneTextSize() float32 {
+	size := float32(15)
+	if app := fyne.CurrentApp(); app != nil {
+		size = fyneTheme.TextSize()
+	}
+	return size * float32(readingTextScale())
+}
+
+// styledLineHeight is the baseline-to-baseline distance for the pane's body
+// text: comfortable book leading, matching the reading feel of the shipping
+// pane rather than a dense terminal.
+func (p *styledReadingPane) styledLineHeight() float32 { return p.textSize * 1.55 }
+
+func (p *styledReadingPane) relayout(width float32) {
+	avail := width - 2*styledPaneInset
+	if avail < 80 {
+		avail = 80
+	}
+	lh := p.styledLineHeight()
+	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
+		Width:      avail,
+		LineHeight: lh,
+		ParaGap:    lh * 0.65,
+		SpaceW:     measureStyled(" ", runWord, p.textSize),
+	}, func(text string, kind runKind) float32 {
+		return measureStyled(text, kind, p.textSize)
+	})
+	p.drawRuns = p.drawRuns[:0]
+	for li, ln := range p.lay.Lines {
+		p.drawRuns = append(p.drawRuns, mergeDrawRuns(li, ln)...)
+	}
+	p.lastWidth = width
+}
+
+// measureStyled is the production ruler: body text at size, verse numbers at
+// the same 0.66 ratio the native overlays use, both in the app font.
+func measureStyled(text string, kind runKind, size float32) float32 {
+	if kind == runVerseNum {
+		size *= styledNumRatio
+	}
+	return fyne.MeasureText(text, size, fyne.TextStyle{}).Width
+}
+
+const styledNumRatio = float32(0.66)
+
+func (p *styledReadingPane) CreateRenderer() fyne.WidgetRenderer {
+	r := &styledPaneRenderer{pane: p}
+	r.rebuild()
+	return r
+}
+
+// Resize re-lays-out at the new width before the renderer positions objects —
+// the same responsive contract as chapterText.Resize.
+func (p *styledReadingPane) Resize(size fyne.Size) {
+	if size.Width > 1 && size.Width != p.lastWidth {
+		p.relayout(size.Width)
+		p.Refresh() // draw runs changed — the renderer must rebuild, not just reposition
+	}
+	p.BaseWidget.Resize(size)
+}
+
+func (p *styledReadingPane) MinSize() fyne.Size {
+	h := float32(0)
+	if p.lay != nil {
+		h = p.lay.Height + p.styledLineHeight() // breathing room below the last line
+	}
+	return fyne.NewSize(200, h)
+}
+
+// highlightY is the Y of the highlighted verse band's top (scroll-to target).
+func (p *styledReadingPane) highlightY() float32 {
+	if p.lay == nil || p.lay.HighlightStart < 0 || p.lay.HighlightStart >= len(p.lay.Lines) {
+		return 0
+	}
+	return p.lay.Lines[p.lay.HighlightStart].Y
+}
+
+// styledPaneRenderer draws the merged runs plus the highlight band.
+type styledPaneRenderer struct {
+	pane *styledReadingPane
+
+	band    *canvas.Rectangle
+	texts   []*canvas.Text
+	objects []fyne.CanvasObject
+}
+
+// rebuild recreates the canvas objects from the pane's current draw runs.
+func (r *styledPaneRenderer) rebuild() {
+	p := r.pane
+	r.texts = r.texts[:0]
+	r.objects = r.objects[:0]
+
+	// The verse-highlight band sits BEHIND the text, like the shipping pane's.
+	r.band = canvas.NewRectangle(color.NRGBA{}) // transparent until positioned
+	r.objects = append(r.objects, r.band)
+
+	for _, dr := range p.drawRuns {
+		t := canvas.NewText(dr.Text, r.runColor(dr))
+		t.TextSize = p.textSize
+		if dr.Kind == runVerseNum {
+			t.TextSize = p.textSize * styledNumRatio
+			t.TextStyle = fyne.TextStyle{Bold: true}
+		}
+		r.texts = append(r.texts, t)
+		r.objects = append(r.objects, t)
+	}
+	r.position()
+}
+
+func (r *styledPaneRenderer) runColor(dr styledDrawRun) color.Color {
+	p := r.pane
+	switch {
+	case dr.HL:
+		return p.pal.HighlightText
+	case dr.Red && dr.Kind == runWord:
+		return p.pal.RedLetter
+	case dr.Kind == runVerseNum:
+		return p.pal.VerseNumber
+	default:
+		return p.pal.Text
+	}
+}
+
+// position places every object from the layout geometry.
+func (r *styledPaneRenderer) position() {
+	p := r.pane
+	if p.lay == nil {
+		return
+	}
+
+	// Highlight band across the highlighted line span.
+	if p.lay.HighlightStart >= 0 && p.lay.HighlightStart < len(p.lay.Lines) {
+		top := p.lay.Lines[p.lay.HighlightStart].Y
+		bot := p.lay.Lines[p.lay.HighlightEnd].Y + p.lay.Lines[p.lay.HighlightEnd].H
+		// pal.Highlight IS the faint wash colour; the tagged reading_fyne
+		// helper is unavailable to untagged code, so use it directly.
+		r.band.FillColor = p.pal.Highlight
+		r.band.Move(fyne.NewPos(0, top))
+		r.band.Resize(fyne.NewSize(p.lastWidth, bot-top))
+		r.band.Show()
+	} else {
+		r.band.Hide()
+	}
+
+	lh := p.styledLineHeight()
+	bodyH := fyne.MeasureText("Ag", p.textSize, fyne.TextStyle{}).Height
+	numH := fyne.MeasureText("1", p.textSize*styledNumRatio, fyne.TextStyle{}).Height
+	for i, dr := range p.drawRuns {
+		ln := p.lay.Lines[dr.Line]
+		y := ln.Y + (lh-bodyH)/2
+		if dr.Kind == runVerseNum {
+			// Raised superscript: top-align the small label against the
+			// body's ascent region.
+			y = ln.Y + (lh-bodyH)/2 - numH*0.18
+		}
+		r.texts[i].Move(fyne.NewPos(styledPaneInset+dr.X, y))
+	}
+}
+
+func (r *styledPaneRenderer) Layout(size fyne.Size) {
+	// Width changes arrive via the widget's Resize (which re-lays-out); the
+	// renderer only needs repositioning here.
+	r.position()
+}
+
+func (r *styledPaneRenderer) MinSize() fyne.Size           { return r.pane.MinSize() }
+func (r *styledPaneRenderer) Refresh()                     { r.rebuild(); canvas.Refresh(r.pane) }
+func (r *styledPaneRenderer) Objects() []fyne.CanvasObject { return r.objects }
+func (r *styledPaneRenderer) Destroy()                     {}
