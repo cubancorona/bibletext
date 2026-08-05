@@ -63,6 +63,13 @@ func (p *styledReadingPane) segTextSize(kind runKind) float32 {
 	return p.textSize
 }
 
+// segWidth measures segment text with the pane's serif source — the SAME
+// ruler the renderer draws with, so hit-tests always agree with pixels.
+func (p *styledReadingPane) segWidth(text string, kind runKind) float32 {
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, p.font)
+	return w.Width
+}
+
 // offsetAtPos maps a widget-relative position to a model rune offset.
 func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 	li := p.lineAtY(pos.Y)
@@ -77,7 +84,7 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 	}
 	for _, seg := range segs {
 		segRunes := []rune(seg.Text)
-		w := fyne.MeasureText(seg.Text, p.segTextSize(seg.Kind), fyne.TextStyle{}).Width
+		w := p.segWidth(seg.Text, seg.Kind)
 		if x < seg.X {
 			return seg.FirstOffset
 		}
@@ -87,7 +94,7 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 			lo, hi := 0, len(segRunes)
 			for lo < hi {
 				mid := (lo + hi + 1) / 2
-				pw := fyne.MeasureText(string(segRunes[:mid]), p.segTextSize(seg.Kind), fyne.TextStyle{}).Width
+				pw := p.segWidth(string(segRunes[:mid]), seg.Kind)
 				if seg.X+pw <= x {
 					lo = mid
 				} else {
@@ -117,13 +124,12 @@ func (p *styledReadingPane) xForOffset(li, offset int) float32 {
 			return styledPaneInset + seg.X
 		}
 		if offset <= end {
-			pw := fyne.MeasureText(string(segRunes[:offset-seg.FirstOffset]),
-				p.segTextSize(seg.Kind), fyne.TextStyle{}).Width
+			pw := p.segWidth(string(segRunes[:offset-seg.FirstOffset]), seg.Kind)
 			return styledPaneInset + seg.X + pw
 		}
 	}
 	last := segs[len(segs)-1]
-	w := fyne.MeasureText(last.Text, p.segTextSize(last.Kind), fyne.TextStyle{}).Width
+	w := p.segWidth(last.Text, last.Kind)
 	return styledPaneInset + last.X + w
 }
 

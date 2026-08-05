@@ -23,6 +23,7 @@ package bibletext
 
 import (
 	"image/color"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -80,6 +81,7 @@ type styledReadingPane struct {
 
 	textSize float32
 	pal      palette
+	font     fyne.Resource // the scripture serif (Georgia, or embedded Gelasio)
 
 	lay       *chapterLayout
 	drawRuns  []styledDrawRun
@@ -98,6 +100,7 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 		verses:    verses,
 		textSize:  styledPaneTextSize(),
 		pal:       state.pal(),
+		font:      styledPaneFont(),
 		selAnchor: -1, selStart: -1, selEnd: -1,
 	}
 	if state.window != nil {
@@ -119,6 +122,28 @@ func styledPaneTextSize() float32 {
 	return size * float32(readingTextScale())
 }
 
+// styledPaneFont resolves the scripture face ONCE per process: the same
+// family iOS renders through its HTML stack (font-family: Georgia, …) — real
+// Georgia when the OS has it (macOS and Windows both ship it), else the
+// embedded Gelasio, Georgia's metrics-compatible OFL equivalent that the
+// share cards already carry. Never nil, so drawing and measuring always use
+// the same face.
+func styledPaneFont() fyne.Resource {
+	styledFontOnce.Do(func() {
+		if fonts := loadBookFonts(); fonts != nil && fonts.regular != nil {
+			styledFontCached = fonts.regular
+			return
+		}
+		styledFontCached = fyne.NewStaticResource("Gelasio-Regular.ttf", shareFontGelasio)
+	})
+	return styledFontCached
+}
+
+var (
+	styledFontOnce   sync.Once
+	styledFontCached fyne.Resource
+)
+
 // styledLineHeight is the baseline-to-baseline distance for the pane's body
 // text: comfortable book leading, matching the reading feel of the shipping
 // pane rather than a dense terminal.
@@ -134,10 +159,8 @@ func (p *styledReadingPane) relayout(width float32) {
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    lh * 0.65,
-		SpaceW:     measureStyled(" ", runWord, p.textSize),
-	}, func(text string, kind runKind) float32 {
-		return measureStyled(text, kind, p.textSize)
-	})
+		SpaceW:     p.measure(" ", runWord),
+	}, p.measure)
 	p.drawRuns = p.drawRuns[:0]
 	p.lineSegs = make([][]styledDrawRun, len(p.lay.Lines))
 	for li, ln := range p.lay.Lines {
@@ -150,13 +173,18 @@ func (p *styledReadingPane) relayout(width float32) {
 	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
 }
 
-// measureStyled is the production ruler: body text at size, verse numbers at
-// the same 0.66 ratio the native overlays use, both in the app font.
-func measureStyled(text string, kind runKind, size float32) float32 {
+// measure is the production ruler: body text at size, verse numbers at the
+// same 0.66 ratio the native overlays use — measured with the SAME serif
+// source the renderer draws with (RenderedTextSize honours FontSource, which
+// fyne.MeasureText cannot), so wrap geometry, hit-testing and glyphs can
+// never drift apart.
+func (p *styledReadingPane) measure(text string, kind runKind) float32 {
+	size := p.textSize
 	if kind == runVerseNum {
 		size *= styledNumRatio
 	}
-	return fyne.MeasureText(text, size, fyne.TextStyle{}).Width
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.font)
+	return w.Width
 }
 
 const styledNumRatio = float32(0.66)
@@ -228,10 +256,13 @@ func (r *styledPaneRenderer) rebuild() {
 
 	for _, dr := range p.drawRuns {
 		t := canvas.NewText(dr.Text, r.runColor(dr))
+		t.FontSource = p.font // the scripture serif, same face iOS shows
 		t.TextSize = p.textSize
 		if dr.Kind == runVerseNum {
+			// The serif at the small superscript size (iOS renders numbers in
+			// the same family); no Bold — the source is a single face and a
+			// synthetic-bold fallback would leave the serif for a sans.
 			t.TextSize = p.textSize * styledNumRatio
-			t.TextStyle = fyne.TextStyle{Bold: true}
 		}
 		r.texts = append(r.texts, t)
 		r.objects = append(r.objects, t)
@@ -275,8 +306,10 @@ func (r *styledPaneRenderer) position() {
 	}
 
 	lh := p.styledLineHeight()
-	bodyH := fyne.MeasureText("Ag", p.textSize, fyne.TextStyle{}).Height
-	numH := fyne.MeasureText("1", p.textSize*styledNumRatio, fyne.TextStyle{}).Height
+	drv := fyne.CurrentApp().Driver()
+	bodyS, _ := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.font)
+	numS, _ := drv.RenderedTextSize("1", p.textSize*styledNumRatio, fyne.TextStyle{}, p.font)
+	bodyH, numH := bodyS.Height, numS.Height
 	for i, dr := range p.drawRuns {
 		ln := p.lay.Lines[dr.Line]
 		y := ln.Y + (lh-bodyH)/2
