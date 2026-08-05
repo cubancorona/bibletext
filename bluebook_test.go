@@ -322,7 +322,7 @@ func TestBluebookSharePipeline(t *testing.T) {
 		quote := formatBibleQuote(cleanQuoteText(st, "35 Jesus wept."))
 		cite := citationForSelection(st, "Jesus wept.")
 		got := composeShareText(quote, cite, "World English Bible")
-		want := "“Jesus wept.”\n— John 11:35 (World English Bible)"
+		want := "“Jesus wept.”\n\n— John 11:35 (World English Bible)"
 		if got != want {
 			t.Errorf("\n got %q\nwant %q\n[src: harvardlawreview.org/blog/2023/06]", got, want)
 		}
@@ -336,7 +336,7 @@ func TestBluebookSharePipeline(t *testing.T) {
 			t.Errorf("a 50+ word passage must not be wrapped in quotation marks; got leading mark")
 		}
 		got := composeShareText(quote, "1 Corinthians 13:4–7", "Berean Standard Bible")
-		want := text + "\n— 1 Corinthians 13:4–7 (Berean Standard Bible)"
+		want := text + "\n\n— 1 Corinthians 13:4–7 (Berean Standard Bible)"
 		if got != want {
 			t.Errorf("\n got %q\nwant %q", got, want)
 		}
@@ -385,7 +385,7 @@ func TestBluebookFragmentSharePipeline(t *testing.T) {
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
 	cite := citationForSelection(st, frag)
 	got := composeShareText(quote, cite, "Berean Standard Bible")
-	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no basis for a charge against Him.’”\n— John 18:38 (Berean Standard Bible)"
+	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no basis for a charge against Him.’”\n\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
@@ -492,7 +492,7 @@ func TestBluebookEndOmissionPipeline(t *testing.T) {
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
 	cite := citationForSelection(st, frag)
 	got := composeShareText(quote, cite, "Berean Standard Bible")
-	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . . .’”\n— John 18:38 (Berean Standard Bible)"
+	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . . .’”\n\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
@@ -518,7 +518,7 @@ func TestBluebookActsShareCards(t *testing.T) {
 	selA := acts2[25]
 	quoteA := formatBibleQuote(cleanQuoteText(st, selA), originalSentenceTerminal(st, selA))
 	gotA := composeShareText(quoteA, citationForSelection(st, selA), "Berean Standard Bible")
-	wantA := "“David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.’”\n— Acts 2:25 (Berean Standard Bible)"
+	wantA := "“David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.’”\n\n— Acts 2:25 (Berean Standard Bible)"
 	if gotA != wantA {
 		t.Errorf("Card A (Acts 2:25):\n got %q\nwant %q", gotA, wantA)
 	}
@@ -527,7 +527,7 @@ func TestBluebookActsShareCards(t *testing.T) {
 	selB := acts2[22] + " " + acts2[23] + " But God raised Him from the dead"
 	quoteB := formatBibleQuote(cleanQuoteText(st, selB), originalSentenceTerminal(st, selB))
 	gotB := composeShareText(quoteB, citationForSelection(st, selB), "Berean Standard Bible")
-	wantB := "Men of Israel, listen to this message: Jesus of Nazareth was a man certified by God to you by miracles, wonders, and signs, which God did among you through Him, as you yourselves know. He was delivered up by God’s set plan and foreknowledge, and you, by the hands of the lawless, put Him to death by nailing Him to the cross. But God raised Him from the dead . . . .\n— Acts 2:22–24 (Berean Standard Bible)"
+	wantB := "Men of Israel, listen to this message: Jesus of Nazareth was a man certified by God to you by miracles, wonders, and signs, which God did among you through Him, as you yourselves know. He was delivered up by God’s set plan and foreknowledge, and you, by the hands of the lawless, put Him to death by nailing Him to the cross. But God raised Him from the dead . . . .\n\n— Acts 2:22–24 (Berean Standard Bible)"
 	if gotB != wantB {
 		t.Errorf("Card B (Acts 2:22–24):\n got %q\nwant %q", gotB, wantB)
 	}

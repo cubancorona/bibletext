@@ -75,10 +75,14 @@ func citationLine(cite, version string) string {
 	return "— " + cite + " (" + version + ")"
 }
 
-// composeShareText builds the plain-text share: the already-formatted quote, a line
-// break, then the citation line.
+// composeShareText builds the plain-text share: the already-formatted quote, a
+// BLANK line, then the citation line. The blank line is load-bearing since text
+// shares began preserving poetry: a poetic quote already contains single line
+// breaks, so a citation on a bare next line reads as one more poem line — the
+// empty line is what marks it as attribution (and matches Rule 5.1's setting
+// the citation off from the quoted matter).
 func composeShareText(quote, cite, version string) string {
-	return quote + "\n" + citationLine(cite, version)
+	return quote + "\n\n" + citationLine(cite, version)
 }
 
 // cleanQuoteText turns a raw reading-view selection into clean, quotable verse

@@ -190,7 +190,7 @@ func TestCitedTextSharePreservesSourceLineBreaks(t *testing.T) {
 	cleaned, cite := prepareShareQuote(state, raw)
 	cleaned = restoreShareLineBreaks(state, cleaned)
 	got := composeShareText(formatBibleQuote(cleaned), cite, "World English Bible")
-	want := "“The heavens declare the glory of God.\nThe expanse shows his handiwork.”\n— Psalms 19:1 (World English Bible)"
+	want := "“The heavens declare the glory of God.\nThe expanse shows his handiwork.”\n\n— Psalms 19:1 (World English Bible)"
 	if got != want {
 		t.Errorf("cited share must retain the source poetry line:\n got %q\nwant %q", got, want)
 	}
