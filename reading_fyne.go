@@ -53,6 +53,15 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	if useStyledPane() {
 		return styledReadingScrollArea(state, verses, pal)
 	}
+	return chapterTextScrollArea(state, verses, pal)
+}
+
+// chapterTextScrollArea is the legacy chapterText pane — the shipping path on
+// the Android bridge-absent fallback and the burn-in fallback behind the styled
+// pane on Windows/Linux. Kept callable directly so its scroll-wiring tests keep
+// exercising THIS pane on the platforms whose readingScrollArea now dispatches
+// to the styled one.
+func chapterTextScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
 	col := &readingColumn{maxWidth: 760}
 	var child fyne.CanvasObject
 	var chapter *chapterText
