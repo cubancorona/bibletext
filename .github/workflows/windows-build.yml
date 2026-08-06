@@ -1,0 +1,51 @@
+# On-demand Windows binary from main — for testing unreleased work on real
+# Windows hardware (or a VM) without cutting a release. Downloads from the
+# run's artifacts (requires being logged in to GitHub).
+# Manual trigger: gh workflow run windows-build.yml
+#
+# The plain exe is right for real Windows machines (real GPU → real OpenGL).
+# The mesa artifact adds llvmpipe's software-GL DLLs for GPU-less VMs: unzip
+# both into one folder so opengl32.dll sits beside bibletext.exe (the same
+# trick windows-visual-smoke.yml uses on GitHub's GPU-less runners).
+name: Windows build artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: build the Windows desktop binary
+        run: go build -ldflags="-H windowsgui -w" -o bibletext.exe ./cmd/desktop
+
+      - name: fetch Mesa llvmpipe DLLs (for GPU-less VMs)
+        shell: pwsh
+        run: |
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -like '*release-msvc.7z' } | Select-Object -First 1
+          Invoke-WebRequest $asset.browser_download_url -OutFile mesa.7z
+          7z x mesa.7z -omesa | Out-Null
+          New-Item -ItemType Directory mesa-dlls | Out-Null
+          Copy-Item mesa\x64\*.dll mesa-dlls\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bibletext-windows
+          path: bibletext.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesa-software-opengl
+          path: mesa-dlls/
