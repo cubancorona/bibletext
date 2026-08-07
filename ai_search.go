@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 )
@@ -13,10 +12,16 @@ import (
 // startAISearch runs runAISearch on a background goroutine and delivers the result
 // back on the Fyne UI thread, so the caller can drive a spinner then render the
 // passages without managing the goroutine itself.
-func startAISearch(state *AppState, query string, done func([]Verse, error)) {
+//
+// It returns a cancel func: with a budget generous enough for a thinking model
+// (aiRequestBudget), the reader needs a way out that actually ABANDONS the
+// request — dropping the callback alone would leave the connection open and the
+// tokens billing. Safe to call any number of times, including after completion.
+func startAISearch(state *AppState, query string, done func([]Verse, error)) (cancel func()) {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
-		defer cancel()
+		defer cancelTimeout()
 		verses, err := runAISearch(ctx, state, query)
 		// The completion is ALWAYS delivered — even when the assistant was
 		// switched to "None" mid-flight. Both callers already drop a dead
@@ -26,6 +31,7 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) {
 		// (review finding).
 		fyne.Do(func() { done(verses, err) })
 	}()
+	return cancelCtx
 }
 
 // aiSearchSession serializes Find submissions: every submission (and anything
@@ -72,6 +78,26 @@ func aiFeaturesEnabled(state *AppState) bool {
 	return state.keys().aiEnabled()
 }
 
+// abandonAISearch is the ONE way to give up on an in-flight Find. It runs the
+// closure the submitting builder installed, which both invalidates that
+// builder's session (so a late completion can't repaint) and cancels the
+// REQUEST — dropping only the callback would leave the connection open and the
+// tokens billing for the rest of aiRequestBudget, which is now three minutes.
+//
+// Every teardown route calls this: the searching view's Cancel, the field's ✕,
+// the Search/Find toggle, collapsing the iPad sidebar, clearSearchState, and
+// Settings → Assistant → None. Safe when nothing is running, and idempotent —
+// the hook is cleared so a second call is a no-op.
+func abandonAISearch(state *AppState) {
+	if state == nil || state.cancelAISearch == nil {
+		return
+	}
+	cancel := state.cancelAISearch
+	state.cancelAISearch = nil
+	cancel()
+	state.aiSearchLoading = false
+}
+
 // clearAISearchContext drops any live or leftover Find state — the results
 // context replacing the reading pane, the query/results/error fields, a pending
 // loading flag — so nothing AI survives the assistant flipping to "None". The
@@ -81,6 +107,7 @@ func clearAISearchContext(state *AppState) {
 	if state == nil {
 		return
 	}
+	abandonAISearch(state) // the request itself, not just its callback
 	if state.aiSearchActive {
 		state.IsSearching = false
 		state.CanReturnToSearchResults = false
@@ -130,6 +157,14 @@ func buildAISearchPrompt(query string) string {
 		"No commentary, no numbering, no extra text — just the references."
 }
 
+// aiSearchGenerate is a seam over the provider call (like aiRetrySleep and
+// reporterLayout elsewhere), so tests can observe the context a Find actually
+// runs under — the only way to prove Cancel abandons the REQUEST rather than
+// just dropping its callback.
+var aiSearchGenerate = func(ctx context.Context, info providerInfo, store *keyStore, key, prompt string) (string, error) {
+	return info.New(store, key).generate(ctx, prompt)
+}
+
 // runAISearch performs a natural-language passage search with the active provider
 // and resolves the returned references against the loaded Bible. The returned verses
 // are real scripture from our data. Results are cached per provider+query so
@@ -154,7 +189,7 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 	cacheKey := aiCacheKey(id+"|search", "", 0, strings.ToLower(q))
 	raw, cached := aiCacheGet(cacheKey)
 	if !cached {
-		out, err := info.New(store, key).generate(ctx, buildAISearchPrompt(q))
+		out, err := aiSearchGenerate(ctx, info, store, key, buildAISearchPrompt(q))
 		if err != nil {
 			return nil, err
 		}

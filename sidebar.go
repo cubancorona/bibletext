@@ -91,8 +91,21 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		}
 		state.aiSearchResults = nil
 		state.aiSearchLoading = true
-		state.refresh() // → aiSearchingView
-		startAISearch(state, q, func(verses []Verse, err error) {
+		state.aiSearchCancelled = false
+		// Installed BEFORE the refresh below, because that refresh SYNCHRONOUSLY
+		// builds aiSearchingView — which only renders Cancel when this hook is
+		// set. Assigning after would leave the first Find of a session with no
+		// Cancel at all. The closure reads the cancelSearch VARIABLE (filled in
+		// once startAISearch returns), so it always reaches the request that is
+		// actually in flight rather than a captured stale one. UI goroutine
+		// only, so no synchronisation. (Mirrors the mobile twin.)
+		cancelSearch := func() {}
+		state.cancelAISearch = func() {
+			askSession.Invalidate()
+			cancelSearch()
+		}
+		state.refresh() // → aiSearchingView (with Cancel)
+		cancelSearch = startAISearch(state, q, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear owns the results now
 			}
@@ -112,19 +125,20 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			default:
 				state.aiSearchResults = verses
 			}
-			state.refresh() // → results / error
+			state.cancelAISearch = nil // this request is done; nothing to abandon
+			state.refresh()            // → results / error
 		})
 	}
 	state.retryAISearch = func() { runAsk(state.aiSearchQuery) }
 	aiEntry.OnSubmitted = runAsk
 
 	clearAsk := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-		askSession.Invalidate() // an in-flight ask must not resurrect after the clear
+		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
 		aiEntry.SetText("")
 		state.aiSearchQuery = ""
 		state.aiSearchResults = nil
 		state.aiSearchErr = nil
-		state.aiSearchLoading = false
+		state.aiSearchCancelled = false
 		if state.IsSearching {
 			state.refresh() // → prompt
 		}
@@ -155,9 +169,9 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		// progress state, or a completion dropped at the aiSearchActive guard
 		// would leak aiSearchLoading=true and toggling back to Find would show
 		// a permanent "Searching with AI…" pane (review finding).
-		askSession.Invalidate()
-		state.aiSearchLoading = false
+		abandonAISearch(state) // cancels the request; invalidates the session
 		state.aiSearchErr = nil
+		state.aiSearchCancelled = false
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai
 		applyMode()

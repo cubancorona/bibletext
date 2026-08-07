@@ -170,9 +170,16 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		thinkingBar = bar
 		msg := widget.NewLabel("Reading the passage…")
 		msg.Alignment = fyne.TextAlignCenter
+		// The budget is generous enough for a thinking model (aiRequestBudget),
+		// so say so — otherwise a minute of spinner reads as a hang. Close is
+		// the way out here (it calls stopThinking, so the ProgressBarInfinite
+		// stops repainting the canvas); the Find surface has its own Cancel.
+		hint := widget.NewLabel("A high-capability model can take a minute or more.")
+		hint.Alignment = fyne.TextAlignCenter
+		hint.TextStyle = fyne.TextStyle{Italic: true}
 		body.Objects = []fyne.CanvasObject{
 			answerScroll,
-			container.NewVBox(layout.NewSpacer(), msg, bar, layout.NewSpacer()),
+			container.NewVBox(layout.NewSpacer(), msg, bar, hint, layout.NewSpacer()),
 		}
 		body.Refresh()
 	}
@@ -244,7 +251,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	startFetch = func() {
 		setThinking()
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), aiRequestBudget)
 			defer cancel()
 			result, err := runAIAction(ctx, state, action, selectedText, question)
 			fyne.Do(func() {

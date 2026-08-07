@@ -44,9 +44,11 @@ type AppState struct {
 	aiSearchResults []Verse
 	// Desktop AI-search progress: results replace the reading pane, so the in-progress
 	// and error states are driven from state (mobile drives them in its own results host).
-	aiSearchLoading bool
-	aiSearchErr     error
-	retryAISearch   func() // re-runs the last AI query (the error view's "Try again")
+	aiSearchLoading   bool
+	aiSearchErr       error
+	retryAISearch     func() // re-runs the last AI query (the error view's "Try again")
+	cancelAISearch    func() // abandons an in-flight AI query (the searching view's "Cancel")
+	aiSearchCancelled bool   // the reader abandoned the last Find — NOT a zero-result answer
 	// searchScrollY remembers the results list's scroll offset so returning to the
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32
@@ -687,6 +689,7 @@ func clearHighlightedVerse(state *AppState) {
 }
 
 func clearSearchState(state *AppState) {
+	abandonAISearch(state) // never leave a Find running behind a torn-down view
 	state.SearchQuery = ""
 	state.ActiveSearchQuery = ""
 	state.SearchResults = nil
@@ -698,6 +701,7 @@ func clearSearchState(state *AppState) {
 	state.aiSearchResults = nil
 	state.aiSearchErr = nil
 	state.aiSearchLoading = false
+	state.aiSearchCancelled = false
 	clearHighlightedVerse(state)
 }
 
