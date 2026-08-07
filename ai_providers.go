@@ -77,6 +77,24 @@ const (
 
 	anthropicVersion = "2023-06-01"
 
+	// aiRequestBudget is how long an AI request may take before the app gives up
+	// — the SINGLE deadline for the whole operation (see newHTTPClient).
+	//
+	// It is deliberately generous because the reader chooses the model. The old
+	// 35s (over a 30s transport cap) quietly excluded the high-capability tier:
+	// measured 2026-08-07, a broad Find took ~1s on Claude/OpenAI's fast models
+	// but ~48s on SpaceXAI's reasoning model — a legitimate answer the app
+	// reported as a failure. Three minutes clears every model measured with room
+	// to spare, and it is a BACKSTOP against a hung connection, not the reader's
+	// patience: aiSearchingView offers Cancel, so a long wait is always the
+	// reader's choice to end.
+	aiRequestBudget = 3 * time.Minute
+
+	// aiProbeBudget covers the short, interactive round-trips — "Test key" and
+	// the model-list fetch. Shorter because they are a handshake, not a
+	// generation, and the reader is watching a button.
+	aiProbeBudget = 45 * time.Second
+
 	// aiMaxOutputTokens caps each answer. It's generous because "thinking" models
 	// (e.g. gemini-2.5-flash) spend part of this budget on hidden reasoning, so a
 	// low cap truncates the visible answer mid-sentence. The prompt keeps answers
@@ -176,7 +194,15 @@ func envVarFor(id string) string {
 	}
 }
 
-func newHTTPClient() *http.Client { return &http.Client{Timeout: 30 * time.Second} }
+// newHTTPClient deliberately sets NO client-level timeout: the caller's context
+// is the single deadline (aiRequestBudget and friends). A client Timeout is a
+// PER-ATTEMPT cap that fights the context — the old 30s one silently outranked
+// the 35s search budget, so a reader who picked a high-capability model could
+// never get an answer from it: the request was killed at 30s no matter what,
+// and (worse) doAIRequest read that as a network blip and fired the same
+// expensive request again. One authority for "how long to wait", and it belongs
+// to the operation, not the transport.
+func newHTTPClient() *http.Client { return &http.Client{} }
 
 // --- Gemini (generateContent) ----------------------------------------------
 
@@ -438,6 +464,13 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err // network error — transient, retry
+			// …unless the caller's deadline passed or they cancelled. That is
+			// not transient: retrying burns what's left of the budget and can
+			// bill the reader a second time for a request the provider may
+			// already be completing. Give up and report it.
+			if ctxErr := req.Context().Err(); ctxErr != nil {
+				return nil, err
+			}
 			continue
 		}
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

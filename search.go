@@ -48,6 +48,14 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 					state.retryAISearch()
 				}
 			})
+		case state.aiSearchCancelled:
+			// Before the empty-results case below: the reader stopped this
+			// search, so the pane must not claim the AI found nothing.
+			return aiSearchMessageView("Search cancelled.", "Try again", func() {
+				if state.retryAISearch != nil {
+					state.retryAISearch()
+				}
+			})
 		case len(state.aiSearchResults) == 0 && strings.TrimSpace(state.aiSearchQuery) == "":
 			return aiSearchPromptView(state)
 		default:
@@ -230,7 +238,28 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	msg := canvas.NewText("Searching with AI…", pal.TextMuted)
 	msg.Alignment = fyne.TextAlignCenter
 	msg.TextSize = 16
-	return container.NewCenter(msg)
+
+	// No ticking elapsed counter on purpose: a per-second repaint pins the
+	// canvas dirty (the same reason there is no ProgressBarInfinite here). One
+	// honest line sets the expectation instead — a high-capability model can
+	// legitimately think for a minute or more (aiRequestBudget) — and Cancel
+	// keeps the wait the reader's choice, not a constant's.
+	hint := canvas.NewText("A high-capability model can take a minute or more.", pal.TextMuted)
+	hint.Alignment = fyne.TextAlignCenter
+	hint.TextSize = 12
+
+	// The handler is a WRAPPER, not state.cancelAISearch itself: a Button stores
+	// the func VALUE it is given, so binding the field directly would pin
+	// whichever search was in flight when this view was built — from the second
+	// Find on, Cancel would abandon the PREVIOUS request and leave the current
+	// one running. Reading the field at tap time always hits the live one.
+	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(6), container.NewCenter(hint)}
+	items = append(items, spacer(14), container.NewCenter(widget.NewButton("Cancel", func() {
+		abandonAISearch(state)
+		state.aiSearchCancelled = true
+		state.refresh() // → the cancelled state (never a false "found nothing")
+	})))
+	return container.NewCenter(container.NewVBox(items...))
 }
 
 // buildSearchModeToggle is a two-segment control switching the search UI between keyword

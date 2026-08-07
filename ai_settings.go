@@ -121,7 +121,7 @@ func showAISettings(state *AppState) {
 			}
 			result.SetText("Testing…")
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
 				_, err := info.New(store, key).generate(ctx, "Reply with the single word: OK")
 				fyne.Do(func() {
@@ -330,7 +330,7 @@ func showAISettings(state *AppState) {
 			fetchSeq++
 			seq := fetchSeq
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
 				models, err := info.ListModels(ctx, key)
 				ids := dropdownModelIDs(models, info.ExtraModelExclude, modelFamilyOf(info.Model))
