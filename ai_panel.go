@@ -109,10 +109,19 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// is dismissed mid-spin. Track the live spinner and Stop() it on every exit from
 	// the thinking state so the animation never outlives the panel.
 	var thinkingBar *widget.ProgressBarInfinite
+	// cancelFetch abandons the in-flight study request. Stopping the spinner is
+	// not enough: the request keeps running for the whole aiRequestBudget (three
+	// minutes) and keeps billing the reader's key for an answer nobody will
+	// read. Every exit — Close, Cancel, a re-run — goes through stopThinking.
+	var cancelFetch func()
 	stopThinking := func() {
 		if thinkingBar != nil {
 			thinkingBar.Stop()
 			thinkingBar = nil
+		}
+		if cancelFetch != nil {
+			cancelFetch()
+			cancelFetch = nil
 		}
 	}
 
@@ -177,9 +186,21 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		hint := widget.NewLabel("A high-capability model can take a minute or more.")
 		hint.Alignment = fyne.TextAlignCenter
 		hint.TextStyle = fyne.TextStyle{Italic: true}
+		// Reads the field at TAP time (not the value at build time), so it
+		// always abandons the request that is actually running — the mistake
+		// the Find surface's first Cancel made.
+		cancelBtn := widget.NewButton("Cancel", func() {
+			userClosed = true
+			stopThinking() // cancels the request, not just the spinner
+			if popup != nil {
+				popup.Hide()
+			}
+			restore()
+		})
 		body.Objects = []fyne.CanvasObject{
 			answerScroll,
-			container.NewVBox(layout.NewSpacer(), msg, bar, hint, layout.NewSpacer()),
+			container.NewVBox(layout.NewSpacer(), msg, bar, hint,
+				container.NewCenter(cancelBtn), layout.NewSpacer()),
 		}
 		body.Refresh()
 	}
@@ -250,11 +271,22 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 
 	startFetch = func() {
 		setThinking()
+		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
+		cancelFetch = cancel // so Close / Cancel can abandon THIS request
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), aiRequestBudget)
-			defer cancel()
-			result, err := runAIAction(ctx, state, action, selectedText, question)
+			defer cancelTimeout()
+			result, err := aiActionRun(ctx, state, action, selectedText, question)
 			fyne.Do(func() {
+				cancelFetch = nil // settled: nothing left to abandon
+				// The reader dismissed this panel (Close / Cancel). Painting a
+				// late answer into it would repaint a hidden, detached popup —
+				// and with the three-minute budget that answer can arrive long
+				// after they moved on. The reply is in aiCache, so reopening
+				// the same action shows it instantly.
+				if userClosed {
+					return
+				}
 				// The panel may have been EVICTED (not user-closed) by a
 				// rebuildWindow drain — a theme-variant flip — while the
 				// request ran. Don't deliver the answer into the hidden,

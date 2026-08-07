@@ -17,6 +17,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // TestHTTPClientImposesNoDeadline: the operation's context is the ONLY deadline.
@@ -276,5 +277,108 @@ func TestAbandonAISearchCoversEveryTeardown(t *testing.T) {
 				t.Fatalf("%s left the request running", tc.name)
 			}
 		})
+	}
+}
+
+// --- Study with AI (Explain / Analyze context / Analyze translation) ---------
+//
+// The panel got the same generous budget as Find, so it needs the same escape
+// hatch. Before this, Close only stopped the SPINNER: the request ran on for
+// the rest of the budget, billing the reader's key for an answer nobody would
+// ever see — a leak that grew from 35s to three minutes with the new budget.
+
+func studyPanelState(t *testing.T, w fyne.Window) *AppState {
+	t.Helper()
+	st := sampleState()
+	st.window = w
+	st.aiKeys = newKeyStoreWith(newFakePrefs())
+	st.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	return st
+}
+
+// stubAIAction makes every study action publish its context and block.
+func stubAIAction(t *testing.T) (ctxs chan context.Context, release func()) {
+	t.Helper()
+	ctxs = make(chan context.Context, 4)
+	done := make(chan struct{})
+	prev := aiActionRun
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+		ctxs <- ctx
+		<-done
+		return "", ctx.Err()
+	}
+	var once sync.Once
+	t.Cleanup(func() { aiActionRun = prev; once.Do(func() { close(done) }) })
+	return ctxs, func() { once.Do(func() { close(done) }) }
+}
+
+// TestStudyPanelCloseAbandonsRequest: Close must cancel the request, not just
+// hide the panel and stop the bar.
+func TestStudyPanelCloseAbandonsRequest(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	ctxs, release := stubAIAction(t)
+	defer release()
+
+	w := test.NewWindow(widget.NewLabel("reading"))
+	defer w.Close()
+	st := studyPanelState(t, w)
+
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	var ctx context.Context
+	select {
+	case ctx = <-ctxs:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the study action never reached the provider seam")
+	}
+
+	overlay := w.Canvas().Overlays().Top()
+	if overlay == nil {
+		t.Fatal("the study panel did not open")
+	}
+	closeBtn := findTreeButton(overlay, "Close")
+	if closeBtn == nil {
+		t.Fatalf("no Close button on the study panel; texts %v", treeTexts(overlay))
+	}
+	closeBtn.OnTapped()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close left the study request running — it keeps billing for the whole budget")
+	}
+}
+
+// TestStudyPanelOffersCancelWhileThinking: the wait can now be minutes, so the
+// thinking state must offer a way out in place, and it must abandon the
+// request too.
+func TestStudyPanelOffersCancelWhileThinking(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	ctxs, release := stubAIAction(t)
+	defer release()
+
+	w := test.NewWindow(widget.NewLabel("reading"))
+	defer w.Close()
+	st := studyPanelState(t, w)
+
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	var ctx context.Context
+	select {
+	case ctx = <-ctxs:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the study action never reached the provider seam")
+	}
+
+	overlay := w.Canvas().Overlays().Top()
+	cancelBtn := findTreeButton(overlay, "Cancel")
+	if cancelBtn == nil {
+		t.Fatalf("the thinking state must offer Cancel; texts %v", treeTexts(overlay))
+	}
+	cancelBtn.OnTapped()
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("Cancel did not abandon the study request")
 	}
 }
