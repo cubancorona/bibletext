@@ -104,10 +104,16 @@ var aiListMarkerPattern = regexp.MustCompile(`^\s*(?:[-*•]\s+|\d{1,2}[.)]\s+)`
 // that ignores the instruction cannot flood the results). The prompt does the
 // real shaping — the model is told to return every GENUINELY relevant passage
 // and never to pad, so a narrow request yields a handful and only a broad one
-// ("every 'fear not'") approaches the cap. The old flat "give at most 15" both
-// truncated legitimately broad requests and implicitly licensed padding narrow
-// ones toward a target.
-const aiSearchResultCap = 30
+// ("every 'one another' command") approaches the cap.
+//
+// 60 is set from measurement, not taste (TestFindCapBench, 2026-08-07, all
+// four providers at caps 15/40/120): narrow requests return ~6-9 results at
+// EVERY cap (the never-pad instruction holds — nobody pads toward the cap),
+// broad requests were all truncated mid-answer at the old caps and, freed,
+// plateau at the model's genuine recall of 20-40. So the cap's only real
+// effect is truncation; 60 sits above every observed plateau, and latency is
+// a provider property, not a cap property (Claude/OpenAI 1-3s at cap 120).
+const aiSearchResultCap = 60
 
 // buildAISearchPrompt asks the active provider for Bible references that answer a
 // natural-language request, in a format we can parse back into real verses. The
