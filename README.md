@@ -322,7 +322,7 @@ Windows, Linux, and Android — nothing is embedded in the app. Open the header
 | Google Gemini | `gemini-2.5-flash` | <https://aistudio.google.com/apikey> |
 | ChatGPT (OpenAI) | `gpt-4o-mini` | <https://platform.openai.com/api-keys> |
 | Claude (Anthropic) | `claude-haiku-4-5` | <https://console.anthropic.com/settings/keys> |
-| Grok (xAI) | `grok-2-latest` | <https://console.x.ai> |
+| Grok (SpaceXAI) | `grok-4.3` | <https://console.x.ai> |
 
 The **Model** dropdown in the same sheet is populated live from your provider's
 own model list (fetched with your key), so new models appear the day they ship —
