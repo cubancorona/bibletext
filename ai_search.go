@@ -98,14 +98,30 @@ func clearAISearchContext(state *AppState) {
 // a book number ("1 John") is never mistaken for a list marker.
 var aiListMarkerPattern = regexp.MustCompile(`^\s*(?:[-*•]\s+|\d{1,2}[.)]\s+)`)
 
+// aiSearchResultCap is the single bound on a Find, governing BOTH sides of the
+// conversation: the prompt invites up to this many references, and
+// resolveReferenceList accepts at most this many resolved verses (so a model
+// that ignores the instruction cannot flood the results). The prompt does the
+// real shaping — the model is told to return every GENUINELY relevant passage
+// and never to pad, so a narrow request yields a handful and only a broad one
+// ("every 'fear not'") approaches the cap. The old flat "give at most 15" both
+// truncated legitimately broad requests and implicitly licensed padding narrow
+// ones toward a target.
+const aiSearchResultCap = 30
+
 // buildAISearchPrompt asks the active provider for Bible references that answer a
-// natural-language request, in a format we can parse back into real verses.
+// natural-language request, in a format we can parse back into real verses. The
+// reader's request stays in the MIDDLE of the prompt with the format
+// instructions after it — instruction-last ordering, so text inside the request
+// can't easily override the reply contract.
 func buildAISearchPrompt(query string) string {
 	return "You help a reader find passages in the Bible from a request in their own words.\n\n" +
 		"Request: " + strings.TrimSpace(query) + "\n\n" +
-		"Reply with ONLY a list of the most relevant references, one per line, each written as " +
+		"Reply with ONLY a list of relevant references, one per line, each written as " +
 		"\"Book Chapter:Verse\" (for example: Jonah 1:2). Use full book names. Order by relevance, " +
-		"best first, and give at most 15. No commentary, no numbering, no extra text — just the references."
+		fmt.Sprintf("best first. Include every passage that genuinely answers the request, up to %d — ", aiSearchResultCap) +
+		"never pad with weak matches; a short list of strong matches is better than a long one. " +
+		"No commentary, no numbering, no extra text — just the references."
 }
 
 // runAISearch performs a natural-language passage search with the active provider
@@ -162,7 +178,7 @@ func resolveReferenceList(bd *BibleData, raw string) []Verse {
 		}
 		seen[k] = true
 		out = append(out, v)
-		if len(out) >= 30 {
+		if len(out) >= aiSearchResultCap {
 			break
 		}
 	}
