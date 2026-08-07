@@ -64,7 +64,11 @@ const (
 	geminiModel    = "gemini-2.5-flash"
 	openAIModel    = "gpt-4o-mini"
 	anthropicModel = "claude-haiku-4-5"
-	grokModel      = "grok-2-latest"
+	// The grok-2 line was retired when xAI became SpaceXAI; grok-4.3 is the
+	// current mainline chat model. Self-heal covered the dead pin, but only by
+	// picking the NEWEST in-tier model — grok-4.5, whose reasoning pass took
+	// ~48s on a broad Find (past the 35s timeout). See reasoningModelSubstrings.
+	grokModel = "grok-4.3"
 
 	geminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
 	openAIBaseURL    = "https://api.openai.com/v1"
@@ -123,7 +127,11 @@ func aiProviders() []providerInfo {
 			ListModels: listAnthropicModels(anthropicBaseURL),
 		},
 		{
-			ID: providerGrok, Name: "Grok (xAI)", Model: grokModel,
+			// xAI merged into SpaceX and rebranded SpaceXAI (July 2026); the
+			// assistant keeps the name Grok, and api.x.ai / console.x.ai still
+			// serve (a SpaceX-branded endpoint is promised with a long
+			// transition — swap grokBaseURL when it lands).
+			ID: providerGrok, Name: "Grok (SpaceXAI)", Model: grokModel,
 			KeyURL: "https://console.x.ai", KeyHint: "key starts with “xai-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{

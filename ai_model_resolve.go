@@ -167,6 +167,34 @@ var modelExcludeSubstrings = []string{
 // tier) so a stable model always wins over a preview/experimental one.
 var modelUnstableSubstrings = []string{"preview", "-exp", "experimental", "nightly", "beta"}
 
+// reasoningModelSubstrings mark heavy "thinking" variants, de-prioritized in
+// self-heal so a light model in the same tier always wins.
+//
+// This backstops the tier keyword where it cannot discriminate. For Anthropic
+// ("haiku"), OpenAI ("mini") and Gemini ("flash") the keyword IS the cheap-and-
+// fast tier, so newest-wins is safe. For SpaceXAI the keyword is "grok" — every
+// model they sell matches it — so newest-wins silently picked grok-4.5, whose
+// reasoning pass took ~48s on a broad Find against ~4s for the non-reasoning
+// variant, blowing the 35s search timeout (measured 2026-08-07). Self-heal must
+// not trade a reader's working feature for a newer, slower model.
+var reasoningModelSubstrings = []string{"reasoning", "thinking", "multi-agent"}
+
+// modelNegatedReasoning are ids that CONTAIN a reasoning marker but explicitly
+// negate it — SpaceXAI ships "grok-4.20-0309-non-reasoning", the fast variant,
+// whose id trivially matches "reasoning" as a substring. Checked first so the
+// light model is never mistaken for the heavy one it is named against.
+var modelNegatedReasoning = []string{"non-reasoning", "no-reasoning", "non-thinking"}
+
+// isHeavyReasoningModel reports whether a model id advertises a heavy thinking
+// pass. Name-based and therefore partial: opaque ids (grok-4.5 vs grok-4.3)
+// carry no such signal — see TestPickInTierPrefersLightOverReasoning.
+func isHeavyReasoningModel(lowID string) bool {
+	if containsAnySubstr(lowID, modelNegatedReasoning) {
+		return false
+	}
+	return containsAnySubstr(lowID, reasoningModelSubstrings)
+}
+
 // pickInTier chooses the best current model whose id contains the tier keyword,
 // dropping non-chat variants, preferring stable over preview and newer over older.
 // It NEVER falls back to an out-of-tier model, so self-heal can't silently swap a
@@ -246,6 +274,7 @@ func pickInTier(models []discoveredModel, tier string) (string, bool) {
 	type cand struct {
 		id     string
 		stable bool
+		light  bool // not a heavy "thinking" variant
 		rank   int64
 	}
 	var cands []cand
@@ -254,7 +283,12 @@ func pickInTier(models []discoveredModel, tier string) (string, bool) {
 		if !strings.Contains(low, tier) || containsAnySubstr(low, modelExcludeSubstrings) {
 			continue
 		}
-		cands = append(cands, cand{m.id, !containsAnySubstr(low, modelUnstableSubstrings), m.rank})
+		cands = append(cands, cand{
+			id:     m.id,
+			stable: !containsAnySubstr(low, modelUnstableSubstrings),
+			light:  !isHeavyReasoningModel(low),
+			rank:   m.rank,
+		})
 	}
 	if len(cands) == 0 {
 		return "", false
@@ -262,6 +296,9 @@ func pickInTier(models []discoveredModel, tier string) (string, bool) {
 	sort.SliceStable(cands, func(i, j int) bool {
 		if cands[i].stable != cands[j].stable {
 			return cands[i].stable // stable before preview
+		}
+		if cands[i].light != cands[j].light {
+			return cands[i].light // light before heavy reasoning variants
 		}
 		if cands[i].rank != cands[j].rank {
 			return cands[i].rank > cands[j].rank // newer first

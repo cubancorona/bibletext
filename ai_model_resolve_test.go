@@ -278,3 +278,49 @@ func TestFriendlyBadKey400SaysKeyRejected(t *testing.T) {
 		t.Errorf("400 too-long message = %q, want shorter-passage", msg)
 	}
 }
+
+// TestPickInTierPrefersLightOverReasoning locks the backstop for tier keywords
+// that cannot discriminate. SpaceXAI's keyword is "grok" — every model they
+// sell matches it — so newest-wins can hand a reader a heavy reasoning model
+// (measured 2026-08-07: a reasoning variant took ~48s on a broad Find against
+// ~4s for the non-reasoning one, past the 35s timeout).
+//
+// LIMIT, deliberately locked here: this only works when the id SAYS so. Names
+// like "grok-4.5" vs "grok-4.3" are opaque — a model list carries no cost or
+// latency signal — so the primary defense against a slow self-heal stays the
+// PINNED default (kept alive by TestLivePinnedDefaultsExist), with this as a
+// backstop for the explicitly-marked variants.
+func TestPickInTierPrefersLightOverReasoning(t *testing.T) {
+	// Real SpaceXAI ids and creation ranks (2026-08-07), newest first.
+	models := []discoveredModel{
+		{"grok-4.20-0309-reasoning", 1773014402},     // newest, marked heavy
+		{"grok-4.20-multi-agent-0309", 1773014401},   // marked heavy
+		{"grok-4.20-0309-non-reasoning", 1773014400}, // oldest, but light
+	}
+	got, ok := pickInTier(models, "grok")
+	if !ok {
+		t.Fatal("expected an in-tier pick")
+	}
+	if got != "grok-4.20-0309-non-reasoning" {
+		t.Errorf("a light in-tier model must beat NEWER marked-heavy ones, got %q", got)
+	}
+
+	// Opaque ids are not guessable — newest still wins, which is exactly why the
+	// pin matters. Locked so the limitation is visible rather than assumed away.
+	opaque := []discoveredModel{{"grok-4.5", 1782691200}, {"grok-4.3", 1776384000}}
+	if got, ok := pickInTier(opaque, "grok"); !ok || got != "grok-4.5" {
+		t.Errorf("opaque ids fall back to newest-wins: got %q ok=%v", got, ok)
+	}
+
+	// The discriminating tiers keep pure newest-wins.
+	anth := []discoveredModel{{"claude-haiku-4-5", 2}, {"claude-haiku-3-5", 1}}
+	if got, ok := pickInTier(anth, "haiku"); !ok || got != "claude-haiku-4-5" {
+		t.Errorf("haiku tier should still take the newest: got %q ok=%v", got, ok)
+	}
+
+	// A tier holding ONLY heavy models still resolves (better than nothing).
+	only := []discoveredModel{{"grok-9-reasoning", 3}, {"grok-8-reasoning", 2}}
+	if got, ok := pickInTier(only, "grok"); !ok || got != "grok-9-reasoning" {
+		t.Errorf("all-heavy tier must still resolve to the newest: got %q ok=%v", got, ok)
+	}
+}

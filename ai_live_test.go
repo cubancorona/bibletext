@@ -105,3 +105,69 @@ func TestLiveModelDropdown(t *testing.T) {
 		})
 	}
 }
+
+// TestLivePinnedDefaultsExist is the guard that would have caught the retired
+// grok-2 pin: every provider's DEFAULT model must still be offered by that
+// provider today. Self-heal covers a dead pin at runtime, but only by picking
+// another in-tier model — for SpaceXAI that silently landed on a reasoning
+// variant slow enough to blow the Find timeout. So a retired default is a real
+// defect to fix deliberately, not a condition to leave to self-heal.
+//
+// It asserts against the provider's LIVE model list (not a chat call), so it
+// costs nothing beyond one GET per provider. Same key-gating as the tests
+// above: inert in CI and in any checkout without keys.
+func TestLivePinnedDefaultsExist(t *testing.T) {
+	store := newKeyStoreWith(newFakePrefs())
+
+	for _, p := range aiProviders() {
+		p := p
+		t.Run(p.Name, func(t *testing.T) {
+			key := providerAPIKey(store, p.ID)
+			if key == "" {
+				t.Skipf("no key in %s — skipping (fill it in .env.local to run)", envVarFor(p.ID))
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			models, err := p.ListModels(ctx, key)
+			if err != nil {
+				t.Fatalf("ListModels: %v", err)
+			}
+			for _, m := range models {
+				if m.id == p.Model {
+					t.Logf("%s ✓ default %q still offered", p.Name, p.Model)
+					return
+				}
+				// Anthropic lists the DATED id ("claude-haiku-4-5-20251001")
+				// while the undated alias we pin is what the chat endpoint
+				// takes. Accept a listed id that is exactly our default plus a
+				// date suffix — narrow on purpose, so "grok-4" could never be
+				// satisfied by "grok-4.5".
+				if rest, cut := strings.CutPrefix(m.id, p.Model+"-"); cut && isDateSuffix(rest) {
+					t.Logf("%s ✓ default %q still offered (dated form %q)", p.Name, p.Model, m.id)
+					return
+				}
+			}
+			ids := make([]string, 0, len(models))
+			for _, m := range models {
+				ids = append(ids, m.id)
+			}
+			t.Errorf("%s default model %q is NO LONGER offered — re-pin it in ai_providers.go.\n"+
+				"Currently offered: %s", p.Name, p.Model, strings.Join(ids, ", "))
+		})
+	}
+}
+
+// isDateSuffix reports whether s is a bare YYYYMMDD stamp — the only remainder
+// TestLivePinnedDefaultsExist accepts after a pinned model id.
+func isDateSuffix(s string) bool {
+	if len(s) != 8 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
