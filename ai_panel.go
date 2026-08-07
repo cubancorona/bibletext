@@ -183,9 +183,8 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// so say so — otherwise a minute of spinner reads as a hang. Close is
 		// the way out here (it calls stopThinking, so the ProgressBarInfinite
 		// stops repainting the canvas); the Find surface has its own Cancel.
-		hint := widget.NewLabel("A high-capability model can take a minute or more.")
-		hint.Alignment = fyne.TextAlignCenter
-		hint.TextStyle = fyne.TextStyle{Italic: true}
+		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
+			centeredCaption("Capable models can take a minute or more."))
 		// Reads the field at TAP time (not the value at build time), so it
 		// always abandons the request that is actually running — the mistake
 		// the Find surface's first Cancel made.
@@ -199,8 +198,14 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		})
 		body.Objects = []fyne.CanvasObject{
 			answerScroll,
-			container.NewVBox(layout.NewSpacer(), msg, bar, hint,
-				container.NewCenter(cancelBtn), layout.NewSpacer()),
+			container.NewVBox(layout.NewSpacer(),
+				container.NewCenter(msg), spacer(10),
+				// Bounded, not full-bleed: a panel-wide bar reads as a banner
+				// rather than a quiet progress hint, and it dwarfed the text.
+				container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
+				spacer(10), container.NewCenter(hint),
+				spacer(4), container.NewCenter(cancelBtn),
+				layout.NewSpacer()),
 		}
 		body.Refresh()
 	}
