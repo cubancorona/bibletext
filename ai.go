@@ -177,6 +177,13 @@ func aiCacheSet(key, value string) {
 // runAIAction returns the analysis for a selection using the active provider and
 // the user's key. Results are cached (keyed by provider+action+passage) so
 // re-opening the same thing doesn't spend another request.
+// aiActionRun is a seam over the study-action call (twin of aiSearchGenerate),
+// so tests can observe the context a study request runs under — the only way to
+// prove Close and Cancel abandon the REQUEST rather than just the spinner.
+var aiActionRun = func(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
+	return runAIAction(ctx, state, action, selectedText, question)
+}
+
 func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
 	store := state.keys()
 	id := store.activeProvider()
