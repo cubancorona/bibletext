@@ -419,9 +419,12 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		aiBar = bar
 		msg := canvas.NewText("Searching with AI…", pal.TextMuted)
 		msg.Alignment = fyne.TextAlignCenter
-		hint := canvas.NewText("A high-capability model can take a minute or more.", pal.TextMuted)
-		hint.Alignment = fyne.TextAlignCenter
-		hint.TextSize = 12
+		// caption() is the app's muted, WRAPPING caption style — a canvas.Text
+		// would neither wrap nor bound the column's width, which is what pushed
+		// the progress bar off-centre (the VBox grew to the hint's full width
+		// while the fixed-width bar stayed left-aligned inside it).
+		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
+			centeredCaption("Capable models can take a minute or more."))
 		// Declared before the call so the hook can close over it; the real cancel
 		// func replaces it the moment startAISearch returns. Published to
 		// state.cancelAISearch so EVERY teardown route (a bottom-tab switch that
@@ -443,10 +446,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			aiDisclaimer.Show() // the prompt state always shows it (see applyMode)
 		})
 		resultsHost.Objects = []fyne.CanvasObject{container.NewCenter(container.NewVBox(
-			msg, spacer(8),
-			container.NewGridWrap(fyne.NewSize(220, bar.MinSize().Height), bar),
-			spacer(6), container.NewCenter(hint),
-			spacer(10), container.NewCenter(cancelBtn),
+			container.NewCenter(msg), spacer(10),
+			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
+			spacer(10), container.NewCenter(hint),
+			spacer(4), container.NewCenter(cancelBtn),
 		))}
 		resultsHost.Refresh()
 

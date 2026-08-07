@@ -298,6 +298,32 @@ func caption(text string) fyne.CanvasObject {
 	return rt
 }
 
+// centeredCaption is caption() with its text centred — for the calm, centred
+// wait/empty states, where a left-ragged caption under a centred heading reads
+// as a misalignment.
+func centeredCaption(text string) fyne.CanvasObject {
+	rt := widget.NewRichText(&widget.TextSegment{
+		Text: text,
+		Style: widget.RichTextStyle{
+			SizeName:  theme.SizeNameCaptionText,
+			ColorName: colorNameMuted,
+			Alignment: fyne.TextAlignCenter,
+		},
+	})
+	rt.Wrapping = fyne.TextWrapWord
+	return rt
+}
+
+// captionHeightFor sizes a bounded caption box for n wrapped lines, so a
+// GridWrap can give the caption a fixed measure (keeping neighbouring elements
+// centred on one axis) without hard-coding pixels at each call site.
+func captionHeightFor(lines int) float32 {
+	if lines < 1 {
+		lines = 1
+	}
+	return float32(lines) * (theme.CaptionTextSize() + theme.Padding()*2)
+}
+
 func spacer(h float32) fyne.CanvasObject {
 	r := canvas.NewRectangle(color.Transparent)
 	r.SetMinSize(fyne.NewSize(0, h))

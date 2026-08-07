@@ -244,17 +244,18 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	// honest line sets the expectation instead — a high-capability model can
 	// legitimately think for a minute or more (aiRequestBudget) — and Cancel
 	// keeps the wait the reader's choice, not a constant's.
-	hint := canvas.NewText("A high-capability model can take a minute or more.", pal.TextMuted)
-	hint.Alignment = fyne.TextAlignCenter
-	hint.TextSize = 12
+	// Width-bounded caption (the app's muted style) so the column has a stable
+	// measure and every element centres against the same axis.
+	hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
+		centeredCaption("Capable models can take a minute or more."))
 
 	// The handler is a WRAPPER, not state.cancelAISearch itself: a Button stores
 	// the func VALUE it is given, so binding the field directly would pin
 	// whichever search was in flight when this view was built — from the second
 	// Find on, Cancel would abandon the PREVIOUS request and leave the current
 	// one running. Reading the field at tap time always hits the live one.
-	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(6), container.NewCenter(hint)}
-	items = append(items, spacer(14), container.NewCenter(widget.NewButton("Cancel", func() {
+	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10), container.NewCenter(hint)}
+	items = append(items, spacer(4), container.NewCenter(widget.NewButton("Cancel", func() {
 		abandonAISearch(state)
 		state.aiSearchCancelled = true
 		state.refresh() // → the cancelled state (never a false "found nothing")
