@@ -91,9 +91,9 @@
           '<button class="gotox" type="button" aria-label="Close">&times;</button></div>' +
         '<div class="gpanes"><div class="gleft"></div><div class="gright"></div></div>' +
         '<div class="gverse">' +
-          '<input type="text" inputmode="numeric" pattern="[0-9]*" placeholder="verse" aria-label="Verse">' +
+          '<input class="gvstart" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="verse" aria-label="Verse">' +
           '<span class="gto">to</span>' +
-          '<input type="text" inputmode="numeric" pattern="[0-9]*" placeholder="end" aria-label="End verse">' +
+          '<input class="gvend" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="end" aria-label="End verse">' +
           '<button class="ggo" type="button">Go</button>' +
         '</div>' +
       '</div>';

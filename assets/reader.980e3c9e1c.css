@@ -124,10 +124,14 @@ body{
 .gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
   padding:.8rem 0 0; border-top:1px solid var(--border)}
 .gverse input{
-  width:4.6rem; font-family:Georgia,serif; font-size:1rem; padding:.4rem .5rem;
-  color:var(--text); background:var(--bg); text-align:center;
+  font-family:Georgia,serif; font-size:1rem; padding:.4rem .6rem;
+  color:var(--text); background:var(--bg);
   border:1px solid var(--border); border-radius:8px; outline:none; min-width:0;
 }
+/* The app's proportions: the start field FLEXES to fill the row and the end
+   field is a fixed narrow cell, with "to" and Go compact on the right. */
+.gverse .gvstart{flex:1 1 auto; width:auto}
+.gverse .gvend{flex:0 0 4rem; width:4rem}
 .gverse input:focus{border-color:var(--accent)}
 .gto{color:var(--muted); font-size:.85rem}
 /* Filled, unlike the page's quiet controls: this is the one commit action, it
