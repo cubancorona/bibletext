@@ -158,8 +158,8 @@ body{
    footnote, not a call to action; the icons say "it runs on your thing" at a
    glance without shouting. They inherit currentColor, so they follow the muted
    colour and the light/dark flip with no second asset. */
-.plats{display:flex; justify-content:center; align-items:center; gap:1.05rem;
-  margin:.55rem 0 0; color:var(--muted)}
+.plats{display:flex; justify-content:center; align-items:center; gap:.6rem;
+  margin:.2rem 0 0; color:var(--muted)}
 .plats a{display:inline-flex; align-items:center; color:inherit; opacity:.75}
 .plats a:hover{opacity:1; color:var(--accent)}
 .plats svg{width:1.05rem; height:1.05rem; fill:currentColor; display:block}
