@@ -32,6 +32,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -101,6 +103,15 @@ func main() {
 		log.Fatalf("write: %v", err)
 	}
 	log.Printf("wrote %d files to %s in %s", site.files, *out, time.Since(start).Round(time.Millisecond))
+}
+
+// cssName/jsName are the content-hashed asset paths for this build; pageShell
+// links them. Set once in writeSite before any page is rendered.
+var cssName, jsName string
+
+func contentHash(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])[:10]
 }
 
 type loadedVersion struct {
@@ -176,10 +187,18 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 		return err
 	}
 	// Assets and the site-wide 404 first, so a partial build still has chrome.
-	if err := site.write("assets/reader.css", readerCSS); err != nil {
+	// CACHE BUSTING. GitHub Pages serves assets with max-age=600 and we cannot
+	// set headers, so a returning reader kept getting NEW html with an OLD
+	// stylesheet — which renders as unstyled controls and giant icons, and is
+	// impossible to diagnose from a screenshot. Content-hashed filenames make a
+	// changed asset a different URL, so that can never happen again.
+	js := readerJS(versions)
+	cssName = "assets/reader." + contentHash(readerCSS) + ".css"
+	jsName = "assets/reader." + contentHash(js) + ".js"
+	if err := site.write(cssName, readerCSS); err != nil {
 		return err
 	}
-	if err := site.write("assets/reader.js", readerJS(versions)); err != nil {
+	if err := site.write(jsName, js); err != nil {
 		return err
 	}
 	if err := writeNotFound(site, versions); err != nil {
@@ -194,14 +213,19 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 }
 
 // readerJS builds the one script the whole site shares, injecting the book
-// table the "Go to" type-ahead searches. Generated from the SAME loaded data
-// the pages come from, so a suggestion can never point at a page that was not
-// written — and per-version chapter counts keep it honest where canons differ.
+// table the "Go to" picker navigates. Generated from the SAME loaded data the
+// pages come from, so the picker can never offer a page that was not written —
+// and per-version chapter counts keep it honest where canons differ.
+//
+// The list is emitted in the app picker's own alphabetical order, each book
+// carrying the letter it files under (bibletext.AlphabeticalBooks /
+// FirstLetter), so the web alphabet grid and the app's agree by construction.
 func readerJS(versions []loadedVersion) string {
 	type entry struct {
-		Name string         `json:"name"`
-		Slug string         `json:"slug"`
-		Ch   map[string]int `json:"ch"`
+		Name   string         `json:"name"`
+		Slug   string         `json:"slug"`
+		Letter string         `json:"l"`
+		Ch     map[string]int `json:"ch"`
 	}
 	byName := map[string]*entry{}
 	var order []string
@@ -217,7 +241,7 @@ func readerJS(versions []loadedVersion) string {
 				if !ok {
 					continue
 				}
-				e = &entry{Name: book, Slug: slug, Ch: map[string]int{}}
+				e = &entry{Name: book, Slug: slug, Letter: bibletext.FirstLetter(book), Ch: map[string]int{}}
 				byName[book] = e
 				order = append(order, book)
 			}
@@ -225,7 +249,7 @@ func readerJS(versions []loadedVersion) string {
 		}
 	}
 	list := make([]*entry, 0, len(order))
-	for _, n := range order {
+	for _, n := range bibletext.AlphabeticalBooks(order) {
 		list = append(list, byName[n])
 	}
 	table, err := json.Marshal(list)

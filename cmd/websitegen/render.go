@@ -31,7 +31,7 @@ func pageShell(title, ogTitle, ogDesc, canonical, body string, depth int) string
 	if canonical != "" {
 		fmt.Fprintf(&b, `<link rel="canonical" href="%s">`, template.HTMLEscapeString(canonical))
 	}
-	fmt.Fprintf(&b, `<link rel="stylesheet" href="%sassets/reader.css">`, up)
+	fmt.Fprintf(&b, `<link rel="stylesheet" href="%s%s">`, up, cssName)
 	b.WriteString(`</head><body>`)
 	b.WriteString(body)
 	// Footer is identical on every page: a quiet route to the app. The default
@@ -39,7 +39,7 @@ func pageShell(title, ogTitle, ogDesc, canonical, body string, depth int) string
 	// script only narrows it to the App Store on an Apple device.
 	b.WriteString(`<footer class="foot"><a id="getapp" href="https://bibletext.co.uk/">Get the BibleText app</a>` +
 		platformIcons + `</footer>`)
-	fmt.Fprintf(&b, `<script src="%sassets/reader.js" defer></script>`, up)
+	fmt.Fprintf(&b, `<script src="%s%s" defer></script>`, up, jsName)
 	b.WriteString(`</body></html>`)
 	return b.String()
 }
