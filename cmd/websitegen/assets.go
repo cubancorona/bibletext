@@ -104,7 +104,22 @@ const readerJS = `
   highlightRange();
   window.addEventListener('hashchange', highlightRange);
 
-  // 2) "Get the app" — point Apple devices at the App Store, everyone else at
+  // 2) Carry the verse across a translation switch. The switcher's hrefs are
+  // plain chapter links (they must be: the fragment is not known at build
+  // time), so without this a reader who followed a shared John 3:16 link and
+  // tapped "BSB" to compare would land at the top of the chapter with no idea
+  // which verse was shared — on the page that exists to show that one verse.
+  function carryVerse() {
+    var hash = /^#v\d+(-\d+)?$/.test(location.hash || '') ? location.hash : '';
+    document.querySelectorAll('.vpick').forEach(function (a) {
+      var base = (a.getAttribute('href') || '').split('#')[0];
+      a.setAttribute('href', base + hash);
+    });
+  }
+  carryVerse();
+  window.addEventListener('hashchange', carryVerse);
+
+  // 3) "Get the app" — point Apple devices at the App Store, everyone else at
   // the landing page (which is already the no-JS default href).
   var a = document.getElementById('getapp');
   if (a && /iPhone|iPad|iPod/.test(navigator.userAgent)) {

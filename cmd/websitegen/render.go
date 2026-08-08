@@ -137,8 +137,10 @@ func chapterPreview(verses []bibletext.Verse) string {
 }
 
 // navBar carries the version switcher and the trail back up. The switcher links
-// to the SAME book and chapter in each other version, so switching keeps your
-// place — matching the app.
+// to the same book and chapter in each other version, and reader.js appends the
+// current verse fragment at runtime (carryVerse) so switching keeps your place —
+// matching the app. The fragment cannot be baked in here: it is not known until
+// someone opens the page with a verse in the URL.
 func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int) string {
 	var b strings.Builder
 	b.WriteString(`<nav class="top"><a class="home" href="../../../">BibleText</a><span class="crumbs">`)
