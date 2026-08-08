@@ -222,7 +222,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 				// rather than a quiet progress hint, and it dwarfed the text.
 				container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
 				spacer(10), container.NewCenter(hint),
-				spacer(4), container.NewCenter(cancelBtn),
+				// inputFrame: the theme's button fill IS this panel's card
+				// colour (SurfaceAlt), so a bare Cancel here had no visible
+				// box at all (observed in practice). The outline restores one.
+				spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
 				fasterRow,
 				layout.NewSpacer()),
 		}

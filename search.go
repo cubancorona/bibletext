@@ -259,11 +259,16 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	// one running. Reading the field at tap time always hits the live one.
 	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10), container.NewCenter(hint)}
 
-	items = append(items, spacer(4), container.NewCenter(widget.NewButton("Cancel", func() {
+	cancelBtn := widget.NewButton("Cancel", func() {
 		abandonAISearch(state)
 		state.aiSearchCancelled = true
 		state.refresh() // → the cancelled state (never a false "found nothing")
-	})))
+	})
+	// inputFrame: the theme fills buttons with SurfaceAlt, which is near-equal
+	// to the page ground here (and IS the card fill on the study panel), so a
+	// bare button reads as floating text (observed in practice). The outline gives it
+	// the same visible box the app's cards and fields carry.
+	items = append(items, spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)))
 
 	// Below Cancel, and quieter than it (fasterModelControl): an offer for the
 	// impatient, not a competing action — shown only when there IS something
