@@ -175,6 +175,38 @@ public final class BtBridge {
     // (suspends follow) and when they tap the "Follow narration" pill (resumes it).
     private static native void nativeReadAlongUserScrolled();
     private static native void nativeReadAlongFollowTapped();
+    // Called on the UI thread with the full URL of a shared bibletext.co.uk
+    // link the user tapped (App Links). Go decides whether it is a passage
+    // link and ignores anything else.
+    private static native void nativeOpenedLink(String url);
+
+    // deliverLaunchLink hands Go the shared link this activity was launched
+    // from, if any. Android delivers an App Link as the launch Intent, so a
+    // COLD tap (the common case — the app usually isn't running) is read here.
+    //
+    // consumed guards against re-delivery: init() runs again on things like a
+    // configuration change, and re-reading the same Intent would yank the
+    // reader back to the shared verse after they had navigated away.
+    //
+    // A tap while the app IS running arrives at onNewIntent, which
+    // GoNativeActivity does not expose; that link is not honoured, and the app
+    // simply comes forward where the reader left off. singleTop (see the
+    // manifest) is what stops it creating a second activity instead.
+    private static boolean launchLinkConsumed = false;
+
+    private static void deliverLaunchLink(final Activity act) {
+        if (act == null || launchLinkConsumed) return;
+        try {
+            android.content.Intent it = act.getIntent();
+            if (it == null || !android.content.Intent.ACTION_VIEW.equals(it.getAction())) return;
+            android.net.Uri data = it.getData();
+            if (data == null) return;
+            launchLinkConsumed = true;
+            nativeOpenedLink(data.toString());
+        } catch (Throwable ignored) {
+            // A malformed intent must never stop the reader from opening.
+        }
+    }
 
     private BtBridge() {}
 
@@ -265,6 +297,7 @@ public final class BtBridge {
                 verseStarts = new int[0];
                 verseEnds = new int[0];
                 activity = act;
+                deliverLaunchLink(act);
 
                 if (lifecycleCallbacks == null && act != null) {
                     lifecycleCallbacks = new Application.ActivityLifecycleCallbacks() {

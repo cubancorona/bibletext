@@ -20,6 +20,10 @@
     "BibleText" → libBibleText.so) — fyne parses + validates both.
   - android:icon must be @mipmap/ic_launcher (the adaptive icon fyne compiles
     from Icon-foreground.png / Icon-background.png on the aapt2 path).
+  - android:launchMode="singleTop" is ours (fyne's template omits it): a shared
+    link tapped while the app is already running must be delivered to the
+    EXISTING activity, because the default "standard" mode would create a
+    SECOND NativeActivity instance over the one Go runtime.
 -->
 <manifest
 	xmlns:android="http://schemas.android.com/apk/res/android"
@@ -31,6 +35,7 @@
 		android:label="BibleText"
 		android:configChanges="orientation|keyboardHidden|uiMode"
 		android:exported="true"
+		android:launchMode="singleTop"
 		android:theme="@android:style/Theme">
 		<meta-data android:name="android.app.lib_name" android:value="BibleText" />
 		<intent-filter>
