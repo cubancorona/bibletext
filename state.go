@@ -49,6 +49,7 @@ type AppState struct {
 	retryAISearch     func() // re-runs the last AI query (the error view's "Try again")
 	cancelAISearch    func() // abandons an in-flight AI query (the searching view's "Cancel")
 	aiSearchCancelled bool   // the reader abandoned the last Find — NOT a zero-result answer
+	cancelAIAction    func() // abandons an in-flight study request (Explain / Analyze …)
 	// searchScrollY remembers the results list's scroll offset so returning to the
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32
