@@ -28,23 +28,16 @@
   var bubble = null;
   function hideBubble() { if (bubble) { bubble.remove(); bubble = null; } }
 
-  function showBubble(x, y) {
+  function showBubble() {
     hideBubble();
     // A real <button>: natively tappable everywhere, and reachable by keyboard.
+    // Its position is entirely CSS — fixed at the foot of the viewport — so it
+    // survives scrolling without any JS following the page.
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'clearbub';
     b.textContent = 'Clear highlight';
-    b.style.left = x + 'px';
-    b.style.top = y + 'px';
     document.body.appendChild(b);
-    // Keep it on screen when the tap lands near an edge (translate(-50%) means
-    // x is its centre).
-    var half = b.getBoundingClientRect().width / 2, pad = 8;
-    var lo = window.pageXOffset + pad + half;
-    var hi = window.pageXOffset + document.documentElement.clientWidth - pad - half;
-    if (x < lo) b.style.left = lo + 'px';
-    else if (x > hi) b.style.left = Math.max(lo, hi) + 'px';
     bubble = b;
   }
 
@@ -85,14 +78,6 @@
     return (dx * dx + dy * dy) > 100;              // >10px of travel
   }
 
-  function tapPoint(e) {
-    if (e.changedTouches && e.changedTouches.length) {
-      return { x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY };
-    }
-    if (typeof e.pageX === 'number') return { x: e.pageX, y: e.pageY };
-    return null;                                  // keyboard-synthesised click
-  }
-
   document.addEventListener(TAP, function (e) {
     var t = e.target;
     if (!t || !t.closest) return;
@@ -102,11 +87,22 @@
     if (t.closest('.clearbub')) { e.preventDefault(); clearHighlight(); return; }
     if (!highlighted()) { hideBubble(); return; }
     if (wasDrag(e)) return;                       // a selection, not a tap
-    if (t.closest('a')) return;                   // the verse numbers are links
+    var link = t.closest('a');
+    if (link) {
+      // The verse numbers are permalinks (#v16) — that is how a reader grabs a
+      // link to one verse from this page. But while the clear bubble is up the
+      // reader is dismissing, not navigating, and the numbers sit right against
+      // the words being tapped: landing on one would silently move the
+      // highlight to another verse. While dismissing, a number just dismisses.
+      if (bubble && /^#v\d+/.test(link.getAttribute('href') || '')) {
+        e.preventDefault();
+        hideBubble();
+      }
+      return;
+    }
     if (t.closest('.v.hl') || t.closest('.v:target')) {
-      var p = tapPoint(e);
-      if (bubble || !p) hideBubble();             // tap again dismisses it
-      else showBubble(p.x, p.y);
+      if (bubble) hideBubble();                   // tap again dismisses it
+      else showBubble();
       return;
     }
     hideBubble();                                 // a tap anywhere else
