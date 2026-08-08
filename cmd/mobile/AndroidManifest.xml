@@ -20,6 +20,10 @@
     "BibleText" → libBibleText.so) — fyne parses + validates both.
   - android:icon must be @mipmap/ic_launcher (the adaptive icon fyne compiles
     from Icon-foreground.png / Icon-background.png on the aapt2 path).
+  - android:launchMode="singleTop" is ours (fyne's template omits it): a shared
+    link tapped while the app is already running must be delivered to the
+    EXISTING activity, because the default "standard" mode would create a
+    SECOND NativeActivity instance over the one Go runtime.
 -->
 <manifest
 	xmlns:android="http://schemas.android.com/apk/res/android"
@@ -31,11 +35,32 @@
 		android:label="BibleText"
 		android:configChanges="orientation|keyboardHidden|uiMode"
 		android:exported="true"
+		android:launchMode="singleTop"
 		android:theme="@android:style/Theme">
 		<meta-data android:name="android.app.lib_name" android:value="BibleText" />
 		<intent-filter>
 			<action android:name="android.intent.action.MAIN" />
 			<category android:name="android.intent.category.LAUNCHER" />
+		</intent-filter>
+		<!-- App Links: a shared bibletext.co.uk verse link opens the app.
+		     android:autoVerify makes Android check
+		     https://bibletext.co.uk/.well-known/assetlinks.json against this
+		     app's signing certificate at install time; unverified links are
+		     NOT claimed on Android 12+, so a mismatch degrades to the web page
+		     rather than to a broken app — which is the behaviour we want.
+
+		     The pathPrefixes are an ALLOW-LIST for the same reason the Apple
+		     association file is: /privacy.html and /support.html are the URLs
+		     registered with App Store Connect (and linked from the app), and
+		     they must always open in the browser. Never widen this to the bare
+		     host. -->
+		<intent-filter android:autoVerify="true">
+			<action android:name="android.intent.action.VIEW" />
+			<category android:name="android.intent.category.DEFAULT" />
+			<category android:name="android.intent.category.BROWSABLE" />
+			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/web/" />
+			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/bsb/" />
+			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/webc/" />
 		</intent-filter>
 	</activity>
 

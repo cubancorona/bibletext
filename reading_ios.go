@@ -162,6 +162,8 @@ static UITapGestureRecognizer *gHighlightTap = nil;
                                  children:@[
                                      study(@"Share with citation", @"share-cite"),
                                      study(@"Share as image", @"share-image"),
+
+                                     study(@"Share as link", @"share-link"),
                                  ]];
     UIAction *xref = study(@"Cross-references", @"crossref");
 
