@@ -88,13 +88,40 @@ done
 printf '%s\n' "$DOMAIN" > "$OUT/CNAME"
 touch "$OUT/.nojekyll"
 
+# App-association files, so a shared verse link opens the APP on a phone that
+# has it. Both are published from docs/ (the source of truth) into the tree
+# rsync mirrors — a file added to gh-pages by hand would be deleted by the next
+# publish. The Apple file is also copied to the legacy root location, which is
+# still supported and costs nothing.
+mkdir -p "$OUT/.well-known"
+cp docs/apple-app-site-association "$OUT/.well-known/apple-app-site-association"
+cp docs/apple-app-site-association "$OUT/apple-app-site-association"
+cp docs/assetlinks.json "$OUT/.well-known/assetlinks.json"
+
 # --- Final gate: never push a tree that would break the domain or the pages --
 [[ "$(cat "$OUT/CNAME")" == "$DOMAIN" ]] || fail "CNAME is not $DOMAIN"
 [[ -f "$OUT/.nojekyll" ]] || fail ".nojekyll missing"
 for page in index.html privacy.html support.html; do
   [[ -s "$OUT/$page" ]] || fail "$page missing from the tree about to be published"
 done
-echo "    CNAME, .nojekyll and all three root pages present"
+# The association files decide whether a tapped link opens the app, and a
+# malformed one fails SILENTLY and slowly (Apple caches per-domain for ~24h,
+# and a 404 is cached as a negative result). Validate before pushing.
+for f in ".well-known/apple-app-site-association" ".well-known/assetlinks.json"; do
+  [[ -s "$OUT/$f" ]] || fail "$f missing — shared links would stop opening the app"
+  python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT/$f" \
+    || fail "$f is not valid JSON — shared links would stop opening the app"
+done
+grep -q 'R8PC7239T2.uk.co.bibletext' "$OUT/.well-known/apple-app-site-association" \
+  || fail "the Apple association file does not name the app id"
+# The scope is an ALLOW-LIST on purpose: privacy.html and support.html are the
+# URLs App Store Connect points at and Apple's reviewer opens. If the app ever
+# claimed them, tapping them would bounce into the app instead of the browser.
+grep -q '"/privacy.html", "exclude": true' "$OUT/.well-known/apple-app-site-association" \
+  || fail "the Apple association file no longer excludes privacy.html"
+grep -q '"/support.html", "exclude": true' "$OUT/.well-known/apple-app-site-association" \
+  || fail "the Apple association file no longer excludes support.html"
+echo "    CNAME, .nojekyll, both association files and all three root pages present"
 
 if $DRY_RUN; then
   echo "==> --dry-run: built and verified $OUT; nothing pushed"
@@ -124,7 +151,7 @@ if git -C "$WORKTREE" diff --cached --quiet; then
 fi
 # Last line of defence: refuse a commit that stages a deletion of the domain
 # file or one of the hand-written pages.
-if git -C "$WORKTREE" diff --cached --name-status | grep -E '^D\s+(CNAME|index\.html|privacy\.html|support\.html)$'; then
+if git -C "$WORKTREE" diff --cached --name-status | grep -E '^D\s+(CNAME|index\.html|privacy\.html|support\.html|\.well-known/.*)$'; then
   fail "this commit would delete a load-bearing root file"
 fi
 git -C "$WORKTREE" commit --quiet -m "Publish site: landing pages + web reader ($(date -u +%Y-%m-%d))"
