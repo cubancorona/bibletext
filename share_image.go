@@ -210,17 +210,29 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 
 	// verseText is already cleaned + quoted by shareVerse (formatBibleQuote): verse
 	// numbers stripped, and outer quotation marks added only when appropriate.
-	quoted := collapseSpaces(verseText)
+	// Authored POEM LINES arrive as "\n" and are structure, not wrapping — the
+	// reading pane and the text share both break there (verseIsPoetic /
+	// restoreShareLineBreaks), so a psalm must not be run together into a
+	// paragraph here either. Each poem line is wrapped on its own; prose is a
+	// single segment, so its layout is unchanged.
+	segments := poemSegments(verseText)
 	contentW := dim - 2*marginX
 	maxBlockH := dim - topInset - botInset
 
 	// Auto-size the verse: the largest size whose wrapped block fits.
+	wrapAll := func(f font.Face) []string {
+		var out []string
+		for _, seg := range segments {
+			out = append(out, wrapText(f, seg, contentW)...)
+		}
+		return out
+	}
 	var face font.Face
 	var lines []string
 	var lineH int
 	for pt := 66; pt >= 26; pt -= 2 {
 		f := newFace(regular, float64(pt))
-		ls := wrapText(f, quoted, contentW)
+		ls := wrapAll(f)
 		lh := int(float64(pt) * 1.42)
 		if len(ls)*lh <= maxBlockH {
 			face, lines, lineH = f, ls, lh
@@ -230,7 +242,7 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 	if face == nil { // extremely long selection: use the smallest size
 		pt := 26
 		face = newFace(regular, float64(pt))
-		lines = wrapText(face, quoted, contentW)
+		lines = wrapAll(face)
 		lineH = int(float64(pt) * 1.42)
 	}
 
@@ -372,4 +384,22 @@ func blend(a, b color.NRGBA, t float64) color.NRGBA {
 // collapseSpaces flattens runs of whitespace (incl. newlines) to single spaces.
 func collapseSpaces(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// poemSegments splits a quote into the blocks that must start their own line on
+// the card: the authored poem lines. Whitespace WITHIN a line is still collapsed
+// (a line may have been wrapped in the source), and blank segments are dropped,
+// so prose — which carries no "\n" — yields exactly one segment and lays out
+// precisely as it always has.
+func poemSegments(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, "\n") {
+		if p := collapseSpaces(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
 }
