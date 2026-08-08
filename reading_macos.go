@@ -101,7 +101,7 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
         [menu addItem:xref];
     }
 
-    // Share → with citation / as image (both go to the macOS share sheet).
+    // Share → with citation / as image / as link (all go to the macOS share sheet).
     NSMenu *share = [[NSMenu alloc] initWithTitle:@"Share"];
     NSMenuItem *sc = [[NSMenuItem alloc] initWithTitle:@"Share with citation" action:@selector(hbShare_cite:) keyEquivalent:@""];
     sc.target = self;
@@ -109,6 +109,9 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     NSMenuItem *si = [[NSMenuItem alloc] initWithTitle:@"Share as image" action:@selector(hbShare_image:) keyEquivalent:@""];
     si.target = self;
     [share addItem:si];
+    NSMenuItem *sl = [[NSMenuItem alloc] initWithTitle:@"Share as link" action:@selector(hbShare_link:) keyEquivalent:@""];
+    sl.target = self;
+    [share addItem:sl];
     NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share" action:nil keyEquivalent:@""];
     shareItem.submenu = share;
     [menu addItem:shareItem];
@@ -147,6 +150,9 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 }
 - (void)hbShare_image:(id)sender {
     bibleTextStudyMenuTapped((char *)"share-image", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbShare_link:(id)sender {
+    bibleTextStudyMenuTapped((char *)"share-link", (char *)self.hbSelectedText.UTF8String);
 }
 // Target of the floating "Follow narration" button (btMacEnsureFollowBtn) — the
 // text view doubles as its action target so no extra controller object is needed.

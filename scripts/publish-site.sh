@@ -41,18 +41,41 @@ go run ./cmd/websitegen -out "$OUT"
 echo "==> verifying the build"
 fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
 
-for spec in "web:1189" "bsb:1189" "webc:1300"; do
-  id="${spec%%:*}"; min="${spec##*:}"
-  got=$(find "$OUT/read/$id" -name index.html -path '*/[0-9]*/*' | wc -l | tr -d ' ')
-  [[ "$got" -ge "$min" ]] || fail "$id has only $got chapter pages (expected >= $min) — generation looks truncated"
+# EXACT counts at chapter depth. -mindepth/-maxdepth 3 is load-bearing: a
+# -path '*/[0-9]*/*' glob crosses slashes, so it also matches every
+# digit-prefixed BOOK index (read/web/1-samuel/index.html) and silently
+# inflated the total by 17-19, leaving that many chapters of slack in the one
+# guard standing between a truncated build and rsync --delete.
+# Equality, not a floor: adding or removing a book must be a deliberate edit
+# here, which is exactly what this block is for.
+for spec in "web:1189" "bsb:1189" "webc:1328"; do
+  id="${spec%%:*}"; want="${spec##*:}"
+  got=$(find "$OUT/read/$id" -mindepth 3 -maxdepth 3 -name index.html | wc -l | tr -d ' ')
+  [[ "$got" -eq "$want" ]] || fail "$id has $got chapter pages, expected exactly $want — generation looks truncated (or a book was added: update this list deliberately)"
   echo "    $id: $got chapter pages"
 done
+# A webc-only page: the Catholic decoder skips unrecognised USFM ids silently,
+# so a helloao id change could drop whole deuterocanonical books while the
+# counts above still looked plausible.
+[[ -s "$OUT/read/webc/daniel/13/index.html" ]] || fail "webc/daniel/13 missing — the Catholic decode looks incomplete"
 [[ -s "$OUT/read/web/john/3/index.html" ]] || fail "smoke page read/web/john/3/ is missing"
 grep -q 'id="v16"' "$OUT/read/web/john/3/index.html" || fail "John 3 has no verse anchors — deep links would not highlight"
 [[ -s "$OUT/read/assets/reader.css" ]] || fail "stylesheet missing"
 [[ -s "$OUT/404.html" ]] || fail "404.html missing"
 
 # --- Assemble the FULL tree (reader + the hand-written pages) ----------------
+# The three root pages are copied from the WORKING TREE, so publishing from a
+# dirty or unexpected checkout would push whatever happens to be sitting there
+# to the live site — including someone's half-finished privacy-policy edit.
+echo "==> checking the repo state"
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" != "main" && "${ALLOW_BRANCH:-0}" != "1" ]]; then
+  fail "on branch '$branch', not main. The live site should be published from main; set ALLOW_BRANCH=1 to override deliberately."
+fi
+if [[ -n "$(git status --porcelain -- docs/)" ]]; then
+  fail "docs/ has uncommitted changes — commit them first so the live site matches a known revision"
+fi
+
 echo "==> assembling the site tree"
 for page in index.html privacy.html support.html; do
   [[ -s "docs/$page" ]] || fail "docs/$page is missing or empty — it is the source of truth for the live site"
@@ -80,9 +103,14 @@ fi
 # in $OUT.
 echo "==> publishing to gh-pages"
 git fetch origin gh-pages --quiet
+# rm -rf alone leaves git's registration behind, so a single crashed run would
+# block every future publish with "already exists". Remove, then prune.
+git worktree remove --force "$WORKTREE" 2>/dev/null || true
 rm -rf "$WORKTREE"
+git worktree prune
+# Armed BEFORE the add so an interrupt mid-checkout still cleans up.
+trap 'git worktree remove --force "$WORKTREE" 2>/dev/null || true; rm -rf "$WORKTREE"; git worktree prune' EXIT
 git worktree add --quiet "$WORKTREE" origin/gh-pages
-trap 'git worktree remove --force "$WORKTREE" 2>/dev/null || true' EXIT
 
 rsync -a --delete --exclude '.git' "$OUT"/ "$WORKTREE"/
 git -C "$WORKTREE" add -A
