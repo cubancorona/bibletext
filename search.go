@@ -275,7 +275,7 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	// faster. Switching re-asks the same question straight away, since the
 	// reader is sitting here waiting for exactly that answer.
 	if pid, model, label, ok := fasterModelOffer(state); ok {
-		items = append(items, spacer(6), fasterModelControl(state, label, func() {
+		items = append(items, spacer(6), fasterModelControl(label, func() {
 			q := state.aiSearchQuery
 			abandonAISearch(state)
 			applyFasterModel(state, pid, model)

@@ -526,11 +526,11 @@ func TestStudyPanelFasterSwitchAbandonsTheSlowRequest(t *testing.T) {
 	}
 
 	overlay := w.Canvas().Overlays().Top()
-	sw := findTreeTappable(overlay, "Switch to a faster model")
+	sw := findTreeLink(overlay, "Switch to a faster model")
 	if sw == nil {
 		t.Fatalf("no faster-model switch on the thinking state; texts %v", treeTexts(overlay))
 	}
-	sw.Tapped(nil)
+	tapLinkText(sw)
 
 	select {
 	case <-slow.Done():
@@ -584,11 +584,11 @@ func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
 		t.Fatal("the study action never reached the provider seam")
 	}
 
-	sw := findTreeTappable(w.Canvas().Overlays().Top(), "Switch to a faster model")
+	sw := findTreeLink(w.Canvas().Overlays().Top(), "Switch to a faster model")
 	if sw == nil {
 		t.Fatalf("no faster-model switch on the thinking state; texts %v", treeTexts(w.Canvas().Overlays().Top()))
 	}
-	sw.Tapped(nil)
+	tapLinkText(sw)
 	var fast studyCall
 	select {
 	case fast = <-calls:
