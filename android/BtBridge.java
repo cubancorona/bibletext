@@ -345,6 +345,7 @@ public final class BtBridge {
                 SubMenu sh = menu.addSubMenu(0, 201, 101, "Share");
                 sh.add(0, 106, 0, "Share with citation");
                 sh.add(0, 107, 1, "Share as image");
+                sh.add(0, 108, 2, "Share as link");
                 // Cross-references stays a plain root item: the toolbar may hoist
                 // it inline after Study with AI when there's room (a bonus slot on
                 // tablets), and it leads the custom items when AI is off — both
@@ -370,6 +371,7 @@ public final class BtBridge {
                     case 105: action = "crossref"; break;
                     case 106: action = "share-cite"; break;
                     case 107: action = "share-image"; break;
+                    case 108: action = "share-link"; break;
                     default: return false; // submenu header (201) or system item
                 }
                 mode.finish();
