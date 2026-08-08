@@ -46,12 +46,17 @@ body{
 .crumbs{color:var(--muted); white-space:nowrap} .crumbs a{color:var(--muted); text-decoration:none}
 .crumbs a:hover{text-decoration:underline} .sep{opacity:.5; padding:0 .15rem}
 .vers{display:flex; gap:.3rem; margin-left:auto}
+/* Deliberately NOT a version bubble: those are small, pill-shaped, muted and
+   act like tabs. This is an action — accent-coloured, square-ish corners, a
+   touch larger. It carries NO fill: a tinted chip on warm parchment reads as
+   abrasive next to scripture, and the shape + weight + accent already say
+   "button". The tint is kept for hover only, where it is transient. */
 .goto{
-  color:var(--text); text-decoration:none; font-size:.8rem; font-weight:700;
-  background:var(--surface); border:1px solid var(--border); border-radius:9px;
-  padding:.22rem .8rem; white-space:nowrap;
+  color:var(--accent); text-decoration:none; font-size:.85rem; font-weight:700;
+  background:none; border:1px solid var(--border); border-radius:8px;
+  padding:.3rem 1.1rem; white-space:nowrap; letter-spacing:.01em;
 }
-.goto:hover{border-color:var(--accent); color:var(--accent)}
+.goto:hover{border-color:var(--accent); background:var(--hl)}
 /* Chapter heading row: title on the left, quiet prev/next arrows on the right.
    Arrows only up here — you land mid-text from a shared link, so this bar is
    for moving, not for labels; the labelled pager at the foot of the chapter is
@@ -62,31 +67,79 @@ body{
    box: hard to see and under the 44px minimum a thumb needs. These match the
    page's other controls (Go to, version pills, the book grid all carry the
    same border and radius), which on the web reads as "clickable" better than
-   a bare glyph does. */
+   a bare glyph does. Unfilled, like Go to — a pair of near-white tiles beside
+   the chapter title fought with the text; the weight of the glyph is what
+   makes them findable, not a bright ground. */
 .arrow{
   display:inline-flex; align-items:center; justify-content:center;
   min-width:2.75rem; min-height:2.75rem;
-  border:1px solid var(--border); border-radius:10px; background:var(--surface);
-  font-size:1.35rem; line-height:1; color:var(--accent); text-decoration:none;
+  border:1px solid var(--border); border-radius:10px; background:none;
+  /* A system sans renders arrows with real weight; Georgia draws them as
+     hairlines that vanish on a phone screen. */
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:1.45rem; font-weight:700; line-height:1;
+  color:var(--accent); text-decoration:none;
 }
 .arrow:hover{border-color:var(--accent); background:var(--hl)}
 .arrow.off{color:var(--muted); opacity:.3; pointer-events:none; background:none}
-/* Go-to overlay: a dim sheet with a single reference field. */
+/* Go-to overlay — the APP'S picker, not a search box: a two-stage alphabet
+   navigator on the left (letters → that letter's books → back), the selected
+   book's chapter grid on the right, and a verse range + Go along the bottom.
+   Tapping a book or a chapter only SELECTS; Go commits. Mirroring the app
+   matters more than web convention here: the reader arriving from a shared link
+   is usually an app user, and typing a reference on a phone is the thing the
+   app's picker exists to avoid. */
 .gotobg{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
-  align-items:flex-start; justify-content:center; padding:12vh 1rem 1rem; z-index:20}
+  align-items:flex-start; justify-content:center; padding:6vh 1rem 1rem; z-index:20}
 .gotobox{background:var(--surface); border:1px solid var(--border); border-radius:12px;
-  width:100%; max-width:26rem; padding:1rem; box-shadow:0 8px 30px rgba(0,0,0,.28)}
-.gotobox input{
-  width:100%; font-family:Georgia,serif; font-size:1.05rem; padding:.55rem .7rem;
-  color:var(--text); background:var(--bg);
-  border:1px solid var(--border); border-radius:8px; outline:none;
+  width:100%; max-width:30rem; padding:1rem; box-shadow:0 8px 30px rgba(0,0,0,.28)}
+.gotohead{display:flex; align-items:center; margin:0 0 .7rem}
+.gotohead h2{margin:0; font-size:1.15rem; letter-spacing:-.01em}
+.gotox{margin-left:auto; background:none; border:0; padding:.1rem .3rem; cursor:pointer;
+  color:var(--muted); font-size:1.4rem; line-height:1;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.gotox:hover{color:var(--text)}
+.gpanes{display:flex; gap:.7rem; align-items:stretch}
+.gleft{flex:0 0 8.6rem; width:8.6rem; max-height:44vh; overflow-y:auto;
+  border-right:1px solid var(--border); padding-right:.6rem}
+.gright{flex:1 1 auto; max-height:44vh; overflow-y:auto; min-width:0}
+/* The alphabet grid: only letters that actually have books in this canon, so
+   there are no dead keys (the app's bookLetters rule). */
+.galpha{display:grid; grid-template-columns:repeat(4,1fr); gap:.3rem}
+.gchaps{display:grid; grid-template-columns:repeat(auto-fill,minmax(2.5rem,1fr)); gap:.3rem}
+.galpha a,.gchaps a{
+  display:flex; align-items:center; justify-content:center; min-height:2.2rem;
+  border:1px solid var(--border); border-radius:8px; text-decoration:none;
+  color:var(--text); font-size:.9rem; background:none;
 }
-.gotobox input:focus{border-color:var(--accent)}
-.gotohint{color:var(--muted); font-size:.78rem; margin:.5rem 0 0}
-.gotolist{list-style:none; margin:.6rem 0 0; padding:0; max-height:40vh; overflow-y:auto}
-.gotolist li a{display:block; padding:.4rem .5rem; border-radius:6px;
-  color:var(--text); text-decoration:none; font-size:.95rem}
-.gotolist li a:hover,.gotolist li a.on{background:var(--hl); color:var(--accent)}
+.galpha a:hover,.gchaps a:hover{border-color:var(--accent); color:var(--accent)}
+.gchaps a.on{border-color:var(--accent); color:var(--accent); font-weight:700; background:var(--hl)}
+.gbooks{display:block}
+.gbooks a{display:block; padding:.35rem .4rem; border-radius:6px; font-size:.92rem;
+  color:var(--text); text-decoration:none}
+.gbooks a:hover{background:var(--hl)}
+.gbooks a.on{color:var(--accent); font-weight:700}
+.gback{display:block; padding:.35rem .4rem; margin:0 0 .2rem; color:var(--muted);
+  text-decoration:none; font-size:.85rem;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.gback:hover{color:var(--accent)}
+/* Verse RANGE as two number fields — "verse [16] to [18]" — so there is no
+   hyphen to type on a phone number pad. Exactly the app's row. */
+.gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
+  padding:.8rem 0 0; border-top:1px solid var(--border)}
+.gverse input{
+  width:4.6rem; font-family:Georgia,serif; font-size:1rem; padding:.4rem .5rem;
+  color:var(--text); background:var(--bg); text-align:center;
+  border:1px solid var(--border); border-radius:8px; outline:none; min-width:0;
+}
+.gverse input:focus{border-color:var(--accent)}
+.gto{color:var(--muted); font-size:.85rem}
+/* Filled, unlike the page's quiet controls: this is the one commit action, it
+   lives on a dimmed sheet, and it is the app's HighImportance Go button. */
+.ggo{margin-left:auto; background:var(--accent); color:var(--surface); border:0;
+  border-radius:8px; padding:.45rem 1.4rem; font-size:.9rem; font-weight:700;
+  cursor:pointer; font-family:inherit}
+.ggo:hover{opacity:.9}
 .vpick{
   color:var(--muted); text-decoration:none; font-size:.7rem; letter-spacing:.04em;
   border:1px solid var(--border); border-radius:999px; padding:.15rem .5rem;
@@ -136,21 +189,10 @@ body{
 .pager a:hover{text-decoration:underline}
 .guess{margin:0 0 1.2rem}
 .guess a{color:var(--accent)}
-/* The "clear highlight" pill. A shared link lands you scrolled to the verse, so
-   a control at the top of the page would be off-screen exactly when it is
-   wanted — this floats just above the thumb instead, and exists only while
-   something is highlighted (reader.js adds it; with JS off there is no
-   highlight to clear beyond a single :target verse, and navigating clears
-   that). */
-.clearhl{
-  position:fixed; left:50%; transform:translateX(-50%); bottom:1.1rem;
-  background:var(--surface); color:var(--accent);
-  border:1px solid var(--border); border-radius:999px;
-  padding:.4rem .9rem; font-size:.8rem; font-family:Georgia,serif;
-  cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.14);
-}
-.clearhl:hover{border-color:var(--accent)}
-@media print{.clearhl{display:none}}
+/* Clearing a highlight is a TAP ON THE HIGHLIGHT, the way the app does it —
+   no floating control, nothing covering the text. The cursor hints at it on a
+   pointer device; on touch it is simply the obvious thing to try. */
+.v:target,.v.hl{cursor:pointer}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
@@ -162,7 +204,9 @@ body{
   margin:.2rem 0 0; color:var(--muted)}
 .plats a{display:inline-flex; align-items:center; color:inherit; opacity:.75}
 .plats a:hover{opacity:1; color:var(--accent)}
-.plats svg{width:1.05rem; height:1.05rem; fill:currentColor; display:block}
+/* px, not rem: on a phone with a large text-size setting these were rendering
+   enormous. They are decoration and should stay the same modest size. */
+.plats svg{width:15px; height:15px; fill:currentColor; display:block}
 @media print{.top,.pager,.foot{display:none}}
 `
 
@@ -188,11 +232,9 @@ const readerJSTemplate = `
     }
     if (first && hi > lo) first.scrollIntoView({ block: 'center' });
   }
-  // Clearing a highlight. A shared link arrives highlighted, and until now
-  // there was no way to put the page back to plain reading short of editing the
-  // URL. Removing the fragment is what does the work: it un-targets the CSS
-  // :target rule (single verse) as well as letting us drop the range classes.
-  var pill = null;
+  // Clearing a highlight: tap the highlighted text, like the app. Removing the
+  // fragment is what does the work — it un-targets the CSS :target rule (single
+  // verse) as well as letting us drop the range classes.
   function highlighted() { return /^#v\d+(-\d+)?$/.test(location.hash || ''); }
 
   function clearHighlight() {
@@ -200,112 +242,157 @@ const readerJSTemplate = `
     // still returns where the reader came from rather than re-highlighting.
     history.replaceState(null, '', location.pathname + location.search);
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
-    // replaceState does NOT fire hashchange, so the listeners below never run —
-    // update everything that reads the fragment by hand.
+    // replaceState fires NO hashchange, so anything reading the fragment has to
+    // be updated by hand — otherwise the version switcher keeps carrying a verse
+    // that is no longer highlighted.
     carryVerse();
-    syncPill();
   }
 
-  function syncPill() {
-    if (!highlighted()) {
-      if (pill) { pill.remove(); pill = null; }
-      return;
-    }
-    if (pill) return;
-    pill = document.createElement('button');
-    pill.className = 'clearhl';
-    pill.type = 'button';
-    pill.textContent = 'Clear highlight';
-    pill.addEventListener('click', clearHighlight);
-    document.body.appendChild(pill);
-  }
-
+  document.addEventListener('click', function (e) {
+    if (!highlighted()) return;
+    // Ignore a click that is really a text selection, and never swallow a link.
+    var sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    if (e.target.closest('a')) return;
+    if (e.target.closest('.v.hl') || e.target.closest('.v:target')) clearHighlight();
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && highlighted()) clearHighlight();
   });
 
   highlightRange();
-  window.addEventListener('hashchange', function () { highlightRange(); syncPill(); });
+  window.addEventListener('hashchange', highlightRange);
 
-  // 3) "Go to" — the app has one in its header, so the web reader does too.
-  // The button is a real link to the book grid, so it works with no JavaScript;
-  // this upgrades it into a type-ahead over the book list (injected at build
-  // time from the SAME canonical names and slugs the pages are generated from,
-  // so it can never reference a page that does not exist).
+  // 3) "Go to" — the APP'S picker, rebuilt for the page. The button is a real
+  // link to the book grid, so it still works with no JavaScript; this upgrades
+  // it into the same two-stage flow the app uses: alphabet grid → that letter's
+  // books → chapter grid, with an optional verse range and a Go button that
+  // commits. Tapping a book or chapter only selects it, exactly as in the app
+  // (gotoPickerModal, withVerse=true).
+  //
   // One table for the whole site, so reader.js is cached once rather than per
-  // version. Each entry carries its chapter count PER version, because the
-  // canons differ (Greek Daniel has 14 chapters under webc, 12 elsewhere) and a
-  // suggestion must never point at a page that was not generated.
+  // version. Books arrive in the app's alphabetical order, each carrying the
+  // letter it files under, and its chapter count PER version — the canons
+  // differ (Greek Daniel has 14 chapters under webc, 12 elsewhere) and the grid
+  // must never offer a page that was not generated.
   var BOOKS = __BOOKS__;
   var VERSION = (location.pathname.split('/')[1] || 'web');
+  // Books present in THIS translation, still in the app's order.
+  var CANON = BOOKS.filter(function (b) { return b.ch[VERSION] > 0; });
 
-  function parseRef(q) {
-    // "John 3", "1 cor 13:4", "ps23" — book prefix, then optional chapter.
-    var m = /^\s*(.+?)\s*(\d+)?\s*(?::\s*(\d+))?\s*$/.exec(q || '');
-    if (!m) return { hits: [], chapter: 0, verse: 0 };
-    var name = (m[1] || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    var chapter = m[2] ? parseInt(m[2], 10) : 0;
-    var verse = m[3] ? parseInt(m[3], 10) : 0;
-    if (!name) return { hits: [], chapter: chapter, verse: verse };
-    var starts = [], contains = [];
-    BOOKS.forEach(function (b) {
-      if (!b.ch[VERSION]) return;          // not in this translation's canon
-      var n = b.name.toLowerCase();
-      if (n.indexOf(name) === 0 || b.slug.indexOf(name.replace(/ /g, '-')) === 0) starts.push(b);
-      else if (n.indexOf(name) >= 0) contains.push(b);
-    });
-    return { hits: starts.concat(contains).slice(0, 8), chapter: chapter, verse: verse };
-  }
-
-  function hrefFor(b, chapter, verse) {
-    var max = b.ch[VERSION] || 1;
-    var ch = chapter > 0 ? chapter : 1;
-    if (ch > max) ch = max;
-    return '/' + VERSION + '/' + b.slug + '/' + ch + '/' + (verse > 0 ? '#v' + verse : '');
-  }
+  function currentBookSlug() { return location.pathname.split('/')[2] || ''; }
 
   function openGoto(ev) {
     if (ev) ev.preventDefault();
+
+    // Start on the chapter the reader is actually in, like the app.
+    var sel = null, selCh = parseInt(location.pathname.split('/')[3], 10) || 1;
+    var here = currentBookSlug();
+    CANON.forEach(function (b) { if (b.slug === here) sel = b; });
+    if (!sel) { sel = CANON[0]; selCh = 1; }
+    var stage = 0, letter = sel ? sel.l : '';
+
     var bg = document.createElement('div');
     bg.className = 'gotobg';
-    bg.innerHTML = '<div class="gotobox"><input type="text" autocomplete="off" ' +
-      'autocapitalize="none" spellcheck="false" placeholder="Book and chapter, e.g. John 3">' +
-      '<p class="gotohint">Type a reference, then Enter. Escape closes.</p>' +
-      '<ul class="gotolist"></ul></div>';
+    bg.innerHTML =
+      '<div class="gotobox">' +
+        '<div class="gotohead"><h2>Go to</h2>' +
+          '<button class="gotox" type="button" aria-label="Close">&times;</button></div>' +
+        '<div class="gpanes"><div class="gleft"></div><div class="gright"></div></div>' +
+        '<div class="gverse">' +
+          '<input type="text" inputmode="numeric" pattern="[0-9]*" placeholder="verse" aria-label="Verse">' +
+          '<span class="gto">to</span>' +
+          '<input type="text" inputmode="numeric" pattern="[0-9]*" placeholder="end" aria-label="End verse">' +
+          '<button class="ggo" type="button">Go</button>' +
+        '</div>' +
+      '</div>';
     document.body.appendChild(bg);
-    var input = bg.querySelector('input'), list = bg.querySelector('.gotolist'), sel = 0;
+    var left = bg.querySelector('.gleft'), right = bg.querySelector('.gright');
+    var startBox = bg.querySelectorAll('.gverse input')[0];
+    var endBox = bg.querySelectorAll('.gverse input')[1];
 
-    function render() {
-      var r = parseRef(input.value);
-      list.innerHTML = '';
-      if (sel >= r.hits.length) sel = 0;
-      r.hits.forEach(function (b, i) {
-        var li = document.createElement('li');
-        var a = document.createElement('a');
-        a.href = hrefFor(b, r.chapter, r.verse);
-        a.textContent = b.name + (r.chapter ? ' ' + Math.min(r.chapter, b.ch[VERSION] || 1) : '') +
-          (r.verse ? ':' + r.verse : '');
-        if (i === sel) a.className = 'on';
-        li.appendChild(a); list.appendChild(li);
-      });
-      return r;
+    function letters() {
+      var seen = {}, out = [];
+      CANON.forEach(function (b) { if (!seen[b.l]) { seen[b.l] = 1; out.push(b.l); } });
+      return out;                             // first-seen order == A→Z, no dead keys
     }
+
+    function cell(cls, text, onTap) {
+      var a = document.createElement('a');
+      a.href = '#'; a.className = cls; a.textContent = text;
+      a.addEventListener('click', function (e) { e.preventDefault(); onTap(); });
+      return a;
+    }
+
+    function renderLeft() {
+      left.innerHTML = '';
+      if (stage === 0) {
+        var grid = document.createElement('div');
+        grid.className = 'galpha';
+        letters().forEach(function (L) {
+          grid.appendChild(cell('', L, function () { letter = L; stage = 1; renderLeft(); }));
+        });
+        left.appendChild(grid);
+        return;
+      }
+      var back = cell('gback', '‹ ' + letter, function () { stage = 0; renderLeft(); });
+      left.appendChild(back);
+      var list = document.createElement('div');
+      list.className = 'gbooks';
+      CANON.forEach(function (b) {
+        if (b.l !== letter) return;
+        var a = cell(b === sel ? 'on' : '', b.name, function () {
+          // Selecting a book selects its chapter 1 and repopulates the grid —
+          // it does not navigate and does not leave this stage.
+          sel = b; selCh = (b.slug === here) ? (parseInt(location.pathname.split('/')[3], 10) || 1) : 1;
+          renderLeft(); renderRight();
+        });
+        list.appendChild(a);
+      });
+      left.appendChild(list);
+    }
+
+    function renderRight() {
+      right.innerHTML = '';
+      if (!sel) return;
+      var grid = document.createElement('div');
+      grid.className = 'gchaps';
+      var max = sel.ch[VERSION] || 1;
+      for (var n = 1; n <= max; n++) {
+        (function (n) {
+          grid.appendChild(cell(n === selCh ? 'on' : '', String(n), function () {
+            selCh = n; renderRight();       // select only — Go commits
+          }));
+        })(n);
+      }
+      right.appendChild(grid);
+      var on = grid.querySelector('.on');
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+
+    function commit() {
+      if (!sel) return;
+      var max = sel.ch[VERSION] || 1;
+      var ch = selCh > 0 && selCh <= max ? selCh : 1;
+      var lo = parseInt(startBox.value, 10);
+      var hi = parseInt(endBox.value, 10);
+      var frag = '';
+      if (lo > 0) frag = '#v' + lo + (hi > lo ? '-' + hi : '');
+      location.href = '/' + VERSION + '/' + sel.slug + '/' + ch + '/' + frag;
+    }
+
     function close() { bg.remove(); document.removeEventListener('keydown', onKey, true); }
     function onKey(e) {
-      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
-      var links = list.querySelectorAll('a');
-      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, links.length - 1); render(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); render(); }
-      else if (e.key === 'Enter') {
-        var target = list.querySelectorAll('a')[sel];
-        if (target) { e.preventDefault(); location.href = target.getAttribute('href'); }
-      }
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if (e.key === 'Enter') { e.preventDefault(); commit(); }
     }
-    input.addEventListener('input', function () { sel = 0; render(); });
+    bg.querySelector('.gotox').addEventListener('click', close);
+    bg.querySelector('.ggo').addEventListener('click', commit);
     document.addEventListener('keydown', onKey, true);
     bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
-    render();
-    input.focus();
+
+    stage = 1;                                 // open ON the current book's letter
+    renderLeft(); renderRight();
   }
 
   var gotoBtn = document.getElementById('gotobtn');
@@ -325,7 +412,6 @@ const readerJSTemplate = `
   }
   carryVerse();
   window.addEventListener('hashchange', carryVerse);
-  syncPill(); // show the clear control if we arrived on a highlighted link
 
   // 3) "Get the app" — point Apple devices at the App Store, everyone else at
   // the landing page (which is already the no-JS default href).

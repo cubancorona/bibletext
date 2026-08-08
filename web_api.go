@@ -34,3 +34,13 @@ func GroupVersesIntoParagraphs(verses []Verse) [][]Verse {
 func IsWordsOfChrist(book string, chapter, verse int) bool {
 	return isWordsOfChrist(book, chapter, verse)
 }
+
+// AlphabeticalBooks orders books the way the app's "Go to" picker does — a
+// leading numeral read as an ordinal, so 1/2/3 John group under John.
+func AlphabeticalBooks(books []string) []string { return alphabeticalBooks(books) }
+
+// FirstLetter is the letter a book is filed under in that picker's alphabet
+// grid ("1 John" → "J"). Exported with AlphabeticalBooks so the web picker
+// groups and orders identically to the app rather than re-deriving the rule in
+// JavaScript, where "1 John" would file under "1".
+func FirstLetter(book string) string { return string(firstLetter(book)) }
