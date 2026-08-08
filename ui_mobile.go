@@ -469,7 +469,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			container.NewCenter(msg), spacer(10),
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
 			spacer(10), container.NewCenter(hint),
-			spacer(4), container.NewCenter(cancelBtn),
+			// inputFrame: the theme's SurfaceAlt button fill is near-invisible
+			// on this ground, so give Cancel the app's standard visible outline.
+			spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)),
 			fasterRow,
 		))}
 		resultsHost.Refresh()
