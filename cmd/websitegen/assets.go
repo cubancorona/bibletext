@@ -126,11 +126,13 @@ body{
 .gback{display:flex; align-items:center; gap:.45rem;
   padding:.25rem .4rem .5rem; margin:0 0 .4rem;
   border-bottom:1px solid var(--border);
-  color:var(--accent); text-decoration:none; font-weight:700;
+  color:var(--accent); text-decoration:none; font-weight:500;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .gback:hover{border-bottom-color:var(--accent)}
-.bkarrow{font-size:1.3rem; line-height:1}
-.bkletter{font-size:1.05rem; letter-spacing:.02em}
+/* Findable, not shouty: the accent colour and the rule do the work, so the
+   glyph and letter stay close to the size of the book names under them. */
+.bkarrow{font-size:1.1rem; line-height:1}
+.bkletter{font-size:.95rem; letter-spacing:.02em}
 /* Verse RANGE as two number fields — "verse [16] to [18]" — so there is no
    hyphen to type on a phone number pad. Exactly the app's row. */
 .gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
