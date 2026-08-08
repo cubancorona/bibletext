@@ -161,7 +161,11 @@ func aiProviders() []providerInfo {
 		},
 		{
 			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel, FastModel: anthropicFastModel,
-			KeyURL: "https://console.anthropic.com/settings/keys", KeyHint: "key starts with “sk-ant-”",
+			// Anthropic's developer console moved to platform.claude.com; the old
+			// console.anthropic.com URL still redirects, but sending readers
+			// through a redirect to a differently-branded site is a worse first
+			// impression than naming the real one (verified 2026-08-08).
+			KeyURL: "https://platform.claude.com/settings/keys", KeyHint: "key starts with “sk-ant-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
 					store: store, id: providerAnthropic, def: anthropicModel, tier: "opus", apiKey: k,

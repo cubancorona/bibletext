@@ -39,7 +39,10 @@ func fasterModelOffer(state *AppState) (providerID, model, label string, ok bool
 	if strings.EqualFold(current, info.FastModel) {
 		return "", "", "", false // already on the quick one — nothing to offer
 	}
-	return id, info.FastModel, "Use a faster model", true
+	// "Switch", not "Use": this writes the same per-provider override the
+	// Settings model picker does, so it persists until the reader changes it
+	// back. A label implying a one-off would misrepresent that.
+	return id, info.FastModel, "Switch to a faster model", true
 }
 
 // applyFasterModel pins the provider to its economy model. It is the same
