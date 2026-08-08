@@ -32,6 +32,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -41,6 +42,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	bibletext "bibletext"
@@ -177,7 +179,7 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 	if err := site.write("assets/reader.css", readerCSS); err != nil {
 		return err
 	}
-	if err := site.write("assets/reader.js", readerJS); err != nil {
+	if err := site.write("assets/reader.js", readerJS(versions)); err != nil {
 		return err
 	}
 	if err := writeNotFound(site, versions); err != nil {
@@ -189,6 +191,48 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 		}
 	}
 	return nil
+}
+
+// readerJS builds the one script the whole site shares, injecting the book
+// table the "Go to" type-ahead searches. Generated from the SAME loaded data
+// the pages come from, so a suggestion can never point at a page that was not
+// written — and per-version chapter counts keep it honest where canons differ.
+func readerJS(versions []loadedVersion) string {
+	type entry struct {
+		Name string         `json:"name"`
+		Slug string         `json:"slug"`
+		Ch   map[string]int `json:"ch"`
+	}
+	byName := map[string]*entry{}
+	var order []string
+	for _, v := range versions {
+		for _, book := range v.bible.Books {
+			n := len(v.bible.Verses[book])
+			if n == 0 {
+				continue
+			}
+			e, seen := byName[book]
+			if !seen {
+				slug, ok := bibletext.BookSlug(book)
+				if !ok {
+					continue
+				}
+				e = &entry{Name: book, Slug: slug, Ch: map[string]int{}}
+				byName[book] = e
+				order = append(order, book)
+			}
+			e.Ch[v.ID] = n
+		}
+	}
+	list := make([]*entry, 0, len(order))
+	for _, n := range order {
+		list = append(list, byName[n])
+	}
+	table, err := json.Marshal(list)
+	if err != nil { // unreachable: plain structs
+		table = []byte("[]")
+	}
+	return strings.Replace(readerJSTemplate, "__BOOKS__", string(table), 1)
 }
 
 func writeVersion(site *siteWriter, v loadedVersion, all []loadedVersion) error {

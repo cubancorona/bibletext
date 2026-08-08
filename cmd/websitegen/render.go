@@ -51,7 +51,13 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	var b strings.Builder
 	b.WriteString(`<div class="wrap">`)
 	b.WriteString(navBar(v, all, book, slug, chapter))
-	fmt.Fprintf(&b, `<h1 class="ref">%s</h1>`, template.HTMLEscapeString(ref))
+	// Heading row: title left, quiet prev/next arrows right — the app's shape.
+	// Arrows only here; the labelled pager at the foot does the wordy version.
+	b.WriteString(`<div class="chapbar">`)
+	fmt.Fprintf(&b, `<h1 class="ref">%s</h1><div class="chapnav">`, template.HTMLEscapeString(ref))
+	b.WriteString(arrowLink("‹", "prev", book, prev))
+	b.WriteString(arrowLink("›", "next", book, next))
+	b.WriteString(`</div></div>`)
 	fmt.Fprintf(&b, `<p class="ver">%s</p>`, template.HTMLEscapeString(v.Name))
 	b.WriteString(`<article class="text">`)
 	b.WriteString(chapterBody(book, verses))
@@ -146,7 +152,9 @@ func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int
 	b.WriteString(`<nav class="top"><a class="home" href="../../../">BibleText</a><span class="crumbs">`)
 	fmt.Fprintf(&b, `<a href="../../">%s</a> <span class="sep">/</span> <a href="../">%s</a>`,
 		template.HTMLEscapeString(strings.ToUpper(v.ID)), template.HTMLEscapeString(book))
-	b.WriteString(`</span><span class="vers">`)
+	// "Go to" is a real link to the book grid, so it works with JavaScript off;
+	// reader.js upgrades it into a reference type-ahead.
+	b.WriteString(`</span><a class="goto" id="gotobtn" href="../../">Go to</a><span class="vers">`)
 	for _, other := range all {
 		if !hasChapter(other, book, chapter) {
 			continue
@@ -162,6 +170,18 @@ func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int
 	}
 	b.WriteString(`</span></nav>`)
 	return b.String()
+}
+
+// arrowLink is one chapter arrow. A missing neighbour stays in the layout as a
+// dimmed, unclickable glyph rather than vanishing, so the pair does not jump
+// sideways at the first or last chapter of a book.
+func arrowLink(glyph, rel, book string, chapter int) string {
+	if chapter <= 0 {
+		return fmt.Sprintf(`<span class="arrow off" aria-hidden="true">%s</span>`, glyph)
+	}
+	return fmt.Sprintf(`<a class="arrow" rel="%s" href="../%d/" title="%s %d" aria-label="%s %d">%s</a>`,
+		rel, chapter, template.HTMLEscapeString(book), chapter,
+		template.HTMLEscapeString(book), chapter, glyph)
 }
 
 func hasChapter(v loadedVersion, book string, chapter int) bool {
