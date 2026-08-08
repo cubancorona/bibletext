@@ -135,6 +135,12 @@ type AppState struct {
 	// common case (fresh navigation pins to the chapter top).
 	restore *restoreAnchor
 
+	// pendingLink holds a shared link (a tapped bibletext.co.uk verse URL) that
+	// arrived before the Bible finished loading — the common case, since the OS
+	// delivers the link within milliseconds of launch. StartBackgroundLoad
+	// consumes it once the data is in place. See share_link_open.go.
+	pendingLink *ShareTarget
+
 	// loadPhase drives the startup loading screen. The Bible loads on a
 	// background goroutine (so the window appears instantly and the iOS launch
 	// watchdog can't SIGKILL us); while loadPhase != loadReady, CreateMainUI
