@@ -119,10 +119,18 @@ body{
   color:var(--text); text-decoration:none}
 .gbooks a:hover{background:var(--hl)}
 .gbooks a.on{color:var(--accent); font-weight:700}
-.gback{display:block; padding:.35rem .4rem; margin:0 0 .2rem; color:var(--muted);
-  text-decoration:none; font-size:.85rem;
+/* The way back to the alphabet, and the heading telling you which letter you
+   are in. It was a muted ‹ and a small letter — easy to miss and easy to miss
+   with a thumb. Accent-coloured, bold, with a rule under it so it reads as the
+   pane's header rather than the first entry in the book list. */
+.gback{display:flex; align-items:center; gap:.45rem;
+  padding:.25rem .4rem .5rem; margin:0 0 .4rem;
+  border-bottom:1px solid var(--border);
+  color:var(--accent); text-decoration:none; font-weight:700;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-.gback:hover{color:var(--accent)}
+.gback:hover{border-bottom-color:var(--accent)}
+.bkarrow{font-size:1.3rem; line-height:1}
+.bkletter{font-size:1.05rem; letter-spacing:.02em}
 /* Verse RANGE as two number fields — "verse [16] to [18]" — so there is no
    hyphen to type on a phone number pad. Exactly the app's row. */
 .gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
@@ -172,6 +180,13 @@ body{
    heading still on screen, rather than pinning it to the very top edge. */
 .v:target,.v.hl{background:var(--hl); border-radius:3px;
   box-shadow:0 0 0 .18em var(--hl); scroll-margin-top:6.5rem}
+/* Browsers do NOT re-evaluate :target when history.replaceState drops the
+   fragment — the URL loses #v16 but the verse stays lit, so tapping a
+   single-verse highlight appeared to do nothing (a range cleared, because that
+   is class-based). reader.js sets this flag when it clears, and the extra
+   class beats the bare :target on specificity. Without JS the flag is never
+   set, so the no-JS highlight is untouched. */
+html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .empty{color:var(--muted); font-style:italic}
 .grid{list-style:none; padding:0; margin:0;
   display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr)); gap:.4rem}
@@ -221,6 +236,9 @@ const readerJSTemplate = `
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     var m = /^#v(\d+)(?:-(\d+))?$/.exec(location.hash || '');
     if (!m) return;
+    // A fresh fragment re-lights the verse: drop the suppression flag a
+    // previous clear may have set.
+    document.documentElement.classList.remove('nohl');
     var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
     if (!(lo > 0) || hi < lo) return;
     var first = null;
@@ -241,6 +259,10 @@ const readerJSTemplate = `
     // replaceState, not a hash change: it leaves no extra history entry, so Back
     // still returns where the reader came from rather than re-highlighting.
     history.replaceState(null, '', location.pathname + location.search);
+    // Dropping the fragment does NOT un-target the verse — browsers keep the
+    // :target match until a real navigation — so a single-verse highlight (the
+    // usual shared link) would stay lit. This flag overrides it in CSS.
+    document.documentElement.classList.add('nohl');
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     // replaceState fires NO hashchange, so anything reading the fragment has to
     // be updated by hand — otherwise the version switcher keeps carrying a verse
@@ -335,7 +357,12 @@ const readerJSTemplate = `
         left.appendChild(grid);
         return;
       }
-      var back = cell('gback', '‹ ' + letter, function () { stage = 0; renderLeft(); });
+      var back = document.createElement('a');
+      back.href = '#';
+      back.className = 'gback';
+      back.innerHTML = '<span class="bkarrow">&larr;</span><span class="bkletter"></span>';
+      back.querySelector('.bkletter').textContent = letter;
+      back.addEventListener('click', function (e) { e.preventDefault(); stage = 0; renderLeft(); });
       left.appendChild(back);
       var list = document.createElement('div');
       list.className = 'gbooks';
