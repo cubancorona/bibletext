@@ -469,3 +469,58 @@ func TestStudyPanelOffersCancelWhileThinking(t *testing.T) {
 		t.Fatal("Cancel did not abandon the study request")
 	}
 }
+
+// --- Settings close must refresh the Find surface ----------------------------
+
+// TestAISurfacesChangedCoversKeyArrival locks the observed in practice case: with a
+// provider already selected but no key, Find shows "Find needs your own AI
+// key". Pasting a key leaves aiEnabled() unchanged, so a rule that watches only
+// the assistant toggle leaves that panel up until the reader navigates away and
+// back.
+func TestAISurfacesChangedCoversKeyArrival(t *testing.T) {
+	for _, tc := range []struct {
+		name                                         string
+		enabledAtOpen, keyAtOpen, enabledNow, keyNow bool
+		want                                         bool
+	}{
+		{"key pasted for the already-selected provider", true, false, true, true, true},
+		{"switched to a provider that already has a key", true, false, true, true, true},
+		{"key cleared", true, true, true, false, true},
+		{"assistant set to None", true, true, false, false, true},
+		{"assistant turned back on with a key", false, false, true, true, true},
+		{"nothing relevant changed (text size only)", true, true, true, true, false},
+		{"still no key after fiddling", true, false, true, false, false},
+	} {
+		if got := aiSurfacesChanged(tc.enabledAtOpen, tc.keyAtOpen, tc.enabledNow, tc.keyNow); got != tc.want {
+			t.Errorf("%s: aiSurfacesChanged = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestFindPaneFollowsKeyAvailability is the other half: once a rebuild happens,
+// the pane must actually stop showing the set-up panel.
+func TestFindPaneFollowsKeyAvailability(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := psalm23State()
+	st.aiKeys = newKeyStoreWith(newFakePrefs())
+	st.aiSearchActive = true
+
+	const setup = "Find needs your own AI key"
+	found := func() bool {
+		for _, txt := range treeTexts(buildSearchResultsView(st)) {
+			if strings.Contains(txt, setup) {
+				return true
+			}
+		}
+		return false
+	}
+	if !found() {
+		t.Fatal("with no key the Find pane must offer the set-up panel")
+	}
+	st.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	if found() {
+		t.Error("with a key present the set-up panel must be gone")
+	}
+}
