@@ -64,7 +64,18 @@ done
 [[ -s "$OUT/webc/daniel/13/index.html" ]] || fail "webc/daniel/13 missing — the Catholic decode looks incomplete"
 [[ -s "$OUT/web/john/3/index.html" ]] || fail "smoke page /web/john/3/ is missing"
 grep -q 'id="v16"' "$OUT/web/john/3/index.html" || fail "John 3 has no verse anchors — deep links would not highlight"
-[[ -s "$OUT/assets/reader.css" ]] || fail "stylesheet missing"
+# Assets are content-hashed (reader.<hash>.css), so this checks the pair exists
+# AND that a real page links the exact file that was built. A page pointing at a
+# stylesheet that isn't in the tree is the failure this naming scheme exists to
+# prevent, and it renders as an unstyled page rather than an error.
+css=$(find "$OUT/assets" -name 'reader.*.css' | head -1)
+js=$(find "$OUT/assets" -name 'reader.*.js' | head -1)
+[[ -s "$css" ]] || fail "stylesheet missing"
+[[ -s "$js" ]] || fail "script missing"
+for asset in "$css" "$js"; do
+  grep -q "assets/$(basename "$asset")" "$OUT/web/john/3/index.html" ||
+    fail "pages do not reference $(basename "$asset") — the build linked an asset it did not write"
+done
 [[ -s "$OUT/404.html" ]] || fail "404.html missing"
 
 # --- Assemble the FULL tree (reader + the hand-written pages) ----------------
