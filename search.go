@@ -48,9 +48,12 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 					state.retryAISearch()
 				}
 			})
-		case state.aiSearchCancelled:
+		case state.aiSearchCancelled && len(state.aiSearchResults) == 0:
 			// Before the empty-results case below: the reader stopped this
-			// search, so the pane must not claim the AI found nothing.
+			// search, so the pane must not claim the AI found nothing. Gated on
+			// having NO results: the flag exists only to suppress a false
+			// zero-result message, so it must never hide real, paid-for
+			// passages if some path leaves it stale.
 			return aiSearchMessageView("Search cancelled.", "Try again", func() {
 				if state.retryAISearch != nil {
 					state.retryAISearch()

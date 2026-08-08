@@ -89,13 +89,48 @@ func aiFeaturesEnabled(state *AppState) bool {
 // Settings → Assistant → None. Safe when nothing is running, and idempotent —
 // the hook is cleared so a second call is a no-op.
 func abandonAISearch(state *AppState) {
-	if state == nil || state.cancelAISearch == nil {
+	if state == nil {
+		return
+	}
+	// BEFORE the nil-hook guard: this is the only thing clearing the progress
+	// flag at the ✕ and the mode toggle, and the nil-hook-while-loading
+	// combination is reachable (a completion nils the hook without touching
+	// the flag). Returning early here re-armed a previously-fixed bug — a
+	// permanent "Searching with AI…" pane.
+	state.aiSearchLoading = false
+	if state.cancelAISearch == nil {
 		return
 	}
 	cancel := state.cancelAISearch
 	state.cancelAISearch = nil
 	cancel()
-	state.aiSearchLoading = false
+}
+
+// installAISearchCancel registers the hook for a NEW request, abandoning any
+// previous one first.
+//
+// This is the whole guard against the arity bug: aiSearchSession is an N-deep
+// generation counter (it can drop N stale completions), but the cancel hook is
+// a single slot. Assigning it directly — as a resubmission does — dropped the
+// previous request's cancel on the floor, leaving that request unreachable by
+// Cancel, the ✕, the toggle, clearSearchState or Assistant→None, and billing
+// for the rest of aiRequestBudget. Routing every install through here means a
+// resubmission structurally cannot orphan its predecessor.
+func installAISearchCancel(state *AppState, cancel func()) {
+	if state == nil {
+		if cancel != nil {
+			cancel()
+		}
+		return
+	}
+	// Cancel the predecessor's REQUEST only. Deliberately not abandonAISearch:
+	// that also clears aiSearchLoading, which the caller has just set true for
+	// the search it is starting.
+	if prev := state.cancelAISearch; prev != nil {
+		state.cancelAISearch = nil
+		prev()
+	}
+	state.cancelAISearch = cancel
 }
 
 // clearAISearchContext drops any live or leftover Find state — the results
@@ -108,6 +143,7 @@ func clearAISearchContext(state *AppState) {
 		return
 	}
 	abandonAISearch(state) // the request itself, not just its callback
+	state.aiSearchCancelled = false
 	if state.aiSearchActive {
 		state.IsSearching = false
 		state.CanReturnToSearchResults = false

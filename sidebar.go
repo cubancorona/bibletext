@@ -100,10 +100,10 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		// actually in flight rather than a captured stale one. UI goroutine
 		// only, so no synchronisation. (Mirrors the mobile twin.)
 		cancelSearch := func() {}
-		state.cancelAISearch = func() {
+		installAISearchCancel(state, func() {
 			askSession.Invalidate()
 			cancelSearch()
-		}
+		})
 		state.refresh() // → aiSearchingView (with Cancel)
 		cancelSearch = startAISearch(state, q, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
@@ -169,9 +169,15 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		// progress state, or a completion dropped at the aiSearchActive guard
 		// would leak aiSearchLoading=true and toggling back to Find would show
 		// a permanent "Searching with AI…" pane (review finding).
+		// Toggling away mid-flight IS an abandonment, so it must land on the
+		// cancelled state — clearing the flag instead left query set and
+		// results nil, which falls through to "AI didn't find matching
+		// passages": the very false zero-result claim Cancel was fixed to
+		// avoid.
+		inFlight := state.cancelAISearch != nil
 		abandonAISearch(state) // cancels the request; invalidates the session
 		state.aiSearchErr = nil
-		state.aiSearchCancelled = false
+		state.aiSearchCancelled = inFlight
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai
 		applyMode()

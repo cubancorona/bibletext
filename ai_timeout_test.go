@@ -227,7 +227,94 @@ func TestSidebarCancelAbandonsTheCurrentSearch(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Cancel did not abandon the CURRENT request (bound to a stale one?)")
 	}
-	_ = ctx1 // the first request's fate is irrelevant; the live one must die
+	// The FIRST request must already be dead — starting Find #2 supersedes it.
+	// This line previously read "the first request's fate is irrelevant", which
+	// blessed a real leak in writing: a reworded query left the original
+	// request unreachable by every control in the app, billing the reader's key
+	// for the rest of the three-minute budget.
+	select {
+	case <-ctx1.Done():
+	default:
+		t.Fatal("resubmitting orphaned the first request — nothing can cancel it now")
+	}
+}
+
+// TestResubmitAbandonsPreviousRequest is the direct statement of that rule:
+// N submissions must never leave N-1 uncancellable requests running.
+func TestResubmitAbandonsPreviousRequest(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer stubAIGenerate(t)()
+
+	st := sidebarFindState(t)
+	_, ctx1 := findSidebarSearchPane(t, st)
+	_, ctx2 := findSidebarSearchPane(t, st)
+
+	select {
+	case <-ctx1.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the superseded request is still live and unreachable")
+	}
+	if ctx2.Err() != nil {
+		t.Fatal("the newest request must stay live")
+	}
+
+	// And the survivor is still reachable by every teardown route.
+	clearSearchState(st)
+	select {
+	case <-ctx2.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("teardown could not reach the surviving request")
+	}
+}
+
+// TestAbandonClearsProgressWithoutHook: the progress flag must clear even when
+// no cancel hook is registered — that early return re-armed a previously-fixed
+// bug (a permanent "Searching with AI…" pane after the ✕ or the mode toggle).
+func TestAbandonClearsProgressWithoutHook(t *testing.T) {
+	st := sampleState()
+	st.aiSearchLoading = true
+	st.cancelAISearch = nil
+	abandonAISearch(st)
+	if st.aiSearchLoading {
+		t.Error("abandonAISearch must clear the progress flag even with no hook registered")
+	}
+}
+
+// TestCancelledFlagNeverHidesRealResults: aiSearchCancelled exists only to
+// suppress a FALSE zero-result message. If any path leaves it stale, it must
+// still not hide passages the reader already paid for.
+func TestCancelledFlagNeverHidesRealResults(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := psalm23State()
+	// A key is required or buildSearchResultsView short-circuits to the no-key
+	// view before ever reaching the cancelled case.
+	st.aiKeys = newKeyStoreWith(newFakePrefs())
+	st.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	st.aiSearchActive = true
+	st.aiSearchQuery = "shepherd"
+	st.aiSearchCancelled = true // stale
+	st.aiSearchResults = st.Bible.GetChapter("Psalms", 23)[:1]
+
+	for _, txt := range treeTexts(buildSearchResultsView(st)) {
+		if strings.Contains(txt, "Search cancelled") {
+			t.Fatalf("a stale cancelled flag hid real results: %q", txt)
+		}
+	}
+}
+
+// TestAssistantNoneClearsCancelledFlag: Settings → Assistant → None tears down
+// every other Find field; leaving this one set strands the next search.
+func TestAssistantNoneClearsCancelledFlag(t *testing.T) {
+	st := sampleState()
+	st.aiSearchActive = true
+	st.aiSearchCancelled = true
+	clearAISearchContext(st)
+	if st.aiSearchCancelled {
+		t.Error("clearAISearchContext must clear aiSearchCancelled with the rest of the Find state")
+	}
 }
 
 // TestSidebarCancelDoesNotClaimNoResults: a cancelled Find must never render
