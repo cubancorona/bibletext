@@ -180,21 +180,34 @@ body{
    21px is written as 1.3125rem rather than px so it still answers a reader who
    has set a larger default text size in their browser, while landing on exactly
    21px at the default. */
-/* LEADING, and why it is "normal" rather than the 2.0 the app's CSS asks for.
-   The app does not render its own line-height: the AppKit/UIKit HTML importer
-   that turns buildChapterHTML into the attributed string DROPS the property
-   (measured: lineHeightMultiple 0, lineSpacing 0, min/max 0 — for both the 2.0
-   phone value and the 1.3 iPad one), so the reading pane actually sets on
-   Georgia's natural line height, 24px at 21px. Paragraph margins DO survive the
-   import, which is why the 24px gap below is real. CSS "normal" is exactly that
-   natural height, and it stays right if a fallback face is used. */
+/* LEADING — MEASURED off the app, not copied from its stylesheet, because the
+   app does not render what its stylesheet says. buildChapterHTML asks for
+   line-height 2.0 on phones, but that CSS goes through the UIKit HTML importer
+   into an attributed string, and what comes out is neither 2.0 nor the font's
+   natural height:
+
+     importer on macOS   drops line-height entirely (multiple 0, spacing 0)
+     importer on iOS     turns it into minimumLineHeight 42 (= 2.0 x 21)
+     what iOS RENDERS    a 27.67pt line pitch at 21px  ->  1.3175
+
+   27.67pt was measured twice at 3x — on a real iPhone screenshot and on the
+   simulator at default text size — as 83 device px, both to the pixel. So 1.3175
+   is what a reader actually sees, and it is what the page sets.
+
+   The paragraph gap is measured the same way: a boundary comes out at exactly
+   166 device px, two line pitches, i.e. ONE BLANK LINE — not the 24px the
+   stylesheet asks for. Hence 1.3175em below rather than 24px.
+
+   Both numbers are unitless/em so they still scale with a reader's own font
+   size. If the app's reading pane is ever re-typeset, re-measure — do not read
+   these off buildChapterHTML. */
 .text{
   font-family:var(--scripture);
-  font-size:1.3125rem; line-height:normal; letter-spacing:.004em;
+  font-size:1.3125rem; line-height:1.3175; letter-spacing:.004em;
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text p{margin:0 0 24px; text-align:justify; hyphens:auto; -webkit-hyphens:auto}
+.text p{margin:0 0 1.3175em; text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line
@@ -254,8 +267,13 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    verse again) and it goes away. cursor:pointer is not only a hint here — it is
    also what makes iOS Safari treat a bare <span> as tappable at all. */
 .v:target,.v.hl{cursor:pointer; -webkit-tap-highlight-color:transparent}
+/* Anchored to the bottom of the VIEWPORT, not to the tap: it stays put while
+   the reader scrolls, and it never sits on top of the words it refers to.
+   The safe-area inset keeps it clear of the iPhone home indicator. */
 .clearbub{
-  position:absolute; z-index:15; transform:translate(-50%,-118%);
+  position:fixed; z-index:15;
+  left:50%; bottom:calc(1.25rem + env(safe-area-inset-bottom,0px));
+  transform:translateX(-50%);
   background:var(--surface); color:var(--accent);
   border:1px solid var(--border); border-radius:999px;
   padding:.4rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;
