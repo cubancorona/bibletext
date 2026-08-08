@@ -550,8 +550,10 @@ func TestFasterModelOfferOnlyWhenThereIsSomethingFaster(t *testing.T) {
 		t.Errorf("offer must point at the provider's economy model: got %q (fast=%q default=%q)",
 			model, info.FastModel, info.Model)
 	}
-	if label == "" {
-		t.Error("the offer needs a label")
+	// The switch PERSISTS (it writes the Settings override), so the label must
+	// not imply a one-off.
+	if !strings.HasPrefix(label, "Switch") {
+		t.Errorf("label = %q — a persistent change must not read as a one-off", label)
 	}
 
 	// Already on the economy model → nothing to offer.

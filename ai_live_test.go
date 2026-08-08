@@ -17,6 +17,9 @@ package bibletext
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -210,4 +213,74 @@ func isDateSuffix(s string) bool {
 		}
 	}
 	return true
+}
+
+// TestLiveKeyURLs checks the "Get a key" links each provider's settings row
+// offers. They rot quietly — Anthropic's console moved to platform.claude.com
+// and the old address only survived on a redirect — and a dead link is the
+// first thing a new reader would hit.
+//
+// It asserts the link resolves to the provider's OWN domain without a
+// cross-brand redirect: a redirect that lands somewhere differently branded is
+// exactly the signal that the canonical URL has changed.
+func TestLiveKeyURLs(t *testing.T) {
+	if os.Getenv("BIBLETEXT_CHECK_LINKS") != "1" {
+		t.Skip("set BIBLETEXT_CHECK_LINKS=1 to check the Get-a-key links (network)")
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	for _, p := range aiProviders() {
+		p := p
+		t.Run(p.Name, func(t *testing.T) {
+			if p.KeyURL == "" {
+				t.Fatal("provider offers no Get-a-key link")
+			}
+			req, err := http.NewRequest(http.MethodGet, p.KeyURL, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Console pages block unknown agents; ask as a browser would.
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "+
+				"AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("%s unreachable: %v", p.KeyURL, err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode >= 400 && resp.StatusCode != http.StatusForbidden {
+				// 403 is bot-blocking, not a dead page (verified by hand in a
+				// real browser); anything else is a genuine failure.
+				t.Errorf("%s → HTTP %d", p.KeyURL, resp.StatusCode)
+			}
+			if final := resp.Request.URL; !sameSite(final.Host, mustHost(t, p.KeyURL)) {
+				t.Errorf("%s redirects off-brand to %s — the canonical URL has probably moved",
+					p.KeyURL, final.Host)
+			}
+			t.Logf("%-18s %s → %d %s", p.Name, p.KeyURL, resp.StatusCode, resp.Request.URL.Host)
+		})
+	}
+}
+
+func mustHost(t *testing.T, raw string) string {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u.Host
+}
+
+// sameSite treats a provider's own sign-in host as the same site (Google bounces
+// aistudio → accounts.google.com, which is expected and not a moved URL).
+func sameSite(got, want string) bool {
+	if got == want {
+		return true
+	}
+	reg := func(h string) string {
+		parts := strings.Split(h, ".")
+		if len(parts) < 2 {
+			return h
+		}
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
+	return reg(got) == reg(want)
 }
