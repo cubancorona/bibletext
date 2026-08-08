@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uk.co.bibletext",
+      "sha256_cert_fingerprints": [
+        "41:B3:DF:F3:D9:9D:5C:7E:F7:79:A7:DA:8F:85:F5:C3:84:18:C2:3C:19:FE:9D:86:D9:95:30:0B:90:59:07:55"
+      ]
+    }
+  }
+]
