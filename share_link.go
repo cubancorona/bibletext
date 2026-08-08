@@ -4,7 +4,7 @@ package bibletext
 //
 // THE CONTRACT (frozen; see bookslugs.go for why nothing here may change):
 //
-//	https://bibletext.co.uk/read/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
+//	https://bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
 //
 // Every part is deliberate:
 //
@@ -21,13 +21,18 @@ package bibletext
 //     en dash (John 3:16–18) must never reach a URL: messengers mangle it.
 //   - Only the public-domain versions ever appear. A licensed version id must
 //     never leak into a public URL, so anything unrecognised falls back to WEB.
+//   - The version id is the FIRST path segment — there is no /read/ prefix. That
+//     makes a shared link as short as it can be, at the cost of reserving the
+//     three ids at the site root: no future root page may be called web, bsb or
+//     webc, and the generator refuses to overwrite the hand-written pages
+//     (see cmd/websitegen's reservedRootNames).
 
 import (
 	"strconv"
 	"strings"
 )
 
-const shareLinkBase = "https://bibletext.co.uk/read"
+const shareLinkBase = "https://bibletext.co.uk"
 
 // webVersionIDs are the versions the web reader publishes — the public-domain
 // three. Kept as its own set (rather than reading PublicDomain off the

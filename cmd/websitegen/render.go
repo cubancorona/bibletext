@@ -72,7 +72,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	b.WriteString(`</nav></div>`)
 
 	title := fmt.Sprintf("%s — %s | BibleText", ref, v.Name)
-	canonical := fmt.Sprintf("https://bibletext.co.uk/read/%s/%s/%d/", v.ID, slug, chapter)
+	canonical := fmt.Sprintf("https://bibletext.co.uk/%s/%s/%d/", v.ID, slug, chapter)
 	return pageShell(title, fmt.Sprintf("%s (%s)", ref, v.Name), chapterPreview(verses), canonical,
 		b.String(), 3)
 }
@@ -191,7 +191,7 @@ func renderBookList(v loadedVersion, all []loadedVersion) string {
 	}
 	b.WriteString(`</ul></div>`)
 	return pageShell(v.Name+" | BibleText", v.Name, "Read the "+v.Name+" — free, no ads, no account.",
-		"https://bibletext.co.uk/read/"+v.ID+"/", b.String(), 1)
+		"https://bibletext.co.uk/"+v.ID+"/", b.String(), 1)
 }
 
 func renderChapterList(v loadedVersion, book, slug string, chapters []int) string {
@@ -208,22 +208,7 @@ func renderChapterList(v loadedVersion, book, slug string, chapters []int) strin
 	title := book + " — " + v.Name + " | BibleText"
 	return pageShell(title, book+" ("+v.Name+")",
 		fmt.Sprintf("%s has %d chapters. Read it free in the %s.", book, len(chapters), v.Name),
-		"https://bibletext.co.uk/read/"+v.ID+"/"+slug+"/", b.String(), 2)
-}
-
-// renderFrontDoor is /read/ — a real page (so it is never a dead end) that also
-// forwards to the default version. The meta refresh works with JS disabled.
-func renderFrontDoor() string {
-	body := `<div class="wrap"><h1 class="ref">BibleText</h1>` +
-		`<p class="ver">Read the Bible — free, no ads, no account.</p><ul class="grid">` +
-		`<li><a href="web/">World English Bible</a></li>` +
-		`<li><a href="bsb/">Berean Standard Bible</a></li>` +
-		`<li><a href="webc/">WEB Catholic</a></li></ul></div>`
-	page := pageShell("BibleText — read the Bible online", "BibleText",
-		"Read the Bible online — free, no ads, no account.",
-		"https://bibletext.co.uk/read/", body, 0)
-	return strings.Replace(page, `<link rel="stylesheet"`,
-		`<meta http-equiv="refresh" content="0; url=`+defaultVersionID+`/"><link rel="stylesheet"`, 1)
+		"https://bibletext.co.uk/"+v.ID+"/"+slug+"/", b.String(), 2)
 }
 
 // writeNotFound emits the SITE-WIDE 404 at the root. GitHub Pages serves it for
@@ -234,13 +219,13 @@ func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 	body := `<div class="wrap"><h1 class="ref">Not found</h1>` +
 		`<p class="ver">That page isn't here — but the whole Bible is.</p>` +
 		`<p id="guess" class="guess"></p>` +
-		`<ul class="grid"><li><a href="/read/web/">World English Bible</a></li>` +
-		`<li><a href="/read/bsb/">Berean Standard Bible</a></li>` +
-		`<li><a href="/read/webc/">WEB Catholic</a></li></ul></div>`
+		`<ul class="grid"><li><a href="/web/">World English Bible</a></li>` +
+		`<li><a href="/bsb/">Berean Standard Bible</a></li>` +
+		`<li><a href="/webc/">WEB Catholic</a></li></ul></div>`
 	page := pageShell("Not found | BibleText", "BibleText",
 		"Read the Bible online — free, no ads, no account.", "", body, 0)
 	// The 404 lives at the site root, so its asset paths must be absolute.
-	page = strings.ReplaceAll(page, `href="assets/`, `href="/read/assets/`)
-	page = strings.ReplaceAll(page, `src="assets/`, `src="/read/assets/`)
+	page = strings.ReplaceAll(page, `href="assets/`, `href="/assets/`)
+	page = strings.ReplaceAll(page, `src="assets/`, `src="/assets/`)
 	return site.write("404.html", page)
 }

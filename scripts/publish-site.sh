@@ -13,6 +13,10 @@
 #   .nojekyll  turns off Jekyll. Without it GitHub rebuilds ~3,900 files through
 #              Jekyll on every push, slowly and for no reason.
 #
+# The reader lives at the ROOT (/web/, /bsb/, /webc/), sharing the namespace with
+# those hand-written pages — which is why this script writes the whole tree at
+# once and why the generator refuses to emit their filenames.
+#
 # This script is now the ONLY publisher. Before it existed, the landing pages
 # were hand-copied onto gh-pages; doing that again would delete the reader (and
 # a reader publish would delete the landing pages), because each would write a
@@ -50,17 +54,17 @@ fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
 # here, which is exactly what this block is for.
 for spec in "web:1189" "bsb:1189" "webc:1328"; do
   id="${spec%%:*}"; want="${spec##*:}"
-  got=$(find "$OUT/read/$id" -mindepth 3 -maxdepth 3 -name index.html | wc -l | tr -d ' ')
+  got=$(find "$OUT/$id" -mindepth 3 -maxdepth 3 -name index.html | wc -l | tr -d ' ')
   [[ "$got" -eq "$want" ]] || fail "$id has $got chapter pages, expected exactly $want — generation looks truncated (or a book was added: update this list deliberately)"
   echo "    $id: $got chapter pages"
 done
 # A webc-only page: the Catholic decoder skips unrecognised USFM ids silently,
 # so a helloao id change could drop whole deuterocanonical books while the
 # counts above still looked plausible.
-[[ -s "$OUT/read/webc/daniel/13/index.html" ]] || fail "webc/daniel/13 missing — the Catholic decode looks incomplete"
-[[ -s "$OUT/read/web/john/3/index.html" ]] || fail "smoke page read/web/john/3/ is missing"
-grep -q 'id="v16"' "$OUT/read/web/john/3/index.html" || fail "John 3 has no verse anchors — deep links would not highlight"
-[[ -s "$OUT/read/assets/reader.css" ]] || fail "stylesheet missing"
+[[ -s "$OUT/webc/daniel/13/index.html" ]] || fail "webc/daniel/13 missing — the Catholic decode looks incomplete"
+[[ -s "$OUT/web/john/3/index.html" ]] || fail "smoke page /web/john/3/ is missing"
+grep -q 'id="v16"' "$OUT/web/john/3/index.html" || fail "John 3 has no verse anchors — deep links would not highlight"
+[[ -s "$OUT/assets/reader.css" ]] || fail "stylesheet missing"
 [[ -s "$OUT/404.html" ]] || fail "404.html missing"
 
 # --- Assemble the FULL tree (reader + the hand-written pages) ----------------
@@ -125,4 +129,4 @@ if git -C "$WORKTREE" diff --cached --name-status | grep -E '^D\s+(CNAME|index\.
 fi
 git -C "$WORKTREE" commit --quiet -m "Publish site: landing pages + web reader ($(date -u +%Y-%m-%d))"
 git -C "$WORKTREE" push --quiet origin HEAD:gh-pages
-echo "==> published. https://$DOMAIN/read/web/john/3/ should be live within a minute."
+echo "==> published. https://$DOMAIN/web/john/3/ should be live within a minute."
