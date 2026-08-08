@@ -176,7 +176,13 @@ var aiListMarkerPattern = regexp.MustCompile(`^\s*(?:[-*•]\s+|\d{1,2}[.)]\s+)`
 // plateau at the model's genuine recall of 20-40. So the cap's only real
 // effect is truncation; 60 sits above every observed plateau, and latency is
 // a provider property, not a cap property (Claude/OpenAI 1-3s at cap 120).
-const aiSearchResultCap = 60
+// 120 from measurement (2026-08-08): the capable defaults return their genuine
+// recall well past 60 — Claude gave exactly 60 when capped there and 93 when
+// allowed 150, gpt-5 gave 76 — so 60 was cutting roughly a third of a real
+// answer. Raising it costs nothing on ordinary questions, which self-limit at
+// 6-9 results whatever the cap. 120 also matches what keyword Search already
+// shows on screen.
+const aiSearchResultCap = 120
 
 // buildAISearchPrompt asks the active provider for Bible references that answer a
 // natural-language request, in a format we can parse back into real verses. The

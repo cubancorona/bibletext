@@ -129,13 +129,53 @@ func TestLivePinnedDefaultsExist(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
+			// CALL the model, don't just look for it in the list. A listing is
+			// not a promise: Gemini lists models that answer a chat request
+			// with "no longer available to new users", so the list-only check
+			// passed while the pinned default was dead and self-heal was
+			// quietly covering for it on every request.
+			store.setOverrideModel(p.ID, p.Model)
+			defer store.setOverrideModel(p.ID, "")
+			if _, err := p.New(store, key).generate(ctx, "Reply with the single word: OK"); err != nil {
+				t.Errorf("%s default model %q is NOT CALLABLE — re-pin it in ai_providers.go: %v",
+					p.Name, p.Model, err)
+			} else {
+				t.Logf("%s ✓ default %q answered", p.Name, p.Model)
+			}
+			// The economy model behind the "faster model" offer must work too.
+			if p.FastModel != "" {
+				store.setOverrideModel(p.ID, p.FastModel)
+				if _, err := p.New(store, key).generate(ctx, "Reply with the single word: OK"); err != nil {
+					t.Errorf("%s fast model %q is NOT CALLABLE — the waiting screens offer a dead switch: %v",
+						p.Name, p.FastModel, err)
+				} else {
+					t.Logf("%s ✓ fast   %q answered", p.Name, p.FastModel)
+				}
+			}
+			return
+		})
+	}
+}
+
+// TestLivePinnedDefaultsListed is the cheaper companion: the default should
+// also appear in the provider's own catalogue (dated aliases accepted).
+func TestLivePinnedDefaultsListed(t *testing.T) {
+	store := newKeyStoreWith(newFakePrefs())
+	for _, p := range aiProviders() {
+		p := p
+		t.Run(p.Name, func(t *testing.T) {
+			key := providerAPIKey(store, p.ID)
+			if key == "" {
+				t.Skipf("no key in %s", envVarFor(p.ID))
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			models, err := p.ListModels(ctx, key)
 			if err != nil {
 				t.Fatalf("ListModels: %v", err)
 			}
 			for _, m := range models {
 				if m.id == p.Model {
-					t.Logf("%s ✓ default %q still offered", p.Name, p.Model)
 					return
 				}
 				// Anthropic lists the DATED id ("claude-haiku-4-5-20251001")
