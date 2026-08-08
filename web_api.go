@@ -1,0 +1,46 @@
+package bibletext
+
+// Exported seams for cmd/websitegen — the static web reader's generator.
+//
+// The generator lives in this module so it can render from the SAME decoders,
+// poem-line rule and red-letter data the app renders from; these thin wrappers
+// are the only surface it needs. Keeping them here (rather than exporting the
+// internals directly) makes the site's dependency on the package explicit and
+// small: if one of these signatures has to change, the blast radius is one
+// program, not the whole codebase.
+
+// DecodeCanonical66 decodes a 66-book helloao complete.json (WEB, BSB).
+func DecodeCanonical66(body []byte) (*BibleData, error) { return decodeCanonical66(body) }
+
+// DecodeHelloAOCatholic decodes the 73-book WEB Catholic complete.json.
+func DecodeHelloAOCatholic(body []byte) (*BibleData, error) { return decodeHelloAOCatholic(body) }
+
+// VerseIsPoetic reports whether a verse carries authored poem-line breaks.
+func VerseIsPoetic(text string) bool { return verseIsPoetic(text) }
+
+// PoeticJoin reports whether the boundary between two adjacent verses is a
+// poetry line boundary — the rule that keeps the web page, the reading pane and
+// a shared quote breaking in identical places.
+func PoeticJoin(prevText, curText string) bool { return poeticJoin(prevText, curText) }
+
+// GroupVersesIntoParagraphs applies the app's paragraph rule (break after a
+// sentence-ending verse once a paragraph is long enough). Exported so the web
+// page breaks paragraphs in exactly the same places the reading pane does.
+func GroupVersesIntoParagraphs(verses []Verse) [][]Verse {
+	return groupVersesIntoParagraphs(verses)
+}
+
+// IsWordsOfChrist reports whether a verse falls in a red-letter range.
+func IsWordsOfChrist(book string, chapter, verse int) bool {
+	return isWordsOfChrist(book, chapter, verse)
+}
+
+// AlphabeticalBooks orders books the way the app's "Go to" picker does — a
+// leading numeral read as an ordinal, so 1/2/3 John group under John.
+func AlphabeticalBooks(books []string) []string { return alphabeticalBooks(books) }
+
+// FirstLetter is the letter a book is filed under in that picker's alphabet
+// grid ("1 John" → "J"). Exported with AlphabeticalBooks so the web picker
+// groups and orders identically to the app rather than re-deriving the rule in
+// JavaScript, where "1 John" would file under "1".
+func FirstLetter(book string) string { return string(firstLetter(book)) }

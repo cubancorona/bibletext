@@ -192,14 +192,14 @@ func TestStyledSelectStudyMenuVerbs(t *testing.T) {
 	if strings.Join(labels, "|") != strings.Join(want, "|") {
 		t.Errorf("menu = %v, want %v", labels, want)
 	}
-	// The Share submenu carries both share verbs.
+	// The Share submenu carries all three share verbs (citation, image, link).
 	var share *fyne.MenuItem
 	for _, it := range m.Items {
 		if it.Label == "Share" {
 			share = it
 		}
 	}
-	if share == nil || share.ChildMenu == nil || len(share.ChildMenu.Items) != 2 {
+	if share == nil || share.ChildMenu == nil || len(share.ChildMenu.Items) != 3 {
 		t.Fatalf("share submenu wrong: %+v", share)
 	}
 }

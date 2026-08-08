@@ -86,7 +86,11 @@ note "target device: $DEVICE_ID"
 # install directly on a device — it fails with MIInstallerErrorDomain 13 "Attempted
 # to install a Beta profile without the proper entitlement". Distribution profiles
 # have no ProvisionedDevices key, so we skip any profile lacking one.
-PROFILE_FILE=""; PROFILE_NAME=""; WILD_FILE=""; WILD_NAME=""
+# Universal links need a profile carrying the Associated Domains capability.
+# Two profiles can match this app at once (an older Xcode-managed one plus the
+# explicit one), and whichever `find` happened to return first would win — so
+# prefer a capable profile explicitly rather than by luck.
+PROFILE_FILE=""; PROFILE_NAME=""; WILD_FILE=""; WILD_NAME=""; ALINK_FILE=""; ALINK_NAME=""
 for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
     [ -d "$dir" ] || continue
     while IFS= read -r -d '' p; do
@@ -96,11 +100,19 @@ for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME
         appid="$(printf '%s' "$plist" | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)"
         name="$(printf '%s' "$plist" | plutil -extract Name raw -o - - 2>/dev/null || true)"
         case "$appid" in
-            "$TEAM_ID.$APP_ID") PROFILE_FILE="$p"; PROFILE_NAME="$name"; break 2 ;;
+            "$TEAM_ID.$APP_ID")
+                if printf '%s' "$plist" | plutil -extract 'Entitlements.com\.apple\.developer\.associated-domains' raw -o - - >/dev/null 2>&1; then
+                    ALINK_FILE="$p"; ALINK_NAME="$name"   # has the capability — preferred
+                elif [ -z "$PROFILE_FILE" ]; then
+                    PROFILE_FILE="$p"; PROFILE_NAME="$name"
+                fi
+                ;;
             "$TEAM_ID."\*)      WILD_FILE="$p"; WILD_NAME="$name" ;;
         esac
     done < <(find "$dir" -name '*.mobileprovision' -print0 2>/dev/null)
 done
+# Capable profile wins; then any exact match; then a wildcard.
+if [ -n "$ALINK_FILE" ]; then PROFILE_FILE="$ALINK_FILE"; PROFILE_NAME="$ALINK_NAME"; fi
 [ -n "$PROFILE_FILE" ] || { PROFILE_FILE="$WILD_FILE"; PROFILE_NAME="$WILD_NAME"; }
 [ -n "$PROFILE_FILE" ] || fail "No provisioning profile for $APP_ID under team $TEAM_ID. Mint one (header)."
 note "provisioning profile: $PROFILE_NAME"
@@ -172,6 +184,20 @@ rm -rf "$APP/_CodeSignature"
 cp "$PROFILE_FILE" "$APP/embedded.mobileprovision"
 security cms -D -i "$PROFILE_FILE" > /tmp/bt_prof.plist
 plutil -extract Entitlements xml1 -o /tmp/bt_ent.plist /tmp/bt_prof.plist
+# Universal links: the profile grants the capability as a WILDCARD ("*"), which
+# enumerates no domains — an app signed with that would install fine and never
+# open a shared link. Pin the concrete domain, matching release-ios.sh. If the
+# profile lacks the capability entirely, skip it: signing an entitlement the
+# profile doesn't authorise fails the install outright, and a build without
+# universal links is far better than no build.
+if /usr/libexec/PlistBuddy -c "Print :com.apple.developer.associated-domains" /tmp/bt_ent.plist >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" /tmp/bt_ent.plist >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" /tmp/bt_ent.plist
+    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:bibletext.co.uk" /tmp/bt_ent.plist
+    note "universal links: claiming applinks:bibletext.co.uk"
+else
+    note "profile has no Associated Domains capability — universal links will NOT work in this build"
+fi
 codesign -f -s "$CERT_HASH" --entitlements /tmp/bt_ent.plist --generate-entitlement-der "$APP"
 
 # ── 7. install + launch ─────────────────────────────────────────────────────

@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["R8PC7239T2.uk.co.bibletext"],
+        "components": [
+          { "/": "/privacy.html", "exclude": true, "comment": "App Store Connect privacy URL - MUST always open in the browser." },
+          { "/": "/support.html", "exclude": true, "comment": "App Store Connect support URL - MUST always open in the browser." },
+          { "/": "/", "exclude": true, "comment": "Landing and download page." },
+          { "/": "/index.html", "exclude": true, "comment": "Landing and download page." },
+          { "/": "/404.html", "exclude": true, "comment": "Not-found page." },
+          { "/": "/assets/*", "exclude": true, "comment": "Stylesheet and script." },
+          { "/": "/web/*", "comment": "World English Bible reader pages." },
+          { "/": "/bsb/*", "comment": "Berean Standard Bible reader pages." },
+          { "/": "/webc/*", "comment": "WEB Catholic reader pages." }
+        ]
+      }
+    ]
+  }
+}
