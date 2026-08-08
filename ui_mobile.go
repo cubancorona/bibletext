@@ -452,7 +452,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		})
 		var fasterRow fyne.CanvasObject = spacer(0)
 		if pid, fm, label, ok := fasterModelOffer(state); ok {
-			fasterRow = container.NewVBox(spacer(6), fasterModelControl(state, label, func() {
+			fasterRow = container.NewVBox(spacer(6), fasterModelControl(label, func() {
 				abandonAISearch(state)
 				applyFasterModel(state, pid, fm)
 				runAsk(q) // re-ask the same question on the quick model

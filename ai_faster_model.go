@@ -13,13 +13,10 @@ package bibletext
 // when there is genuinely something faster to move to.
 
 import (
-	"image/color"
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -49,54 +46,23 @@ func fasterModelOffer(state *AppState) (providerID, model, label string, ok bool
 	return id, info.FastModel, "Switch to a faster model", true
 }
 
-// fasterModelControl renders the offer as a small tappable text line — accent
-// colour at caption size, no button chrome at all — so it reads as a quiet
-// aside under Cancel rather than a competing action. Cancel keeps the only
-// real button on the screen; this is the link-like alternative for the
-// impatient. (A LowImportance button inside a smallChipTheme override was
-// tried first: it rendered washed-out to the point of illegibility and
-// mis-measured its label under the override.)
-func fasterModelControl(state *AppState, label string, onTapped func()) fyne.CanvasObject {
-	pal := lightPalette
-	if state != nil {
-		pal = state.pal()
-	}
-	return container.NewCenter(newTappableText(label, pal.Accent, onTapped))
+// fasterModelControl renders the offer as a small link line — Fyne's stock
+// Hyperlink, in the palette accent via the theme's ColorNameHyperlink mapping,
+// at caption size — so it reads as a quiet aside under Cancel rather than a
+// competing action. Cancel keeps the only real button on the screen. A stock
+// widget rather than hand-rolled tappable text: it brings the hover underline,
+// keyboard focus and Space activation for free, and re-resolves its colour on
+// a theme flip. Standard size names only — a custom ThemeSizeName measures as
+// ZERO under any theme that doesn't define it (the Fyne test theme, a future
+// override), collapsing the link's tap hit-band to nothing. (A LowImportance
+// button was tried first: a bold body-size label, louder than Cancel's own —
+// and inside a chip-theme override it rendered washed-out and mis-measured.)
+func fasterModelControl(label string, onTapped func()) fyne.CanvasObject {
+	hl := widget.NewHyperlink(label, nil)
+	hl.OnTapped = onTapped
+	hl.SizeName = theme.SizeNameCaptionText
+	return container.NewCenter(hl)
 }
-
-// tappableText is a bare text line that acts on tap — link-like, no chrome.
-type tappableText struct {
-	widget.BaseWidget
-	text     *canvas.Text
-	onTapped func()
-}
-
-func newTappableText(label string, clr color.Color, onTapped func()) *tappableText {
-	t := &tappableText{
-		text:     canvas.NewText(label, clr),
-		onTapped: onTapped,
-	}
-	t.text.TextSize = theme.CaptionTextSize() + 1
-	t.ExtendBaseWidget(t)
-	return t
-}
-
-func (t *tappableText) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(container.NewPadded(t.text))
-}
-
-func (t *tappableText) Tapped(*fyne.PointEvent) {
-	if t.onTapped != nil {
-		t.onTapped()
-	}
-}
-
-func (t *tappableText) Cursor() desktop.Cursor { return desktop.PointerCursor }
-
-var (
-	_ fyne.Tappable      = (*tappableText)(nil)
-	_ desktop.Cursorable = (*tappableText)(nil)
-)
 
 // applyFasterModel pins the provider to its economy model. It is the same
 // mechanism as choosing that model in Settings, so the choice persists and the

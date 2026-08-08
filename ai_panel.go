@@ -201,7 +201,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// the Find surface's first Cancel made.
 		var fasterRow fyne.CanvasObject = spacer(0)
 		if pid, fm, label, ok := fasterModelOffer(state); ok {
-			fasterRow = container.NewVBox(spacer(6), fasterModelControl(state, label, func() {
+			fasterRow = container.NewVBox(spacer(6), fasterModelControl(label, func() {
 				applyFasterModel(state, pid, fm)
 				startFetch() // startFetch abandons the slow request before starting this one
 			}))
