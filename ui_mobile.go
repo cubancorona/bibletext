@@ -450,6 +450,16 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			cancelSearch()          // abandon the request itself, not just its callback
 			stopAIBar()
 		})
+		var fasterRow fyne.CanvasObject = spacer(0)
+		if pid, fm, label, ok := fasterModelOffer(state); ok {
+			fb := widget.NewButton(label, func() {
+				abandonAISearch(state)
+				applyFasterModel(state, pid, fm)
+				runAsk(q) // re-ask the same question on the quick model
+			})
+			fb.Importance = widget.LowImportance
+			fasterRow = container.NewVBox(spacer(8), container.NewCenter(fb))
+		}
 		cancelBtn := widget.NewButton("Cancel", func() {
 			abandonAISearch(state)
 			state.aiSearchCancelled = true
@@ -461,6 +471,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			container.NewCenter(msg), spacer(10),
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
 			spacer(10), container.NewCenter(hint),
+			fasterRow,
 			spacer(4), container.NewCenter(cancelBtn),
 		))}
 		resultsHost.Refresh()

@@ -174,6 +174,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 
 	// --- State transitions. setThinking/setError layer their content on top of
 	// the (empty) answer scroll; setResult fills the scroll and drops the overlay.
+	// Declared before setThinking so the waiting state's "faster model" offer
+	// can re-run the request; assigned below.
+	var startFetch func()
+
 	setThinking := func() {
 		bar := widget.NewProgressBarInfinite()
 		thinkingBar = bar
@@ -188,6 +192,15 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// Reads the field at TAP time (not the value at build time), so it
 		// always abandons the request that is actually running — the mistake
 		// the Find surface's first Cancel made.
+		var fasterRow fyne.CanvasObject = spacer(0)
+		if pid, fm, label, ok := fasterModelOffer(state); ok {
+			fb := widget.NewButton(label, func() {
+				applyFasterModel(state, pid, fm)
+				startFetch() // stopThinking inside cancels the slow request first
+			})
+			fb.Importance = widget.LowImportance
+			fasterRow = container.NewVBox(spacer(8), container.NewCenter(fb))
+		}
 		cancelBtn := widget.NewButton("Cancel", func() {
 			userClosed = true
 			stopThinking() // cancels the request, not just the spinner
@@ -204,6 +217,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 				// rather than a quiet progress hint, and it dwarfed the text.
 				container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
 				spacer(10), container.NewCenter(hint),
+				fasterRow,
 				spacer(4), container.NewCenter(cancelBtn),
 				layout.NewSpacer()),
 		}
@@ -247,7 +261,6 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		})
 	}
 
-	var startFetch func()
 	setError := func(msg string, needsSettings bool) {
 		stopThinking()
 		copyBtn.Disable()

@@ -43,7 +43,18 @@ var activeAIState *AppState
 func registerAIState(state *AppState) { activeAIState = state }
 
 // friendlyAIError maps a raw error to a calm, reader-facing message for the panel.
+// errBudgetExhausted means the model used its whole output allowance on hidden
+// reasoning and produced no visible answer. It is a distinct error because the
+// remedy is specific — ask something narrower, or switch to the faster model —
+// and because reporting it as an "empty answer" blames the provider for a
+// limit the app set.
+var errBudgetExhausted = errors.New("ai: output budget exhausted by reasoning")
+
 func friendlyAIError(err error) string {
+	if errors.Is(err, errBudgetExhausted) {
+		return "The model spent its whole allowance thinking and didn't finish an answer. " +
+			"Try a narrower question, or switch to the faster model."
+	}
 	var nk *noKeyError
 	if errors.As(err, &nk) {
 		return "No API key for " + nk.provider.Name + " yet. Open AI settings to add one."

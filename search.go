@@ -258,6 +258,26 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	// Find on, Cancel would abandon the PREVIOUS request and leave the current
 	// one running. Reading the field at tap time always hits the live one.
 	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10), container.NewCenter(hint)}
+
+	// Quiet, low-importance, and only when there IS something faster: an offer,
+	// not a nag. Switching re-asks the same question straight away, since the
+	// reader is sitting here waiting for exactly that answer.
+	if pid, model, label, ok := fasterModelOffer(state); ok {
+		faster := widget.NewButton(label, func() {
+			q := state.aiSearchQuery
+			abandonAISearch(state)
+			applyFasterModel(state, pid, model)
+			if state.retryAISearch != nil && strings.TrimSpace(q) != "" {
+				state.retryAISearch()
+				return
+			}
+			state.aiSearchCancelled = true
+			state.refresh()
+		})
+		faster.Importance = widget.LowImportance
+		items = append(items, spacer(8), container.NewCenter(faster))
+	}
+
 	items = append(items, spacer(4), container.NewCenter(widget.NewButton("Cancel", func() {
 		abandonAISearch(state)
 		state.aiSearchCancelled = true

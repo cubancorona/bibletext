@@ -524,3 +524,165 @@ func TestFindPaneFollowsKeyAvailability(t *testing.T) {
 		t.Error("with a key present the set-up panel must be gone")
 	}
 }
+
+// --- The "faster model" offer -----------------------------------------------
+//
+// The defaults are now the capable tier, so the waiting screens carry an escape
+// hatch. It must be an OFFER: present only when there is genuinely something
+// faster to move to, never automatic, and never a downgrade the reader did not
+// ask for.
+
+func TestFasterModelOfferOnlyWhenThereIsSomethingFaster(t *testing.T) {
+	newState := func() *AppState {
+		st := sampleState()
+		st.aiKeys = newKeyStoreWith(newFakePrefs())
+		return st
+	}
+
+	// Default (capable) model → the economy model is on offer.
+	st := newState()
+	pid, model, label, ok := fasterModelOffer(st)
+	if !ok {
+		t.Fatal("on the capable default the offer must be available")
+	}
+	info, _ := providerByID(pid)
+	if model != info.FastModel || model == info.Model {
+		t.Errorf("offer must point at the provider's economy model: got %q (fast=%q default=%q)",
+			model, info.FastModel, info.Model)
+	}
+	if label == "" {
+		t.Error("the offer needs a label")
+	}
+
+	// Already on the economy model → nothing to offer.
+	st2 := newState()
+	st2.aiKeys.setOverrideModel(st2.aiKeys.activeProvider(), info.FastModel)
+	if _, _, _, ok := fasterModelOffer(st2); ok {
+		t.Error("no offer when the reader is already on the fast model")
+	}
+
+	// Assistant off → no AI surfaces at all.
+	st3 := newState()
+	st3.aiKeys.setAIEnabled(false)
+	if _, _, _, ok := fasterModelOffer(st3); ok {
+		t.Error("no offer when the assistant is None")
+	}
+}
+
+// TestApplyFasterModelIsTheSameAsChoosingItInSettings: the switch must persist
+// through the ordinary override, so the reader can see and undo it.
+func TestApplyFasterModelIsTheSameAsChoosingItInSettings(t *testing.T) {
+	st := sampleState()
+	st.aiKeys = newKeyStoreWith(newFakePrefs())
+	pid, model, _, ok := fasterModelOffer(st)
+	if !ok {
+		t.Fatal("expected an offer")
+	}
+	applyFasterModel(st, pid, model)
+	if got := st.aiKeys.overrideModel(pid); got != model {
+		t.Errorf("override = %q, want %q", got, model)
+	}
+	if _, _, _, ok := fasterModelOffer(st); ok {
+		t.Error("after switching, the offer must disappear")
+	}
+}
+
+// TestEveryProviderHasADistinctFastOption: the offer is only meaningful if each
+// provider actually names an economy model different from its default.
+func TestEveryProviderHasADistinctFastOption(t *testing.T) {
+	for _, p := range aiProviders() {
+		if p.FastModel == "" {
+			t.Errorf("%s has no FastModel — the waiting screens can offer nothing", p.Name)
+			continue
+		}
+		if p.FastModel == p.Model {
+			t.Errorf("%s: FastModel equals the default (%q) — the offer would be a no-op", p.Name, p.Model)
+		}
+	}
+}
+
+// TestOpenAIReasoningParams locks the client fix that made the capable default
+// reachable at all: the gpt-5 / o-series families REJECT max_tokens and reject
+// an explicit temperature, so sending either made them look "unavailable".
+func TestOpenAIReasoningParams(t *testing.T) {
+	for _, m := range []string{"gpt-5", "gpt-5-mini", "o1", "o3", "o4-mini"} {
+		if !openAIFixedTemperature(m) {
+			t.Errorf("%s must not be sent an explicit temperature", m)
+		}
+	}
+	for _, m := range []string{"gpt-4o-mini", "gpt-4.1", "grok-4.5"} {
+		if openAIFixedTemperature(m) {
+			t.Errorf("%s accepts a temperature and should still get ours", m)
+		}
+	}
+}
+
+// TestSelfHealCacheYieldsToANewRecommendation locks the migration: a model the
+// app CHOSE for a reader (self-heal, when the old default died) must not
+// outrank a newer recommendation. Only an explicit choice in Settings does.
+func TestSelfHealCacheYieldsToANewRecommendation(t *testing.T) {
+	prefs := newFakePrefs()
+	store := newKeyStoreWith(prefs)
+	info, _ := providerByID(defaultProviderID)
+
+	// Self-heal caches a stand-in for the CURRENT default.
+	store.setResolvedModel(defaultProviderID, "some-healed-model")
+	if got := store.resolvedModel(defaultProviderID); got != "some-healed-model" {
+		t.Fatalf("cache should be honoured while it stands in for the current default, got %q", got)
+	}
+
+	// The app now ships a different recommendation: the stand-in is stale.
+	prefs.SetString(prefModelResolvedForPrefix+defaultProviderID, "an-older-default")
+	if got := store.resolvedModel(defaultProviderID); got != "" {
+		t.Errorf("a cache healed from an older default must be discarded, got %q", got)
+	}
+
+	// An explicit choice is the reader's and survives everything.
+	store.setOverrideModel(defaultProviderID, info.FastModel)
+	if got := store.overrideModel(defaultProviderID); got != info.FastModel {
+		t.Errorf("an explicit model choice must never be migrated away, got %q", got)
+	}
+}
+
+// TestBudgetExhaustionIsReportedHonestly: a reasoning model that spends its
+// whole allowance thinking must not be reported as the provider returning
+// nothing — that blames the model for a limit the app set, and tells the reader
+// nothing they can act on.
+func TestBudgetExhaustionIsReportedHonestly(t *testing.T) {
+	_, err := parseOpenAIText([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !errors.Is(err, errBudgetExhausted) {
+		t.Fatalf("want errBudgetExhausted, got %v", err)
+	}
+	msg := friendlyAIError(err)
+	for _, want := range []string{"thinking", "faster model"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the message should mention %q and be actionable, got %q", want, msg)
+		}
+	}
+	if strings.Contains(msg, "empty answer") {
+		t.Error("must not blame the provider for our own budget")
+	}
+
+	// A genuinely empty answer still reads as one.
+	_, err = parseOpenAIText([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"stop"}]}`))
+	if errors.Is(err, errBudgetExhausted) {
+		t.Error("a normal stop must not be reported as budget exhaustion")
+	}
+}
+
+// TestOutputBudgetIsNotASilentPolicy: the app makes no promise about token
+// usage, so its backstop must be far above what a reasoning model needs to
+// answer at all (measured: gpt-5 emitted NOTHING at 4096 and at 8192).
+func TestOutputBudgetIsNotASilentPolicy(t *testing.T) {
+	if aiMaxOutputTokens < 16384 {
+		t.Errorf("aiMaxOutputTokens = %d — below the measured floor for a reasoning model to answer",
+			aiMaxOutputTokens)
+	}
+	if aiSearchResultCap < 100 {
+		t.Errorf("aiSearchResultCap = %d — the capable models return 76-93 on a broad question",
+			aiSearchResultCap)
+	}
+}
