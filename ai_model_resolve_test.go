@@ -92,7 +92,7 @@ func TestPickInTier(t *testing.T) {
 		{"claude-haiku-5-preview", 250}, // newer but preview → loses to stable
 		{"claude-opus-4-8", 300},        // out of tier → never picked
 	}
-	got, ok := pickInTier(models, "haiku")
+	got, ok := pickInTier(models, "haiku", nil)
 	if !ok || got != "claude-haiku-4-5" {
 		t.Fatalf("haiku pick = %q,%v; want claude-haiku-4-5", got, ok)
 	}
@@ -106,18 +106,48 @@ func TestPickInTier(t *testing.T) {
 		{"gpt-4o-mini-search-preview", 40},
 		{"gpt-5-mini", 50}, // newest real mini → wins
 	}
-	if got, ok := pickInTier(oai, "mini"); !ok || got != "gpt-5-mini" {
+	if got, ok := pickInTier(oai, "mini", nil); !ok || got != "gpt-5-mini" {
 		t.Fatalf("mini pick = %q,%v; want gpt-5-mini", got, ok)
 	}
 
 	// Preview used only when nothing stable is in tier.
-	if got, ok := pickInTier([]discoveredModel{{"grok-9-beta", 1}}, "grok"); !ok || got != "grok-9-beta" {
+	if got, ok := pickInTier([]discoveredModel{{"grok-9-beta", 1}}, "grok", nil); !ok || got != "grok-9-beta" {
 		t.Fatalf("beta-only pick = %q,%v; want grok-9-beta", got, ok)
 	}
 
 	// No in-tier match → no fallback to an out-of-tier (pricier) model.
-	if got, ok := pickInTier([]discoveredModel{{"claude-opus-4-8", 1}}, "haiku"); ok {
+	if got, ok := pickInTier([]discoveredModel{{"claude-opus-4-8", 1}}, "haiku", nil); ok {
 		t.Errorf("expected no haiku match, got %q", got)
+	}
+}
+
+// TestPickInTierHonorsExtraExclude: the capable-tier keyword "gpt-5" also
+// matches OpenAI's "-pro" Responses-only family, which 404s on
+// /chat/completions. Self-heal caches its pick, so selecting one would wedge
+// the Recommended path (every retry rediscovers the same broken id). The
+// provider's chat-endpoint exclusions must therefore reach pickInTier, not
+// just the settings dropdown.
+func TestPickInTierHonorsExtraExclude(t *testing.T) {
+	models := []discoveredModel{
+		{"gpt-5", 100},
+		{"gpt-5.2-pro", 300}, // newest in tier, but Responses-API-only
+		{"gpt-5.2", 200},
+	}
+	if got, ok := pickInTier(models, "gpt-5", openAIChatOnlyExclude); !ok || got != "gpt-5.2" {
+		t.Fatalf("gpt-5 pick = %q,%v; want gpt-5.2 (the -pro id must be excluded)", got, ok)
+	}
+	// And the registry actually threads the exclusion into the resolver — the
+	// dropdown filter and the self-heal filter must not drift apart.
+	info, ok := providerByID(providerOpenAI)
+	if !ok {
+		t.Fatal("no OpenAI provider registered")
+	}
+	r, ok := info.New(newTestKeyStore(), "test-key").(*modelResolver)
+	if !ok {
+		t.Fatal("OpenAI client is not a modelResolver")
+	}
+	if len(r.extraExclude) == 0 {
+		t.Fatal("OpenAI's modelResolver carries no extraExclude — self-heal could cache a -pro pick")
 	}
 }
 
@@ -297,7 +327,7 @@ func TestPickInTierPrefersLightOverReasoning(t *testing.T) {
 		{"grok-4.20-multi-agent-0309", 1773014401},   // marked heavy
 		{"grok-4.20-0309-non-reasoning", 1773014400}, // oldest, but light
 	}
-	got, ok := pickInTier(models, "grok")
+	got, ok := pickInTier(models, "grok", nil)
 	if !ok {
 		t.Fatal("expected an in-tier pick")
 	}
@@ -308,19 +338,19 @@ func TestPickInTierPrefersLightOverReasoning(t *testing.T) {
 	// Opaque ids are not guessable — newest still wins, which is exactly why the
 	// pin matters. Locked so the limitation is visible rather than assumed away.
 	opaque := []discoveredModel{{"grok-4.5", 1782691200}, {"grok-4.3", 1776384000}}
-	if got, ok := pickInTier(opaque, "grok"); !ok || got != "grok-4.5" {
+	if got, ok := pickInTier(opaque, "grok", nil); !ok || got != "grok-4.5" {
 		t.Errorf("opaque ids fall back to newest-wins: got %q ok=%v", got, ok)
 	}
 
 	// The discriminating tiers keep pure newest-wins.
 	anth := []discoveredModel{{"claude-haiku-4-5", 2}, {"claude-haiku-3-5", 1}}
-	if got, ok := pickInTier(anth, "haiku"); !ok || got != "claude-haiku-4-5" {
+	if got, ok := pickInTier(anth, "haiku", nil); !ok || got != "claude-haiku-4-5" {
 		t.Errorf("haiku tier should still take the newest: got %q ok=%v", got, ok)
 	}
 
 	// A tier holding ONLY heavy models still resolves (better than nothing).
 	only := []discoveredModel{{"grok-9-reasoning", 3}, {"grok-8-reasoning", 2}}
-	if got, ok := pickInTier(only, "grok"); !ok || got != "grok-9-reasoning" {
+	if got, ok := pickInTier(only, "grok", nil); !ok || got != "grok-9-reasoning" {
 		t.Errorf("all-heavy tier must still resolve to the newest: got %q ok=%v", got, ok)
 	}
 }

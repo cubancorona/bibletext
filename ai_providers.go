@@ -129,6 +129,12 @@ const (
 	aiMaxOutputTokens = 32768
 )
 
+// openAIChatOnlyExclude names OpenAI id substrings that the models endpoint
+// lists but /chat/completions rejects. One var, two consumers — the settings
+// dropdown (ExtraModelExclude) and self-heal (modelResolver.extraExclude) —
+// so the two filters can never drift apart.
+var openAIChatOnlyExclude = []string{"-pro"}
+
 // aiProviders is the registry shown in settings and used to build clients.
 func aiProviders() []providerInfo {
 	return []providerInfo{
@@ -150,14 +156,16 @@ func aiProviders() []providerInfo {
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
 					store: store, id: providerOpenAI, def: openAIModel, tier: "gpt-5", apiKey: k,
-					list:  listOpenAIModels(openAIBaseURL),
-					build: func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
+					extraExclude: openAIChatOnlyExclude,
+					list:         listOpenAIModels(openAIBaseURL),
+					build:        func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
 				}
 			},
 			ListModels: listOpenAIModels(openAIBaseURL),
 			// OpenAI's "-pro" reasoning tier (gpt-5.x-pro, o*-pro) is Responses-API
-			// only and 404s on /chat/completions — keep it out of the dropdown.
-			ExtraModelExclude: []string{"-pro"},
+			// only and 404s on /chat/completions — keep it out of the dropdown AND
+			// out of self-heal (the "gpt-5" tier keyword matches those ids too).
+			ExtraModelExclude: openAIChatOnlyExclude,
 		},
 		{
 			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel, FastModel: anthropicFastModel,

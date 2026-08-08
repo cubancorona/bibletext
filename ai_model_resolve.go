@@ -40,13 +40,23 @@ type modelLister func(ctx context.Context, apiKey string) ([]discoveredModel, er
 
 // modelResolver is the self-healing aiClient wrapper (see file comment).
 type modelResolver struct {
-	store  *keyStore
-	id     string // provider id
-	def    string // hardcoded default model
-	tier   string // tier keyword: haiku / mini / flash / grok
-	apiKey string
-	list   modelLister
-	build  func(model string) aiClient
+	store *keyStore
+	id    string // provider id
+	def   string // hardcoded default model
+	// tier is the keyword naming the shipped default's tier — pro / gpt-5 /
+	// opus / grok (ai_providers.go). Since the 2026-08 capable-defaults change
+	// these name each provider's CAPABLE tier, so self-heal replaces a retired
+	// capable default with a current capable model, never a downgrade.
+	tier string
+	// extraExclude mirrors providerInfo.ExtraModelExclude into self-heal: ids a
+	// provider lists but that fail on its chat endpoint (OpenAI's "-pro"
+	// Responses-only family) must be as unpickable here as they are in the
+	// settings dropdown — a healed pick is cached, so one bad pick would wedge
+	// the Recommended path until the shipped default changes.
+	extraExclude []string
+	apiKey       string
+	list         modelLister
+	build        func(model string) aiClient
 }
 
 var _ aiClient = (*modelResolver)(nil)
@@ -62,6 +72,28 @@ func (r *modelResolver) currentModel() string {
 		}
 	}
 	return r.def
+}
+
+// activeModelFor is currentModel reachable without building a client: the model
+// a provider would send right now — the reader's explicit override, else the
+// self-healed cache, else the shipped default. Used where the MODEL IDENTITY
+// matters outside a request: the faster-model offer (is the reader already on
+// the economy model?) and the study-answer cache scope (two models' answers
+// must not share a key).
+func activeModelFor(store *keyStore, id string) string {
+	if store != nil {
+		if o := strings.TrimSpace(store.overrideModel(id)); o != "" {
+			return o
+		}
+		if c := strings.TrimSpace(store.resolvedModel(id)); c != "" {
+			return c
+		}
+	}
+	info, ok := providerByID(id)
+	if !ok {
+		return ""
+	}
+	return info.Model
 }
 
 // isPinned reports whether model is the user's explicit Settings override (not
@@ -111,7 +143,7 @@ func (r *modelResolver) rediscover(ctx context.Context, tried string) (string, e
 	if err != nil {
 		return "", err
 	}
-	best, ok := pickInTier(models, r.tier)
+	best, ok := pickInTier(models, r.tier, r.extraExclude)
 	if !ok || best == tried {
 		return "", nil
 	}
@@ -170,13 +202,14 @@ var modelUnstableSubstrings = []string{"preview", "-exp", "experimental", "night
 // reasoningModelSubstrings mark heavy "thinking" variants, de-prioritized in
 // self-heal so a light model in the same tier always wins.
 //
-// This backstops the tier keyword where it cannot discriminate. For Anthropic
-// ("haiku"), OpenAI ("mini") and Gemini ("flash") the keyword IS the cheap-and-
-// fast tier, so newest-wins is safe. For SpaceXAI the keyword is "grok" — every
-// model they sell matches it — so newest-wins silently picked grok-4.5, whose
-// reasoning pass took ~48s on a broad Find against ~4s for the non-reasoning
-// variant, blowing the 35s search timeout (measured 2026-08-07). Self-heal must
-// not trade a reader's working feature for a newer, slower model.
+// This backstops the tier keyword where it cannot discriminate — above all for
+// SpaceXAI, whose keyword is "grok" (every model they sell matches it): before
+// this rule, newest-wins picked a variant whose reasoning pass took ~48s on a
+// broad Find against ~4s for the non-reasoning one (measured 2026-08-07).
+// "Light" here means the id doesn't ADVERTISE an extra-heavy thinking pass;
+// the capable-tier keywords (pro / gpt-5 / opus) stay within their tier either
+// way, so this never downgrades — it just avoids the slowest spelling of the
+// same tier when the provider offers a choice.
 var reasoningModelSubstrings = []string{"reasoning", "thinking", "multi-agent"}
 
 // modelNegatedReasoning are ids that CONTAIN a reasoning marker but explicitly
@@ -196,9 +229,10 @@ func isHeavyReasoningModel(lowID string) bool {
 }
 
 // pickInTier chooses the best current model whose id contains the tier keyword,
-// dropping non-chat variants, preferring stable over preview and newer over older.
-// It NEVER falls back to an out-of-tier model, so self-heal can't silently swap a
-// cheap default for a pricier one.
+// dropping non-chat variants (the shared exclude list plus the provider's own
+// extraExclude), preferring stable over preview and newer over older. It NEVER
+// falls back to an out-of-tier model, so self-heal keeps the reader in the tier
+// the shipped default promised — neither silently pricier nor silently worse.
 // dropdownModelCap bounds the settings dropdown: enough to show every current
 // chat model a provider offers without the popup becoming an endless scroll
 // (Gemini alone lists dozens of variants).
@@ -266,7 +300,7 @@ func modelFamilyOf(defaultModel string) string {
 	return defaultModel
 }
 
-func pickInTier(models []discoveredModel, tier string) (string, bool) {
+func pickInTier(models []discoveredModel, tier string, extraExclude []string) (string, bool) {
 	tier = strings.ToLower(tier)
 	if tier == "" {
 		return "", false
@@ -280,7 +314,8 @@ func pickInTier(models []discoveredModel, tier string) (string, bool) {
 	var cands []cand
 	for _, m := range models {
 		low := strings.ToLower(m.id)
-		if !strings.Contains(low, tier) || containsAnySubstr(low, modelExcludeSubstrings) {
+		if !strings.Contains(low, tier) || containsAnySubstr(low, modelExcludeSubstrings) ||
+			containsAnySubstr(low, extraExclude) {
 			continue
 		}
 		cands = append(cands, cand{
