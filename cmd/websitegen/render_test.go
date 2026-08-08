@@ -99,7 +99,7 @@ func TestRenderChapterHasPreviewMetadata(t *testing.T) {
 
 	for _, want := range []string{
 		`<meta property="og:title" content="John 3 (World English Bible)">`,
-		`<link rel="canonical" href="https://bibletext.co.uk/read/web/john/3/">`,
+		`<link rel="canonical" href="https://bibletext.co.uk/web/john/3/">`,
 		`id="v16"`,
 		`href="../2/"`, // previous chapter
 		`href="../4/"`, // next chapter
@@ -124,7 +124,7 @@ func TestSiteURLsMatchTheAppsLinks(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s has no slug", tc.book)
 		}
-		generated := "read/" + tc.version + "/" + slug + "/3/index.html"
+		generated := tc.version + "/" + slug + "/3/index.html"
 		shared := bibletext.ShareLinkURL(tc.version, tc.book, 3, 1, 0)
 		wantPath := strings.TrimPrefix(shared, "https://bibletext.co.uk/")
 		wantPath = strings.TrimSuffix(wantPath, "#v1") + "index.html"

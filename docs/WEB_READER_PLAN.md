@@ -1,4 +1,8 @@
-# Share-as-link + web reader — plan (draft for review)
+# Share-as-link + web reader — plan (BUILT; see CLAUDE.md for the shipped shape)
+
+> Decisions taken since this draft: Go generator (confirmed), same repo — no deploy
+> repo and no subdomain, all three public-domain versions, audio deferred, and the
+> reader lives at the site ROOT (`/web/john/3/`) rather than under `/read/`.
 
 2026-08-08, branch `web-reader`, worktree `~/Dev/bibletext-web`. Status: PLAN —
 nothing built yet; decisions marked ⚖ need the owner's call.
@@ -7,7 +11,7 @@ nothing built yet; decisions marked ⚖ need the owner's call.
 
 Sharing a verse gains a third option, **Share as link**, producing a URL like
 
-    https://read.bibletext.co.uk/web/john/3/#v16-18
+    https://bibletext.co.uk/web/john/3/#v16-18
 
 that opens a fast, elegant, static web reader: navigate versions (WEB / WEB
 Catholic / BSB only — never licensed versions), books, chapters; verse
@@ -69,7 +73,7 @@ as a deliberate migration. Subdomain URLs are also shorter in messages.
 
 ## The URL contract (forever-frozen; links in old messages must never break)
 
-    https://read.bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
+    https://bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
 
 - `<version>` ∈ {`web`, `webc`, `bsb`} — exactly the app's version ids; the
   builder hard-falls-back anything else to `web`; licensed ids never emitted.

@@ -1,5 +1,5 @@
 // Command websitegen builds the static web reader published at
-// bibletext.co.uk/read/ — the destination of the app's "Share as link".
+// bibletext.co.uk — the destination of the app's "Share as link".
 //
 // WHY A GO GENERATOR AND NOT A WEB FRAMEWORK. The scripture, the poem-line
 // rule, the red-letter ranges and the book names all live in this repo's Go
@@ -12,13 +12,18 @@
 //
 // WHAT IT EMITS (every path is part of the frozen contract — see share_link.go):
 //
-//	read/index.html                      front door, redirects to the default version
-//	read/<version>/index.html            book list
-//	read/<version>/<book>/index.html     chapter list
-//	read/<version>/<book>/<ch>/index.html   the chapter — one static file per chapter
-//	read/assets/reader.css               one stylesheet
-//	read/assets/reader.js                two small progressive enhancements
+//	<version>/index.html                 book list        e.g. /web/
+//	<version>/<book>/index.html          chapter list     e.g. /web/john/
+//	<version>/<book>/<ch>/index.html     the chapter      e.g. /web/john/3/
+//	assets/reader.css                    one stylesheet
+//	assets/reader.js                     two small progressive enhancements
 //	404.html                             site-wide, at the root (see writeNotFound)
+//
+// The reader lives at the ROOT, not under a /read/ prefix, so a shared link is
+// as short as possible. The site root is therefore shared with the hand-written
+// landing/privacy/support pages: reservedRootNames below makes it impossible for
+// the generator to overwrite one of them, and the three version ids are reserved
+// at the root forever.
 //
 // A single verse link (#v16) needs NO JavaScript: each verse carries an id and
 // CSS :target draws the highlight. Ranges (#v16-18) and the platform-aware
@@ -139,7 +144,20 @@ type siteWriter struct {
 	files int
 }
 
+// reservedRootNames are files at the site root that the HAND-WRITTEN site owns.
+// The reader now lives at the root (no /read/ prefix), so the generator shares
+// that namespace with the landing, privacy and support pages — and those three
+// are also what the App Store's privacy and support URLs point at. Nothing here
+// should ever try to write them, but "should never" is not a guarantee: this
+// makes it impossible, loudly, at build time rather than at publish time.
+var reservedRootNames = map[string]bool{
+	"index.html": true, "privacy.html": true, "support.html": true, "CNAME": true,
+}
+
 func (s *siteWriter) write(relPath, content string) error {
+	if reservedRootNames[relPath] {
+		return fmt.Errorf("refusing to write %q: the hand-written site owns that file at the root", relPath)
+	}
 	full := filepath.Join(s.root, filepath.FromSlash(relPath))
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		return err
@@ -156,16 +174,13 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 		return err
 	}
 	// Assets and the site-wide 404 first, so a partial build still has chrome.
-	if err := site.write("read/assets/reader.css", readerCSS); err != nil {
+	if err := site.write("assets/reader.css", readerCSS); err != nil {
 		return err
 	}
-	if err := site.write("read/assets/reader.js", readerJS); err != nil {
+	if err := site.write("assets/reader.js", readerJS); err != nil {
 		return err
 	}
 	if err := writeNotFound(site, versions); err != nil {
-		return err
-	}
-	if err := site.write("read/index.html", renderFrontDoor()); err != nil {
 		return err
 	}
 	for _, v := range versions {
@@ -177,7 +192,7 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 }
 
 func writeVersion(site *siteWriter, v loadedVersion, all []loadedVersion) error {
-	if err := site.write("read/"+v.ID+"/index.html", renderBookList(v, all)); err != nil {
+	if err := site.write(v.ID+"/index.html", renderBookList(v, all)); err != nil {
 		return err
 	}
 	for _, book := range v.bible.Books {
@@ -189,7 +204,7 @@ func writeVersion(site *siteWriter, v loadedVersion, all []loadedVersion) error 
 		if len(chapters) == 0 {
 			continue
 		}
-		base := "read/" + v.ID + "/" + slug
+		base := v.ID + "/" + slug
 		if err := site.write(base+"/index.html", renderChapterList(v, book, slug, chapters)); err != nil {
 			return err
 		}

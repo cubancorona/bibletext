@@ -99,36 +99,36 @@ func TestShareLinkURL(t *testing.T) {
 		want                  string
 	}{
 		{name: "single verse", version: "web", book: "John", chapter: 3, lo: 16,
-			want: "https://bibletext.co.uk/read/web/john/3/#v16"},
+			want: "https://bibletext.co.uk/web/john/3/#v16"},
 		{name: "range", version: "web", book: "John", chapter: 3, lo: 16, hi: 18,
-			want: "https://bibletext.co.uk/read/web/john/3/#v16-18"},
+			want: "https://bibletext.co.uk/web/john/3/#v16-18"},
 		{name: "chapter only", version: "bsb", book: "Psalms", chapter: 119,
-			want: "https://bibletext.co.uk/read/bsb/psalms/119/"},
+			want: "https://bibletext.co.uk/bsb/psalms/119/"},
 		{name: "no zero padding", version: "bsb", book: "Psalms", chapter: 119, lo: 105,
-			want: "https://bibletext.co.uk/read/bsb/psalms/119/#v105"},
+			want: "https://bibletext.co.uk/bsb/psalms/119/#v105"},
 		{name: "hi below lo collapses to single", version: "web", book: "Acts", chapter: 2, lo: 5, hi: 2,
-			want: "https://bibletext.co.uk/read/web/acts/2/#v5"},
+			want: "https://bibletext.co.uk/web/acts/2/#v5"},
 		{name: "hi equal to lo is single", version: "web", book: "Acts", chapter: 2, lo: 5, hi: 5,
-			want: "https://bibletext.co.uk/read/web/acts/2/#v5"},
+			want: "https://bibletext.co.uk/web/acts/2/#v5"},
 		{name: "multi-word book", version: "web", book: "Song of Solomon", chapter: 2, lo: 1,
-			want: "https://bibletext.co.uk/read/web/song-of-solomon/2/#v1"},
+			want: "https://bibletext.co.uk/web/song-of-solomon/2/#v1"},
 		{name: "numbered book", version: "web", book: "1 Corinthians", chapter: 13, lo: 4, hi: 7,
-			want: "https://bibletext.co.uk/read/web/1-corinthians/13/#v4-7"},
+			want: "https://bibletext.co.uk/web/1-corinthians/13/#v4-7"},
 		// A licensed version must never appear in a public URL.
 		{name: "licensed version falls back to web", version: "nkjv", book: "John", chapter: 3, lo: 16,
-			want: "https://bibletext.co.uk/read/web/john/3/#v16"},
+			want: "https://bibletext.co.uk/web/john/3/#v16"},
 		{name: "unknown version falls back to web", version: "zzz", book: "John", chapter: 3,
-			want: "https://bibletext.co.uk/read/web/john/3/"},
+			want: "https://bibletext.co.uk/web/john/3/"},
 		// Deuterocanon exists only in the Catholic canon, so the link must say so.
 		{name: "deuterocanon forces webc", version: "web", book: "1 Maccabees", chapter: 2, lo: 19, hi: 22,
-			want: "https://bibletext.co.uk/read/webc/1-maccabees/2/#v19-22"},
+			want: "https://bibletext.co.uk/webc/1-maccabees/2/#v19-22"},
 		{name: "webc stays webc", version: "webc", book: "Wisdom", chapter: 3, lo: 1,
-			want: "https://bibletext.co.uk/read/webc/wisdom/3/#v1"},
+			want: "https://bibletext.co.uk/webc/wisdom/3/#v1"},
 		// Greek Daniel: chapter 13 exists only under webc, but the slug is shared.
 		{name: "greek daniel under webc", version: "webc", book: "Daniel", chapter: 13, lo: 45,
-			want: "https://bibletext.co.uk/read/webc/daniel/13/#v45"},
+			want: "https://bibletext.co.uk/webc/daniel/13/#v45"},
 		{name: "chapter clamped", version: "web", book: "John", chapter: 0, lo: 1,
-			want: "https://bibletext.co.uk/read/web/john/1/#v1"},
+			want: "https://bibletext.co.uk/web/john/1/#v1"},
 	} {
 		if got := ShareLinkURL(tc.version, tc.book, tc.chapter, tc.lo, tc.hi); got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
@@ -144,7 +144,7 @@ func TestShareLinkURL(t *testing.T) {
 // no spaces, no characters a messenger would mangle, and always a trailing
 // slash before any fragment.
 func TestShareLinkURLsAreAlwaysSafe(t *testing.T) {
-	safe := regexp.MustCompile(`^https://bibletext\.co\.uk/read/(web|webc|bsb)/[a-z0-9-]+/[0-9]+/(#v[0-9]+(-[0-9]+)?)?$`)
+	safe := regexp.MustCompile(`^https://bibletext\.co\.uk/(web|webc|bsb)/[a-z0-9-]+/[0-9]+/(#v[0-9]+(-[0-9]+)?)?$`)
 	books := append(append([]string{}, NewBibleData().Books...), catholicBooks...)
 	for _, b := range books {
 		for _, v := range []string{"web", "webc", "bsb", "nkjv", ""} {
