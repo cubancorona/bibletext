@@ -28,18 +28,50 @@
   var bubble = null;
   function hideBubble() { if (bubble) { bubble.remove(); bubble = null; } }
 
+  // Place the bubble just below the LAST line of the highlight, centred on the
+  // text column. getClientRects (not getBoundingClientRect) is what makes this
+  // land correctly: a verse spanning several lines has one rect per line, and
+  // the box around all of them would put the bubble under the widest line
+  // rather than under where the verse actually ends.
+  function positionBubble(b) {
+    var els = document.querySelectorAll('.v.hl');
+    if (!els.length) els = document.querySelectorAll('.v:target');
+    if (!els.length) return;
+    var lines = [], i, j, rl;
+    for (i = 0; i < els.length; i++) {
+      rl = els[i].getClientRects();
+      for (j = 0; j < rl.length; j++) if (rl[j].height > 1) lines.push(rl[j]);
+    }
+    if (!lines.length) return;
+    var h = b.offsetHeight || 34, gap = 8;
+    // Under the LAST line of the highlight that still leaves room on screen. A
+    // three-verse highlight can run past the fold, and pinning to its true last
+    // line would drop the bubble off the screen the reader is looking at.
+    var pick = null;
+    for (i = 0; i < lines.length; i++) {
+      if (lines[i].bottom + gap + h <= window.innerHeight) pick = lines[i];
+    }
+    if (!pick) pick = lines[0];
+    var col = (document.querySelector('.wrap') || document.body).getBoundingClientRect();
+    b.style.top = (pick.bottom + gap + window.pageYOffset) + 'px';
+    b.style.left = (col.left + col.width / 2 + window.pageXOffset) + 'px';
+  }
+
   function showBubble() {
     hideBubble();
     // A real <button>: natively tappable everywhere, and reachable by keyboard.
-    // Its position is entirely CSS — fixed at the foot of the viewport — so it
-    // survives scrolling without any JS following the page.
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'clearbub';
     b.textContent = 'Clear highlight';
     document.body.appendChild(b);
+    positionBubble(b);
     bubble = b;
   }
+
+  // The text reflows on rotation or a window resize, so the line the bubble was
+  // pinned under moves. Re-pin rather than leave it stranded.
+  window.addEventListener('resize', function () { if (bubble) positionBubble(bubble); });
 
   function clearHighlight() {
     // replaceState, not a hash change: it leaves no extra history entry, so Back
