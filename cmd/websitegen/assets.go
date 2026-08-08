@@ -1,20 +1,52 @@
 package main
 
+import "strings"
+
 // The site's entire client-side surface: one stylesheet and one small script.
 //
 // The colours are the app's palette (theme.go) transcribed to CSS so the web
 // page and the app are recognisably the same product — warm parchment in light,
-// warm near-black with a luminous sapphire accent in dark. The type is a system
-// serif stack: Georgia is present on Apple and Windows devices, and a serif
-// fallback covers the rest. Shipping no webfont keeps a shared link as fast as
-// it can possibly be, which matters more here than exact glyph parity — this
-// page is usually opened on a phone, on mobile data, from a message.
+// warm near-black with a luminous sapphire accent in dark.
+//
+// The TYPE follows the app's split: scripture in Georgia (a system font on the
+// phones and desktops that open a shared link, so it costs nothing) with the
+// app's own metrics, and chrome in Atkinson Hyperlegible, which is installed
+// nowhere and so ships as a ~15 KB WOFF2 subset per weight (web_fonts.go). That
+// is the one webfont on the page; font-display:swap means a reader on mobile
+// data sees text immediately and the chrome settles a moment later.
 
-const readerCSS = `
+// readerCSS fills in the webfont URLs. They are content-hashed like the
+// stylesheet itself, and since both live in assets/ the src is a bare filename.
+func readerCSS(regularFile, boldFile string) string {
+	css := strings.Replace(readerCSSTemplate, "__FONT_REGULAR__", regularFile, 1)
+	return strings.Replace(css, "__FONT_BOLD__", boldFile, 1)
+}
+
+// readerCSSTemplate carries __FONT_REGULAR__/__FONT_BOLD__ placeholders for the
+// content-hashed webfont filenames, filled in by readerCSS once the faces have
+// been written (their URLs are relative to the stylesheet, which sits in the
+// same assets/ directory).
+const readerCSSTemplate = `
+/* Atkinson Hyperlegible (c) Braille Institute of America, Inc. — SIL Open Font
+   License 1.1, published beside these files as assets/atkinson-OFL.txt. It is
+   the app's UI typeface; swap keeps text visible while it loads. */
+@font-face{
+  font-family:"Atkinson Hyperlegible"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(__FONT_REGULAR__) format("woff2");
+}
+@font-face{
+  font-family:"Atkinson Hyperlegible"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(__FONT_BOLD__) format("woff2");
+}
 :root{
   --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
   --accent:#2f4c86; --border:#bdb29f; --verse:#53688f; --red:#b23a2e;
   --hl:#dde7f7;
+  /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
+     stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
+     fall back per-glyph instead of tofu. */
+  --ui:"Atkinson Hyperlegible",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --scripture:Georgia,"Iowan Old Style","Times New Roman",serif;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -27,7 +59,13 @@ const readerCSS = `
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0; background:var(--bg); color:var(--text);
-  font-family:Georgia,'Times New Roman',serif; line-height:1.6;
+  /* Chrome, like the app. Scripture opts back into the serif on .text. */
+  font-family:var(--ui); line-height:1.6;
+  /* iOS Safari answers a double-tap with a small zoom instead of selecting the
+     word under the finger — on a page of scripture, selecting is what a reader
+     means. manipulation drops double-tap-to-zoom (and the old 300ms tap delay)
+     while leaving pinch-zoom and scrolling untouched. */
+  touch-action:manipulation;
 }
 .wrap{max-width:40rem; margin:0 auto; padding:1rem 1.6rem 2rem}
 .top{
@@ -74,9 +112,10 @@ body{
   display:inline-flex; align-items:center; justify-content:center;
   min-width:2.75rem; min-height:2.75rem;
   border:1px solid var(--border); border-radius:10px; background:none;
-  /* A system sans renders arrows with real weight; Georgia draws them as
-     hairlines that vanish on a phone screen. */
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  /* The chrome stack: Georgia draws arrows as hairlines that vanish on a phone
+     screen. Atkinson has no arrow glyphs, so these fall through to the system
+     sans behind it — which is exactly what draws them with weight. */
+  font-family:var(--ui);
   font-size:1.45rem; font-weight:700; line-height:1;
   color:var(--accent); text-decoration:none;
 }
@@ -97,7 +136,7 @@ body{
 .gotohead h2{margin:0; font-size:1.15rem; letter-spacing:-.01em}
 .gotox{margin-left:auto; background:none; border:0; padding:.1rem .3rem; cursor:pointer;
   color:var(--muted); font-size:1.4rem; line-height:1;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  font-family:var(--ui)}
 .gotox:hover{color:var(--text)}
 .gpanes{display:flex; gap:.7rem; align-items:stretch}
 .gleft{flex:0 0 8.6rem; width:8.6rem; max-height:44vh; overflow-y:auto;
@@ -127,7 +166,7 @@ body{
   padding:.25rem .4rem .5rem; margin:0 0 .4rem;
   border-bottom:1px solid var(--border);
   color:var(--accent); text-decoration:none; font-weight:500;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  font-family:var(--ui)}
 .gback:hover{border-bottom-color:var(--accent)}
 /* Findable, not shouty: the accent colour and the rule do the work, so the
    glyph and letter stay close to the size of the book names under them. */
@@ -138,7 +177,7 @@ body{
 .gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
   padding:.8rem 0 0; border-top:1px solid var(--border)}
 .gverse input{
-  font-family:Georgia,serif; font-size:1rem; padding:.4rem .6rem;
+  font-family:var(--ui); font-size:1rem; padding:.4rem .6rem;
   color:var(--text); background:var(--bg);
   border:1px solid var(--border); border-radius:8px; outline:none; min-width:0;
 }
@@ -161,8 +200,29 @@ body{
 .vpick.on{color:var(--accent); border-color:var(--accent)}
 .ref{font-size:1.9rem; margin:1.1rem 0 .1rem; font-weight:700; letter-spacing:-.01em}
 .ver{margin:0 0 1.3rem; color:var(--muted); font-size:.85rem}
-.text{font-size:1.28rem; line-height:1.62}
-.text p{margin:0 0 1.1rem; text-align:justify; hyphens:auto}
+/* THE SCRIPTURE FACE, matched to the iOS app. Every value here is the app's
+   own reading CSS (buildChapterHTML, reading.go): the same stack led by
+   Georgia, the same 21px base, the same 0.004em tracking and the same OpenType
+   features — kerning, ligatures, contextual alternates and OLD-STYLE numerals,
+   which is what gives the app's verse numbers their book-page look.
+   21px is written as 1.3125rem rather than px so it still answers a reader who
+   has set a larger default text size in their browser, while landing on exactly
+   21px at the default. */
+/* LEADING, and why it is "normal" rather than the 2.0 the app's CSS asks for.
+   The app does not render its own line-height: the AppKit/UIKit HTML importer
+   that turns buildChapterHTML into the attributed string DROPS the property
+   (measured: lineHeightMultiple 0, lineSpacing 0, min/max 0 — for both the 2.0
+   phone value and the 1.3 iPad one), so the reading pane actually sets on
+   Georgia's natural line height, 24px at 21px. Paragraph margins DO survive the
+   import, which is why the 24px gap below is real. CSS "normal" is exactly that
+   natural height, and it stays right if a fallback face is used. */
+.text{
+  font-family:var(--scripture);
+  font-size:1.3125rem; line-height:normal; letter-spacing:.004em;
+  -webkit-font-smoothing:antialiased;
+  font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
+}
+.text p{margin:0 0 24px; text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line
@@ -170,13 +230,20 @@ body{
    that OPENS with poetry keeps its space and takes no indent, matching the
    app's rule that the reporter indent is skipped for poetic paragraphs. */
 @media (min-width:46rem){
-  .text p{margin:0; text-indent:1.4em; line-height:1.5}
+  /* The reporter set: no gap between paragraphs, a first-line indent instead
+     (the app's em+en spaces). Leading stays natural — the importer drops the
+     app's 1.3 exactly as it drops the phone's 2.0. */
+  .text p{margin:0; text-indent:1.5em}
   .text p:first-child{text-indent:0}
   .text p.pm{margin:.55rem 0; text-indent:0}
   .text p.pm + p{text-indent:0}
 }
 .text p.pm{text-align:left; hyphens:none}
-.n{font-size:.62em; vertical-align:.45em; line-height:0}
+/* The app's verse number: sup.v — 0.66em, weight 600, no tracking, 2px of air
+   after it. The raise is left to the browser's own <sup> handling, damped so a
+   superscript cannot open up the line it sits on. */
+.n{font-size:.66em; font-weight:600; letter-spacing:0; margin-right:2px;
+  vertical-align:.45em; line-height:0}
 .n a{color:var(--verse); text-decoration:none}
 .n a:hover{text-decoration:underline}
 .wj{color:var(--red)}
@@ -210,10 +277,21 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .pager a:hover{text-decoration:underline}
 .guess{margin:0 0 1.2rem}
 .guess a{color:var(--accent)}
-/* Clearing a highlight is a TAP ON THE HIGHLIGHT, the way the app does it —
-   no floating control, nothing covering the text. The cursor hints at it on a
-   pointer device; on touch it is simply the obvious thing to try. */
-.v:target,.v.hl{cursor:pointer}
+/* Clearing a highlight: tap the highlighted text and a small "Clear highlight"
+   bubble appears at the tap; tap the bubble to clear, tap anywhere else (or the
+   verse again) and it goes away. cursor:pointer is not only a hint here — it is
+   also what makes iOS Safari treat a bare <span> as tappable at all. */
+.v:target,.v.hl{cursor:pointer; -webkit-tap-highlight-color:transparent}
+.clearbub{
+  position:absolute; z-index:15; transform:translate(-50%,-118%);
+  background:var(--surface); color:var(--accent);
+  border:1px solid var(--border); border-radius:999px;
+  padding:.4rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;
+  font-family:var(--ui);
+  box-shadow:0 3px 12px rgba(0,0,0,.18); white-space:nowrap;
+  -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+}
+.clearbub:hover{border-color:var(--accent)}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
@@ -256,10 +334,34 @@ const readerJSTemplate = `
     }
     if (first && hi > lo) first.scrollIntoView({ block: 'center' });
   }
-  // Clearing a highlight: tap the highlighted text, like the app. Removing the
-  // fragment is what does the work — it un-targets the CSS :target rule (single
-  // verse) as well as letting us drop the range classes.
+  // Clearing a highlight: tap the highlighted text and a small bubble appears at
+  // the tap; the bubble clears it. Removing the fragment is what does the work —
+  // it un-targets the CSS :target rule (single verse) as well as letting us drop
+  // the range classes.
   function highlighted() { return /^#v\d+(-\d+)?$/.test(location.hash || ''); }
+
+  var bubble = null;
+  function hideBubble() { if (bubble) { bubble.remove(); bubble = null; } }
+
+  function showBubble(x, y) {
+    hideBubble();
+    // A real <button>: natively tappable everywhere, and reachable by keyboard.
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'clearbub';
+    b.textContent = 'Clear highlight';
+    b.style.left = x + 'px';
+    b.style.top = y + 'px';
+    document.body.appendChild(b);
+    // Keep it on screen when the tap lands near an edge (translate(-50%) means
+    // x is its centre).
+    var half = b.getBoundingClientRect().width / 2, pad = 8;
+    var lo = window.pageXOffset + pad + half;
+    var hi = window.pageXOffset + document.documentElement.clientWidth - pad - half;
+    if (x < lo) b.style.left = lo + 'px';
+    else if (x > hi) b.style.left = Math.max(lo, hi) + 'px';
+    bubble = b;
+  }
 
   function clearHighlight() {
     // replaceState, not a hash change: it leaves no extra history entry, so Back
@@ -269,6 +371,7 @@ const readerJSTemplate = `
     // :target match until a real navigation — so a single-verse highlight (the
     // usual shared link) would stay lit. This flag overrides it in CSS.
     document.documentElement.classList.add('nohl');
+    hideBubble();
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     // replaceState fires NO hashchange, so anything reading the fragment has to
     // be updated by hand — otherwise the version switcher keeps carrying a verse
@@ -276,16 +379,57 @@ const readerJSTemplate = `
     carryVerse();
   }
 
-  document.addEventListener('click', function (e) {
-    if (!highlighted()) return;
-    // Ignore a click that is really a text selection, and never swallow a link.
-    var sel = window.getSelection();
-    if (sel && !sel.isCollapsed) return;
-    if (e.target.closest('a')) return;
-    if (e.target.closest('.v.hl') || e.target.closest('.v:target')) clearHighlight();
+  // POINTERUP, not click. iOS Safari only synthesises a click for elements it
+  // considers tappable, and a verse is a bare <span>; a delegated click listener
+  // is exactly the case that quietly never fires there, which is why tapping the
+  // highlight did nothing on a phone while working on the desktop. Pointer
+  // events are delivered regardless. Click is the fallback for anything without
+  // Pointer Events.
+  var TAP = window.PointerEvent ? 'pointerup' : 'click';
+
+  // Was this a tap or the end of a drag? A drag is the reader selecting text,
+  // and a bubble must not jump up over their selection. Measuring the movement
+  // is the honest test: the earlier version asked whether a selection existed
+  // at all, which meant that once a reader had selected anything, tapping the
+  // highlight did nothing until they cleared it — with no way to know why.
+  var downX = null, downY = null;
+  document.addEventListener('pointerdown', function (e) { downX = e.clientX; downY = e.clientY; });
+  function wasDrag(e) {
+    if (downX === null || typeof e.clientX !== 'number') return false;
+    var dx = e.clientX - downX, dy = e.clientY - downY;
+    return (dx * dx + dy * dy) > 100;              // >10px of travel
+  }
+
+  function tapPoint(e) {
+    if (e.changedTouches && e.changedTouches.length) {
+      return { x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY };
+    }
+    if (typeof e.pageX === 'number') return { x: e.pageX, y: e.pageY };
+    return null;                                  // keyboard-synthesised click
+  }
+
+  document.addEventListener(TAP, function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    // The bubble is handled HERE rather than by its own click handler: on the
+    // pointerup path this listener runs first and would remove the button
+    // before any click of its own could fire.
+    if (t.closest('.clearbub')) { e.preventDefault(); clearHighlight(); return; }
+    if (!highlighted()) { hideBubble(); return; }
+    if (wasDrag(e)) return;                       // a selection, not a tap
+    if (t.closest('a')) return;                   // the verse numbers are links
+    if (t.closest('.v.hl') || t.closest('.v:target')) {
+      var p = tapPoint(e);
+      if (bubble || !p) hideBubble();             // tap again dismisses it
+      else showBubble(p.x, p.y);
+      return;
+    }
+    hideBubble();                                 // a tap anywhere else
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && highlighted()) clearHighlight();
+    if (e.key !== 'Escape') return;
+    if (bubble) { hideBubble(); return; }
+    if (highlighted()) clearHighlight();
   });
 
   highlightRange();

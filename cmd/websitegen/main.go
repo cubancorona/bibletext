@@ -192,10 +192,28 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 	// stylesheet — which renders as unstyled controls and giant icons, and is
 	// impossible to diagnose from a screenshot. Content-hashed filenames make a
 	// changed asset a different URL, so that can never happen again.
+	// The chrome typeface, straight from the app's embedded copy, plus the OFL
+	// text the licence requires to travel with it. Written FIRST because the
+	// stylesheet's @font-face src carries their hashed names.
+	regular := bibletext.WebUIFontRegular()
+	bold := bibletext.WebUIFontBold()
+	regularFile := "AtkinsonHyperlegible-Regular." + contentHash(string(regular)) + ".woff2"
+	boldFile := "AtkinsonHyperlegible-Bold." + contentHash(string(bold)) + ".woff2"
+	if err := site.write("assets/"+regularFile, string(regular)); err != nil {
+		return err
+	}
+	if err := site.write("assets/"+boldFile, string(bold)); err != nil {
+		return err
+	}
+	if err := site.write("assets/atkinson-OFL.txt", string(bibletext.WebUIFontLicense())); err != nil {
+		return err
+	}
+
 	js := readerJS(versions)
-	cssName = "assets/reader." + contentHash(readerCSS) + ".css"
+	css := readerCSS(regularFile, boldFile)
+	cssName = "assets/reader." + contentHash(css) + ".css"
 	jsName = "assets/reader." + contentHash(js) + ".js"
-	if err := site.write(cssName, readerCSS); err != nil {
+	if err := site.write(cssName, css); err != nil {
 		return err
 	}
 	if err := site.write(jsName, js); err != nil {
