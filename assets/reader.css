@@ -17,33 +17,48 @@ body{
   margin:0; background:var(--bg); color:var(--text);
   font-family:Georgia,'Times New Roman',serif; line-height:1.6;
 }
-.wrap{max-width:38rem; margin:0 auto; padding:1rem 1.6rem 2rem}
+.wrap{max-width:40rem; margin:0 auto; padding:1rem 1.6rem 2rem}
 .top{
   display:flex; flex-wrap:wrap; align-items:center; gap:.5rem;
-  font-size:.8rem; padding:.35rem 0 .9rem; border-bottom:1px solid var(--border);
+  font-size:.8rem; padding:.35rem 0 .55rem;
 }
+.top.plain{padding-bottom:.9rem; border-bottom:1px solid var(--border)}
+/* "Go to" gets its own centred line under the nav row, so it never competes
+   with the trail or the version pills for width — and the divider closes the
+   whole header rather than sitting between its two halves. */
+.gotorow{display:flex; justify-content:center; padding:0 0 .8rem;
+  border-bottom:1px solid var(--border)}
 .home{font-weight:700; color:var(--text); text-decoration:none; letter-spacing:.01em}
-.crumbs{color:var(--muted)} .crumbs a{color:var(--muted); text-decoration:none}
+/* nowrap keeps the trail on one line — it was stacking into single words when
+   "Go to" shared the row; now that Go to has its own line there is room. */
+.crumbs{color:var(--muted); white-space:nowrap} .crumbs a{color:var(--muted); text-decoration:none}
 .crumbs a:hover{text-decoration:underline} .sep{opacity:.5; padding:0 .15rem}
-.vers{display:flex; gap:.3rem}
+.vers{display:flex; gap:.3rem; margin-left:auto}
 .goto{
-  margin-left:auto; color:var(--accent); text-decoration:none; font-size:.75rem;
-  border:1px solid var(--border); border-radius:999px; padding:.15rem .6rem;
+  color:var(--text); text-decoration:none; font-size:.8rem; font-weight:700;
+  background:var(--surface); border:1px solid var(--border); border-radius:9px;
+  padding:.22rem .8rem; white-space:nowrap;
 }
-.goto:hover{border-color:var(--accent)}
+.goto:hover{border-color:var(--accent); color:var(--accent)}
 /* Chapter heading row: title on the left, quiet prev/next arrows on the right.
    Arrows only up here — you land mid-text from a shared link, so this bar is
    for moving, not for labels; the labelled pager at the foot of the chapter is
    where a finished reader actually is. */
-.chapbar{display:flex; align-items:baseline; gap:.75rem}
-.chapnav{margin-left:auto; display:flex; gap:.15rem; white-space:nowrap}
+.chapbar{display:flex; align-items:center; gap:.75rem}
+.chapnav{margin-left:auto; display:flex; gap:.4rem; white-space:nowrap}
+/* Real arrows in real buttons. The first cut used thin ‹ › glyphs in a ~32px
+   box: hard to see and under the 44px minimum a thumb needs. These match the
+   page's other controls (Go to, version pills, the book grid all carry the
+   same border and radius), which on the web reads as "clickable" better than
+   a bare glyph does. */
 .arrow{
-  display:inline-block; min-width:2rem; text-align:center;
-  padding:.15rem .45rem; border-radius:8px; font-size:1.25rem; line-height:1.4;
-  color:var(--accent); text-decoration:none;
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:2.75rem; min-height:2.75rem;
+  border:1px solid var(--border); border-radius:10px; background:var(--surface);
+  font-size:1.35rem; line-height:1; color:var(--accent); text-decoration:none;
 }
-.arrow:hover{background:var(--hl)}
-.arrow.off{color:var(--muted); opacity:.35; pointer-events:none}
+.arrow:hover{border-color:var(--accent); background:var(--hl)}
+.arrow.off{color:var(--muted); opacity:.3; pointer-events:none; background:none}
 /* Go-to overlay: a dim sheet with a single reference field. */
 .gotobg{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
   align-items:flex-start; justify-content:center; padding:12vh 1rem 1rem; z-index:20}
@@ -67,8 +82,21 @@ body{
 .vpick.on{color:var(--accent); border-color:var(--accent)}
 .ref{font-size:1.9rem; margin:1.1rem 0 .1rem; font-weight:700; letter-spacing:-.01em}
 .ver{margin:0 0 1.3rem; color:var(--muted); font-size:.85rem}
-.text{font-size:1.16rem}
+.text{font-size:1.28rem; line-height:1.62}
 .text p{margin:0 0 1.1rem; text-align:justify; hyphens:auto}
+/* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
+   space (the app's phone reading pane); from tablet width up the app switches
+   to its iPad "reporter" setting — a first-line indent with no blank line
+   between paragraphs, which is how a printed Bible sets prose. A paragraph
+   that OPENS with poetry keeps its space and takes no indent, matching the
+   app's rule that the reporter indent is skipped for poetic paragraphs. */
+@media (min-width:46rem){
+  .text p{margin:0; text-indent:1.4em; line-height:1.5}
+  .text p:first-child{text-indent:0}
+  .text p.pm{margin:.55rem 0; text-indent:0}
+  .text p.pm + p{text-indent:0}
+}
+.text p.pm{text-align:left; hyphens:none}
 .n{font-size:.62em; vertical-align:.45em; line-height:0}
 .n a{color:var(--verse); text-decoration:none}
 .n a:hover{text-decoration:underline}
@@ -111,7 +139,16 @@ body{
 }
 .clearhl:hover{border-color:var(--accent)}
 @media print{.clearhl{display:none}}
-.foot{max-width:38rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
+.foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
+/* Platform row under the app link. Monochrome and quiet on purpose — this is a
+   footnote, not a call to action; the icons say "it runs on your thing" at a
+   glance without shouting. They inherit currentColor, so they follow the muted
+   colour and the light/dark flip with no second asset. */
+.plats{display:flex; justify-content:center; align-items:center; gap:1.05rem;
+  margin:.55rem 0 0; color:var(--muted)}
+.plats a{display:inline-flex; align-items:center; color:inherit; opacity:.75}
+.plats a:hover{opacity:1; color:var(--accent)}
+.plats svg{width:1.05rem; height:1.05rem; fill:currentColor; display:block}
 @media print{.top,.pager,.foot{display:none}}
