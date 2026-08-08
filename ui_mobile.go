@@ -443,7 +443,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		// rebuilds this tab, the ✕, the mode toggle, Settings → Assistant →
 		// None) can abandon the request through abandonAISearch — otherwise the
 		// only handle lives in this closure and a rebuild orphans the request
-		// for the rest of the three-minute budget.
+		// for the rest of the multi-minute budget.
 		cancelSearch := func() {}
 		installAISearchCancel(state, func() {
 			askSession.Invalidate() // a late completion must not repaint this pane
@@ -452,13 +452,11 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		})
 		var fasterRow fyne.CanvasObject = spacer(0)
 		if pid, fm, label, ok := fasterModelOffer(state); ok {
-			fb := widget.NewButton(label, func() {
+			fasterRow = container.NewVBox(spacer(6), fasterModelControl(state, label, func() {
 				abandonAISearch(state)
 				applyFasterModel(state, pid, fm)
 				runAsk(q) // re-ask the same question on the quick model
-			})
-			fb.Importance = widget.LowImportance
-			fasterRow = container.NewVBox(spacer(8), container.NewCenter(fb))
+			}))
 		}
 		cancelBtn := widget.NewButton("Cancel", func() {
 			abandonAISearch(state)
@@ -471,8 +469,8 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			container.NewCenter(msg), spacer(10),
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
 			spacer(10), container.NewCenter(hint),
-			fasterRow,
 			spacer(4), container.NewCenter(cancelBtn),
+			fasterRow,
 		))}
 		resultsHost.Refresh()
 

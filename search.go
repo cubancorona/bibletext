@@ -259,11 +259,18 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	// one running. Reading the field at tap time always hits the live one.
 	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10), container.NewCenter(hint)}
 
-	// Quiet, low-importance, and only when there IS something faster: an offer,
-	// not a nag. Switching re-asks the same question straight away, since the
+	items = append(items, spacer(4), container.NewCenter(widget.NewButton("Cancel", func() {
+		abandonAISearch(state)
+		state.aiSearchCancelled = true
+		state.refresh() // → the cancelled state (never a false "found nothing")
+	})))
+
+	// Below Cancel, and quieter than it (fasterModelControl): an offer for the
+	// impatient, not a competing action — shown only when there IS something
+	// faster. Switching re-asks the same question straight away, since the
 	// reader is sitting here waiting for exactly that answer.
 	if pid, model, label, ok := fasterModelOffer(state); ok {
-		faster := widget.NewButton(label, func() {
+		items = append(items, spacer(6), fasterModelControl(state, label, func() {
 			q := state.aiSearchQuery
 			abandonAISearch(state)
 			applyFasterModel(state, pid, model)
@@ -273,16 +280,8 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 			}
 			state.aiSearchCancelled = true
 			state.refresh()
-		})
-		faster.Importance = widget.LowImportance
-		items = append(items, spacer(8), container.NewCenter(faster))
+		}))
 	}
-
-	items = append(items, spacer(4), container.NewCenter(widget.NewButton("Cancel", func() {
-		abandonAISearch(state)
-		state.aiSearchCancelled = true
-		state.refresh() // → the cancelled state (never a false "found nothing")
-	})))
 	return container.NewCenter(container.NewVBox(items...))
 }
 

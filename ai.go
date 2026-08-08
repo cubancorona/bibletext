@@ -210,10 +210,16 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 	// The fixed actions (Explain / Context / Translation) build their prompt from the
 	// action alone; "ask" carries a free-form question, so it builds a different prompt and
 	// folds the question into the cache scope (same passage, new question → fresh answer).
-	scope := id + "|" + action
+	// The MODEL is part of the scope too: a faster-model switch re-asks the same
+	// passage+action, and the superseded request can still settle and cache —
+	// under one shared key, which model's prose the panel later serves would be
+	// whichever wrote last. Distinct keys keep every answer filed under the
+	// model that produced it.
+	model := activeModelFor(store, id)
+	scope := id + "|" + model + "|" + action
 	prompt := buildAIPrompt(action, book, chapter, selectedText, version)
 	if action == aiActionAsk {
-		scope = id + "|ask|" + question
+		scope = id + "|" + model + "|ask|" + question
 		prompt = buildAskPrompt(book, chapter, selectedText, version, question)
 	}
 

@@ -136,10 +136,19 @@ func findSidebarSearchPane(t *testing.T, st *AppState) (fyne.CanvasObject, conte
 	// installed — exactly how the first cut of Cancel passed its tests while
 	// rendering no button in the real app (state.refresh() -> showReading ->
 	// buildSearchResultsView happens INSIDE runAsk, ui_desktop.go:38).
+	//
+	// The hook is DISARMED before returning (and on cleanup): a request the
+	// test leaves blocked is released during t.Cleanup, and its completion
+	// callback runs state.refresh() on the stub's goroutine — in the test
+	// driver fyne.Do is inline, so a live hook would BUILD WIDGETS on that
+	// goroutine while the next test builds its own, racing on Fyne's shared
+	// font caches (the CI-only flake on windows/macOS runners).
 	var paneAtRefresh fyne.CanvasObject
 	st.showReading = func() { paneAtRefresh = buildSearchResultsView(st) }
+	t.Cleanup(func() { st.showReading = nil })
 
 	st.retryAISearch() // re-runs the last query through the real submit path
+	st.showReading = nil
 	select {
 	case ctx := <-aiCtxSeen:
 		if paneAtRefresh == nil {
@@ -154,27 +163,32 @@ func findSidebarSearchPane(t *testing.T, st *AppState) (fyne.CanvasObject, conte
 
 var aiCtxSeen chan context.Context
 
-// stubAIGenerate makes every Find hand its context to aiCtxSeen and block.
+// stubAIGenerate makes every Find hand its context to aiCtxSeen and then PARK
+// FOREVER. Parking is deliberate: if a blocked stub is ever released, its
+// startAISearch goroutine runs the completion callback — and in the test
+// driver fyne.Do is inline, so that callback executes app code (session reads,
+// state.refresh) on a background goroutine CONCURRENTLY with whatever test is
+// running by then. That was a CI-only -race flake on the windows/macOS
+// runners. A few permanently-parked goroutines per run are a harmless test
+// leak; a concurrent late completion is not. (Tests assert on the CONTEXTS,
+// which cancel independently of the stub returning.)
 func stubAIGenerate(t *testing.T) (release func()) {
 	t.Helper()
 	aiCtxSeen = make(chan context.Context, 8)
-	// The AI response cache is package-global and outlives a test: when cleanup
-	// releases a blocked stub whose context is still live it returns a nil
-	// error, caching an empty reply for that query — the next test's Find would
-	// then be served from cache and never reach the seam.
+	// The AI response cache is package-global and outlives a test — reset it so
+	// no Find is served from a previous test's reply without reaching the seam.
 	aiCacheMu.Lock()
 	aiCache = map[string]string{}
 	aiCacheMu.Unlock()
-	done := make(chan struct{})
+	never := make(chan struct{}) // intentionally never closed
 	prev := aiSearchGenerate
 	aiSearchGenerate = func(ctx context.Context, _ providerInfo, _ *keyStore, _, _ string) (string, error) {
 		aiCtxSeen <- ctx
-		<-done
+		<-never
 		return "", ctx.Err()
 	}
-	var once sync.Once
-	t.Cleanup(func() { aiSearchGenerate = prev; once.Do(func() { close(done) }) })
-	return func() { once.Do(func() { close(done) }) }
+	t.Cleanup(func() { aiSearchGenerate = prev })
+	return func() {} // kept so `defer stubAIGenerate(t)()` call sites compile
 }
 
 func sidebarFindState(t *testing.T) *AppState {
@@ -467,6 +481,146 @@ func TestStudyPanelOffersCancelWhileThinking(t *testing.T) {
 	case <-ctx.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("Cancel did not abandon the study request")
+	}
+}
+
+// stubAIActionParked publishes each study request's context and parks the call
+// forever — completions never run, so no callback can touch Fyne state from a
+// non-UI goroutine mid-test (the same discipline as stubAIGenerate; see its
+// comment on why releasing parked calls races the next test's font caches).
+func stubAIActionParked(t *testing.T) (ctxs chan context.Context) {
+	t.Helper()
+	ctxs = make(chan context.Context, 4)
+	never := make(chan struct{}) // intentionally never closed
+	prev := aiActionRun
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+		ctxs <- ctx
+		<-never
+		return "", ctx.Err()
+	}
+	t.Cleanup(func() { aiActionRun = prev })
+	return ctxs
+}
+
+// TestStudyPanelFasterSwitchAbandonsTheSlowRequest: the waiting state's
+// "Switch to a faster model" must cancel the in-flight capable-model request
+// before re-asking. The panel's cancel handle is a one-slot variable — without
+// startFetch abandoning its predecessor, the slow request would be silently
+// orphaned to run (and bill the reader's key) for the whole aiRequestBudget
+// with no way left to stop it.
+func TestStudyPanelFasterSwitchAbandonsTheSlowRequest(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	ctxs := stubAIActionParked(t)
+
+	w := test.NewWindow(widget.NewLabel("reading"))
+	defer w.Close()
+	st := studyPanelState(t, w)
+
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	var slow context.Context
+	select {
+	case slow = <-ctxs:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the study action never reached the provider seam")
+	}
+
+	overlay := w.Canvas().Overlays().Top()
+	sw := findTreeTappable(overlay, "Switch to a faster model")
+	if sw == nil {
+		t.Fatalf("no faster-model switch on the thinking state; texts %v", treeTexts(overlay))
+	}
+	sw.Tapped(nil)
+
+	select {
+	case <-slow.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("switching to the faster model left the slow request running — it keeps billing for the whole budget")
+	}
+	select {
+	case <-ctxs:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the switch never re-asked the question on the faster model")
+	}
+}
+
+// TestStudyPanelStaleSettleCannotDisarmTheNewRequest: a request superseded by
+// the faster-model switch still settles eventually (its context is cancelled,
+// so quickly). Its completion must be a no-op — before the generation guard it
+// nil'd the one-slot cancelFetch (disarming Close/Cancel for the LIVE request)
+// and painted its own cancellation error over the new thinking state.
+func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	type studyCall struct {
+		ctx     context.Context
+		release chan struct{}
+	}
+	calls := make(chan studyCall, 4)
+	prev := aiActionRun
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+		c := studyCall{ctx: ctx, release: make(chan struct{})}
+		calls <- c
+		// Block on the test's explicit release, NOT ctx.Done(): the release
+		// (sent after the switch tap fully returns) is the happens-before edge
+		// that orders this call's completion after the tap's writes, keeping
+		// the test race-clean. Unreleased calls stay parked (see
+		// stubAIActionParked).
+		<-c.release
+		return "", ctx.Err()
+	}
+	t.Cleanup(func() { aiActionRun = prev })
+
+	w := test.NewWindow(widget.NewLabel("reading"))
+	defer w.Close()
+	st := studyPanelState(t, w)
+
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	var slow studyCall
+	select {
+	case slow = <-calls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the study action never reached the provider seam")
+	}
+
+	sw := findTreeTappable(w.Canvas().Overlays().Top(), "Switch to a faster model")
+	if sw == nil {
+		t.Fatalf("no faster-model switch on the thinking state; texts %v", treeTexts(w.Canvas().Overlays().Top()))
+	}
+	sw.Tapped(nil)
+	var fast studyCall
+	select {
+	case fast = <-calls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the switch never re-asked the question")
+	}
+
+	// Let the superseded request settle now. Its completion runs on the stub
+	// goroutine (the test driver's fyne.Do is inline); with the generation
+	// guard it returns before touching the panel. The sleep gives it time to
+	// run — too short would only weaken the assertions below toward vacuous,
+	// never toward flaky-failing.
+	close(slow.release)
+	time.Sleep(200 * time.Millisecond)
+
+	// The panel must still be waiting on the fast request — not showing the
+	// stale request's cancellation as an error.
+	overlay := w.Canvas().Overlays().Top()
+	if !treeHasText(overlay, "Reading the passage…") {
+		t.Fatalf("the stale settle repainted the live thinking state; texts %v", treeTexts(overlay))
+	}
+	// And Cancel must still command the fast request — the stale settle must
+	// not have nil'd the one-slot cancel handle.
+	cancelBtn := findTreeButton(overlay, "Cancel")
+	if cancelBtn == nil {
+		t.Fatalf("no Cancel on the thinking state; texts %v", treeTexts(overlay))
+	}
+	cancelBtn.OnTapped()
+	select {
+	case <-fast.ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("after the stale settle, Cancel no longer reached the live request")
 	}
 }
 

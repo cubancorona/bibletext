@@ -381,7 +381,10 @@ func TestAIActionTitle(t *testing.T) {
 
 func TestRunAIActionUsesCache(t *testing.T) {
 	state := &AppState{CurrentBook: "Mark", CurrentChapter: 1} // no aiKeys -> inert store, active=gemini
-	key := aiCacheKey(providerGemini+"|"+aiActionExplain, "Mark", 1, "the beginning")
+	// The scope carries the RESOLVED MODEL (here the default: no override, no
+	// self-heal cache) so two models' answers can never share a key — the
+	// faster-model switch re-asks and both requests may settle and cache.
+	key := aiCacheKey(providerGemini+"|"+geminiModel+"|"+aiActionExplain, "Mark", 1, "the beginning")
 	aiCacheSet(key, "cached answer")
 	t.Cleanup(func() {
 		aiCacheMu.Lock()
