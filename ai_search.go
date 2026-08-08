@@ -82,7 +82,7 @@ func aiFeaturesEnabled(state *AppState) bool {
 // closure the submitting builder installed, which both invalidates that
 // builder's session (so a late completion can't repaint) and cancels the
 // REQUEST — dropping only the callback would leave the connection open and the
-// tokens billing for the rest of aiRequestBudget, which is now three minutes.
+// tokens billing for the rest of the generous aiRequestBudget (minutes).
 //
 // Every teardown route calls this: the searching view's Cancel, the field's ✕,
 // the Search/Find toggle, collapsing the iPad sidebar, clearSearchState, and

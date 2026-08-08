@@ -110,9 +110,9 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// the thinking state so the animation never outlives the panel.
 	var thinkingBar *widget.ProgressBarInfinite
 	// cancelFetch abandons the in-flight study request. Stopping the spinner is
-	// not enough: the request keeps running for the whole aiRequestBudget (three
-	// minutes) and keeps billing the reader's key for an answer nobody will
-	// read. Every exit — Close, Cancel, a re-run — goes through stopThinking.
+	// not enough: the request keeps running for the whole aiRequestBudget and
+	// keeps billing the reader's key for an answer nobody will read. Every
+	// exit — Close, Cancel, a re-run — goes through stopThinking.
 	var cancelFetch func()
 	stopThinking := func() {
 		if thinkingBar != nil {
@@ -177,6 +177,13 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// Declared before setThinking so the waiting state's "faster model" offer
 	// can re-run the request; assigned below.
 	var startFetch func()
+	// fetchGen identifies the request the panel currently cares about (Find's
+	// aiSearchSession, in miniature). Every startFetch bumps it; a completion
+	// compares its captured value and bails when superseded. Without this, a
+	// request abandoned by the faster-model re-run would still settle here —
+	// nil-ing cancelFetch (disarming the NEW request's cancel) and painting its
+	// stale answer or cancellation error over the state the reader moved on to.
+	var fetchGen int
 
 	setThinking := func() {
 		bar := widget.NewProgressBarInfinite()
@@ -194,12 +201,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// the Find surface's first Cancel made.
 		var fasterRow fyne.CanvasObject = spacer(0)
 		if pid, fm, label, ok := fasterModelOffer(state); ok {
-			fb := widget.NewButton(label, func() {
+			fasterRow = container.NewVBox(spacer(6), fasterModelControl(state, label, func() {
 				applyFasterModel(state, pid, fm)
-				startFetch() // stopThinking inside cancels the slow request first
-			})
-			fb.Importance = widget.LowImportance
-			fasterRow = container.NewVBox(spacer(8), container.NewCenter(fb))
+				startFetch() // startFetch abandons the slow request before starting this one
+			}))
 		}
 		cancelBtn := widget.NewButton("Cancel", func() {
 			userClosed = true
@@ -217,8 +222,8 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 				// rather than a quiet progress hint, and it dwarfed the text.
 				container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
 				spacer(10), container.NewCenter(hint),
-				fasterRow,
 				spacer(4), container.NewCenter(cancelBtn),
+				fasterRow,
 				layout.NewSpacer()),
 		}
 		body.Refresh()
@@ -288,6 +293,14 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	}
 
 	startFetch = func() {
+		// Abandon any request already in flight FIRST (the faster-model switch,
+		// Try again): cancel its context and stop its spinner, or the
+		// superseded request would keep billing the reader's key for the whole
+		// aiRequestBudget while its detached ProgressBarInfinite keeps
+		// repainting the canvas — the exact leak documented above cancelFetch.
+		stopThinking()
+		fetchGen++
+		gen := fetchGen
 		setThinking()
 		ctx, cancel := context.WithCancel(context.Background())
 		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
@@ -296,10 +309,13 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			defer cancelTimeout()
 			result, err := aiActionRun(ctx, state, action, selectedText, question)
 			fyne.Do(func() {
+				if gen != fetchGen {
+					return // superseded — a newer request owns the panel now
+				}
 				cancelFetch = nil // settled: nothing left to abandon
 				// The reader dismissed this panel (Close / Cancel). Painting a
 				// late answer into it would repaint a hidden, detached popup —
-				// and with the three-minute budget that answer can arrive long
+				// and with the generous aiRequestBudget that answer can arrive long
 				// after they moved on. The reply is in aiCache, so reopening
 				// the same action shows it instantly.
 				if userClosed {

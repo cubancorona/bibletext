@@ -42,6 +42,8 @@ func walkTree(o fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 		walkTree(v.content, visit)
 	case *searchResultCard:
 		walkTree(v.content, visit)
+	case *tappableText:
+		walkTree(v.text, visit)
 	}
 }
 
@@ -88,6 +90,18 @@ func findTreeButton(o fyne.CanvasObject, label string) *widget.Button {
 	walkTree(o, func(n fyne.CanvasObject) {
 		if b, ok := n.(*widget.Button); ok && found == nil && b.Text == label {
 			found = b
+		}
+	})
+	return found
+}
+
+// findTreeTappable returns the first *tappableText under o with the given label
+// (the waiting screens' link-style "Switch to a faster model" control).
+func findTreeTappable(o fyne.CanvasObject, label string) *tappableText {
+	var found *tappableText
+	walkTree(o, func(n fyne.CanvasObject) {
+		if tt, ok := n.(*tappableText); ok && found == nil && tt.text.Text == label {
+			found = tt
 		}
 	})
 	return found
