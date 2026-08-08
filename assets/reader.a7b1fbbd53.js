@@ -19,10 +19,34 @@
     }
     if (first && hi > lo) first.scrollIntoView({ block: 'center' });
   }
-  // Clearing a highlight: tap the highlighted text, like the app. Removing the
-  // fragment is what does the work — it un-targets the CSS :target rule (single
-  // verse) as well as letting us drop the range classes.
+  // Clearing a highlight: tap the highlighted text and a small bubble appears at
+  // the tap; the bubble clears it. Removing the fragment is what does the work —
+  // it un-targets the CSS :target rule (single verse) as well as letting us drop
+  // the range classes.
   function highlighted() { return /^#v\d+(-\d+)?$/.test(location.hash || ''); }
+
+  var bubble = null;
+  function hideBubble() { if (bubble) { bubble.remove(); bubble = null; } }
+
+  function showBubble(x, y) {
+    hideBubble();
+    // A real <button>: natively tappable everywhere, and reachable by keyboard.
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'clearbub';
+    b.textContent = 'Clear highlight';
+    b.style.left = x + 'px';
+    b.style.top = y + 'px';
+    document.body.appendChild(b);
+    // Keep it on screen when the tap lands near an edge (translate(-50%) means
+    // x is its centre).
+    var half = b.getBoundingClientRect().width / 2, pad = 8;
+    var lo = window.pageXOffset + pad + half;
+    var hi = window.pageXOffset + document.documentElement.clientWidth - pad - half;
+    if (x < lo) b.style.left = lo + 'px';
+    else if (x > hi) b.style.left = Math.max(lo, hi) + 'px';
+    bubble = b;
+  }
 
   function clearHighlight() {
     // replaceState, not a hash change: it leaves no extra history entry, so Back
@@ -32,6 +56,7 @@
     // :target match until a real navigation — so a single-verse highlight (the
     // usual shared link) would stay lit. This flag overrides it in CSS.
     document.documentElement.classList.add('nohl');
+    hideBubble();
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     // replaceState fires NO hashchange, so anything reading the fragment has to
     // be updated by hand — otherwise the version switcher keeps carrying a verse
@@ -39,16 +64,57 @@
     carryVerse();
   }
 
-  document.addEventListener('click', function (e) {
-    if (!highlighted()) return;
-    // Ignore a click that is really a text selection, and never swallow a link.
-    var sel = window.getSelection();
-    if (sel && !sel.isCollapsed) return;
-    if (e.target.closest('a')) return;
-    if (e.target.closest('.v.hl') || e.target.closest('.v:target')) clearHighlight();
+  // POINTERUP, not click. iOS Safari only synthesises a click for elements it
+  // considers tappable, and a verse is a bare <span>; a delegated click listener
+  // is exactly the case that quietly never fires there, which is why tapping the
+  // highlight did nothing on a phone while working on the desktop. Pointer
+  // events are delivered regardless. Click is the fallback for anything without
+  // Pointer Events.
+  var TAP = window.PointerEvent ? 'pointerup' : 'click';
+
+  // Was this a tap or the end of a drag? A drag is the reader selecting text,
+  // and a bubble must not jump up over their selection. Measuring the movement
+  // is the honest test: the earlier version asked whether a selection existed
+  // at all, which meant that once a reader had selected anything, tapping the
+  // highlight did nothing until they cleared it — with no way to know why.
+  var downX = null, downY = null;
+  document.addEventListener('pointerdown', function (e) { downX = e.clientX; downY = e.clientY; });
+  function wasDrag(e) {
+    if (downX === null || typeof e.clientX !== 'number') return false;
+    var dx = e.clientX - downX, dy = e.clientY - downY;
+    return (dx * dx + dy * dy) > 100;              // >10px of travel
+  }
+
+  function tapPoint(e) {
+    if (e.changedTouches && e.changedTouches.length) {
+      return { x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY };
+    }
+    if (typeof e.pageX === 'number') return { x: e.pageX, y: e.pageY };
+    return null;                                  // keyboard-synthesised click
+  }
+
+  document.addEventListener(TAP, function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    // The bubble is handled HERE rather than by its own click handler: on the
+    // pointerup path this listener runs first and would remove the button
+    // before any click of its own could fire.
+    if (t.closest('.clearbub')) { e.preventDefault(); clearHighlight(); return; }
+    if (!highlighted()) { hideBubble(); return; }
+    if (wasDrag(e)) return;                       // a selection, not a tap
+    if (t.closest('a')) return;                   // the verse numbers are links
+    if (t.closest('.v.hl') || t.closest('.v:target')) {
+      var p = tapPoint(e);
+      if (bubble || !p) hideBubble();             // tap again dismisses it
+      else showBubble(p.x, p.y);
+      return;
+    }
+    hideBubble();                                 // a tap anywhere else
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && highlighted()) clearHighlight();
+    if (e.key !== 'Escape') return;
+    if (bubble) { hideBubble(); return; }
+    if (highlighted()) clearHighlight();
   });
 
   highlightRange();

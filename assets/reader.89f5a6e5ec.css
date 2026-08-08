@@ -1,8 +1,24 @@
 
+/* Atkinson Hyperlegible (c) Braille Institute of America, Inc. — SIL Open Font
+   License 1.1, published beside these files as assets/atkinson-OFL.txt. It is
+   the app's UI typeface; swap keeps text visible while it loads. */
+@font-face{
+  font-family:"Atkinson Hyperlegible"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(AtkinsonHyperlegible-Regular.2cf368a11c.woff2) format("woff2");
+}
+@font-face{
+  font-family:"Atkinson Hyperlegible"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(AtkinsonHyperlegible-Bold.6b2614d107.woff2) format("woff2");
+}
 :root{
   --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
   --accent:#2f4c86; --border:#bdb29f; --verse:#53688f; --red:#b23a2e;
   --hl:#dde7f7;
+  /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
+     stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
+     fall back per-glyph instead of tofu. */
+  --ui:"Atkinson Hyperlegible",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --scripture:Georgia,"Iowan Old Style","Times New Roman",serif;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -15,7 +31,13 @@
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0; background:var(--bg); color:var(--text);
-  font-family:Georgia,'Times New Roman',serif; line-height:1.6;
+  /* Chrome, like the app. Scripture opts back into the serif on .text. */
+  font-family:var(--ui); line-height:1.6;
+  /* iOS Safari answers a double-tap with a small zoom instead of selecting the
+     word under the finger — on a page of scripture, selecting is what a reader
+     means. manipulation drops double-tap-to-zoom (and the old 300ms tap delay)
+     while leaving pinch-zoom and scrolling untouched. */
+  touch-action:manipulation;
 }
 .wrap{max-width:40rem; margin:0 auto; padding:1rem 1.6rem 2rem}
 .top{
@@ -62,9 +84,10 @@ body{
   display:inline-flex; align-items:center; justify-content:center;
   min-width:2.75rem; min-height:2.75rem;
   border:1px solid var(--border); border-radius:10px; background:none;
-  /* A system sans renders arrows with real weight; Georgia draws them as
-     hairlines that vanish on a phone screen. */
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  /* The chrome stack: Georgia draws arrows as hairlines that vanish on a phone
+     screen. Atkinson has no arrow glyphs, so these fall through to the system
+     sans behind it — which is exactly what draws them with weight. */
+  font-family:var(--ui);
   font-size:1.45rem; font-weight:700; line-height:1;
   color:var(--accent); text-decoration:none;
 }
@@ -85,7 +108,7 @@ body{
 .gotohead h2{margin:0; font-size:1.15rem; letter-spacing:-.01em}
 .gotox{margin-left:auto; background:none; border:0; padding:.1rem .3rem; cursor:pointer;
   color:var(--muted); font-size:1.4rem; line-height:1;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  font-family:var(--ui)}
 .gotox:hover{color:var(--text)}
 .gpanes{display:flex; gap:.7rem; align-items:stretch}
 .gleft{flex:0 0 8.6rem; width:8.6rem; max-height:44vh; overflow-y:auto;
@@ -115,7 +138,7 @@ body{
   padding:.25rem .4rem .5rem; margin:0 0 .4rem;
   border-bottom:1px solid var(--border);
   color:var(--accent); text-decoration:none; font-weight:500;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  font-family:var(--ui)}
 .gback:hover{border-bottom-color:var(--accent)}
 /* Findable, not shouty: the accent colour and the rule do the work, so the
    glyph and letter stay close to the size of the book names under them. */
@@ -126,7 +149,7 @@ body{
 .gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
   padding:.8rem 0 0; border-top:1px solid var(--border)}
 .gverse input{
-  font-family:Georgia,serif; font-size:1rem; padding:.4rem .6rem;
+  font-family:var(--ui); font-size:1rem; padding:.4rem .6rem;
   color:var(--text); background:var(--bg);
   border:1px solid var(--border); border-radius:8px; outline:none; min-width:0;
 }
@@ -149,8 +172,29 @@ body{
 .vpick.on{color:var(--accent); border-color:var(--accent)}
 .ref{font-size:1.9rem; margin:1.1rem 0 .1rem; font-weight:700; letter-spacing:-.01em}
 .ver{margin:0 0 1.3rem; color:var(--muted); font-size:.85rem}
-.text{font-size:1.28rem; line-height:1.62}
-.text p{margin:0 0 1.1rem; text-align:justify; hyphens:auto}
+/* THE SCRIPTURE FACE, matched to the iOS app. Every value here is the app's
+   own reading CSS (buildChapterHTML, reading.go): the same stack led by
+   Georgia, the same 21px base, the same 0.004em tracking and the same OpenType
+   features — kerning, ligatures, contextual alternates and OLD-STYLE numerals,
+   which is what gives the app's verse numbers their book-page look.
+   21px is written as 1.3125rem rather than px so it still answers a reader who
+   has set a larger default text size in their browser, while landing on exactly
+   21px at the default. */
+/* LEADING, and why it is "normal" rather than the 2.0 the app's CSS asks for.
+   The app does not render its own line-height: the AppKit/UIKit HTML importer
+   that turns buildChapterHTML into the attributed string DROPS the property
+   (measured: lineHeightMultiple 0, lineSpacing 0, min/max 0 — for both the 2.0
+   phone value and the 1.3 iPad one), so the reading pane actually sets on
+   Georgia's natural line height, 24px at 21px. Paragraph margins DO survive the
+   import, which is why the 24px gap below is real. CSS "normal" is exactly that
+   natural height, and it stays right if a fallback face is used. */
+.text{
+  font-family:var(--scripture);
+  font-size:1.3125rem; line-height:normal; letter-spacing:.004em;
+  -webkit-font-smoothing:antialiased;
+  font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
+}
+.text p{margin:0 0 24px; text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line
@@ -158,13 +202,20 @@ body{
    that OPENS with poetry keeps its space and takes no indent, matching the
    app's rule that the reporter indent is skipped for poetic paragraphs. */
 @media (min-width:46rem){
-  .text p{margin:0; text-indent:1.4em; line-height:1.5}
+  /* The reporter set: no gap between paragraphs, a first-line indent instead
+     (the app's em+en spaces). Leading stays natural — the importer drops the
+     app's 1.3 exactly as it drops the phone's 2.0. */
+  .text p{margin:0; text-indent:1.5em}
   .text p:first-child{text-indent:0}
   .text p.pm{margin:.55rem 0; text-indent:0}
   .text p.pm + p{text-indent:0}
 }
 .text p.pm{text-align:left; hyphens:none}
-.n{font-size:.62em; vertical-align:.45em; line-height:0}
+/* The app's verse number: sup.v — 0.66em, weight 600, no tracking, 2px of air
+   after it. The raise is left to the browser's own <sup> handling, damped so a
+   superscript cannot open up the line it sits on. */
+.n{font-size:.66em; font-weight:600; letter-spacing:0; margin-right:2px;
+  vertical-align:.45em; line-height:0}
 .n a{color:var(--verse); text-decoration:none}
 .n a:hover{text-decoration:underline}
 .wj{color:var(--red)}
@@ -198,10 +249,21 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .pager a:hover{text-decoration:underline}
 .guess{margin:0 0 1.2rem}
 .guess a{color:var(--accent)}
-/* Clearing a highlight is a TAP ON THE HIGHLIGHT, the way the app does it —
-   no floating control, nothing covering the text. The cursor hints at it on a
-   pointer device; on touch it is simply the obvious thing to try. */
-.v:target,.v.hl{cursor:pointer}
+/* Clearing a highlight: tap the highlighted text and a small "Clear highlight"
+   bubble appears at the tap; tap the bubble to clear, tap anywhere else (or the
+   verse again) and it goes away. cursor:pointer is not only a hint here — it is
+   also what makes iOS Safari treat a bare <span> as tappable at all. */
+.v:target,.v.hl{cursor:pointer; -webkit-tap-highlight-color:transparent}
+.clearbub{
+  position:absolute; z-index:15; transform:translate(-50%,-118%);
+  background:var(--surface); color:var(--accent);
+  border:1px solid var(--border); border-radius:999px;
+  padding:.4rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;
+  font-family:var(--ui);
+  box-shadow:0 3px 12px rgba(0,0,0,.18); white-space:nowrap;
+  -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+}
+.clearbub:hover{border-color:var(--accent)}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
