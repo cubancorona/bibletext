@@ -267,13 +267,12 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    verse again) and it goes away. cursor:pointer is not only a hint here — it is
    also what makes iOS Safari treat a bare <span> as tappable at all. */
 .v:target,.v.hl{cursor:pointer; -webkit-tap-highlight-color:transparent}
-/* Anchored to the bottom of the VIEWPORT, not to the tap: it stays put while
-   the reader scrolls, and it never sits on top of the words it refers to.
-   The safe-area inset keeps it clear of the iPhone home indicator. */
+/* Sits just under the highlighted text, centred on the column — so it points at
+   what it will clear without covering it. Absolute (document coordinates), so
+   it travels with the passage as the reader scrolls; reader.js sets top/left
+   from the last line of the highlight. */
 .clearbub{
-  position:fixed; z-index:15;
-  left:50%; bottom:calc(1.25rem + env(safe-area-inset-bottom,0px));
-  transform:translateX(-50%);
+  position:absolute; z-index:15; transform:translateX(-50%);
   background:var(--surface); color:var(--accent);
   border:1px solid var(--border); border-radius:999px;
   padding:.4rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;
