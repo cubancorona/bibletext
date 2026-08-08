@@ -23,6 +23,13 @@ func VerseIsPoetic(text string) bool { return verseIsPoetic(text) }
 // a shared quote breaking in identical places.
 func PoeticJoin(prevText, curText string) bool { return poeticJoin(prevText, curText) }
 
+// GroupVersesIntoParagraphs applies the app's paragraph rule (break after a
+// sentence-ending verse once a paragraph is long enough). Exported so the web
+// page breaks paragraphs in exactly the same places the reading pane does.
+func GroupVersesIntoParagraphs(verses []Verse) [][]Verse {
+	return groupVersesIntoParagraphs(verses)
+}
+
 // IsWordsOfChrist reports whether a verse falls in a red-letter range.
 func IsWordsOfChrist(book string, chapter, verse int) bool {
 	return isWordsOfChrist(book, chapter, verse)
