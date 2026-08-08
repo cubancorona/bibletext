@@ -46,6 +46,9 @@ type providerInfo struct {
 	// the same token can be valid elsewhere (OpenAI "-pro" is Responses-only and
 	// 404s on chat, but Gemini's "gemini-2.5-pro" is a fine chat model).
 	ExtraModelExclude []string
+	// FastModel is this provider's economy model — the option the waiting
+	// screens offer when the reader would rather not wait. Empty means none.
+	FastModel string
 }
 
 const (
@@ -61,10 +64,25 @@ const (
 	// tier (see ai_model_resolve.go), and a per-provider override in Settings can
 	// pin a specific one. Update them when convenient, but a stale default no
 	// longer breaks the feature on shipped installs.
-	geminiModel    = "gemini-2.5-flash"
-	openAIModel    = "gpt-4o-mini"
-	anthropicModel = "claude-haiku-4-5"
-	grokModel      = "grok-2-latest"
+	// Scripture study is worth the better model. Measured 2026-08-08 on two
+	// literal queries whose answers can be CHECKED against our own text: the
+	// capable tier roughly doubles recall at equal-or-better precision (Claude
+	// 34→60 and 51→60 verses, 88→90% and 98→100%; Grok 30→52 and 16→50). A
+	// reader asking "every verse where God says do not be afraid" was getting a
+	// third of the answer. Cost is the reader's own key and is pennies per
+	// search either way; the real price is latency (seconds → tens of seconds),
+	// which aiRequestBudget + Cancel + the "faster model" offer now cover.
+	geminiModel    = "gemini-pro-latest"
+	openAIModel    = "gpt-5"
+	anthropicModel = "claude-opus-5"
+
+	// The economy option per provider — offered from the waiting screens, never
+	// selected automatically. These were the defaults before 2026-08-08.
+	geminiFastModel    = "gemini-2.5-flash"
+	openAIFastModel    = "gpt-4o-mini"
+	anthropicFastModel = "claude-haiku-4-5"
+	grokFastModel      = "grok-4.3"
+	grokModel          = "grok-4.5"
 
 	geminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
 	openAIBaseURL    = "https://api.openai.com/v1"
@@ -73,22 +91,59 @@ const (
 
 	anthropicVersion = "2023-06-01"
 
-	// aiMaxOutputTokens caps each answer. It's generous because "thinking" models
-	// (e.g. gemini-2.5-flash) spend part of this budget on hidden reasoning, so a
-	// low cap truncates the visible answer mid-sentence. The prompt keeps answers
-	// concise, so a high cap just prevents truncation rather than producing essays.
-	aiMaxOutputTokens = 4096
+	// aiRequestBudget is how long an AI request may take before the app gives up
+	// — the SINGLE deadline for the whole operation (see newHTTPClient).
+	//
+	// It is deliberately generous because the reader chooses the model. The old
+	// 35s (over a 30s transport cap) quietly excluded the high-capability tier:
+	// measured 2026-08-07, a broad Find took ~1s on the fast models but ~48s on
+	// a reasoning model — a legitimate answer the app reported as a failure.
+	//
+	// Five minutes, not three: with the capable defaults a real broad Find
+	// measured 34s (Claude), 50s (Gemini), 84s (Grok) and 160s (gpt-5) —
+	// 160 of a 180s budget is not headroom, it is a coin toss. This is a
+	// BACKSTOP against a hung connection, not a judgement about the reader's
+	// patience: the waiting screens carry Cancel and the faster-model offer, so
+	// a long wait is always theirs to end.
+	aiRequestBudget = 5 * time.Minute
+
+	// aiProbeBudget covers the short, interactive round-trips — "Test key" and
+	// the model-list fetch. Shorter because they are a handshake, not a
+	// generation, and the reader is watching a button.
+	aiProbeBudget = 45 * time.Second
+
+	// aiMaxOutputTokens is a RUNAWAY BACKSTOP, not a spending policy. The app
+	// makes the reader no promise about token usage, so it must not quietly
+	// impose one — the prompt is what keeps answers short.
+	//
+	// The old 4096 was a silent blocker on the reasoning models. Measured
+	// 2026-08-08 with gpt-5 on a Find: at 4096 and at 8192 the model spent the
+	// ENTIRE budget on hidden reasoning and returned nothing — finish_reason
+	// "length", zero visible lines, the reader billed for it, and the app
+	// reporting "the AI returned an empty answer" as though the model had
+	// failed. At 16384 it answered with 59 references (13,248 reasoning
+	// tokens); at 32768, 76. So the budget was not just a floor, it was
+	// capping how complete an answer could be.
+	//
+	// All four providers accept this value (verified live).
+	aiMaxOutputTokens = 32768
 )
+
+// openAIChatOnlyExclude names OpenAI id substrings that the models endpoint
+// lists but /chat/completions rejects. One var, two consumers — the settings
+// dropdown (ExtraModelExclude) and self-heal (modelResolver.extraExclude) —
+// so the two filters can never drift apart.
+var openAIChatOnlyExclude = []string{"-pro"}
 
 // aiProviders is the registry shown in settings and used to build clients.
 func aiProviders() []providerInfo {
 	return []providerInfo{
 		{
-			ID: providerGemini, Name: "Google Gemini", Model: geminiModel,
+			ID: providerGemini, Name: "Google Gemini", Model: geminiModel, FastModel: geminiFastModel,
 			KeyURL: "https://aistudio.google.com/apikey", KeyHint: "key from Google AI Studio (starts with “AIza” or “AQ.”)",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
-					store: store, id: providerGemini, def: geminiModel, tier: "flash", apiKey: k,
+					store: store, id: providerGemini, def: geminiModel, tier: "pro", apiKey: k,
 					list:  listGeminiModels(geminiBaseURL),
 					build: func(m string) aiClient { return newGeminiClient(k, m) },
 				}
@@ -96,26 +151,32 @@ func aiProviders() []providerInfo {
 			ListModels: listGeminiModels(geminiBaseURL),
 		},
 		{
-			ID: providerOpenAI, Name: "ChatGPT (OpenAI)", Model: openAIModel,
+			ID: providerOpenAI, Name: "ChatGPT (OpenAI)", Model: openAIModel, FastModel: openAIFastModel,
 			KeyURL: "https://platform.openai.com/api-keys", KeyHint: "key starts with “sk-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
-					store: store, id: providerOpenAI, def: openAIModel, tier: "mini", apiKey: k,
-					list:  listOpenAIModels(openAIBaseURL),
-					build: func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
+					store: store, id: providerOpenAI, def: openAIModel, tier: "gpt-5", apiKey: k,
+					extraExclude: openAIChatOnlyExclude,
+					list:         listOpenAIModels(openAIBaseURL),
+					build:        func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
 				}
 			},
 			ListModels: listOpenAIModels(openAIBaseURL),
 			// OpenAI's "-pro" reasoning tier (gpt-5.x-pro, o*-pro) is Responses-API
-			// only and 404s on /chat/completions — keep it out of the dropdown.
-			ExtraModelExclude: []string{"-pro"},
+			// only and 404s on /chat/completions — keep it out of the dropdown AND
+			// out of self-heal (the "gpt-5" tier keyword matches those ids too).
+			ExtraModelExclude: openAIChatOnlyExclude,
 		},
 		{
-			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel,
-			KeyURL: "https://console.anthropic.com/settings/keys", KeyHint: "key starts with “sk-ant-”",
+			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel, FastModel: anthropicFastModel,
+			// Anthropic's developer console moved to platform.claude.com; the old
+			// console.anthropic.com URL still redirects, but sending readers
+			// through a redirect to a differently-branded site is a worse first
+			// impression than naming the real one (verified 2026-08-08).
+			KeyURL: "https://platform.claude.com/settings/keys", KeyHint: "key starts with “sk-ant-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
-					store: store, id: providerAnthropic, def: anthropicModel, tier: "haiku", apiKey: k,
+					store: store, id: providerAnthropic, def: anthropicModel, tier: "opus", apiKey: k,
 					list:  listAnthropicModels(anthropicBaseURL),
 					build: func(m string) aiClient { return newAnthropicClient(k, m) },
 				}
@@ -123,7 +184,11 @@ func aiProviders() []providerInfo {
 			ListModels: listAnthropicModels(anthropicBaseURL),
 		},
 		{
-			ID: providerGrok, Name: "Grok (xAI)", Model: grokModel,
+			// xAI merged into SpaceX and rebranded SpaceXAI (July 2026); the
+			// assistant keeps the name Grok, and api.x.ai / console.x.ai still
+			// serve (a SpaceX-branded endpoint is promised with a long
+			// transition — swap grokBaseURL when it lands).
+			ID: providerGrok, Name: "Grok (SpaceXAI)", Model: grokModel, FastModel: grokFastModel,
 			KeyURL: "https://console.x.ai", KeyHint: "key starts with “xai-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
@@ -168,7 +233,15 @@ func envVarFor(id string) string {
 	}
 }
 
-func newHTTPClient() *http.Client { return &http.Client{Timeout: 30 * time.Second} }
+// newHTTPClient deliberately sets NO client-level timeout: the caller's context
+// is the single deadline (aiRequestBudget and friends). A client Timeout is a
+// PER-ATTEMPT cap that fights the context — the old 30s one silently outranked
+// the 35s search budget, so a reader who picked a high-capability model could
+// never get an answer from it: the request was killed at 30s no matter what,
+// and (worse) doAIRequest read that as a network blip and fired the same
+// expensive request again. One authority for "how long to wait", and it belongs
+// to the operation, not the transport.
+func newHTTPClient() *http.Client { return &http.Client{} }
 
 // --- Gemini (generateContent) ----------------------------------------------
 
@@ -251,6 +324,9 @@ func parseGeminiText(body []byte) (string, error) {
 	text := strings.TrimSpace(sb.String())
 	if text == "" {
 		if reason := gr.Candidates[0].FinishReason; reason != "" && reason != "STOP" {
+			if reason == "MAX_TOKENS" {
+				return "", errBudgetExhausted
+			}
 			return "", fmt.Errorf("the AI stopped early (%s)", reason)
 		}
 		return "", errors.New("the AI returned an empty answer")
@@ -272,11 +348,31 @@ func newOpenAIClient(apiKey, baseURL, model string) *openAIClient {
 }
 
 type openAIRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openAIMessage `json:"messages"`
-	Temperature float64         `json:"temperature,omitempty"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
+	Model    string          `json:"model"`
+	Messages []openAIMessage `json:"messages"`
+	// Temperature is omitted for the reasoning families, which accept only
+	// their default and reject any explicit value with a 400.
+	Temperature float64 `json:"temperature,omitempty"`
+	// MaxCompletionTokens, not max_tokens: the reasoning families REJECT
+	// max_tokens outright ("Unsupported parameter"), and the older chat models
+	// accept this spelling too — so one field serves both. Sending the old name
+	// is why gpt-5 and the o-series looked "unavailable" on a key that could in
+	// fact call them.
+	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
 }
+
+// openAIFixedTemperature reports whether a model rejects an explicit
+// temperature (the gpt-5 and o-series reasoning families).
+func openAIFixedTemperature(model string) bool {
+	m := strings.ToLower(model)
+	for _, p := range []string{"gpt-5", "o1", "o3", "o4"} {
+		if strings.HasPrefix(m, p) {
+			return true
+		}
+	}
+	return false
+}
+
 type openAIMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -286,6 +382,11 @@ type openAIResponse struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		// FinishReason distinguishes "the model had nothing to say" from "the
+		// model ran out of budget while thinking" — on the reasoning families
+		// those look identical in the content field (both empty) but mean very
+		// different things to the reader.
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 }
 
@@ -293,12 +394,15 @@ func (c *openAIClient) generate(ctx context.Context, prompt string) (string, err
 	if strings.TrimSpace(c.apiKey) == "" {
 		return "", errNoAPIKey
 	}
-	payload, err := json.Marshal(openAIRequest{
-		Model:       c.model,
-		Messages:    []openAIMessage{{Role: "user", Content: prompt}},
-		Temperature: 0.4,
-		MaxTokens:   aiMaxOutputTokens,
-	})
+	reqBody := openAIRequest{
+		Model:               c.model,
+		Messages:            []openAIMessage{{Role: "user", Content: prompt}},
+		MaxCompletionTokens: aiMaxOutputTokens,
+	}
+	if !openAIFixedTemperature(c.model) {
+		reqBody.Temperature = 0.4
+	}
+	payload, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
@@ -326,6 +430,12 @@ func parseOpenAIText(body []byte) (string, error) {
 	}
 	text := strings.TrimSpace(r.Choices[0].Message.Content)
 	if text == "" {
+		// A reasoning model can spend its whole budget thinking and emit
+		// nothing. Saying "the AI returned an empty answer" blames the model
+		// for a limit WE set, and leaves the reader with no idea what to do.
+		if r.Choices[0].FinishReason == "length" {
+			return "", errBudgetExhausted
+		}
 		return "", errors.New("the AI returned an empty answer")
 	}
 	return text, nil
@@ -430,6 +540,13 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err // network error — transient, retry
+			// …unless the caller's deadline passed or they cancelled. That is
+			// not transient: retrying burns what's left of the budget and can
+			// bill the reader a second time for a request the provider may
+			// already be completing. Give up and report it.
+			if ctxErr := req.Context().Err(); ctxErr != nil {
+				return nil, err
+			}
 			continue
 		}
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

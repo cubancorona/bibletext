@@ -472,8 +472,13 @@ keystroke supersedes it (pinned in `search_race_test.go`).
 - Prompts are built by `buildAIPrompt` / `buildAskPrompt` ([ai.go](ai.go),
   [ai_ask.go](ai_ask.go)): a shared even-handed preamble + per-action task + the
   quoted selection. Only the selected text plus its **book and chapter** (not the
-  verse number) leave the device. Sent as one user message at temperature `0.4`,
-  capped `4096` output tokens; identical requests are cached in memory.
+  verse number) leave the device. Sent as one user message with a `32768`-token
+  runaway backstop (`aiMaxOutputTokens` — a hung-generation guard, not a spending
+  policy; reasoning models count hidden thinking against it, so a low cap starves
+  them into empty answers). Temperature `0.4` for Gemini / Grok / non-reasoning
+  ChatGPT models; the OpenAI reasoning families and Claude use provider defaults
+  (`openAIFixedTemperature`). Identical requests are cached in memory, keyed by
+  provider + resolved model + action + passage.
 - Providers Gemini / OpenAI / Anthropic / Grok live in
   [ai_providers.go](ai_providers.go). Keys are stored **on-device only** via
   `keyStore` ([ai_keystore.go](ai_keystore.go)): the Apple Keychain on **iOS

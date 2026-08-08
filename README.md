@@ -319,10 +319,10 @@ Windows, Linux, and Android — nothing is embedded in the app. Open the header
 
 | Provider | Model | Get a key |
 |---|---|---|
-| Google Gemini | `gemini-2.5-flash` | <https://aistudio.google.com/apikey> |
-| ChatGPT (OpenAI) | `gpt-4o-mini` | <https://platform.openai.com/api-keys> |
-| Claude (Anthropic) | `claude-haiku-4-5` | <https://console.anthropic.com/settings/keys> |
-| Grok (xAI) | `grok-2-latest` | <https://console.x.ai> |
+| Google Gemini | `gemini-pro-latest` (faster: `gemini-2.5-flash`) | <https://aistudio.google.com/apikey> |
+| ChatGPT (OpenAI) | `gpt-5` (faster: `gpt-4o-mini`) | <https://platform.openai.com/api-keys> |
+| Claude (Anthropic) | `claude-opus-5` (faster: `claude-haiku-4-5`) | <https://platform.claude.com/settings/keys> |
+| Grok (SpaceXAI) | `grok-4.5` (faster: `grok-4.3`) | <https://console.x.ai> |
 
 The **Model** dropdown in the same sheet is populated live from your provider's
 own model list (fetched with your key), so new models appear the day they ship —
@@ -335,10 +335,13 @@ A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 ### What gets sent
 
 Each action builds one prompt (`buildAIPrompt` in `ai.go`) and sends it as a
-single user message capped at `4096` output tokens (Gemini / ChatGPT / Grok
-requests are sent at temperature `0.4`; Claude uses the provider's default).
-Identical requests are cached in memory, so re-opening the same analysis does not
-re-send. Only the text you selected — plus the book and chapter it came from — and
+single user message. Output is limited only by a `32768`-token runaway backstop
+— the prompt, not a spending cap, is what keeps answers short (a lower cap
+silently starved the reasoning models, which count their hidden thinking against
+it). Gemini and Grok requests are sent at temperature `0.4`, ChatGPT too except
+its reasoning families (`gpt-5`, `o*`), which — like Claude — use the provider's
+default. Identical requests are cached in memory, so re-opening the same
+analysis does not re-send. Only the text you selected — plus the book and chapter it came from — and
 the fixed instructions below ever leave the device:
 
 ```
