@@ -91,8 +91,21 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		}
 		state.aiSearchResults = nil
 		state.aiSearchLoading = true
-		state.refresh() // → aiSearchingView
-		startAISearch(state, q, func(verses []Verse, err error) {
+		state.aiSearchCancelled = false
+		// Installed BEFORE the refresh below, because that refresh SYNCHRONOUSLY
+		// builds aiSearchingView — which only renders Cancel when this hook is
+		// set. Assigning after would leave the first Find of a session with no
+		// Cancel at all. The closure reads the cancelSearch VARIABLE (filled in
+		// once startAISearch returns), so it always reaches the request that is
+		// actually in flight rather than a captured stale one. UI goroutine
+		// only, so no synchronisation. (Mirrors the mobile twin.)
+		cancelSearch := func() {}
+		installAISearchCancel(state, func() {
+			askSession.Invalidate()
+			cancelSearch()
+		})
+		state.refresh() // → aiSearchingView (with Cancel)
+		cancelSearch = startAISearch(state, q, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear owns the results now
 			}
@@ -112,19 +125,20 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			default:
 				state.aiSearchResults = verses
 			}
-			state.refresh() // → results / error
+			state.cancelAISearch = nil // this request is done; nothing to abandon
+			state.refresh()            // → results / error
 		})
 	}
 	state.retryAISearch = func() { runAsk(state.aiSearchQuery) }
 	aiEntry.OnSubmitted = runAsk
 
 	clearAsk := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-		askSession.Invalidate() // an in-flight ask must not resurrect after the clear
+		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
 		aiEntry.SetText("")
 		state.aiSearchQuery = ""
 		state.aiSearchResults = nil
 		state.aiSearchErr = nil
-		state.aiSearchLoading = false
+		state.aiSearchCancelled = false
 		if state.IsSearching {
 			state.refresh() // → prompt
 		}
@@ -155,9 +169,15 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		// progress state, or a completion dropped at the aiSearchActive guard
 		// would leak aiSearchLoading=true and toggling back to Find would show
 		// a permanent "Searching with AI…" pane (review finding).
-		askSession.Invalidate()
-		state.aiSearchLoading = false
+		// Toggling away mid-flight IS an abandonment, so it must land on the
+		// cancelled state — clearing the flag instead left query set and
+		// results nil, which falls through to "AI didn't find matching
+		// passages": the very false zero-result claim Cancel was fixed to
+		// avoid.
+		inFlight := state.cancelAISearch != nil
+		abandonAISearch(state) // cancels the request; invalidates the session
 		state.aiSearchErr = nil
+		state.aiSearchCancelled = inFlight
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai
 		applyMode()
@@ -282,6 +302,32 @@ func caption(text string) fyne.CanvasObject {
 	})
 	rt.Wrapping = fyne.TextWrapWord
 	return rt
+}
+
+// centeredCaption is caption() with its text centred — for the calm, centred
+// wait/empty states, where a left-ragged caption under a centred heading reads
+// as a misalignment.
+func centeredCaption(text string) fyne.CanvasObject {
+	rt := widget.NewRichText(&widget.TextSegment{
+		Text: text,
+		Style: widget.RichTextStyle{
+			SizeName:  theme.SizeNameCaptionText,
+			ColorName: colorNameMuted,
+			Alignment: fyne.TextAlignCenter,
+		},
+	})
+	rt.Wrapping = fyne.TextWrapWord
+	return rt
+}
+
+// captionHeightFor sizes a bounded caption box for n wrapped lines, so a
+// GridWrap can give the caption a fixed measure (keeping neighbouring elements
+// centred on one axis) without hard-coding pixels at each call site.
+func captionHeightFor(lines int) float32 {
+	if lines < 1 {
+		lines = 1
+	}
+	return float32(lines) * (theme.CaptionTextSize() + theme.Padding()*2)
 }
 
 func spacer(h float32) fyne.CanvasObject {

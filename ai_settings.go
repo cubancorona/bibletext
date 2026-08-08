@@ -42,6 +42,13 @@ func showAISettings(state *AppState) {
 	// Search-tab Find toggle, the native selection menus — so closing the sheet
 	// after that change rebuilds the window rather than just re-rendering verses.
 	aiOnAtOpen := store.aiEnabled()
+	// Whether AI is USABLE — an assistant is selected AND its key is present.
+	// aiEnabled alone misses the common case: a provider is already selected
+	// (Gemini is the default) but has no key, so Find shows "Find needs your
+	// own AI key"; pasting a key, or switching to a provider that already has
+	// one, leaves aiEnabled unchanged and used to leave that stale panel up
+	// until the reader navigated away and back (field report).
+	aiKeyAtOpen := hasAIKey(state)
 	// If a full rebuild happens while the sheet is open (theme-variant flip,
 	// tablet rotation), the new window was already built from live prefs —
 	// done()'s own delta rebuild/refresh would be a duplicate window swap.
@@ -121,7 +128,7 @@ func showAISettings(state *AppState) {
 			}
 			result.SetText("Testing…")
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
 				_, err := info.New(store, key).generate(ctx, "Reply with the single word: OK")
 				fyne.Do(func() {
@@ -330,7 +337,7 @@ func showAISettings(state *AppState) {
 			fetchSeq++
 			seq := fetchSeq
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
 				models, err := info.ListModels(ctx, key)
 				ids := dropdownModelIDs(models, info.ExtraModelExclude, modelFamilyOf(info.Model))
@@ -434,9 +441,7 @@ func showAISettings(state *AppState) {
 		if windowRebuildGen != rebuildGenAtOpen {
 			return // a rebuild drained us; it already built from live prefs
 		}
-		if store.aiEnabled() != aiOnAtOpen {
-			// The assistant flipped between "None" and a provider: whole surfaces
-			// (the sidebar/tab Find toggle) come or go, so rebuild the window.
+		if aiSurfacesChanged(aiOnAtOpen, aiKeyAtOpen, store.aiEnabled(), hasAIKey(state)) {
 			rebuildWindow(state)
 		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
 			state.refreshReadingOnly() // red-letter / text size changed → re-render the verses
@@ -629,6 +634,23 @@ func showAISettings(state *AppState) {
 		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
 	}
 	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
+}
+
+// aiSurfacesChanged reports whether closing the settings sheet must rebuild the
+// window, given what was true when it opened and what is true now.
+//
+// Two independent reasons, and the second is the one that is easy to miss:
+//   - the assistant came or went ("None" ↔ a provider), so whole surfaces —
+//     the Search-tab Find toggle, the native selection menus — appear or
+//     disappear; or
+//   - AI became usable or unusable because a KEY arrived or left. A provider is
+//     selected by default, so aiEnabled() is already true while Find is showing
+//     "Find needs your own AI key". Pasting a key (or switching to a provider
+//     that already has one) changes nothing about aiEnabled, so without this
+//     half the stale set-up panel survived until the reader navigated away and
+//     back — field-reported.
+func aiSurfacesChanged(enabledAtOpen, keyAtOpen, enabledNow, keyNow bool) bool {
+	return enabledAtOpen != enabledNow || keyAtOpen != keyNow
 }
 
 // compactTheme shrinks only the base text size of a subtree (applied via

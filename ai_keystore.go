@@ -55,6 +55,11 @@ const (
 	// remembered across launches. Both are per-provider (suffix = provider id).
 	prefModelOverridePrefix = "ai.model.override."
 	prefModelResolvedPrefix = "ai.model.resolved."
+	// prefModelResolvedForPrefix records WHICH default a cached self-heal was
+	// standing in for. When the app ships a new recommended model the old cache
+	// is no longer relevant — it was our fallback, never the reader's choice —
+	// so it must not outrank the new recommendation. See resolvedModel.
+	prefModelResolvedForPrefix = "ai.model.resolvedfor."
 )
 
 // newKeyStore binds to the running app's Preferences. Returns an inert store
@@ -211,13 +216,30 @@ func (k *keyStore) setOverrideModel(id, model string) {
 	k.prefs.SetString(prefModelOverridePrefix+id, strings.TrimSpace(model))
 }
 
-// resolvedModel is the model self-heal discovered for a provider when the default
-// was retired (blank = none discovered yet).
+// resolvedModel is the model self-heal discovered for a provider when the
+// default was retired (blank = none discovered yet).
+//
+// A cache is honoured only while it is still standing in for the SAME default
+// it healed from. Upgrading the app's recommended model discards it: a reader
+// on "Recommended" never chose that fallback — the app picked it when the old
+// default died — so it must not silently pin them to yesterday's model. An
+// explicit choice in Settings (overrideModel) is untouched by any of this.
 func (k *keyStore) resolvedModel(id string) string {
 	if k == nil || k.prefs == nil {
 		return ""
 	}
-	return strings.TrimSpace(k.prefs.String(prefModelResolvedPrefix + id))
+	cached := strings.TrimSpace(k.prefs.String(prefModelResolvedPrefix + id))
+	if cached == "" {
+		return ""
+	}
+	info, ok := providerByID(id)
+	if !ok {
+		return cached
+	}
+	if strings.TrimSpace(k.prefs.String(prefModelResolvedForPrefix+id)) != info.Model {
+		return "" // healed from a default we no longer ship — re-resolve
+	}
+	return cached
 }
 
 func (k *keyStore) setResolvedModel(id, model string) {
@@ -225,4 +247,7 @@ func (k *keyStore) setResolvedModel(id, model string) {
 		return
 	}
 	k.prefs.SetString(prefModelResolvedPrefix+id, strings.TrimSpace(model))
+	if info, ok := providerByID(id); ok {
+		k.prefs.SetString(prefModelResolvedForPrefix+id, info.Model)
+	}
 }

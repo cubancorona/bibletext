@@ -43,7 +43,18 @@ var activeAIState *AppState
 func registerAIState(state *AppState) { activeAIState = state }
 
 // friendlyAIError maps a raw error to a calm, reader-facing message for the panel.
+// errBudgetExhausted means the model used its whole output allowance on hidden
+// reasoning and produced no visible answer. It is a distinct error because the
+// remedy is specific — ask something narrower, or switch to the faster model —
+// and because reporting it as an "empty answer" blames the provider for a
+// limit the app set.
+var errBudgetExhausted = errors.New("ai: output budget exhausted by reasoning")
+
 func friendlyAIError(err error) string {
+	if errors.Is(err, errBudgetExhausted) {
+		return "The model spent its whole allowance thinking and didn't finish an answer. " +
+			"Try a narrower question, or switch to the faster model."
+	}
 	var nk *noKeyError
 	if errors.As(err, &nk) {
 		return "No API key for " + nk.provider.Name + " yet. Open AI settings to add one."
@@ -177,6 +188,13 @@ func aiCacheSet(key, value string) {
 // runAIAction returns the analysis for a selection using the active provider and
 // the user's key. Results are cached (keyed by provider+action+passage) so
 // re-opening the same thing doesn't spend another request.
+// aiActionRun is a seam over the study-action call (twin of aiSearchGenerate),
+// so tests can observe the context a study request runs under — the only way to
+// prove Close and Cancel abandon the REQUEST rather than just the spinner.
+var aiActionRun = func(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
+	return runAIAction(ctx, state, action, selectedText, question)
+}
+
 func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
 	store := state.keys()
 	id := store.activeProvider()
@@ -192,10 +210,16 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 	// The fixed actions (Explain / Context / Translation) build their prompt from the
 	// action alone; "ask" carries a free-form question, so it builds a different prompt and
 	// folds the question into the cache scope (same passage, new question → fresh answer).
-	scope := id + "|" + action
+	// The MODEL is part of the scope too: a faster-model switch re-asks the same
+	// passage+action, and the superseded request can still settle and cache —
+	// under one shared key, which model's prose the panel later serves would be
+	// whichever wrote last. Distinct keys keep every answer filed under the
+	// model that produced it.
+	model := activeModelFor(store, id)
+	scope := id + "|" + model + "|" + action
 	prompt := buildAIPrompt(action, book, chapter, selectedText, version)
 	if action == aiActionAsk {
-		scope = id + "|ask|" + question
+		scope = id + "|" + model + "|ask|" + question
 		prompt = buildAskPrompt(book, chapter, selectedText, version, question)
 	}
 

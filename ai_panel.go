@@ -109,10 +109,19 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// is dismissed mid-spin. Track the live spinner and Stop() it on every exit from
 	// the thinking state so the animation never outlives the panel.
 	var thinkingBar *widget.ProgressBarInfinite
+	// cancelFetch abandons the in-flight study request. Stopping the spinner is
+	// not enough: the request keeps running for the whole aiRequestBudget and
+	// keeps billing the reader's key for an answer nobody will read. Every
+	// exit — Close, Cancel, a re-run — goes through stopThinking.
+	var cancelFetch func()
 	stopThinking := func() {
 		if thinkingBar != nil {
 			thinkingBar.Stop()
 			thinkingBar = nil
+		}
+		if cancelFetch != nil {
+			cancelFetch()
+			cancelFetch = nil
 		}
 	}
 
@@ -165,14 +174,60 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 
 	// --- State transitions. setThinking/setError layer their content on top of
 	// the (empty) answer scroll; setResult fills the scroll and drops the overlay.
+	// Declared before setThinking so the waiting state's "faster model" offer
+	// can re-run the request; assigned below.
+	var startFetch func()
+	// fetchGen identifies the request the panel currently cares about (Find's
+	// aiSearchSession, in miniature). Every startFetch bumps it; a completion
+	// compares its captured value and bails when superseded. Without this, a
+	// request abandoned by the faster-model re-run would still settle here —
+	// nil-ing cancelFetch (disarming the NEW request's cancel) and painting its
+	// stale answer or cancellation error over the state the reader moved on to.
+	var fetchGen int
+
 	setThinking := func() {
 		bar := widget.NewProgressBarInfinite()
 		thinkingBar = bar
 		msg := widget.NewLabel("Reading the passage…")
 		msg.Alignment = fyne.TextAlignCenter
+		// The budget is generous enough for a thinking model (aiRequestBudget),
+		// so say so — otherwise a minute of spinner reads as a hang. Close is
+		// the way out here (it calls stopThinking, so the ProgressBarInfinite
+		// stops repainting the canvas); the Find surface has its own Cancel.
+		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
+			centeredCaption("Capable models can take a minute or more."))
+		// Reads the field at TAP time (not the value at build time), so it
+		// always abandons the request that is actually running — the mistake
+		// the Find surface's first Cancel made.
+		var fasterRow fyne.CanvasObject = spacer(0)
+		if pid, fm, label, ok := fasterModelOffer(state); ok {
+			fasterRow = container.NewVBox(spacer(6), fasterModelControl(label, func() {
+				applyFasterModel(state, pid, fm)
+				startFetch() // startFetch abandons the slow request before starting this one
+			}))
+		}
+		cancelBtn := widget.NewButton("Cancel", func() {
+			userClosed = true
+			stopThinking() // cancels the request, not just the spinner
+			if popup != nil {
+				popup.Hide()
+			}
+			restore()
+		})
 		body.Objects = []fyne.CanvasObject{
 			answerScroll,
-			container.NewVBox(layout.NewSpacer(), msg, bar, layout.NewSpacer()),
+			container.NewVBox(layout.NewSpacer(),
+				container.NewCenter(msg), spacer(10),
+				// Bounded, not full-bleed: a panel-wide bar reads as a banner
+				// rather than a quiet progress hint, and it dwarfed the text.
+				container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
+				spacer(10), container.NewCenter(hint),
+				// inputFrame: the theme's button fill IS this panel's card
+				// colour (SurfaceAlt), so a bare Cancel here had no visible
+				// box at all (field-reported). The outline restores one.
+				spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
+				fasterRow,
+				layout.NewSpacer()),
 		}
 		body.Refresh()
 	}
@@ -214,7 +269,6 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		})
 	}
 
-	var startFetch func()
 	setError := func(msg string, needsSettings bool) {
 		stopThinking()
 		copyBtn.Disable()
@@ -242,12 +296,34 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	}
 
 	startFetch = func() {
+		// Abandon any request already in flight FIRST (the faster-model switch,
+		// Try again): cancel its context and stop its spinner, or the
+		// superseded request would keep billing the reader's key for the whole
+		// aiRequestBudget while its detached ProgressBarInfinite keeps
+		// repainting the canvas — the exact leak documented above cancelFetch.
+		stopThinking()
+		fetchGen++
+		gen := fetchGen
 		setThinking()
+		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
+		cancelFetch = cancel // so Close / Cancel can abandon THIS request
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
-			defer cancel()
-			result, err := runAIAction(ctx, state, action, selectedText, question)
+			defer cancelTimeout()
+			result, err := aiActionRun(ctx, state, action, selectedText, question)
 			fyne.Do(func() {
+				if gen != fetchGen {
+					return // superseded — a newer request owns the panel now
+				}
+				cancelFetch = nil // settled: nothing left to abandon
+				// The reader dismissed this panel (Close / Cancel). Painting a
+				// late answer into it would repaint a hidden, detached popup —
+				// and with the generous aiRequestBudget that answer can arrive long
+				// after they moved on. The reply is in aiCache, so reopening
+				// the same action shows it instantly.
+				if userClosed {
+					return
+				}
 				// The panel may have been EVICTED (not user-closed) by a
 				// rebuildWindow drain — a theme-variant flip — while the
 				// request ran. Don't deliver the answer into the hidden,

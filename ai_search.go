@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 )
@@ -13,10 +12,16 @@ import (
 // startAISearch runs runAISearch on a background goroutine and delivers the result
 // back on the Fyne UI thread, so the caller can drive a spinner then render the
 // passages without managing the goroutine itself.
-func startAISearch(state *AppState, query string, done func([]Verse, error)) {
+//
+// It returns a cancel func: with a budget generous enough for a thinking model
+// (aiRequestBudget), the reader needs a way out that actually ABANDONS the
+// request — dropping the callback alone would leave the connection open and the
+// tokens billing. Safe to call any number of times, including after completion.
+func startAISearch(state *AppState, query string, done func([]Verse, error)) (cancel func()) {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
-		defer cancel()
+		defer cancelTimeout()
 		verses, err := runAISearch(ctx, state, query)
 		// The completion is ALWAYS delivered — even when the assistant was
 		// switched to "None" mid-flight. Both callers already drop a dead
@@ -26,6 +31,7 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) {
 		// (review finding).
 		fyne.Do(func() { done(verses, err) })
 	}()
+	return cancelCtx
 }
 
 // aiSearchSession serializes Find submissions: every submission (and anything
@@ -72,6 +78,61 @@ func aiFeaturesEnabled(state *AppState) bool {
 	return state.keys().aiEnabled()
 }
 
+// abandonAISearch is the ONE way to give up on an in-flight Find. It runs the
+// closure the submitting builder installed, which both invalidates that
+// builder's session (so a late completion can't repaint) and cancels the
+// REQUEST — dropping only the callback would leave the connection open and the
+// tokens billing for the rest of the generous aiRequestBudget (minutes).
+//
+// Every teardown route calls this: the searching view's Cancel, the field's ✕,
+// the Search/Find toggle, collapsing the iPad sidebar, clearSearchState, and
+// Settings → Assistant → None. Safe when nothing is running, and idempotent —
+// the hook is cleared so a second call is a no-op.
+func abandonAISearch(state *AppState) {
+	if state == nil {
+		return
+	}
+	// BEFORE the nil-hook guard: this is the only thing clearing the progress
+	// flag at the ✕ and the mode toggle, and the nil-hook-while-loading
+	// combination is reachable (a completion nils the hook without touching
+	// the flag). Returning early here re-armed a previously-fixed bug — a
+	// permanent "Searching with AI…" pane.
+	state.aiSearchLoading = false
+	if state.cancelAISearch == nil {
+		return
+	}
+	cancel := state.cancelAISearch
+	state.cancelAISearch = nil
+	cancel()
+}
+
+// installAISearchCancel registers the hook for a NEW request, abandoning any
+// previous one first.
+//
+// This is the whole guard against the arity bug: aiSearchSession is an N-deep
+// generation counter (it can drop N stale completions), but the cancel hook is
+// a single slot. Assigning it directly — as a resubmission does — dropped the
+// previous request's cancel on the floor, leaving that request unreachable by
+// Cancel, the ✕, the toggle, clearSearchState or Assistant→None, and billing
+// for the rest of aiRequestBudget. Routing every install through here means a
+// resubmission structurally cannot orphan its predecessor.
+func installAISearchCancel(state *AppState, cancel func()) {
+	if state == nil {
+		if cancel != nil {
+			cancel()
+		}
+		return
+	}
+	// Cancel the predecessor's REQUEST only. Deliberately not abandonAISearch:
+	// that also clears aiSearchLoading, which the caller has just set true for
+	// the search it is starting.
+	if prev := state.cancelAISearch; prev != nil {
+		state.cancelAISearch = nil
+		prev()
+	}
+	state.cancelAISearch = cancel
+}
+
 // clearAISearchContext drops any live or leftover Find state — the results
 // context replacing the reading pane, the query/results/error fields, a pending
 // loading flag — so nothing AI survives the assistant flipping to "None". The
@@ -81,6 +142,8 @@ func clearAISearchContext(state *AppState) {
 	if state == nil {
 		return
 	}
+	abandonAISearch(state) // the request itself, not just its callback
+	state.aiSearchCancelled = false
 	if state.aiSearchActive {
 		state.IsSearching = false
 		state.CanReturnToSearchResults = false
@@ -98,14 +161,50 @@ func clearAISearchContext(state *AppState) {
 // a book number ("1 John") is never mistaken for a list marker.
 var aiListMarkerPattern = regexp.MustCompile(`^\s*(?:[-*•]\s+|\d{1,2}[.)]\s+)`)
 
+// aiSearchResultCap is the single bound on a Find, governing BOTH sides of the
+// conversation: the prompt invites up to this many references, and
+// resolveReferenceList accepts at most this many resolved verses (so a model
+// that ignores the instruction cannot flood the results). The prompt does the
+// real shaping — the model is told to return every GENUINELY relevant passage
+// and never to pad, so a narrow request yields a handful and only a broad one
+// ("every 'one another' command") approaches the cap.
+//
+// 60 is set from measurement, not taste (TestFindCapBench, 2026-08-07, all
+// four providers at caps 15/40/120): narrow requests return ~6-9 results at
+// EVERY cap (the never-pad instruction holds — nobody pads toward the cap),
+// broad requests were all truncated mid-answer at the old caps and, freed,
+// plateau at the model's genuine recall of 20-40. So the cap's only real
+// effect is truncation; 60 sits above every observed plateau, and latency is
+// a provider property, not a cap property (Claude/OpenAI 1-3s at cap 120).
+// 120 from measurement (2026-08-08): the capable defaults return their genuine
+// recall well past 60 — Claude gave exactly 60 when capped there and 93 when
+// allowed 150, gpt-5 gave 76 — so 60 was cutting roughly a third of a real
+// answer. Raising it costs nothing on ordinary questions, which self-limit at
+// 6-9 results whatever the cap. 120 also matches what keyword Search already
+// shows on screen.
+const aiSearchResultCap = 120
+
 // buildAISearchPrompt asks the active provider for Bible references that answer a
-// natural-language request, in a format we can parse back into real verses.
+// natural-language request, in a format we can parse back into real verses. The
+// reader's request stays in the MIDDLE of the prompt with the format
+// instructions after it — instruction-last ordering, so text inside the request
+// can't easily override the reply contract.
 func buildAISearchPrompt(query string) string {
 	return "You help a reader find passages in the Bible from a request in their own words.\n\n" +
 		"Request: " + strings.TrimSpace(query) + "\n\n" +
-		"Reply with ONLY a list of the most relevant references, one per line, each written as " +
+		"Reply with ONLY a list of relevant references, one per line, each written as " +
 		"\"Book Chapter:Verse\" (for example: Jonah 1:2). Use full book names. Order by relevance, " +
-		"best first, and give at most 15. No commentary, no numbering, no extra text — just the references."
+		fmt.Sprintf("best first. Include every passage that genuinely answers the request, up to %d — ", aiSearchResultCap) +
+		"never pad with weak matches; a short list of strong matches is better than a long one. " +
+		"No commentary, no numbering, no extra text — just the references."
+}
+
+// aiSearchGenerate is a seam over the provider call (like aiRetrySleep and
+// reporterLayout elsewhere), so tests can observe the context a Find actually
+// runs under — the only way to prove Cancel abandons the REQUEST rather than
+// just dropping its callback.
+var aiSearchGenerate = func(ctx context.Context, info providerInfo, store *keyStore, key, prompt string) (string, error) {
+	return info.New(store, key).generate(ctx, prompt)
 }
 
 // runAISearch performs a natural-language passage search with the active provider
@@ -132,7 +231,7 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 	cacheKey := aiCacheKey(id+"|search", "", 0, strings.ToLower(q))
 	raw, cached := aiCacheGet(cacheKey)
 	if !cached {
-		out, err := info.New(store, key).generate(ctx, buildAISearchPrompt(q))
+		out, err := aiSearchGenerate(ctx, info, store, key, buildAISearchPrompt(q))
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +261,7 @@ func resolveReferenceList(bd *BibleData, raw string) []Verse {
 		}
 		seen[k] = true
 		out = append(out, v)
-		if len(out) >= 30 {
+		if len(out) >= aiSearchResultCap {
 			break
 		}
 	}

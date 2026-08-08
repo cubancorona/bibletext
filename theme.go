@@ -142,6 +142,13 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 		return p.Text
 	case theme.ColorNamePrimary:
 		return p.Accent
+	case theme.ColorNameHyperlink:
+		// Links in the palette accent, not Fyne's default #296FF6 — without
+		// this every stock Hyperlink (Settings' "Get a key" / "Privacy
+		// Policy", the waiting screens' faster-model line) renders in a bright
+		// off-palette blue in BOTH variants (and follows the user's global
+		// fyne primaryColor setting rather than the app).
+		return p.Accent
 	case theme.ColorNameForegroundOnPrimary:
 		// The label/icon on accent-filled (primary) buttons. Use the palette's
 		// AccentText — a cool near-white on the light-mode lapis accent, deep navy on

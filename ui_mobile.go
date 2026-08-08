@@ -214,6 +214,11 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 			if state.CurrentTab == i {
 				return
 			}
+			// A tab switch rebuilds the window, which discards the Search tab's
+			// live widgets. Abandon any in-flight Find first — the rebuilt tab
+			// cannot reach the old request, so without this it billed on for
+			// the rest of aiRequestBudget with no control able to stop it.
+			abandonAISearch(state)
 			state.CurrentTab = i
 			rebuildWindow(state)
 		})
@@ -415,17 +420,63 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.aiSearchActive = true
 		state.aiSearchQuery = q
 		state.aiSearchResults = nil
+		// Write the SAME state the desktop path does. The phone painted only
+		// into its captured resultsHost, so a rebuild (tab switch, rotation,
+		// theme flip) stranded a live search: no spinner, no Cancel, and an
+		// error that reached no state at all vanished silently.
+		state.aiSearchLoading = true
+		state.aiSearchErr = nil
+		state.aiSearchCancelled = false
 		bar := widget.NewProgressBarInfinite()
 		aiBar = bar
 		msg := canvas.NewText("Searching with AI…", pal.TextMuted)
 		msg.Alignment = fyne.TextAlignCenter
+		// caption() is the app's muted, WRAPPING caption style — a canvas.Text
+		// would neither wrap nor bound the column's width, which is what pushed
+		// the progress bar off-centre (the VBox grew to the hint's full width
+		// while the fixed-width bar stayed left-aligned inside it).
+		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
+			centeredCaption("Capable models can take a minute or more."))
+		// Declared before the call so the hook can close over it; the real cancel
+		// func replaces it the moment startAISearch returns. Published to
+		// state.cancelAISearch so EVERY teardown route (a bottom-tab switch that
+		// rebuilds this tab, the ✕, the mode toggle, Settings → Assistant →
+		// None) can abandon the request through abandonAISearch — otherwise the
+		// only handle lives in this closure and a rebuild orphans the request
+		// for the rest of the multi-minute budget.
+		cancelSearch := func() {}
+		installAISearchCancel(state, func() {
+			askSession.Invalidate() // a late completion must not repaint this pane
+			cancelSearch()          // abandon the request itself, not just its callback
+			stopAIBar()
+		})
+		var fasterRow fyne.CanvasObject = spacer(0)
+		if pid, fm, label, ok := fasterModelOffer(state); ok {
+			fasterRow = container.NewVBox(spacer(6), fasterModelControl(label, func() {
+				abandonAISearch(state)
+				applyFasterModel(state, pid, fm)
+				runAsk(q) // re-ask the same question on the quick model
+			}))
+		}
+		cancelBtn := widget.NewButton("Cancel", func() {
+			abandonAISearch(state)
+			state.aiSearchCancelled = true
+			resultsHost.Objects = []fyne.CanvasObject{aiSearchPromptView(state)}
+			resultsHost.Refresh()
+			aiDisclaimer.Show() // the prompt state always shows it (see applyMode)
+		})
 		resultsHost.Objects = []fyne.CanvasObject{container.NewCenter(container.NewVBox(
-			msg, spacer(8),
-			container.NewGridWrap(fyne.NewSize(220, bar.MinSize().Height), bar),
+			container.NewCenter(msg), spacer(10),
+			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
+			spacer(10), container.NewCenter(hint),
+			// inputFrame: the theme's SurfaceAlt button fill is near-invisible
+			// on this ground, so give Cancel the app's standard visible outline.
+			spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)),
+			fasterRow,
 		))}
 		resultsHost.Refresh()
 
-		startAISearch(state, q, func(verses []Verse, err error) {
+		cancelSearch = startAISearch(state, q, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear/toggle owns the pane now
 			}
@@ -436,6 +487,8 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			// tab. (After the session check, though — a superseded completion
 			// must never stop a NEWER ask's bar.)
 			stopAIBar()
+			state.cancelAISearch = nil // this request is done; nothing to abandon
+			state.aiSearchLoading = false
 			if !state.aiSearchActive {
 				// The AI results context was torn down mid-flight (the assistant
 				// flipped to "None" — clearAISearchContext): drop the result
@@ -446,6 +499,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			case err != nil && isNoKeyError(err):
 				resultsHost.Objects = []fyne.CanvasObject{aiNoKeyView(state)}
 			case err != nil:
+				state.aiSearchErr = err // so a rebuild re-renders the failure
 				resultsHost.Objects = []fyne.CanvasObject{
 					aiSearchMessageView(friendlyAIError(err), "Try again", func() { runAsk(q) }),
 				}
@@ -475,11 +529,12 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	})
 	clearKwBtn.Importance = widget.LowImportance
 	clearAskBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-		askSession.Invalidate() // an in-flight ask must not resurrect after the clear
+		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
 		aiEntry.SetText("")
 		stopAIBar()
 		state.aiSearchResults = nil
 		state.aiSearchQuery = ""
+		state.aiSearchCancelled = false
 		applyMode()
 	})
 	clearAskBtn.Importance = widget.LowImportance
@@ -514,8 +569,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	}
 
 	toggle := buildSearchModeToggle(state, func(ai bool) {
-		askSession.Invalidate() // an in-flight ask must not stomp the other mode's pane
+		inFlight := state.cancelAISearch != nil
+		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
 		stopAIBar()
+		state.aiSearchCancelled = inFlight // abandoning is not a zero-result answer
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai // switch the results context with the mode
 		applyMode()

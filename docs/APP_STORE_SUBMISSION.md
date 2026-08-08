@@ -1,8 +1,8 @@
-# App Store submission checklist — BibleText 1.1.6
+# App Store submission checklist — BibleText 1.1.7
 
-Prepared 1 August 2026; updated 4 August 2026, when build 124 was uploaded and
-version 1.1.6 was submitted for review (state: Waiting for Review, manual
-release after approval).
+Prepared 1 August 2026 for 1.1.6 (build 124, since released); refreshed
+8 August 2026 for the 1.1.7 cycle (AI Find, capable-model defaults with the
+faster-model switch, SpaceXAI rename).
 
 ## Release identity
 
@@ -11,8 +11,8 @@ release after approval).
 | App | BibleText |
 | Apple app ID | `6784567351` |
 | Bundle ID | `uk.co.bibletext` |
-| Version | `1.1.6` |
-| Build | `124` |
+| Version | `1.1.7` |
+| Build | `127` |
 | Platform | Universal iPhone and iPad |
 | Minimum OS | iOS 13.0 |
 | Price | Free |
@@ -20,12 +20,12 @@ release after approval).
 | Secondary category | Education |
 | Copyright | `2026 Willow Noonan` |
 
-The public App Store version at preparation time is 1.1.5. Do not change the
+The public App Store version at preparation time is 1.1.6 (build 124). Do not change the
 bundle ID or remove iPad support from this update.
 
 ## Locally verified release inputs
 
-- `cmd/mobile/FyneApp.toml` is the source of version 1.1.6/build 124.
+- `cmd/mobile/FyneApp.toml` is the source of version 1.1.7/build 127.
 - `scripts/release-ios.sh` derives the marketing version from that file, keeps
   exact copies of locally edited build files, builds arm64, creates an App Store
   archive, and does not upload unless `BIBLETEXT_UPLOAD=1` is explicitly set.
@@ -34,8 +34,8 @@ bundle ID or remove iPad support from this update.
   iPhone and iPad.
 - `UIRequiresFullScreen` is removed so iPad Split View, Stage Manager, and
   resizable windows are not disabled.
-- AI provider keys use Apple Keychain on iOS/macOS and migrate from the old
-  preferences value on first access.
+- AI provider keys use the Apple Keychain on iOS (preferences elsewhere) and
+  migrate from the old preferences value on first access.
 - The App Store icon is an opaque 1024×1024 RGB image. `release-ios.sh`
   regenerates the whole icon asset catalog with `actool` from that single
   source, because fyne emits no iPad Pro 167×167 rendition and App Store Connect
@@ -51,8 +51,8 @@ go vet ./...
 ./scripts/release-ios.sh
 ```
 
-The last command must finish with `build/BibleText.ipa is ready (version 1.1.6,
-build 124)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
+The last command must finish with `build/BibleText.ipa is ready (version 1.1.7,
+build 127)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
 
 ## Store metadata prepared locally
 
@@ -68,9 +68,12 @@ ignored by Git). The prepared English (UK) values are:
 - Support URL: <https://bibletext.co.uk/support.html>
 - Marketing URL: <https://bibletext.co.uk/>
 - Privacy URL: <https://bibletext.co.uk/privacy.html>
-- What's New: poetry as authored verse lines, words of Christ in red by
-  default, fresh installs opening at Matthew 1, poetry-preserving shares, the
-  light/dark re-theme fix, and history- and key-preserving upgrades
+- What's New (1.1.7 DRAFT — needs the owner's approval before it goes in):
+  Find and AI study now recommend each provider's most capable model, wait long
+  enough for it to answer, and let you cancel or switch to a faster model while
+  you wait. Find results are more complete, error messages are clearer, and the
+  Find screen notices a newly added key right away. Settings reflects Grok's
+  new home, SpaceXAI. Plus cleaner shared citations.
 
 `build/appstore/review_notes.txt` has current feature paths, iPad behaviour,
 the optional-AI test procedure, data flow, age-rating context, and contact
@@ -98,7 +101,8 @@ Use the opaque JPEG exports, not the source PNGs (the PNG files have alpha):
 - iPad 13-inch slot: `build/appstore/screenshots-ready/en-GB/ipad13/` — three
   2752×2064 images and one 2064×2752 image
 
-Upload after the 1.1.6 English (UK) localization exists:
+Upload after the 1.1.7 English (UK) localization exists (screenshots only
+need re-uploading if they changed; the 1.1.6 sets remain accurate):
 
 ```sh
 python3 build/appstore/upload_screenshots.py
@@ -130,9 +134,9 @@ Leave `NSPrivacyAccessedAPITypes` as declared: file timestamp (C617.1), system
 boot time (35F9.1), and user defaults (CA92.1).
 
 Publish the updated `docs/privacy.html` and `docs/support.html` to the live URLs
-before review. The source files now describe Keychain storage and the direct AI
-provider data flow, but editing `main` alone does not update the `gh-pages`
-deployment.
+before review — this cycle they rename xAI to SpaceXAI, matching the in-app
+disclosure. Editing `main` alone does not update the live site: copy the changed
+files onto a fresh checkout of `origin/gh-pages` (keeping its `CNAME`) and push.
 
 ## Age rating and compliance review
 
@@ -189,7 +193,9 @@ Account Holder/App Manager must confirm each item:
 2. Digital Services Act trader status and required contact display are complete.
 3. Country-specific availability declarations (including China mainland,
    Vietnam, and South Korea if applicable to the account type) are complete.
-4. Version 1.1.6 exists for iOS and is in an editable state.
+4. Version 1.1.7 exists for iOS and is in an editable state. While it is
+   editable, also set the version-level Privacy Policy URL, Marketing URL, and
+   Support URL to the bibletext.co.uk pages (standing TODO from 1.1.6).
 5. English (UK) metadata, both screenshot sets, categories, price, territories,
    and platform availability are correct. Check Mac and Apple Vision Pro
    availability explicitly rather than inheriting an unintended default.
@@ -203,7 +209,7 @@ Account Holder/App Manager must confirm each item:
 9. Release mode (manual, automatic, or phased) and the intended release date are
    selected deliberately.
 10. Upload `build/BibleText.ipa`; wait for processing and any export-compliance
-   prompts; select exactly version 1.1.6/build 124.
+   prompts; select exactly version 1.1.7/build 127.
 11. Run an installed-build smoke test on a real iPhone and iPad: first launch,
    Books/Search/Go-to, light/dark mode, rotation and Split View, Save Image and
    Photos permission, streaming/device audio with background controls, offline

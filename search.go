@@ -48,6 +48,17 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 					state.retryAISearch()
 				}
 			})
+		case state.aiSearchCancelled && len(state.aiSearchResults) == 0:
+			// Before the empty-results case below: the reader stopped this
+			// search, so the pane must not claim the AI found nothing. Gated on
+			// having NO results: the flag exists only to suppress a false
+			// zero-result message, so it must never hide real, paid-for
+			// passages if some path leaves it stale.
+			return aiSearchMessageView("Search cancelled.", "Try again", func() {
+				if state.retryAISearch != nil {
+					state.retryAISearch()
+				}
+			})
 		case len(state.aiSearchResults) == 0 && strings.TrimSpace(state.aiSearchQuery) == "":
 			return aiSearchPromptView(state)
 		default:
@@ -230,7 +241,53 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	msg := canvas.NewText("Searching with AI…", pal.TextMuted)
 	msg.Alignment = fyne.TextAlignCenter
 	msg.TextSize = 16
-	return container.NewCenter(msg)
+
+	// No ticking elapsed counter on purpose: a per-second repaint pins the
+	// canvas dirty (the same reason there is no ProgressBarInfinite here). One
+	// honest line sets the expectation instead — a high-capability model can
+	// legitimately think for a minute or more (aiRequestBudget) — and Cancel
+	// keeps the wait the reader's choice, not a constant's.
+	// Width-bounded caption (the app's muted style) so the column has a stable
+	// measure and every element centres against the same axis.
+	hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
+		centeredCaption("Capable models can take a minute or more."))
+
+	// The handler is a WRAPPER, not state.cancelAISearch itself: a Button stores
+	// the func VALUE it is given, so binding the field directly would pin
+	// whichever search was in flight when this view was built — from the second
+	// Find on, Cancel would abandon the PREVIOUS request and leave the current
+	// one running. Reading the field at tap time always hits the live one.
+	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10), container.NewCenter(hint)}
+
+	cancelBtn := widget.NewButton("Cancel", func() {
+		abandonAISearch(state)
+		state.aiSearchCancelled = true
+		state.refresh() // → the cancelled state (never a false "found nothing")
+	})
+	// inputFrame: the theme fills buttons with SurfaceAlt, which is near-equal
+	// to the page ground here (and IS the card fill on the study panel), so a
+	// bare button reads as floating text (field-reported). The outline gives it
+	// the same visible box the app's cards and fields carry.
+	items = append(items, spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)))
+
+	// Below Cancel, and quieter than it (fasterModelControl): an offer for the
+	// impatient, not a competing action — shown only when there IS something
+	// faster. Switching re-asks the same question straight away, since the
+	// reader is sitting here waiting for exactly that answer.
+	if pid, model, label, ok := fasterModelOffer(state); ok {
+		items = append(items, spacer(6), fasterModelControl(label, func() {
+			q := state.aiSearchQuery
+			abandonAISearch(state)
+			applyFasterModel(state, pid, model)
+			if state.retryAISearch != nil && strings.TrimSpace(q) != "" {
+				state.retryAISearch()
+				return
+			}
+			state.aiSearchCancelled = true
+			state.refresh()
+		}))
+	}
+	return container.NewCenter(container.NewVBox(items...))
 }
 
 // buildSearchModeToggle is a two-segment control switching the search UI between keyword
