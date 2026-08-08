@@ -34,12 +34,17 @@ body{
 .crumbs{color:var(--muted); white-space:nowrap} .crumbs a{color:var(--muted); text-decoration:none}
 .crumbs a:hover{text-decoration:underline} .sep{opacity:.5; padding:0 .15rem}
 .vers{display:flex; gap:.3rem; margin-left:auto}
+/* Deliberately NOT a version bubble: those are small, pill-shaped, muted and
+   act like tabs. This is an action — accent-coloured, square-ish corners, a
+   touch larger. It carries NO fill: a tinted chip on warm parchment reads as
+   abrasive next to scripture, and the shape + weight + accent already say
+   "button". The tint is kept for hover only, where it is transient. */
 .goto{
-  color:var(--text); text-decoration:none; font-size:.8rem; font-weight:700;
-  background:var(--surface); border:1px solid var(--border); border-radius:9px;
-  padding:.22rem .8rem; white-space:nowrap;
+  color:var(--accent); text-decoration:none; font-size:.85rem; font-weight:700;
+  background:none; border:1px solid var(--border); border-radius:8px;
+  padding:.3rem 1.1rem; white-space:nowrap; letter-spacing:.01em;
 }
-.goto:hover{border-color:var(--accent); color:var(--accent)}
+.goto:hover{border-color:var(--accent); background:var(--hl)}
 /* Chapter heading row: title on the left, quiet prev/next arrows on the right.
    Arrows only up here — you land mid-text from a shared link, so this bar is
    for moving, not for labels; the labelled pager at the foot of the chapter is
@@ -50,31 +55,79 @@ body{
    box: hard to see and under the 44px minimum a thumb needs. These match the
    page's other controls (Go to, version pills, the book grid all carry the
    same border and radius), which on the web reads as "clickable" better than
-   a bare glyph does. */
+   a bare glyph does. Unfilled, like Go to — a pair of near-white tiles beside
+   the chapter title fought with the text; the weight of the glyph is what
+   makes them findable, not a bright ground. */
 .arrow{
   display:inline-flex; align-items:center; justify-content:center;
   min-width:2.75rem; min-height:2.75rem;
-  border:1px solid var(--border); border-radius:10px; background:var(--surface);
-  font-size:1.35rem; line-height:1; color:var(--accent); text-decoration:none;
+  border:1px solid var(--border); border-radius:10px; background:none;
+  /* A system sans renders arrows with real weight; Georgia draws them as
+     hairlines that vanish on a phone screen. */
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:1.45rem; font-weight:700; line-height:1;
+  color:var(--accent); text-decoration:none;
 }
 .arrow:hover{border-color:var(--accent); background:var(--hl)}
 .arrow.off{color:var(--muted); opacity:.3; pointer-events:none; background:none}
-/* Go-to overlay: a dim sheet with a single reference field. */
+/* Go-to overlay — the APP'S picker, not a search box: a two-stage alphabet
+   navigator on the left (letters → that letter's books → back), the selected
+   book's chapter grid on the right, and a verse range + Go along the bottom.
+   Tapping a book or a chapter only SELECTS; Go commits. Mirroring the app
+   matters more than web convention here: the reader arriving from a shared link
+   is usually an app user, and typing a reference on a phone is the thing the
+   app's picker exists to avoid. */
 .gotobg{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
-  align-items:flex-start; justify-content:center; padding:12vh 1rem 1rem; z-index:20}
+  align-items:flex-start; justify-content:center; padding:6vh 1rem 1rem; z-index:20}
 .gotobox{background:var(--surface); border:1px solid var(--border); border-radius:12px;
-  width:100%; max-width:26rem; padding:1rem; box-shadow:0 8px 30px rgba(0,0,0,.28)}
-.gotobox input{
-  width:100%; font-family:Georgia,serif; font-size:1.05rem; padding:.55rem .7rem;
-  color:var(--text); background:var(--bg);
-  border:1px solid var(--border); border-radius:8px; outline:none;
+  width:100%; max-width:30rem; padding:1rem; box-shadow:0 8px 30px rgba(0,0,0,.28)}
+.gotohead{display:flex; align-items:center; margin:0 0 .7rem}
+.gotohead h2{margin:0; font-size:1.15rem; letter-spacing:-.01em}
+.gotox{margin-left:auto; background:none; border:0; padding:.1rem .3rem; cursor:pointer;
+  color:var(--muted); font-size:1.4rem; line-height:1;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.gotox:hover{color:var(--text)}
+.gpanes{display:flex; gap:.7rem; align-items:stretch}
+.gleft{flex:0 0 8.6rem; width:8.6rem; max-height:44vh; overflow-y:auto;
+  border-right:1px solid var(--border); padding-right:.6rem}
+.gright{flex:1 1 auto; max-height:44vh; overflow-y:auto; min-width:0}
+/* The alphabet grid: only letters that actually have books in this canon, so
+   there are no dead keys (the app's bookLetters rule). */
+.galpha{display:grid; grid-template-columns:repeat(4,1fr); gap:.3rem}
+.gchaps{display:grid; grid-template-columns:repeat(auto-fill,minmax(2.5rem,1fr)); gap:.3rem}
+.galpha a,.gchaps a{
+  display:flex; align-items:center; justify-content:center; min-height:2.2rem;
+  border:1px solid var(--border); border-radius:8px; text-decoration:none;
+  color:var(--text); font-size:.9rem; background:none;
 }
-.gotobox input:focus{border-color:var(--accent)}
-.gotohint{color:var(--muted); font-size:.78rem; margin:.5rem 0 0}
-.gotolist{list-style:none; margin:.6rem 0 0; padding:0; max-height:40vh; overflow-y:auto}
-.gotolist li a{display:block; padding:.4rem .5rem; border-radius:6px;
-  color:var(--text); text-decoration:none; font-size:.95rem}
-.gotolist li a:hover,.gotolist li a.on{background:var(--hl); color:var(--accent)}
+.galpha a:hover,.gchaps a:hover{border-color:var(--accent); color:var(--accent)}
+.gchaps a.on{border-color:var(--accent); color:var(--accent); font-weight:700; background:var(--hl)}
+.gbooks{display:block}
+.gbooks a{display:block; padding:.35rem .4rem; border-radius:6px; font-size:.92rem;
+  color:var(--text); text-decoration:none}
+.gbooks a:hover{background:var(--hl)}
+.gbooks a.on{color:var(--accent); font-weight:700}
+.gback{display:block; padding:.35rem .4rem; margin:0 0 .2rem; color:var(--muted);
+  text-decoration:none; font-size:.85rem;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.gback:hover{color:var(--accent)}
+/* Verse RANGE as two number fields — "verse [16] to [18]" — so there is no
+   hyphen to type on a phone number pad. Exactly the app's row. */
+.gverse{display:flex; align-items:center; gap:.5rem; margin:.9rem 0 0;
+  padding:.8rem 0 0; border-top:1px solid var(--border)}
+.gverse input{
+  width:4.6rem; font-family:Georgia,serif; font-size:1rem; padding:.4rem .5rem;
+  color:var(--text); background:var(--bg); text-align:center;
+  border:1px solid var(--border); border-radius:8px; outline:none; min-width:0;
+}
+.gverse input:focus{border-color:var(--accent)}
+.gto{color:var(--muted); font-size:.85rem}
+/* Filled, unlike the page's quiet controls: this is the one commit action, it
+   lives on a dimmed sheet, and it is the app's HighImportance Go button. */
+.ggo{margin-left:auto; background:var(--accent); color:var(--surface); border:0;
+  border-radius:8px; padding:.45rem 1.4rem; font-size:.9rem; font-weight:700;
+  cursor:pointer; font-family:inherit}
+.ggo:hover{opacity:.9}
 .vpick{
   color:var(--muted); text-decoration:none; font-size:.7rem; letter-spacing:.04em;
   border:1px solid var(--border); border-radius:999px; padding:.15rem .5rem;
@@ -124,21 +177,10 @@ body{
 .pager a:hover{text-decoration:underline}
 .guess{margin:0 0 1.2rem}
 .guess a{color:var(--accent)}
-/* The "clear highlight" pill. A shared link lands you scrolled to the verse, so
-   a control at the top of the page would be off-screen exactly when it is
-   wanted — this floats just above the thumb instead, and exists only while
-   something is highlighted (reader.js adds it; with JS off there is no
-   highlight to clear beyond a single :target verse, and navigating clears
-   that). */
-.clearhl{
-  position:fixed; left:50%; transform:translateX(-50%); bottom:1.1rem;
-  background:var(--surface); color:var(--accent);
-  border:1px solid var(--border); border-radius:999px;
-  padding:.4rem .9rem; font-size:.8rem; font-family:Georgia,serif;
-  cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.14);
-}
-.clearhl:hover{border-color:var(--accent)}
-@media print{.clearhl{display:none}}
+/* Clearing a highlight is a TAP ON THE HIGHLIGHT, the way the app does it —
+   no floating control, nothing covering the text. The cursor hints at it on a
+   pointer device; on touch it is simply the obvious thing to try. */
+.v:target,.v.hl{cursor:pointer}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
@@ -150,5 +192,7 @@ body{
   margin:.2rem 0 0; color:var(--muted)}
 .plats a{display:inline-flex; align-items:center; color:inherit; opacity:.75}
 .plats a:hover{opacity:1; color:var(--accent)}
-.plats svg{width:1.05rem; height:1.05rem; fill:currentColor; display:block}
+/* px, not rem: on a phone with a large text-size setting these were rendering
+   enormous. They are decoration and should stay the same modest size. */
+.plats svg{width:15px; height:15px; fill:currentColor; display:block}
 @media print{.top,.pager,.foot{display:none}}
