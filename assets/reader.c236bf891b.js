@@ -5,6 +5,9 @@
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     var m = /^#v(\d+)(?:-(\d+))?$/.exec(location.hash || '');
     if (!m) return;
+    // A fresh fragment re-lights the verse: drop the suppression flag a
+    // previous clear may have set.
+    document.documentElement.classList.remove('nohl');
     var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
     if (!(lo > 0) || hi < lo) return;
     var first = null;
@@ -25,6 +28,10 @@
     // replaceState, not a hash change: it leaves no extra history entry, so Back
     // still returns where the reader came from rather than re-highlighting.
     history.replaceState(null, '', location.pathname + location.search);
+    // Dropping the fragment does NOT un-target the verse — browsers keep the
+    // :target match until a real navigation — so a single-verse highlight (the
+    // usual shared link) would stay lit. This flag overrides it in CSS.
+    document.documentElement.classList.add('nohl');
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     // replaceState fires NO hashchange, so anything reading the fragment has to
     // be updated by hand — otherwise the version switcher keeps carrying a verse
@@ -119,7 +126,12 @@
         left.appendChild(grid);
         return;
       }
-      var back = cell('gback', '‹ ' + letter, function () { stage = 0; renderLeft(); });
+      var back = document.createElement('a');
+      back.href = '#';
+      back.className = 'gback';
+      back.innerHTML = '<span class="bkarrow">&larr;</span><span class="bkletter"></span>';
+      back.querySelector('.bkletter').textContent = letter;
+      back.addEventListener('click', function (e) { e.preventDefault(); stage = 0; renderLeft(); });
       left.appendChild(back);
       var list = document.createElement('div');
       list.className = 'gbooks';
