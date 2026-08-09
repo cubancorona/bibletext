@@ -6,82 +6,77 @@ When someone shares a verse as a link, let them attach a short note. Whoever
 opens the link sees it as a dismissable speech bubble beside the passage —
 on the web reader, or in the app when they have it installed.
 
-## The constraint that shapes everything
+## Two facts that decide most of the design
 
-**There is no server.** bibletext.co.uk is static files on GitHub Pages, and the
-app has no account system. So a note can live in exactly one of two places:
+**1. There is no server.** bibletext.co.uk is static files on GitHub Pages and
+the app has no account system, so a note can live in exactly one of two places:
+in the link itself, or on a server we would first have to build — which means
+storage, IDs, retention policy, abuse and moderation duty, GDPR answers, cost,
+and an entirely new privacy story for an app whose current one is "your keys
+never leave your device, we have no accounts, we collect nothing." The note goes
+in the link.
 
-1. **In the link itself** — self-contained, no infrastructure, nothing to run,
-   nothing to moderate, nothing to leak, and it still works in ten years.
-2. **On a server we would have to build** — which means storage, IDs, retention
-   policy, abuse and moderation duty, GDPR answers, cost, and an entirely new
-   privacy story for an app whose current one is "your keys never leave your
-   device, we have no accounts, we collect nothing".
+**2. Nothing that parses these links has shipped yet.** Share-as-link, the deep
+links and `share_link_parse.go` are all in 1.1.8, which is built but not
+submitted; the newest release in the wild, 1.1.7, contains none of that code.
+So there is **no installed base to stay compatible with** — the grammar is free
+to be whatever is best, and the first release that can open a shared link can
+also be the first that understands a note.
 
-This plan takes option 1. Everything below follows from that.
+That second fact removes what would otherwise be this feature's one permanent
+wart. It is worth spending a little of 1.1.8's remaining pre-submission time on
+(see "The 1.1.8 question").
 
-## Where in the link the note rides
+## The link grammar
 
-The parser that already ships (`share_link_parse.go`, in every 1.1.x app in the
-wild) knows nothing about notes. Those apps **will** receive note-bearing links,
-so how they degrade is a design input, not an afterthought. Measured against the
-shipped parser:
+The verse already rides in the fragment, for a reason worth keeping: browsers
+never transmit fragments, so the note is seen by the sender, the recipient, and
+whatever messenger carried the link — and by nobody else, ever, including us. A
+query string would put the private half of the message into the request line
+where GitHub's infrastructure logs it and any proxy can read it. In an app that
+keeps API keys on device precisely so nobody else holds them, that is the one
+option that contradicts the product.
 
-| Candidate | Old app sees | Note stays client-side? |
-|---|---|---|
-| A. `#v16-18-n<payload>` | John 3:16 — **range lost** | yes |
-| B. `?n=<payload>#v16-18` | John 3:16-18 — intact | **no** — sent to the server |
-| C. `?v=16-18#n<payload>` | John 3:16-18 — intact | yes |
-
-(Measured, not assumed: A collapses the range because `parseVersePayload` cuts on
-the first `-` and then fails `Atoi` on the tail, whose error path returns the low
-verse. C works because the `?v=` alias is already an accepted form, consulted
-whenever the fragment has no `v` prefix.)
-
-B is out on privacy: it puts the note text in the HTTP request line, where
-GitHub's infrastructure logs it and any proxy can read it. In an app that keeps
-API keys on device precisely so nobody else holds them, mailing the private half
-of the message to a third party is the one option that contradicts the product.
-
-That leaves A versus C, and the tempting reading is that C is strictly better —
-it is the only one that keeps an old app's range intact. **It is not worth it.**
-
-An old app opening a note-bearing link is *already* showing it without the note;
-that is the unmitigable part (see "What this cannot do"). So C spends a permanent
-change in the shape of every note link, forever, to protect a case that is
-degraded anyway and only until people update. And the change is not cosmetic:
-`share_link.go` and the docs state the contract as *the verse rides in the
-fragment*, with `?v=` documented as a form we TOLERATE inbound, never one we
-emit. Promoting an alias to an emitted primary form is a contract change that
-outlives us — these links sit in message threads for years — and it splits the
-passage identity across two places while starting to send verse numbers to
-someone's logs.
-
-What A actually costs, measured: `#v16-18-n<note>` lands an old app on John 3:16
-instead of 3:16-18. Right chapter, right passage, narrower highlight, on a link
-that was already missing its note.
-
-**Recommendation: A.** The note goes in the fragment, next to the verse, and the
-URL contract keeps its shape:
+Since the grammar is frozen the moment a link is sent, make it *extensible* now
+rather than concatenating a second time later:
 
 ```
-#v16-n<payload>        one verse, with a note
-#v16-18-n<payload>     a range, with a note
-#n<payload>            a chapter link with a note, no verse
+#v16                       one verse, as today
+#v16-18                    a range, as today
+#v16-18&n=<payload>        a range, with a note
+#n=<payload>               a chapter link with a note, no verse
 ```
 
-Unambiguous even though base64url's alphabet includes `-`, because the verse part
-is strictly digits and dashes: `^v(\d+)(?:-(\d+))?(?:-n(.*))?$` anchors the verse
-and takes the payload greedily to the end.
+Keys are `&`-separated, `=`-valued; the `v` token keeps exactly the shape the
+web reader already emits, so today's links stay byte-identical and a future key
+costs no new format decision. It is unambiguous without regex gymnastics because
+base64url's alphabet is `A–Z a–z 0–9 - _` and the payload is unpadded, so neither
+`&` nor `=` can occur inside it.
 
-Both A and C give up the pure-CSS `:target` highlight on note-bearing links,
-since the fragment is no longer exactly `#v16` — which costs nothing, because
-such a link already needs JavaScript to draw the bubble. Links without notes are
-completely unchanged and keep the zero-JS highlight.
+Unknown keys must be **ignored, not rejected**, in every parser from the first
+release onward. That is the whole cost of never having this conversation again.
+
+## The 1.1.8 question
+
+1.1.8 is built and verified but not uploaded. Three ways forward:
+
+- **(a) Submit as-is.** Notes land in 1.1.9. Measured against the parser as it
+  stands, a 1.1.8 user tapping a future note link gets John 3:16 instead of
+  3:16-18 — the range collapses, because `parseVersePayload` cuts on the first
+  `-` and fails `Atoi` on the tail. Right passage, narrower highlight, no note.
+- **(b) Teach 1.1.8 the grammar, not the feature.** Roughly five lines: split the
+  fragment on `&`, read the `v` key, ignore everything else. No UI, no new
+  surface, no new risk — and every 1.1.8 user then opens every future note link
+  at exactly the right passage. **Recommended.**
+- **(c) Hold 1.1.8 and ship notes with it.** Largest delay, and it puts a brand
+  new feature into a release that is otherwise finished and verified.
+
+(b) is the cheap permanent fix: it costs one small, testable change now and
+retires the only degradation this feature would otherwise carry forever.
 
 ## Encoding, and how long the links get
 
-UTF-8 → raw deflate *only if it comes out smaller* (a flag bit says which) →
+UTF-8 → raw deflate *only if it comes out smaller* (a flag says which) →
 base64url, unpadded. Measured on realistic notes:
 
 | Note | chars | raw | deflated | encoded | final URL |
@@ -112,25 +107,21 @@ as hostile input:
 - **Cap the length** (above), which also bounds the abuse surface.
 
 Worth stating plainly: because the note never reaches a server, we never store or
-transmit it, which means there is nothing to breach and no moderation duty. That
-is a consequence of the architecture, not a policy we have to maintain.
+transmit it, so there is nothing to breach and no moderation duty. That is a
+consequence of the architecture, not a policy anyone has to maintain.
 
 ## What this cannot do
 
-Two limits to accept up front rather than discover later:
+**Link previews will not show the note.** Unfurlers (iMessage, WhatsApp, Slack)
+don't run JavaScript and never receive the fragment, so the preview shows the
+chapter, as today. This one is permanent and there is no way around it while the
+note stays private.
 
-- **Link previews will not show the note.** Unfurlers (iMessage, WhatsApp, Slack)
-  don't run JavaScript and never receive the fragment. The preview will show the
-  chapter, as today.
-- **Apps older than this feature will show the passage with no note, silently.**
-  Universal Links cannot be version-gated — the AASA file is static and cannot
-  ask what version is installed. So during the transition a note is guaranteed
-  only on the web and on updated apps.
-
-The second one has a good mitigation: **also put the note text in the shared
-message body**, above the link. That is how people share things anyway, it means
-the note is never invisible to anyone on any version, and the bubble becomes an
-enhancement rather than the only delivery mechanism. Recommended.
+A partial answer, if it matters: **also put the note text in the shared message
+body**, above the link. It is how people share things anyway, and it reaches the
+recipient before they tap — including recipients who never tap, and those without
+the app. Optional, not required — with (b) above, the note is no longer invisible
+to anyone who opens the link.
 
 ## Surfaces to touch
 
@@ -152,27 +143,26 @@ under the last visible line of the highlight, re-pinned on resize.
 
 ## Phases
 
-- **P0 — contract + codec.** Extend `ShareLinkURL` / `ParseShareLink` for the
-  note, add the encoder/decoder, and pin it with tests. No UI. Ends with the
-  golden test extended and the back-compat table above locked in as assertions.
-- **P1 — web reader shows the bubble.** A hand-made link now works end to end,
-  which derisks the contract before any app code exists.
-- **P2 — app composes.** Optional note field in the share flow; note text also
-  goes into the message body. One-tap "share as link" must stay one tap — the
-  note is an opt-in second step, not a new modal in everyone's way.
-- **P3 — app shows the bubble** on all four reading surfaces.
+- **P0 — grammar tolerance in 1.1.8.** The five-line change above, plus tests
+  pinning that unknown keys are ignored and the verse still parses. Ships with
+  the release that is already built.
+- **P1 — contract + codec.** `ShareLinkURL` / `ParseShareLink` carry the note;
+  encoder/decoder with round-trip, cap, emoji and hostile-input tests.
+- **P2 — web reader shows the bubble.** A hand-made link now works end to end,
+  which proves the format before any app UI exists.
+- **P3 — app composes.** Optional note field in the share flow. One-tap "share as
+  link" must stay one tap — the note is an opt-in second step, not a new modal in
+  everyone's way.
+- **P4 — app shows the bubble** on all four reading surfaces.
 
-P1 before P2 is deliberate: the web is the only surface that can render a note
+P2 before P3 is deliberate: the web is the only surface that can render a note
 without shipping an app release, so it is where the format should be proven.
 
 ## Open decisions
 
-1. **Placement.** Recommended: A — note in the fragment beside the verse,
-   contract shape unchanged. The alternative (C) buys an old app's range
-   highlight back at the price of a permanent change to every note link.
+1. **The 1.1.8 question** — (a), (b) or (c) above. Recommended: (b).
 2. **Cap** — 280 characters unless there's a reason to go shorter.
-3. **Note in the message body too?** Recommended yes; it is what makes the
-   feature work for people on older app versions.
+3. **Note in the message body too?** Now optional rather than load-bearing.
 4. **Attribution.** Recommended none: the messenger already shows who sent it,
    and a sender-typed name is an impersonation surface for nothing gained.
 5. **Re-openable after dismiss?** A small marker to bring the note back, so an
