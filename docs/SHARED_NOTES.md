@@ -1,6 +1,8 @@
 # Shared notes — design plan
 
-> Status: **plan only**, nothing implemented. Branch: `shared-notes`.
+> Status: **built** on branch `shared-notes`. The web reader and iOS are done;
+> macOS, Android and the desktop styled pane still show the fallback card rather
+> than a native bubble (see "Surfaces", below).
 
 When someone shares a verse as a link, let them attach a short note. Whoever
 opens the link sees it as a dismissable speech bubble beside the passage —
@@ -141,22 +143,48 @@ The web bubble should reuse the positioning machinery already built for the
 clear-highlight pill (`positionBubble` in `assets.go`): document-absolute, pinned
 under the last visible line of the highlight, re-pinned on resize.
 
-## Phases
+## What was built
 
-- **P0 — grammar tolerance in 1.1.8.** The five-line change above, plus tests
-  pinning that unknown keys are ignored and the verse still parses. Ships with
-  the release that is already built.
-- **P1 — contract + codec.** `ShareLinkURL` / `ParseShareLink` carry the note;
-  encoder/decoder with round-trip, cap, emoji and hostile-input tests.
-- **P2 — web reader shows the bubble.** A hand-made link now works end to end,
-  which proves the format before any app UI exists.
-- **P3 — app composes.** Optional note field in the share flow. One-tap "share as
-  link" must stay one tap — the note is an opt-in second step, not a new modal in
-  everyone's way.
-- **P4 — app shows the bubble** on all four reading surfaces.
+- **Grammar + codec** (`share_link.go`, `share_note.go`) — done, with the
+  back-compat table above pinned as assertions.
+- **Web reader** — done: bubble anchored to the passage, minimize and delete,
+  the tap on the highlight offering the same pair, the note carried across a
+  translation switch.
+- **App compose** — done, "Share with note" on all four menu surfaces. The note
+  also goes into the shared message body.
+- **Persistence** (`notes_store.go`) — done: one note per version+book+chapter,
+  minimize and delete recorded in the store, picked up again in
+  `addRecentChapter`, so a note returns on a later visit and survives relaunch.
+- **iOS bubble** — done, as a native sticker (below).
+- **macOS / Android / desktop bubbles** — NOT done. Those platforms fall back to
+  a dismissable card, which shows the note but sits over the passage rather than
+  beside it.
 
-P2 before P3 is deliberate: the web is the only surface that can render a note
-without shipping an app release, so it is where the format should be proven.
+### The iOS sticker, and why it is not HTML
+
+Measured on iOS 26.5, the NSAttributedString HTML importer drops `border`,
+`border-radius`, `padding`, `box-shadow` and every margin on a `<div>`, so the
+web reader's bubble markup arrives as a borderless, tinted run of text. It would
+also join the text storage, where it would be selectable, copyable into "Share
+with citation", and visible to the verse-index font-size scan. A Fyne widget is
+equally impossible: the UITextView floats above the whole Fyne canvas, so a Fyne
+bubble renders BEHIND the scripture.
+
+So the note is a native `UIView`, placed in a band the text reserves via
+`paragraphSpacingBefore` on the paragraph holding the highlight. That, rather
+than an exclusion path, because an exclusion path needs the paragraph's rect to
+place it while itself moving that paragraph — a feedback loop. Paragraph spacing
+is part of the paragraph's own metrics, so layout converges in one pass. The
+sticker is a subview of the text view, which IS a scroll view, so it scrolls
+with the passage for free.
+
+Two things that will bite anyone repeating this on macOS or Android:
+
+1. `bibleTextApplyHTML` zeroes `paragraphSpacingBefore` across the whole string
+   on every import (to kill a phantom band the importer injects before verse 1).
+   The band must be carved AFTER that pass or it is wiped every render.
+2. `chapterRenderFingerprint` gates the whole re-render. The note had to become
+   part of it, or every appear, hide, restore and delete is silently skipped.
 
 ## Open decisions
 
