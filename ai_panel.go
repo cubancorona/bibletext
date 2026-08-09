@@ -55,7 +55,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// with an ellipsis (it's given the panel width by the VBox). The char cap is
 	// only a sanity bound; the visual truncation is what keeps it tidy.
 	quote := widget.NewRichText(&widget.TextSegment{
-		Text: "“" + oneLinePreview(selectedText, 300) + "”",
+		Text: quotedOneLine(selectedText, 300),
 		Style: widget.RichTextStyle{
 			ColorName: colorNameMuted,
 			SizeName:  theme.SizeNameCaptionText,
@@ -384,6 +384,28 @@ func aiPanelSize(canvasSize fyne.Size) fyne.Size {
 		h = 240
 	}
 	return fyne.NewSize(w, h)
+}
+
+// quotedOneLine renders a selection as the single quoted line the AI sheets
+// show under their title.
+//
+// The line is wrapped in curly double marks — but a verse that OPENS a
+// quotation carries its own opening mark (Psalm 46:10 begins “Be still, and
+// know that I am God.), and wrapping that verbatim printed a doubled ““. Outer
+// double marks the selection already carries are dropped before the display
+// pair is added. Marks INSIDE the line are left alone: this is a preview of
+// what the reader highlighted, not the share pipeline, which nests them to
+// Bluebook depth (formatBibleQuote).
+func quotedOneLine(s string, maxRunes int) string {
+	return "“" + oneLinePreview(trimOuterDoubleQuotes(s), maxRunes) + "”"
+}
+
+// trimOuterDoubleQuotes strips double quotation marks (curly or straight) from
+// the very start and end of a selection. Single marks are deliberately left:
+// the display pair is a double, so a stray ‘ cannot double up — and a trailing
+// ’ is far more often a possessive ("the disciples’") than a quotation.
+func trimOuterDoubleQuotes(s string) string {
+	return strings.Trim(strings.TrimSpace(s), "“”\" \t\n")
 }
 
 // oneLinePreview collapses whitespace and truncates to a single short line.
