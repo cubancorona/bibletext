@@ -20,6 +20,7 @@ import (
 const (
 	selActionShareCite  = "share-cite"
 	selActionShareImage = "share-image"
+	selActionShareLink  = "share-link"
 	selActionCrossRef   = "crossref"
 )
 
@@ -38,9 +39,37 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 		shareVerse(state, text, false)
 	case selActionShareImage:
 		shareVerse(state, text, true)
+	case selActionShareLink:
+		shareVerseLink(state, text)
 	case selActionCrossRef:
 		showCrossRefs(state, text)
 	}
+}
+
+// shareVerseLink shares a link to the passage on the web reader
+// (bibletext.co.uk/read/…), so the recipient can read it — and keep reading —
+// without installing anything.
+//
+// The verse span comes from the SAME positional attribution the citation uses
+// (normalizeShareSelection), so the reference in the message and the verses the
+// page highlights can never disagree. It degrades in tiers rather than failing:
+// an unpinnable selection still shares the chapter, and a book with no slug
+// (impossible today, guarded by tests) falls back to the plain-text share.
+func shareVerseLink(state *AppState, text string) {
+	_, cite := prepareShareQuote(state, text)
+	version := state.currentVersion()
+	lo, hi := 0, 0
+	if _, l, h, ok := normalizeShareSelection(state, text); ok {
+		lo, hi = l, h
+	}
+	url := ShareLinkURL(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi)
+	if url == "" {
+		shareVerse(state, text, false) // no link possible — share the words instead
+		return
+	}
+	// Citation first, then the URL on its own line: messengers unfurl a link on
+	// its own line, and the reference still reads if the preview doesn't render.
+	nativeShareText(cite + " (" + version.Name + ")\n" + url)
 }
 
 // shareVerse formats the selection in Bluebook style (see formatBibleQuote /
