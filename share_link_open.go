@@ -131,6 +131,11 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	state.NoteMinimized = false
 	if t.Note != "" {
 		rememberIncomingNote(state, t)
+		// Platforms with a native sticker draw the note beside the passage; the
+		// rest fall back to a card, which is a real surface rather than nothing.
+		if !notePaneHasSticker() {
+			showSharedNote(state, t.Note)
+		}
 	}
 }
 
