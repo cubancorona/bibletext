@@ -54,13 +54,13 @@ func TestSelectionMenuMirrorsNativeLayout(t *testing.T) {
 			}
 		}
 	}
-	// The AI submenu carries the three study actions; Share carries all three
-	// forms — with citation, as image, and as a link to the web reader.
+	// The AI submenu carries the three study actions; Share carries all four
+	// forms — with citation, as image, as a link, and as a link with a note.
 	ai := m.Items[3]
 	if ai.ChildMenu == nil || len(ai.ChildMenu.Items) != 3 {
 		t.Fatalf("Study with AI submenu wrong: %+v", ai.ChildMenu)
 	}
-	if share := m.Items[4]; share.ChildMenu == nil || len(share.ChildMenu.Items) != 3 {
+	if share := m.Items[4]; share.ChildMenu == nil || len(share.ChildMenu.Items) != 4 {
 		t.Fatalf("Share submenu wrong: %+v", share.ChildMenu)
 	}
 
