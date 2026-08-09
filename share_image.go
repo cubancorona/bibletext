@@ -210,28 +210,46 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 
 	// verseText is already cleaned + quoted by shareVerse (formatBibleQuote): verse
 	// numbers stripped, and outer quotation marks added only when appropriate.
-	quoted := collapseSpaces(verseText)
+	// Authored POEM LINES arrive as "\n" and are structure, not wrapping — the
+	// reading pane and the text share both break there (verseIsPoetic /
+	// restoreShareLineBreaks), so a psalm must not be run together into a
+	// paragraph here either. Each poem line is wrapped on its own; prose is a
+	// single segment, so its layout is unchanged.
+	segments := poemSegments(verseText)
 	contentW := dim - 2*marginX
 	maxBlockH := dim - topInset - botInset
 
 	// Auto-size the verse: the largest size whose wrapped block fits.
+	wrapAll := func(f font.Face) []string {
+		var out []string
+		for _, seg := range segments {
+			out = append(out, wrapText(f, seg, contentW)...)
+		}
+		return out
+	}
 	var face font.Face
 	var lines []string
 	var lineH int
-	for pt := 66; pt >= 26; pt -= 2 {
+	for pt := 66; pt >= cardMinPt; pt -= 2 {
 		f := newFace(regular, float64(pt))
-		ls := wrapText(f, quoted, contentW)
+		ls := wrapAll(f)
 		lh := int(float64(pt) * 1.42)
 		if len(ls)*lh <= maxBlockH {
 			face, lines, lineH = f, ls, lh
 			break
 		}
 	}
-	if face == nil { // extremely long selection: use the smallest size
-		pt := 26
+	if face == nil {
+		// Longer than the card can hold even at the smallest readable size. The
+		// old code drew the full block anyway: it bled off the top AND bottom
+		// edges mid-word and the citation printed straight over the verse. Clamp
+		// to what fits and MARK the cut — an unmarked truncation would present a
+		// severed quotation as a whole one, which is the one thing this pipeline
+		// is careful never to do (see addEndOmission).
+		pt := cardMinPt
 		face = newFace(regular, float64(pt))
-		lines = wrapText(face, quoted, contentW)
 		lineH = int(float64(pt) * 1.42)
+		lines = clampLinesToCard(wrapAll(face), maxBlockH/lineH, face, contentW, verseText)
 	}
 
 	// Vertically centre the verse block in the content area.
@@ -372,4 +390,67 @@ func blend(a, b color.NRGBA, t float64) color.NRGBA {
 // collapseSpaces flattens runs of whitespace (incl. newlines) to single spaces.
 func collapseSpaces(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// cardMinPt is the smallest type the card will set. Below this the card stops
+// being a shareable image and becomes a wall — and a passage that long is past
+// what a square card can carry anyway, which is what clampLinesToCard handles.
+const cardMinPt = 20
+
+// clampLinesToCard trims a wrapped block to the lines that actually fit and
+// marks the cut with the Bluebook end-of-quote omission (Rule 5.3's spaced
+// ellipsis, four-dot form — never the single "…" glyph), restoring the closing
+// quotation mark the cut removed. It re-drops words until the marked final line
+// measures within the content width, so the mark can never itself overflow.
+func clampLinesToCard(lines []string, maxLines int, face font.Face, contentW int, original string) []string {
+	if maxLines < 1 {
+		maxLines = 1
+	}
+	if len(lines) <= maxLines {
+		return lines
+	}
+	closing := ""
+	if strings.HasSuffix(strings.TrimRight(original, " \t\n"), "”") {
+		closing = "”"
+	}
+	kept := append([]string(nil), lines[:maxLines]...)
+	last := kept[len(kept)-1]
+	for {
+		trimmed := strings.TrimRight(last, " \t")
+		// Don't stack the mark on punctuation the cut left dangling.
+		trimmed = strings.TrimRight(trimmed, "”’\"'")
+		trimmed = strings.TrimRight(trimmed, " ,;:.")
+		// The four-dot form, composed exactly as addEndOmission does it: the
+		// spaced ellipsis, a space, then the sentence's final punctuation.
+		candidate := trimmed + endOmissionEllipsis + " ." + closing
+		if trimmed == "" || font.MeasureString(face, candidate).Ceil() <= contentW {
+			kept[len(kept)-1] = candidate
+			return kept
+		}
+		// Too wide with the mark attached — give back a word and try again.
+		i := strings.LastIndexByte(trimmed, ' ')
+		if i <= 0 {
+			kept[len(kept)-1] = candidate
+			return kept
+		}
+		last = trimmed[:i]
+	}
+}
+
+// poemSegments splits a quote into the blocks that must start their own line on
+// the card: the authored poem lines. Whitespace WITHIN a line is still collapsed
+// (a line may have been wrapped in the source), and blank segments are dropped,
+// so prose — which carries no "\n" — yields exactly one segment and lays out
+// precisely as it always has.
+func poemSegments(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, "\n") {
+		if p := collapseSpaces(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
 }
