@@ -85,17 +85,46 @@
     b.style.left = (col.left + col.width / 2 + window.pageXOffset) + 'px';
   }
 
+  // Tapping a highlight offers what that highlight actually IS. A plain one is
+  // just a highlight, so it offers to clear it. One that belongs to a note is
+  // the note's highlight, so it offers the note's own two actions — the same
+  // pair the bubble carries, because "hide" and "delete" mean different things
+  // and the reader should not have to guess which a single control does.
   function showBubble() {
     hideBubble();
-    // A real <button>: natively tappable everywhere, and reachable by keyboard.
+    var bar = document.createElement('div');
+    bar.className = 'clearbar';
+
+    var noteText = currentNoteText();
+    if (noteText) {
+      bar.appendChild(barButton('Hide note', function () {
+        hideBubble(); minimizeNote(noteText);
+      }));
+      bar.appendChild(barButton('Delete note', function () {
+        hideBubble(); trashNote();
+      }));
+    } else {
+      bar.appendChild(barButton('Clear highlight', function () { clearHighlight(); }));
+    }
+
+    document.body.appendChild(bar);
+    positionBubble(bar);
+    bubble = bar;
+  }
+
+  function barButton(label, onTap) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'clearbub';
-    b.textContent = 'Clear highlight';
-    document.body.appendChild(b);
-    positionBubble(b);
-    bubble = b;
+    b.textContent = label;
+    b.addEventListener('click', function (e) { e.preventDefault(); onTap(); });
+    return b;
   }
+
+  // The note this page is currently showing, if any — the bubble and the
+  // minimized marker both count, because both mean "there is a note here".
+  var activeNoteText = '';
+  function currentNoteText() { return activeNoteText; }
 
   // The text reflows on rotation or a window resize, so the line the bubble was
   // pinned under moves. Re-pin rather than leave it stranded.
@@ -150,7 +179,10 @@
     // The bubble is handled HERE rather than by its own click handler: on the
     // pointerup path this listener runs first and would remove the button
     // before any click of its own could fire.
-    if (t.closest('.clearbub')) { e.preventDefault(); clearHighlight(); return; }
+    // The bar's buttons carry their own handlers; this listener runs first on
+    // the pointerup path and would otherwise remove them before a click landed,
+    // so let the tap through and stop here.
+    if (t.closest('.clearbar')) { return; }
     if (!highlighted()) { hideBubble(); return; }
     if (wasDrag(e)) return;                       // a selection, not a tap
     var link = t.closest('a');
@@ -375,6 +407,10 @@
 
   var noteBox = null, noteChip = null;
 
+  var ICON_MINIMIZE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.75h10a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0 0 1.5z"/></svg>';
+  var ICON_TRASH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 1.75a.75.75 0 0 0-.75.75V3H3a.75.75 0 0 0 0 1.5h.4l.62 8.06A1.75 1.75 0 0 0 5.77 14h4.46a1.75 1.75 0 0 0 1.75-1.44l.62-8.06H13A.75.75 0 0 0 13 3h-2.75v-.5a.75.75 0 0 0-.75-.75h-3zm.75 1.25h1.5V3h-1.5v-.0zM5.9 4.5h4.2l-.6 7.9a.25.25 0 0 1-.25.1H6.75a.25.25 0 0 1-.25-.1L5.9 4.5z"/></svg>';
+  var ICON_NOTE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.75A1.75 1.75 0 0 1 4.75 1h6.5A1.75 1.75 0 0 1 13 2.75v10.5A1.75 1.75 0 0 1 11.25 15h-6.5A1.75 1.75 0 0 1 3 13.25V2.75zM5.5 4.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3z"/></svg>';
+
   function showNote(text) {
     hideNote();
     var wrap = document.querySelector('.wrap');
@@ -382,35 +418,88 @@
 
     var box = document.createElement('aside');
     box.className = 'note';
+
     var who = document.createElement('p');
     who.className = 'notewho';
     who.textContent = 'Note from Friend';   // a person, never "from BibleText"
+
     var body = document.createElement('p');
     body.className = 'notetext';
     body.textContent = text;                             // TEXT, never markup
-    var x = document.createElement('button');
-    x.type = 'button';
-    x.className = 'notex';
-    x.setAttribute('aria-label', 'Dismiss note');
-    x.textContent = '×';
-    x.addEventListener('click', function (e) { e.preventDefault(); hideNote(); showChip(text); });
-    box.appendChild(x); box.appendChild(who); box.appendChild(body);
+
+    // Two controls, and the difference between them is the whole point:
+    // MINIMIZE is reversible and takes the highlight down with the note, so the
+    // reader can see the passage plainly and bring the message back. TRASH is
+    // the one that throws it away.
+    var tools = document.createElement('div');
+    tools.className = 'notetools';
+    tools.appendChild(noteButton('Minimize note', ICON_MINIMIZE, function () {
+      minimizeNote(text);
+    }));
+    tools.appendChild(noteButton('Delete note', ICON_TRASH, function () {
+      trashNote();
+    }));
+
+    box.appendChild(tools); box.appendChild(who); box.appendChild(body);
     anchorToPassage(box);
     noteBox = box;
+    activeNoteText = text;
     rescrollToHighlight();
   }
 
-  // Dismissing collapses the note to a small marker rather than destroying it —
-  // an accidental tap should not lose someone's message.
-  function showChip(text) {
+  function noteButton(label, svg, onTap) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'notebtn';
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.innerHTML = svg;                 // our own markup, never the note's
+    b.addEventListener('click', function (e) { e.preventDefault(); onTap(); });
+    return b;
+  }
+
+  // Minimize: the note collapses to a marker AND the highlight comes down with
+  // it, so the reader gets the passage as it would normally read. Nothing is
+  // lost — the fragment still carries both, so this survives a reload and the
+  // marker puts everything back.
+  function minimizeNote(text) {
     hideNote();
+    suppressHighlight(true);
     var chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'notechip';
-    chip.textContent = 'Show note';
-    chip.addEventListener('click', function (e) { e.preventDefault(); showNote(text); });
+    chip.setAttribute('aria-label', 'Show note');
+    chip.innerHTML = ICON_NOTE + '<span>Note</span>';
+    chip.addEventListener('click', function (e) {
+      e.preventDefault();
+      suppressHighlight(false);
+      showNote(text);
+    });
     anchorToPassage(chip);
     noteChip = chip;
+    activeNoteText = text;
+  }
+
+  // Trash: the note and the highlight both go, and the fragment goes with them
+  // so a reload does not resurrect what the reader threw away.
+  function trashNote() {
+    activeNoteText = '';
+    hideNote();
+    suppressHighlight(true);
+    history.replaceState(null, '', location.pathname + location.search);
+    carryVerse();
+  }
+
+  // Hide or restore the highlight without touching the URL, so minimize is
+  // reversible. The nohl flag is what beats the bare CSS :target rule.
+  function suppressHighlight(off) {
+    if (off) {
+      document.documentElement.classList.add('nohl');
+      document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
+    } else {
+      document.documentElement.classList.remove('nohl');
+      highlightRange();
+    }
   }
 
   function hideNote() {

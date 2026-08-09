@@ -268,11 +268,16 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    also what makes iOS Safari treat a bare <span> as tappable at all. */
 .v:target,.v.hl{cursor:pointer; -webkit-tap-highlight-color:transparent}
 /* Sits just under the highlighted text, centred on the column — so it points at
-   what it will clear without covering it. Absolute (document coordinates), so
-   it travels with the passage as the reader scrolls; reader.js sets top/left
-   from the last line of the highlight. */
-.clearbub{
+   what it offers without covering it. Absolute (document coordinates), so it
+   travels with the passage as the reader scrolls; reader.js sets top/left from
+   the last line of the highlight. It holds ONE button for a plain highlight and
+   TWO when the highlight belongs to a note, because "hide" and "delete" are
+   different enough that a reader should not have to guess. */
+.clearbar{
   position:absolute; z-index:15; transform:translateX(-50%);
+  display:flex; gap:.4rem;
+}
+.clearbub{
   background:var(--surface); color:var(--accent);
   border:1px solid var(--border); border-radius:999px;
   padding:.4rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;
@@ -315,19 +320,25 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 /* The note itself is set in the CHROME face, not the scripture serif: it is
    somebody's message, and it must never be mistaken for the text. */
 .notetext{margin:0; font-size:.95rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere}
-.notex{
-  position:absolute; top:.35rem; right:.4rem; background:none; border:0;
-  padding:.15rem .35rem; cursor:pointer; color:var(--muted);
-  font-size:1.2rem; line-height:1; font-family:var(--ui);
+/* Minimize and delete, in that order: the reversible one first, so the
+   destructive one is never the one a thumb reaches by accident. */
+.notetools{position:absolute; top:.3rem; right:.35rem; display:flex; gap:.1rem}
+.notebtn{
+  background:none; border:0; padding:.3rem; cursor:pointer; color:var(--muted);
+  line-height:0; border-radius:6px;
 }
-.notex:hover{color:var(--text)}
+.notebtn svg{width:15px; height:15px; fill:currentColor; display:block}
+.notebtn:hover{color:var(--accent); background:var(--hl)}
+/* The minimized marker. Small and quiet, but unmistakably a thing to press:
+   the note is still there and the reader has to be able to find it again. */
 .notechip{
-  display:inline-flex; align-items:center; margin:1.1rem 0;
+  display:inline-flex; align-items:center; gap:.35rem; margin:1.1rem 0;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
-  padding:.25rem .8rem; font-size:.75rem; font-family:var(--ui);
-  color:var(--muted); cursor:pointer;
+  padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
+  color:var(--muted); cursor:pointer; line-height:1.2;
 }
+.notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
