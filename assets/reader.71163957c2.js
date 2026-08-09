@@ -512,10 +512,20 @@
   // top of the chapter. Two reasons: it can never cover the words it is about,
   // and a reader arriving on a shared link lands mid-chapter at their verse, so
   // a note parked at the top of the page is a note they never see.
+  // The paragraph the note belongs to, remembered the first time we can see it.
+  // It has to be remembered: minimizing CLEARS the highlight, so by the time the
+  // marker is placed there is no .v.hl left to anchor to and the marker would
+  // jump to the top of the chapter — which is exactly what it did.
+  var noteAnchorPara = null;
+
   function anchorToPassage(el) {
     var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
-    var para = lit && lit.closest ? lit.closest('p') : null;
-    if (para && para.parentNode) { para.parentNode.insertBefore(el, para); return; }
+    var para = (lit && lit.closest ? lit.closest('p') : null) || noteAnchorPara;
+    if (para && para.parentNode) {
+      noteAnchorPara = para;
+      para.parentNode.insertBefore(el, para);
+      return;
+    }
     var text = document.querySelector('.text');
     if (text && text.parentNode) text.parentNode.insertBefore(el, text);
     else document.querySelector('.wrap').appendChild(el);
