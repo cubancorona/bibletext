@@ -327,6 +327,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    words in front of them are the Bible or a stranger's message. */
 .note{
   position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
+  scroll-margin-top:1.2rem;
   background:var(--surface); border:1px solid var(--border);
   border-left:3px solid var(--accent); border-radius:10px;
   font-family:var(--ui); font-size:1rem; line-height:1.5;
@@ -361,6 +362,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    the note is still there and the reader has to be able to find it again. */
 .notechip{
   display:inline-flex; align-items:center; gap:.35rem; margin:1.1rem 0;
+  scroll-margin-top:1.2rem;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
   padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
@@ -923,8 +925,20 @@ const readerJSTemplate = `
   }
 
   // Inserting the note pushes the passage down, so whatever scroll brought the
-  // reader to their verse is now pointing at the wrong place. Put it back.
+  // reader to their verse is now pointing at the wrong place. Put it back — and
+  // when there IS a note, land on the NOTE rather than the verse.
+  //
+  // That matters more than it sounds. The note is anchored to the top of the
+  // paragraph holding the verse, and a paragraph can be long: a note on John
+  // 11:35 sits with verse 30, some 570px above the verse, so centring the verse
+  // scrolled the message clean off the top of the screen. The note is the reason
+  // the link was sent, so it is what the reader should arrive at; the passage
+  // follows immediately under it.
   function rescrollToHighlight() {
+    if (noteBox || noteChip) {
+      (noteBox || noteChip).scrollIntoView({ block: 'start' });
+      return;
+    }
     var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
     if (lit) lit.scrollIntoView({ block: 'center' });
   }
