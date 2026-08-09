@@ -40,6 +40,7 @@ extern void bibleTextHighlightCleared(void);
 // note and takes its highlight down with it, delete throws both away.
 extern void bibleTextNoteHidden(void);
 extern void bibleTextNoteDeleted(void);
+extern void bibleTextNoteRestored(void);
 
 // Whether the highlight on screen belongs to a shared note. Declared up here
 // because the tap menu below is the first thing that reads it; Go sets it on
@@ -299,6 +300,12 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 // Single tap -> if it landed on the highlighted wash, present "Clear highlight" at
 // the tap point. Otherwise do nothing (an outside tap also auto-dismisses any menu
 // already up — that's the tap-away behaviour, free from UIKit).
+// The sticker's controls. They target the text view because it is the sticker's
+// superview and already a full ObjC class here — no extra target object to own.
+- (void)btNoteHide:(id)sender    { bibleTextNoteHidden(); }
+- (void)btNoteDelete:(id)sender  { bibleTextNoteDeleted(); }
+- (void)btNoteRestore:(id)sender { bibleTextNoteRestored(); }
+
 - (void)btHighlightTap:(UITapGestureRecognizer *)g {
     if (g.state != UIGestureRecognizerStateEnded) return;
     if (gReadingHighlightRange.location == NSNotFound || gReadingHighlightRange.length == 0) return;
@@ -508,6 +515,219 @@ static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
 // before the next verse's), so each tick can clear the previous verse cheaply.
 static NSRange  gReadAlongRange = {NSNotFound, 0};
 static UIColor *gReadAlongColor = nil;
+
+// --- The shared-note sticker ------------------------------------------------
+// A note that arrived on a shared link is drawn as a real UIView floating over
+// the reading pane, in a band the TEXT ITSELF reserves.
+//
+// WHY NOT HTML. The NSAttributedString importer drops border, border-radius,
+// padding, box-shadow and every margin on a div (measured on iOS 26.5), so the
+// web reader's bubble markup would arrive as a background-tinted, borderless
+// run of text. It would also join the text storage, where it would be
+// selectable, copyable into "Share with citation", and visible to
+// btIOSBuildVerseIndex's font-size scan for verse numbers.
+//
+// WHY NOT A FYNE WIDGET. This UITextView floats above the whole Fyne canvas, so
+// a Fyne bubble renders BEHIND the scripture.
+//
+// WHY paragraphSpacingBefore RATHER THAN AN EXCLUSION PATH. An exclusion path
+// needs the paragraph's rect to place it, but adding it re-lays-out the text and
+// moves that paragraph — a feedback loop you have to iterate out of.
+// paragraphSpacingBefore is part of the paragraph's own metrics, so layout
+// converges in ONE pass and the sticker's frame is a consequence of layout
+// rather than an input to it. The view scrolls for free because it is a subview
+// of the text view, which IS a scroll view: its frame is in content coordinates.
+static UIView   *gNoteView = nil;      // the bubble, or the collapsed chip
+static NSString *gNoteText = nil;
+static BOOL      gNoteMinimized = NO;
+static CGFloat   gNoteBandH = 0;       // what we reserved, in points
+static CGFloat   gNoteBg[3]     = {0.99, 0.98, 0.97};
+static CGFloat   gNoteFg[3]     = {0.15, 0.13, 0.11};
+static CGFloat   gNoteMuted[3]  = {0.42, 0.39, 0.34};
+static CGFloat   gNoteAccent[3] = {0.18, 0.30, 0.53};
+static CGFloat   gNoteBorder[3] = {0.74, 0.70, 0.62};
+
+static UIColor *btNoteColor(CGFloat c[3]) {
+    return [UIColor colorWithRed:c[0] green:c[1] blue:c[2] alpha:1.0];
+}
+
+// The note the pane should draw, pushed from Go on every chapter render (so a
+// light/dark flip restyles it and a navigation replaces it).
+void bibleTextSetNote(const char *text, int minimized,
+                      double bgR, double bgG, double bgB,
+                      double fgR, double fgG, double fgB,
+                      double muR, double muG, double muB,
+                      double acR, double acG, double acB,
+                      double boR, double boG, double boB) {
+    NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gNoteText = t;
+        gNoteMinimized = minimized ? YES : NO;
+        gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
+        gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
+        gNoteMuted[0]=muR; gNoteMuted[1]=muG; gNoteMuted[2]=muB;
+        gNoteAccent[0]=acR; gNoteAccent[1]=acG; gNoteAccent[2]=acB;
+        gNoteBorder[0]=boR; gNoteBorder[1]=boG; gNoteBorder[2]=boB;
+    });
+}
+
+static UIFont *btNoteBodyFont(void) { return [UIFont systemFontOfSize:15]; }
+static UIFont *btNoteWhoFont(void)  { return [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]; }
+
+static const CGFloat kNotePad = 12, kNoteGap = 10, kNoteBtn = 30;
+
+// How tall the sticker needs to be at this width. Measured BEFORE the band is
+// reserved, because the band's height is this number — that ordering is the
+// whole trick.
+static CGFloat btIOSNoteHeightForWidth(CGFloat w) {
+    if (gNoteText == nil) return 0;
+    if (gNoteMinimized) return kNoteBtn;      // the collapsed chip
+    CGFloat inner = w - 2 * kNotePad;
+    if (inner < 40) inner = 40;
+    CGRect r = [gNoteText boundingRectWithSize:CGSizeMake(inner, CGFLOAT_MAX)
+                                       options:(NSStringDrawingUsesLineFragmentOrigin |
+                                                NSStringDrawingUsesFontLeading)
+                                    attributes:@{NSFontAttributeName: btNoteBodyFont()}
+                                       context:nil];
+    return kNotePad + 14 + 4 + ceil(r.size.height) + kNotePad;
+}
+
+// Reserve the band by growing the paragraph that holds the highlight. Must run
+// AFTER the pass that zeroes paragraphSpacingBefore across the whole string
+// (that pass exists to kill a phantom band the importer injects before verse 1)
+// or the reservation is wiped on every render.
+static void btIOSReserveNoteBand(NSMutableAttributedString *mas) {
+    gNoteBandH = 0;
+    if (gNoteText == nil || mas.length == 0) return;
+    if (gReadingTV == nil) return;
+
+    CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
+    CGFloat h = btIOSNoteHeightForWidth(w);
+    if (h <= 0) return;
+    gNoteBandH = h + kNoteGap;
+
+    // The paragraph the note belongs to: the one holding the highlight, or the
+    // first paragraph when the note names no verse.
+    NSRange anchor = gReadingHighlightRange;
+    if (anchor.location == NSNotFound || NSMaxRange(anchor) > mas.length) anchor = NSMakeRange(0, 0);
+    NSRange para = [mas.string paragraphRangeForRange:anchor];
+    if (para.location == NSNotFound || NSMaxRange(para) > mas.length) return;
+
+    NSParagraphStyle *base = [mas attribute:NSParagraphStyleAttributeName atIndex:para.location
+                             effectiveRange:NULL];
+    NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
+    ps.paragraphSpacingBefore = gNoteBandH;
+    [mas addAttribute:NSParagraphStyleAttributeName value:ps range:para];
+}
+
+// Build (or rebuild) the sticker's subviews for the current note and palette.
+static void btIOSEnsureNoteView(void) {
+    if (gNoteView) { [gNoteView removeFromSuperview]; gNoteView = nil; }
+    if (gNoteText == nil || gReadingTV == nil) return;
+
+    UIView *box = [[UIView alloc] initWithFrame:CGRectZero];
+    box.backgroundColor = btNoteColor(gNoteBg);
+    box.layer.borderColor = btNoteColor(gNoteBorder).CGColor;
+    box.layer.borderWidth = 1;
+    box.layer.cornerRadius = gNoteMinimized ? kNoteBtn / 2 : 10;
+    box.clipsToBounds = YES;
+
+    if (gNoteMinimized) {
+        // The collapsed marker: small, quiet, and obviously a thing to press.
+        UIButton *chip = [UIButton buttonWithType:UIButtonTypeSystem];
+        [chip setTitle:@"  Note  " forState:UIControlStateNormal];
+        [chip setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+        chip.titleLabel.font = btNoteWhoFont();
+        [chip addTarget:gReadingTV action:@selector(btNoteRestore:)
+       forControlEvents:UIControlEventTouchUpInside];
+        chip.tag = 901;
+        [box addSubview:chip];
+    } else {
+        UILabel *who = [[UILabel alloc] initWithFrame:CGRectZero];
+        who.text = @"Note from Friend";     // a person, never "from BibleText"
+        who.font = btNoteWhoFont();
+        who.textColor = btNoteColor(gNoteMuted);
+        who.tag = 902;
+        [box addSubview:who];
+
+        UILabel *body = [[UILabel alloc] initWithFrame:CGRectZero];
+        body.text = gNoteText;              // TEXT — nothing here parses markup
+        body.font = btNoteBodyFont();
+        body.textColor = btNoteColor(gNoteFg);
+        body.numberOfLines = 0;
+        body.tag = 903;
+        [box addSubview:body];
+
+        // Minimize first, delete second: the destructive one is never what a
+        // thumb reaches by accident.
+        UIButton *hide = [UIButton buttonWithType:UIButtonTypeSystem];
+        [hide setTitle:@"–" forState:UIControlStateNormal];   // en dash
+        [hide setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+        hide.titleLabel.font = [UIFont systemFontOfSize:20 weight:UIFontWeightMedium];
+        [hide addTarget:gReadingTV action:@selector(btNoteHide:)
+       forControlEvents:UIControlEventTouchUpInside];
+        hide.tag = 904;
+        [box addSubview:hide];
+
+        UIButton *del = [UIButton buttonWithType:UIButtonTypeSystem];
+        [del setTitle:@"✕" forState:UIControlStateNormal];    // multiplication x
+        [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+        del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+        [del addTarget:gReadingTV action:@selector(btNoteDelete:)
+      forControlEvents:UIControlEventTouchUpInside];
+        del.tag = 905;
+        [box addSubview:del];
+    }
+
+    // A subview of the TEXT VIEW, not its window: a UITextView is a scroll view,
+    // so this frame is in content coordinates and the sticker scrolls with the
+    // passage for free. Re-layout is the only thing that has to move it.
+    [gReadingTV addSubview:box];
+    gNoteView = box;
+}
+
+// Put the sticker in the band the text reserved. Runs after every layout.
+static void btIOSLayoutNote(void) {
+    if (gNoteView == nil || gReadingTV == nil || gNoteText == nil) return;
+    NSLayoutManager *lm = gReadingTV.layoutManager;
+    NSTextContainer *tc = gReadingTV.textContainer;
+    if (lm == nil || tc == nil) return;
+
+    NSRange anchor = gReadingHighlightRange;
+    if (anchor.location == NSNotFound || NSMaxRange(anchor) > gReadingTV.textStorage.length) {
+        anchor = NSMakeRange(0, 0);
+    }
+    NSRange para = [gReadingTV.textStorage.string paragraphRangeForRange:anchor];
+    NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+    if (g.length == 0) return;
+
+    // The FRAGMENT rect includes the spacing we reserved; the USED rect is where
+    // the text actually starts. The difference is the parking spot.
+    CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
+    CGFloat pad = tc.lineFragmentPadding;
+    CGFloat w = tc.size.width - 2 * pad;
+    CGFloat h = btIOSNoteHeightForWidth(w);
+    CGFloat x = gReadingTV.textContainerInset.left + pad;
+    CGFloat y = frag.origin.y + gReadingTV.textContainerInset.top;
+
+    if (gNoteMinimized) {
+        CGFloat cw = 86;
+        gNoteView.frame = CGRectMake(x, y, cw, kNoteBtn);
+        UIView *chip = [gNoteView viewWithTag:901];
+        chip.frame = gNoteView.bounds;
+        return;
+    }
+
+    gNoteView.frame = CGRectMake(x, y, w, h);
+    UILabel  *who  = (UILabel *)[gNoteView viewWithTag:902];
+    UILabel  *body = (UILabel *)[gNoteView viewWithTag:903];
+    UIButton *hide = (UIButton *)[gNoteView viewWithTag:904];
+    UIButton *del  = (UIButton *)[gNoteView viewWithTag:905];
+    who.frame  = CGRectMake(kNotePad, kNotePad - 2, w - 2 * kNotePad - 2 * kNoteBtn, 14);
+    body.frame = CGRectMake(kNotePad, kNotePad + 14 + 4, w - 2 * kNotePad, h - kNotePad - 14 - 4 - kNotePad);
+    hide.frame = CGRectMake(w - 2 * kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
+    del.frame  = CGRectMake(w - kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
+}
 
 // --- Floating "Follow narration" button -------------------------------------
 // A semi-transparent pill floated bottom-centre over the reading pane while the
@@ -926,6 +1146,9 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // verse is highlighted; during ordinary reading they're off the touch path
     // entirely, so they add nothing to scrolling.
     btIOSSetHighlightUIEnabled(gReadingHighlightRange.location != NSNotFound);
+    // Carve the parking spot BEFORE the text reaches the view, so layout settles
+    // once with the band already in it rather than twice.
+    btIOSReserveNoteBand(mas);
     gReadingTV.attributedText = as;
     // Re-assert the opaque paper background: assigning attributedText (HTML import)
     // can revert the view toward clearColor/non-opaque, which brings back the
@@ -937,6 +1160,10 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     }
     btIOSApplyReadingBG();
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
+    // The sticker is rebuilt per render (text, palette and minimized state all
+    // arrive from Go) and then placed into the band the layout just produced.
+    btIOSEnsureNoteView();
+    btIOSLayoutNote();
     // New text: the prior chapter's initial-touch is no longer valid, and the fresh
     // attributed string carries the original verse-number colours (the marker is not
     // applied to it yet). Reset both, then (re-)apply the marker if one is intended —
@@ -1058,6 +1285,7 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         gReadingTV.frame = r;
         btIOSApplyInsets(r.size.width); // reporter column re-centres on width change
         btIOSLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
+        btIOSLayoutNote();      // and the sticker to the band the text reserved
         // Only re-resolve the scroll position when a highlight (search jump) or a
         // pending restore is armed: those were computed at the old width and must be
         // re-placed after the rewrap. Without a target, bibleTextScrollReadingTV
@@ -1565,6 +1793,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		hasNote = 1
 	}
 	C.bibleTextSetHasNote(C.int(hasNote))
+	pushNoteToPane(state)
 
 	// Keep the native reporter column in sync with the text-size setting (the
 	// measure is em-based, so Large/XL widen the column and keep the line's
@@ -1652,6 +1881,28 @@ func armReadingRestore(verse int, delta, frac float64) {
 func captureLastTouch() (verse int, delta float64, ok bool) {
 	t := C.bibleTextTVCaptureTouch()
 	return int(t.verse), float64(t.delta), t.ok != 0
+}
+
+// pushNoteToPane hands the native sticker its text, its collapsed state and the
+// live palette. Called on every chapter render, so a light/dark flip restyles
+// it and a navigation replaces it — the same cadence as the follow pill.
+func pushNoteToPane(state *AppState) {
+	pal := state.pal()
+	cText := C.CString(state.ActiveNote)
+	defer C.free(unsafe.Pointer(cText))
+	min := C.int(0)
+	if state.NoteMinimized {
+		min = 1
+	}
+	f := func(c color.NRGBA) (C.double, C.double, C.double) {
+		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
+	}
+	bgR, bgG, bgB := f(pal.SurfaceAlt)
+	fgR, fgG, fgB := f(pal.Text)
+	muR, muG, muB := f(pal.TextMuted)
+	acR, acG, acB := f(pal.Accent)
+	boR, boG, boB := f(pal.Border)
+	C.bibleTextSetNote(cText, min, bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {
