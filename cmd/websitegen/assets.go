@@ -315,11 +315,20 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    line and the quoted, off-palette card is that a reader can tell at a glance
    that a person wrote this, not the app. A note that could pass for our own
    voice would be a phishing surface on our own domain. */
+/* Anchoring the note beside its passage puts it INSIDE .text, so it would
+   otherwise inherit the scripture face, its justification, its 21px, and the
+   reporter first-line indent — i.e. it would look like scripture. Everything
+   here is an explicit reset: a reader must never have to work out whether the
+   words in front of them are the Bible or a stranger's message. */
 .note{
-  position:relative; margin:1.1rem 0 0; padding:.85rem 2.2rem .9rem 1rem;
+  position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
   background:var(--surface); border:1px solid var(--border);
   border-left:3px solid var(--accent); border-radius:10px;
+  font-family:var(--ui); font-size:1rem; line-height:1.5;
+  letter-spacing:normal; text-align:left; text-indent:0;
+  font-feature-settings:normal;
 }
+.note p{margin:0; text-align:left; text-indent:0; hyphens:none}
 /* The tail, which is what makes it read as somebody speaking. */
 .note::after{
   content:""; position:absolute; left:1.6rem; bottom:-9px;
@@ -341,7 +350,8 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 }
 .notex:hover{color:var(--text)}
 .notechip{
-  display:inline-flex; align-items:center; margin:1.1rem 0 0;
+  display:inline-flex; align-items:center; margin:1.1rem 0;
+  letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
   padding:.25rem .8rem; font-size:.75rem; font-family:var(--ui);
   color:var(--muted); cursor:pointer;
@@ -767,6 +777,7 @@ const readerJSTemplate = `
     box.appendChild(x); box.appendChild(who); box.appendChild(body);
     anchorToPassage(box);
     noteBox = box;
+    rescrollToHighlight();
   }
 
   // Dismissing collapses the note to a small marker rather than destroying it —
@@ -787,13 +798,25 @@ const readerJSTemplate = `
     if (noteChip) { noteChip.remove(); noteChip = null; }
   }
 
-  // The note belongs to the passage, so it sits directly above the chapter text
-  // rather than floating: it must never cover the words it is about, and it has
-  // to survive scrolling and reflow without any JavaScript following the page.
+  // The note belongs to the passage, so it goes into the FLOW immediately above
+  // the paragraph holding the highlighted verse — not floating, and not at the
+  // top of the chapter. Two reasons: it can never cover the words it is about,
+  // and a reader arriving on a shared link lands mid-chapter at their verse, so
+  // a note parked at the top of the page is a note they never see.
   function anchorToPassage(el) {
+    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+    var para = lit && lit.closest ? lit.closest('p') : null;
+    if (para && para.parentNode) { para.parentNode.insertBefore(el, para); return; }
     var text = document.querySelector('.text');
     if (text && text.parentNode) text.parentNode.insertBefore(el, text);
     else document.querySelector('.wrap').appendChild(el);
+  }
+
+  // Inserting the note pushes the passage down, so whatever scroll brought the
+  // reader to their verse is now pointing at the wrong place. Put it back.
+  function rescrollToHighlight() {
+    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+    if (lit) lit.scrollIntoView({ block: 'center' });
   }
 
   function renderNote() {
