@@ -13,31 +13,31 @@ func TestParseShareLink(t *testing.T) {
 		ok        bool
 	}{
 		{name: "canonical single verse", url: "https://bibletext.co.uk/web/john/3/#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
 		{name: "canonical range", url: "https://bibletext.co.uk/web/john/3/#v16-18",
-			want: ShareTarget{"web", "John", 3, 16, 18}, ok: true},
+			want: ShareTarget{"web", "John", 3, 16, 18, ""}, ok: true},
 		{name: "chapter only", url: "https://bibletext.co.uk/bsb/psalms/23/",
-			want: ShareTarget{"bsb", "Psalms", 23, 0, 0}, ok: true},
+			want: ShareTarget{"bsb", "Psalms", 23, 0, 0, ""}, ok: true},
 		{name: "no trailing slash", url: "https://bibletext.co.uk/web/john/3#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
 		{name: "query alias", url: "https://bibletext.co.uk/web/john/3/?v=16-18",
-			want: ShareTarget{"web", "John", 3, 16, 18}, ok: true},
+			want: ShareTarget{"web", "John", 3, 16, 18, ""}, ok: true},
 		{name: "http and www", url: "http://www.bibletext.co.uk/web/john/3/#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
 		{name: "hand-typed capitals", url: "https://BibleText.co.uk/WEB/John/3/#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
 		{name: "numbered book", url: "https://bibletext.co.uk/web/1-corinthians/13/#v4-7",
-			want: ShareTarget{"web", "1 Corinthians", 13, 4, 7}, ok: true},
+			want: ShareTarget{"web", "1 Corinthians", 13, 4, 7, ""}, ok: true},
 		{name: "deuterocanon", url: "https://bibletext.co.uk/webc/1-maccabees/2/#v19-22",
-			want: ShareTarget{"webc", "1 Maccabees", 2, 19, 22}, ok: true},
+			want: ShareTarget{"webc", "1 Maccabees", 2, 19, 22, ""}, ok: true},
 
 		// Forgiving: a mangled verse payload still lands on the right chapter.
 		{name: "backwards range keeps the first verse", url: "https://bibletext.co.uk/web/john/3/#v18-16",
-			want: ShareTarget{"web", "John", 3, 18, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 18, 0, ""}, ok: true},
 		{name: "garbage fragment ignored", url: "https://bibletext.co.uk/web/john/3/#vfoo",
-			want: ShareTarget{"web", "John", 3, 0, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 0, 0, ""}, ok: true},
 		{name: "zero verse ignored", url: "https://bibletext.co.uk/web/john/3/#v0",
-			want: ShareTarget{"web", "John", 3, 0, 0}, ok: true},
+			want: ShareTarget{"web", "John", 3, 0, 0, ""}, ok: true},
 
 		// NOT ours, or not a passage — these must stay in the browser. The
 		// privacy and support pages are the URLs App Store Connect points at;

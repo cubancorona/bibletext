@@ -283,8 +283,10 @@ func (r *styledPaneRenderer) rebuild() {
 func (r *styledPaneRenderer) runColor(dr styledDrawRun) color.Color {
 	p := r.pane
 	switch {
+	case dr.HL && dr.Red && dr.Kind == runWord:
+		return p.pal.RedLetter // the band highlights it; the red still means something
 	case dr.HL:
-		return p.pal.HighlightText
+		return p.pal.Text
 	case dr.Red && dr.Kind == runWord:
 		return p.pal.RedLetter
 	case dr.Kind == runVerseNum:

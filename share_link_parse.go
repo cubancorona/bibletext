@@ -25,6 +25,14 @@ type ShareTarget struct {
 	Chapter   int    // >= 1
 	VerseLo   int    // 0 when the link names no verse (a chapter link)
 	VerseHi   int    // 0 or == VerseLo for a single verse
+
+	// Note is the sender's message, already decoded and normalized, or "" when
+	// the link carries none or carries one we could not read.
+	//
+	// IT IS UNTRUSTED TEXT: anyone can write a link. Render it as TEXT, never as
+	// markup, and never styled as if BibleText said it — see
+	// docs/SHARED_NOTES.md → Security.
+	Note string
 }
 
 // ParseShareLink parses a BibleText web-reader URL into the passage it names.
@@ -85,7 +93,24 @@ func ParseShareLink(raw string) (ShareTarget, bool) {
 	}
 
 	lo, hi := parseVersePayload(frag, query)
-	return ShareTarget{VersionID: version, Book: book, Chapter: chapter, VerseLo: lo, VerseHi: hi}, true
+	note, _ := DecodeNote(fragmentKey(frag, "n"))
+	return ShareTarget{
+		VersionID: version, Book: book, Chapter: chapter,
+		VerseLo: lo, VerseHi: hi, Note: note,
+	}, true
+}
+
+// fragmentKey reads one key out of the fragment's "&"-separated key list,
+// returning "" when it is absent. Keys we do not recognise are simply not asked
+// for, which is how the grammar stays open: a link written by a future version
+// still parses for everything this version does understand.
+func fragmentKey(frag, key string) string {
+	for _, kv := range strings.Split(frag, "&") {
+		if v, found := strings.CutPrefix(strings.TrimSpace(kv), key+"="); found {
+			return v
+		}
+	}
+	return ""
 }
 
 const shareLinkHost = "bibletext.co.uk"
@@ -93,11 +118,28 @@ const shareLinkHost = "bibletext.co.uk"
 // parseVersePayload reads the verse span from the fragment ("v16", "v16-18")
 // or, failing that, the ?v= alias ("16-18"). Anything unparseable yields no
 // verse rather than an error: the chapter is still the right place to land.
+//
+// The fragment is a key list, so the verse is whatever sits before the first
+// "&" — everything after it belongs to other keys (the note, and whatever is
+// added later). Taking only the first field is what makes an unknown key
+// harmless here rather than something that swallows the verse.
 func parseVersePayload(frag, query string) (lo, hi int) {
-	payload := strings.TrimPrefix(strings.TrimSpace(frag), "v")
-	if payload == "" || payload == frag {
-		// No "v" prefix in the fragment — try the query alias.
-		payload = ""
+	if i := strings.IndexByte(frag, '&'); i >= 0 {
+		frag = frag[:i]
+	}
+	frag = strings.TrimSpace(frag)
+
+	// The verse key, in either spelling: the bare "v16" the reader emits, or the
+	// explicit "v=16" the key grammar implies.
+	var payload string
+	switch {
+	case strings.HasPrefix(frag, "v="):
+		payload = frag[len("v="):]
+	case strings.HasPrefix(frag, "v"):
+		payload = frag[len("v"):]
+	}
+	if payload == "" {
+		// No verse in the fragment — try the ?v= alias.
 		for _, kv := range strings.Split(query, "&") {
 			if v, found := strings.CutPrefix(kv, "v="); found {
 				payload = strings.TrimPrefix(strings.TrimSpace(v), "v")
