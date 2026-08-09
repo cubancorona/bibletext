@@ -13,9 +13,11 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/font"
 )
 
 func TestShareTypefacesAllParse(t *testing.T) {
@@ -96,4 +98,59 @@ func writeContactSheet(paths []string, out string) error {
 	}
 	defer f.Close()
 	return png.Encode(f, sheet)
+}
+
+// TestCardNeverOverflowsItsBlock pins the invariant the old size loop broke: a
+// selection longer than the card can hold was drawn at the floor size ANYWAY,
+// so it bled off both edges and the citation overprinted the verse. The block
+// must always fit, and a cut must be MARKED rather than silently presenting a
+// severed quotation as whole.
+func TestCardNeverOverflowsItsBlock(t *testing.T) {
+	const (
+		dim      = 1080
+		marginX  = 120
+		topInset = 150
+		botInset = 230
+	)
+	contentW := dim - 2*marginX
+	maxBlockH := dim - topInset - botInset
+
+	tf, ok := typefaceForRef("John 3:16|World English Bible", 0)
+	if !ok {
+		t.Fatal("no embedded typefaces")
+	}
+	face := newFace(tf.regular, float64(cardMinPt))
+	pt := cardMinPt // via a variable: the constant expression is not integral
+	lineH := int(float64(pt) * 1.42)
+	maxLines := maxBlockH / lineH
+
+	for _, n := range []int{4, 12, 40, 120} {
+		body := strings.Repeat("For God so loved the world, that he gave his one and only Son, "+
+			"that whoever believes in him should not perish, but have eternal life. ", n)
+		quote := "“" + strings.TrimSpace(body) + "”"
+
+		var wrapped []string
+		for _, seg := range poemSegments(quote) {
+			wrapped = append(wrapped, wrapText(face, seg, contentW)...)
+		}
+		got := clampLinesToCard(wrapped, maxLines, face, contentW, quote)
+
+		if len(got)*lineH > maxBlockH {
+			t.Errorf("n=%d: block is %dpx tall, exceeds the %dpx content area", n, len(got)*lineH, maxBlockH)
+		}
+		for i, ln := range got {
+			if w := font.MeasureString(face, ln).Ceil(); w > contentW {
+				t.Errorf("n=%d line %d measures %dpx, wider than the %dpx column: %q", n, i, w, contentW, ln)
+			}
+		}
+		// Truncated cards must carry the omission mark; cards that fit must not.
+		truncated := len(wrapped) > maxLines
+		marked := strings.Contains(got[len(got)-1], endOmissionEllipsis)
+		if truncated && !marked {
+			t.Errorf("n=%d: the card was cut but the omission is unmarked: %q", n, got[len(got)-1])
+		}
+		if !truncated && marked {
+			t.Errorf("n=%d: a complete quotation must not claim an omission: %q", n, got[len(got)-1])
+		}
+	}
 }
