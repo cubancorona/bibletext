@@ -1,15 +1,43 @@
 
 (function () {
+  // 0) The fragment is a KEY LIST, "&"-separated (share_link.go): the verse
+  // span, written bare as "v16" / "v16-18", plus optional keys like "n=<note>".
+  // Unknown keys are ignored — that rule is what lets a future key be added
+  // without stranding the links already sent, and it has to hold here too.
+  function fragKeys() {
+    var out = { v: '' };
+    var raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return out;
+    raw.split('&').forEach(function (kv, i) {
+      var eq = kv.indexOf('=');
+      if (eq < 0) {
+        // The bare verse token, which only ever leads.
+        if (i === 0 && /^v\d/.test(kv)) out.v = kv.slice(1);
+        return;
+      }
+      out[kv.slice(0, eq)] = kv.slice(eq + 1);
+    });
+    if (!out.v && /^\d/.test(out['v='] || '')) out.v = out['v='];
+    return out;
+  }
+
+  function verseSpan() {
+    var m = /^(\d+)(?:-(\d+))?$/.exec(fragKeys().v || '');
+    if (!m) return null;
+    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
+    if (!(lo > 0) || hi < lo) return null;
+    return [lo, hi];
+  }
+
   // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
   function highlightRange() {
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
-    var m = /^#v(\d+)(?:-(\d+))?$/.exec(location.hash || '');
+    var m = verseSpan();
     if (!m) return;
     // A fresh fragment re-lights the verse: drop the suppression flag a
     // previous clear may have set.
     document.documentElement.classList.remove('nohl');
-    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
-    if (!(lo > 0) || hi < lo) return;
+    var lo = m[0], hi = m[1];
     var first = null;
     for (var n = lo; n <= hi; n++) {
       var el = document.getElementById('v' + n);
@@ -23,7 +51,7 @@
   // the tap; the bubble clears it. Removing the fragment is what does the work —
   // it un-targets the CSS :target rule (single verse) as well as letting us drop
   // the range classes.
-  function highlighted() { return /^#v\d+(-\d+)?$/.test(location.hash || ''); }
+  function highlighted() { return verseSpan() !== null; }
 
   var bubble = null;
   function hideBubble() { if (bubble) { bubble.remove(); bubble = null; } }
@@ -76,7 +104,13 @@
   function clearHighlight() {
     // replaceState, not a hash change: it leaves no extra history entry, so Back
     // still returns where the reader came from rather than re-highlighting.
-    history.replaceState(null, '', location.pathname + location.search);
+    // Only the VERSE key goes — a note in the same fragment is a separate thing
+    // with its own dismiss, and clearing the highlight must not silently delete
+    // it from the URL the reader might reload or re-share.
+    var keep = (location.hash || '').replace(/^#/, '').split('&')
+      .filter(function (kv, i) { return !(i === 0 && /^v\d/.test(kv)) && kv.indexOf('v=') !== 0; })
+      .join('&');
+    history.replaceState(null, '', location.pathname + location.search + (keep ? '#' + keep : ''));
     // Dropping the fragment does NOT un-target the verse — browsers keep the
     // :target match until a real navigation — so a single-verse highlight (the
     // usual shared link) would stay lit. This flag overrides it in CSS.
@@ -288,13 +322,146 @@
   var gotoBtn = document.getElementById('gotobtn');
   if (gotoBtn) gotoBtn.addEventListener('click', openGoto);
 
+  // 1b) THE SENDER'S NOTE. The link may carry one in the "n" key; it is the
+  // same payload the app writes (share_note.go): a format byte, then UTF-8,
+  // raw or raw-DEFLATE'd, then unpadded base64url.
+  //
+  // It is UNTRUSTED TEXT — anyone can write a link. It is inserted with
+  // textContent and never as markup, no part of it is ever made a live link,
+  // and the bubble says whose it is, because a note styled as though BibleText
+  // said it would be a phishing kit on our own domain.
+  function decodeNote(payload) {
+    if (!payload) return Promise.resolve('');
+    var bytes;
+    try {
+      var b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var bin = atob(b64);
+      bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } catch (e) { return Promise.resolve(''); }
+    if (bytes.length < 2) return Promise.resolve('');
+
+    var tag = bytes[0], body = bytes.subarray(1);
+    var utf8 = function (b) { return new TextDecoder('utf-8', { fatal: false }).decode(b); };
+    if (tag === 112 /* p */) return Promise.resolve(cleanNote(utf8(body)));
+    if (tag !== 122 /* z */) return Promise.resolve('');   // a format we do not know
+    if (typeof DecompressionStream !== 'function') return Promise.resolve('');
+    try {
+      var ds = new DecompressionStream('deflate-raw');
+      var stream = new Blob([body]).stream().pipeThrough(ds);
+      return new Response(stream).arrayBuffer()
+        .then(function (buf) { return cleanNote(utf8(new Uint8Array(buf))); })
+        .catch(function () { return ''; });
+    } catch (e) { return Promise.resolve(''); }
+  }
+
+  // The browser half of normalizeNote (share_note.go): strip the control
+  // characters and bidi overrides that let text hide or reverse itself, keep
+  // the newlines that make a note readable, and cap the length.
+  function cleanNote(s) {
+    if (!s) return '';
+    s = s.replace(/\r\n?/g, '\n')
+         // C0 and C1 controls, keeping tab (09) and newline (0a).
+         .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
+         // Bidi marks, embeddings, isolates, and the BOM.
+         .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+         .replace(/\n{3,}/g, '\n\n')
+         .trim();
+    var runes = Array.from(s);
+    if (runes.length > 280) s = runes.slice(0, 280).join('').trim();
+    return s;
+  }
+
+  var noteBox = null, noteChip = null;
+
+  function showNote(text) {
+    hideNote();
+    var wrap = document.querySelector('.wrap');
+    if (!wrap || !text) return;
+
+    var box = document.createElement('aside');
+    box.className = 'note';
+    var who = document.createElement('p');
+    who.className = 'notewho';
+    who.textContent = 'Note from Friend';   // a person, never "from BibleText"
+    var body = document.createElement('p');
+    body.className = 'notetext';
+    body.textContent = text;                             // TEXT, never markup
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'notex';
+    x.setAttribute('aria-label', 'Dismiss note');
+    x.textContent = '×';
+    x.addEventListener('click', function (e) { e.preventDefault(); hideNote(); showChip(text); });
+    box.appendChild(x); box.appendChild(who); box.appendChild(body);
+    anchorToPassage(box);
+    noteBox = box;
+    rescrollToHighlight();
+  }
+
+  // Dismissing collapses the note to a small marker rather than destroying it —
+  // an accidental tap should not lose someone's message.
+  function showChip(text) {
+    hideNote();
+    var chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'notechip';
+    chip.textContent = 'Show note';
+    chip.addEventListener('click', function (e) { e.preventDefault(); showNote(text); });
+    anchorToPassage(chip);
+    noteChip = chip;
+  }
+
+  function hideNote() {
+    if (noteBox) { noteBox.remove(); noteBox = null; }
+    if (noteChip) { noteChip.remove(); noteChip = null; }
+  }
+
+  // The note belongs to the passage, so it goes into the FLOW immediately above
+  // the paragraph holding the highlighted verse — not floating, and not at the
+  // top of the chapter. Two reasons: it can never cover the words it is about,
+  // and a reader arriving on a shared link lands mid-chapter at their verse, so
+  // a note parked at the top of the page is a note they never see.
+  function anchorToPassage(el) {
+    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+    var para = lit && lit.closest ? lit.closest('p') : null;
+    if (para && para.parentNode) { para.parentNode.insertBefore(el, para); return; }
+    var text = document.querySelector('.text');
+    if (text && text.parentNode) text.parentNode.insertBefore(el, text);
+    else document.querySelector('.wrap').appendChild(el);
+  }
+
+  // Inserting the note pushes the passage down, so whatever scroll brought the
+  // reader to their verse is now pointing at the wrong place. Put it back.
+  function rescrollToHighlight() {
+    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+    if (lit) lit.scrollIntoView({ block: 'center' });
+  }
+
+  function renderNote() {
+    var payload = fragKeys().n;
+    if (!payload) { hideNote(); return; }
+    decodeNote(payload).then(function (text) { if (text) showNote(text); });
+  }
+
+  renderNote();
+  window.addEventListener('hashchange', renderNote);
+
   // 2) Carry the verse across a translation switch. The switcher's hrefs are
   // plain chapter links (they must be: the fragment is not known at build
   // time), so without this a reader who followed a shared John 3:16 link and
   // tapped "BSB" to compare would land at the top of the chapter with no idea
   // which verse was shared — on the page that exists to show that one verse.
   function carryVerse() {
-    var hash = /^#v\d+(-\d+)?$/.test(location.hash || '') ? location.hash : '';
+    // Carry the whole fragment, not just the verse: a reader who followed a
+    // link with a note and taps BSB to compare is still reading the same
+    // message about the same passage, so the note travels with them.
+    var keys = fragKeys();
+    var parts = [];
+    if (verseSpan()) parts.push('v' + keys.v);
+    if (keys.n) parts.push('n=' + keys.n);
+    var hash = parts.length ? '#' + parts.join('&') : '';
     document.querySelectorAll('.vpick').forEach(function (a) {
       var base = (a.getAttribute('href') || '').split('#')[0];
       a.setAttribute('href', base + hash);

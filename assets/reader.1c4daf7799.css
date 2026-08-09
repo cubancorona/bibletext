@@ -13,7 +13,7 @@
 :root{
   --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
   --accent:#2f4c86; --border:#bdb29f; --verse:#53688f; --red:#b23a2e;
-  --hl:#dde7f7;
+  --hl:#ffe08a;
   /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
      stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
      fall back per-glyph instead of tofu. */
@@ -24,7 +24,7 @@
   :root{
     --bg:#191715; --surface:#221f1c; --text:#e9e3d9; --muted:#9d9487;
     --accent:#7ca0e4; --border:#39342e; --verse:#8ca8d8; --red:#e57373;
-    --hl:#222d42;
+    --hl:#3a2b0c;
   }
 }
 *{box-sizing:border-box}
@@ -281,6 +281,54 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
 }
 .clearbub:hover{border-color:var(--accent)}
+/* THE SENDER'S NOTE. It sits above the chapter, in the flow, so it never covers
+   the words it is about and needs no JavaScript to follow the page.
+   It must NOT look like BibleText chrome: the whole point of the attribution
+   line and the quoted, off-palette card is that a reader can tell at a glance
+   that a person wrote this, not the app. A note that could pass for our own
+   voice would be a phishing surface on our own domain. */
+/* Anchoring the note beside its passage puts it INSIDE .text, so it would
+   otherwise inherit the scripture face, its justification, its 21px, and the
+   reporter first-line indent — i.e. it would look like scripture. Everything
+   here is an explicit reset: a reader must never have to work out whether the
+   words in front of them are the Bible or a stranger's message. */
+.note{
+  position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
+  background:var(--surface); border:1px solid var(--border);
+  border-left:3px solid var(--accent); border-radius:10px;
+  font-family:var(--ui); font-size:1rem; line-height:1.5;
+  letter-spacing:normal; text-align:left; text-indent:0;
+  font-feature-settings:normal;
+}
+.note p{margin:0; text-align:left; text-indent:0; hyphens:none}
+/* The tail, which is what makes it read as somebody speaking. */
+.note::after{
+  content:""; position:absolute; left:1.6rem; bottom:-9px;
+  width:14px; height:14px; background:var(--surface);
+  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+  transform:rotate(45deg);
+}
+.notewho{
+  margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
+  letter-spacing:.01em;
+}
+/* The note itself is set in the CHROME face, not the scripture serif: it is
+   somebody's message, and it must never be mistaken for the text. */
+.notetext{margin:0; font-size:.95rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere}
+.notex{
+  position:absolute; top:.35rem; right:.4rem; background:none; border:0;
+  padding:.15rem .35rem; cursor:pointer; color:var(--muted);
+  font-size:1.2rem; line-height:1; font-family:var(--ui);
+}
+.notex:hover{color:var(--text)}
+.notechip{
+  display:inline-flex; align-items:center; margin:1.1rem 0;
+  letter-spacing:normal; text-indent:0;
+  background:none; border:1px solid var(--border); border-radius:999px;
+  padding:.25rem .8rem; font-size:.75rem; font-family:var(--ui);
+  color:var(--muted); cursor:pointer;
+}
+.notechip:hover{border-color:var(--accent); color:var(--accent)}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
