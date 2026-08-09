@@ -200,6 +200,11 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			state.fullPending = loaded.fullPending
 			state.seedOnly = loaded.seedOnly
 			state.loadPhase = loadReady
+			// A shared link tapped before the data landed was parked; apply it
+			// NOW, before the rebuild below, so that rebuild paints the shared
+			// chapter directly — one rebuild, no flash of the wrong chapter,
+			// and the saved scroll target cleared before it can fire.
+			consumePendingLink(state)
 			// Full rebuild (not just refresh) so afterRebuild re-pins/re-asserts
 			// the iOS native overlay and armPendingRestore re-arms the saved
 			// scroll position on the freshly-built reading view.

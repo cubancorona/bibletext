@@ -214,6 +214,20 @@ plutil -extract Entitlements xml1 -o "$WORK/ent.plist" "$WORK/prof.plist"
 # here; with an explicit dev profile this is an idempotent no-op.
 /usr/libexec/PlistBuddy -c "Set :application-identifier $TEAM_ID.$APP_ID" "$WORK/ent.plist" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Add :application-identifier string $TEAM_ID.$APP_ID" "$WORK/ent.plist"
+# Universal links. The profile carries the Associated Domains capability as a
+# wildcard once it is enabled on the App ID, and a wildcard enumerates NO
+# domains — the app would ship, install, and simply never open a shared link,
+# with nothing to see in any log. So pin the concrete domain here, exactly as
+# application-identifier is pinned above.
+#
+# The claim is scoped by the association file we publish at
+# /.well-known/apple-app-site-association, which allow-lists ONLY the reader
+# paths: privacy.html and support.html (the URLs App Store Connect points at)
+# must keep opening in Safari. Never claim www. — it 301s to the apex, and
+# Apple requires the association file be served without redirects.
+/usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$WORK/ent.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" "$WORK/ent.plist"
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:bibletext.co.uk" "$WORK/ent.plist"
 codesign -f -s "$CERT_HASH" --entitlements "$WORK/ent.plist" --generate-entitlement-der "$APP"
 
 # ── 7. assemble an .xcarchive around BibleText.app ───────────────────────────
