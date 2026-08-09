@@ -36,6 +36,15 @@ extern void bibleTextReadAlongFollowTapped(void);
 // highlight" from the inline native menu. Go clears the highlight state and
 // re-renders so the .hl background wash disappears.
 extern void bibleTextHighlightCleared(void);
+// The same tap, when the highlight belongs to a shared note: hide keeps the
+// note and takes its highlight down with it, delete throws both away.
+extern void bibleTextNoteHidden(void);
+extern void bibleTextNoteDeleted(void);
+
+// Whether the highlight on screen belongs to a shared note. Declared up here
+// because the tap menu below is the first thing that reads it; Go sets it on
+// every chapter push (bibleTextSetHasNote).
+static BOOL gHasNote = NO;
 // Called from the soft-keyboard frame observer with the keyboard's on-screen overlap
 // (height in points, 0 when hidden). The Goto verse picker lifts its bottom row by this
 // to sit exactly above the keyboard.
@@ -255,6 +264,22 @@ static UITapGestureRecognizer *gHighlightTap = nil;
            menuForConfiguration:(UIEditMenuConfiguration *)configuration
                suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions
            API_AVAILABLE(ios(16.0)) {
+    // A highlight belonging to a NOTE offers the note's own two actions — the
+    // same pair the web reader offers on the same tap. Hide is reversible and
+    // takes the highlight down with it; delete throws the note away. One control
+    // for two such different outcomes would make the reader guess.
+    if (gHasNote) {
+        UIAction *hide = [UIAction actionWithTitle:@"Hide note" image:nil identifier:nil
+                                           handler:^(__kindof UIAction *a) {
+            bibleTextNoteHidden();
+        }];
+        UIAction *del = [UIAction actionWithTitle:@"Delete note" image:nil identifier:nil
+                                          handler:^(__kindof UIAction *a) {
+            bibleTextNoteDeleted();
+        }];
+        del.attributes = UIMenuElementAttributesDestructive;
+        return [UIMenu menuWithChildren:@[hide, del]];
+    }
     UIAction *clear = [UIAction actionWithTitle:@"Clear highlight" image:nil identifier:nil
                                         handler:^(__kindof UIAction *a) {
         bibleTextHighlightCleared(); // -> Go: clear + re-render (drops the .hl run)
@@ -845,6 +870,8 @@ static void bibleTextEnsureTV(void) {
 // fully off the text view's touch pipeline, so they add nothing to scrolling — a
 // UIEditMenuInteraction installs its own gesture recognizers that otherwise process
 // every touch (including scroll pans). Called from bibleTextApplyHTML.
+void bibleTextSetHasNote(int on) { gHasNote = on ? YES : NO; }
+
 static void btIOSSetHighlightUIEnabled(BOOL on) {
     if (gReadingTV == nil) return;
     if (gHighlightTap) gHighlightTap.enabled = on;
@@ -1531,6 +1558,14 @@ var lastPushedBookChapter string
 // inline styling — superscript verse numbers, accent color, serif font) and
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
+	// Tell the native tap menu what this chapter's highlight means, so it offers
+	// the note's verbs rather than "Clear highlight" when a note owns it.
+	hasNote := 0
+	if state.ActiveNote != "" && !state.NoteMinimized {
+		hasNote = 1
+	}
+	C.bibleTextSetHasNote(C.int(hasNote))
+
 	// Keep the native reporter column in sync with the text-size setting (the
 	// measure is em-based, so Large/XL widen the column and keep the line's
 	// character count at the reporter's ~59). Phones pass 0 → legacy insets.
