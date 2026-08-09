@@ -112,6 +112,9 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     NSMenuItem *sl = [[NSMenuItem alloc] initWithTitle:@"Share as link" action:@selector(hbShare_link:) keyEquivalent:@""];
     sl.target = self;
     [share addItem:sl];
+    NSMenuItem *sn = [[NSMenuItem alloc] initWithTitle:@"Share with note" action:@selector(hbShare_link_note:) keyEquivalent:@""];
+    sn.target = self;
+    [share addItem:sn];
     NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share" action:nil keyEquivalent:@""];
     shareItem.submenu = share;
     [menu addItem:shareItem];
@@ -150,6 +153,9 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 }
 - (void)hbShare_image:(id)sender {
     bibleTextStudyMenuTapped((char *)"share-image", (char *)self.hbSelectedText.UTF8String);
+}
+- (void)hbShare_link_note:(id)sender {
+    bibleTextStudyMenuTapped((char *)"share-link-note", (char *)self.hbSelectedText.UTF8String);
 }
 - (void)hbShare_link:(id)sender {
     bibleTextStudyMenuTapped((char *)"share-link", (char *)self.hbSelectedText.UTF8String);

@@ -21,6 +21,7 @@ const (
 	selActionShareCite  = "share-cite"
 	selActionShareImage = "share-image"
 	selActionShareLink  = "share-link"
+	selActionShareNote  = "share-link-note"
 	selActionCrossRef   = "crossref"
 )
 
@@ -41,6 +42,8 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 		shareVerse(state, text, true)
 	case selActionShareLink:
 		shareVerseLink(state, text)
+	case selActionShareNote:
+		promptShareNote(state, text)
 	case selActionCrossRef:
 		showCrossRefs(state, text)
 	}
@@ -55,6 +58,31 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 // page highlights can never disagree. It degrades in tiers rather than failing:
 // an unpinnable selection still shares the chapter, and a book with no slug
 // (impossible today, guarded by tests) falls back to the plain-text share.
+// shareVerseLinkWithNote is shareVerseLink carrying the sender's note. An empty
+// note produces exactly the link shareVerseLink would have, so the two paths
+// cannot drift apart.
+func shareVerseLinkWithNote(state *AppState, text, note string) {
+	_, cite := prepareShareQuote(state, text)
+	version := state.currentVersion()
+	lo, hi := 0, 0
+	if _, l, h, ok := normalizeShareSelection(state, text); ok {
+		lo, hi = l, h
+	}
+	url := ShareLinkURLWithNote(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note)
+	if url == "" {
+		shareVerse(state, text, false)
+		return
+	}
+	// The note goes in the MESSAGE too, not only inside the link. It is how
+	// people share things anyway, it reaches a recipient who never taps, and it
+	// reaches one whose app is too old to read the note out of the fragment.
+	msg := cite + " (" + version.Name + ")\n" + url
+	if n := strings.TrimSpace(note); n != "" {
+		msg = n + "\n\n" + msg
+	}
+	nativeShareText(msg)
+}
+
 func shareVerseLink(state *AppState, text string) {
 	_, cite := prepareShareQuote(state, text)
 	version := state.currentVersion()

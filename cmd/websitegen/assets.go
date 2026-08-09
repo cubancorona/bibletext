@@ -41,7 +41,7 @@ const readerCSSTemplate = `
 :root{
   --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
   --accent:#2f4c86; --border:#bdb29f; --verse:#53688f; --red:#b23a2e;
-  --hl:#dde7f7;
+  --hl:#ffe08a;
   /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
      stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
      fall back per-glyph instead of tofu. */
@@ -52,7 +52,7 @@ const readerCSSTemplate = `
   :root{
     --bg:#191715; --surface:#221f1c; --text:#e9e3d9; --muted:#9d9487;
     --accent:#7ca0e4; --border:#39342e; --verse:#8ca8d8; --red:#e57373;
-    --hl:#222d42;
+    --hl:#3a2b0c;
   }
 }
 *{box-sizing:border-box}
@@ -296,11 +296,16 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    also what makes iOS Safari treat a bare <span> as tappable at all. */
 .v:target,.v.hl{cursor:pointer; -webkit-tap-highlight-color:transparent}
 /* Sits just under the highlighted text, centred on the column — so it points at
-   what it will clear without covering it. Absolute (document coordinates), so
-   it travels with the passage as the reader scrolls; reader.js sets top/left
-   from the last line of the highlight. */
-.clearbub{
+   what it offers without covering it. Absolute (document coordinates), so it
+   travels with the passage as the reader scrolls; reader.js sets top/left from
+   the last line of the highlight. It holds ONE button for a plain highlight and
+   TWO when the highlight belongs to a note, because "hide" and "delete" are
+   different enough that a reader should not have to guess. */
+.clearbar{
   position:absolute; z-index:15; transform:translateX(-50%);
+  display:flex; gap:.4rem;
+}
+.clearbub{
   background:var(--surface); color:var(--accent);
   border:1px solid var(--border); border-radius:999px;
   padding:.4rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;
@@ -309,6 +314,60 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
 }
 .clearbub:hover{border-color:var(--accent)}
+/* THE SENDER'S NOTE. It sits above the chapter, in the flow, so it never covers
+   the words it is about and needs no JavaScript to follow the page.
+   It must NOT look like BibleText chrome: the whole point of the attribution
+   line and the quoted, off-palette card is that a reader can tell at a glance
+   that a person wrote this, not the app. A note that could pass for our own
+   voice would be a phishing surface on our own domain. */
+/* Anchoring the note beside its passage puts it INSIDE .text, so it would
+   otherwise inherit the scripture face, its justification, its 21px, and the
+   reporter first-line indent — i.e. it would look like scripture. Everything
+   here is an explicit reset: a reader must never have to work out whether the
+   words in front of them are the Bible or a stranger's message. */
+.note{
+  position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
+  background:var(--surface); border:1px solid var(--border);
+  border-left:3px solid var(--accent); border-radius:10px;
+  font-family:var(--ui); font-size:1rem; line-height:1.5;
+  letter-spacing:normal; text-align:left; text-indent:0;
+  font-feature-settings:normal;
+}
+.note p{margin:0; text-align:left; text-indent:0; hyphens:none}
+/* The tail, which is what makes it read as somebody speaking. */
+.note::after{
+  content:""; position:absolute; left:1.6rem; bottom:-9px;
+  width:14px; height:14px; background:var(--surface);
+  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+  transform:rotate(45deg);
+}
+.notewho{
+  margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
+  letter-spacing:.01em;
+}
+/* The note itself is set in the CHROME face, not the scripture serif: it is
+   somebody's message, and it must never be mistaken for the text. */
+.notetext{margin:0; font-size:.95rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere}
+/* Minimize and delete, in that order: the reversible one first, so the
+   destructive one is never the one a thumb reaches by accident. */
+.notetools{position:absolute; top:.3rem; right:.35rem; display:flex; gap:.1rem}
+.notebtn{
+  background:none; border:0; padding:.3rem; cursor:pointer; color:var(--muted);
+  line-height:0; border-radius:6px;
+}
+.notebtn svg{width:15px; height:15px; fill:currentColor; display:block}
+.notebtn:hover{color:var(--accent); background:var(--hl)}
+/* The minimized marker. Small and quiet, but unmistakably a thing to press:
+   the note is still there and the reader has to be able to find it again. */
+.notechip{
+  display:inline-flex; align-items:center; gap:.35rem; margin:1.1rem 0;
+  letter-spacing:normal; text-indent:0;
+  background:none; border:1px solid var(--border); border-radius:999px;
+  padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
+  color:var(--muted); cursor:pointer; line-height:1.2;
+}
+.notechip svg{width:13px; height:13px; fill:currentColor; display:block}
+.notechip:hover{border-color:var(--accent); color:var(--accent)}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
@@ -332,16 +391,44 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 // thing genuinely lost is the clear-highlight control (navigating clears it).
 const readerJSTemplate = `
 (function () {
+  // 0) The fragment is a KEY LIST, "&"-separated (share_link.go): the verse
+  // span, written bare as "v16" / "v16-18", plus optional keys like "n=<note>".
+  // Unknown keys are ignored — that rule is what lets a future key be added
+  // without stranding the links already sent, and it has to hold here too.
+  function fragKeys() {
+    var out = { v: '' };
+    var raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return out;
+    raw.split('&').forEach(function (kv, i) {
+      var eq = kv.indexOf('=');
+      if (eq < 0) {
+        // The bare verse token, which only ever leads.
+        if (i === 0 && /^v\d/.test(kv)) out.v = kv.slice(1);
+        return;
+      }
+      out[kv.slice(0, eq)] = kv.slice(eq + 1);
+    });
+    if (!out.v && /^\d/.test(out['v='] || '')) out.v = out['v='];
+    return out;
+  }
+
+  function verseSpan() {
+    var m = /^(\d+)(?:-(\d+))?$/.exec(fragKeys().v || '');
+    if (!m) return null;
+    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
+    if (!(lo > 0) || hi < lo) return null;
+    return [lo, hi];
+  }
+
   // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
   function highlightRange() {
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
-    var m = /^#v(\d+)(?:-(\d+))?$/.exec(location.hash || '');
+    var m = verseSpan();
     if (!m) return;
     // A fresh fragment re-lights the verse: drop the suppression flag a
     // previous clear may have set.
     document.documentElement.classList.remove('nohl');
-    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
-    if (!(lo > 0) || hi < lo) return;
+    var lo = m[0], hi = m[1];
     var first = null;
     for (var n = lo; n <= hi; n++) {
       var el = document.getElementById('v' + n);
@@ -355,7 +442,7 @@ const readerJSTemplate = `
   // the tap; the bubble clears it. Removing the fragment is what does the work —
   // it un-targets the CSS :target rule (single verse) as well as letting us drop
   // the range classes.
-  function highlighted() { return /^#v\d+(-\d+)?$/.test(location.hash || ''); }
+  function highlighted() { return verseSpan() !== null; }
 
   var bubble = null;
   function hideBubble() { if (bubble) { bubble.remove(); bubble = null; } }
@@ -389,17 +476,46 @@ const readerJSTemplate = `
     b.style.left = (col.left + col.width / 2 + window.pageXOffset) + 'px';
   }
 
+  // Tapping a highlight offers what that highlight actually IS. A plain one is
+  // just a highlight, so it offers to clear it. One that belongs to a note is
+  // the note's highlight, so it offers the note's own two actions — the same
+  // pair the bubble carries, because "hide" and "delete" mean different things
+  // and the reader should not have to guess which a single control does.
   function showBubble() {
     hideBubble();
-    // A real <button>: natively tappable everywhere, and reachable by keyboard.
+    var bar = document.createElement('div');
+    bar.className = 'clearbar';
+
+    var noteText = currentNoteText();
+    if (noteText) {
+      bar.appendChild(barButton('Hide note', function () {
+        hideBubble(); minimizeNote(noteText);
+      }));
+      bar.appendChild(barButton('Delete note', function () {
+        hideBubble(); trashNote();
+      }));
+    } else {
+      bar.appendChild(barButton('Clear highlight', function () { clearHighlight(); }));
+    }
+
+    document.body.appendChild(bar);
+    positionBubble(bar);
+    bubble = bar;
+  }
+
+  function barButton(label, onTap) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'clearbub';
-    b.textContent = 'Clear highlight';
-    document.body.appendChild(b);
-    positionBubble(b);
-    bubble = b;
+    b.textContent = label;
+    b.addEventListener('click', function (e) { e.preventDefault(); onTap(); });
+    return b;
   }
+
+  // The note this page is currently showing, if any — the bubble and the
+  // minimized marker both count, because both mean "there is a note here".
+  var activeNoteText = '';
+  function currentNoteText() { return activeNoteText; }
 
   // The text reflows on rotation or a window resize, so the line the bubble was
   // pinned under moves. Re-pin rather than leave it stranded.
@@ -408,7 +524,13 @@ const readerJSTemplate = `
   function clearHighlight() {
     // replaceState, not a hash change: it leaves no extra history entry, so Back
     // still returns where the reader came from rather than re-highlighting.
-    history.replaceState(null, '', location.pathname + location.search);
+    // Only the VERSE key goes — a note in the same fragment is a separate thing
+    // with its own dismiss, and clearing the highlight must not silently delete
+    // it from the URL the reader might reload or re-share.
+    var keep = (location.hash || '').replace(/^#/, '').split('&')
+      .filter(function (kv, i) { return !(i === 0 && /^v\d/.test(kv)) && kv.indexOf('v=') !== 0; })
+      .join('&');
+    history.replaceState(null, '', location.pathname + location.search + (keep ? '#' + keep : ''));
     // Dropping the fragment does NOT un-target the verse — browsers keep the
     // :target match until a real navigation — so a single-verse highlight (the
     // usual shared link) would stay lit. This flag overrides it in CSS.
@@ -448,7 +570,10 @@ const readerJSTemplate = `
     // The bubble is handled HERE rather than by its own click handler: on the
     // pointerup path this listener runs first and would remove the button
     // before any click of its own could fire.
-    if (t.closest('.clearbub')) { e.preventDefault(); clearHighlight(); return; }
+    // The bar's buttons carry their own handlers; this listener runs first on
+    // the pointerup path and would otherwise remove them before a click landed,
+    // so let the tap through and stop here.
+    if (t.closest('.clearbar')) { return; }
     if (!highlighted()) { hideBubble(); return; }
     if (wasDrag(e)) return;                       // a selection, not a tap
     var link = t.closest('a');
@@ -620,13 +745,213 @@ const readerJSTemplate = `
   var gotoBtn = document.getElementById('gotobtn');
   if (gotoBtn) gotoBtn.addEventListener('click', openGoto);
 
+  // 1b) THE SENDER'S NOTE. The link may carry one in the "n" key; it is the
+  // same payload the app writes (share_note.go): a format byte, then UTF-8,
+  // raw or raw-DEFLATE'd, then unpadded base64url.
+  //
+  // It is UNTRUSTED TEXT — anyone can write a link. It is inserted with
+  // textContent and never as markup, no part of it is ever made a live link,
+  // and the bubble says whose it is, because a note styled as though BibleText
+  // said it would be a phishing kit on our own domain.
+  function decodeNote(payload) {
+    if (!payload) return Promise.resolve('');
+    var bytes;
+    try {
+      var b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var bin = atob(b64);
+      bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } catch (e) { return Promise.resolve(''); }
+    if (bytes.length < 2) return Promise.resolve('');
+
+    var tag = bytes[0], body = bytes.subarray(1);
+    var utf8 = function (b) { return new TextDecoder('utf-8', { fatal: false }).decode(b); };
+    if (tag === 112 /* p */) return Promise.resolve(cleanNote(utf8(body)));
+    if (tag !== 122 /* z */) return Promise.resolve('');   // a format we do not know
+    if (typeof DecompressionStream !== 'function') return Promise.resolve('');
+    try {
+      var ds = new DecompressionStream('deflate-raw');
+      var stream = new Blob([body]).stream().pipeThrough(ds);
+      return new Response(stream).arrayBuffer()
+        .then(function (buf) { return cleanNote(utf8(new Uint8Array(buf))); })
+        .catch(function () { return ''; });
+    } catch (e) { return Promise.resolve(''); }
+  }
+
+  // The browser half of normalizeNote (share_note.go): strip the control
+  // characters and bidi overrides that let text hide or reverse itself, keep
+  // the newlines that make a note readable, and cap the length.
+  function cleanNote(s) {
+    if (!s) return '';
+    s = s.replace(/\r\n?/g, '\n')
+         // C0 and C1 controls, keeping tab (09) and newline (0a).
+         .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
+         // Bidi marks, embeddings, isolates, and the BOM.
+         .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+         .replace(/\n{3,}/g, '\n\n')
+         .trim();
+    var runes = Array.from(s);
+    if (runes.length > 280) s = runes.slice(0, 280).join('').trim();
+    return s;
+  }
+
+  var noteBox = null, noteChip = null;
+
+  var ICON_MINIMIZE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.75h10a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0 0 1.5z"/></svg>';
+  var ICON_TRASH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 1.75a.75.75 0 0 0-.75.75V3H3a.75.75 0 0 0 0 1.5h.4l.62 8.06A1.75 1.75 0 0 0 5.77 14h4.46a1.75 1.75 0 0 0 1.75-1.44l.62-8.06H13A.75.75 0 0 0 13 3h-2.75v-.5a.75.75 0 0 0-.75-.75h-3zm.75 1.25h1.5V3h-1.5v-.0zM5.9 4.5h4.2l-.6 7.9a.25.25 0 0 1-.25.1H6.75a.25.25 0 0 1-.25-.1L5.9 4.5z"/></svg>';
+  var ICON_NOTE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.75A1.75 1.75 0 0 1 4.75 1h6.5A1.75 1.75 0 0 1 13 2.75v10.5A1.75 1.75 0 0 1 11.25 15h-6.5A1.75 1.75 0 0 1 3 13.25V2.75zM5.5 4.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3z"/></svg>';
+
+  function showNote(text) {
+    hideNote();
+    var wrap = document.querySelector('.wrap');
+    if (!wrap || !text) return;
+
+    var box = document.createElement('aside');
+    box.className = 'note';
+
+    var who = document.createElement('p');
+    who.className = 'notewho';
+    who.textContent = 'Note from Friend';   // a person, never "from BibleText"
+
+    var body = document.createElement('p');
+    body.className = 'notetext';
+    body.textContent = text;                             // TEXT, never markup
+
+    // Two controls, and the difference between them is the whole point:
+    // MINIMIZE is reversible and takes the highlight down with the note, so the
+    // reader can see the passage plainly and bring the message back. TRASH is
+    // the one that throws it away.
+    var tools = document.createElement('div');
+    tools.className = 'notetools';
+    tools.appendChild(noteButton('Minimize note', ICON_MINIMIZE, function () {
+      minimizeNote(text);
+    }));
+    tools.appendChild(noteButton('Delete note', ICON_TRASH, function () {
+      trashNote();
+    }));
+
+    box.appendChild(tools); box.appendChild(who); box.appendChild(body);
+    anchorToPassage(box);
+    noteBox = box;
+    activeNoteText = text;
+    rescrollToHighlight();
+  }
+
+  function noteButton(label, svg, onTap) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'notebtn';
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.innerHTML = svg;                 // our own markup, never the note's
+    b.addEventListener('click', function (e) { e.preventDefault(); onTap(); });
+    return b;
+  }
+
+  // Minimize: the note collapses to a marker AND the highlight comes down with
+  // it, so the reader gets the passage as it would normally read. Nothing is
+  // lost — the fragment still carries both, so this survives a reload and the
+  // marker puts everything back.
+  function minimizeNote(text) {
+    hideNote();
+    suppressHighlight(true);
+    var chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'notechip';
+    chip.setAttribute('aria-label', 'Show note');
+    chip.innerHTML = ICON_NOTE + '<span>Note</span>';
+    chip.addEventListener('click', function (e) {
+      e.preventDefault();
+      suppressHighlight(false);
+      showNote(text);
+    });
+    anchorToPassage(chip);
+    noteChip = chip;
+    activeNoteText = text;
+  }
+
+  // Trash: the note and the highlight both go, and the fragment goes with them
+  // so a reload does not resurrect what the reader threw away.
+  function trashNote() {
+    activeNoteText = '';
+    hideNote();
+    suppressHighlight(true);
+    history.replaceState(null, '', location.pathname + location.search);
+    carryVerse();
+  }
+
+  // Hide or restore the highlight without touching the URL, so minimize is
+  // reversible. The nohl flag is what beats the bare CSS :target rule.
+  function suppressHighlight(off) {
+    if (off) {
+      document.documentElement.classList.add('nohl');
+      document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
+    } else {
+      document.documentElement.classList.remove('nohl');
+      highlightRange();
+    }
+  }
+
+  function hideNote() {
+    if (noteBox) { noteBox.remove(); noteBox = null; }
+    if (noteChip) { noteChip.remove(); noteChip = null; }
+  }
+
+  // The note belongs to the passage, so it goes into the FLOW immediately above
+  // the paragraph holding the highlighted verse — not floating, and not at the
+  // top of the chapter. Two reasons: it can never cover the words it is about,
+  // and a reader arriving on a shared link lands mid-chapter at their verse, so
+  // a note parked at the top of the page is a note they never see.
+  // The paragraph the note belongs to, remembered the first time we can see it.
+  // It has to be remembered: minimizing CLEARS the highlight, so by the time the
+  // marker is placed there is no .v.hl left to anchor to and the marker would
+  // jump to the top of the chapter — which is exactly what it did.
+  var noteAnchorPara = null;
+
+  function anchorToPassage(el) {
+    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+    var para = (lit && lit.closest ? lit.closest('p') : null) || noteAnchorPara;
+    if (para && para.parentNode) {
+      noteAnchorPara = para;
+      para.parentNode.insertBefore(el, para);
+      return;
+    }
+    var text = document.querySelector('.text');
+    if (text && text.parentNode) text.parentNode.insertBefore(el, text);
+    else document.querySelector('.wrap').appendChild(el);
+  }
+
+  // Inserting the note pushes the passage down, so whatever scroll brought the
+  // reader to their verse is now pointing at the wrong place. Put it back.
+  function rescrollToHighlight() {
+    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+    if (lit) lit.scrollIntoView({ block: 'center' });
+  }
+
+  function renderNote() {
+    var payload = fragKeys().n;
+    if (!payload) { hideNote(); return; }
+    decodeNote(payload).then(function (text) { if (text) showNote(text); });
+  }
+
+  renderNote();
+  window.addEventListener('hashchange', renderNote);
+
   // 2) Carry the verse across a translation switch. The switcher's hrefs are
   // plain chapter links (they must be: the fragment is not known at build
   // time), so without this a reader who followed a shared John 3:16 link and
   // tapped "BSB" to compare would land at the top of the chapter with no idea
   // which verse was shared — on the page that exists to show that one verse.
   function carryVerse() {
-    var hash = /^#v\d+(-\d+)?$/.test(location.hash || '') ? location.hash : '';
+    // Carry the whole fragment, not just the verse: a reader who followed a
+    // link with a note and taps BSB to compare is still reading the same
+    // message about the same passage, so the note travels with them.
+    var keys = fragKeys();
+    var parts = [];
+    if (verseSpan()) parts.push('v' + keys.v);
+    if (keys.n) parts.push('n=' + keys.n);
+    var hash = parts.length ? '#' + parts.join('&') : '';
     document.querySelectorAll('.vpick').forEach(function (a) {
       var base = (a.getAttribute('href') || '').split('#')[0];
       a.setAttribute('href', base + hash);
