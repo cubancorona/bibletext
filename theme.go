@@ -56,30 +56,35 @@ var lightPalette = palette{
 	// 5.5:1 on the reading paper (was a borderline 4.55), and Border is dark enough
 	// (~1.8:1) that chips and inputs read as controls instead of dissolving into the
 	// parchment (was 1.16:1). The dark palette already passed AA and is untouched.
-	Border:        color.NRGBA{R: 189, G: 178, B: 159, A: 255},
-	Text:          color.NRGBA{R: 37, G: 34, B: 29, A: 255},
-	TextMuted:     color.NRGBA{R: 107, G: 100, B: 86, A: 255},
-	Accent:        color.NRGBA{R: 47, G: 76, B: 134, A: 255}, // lapis / sapphire — the sacred manuscript blue
-	AccentText:    color.NRGBA{R: 244, G: 247, B: 252, A: 255},
-	Highlight:     color.NRGBA{R: 221, G: 231, B: 247, A: 255}, // soft lapis wash behind a found verse
-	HighlightText: color.NRGBA{R: 36, G: 60, B: 112, A: 255},
-	VerseNumber:   color.NRGBA{R: 83, G: 104, B: 143, A: 255}, // muted slate-blue superscripts
-	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255},  // deep crimson on parchment
+	Border:     color.NRGBA{R: 189, G: 178, B: 159, A: 255},
+	Text:       color.NRGBA{R: 37, G: 34, B: 29, A: 255},
+	TextMuted:  color.NRGBA{R: 107, G: 100, B: 86, A: 255},
+	Accent:     color.NRGBA{R: 47, G: 76, B: 134, A: 255}, // lapis / sapphire — the sacred manuscript blue
+	AccentText: color.NRGBA{R: 244, G: 247, B: 252, A: 255},
+	// A marker-pen amber, not a lapis wash. The wash was too close in weight to
+	// the parchment to read as a highlight at all, and it sat behind RED LETTERS,
+	// where a faint blue tint just muddied them. Amber is the one hue that says
+	// "highlighted" while leaving red as red.
+	Highlight:     color.NRGBA{R: 255, G: 224, B: 138, A: 255}, // marker-pen amber
+	HighlightText: color.NRGBA{R: 36, G: 60, B: 112, A: 255},   // unused by the panes; see reading.go .hl
+	VerseNumber:   color.NRGBA{R: 83, G: 104, B: 143, A: 255},  // muted slate-blue superscripts
+	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255},   // deep crimson on parchment
 	Input:         color.NRGBA{R: 252, G: 251, B: 247, A: 255},
 }
 
 // Dark: warm near-black with a luminous sapphire accent — illuminated, not stark.
 var darkPalette = palette{
-	Background:    color.NRGBA{R: 25, G: 23, B: 21, A: 255},
-	Surface:       color.NRGBA{R: 34, G: 31, B: 28, A: 255},
-	SurfaceAlt:    color.NRGBA{R: 42, G: 38, B: 34, A: 255},
-	Border:        color.NRGBA{R: 57, G: 52, B: 46, A: 255},
-	Text:          color.NRGBA{R: 233, G: 227, B: 217, A: 255},
-	TextMuted:     color.NRGBA{R: 157, G: 148, B: 135, A: 255},
-	Accent:        color.NRGBA{R: 124, G: 160, B: 228, A: 255}, // luminous sapphire on near-black
-	AccentText:    color.NRGBA{R: 17, G: 24, B: 40, A: 255},
-	Highlight:     color.NRGBA{R: 34, G: 45, B: 66, A: 255}, // deep lapis wash behind a found verse
-	HighlightText: color.NRGBA{R: 182, G: 205, B: 240, A: 255},
+	Background: color.NRGBA{R: 25, G: 23, B: 21, A: 255},
+	Surface:    color.NRGBA{R: 34, G: 31, B: 28, A: 255},
+	SurfaceAlt: color.NRGBA{R: 42, G: 38, B: 34, A: 255},
+	Border:     color.NRGBA{R: 57, G: 52, B: 46, A: 255},
+	Text:       color.NRGBA{R: 233, G: 227, B: 217, A: 255},
+	TextMuted:  color.NRGBA{R: 157, G: 148, B: 135, A: 255},
+	Accent:     color.NRGBA{R: 124, G: 160, B: 228, A: 255}, // luminous sapphire on near-black
+	AccentText: color.NRGBA{R: 17, G: 24, B: 40, A: 255},
+	Highlight:  color.NRGBA{R: 58, G: 43, B: 12, A: 255}, // the same amber, banked well down so the
+	// light red letters still separate from it
+	HighlightText: color.NRGBA{R: 182, G: 205, B: 240, A: 255}, // unused by the panes; see reading.go .hl
 	VerseNumber:   color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
 	RedLetter:     color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
 	Input:         color.NRGBA{R: 38, G: 35, B: 31, A: 255},

@@ -19,7 +19,6 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	vnum := nrgbaToHex(pal.VerseNumber)
 	red := nrgbaToHex(pal.RedLetter)
 	hlBG := nrgbaToHex(pal.Highlight)
-	hlFG := nrgbaToHex(pal.HighlightText)
 
 	redLetter := redLetterEnabled()
 	var b strings.Builder
@@ -46,7 +45,7 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 				// (the bold serif sets ~17% wider), so the paragraph re-wrapped
 				// and the text jumped when the highlight cleared. Matches iOS's
 				// .hl and the desktop pane, neither of which changes weight.
-				fmt.Fprintf(&b, `<span style="color:%s;background-color:%s">%s</span>`, hlFG, hlBG, body)
+				fmt.Fprintf(&b, `<span style="background-color:%s">%s</span>`, hlBG, body)
 			case redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse):
 				fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, body)
 			default:
