@@ -1160,6 +1160,9 @@ func selectionStudyMenu(state *AppState, sel string, copyFn, selectAllFn func())
 			fyne.NewMenuItem("Share as link", func() {
 				dispatchSelectionAction(state, selActionShareLink, sel)
 			}),
+			fyne.NewMenuItem("Share with note", func() {
+				dispatchSelectionAction(state, selActionShareNote, sel)
+			}),
 		)
 		xrefItem := fyne.NewMenuItem("Cross-references", func() {
 			dispatchSelectionAction(state, selActionCrossRef, sel)
