@@ -121,21 +121,26 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// against that ordering changing, not the thing doing the work.
 	state.restore = nil
 
+	// The sender's note, BEFORE the render. addRecentChapter above already asked
+	// the store what note belongs here, and for a link arriving with a new one
+	// that answer is "none" — so this has to overwrite it and be in place before
+	// refresh(), or the first view of a freshly opened link shows no note and
+	// only a later navigation reveals it.
+	state.ActiveNote = t.Note
+	state.NoteMinimized = false
+	state.NoteVerseLo = t.VerseLo
+	if t.Note != "" {
+		rememberIncomingNote(state, t)
+	}
+
 	state.refresh()
 	if state.surfaceReading != nil {
 		state.surfaceReading()
 	}
-	// The sender's note, if the link carried one. Shown AFTER the passage is on
-	// screen, so dismissing it leaves the reader exactly where the link pointed.
-	state.ActiveNote = t.Note
-	state.NoteMinimized = false
-	if t.Note != "" {
-		rememberIncomingNote(state, t)
-		// Platforms with a native sticker draw the note beside the passage; the
-		// rest fall back to a card, which is a real surface rather than nothing.
-		if !notePaneHasSticker() {
-			showSharedNote(state, t.Note)
-		}
+	// Platforms with a native sticker draw the note beside the passage; the rest
+	// fall back to a card, which is a real surface rather than nothing.
+	if t.Note != "" && !notePaneHasSticker() {
+		showSharedNote(state, t.Note)
 	}
 }
 

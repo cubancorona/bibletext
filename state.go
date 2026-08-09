@@ -73,6 +73,10 @@ type AppState struct {
 	// kept but neither it nor its highlight is shown until they bring it back.
 	ActiveNote    string
 	NoteMinimized bool
+	// NoteVerseLo is the verse the note is attached to. Kept separately from the
+	// highlight because minimizing CLEARS the highlight — without this the note
+	// would lose its anchor and its marker would jump to the top of the chapter.
+	NoteVerseLo int
 
 	RecentChapters []ChapterVisit
 
