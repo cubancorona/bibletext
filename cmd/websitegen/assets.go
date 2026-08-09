@@ -941,12 +941,23 @@ const readerJSTemplate = `
   // the link was sent, so it is what the reader should arrive at; the passage
   // follows immediately under it.
   function rescrollToHighlight() {
-    if (noteBox || noteChip) {
-      (noteBox || noteChip).scrollIntoView({ block: 'start' });
-      return;
+    var go = function () {
+      if (noteBox || noteChip) {
+        (noteBox || noteChip).scrollIntoView({ block: 'start' });
+        return;
+      }
+      var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+      if (lit) lit.scrollIntoView({ block: 'center' });
+    };
+    // AFTER LAYOUT, not merely after insertion. Scrolling in the same turn as
+    // the insert measured the old layout and landed exactly the note's own
+    // height short — the note sat just above the top of the screen with only its
+    // tail showing. Two frames is the reliable "the box has a height now" point.
+    if (window.requestAnimationFrame) {
+      requestAnimationFrame(function () { requestAnimationFrame(go); });
+    } else {
+      setTimeout(go, 0);
     }
-    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
-    if (lit) lit.scrollIntoView({ block: 'center' });
   }
 
   function renderNote() {
