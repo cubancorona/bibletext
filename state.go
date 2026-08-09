@@ -68,6 +68,12 @@ type AppState struct {
 	HighlightedVerseEnd int // inclusive end; 0 or < start means a single verse
 	HasHighlightedVerse bool
 
+	// The note attached to that highlight, when the reader arrived on a shared
+	// link carrying one. Minimized means the reader collapsed it: the note is
+	// kept but neither it nor its highlight is shown until they bring it back.
+	ActiveNote    string
+	NoteMinimized bool
+
 	RecentChapters []ChapterVisit
 
 	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,

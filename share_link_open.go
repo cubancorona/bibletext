@@ -127,6 +127,8 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	}
 	// The sender's note, if the link carried one. Shown AFTER the passage is on
 	// screen, so dismissing it leaves the reader exactly where the link pointed.
+	state.ActiveNote = t.Note
+	state.NoteMinimized = false
 	if t.Note != "" {
 		showSharedNote(state, t.Note)
 	}
