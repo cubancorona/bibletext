@@ -225,18 +225,9 @@ plutil -extract Entitlements xml1 -o "$WORK/ent.plist" "$WORK/prof.plist"
 # paths: privacy.html and support.html (the URLs App Store Connect points at)
 # must keep opening in Safari. Never claim www. — it 301s to the apex, and
 # Apple requires the association file be served without redirects.
-#
-# NOT CLAIMED IN THIS RELEASE. The app can WRITE a shared link (Share as link,
-# Share with note) but does not yet OPEN one: receiving a link and drawing the
-# note beside the passage is still being built. Claiming the domain now would
-# route every shared link into an app that cannot show the note, so until that
-# lands a shared link opens in the WEB READER for everybody — which is where the
-# note is displayed, and where the whole feature already works.
-#
-# Restoring it is one line: delete the Delete below and re-add the array. The
-# association file stays published, so the claim starts working the moment a
-# build carries the entitlement again.
 /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$WORK/ent.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" "$WORK/ent.plist"
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:bibletext.co.uk" "$WORK/ent.plist"
 codesign -f -s "$CERT_HASH" --entitlements "$WORK/ent.plist" --generate-entitlement-der "$APP"
 
 # ── 7. assemble an .xcarchive around BibleText.app ───────────────────────────
