@@ -622,7 +622,14 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 					b.WriteByte(' ')
 				}
 			}
-			fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
+			// The number joins the highlight when its verse is highlighted:
+			// leaving it out punched a pale hole in the middle of the band,
+			// which reads as a rendering fault rather than as a highlight.
+			if isVerseHighlighted(state, v) {
+				fmt.Fprintf(&b, `<sup class="v hl">%d</sup><span class="hl">&nbsp;</span>`, v.Verse)
+			} else {
+				fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
+			}
 			// Authored poem lines become explicit <br> — a literal "\n" would
 			// be ordinary HTML whitespace (renders as a space). Escape first;
 			// htmlEscape leaves "\n" alone.

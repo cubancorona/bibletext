@@ -148,10 +148,12 @@ func applyNoteForCurrentChapter(state *AppState) {
 	if !ok {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
+		state.NoteVerseLo = 0
 		return
 	}
 	state.ActiveNote = n.Text
 	state.NoteMinimized = n.Minimized
+	state.NoteVerseLo = n.VerseLo
 	if n.Minimized {
 		return
 	}
@@ -220,5 +222,6 @@ func dropCurrentNote(state *AppState) {
 	deleteNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
 	state.ActiveNote = ""
 	state.NoteMinimized = false
+	state.NoteVerseLo = 0
 	clearHighlightedVerse(state)
 }
