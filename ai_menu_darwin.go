@@ -88,6 +88,51 @@ func bibleTextStudyMenuTapped(cAction, cText *C.char) {
 	})
 }
 
+// bibleTextNoteHidden is the tap menu's "Hide note": the note and its highlight
+// come down together, and the note is KEPT so the reader can bring it back.
+//
+//export bibleTextNoteHidden
+func bibleTextNoteHidden() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		hideCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
+// bibleTextNoteRestored is the collapsed marker being pressed: the note comes
+// back, and its highlight with it.
+//
+//export bibleTextNoteRestored
+func bibleTextNoteRestored() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		restoreCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
+// bibleTextNoteDeleted is the tap menu's "Delete note": the note goes for good,
+// and the highlight goes with it.
+//
+//export bibleTextNoteDeleted
+func bibleTextNoteDeleted() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		dropCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
 // bibleTextHighlightCleared fires when the reader single-taps a highlighted verse
 // and picks "Clear highlight" from the inline native menu. It drops the highlight
 // and re-renders so the .hl background wash disappears. Runs on the native UI

@@ -68,6 +68,16 @@ type AppState struct {
 	HighlightedVerseEnd int // inclusive end; 0 or < start means a single verse
 	HasHighlightedVerse bool
 
+	// The note attached to that highlight, when the reader arrived on a shared
+	// link carrying one. Minimized means the reader collapsed it: the note is
+	// kept but neither it nor its highlight is shown until they bring it back.
+	ActiveNote    string
+	NoteMinimized bool
+	// NoteVerseLo is the verse the note is attached to. Kept separately from the
+	// highlight because minimizing CLEARS the highlight — without this the note
+	// would lose its anchor and its marker would jump to the top of the chapter.
+	NoteVerseLo int
+
 	RecentChapters []ChapterVisit
 
 	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,
@@ -432,6 +442,11 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 		}
 	}
 	state.RecentChapters = updated
+	// Every book/chapter navigation funnels through here, so this is also the
+	// single place to pick up whatever note belongs to where the reader has just
+	// landed — that is what makes a note reappear on a later visit rather than
+	// living only as long as the link that brought it.
+	applyNoteForCurrentChapter(state)
 	// Every book/chapter navigation funnels through here, so this is the single
 	// place to persist the current location + history (no-op without a Fyne app).
 	persistReadingPosition(state)

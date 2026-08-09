@@ -472,8 +472,22 @@ func chapterRenderFingerprint(state *AppState) string {
 	// changes the TEXT without changing version/book/chapter, and the gate
 	// must not skip that re-render — the reader would keep the old decode
 	// (e.g. flattened poetry) until their next navigation.
-	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s|d%p",
-		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID(), state.Bible)
+	// The note is part of what the pane draws — it reserves a band in the text
+	// and floats a sticker in it — so it has to be part of the identity of a
+	// render. Without it the skip gate below would swallow every appear, hide,
+	// restore and delete: the reader would tap "Delete note" and watch nothing
+	// happen. Its LENGTH stands in for its text (notes are replaced wholesale,
+	// never edited in place) so a long note costs nothing to fingerprint.
+	note := "0"
+	if state.ActiveNote != "" {
+		m := 0
+		if state.NoteMinimized {
+			m = 1
+		}
+		note = fmt.Sprintf("%d.%d", len(state.ActiveNote), m)
+	}
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s|d%p|n%s",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID(), state.Bible, note)
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------
