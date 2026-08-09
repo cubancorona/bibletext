@@ -489,3 +489,45 @@ func TestKeyStoreFailedDeleteReportsFailure(t *testing.T) {
 		t.Error("a failed delete must report failure, not success")
 	}
 }
+
+// TestQuotedOneLineNeverDoublesTheOpeningMark: the AI sheets wrap the reader's
+// selection in curly double marks for display. A verse that OPENS a quotation
+// carries its own mark — Psalm 46:10 begins “Be still, and know that I am God.
+// — and wrapping that verbatim printed a doubled ““ in the Explain panel
+// (seen on an iPad screenshot). Marks INSIDE the line must survive: the line
+// previews what was highlighted, it is not the Bluebook share pipeline.
+func TestQuotedOneLineNeverDoublesTheOpeningMark(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"verse that opens a quotation",
+			"“Be still, and know that I am God.",
+			"“Be still, and know that I am God.”"},
+		{"plain prose is unchanged",
+			"For God so loved the world",
+			"“For God so loved the world”"},
+		{"selection carrying both of its own marks",
+			"“Be still, and know that I am God.”",
+			"“Be still, and know that I am God.”"},
+		{"an inner quotation is preserved",
+			"He said, “I am the way,” and they believed",
+			"“He said, “I am the way,” and they believed”"},
+		{"a trailing possessive apostrophe is not eaten",
+			"the disciples’",
+			"“the disciples’”"},
+		{"surrounding whitespace is collapsed away",
+			"  \n Be still  ",
+			"“Be still”"},
+	} {
+		if got := quotedOneLine(tc.in, 300); got != tc.want {
+			t.Errorf("%s:\n got  %q\n want %q", tc.name, got, tc.want)
+		}
+	}
+	// Truncation still applies, and the closing mark still lands last.
+	long := strings.Repeat("word ", 80)
+	got := quotedOneLine("“"+long, 40)
+	if !strings.HasPrefix(got, "“word") || !strings.HasSuffix(got, "…”") {
+		t.Errorf("truncated preview malformed: %q", got)
+	}
+	if strings.HasPrefix(got, "““") {
+		t.Errorf("truncated preview doubled the opening mark: %q", got)
+	}
+}
