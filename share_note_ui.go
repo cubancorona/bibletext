@@ -1,11 +1,7 @@
 package bibletext
 
-// Writing a shared note: the sheet that collects it before the share sheet opens.
-//
-// Only the WRITING half ships here. Receiving a note — opening a shared link in
-// the app and drawing the note beside the passage — is a separate feature on its
-// own branch; until it lands, a shared link opens in the web reader for
-// everybody, which is where the note is displayed.
+// Shared notes in the app: the sheet that writes one, and the card that shows
+// one that arrived.
 //
 // Untagged on purpose — no build tag, no cgo — so the whole flow unit-tests on
 // the host and the same code serves iPhone, iPad, macOS, Android, Windows and
@@ -154,6 +150,75 @@ func promptShareNote(state *AppState, selectedText string) {
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
 	focusEntry()
+}
+
+// showSharedNote presents a note that arrived on a link. It is deliberately a
+// card the reader dismisses rather than something drawn into the scripture:
+// the note is somebody's message about the passage, and it must never be
+// mistaken for the passage. The attribution line is load-bearing — a message
+// that could pass for the app's own voice would be a phishing surface.
+func showSharedNote(state *AppState, note string) {
+	if state == nil || state.window == nil {
+		return
+	}
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return
+	}
+	cnv := pickerCanvas(state)
+	if cnv == nil {
+		return
+	}
+	pal := state.pal()
+
+	if state.hideReadingOverlay != nil {
+		state.hideReadingOverlay()
+	}
+	var popup *widget.PopUp
+	closed := false
+	closeCard := func() {
+		if closed {
+			return
+		}
+		closed = true
+		if popup != nil {
+			popup.Hide()
+		}
+		if state.showReadingOverlay != nil {
+			state.showReadingOverlay()
+		}
+	}
+
+	who := canvas.NewText("Note from Friend", pal.TextMuted)
+	who.TextSize = 11
+
+	ref := canvas.NewText(state.CurrentBook+" "+strconv.Itoa(state.CurrentChapter), pal.Accent)
+	ref.TextStyle = fyne.TextStyle{Bold: true}
+	ref.TextSize = subheadingTextSize
+
+	// A plain wrapped Label: the note is TEXT. Nothing here interprets markup,
+	// and nothing in it becomes tappable.
+	body := widget.NewLabel(note)
+	body.Wrapping = fyne.TextWrapWord
+
+	okBtn := widget.NewButton("Read the passage", closeCard)
+	okBtn.Importance = widget.HighImportance
+
+	form := container.NewVBox(
+		who, ref,
+		widget.NewSeparator(),
+		body,
+		container.NewBorder(nil, nil, nil, container.NewHBox(okBtn)),
+	)
+
+	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	popup = widget.NewModalPopUp(card, cnv)
+	popup.Show()
+	w := float32(460)
+	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
+		w = cw
+	}
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 }
 
 // shareNoteReference is the passage label on the compose sheet — the same
