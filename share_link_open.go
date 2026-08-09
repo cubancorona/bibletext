@@ -125,6 +125,11 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	if state.surfaceReading != nil {
 		state.surfaceReading()
 	}
+	// The sender's note, if the link carried one. Shown AFTER the passage is on
+	// screen, so dismissing it leaves the reader exactly where the link pointed.
+	if t.Note != "" {
+		showSharedNote(state, t.Note)
+	}
 }
 
 // deliverShareLink marshals a link from a native callback onto the UI goroutine.

@@ -337,8 +337,8 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   transform:rotate(45deg);
 }
 .notewho{
-  margin:0 0 .3rem; color:var(--muted); font-size:.72rem;
-  letter-spacing:.04em; text-transform:uppercase;
+  margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
+  letter-spacing:.01em;
 }
 /* The note itself is set in the CHROME face, not the scripture serif: it is
    somebody's message, and it must never be mistaken for the text. */
@@ -764,7 +764,7 @@ const readerJSTemplate = `
     box.className = 'note';
     var who = document.createElement('p');
     who.className = 'notewho';
-    who.textContent = 'Note from whoever shared this';   // never "from BibleText"
+    who.textContent = 'Note from Friend';   // a person, never "from BibleText"
     var body = document.createElement('p');
     body.className = 'notetext';
     body.textContent = text;                             // TEXT, never markup
