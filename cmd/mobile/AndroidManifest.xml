@@ -42,26 +42,21 @@
 			<action android:name="android.intent.action.MAIN" />
 			<category android:name="android.intent.category.LAUNCHER" />
 		</intent-filter>
-		<!-- App Links: a shared bibletext.co.uk verse link opens the app.
-		     android:autoVerify makes Android check
-		     https://bibletext.co.uk/.well-known/assetlinks.json against this
-		     app's signing certificate at install time; unverified links are
-		     NOT claimed on Android 12+, so a mismatch degrades to the web page
-		     rather than to a broken app — which is the behaviour we want.
+		<!-- App Links: DELIBERATELY NOT DECLARED.
+		     The app can WRITE a shared bibletext.co.uk link (Share as link, Share
+		     with note) but does not yet OPEN one — receiving a link and drawing the
+		     note beside the passage is still being built. Claiming the links now
+		     would route every shared link into an app that cannot show the note, so
+		     until that lands a shared link opens in the WEB READER for everybody,
+		     which is where the note is displayed.
 
-		     The pathPrefixes are an ALLOW-LIST for the same reason the Apple
-		     association file is: /privacy.html and /support.html are the URLs
-		     registered with App Store Connect (and linked from the app), and
-		     they must always open in the browser. Never widen this to the bare
-		     host. -->
-		<intent-filter android:autoVerify="true">
-			<action android:name="android.intent.action.VIEW" />
-			<category android:name="android.intent.category.DEFAULT" />
-			<category android:name="android.intent.category.BROWSABLE" />
-			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/web/" />
-			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/bsb/" />
-			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/webc/" />
-		</intent-filter>
+		     assetlinks.json stays published, so the claim starts working the moment
+		     this filter comes back. When it does, restore an intent-filter with
+		     android:autoVerify="true" and the three pathPrefix entries — /web/,
+		     /bsb/ and /webc/ ONLY. That allow-list matters: /privacy.html and
+		     /support.html are registered with the stores and linked from the app,
+		     and must always open in the browser. Never widen it to the bare host.
+		-->
 	</activity>
 
 	<receiver android:name="org.golang.app.FyneNotificationReceiver"

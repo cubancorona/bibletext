@@ -72,7 +72,7 @@ func promptAskQuestion(state *AppState, selectedText string) {
 	ref.TextSize = subheadingTextSize
 
 	quote := widget.NewRichText(&widget.TextSegment{
-		Text: "“" + oneLinePreview(selectedText, 240) + "”",
+		Text: quotedOneLine(selectedText, 240),
 		Style: widget.RichTextStyle{
 			ColorName: colorNameMuted,
 			SizeName:  theme.SizeNameCaptionText,
