@@ -4,7 +4,21 @@ package bibletext
 //
 // THE CONTRACT (frozen; see bookslugs.go for why nothing here may change):
 //
-//	https://bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
+//	https://bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>][&n=<note>]
+//
+// THE FRAGMENT IS A KEY LIST, "&"-separated. Today two keys exist:
+//
+//	v=16 / v=16-18   the verse span, written bare as "v16" / "v16-18"
+//	n=<payload>      an optional note from the sender (share_note.go)
+//
+// UNKNOWN KEYS ARE IGNORED, NEVER REJECTED — by every parser, from the first
+// release onward. That single rule is what lets a key be added later without
+// stranding the links already sent, and it is why the grammar was made a key
+// list before the first link-capable release shipped rather than after.
+//
+// The bare "v16" spelling (rather than "v=16") is kept because it is what the
+// web reader already emits and what every link in the wild already looks like;
+// the parser accepts both.
 //
 // Every part is deliberate:
 //
@@ -50,6 +64,14 @@ var webVersionIDs = map[string]bool{"web": true, "bsb": true, "webc": true}
 // the wrong chapter. (The app cannot select across chapters today; fixing the
 // rule now means tomorrow's app needs no new pages.)
 func ShareLinkURL(versionID, book string, chapter, lo, hi int) string {
+	return ShareLinkURLWithNote(versionID, book, chapter, lo, hi, "")
+}
+
+// ShareLinkURLWithNote is ShareLinkURL plus an optional note from the sender.
+// An empty note (or one that is empty once normalized) yields exactly the link
+// ShareLinkURL would have produced — byte for byte — so adding this feature
+// changed nothing about the links that do not use it.
+func ShareLinkURLWithNote(versionID, book string, chapter, lo, hi int, note string) string {
 	slug, ok := BookSlug(book)
 	if !ok {
 		return ""
@@ -68,14 +90,22 @@ func ShareLinkURL(versionID, book string, chapter, lo, hi int) string {
 		chapter = 1
 	}
 	url := shareLinkBase + "/" + version + "/" + slug + "/" + strconv.Itoa(chapter) + "/"
+
+	var keys []string
 	switch {
-	case lo <= 0:
-		return url
+	case lo <= 0: // a chapter link names no verse
 	case hi > lo:
-		return url + "#v" + strconv.Itoa(lo) + "-" + strconv.Itoa(hi)
+		keys = append(keys, "v"+strconv.Itoa(lo)+"-"+strconv.Itoa(hi))
 	default:
-		return url + "#v" + strconv.Itoa(lo)
+		keys = append(keys, "v"+strconv.Itoa(lo))
 	}
+	if payload := EncodeNote(note); payload != "" {
+		keys = append(keys, "n="+payload)
+	}
+	if len(keys) == 0 {
+		return url
+	}
+	return url + "#" + strings.Join(keys, "&")
 }
 
 const defaultWebVersionID = "web"
