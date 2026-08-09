@@ -554,10 +554,16 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		letter-spacing: 0;
 		margin-right: 2px;
 	}`, numHex)
+	// NO font-weight here. The HTML importer resolves weight 600 to a real
+	// Georgia-Bold run, and bold Georgia sets ~17% wider than the regular face
+	// (measured: "highlighted words" 167.44pt regular vs 195.82pt bold at 21px),
+	// so highlighting a verse re-wrapped the paragraph and the text visibly
+	// jumped when the highlight was cleared. A highlight should mark the verse,
+	// not re-typeset it — the colour and the band already do that, which is what
+	// the desktop styled pane has always done (runColor, no weight change).
 	fmt.Fprintf(&b, `.hl {
 		color: %s;
 		background-color: %s;
-		font-weight: 600;
 		padding: 0 2px;
 		border-radius: 2px;
 	}`, highlightTextHex, highlightBgHex)
