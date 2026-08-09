@@ -81,19 +81,21 @@ func shareVerse(state *AppState, text string, asImage bool) {
 	cleaned, cite := prepareShareQuote(state, text)
 	version := state.currentVersion().Name
 	terminal := originalSentenceTerminal(state, cleaned)
+	// BOTH shares retain authored structure: source poetry lines and the reading
+	// view's paragraph boundaries. They are rebuilt from the chapter data, never
+	// copied from rendered wrapping, so resizing the reader cannot change what is
+	// shared. prepareShareQuote collapses every "\n" out of the selection, so
+	// without this the card could not break a psalm even though its renderer
+	// knows how (poemSegments) — a card is the one surface where a flattened
+	// psalm is most conspicuous.
+	cleaned = restoreShareLineBreaks(state, cleaned)
+	quote := formatBibleQuote(cleaned, terminal)
 	if asImage {
-		quote := formatBibleQuote(cleaned, terminal)
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
 		showShareImagePreview(state, quote, cite, version)
 		return
 	}
-	// Text shares retain only authored structure: source poetry lines and the
-	// reading view's paragraph boundaries. They are rebuilt from the chapter data,
-	// never copied from rendered wrapping, so resizing the reader cannot change the
-	// clipboard text. Image cards keep their existing continuous-text layout.
-	cleaned = restoreShareLineBreaks(state, cleaned)
-	quote := formatBibleQuote(cleaned, terminal)
 	nativeShareText(composeShareText(quote, cite, version))
 }
 
