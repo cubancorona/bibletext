@@ -103,6 +103,21 @@ func bibleTextNoteHidden() {
 	})
 }
 
+// bibleTextNoteRestored is the collapsed marker being pressed: the note comes
+// back, and its highlight with it.
+//
+//export bibleTextNoteRestored
+func bibleTextNoteRestored() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		restoreCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
 // bibleTextNoteDeleted is the tap menu's "Delete note": the note goes for good,
 // and the highlight goes with it.
 //
