@@ -41,7 +41,7 @@ const readerCSSTemplate = `
 :root{
   --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
   --accent:#2f4c86; --border:#bdb29f; --verse:#53688f; --red:#b23a2e;
-  --hl:#dde7f7;
+  --hl:#ffe08a;
   /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
      stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
      fall back per-glyph instead of tofu. */
@@ -52,7 +52,7 @@ const readerCSSTemplate = `
   :root{
     --bg:#191715; --surface:#221f1c; --text:#e9e3d9; --muted:#9d9487;
     --accent:#7ca0e4; --border:#39342e; --verse:#8ca8d8; --red:#e57373;
-    --hl:#222d42;
+    --hl:#3a2b0c;
   }
 }
 *{box-sizing:border-box}

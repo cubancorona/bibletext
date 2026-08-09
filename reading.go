@@ -497,7 +497,6 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	textHex := nrgbaToHex(pal.Text)
 	numHex := nrgbaToHex(pal.VerseNumber)
-	highlightTextHex := nrgbaToHex(pal.HighlightText)
 	highlightBgHex := nrgbaToHex(pal.Highlight)
 	redLetterHex := nrgbaToHex(pal.RedLetter)
 	redLetter := redLetterEnabled()
@@ -561,12 +560,15 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// jumped when the highlight was cleared. A highlight should mark the verse,
 	// not re-typeset it — the colour and the band already do that, which is what
 	// the desktop styled pane has always done (runColor, no weight change).
+	// NO colour override either. Recolouring the highlighted run threw away the
+	// red letters exactly where a reader is most likely to be looking — the verse
+	// somebody chose to send them. The band alone now says "highlighted", so red
+	// stays red inside it.
 	fmt.Fprintf(&b, `.hl {
-		color: %s;
 		background-color: %s;
 		padding: 0 2px;
 		border-radius: 2px;
-	}`, highlightTextHex, highlightBgHex)
+	}`, highlightBgHex)
 	fmt.Fprintf(&b, `.wj { color: %s; }`, redLetterHex)
 	// Poetic paragraphs set ragged-right: justification would stretch short
 	// poem lines full-width (TextKit does not reliably exempt forced-break
