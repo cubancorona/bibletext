@@ -727,6 +727,12 @@ const readerJSTemplate = `
       var hi = parseInt(endBox.value, 10);
       var frag = '';
       if (lo > 0) frag = '#v' + lo + (hi > lo ? '-' + hi : '');
+      // CLOSE FIRST. Going to a verse in the chapter already open changes only
+      // the fragment, and a fragment change does not load a document — so
+      // nothing tears the picker down and it sat there over the passage it had
+      // just jumped to. Navigating to another chapter hid the bug, because that
+      // really is a page load.
+      close();
       location.href = '/' + VERSION + '/' + sel.slug + '/' + ch + '/' + frag;
     }
 
