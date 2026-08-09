@@ -98,11 +98,7 @@ func bibleTextNoteHidden() {
 		return
 	}
 	fyne.Do(func() {
-		if state.ActiveNote == "" {
-			return
-		}
-		state.NoteMinimized = true
-		clearHighlightedVerse(state)
+		hideCurrentNote(state)
 		state.refreshReadingOnly()
 	})
 }
@@ -117,9 +113,7 @@ func bibleTextNoteDeleted() {
 		return
 	}
 	fyne.Do(func() {
-		state.ActiveNote = ""
-		state.NoteMinimized = false
-		clearHighlightedVerse(state)
+		dropCurrentNote(state)
 		state.refreshReadingOnly()
 	})
 }

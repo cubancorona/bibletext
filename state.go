@@ -438,6 +438,11 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 		}
 	}
 	state.RecentChapters = updated
+	// Every book/chapter navigation funnels through here, so this is also the
+	// single place to pick up whatever note belongs to where the reader has just
+	// landed — that is what makes a note reappear on a later visit rather than
+	// living only as long as the link that brought it.
+	applyNoteForCurrentChapter(state)
 	// Every book/chapter navigation funnels through here, so this is the single
 	// place to persist the current location + history (no-op without a Fyne app).
 	persistReadingPosition(state)

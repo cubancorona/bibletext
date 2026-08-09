@@ -130,7 +130,7 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	state.ActiveNote = t.Note
 	state.NoteMinimized = false
 	if t.Note != "" {
-		showSharedNote(state, t.Note)
+		rememberIncomingNote(state, t)
 	}
 }
 
