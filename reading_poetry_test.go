@@ -246,8 +246,52 @@ func TestBuildChapterHTMLPoetryHighlightSpan(t *testing.T) {
 	}
 
 	ahtml := buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 23))
-	if !strings.Contains(ahtml, "<b>He makes me lie down in green pastures;<br>He leads me beside quiet waters.</b>") {
+	if !strings.Contains(ahtml, "He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span>") {
 		t.Errorf("Android highlight span must carry the poem break inside it:\n%s", ahtml)
+	}
+}
+
+// A highlight marks a verse; it must not re-typeset it. Bold Georgia sets ~17%
+// wider than the regular face, so a weight change re-wrapped the paragraph and
+// the text jumped when the highlight cleared. Both mobile dialects are pinned
+// here because they are the two that used to bold.
+func TestHighlightDoesNotChangeWeight(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := psalm23State()
+	st.HasHighlightedVerse = true
+	st.HighlightedBook = "Psalms"
+	st.HighlightedChapter = 23
+	st.HighlightedVerse = 2
+
+	// Only the .hl rule: sup.v legitimately carries a weight for the verse
+	// number, and that never changes as a highlight comes and goes.
+	html := buildChapterHTML(st, st.Bible.GetChapter("Psalms", 23))
+	i := strings.Index(html, ".hl {")
+	if i < 0 {
+		t.Fatalf("no .hl rule in the chapter HTML:\n%s", html)
+	}
+	rule := html[i:]
+	if end := strings.Index(rule, "}"); end >= 0 {
+		rule = rule[:end]
+	}
+	if strings.Contains(rule, "font-weight") {
+		t.Errorf("the .hl rule must not change weight — it re-typesets the verse:\n%s", rule)
+	}
+
+	ahtml := buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 23))
+	i = strings.Index(ahtml, "He makes me lie down")
+	if i < 0 {
+		t.Fatalf("highlighted verse missing from Android HTML:\n%s", ahtml)
+	}
+	// The verse NUMBER legitimately keeps its <b>; the verse TEXT must not.
+	span := ahtml[strings.LastIndex(ahtml[:i], "<span"):]
+	if end := strings.Index(span, "</span>"); end >= 0 {
+		span = span[:end]
+	}
+	if strings.Contains(span, "<b>") {
+		t.Errorf("Android highlight must not bold the verse text:\n%s", span)
 	}
 }
 

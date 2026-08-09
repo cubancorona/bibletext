@@ -42,7 +42,11 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			switch {
 			case isVerseHighlighted(state, v):
 				// A search highlight wins visually over red-letter (as on iOS).
-				fmt.Fprintf(&b, `<span style="color:%s;background-color:%s"><b>%s</b></span>`, hlFG, hlBG, body)
+				// Colour and band only — NO <b>: bolding re-typesets the verse
+				// (the bold serif sets ~17% wider), so the paragraph re-wrapped
+				// and the text jumped when the highlight cleared. Matches iOS's
+				// .hl and the desktop pane, neither of which changes weight.
+				fmt.Fprintf(&b, `<span style="color:%s;background-color:%s">%s</span>`, hlFG, hlBG, body)
 			case redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse):
 				fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, body)
 			default:
