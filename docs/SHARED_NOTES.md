@@ -38,23 +38,46 @@ the first `-` and then fails `Atoi` on the tail, whose error path returns the lo
 verse. C works because the `?v=` alias is already an accepted form, consulted
 whenever the fragment has no `v` prefix.)
 
-**C dominates A**, so the real choice is B vs C:
+B is out on privacy: it puts the note text in the HTTP request line, where
+GitHub's infrastructure logs it and any proxy can read it. In an app that keeps
+API keys on device precisely so nobody else holds them, mailing the private half
+of the message to a third party is the one option that contradicts the product.
 
-- **B** keeps the fragment as `#v16-18`, so the single-verse highlight stays pure
-  CSS `:target` with zero JavaScript — but the note text goes into the HTTP
-  request line, where GitHub's infrastructure logs it and any proxy can read it.
-  For a private message between two people, in an app that keeps API keys on
-  device precisely so nobody else holds them, that is a real regression.
-- **C** keeps the note in the fragment, which browsers never transmit. The note
-  is seen by the sender, the recipient, and whatever messenger carried the link —
-  and by nobody else, ever, including us. The cost is that a note-bearing link's
-  verse highlight needs JavaScript, since the fragment is no longer `#v16`.
+That leaves A versus C, and the tempting reading is that C is strictly better —
+it is the only one that keeps an old app's range intact. **It is not worth it.**
 
-**Recommendation: C.** The privacy property is the whole posture of this project,
-and the cost is close to nothing: a note-bearing link already needs JavaScript to
-draw the bubble at all, so requiring it for that link's highlight adds no new
-dependency. Links without notes are completely unchanged and keep the zero-JS
-highlight.
+An old app opening a note-bearing link is *already* showing it without the note;
+that is the unmitigable part (see "What this cannot do"). So C spends a permanent
+change in the shape of every note link, forever, to protect a case that is
+degraded anyway and only until people update. And the change is not cosmetic:
+`share_link.go` and the docs state the contract as *the verse rides in the
+fragment*, with `?v=` documented as a form we TOLERATE inbound, never one we
+emit. Promoting an alias to an emitted primary form is a contract change that
+outlives us — these links sit in message threads for years — and it splits the
+passage identity across two places while starting to send verse numbers to
+someone's logs.
+
+What A actually costs, measured: `#v16-18-n<note>` lands an old app on John 3:16
+instead of 3:16-18. Right chapter, right passage, narrower highlight, on a link
+that was already missing its note.
+
+**Recommendation: A.** The note goes in the fragment, next to the verse, and the
+URL contract keeps its shape:
+
+```
+#v16-n<payload>        one verse, with a note
+#v16-18-n<payload>     a range, with a note
+#n<payload>            a chapter link with a note, no verse
+```
+
+Unambiguous even though base64url's alphabet includes `-`, because the verse part
+is strictly digits and dashes: `^v(\d+)(?:-(\d+))?(?:-n(.*))?$` anchors the verse
+and takes the payload greedily to the end.
+
+Both A and C give up the pure-CSS `:target` highlight on note-bearing links,
+since the fragment is no longer exactly `#v16` — which costs nothing, because
+such a link already needs JavaScript to draw the bubble. Links without notes are
+completely unchanged and keep the zero-JS highlight.
 
 ## Encoding, and how long the links get
 
@@ -144,8 +167,9 @@ without shipping an app release, so it is where the format should be proven.
 
 ## Open decisions
 
-1. **Placement B or C** — privacy versus a zero-JS highlight on note links.
-   Recommended: C.
+1. **Placement.** Recommended: A — note in the fragment beside the verse,
+   contract shape unchanged. The alternative (C) buys an old app's range
+   highlight back at the price of a permanent change to every note link.
 2. **Cap** — 280 characters unless there's a reason to go shorter.
 3. **Note in the message body too?** Recommended yes; it is what makes the
    feature work for people on older app versions.
