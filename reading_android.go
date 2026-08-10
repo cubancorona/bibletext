@@ -23,7 +23,7 @@ package bibletext
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
-                 btaShareTextM, btaShareImageM, btaSetAIEnabledM,
+                 btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
@@ -62,6 +62,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// Selection-menu AI gate — mirrors the Settings → Assistant choice; when off,
 	// onCreateActionMode omits the "Study with AI" submenu (Share/Cross-refs stay).
 	btaSetAIEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setAIEnabled", "(Z)V");
+	// Selection-menu notes gate — mirrors Settings → Shared notes; when off,
+	// onCreateActionMode omits "Share with note".
+	btaSetNotesEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setNotesEnabled", "(Z)V");
 	// Read-along (audio): highlight the narrated verse + the floating "Follow
 	// narration" pill, both painted on this same overlay (reading_android.go owns
 	// the BtBridge handle, so the audio read-along calls route through here).
@@ -80,7 +83,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
-	    btaSetAIEnabledM == NULL ||
+	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL) {
 		(*env)->ExceptionClear(env);
@@ -163,6 +166,12 @@ static void btaSetAIEnabled(uintptr_t jni_env, int on) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetAIEnabledM, on ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaSetNotesEnabled(uintptr_t jni_env, int on) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNotesEnabledM, on ? JNI_TRUE : JNI_FALSE);
 }
 
 // --- Read-along (audio) wrappers on the reading overlay ---------------------
@@ -285,6 +294,11 @@ func syncNativeAIMenu(state *AppState) {
 	}
 	runBta(func(env uintptr) {
 		C.btaSetAIEnabled(C.uintptr_t(env), on)
+		notesOn := C.int(0)
+		if notesFeatureOn(state) {
+			notesOn = 1
+		}
+		C.btaSetNotesEnabled(C.uintptr_t(env), notesOn)
 	})
 }
 

@@ -144,6 +144,15 @@ func applyNoteForCurrentChapter(state *AppState) {
 	if state == nil {
 		return
 	}
+	// Off means off, but it does NOT mean gone: the stored notes stay where they
+	// are unless the reader asked for them to be deleted, so switching back on
+	// brings them all back.
+	if !notesFeatureOn(state) {
+		state.ActiveNote = ""
+		state.NoteMinimized = false
+		state.NoteVerseLo = 0
+		return
+	}
 	n, ok := loadNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
 	if !ok {
 		state.ActiveNote = ""

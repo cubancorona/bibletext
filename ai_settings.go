@@ -459,6 +459,37 @@ func showAISettings(state *AppState) {
 	redLetter.SetChecked(redLetterEnabled())
 	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
 
+	// Shared notes. Turning them OFF asks what to do with the ones already
+	// received rather than deciding for the reader: a note is somebody else's
+	// message, and silently binning a stack of them is not a switch's business.
+	notes := widget.NewCheck("Show notes people share with you", nil)
+	notes.SetChecked(notesEnabled())
+	notes.OnChanged = func(on bool) {
+		if on {
+			setNotesEnabled(true)
+			state.refresh()
+			return
+		}
+		// Nothing saved yet — no question worth asking.
+		if len(readNotes(appPrefs())) == 0 {
+			setNotesEnabled(false)
+			state.refresh()
+			return
+		}
+		promptKeepOrDeleteNotes(state, func() {
+			setNotesEnabled(false)
+			state.refresh()
+		}, func() {
+			notes.SetChecked(true) // cancelled: put the switch back
+		})
+	}
+	notesNote := widget.NewRichText(&widget.TextSegment{
+		Text: "A shared link still opens the passage in BibleText when notes are off — only the message is left out. " +
+			"To stop links opening in the app at all, use iOS Settings.",
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+	})
+	notesNote.Wrapping = fyne.TextWrapWord
+
 	// Scripture text size — the app can't inherit the phone's Larger Text setting
 	// (Fyne renders its own canvas), so this is the reader's size control. Radio
 	// rows (not a slider): three named steps are easier to hit and to reason about.
@@ -556,6 +587,9 @@ func showAISettings(state *AppState) {
 		aiDisclosure,
 		sectionLabel("READING", pal),
 		textSizeRow,
+		sectionLabel("SHARED NOTES", pal),
+		notes,
+		notesNote,
 	)
 	if redLetterSupported() {
 		form.Add(redLetter)

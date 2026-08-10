@@ -192,6 +192,11 @@ public final class BtBridge {
     // GoNativeActivity does not expose; that link is not honoured, and the app
     // simply comes forward where the reader left off. singleTop (see the
     // manifest) is what stops it creating a second activity instead.
+    // Whether to offer writing a note. Set from Go on every reading-view build,
+    // the same way aiOn gates the Study with AI item.
+    public static boolean notesEnabled = true;
+    public static void setNotesEnabled(boolean on) { notesEnabled = on; }
+
     private static boolean launchLinkConsumed = false;
 
     private static void deliverLaunchLink(final Activity act) {
@@ -379,7 +384,7 @@ public final class BtBridge {
                 sh.add(0, 106, 0, "Share with citation");
                 sh.add(0, 107, 1, "Share as image");
                 sh.add(0, 108, 2, "Share as link");
-                sh.add(0, 109, 3, "Share with note");
+                if (notesEnabled) sh.add(0, 109, 3, "Share with note");
                 // Cross-references stays a plain root item: the toolbar may hoist
                 // it inline after Study with AI when there's room (a bonus slot on
                 // tablets), and it leads the custom items when AI is off — both

@@ -57,6 +57,10 @@ extern void bibleTextKeyboardChanged(double height);
 // omit the "Study with AI" submenu. Defaults to on, matching the preference.
 static int gBTAIEnabled = 1;
 void btIOSSetAIEnabled(int on) { gBTAIEnabled = on; }
+// Whether to offer writing a note. Same shape as the AI gate: Go pushes it
+// whenever the reading view is built.
+static int gBTNotesEnabled = 1;
+void btIOSSetNotesEnabled(int on) { gBTNotesEnabled = on; }
 
 // --- Reporter measure (iPad) ---------------------------------------------------
 // gReadingMeasure is the target text-column width in points (27.5em × body px —
@@ -168,14 +172,12 @@ static UITapGestureRecognizer *gHighlightTap = nil;
             bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
         }];
     };
-    UIMenu *share = [UIMenu menuWithTitle:@"Share" image:nil identifier:nil options:0
-                                 children:@[
+    NSMutableArray *shareKids = [NSMutableArray arrayWithArray:@[
                                      study(@"Share with citation", @"share-cite"),
                                      study(@"Share as image", @"share-image"),
-
-                                     study(@"Share as link", @"share-link"),
-                                     study(@"Share with note", @"share-link-note"),
-                                 ]];
+                                     study(@"Share as link", @"share-link")]];
+    if (gBTNotesEnabled) [shareKids addObject:study(@"Share with note", @"share-link-note")];
+    UIMenu *share = [UIMenu menuWithTitle:@"Share" children:shareKids];
     UIAction *xref = study(@"Cross-references", @"crossref");
 
     // Keep the three BibleText actions together as ONE group instead of scattering
@@ -1721,6 +1723,7 @@ type nativeReadingHost struct {
 // "Study with AI" submenu appears or disappears with the setting.
 func syncNativeAIMenu(state *AppState) {
 	on := C.int(0)
+	C.btIOSSetNotesEnabled(C.int(map[bool]int{true: 1, false: 0}[notesFeatureOn(state)]))
 	if aiFeaturesEnabled(state) {
 		on = 1
 	}
