@@ -510,6 +510,15 @@ func showAISettings(state *AppState) {
 	})
 	textSize.Horizontal = true
 	textSize.Required = true
+	// Three named steps side by side, but only where three fit. A horizontal
+	// RadioGroup divides its width into equal cells and does not shorten labels,
+	// so on a phone — where the body is ~340pt and this row wants ~382pt — the
+	// last option loses its end ("Extra l"). Stacking is the honest answer at that
+	// width; the sheet scrolls now, so the extra height costs nothing.
+	if textSize.MinSize().Width > aiPanelSize(cnv.Size()).Width-sheetChromeWidth {
+		textSize.Horizontal = false
+		textSize.Refresh()
+	}
 	textSize.SetSelected(currentLabel)
 	textSizeRow := container.NewVBox(
 		widget.NewLabel("Text size"),
@@ -534,6 +543,9 @@ func showAISettings(state *AppState) {
 	}
 
 	var card *fyne.Container // assigned below, before the popup shows
+	// fitSheet re-measures and re-sizes the sheet; assigned once the popup exists
+	// (see the sizing block at the end of this function).
+	var fitSheet func()
 	applyAssistant = func() {
 		// Mirror the choice into the native selection menus right away, so the
 		// Study-with-AI submenu is gone (or back) on the very next selection.
@@ -559,9 +571,9 @@ func showAISettings(state *AppState) {
 		// None-state open) reports a single-line MinSize until it has been laid
 		// out at its real width — which the FIRST Resize's layout pass does — so
 		// only the second measurement is wrap-accurate on the grow flip.
-		if popup != nil && card != nil {
-			popup.Resize(card.MinSize())
-			popup.Resize(card.MinSize())
+		if fitSheet != nil {
+			fitSheet()
+			fitSheet()
 		}
 	}
 	// Set the radio's visual selection WITHOUT firing its OnChanged (which would
@@ -598,21 +610,34 @@ func showAISettings(state *AppState) {
 	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
 	hint.TextSize = 11
 
+	// The settings body scrolls; the title bar and the closing hint do not. A sheet
+	// with a scrolling middle keeps the ✕ reachable no matter how long the body
+	// grows, which is the failure this replaced: the sheet used to be exactly as
+	// tall as its content, so a new section pushed the bottom of it off the screen
+	// with no way to reach what was cut off. See sheet_fit.go.
+	//
+	// The scroll only engages when the content genuinely does not fit — under the
+	// cap the sheet is its natural height and looks exactly as it always did.
+	// squeezeWidthLayout, not the bare form: a scroll widens its content to the
+	// content's MinSize and clips the overflow sideways, with no horizontal bar to
+	// reach it. See sheet_fit.go.
+	formBody := container.New(squeezeWidthLayout{}, form)
+	formScroll := container.NewVScroll(formBody)
 	inner := container.NewBorder(
 		container.NewVBox(header, widget.NewSeparator()),
 		container.NewPadded(hint),
 		nil, nil,
-		form,
+		formScroll,
 	)
 	// Chrome text at the standard 18px (the tighter layout — not a smaller font —
 	// does the de-cluttering). compactTheme stays as the one knob if we ever want to
 	// nudge just the sheet's text size.
 	themed := container.NewThemeOverride(inner, compactTheme{Theme: state.theme, text: 18})
 
-	// A CARD-sized sheet at a fixed width, auto-sizing its height to the content. Two
-	// things this buys us: the popup's overlay-background rectangle is only as big as
-	// the card (hidden behind the surface fill), so it never shows as a white wall;
-	// and there is no scroll view, so a stray scrollbar is impossible.
+	// A CARD-sized sheet at a fixed width, taking its height from the content but
+	// NEVER taller than the screen. The fixed width keeps the popup's overlay-
+	// background rectangle only as big as the card (hidden behind the surface
+	// fill), so it never shows as a white wall.
 	ps := aiPanelSize(cnv.Size())
 	card = container.New(fixedWidthLayout{width: ps.Width},
 		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
@@ -623,7 +648,6 @@ func showAISettings(state *AppState) {
 	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
 	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
 	popup = widget.NewPopUp(card, cnv)
-	popup.Resize(card.MinSize())
 	x := (cnv.Size().Width - ps.Width) / 2
 	if x < 0 {
 		x = 0
@@ -632,6 +656,28 @@ func showAISettings(state *AppState) {
 	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 		y = pos.Y + 16
 	}
+
+	// Re-measured rather than computed once: the sheet's height changes while it is
+	// open (assistant ↔ None swaps the whole key form in and out), and the reader's
+	// text-size choice changes it too.
+	fitSheet = func() {
+		if popup == nil || card == nil {
+			return
+		}
+		pos, sz := cnv.InteractiveArea()
+		h := scrollingSheetHeight(
+			popup.MinSize().Height,
+			formScroll.MinSize().Height,
+			formBody.MinSize().Height,
+			sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, y),
+		)
+		popup.Resize(fyne.NewSize(card.MinSize().Width, h))
+	}
+	// Twice, for the wrapping-RichText reason applyAssistant documents: the two
+	// disclosure paragraphs report a single line until a layout pass has run them
+	// at their real width, and the first Resize is what runs it.
+	fitSheet()
+	fitSheet()
 	popup.ShowAtPosition(fyne.NewPos(x, y))
 
 	// done() (overlay-restore cleanup) is called directly by the ✕. An outside-tap close
