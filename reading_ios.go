@@ -2029,9 +2029,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// Books tab and back, or a refresh that didn't change the text). A pending
 	// scroll restore forces the push so the scroll cadence runs. The fingerprint
 	// includes highlight + theme so a search-jump or light/dark flip still pushes.
-	if state.restore == nil && fp == lastPushedChapterFP {
+	// forceReposition defeats the skip: an explicit arrival must place the view
+	// even when the render is byte-identical (see AppState.forceReposition).
+	if state.restore == nil && !state.forceReposition && fp == lastPushedChapterFP {
 		return
 	}
+	state.forceReposition = false
 	lastPushedChapterFP = fp
 	lastPushedBookChapter = bc
 

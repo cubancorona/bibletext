@@ -477,9 +477,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	armPendingRestore(state)
 
-	if state.restore == nil && fp == lastPushedChapterFP {
+	// forceReposition defeats the skip: an explicit arrival must place the view
+	// even when the render is byte-identical (see AppState.forceReposition).
+	if state.restore == nil && !state.forceReposition && fp == lastPushedChapterFP {
 		return
 	}
+	state.forceReposition = false
 	lastPushedChapterFP = fp
 	lastPushedBookChapter = bc
 
