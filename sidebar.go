@@ -226,14 +226,9 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			state.refresh() // re-render the results in the new mode's context
 		}
 	}
-	toggle := buildSearchModeToggle(state, applyModeSwitch)
-	// The notes bubble sits beside the pair, not inside it: a different corpus
-	// deserves a different-looking control. rebuildWindow repaints both, so the
-	// fill lands on whichever one is now active.
-	notesBtn := buildNotesModeButton(state, func(mode searchMode) {
-		applyModeSwitch(mode)
-		rebuildWindow(state)
-	})
+	// One row owning Search / Find / the notes bubble, so the active fill can move
+	// between all three rather than two of them claiming to be active at once.
+	modeRow := buildSearchModeControls(state, applyModeSwitch)
 
 	state.focusSearch = func() {
 		if state.window == nil {
@@ -312,9 +307,8 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 
 	headerItems := []fyne.CanvasObject{sectionLabel("READ", pal)}
 	if aiOn || notesFeatureOn(state) {
-		// Each control collapses to a zero-height spacer when its own feature is
-		// off, so this row shows whichever of them exist.
-		headerItems = append(headerItems, container.NewBorder(nil, nil, nil, notesBtn, toggle))
+		// The row collapses to a zero-height spacer when neither feature is on.
+		headerItems = append(headerItems, modeRow)
 	}
 	headerItems = append(headerItems, fieldHost, captionHost, spacer(10))
 	if b := incompleteBibleBanner(state); b != nil {

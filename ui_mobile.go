@@ -638,21 +638,14 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.NotesMode = mode == modeNotes
 		applyMode()
 	}
-	toggle := buildSearchModeToggle(state, applyModeSwitch)
-
-	// The Search/Find pair, with the notes bubble as a separate control on the
-	// right — a different corpus, so a different-looking button. Each collapses to
-	// a zero-height spacer when its feature is off, so with the assistant on
-	// "None" AND notes off the whole row disappears.
-	notesBtn := buildNotesModeButton(state, func(mode searchMode) {
-		applyModeSwitch(mode)
-		rebuildWindow(state) // repaint the controls: the fill moves between them
-	})
+	// One row owning Search / Find / the notes bubble, so the active fill can move
+	// between all three. No rebuild on a mode change: applyModeSwitch swaps the
+	// field and results in place, and the row repaints its own buttons — a rebuild
+	// here would drop keyboard focus mid-search.
+	modeRow := buildSearchModeControls(state, applyModeSwitch)
 	var header *fyne.Container
 	if aiOn || notesFeatureOn(state) {
-		header = container.NewVBox(
-			container.NewBorder(nil, nil, nil, notesBtn, toggle),
-			fieldHost, aiDisclaimer)
+		header = container.NewVBox(modeRow, fieldHost, aiDisclaimer)
 	} else {
 		header = container.NewVBox(fieldHost, aiDisclaimer) // nothing to switch between
 	}

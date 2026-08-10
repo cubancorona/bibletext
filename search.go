@@ -296,9 +296,10 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	return container.NewCenter(container.NewVBox(items...))
 }
 
-// buildSearchModeToggle is a two-segment control switching the search UI between keyword
-// ("Search") and AI passage ("Find") search; the active half is filled. Shared by the
-// mobile Search tab and the desktop sidebar. On desktop it renders compact and quieter
+// buildSearchModeControls builds the whole mode row; see its definition below.
+// This older comment describes the two-segment Search/Find pair it contains: the
+// active half is filled, it is shared by the mobile Search tab and the desktop
+// sidebar, and on desktop it renders compact and quieter
 // (smaller text/padding, flat inactive half) — touch-sized buttons are too intrusive for
 // a mouse UI. (The narrative-answer "Ask" lives on the reading selection menu, not here.)
 // searchMode is which corpus the Search tab is pointed at.
@@ -325,83 +326,97 @@ func searchModeOf(state *AppState) searchMode {
 	return modeKeyword
 }
 
-// buildSearchModeToggle builds the Search / Find pair — the two ways of looking
-// through SCRIPTURE. Find appears only with an assistant chosen; with none there
-// is no choice to make and the control disappears entirely (callers lay it out
-// unconditionally and rely on that).
+// buildSearchModeControls builds the whole mode row: the Search / Find pair —
+// the two ways of looking through SCRIPTURE — and, set apart on the right, the
+// shared-notes bubble.
 //
-// Notes is deliberately NOT a third segment here. It searches a different corpus
-// — messages people sent you, not the Bible — and putting it in the same
-// segmented control implied the three were the same kind of thing. It gets its
-// own icon button beside this one; see buildNotesModeButton.
-func buildSearchModeToggle(state *AppState, onSelect func(mode searchMode)) fyne.CanvasObject {
-	if !aiFeaturesEnabled(state) {
+// ONE builder for all three, and this is not tidiness. The fill that marks the
+// active mode has to move BETWEEN them, so whatever owns it must be able to
+// reach all three at once. Built as two independent widgets, tapping Find lit
+// Find while the notes bubble stayed lit as well — two modes claiming to be
+// active, because the pair's apply() had never heard of the bubble.
+//
+// Notes is not a third segment inside the pair: it searches a different corpus,
+// and a third text segment implied the three were the same kind of thing. It is
+// an icon — the note bubble a note is actually drawn as — so the control and
+// what it opens read as one object, and so it cannot be mistaken for a third way
+// to search the Bible.
+//
+// Each half disappears with its feature (no assistant → no pair; notes off → no
+// bubble), and with neither left there is nothing to choose and the row collapses
+// to a zero-height spacer. Callers lay it out unconditionally and rely on that.
+func buildSearchModeControls(state *AppState, onSelect func(mode searchMode)) fyne.CanvasObject {
+	aiOn := aiFeaturesEnabled(state)
+	notesOn := notesFeatureOn(state)
+	if !aiOn && !notesOn {
 		return spacer(0)
 	}
-	compact := !fyne.CurrentDevice().IsMobile()
-	var kwBtn, aiBtn *widget.Button
-	apply := func(m searchMode) {
-		idle := widget.MediumImportance
-		if compact {
-			idle = widget.LowImportance // flat inactive → only the active half is filled
-		}
-		kwBtn.Importance = idle
-		aiBtn.Importance = idle
-		switch m {
-		case modeFind:
-			aiBtn.Importance = widget.HighImportance
-		case modeKeyword:
-			kwBtn.Importance = widget.HighImportance
-		}
-		// modeNotes fills NEITHER: the scripture pair is inactive while the
-		// reader is in their notes, and the notes button carries the highlight.
-		kwBtn.Refresh()
-		aiBtn.Refresh()
-	}
-	kwBtn = widget.NewButton("Search", func() { apply(modeKeyword); onSelect(modeKeyword) })
-	aiBtn = widget.NewButton("Find", func() { apply(modeFind); onSelect(modeFind) })
-	apply(searchModeOf(state))
-	grid := container.NewGridWithColumns(2, kwBtn, aiBtn)
-	if !compact {
-		return grid
-	}
-	// Shrink the text + padding so the toggle reads as a small, elegant control.
-	var base fyne.Theme = theme.DefaultTheme()
-	if state.theme != nil {
-		base = state.theme
-	}
-	return container.NewThemeOverride(grid, smallChipTheme{Theme: base})
-}
 
-// buildNotesModeButton is the shared-notes control: an icon, on its own, beside
-// the Search/Find pair rather than inside it.
-//
-// The icon is the note bubble itself (icons_embed.go), so the button and the
-// thing it opens are visibly one object — and being wordless it does not read as
-// a third way of searching the Bible, which is exactly the confusion a third
-// text segment created. Filled when the reader is in their notes, quiet
-// otherwise. Absent entirely when notes are switched off.
-func buildNotesModeButton(state *AppState, onSelect func(mode searchMode)) fyne.CanvasObject {
-	if !notesFeatureOn(state) {
-		return spacer(0)
+	compact := !fyne.CurrentDevice().IsMobile()
+	idle := widget.MediumImportance
+	if compact {
+		idle = widget.LowImportance // flat inactive → only the active one is filled
 	}
-	var btn *widget.Button
-	btn = widget.NewButtonWithIcon("", iconNoteBubble, func() {
-		// Tapping the notes button while already in notes goes back to scripture,
-		// so the control is a way out as well as a way in — otherwise the only
-		// exit is a segment that looks unrelated to it.
-		if searchModeOf(state) == modeNotes {
-			onSelect(modeKeyword)
-			return
+
+	var kwBtn, aiBtn, notesBtn *widget.Button
+	// apply is the single place the fill lives. Every control the row owns is set
+	// on every change, so exactly one of them can ever look active.
+	apply := func(m searchMode) {
+		if kwBtn != nil {
+			kwBtn.Importance = idle
+			aiBtn.Importance = idle
+			switch m {
+			case modeKeyword:
+				kwBtn.Importance = widget.HighImportance
+			case modeFind:
+				aiBtn.Importance = widget.HighImportance
+			}
+			kwBtn.Refresh()
+			aiBtn.Refresh()
 		}
-		onSelect(modeNotes)
-	})
-	if searchModeOf(state) == modeNotes {
-		btn.Importance = widget.HighImportance
-	} else {
-		btn.Importance = widget.LowImportance
+		if notesBtn != nil {
+			notesBtn.Importance = widget.LowImportance
+			if m == modeNotes {
+				notesBtn.Importance = widget.HighImportance
+			}
+			notesBtn.Refresh()
+		}
 	}
-	return btn
+
+	var pair fyne.CanvasObject = spacer(0)
+	if aiOn {
+		kwBtn = widget.NewButton("Search", func() { apply(modeKeyword); onSelect(modeKeyword) })
+		aiBtn = widget.NewButton("Find", func() { apply(modeFind); onSelect(modeFind) })
+		grid := container.NewGridWithColumns(2, kwBtn, aiBtn)
+		pair = grid
+		if compact {
+			// Shrink the text + padding so the pair reads as a small, elegant control.
+			var base fyne.Theme = theme.DefaultTheme()
+			if state.theme != nil {
+				base = state.theme
+			}
+			pair = container.NewThemeOverride(grid, smallChipTheme{Theme: base})
+		}
+	}
+
+	var right fyne.CanvasObject = spacer(0)
+	if notesOn {
+		notesBtn = widget.NewButtonWithIcon("", iconNoteBubble, func() {
+			// Tapping the bubble while already in notes goes back to scripture, so
+			// the control is a way out as well as a way in — otherwise the only exit
+			// is a segment that looks unrelated to it.
+			m := modeNotes
+			if searchModeOf(state) == modeNotes {
+				m = modeKeyword
+			}
+			apply(m)
+			onSelect(m)
+		})
+		right = notesBtn
+	}
+
+	apply(searchModeOf(state))
+	return container.NewBorder(nil, nil, nil, right, pair)
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {

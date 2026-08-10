@@ -111,6 +111,19 @@ type AppState struct {
 	// place that resolves the pair, so no caller has to remember the rule.
 	NotesMode bool
 
+	// forceReposition asks the next render to place the view even when nothing
+	// about the chapter changed.
+	//
+	// The reading panes skip their whole push — HTML rebuild AND the scroll
+	// cadence that rides on it — when the render fingerprint is unchanged. That
+	// is right for a repaint and WRONG for a navigation: tapping a note (or a
+	// search result) for the passage you are already reading produces an
+	// identical fingerprint, so the view never moved and the tap looked broken.
+	// The fingerprint's job is to avoid re-rendering, not to suppress
+	// re-positioning. Set by the explicit arrivals — a shared link, a note, a
+	// search result — and cleared by the render that honours it.
+	forceReposition bool
+
 	// NotesQuery filters the notes browser. It is deliberately NOT the keyword
 	// search query: switching Search → Notes with a scripture term still in the
 	// box would greet the reader with "no notes match" for a search they never
@@ -697,6 +710,10 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 	selectBook(state, verse.BookName, false)
 	state.CurrentChapter = verse.Chapter
 	addRecentChapter(state, verse.BookName, verse.Chapter)
+	// The reader asked to go here. Place the view even if this is the chapter
+	// already on screen with the very same verse already lit — otherwise the tap
+	// does nothing visible (see AppState.forceReposition).
+	state.forceReposition = true
 	state.HighlightedBook = verse.BookName
 	state.HighlightedChapter = verse.Chapter
 	state.HighlightedVerse = verse.Verse

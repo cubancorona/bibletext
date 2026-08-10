@@ -28,6 +28,11 @@ import (
 
 const devLinksEnabled = true
 
+// devLinksScrollY remembers how far down the scenario list the reader had got.
+// A package var rather than AppState: this page does not exist in a shipping
+// build, and its state has no business widening a type the whole app shares.
+var devLinksScrollY float32
+
 type devScenario struct {
 	name string
 	what string // what to look for — the expected result, in one line
@@ -197,9 +202,18 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// sideways, and a wrapping Label's MinSize is wider than a phone. Without it
 	// this page clipped its own descriptions — which would be a poor advert for a
 	// page whose job is finding exactly that.
+	scroll := container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewPadded(column)))
+
+	// Keep the reader's place in the list. Opening a scenario switches to the Read
+	// tab, and coming back rebuilds this page from scratch (that is how the mobile
+	// tab bar works), so without this every check sent you back to scenario one —
+	// and the whole point is working DOWN a list of twenty-one.
+	scroll.Offset = fyne.NewPos(0, devLinksScrollY)
+	scroll.OnScrolled = func(p fyne.Position) { devLinksScrollY = p.Y }
+
 	return container.NewBorder(
 		container.New(squeezeWidthLayout{}, container.NewPadded(head)), nil, nil, nil,
-		container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewPadded(column))))
+		scroll)
 }
 
 // shortenForDev keeps a long note payload from turning the row into a wall.

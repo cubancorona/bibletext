@@ -987,7 +987,8 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// already holds this exact chapter render (mirrors the iOS gate in
 	// pushChapterHTML); a pending scroll restore forces the push. SetHTML consumes
 	// the C string synchronously, so freeing right after the call is safe.
-	if state.restore != nil || fp != lastPushedChapterFP {
+	if state.restore != nil || state.forceReposition || fp != lastPushedChapterFP {
+		state.forceReposition = false
 		lastPushedChapterFP = fp
 		lastPushedBookChapter = bc
 		html := buildChapterHTML(state, verses)
