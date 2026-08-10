@@ -315,8 +315,8 @@ func TestSearchToggleUI(t *testing.T) {
 	defer app.Quit()
 	state := sampleState() // no keystore bound → AI features on by default
 
-	var picked []bool
-	toggle := buildSearchModeToggle(state, func(ai bool) { picked = append(picked, ai) })
+	var picked []searchMode
+	toggle := buildSearchModeToggle(state, func(m searchMode) { picked = append(picked, m) })
 
 	searchBtn := findTreeButton(toggle, "Search")
 	findBtn := findTreeButton(toggle, "Find")
@@ -336,8 +336,8 @@ func TestSearchToggleUI(t *testing.T) {
 
 	// Tapping Find reports AI mode and moves the fill.
 	test.Tap(findBtn)
-	if len(picked) != 1 || !picked[0] {
-		t.Fatalf("tapping Find must report ai=true, got %v", picked)
+	if len(picked) != 1 || picked[0] != modeFind {
+		t.Fatalf("tapping Find must report modeFind, got %v", picked)
 	}
 	if !filled(findBtn) || filled(searchBtn) {
 		t.Fatalf("expected Find filled after tap (search=%v find=%v)", searchBtn.Importance, findBtn.Importance)
@@ -345,8 +345,8 @@ func TestSearchToggleUI(t *testing.T) {
 
 	// Tapping Search flips back.
 	test.Tap(searchBtn)
-	if len(picked) != 2 || picked[1] {
-		t.Fatalf("tapping Search must report ai=false, got %v", picked)
+	if len(picked) != 2 || picked[1] != modeKeyword {
+		t.Fatalf("tapping Search must report modeKeyword, got %v", picked)
 	}
 	if !filled(searchBtn) || filled(findBtn) {
 		t.Fatal("expected Search filled again after flipping back")
@@ -359,7 +359,7 @@ func TestSearchToggleStartsInPersistedFindMode(t *testing.T) {
 	state := sampleState()
 	state.aiSearchMode = true // the session left off in Find mode
 
-	toggle := buildSearchModeToggle(state, func(bool) {})
+	toggle := buildSearchModeToggle(state, func(searchMode) {})
 	searchBtn := findTreeButton(toggle, "Search")
 	findBtn := findTreeButton(toggle, "Find")
 	if searchBtn == nil || findBtn == nil {

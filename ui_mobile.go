@@ -134,6 +134,16 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	case 2:
 		content = buildMobileSearchTab(state, gotoReadTab)
 		notifyReadingOverlay(overlayShouldShow(state))
+	case 3:
+		// Dev builds only; in a release build devLinksEnabled is false and this
+		// tab does not exist to be selected.
+		if devLinksEnabled {
+			content = buildDevLinksTab(state, gotoReadTab)
+			notifyReadingOverlay(false)
+			break
+		}
+		state.CurrentTab = 0
+		content = container.NewStack(rebuildMobileReadingPane(state))
 	default: // 0 = Read
 		readingHost := container.NewStack(rebuildMobileReadingPane(state))
 		state.showReading = func() {
@@ -205,6 +215,15 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 		{"Read", theme.DocumentIcon()},
 		{"Books", theme.MenuIcon()},
 		{"Search", theme.SearchIcon()},
+	}
+	// Development builds only (-tags bibletextdev). devLinksEnabled is a compile-
+	// time constant, so in a release build this branch and everything it reaches
+	// are eliminated — the page cannot ship. See dev_links_off.go.
+	if devLinksEnabled {
+		items = append(items, struct {
+			label string
+			icon  fyne.Resource
+		}{"Links", theme.MailSendIcon()})
 	}
 
 	cells := make([]fyne.CanvasObject, len(items))
@@ -320,6 +339,11 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	if !aiOn {
 		state.aiSearchMode = false
 		state.aiSearchActive = false
+	}
+	// Same for notes: a mode left over from before the reader switched them off
+	// would render a browser whose toggle is no longer on screen.
+	if !notesFeatureOn(state) {
+		state.NotesMode = false
 	}
 
 	resultsHost := container.NewStack()
@@ -520,6 +544,28 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	fieldHost := container.NewStack()
 	var applyMode func()
 
+	// --- Notes (the messages people have shared with you). ---
+	// Its own field, and its own query: switching Search → Notes with a scripture
+	// term still in the box would answer "no notes match" to a search the reader
+	// never made of their notes. Filtering is live and undebounced — it is a
+	// substring scan over at most notesMax short strings already in memory.
+	notesEntry := newSearchEntry()
+	notesEntry.SetPlaceHolder("Search your notes…")
+	notesEntry.SetText(state.NotesQuery)
+	repaintNotes := func() {
+		resultsHost.Objects = []fyne.CanvasObject{buildNotesBrowseView(state)}
+		resultsHost.Refresh()
+	}
+	notesEntry.OnChanged = func(q string) {
+		state.NotesQuery = q
+		repaintNotes()
+	}
+	notesEntry.OnSubmitted = func(string) { dismissKeyboard(state) }
+	clearNotesBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		notesEntry.SetText("") // fires OnChanged → repaint
+	})
+	clearNotesBtn.Importance = widget.LowImportance
+
 	// X buttons clear the field and its results.
 	clearKwBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		searchEntry.SetText("")
@@ -540,6 +586,17 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	clearAskBtn.Importance = widget.LowImportance
 
 	applyMode = func() {
+		if searchModeOf(state) == modeNotes {
+			aiDisclaimer.Hide()
+			stopAIBar()
+			fieldHost.Objects = []fyne.CanvasObject{
+				container.NewBorder(nil, nil, nil, clearNotesBtn, inputFrame(withCaret(state, notesEntry), pal.Border)),
+			}
+			resultsHost.Objects = []fyne.CanvasObject{buildNotesBrowseView(state)}
+			fieldHost.Refresh()
+			resultsHost.Refresh()
+			return
+		}
 		if state.aiSearchMode {
 			fieldHost.Objects = []fyne.CanvasObject{
 				container.NewBorder(nil, nil, nil, container.NewHBox(clearAskBtn, askBtn), inputFrame(withCaret(state, aiEntry), pal.Border)),
@@ -568,21 +625,26 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		resultsHost.Refresh()
 	}
 
-	toggle := buildSearchModeToggle(state, func(ai bool) {
+	toggle := buildSearchModeToggle(state, func(mode searchMode) {
+		ai := mode == modeFind
 		inFlight := state.cancelAISearch != nil
 		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
 		stopAIBar()
 		state.aiSearchCancelled = inFlight // abandoning is not a zero-result answer
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai // switch the results context with the mode
+		state.NotesMode = mode == modeNotes
 		applyMode()
 	})
 
+	// The toggle is laid out whenever there is more than one mode to choose
+	// between — with the assistant on "None" AND notes off it collapses to
+	// nothing, and buildSearchModeToggle returns a zero-height spacer for that.
 	var header *fyne.Container
-	if aiOn {
+	if aiOn || notesFeatureOn(state) {
 		header = container.NewVBox(toggle, fieldHost, aiDisclaimer)
 	} else {
-		header = container.NewVBox(fieldHost, aiDisclaimer) // no Search/Find toggle
+		header = container.NewVBox(fieldHost, aiDisclaimer) // nothing to switch between
 	}
 	applyMode() // initialise to the persisted mode (also shows/hides the AI disclaimer)
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, resultsHost)
