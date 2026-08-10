@@ -1205,6 +1205,20 @@ static void bibleTextEnsureTV(void) {
 // every touch (including scroll pans). Called from bibleTextApplyHTML.
 void bibleTextSetHasNote(int on) { gHasNote = on ? YES : NO; }
 
+// bibleTextOpenInBrowser hands a link back to the system. Opening a universal
+// link from INSIDE the app that claims it does not loop — iOS deliberately
+// routes it to the browser instead, which is exactly the escape hatch needed
+// when the app has decided the link is not its business.
+void bibleTextOpenInBrowser(const char *url) {
+    if (url == NULL || *url == 0) return;
+    NSString *s = [NSString stringWithUTF8String:url];
+    NSURL *u = [NSURL URLWithString:s];
+    if (u == nil) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[UIApplication sharedApplication] openURL:u options:@{} completionHandler:nil];
+    });
+}
+
 static void btIOSSetHighlightUIEnabled(BOOL on) {
     if (gReadingTV == nil) return;
     if (gHighlightTap) gHighlightTap.enabled = on;

@@ -24,6 +24,7 @@ static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
+                 btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
@@ -65,6 +66,8 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// Selection-menu notes gate — mirrors Settings → Shared notes; when off,
 	// onCreateActionMode omits "Share with note".
 	btaSetNotesEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setNotesEnabled", "(Z)V");
+	// Handing a shared link back out to the browser (notes off + the link has one).
+	btaOpenBrowserM = (*env)->GetStaticMethodID(env, btaClass, "openInBrowser", "(Ljava/lang/String;)V");
 	// Read-along (audio): highlight the narrated verse + the floating "Follow
 	// narration" pill, both painted on this same overlay (reading_android.go owns
 	// the BtBridge handle, so the audio read-along calls route through here).
@@ -83,7 +86,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
-	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL ||
+	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL) {
 		(*env)->ExceptionClear(env);
@@ -172,6 +175,14 @@ static void btaSetNotesEnabled(uintptr_t jni_env, int on) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNotesEnabledM, on ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaOpenBrowser(uintptr_t jni_env, char *url) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jstring s = (*env)->NewStringUTF(env, url);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaOpenBrowserM, s);
+	(*env)->DeleteLocalRef(env, s);
 }
 
 // --- Read-along (audio) wrappers on the reading overlay ---------------------
@@ -540,6 +551,24 @@ func armReadingRestore(verse int, delta, frac float64) {
 }
 
 // --- Share (text only on Android; share-as-image is iOS/macOS for now) -------
+
+// openLinkInBrowser hands a shared link back out to the default browser. Used
+// when the link carries a note and notes are switched off: the app cannot stop
+// the OS handing it the link — the manifest's App Links filter settles that at
+// build time — but it can decline it and pass it on, where the note still reads.
+//
+// The Java side names the browser explicitly, because a bare ACTION_VIEW would
+// resolve straight back to this app.
+func openLinkInBrowser(rawURL string) {
+	if rawURL == "" {
+		return
+	}
+	runBta(func(env uintptr) {
+		cs := C.CString(rawURL)
+		C.btaOpenBrowser(C.uintptr_t(env), cs)
+		C.free(unsafe.Pointer(cs))
+	})
+}
 
 func nativeShareText(s string) {
 	runBta(func(env uintptr) {
