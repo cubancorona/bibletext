@@ -34,15 +34,13 @@ func HandleShareLink(state *AppState, rawURL string) bool {
 	if !ok {
 		return false
 	}
-	// A link carrying a note, with notes switched off, is not ours to open: hand
-	// it to the browser, where the note still shows. The app cannot stop the OS
-	// waking it — that is settled by the entitlement and the manifest — but it can
-	// decline the link and pass it on, which is the nearest thing to "off".
-	//
-	// Only note-bearing links are handed over. A plain shared verse belongs in the
-	// app whatever the notes setting says.
+	// A link carrying a note, with notes switched off, is not ours to open
+	// unasked — but nor is it ours to silently throw away. Ask: read it in the
+	// browser, read the passage without it, or turn notes back on and read it
+	// here. Only note-bearing links reach this; a plain shared verse belongs in
+	// the app whatever the setting says.
 	if target.Note != "" && !notesFeatureOn(state) {
-		openLinkInBrowser(rawURL)
+		offerNoteLinkChoice(state, rawURL, target)
 		return true
 	}
 	if state.loadPhase != loadReady {
@@ -71,7 +69,7 @@ func consumePendingLink(state *AppState) {
 	// The setting can have changed between parking and consuming (a cold start
 	// reads preferences after the link arrives), so ask again here.
 	if t.Note != "" && !notesFeatureOn(state) {
-		openLinkInBrowser(raw)
+		offerNoteLinkChoice(state, raw, t)
 		return
 	}
 	applyShareTarget(state, t)
