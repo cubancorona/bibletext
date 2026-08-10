@@ -150,6 +150,10 @@ type AppState struct {
 	// delivers the link within milliseconds of launch. StartBackgroundLoad
 	// consumes it once the data is in place. See share_link_open.go.
 	pendingLink *ShareTarget
+	// pendingLinkRaw is the URL that target came from. The browser handoff needs
+	// the ORIGINAL link, not a reconstruction: only the original is guaranteed to
+	// be byte-identical to what the sender wrote.
+	pendingLinkRaw string
 
 	// loadPhase drives the startup loading screen. The Bible loads on a
 	// background goroutine (so the window appears instantly and the iOS launch

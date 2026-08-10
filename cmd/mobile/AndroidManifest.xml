@@ -75,6 +75,18 @@
 		android:foregroundServiceType="mediaPlayback" />
 	</application>
 
+	<!-- Package visibility (Android 11+): without this the app cannot SEE a
+	     browser to resolve, so handing a shared link back out — which is what
+	     happens when a note arrives with notes switched off — would silently do
+	     nothing. Declares only "something that opens https", nothing broader. -->
+	<queries>
+		<intent>
+			<action android:name="android.intent.action.VIEW" />
+			<category android:name="android.intent.category.BROWSABLE" />
+			<data android:scheme="https" />
+		</intent>
+	</queries>
+
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 	<uses-permission android:name="android.permission.INTERNET" />

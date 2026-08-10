@@ -194,6 +194,39 @@ public final class BtBridge {
     // manifest) is what stops it creating a second activity instead.
     // Whether to offer writing a note. Set from Go on every reading-view build,
     // the same way aiOn gates the Study with AI item.
+    // openInBrowser hands a shared link back out. A bare ACTION_VIEW would
+    // resolve straight back to THIS app — we claim these links — so the default
+    // browser is resolved and named explicitly. The probe URL is a generic https
+    // one so the resolve cannot match our own filters.
+    public static void openInBrowser(final String url) {
+        final Activity act = activity;
+        if (act == null || url == null || url.isEmpty()) return;
+        act.runOnUiThread(new Runnable() { public void run() {
+            try {
+                android.content.pm.PackageManager pm = act.getPackageManager();
+                android.content.Intent probe = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://example.invalid"));
+                probe.addCategory(android.content.Intent.CATEGORY_BROWSABLE);
+                android.content.pm.ResolveInfo ri = pm.resolveActivity(
+                        probe, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+
+                android.content.Intent go = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+                go.addCategory(android.content.Intent.CATEGORY_BROWSABLE);
+                go.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (ri != null && ri.activityInfo != null
+                        && !act.getPackageName().equals(ri.activityInfo.packageName)) {
+                    go.setPackage(ri.activityInfo.packageName);
+                }
+                act.startActivity(go);
+            } catch (Throwable t) {
+                // No browser, or the chooser refused: leaving the reader where
+                // they are beats crashing over a link we chose not to open.
+            }
+        }});
+    }
+
     public static boolean notesEnabled = true;
     public static void setNotesEnabled(boolean on) { notesEnabled = on; }
 
