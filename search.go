@@ -29,6 +29,12 @@ func trackSearchScroll(state *AppState, scroll *container.Scroll) {
 }
 
 func buildSearchResultsView(state *AppState) fyne.CanvasObject {
+	// Notes mode is its own corpus, so it short-circuits before any of the verse
+	// paths below. searchModeOf validates the flag against the feature switch, so
+	// a mode left over from before notes were turned off cannot land here.
+	if searchModeOf(state) == modeNotes {
+		return buildNotesBrowseView(state)
+	}
 	// When the current results context is the AI search, render the matching state — the
 	// passages, or (driven from state, for desktop where results replace the reading pane)
 	// the in-progress / no-key / error / prompt states. This also powers "back to results"
@@ -295,34 +301,75 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 // mobile Search tab and the desktop sidebar. On desktop it renders compact and quieter
 // (smaller text/padding, flat inactive half) — touch-sized buttons are too intrusive for
 // a mouse UI. (The narrative-answer "Ask" lives on the reading selection menu, not here.)
-func buildSearchModeToggle(state *AppState, onSelect func(ai bool)) fyne.CanvasObject {
-	if !aiFeaturesEnabled(state) {
-		// Settings → Assistant is "None": there is no Search/Find switch. The
-		// callers already omit this from their layouts; this keeps the constructor
-		// self-safe if it's ever invoked directly.
+// searchMode is which corpus the Search tab is pointed at.
+type searchMode int
+
+const (
+	modeKeyword searchMode = iota // the Bible, by word
+	modeFind                      // the Bible, by natural-language AI Find
+	modeNotes                     // the notes people have shared with you
+)
+
+// searchModeOf resolves the two mode flags into one answer, and is the ONLY
+// place that knows the precedence. Both flags are validated against whether
+// their feature is switched on, so a mode left over from before the reader
+// turned the assistant to "None" (or turned notes off) can never strand the tab
+// in a mode whose control is no longer on screen.
+func searchModeOf(state *AppState) searchMode {
+	switch {
+	case state.NotesMode && notesFeatureOn(state):
+		return modeNotes
+	case state.aiSearchMode && aiFeaturesEnabled(state):
+		return modeFind
+	}
+	return modeKeyword
+}
+
+// buildSearchModeToggle builds the segmented control over whichever modes are
+// actually available: Find appears only with an assistant chosen, Notes only
+// with shared notes switched on. With nothing but keyword search left there is
+// no choice to offer and the control disappears entirely — callers lay it out
+// unconditionally and rely on that.
+func buildSearchModeToggle(state *AppState, onSelect func(mode searchMode)) fyne.CanvasObject {
+	type seg struct {
+		label string
+		mode  searchMode
+	}
+	segs := []seg{{"Search", modeKeyword}}
+	if aiFeaturesEnabled(state) {
+		segs = append(segs, seg{"Find", modeFind})
+	}
+	if notesFeatureOn(state) {
+		segs = append(segs, seg{"Notes", modeNotes})
+	}
+	if len(segs) < 2 {
 		return spacer(0)
 	}
+
 	compact := !fyne.CurrentDevice().IsMobile()
-	var kwBtn, aiBtn *widget.Button
-	apply := func(ai bool) {
+	btns := make([]*widget.Button, len(segs))
+	cells := make([]fyne.CanvasObject, len(segs))
+	apply := func(m searchMode) {
 		idle := widget.MediumImportance
 		if compact {
-			idle = widget.LowImportance // flat inactive → only the active half is filled
+			idle = widget.LowImportance // flat inactive → only the active segment is filled
 		}
-		kwBtn.Importance = idle
-		aiBtn.Importance = idle
-		if ai {
-			aiBtn.Importance = widget.HighImportance
-		} else {
-			kwBtn.Importance = widget.HighImportance
+		for i, sg := range segs {
+			if sg.mode == m {
+				btns[i].Importance = widget.HighImportance
+			} else {
+				btns[i].Importance = idle
+			}
+			btns[i].Refresh()
 		}
-		kwBtn.Refresh()
-		aiBtn.Refresh()
 	}
-	kwBtn = widget.NewButton("Search", func() { apply(false); onSelect(false) })
-	aiBtn = widget.NewButton("Find", func() { apply(true); onSelect(true) })
-	apply(state.aiSearchMode)
-	grid := container.NewGridWithColumns(2, kwBtn, aiBtn)
+	for i, sg := range segs {
+		i, sg := i, sg
+		btns[i] = widget.NewButton(sg.label, func() { apply(sg.mode); onSelect(sg.mode) })
+		cells[i] = btns[i]
+	}
+	apply(searchModeOf(state))
+	grid := container.NewGridWithColumns(len(cells), cells...)
 	if !compact {
 		return grid
 	}
@@ -366,6 +413,10 @@ type searchResultCard struct {
 	content fyne.CanvasObject
 	hoverBg color.NRGBA
 	bg      *canvas.Rectangle
+	// onTap overrides the default "open this verse". The Notes mode reuses this
+	// card so a note row is the same tap target, the same hover, and the same
+	// shape as the search hits it sits beside.
+	onTap func()
 }
 
 func newSearchResultCard(state *AppState, verse Verse, content fyne.CanvasObject, pal palette) *searchResultCard {
@@ -381,6 +432,10 @@ func (c *searchResultCard) CreateRenderer() fyne.WidgetRenderer {
 }
 
 func (c *searchResultCard) Tapped(*fyne.PointEvent) {
+	if c.onTap != nil {
+		c.onTap()
+		return
+	}
 	openSearchResult(c.state, c.verse)
 }
 

@@ -106,6 +106,17 @@ type AppState struct {
 	// survives the window rebuilds that tab switches trigger.
 	aiSearchMode bool
 
+	// NotesMode is the Search tab's third mode: browsing the notes people have
+	// shared. Mutually exclusive with aiSearchMode — searchModeOf is the one
+	// place that resolves the pair, so no caller has to remember the rule.
+	NotesMode bool
+
+	// NotesQuery filters the notes browser. It is deliberately NOT the keyword
+	// search query: switching Search → Notes with a scripture term still in the
+	// box would greet the reader with "no notes match" for a search they never
+	// made of their notes.
+	NotesQuery string
+
 	// Annotations is the foundation for note/highlight + research features. It is
 	// populated/persisted by future work; the reading view already renders verses
 	// as selectable, individually-referenceable blocks.
@@ -664,7 +675,14 @@ func runSearch(state *AppState, trimmed string) {
 	state.refreshReadingOnly()
 }
 
+// openSearchResult opens a single verse. openSearchResultRange is the same act
+// for a passage that spans several — a note's range, say — kept as one function
+// so the two arrivals cannot drift apart.
 func openSearchResult(state *AppState, verse Verse) {
+	openSearchResultRange(state, verse, 0)
+}
+
+func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 	// Drop the search field's focus (and the soft keyboard) BEFORE rebuilding. When a
 	// result is tapped the Search-tab field is usually still focused; jumping to the
 	// Read tab then dismissing the keyboard can leave the field's pixels ghosting over
@@ -682,7 +700,8 @@ func openSearchResult(state *AppState, verse Verse) {
 	state.HighlightedBook = verse.BookName
 	state.HighlightedChapter = verse.Chapter
 	state.HighlightedVerse = verse.Verse
-	state.HasHighlightedVerse = true
+	state.HighlightedVerseEnd = endVerse
+	state.HasHighlightedVerse = verse.Verse > 0
 	state.IsSearching = false
 	state.CanReturnToSearchResults = true
 	state.refresh()

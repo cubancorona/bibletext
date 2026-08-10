@@ -50,7 +50,12 @@ func TestSearchModeToggleHiddenWhenAIOff(t *testing.T) {
 	defer app.Quit()
 
 	state := aiOffState()
-	toggle := buildSearchModeToggle(state, func(bool) { t.Fatal("onSelect must never fire with AI off") })
+	// Notes off TOO: with notes on there is still a Search|Notes choice to make,
+	// and a toggle to make it with. What this pins is the no-choice case — no
+	// assistant and no notes leaves one mode, so no control at all.
+	setNotesEnabled(false)
+	defer setNotesEnabled(true)
+	toggle := buildSearchModeToggle(state, func(searchMode) { t.Fatal("onSelect must never fire with nothing to choose") })
 	if toggle == nil {
 		t.Fatal("expected a placeholder object")
 	}
@@ -100,7 +105,7 @@ func TestSidebarForcesKeywordModeWhenAIOff(t *testing.T) {
 	if state.aiSearchMode || state.aiSearchActive {
 		t.Fatal("building the sidebar with AI off must force keyword mode")
 	}
-	for _, txt := range collectText(buildSearchModeToggle(state, func(bool) {})) {
+	for _, txt := range collectText(buildSearchModeToggle(state, func(searchMode) {})) {
 		if txt == "Find" {
 			t.Fatal("no Find control may exist with AI off")
 		}

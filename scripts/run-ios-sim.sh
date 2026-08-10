@@ -21,6 +21,20 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
 APP_ID="uk.co.bibletext"
+
+# --dev adds the bibletextdev build tag, which compiles in the Links tab: a page
+# of shared-link scenarios that call the real HandleShareLink. It exists because
+# a universal link cannot be triggered in the simulator and needs a tap from
+# another app on a device, so this is the only way to exercise that path
+# directly. Release builds never pass the tag, so the page cannot ship —
+# dev_links_off.go is what a shipping build compiles instead.
+DEV_TAG=""
+for arg in "$@"; do
+    case "$arg" in
+        --dev) DEV_TAG=",bibletextdev" ;;
+    esac
+done
+
 DEVICE_NAME="${BIBLETEXT_SIM_DEVICE:-iPhone 15}"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
@@ -115,7 +129,7 @@ if ( cd "$REPO_ROOT" && CGO_ENABLED=1 GOOS=ios GOARCH="$(go env GOARCH)" \
         CC="$SIM_CLANG" CXX="${SIM_CLANG}++" \
         CGO_CFLAGS="$SIM_CF" CGO_CXXFLAGS="$SIM_CF" \
         CGO_LDFLAGS="$SIM_CF -Wl,-sectcreate,__TEXT,__entitlements,$SIM_ENT" \
-        go build -tags ios -ldflags=-w -o "$SIM_MAIN" ./cmd/mobile ); then
+        go build -tags "ios$DEV_TAG" -ldflags=-w -o "$SIM_MAIN" ./cmd/mobile ); then
     mv -f "$SIM_MAIN" "$APP_DIR/$APP_NAME/main"
 else
     echo "==> entitlements relink failed; continuing with fyne's binary (Keychain falls back to Preferences)" >&2
