@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const prefSharedNotes = "shared.notes"
@@ -40,6 +41,13 @@ type SharedNote struct {
 	// range — neither the bubble nor its highlight shows until they bring it
 	// back, which is what makes minimize different from delete.
 	Minimized bool `json:"m,omitempty"`
+
+	// Received is when the note arrived, as a Unix time in seconds. It exists so
+	// the browser can offer "newest first", which is what a reader actually wants
+	// from a list of messages. omitempty and additive: notes stored before this
+	// field existed simply have 0, and sort as the oldest — a wrong position for
+	// a handful of old notes is a far better outcome than a migration.
+	Received int64 `json:"ts,omitempty"`
 }
 
 func noteKey(versionID, book string, chapter int) string {
@@ -97,11 +105,25 @@ func writeNotes(p prefStore, notes map[string]SharedNote) {
 }
 
 // saveNote stores (or replaces) the note on a passage.
+// noteNow is the clock, indirected so tests can pin it.
+var noteNow = func() int64 { return time.Now().Unix() }
+
 func saveNote(p prefStore, n SharedNote) {
 	if strings.TrimSpace(n.Text) == "" || n.Book == "" || n.Chapter < 1 {
 		return
 	}
 	notes := readNotes(p)
+	// Keep the ORIGINAL arrival time when re-saving a note that is already
+	// stored. saveNote is how minimize and restore persist themselves, so
+	// stamping unconditionally would shuffle a note to the top of "newest first"
+	// every time the reader collapsed it — the list would reorder itself under
+	// their hand for no reason they could see.
+	if prev, ok := notes[n.key()]; ok && n.Received == 0 {
+		n.Received = prev.Received
+	}
+	if n.Received == 0 {
+		n.Received = noteNow()
+	}
 	notes[n.key()] = n
 	writeNotes(p, notes)
 }

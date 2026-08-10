@@ -34,7 +34,7 @@ func TestSortedNotesUsesCanonOrder(t *testing.T) {
 		"e": {Book: "Psalms", Chapter: 23, VerseLo: 5, Text: "x"},
 		"f": {Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "x"},
 	}
-	got := sortedNotes(notes, order)
+	got := sortedNotes(notes, order, sortBook)
 	want := []string{"Genesis 1", "Psalms 23:1", "Psalms 23:5", "John 3", "John 11", "Revelation 22"}
 	if len(got) != len(want) {
 		t.Fatalf("got %d notes, want %d", len(got), len(want))
@@ -54,7 +54,7 @@ func TestSortedNotesKeepsBooksTheCanonLacks(t *testing.T) {
 		"a": {Book: "Tobit", Chapter: 4, Text: "x"},
 		"b": {Book: "John", Chapter: 3, Text: "x"},
 	}
-	got := sortedNotes(notes, order)
+	got := sortedNotes(notes, order, sortBook)
 	if len(got) != 2 {
 		t.Fatalf("a note was dropped: %d of 2", len(got))
 	}
@@ -138,16 +138,16 @@ func TestBrowsableNotesRespectsTheSwitch(t *testing.T) {
 	st.NotesMode = true
 
 	setNotesEnabled(true)
-	if got := len(browsableNotes(st)); got != 1 {
-		t.Errorf("expected the stored note, got %d", got)
+	if got, total := browsableNotes(st); len(got) != 1 || total != 1 {
+		t.Errorf("expected the stored note, got %d of %d", len(got), total)
 	}
 	setNotesEnabled(false)
-	if got := len(browsableNotes(st)); got != 0 {
-		t.Errorf("notes are off; expected none, got %d", got)
+	if got, total := browsableNotes(st); len(got) != 0 || total != 0 {
+		t.Errorf("notes are off; expected none, got %d of %d", len(got), total)
 	}
 	setNotesEnabled(true)
-	if got := len(browsableNotes(st)); got != 1 {
-		t.Errorf("switching back on must bring it back, got %d", got)
+	if got, _ := browsableNotes(st); len(got) != 1 {
+		t.Errorf("switching back on must bring it back, got %d", len(got))
 	}
 }
 
@@ -206,5 +206,121 @@ func TestOpenNoteRestoresAMinimizedOne(t *testing.T) {
 	}
 	if back.Minimized {
 		t.Error("opening a minimized note from the list should restore it")
+	}
+}
+
+// Newest first is the default, because these are messages: the one that just
+// arrived is the one you opened the list for.
+func TestSortedNotesNewestFirst(t *testing.T) {
+	order := map[string]int{"Genesis": 0, "John": 42}
+	notes := map[string]SharedNote{
+		"a": {Book: "Genesis", Chapter: 1, Text: "oldest", Received: 100},
+		"b": {Book: "John", Chapter: 3, Text: "newest", Received: 300},
+		"c": {Book: "John", Chapter: 1, Text: "middle", Received: 200},
+	}
+	got := sortedNotes(notes, order, sortNewest)
+	want := []string{"newest", "middle", "oldest"}
+	for i, w := range want {
+		if got[i].Text != w {
+			t.Errorf("position %d: got %q, want %q", i, got[i].Text, w)
+		}
+	}
+	// Same data, the other order: the canon decides instead.
+	got = sortedNotes(notes, order, sortBook)
+	wantRefs := []string{"Genesis 1", "John 1", "John 3"}
+	for i, w := range wantRefs {
+		if ref := noteReference(got[i]); ref != w {
+			t.Errorf("book order position %d: got %q, want %q", i, ref, w)
+		}
+	}
+}
+
+// Notes stored before Received existed have a zero stamp. They must still sort
+// deterministically rather than shuffling between renders.
+func TestSortedNotesIsStableWithoutTimestamps(t *testing.T) {
+	order := map[string]int{"Genesis": 0, "John": 42}
+	notes := map[string]SharedNote{
+		"a": {Book: "John", Chapter: 3, Text: "x"},
+		"b": {Book: "Genesis", Chapter: 1, Text: "x"},
+		"c": {Book: "John", Chapter: 1, Text: "x"},
+	}
+	first := sortedNotes(notes, order, sortNewest)
+	for i := 0; i < 5; i++ {
+		again := sortedNotes(notes, order, sortNewest)
+		for j := range first {
+			if noteReference(first[j]) != noteReference(again[j]) {
+				t.Fatalf("order changed between renders at %d: %q then %q",
+					j, noteReference(first[j]), noteReference(again[j]))
+			}
+		}
+	}
+}
+
+// Minimizing a note must NOT move it to the top of "newest first" — saveNote is
+// how minimize persists itself, so an unconditional stamp would reorder the list
+// under the reader's hand.
+func TestMinimizingDoesNotRestampANote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	p := fyne.CurrentApp().Preferences()
+
+	noteNow = func() int64 { return 1000 }
+	defer func() { noteNow = func() int64 { return 0 } }()
+	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "hi"})
+
+	got, ok := loadNote(p, "web", "John", 3)
+	if !ok || got.Received != 1000 {
+		t.Fatalf("expected the arrival stamped at 1000, got %+v", got)
+	}
+
+	noteNow = func() int64 { return 9999 } // time passes
+	setNoteMinimized(p, "web", "John", 3, true)
+
+	got, _ = loadNote(p, "web", "John", 3)
+	if got.Received != 1000 {
+		t.Errorf("minimizing restamped the note: %d, want the original 1000", got.Received)
+	}
+	if !got.Minimized {
+		t.Error("minimize did not stick")
+	}
+}
+
+// The header line is the answer to "is this everything?", so its counts have to
+// be exact and its wording unambiguous.
+func TestNotesHeaderLine(t *testing.T) {
+	for _, tc := range []struct {
+		shown, total int
+		query        string
+		want         string
+	}{
+		{0, 0, "", ""},
+		{1, 1, "", "Your one note."},
+		{7, 7, "", "All 7 notes."},
+		{3, 7, "hosp", "3 of 7 notes match “hosp”."},
+		{7, 7, "e", "All 7 notes match “e”."},
+		{0, 7, "zzz", "No notes match “zzz”."},
+		{0, 7, "  zzz  ", "No notes match “zzz”."},
+	} {
+		if got := notesHeaderLine(tc.shown, tc.total, tc.query); got != tc.want {
+			t.Errorf("notesHeaderLine(%d,%d,%q) = %q, want %q",
+				tc.shown, tc.total, tc.query, got, tc.want)
+		}
+	}
+}
+
+// The sort choice must survive a relaunch, or it is a control that does nothing.
+func TestNotesSortPersists(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	if got := notesSortPref(); got != sortNewest {
+		t.Errorf("default should be newest first, got %v", got)
+	}
+	setNotesSortPref(sortBook)
+	if got := notesSortPref(); got != sortBook {
+		t.Errorf("book order did not stick, got %v", got)
+	}
+	setNotesSortPref(sortNewest)
+	if got := notesSortPref(); got != sortNewest {
+		t.Errorf("newest first did not stick, got %v", got)
 	}
 }

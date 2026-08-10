@@ -625,7 +625,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		resultsHost.Refresh()
 	}
 
-	toggle := buildSearchModeToggle(state, func(mode searchMode) {
+	// Shared by both controls, so switching mode means the same thing however the
+	// reader got there.
+	applyModeSwitch := func(mode searchMode) {
 		ai := mode == modeFind
 		inFlight := state.cancelAISearch != nil
 		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
@@ -635,14 +637,22 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.aiSearchActive = ai // switch the results context with the mode
 		state.NotesMode = mode == modeNotes
 		applyMode()
-	})
+	}
+	toggle := buildSearchModeToggle(state, applyModeSwitch)
 
-	// The toggle is laid out whenever there is more than one mode to choose
-	// between — with the assistant on "None" AND notes off it collapses to
-	// nothing, and buildSearchModeToggle returns a zero-height spacer for that.
+	// The Search/Find pair, with the notes bubble as a separate control on the
+	// right — a different corpus, so a different-looking button. Each collapses to
+	// a zero-height spacer when its feature is off, so with the assistant on
+	// "None" AND notes off the whole row disappears.
+	notesBtn := buildNotesModeButton(state, func(mode searchMode) {
+		applyModeSwitch(mode)
+		rebuildWindow(state) // repaint the controls: the fill moves between them
+	})
 	var header *fyne.Container
 	if aiOn || notesFeatureOn(state) {
-		header = container.NewVBox(toggle, fieldHost, aiDisclaimer)
+		header = container.NewVBox(
+			container.NewBorder(nil, nil, nil, notesBtn, toggle),
+			fieldHost, aiDisclaimer)
 	} else {
 		header = container.NewVBox(fieldHost, aiDisclaimer) // nothing to switch between
 	}
