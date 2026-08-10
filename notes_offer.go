@@ -97,21 +97,38 @@ func offerNoteLinkChoice(state *AppState, rawURL string, t ShareTarget) {
 		applyShareTarget(state, t)
 	})
 
+	// The width has to be known BEFORE the buttons are laid out, because it
+	// decides whether they fit side by side.
+	w := float32(440)
+	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
+		w = cw
+	}
+
+	// Side by side where there is room, stacked where there is not. A Border row
+	// pins one button left and one right at their natural widths and does NOT
+	// shrink them, so on a narrow canvas the right-hand button is simply drawn
+	// ON TOP of the left one — hiding its label and stealing its taps. Measured:
+	// the two want ~380pt together, so every phone narrower than about 410pt
+	// overlapped. Caught by an audit, not by looking at it on a big phone, which
+	// is exactly why it survived being looked at.
+	var choices fyne.CanvasObject
+	if passageOnly.MinSize().Width+inBrowser.MinSize().Width+24 <= w-sheetChromeWidth {
+		choices = container.NewBorder(nil, nil, passageOnly, container.NewHBox(inBrowser))
+	} else {
+		choices = container.NewVBox(inBrowser, passageOnly) // primary on top
+	}
+
 	form := container.NewVBox(
 		title, ref,
 		widget.NewSeparator(),
 		body,
-		container.NewBorder(nil, nil, passageOnly, container.NewHBox(inBrowser)),
+		choices,
 		turnOn,
 	)
 
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
-	w := float32(440)
-	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
-		w = cw
-	}
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 }
 

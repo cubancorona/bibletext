@@ -234,3 +234,40 @@ func dropCurrentNote(state *AppState) {
 	state.NoteVerseLo = 0
 	clearHighlightedVerse(state)
 }
+
+// applyNoteOnResume surfaces a stored note for the chapter the app is REOPENING
+// into.
+//
+// It exists because reopening never went through addRecentChapter. The restore
+// path sets book and chapter directly (reading_state.go), so nothing called
+// applyNoteForCurrentChapter and the chapter the reader last had open came back
+// bare — the note only appeared once they navigated away and returned, by which
+// point every OTHER chapter's note had shown up correctly. Field-reported, and
+// exactly as confusing as it sounds.
+//
+// REOPENING IS NOT ARRIVING, though, and the difference decides the scroll.
+// Arriving on a link should land the reader on the message: that is what the
+// link was for. Reopening should land them where they stopped reading — a
+// promise the app has kept since reading_state.go was written — and that may be
+// a long way past the note. The iOS scroller keys off the HIGHLIGHT, so a
+// note-derived highlight would quietly override the saved position and yank a
+// reader who had read on back up to the note. The note therefore comes back in
+// full, bubble and all, but hands the scroll to the saved position.
+//
+// With no saved position (a chapter never scrolled) there is nothing to
+// protect, and the note behaves exactly as it does on arrival.
+func applyNoteOnResume(state *AppState) {
+	if state == nil {
+		return
+	}
+	hadHighlight := state.HasHighlightedVerse
+	applyNoteForCurrentChapter(state)
+	if hadHighlight || !state.HasHighlightedVerse {
+		return // nothing new to give up
+	}
+	if a := state.restore; a != nil && (a.Verse > 0 || a.Frac > 0) {
+		state.HasHighlightedVerse = false
+		state.HighlightedBook, state.HighlightedChapter = "", 0
+		state.HighlightedVerse, state.HighlightedVerseEnd = 0, 0
+	}
+}
