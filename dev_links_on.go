@@ -175,7 +175,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		u := canvas.NewText(shortenForDev(sc.url), pal.TextMuted)
 		u.TextSize = 10
 
-		open := widget.NewButton("Open", func() {
+		inApp := widget.NewButton("Open in app", func() {
 			if !HandleShareLink(state, sc.url) {
 				// Declined is a legitimate outcome for the malformed cases —
 				// say so rather than leaving the tap looking broken.
@@ -188,11 +188,20 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 				switchToRead()
 			}
 		})
-		open.Importance = widget.HighImportance
+		inApp.Importance = widget.HighImportance
+
+		// The same URL handed to the browser, so the two renderings of one link
+		// can be compared without retyping it. This is how the notched-highlight
+		// report got settled: the app and the web turned out to have the same
+		// defect for the same reason, which is far easier to see side by side
+		// than to reason about from one screenshot.
+		inBrowser := widget.NewButton("Open in browser", func() {
+			openLinkInBrowser(sc.url)
+		})
 
 		column.Add(container.NewVBox(
 			name, expect, u,
-			container.NewHBox(open),
+			container.NewHBox(inApp, inBrowser),
 			widget.NewSeparator(),
 		))
 	}

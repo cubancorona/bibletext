@@ -1323,13 +1323,29 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     gReadAlongRange = NSMakeRange(NSNotFound, 0);
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
-    // Find the highlighted verse (the .hl span becomes a background-coloured run)
-    // so we scroll to it rather than the top when arriving from a search result.
+    // Find the highlighted passage (the .hl spans become background-coloured runs)
+    // so we scroll to it rather than the top when arriving from a search result,
+    // and so a tap on it can offer "Clear highlight".
+    //
+    // EVERY run, unioned — not the first one. This used to stop at the first run,
+    // which was fine while the first run was the verse TEXT. Then the verse NUMBER
+    // joined the band (it was punching a pale hole through the middle of the
+    // highlight), and because the number is superscript it imports as its own
+    // attribute run: the registered range collapsed to the two digits. The band
+    // still LOOKED right, but only the number was tappable, so "Clear highlight"
+    // became unreachable for anyone who tapped the words — and on a link with no
+    // note there is no other way to remove a highlight. Field-reported.
+    //
+    // The union is safe because at most one passage is ever highlighted; the
+    // read-along tint is added to the live storage AFTER this import, so it cannot
+    // widen the range.
     gReadingHighlightRange = (NSRange){NSNotFound, 0};
     [as enumerateAttribute:NSBackgroundColorAttributeName
                    inRange:NSMakeRange(0, as.length) options:0
                 usingBlock:^(id value, NSRange range, BOOL *stop) {
-        if (value != nil) { gReadingHighlightRange = range; *stop = YES; }
+        if (value == nil) return;
+        if (gReadingHighlightRange.location == NSNotFound) gReadingHighlightRange = range;
+        else gReadingHighlightRange = NSUnionRange(gReadingHighlightRange, range);
     }];
     // Attach the clear-highlight tap recognizer + edit-menu interaction ONLY while a
     // verse is highlighted; during ordinary reading they're off the touch path

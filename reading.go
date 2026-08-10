@@ -616,9 +616,18 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		}
 		for i, v := range para {
 			if i > 0 {
-				if poeticJoin(para[i-1].Text, v.Text) {
+				switch {
+				case poeticJoin(para[i-1].Text, v.Text):
 					b.WriteString("<br>")
-				} else {
+				case isVerseHighlighted(state, para[i-1]) && isVerseHighlighted(state, v):
+					// THE JOINING SPACE IS PART OF THE BAND. Written bare it
+					// belongs to neither verse's span, so a highlighted range
+					// came out with a notch punched through it at every join
+					// that happened to fall mid-line — field-reported, and the
+					// same hole the verse NUMBER used to leave. Joins that fall
+					// at a line wrap hid it, which is why only some showed.
+					b.WriteString(`<span class="hl"> </span>`)
+				default:
 					b.WriteByte(' ')
 				}
 			}
