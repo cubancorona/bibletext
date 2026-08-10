@@ -1172,8 +1172,7 @@ func selectionStudyMenu(state *AppState, sel string, copyFn, selectAllFn func())
 	if sel != "" {
 		items = append(items, fyne.NewMenuItemSeparator())
 
-		shareItem := fyne.NewMenuItem("Share", nil)
-		shareItem.ChildMenu = fyne.NewMenu("",
+		shareChildren := []*fyne.MenuItem{
 			fyne.NewMenuItem("Share with citation", func() {
 				dispatchSelectionAction(state, selActionShareCite, sel)
 			}),
@@ -1183,10 +1182,16 @@ func selectionStudyMenu(state *AppState, sel string, copyFn, selectAllFn func())
 			fyne.NewMenuItem("Share as link", func() {
 				dispatchSelectionAction(state, selActionShareLink, sel)
 			}),
-			fyne.NewMenuItem("Share with note", func() {
+		}
+		// Writing a note is offered only while the feature is on, the same way
+		// the AI verbs vanish when the assistant is set to None.
+		if notesFeatureOn(state) {
+			shareChildren = append(shareChildren, fyne.NewMenuItem("Share with note", func() {
 				dispatchSelectionAction(state, selActionShareNote, sel)
-			}),
-		)
+			}))
+		}
+		shareItem := fyne.NewMenuItem("Share", nil)
+		shareItem.ChildMenu = fyne.NewMenu("", shareChildren...)
 		xrefItem := fyne.NewMenuItem("Cross-references", func() {
 			dispatchSelectionAction(state, selActionCrossRef, sel)
 		})

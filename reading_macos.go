@@ -36,6 +36,11 @@ extern void bibleTextReadAlongFollowTapped(void);
 // AI off). Set from Go (btMacSetAIEnabled) when the reading host is built and
 // whenever the setting changes; menuForEvent: reads it to include or omit the
 // "Study with AI" submenu. Defaults to on, matching the preference's default.
+// Whether to offer writing a note in the contextual menu. Pushed from Go on
+// every reading-view build, like the iOS twin.
+static int gBTMacNotesEnabled = 1;
+void btMacSetNotesEnabled(int on) { gBTMacNotesEnabled = on; }
+
 static int gBTAIEnabled = 1;
 void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 
@@ -112,9 +117,11 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     NSMenuItem *sl = [[NSMenuItem alloc] initWithTitle:@"Share as link" action:@selector(hbShare_link:) keyEquivalent:@""];
     sl.target = self;
     [share addItem:sl];
-    NSMenuItem *sn = [[NSMenuItem alloc] initWithTitle:@"Share with note" action:@selector(hbShare_link_note:) keyEquivalent:@""];
-    sn.target = self;
-    [share addItem:sn];
+    if (gBTMacNotesEnabled) {
+        NSMenuItem *sn = [[NSMenuItem alloc] initWithTitle:@"Share with note" action:@selector(hbShare_link_note:) keyEquivalent:@""];
+        sn.target = self;
+        [share addItem:sn];
+    }
     NSMenuItem *shareItem = [[NSMenuItem alloc] initWithTitle:@"Share" action:nil keyEquivalent:@""];
     shareItem.submenu = share;
     [menu addItem:shareItem];
@@ -940,6 +947,13 @@ func syncNativeAIMenu(state *AppState) {
 var lastPushedBookChapter string
 
 func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
+	// Keep the contextual menu's note verb in step with the setting.
+	on := C.int(0)
+	if notesFeatureOn(state) {
+		on = 1
+	}
+	C.btMacSetNotesEnabled(on)
+
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	macCurrentHost = h

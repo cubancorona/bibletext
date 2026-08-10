@@ -126,11 +126,21 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// that answer is "none" — so this has to overwrite it and be in place before
 	// refresh(), or the first view of a freshly opened link shows no note and
 	// only a later navigation reveals it.
-	state.ActiveNote = t.Note
-	state.NoteMinimized = false
-	state.NoteVerseLo = t.VerseLo
-	if t.Note != "" {
-		rememberIncomingNote(state, t)
+	// With notes switched off the app still opens the passage the link names and
+	// simply has nothing to do with the message attached to it: not shown, not
+	// stored. (The switch cannot stop the link reaching the app at all — that is
+	// settled by the entitlement and the manifest at build time.)
+	if notesFeatureOn(state) {
+		state.ActiveNote = t.Note
+		state.NoteMinimized = false
+		state.NoteVerseLo = t.VerseLo
+		if t.Note != "" {
+			rememberIncomingNote(state, t)
+		}
+	} else {
+		state.ActiveNote = ""
+		state.NoteMinimized = false
+		state.NoteVerseLo = 0
 	}
 
 	state.refresh()
@@ -139,7 +149,7 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	}
 	// Platforms with a native sticker draw the note beside the passage; the rest
 	// fall back to a card, which is a real surface rather than nothing.
-	if t.Note != "" && !notePaneHasSticker() {
+	if t.Note != "" && notesFeatureOn(state) && !notePaneHasSticker() {
 		showSharedNote(state, t.Note)
 	}
 }
