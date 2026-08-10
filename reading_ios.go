@@ -540,6 +540,8 @@ static UIColor *gReadAlongColor = nil;
 static UIView   *gNoteView = nil;      // the bubble, or the collapsed chip
 static NSString *gNoteText = nil;
 static BOOL      gNoteMinimized = NO;
+static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
+static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
 static CGFloat   gNoteBandH = 0;       // what we reserved, in points
 static CGFloat   gNoteBg[3]     = {0.99, 0.98, 0.97};
 static CGFloat   gNoteFg[3]     = {0.15, 0.13, 0.11};
@@ -553,7 +555,7 @@ static UIColor *btNoteColor(CGFloat c[3]) {
 
 // The note the pane should draw, pushed from Go on every chapter render (so a
 // light/dark flip restyles it and a navigation replaces it).
-void bibleTextSetNote(const char *text, int minimized,
+void bibleTextSetNote(const char *text, int minimized, int anchorVerse,
                       double bgR, double bgG, double bgB,
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
@@ -563,6 +565,7 @@ void bibleTextSetNote(const char *text, int minimized,
     dispatch_async(dispatch_get_main_queue(), ^{
         gNoteText = t;
         gNoteMinimized = minimized ? YES : NO;
+        gNoteAnchorVerse = anchorVerse;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
         gNoteMuted[0]=muR; gNoteMuted[1]=muG; gNoteMuted[2]=muB;
@@ -592,32 +595,78 @@ static CGFloat btIOSNoteHeightForWidth(CGFloat w) {
     return kNotePad + 14 + 4 + ceil(r.size.height) + kNotePad;
 }
 
-// Reserve the band by growing the paragraph that holds the highlight. Must run
-// AFTER the pass that zeroes paragraphSpacingBefore across the whole string
-// (that pass exists to kill a phantom band the importer injects before verse 1)
-// or the reservation is wiped on every render.
-static void btIOSReserveNoteBand(NSMutableAttributedString *mas) {
+// The character range the note is anchored to. The note carries its OWN verse
+// rather than borrowing the highlight's, because MINIMIZING CLEARS THE
+// HIGHLIGHT — and a marker that loses its anchor jumps to the top of the
+// chapter, which is exactly what it did.
+static void btIOSApplyNoteInset(void);
+
+static NSRange btIOSNoteAnchorRange(NSTextStorage *ts, NSString *str, NSUInteger len) {
+    if (gNoteAnchorVerse > 0 && ts != nil) {
+        NSUInteger loc = btIOSLocForVerse(ts, gNoteAnchorVerse);
+        if (loc < len) return NSMakeRange(loc, 0);
+    }
+    if (gReadingHighlightRange.location != NSNotFound &&
+        NSMaxRange(gReadingHighlightRange) <= len) {
+        return gReadingHighlightRange;
+    }
+    return NSMakeRange(0, 0);
+}
+
+// Install the band and the sticker. Runs AFTER the text is in the view and the
+// verse index is built, because the note's anchor is a VERSE and the index is
+// what turns a verse into a character location. Mutating the live text storage
+// re-lays-out, which is what we want: the band is part of the layout, not
+// something floated over it.
+//
+// It must also run after the pass that zeroes paragraphSpacingBefore across the
+// whole string (that pass exists to kill a phantom band the importer injects
+// before verse 1), or the reservation would be wiped on every render.
+static void btIOSInstallNote(void) {
     gNoteBandH = 0;
-    if (gNoteText == nil || mas.length == 0) return;
+    gNoteTopInset = 0;
     if (gReadingTV == nil) return;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    if (gNoteText == nil || ts.length == 0) { btIOSApplyNoteInset(); return; }
 
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
     CGFloat h = btIOSNoteHeightForWidth(w);
-    if (h <= 0) return;
+    if (h <= 0) { btIOSApplyNoteInset(); return; }
     gNoteBandH = h + kNoteGap;
 
-    // The paragraph the note belongs to: the one holding the highlight, or the
-    // first paragraph when the note names no verse.
-    NSRange anchor = gReadingHighlightRange;
-    if (anchor.location == NSNotFound || NSMaxRange(anchor) > mas.length) anchor = NSMakeRange(0, 0);
-    NSRange para = [mas.string paragraphRangeForRange:anchor];
-    if (para.location == NSNotFound || NSMaxRange(para) > mas.length) return;
+    NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
+    NSRange para = [ts.string paragraphRangeForRange:anchor];
+    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) { gNoteBandH = 0; btIOSApplyNoteInset(); return; }
 
-    NSParagraphStyle *base = [mas attribute:NSParagraphStyleAttributeName atIndex:para.location
-                             effectiveRange:NULL];
+    // THE FIRST PARAGRAPH IS A SPECIAL CASE. paragraphSpacingBefore collapses at
+    // the top of a text container, so a note on verse 1 reserved nothing and the
+    // bubble sat on top of the opening verses. Reserve that one with the
+    // container's top inset instead, which cannot collapse.
+    if (para.location == 0) {
+        gNoteTopInset = gNoteBandH;
+        btIOSApplyNoteInset();
+        return;
+    }
+    btIOSApplyNoteInset();   // clears any inset left from a previous chapter
+
+    NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
+                            effectiveRange:NULL];
     NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
     ps.paragraphSpacingBefore = gNoteBandH;
-    [mas addAttribute:NSParagraphStyleAttributeName value:ps range:para];
+    [ts beginEditing];
+    [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
+    [ts endEditing];
+}
+
+// Apply (or clear) the top-inset reservation.
+static void btIOSApplyNoteInset(void) {
+    if (gReadingTV == nil) return;
+    UIEdgeInsets ins = gReadingTV.textContainerInset;
+    CGFloat wanted = 14 + gNoteTopInset;      // 14 is the pane's own top inset
+    if (fabs(ins.top - wanted) > 0.5) {
+        ins.top = wanted;
+        gReadingTV.textContainerInset = ins;
+    }
 }
 
 // Build (or rebuild) the sticker's subviews for the current note and palette.
@@ -693,22 +742,41 @@ static void btIOSLayoutNote(void) {
     NSTextContainer *tc = gReadingTV.textContainer;
     if (lm == nil || tc == nil) return;
 
-    NSRange anchor = gReadingHighlightRange;
-    if (anchor.location == NSNotFound || NSMaxRange(anchor) > gReadingTV.textStorage.length) {
-        anchor = NSMakeRange(0, 0);
-    }
-    NSRange para = [gReadingTV.textStorage.string paragraphRangeForRange:anchor];
+    NSTextStorage *ts = gReadingTV.textStorage;
+    NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
+    NSRange para = [ts.string paragraphRangeForRange:anchor];
     NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
     if (g.length == 0) return;
 
-    // The FRAGMENT rect includes the spacing we reserved; the USED rect is where
-    // the text actually starts. The difference is the parking spot.
-    CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
     CGFloat pad = tc.lineFragmentPadding;
     CGFloat w = tc.size.width - 2 * pad;
     CGFloat h = btIOSNoteHeightForWidth(w);
     CGFloat x = gReadingTV.textContainerInset.left + pad;
-    CGFloat y = frag.origin.y + gReadingTV.textContainerInset.top;
+
+    // RECONCILE THE BAND. The height is measured from the container width, and
+    // on the first render after a link opens that width is not yet final — the
+    // band came out taller than the bubble and left a gap. If what we reserved
+    // no longer matches what we need, reserve again and let the layout settle;
+    // the flag stops that becoming a loop.
+    static BOOL reconciling = NO;
+    CGFloat want = h + kNoteGap;
+    if (!reconciling && fabs(want - gNoteBandH) > 1.0) {
+        reconciling = YES;
+        btIOSInstallNote();
+        reconciling = NO;
+    }
+
+    CGFloat y;
+    if (gNoteTopInset > 0) {
+        // Reserved with the container inset: the sticker sits in that inset,
+        // above the first line of the chapter.
+        y = 14;
+    } else {
+        // The FRAGMENT rect includes the spacing we reserved; the USED rect is
+        // where the text actually starts. The difference is the parking spot.
+        CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
+        y = frag.origin.y + gReadingTV.textContainerInset.top;
+    }
 
     if (gNoteMinimized) {
         CGFloat cw = 86;
@@ -1146,9 +1214,6 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // verse is highlighted; during ordinary reading they're off the touch path
     // entirely, so they add nothing to scrolling.
     btIOSSetHighlightUIEnabled(gReadingHighlightRange.location != NSNotFound);
-    // Carve the parking spot BEFORE the text reaches the view, so layout settles
-    // once with the band already in it rather than twice.
-    btIOSReserveNoteBand(mas);
     gReadingTV.attributedText = as;
     // Re-assert the opaque paper background: assigning attributedText (HTML import)
     // can revert the view toward clearColor/non-opaque, which brings back the
@@ -1162,6 +1227,7 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
     // The sticker is rebuilt per render (text, palette and minimized state all
     // arrive from Go) and then placed into the band the layout just produced.
+    btIOSInstallNote();
     btIOSEnsureNoteView();
     btIOSLayoutNote();
     // New text: the prior chapter's initial-touch is no longer valid, and the fresh
@@ -1902,7 +1968,10 @@ func pushNoteToPane(state *AppState) {
 	muR, muG, muB := f(pal.TextMuted)
 	acR, acG, acB := f(pal.Accent)
 	boR, boG, boB := f(pal.Border)
-	C.bibleTextSetNote(cText, min, bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
+	// The note's OWN verse, not the highlight's — minimizing clears the
+	// highlight, and a marker without an anchor jumps to the top of the chapter.
+	C.bibleTextSetNote(cText, min, C.int(state.NoteVerseLo),
+		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {
