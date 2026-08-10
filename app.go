@@ -200,6 +200,13 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			state.fullPending = loaded.fullPending
 			state.seedOnly = loaded.seedOnly
 			state.loadPhase = loadReady
+			// Bring back the note on the chapter we are reopening into. It has
+			// to happen HERE rather than in the restore itself: the restore runs
+			// on the load goroutine against a throwaway state, and only the
+			// fields copied just above survive the trip — a note set there would
+			// be dropped on the floor. Before consumePendingLink, so a link
+			// tapped at cold start still wins.
+			applyNoteOnResume(state)
 			// A shared link tapped before the data landed was parked; apply it
 			// NOW, before the rebuild below, so that rebuild paints the shared
 			// chapter directly — one rebuild, no flash of the wrong chapter,
