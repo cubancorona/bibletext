@@ -50,12 +50,10 @@ func TestSearchModeToggleHiddenWhenAIOff(t *testing.T) {
 	defer app.Quit()
 
 	state := aiOffState()
-	// Notes off TOO: with notes on there is still a Search|Notes choice to make,
-	// and a toggle to make it with. What this pins is the no-choice case — no
-	// assistant and no notes leaves one mode, so no control at all.
-	setNotesEnabled(false)
-	defer setNotesEnabled(true)
-	toggle := buildSearchModeToggle(state, func(searchMode) { t.Fatal("onSelect must never fire with nothing to choose") })
+	// The toggle is the SCRIPTURE pair (Search/Find). With no assistant there is
+	// no second way to search the Bible, so it collapses to nothing — the notes
+	// bubble is a separate control and does not keep it alive.
+	toggle := buildSearchModeToggle(state, func(searchMode) { t.Fatal("onSelect must never fire with AI off") })
 	if toggle == nil {
 		t.Fatal("expected a placeholder object")
 	}

@@ -325,51 +325,43 @@ func searchModeOf(state *AppState) searchMode {
 	return modeKeyword
 }
 
-// buildSearchModeToggle builds the segmented control over whichever modes are
-// actually available: Find appears only with an assistant chosen, Notes only
-// with shared notes switched on. With nothing but keyword search left there is
-// no choice to offer and the control disappears entirely — callers lay it out
-// unconditionally and rely on that.
+// buildSearchModeToggle builds the Search / Find pair — the two ways of looking
+// through SCRIPTURE. Find appears only with an assistant chosen; with none there
+// is no choice to make and the control disappears entirely (callers lay it out
+// unconditionally and rely on that).
+//
+// Notes is deliberately NOT a third segment here. It searches a different corpus
+// — messages people sent you, not the Bible — and putting it in the same
+// segmented control implied the three were the same kind of thing. It gets its
+// own icon button beside this one; see buildNotesModeButton.
 func buildSearchModeToggle(state *AppState, onSelect func(mode searchMode)) fyne.CanvasObject {
-	type seg struct {
-		label string
-		mode  searchMode
-	}
-	segs := []seg{{"Search", modeKeyword}}
-	if aiFeaturesEnabled(state) {
-		segs = append(segs, seg{"Find", modeFind})
-	}
-	if notesFeatureOn(state) {
-		segs = append(segs, seg{"Notes", modeNotes})
-	}
-	if len(segs) < 2 {
+	if !aiFeaturesEnabled(state) {
 		return spacer(0)
 	}
-
 	compact := !fyne.CurrentDevice().IsMobile()
-	btns := make([]*widget.Button, len(segs))
-	cells := make([]fyne.CanvasObject, len(segs))
+	var kwBtn, aiBtn *widget.Button
 	apply := func(m searchMode) {
 		idle := widget.MediumImportance
 		if compact {
-			idle = widget.LowImportance // flat inactive → only the active segment is filled
+			idle = widget.LowImportance // flat inactive → only the active half is filled
 		}
-		for i, sg := range segs {
-			if sg.mode == m {
-				btns[i].Importance = widget.HighImportance
-			} else {
-				btns[i].Importance = idle
-			}
-			btns[i].Refresh()
+		kwBtn.Importance = idle
+		aiBtn.Importance = idle
+		switch m {
+		case modeFind:
+			aiBtn.Importance = widget.HighImportance
+		case modeKeyword:
+			kwBtn.Importance = widget.HighImportance
 		}
+		// modeNotes fills NEITHER: the scripture pair is inactive while the
+		// reader is in their notes, and the notes button carries the highlight.
+		kwBtn.Refresh()
+		aiBtn.Refresh()
 	}
-	for i, sg := range segs {
-		i, sg := i, sg
-		btns[i] = widget.NewButton(sg.label, func() { apply(sg.mode); onSelect(sg.mode) })
-		cells[i] = btns[i]
-	}
+	kwBtn = widget.NewButton("Search", func() { apply(modeKeyword); onSelect(modeKeyword) })
+	aiBtn = widget.NewButton("Find", func() { apply(modeFind); onSelect(modeFind) })
 	apply(searchModeOf(state))
-	grid := container.NewGridWithColumns(len(cells), cells...)
+	grid := container.NewGridWithColumns(2, kwBtn, aiBtn)
 	if !compact {
 		return grid
 	}
@@ -379,6 +371,37 @@ func buildSearchModeToggle(state *AppState, onSelect func(mode searchMode)) fyne
 		base = state.theme
 	}
 	return container.NewThemeOverride(grid, smallChipTheme{Theme: base})
+}
+
+// buildNotesModeButton is the shared-notes control: an icon, on its own, beside
+// the Search/Find pair rather than inside it.
+//
+// The icon is the note bubble itself (icons_embed.go), so the button and the
+// thing it opens are visibly one object — and being wordless it does not read as
+// a third way of searching the Bible, which is exactly the confusion a third
+// text segment created. Filled when the reader is in their notes, quiet
+// otherwise. Absent entirely when notes are switched off.
+func buildNotesModeButton(state *AppState, onSelect func(mode searchMode)) fyne.CanvasObject {
+	if !notesFeatureOn(state) {
+		return spacer(0)
+	}
+	var btn *widget.Button
+	btn = widget.NewButtonWithIcon("", iconNoteBubble, func() {
+		// Tapping the notes button while already in notes goes back to scripture,
+		// so the control is a way out as well as a way in — otherwise the only
+		// exit is a segment that looks unrelated to it.
+		if searchModeOf(state) == modeNotes {
+			onSelect(modeKeyword)
+			return
+		}
+		onSelect(modeNotes)
+	})
+	if searchModeOf(state) == modeNotes {
+		btn.Importance = widget.HighImportance
+	} else {
+		btn.Importance = widget.LowImportance
+	}
+	return btn
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {

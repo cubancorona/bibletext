@@ -156,6 +156,36 @@ under the last visible line of the highlight, re-pinned on resize.
   minimize and delete recorded in the store, picked up again in
   `addRecentChapter`, so a note returns on a later visit and survives relaunch.
 - **iOS bubble** — done, as a native sticker (below).
+- **Notes browser** (`notes_browse.go`) — done, on the SEARCH tab, not in
+  Settings. A note is a message about a passage, so the only thing to do with
+  one besides read it is go to the passage; the Search tab already owns "find
+  something and tap through to it", and a note row is literally the same
+  `searchResultCard` as a search hit. The desktop/iPad sidebar comes free, since
+  both surfaces render through `buildSearchResultsView`.
+
+  The control is an ICON beside the Search/Find pair rather than a third segment
+  inside it: notes are a different corpus from the scripture those two look
+  through, and a third text segment implied all three were the same kind of
+  thing. Filtering matches the note's text AND its reference, is live, and keeps
+  its own query (`AppState.NotesQuery`) — switching Search → Notes with a
+  scripture term still in the box would otherwise answer "no notes match" to a
+  search the reader never made. Empty query lists everything under a line saying
+  so, which is what makes it a browser first and a search second.
+
+  Sort is newest-first by default, because these are messages: the one that just
+  arrived is the one you opened the list for. That needed `SharedNote.Received`,
+  added additively — notes stored before it have a zero stamp and sort as the
+  oldest, which is truthful and beats a migration. `saveNote` preserves an
+  existing stamp, because saveNote is also how minimize persists itself and an
+  unconditional stamp would shuffle a note to the top every time it was
+  collapsed.
+- **Dev link-testing page** (`dev_links_on.go`, `//go:build bibletextdev`) —
+  done. A universal link cannot be triggered in the simulator and needs a tap
+  from another app on a device, so this is the only way to drive that path
+  directly: a fourth bottom-bar page whose rows call the real `HandleShareLink`.
+  A build tag rather than a runtime flag so the scenarios are not compiled into
+  the App Store binary at all; `TestReleaseScriptsNeverPassTheDevTag` asserts the
+  release pipelines never opt in. Build with `run-ios-device.sh --dev`.
 - **macOS / Android / desktop bubbles** — NOT done. Those platforms fall back to
   a dismissable card, which shows the note but sits over the passage rather than
   beside it.

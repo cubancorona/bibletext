@@ -22,6 +22,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -38,34 +39,93 @@ func noteReference(n SharedNote) string {
 	return ref
 }
 
-// sortedNotes returns the stored notes in canonical reading order — Genesis
-// first, Revelation last — rather than the alphabetical-by-key order the blob
-// happens to be written in. bookOrder maps a book name to its position in the
-// loaded canon; anything the current translation does not contain (a note taken
-// in the Catholic canon, read back under a 66-book one) sorts to the end, still
-// visible, still openable once that translation is picked again.
-func sortedNotes(notes map[string]SharedNote, bookOrder map[string]int) []SharedNote {
+// noteSort is how the browser orders the list.
+type noteSort int
+
+const (
+	// sortNewest is the default, and deliberately so: these are messages. When
+	// somebody sends you one, the thing you want on opening the list is the one
+	// that just arrived — not wherever it happens to fall in the canon.
+	sortNewest noteSort = iota
+	sortBook            // Genesis first, Revelation last
+)
+
+const prefNotesSort = "notes.sort"
+
+// notesSortPref / setNotesSortPref persist the choice, because a sort order the
+// reader picks and the app forgets every launch is a setting that does not work.
+func notesSortPref() noteSort {
+	if p := appPrefs(); p != nil && p.String(prefNotesSort) == "book" {
+		return sortBook
+	}
+	return sortNewest
+}
+
+func setNotesSortPref(s noteSort) {
+	p := appPrefs()
+	if p == nil {
+		return
+	}
+	if s == sortBook {
+		p.SetString(prefNotesSort, "book")
+		return
+	}
+	p.SetString(prefNotesSort, "newest")
+}
+
+func (s noteSort) label() string {
+	if s == sortBook {
+		return "Bible order"
+	}
+	return "Newest first"
+}
+
+// sortedNotes orders the stored notes.
+//
+// bookOrder maps a book name to its position in the loaded canon; anything the
+// current translation does not contain (a note taken in the Catholic canon, read
+// back under a 66-book one) sorts to the end — still visible, still openable
+// once that translation is picked again.
+//
+// Both orders are TOTAL: ties fall through to the canon, then chapter, then
+// verse, so the list never reshuffles between two renders of the same data.
+// Notes stored before Received existed have a zero timestamp and sort as the
+// oldest, which is the truthful answer — they did arrive first.
+func sortedNotes(notes map[string]SharedNote, bookOrder map[string]int, by noteSort) []SharedNote {
 	out := make([]SharedNote, 0, len(notes))
 	for _, n := range notes {
 		out = append(out, n)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		bi, oki := bookOrder[out[i].Book]
-		bj, okj := bookOrder[out[j].Book]
-		if oki != okj {
-			return oki // known books before unknown ones
+	canonLess := func(a, b SharedNote) (bool, bool) {
+		ia, oka := bookOrder[a.Book]
+		ib, okb := bookOrder[b.Book]
+		if oka != okb {
+			return oka, true // known books before unknown ones
 		}
-		if !oki {
-			if out[i].Book != out[j].Book {
-				return out[i].Book < out[j].Book
+		if !oka {
+			if a.Book != b.Book {
+				return a.Book < b.Book, true
 			}
-		} else if bi != bj {
-			return bi < bj
+		} else if ia != ib {
+			return ia < ib, true
 		}
-		if out[i].Chapter != out[j].Chapter {
-			return out[i].Chapter < out[j].Chapter
+		if a.Chapter != b.Chapter {
+			return a.Chapter < b.Chapter, true
 		}
-		return out[i].VerseLo < out[j].VerseLo
+		if a.VerseLo != b.VerseLo {
+			return a.VerseLo < b.VerseLo, true
+		}
+		return false, false // genuinely equal
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if by == sortNewest && out[i].Received != out[j].Received {
+			return out[i].Received > out[j].Received // newest first
+		}
+		less, decided := canonLess(out[i], out[j])
+		if decided {
+			return less
+		}
+		return false
 	})
 	return out
 }
@@ -106,12 +166,43 @@ func bookOrderOf(state *AppState) map[string]int {
 	return order
 }
 
-// browsableNotes is the list the Notes mode shows for the current query.
-func browsableNotes(state *AppState) []SharedNote {
+// browsableNotes is the list the Notes mode shows for the current query, and
+// storedNoteCount is how many there are in total — the two numbers the header
+// line needs to say "3 of 7".
+func browsableNotes(state *AppState) (shown []SharedNote, total int) {
 	if state == nil || !notesFeatureOn(state) {
-		return nil
+		return nil, 0
 	}
-	return matchNotes(sortedNotes(readNotes(appPrefs()), bookOrderOf(state)), state.NotesQuery)
+	all := sortedNotes(readNotes(appPrefs()), bookOrderOf(state), notesSortPref())
+	return matchNotes(all, state.NotesQuery), len(all)
+}
+
+// notesHeaderLine says what the list is currently showing.
+//
+// It earns its place by answering the question a list of unknown length always
+// raises — "is this everything?" — which an unlabelled list leaves the reader to
+// guess at. With nothing typed it says so outright; with a query it says how
+// much of the whole set survived, so a short list never looks like a short
+// collection.
+//
+// It does NOT name the sort order: the control immediately beside it already
+// does, and saying it twice reads like two different facts.
+func notesHeaderLine(shown, total int, query string) string {
+	q := strings.TrimSpace(query)
+	switch {
+	case total == 0:
+		return ""
+	case q == "" && total == 1:
+		return "Your one note."
+	case q == "":
+		return "All " + strconv.Itoa(total) + " notes."
+	case shown == 0:
+		return "No notes match “" + q + "”."
+	case shown == total:
+		return "All " + strconv.Itoa(total) + " notes match “" + q + "”."
+	default:
+		return strconv.Itoa(shown) + " of " + strconv.Itoa(total) + " notes match “" + q + "”."
+	}
 }
 
 // openNote goes to the passage a note is attached to.
@@ -134,28 +225,59 @@ func openNote(state *AppState, n SharedNote) {
 	openSearchResultRange(state, Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}, n.VerseHi)
 }
 
-// buildNotesBrowseView renders the Notes mode: every stored note matching the
-// query, newest canon order first, each tapping through to its passage.
+// buildNotesBrowseView renders the Notes mode: a line saying what is on show,
+// the sort control, then every matching note, each tapping through to its
+// passage.
 func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
-	notes := browsableNotes(state)
+	notes, total := browsableNotes(state)
 
-	if len(notes) == 0 {
-		msg := "Notes people share with you appear here."
-		if strings.TrimSpace(state.NotesQuery) != "" {
-			msg = "No notes match “" + strings.TrimSpace(state.NotesQuery) + "”."
-		}
-		hint := widget.NewLabel(msg)
+	// Nothing stored at all is a different situation from a filter that matched
+	// nothing, and gets a different sentence: one explains the feature, the other
+	// reports a result.
+	if total == 0 {
+		hint := widget.NewLabel("Notes people share with you appear here. " +
+			"Open a link with a note and it will be kept, so you can come back to it.")
 		hint.Wrapping = fyne.TextWrapWord
 		hint.Alignment = fyne.TextAlignCenter
 		return container.NewPadded(container.NewVBox(spacer(24), hint))
 	}
 
+	by := notesSortPref()
+	line := canvas.NewText(notesHeaderLine(len(notes), total, state.NotesQuery), pal.TextMuted)
+	line.TextSize = 12
+
+	// One button that names the order it is IN, and swaps to the other on tap.
+	// With exactly two orders a menu would be three taps to do what one does, and
+	// showing the current state is what keeps that honest.
+	sortBtn := widget.NewButton(by.label(), func() {
+		if by == sortNewest {
+			setNotesSortPref(sortBook)
+		} else {
+			setNotesSortPref(sortNewest)
+		}
+		state.refresh()
+	})
+	sortBtn.Importance = widget.LowImportance
+	// Shrunk deliberately: at the app's normal chrome size a borderless button
+	// this wide reads as a heading competing with the line beside it, rather than
+	// as the small control it is.
+	var base fyne.Theme = theme.DefaultTheme()
+	if state.theme != nil {
+		base = state.theme
+	}
+	sorter := container.NewThemeOverride(sortBtn, compactTheme{Theme: base, text: 13})
+
+	head := container.NewBorder(nil, nil, nil, sorter, container.NewPadded(line))
+
 	column := container.NewVBox()
 	for _, n := range notes {
 		column.Add(noteBrowseRow(state, n, pal))
 	}
-	return container.NewVScroll(column)
+	// squeezeWidthLayout: a scroll widens its content to the content's MinSize
+	// and clips the overflow sideways, with no bar to reach it (see sheet_fit.go).
+	body := container.NewVScroll(container.New(squeezeWidthLayout{}, column))
+	return container.NewBorder(head, nil, nil, nil, body)
 }
 
 // noteBrowseRow is one note in the list: its passage, then its message. The
