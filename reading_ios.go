@@ -544,6 +544,8 @@ static NSString *gNoteText = nil;
 static BOOL      gNoteMinimized = NO;
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
+static CAShapeLayer *gNoteCard = nil;    // the rounded card
+static CAShapeLayer *gNoteTail = nil;    // the speech tail beneath it
 static CGFloat   gNoteBandH = 0;       // what we reserved, in points
 static CGFloat   gNoteBg[3]     = {0.99, 0.98, 0.97};
 static CGFloat   gNoteFg[3]     = {0.15, 0.13, 0.11};
@@ -580,13 +582,18 @@ static UIFont *btNoteBodyFont(void) { return [UIFont systemFontOfSize:15]; }
 static UIFont *btNoteWhoFont(void)  { return [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]; }
 
 static const CGFloat kNotePad = 12, kNoteGap = 10, kNoteBtn = 30;
+// The speech tail: what makes it read as somebody talking rather than a panel.
+// Matches the web bubble, which hangs a small triangle under the left shoulder.
+static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
 
 // How tall the sticker needs to be at this width. Measured BEFORE the band is
 // reserved, because the band's height is this number — that ordering is the
 // whole trick.
+// The height of the CARD. The view is this plus the tail (see kNoteTail), and
+// the reserved band is the view plus the gap.
 static CGFloat btIOSNoteHeightForWidth(CGFloat w) {
     if (gNoteText == nil) return 0;
-    if (gNoteMinimized) return kNoteBtn;      // the collapsed chip
+    if (gNoteMinimized) return kNoteBtn;      // the collapsed chip has no tail
     CGFloat inner = w - 2 * kNotePad;
     if (inner < 40) inner = 40;
     CGRect r = [gNoteText boundingRectWithSize:CGSizeMake(inner, CGFLOAT_MAX)
@@ -634,7 +641,7 @@ static void btIOSInstallNote(void) {
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
     CGFloat h = btIOSNoteHeightForWidth(w);
     if (h <= 0) { btIOSApplyNoteInset(); return; }
-    gNoteBandH = h + kNoteGap;
+    gNoteBandH = h + (gNoteMinimized ? 0 : kNoteTail) + kNoteGap;
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
@@ -677,11 +684,32 @@ static void btIOSEnsureNoteView(void) {
     if (gNoteText == nil || gReadingTV == nil) return;
 
     UIView *box = [[UIView alloc] initWithFrame:CGRectZero];
-    box.backgroundColor = btNoteColor(gNoteBg);
-    box.layer.borderColor = btNoteColor(gNoteBorder).CGColor;
-    box.layer.borderWidth = 1;
-    box.layer.cornerRadius = gNoteMinimized ? kNoteBtn / 2 : 10;
-    box.clipsToBounds = YES;
+    gNoteCard = nil;
+    gNoteTail = nil;
+    if (gNoteMinimized) {
+        // The collapsed marker is a plain pill — no tail, exactly as on the web.
+        box.backgroundColor = btNoteColor(gNoteBg);
+        box.layer.borderColor = btNoteColor(gNoteBorder).CGColor;
+        box.layer.borderWidth = 1;
+        box.layer.cornerRadius = kNoteBtn / 2;
+        box.clipsToBounds = YES;
+    } else {
+        // Two layers, tail FIRST: the card is drawn opaque on top of it, which
+        // hides the seam where they meet. Stroking one combined path would draw
+        // a line straight across the tail's mouth.
+        box.backgroundColor = [UIColor clearColor];
+        box.clipsToBounds = NO;
+        gNoteTail = [CAShapeLayer layer];
+        gNoteTail.fillColor = btNoteColor(gNoteBg).CGColor;
+        gNoteTail.strokeColor = btNoteColor(gNoteBorder).CGColor;
+        gNoteTail.lineWidth = 1;
+        [box.layer addSublayer:gNoteTail];
+        gNoteCard = [CAShapeLayer layer];
+        gNoteCard.fillColor = btNoteColor(gNoteBg).CGColor;
+        gNoteCard.strokeColor = btNoteColor(gNoteBorder).CGColor;
+        gNoteCard.lineWidth = 1;
+        [box.layer addSublayer:gNoteCard];
+    }
 
     if (gNoteMinimized) {
         // The collapsed marker: small, quiet, and obviously a thing to press.
@@ -761,7 +789,7 @@ static void btIOSLayoutNote(void) {
     // no longer matches what we need, reserve again and let the layout settle;
     // the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = h + kNoteGap;
+    CGFloat want = h + (gNoteMinimized ? 0 : kNoteTail) + kNoteGap;
     if (!reconciling && fabs(want - gNoteBandH) > 1.0) {
         reconciling = YES;
         btIOSInstallNote();
@@ -788,7 +816,22 @@ static void btIOSLayoutNote(void) {
         return;
     }
 
-    gNoteView.frame = CGRectMake(x, y, w, h);
+    gNoteView.frame = CGRectMake(x, y, w, h + kNoteTail);
+
+    // The card fills the top; the tail hangs under its left shoulder, pointing
+    // down at the passage the note is about.
+    CGRect card = CGRectMake(0.5, 0.5, w - 1, h - 1);
+    gNoteCard.frame = gNoteView.bounds;
+    gNoteCard.path = [UIBezierPath bezierPathWithRoundedRect:card cornerRadius:10].CGPath;
+
+    UIBezierPath *tp = [UIBezierPath bezierPath];
+    [tp moveToPoint:CGPointMake(kNoteTailX, h - 1)];
+    [tp addLineToPoint:CGPointMake(kNoteTailX + kNoteTailW / 2, h - 1 + kNoteTail)];
+    [tp addLineToPoint:CGPointMake(kNoteTailX + kNoteTailW, h - 1)];
+    [tp closePath];
+    gNoteTail.frame = gNoteView.bounds;
+    gNoteTail.path = tp.CGPath;
+
     UILabel  *who  = (UILabel *)[gNoteView viewWithTag:902];
     UILabel  *body = (UILabel *)[gNoteView viewWithTag:903];
     UIButton *hide = (UIButton *)[gNoteView viewWithTag:904];
