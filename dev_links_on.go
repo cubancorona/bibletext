@@ -161,13 +161,13 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// delivers them. A Label renders them fine, and Entry is a different widget.
 	// Type beside them to compare what arrives with what was already there.
 	emojiProbe := widget.NewEntry()
-	emojiProbe.SetText("prefilled 👊 ☕ 🙏 — now type one →")
+	emojiProbe.SetText("prefilled 🤏 🥺 🫶 👊 ☕ — type here →")
 
 	head := container.NewVBox(
 		title, blurb,
 		notesSwitch, wipe, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
-		widget.NewLabel("label 👊 ☕ 🙏"),
+		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,
 		widget.NewSeparator(),
 	)

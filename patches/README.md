@@ -233,3 +233,33 @@ diff -u --label a/widget/entry_cursor_anim.go \
 Then confirm the upstream `drawloop` still has the `time.After(100 * time.Millisecond)`
 fallback, and that `entry_cursor_anim.go` still drives the caret via the fade-band
 animation (either may have changed structure between releases).
+
+## Patch 3: current emoji (`fyne-2.7.4-noto-emoji.patch` + `NotoColorEmoji.ttf`)
+
+Fyne bundles `EmojiOneColor.otf`, a ~2016 EmojiOne set. Anything added to
+Unicode from Emoji 11.0 (2018) onward — 🥺 🤏 🤌 🫶 🫠 — has no glyph there, and a
+note carrying one drew a faint notdef box in every Fyne-drawn surface (the
+Share-with-note box, the notes browser). Field-reported via a 🤏 that never
+appeared.
+
+The swap is two pieces, because a binary cannot ride a unified diff:
+
+- the `.patch` retargets `theme/bundled-emoji.go`'s embed directive, and
+- `setup-fyne-patch.sh` copies `patches/NotoColorEmoji.ttf` into
+  `third_party/fyne/theme/font/` (and deletes the no-longer-embedded
+  EmojiOneColor.otf).
+
+The font is Noto Color Emoji (CBDT/CBLC bitmap build, ~10.7 MB — app grows by
+roughly the 6.5 MB difference), fetched 2026-08-11 from
+`googlefonts/noto-emoji@main`, licensed OFL 1.1 — the licence text is tracked
+beside it as `NotoColorEmoji-LICENSE-OFL.txt` and must ship wherever the font
+does. Verified against go-text/render v0.2.1: the renderer's `GlyphBitmap`
+path rasterises it (probed: 🤏 draws 1452 opaque pixels at 48px where EmojiOne
+drew a notdef box).
+
+Removal: delete the two `patches/NotoColorEmoji*` files and the `.patch`, and
+drop the three emoji lines from `setup-fyne-patch.sh`.
+
+NOTE the scope: only builds that go through the patch scripts get this —
+i.e. every MOBILE build. Desktop builds ship stock go.mod and keep the old
+set until they too build against the patched tree.

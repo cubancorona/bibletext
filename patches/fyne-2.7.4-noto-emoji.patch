@@ -1,0 +1,19 @@
+--- a/theme/bundled-emoji.go	2026-08-11 08:52:02
++++ b/theme/bundled-emoji.go	2026-08-11 08:52:02
+@@ -8,10 +8,14 @@
+ 	"fyne.io/fyne/v2"
+ )
+ 
+-//go:embed font/EmojiOneColor.otf
++// BibleText patch: current emoji. EmojiOneColor is a ~2016 set; anything from
++// Emoji 11.0 (2018) on — 🥺 🤏 🤌 🫶 — has no glyph and drew as a notdef box.
++// Noto Color Emoji (OFL 1.1; licence shipped as NotoColorEmoji-LICENSE-OFL.txt)
++// is copied in by scripts/setup-fyne-patch.sh — a binary cannot ride a patch.
++//go:embed font/NotoColorEmoji.ttf
+ var emojiFontData []byte
+ 
+ var emoji = &fyne.StaticResource{
+-	StaticName:    "EmojiOneColor.otf",
++	StaticName:    "NotoColorEmoji.ttf",
+ 	StaticContent: emojiFontData,
+ }
