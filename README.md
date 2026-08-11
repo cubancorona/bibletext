@@ -186,8 +186,11 @@ root), signing, emulator use, and distribution are covered in
   selection cut mid-word trims to the whole word, stray verse-number markers
   never leak into the quote, and the citation always names exactly the verses
   the shared words come from. Text shares retain source poetry lines and reading
-  paragraphs, but never line breaks caused only by screen wrapping. Both open
-  your device's native share sheet.
+  paragraphs, but never line breaks caused only by screen wrapping. **Share as
+  link** sends a `bibletext.co.uk` URL that opens the chapter in the static web
+  reader with the shared verses highlighted — no app needed on the receiving end
+  (public-domain translations only; a licensed translation's link falls back to
+  the World English Bible). All open your device's native share sheet.
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
@@ -276,7 +279,9 @@ NRSVue (and, if ever offered, LSB) are actually in its catalog before relying on
 
 Once you hold a license and have provider credentials, **no code change is
 needed** — set these environment variables (the source is `licensedAPISource`
-in `versions.go`, with the provider's HTTP calls ready to be filled in):
+in `versions.go`, fetching through the API.Bible client in `apibible.go`;
+licensed caches are revalidated every 30 days and purged when the licence
+configuration is removed):
 
 ```bash
 export BIBLE_API_KEY="<your provider api key>"
