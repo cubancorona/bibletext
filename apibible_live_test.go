@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -95,4 +96,84 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 		t.Errorf("JHN.11:35 = %q, want exactly \"Jesus wept.\"", v35)
 	}
 	t.Logf("JHN.11:35 = %q", v35)
+}
+
+// TestLiveAPIBibleFullFetch runs the REAL full-canon fetch through the
+// passages range walk, reports the true call count (the reason the walk
+// exists: ~200 calls versus ~1,190 chapter-by-chapter against a
+// 5,000/month quota), and — when BIBLETEXT_LIVE_COMPARE_CACHE names a cache
+// file from the chapter-walk era — proves the two paths produce the
+// identical canon, verse by verse. Gated hard: it spends real quota.
+//
+//	BIBLE_API_KEY=… BIBLETEXT_LIVE_FULL_FETCH=1 \
+//	BIBLETEXT_LIVE_COMPARE_CACHE=/path/to/bibletext-nkjv.json \
+//	go test -run TestLiveAPIBibleFullFetch -v .
+func TestLiveAPIBibleFullFetch(t *testing.T) {
+	key := os.Getenv("BIBLE_API_KEY")
+	if key == "" || os.Getenv("BIBLETEXT_LIVE_FULL_FETCH") != "1" {
+		t.Skip("live full fetch not requested")
+	}
+	bibleID := os.Getenv("BIBLETEXT_PROVIDER_ID_NKJV")
+	if bibleID == "" {
+		bibleID = "63097d2a0a2f7db3-01"
+	}
+	before := apiBibleCallCount.Load()
+	data, err := fetchAPIBible("NKJV", bibleID, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := apiBibleCallCount.Load() - before
+	total := 0
+	for _, chs := range data.Verses {
+		for _, vs := range chs {
+			total += len(vs)
+		}
+	}
+	t.Logf("full fetch: %d books, %d verses, %d API calls", len(data.Books), total, calls)
+	if len(data.Books) != 66 {
+		t.Errorf("books = %d", len(data.Books))
+	}
+	if calls > 300 {
+		t.Errorf("passage walk used %d calls — expected ~200", calls)
+	}
+
+	cachePath := os.Getenv("BIBLETEXT_LIVE_COMPARE_CACHE")
+	if cachePath == "" {
+		return
+	}
+	blob, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("compare cache: %v", err)
+	}
+	var envelope struct {
+		Data *BibleData `json:"data"`
+	}
+	if err := json.Unmarshal(blob, &envelope); err != nil {
+		t.Fatalf("compare cache decode: %v", err)
+	}
+	diffs := 0
+	for book, chs := range envelope.Data.Verses {
+		for ch, oldVs := range chs {
+			newVs := data.Verses[book][ch]
+			if len(newVs) != len(oldVs) {
+				t.Errorf("%s %d: %d verses via passages, %d via chapters", book, ch, len(newVs), len(oldVs))
+				diffs++
+				continue
+			}
+			for i := range oldVs {
+				if newVs[i].Text != oldVs[i].Text || newVs[i].Verse != oldVs[i].Verse {
+					if diffs < 10 {
+						t.Errorf("%s %d:%d differs:\n passages %q\n chapters %q",
+							book, ch, oldVs[i].Verse, newVs[i].Text, oldVs[i].Text)
+					}
+					diffs++
+				}
+			}
+		}
+	}
+	if diffs > 0 {
+		t.Errorf("%d verse differences between passage and chapter walks", diffs)
+	} else {
+		t.Log("passage walk output is IDENTICAL to the chapter-walk cache")
+	}
 }

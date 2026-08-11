@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -355,4 +356,183 @@ func TestPurgeUnavailableLicensedCaches(t *testing.T) {
 	if _, err := os.Stat(webPath); err != nil {
 		t.Error("public-domain cache must never be purged")
 	}
+}
+
+// --- Passages range walk ------------------------------------------------------
+
+func TestChapterVerseFromRef(t *testing.T) {
+	cases := []struct {
+		in    string
+		ch, v int
+	}{
+		{"GEN 8:17", 8, 17},
+		{"GEN.8.17", 8, 17},
+		{"PSA 46:11", 46, 11},
+		{"GEN.17.2", 17, 2},
+		{"17", 0, 0}, // a bare number is not a reference
+		{"", 0, 0},
+	}
+	for _, c := range cases {
+		ch, v := chapterVerseFromRef(c.in)
+		if ch != c.ch || v != c.v {
+			t.Errorf("chapterVerseFromRef(%q) = (%d,%d), want (%d,%d)", c.in, ch, v, c.ch, c.v)
+		}
+	}
+	if got := passageEndRef("GEN.8.17-GEN.17.2"); got != "GEN.17.2" {
+		t.Errorf("passageEndRef = %q", got)
+	}
+	if got := passageEndRef("GEN.50.26"); got != "GEN.50.26" {
+		t.Errorf("passageEndRef single = %q", got)
+	}
+}
+
+func TestDecodeAPIBiblePassageMultiChapter(t *testing.T) {
+	// Two chapters in one content array, the chapter carried by the marker
+	// sids exactly as the passages endpoint serves them; the chunk "resumes"
+	// mid-book so defaultChapter anchors nothing here.
+	content := `[
+	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
+	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"33","sid":"GEN 7:33"},"items":[{"type":"text","text":"33"}]},
+	    {"type":"text","text":"Verse of the seventh.","attrs":{"verseId":"GEN.7.33"}},
+	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"GEN 8:1"},"items":[{"type":"text","text":"1"}]},
+	    {"type":"text","text":"First of the eighth.","attrs":{"verseId":"GEN.8.1"}}
+	  ]}
+	]`
+	m, err := decodeAPIBiblePassage(json.RawMessage(content), "Genesis", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m) != 2 || len(m[7]) != 1 || len(m[8]) != 1 {
+		t.Fatalf("chapter split wrong: %+v", m)
+	}
+	if m[7][0].Verse != 33 || m[7][0].Text != "Verse of the seventh." || m[7][0].Chapter != 7 {
+		t.Errorf("ch7 verse wrong: %+v", m[7][0])
+	}
+	if m[8][0].Verse != 1 || m[8][0].Chapter != 8 {
+		t.Errorf("ch8 verse wrong: %+v", m[8][0])
+	}
+}
+
+// apiBiblePassageFixture serves a canon through the PASSAGES endpoint: every
+// book one chapter of two verses, except Genesis — three 100-verse chapters,
+// so the walk must chunk (cap 200), hit the exactly-at-cap chapter boundary,
+// take the 404-then-advance-a-chapter path, and merge chunks.
+func apiBiblePassageFixture(t *testing.T) *httptest.Server {
+	t.Helper()
+	genChapters := 3
+	genVerses := 100 // per chapter
+	mux := http.NewServeMux()
+	mux.HandleFunc("/bibles/pass-bible/books", func(w http.ResponseWriter, r *http.Request) {
+		type ch struct {
+			ID     string `json:"id"`
+			Number string `json:"number"`
+		}
+		type book struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Chapters []ch   `json:"chapters"`
+		}
+		var books []book
+		for _, usfm := range usfmCanonical66 {
+			b := book{ID: usfm, Name: apiBibleBookName(usfm)}
+			n := 1
+			if usfm == "GEN" {
+				n = genChapters
+			}
+			for i := 1; i <= n; i++ {
+				b.Chapters = append(b.Chapters, ch{ID: fmt.Sprintf("%s.%d", usfm, i), Number: strconv.Itoa(i)})
+			}
+			books = append(books, b)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": books})
+	})
+	mux.HandleFunc("/bibles/pass-bible/passages/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("api-key") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		rangeID := strings.TrimPrefix(r.URL.Path, "/bibles/pass-bible/passages/")
+		parts := strings.SplitN(rangeID, "-", 2)
+		seg := strings.Split(parts[0], ".")
+		if len(seg) < 3 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		usfm := seg[0]
+		startCh, _ := strconv.Atoi(seg[1])
+		startV, _ := strconv.Atoi(seg[2])
+		chapters := 1
+		versesPer := 2
+		if usfm == "GEN" {
+			chapters, versesPer = genChapters, genVerses
+		}
+		if startCh > chapters || startV > versesPer {
+			w.WriteHeader(http.StatusNotFound) // past the book's real end / invalid verse
+			return
+		}
+		// Serve verses from (startCh, startV) forward, capped.
+		var blocks []string
+		served := 0
+		endCh, endV := 0, 0
+		for ch := startCh; ch <= chapters && served < apiBiblePassageCap; ch++ {
+			v0 := 1
+			if ch == startCh {
+				v0 = startV
+			}
+			var items []string
+			for v := v0; v <= versesPer && served < apiBiblePassageCap; v++ {
+				items = append(items, fmt.Sprintf(
+					`{"name":"verse","type":"tag","attrs":{"style":"v","number":"%d","sid":"%s %d:%d"},"items":[{"type":"text","text":"%d"}]},{"type":"text","text":"Verse %d of chapter %d.","attrs":{"verseId":"%s.%d.%d"}}`,
+					v, usfm, ch, v, v, v, ch, usfm, ch, v))
+				served++
+				endCh, endV = ch, v
+			}
+			blocks = append(blocks, `{"name":"para","type":"tag","attrs":{"style":"p"},"items":[`+strings.Join(items, ",")+`]}`)
+		}
+		id := fmt.Sprintf("%s.%d.%d-%s.%d.%d", usfm, startCh, startV, usfm, endCh, endV)
+		fmt.Fprintf(w, `{"data":{"id":%q,"verseCount":%d,"content":[%s]}}`, id, served, strings.Join(blocks, ","))
+	})
+	return httptest.NewServer(mux)
+}
+
+func TestFetchAPIBibleByPassages(t *testing.T) {
+	srv := apiBiblePassageFixture(t)
+	defer srv.Close()
+	prev := apiBibleBaseURL
+	apiBibleBaseURL = srv.URL
+	t.Cleanup(func() { apiBibleBaseURL = prev })
+
+	before := apiBibleCallCount.Load()
+	data, err := fetchAPIBible("NKJV", "pass-bible", "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := apiBibleCallCount.Load() - before
+	if len(data.Books) != 66 {
+		t.Fatalf("got %d books, want 66", len(data.Books))
+	}
+	gen := data.Verses["Genesis"]
+	if len(gen) != 3 {
+		t.Fatalf("Genesis chapters = %d, want 3: have %v", len(gen), len(gen))
+	}
+	total := 0
+	for ch := 1; ch <= 3; ch++ {
+		if len(gen[ch]) != 100 {
+			t.Errorf("Genesis %d has %d verses, want 100", ch, len(gen[ch]))
+		}
+		total += len(gen[ch])
+	}
+	if gen[2][99].Text != "Verse 100 of chapter 2." || gen[3][0].Text != "Verse 1 of chapter 3." {
+		t.Errorf("chunk seam texts wrong: %q / %q", gen[2][99].Text, gen[3][0].Text)
+	}
+	if err := validateBibleData(data); err != nil {
+		t.Errorf("assembled data invalid: %v", err)
+	}
+	// The whole point: books(1) + 65 single-chunk books + Genesis's walk
+	// (chunk, 404 continuation, advanced-chapter chunk) — about 70 calls,
+	// not one per chapter.
+	if calls > 75 {
+		t.Errorf("passage fetch used %d calls — the range walk is not batching", calls)
+	}
+	t.Logf("passage fetch calls: %d", calls)
 }
