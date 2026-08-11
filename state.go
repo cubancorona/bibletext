@@ -588,6 +588,22 @@ func executeSearch(state *AppState, rawQuery string) {
 		return
 	}
 
+	// A PASTED SHARE LINK opens like a tapped one. This is how notes reach the
+	// desktop at all: macOS/Windows/Linux are never handed a universal link by
+	// the OS, but a reader can paste one from a message into the box they
+	// already think of as "where I type things" — and it routes through the
+	// very same HandleShareLink the OS entry points use, notes gate, offer
+	// dialog and all. Mobile gets the same trick for free.
+	if _, isLink := ParseShareLink(trimmed); isLink {
+		if HandleShareLink(state, trimmed) {
+			clearSearchState(state)
+			if state.setSearchText != nil {
+				state.setSearchText("")
+			}
+			return
+		}
+	}
+
 	if book, chapter, verse, hasVerse, ok := state.Bible.parseReferenceQuery(trimmed); ok && hasVerse {
 		if match := state.Bible.GetVerse(book, chapter, verse); match != nil {
 			openSearchResult(state, *match)
