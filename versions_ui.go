@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -107,7 +108,7 @@ func showVersionPicker(state *AppState) {
 	header := container.NewVBox(title, intro, widget.NewSeparator())
 
 	rows := container.NewVBox()
-	for _, v := range bibleVersions() {
+	for _, v := range versionPickerOrder() {
 		ver := v // capture
 		rows.Add(versionRow(state, ver, func() {
 			closePicker()
@@ -115,14 +116,15 @@ func showVersionPicker(state *AppState) {
 		}))
 	}
 
-	note := widget.NewLabel("NRSV, LSB and NKJV are under evaluation and not yet selectable; they unlock once licensing is complete.")
-	note.Wrapping = fyne.TextWrapWord
 	closeBtn := widget.NewButton("Close", closePicker)
-	footer := container.NewVBox(
-		widget.NewSeparator(),
-		note,
-		container.NewBorder(nil, nil, nil, closeBtn),
-	)
+	footerItems := []fyne.CanvasObject{widget.NewSeparator()}
+	if locked := lockedVersionNames(); len(locked) > 0 {
+		note := widget.NewLabel(joinNatural(locked) + " are under evaluation and not yet selectable; they unlock once licensing is complete.")
+		note.Wrapping = fyne.TextWrapWord
+		footerItems = append(footerItems, note)
+	}
+	footerItems = append(footerItems, container.NewBorder(nil, nil, nil, closeBtn))
+	footer := container.NewVBox(footerItems...)
 
 	body := container.NewVScroll(container.NewPadded(rows))
 	content := container.NewBorder(header, footer, nil, nil, body)
@@ -147,6 +149,51 @@ func showVersionPicker(state *AppState) {
 		h = maxH
 	}
 	popup.Resize(fyne.NewSize(w, h))
+}
+
+// versionPickerOrder returns the registry's versions in the picker's display
+// order: selectable LICENSED translations first (the NKJV, once its licence
+// is configured), then the public-domain versions, each group keeping
+// registry order, with not-yet-selectable versions ("evaluation in
+// progress") sinking to the bottom. The registry itself is untouched — WEB
+// stays the default version everywhere else.
+func versionPickerOrder() []BibleVersion {
+	var licensed, public, locked []BibleVersion
+	for _, v := range bibleVersions() {
+		switch {
+		case !v.canSelect():
+			locked = append(locked, v)
+		case isLicensedSource(v):
+			licensed = append(licensed, v)
+		default:
+			public = append(public, v)
+		}
+	}
+	return append(append(licensed, public...), locked...)
+}
+
+// lockedVersionNames lists the display abbreviations of versions the picker
+// shows de-emphasized, for the footer note; empty when everything is live.
+func lockedVersionNames() []string {
+	var names []string
+	for _, v := range bibleVersions() {
+		if !v.canSelect() {
+			names = append(names, strings.ToUpper(v.ID))
+		}
+	}
+	return names
+}
+
+// joinNatural renders a name list the way a sentence wants it:
+// "NRSV", "NRSV and LSB", "NRSV, LSB and NKJV".
+func joinNatural(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // versionRow is one card in the picker: name + abbreviation, the publisher/license
