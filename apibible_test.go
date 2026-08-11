@@ -174,6 +174,23 @@ func apiBibleFixture(t *testing.T) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
+func TestAPIBibleBookNamesComplete(t *testing.T) {
+	seen := map[string]bool{}
+	for _, usfm := range usfmCanonical66 {
+		name := apiBibleBookName(usfm)
+		if name == "" {
+			t.Errorf("USFM id %s has no app book name", usfm)
+		}
+		if seen[name] {
+			t.Errorf("USFM id %s duplicates book name %q", usfm, name)
+		}
+		seen[name] = true
+	}
+	if len(seen) != 66 {
+		t.Errorf("got %d unique book names, want 66", len(seen))
+	}
+}
+
 func TestFetchAPIBibleAssemblesFullCanon(t *testing.T) {
 	srv := apiBibleFixture(t)
 	defer srv.Close()
@@ -190,6 +207,28 @@ func TestFetchAPIBibleAssemblesFullCanon(t *testing.T) {
 	}
 	if data.Books[0] != "Genesis" || data.Books[18] != "Psalms" || data.Books[65] != "Revelation" {
 		t.Errorf("canonical order broken: %v ... %v", data.Books[:3], data.Books[63:])
+	}
+	// Every book must resolve to a real, unique name with verses under it.
+	// (The Catholic USFM map knows only the GREEK Esther/Daniel — ESG/DAG —
+	// so plain EST/DAN once silently became "": Daniel nameless, Esther
+	// overwritten and lost. This pins the whole canon by name.)
+	seen := map[string]bool{}
+	for _, name := range data.Books {
+		if name == "" {
+			t.Fatal("empty book name in assembled canon")
+		}
+		if seen[name] {
+			t.Fatalf("duplicate book name %q in assembled canon", name)
+		}
+		seen[name] = true
+		if len(data.Verses[name]) == 0 {
+			t.Errorf("book %q assembled with no chapters", name)
+		}
+	}
+	for _, must := range []string{"Esther", "Daniel"} {
+		if !seen[must] {
+			t.Errorf("book %q missing from assembled canon", must)
+		}
 	}
 	ps := data.Verses["Psalms"][1]
 	if len(ps) != 2 || !strings.Contains(ps[0].Text, "\n") {

@@ -152,3 +152,66 @@ func TestSwitchVersionInteractive(t *testing.T) {
 		t.Fatal("an unknown version id must be refused")
 	}
 }
+
+// TestVersionPickerOrder pins the picker's display order: a licence-configured
+// NKJV leads, the public-domain versions follow in registry order, and
+// everything not selectable sinks to the bottom (where the footer note names
+// it). Without a licence the NKJV is itself locked and must sink too.
+func TestVersionPickerOrder(t *testing.T) {
+	t.Setenv("BIBLE_API_KEY", "test-key")
+	t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-bible")
+
+	got := versionPickerOrder()
+	if len(got) != len(bibleVersions()) {
+		t.Fatalf("picker order dropped versions: %d != %d", len(got), len(bibleVersions()))
+	}
+	if got[0].ID != "nkjv" {
+		t.Errorf("licensed NKJV should lead the picker, got %q first", got[0].ID)
+	}
+	lockedZone := false
+	for i, v := range got {
+		if !v.canSelect() {
+			lockedZone = true
+		} else if lockedZone {
+			t.Errorf("selectable %q at %d appears after a locked version", v.ID, i)
+		}
+	}
+	for _, name := range lockedVersionNames() {
+		if name == "NKJV" {
+			t.Error("licence-configured NKJV must not be in the locked footer note")
+		}
+	}
+
+	t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
+	got = versionPickerOrder()
+	if got[0].ID == "nkjv" {
+		t.Error("unlicensed NKJV must not lead the picker")
+	}
+	found := false
+	for _, name := range lockedVersionNames() {
+		if name == "NKJV" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("unlicensed NKJV missing from the locked footer note")
+	}
+}
+
+func TestJoinNatural(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want string
+	}{
+		{nil, ""},
+		{[]string{"NRSV"}, "NRSV"},
+		{[]string{"NRSV", "LSB"}, "NRSV and LSB"},
+		{[]string{"NRSV", "LSB", "NKJV"}, "NRSV, LSB and NKJV"},
+	}
+	for _, c := range cases {
+		if got := joinNatural(c.in); got != c.want {
+			t.Errorf("joinNatural(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

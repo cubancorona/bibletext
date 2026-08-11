@@ -177,7 +177,12 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 				}{c.ID, c.Number})
 			}
 		}
-		name := usfmToCatholicName[usfm]
+		name := apiBibleBookName(usfm)
+		if name == "" {
+			// A silent "" here once cost a whole book: Esther vanished and
+			// Daniel lost its name (the Catholic map only knows ESG/DAG).
+			return nil, fmt.Errorf("%s: no app book name for USFM id %s", displayName, usfm)
+		}
 		for _, c := range chapters {
 			n, err := strconv.Atoi(strings.TrimSpace(c.Number))
 			if err != nil {
@@ -194,7 +199,7 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 	// and cancels the rest.
 	verses := make(map[string]map[int][]Verse, 66)
 	for _, usfm := range usfmCanonical66 {
-		verses[usfmToCatholicName[usfm]] = map[int][]Verse{}
+		verses[apiBibleBookName(usfm)] = map[int][]Verse{}
 	}
 	var (
 		mu       sync.Mutex
@@ -244,7 +249,7 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 
 	booksOut := make([]string, 0, len(usfmCanonical66))
 	for _, usfm := range usfmCanonical66 {
-		booksOut = append(booksOut, usfmToCatholicName[usfm])
+		booksOut = append(booksOut, apiBibleBookName(usfm))
 	}
 	data := &BibleData{Verses: verses, Books: booksOut}
 	if err := validateBibleData(data); err != nil {
@@ -420,6 +425,21 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 		return nil, fmt.Errorf("no verse text decoded")
 	}
 	return out, nil
+}
+
+// apiBibleBookName resolves a standard USFM book id to the app's book name.
+// usfmToCatholicName serves helloao's CATHOLIC edition, which carries the
+// Greek Esther and Daniel under ESG/DAG — the plain EST/DAN ids every
+// standard 66-book canon uses are absent from that map, so they are named
+// here. A lookup miss is a hard error in fetchAPIBible, never a silent "".
+func apiBibleBookName(usfm string) string {
+	switch usfm {
+	case "EST":
+		return "Esther"
+	case "DAN":
+		return "Daniel"
+	}
+	return usfmToCatholicName[usfm]
 }
 
 // verseNumFromMarker extracts the verse number from a verse-marker tag:
