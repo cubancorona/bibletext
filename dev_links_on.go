@@ -187,6 +187,14 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		u.TextSize = 10
 
 		inApp := widget.NewButton("Open in app", func() {
+			// Will this link raise the three-way offer instead of navigating?
+			// (Notes off + the link genuinely carries a note.) The offer is a
+			// modal on THIS canvas, and switchToRead's window rebuild drains
+			// overlays — switching would destroy the question before a single
+			// frame of it was drawn. Stay put; the offer does its own
+			// navigating through whichever door the reader picks.
+			t, parsed := ParseShareLink(sc.url)
+			offerWillShow := parsed && t.Note != "" && !notesEnabled()
 			if !HandleShareLink(state, sc.url) {
 				// Declined is a legitimate outcome for the malformed cases —
 				// say so rather than leaving the tap looking broken.
@@ -195,7 +203,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 				return
 			}
 			refreshStatus()
-			if switchToRead != nil {
+			if !offerWillShow && switchToRead != nil {
 				switchToRead()
 			}
 		})
