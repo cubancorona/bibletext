@@ -2,7 +2,25 @@
 
 package bibletext
 
-// openLinkInBrowser is a no-op off the platforms that receive shared links.
-// macOS, Windows and Linux never have one handed to them, so there is nothing
-// to hand back.
-func openLinkInBrowser(rawURL string) {}
+// openLinkInBrowser on the desktops: hand the URL to the system browser via
+// Fyne. Desktop never has a link handed to it by the OS, but it can now be
+// handed one by the READER — a bibletext.co.uk link pasted into Search opens
+// in-app (executeSearch → HandleShareLink) — and the notes-off offer's "Read
+// it in the browser" has to actually go somewhere on every platform that can
+// show the offer.
+
+import (
+	"net/url"
+
+	"fyne.io/fyne/v2"
+)
+
+func openLinkInBrowser(rawURL string) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+	if app := fyne.CurrentApp(); app != nil {
+		_ = app.OpenURL(u)
+	}
+}

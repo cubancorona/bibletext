@@ -46,6 +46,13 @@ func buildReadingView(state *AppState) fyne.CanvasObject {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeader(state, chapterNumbers))
+	// The chapter's shared note, when one is stored: the desktop/Android answer
+	// to the iOS in-text sticker (notes_banner.go). Above the pane rather than
+	// inside it, so the native overlays and the styled pane need no per-platform
+	// note machinery to reach feature parity.
+	if banner := buildNoteBanner(state); banner != nil {
+		top.Add(banner)
+	}
 
 	// One uniform pad around the whole pane keeps the header and the page on the
 	// same left/right margin.
