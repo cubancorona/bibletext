@@ -97,9 +97,14 @@ func promptKeepOrDeleteNotes(state *AppState, onOff func(), onCancel func()) {
 		}
 		closed = true
 		if popup != nil {
-			popup.Hide()
+			popup.Hide() // removes it from the overlay stack synchronously
 		}
-		if state.showReadingOverlay != nil {
+		// This prompt sits ON TOP of the Settings sheet, which hid the reading
+		// overlay when IT opened and restores it when IT closes. Restoring here
+		// unconditionally painted the native note sticker straight over the
+		// still-open sheet (caught in the simulator). Restore only when nothing
+		// else owns the canvas — the same rule the sheet watchdogs follow.
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
 			state.showReadingOverlay()
 		}
 	}
