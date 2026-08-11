@@ -405,9 +405,15 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// resize PopUp overlays on a canvas resize, so after a rotation this
 		// card kept its portrait height on a landscape canvas — the verse
 		// fields and the Go button, the picker's only commit path, hung off the
-		// bottom of the screen (the implementation requirement, upheld 3/3). The same refit
-		// covers Android's soft keyboard now that the manifest declares
-		// adjustResize: the IME shrinks the canvas, the card refits above it.
+		// bottom of the screen (the implementation requirement, upheld 3/3).
+		//
+		// (An adjustResize manifest entry briefly rode along here to make this
+		// refit double as Android's keyboard lift — reverted the same day: an
+		// IME-shrunk canvas flips the LIVE smallest-dimension tablet test on
+		// landscape Android tablets, and layoutWatcher then thrashes the whole
+		// window between the regular and compact layouts mid-keystroke,
+		// dismissing the keyboard each time. Android's lift needs the iOS
+		// approach instead: the IME height fed from the native side.)
 		//
 		// This is the ONE exception to the "the popup is never resized" rule
 		// above, and it does not reopen that bug: the rule exists because
