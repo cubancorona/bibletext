@@ -77,7 +77,7 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 		return 0
 	}
 	ln := p.lay.Lines[li]
-	x := pos.X - styledPaneInset
+	x := pos.X - p.insetX()
 	segs := p.lineSegs[li]
 	if len(segs) == 0 || x <= segs[0].X {
 		return ln.StartOffset
@@ -111,26 +111,26 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 func (p *styledReadingPane) xForOffset(li, offset int) float32 {
 	segs := p.lineSegs[li]
 	if len(segs) == 0 {
-		return styledPaneInset
+		return p.insetX()
 	}
 	for i, seg := range segs {
 		segRunes := []rune(seg.Text)
 		end := seg.FirstOffset + len(segRunes)
 		if offset < seg.FirstOffset {
 			if i == 0 {
-				return styledPaneInset + seg.X
+				return p.insetX() + seg.X
 			}
 			// In the inter-segment space: snap to this segment's start.
-			return styledPaneInset + seg.X
+			return p.insetX() + seg.X
 		}
 		if offset <= end {
 			pw := p.segWidth(string(segRunes[:offset-seg.FirstOffset]), seg.Kind)
-			return styledPaneInset + seg.X + pw
+			return p.insetX() + seg.X + pw
 		}
 	}
 	last := segs[len(segs)-1]
 	w := p.segWidth(last.Text, last.Kind)
-	return styledPaneInset + last.X + w
+	return p.insetX() + last.X + w
 }
 
 // selectionSpan is one line's slice of the active selection, in widget coords.

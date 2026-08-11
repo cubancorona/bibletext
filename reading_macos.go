@@ -674,6 +674,32 @@ void bibleTextMacTVSetHTML(const char *html) {
 // bibleTextMacTVSetFrame positions the overlay. Inputs are Fyne coordinates
 // (top-left origin, points). AppKit content views are non-flipped (bottom-left
 // origin), so we flip Y using the content view height.
+// The reporter measure (27.5em × body px), the NSTextView twin of the iPad's
+// bibleTextSetReadingMeasure: cap the text column and centre it by growing the
+// horizontal textContainerInset. NSTextView applies the inset width to BOTH
+// sides and the container tracks the view width, so one number does the whole
+// job. Floors at the legacy 16pt so a narrow window degrades to today's look.
+static CGFloat gMacReadingMeasure = 0;
+static void btMacApplyInsets(CGFloat w) {
+    if (gTextView == nil || w <= 0) return;
+    CGFloat side = 16;
+    if (gMacReadingMeasure > 0) {
+        side = floor((w - gMacReadingMeasure) / 2.0);
+        if (side < 16) side = 16;
+    }
+    NSSize cur = gTextView.textContainerInset;
+    if (fabs(cur.width - side) < 0.5) return;
+    gTextView.textContainerInset = NSMakeSize(side, cur.height);
+    [gTextView.layoutManager ensureLayoutForTextContainer:gTextView.textContainer];
+}
+
+void bibleTextMacSetReadingMeasure(double m) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gMacReadingMeasure = (CGFloat)m;
+        if (gScroll != nil) btMacApplyInsets(gScroll.contentSize.width);
+    });
+}
+
 void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
     dispatch_async(dispatch_get_main_queue(), ^{
         bibleTextMacEnsureTV();
@@ -684,6 +710,7 @@ void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
         NSRect r = NSMakeRect(x, ph - y - h, w, h);
         BOOL changed = !NSEqualRects(r, gScroll.frame);
         gScroll.frame = r;
+        btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
         btMacLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
         // SetHTML may have scrolled to the highlighted verse / restore target
         // while the overlay was still at its initial width; once the real frame
@@ -852,6 +879,7 @@ import "C"
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"time"
 	"unsafe"
 
@@ -957,6 +985,16 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	macCurrentHost = h
+	// Keep the native reporter column in sync with the text-size setting: the
+	// measure is em-based (27.5 × body px), so Large/XL widen the column and
+	// keep its character count at the reporter's ~59 (the iOS twin does the
+	// same in pushChapterHTML).
+	if reporterLayoutActive() {
+		bodyPx := math.Round(21 * readingTextScale())
+		C.bibleTextMacSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+	} else {
+		C.bibleTextMacSetReadingMeasure(0)
+	}
 	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
 	fp := chapterRenderFingerprint(state)
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)

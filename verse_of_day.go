@@ -393,9 +393,13 @@ func showVerseOfDay(state *AppState) {
 	fitVOTD()
 
 	// Re-measure once the real layout has landed so the card fits the verse snugly.
+	// Visible() gates it: a dismissed card must not re-measure — in the app that
+	// is mere waste, but under `go test -race` a stale timer's font measurement
+	// runs concurrently with the next test's and trips go-text's single-threaded
+	// glyph cache (the real app measures only on its one UI thread).
 	time.AfterFunc(40*time.Millisecond, func() {
 		fyne.Do(func() {
-			if popup != nil {
+			if popup != nil && popup.Visible() {
 				fitVOTD()
 			}
 		})

@@ -36,6 +36,11 @@ func topPopup(t *testing.T, win fyne.Window) *widget.PopUp {
 	if !ok || p == nil {
 		t.Fatalf("expected a popup overlay, got %T", win.Canvas().Overlays().Top())
 	}
+	// Hide on the way out: several of these popups arm 40ms re-measure timers
+	// gated on Visible(), and a popup left visible past its test lets that
+	// timer's font measurement race the next test's (go-text's glyph cache is
+	// single-thread-only; the real app measures on one UI thread).
+	t.Cleanup(p.Hide)
 	return p
 }
 
