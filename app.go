@@ -159,6 +159,10 @@ var loadProgressFn func(book string, bookNum, totalBooks, chapter int)
 // Exported so both entry points (desktop Run, cmd/mobile) use the same path.
 func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 	go func() {
+		// Licensed translations whose licence configuration is gone must not
+		// keep their on-device copies (the removal obligation that comes with
+		// content held under terms). Cheap no-op for everyone else.
+		purgeUnavailableLicensedCaches()
 		// Show per-book download progress on the loading spinner during a first-run fetch.
 		loadProgressFn = func(book string, bookNum, totalBooks, chapter int) {
 			ref := book
