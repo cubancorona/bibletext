@@ -714,6 +714,10 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 	// already on screen with the very same verse already lit — otherwise the tap
 	// does nothing visible (see AppState.forceReposition).
 	state.forceReposition = true
+	// And drop any pending "reopen where you left off" target: it now outranks the
+	// highlight in the reading panes, so leaving it armed would send an explicit
+	// arrival to the saved position instead of the verse just asked for.
+	state.restore = nil
 	state.HighlightedBook = verse.BookName
 	state.HighlightedChapter = verse.Chapter
 	state.HighlightedVerse = verse.Verse

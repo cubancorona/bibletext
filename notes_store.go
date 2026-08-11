@@ -267,29 +267,24 @@ func dropCurrentNote(state *AppState) {
 // point every OTHER chapter's note had shown up correctly. Field-reported, and
 // exactly as confusing as it sounds.
 //
-// REOPENING IS NOT ARRIVING, though, and the difference decides the scroll.
-// Arriving on a link should land the reader on the message: that is what the
-// link was for. Reopening should land them where they stopped reading — a
-// promise the app has kept since reading_state.go was written — and that may be
-// a long way past the note. The iOS scroller keys off the HIGHLIGHT, so a
-// note-derived highlight would quietly override the saved position and yank a
-// reader who had read on back up to the note. The note therefore comes back in
-// full, bubble and all, but hands the scroll to the saved position.
+// REOPENING IS NOT ARRIVING, though, and the difference decides the SCROLL —
+// but only the scroll. Arriving on a link should land the reader on the message;
+// reopening should land them where they stopped reading, which may be a long way
+// past the note.
 //
-// With no saved position (a chapter never scrolled) there is nothing to
-// protect, and the note behaves exactly as it does on arrival.
+// The first attempt bought that by dropping the note's highlight on resume, so
+// it could not capture the scroll. That was the wrong price: the note came back
+// bare, a bubble pointing at nothing, and it read as a fault — reported as one.
+// A note and the passage it marks are one object; showing half of it is worse
+// than either alternative.
+//
+// So the note is restored WHOLE, and the scroll is settled where it belongs: a
+// pending restore now outranks the highlight in the reading panes, and the
+// explicit arrivals clear the restore so they still land on their passage. See
+// AppState.restore and openSearchResultRange.
 func applyNoteOnResume(state *AppState) {
 	if state == nil {
 		return
 	}
-	hadHighlight := state.HasHighlightedVerse
 	applyNoteForCurrentChapter(state)
-	if hadHighlight || !state.HasHighlightedVerse {
-		return // nothing new to give up
-	}
-	if a := state.restore; a != nil && (a.Verse > 0 || a.Frac > 0) {
-		state.HasHighlightedVerse = false
-		state.HighlightedBook, state.HighlightedChapter = "", 0
-		state.HighlightedVerse, state.HighlightedVerseEnd = 0, 0
-	}
 }
