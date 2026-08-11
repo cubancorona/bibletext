@@ -1076,30 +1076,14 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
 static void bibleTextScrollReadingTV(void) {
     if (gReadingTV == nil) return;
     NSUInteger len = gReadingTV.textStorage.length;
-    if (gReadingHighlightRange.location != NSNotFound &&
-        gReadingHighlightRange.length > 0 &&
-        NSMaxRange(gReadingHighlightRange) <= len) {
-        NSLayoutManager *lm = gReadingTV.layoutManager;
-        NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
-                                    actualCharacterRange:NULL];
-        CGRect rect = [lm boundingRectForGlyphRange:glyphs
-                                    inTextContainer:gReadingTV.textContainer];
-        // A little breathing room above the verse so it doesn't kiss the top.
-        CGFloat target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
-        // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band
-        // ABOVE the paragraph holding the highlighted verse, so scrolling to the
-        // verse pushed the message off the top of the screen — and the message is
-        // the reason the link was sent. The passage follows directly under it.
-        // Taken as a minimum rather than a substitution, so this can only ever
-        // scroll further UP: nothing can put the note out of view.
-        CGFloat noteY = btIOSNoteTopY();
-        if (noteY >= 0 && noteY - 12 < target) target = noteY - 12;
-        CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
-        if (target > maxY) target = maxY;
-        if (target < 0) target = 0;
-        gReadingTV.contentOffset = CGPointMake(0, target);
-        return;
-    }
+    // ORDER MATTERS, and it is restore-before-highlight.
+    //
+    // A pending restore only ever exists on a REOPEN — the explicit arrivals (a
+    // tapped link, a note, a search result) clear it precisely so they fall
+    // through to the highlight below. So an armed restore means "the reader is
+    // coming back", and coming back should land where they stopped reading, not
+    // on whatever happens to be highlighted there. With the other order, a note
+    // restored on reopen dragged the reader back to it every launch.
     if (gReadingHasRestore && len > 0) {
         UITextView *tv = gReadingTV;
         NSLayoutManager *lm = tv.layoutManager;
@@ -1125,6 +1109,30 @@ static void bibleTextScrollReadingTV(void) {
             tv.contentOffset = CGPointMake(0, target);
             return;
         }
+    }
+    if (gReadingHighlightRange.location != NSNotFound &&
+        gReadingHighlightRange.length > 0 &&
+        NSMaxRange(gReadingHighlightRange) <= len) {
+        NSLayoutManager *lm = gReadingTV.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
+                                    actualCharacterRange:NULL];
+        CGRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gReadingTV.textContainer];
+        // A little breathing room above the verse so it doesn't kiss the top.
+        CGFloat target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
+        // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band
+        // ABOVE the paragraph holding the highlighted verse, so scrolling to the
+        // verse pushed the message off the top of the screen — and the message is
+        // the reason the link was sent. The passage follows directly under it.
+        // Taken as a minimum rather than a substitution, so this can only ever
+        // scroll further UP: nothing can put the note out of view.
+        CGFloat noteY = btIOSNoteTopY();
+        if (noteY >= 0 && noteY - 12 < target) target = noteY - 12;
+        CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
+        if (target > maxY) target = maxY;
+        if (target < 0) target = 0;
+        gReadingTV.contentOffset = CGPointMake(0, target);
+        return;
     }
     gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
 }

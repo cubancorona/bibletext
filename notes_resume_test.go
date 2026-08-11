@@ -48,10 +48,12 @@ func TestNoteComesBackOnReopen(t *testing.T) {
 	}
 }
 
-// A reader who had read on past the note must come back to where they stopped,
-// not be yanked up to the note. The iOS scroller keys off the highlight, so the
-// note must not set one when there is a saved position.
-func TestReopenKeepsTheSavedPositionOverTheNote(t *testing.T) {
+// The note comes back WHOLE — bubble and highlight — even when a saved reading
+// position exists. Dropping the highlight to protect the scroll was the first
+// attempt and it was wrong: a bubble pointing at nothing reads as a fault, and
+// was reported as one. The scroll is protected in the reading panes instead,
+// where a pending restore outranks the highlight.
+func TestReopenRestoresTheNoteWhole(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
@@ -74,10 +76,12 @@ func TestReopenKeepsTheSavedPositionOverTheNote(t *testing.T) {
 			if st.ActiveNote != "read this bit" {
 				t.Errorf("the note should still come back: %q", st.ActiveNote)
 			}
-			if st.HasHighlightedVerse {
-				t.Errorf("a note highlight overrode the saved reading position (verse %d)",
-					st.HighlightedVerse)
+			if !st.HasHighlightedVerse || st.HighlightedVerse != 1 || st.HighlightedVerseEnd != 4 {
+				t.Errorf("the note came back without its highlight: has=%v %d-%d",
+					st.HasHighlightedVerse, st.HighlightedVerse, st.HighlightedVerseEnd)
 			}
+			// The saved position must survive too — the panes use it to outrank
+			// the highlight, so losing it here would hand the scroll to the note.
 			if st.restore == nil {
 				t.Error("the saved position was dropped")
 			}
@@ -127,5 +131,41 @@ func TestReopenSurfacesNothingWhenNotesAreOff(t *testing.T) {
 	}
 	if st.HasHighlightedVerse {
 		t.Error("a highlight appeared on reopen with the feature off")
+	}
+}
+
+// An explicit arrival clears the saved position, because the panes now let a
+// pending restore outrank the highlight — leaving one armed would send a tapped
+// link to where the reader last was instead of the verse they asked for.
+func TestArrivalsClearTheSavedPosition(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+
+	for name, arrive := range map[string]func(*AppState){
+		"tapped link": func(st *AppState) {
+			applyShareTarget(st, ShareTarget{VersionID: "web", Book: "Psalms", Chapter: 23,
+				VerseLo: 1, VerseHi: 4, Note: "hello"})
+		},
+		"search result": func(st *AppState) {
+			openSearchResult(st, Verse{BookName: "Psalms", Chapter: 23, Verse: 2})
+		},
+		"note from the browser": func(st *AppState) {
+			openNote(st, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+				VerseLo: 1, VerseHi: 4, Text: "n"})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st := psalm23State()
+			st.restore = &restoreAnchor{Book: "Psalms", Chapter: 23, Verse: 5}
+			arrive(st)
+			if st.restore != nil {
+				t.Errorf("a stale saved position survived an arrival (verse %d) — it would win the scroll",
+					st.restore.Verse)
+			}
+			if !st.forceReposition {
+				t.Error("an arrival must also ask the pane to reposition")
+			}
+		})
 	}
 }
