@@ -33,7 +33,6 @@
 				 android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round">
 	<activity android:name="org.golang.app.GoNativeActivity"
 		android:label="BibleText"
-		android:windowSoftInputMode="adjustResize"
 		android:configChanges="orientation|keyboardHidden|uiMode"
 		android:exported="true"
 		android:launchMode="singleTop"
