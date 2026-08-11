@@ -35,7 +35,7 @@ const proseChapterContent = `[
   {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"16"},"items":[{"type":"text","text":"16"}]},
     {"name":"char","type":"tag","attrs":{"style":"wj"},"items":[
-      {"type":"text","text":"For God so loved the world,","attrs":{"verseId":"JHN.3.16"}}
+      {"type":"text","text":"For God so loved the world, ","attrs":{"verseId":"JHN.3.16"}}
     ]},
     {"type":"text","text":"that he gave his one and only Son.","attrs":{"verseId":"JHN.3.16"}},
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"17"},"items":[{"type":"text","text":"17"}]},

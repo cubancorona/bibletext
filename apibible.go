@@ -341,8 +341,16 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 	texts := map[int]*strings.Builder{}
 	current := 0
 
-	appendText := func(verse int, s string) {
-		if verse == 0 || strings.TrimSpace(s) == "" {
+	// Fragments are concatenated RAW: the source's text nodes carry their own
+	// spacing ("The " + sc"Lord" + " said to my Lord,"), and any inserted
+	// space corrupts constructions where a span abuts punctuation ("Lord" +
+	// ";") or splits a word ("G" + sc"OD" → "G OD" — the live NKJV caught
+	// both). The only synthetic joins are the poetry "\n" and a single space
+	// where a PROSE verse flows across a paragraph boundary.
+	pendingBreak := false // next text for the current verse starts a poem line
+	pendingSpace := false // next text for the current verse crosses a prose para join
+	appendText := func(verse, from int, s string) {
+		if verse == 0 || s == "" {
 			return
 		}
 		b, ok := texts[verse]
@@ -351,18 +359,24 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 			texts[verse] = b
 			order = append(order, verse)
 		}
-		if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") && !strings.HasSuffix(b.String(), " ") {
-			b.WriteByte(' ')
+		if verse == from {
+			cur := b.String()
+			if pendingBreak {
+				if b.Len() > 0 && !strings.HasSuffix(cur, "\n") {
+					b.WriteByte('\n')
+				}
+			} else if pendingSpace && b.Len() > 0 &&
+				!strings.HasSuffix(cur, " ") && !strings.HasSuffix(cur, "\n") &&
+				!strings.HasPrefix(s, " ") {
+				b.WriteByte(' ')
+			}
 		}
-		b.WriteString(strings.TrimSpace(s))
+		pendingBreak, pendingSpace = false, false
+		b.WriteString(s)
 	}
 
-	// lineBreak marks the start of a new poetry line for whichever verse next
-	// receives text — mirroring the "\n"-in-verse-text convention every
-	// rendering surface shares.
-	pendingBreak := false
-	var walk func(nodes []apiBibleNode)
-	walk = func(nodes []apiBibleNode) {
+	var walk func(nodes []apiBibleNode, upcase bool)
+	walk = func(nodes []apiBibleNode, upcase bool) {
 		for _, n := range nodes {
 			switch {
 			case n.Type == "text" || (n.Text != "" && len(n.Items) == 0):
@@ -370,13 +384,11 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 				if id := verseNumFromID(n.Attrs.VerseID); id != 0 {
 					v = id
 				}
-				if pendingBreak && v != 0 {
-					if b, ok := texts[v]; ok && b.Len() > 0 {
-						b.WriteByte('\n')
-					}
-					pendingBreak = false
+				s := n.Text
+				if upcase {
+					s = strings.ToUpper(s)
 				}
-				appendText(v, n.Text)
+				appendText(v, current, s)
 			case n.Name == "verse":
 				if num := verseNumFromMarker(n); num != 0 {
 					current = num
@@ -385,22 +397,40 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 				// verse text — the live NKJV proved it arrives as a nested
 				// text node. The app draws its own verse numbers, so the
 				// marker subtree is presentation only: never walk it.
-			default: // char spans (wj, nd, …) and anything else that nests
-				walk(n.Items)
+			default:
+				// Char spans (sc, nd, wj, it, …) and anything else that
+				// nests. Small-caps and divine-name spans read as UPPERCASE
+				// in plain text — that is what preserves the NKJV's
+				// LORD/Lord (YHWH/Adonai) distinction and reassembles
+				// "G"+sc"OD" into "GOD".
+				style := strings.ToLower(n.Attrs.Style)
+				walk(n.Items, upcase || style == "sc" || style == "nd")
 			}
 		}
 	}
 
 	for _, block := range blocks {
 		style := strings.ToLower(block.Attrs.Style)
+		if apiBibleSkipPara(style) {
+			// Headings are not scripture: acrostic letters (qa — which the
+			// "q" poetry prefix would otherwise claim), superscriptions (d),
+			// section heads (s*/ms*/mr/sr/r/sp/cl/cd). include-titles=false
+			// does NOT strip qa, so Psalm 119's א/Aleph headings once leaked
+			// into verse text.
+			continue
+		}
 		isPoetry := strings.HasPrefix(style, "q")
 		// A paragraph boundary continues the current verse. For poetry that
 		// boundary is an authored line; for prose it is just flow.
-		if current != 0 && isPoetry {
-			pendingBreak = true
+		if current != 0 {
+			if isPoetry {
+				pendingBreak = true
+			} else {
+				pendingSpace = true
+			}
 		}
-		walk(block.Items)
-		pendingBreak = false
+		walk(block.Items, false)
+		pendingBreak, pendingSpace = false, false
 	}
 
 	if len(order) == 0 {
@@ -409,7 +439,7 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 	sort.Ints(order)
 	out := make([]Verse, 0, len(order))
 	for _, num := range order {
-		text := strings.TrimSpace(texts[num].String())
+		text := normalizeVerseSpaces(texts[num].String())
 		if text == "" {
 			continue
 		}
@@ -425,6 +455,36 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 		return nil, fmt.Errorf("no verse text decoded")
 	}
 	return out, nil
+}
+
+// apiBibleSkipPara reports whether a paragraph style carries headings rather
+// than scripture text: acrostic letters (qa), superscriptions (d), section
+// heads and cross-reference lines. Matched exactly — prefix tests would claim
+// scripture styles (a bare "s" prefix eats "sp"-adjacent poetry, and "q"
+// already claims qa for poetry, which is exactly how Psalm 119's headings
+// once leaked).
+func apiBibleSkipPara(style string) bool {
+	switch style {
+	case "qa", "d", "cl", "cd", "mr", "sr", "r", "sp",
+		"s", "s1", "s2", "s3", "s4", "ms", "ms1", "ms2", "ms3":
+		return true
+	}
+	return false
+}
+
+// normalizeVerseSpaces trims each poem line and collapses interior space runs
+// (raw fragment concatenation can double a space when two neighbouring nodes
+// both carry one), preserving the "\n" poem-line structure.
+func normalizeVerseSpaces(s string) string {
+	lines := strings.Split(s, "\n")
+	out := lines[:0]
+	for _, ln := range lines {
+		ln = strings.Join(strings.Fields(ln), " ")
+		if ln != "" {
+			out = append(out, ln)
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // apiBibleBookName resolves a standard USFM book id to the app's book name.
