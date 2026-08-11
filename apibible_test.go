@@ -17,14 +17,14 @@ import (
 // chapterJSON builds the content-type=json block tree the decoder consumes.
 const psalmChapterContent = `[
   {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
-    {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"PSA 46:1"},"items":[]},
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"PSA 46:1"},"items":[{"type":"text","text":"1"}]},
     {"type":"text","text":"God is our refuge and strength,","attrs":{"verseId":"PSA.46.1"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q2"},"items":[
     {"type":"text","text":"a very present help in trouble.","attrs":{"verseId":"PSA.46.1"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
-    {"name":"verse","type":"tag","attrs":{"style":"v","number":"2","sid":"PSA 46:2"},"items":[]},
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"2","sid":"PSA 46:2"},"items":[{"type":"text","text":"2"}]},
     {"type":"text","text":"Therefore we won't be afraid,","attrs":{"verseId":"PSA.46.2"}}
   ]}
 ]`
@@ -33,12 +33,12 @@ const psalmChapterContent = `[
 // verse continuing across two text nodes in one paragraph.
 const proseChapterContent = `[
   {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
-    {"name":"verse","type":"tag","attrs":{"style":"v","number":"16"},"items":[]},
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"16"},"items":[{"type":"text","text":"16"}]},
     {"name":"char","type":"tag","attrs":{"style":"wj"},"items":[
       {"type":"text","text":"For God so loved the world,","attrs":{"verseId":"JHN.3.16"}}
     ]},
     {"type":"text","text":"that he gave his one and only Son.","attrs":{"verseId":"JHN.3.16"}},
-    {"name":"verse","type":"tag","attrs":{"style":"v","number":"17"},"items":[]},
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"17"},"items":[{"type":"text","text":"17"}]},
     {"type":"text","text":"For God didn't send his Son to judge.","attrs":{"verseId":"JHN.3.17"}}
   ]}
 ]`

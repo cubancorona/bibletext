@@ -64,8 +64,8 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 			poetic = true
 		}
 	}
-	if !strings.Contains(byNum[10], "Be still") {
-		t.Errorf("PSA.46:10 = %q, want it to contain \"Be still\"", byNum[10])
+	if !strings.HasPrefix(byNum[10], "Be still") {
+		t.Errorf("PSA.46:10 = %q, want it to BEGIN with \"Be still\" — a leading digit means the marker's rendered verse number leaked into the text", byNum[10])
 	}
 	if !poetic {
 		t.Error("PSA.46 decoded with no poem line breaks — poetry paragraphs not being detected")
@@ -91,8 +91,8 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 			v35 = v.Text
 		}
 	}
-	if !strings.Contains(v35, "wept") {
-		t.Errorf("JHN.11:35 = %q, want it to contain \"wept\"", v35)
+	if v35 != "Jesus wept." {
+		t.Errorf("JHN.11:35 = %q, want exactly \"Jesus wept.\"", v35)
 	}
 	t.Logf("JHN.11:35 = %q", v35)
 }

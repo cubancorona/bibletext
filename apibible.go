@@ -376,7 +376,10 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 				if num := verseNumFromMarker(n); num != 0 {
 					current = num
 				}
-				walk(n.Items)
+				// The marker's own items render the verse NUMBER ("10"), not
+				// verse text — the live NKJV proved it arrives as a nested
+				// text node. The app draws its own verse numbers, so the
+				// marker subtree is presentation only: never walk it.
 			default: // char spans (wj, nd, …) and anything else that nests
 				walk(n.Items)
 			}
