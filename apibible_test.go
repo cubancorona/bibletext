@@ -1,0 +1,319 @@
+package bibletext
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// --- Decoder ------------------------------------------------------------------
+
+// chapterJSON builds the content-type=json block tree the decoder consumes.
+const psalmChapterContent = `[
+  {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"PSA 46:1"},"items":[]},
+    {"type":"text","text":"God is our refuge and strength,","attrs":{"verseId":"PSA.46.1"}}
+  ]},
+  {"name":"para","type":"tag","attrs":{"style":"q2"},"items":[
+    {"type":"text","text":"a very present help in trouble.","attrs":{"verseId":"PSA.46.1"}}
+  ]},
+  {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"2","sid":"PSA 46:2"},"items":[]},
+    {"type":"text","text":"Therefore we won't be afraid,","attrs":{"verseId":"PSA.46.2"}}
+  ]}
+]`
+
+// proseChapterContent exercises nested char spans (wj = words of Jesus) and a
+// verse continuing across two text nodes in one paragraph.
+const proseChapterContent = `[
+  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"16"},"items":[]},
+    {"name":"char","type":"tag","attrs":{"style":"wj"},"items":[
+      {"type":"text","text":"For God so loved the world,","attrs":{"verseId":"JHN.3.16"}}
+    ]},
+    {"type":"text","text":"that he gave his one and only Son.","attrs":{"verseId":"JHN.3.16"}},
+    {"name":"verse","type":"tag","attrs":{"style":"v","number":"17"},"items":[]},
+    {"type":"text","text":"For God didn't send his Son to judge.","attrs":{"verseId":"JHN.3.17"}}
+  ]}
+]`
+
+func TestDecodeAPIBibleChapterPoetryLines(t *testing.T) {
+	vs, err := decodeAPIBibleChapter(json.RawMessage(psalmChapterContent), "Psalms", 46)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 2 {
+		t.Fatalf("got %d verses, want 2: %+v", len(vs), vs)
+	}
+	// Verse 1 spans two q-paragraphs: the boundary must be an authored "\n"
+	// poem line, the convention every rendering surface shares.
+	want := "God is our refuge and strength,\na very present help in trouble."
+	if vs[0].Text != want {
+		t.Errorf("verse 1:\n got  %q\n want %q", vs[0].Text, want)
+	}
+	if vs[0].Verse != 1 || vs[0].BookName != "Psalms" || vs[0].Chapter != 46 {
+		t.Errorf("verse 1 keys wrong: %+v", vs[0])
+	}
+	if vs[1].Text != "Therefore we won't be afraid," || vs[1].Verse != 2 {
+		t.Errorf("verse 2 wrong: %+v", vs[1])
+	}
+}
+
+func TestDecodeAPIBibleChapterNestedSpans(t *testing.T) {
+	vs, err := decodeAPIBibleChapter(json.RawMessage(proseChapterContent), "John", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 2 {
+		t.Fatalf("got %d verses, want 2", len(vs))
+	}
+	// The wj char span nests its text; both nodes belong to verse 16 and join
+	// with a single space (prose, no poem break).
+	want := "For God so loved the world, that he gave his one and only Son."
+	if vs[0].Text != want {
+		t.Errorf("verse 16:\n got  %q\n want %q", vs[0].Text, want)
+	}
+	if vs[1].Verse != 17 {
+		t.Errorf("verse 17 not keyed: %+v", vs[1])
+	}
+}
+
+func TestDecodeAPIBibleChapterRejectsNonJSONContent(t *testing.T) {
+	// content-type=html/text answers with a string — must fail loudly, never
+	// produce an empty chapter.
+	if _, err := decodeAPIBibleChapter(json.RawMessage(`"<p>html soup</p>"`), "John", 3); err == nil {
+		t.Fatal("string content must be rejected")
+	}
+	if _, err := decodeAPIBibleChapter(json.RawMessage(`[]`), "John", 3); err == nil {
+		t.Fatal("empty block list must be rejected")
+	}
+}
+
+func TestVerseNumberFallbacks(t *testing.T) {
+	// Ranged verse markers ("17-18") key under the first number, and sid /
+	// verseId parsing survives book codes with dots and spaces.
+	if got := leadingInt("17-18"); got != 17 {
+		t.Errorf("leadingInt range = %d", got)
+	}
+	if got := verseNumFromID("PSA.46.10"); got != 10 {
+		t.Errorf("verseNumFromID = %d", got)
+	}
+	n := apiBibleNode{}
+	n.Attrs.SID = "PSA 46:11"
+	if got := verseNumFromMarker(n); got != 11 {
+		t.Errorf("verseNumFromMarker sid = %d", got)
+	}
+}
+
+// --- Full fetch against a fixture server -------------------------------------
+
+// apiBibleFixture serves a tiny 66-book bible: every canonical book exists,
+// with one chapter each (so validateBibleData passes), and Psalms carries the
+// poetry fixture. It also asserts the api-key header on every request.
+func apiBibleFixture(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	auth := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Header.Get("api-key") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return false
+		}
+		return true
+	}
+	mux.HandleFunc("/bibles/test-bible/books", func(w http.ResponseWriter, r *http.Request) {
+		if !auth(w, r) {
+			return
+		}
+		type ch struct {
+			ID     string `json:"id"`
+			Number string `json:"number"`
+		}
+		type book struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Chapters []ch   `json:"chapters"`
+		}
+		var books []book
+		for _, usfm := range usfmCanonical66 {
+			books = append(books, book{
+				ID:   usfm,
+				Name: usfmToCatholicName[usfm],
+				Chapters: []ch{
+					{ID: usfm + ".intro", Number: "intro"}, // must be skipped
+					{ID: usfm + ".1", Number: "1"},
+				},
+			})
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": books})
+	})
+	mux.HandleFunc("/bibles/test-bible/chapters/", func(w http.ResponseWriter, r *http.Request) {
+		if !auth(w, r) {
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/bibles/test-bible/chapters/")
+		if strings.HasSuffix(id, ".intro") {
+			t.Errorf("intro pseudo-chapter %q must not be fetched", id)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if r.URL.Query().Get("content-type") != "json" {
+			t.Errorf("chapter fetched without content-type=json: %s", r.URL.RawQuery)
+		}
+		content := proseChapterContent
+		if strings.HasPrefix(id, "PSA.") {
+			content = psalmChapterContent
+		}
+		fmt.Fprintf(w, `{"data":{"id":%q,"content":%s}}`, id, content)
+	})
+	return httptest.NewServer(mux)
+}
+
+func TestFetchAPIBibleAssemblesFullCanon(t *testing.T) {
+	srv := apiBibleFixture(t)
+	defer srv.Close()
+	prev := apiBibleBaseURL
+	apiBibleBaseURL = srv.URL
+	t.Cleanup(func() { apiBibleBaseURL = prev })
+
+	data, err := fetchAPIBible("NKJV", "test-bible", "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.Books) != 66 {
+		t.Fatalf("got %d books, want 66", len(data.Books))
+	}
+	if data.Books[0] != "Genesis" || data.Books[18] != "Psalms" || data.Books[65] != "Revelation" {
+		t.Errorf("canonical order broken: %v ... %v", data.Books[:3], data.Books[63:])
+	}
+	ps := data.Verses["Psalms"][1]
+	if len(ps) != 2 || !strings.Contains(ps[0].Text, "\n") {
+		t.Errorf("Psalms poetry not preserved through the full fetch: %+v", ps)
+	}
+	if err := validateBibleData(data); err != nil {
+		t.Errorf("assembled data invalid: %v", err)
+	}
+}
+
+func TestFetchAPIBibleRejectsBadKey(t *testing.T) {
+	srv := apiBibleFixture(t)
+	defer srv.Close()
+	prev := apiBibleBaseURL
+	apiBibleBaseURL = srv.URL
+	t.Cleanup(func() { apiBibleBaseURL = prev })
+
+	_, err := fetchAPIBible("NKJV", "test-bible", "wrong-key")
+	if err == nil || !strings.Contains(err.Error(), "rejected the key") {
+		t.Fatalf("want key-rejected error, got %v", err)
+	}
+}
+
+// --- Licensed-cache compliance gates -----------------------------------------
+
+// writeCacheStampedAt writes a minimal valid cache whose SavedAt is `at`.
+func writeCacheStampedAt(t *testing.T, path string, at time.Time) {
+	t.Helper()
+	data := &BibleData{
+		Books: []string{"John"},
+		Verses: map[string]map[int][]Verse{
+			"John": {3: {{BookName: "John", Book: "John", Chapter: 3, Verse: 16, Text: "For God so loved the world."}}},
+		},
+	}
+	if err := saveBibleToCache(path, data, func() time.Time { return at }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLicensedCacheStale(t *testing.T) {
+	dir := t.TempDir()
+	fresh := filepath.Join(dir, "fresh.json")
+	stale := filepath.Join(dir, "stale.json")
+	writeCacheStampedAt(t, fresh, time.Now().UTC().Add(-24*time.Hour))
+	writeCacheStampedAt(t, stale, time.Now().UTC().Add(-licensedRecencyWindow-time.Hour))
+
+	if licensedCacheStale(fresh) {
+		t.Error("day-old cache must not be stale")
+	}
+	if !licensedCacheStale(stale) {
+		t.Error("31-day-old cache must be stale — API.Bible §11 requires a 30-day recency check")
+	}
+	if licensedCacheStale(filepath.Join(dir, "missing.json")) {
+		t.Error("a missing cache is absent, not stale")
+	}
+}
+
+// TestStaleLicensedCacheIsRevalidatedNotServed pins the compliance behaviour
+// end to end: a stale licensed cache triggers a refetch, and if the refetch
+// fails the app reports an error rather than quietly serving the stale copy —
+// the opposite of the public-domain versions' keep-serving-forever fallback.
+func TestStaleLicensedCacheIsRevalidatedNotServed(t *testing.T) {
+	srv := apiBibleFixture(t)
+	defer srv.Close()
+	prevURL := apiBibleBaseURL
+	apiBibleBaseURL = srv.URL
+	t.Cleanup(func() { apiBibleBaseURL = prevURL })
+
+	t.Setenv("BIBLE_API_KEY", "test-key")
+	t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-bible")
+
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+	v, ok := versionByID("nkjv")
+	if !ok {
+		t.Fatal("nkjv not registered")
+	}
+	path := cachePathForVersion("nkjv")
+	writeCacheStampedAt(t, path, time.Now().UTC().Add(-licensedRecencyWindow-time.Hour))
+
+	// The fast startup path must MISS on the stale licensed cache.
+	if _, _, err := loadVersionFromCacheOnly(v); err == nil {
+		t.Fatal("stale licensed cache must not be served from the cache-only path")
+	}
+
+	// The full path revalidates: fetches fresh, replaces the cache.
+	data, _, err := loadVersionData(v, nil)
+	if err != nil {
+		t.Fatalf("revalidating load failed: %v", err)
+	}
+	if len(data.Books) != 66 {
+		t.Errorf("revalidated data wrong shape: %d books", len(data.Books))
+	}
+	if licensedCacheStale(path) {
+		t.Error("cache not refreshed by revalidation")
+	}
+
+	// Now make it stale again AND kill the network: the load must ERROR, not
+	// fall back to the stale copy.
+	writeCacheStampedAt(t, path, time.Now().UTC().Add(-licensedRecencyWindow-time.Hour))
+	srv.Close()
+	if _, _, err := loadVersionData(v, nil); err == nil {
+		t.Fatal("stale licensed cache with no network must error, not serve stale")
+	}
+}
+
+func TestPurgeUnavailableLicensedCaches(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+	// No licence envs set → nkjv source unavailable.
+	t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
+	nkjvPath := cachePathForVersion("nkjv")
+	writeCacheStampedAt(t, nkjvPath, time.Now().UTC())
+	// A public-domain cache must survive the purge untouched.
+	webPath := cachePathForVersion("web")
+	writeCacheStampedAt(t, webPath, time.Now().UTC())
+
+	purgeUnavailableLicensedCaches()
+
+	if _, err := os.Stat(nkjvPath); !os.IsNotExist(err) {
+		t.Error("unlicensed nkjv cache must be removed (API.Bible §10 removal obligation)")
+	}
+	if _, err := os.Stat(webPath); err != nil {
+		t.Error("public-domain cache must never be purged")
+	}
+}

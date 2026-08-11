@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // defaultVersionID is the translation shown on first launch (public domain, so
@@ -37,6 +38,12 @@ type BibleVersion struct {
 	Name      string // full name, e.g. "World English Bible"
 	Abbrev    string // short label, e.g. "WEB"
 	Publisher string // one-line rights/copyright note, shown in the picker
+
+	// LicenseNotice is the attribution the rights holder requires displayed
+	// with the text — shown in the picker once the version is actually
+	// licensed and serving real text (versionRow). Empty for public-domain
+	// versions, whose Publisher line already says everything.
+	LicenseNotice string
 
 	// PublicDomain marks freely-distributable text (no license required).
 	PublicDomain bool
@@ -108,7 +115,12 @@ var registeredVersions = []BibleVersion{
 	{
 		ID: "nkjv", Name: "New King James Version", Abbrev: "NKJV",
 		Publisher: "© Thomas Nelson (HarperCollins Christian) — license required",
-		source:    newLicensedSource("nkjv"),
+		// The notice Thomas Nelson requires with NKJV text, plus the visible
+		// API.Bible citation the Starter plan requires. Rendered by the picker
+		// only while the version is licensed and serving real text.
+		LicenseNotice: "Scripture taken from the New King James Version®. Copyright © 1982 " +
+			"by Thomas Nelson. Used by permission. All rights reserved. Text provided via API.Bible (api.bible).",
+		source: newLicensedSource("nkjv"),
 	},
 }
 
@@ -163,6 +175,50 @@ func newLicensedSource(versionID string) *licensedAPISource {
 	return &licensedAPISource{versionID: versionID}
 }
 
+// isLicensedSource reports whether v's text comes from a licensed provider —
+// content the app holds under terms, not in perpetuity. Licensed caches get
+// the recency/expiry treatment below; public-domain caches never do.
+func isLicensedSource(v BibleVersion) bool {
+	_, ok := v.source.(*licensedAPISource)
+	return ok
+}
+
+// licensedRecencyWindow is how long a licensed translation's on-device copy
+// may serve before it must be revalidated against the provider. API.Bible's
+// Terms (§11 Content Recency Requirements, 3 Aug 2026) require stored content
+// to be checked for updates at least every 30 days; the app enforces exactly
+// that window rather than treating the cache as permanent the way it does for
+// public-domain text.
+const licensedRecencyWindow = 30 * 24 * time.Hour
+
+// licensedCacheStale reports whether the cache at path is past the recency
+// window. A missing or unreadable cache is NOT stale — it is simply absent,
+// and the normal load path handles that.
+func licensedCacheStale(path string) bool {
+	savedAt, err := cacheSavedAt(path)
+	if err != nil {
+		return false
+	}
+	return currentUTCTime().Sub(savedAt) > licensedRecencyWindow
+}
+
+// purgeUnavailableLicensedCaches removes on-device copies of licensed
+// translations whose licence configuration is GONE — the removal obligation
+// that comes with holding content under terms (API.Bible §10: content must be
+// removed on termination/deactivation). Public-domain caches are never
+// touched. Called once at startup, off the UI goroutine.
+func purgeUnavailableLicensedCaches() {
+	for _, v := range registeredVersions {
+		if !isLicensedSource(v) || v.source.available() {
+			continue
+		}
+		_ = os.Remove(cachePathForVersion(v.ID))
+		for _, path := range supersededCachePaths(v) {
+			_ = os.Remove(path)
+		}
+	}
+}
+
 func (s *licensedAPISource) apiKey() string { return strings.TrimSpace(os.Getenv("BIBLE_API_KEY")) }
 
 // licensed is the explicit operator opt-in confirming we hold rights to ship
@@ -186,13 +242,7 @@ func (s *licensedAPISource) fetch() (*BibleData, error) {
 			"(need a distribution license, BIBLE_API_KEY, BIBLETEXT_LICENSE_%s=1 and BIBLETEXT_PROVIDER_ID_%s)",
 			s.versionID, strings.ToUpper(s.versionID), strings.ToUpper(s.versionID))
 	}
-	// TODO(license): with rights secured, implement the provider call here.
-	// Shape (scripture.api.bible): for each book+chapter,
-	//   GET https://api.scripture.api.bible/v1/bibles/<providerVersionID>/chapters/<chapterId>?content-type=text
-	//   header: api-key: <apiKey>
-	// then map verses into BibleData (mirror decodeChapterResponse). Caching,
-	// state, switching and the UI already work for real data via loadVersionData.
-	return nil, fmt.Errorf("version %q: licensed provider fetch not yet implemented", s.versionID)
+	return fetchAPIBible(strings.ToUpper(s.versionID), s.providerVersionID(), s.apiKey())
 }
 
 func envTruthy(v string) bool {
@@ -233,10 +283,24 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 	if v.source == nil || !v.source.available() {
 		return nil, modeTesting, errCacheNotFound
 	}
+	// A LICENSED cache past its recency window must not be served from the
+	// fast path: report a miss so startup takes the full load path, which
+	// revalidates (refetches) it. Public-domain versions keep their
+	// serve-forever behaviour — this gate exists because API.Bible's terms
+	// require it, not because the text goes stale.
+	if isLicensedSource(v) && licensedCacheStale(cachePathForVersion(v.ID)) {
+		return nil, modeReal, errCacheNotFound
+	}
 	noFetch := func() (*BibleData, error) { return nil, errCacheNotFound }
 	data, _, err := loadBibleData(noFetch, cachePathForVersion(v.ID), currentUTCTime)
 	if err == nil {
 		return data, modeReal, nil
+	}
+	// The superseded-epoch fallback below is a stale-serve by design — right
+	// for public-domain texts, wrong for licensed ones, which never serve
+	// stale copies.
+	if isLicensedSource(v) {
+		return nil, modeReal, errCacheNotFound
 	}
 	// EPOCH-MIGRATION FALLBACK (incident-hardening): a cacheEpoch bump moves the
 	// cache to a new filename, so the first post-update launch misses here even
@@ -257,6 +321,18 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 
 func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 	if v.source != nil && v.source.available() {
+		// Licensed content past the recency window is revalidated, not served:
+		// dropping the stale cache first makes loadBibleData refetch, and a
+		// failed refetch is an ERROR rather than a quiet fall-back to the old
+		// copy. This is the §11 compliance line the API.Bible enquiry offers —
+		// enforce it from day one so a granted licence never inherits a laxer
+		// behaviour we then have to walk back.
+		if isLicensedSource(v) {
+			path := cachePathForVersion(v.ID)
+			if licensedCacheStale(path) {
+				_ = os.Remove(path)
+			}
+		}
 		data, _, err := loadBibleData(v.source.fetch, cachePathForVersion(v.ID), currentUTCTime)
 		if err != nil {
 			return nil, modeReal, err

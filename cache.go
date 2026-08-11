@@ -71,6 +71,29 @@ func loadBibleFromCache(path string) (*BibleData, error) {
 	return cached.Data, nil
 }
 
+// cacheSavedAt reads only the envelope's SavedAt stamp — the licensed-content
+// recency gate (licensedCacheStale) needs the age of a cache without paying
+// for a full decode + validation of ~31k verses.
+func cacheSavedAt(path string) (time.Time, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return time.Time{}, errCacheNotFound
+		}
+		return time.Time{}, err
+	}
+	var envelope struct {
+		SavedAt time.Time `json:"saved_at"`
+	}
+	if err := json.Unmarshal(content, &envelope); err != nil {
+		return time.Time{}, err
+	}
+	if envelope.SavedAt.IsZero() {
+		return time.Time{}, errors.New("cache has no saved_at stamp")
+	}
+	return envelope.SavedAt, nil
+}
+
 func saveBibleToCache(path string, data *BibleData, nowFn func() time.Time) error {
 	if err := validateBibleData(data); err != nil {
 		return fmt.Errorf("cannot cache invalid bible data: %w", err)

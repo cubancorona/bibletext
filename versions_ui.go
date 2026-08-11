@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -188,6 +189,21 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 		tag.TextSize = 11
 		tag.TextStyle = fyne.TextStyle{Italic: true}
 		lines.Add(tag)
+	case v.LicenseNotice != "":
+		// Licensed and serving real text: show the attribution the rights
+		// holder requires, wrapped so the full notice is actually readable.
+		// (Pre-ship TODO: the API.Bible Starter attribution wants a tappable
+		// api.bible hyperlink; the picker rows are themselves tappable, so
+		// that needs a dedicated copyright surface, not a link-in-a-row.)
+		notice := widget.NewRichText(&widget.TextSegment{
+			Text: v.LicenseNotice,
+			Style: widget.RichTextStyle{
+				ColorName: colorNameMuted,
+				SizeName:  theme.SizeNameCaptionText,
+			},
+		})
+		notice.Wrapping = fyne.TextWrapWord
+		lines.Add(notice)
 	}
 
 	var right fyne.CanvasObject = layout.NewSpacer()
