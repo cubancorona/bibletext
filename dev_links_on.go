@@ -155,9 +155,20 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		"the same entry point the OS uses when a link is tapped.")
 	blurb.Wrapping = fyne.TextWrapWord
 
+	// An Entry PRE-FILLED with emoji, to separate two very different faults when
+	// someone reports "the emoji did not appear in the note box": whether a Fyne
+	// Entry can DRAW emoji at all, or whether the iOS emoji keyboard never
+	// delivers them. A Label renders them fine, and Entry is a different widget.
+	// Type beside them to compare what arrives with what was already there.
+	emojiProbe := widget.NewEntry()
+	emojiProbe.SetText("prefilled 👊 ☕ 🙏 — now type one →")
+
 	head := container.NewVBox(
 		title, blurb,
 		notesSwitch, wipe, status,
+		widget.NewLabel("Emoji probe (Entry vs Label):"),
+		widget.NewLabel("label 👊 ☕ 🙏"),
+		emojiProbe,
 		widget.NewSeparator(),
 	)
 
