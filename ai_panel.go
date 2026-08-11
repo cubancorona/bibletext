@@ -214,9 +214,17 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			}
 			restore()
 		})
+		// The whole waiting column sits in a scroll. Its natural height (~290pt)
+		// is FIXED while the panel's is not: on a landscape phone the body region
+		// can be half that, and the column painted its tail — Cancel included —
+		// over the footer or past the card (audit finding). In the common case
+		// the scroll has room and never engages. Spacers are gone (inside a
+		// scroll they collapse to nothing anyway); squeezeWidthLayout stops the
+		// scroll widening the column sideways (sheet_fit.go).
 		body.Objects = []fyne.CanvasObject{
 			answerScroll,
-			container.NewVBox(layout.NewSpacer(),
+			container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewVBox(
+				spacer(8),
 				container.NewCenter(msg), spacer(10),
 				// Bounded, not full-bleed: a panel-wide bar reads as a banner
 				// rather than a quiet progress hint, and it dwarfed the text.
@@ -227,7 +235,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 				// box at all (field-reported). The outline restores one.
 				spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
 				fasterRow,
-				layout.NewSpacer()),
+			))),
 		}
 		body.Refresh()
 	}
@@ -289,8 +297,13 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		} else {
 			actBtn = widget.NewButton("Try again", func() { startFetch() })
 		}
+		// Scrolled for the same reason as the waiting column: a long provider
+		// error on a short canvas pushed the one actionable button into the
+		// footer (audit finding).
 		body.Objects = []fyne.CanvasObject{
-			container.NewVBox(layout.NewSpacer(), lbl, container.NewCenter(actBtn), layout.NewSpacer()),
+			container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewVBox(
+				spacer(8), lbl, container.NewCenter(actBtn),
+			))),
 		}
 		body.Refresh()
 	}

@@ -25,6 +25,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -159,20 +160,28 @@ func promptShareNote(state *AppState, selectedText string) {
 
 	// A live count, because the cap is real: the note rides inside the link, and
 	// a link a messenger truncates is a link that opens nothing.
-	left := canvas.NewText("", pal.TextMuted)
-	left.TextSize = 11
+	//
+	// A WRAPPING RichText, not a canvas.Text: a canvas.Text never wraps, so the
+	// idle line's ~357pt made it the whole card's minimum width — and on a
+	// canvas narrower than that, the non-modal renderer grew the card past the
+	// screen's right edge, taking the Share button with it (audit finding).
+	left := widget.NewRichText(&widget.TextSegment{
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+	})
+	left.Wrapping = fyne.TextWrapWord
 	updateLeft := func() {
+		seg := left.Segments[0].(*widget.TextSegment)
 		n := utf8.RuneCountInString(strings.TrimSpace(noteText()))
 		switch {
 		case n == 0:
-			left.Text = "Optional. The note travels inside the link — it is never uploaded."
-			left.Color = pal.TextMuted
+			seg.Text = "Optional. The note travels inside the link — it is never uploaded."
+			seg.Style.ColorName = colorNameMuted
 		case n > NoteMaxRunes:
-			left.Text = "Too long by " + strconv.Itoa(n-NoteMaxRunes) + " — it will be shortened"
-			left.Color = pal.RedLetter
+			seg.Text = "Too long by " + strconv.Itoa(n-NoteMaxRunes) + " — it will be shortened"
+			seg.Style.ColorName = theme.ColorNameError
 		default:
-			left.Text = strconv.Itoa(NoteMaxRunes-n) + " characters left"
-			left.Color = pal.TextMuted
+			seg.Text = strconv.Itoa(NoteMaxRunes-n) + " characters left"
+			seg.Style.ColorName = colorNameMuted
 		}
 		left.Refresh()
 	}
@@ -324,11 +333,20 @@ func showSharedNote(state *AppState, note string) {
 	okBtn := widget.NewButton("Read the passage", closeCard)
 	okBtn.Importance = widget.HighImportance
 
-	form := container.NewVBox(
-		who, ref,
-		widget.NewSeparator(),
-		body,
+	// The note is the one thing here that grows — 280 runes of someone's
+	// message, possibly with blank lines — so IT scrolls while the attribution
+	// and the button stay fixed. The button matters most: this popup is modal
+	// and "Read the passage" is its ONLY dismissal, so a note tall enough to
+	// push it off a small phone stranded the reader with the reading overlay
+	// latched hidden (audit finding). squeezeWidthLayout for the same reason as
+	// every scroll here: a bare VScroll widens content to its MinSize and clips
+	// it sideways (sheet_fit.go).
+	bodyScroll := container.NewVScroll(container.New(squeezeWidthLayout{}, body))
+	form := container.NewBorder(
+		container.NewVBox(who, ref, widget.NewSeparator()),
 		container.NewBorder(nil, nil, nil, container.NewHBox(okBtn)),
+		nil, nil,
+		bodyScroll,
 	)
 
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
@@ -338,7 +356,19 @@ func showSharedNote(state *AppState, note string) {
 	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
 		w = cw
 	}
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	fit := func() {
+		pos, sz := cnv.InteractiveArea()
+		maxH := sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16)
+		h := scrollingSheetHeight(
+			popup.MinSize().Height,
+			bodyScroll.MinSize().Height,
+			body.MinSize().Height,
+			maxH,
+		)
+		popup.Resize(fyne.NewSize(w, h))
+	}
+	fit()
+	fit() // wrap-accurate only after the first layout pass (the ai_settings lesson)
 }
 
 // shareNoteReference is the passage label on the compose sheet — the same
