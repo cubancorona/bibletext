@@ -94,15 +94,21 @@ build-87 TestFlight scripts are guarded and are not part of this release.
 
 ## Screenshots
 
-Use the opaque JPEG exports, not the source PNGs (the PNG files have alpha):
+Use the opaque JPEG exports, not the source PNGs (the PNG files have alpha).
 
-- iPhone 6.9-inch slot: `build/appstore/screenshots-ready/en-GB/` — four
+**Current sets: `build/appstore/screenshots-ready-1.1.8/`** (captured 9 Aug
+2026 — AI study, Matthew 1 reading view, Explain, dark mode, and the share
+card, for both slots; full capture recipes and exact upload commands in
+`build/appstore/screenshots-1.1.8/HANDOFF.md`):
+
+- iPhone 6.9-inch slot: `build/appstore/screenshots-ready-1.1.8/en-GB/` —
   1320×2868 images
-- iPad 13-inch slot: `build/appstore/screenshots-ready/en-GB/ipad13/` — three
-  2752×2064 images and one 2064×2752 image
+- iPad 13-inch slot: `build/appstore/screenshots-ready-1.1.8/en-GB/ipad13/` —
+  2752×2064 images
 
-Upload after the 1.1.7 English (UK) localization exists (screenshots only
-need re-uploading if they changed; the 1.1.6 sets remain accurate):
+The older `screenshots-ready/` directories are the 1.1.6-era sets, superseded.
+Upload once the current review cycle clears (screenshots are per-device-size,
+independent of app version):
 
 ```sh
 python3 build/appstore/upload_screenshots.py
