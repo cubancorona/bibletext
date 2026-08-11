@@ -252,18 +252,18 @@ func TestDecodeAPIBibleEdgeHugeVerseNumber(t *testing.T) {
 	    {"type":"text","text":"Overflow-keyed text."}
 	  ]}
 	]`
+	// An absurd marker number is IGNORED (it would overflow the decoder's
+	// packed chapter/verse keys): its text cannot key a verse, and since no
+	// sane verse precedes it here the chapter correctly fails loudly rather
+	// than keying garbage or wrapping negative.
 	vs, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatalf("overflowed marker must not key a verse, got %+v", vs)
 	}
-	if len(vs) != 1 {
-		t.Fatalf("got %d verses, want 1: %+v", len(vs), vs)
-	}
-	if vs[0].Verse <= 0 {
-		t.Errorf("overflowed marker keyed verse %d — wrapped negative", vs[0].Verse)
-	}
-	if vs[0].Text != "Overflow-keyed text." {
-		t.Errorf("text lost under overflowed marker: %q", vs[0].Text)
+	for _, v := range vs {
+		if v.Verse <= 0 {
+			t.Errorf("overflowed marker keyed verse %d — wrapped negative", v.Verse)
+		}
 	}
 }
 

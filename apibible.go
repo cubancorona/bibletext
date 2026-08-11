@@ -13,19 +13,23 @@ package bibletext
 // (§11, 3 Aug 2026) require stored content to be re-checked at least every 30
 // days, so a licensed cache is revalidated rather than served forever.
 //
-// Endpoint shape (rest.api.bible, verified against docs.api.bible 2026-08-11):
+// Endpoint shape (rest.api.bible, verified against docs.api.bible and live
+// probes 2026-08-11):
 //
 //	GET /v1/bibles/{bibleId}/books                          — the canon
 //	GET /v1/bibles/{bibleId}/books/{bookId}/chapters        — chapter ids
-//	GET /v1/bibles/{bibleId}/chapters/{chapterId}
-//	    ?content-type=json&include-titles=false&...         — verse content
+//	GET /v1/bibles/{bibleId}/passages/{rangeId}
+//	    ?content-type=json&include-titles=false&...         — ≤200 verses/call
+//	GET /v1/bibles/{bibleId}/chapters/{chapterId}?…         — fallback path
 //	header: api-key: <key>
 //
-// A full fetch is ~1,255 requests. The Starter plan allows 5,000 calls per
-// MONTH shared across every install, so this whole-Bible path is for the
-// developer's own licensed testing — a public rollout needs either a higher
-// tier or the streamed per-chapter mode, and in any case waits on API.Bible's
-// answers about offline storage (see the support@api.bible enquiry).
+// The Starter plan bills per call (5,000/MONTH shared across every install),
+// so the fetch walks the PASSAGES endpoint in ≤200-verse ranges: ~200 calls
+// for the whole canon versus ~1,190 chapter-by-chapter (the per-chapter path
+// survives as an automatic fallback for providers without passages support).
+// A public rollout still needs the streamed per-chapter mode and waits on
+// API.Bible's answers about offline storage (see the support@api.bible
+// enquiry).
 //
 // FUMS: API.Bible's usage tracker is required for web apps only — "if you only
 // use API.Bible for your mobile app … you can skip this section" — and the web
@@ -35,6 +39,7 @@ package bibletext
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +47,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -104,6 +110,41 @@ type apiBibleChapterResponse struct {
 	} `json:"data"`
 }
 
+type apiBiblePassageResponse struct {
+	Data struct {
+		ID         string          `json:"id"` // the range actually served, e.g. "GEN.8.17-GEN.17.2"
+		VerseCount int             `json:"verseCount"`
+		Content    json.RawMessage `json:"content"`
+	} `json:"data"`
+}
+
+// apiBiblePassageCap is the API's per-passage verse limit (verified live: a
+// GEN.1-GEN.50 request serves exactly 200 verses and reports where it
+// stopped). The range walk leans on it: a chunk under the cap means the
+// requested range is exhausted.
+const apiBiblePassageCap = 200
+
+// apiBibleContentQuery is the shared content-shaping query for chapter and
+// passage bodies.
+const apiBibleContentQuery = "content-type=json&include-titles=false&include-notes=false&include-chapter-numbers=false"
+
+// apiBibleStatusError reports a non-retryable HTTP status. The passage walk
+// depends on distinguishing 400/404 (range past the book's real end, or a
+// provider without the passages endpoint) from everything else.
+type apiBibleStatusError struct {
+	Status int
+	Path   string
+	Body   string
+}
+
+func (e *apiBibleStatusError) Error() string {
+	return fmt.Sprintf("HTTP %d from API.Bible for %s: %s", e.Status, e.Path, e.Body)
+}
+
+// apiBibleCallCount counts real requests issued, for quota accounting in
+// logs and tests (the Starter plan bills per call).
+var apiBibleCallCount atomic.Int64
+
 // apiBibleNode is one node of the content-type=json tree: paragraph blocks at
 // the top, then a mix of tag nodes (verse markers, char spans — which NEST)
 // and text nodes. Decoded defensively: fields we don't recognise are ignored,
@@ -144,17 +185,11 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 		return nil, fmt.Errorf("%s: list books: %w", displayName, err)
 	}
 
-	type chapterJob struct {
-		usfmID    string
-		bookName  string
-		chapterID string
-		number    int
-	}
-	var jobs []chapterJob
 	byID := map[string]int{}
 	for i, b := range books.Data {
 		byID[strings.ToUpper(b.ID)] = i
 	}
+	var plans []apiBibleBookPlan
 	for _, usfm := range usfmCanonical66 {
 		idx, ok := byID[usfm]
 		if !ok {
@@ -183,24 +218,30 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 			// Daniel lost its name (the Catholic map only knows ESG/DAG).
 			return nil, fmt.Errorf("%s: no app book name for USFM id %s", displayName, usfm)
 		}
+		plan := apiBibleBookPlan{usfm: usfm, name: name}
 		for _, c := range chapters {
 			n, err := strconv.Atoi(strings.TrimSpace(c.Number))
 			if err != nil {
 				continue // "intro" and other non-numeric pseudo-chapters
 			}
-			jobs = append(jobs, chapterJob{usfmID: usfm, bookName: name, chapterID: c.ID, number: n})
+			plan.chapters = append(plan.chapters, apiBibleChapterRef{id: c.ID, number: n})
+			if n > plan.lastChapter {
+				plan.lastChapter = n
+			}
 		}
-	}
-	if len(jobs) == 0 {
-		return nil, fmt.Errorf("%s: provider returned no chapters", displayName)
+		if len(plan.chapters) == 0 {
+			return nil, fmt.Errorf("%s: provider returned no chapters for %s", displayName, usfm)
+		}
+		plans = append(plans, plan)
 	}
 
-	// Fan the chapter downloads out over a small worker pool; first error wins
-	// and cancels the rest.
+	// Fan the downloads out over a small worker pool, one BOOK per job. Each
+	// book walks the passages endpoint in ≤200-verse ranges (~200 calls for
+	// the whole canon — the Starter plan bills per call, and the old
+	// chapter-by-chapter walk cost ~1,190). A provider without passages
+	// support (a 400/404 on a book's FIRST range) falls back to the
+	// per-chapter path for that book. First error wins and cancels the rest.
 	verses := make(map[string]map[int][]Verse, 66)
-	for _, usfm := range usfmCanonical66 {
-		verses[apiBibleBookName(usfm)] = map[int][]Verse{}
-	}
 	var (
 		mu       sync.Mutex
 		wg       sync.WaitGroup
@@ -215,32 +256,28 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 		mu.Unlock()
 	}
 	sem := make(chan struct{}, apiBibleConcurrency)
-	for _, job := range jobs {
+	for _, plan := range plans {
 		if ctx.Err() != nil {
 			break
 		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(job chapterJob) {
+		go func(plan apiBibleBookPlan) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			var cr apiBibleChapterResponse
-			err := apiBibleGet(ctx, client, apiKey,
-				"/bibles/"+providerBibleID+"/chapters/"+job.chapterID+
-					"?content-type=json&include-titles=false&include-notes=false&include-chapter-numbers=false", &cr)
-			if err != nil {
-				fail(fmt.Errorf("%s %d: %w", job.bookName, job.number, err))
-				return
+			book, err := fetchAPIBibleBookByPassages(ctx, client, apiKey, providerBibleID, plan)
+			var se *apiBibleStatusError
+			if errors.As(err, &se) && (se.Status == http.StatusBadRequest || se.Status == http.StatusNotFound) {
+				book, err = fetchAPIBibleBookByChapters(ctx, client, apiKey, providerBibleID, plan)
 			}
-			vs, err := decodeAPIBibleChapter(cr.Data.Content, job.bookName, job.number)
 			if err != nil {
-				fail(fmt.Errorf("%s %d: %w", job.bookName, job.number, err))
+				fail(err)
 				return
 			}
 			mu.Lock()
-			verses[job.bookName][job.number] = vs
+			verses[plan.name] = book
 			mu.Unlock()
-		}(job)
+		}(plan)
 	}
 	wg.Wait()
 	if firstErr != nil {
@@ -256,6 +293,138 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 		return nil, fmt.Errorf("%s: incomplete download: %w", displayName, err)
 	}
 	return data, nil
+}
+
+type apiBibleChapterRef struct {
+	id     string
+	number int
+}
+
+type apiBibleBookPlan struct {
+	usfm        string
+	name        string
+	lastChapter int
+	chapters    []apiBibleChapterRef
+}
+
+// fetchAPIBibleBookByPassages downloads one book through the passages
+// endpoint in ≤apiBiblePassageCap-verse ranges. The API truncates a range
+// gracefully and reports the range actually served in data.id, so the walk
+// self-paginates: request start→end-of-book, continue from one past the
+// served end, stop when a chunk comes back under the cap. A continuation
+// start can be invalid in two ways the API answers 400/404 for — one past a
+// chapter's last verse (an exactly-cap chunk ending on a chapter boundary),
+// or past the book's end — handled by advancing a chapter once, then
+// stopping.
+func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKey, bibleID string, plan apiBibleBookPlan) (map[int][]Verse, error) {
+	out := map[int][]Verse{}
+	startCh, startV := 1, 1
+	bumpedChapter := false
+	for {
+		rangeID := fmt.Sprintf("%s.%d.%d-%s.%d", plan.usfm, startCh, startV, plan.usfm, plan.lastChapter)
+		var pr apiBiblePassageResponse
+		err := apiBibleGet(ctx, client, apiKey,
+			"/bibles/"+bibleID+"/passages/"+rangeID+"?"+apiBibleContentQuery, &pr)
+		if err != nil {
+			var se *apiBibleStatusError
+			if errors.As(err, &se) && (se.Status == http.StatusBadRequest || se.Status == http.StatusNotFound) {
+				if startCh == 1 && startV == 1 {
+					return nil, err // passages unsupported here — caller falls back
+				}
+				if !bumpedChapter && startCh < plan.lastChapter {
+					bumpedChapter = true
+					startCh, startV = startCh+1, 1
+					continue
+				}
+				break // past the book's real end — done
+			}
+			return nil, err
+		}
+		bumpedChapter = false
+		chunk, err := decodeAPIBiblePassage(pr.Data.Content, plan.name, startCh)
+		if err != nil {
+			return nil, fmt.Errorf("%s passage %s: %w", plan.name, rangeID, err)
+		}
+		for ch, vs := range chunk {
+			out[ch] = append(out[ch], vs...)
+		}
+		if pr.Data.VerseCount < apiBiblePassageCap {
+			break // the requested range is exhausted
+		}
+		endCh, endV := chapterVerseFromRef(passageEndRef(pr.Data.ID))
+		if endCh == 0 || endV == 0 {
+			return nil, fmt.Errorf("%s: unparseable passage range id %q", plan.name, pr.Data.ID)
+		}
+		startCh, startV = endCh, endV+1
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%s: passages yielded no verses", plan.name)
+	}
+	for ch := range out {
+		out[ch] = sortVersesDedupe(out[ch])
+	}
+	return out, nil
+}
+
+// fetchAPIBibleBookByChapters is the chapter-by-chapter path — one request
+// per chapter, sequential within the book (books already run in parallel).
+// It is the fallback for providers without the passages endpoint.
+func fetchAPIBibleBookByChapters(ctx context.Context, client *http.Client, apiKey, bibleID string, plan apiBibleBookPlan) (map[int][]Verse, error) {
+	out := make(map[int][]Verse, len(plan.chapters))
+	for _, c := range plan.chapters {
+		var cr apiBibleChapterResponse
+		if err := apiBibleGet(ctx, client, apiKey,
+			"/bibles/"+bibleID+"/chapters/"+c.id+"?"+apiBibleContentQuery, &cr); err != nil {
+			return nil, fmt.Errorf("%s %d: %w", plan.name, c.number, err)
+		}
+		vs, err := decodeAPIBibleChapter(cr.Data.Content, plan.name, c.number)
+		if err != nil {
+			return nil, fmt.Errorf("%s %d: %w", plan.name, c.number, err)
+		}
+		out[c.number] = vs
+	}
+	return out, nil
+}
+
+// passageEndRef extracts the end reference of a served range id:
+// "GEN.8.17-GEN.17.2" → "GEN.17.2" (a single-verse id passes through whole).
+func passageEndRef(id string) string {
+	if i := strings.LastIndexByte(id, '-'); i >= 0 {
+		return id[i+1:]
+	}
+	return id
+}
+
+// chapterVerseFromRef parses "GEN 8:17", "GEN.8.17" or "PSA 46:11" into
+// (chapter, verse); zero values mean the component was absent.
+func chapterVerseFromRef(s string) (ch, v int) {
+	i := strings.LastIndexAny(s, ":.")
+	if i < 0 {
+		return 0, 0
+	}
+	v = leadingInt(s[i+1:])
+	rest := s[:i]
+	j := strings.LastIndexAny(rest, " .")
+	if j < 0 {
+		return 0, v
+	}
+	return leadingInt(rest[j+1:]), v
+}
+
+// sortVersesDedupe orders a chapter's verses and drops duplicate verse
+// numbers (a normalized continuation overlap keeps the first decode).
+func sortVersesDedupe(vs []Verse) []Verse {
+	sort.Slice(vs, func(i, j int) bool { return vs[i].Verse < vs[j].Verse })
+	out := vs[:0]
+	last := -1
+	for _, v := range vs {
+		if v.Verse == last {
+			continue
+		}
+		last = v.Verse
+		out = append(out, v)
+	}
+	return out
 }
 
 // apiBibleGet performs one authenticated GET and decodes the JSON body. One
@@ -277,6 +446,7 @@ func apiBibleGet(ctx context.Context, client *http.Client, apiKey, path string, 
 		}
 		req.Header.Set("api-key", apiKey)
 		req.Header.Set("Accept", "application/json")
+		apiBibleCallCount.Add(1)
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
@@ -303,7 +473,7 @@ func apiBibleGet(ctx context.Context, client *http.Client, apiKey, path string, 
 			lastErr = fmt.Errorf("HTTP %d from API.Bible", resp.StatusCode)
 			continue
 		default:
-			return fmt.Errorf("HTTP %d from API.Bible for %s: %s", resp.StatusCode, path, truncateForError(body))
+			return &apiBibleStatusError{Status: resp.StatusCode, Path: path, Body: truncateForError(body)}
 		}
 	}
 	return lastErr
@@ -319,14 +489,43 @@ func truncateForError(b []byte) string {
 
 // --- Content decoding --------------------------------------------------------
 
-// decodeAPIBibleChapter turns content-type=json paragraph blocks into the
-// chapter's verses. Verse boundaries come from the embedded verse-marker tags
-// (attrs.number, with attrs.sid/"verseId" fallbacks); text nodes append to the
-// current verse. Authored poem lines are preserved the same way the helloao
-// decoders do it: each new POETRY paragraph (USFM q styles) that continues a
-// verse contributes a "\n" line break, so psalms render as lines on every
-// surface (see reading.go verseIsPoetic).
+// decodeAPIBibleChapter turns one chapter's content-type=json blocks into its
+// verses — a thin wrapper over the passage decoder for the chapter endpoint
+// and the tests. The CALLER's chapter is authoritative here: it asked the
+// endpoint for exactly one chapter, so embedded references only order the
+// verses and the result is re-stamped, preserving the chapter path's
+// long-standing contract.
 func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([]Verse, error) {
+	byChapter, err := decodeAPIBiblePassage(raw, bookName, chapter)
+	if err != nil {
+		return nil, err
+	}
+	var vs []Verse
+	for _, chunk := range byChapter {
+		vs = append(vs, chunk...)
+	}
+	for i := range vs {
+		vs[i].Chapter = chapter
+	}
+	vs = sortVersesDedupe(vs)
+	if len(vs) == 0 {
+		return nil, fmt.Errorf("no verse text decoded")
+	}
+	return vs, nil
+}
+
+// decodeAPIBiblePassage turns content-type=json paragraph blocks — possibly
+// spanning several chapters, as the passages endpoint serves them — into
+// verses grouped by chapter. Verse boundaries come from the embedded
+// verse-marker tags (attrs.number, with attrs.sid/"verseId" fallbacks, whose
+// references also carry the CHAPTER: "GEN 8:17"); text nodes append to the
+// current verse. defaultChapter anchors content that arrives before any
+// chapter-bearing reference (single-chapter responses, and a range chunk
+// resuming mid-chapter). Authored poem lines are preserved the same way the
+// helloao decoders do it: each new POETRY paragraph (USFM q styles) that
+// continues a verse contributes a "\n" line break, so psalms render as lines
+// on every surface (see reading.go verseIsPoetic).
+func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter int) (map[int][]Verse, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("empty chapter content")
 	}
@@ -337,9 +536,21 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 		return nil, fmt.Errorf("unexpected chapter content shape (want json blocks): %w", err)
 	}
 
+	// Verses are keyed by a packed (chapter, verse) int — real chapter and
+	// verse numbers never reach 1000, and saneRef drops anything that would
+	// overflow the packing (an absurd marker number is ignored, so its text
+	// accrues to the previous verse rather than keying garbage).
+	saneRef := func(n int) int {
+		if n < 1 || n > 999 {
+			return 0
+		}
+		return n
+	}
+	pack := func(ch, v int) int { return ch*1000 + v }
 	order := []int{}
 	texts := map[int]*strings.Builder{}
-	current := 0
+	currentCh := defaultChapter
+	current := 0 // current verse number; 0 = before the first verse
 
 	// Fragments are concatenated RAW: the source's text nodes carry their own
 	// spacing ("The " + sc"Lord" + " said to my Lord,"), and any inserted
@@ -349,17 +560,17 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 	// where a PROSE verse flows across a paragraph boundary.
 	pendingBreak := false // next text for the current verse starts a poem line
 	pendingSpace := false // next text for the current verse crosses a prose para join
-	appendText := func(verse, from int, s string) {
-		if verse == 0 || s == "" {
+	appendText := func(key, from int, s string) {
+		if key%1000 == 0 || s == "" {
 			return
 		}
-		b, ok := texts[verse]
+		b, ok := texts[key]
 		if !ok {
 			b = &strings.Builder{}
-			texts[verse] = b
-			order = append(order, verse)
+			texts[key] = b
+			order = append(order, key)
 		}
-		if verse == from {
+		if key == from {
 			cur := b.String()
 			if pendingBreak {
 				if b.Len() > 0 && !strings.HasSuffix(cur, "\n") {
@@ -380,17 +591,23 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 		for _, n := range nodes {
 			switch {
 			case n.Type == "text" || (n.Text != "" && len(n.Items) == 0):
-				v := current
-				if id := verseNumFromID(n.Attrs.VerseID); id != 0 {
-					v = id
+				ch, v := currentCh, current
+				if idCh, idV := chapterVerseFromRef(n.Attrs.VerseID); saneRef(idV) != 0 {
+					v = idV
+					if saneRef(idCh) != 0 {
+						ch = idCh
+					}
 				}
 				s := n.Text
 				if upcase {
 					s = strings.ToUpper(s)
 				}
-				appendText(v, current, s)
+				appendText(pack(ch, v), pack(currentCh, current), s)
 			case n.Name == "verse":
-				if num := verseNumFromMarker(n); num != 0 {
+				if sidCh, _ := chapterVerseFromRef(n.Attrs.SID); saneRef(sidCh) != 0 {
+					currentCh = sidCh
+				}
+				if num := saneRef(verseNumFromMarker(n)); num != 0 {
 					current = num
 				}
 				// The marker's own items render the verse NUMBER ("10"), not
@@ -437,21 +654,24 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 		return nil, fmt.Errorf("no verse text decoded")
 	}
 	sort.Ints(order)
-	out := make([]Verse, 0, len(order))
-	for _, num := range order {
-		text := normalizeVerseSpaces(texts[num].String())
+	out := map[int][]Verse{}
+	total := 0
+	for _, key := range order {
+		text := normalizeVerseSpaces(texts[key].String())
 		if text == "" {
 			continue
 		}
-		out = append(out, Verse{
+		ch, num := key/1000, key%1000
+		out[ch] = append(out[ch], Verse{
 			BookName: bookName,
 			Book:     bookName,
-			Chapter:  chapter,
+			Chapter:  ch,
 			Verse:    num,
 			Text:     text,
 		})
+		total++
 	}
-	if len(out) == 0 {
+	if total == 0 {
 		return nil, fmt.Errorf("no verse text decoded")
 	}
 	return out, nil
