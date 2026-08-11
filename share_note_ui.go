@@ -28,6 +28,59 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// noteEntrySlot is the transparent box the native compose field parks over. It
+// is a widget rather than a bare rectangle so its own Resize/Move push the
+// fresh absolute rect across to the native view — the live-tracking pattern
+// nativeReadingHost uses for the reading overlay. Without it the field's frame
+// was only re-asserted for 600ms after the sheet opened, and any later layout
+// change left the UITextView stranded where the slot used to be.
+//
+// open latches it: a slot from a closed sheet must never push frames, or a
+// stale relayout could reposition a native view belonging to nothing.
+type noteEntrySlot struct {
+	widget.BaseWidget
+	open *bool
+}
+
+func newNoteEntrySlot(open *bool) *noteEntrySlot {
+	s := &noteEntrySlot{open: open}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+func (s *noteEntrySlot) CreateRenderer() fyne.WidgetRenderer {
+	r := canvas.NewRectangle(color.Transparent)
+	r.SetMinSize(fyne.NewSize(0, 112)) // ~4 comfortable lines at 18px
+	return widget.NewSimpleRenderer(r)
+}
+
+func (s *noteEntrySlot) Resize(sz fyne.Size) {
+	s.BaseWidget.Resize(sz)
+	s.push()
+}
+
+func (s *noteEntrySlot) Move(p fyne.Position) {
+	s.BaseWidget.Move(p)
+	s.push()
+}
+
+// push projects the slot's rect immediately (responsive) and again a tick later
+// (Resize/Move can fire mid-layout, before siblings have their final heights —
+// same double-push the reading overlay uses).
+func (s *noteEntrySlot) push() {
+	if s.open == nil || !*s.open {
+		return
+	}
+	setNativeNoteEntryFrameFromObject(s)
+	time.AfterFunc(50*time.Millisecond, func() {
+		fyne.Do(func() {
+			if s.open != nil && *s.open {
+				setNativeNoteEntryFrameFromObject(s)
+			}
+		})
+	})
+}
+
 // noteEntryOnChanged is installed by the compose sheet while it is open, and
 // fired (via fyne.Do) by the native field's //export callback on every edit —
 // it drives the live character counter. nil whenever no sheet is up.
@@ -57,17 +110,26 @@ func promptShareNote(state *AppState, selectedText string) {
 	}
 	var popup *widget.PopUp
 	closed := false
+	// sheetOpen latches the native slot's frame-pushing (see noteEntrySlot): it
+	// must drop on EVERY close path, or a stale relayout of this sheet's dead
+	// slot could reposition a newer sheet's field.
+	sheetOpen := true
 	closeSheet := func() {
 		if closed {
 			return
 		}
 		closed = true
+		sheetOpen = false
 		noteEntryOnChanged = nil
 		hideNativeNoteEntry() // no-op off iOS, and when the Fyne entry was used
 		if popup != nil {
-			popup.Hide()
+			popup.Hide() // removes it from the overlay stack synchronously
 		}
-		if state.showReadingOverlay != nil {
+		// Restore the reading overlay only when nothing else owns the canvas —
+		// the same rule the keep/delete prompt follows. On the watchdog path a
+		// window rebuild may already have re-pinned everything, and another
+		// sheet may have opened since.
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
 			state.showReadingOverlay()
 		}
 	}
@@ -130,15 +192,12 @@ func promptShareNote(state *AppState, selectedText string) {
 	actions := container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, sendBtn))
 
 	// The field's slot in the form. With the native view in play the slot is a
-	// transparent box of the right size — the UITextView is parked exactly over
-	// it once the popup has laid out, so Fyne still owns the layout and the
+	// transparent tracking widget — the UITextView is parked exactly over it and
+	// FOLLOWS it through every relayout, so Fyne still owns the layout and the
 	// native view just wears it.
 	entrySlot := fyne.CanvasObject(inputFrame(withCaret(state, entry), pal.Border))
-	var nativeSlot *canvas.Rectangle
 	if useNative {
-		nativeSlot = canvas.NewRectangle(color.Transparent)
-		nativeSlot.SetMinSize(fyne.NewSize(0, 112)) // ~4 comfortable lines at 18px
-		entrySlot = nativeSlot
+		entrySlot = newNoteEntrySlot(&sheetOpen)
 	}
 
 	form := container.NewVBox(
@@ -182,29 +241,35 @@ func promptShareNote(state *AppState, selectedText string) {
 	}
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
+
+	// A window rebuild (theme flip, rotation, a background data swap) drains
+	// every popup WITHOUT running closeSheet — Hide() is all a drain does. For
+	// the Fyne entry that was merely untidy; with a native field it would leave
+	// an orphaned UITextView floating over whatever the rebuild painted. Poll
+	// until the popup is gone by ANY route, then run the (idempotent) teardown —
+	// the same 150ms watchdog the ask sheet uses.
+	var watch func()
+	watch = func() {
+		if popup == nil || !popup.Visible() {
+			closeSheet() // idempotent; also drops the slot latch
+			return
+		}
+		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+	}
+	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+
 	if !useNative {
 		focusEntry()
 		return
 	}
 
-	// Native field: create it (keyboard comes up with it), install the counter
-	// hook, and park it over the slot once layout has settled. The frame push is
-	// re-asserted on a couple of ticks — the same cadence the reading overlay
-	// uses — because the first AbsolutePositionForObject can run before the
-	// popup's layout pass. The view stays hidden until its first real frame, so
-	// mis-timing shows nothing rather than a box at (0,0).
+	// Native field: create it (keyboard comes up with it) and install the
+	// counter hook. Placement is the slot widget's job from here — its
+	// Resize/Move fired during the popup's layout pass above and keep firing on
+	// every relayout. The view stays hidden until its first real frame arrives,
+	// so mis-timing shows nothing rather than a box at (0,0).
 	showNativeNoteEntry("", "Say something about this passage…", pal)
 	noteEntryOnChanged = updateLeft
-	place := func() {
-		if closed || nativeSlot == nil {
-			return
-		}
-		setNativeNoteEntryFrameFromObject(nativeSlot)
-	}
-	fyne.Do(place)
-	for _, ms := range []int{60, 250, 600} {
-		time.AfterFunc(time.Duration(ms)*time.Millisecond, func() { fyne.Do(place) })
-	}
 }
 
 // showSharedNote presents a note that arrived on a link. It is deliberately a

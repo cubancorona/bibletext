@@ -52,6 +52,11 @@ jobs:
           cache: true
       - name: install fyne CLI
         run: go install fyne.io/tools/cmd/fyne@latest
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
       - name: package both architectures
         run: |
           cd cmd/desktop
@@ -83,6 +88,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev
           go install fyne.io/tools/cmd/fyne@latest
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
       - name: package
         run: |
           cd cmd/desktop
@@ -105,6 +115,11 @@ jobs:
           cache: true
       - name: install fyne CLI
         run: go install fyne.io/tools/cmd/fyne@latest
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
       - name: package
         shell: bash
         run: |
