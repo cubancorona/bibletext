@@ -154,3 +154,18 @@ func bibleTextHighlightCleared() {
 		state.refreshReadingOnly()
 	})
 }
+
+// bibleTextNoteEntryChanged fires from the native Share-with-note compose
+// field's delegate on every edit. The sheet installs noteEntryOnChanged to
+// drive its live character counter; the indirection (rather than reaching into
+// sheet state from here) keeps this file free of any UI knowledge, like the
+// other exports above.
+//
+//export bibleTextNoteEntryChanged
+func bibleTextNoteEntryChanged() {
+	fyne.Do(func() {
+		if f := noteEntryOnChanged; f != nil {
+			f()
+		}
+	})
+}
