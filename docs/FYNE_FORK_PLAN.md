@@ -110,10 +110,25 @@ test the current three patches already pass.
 
 In rough value order, each tied to a wound already taken:
 
-1. **Draw loop, properly.** The 2ms hack trades battery for latency; the real
-   fix is event-driven invalidation in the mobile driver — paint on dirty,
-   idle at zero. The measurement harness (the caret CPU numbers in
-   `patches/README.md`) already exists to prove it.
+1. **Draw loop, properly — BUILT 2026-08-12 on `bt-drawloop-ondemand`.** The
+   2ms hack trades battery for latency; the real fix is event-driven
+   invalidation. Done: the iOS `CADisplayLink` is now created **parked** and
+   Fyne arms it only when its canvas is dirty (`requestDisplay`/`releaseDisplay`
+   in `app/darwin_ios.m`, `RequestDisplay`/`ReleaseDisplay` on the `App`
+   interface, called either side of `handlePaint`'s dirty branch), so idle
+   frames never enter `drawloop` at all.
+   The invariant that makes it safe: `Publish()` is an unbuffered rendezvous
+   serviced only from inside the display callback, so **every path that paints
+   and publishes must arm the link first** — exactly two in the driver
+   (`handlePaint` and the backgrounding branch), both compliant.
+   Verified: builds host + GOOS=ios; app's full `-race` suite green; simulator
+   launch renders, and a tap after 20s idle correctly re-armed and advanced the
+   chapter (no deadlock, no freeze); idle CPU 10.7% vs 17.9% for the 2ms build
+   (simulator, indicative only). **Still needs a physical iPhone** for the
+   actual stutter verdict, battery, and the backgrounding lifecycle path.
+   If it holds, fork commit ① (2ms + paint guard) can be dropped entirely, and
+   this is the upstream PR the maintainer left the door open to — draw-loop
+   efficiency rather than native-overlay support.
 2. **Keyboard insets as a driver API.** The Android IME gap (goto picker) is a
    framework hole — Fyne exposes no keyboard geometry. A fork commit adding it
    solves the picker properly on Android, replaces the iOS side-channel
