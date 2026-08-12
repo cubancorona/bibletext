@@ -73,6 +73,29 @@ func newKeyStore() *keyStore {
 	return &keyStore{}
 }
 
+// bibleKeyID is the credential-store account for the reader's own API.Bible
+// key (BYOK for licensed translations). It rides the same storage as the AI
+// keys: Keychain on iOS, Preferences elsewhere, env var overriding both.
+const bibleKeyID = "apibible"
+
+func (k *keyStore) bibleAPIKey() string          { return k.apiKey(bibleKeyID) }
+func (k *keyStore) setBibleAPIKey(v string) bool { return k.setAPIKey(bibleKeyID, v) }
+
+// sharedKeys serves callers without an AppState (the version registry decides
+// availability from the stored Bible key). Bound to the app's Preferences on
+// first use once an app exists; inert before that. A test hook: overridable.
+var sharedKeys = func() *keyStore {
+	if sharedKeyStore == nil && fyne.CurrentApp() != nil {
+		sharedKeyStore = newKeyStore()
+	}
+	if sharedKeyStore == nil {
+		return &keyStore{}
+	}
+	return sharedKeyStore
+}
+
+var sharedKeyStore *keyStore
+
 // keyInSecureStore reports whether this provider's key is CURRENTLY held by the
 // platform credential store — a definitive found-and-readable answer, not
 // "this platform has a keychain". The Settings status uses it so the saved
@@ -100,6 +123,7 @@ func (k *keyStore) migrateAllKeys() {
 	for _, p := range aiProviders() {
 		k.apiKey(p.ID)
 	}
+	k.apiKey(bibleKeyID) // the Bible key migrates the same way
 }
 
 func newKeyStoreWith(p prefStore) *keyStore { return &keyStore{prefs: p} }

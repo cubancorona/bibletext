@@ -8,6 +8,7 @@ package bibletext
 
 import (
 	"context"
+	"image/color"
 	"net/url"
 	"strings"
 	"time"
@@ -98,10 +99,11 @@ func showAISettings(state *AppState) {
 		// pasting a key populates the model list immediately.
 		var fetchModels func()
 
-		heading := canvas.NewText(info.Name+" key", pal.Text)
-		heading.TextStyle = fyne.TextStyle{Bold: true}
-		heading.TextSize = 18 // match the standard chrome text size
-
+		// No bold sub-heading here: the section label above and the entry's
+		// placeholder already name the provider, and a heading LOUDER than its
+		// section inverts the sheet's hierarchy (owner design review). The
+		// "Get a key" link rides the status row, right-aligned — the same
+		// place it sits in the Translations section.
 		var link fyne.CanvasObject = layout.NewSpacer()
 		if u, err := url.Parse(info.KeyURL); err == nil {
 			link = widget.NewHyperlink("Get a key ↗", u)
@@ -379,9 +381,7 @@ func showAISettings(state *AppState) {
 
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
-				container.NewBorder(nil, nil, heading, link),
 				withCaret(state, entry),
-				status,
 				// Paste + Clear + Test on one row; the result label gets its OWN
 				// full-width row below. It must NOT share the row as a Border
 				// center: on a phone the three buttons leave only a sliver of
@@ -391,10 +391,16 @@ func showAISettings(state *AppState) {
 				// message). Hidden until a test runs, so the sheet only grows by
 				// a line or two when there's something to say.
 				container.NewHBox(pasteBtn, clearBtn, testBtn),
+				// Status left, "Get a key ↗" right — the one shared row shape
+				// both key sections use.
+				container.NewBorder(nil, nil, nil, link, status),
 				result,
 				spacer(8),
-				modelCaption,
-				modelBtn,
+				// The model chooser speaks one step quieter than the section:
+				// sub-controls must never out-shout their section label.
+				container.NewThemeOverride(
+					container.NewVBox(modelCaption, modelBtn),
+					compactTheme{Theme: state.theme, text: 15}),
 			),
 		}
 		keyArea.Refresh()
@@ -508,7 +514,9 @@ func showAISettings(state *AppState) {
 			setReadingTextSizeID(id)
 		}
 	})
-	textSize.Horizontal = true
+	// Three named steps in a row where the sheet is wide enough; stacked on a
+	// phone, where the row form clips "Extra large" at the right edge.
+	textSize.Horizontal = cnv.Size().Width >= 500
 	textSize.Required = true
 	textSize.SetSelected(currentLabel)
 	textSizeRow := container.NewVBox(
@@ -534,6 +542,17 @@ func showAISettings(state *AppState) {
 	}
 
 	var card *fyne.Container // assigned below, before the popup shows
+	var sizeSheet func()     // assigned below; re-measures the sheet + popup
+
+	// The Translations section (the reader's own API.Bible key). Its area
+	// grows when a test result appears or the key arrives, so it re-measures
+	// the sheet the same way the assistant flip does.
+	bibleKeys := bibleKeySection(state, pal, func() {
+		if sizeSheet != nil {
+			sizeSheet()
+		}
+	})
+
 	applyAssistant = func() {
 		// Mirror the choice into the native selection menus right away, so the
 		// Study-with-AI submenu is gone (or back) on the very next selection.
@@ -549,19 +568,10 @@ func showAISettings(state *AppState) {
 			aiDisclosure.Hide()
 		}
 		// The card's height changes between the one-line hint (None) and the full
-		// key+model form — and fyne's PopUp uses its Resize-time innerSize both to
-		// paint and as the tap-outside-to-dismiss boundary. Without re-measuring,
-		// a mid-sheet flip leaves that boundary stale: taps on the grown card
-		// phantom-dismiss the sheet mid-key-entry (grow case), or a dead band
-		// below the shrunken card swallows outside-taps (shrink case).
-		//
-		// Resize twice: a wrapping RichText that was hidden (the disclosure on a
-		// None-state open) reports a single-line MinSize until it has been laid
-		// out at its real width — which the FIRST Resize's layout pass does — so
-		// only the second measurement is wrap-accurate on the grow flip.
-		if popup != nil && card != nil {
-			popup.Resize(card.MinSize())
-			popup.Resize(card.MinSize())
+		// key+model form — re-measure so the popup's paint size and its
+		// tap-outside-to-dismiss boundary track the content (see sizeSheet).
+		if sizeSheet != nil {
+			sizeSheet()
 		}
 	}
 	// Set the radio's visual selection WITHOUT firing its OnChanged (which would
@@ -579,52 +589,65 @@ func showAISettings(state *AppState) {
 
 	// Assistant + key first so the key field sits high in the sheet — on a phone
 	// the soft keyboard covers the lower half, and this keeps the field above it.
-	// Section labels (not separators) divide the groups, keeping the sheet tight.
+	// Each group is a section label + its controls, separated by a fixed
+	// breathing gap: one quiet, repeating rhythm rather than boxes-in-boxes.
 	form := container.NewVBox(
 		sectionLabel("ASSISTANT", pal),
 		active,
 		keyArea,
 		aiDisclosure,
+		sheetGap(),
+		sectionLabel("TRANSLATIONS", pal),
+		bibleKeys,
+		sheetGap(),
 		sectionLabel("READING", pal),
 		textSizeRow,
+		sheetGap(),
 		sectionLabel("SHARED NOTES", pal),
 		notes,
 		notesNote,
 	)
 	if redLetterSupported() {
+		// The words of Christ close the sheet — the owner's standing layout
+		// choice: the last thing the reader sees before returning to the text.
+		form.Add(sheetGap())
 		form.Add(redLetter)
 	}
 
 	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
 	hint.TextSize = 11
 
-	inner := container.NewBorder(
-		container.NewVBox(header, widget.NewSeparator()),
-		container.NewPadded(hint),
-		nil, nil,
-		form,
-	)
+	// The settings sheet claims a little more width than the AI panels (a
+	// tighter 12pt gutter each side): the sheet scrolls now, and its scrollbar
+	// lives INSIDE the card, so the form itself is clamped a scrollbar's width
+	// narrower — without the extra room, rows that fit the old static sheet
+	// would clip at the right edge.
+	sw := cnv.Size().Width - 24
+	if sw > 560 {
+		sw = 560
+	}
+	if sw < 280 {
+		sw = 280
+	}
+
+	// The form scrolls only when the sections outgrow the screen (small
+	// phones); otherwise the sheet hugs its content exactly as before.
+	scrollBody := container.New(fixedWidthLayout{width: sw - 40}, form)
+	scroll := container.NewVScroll(scrollBody)
+	headerBar := container.NewVBox(header, widget.NewSeparator())
+	hintBar := container.NewPadded(hint)
+
+	inner := container.NewBorder(headerBar, hintBar, nil, nil, scroll)
 	// Chrome text at the standard 18px (the tighter layout — not a smaller font —
 	// does the de-cluttering). compactTheme stays as the one knob if we ever want to
 	// nudge just the sheet's text size.
 	themed := container.NewThemeOverride(inner, compactTheme{Theme: state.theme, text: 18})
 
-	// A CARD-sized sheet at a fixed width, auto-sizing its height to the content. Two
-	// things this buys us: the popup's overlay-background rectangle is only as big as
-	// the card (hidden behind the surface fill), so it never shows as a white wall;
-	// and there is no scroll view, so a stray scrollbar is impossible.
-	ps := aiPanelSize(cnv.Size())
-	card = container.New(fixedWidthLayout{width: ps.Width},
-		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
-
-	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
-	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
-	// the tap-to-dismiss on PopUp.isInsideContent, which reads innerSize, and without an
-	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
-	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
-	popup = widget.NewPopUp(card, cnv)
-	popup.Resize(card.MinSize())
-	x := (cnv.Size().Width - ps.Width) / 2
+	// A CARD-sized sheet at a fixed width, auto-sizing its height to the content
+	// up to what the screen allows. The popup's overlay-background rectangle is
+	// only as big as the card (hidden behind the surface fill), so it never
+	// shows as a white wall.
+	x := (cnv.Size().Width - sw) / 2
 	if x < 0 {
 		x = 0
 	}
@@ -632,6 +655,43 @@ func showAISettings(state *AppState) {
 	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 		y = pos.Y + 16
 	}
+
+	card = container.New(fixedWidthLayout{width: sw},
+		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
+
+	// sizeSheet pins the scroll viewport: the full form height when it fits
+	// under the sheet's top offset, the remaining screen otherwise. Both the
+	// assistant flip and the Bible-key area growing call it, because fyne's
+	// PopUp uses its Resize-time innerSize both to paint and as the
+	// tap-outside-to-dismiss boundary (see the resize-twice note below).
+	sizeSheet = func() {
+		avail := cnv.Size().Height - y - 24 -
+			headerBar.MinSize().Height - hintBar.MinSize().Height
+		want := form.MinSize().Height
+		if want > avail {
+			want = avail
+		}
+		if want < 160 {
+			want = 160
+		}
+		scroll.SetMinSize(fyne.NewSize(0, want))
+		if popup != nil && card != nil {
+			// Resize twice: a wrapping RichText that was hidden reports a
+			// single-line MinSize until it has been laid out at its real width
+			// — which the FIRST Resize's layout pass does — so only the second
+			// measurement is wrap-accurate on a grow flip.
+			popup.Resize(card.MinSize())
+			popup.Resize(card.MinSize())
+		}
+	}
+
+	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
+	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
+	// the tap-to-dismiss on PopUp.isInsideContent, which reads innerSize, and without an
+	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
+	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
+	popup = widget.NewPopUp(card, cnv)
+	sizeSheet()
 	popup.ShowAtPosition(fyne.NewPos(x, y))
 
 	// done() (overlay-restore cleanup) is called directly by the ✕. An outside-tap close
@@ -685,6 +745,14 @@ func showAISettings(state *AppState) {
 //     back — field-reported.
 func aiSurfacesChanged(enabledAtOpen, keyAtOpen, enabledNow, keyNow bool) bool {
 	return enabledAtOpen != enabledNow || keyAtOpen != keyNow
+}
+
+// sheetGap is the fixed breathing room between settings sections — one
+// consistent rhythm, in place of separators or nested boxes.
+func sheetGap() fyne.CanvasObject {
+	r := canvas.NewRectangle(color.Transparent)
+	r.SetMinSize(fyne.NewSize(1, 16))
+	return r
 }
 
 // compactTheme shrinks only the base text size of a subtree (applied via

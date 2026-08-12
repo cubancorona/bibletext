@@ -177,7 +177,7 @@ func TestVersionPickerOrder(t *testing.T) {
 			t.Errorf("selectable %q at %d appears after a locked version", v.ID, i)
 		}
 	}
-	for _, name := range lockedVersionNames() {
+	for _, name := range append(lockedVersionNames(true), lockedVersionNames(false)...) {
 		if name == "NKJV" {
 			t.Error("licence-configured NKJV must not be in the locked footer note")
 		}
@@ -189,13 +189,18 @@ func TestVersionPickerOrder(t *testing.T) {
 		t.Error("unlicensed NKJV must not lead the picker")
 	}
 	found := false
-	for _, name := range lockedVersionNames() {
+	for _, name := range lockedVersionNames(true) {
 		if name == "NKJV" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("unlicensed NKJV missing from the locked footer note")
+		t.Error("unlicensed NKJV missing from the BYOK footer note")
+	}
+	for _, name := range lockedVersionNames(false) {
+		if name == "NKJV" {
+			t.Error("BYOK-capable NKJV must not be in the evaluation footer note")
+		}
 	}
 }
 

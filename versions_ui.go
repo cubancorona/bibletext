@@ -118,7 +118,12 @@ func showVersionPicker(state *AppState) {
 
 	closeBtn := widget.NewButton("Close", closePicker)
 	footerItems := []fyne.CanvasObject{widget.NewSeparator()}
-	if locked := lockedVersionNames(); len(locked) > 0 {
+	if byok := lockedVersionNames(true); len(byok) > 0 {
+		note := widget.NewLabel(joinNatural(byok) + " unlocks with your own free API.Bible key — add it in Settings.")
+		note.Wrapping = fyne.TextWrapWord
+		footerItems = append(footerItems, note)
+	}
+	if locked := lockedVersionNames(false); len(locked) > 0 {
 		note := widget.NewLabel(joinNatural(locked) + " are under evaluation and not yet selectable; they unlock once licensing is complete.")
 		note.Wrapping = fyne.TextWrapWord
 		footerItems = append(footerItems, note)
@@ -173,11 +178,14 @@ func versionPickerOrder() []BibleVersion {
 }
 
 // lockedVersionNames lists the display abbreviations of versions the picker
-// shows de-emphasized, for the footer note; empty when everything is live.
-func lockedVersionNames() []string {
+// shows de-emphasized, for the footer notes — split by HOW they unlock:
+// byok=true names the ones the reader can unlock with their own API.Bible
+// key; byok=false names the operator-gated rest. Empty when everything is
+// live.
+func lockedVersionNames(byok bool) []string {
 	var names []string
 	for _, v := range bibleVersions() {
-		if !v.canSelect() {
+		if !v.canSelect() && byokCapable(v) == byok {
 			names = append(names, strings.ToUpper(v.ID))
 		}
 	}
@@ -224,9 +232,14 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 	lines := container.NewVBox(name, publisher)
 	switch {
 	case !selectable:
-		// Copyrighted translation we don't yet have rights to ship: shown, but not
-		// selectable, with a formal status note instead of any placeholder text.
-		tag := canvas.NewText("Evaluation in progress — not yet available", pal.TextMuted)
+		// Copyrighted translation not currently unlocked: shown, but not
+		// selectable. BYOK-capable translations tell the reader exactly how to
+		// unlock them; the rest carry the formal evaluation note.
+		text := "Evaluation in progress — not yet available"
+		if byokCapable(v) {
+			text = "Unlocks with your own free API.Bible key — see Settings"
+		}
+		tag := canvas.NewText(text, pal.TextMuted)
 		tag.TextSize = 11
 		tag.TextStyle = fyne.TextStyle{Italic: true}
 		lines.Add(tag)
