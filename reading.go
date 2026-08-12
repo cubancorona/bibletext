@@ -586,8 +586,10 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// the desktop styled pane has always done (runColor, no weight change).
 	// NO colour override either. Recolouring the highlighted run threw away the
 	// red letters exactly where a reader is most likely to be looking — the verse
-	// somebody chose to send them. The band alone now says "highlighted", so red
-	// stays red inside it.
+	// somebody chose to send them. The band alone says "highlighted", so red stays
+	// red inside it — but ONLY because the emission below keeps .wj alongside .hl
+	// on a verse that is both. Leaving colour out of this rule is necessary for
+	// that and not sufficient on its own.
 	fmt.Fprintf(&b, `.hl {
 		background-color: %s;
 		padding: 0 2px;
@@ -653,11 +655,26 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			// be ordinary HTML whitespace (renders as a space). Escape first;
 			// htmlEscape leaves "\n" alone.
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
+			wj := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
 			switch {
+			case isVerseHighlighted(state, v) && wj:
+				// BOTH classes, not one or the other. .hl carries only the band
+				// and .wj only the colour, so together they paint red letters ON
+				// the highlight — which is the entire reason the band is a
+				// background rather than a recolour (see the .hl comment above).
+				//
+				// This used to be an either/or switch whose highlight arm won, so
+				// a highlighted words-of-Christ verse silently lost its red and
+				// came out in body colour — in BOTH light and dark (owner-caught
+				// in the simulator: John 11:25 rendered black under the band while
+				// v26 beside it stayed red). The CSS already promised red survived
+				// the band; this emission was what broke the promise. The verse
+				// NUMBER has carried two classes (`v hl`) all along, which is what
+				// proves the HTML importer honours them.
+				fmt.Fprintf(&b, `<span class="hl wj">%s</span>`, body)
 			case isVerseHighlighted(state, v):
-				// A search highlight wins visually over red-letter.
 				fmt.Fprintf(&b, `<span class="hl">%s</span>`, body)
-			case redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse):
+			case wj:
 				fmt.Fprintf(&b, `<span class="wj">%s</span>`, body)
 			default:
 				b.WriteString(body)
