@@ -474,3 +474,65 @@ func TestWriteReadingStateSeqLatestWins(t *testing.T) {
 		t.Fatalf("a stale (older-seq) write overwrote the newer snapshot: %+v ok=%v", got, ok)
 	}
 }
+
+// A LICENSED translation that cannot be revalidated must not lock the reader out
+// of the app.
+//
+// This is the failure the bundled-key release makes reachable: the NKJV cache is
+// deleted before its refetch (§11 — stale licensed text is revalidated, not
+// served) and the cache-only path refuses stale/superseded licensed copies for
+// the same reason. So offline — or with the shared key's monthly quota spent,
+// which looks identical from the device — BOTH routes fail. Before this fix the
+// error aborted the whole launch to a Retry button that could never succeed,
+// and the reader could not even switch translations to escape, because the app
+// never opened.
+//
+// The compliance line is NOT relaxed here: nothing stale is served. The app just
+// opens in the default canon instead of refusing to open at all.
+func TestRestoreFallsBackWhenLicensedVersionCannotRevalidate(t *testing.T) {
+	origLoad := loadVersionForRestore
+	defer func() { loadVersionForRestore = origLoad }()
+	loadVersionForRestore = func(BibleVersion, *BibleData) (*BibleData, dataMode, error) {
+		return nil, modeReal, errors.New("offline")
+	}
+
+	// A licensed version is only SELECTABLE once a key is present, and
+	// restoreReadingState skips unselectable versions — so without this the test
+	// would skip the very branch it exists to cover.
+	t.Setenv("BIBLE_API_KEY", "")
+	fake := withFakeSharedKeys(t)
+	fake.setBibleAPIKey("test-key-unlocks-the-licensed-version")
+
+	licensed := ""
+	for _, v := range bibleVersions() {
+		if isLicensedSource(v) && v.canSelect() {
+			licensed = v.ID
+			break
+		}
+	}
+	if licensed == "" {
+		t.Fatal("no selectable licensed version even with a key — the test would not exercise the fallback")
+	}
+
+	base := fullValidBible()
+	state := &AppState{
+		Bible:          base,
+		CurrentVersion: defaultVersionID,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base},
+	}
+	rs := readingState{Version: licensed, Book: "Genesis", Chapter: 1}
+
+	restored, err := restoreReadingState(state, rs, base)
+	if err != nil {
+		t.Fatalf("an unrevalidatable licensed translation aborted the launch: %v", err)
+	}
+	if !restored {
+		t.Fatal("restore reported nothing usable; the reader's place should survive in the default canon")
+	}
+	if state.CurrentVersion != defaultVersionID {
+		t.Errorf("fell back to %q, want the default %q", state.CurrentVersion, defaultVersionID)
+	}
+	if state.CurrentBook != "Genesis" {
+		t.Errorf("lost the reader's place: book = %q", state.CurrentBook)
+	}
+}

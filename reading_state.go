@@ -340,9 +340,30 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 				// later online launch re-fetches and upgrades in place.
 				old, oldMode, cerr := loadVersionFromCacheOnly(v)
 				if cerr != nil {
-					return false, fmt.Errorf("restore saved %s reading state: %w", v.ID, err)
+					// A LICENSED translation that cannot be revalidated must not
+					// abort the launch. Its cache was DELETED before the refetch
+					// (versions.go: §11 says stale licensed text is revalidated,
+					// not served) and the cache-only path refuses a stale or
+					// superseded copy for the same reason — so offline, or with
+					// the shared key's quota spent, both routes fail and the
+					// reader was left staring at a Retry button that could not
+					// succeed, locked out of the WHOLE app because their last
+					// translation happened to be the licensed one.
+					//
+					// Fall through to the default canon instead: the app opens,
+					// the saved book and chapter survive (all our translations
+					// share the structure), and the licensed text returns by
+					// itself on the next launch with a connection. Nothing stale
+					// is served, so the compliance line is untouched — this is
+					// only about refusing to open the app.
+					if isLicensedSource(v) {
+						data, loadedMode = nil, mode
+					} else {
+						return false, fmt.Errorf("restore saved %s reading state: %w", v.ID, err)
+					}
+				} else {
+					data, loadedMode = old, oldMode
 				}
-				data, loadedMode = old, oldMode
 			}
 			if data != nil {
 				bible, versionID, mode = data, v.ID, loadedMode
