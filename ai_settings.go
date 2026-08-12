@@ -99,11 +99,13 @@ func showAISettings(state *AppState) {
 		// pasting a key populates the model list immediately.
 		var fetchModels func()
 
-		// No bold sub-heading here: the section label above and the entry's
-		// placeholder already name the provider, and a heading LOUDER than its
-		// section inverts the sheet's hierarchy (owner design review). The
+		// The field's ROW LABEL: plain body weight, like "Text size" below —
+		// iOS-settings anatomy. (A BOLD heading here once out-shouted the
+		// section label, and removing it entirely left the filled field an
+		// anonymous row of dots — both owner design findings.) The
 		// "Get a key" link rides the status row, right-aligned — the same
 		// place it sits in the Translations section.
+		keyLabel := widget.NewLabel(info.Name + " key")
 		var link fyne.CanvasObject = layout.NewSpacer()
 		if u, err := url.Parse(info.KeyURL); err == nil {
 			link = widget.NewHyperlink("Get a key ↗", u)
@@ -221,7 +223,10 @@ func showAISettings(state *AppState) {
 			effModel = info.Model
 		}
 		recommended := "Recommended (" + effModel + ")"
-		modelCaption := canvas.NewText("Model — Recommended keeps itself current automatically.", pal.TextMuted)
+		// Row label above the control, footnote caption below it — the same
+		// anatomy as every other labelled row on the sheet.
+		modelLabel := widget.NewLabel("Model")
+		modelCaption := canvas.NewText("Recommended keeps itself current automatically.", pal.TextMuted)
 		modelCaption.TextSize = 12
 
 		// Until (or unless) the live list arrives, the choices are Recommended
@@ -381,6 +386,7 @@ func showAISettings(state *AppState) {
 
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
+				keyLabel,
 				withCaret(state, entry),
 				// Paste + Clear + Test on one row; the result label gets its OWN
 				// full-width row below. It must NOT share the row as a Border
@@ -398,9 +404,10 @@ func showAISettings(state *AppState) {
 				spacer(8),
 				// The model chooser speaks one step quieter than the section:
 				// sub-controls must never out-shout their section label.
-				container.NewThemeOverride(
-					container.NewVBox(modelCaption, modelBtn),
+				modelLabel,
+				container.NewThemeOverride(modelBtn,
 					compactTheme{Theme: state.theme, text: 15}),
+				modelCaption,
 			),
 		}
 		keyArea.Refresh()
@@ -609,8 +616,10 @@ func showAISettings(state *AppState) {
 	)
 	if redLetterSupported() {
 		// The words of Christ close the sheet — the owner's standing layout
-		// choice: the last thing the reader sees before returning to the text.
+		// choice: the last thing the reader sees before returning to the
+		// text. Under its own header so nothing floats unlabelled.
 		form.Add(sheetGap())
+		form.Add(sectionLabel("WORDS OF CHRIST", pal))
 		form.Add(redLetter)
 	}
 

@@ -30,8 +30,11 @@ const bibleKeyProbeBudget = 12 * time.Second
 func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) fyne.CanvasObject {
 	store := state.keys()
 
-	intro := caption("The New King James Version downloads with your own free API.Bible key. " +
-		"Create a key, add the NKJV to it, and paste it here — then choose NKJV from the translation picker.")
+	// iOS-settings anatomy: a plain row label above the field, and the
+	// explanation as a FOOTER caption below the group.
+	keyLabel := widget.NewLabel("API.Bible key")
+	footer := caption("The New King James Version downloads with your own free API.Bible key — " +
+		"create a key, add the NKJV to it, then choose NKJV from the translation picker.")
 
 	entry := widget.NewPasswordEntry()
 	entry.SetPlaceHolder("Paste your API.Bible key")
@@ -154,13 +157,14 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) fyne.Ca
 	}
 
 	return container.NewVBox(
-		intro,
+		keyLabel,
 		entry,
 		container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
 		// Status left, "Get a key ↗" right — the same row shape as the
 		// assistant key area, so the two sections read as one design.
 		container.NewBorder(nil, nil, nil, link, status),
 		result,
+		footer,
 	)
 }
 
