@@ -329,10 +329,59 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 
 // noteBrowseRow is one note in the list: its passage, then its message. The
 // whole card is the tap target, matching the search results it sits beside.
+// noteDateLabel says when a note arrived, quietly.
+//
+// Recent notes read as words ("Today", "Yesterday") because that is how someone
+// thinks about a message that just came; past a week it becomes a date, and the
+// year appears only when it is not this one — the same grammar a mail client
+// uses, and the reason the line can sit beside the reference without competing
+// with it.
+//
+// Returns "" for a note with no timestamp. Received was added after the first
+// notes shipped, so an early note can legitimately have none, and inventing
+// "Today" for one that arrived weeks ago would be worse than saying nothing.
+// A timestamp in the FUTURE (a clock that moved) reads as "Today" rather than
+// as a negative day count.
+func noteDateLabel(ts int64, now time.Time) string {
+	if ts <= 0 {
+		return ""
+	}
+	t := time.Unix(ts, 0).In(now.Location())
+	midnight := func(x time.Time) time.Time {
+		y, m, d := x.Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, x.Location())
+	}
+	days := int(midnight(now).Sub(midnight(t)).Hours() / 24)
+	switch {
+	case days <= 0:
+		return "Today"
+	case days == 1:
+		return "Yesterday"
+	case days < 7:
+		return strconv.Itoa(days) + " days ago"
+	case t.Year() == now.Year():
+		return t.Format("2 Jan")
+	default:
+		return t.Format("2 Jan 2006")
+	}
+}
+
 func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject {
 	ref := canvas.NewText(noteReference(n), pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 18
+
+	// The date rides on the reference's own line, muted and small, pushed to the
+	// far edge. Given a line of its own it would read as a second fact about the
+	// note; up here it reads as part of the heading, which is what a date is.
+	// Centred vertically so the smaller text sits on the reference's optical
+	// middle rather than hanging from the top of the row.
+	head := fyne.CanvasObject(ref)
+	if when := noteDateLabel(n.Received, time.Now()); when != "" {
+		stamp := canvas.NewText(when, pal.TextMuted)
+		stamp.TextSize = 12
+		head = container.NewBorder(nil, nil, ref, container.NewCenter(stamp))
+	}
 
 	// The note's own words, wrapped, never styled as the app's voice and never
 	// as markup — the same rule the bubble follows. A collapsed note still shows
@@ -341,7 +390,7 @@ func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject
 	body := widget.NewLabel(strings.TrimSpace(n.Text))
 	body.Wrapping = fyne.TextWrapWord
 
-	rows := container.NewVBox(ref, body)
+	rows := container.NewVBox(head, body)
 	if n.Minimized {
 		quiet := canvas.NewText("Minimized in the chapter", pal.TextMuted)
 		quiet.TextSize = 12
