@@ -135,3 +135,44 @@ func TestExecuteSearchOpensPastedShareLinks(t *testing.T) {
 		t.Error("a pasted link must not leave the pane in search mode")
 	}
 }
+
+// A BARE passage link (no note payload) must not blank the note already stored
+// on that chapter. Before the gate in applyShareTarget, arriving on a chapter
+// via a plain link wrote an empty ActiveNote over the stored one, so the banner
+// vanished until the reader navigated away and back (platform reproduction).
+func TestBarePassageLinkKeepsTheStoredNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+
+	bd := &BibleData{
+		Books: []string{"Philemon"},
+		Verses: map[string]map[int][]Verse{"Philemon": {1: {
+			{BookName: "Philemon", Chapter: 1, Verse: 1, Text: "Paul, a prisoner of Christ Jesus."},
+			{BookName: "Philemon", Chapter: 1, Verse: 4, Text: "I always thank my God."},
+		}}},
+	}
+	bd.PrepareSearchIndex()
+	st := &AppState{Bible: bd, CurrentBook: "Philemon", CurrentChapter: 1}
+
+	// A note arrives on a link and is stored.
+	withNote := ShareLinkURLWithNote("web", "Philemon", 1, 1, 4, "synthetic note")
+	if !HandleShareLink(st, withNote) {
+		t.Fatal("the note link was not handled")
+	}
+	if st.ActiveNote != "synthetic note" {
+		t.Fatalf("note did not arrive: %q", st.ActiveNote)
+	}
+
+	// The SAME passage is then opened by a plain link carrying no note.
+	bare := ShareLinkURL("web", "Philemon", 1, 1, 4)
+	if !HandleShareLink(st, bare) {
+		t.Fatal("the bare link was not handled")
+	}
+	if st.ActiveNote != "synthetic note" {
+		t.Errorf("a bare link wiped the stored note (ActiveNote=%q)", st.ActiveNote)
+	}
+	if buildNoteBanner(st) == nil {
+		t.Error("the banner disappeared after a bare link to the same passage")
+	}
+}

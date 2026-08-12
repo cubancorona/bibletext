@@ -21,7 +21,9 @@ package bibletext
 //     then silently scrolls somewhere else. Clearing it is not optional — see
 //     applyShareTarget.
 
-import "fyne.io/fyne/v2"
+import (
+	"fyne.io/fyne/v2"
+)
 
 // HandleShareLink is the single entry point for a tapped link, called from the
 // platform glue on the UI goroutine. It returns false when the URL is not one
@@ -154,10 +156,15 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// stored. (The switch cannot stop the link reaching the app at all — that is
 	// settled by the entitlement and the manifest at build time.)
 	if notesFeatureOn(state) {
-		state.ActiveNote = t.Note
-		state.NoteMinimized = false
-		state.NoteVerseLo = t.VerseLo
+		// Only a link that actually CARRIES a note may change what's shown: a
+		// bare passage link (or one whose payload didn't decode) must not hide
+		// the note already stored on this chapter — addRecentChapter above has
+		// just put that stored note in place, and it stays (platform reproduction: a
+		// note-less link blanked the saved note's banner).
 		if t.Note != "" {
+			state.ActiveNote = t.Note
+			state.NoteMinimized = false
+			state.NoteVerseLo = t.VerseLo
 			rememberIncomingNote(state, t)
 		}
 	} else {
@@ -170,11 +177,10 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	if state.surfaceReading != nil {
 		state.surfaceReading()
 	}
-	// Platforms with a native sticker draw the note beside the passage; the rest
-	// fall back to a card, which is a real surface rather than nothing.
-	if t.Note != "" && notesFeatureOn(state) && !notePaneHasSticker() {
-		showSharedNote(state, t.Note)
-	}
+	// Every platform now shows the note inline — iOS draws the native sticker
+	// beside the passage, the rest put the banner above the reading pane — so
+	// the modal arrival card (the pre-banner fallback) would only duplicate
+	// what is already on screen and cover the verses it points at.
 }
 
 // deliverShareLink marshals a link from a native callback onto the UI goroutine.

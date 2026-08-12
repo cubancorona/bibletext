@@ -7,7 +7,6 @@ package bibletext
 // sheet_fit_test.go.
 
 import (
-	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -93,35 +92,6 @@ func TestVersionLoadingCardFitsNarrowPhone(t *testing.T) {
 		t.Errorf("loading card is %vpt wide on a %vpt canvas", wd, win.Canvas().Size().Width)
 	}
 	assertBoxOnScreen(t, p, win.Canvas(), "loading card")
-}
-
-// The arriving-note card is modal and "Read the passage" is its only closer. A
-// 280-rune note with blank lines pushed it off a small phone, stranding the
-// reader with the reading overlay latched hidden.
-func TestSharedNoteCardKeepsItsButtonOnScreen(t *testing.T) {
-	st, win := smallPhone(t)
-	long := strings.Repeat("A line of somebody's message.\n", 12) +
-		strings.Repeat("x", 40)
-	showSharedNote(st, long)
-	p := topPopup(t, win)
-	test.WidgetRenderer(p).Layout(p.Size())
-
-	assertBoxOnScreen(t, p, win.Canvas(), "shared-note card")
-	// Fitting by truncation is not fitting: the overflow must be scrollable.
-	if findScroll(p.Content) == nil {
-		t.Fatal("no scroll in the note card — a long note would be unreachable")
-	}
-	btn := findTreeButton(p.Content, "Read the passage")
-	if btn == nil {
-		t.Fatal("the only dismissal is missing")
-	}
-	// The button's ABSOLUTE position, not just its existence: the original bug
-	// laid it out below the frame the modal renderer clamps to — present in the
-	// tree, painted off the glass. The Border structure is what pins it inside.
-	bp := fyne.CurrentApp().Driver().AbsolutePositionForObject(btn)
-	if bot := bp.Y + btn.Size().Height; bot > win.Canvas().Size().Height {
-		t.Errorf("the only dismissal ends at y=%v on a %vpt canvas", bot, win.Canvas().Size().Height)
-	}
 }
 
 // Verse of the day on a short canvas: the button row must stay inside the card.
