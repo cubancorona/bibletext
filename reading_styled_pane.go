@@ -74,6 +74,16 @@ func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
 // styledReadingPane renders a chapter with styled runs. It lives inside the
 // existing readingColumn/VScroll exactly where chapterText does today.
 type styledReadingPane struct {
+	// extraInset centres the reporter measure: the dynamic left/right margin
+	// ADDED to styledPaneInset while the column is narrower than the pane.
+	// Draw, selection and hit-testing all read it through insetX(), so glyphs
+	// and hit-tests cannot disagree about where the column sits.
+	extraInset float32
+	// lh is the laid-out baseline distance (reporter 1.3 vs cozy 1.55) —
+	// stored so the renderer centres glyphs in the SAME line height the
+	// layout used.
+	lh float32
+
 	widget.BaseWidget
 
 	state  *AppState
@@ -159,11 +169,30 @@ func (p *styledReadingPane) relayout(width float32) {
 		avail = 80
 	}
 	lh := p.styledLineHeight()
+	paraGap := lh * 0.65
+	indent := float32(0)
+	p.extraInset = 0
+	// THE REPORTER PAGE, when the pane can hold it (owner directive: the
+	// desktop reads like the iPad). Same U.S. Reports set the iPad uses —
+	// centred 27.5em measure, 1.3 leading, first-line indents with no
+	// paragraph gap — gated purely on width, so a narrow window keeps
+	// today's cozy narrow-pane layout and a resize glides between the two.
+	// The em is the pane's own body size, exactly as the iPad's measure is
+	// 27.5 × ITS body px.
+	if m := reporterMeasureEm * p.textSize; avail > m {
+		p.extraInset = float32(int((avail - m) / 2)) // whole px: keep glyphs crisp
+		avail = m
+		lh = p.textSize * 1.3
+		paraGap = 0
+		indent = 1.5 * p.textSize
+	}
+	p.lh = lh
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
 		Width:      avail,
 		LineHeight: lh,
-		ParaGap:    lh * 0.65,
+		ParaGap:    paraGap,
 		SpaceW:     p.measure(" ", runWord),
+		Indent:     indent,
 	}, p.measure)
 	p.drawRuns = p.drawRuns[:0]
 	p.lineSegs = make([][]styledDrawRun, len(p.lay.Lines))
@@ -310,8 +339,8 @@ func (r *styledPaneRenderer) position() {
 		// pal.Highlight IS the faint wash colour; the tagged reading_fyne
 		// helper is unavailable to untagged code, so use it directly.
 		r.band.FillColor = p.pal.Highlight
-		r.band.Move(fyne.NewPos(0, top))
-		r.band.Resize(fyne.NewSize(p.lastWidth, bot-top))
+		r.band.Move(fyne.NewPos(p.extraInset, top))
+		r.band.Resize(fyne.NewSize(p.lastWidth-2*p.extraInset, bot-top))
 		r.band.Show()
 	} else {
 		r.band.Hide()
@@ -321,14 +350,17 @@ func (r *styledPaneRenderer) position() {
 	if first, last, ok := p.verseLineSpan(p.raVerse); ok {
 		top := p.lay.Lines[first].Y
 		bot := p.lay.Lines[last].Y + p.lay.Lines[last].H
-		r.raBand.Move(fyne.NewPos(0, top))
-		r.raBand.Resize(fyne.NewSize(p.lastWidth, bot-top))
+		r.raBand.Move(fyne.NewPos(p.extraInset, top))
+		r.raBand.Resize(fyne.NewSize(p.lastWidth-2*p.extraInset, bot-top))
 		r.raBand.Show()
 	} else {
 		r.raBand.Hide()
 	}
 
-	lh := p.styledLineHeight()
+	lh := p.lh
+	if lh == 0 {
+		lh = p.styledLineHeight()
+	}
 	drv := fyne.CurrentApp().Driver()
 	bodyS, _ := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.font)
 	numS, _ := drv.RenderedTextSize("1", p.textSize*styledNumRatio, fyne.TextStyle{}, p.font)
@@ -341,7 +373,7 @@ func (r *styledPaneRenderer) position() {
 			// body's ascent region.
 			y = ln.Y + (lh-bodyH)/2 - numH*0.18
 		}
-		r.texts[i].Move(fyne.NewPos(styledPaneInset+dr.X, y))
+		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
 	}
 }
 
@@ -422,3 +454,9 @@ func (p *styledReadingPane) verseLineSpan(verse int) (first, last int, ok bool) 
 	}
 	return first, last, true
 }
+
+// insetX is the pane's live left inset: the fixed padding plus whatever margin
+// centres the reporter measure. Every consumer of run X coordinates — drawing,
+// selection, hit-testing — must use THIS, never styledPaneInset directly, or
+// clicks land beside the glyphs whenever the column is centred.
+func (p *styledReadingPane) insetX() float32 { return styledPaneInset + p.extraInset }

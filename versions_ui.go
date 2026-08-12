@@ -399,7 +399,13 @@ func showVersionLoading(state *AppState, name string) func() {
 		state.hideReadingOverlay()
 	}
 
-	title := canvas.NewText("Downloading "+name+"…", pal.Text)
+	// A wrapped Label, NOT a canvas.Text: a canvas.Text never wraps, so the
+	// version's name made the card's minimum width whatever the whole line
+	// wanted — wider than a phone for the WEBC's full name — and the modal
+	// renderer clamps the FRAME to the canvas while the text sails on
+	// underneath, clipped at both edges (audit finding).
+	title := widget.NewLabel("Downloading " + name + "…")
+	title.Wrapping = fyne.TextWrapWord
 	title.Alignment = fyne.TextAlignCenter
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	sub := canvas.NewText("One-time download — it's cached after this.", pal.TextMuted)
@@ -412,11 +418,21 @@ func showVersionLoading(state *AppState, name string) func() {
 		container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar),
 		spacer(8), sub,
 	)
-	popup := widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
-		cnv,
-	)
+	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	popup := widget.NewModalPopUp(card, cnv)
 	popup.Show()
+	// Size it explicitly — never from an unwrapped line. Resize twice: a
+	// wrapping label reports a single-line MinSize until a layout pass has run
+	// it at its real width (the ai_settings lesson).
+	w := cnv.Size().Width - 48
+	if w > 340 {
+		w = 340
+	}
+	if w < 264 {
+		w = 264 // the 240pt progress bar + card padding
+	}
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 
 	dismissed := false
 	return func() {
@@ -465,9 +481,23 @@ func showVersionLoadError(state *AppState, name string) {
 		}
 	})
 	content := container.NewVBox(msg, container.NewCenter(okBtn))
-	popup = widget.NewModalPopUp(
-		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
-		cnv,
-	)
+	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
+	// THE ONLY WAY OUT OF THIS DIALOG IS THE OK BUTTON, so its geometry is not
+	// cosmetic. Un-Resized, the popup floored at its content's minimum — the
+	// width of the OK button — and the wrapped message re-wrapped into a ribbon
+	// a few characters wide and hundreds of points tall, pushing OK clean off
+	// the screen: a modal with no reachable dismissal (audit finding, upheld
+	// 3/3 on re-measurement). Give it a real width; the message is two short
+	// lines at any phone width, so height follows harmlessly.
+	w := cnv.Size().Width - 48
+	if w > 380 {
+		w = 380
+	}
+	if w < 240 {
+		w = 240
+	}
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 }

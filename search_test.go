@@ -315,8 +315,8 @@ func TestSearchToggleUI(t *testing.T) {
 	defer app.Quit()
 	state := sampleState() // no keystore bound → AI features on by default
 
-	var picked []bool
-	toggle := buildSearchModeToggle(state, func(ai bool) { picked = append(picked, ai) })
+	var picked []searchMode
+	toggle := buildSearchModeControls(state, func(m searchMode) { picked = append(picked, m) })
 
 	searchBtn := findTreeButton(toggle, "Search")
 	findBtn := findTreeButton(toggle, "Find")
@@ -336,8 +336,8 @@ func TestSearchToggleUI(t *testing.T) {
 
 	// Tapping Find reports AI mode and moves the fill.
 	test.Tap(findBtn)
-	if len(picked) != 1 || !picked[0] {
-		t.Fatalf("tapping Find must report ai=true, got %v", picked)
+	if len(picked) != 1 || picked[0] != modeFind {
+		t.Fatalf("tapping Find must report modeFind, got %v", picked)
 	}
 	if !filled(findBtn) || filled(searchBtn) {
 		t.Fatalf("expected Find filled after tap (search=%v find=%v)", searchBtn.Importance, findBtn.Importance)
@@ -345,8 +345,8 @@ func TestSearchToggleUI(t *testing.T) {
 
 	// Tapping Search flips back.
 	test.Tap(searchBtn)
-	if len(picked) != 2 || picked[1] {
-		t.Fatalf("tapping Search must report ai=false, got %v", picked)
+	if len(picked) != 2 || picked[1] != modeKeyword {
+		t.Fatalf("tapping Search must report modeKeyword, got %v", picked)
 	}
 	if !filled(searchBtn) || filled(findBtn) {
 		t.Fatal("expected Search filled again after flipping back")
@@ -359,7 +359,7 @@ func TestSearchToggleStartsInPersistedFindMode(t *testing.T) {
 	state := sampleState()
 	state.aiSearchMode = true // the session left off in Find mode
 
-	toggle := buildSearchModeToggle(state, func(bool) {})
+	toggle := buildSearchModeControls(state, func(searchMode) {})
 	searchBtn := findTreeButton(toggle, "Search")
 	findBtn := findTreeButton(toggle, "Find")
 	if searchBtn == nil || findBtn == nil {
@@ -383,5 +383,69 @@ func TestParseReferenceQueryWithAliases(t *testing.T) {
 	book, chapter, _, hasVerse, ok = bd.parseReferenceQuery("Ps 23")
 	if !ok || book != "Psalms" || chapter != 23 || hasVerse {
 		t.Fatalf("expected Psalms 23 chapter ref, got %s %d (hasVerse=%v ok=%v)", book, chapter, hasVerse, ok)
+	}
+}
+
+// Exactly one mode may look active. The bug this pins: the Search/Find pair and
+// the notes bubble were built as independent widgets, so the pair's apply() had
+// never heard of the bubble — tapping Find lit Find while the bubble stayed lit
+// too, two controls both claiming to be the current mode. Field-reported.
+func TestOnlyOneModeControlIsEverFilled(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	state := sampleState() // no keystore bound → AI features on by default
+
+	row := buildSearchModeControls(state, func(m searchMode) {
+		state.aiSearchMode = m == modeFind
+		state.NotesMode = m == modeNotes
+	})
+
+	searchBtn := findTreeButton(row, "Search")
+	findBtn := findTreeButton(row, "Find")
+	if searchBtn == nil || findBtn == nil {
+		t.Fatalf("row must hold Search and Find; texts: %v", treeTexts(row))
+	}
+	// The bubble is the only button with an icon and no label.
+	var notesBtn *widget.Button
+	walkTree(row, func(o fyne.CanvasObject) {
+		if b, ok := o.(*widget.Button); ok && b.Text == "" && b.Icon != nil && notesBtn == nil {
+			notesBtn = b
+		}
+	})
+	if notesBtn == nil {
+		t.Fatalf("row must hold the notes bubble; texts: %v", treeTexts(row))
+	}
+
+	filled := func(b *widget.Button) bool { return b.Importance == widget.HighImportance }
+	countFilled := func() int {
+		n := 0
+		for _, b := range []*widget.Button{searchBtn, findBtn, notesBtn} {
+			if filled(b) {
+				n++
+			}
+		}
+		return n
+	}
+
+	for _, step := range []struct {
+		name string
+		tap  *widget.Button
+		want *widget.Button
+	}{
+		{"notes", notesBtn, notesBtn},
+		{"find after notes", findBtn, findBtn}, // the reported bug
+		{"notes again", notesBtn, notesBtn},
+		{"search after notes", searchBtn, searchBtn},
+		{"notes from search", notesBtn, notesBtn},
+	} {
+		test.Tap(step.tap)
+		if n := countFilled(); n != 1 {
+			t.Errorf("%s: %d controls filled, want exactly 1 (search=%v find=%v notes=%v)",
+				step.name, n, searchBtn.Importance, findBtn.Importance, notesBtn.Importance)
+		}
+		if !filled(step.want) {
+			t.Errorf("%s: the tapped control is not the filled one", step.name)
+		}
 	}
 }

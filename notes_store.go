@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const prefSharedNotes = "shared.notes"
@@ -40,6 +41,13 @@ type SharedNote struct {
 	// range — neither the bubble nor its highlight shows until they bring it
 	// back, which is what makes minimize different from delete.
 	Minimized bool `json:"m,omitempty"`
+
+	// Received is when the note arrived, as a Unix time in seconds. It exists so
+	// the browser can offer "newest first", which is what a reader actually wants
+	// from a list of messages. omitempty and additive: notes stored before this
+	// field existed simply have 0, and sort as the oldest — a wrong position for
+	// a handful of old notes is a far better outcome than a migration.
+	Received int64 `json:"ts,omitempty"`
 }
 
 func noteKey(versionID, book string, chapter int) string {
@@ -97,11 +105,25 @@ func writeNotes(p prefStore, notes map[string]SharedNote) {
 }
 
 // saveNote stores (or replaces) the note on a passage.
+// noteNow is the clock, indirected so tests can pin it.
+var noteNow = func() int64 { return time.Now().Unix() }
+
 func saveNote(p prefStore, n SharedNote) {
 	if strings.TrimSpace(n.Text) == "" || n.Book == "" || n.Chapter < 1 {
 		return
 	}
 	notes := readNotes(p)
+	// Keep the ORIGINAL arrival time when re-saving a note that is already
+	// stored. saveNote is how minimize and restore persist themselves, so
+	// stamping unconditionally would shuffle a note to the top of "newest first"
+	// every time the reader collapsed it — the list would reorder itself under
+	// their hand for no reason they could see.
+	if prev, ok := notes[n.key()]; ok && n.Received == 0 {
+		n.Received = prev.Received
+	}
+	if n.Received == 0 {
+		n.Received = noteNow()
+	}
 	notes[n.key()] = n
 	writeNotes(p, notes)
 }
@@ -233,4 +255,36 @@ func dropCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
 	clearHighlightedVerse(state)
+}
+
+// applyNoteOnResume surfaces a stored note for the chapter the app is REOPENING
+// into.
+//
+// It exists because reopening never went through addRecentChapter. The restore
+// path sets book and chapter directly (reading_state.go), so nothing called
+// applyNoteForCurrentChapter and the chapter the reader last had open came back
+// bare — the note only appeared once they navigated away and returned, by which
+// point every OTHER chapter's note had shown up correctly. Field-reported, and
+// exactly as confusing as it sounds.
+//
+// REOPENING IS NOT ARRIVING, though, and the difference decides the SCROLL —
+// but only the scroll. Arriving on a link should land the reader on the message;
+// reopening should land them where they stopped reading, which may be a long way
+// past the note.
+//
+// The first attempt bought that by dropping the note's highlight on resume, so
+// it could not capture the scroll. That was the wrong price: the note came back
+// bare, a bubble pointing at nothing, and it read as a fault — reported as one.
+// A note and the passage it marks are one object; showing half of it is worse
+// than either alternative.
+//
+// So the note is restored WHOLE, and the scroll is settled where it belongs: a
+// pending restore now outranks the highlight in the reading panes, and the
+// explicit arrivals clear the restore so they still land on their passage. See
+// AppState.restore and openSearchResultRange.
+func applyNoteOnResume(state *AppState) {
+	if state == nil {
+		return
+	}
+	applyNoteForCurrentChapter(state)
 }

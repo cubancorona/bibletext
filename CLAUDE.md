@@ -171,6 +171,21 @@ change can never clobber the live landing or App Store pages.
   U.S. Reports geometry (centred 27.5em native-inset column, 1.3 leading,
   indented paragraphs — `reporterLayoutActive()`, `reporterMeasureEm`; phones
   unchanged); details in docs/IPAD.md → "The reading page".
+- **Desktop reads as the reporter page too (owner directive, task #17).**
+  macOS: `reporterLayoutActive()` is now TRUE on darwin (`reporter_macos.go`),
+  so `buildChapterHTML` emits the U.S. Reports set and
+  `bibleTextMacSetReadingMeasure` (reading_macos.go) centres the 27.5em column
+  via `textContainerInset` — the NSTextView twin of the iPad's
+  `bibleTextSetReadingMeasure`, re-applied on every pane resize. Windows/Linux:
+  the styled pane does it WIDTH-GATED in `relayout` (reading_styled_pane.go) —
+  a pane wider than `reporterMeasureEm × textSize` centres the measure
+  (`extraInset`, read through `insetX()` by draw AND selection so glyphs and
+  hit-tests share one ruler), sets 1.3 leading, zero paragraph gap and a
+  geometric first-line indent (`styledLayoutParams.Indent`; unlike iOS's
+  literal em+en spaces it never enters the selection text model, so copies
+  stay clean); narrower panes keep the cozy 1.55/gap layout. Tests:
+  `reading_styled_reporter_test.go`; host tests asserting PHONE HTML must pin
+  the `reporterLayout` seam to false (the host is darwin → reporter default).
 - **Desktop styled pane (Windows/Linux).** Since the milestone-4 swap the
   Windows/Linux reading pane is `styledReadingPane` (`reading_styled_*.go`,
   untagged so the whole engine unit-tests on the Mac): styled runs (red

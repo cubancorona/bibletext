@@ -50,17 +50,41 @@ func TestSearchModeToggleHiddenWhenAIOff(t *testing.T) {
 	defer app.Quit()
 
 	state := aiOffState()
-	toggle := buildSearchModeToggle(state, func(bool) { t.Fatal("onSelect must never fire with AI off") })
-	if toggle == nil {
+	// Notes off TOO. The row owns the Search/Find pair AND the notes bubble, so
+	// what collapses it is having no choice left at all — with notes on there is
+	// still a bubble to press, and it should be there.
+	setNotesEnabled(false)
+	defer setNotesEnabled(true)
+	row := buildSearchModeControls(state, func(searchMode) { t.Fatal("onSelect must never fire with nothing to choose") })
+	if row == nil {
 		t.Fatal("expected a placeholder object")
 	}
 	// Fyne floors every canvas object's MinSize at 1×1, so "collapsed" means at
 	// most that floor — anything larger would be a visible control.
-	if got := toggle.MinSize(); got.Width > 1 || got.Height > 1 {
-		t.Fatalf("with AI off the toggle must collapse to nothing, got MinSize %v", got)
+	if got := row.MinSize(); got.Width > 1 || got.Height > 1 {
+		t.Fatalf("with nothing to choose the row must collapse, got MinSize %v", got)
 	}
-	if texts := collectText(toggle); len(texts) != 0 {
-		t.Fatalf("with AI off the toggle must render no text (no Find button), got %v", texts)
+	if texts := collectText(row); len(texts) != 0 {
+		t.Fatalf("the collapsed row must render no text, got %v", texts)
+	}
+}
+
+// With AI off but notes ON the row still exists — the bubble is the one control
+// left — and it must carry no "Find".
+func TestNotesBubbleSurvivesAIOff(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	state := aiOffState()
+	setNotesEnabled(true)
+	row := buildSearchModeControls(state, func(searchMode) {})
+	if got := row.MinSize(); got.Height <= 1 {
+		t.Errorf("with notes on the row must still show the bubble, got MinSize %v", got)
+	}
+	for _, txt := range collectText(row) {
+		if txt == "Find" || txt == "Search" {
+			t.Errorf("no scripture-search control may exist with AI off, found %q", txt)
+		}
 	}
 }
 
@@ -100,7 +124,7 @@ func TestSidebarForcesKeywordModeWhenAIOff(t *testing.T) {
 	if state.aiSearchMode || state.aiSearchActive {
 		t.Fatal("building the sidebar with AI off must force keyword mode")
 	}
-	for _, txt := range collectText(buildSearchModeToggle(state, func(bool) {})) {
+	for _, txt := range collectText(buildSearchModeControls(state, func(searchMode) {})) {
 		if txt == "Find" {
 			t.Fatal("no Find control may exist with AI off")
 		}

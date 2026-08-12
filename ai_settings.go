@@ -516,14 +516,27 @@ func showAISettings(state *AppState) {
 			setReadingTextSizeID(id)
 		}
 	})
-	// Three named steps in a row where the sheet is wide enough; stacked on a
-	// phone, where the row form clips "Extra large" at the right edge.
-	textSize.Horizontal = cnv.Size().Width >= 500
+	textSize.Horizontal = true
 	textSize.Required = true
+	// Three named steps side by side, but only where three fit. A horizontal
+	// RadioGroup divides its width into equal cells and does not shorten labels,
+	// so on a phone — where the body is ~340pt and this row wants ~382pt — the
+	// last option loses its end ("Extra l"). Stacking is the honest answer at that
+	// width; the sheet scrolls now, so the extra height costs nothing.
+	//
+	// What is left for the options is the sheet body MINUS the group card's own
+	// frame and MINUS the row's label beside them — measure all three rather
+	// than guessing at a screen width, or the row clips again the first time a
+	// label or a card inset changes.
+	textSizeLabel := widget.NewLabel("Text size")
+	if avail := aiPanelSize(cnv.Size()).Width - sheetChromeWidth -
+		settingsCardChromeWidth - textSizeLabel.MinSize().Width; textSize.MinSize().Width > avail {
+		textSize.Horizontal = false
+		textSize.Refresh()
+	}
 	textSize.SetSelected(currentLabel)
-	// Row shape: label left, the stacked sizes filling the row (the label
-	// top-aligns against the first option).
-	textSizeRow := container.NewBorder(nil, nil, widget.NewLabel("Text size"), nil, textSize)
+	// Row shape: label left, the sizes filling the rest of the row.
+	textSizeRow := container.NewBorder(nil, nil, textSizeLabel, nil, textSize)
 
 	// In-app disclosure of where AI prompts go, shown right under the key field
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
@@ -543,17 +556,19 @@ func showAISettings(state *AppState) {
 	}
 
 	var card *fyne.Container // assigned below, before the popup shows
-	var sizeSheet func()     // assigned below; re-measures the sheet + popup
+	// fitSheet re-measures and re-sizes the sheet; assigned once the popup exists
+	// (see the sizing block at the end of this function).
+	var fitSheet func()
 
 	// The Translations section (the reader's own API.Bible key). Its area
 	// grows when a test result appears or the key arrives, so it re-measures
 	// the sheet the same way the assistant flip does.
 	bibleKeys, bibleKeysFooter := bibleKeySection(state, pal, func() {
-		if sizeSheet != nil {
-			sizeSheet()
+		if fitSheet != nil {
+			fitSheet()
+			fitSheet()
 		}
 	})
-
 	applyAssistant = func() {
 		// Mirror the choice into the native selection menus right away, so the
 		// Study-with-AI submenu is gone (or back) on the very next selection.
@@ -569,10 +584,19 @@ func showAISettings(state *AppState) {
 			aiDisclosure.Hide()
 		}
 		// The card's height changes between the one-line hint (None) and the full
-		// key+model form — re-measure so the popup's paint size and its
-		// tap-outside-to-dismiss boundary track the content (see sizeSheet).
-		if sizeSheet != nil {
-			sizeSheet()
+		// key+model form — and fyne's PopUp uses its Resize-time innerSize both to
+		// paint and as the tap-outside-to-dismiss boundary. Without re-measuring,
+		// a mid-sheet flip leaves that boundary stale: taps on the grown card
+		// phantom-dismiss the sheet mid-key-entry (grow case), or a dead band
+		// below the shrunken card swallows outside-taps (shrink case).
+		//
+		// Resize twice: a wrapping RichText that was hidden (the disclosure on a
+		// None-state open) reports a single-line MinSize until it has been laid
+		// out at its real width — which the FIRST Resize's layout pass does — so
+		// only the second measurement is wrap-accurate on the grow flip.
+		if fitSheet != nil {
+			fitSheet()
+			fitSheet()
 		}
 	}
 	// Set the radio's visual selection WITHOUT firing its OnChanged (which would
@@ -623,37 +647,45 @@ func showAISettings(state *AppState) {
 	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
 	hint.TextSize = 11
 
-	// The settings sheet claims a little more width than the AI panels (a
-	// tighter 12pt gutter each side): the sheet scrolls now, and its scrollbar
-	// lives INSIDE the card, so the form itself is clamped a scrollbar's width
-	// narrower — without the extra room, rows that fit the old static sheet
-	// would clip at the right edge.
-	sw := cnv.Size().Width - 24
-	if sw > 560 {
-		sw = 560
-	}
-	if sw < 280 {
-		sw = 280
-	}
-
-	// The form scrolls only when the sections outgrow the screen (small
-	// phones); otherwise the sheet hugs its content exactly as before.
-	scrollBody := container.New(fixedWidthLayout{width: sw - 40}, form)
-	scroll := container.NewVScroll(scrollBody)
-	headerBar := container.NewVBox(header, widget.NewSeparator())
-	hintBar := container.NewPadded(hint)
-
-	inner := container.NewBorder(headerBar, hintBar, nil, nil, scroll)
+	// The settings body scrolls; the title bar and the closing hint do not. A sheet
+	// with a scrolling middle keeps the ✕ reachable no matter how long the body
+	// grows, which is the failure this replaced: the sheet used to be exactly as
+	// tall as its content, so a new section pushed the bottom of it off the screen
+	// with no way to reach what was cut off. See sheet_fit.go.
+	//
+	// The scroll only engages when the content genuinely does not fit — under the
+	// cap the sheet is its natural height and looks exactly as it always did.
+	// squeezeWidthLayout, not the bare form: a scroll widens its content to the
+	// content's MinSize and clips the overflow sideways, with no horizontal bar to
+	// reach it. See sheet_fit.go.
+	formBody := container.New(squeezeWidthLayout{}, form)
+	formScroll := container.NewVScroll(formBody)
+	inner := container.NewBorder(
+		container.NewVBox(header, widget.NewSeparator()),
+		container.NewPadded(hint),
+		nil, nil,
+		formScroll,
+	)
 	// Chrome text at the standard 18px (the tighter layout — not a smaller font —
 	// does the de-cluttering). compactTheme stays as the one knob if we ever want to
 	// nudge just the sheet's text size.
 	themed := container.NewThemeOverride(inner, compactTheme{Theme: state.theme, text: 18})
 
-	// A CARD-sized sheet at a fixed width, auto-sizing its height to the content
-	// up to what the screen allows. The popup's overlay-background rectangle is
-	// only as big as the card (hidden behind the surface fill), so it never
-	// shows as a white wall.
-	x := (cnv.Size().Width - sw) / 2
+	// A CARD-sized sheet at a fixed width, taking its height from the content but
+	// NEVER taller than the screen. The fixed width keeps the popup's overlay-
+	// background rectangle only as big as the card (hidden behind the surface
+	// fill), so it never shows as a white wall.
+	ps := aiPanelSize(cnv.Size())
+	card = container.New(fixedWidthLayout{width: ps.Width},
+		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
+
+	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
+	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
+	// the tap-to-dismiss on PopUp.isInsideContent, which reads innerSize, and without an
+	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
+	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
+	popup = widget.NewPopUp(card, cnv)
+	x := (cnv.Size().Width - ps.Width) / 2
 	if x < 0 {
 		x = 0
 	}
@@ -662,42 +694,27 @@ func showAISettings(state *AppState) {
 		y = pos.Y + 16
 	}
 
-	card = container.New(fixedWidthLayout{width: sw},
-		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
-
-	// sizeSheet pins the scroll viewport: the full form height when it fits
-	// under the sheet's top offset, the remaining screen otherwise. Both the
-	// assistant flip and the Bible-key area growing call it, because fyne's
-	// PopUp uses its Resize-time innerSize both to paint and as the
-	// tap-outside-to-dismiss boundary (see the resize-twice note below).
-	sizeSheet = func() {
-		avail := cnv.Size().Height - y - 24 -
-			headerBar.MinSize().Height - hintBar.MinSize().Height
-		want := form.MinSize().Height
-		if want > avail {
-			want = avail
+	// Re-measured rather than computed once: the sheet's height changes while it is
+	// open (assistant ↔ None swaps the whole key form in and out), and the reader's
+	// text-size choice changes it too.
+	fitSheet = func() {
+		if popup == nil || card == nil {
+			return
 		}
-		if want < 160 {
-			want = 160
-		}
-		scroll.SetMinSize(fyne.NewSize(0, want))
-		if popup != nil && card != nil {
-			// Resize twice: a wrapping RichText that was hidden reports a
-			// single-line MinSize until it has been laid out at its real width
-			// — which the FIRST Resize's layout pass does — so only the second
-			// measurement is wrap-accurate on a grow flip.
-			popup.Resize(card.MinSize())
-			popup.Resize(card.MinSize())
-		}
+		pos, sz := cnv.InteractiveArea()
+		h := scrollingSheetHeight(
+			popup.MinSize().Height,
+			formScroll.MinSize().Height,
+			formBody.MinSize().Height,
+			sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, y),
+		)
+		popup.Resize(fyne.NewSize(card.MinSize().Width, h))
 	}
-
-	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
-	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
-	// the tap-to-dismiss on PopUp.isInsideContent, which reads innerSize, and without an
-	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
-	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
-	popup = widget.NewPopUp(card, cnv)
-	sizeSheet()
+	// Twice, for the wrapping-RichText reason applyAssistant documents: the two
+	// disclosure paragraphs report a single line until a layout pass has run them
+	// at their real width, and the first Resize is what runs it.
+	fitSheet()
+	fitSheet()
 	popup.ShowAtPosition(fyne.NewPos(x, y))
 
 	// done() (overlay-restore cleanup) is called directly by the ✕. An outside-tap close
@@ -760,6 +777,12 @@ func sheetGap() fyne.CanvasObject {
 	r.SetMinSize(fyne.NewSize(1, 16))
 	return r
 }
+
+// settingsCardChromeWidth is what a group card spends on its own frame — the
+// surface's border plus the padding inside it, both edges — so a row can work
+// out what width is really left for its control. The sheet's own frame is
+// sheetChromeWidth (sheet_fit.go); a row inside a card pays both.
+const settingsCardChromeWidth = 14
 
 // settingsGroup is one grouped-list inset card: a section's rows on their own
 // surface under the small-caps header. THIS is what makes the sheet read from

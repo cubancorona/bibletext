@@ -34,6 +34,20 @@ APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"   # paid Apple Developer Program team
 IOS_MIN="13.0"
+
+# --dev adds the bibletextdev build tag, which compiles in the Links tab: a page
+# of shared-link scenarios that call the real HandleShareLink. It exists because
+# a universal link cannot be triggered in the simulator and needs a tap from
+# another app on a device, so this is the only way to exercise that path
+# directly. Release builds never pass the tag, so the page cannot ship —
+# dev_links_off.go is what a shipping build compiles instead.
+DEV_TAG=""
+for arg in "$@"; do
+    case "$arg" in
+        --dev) DEV_TAG=",bibletextdev" ;;
+    esac
+done
+
 WORK="$(mktemp -d /tmp/bibletext-device.XXXXXX)"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
@@ -145,7 +159,7 @@ CC="$(xcrun --sdk iphoneos -f clang)"
 CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
     CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
     CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-    go build -o /tmp/bibletext-ios-arm64 "$REPO_ROOT/cmd/mobile"
+    go build ${DEV_TAG:+-tags "${DEV_TAG#,}"} -o /tmp/bibletext-ios-arm64 "$REPO_ROOT/cmd/mobile"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
 cp /tmp/bibletext-ios-arm64 "$APP/$EXE"; chmod +x "$APP/$EXE"
 note "binary arch: $(lipo -archs "$APP/$EXE")"

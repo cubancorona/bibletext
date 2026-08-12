@@ -361,23 +361,46 @@ func showVerseOfDay(state *AppState) {
 	readBtn.Importance = widget.HighImportance
 	closeBtn := widget.NewButton("Close", closeAnd(nil))
 
-	content := container.NewVBox(
+	// The verse scrolls; the kicker, reference and buttons stay fixed. A long
+	// psalm verse at the Extra-large text size on a short canvas (Android
+	// split-screen is the worst) pushed the button row past the frame the modal
+	// renderer clamps to — buttons on a modal that ignores outside taps (audit
+	// finding). Under the cap the scroll never engages and the card looks
+	// exactly as before.
+	bodyScroll := container.NewVScroll(container.New(squeezeWidthLayout{}, body))
+	content := container.NewBorder(
 		kicker,
-		body,
-		ref,
-		widget.NewSeparator(),
-		container.NewHBox(layout.NewSpacer(), closeBtn, readBtn),
+		container.NewVBox(ref, widget.NewSeparator(),
+			container.NewHBox(layout.NewSpacer(), closeBtn, readBtn)),
+		nil, nil,
+		bodyScroll,
 	)
 	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
-	popup.Resize(fyne.NewSize(w, bodyH+150))
+	fitVOTD := func() {
+		pos, sz := cnv.InteractiveArea()
+		maxH := sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16)
+		h := scrollingSheetHeight(
+			popup.MinSize().Height,
+			bodyScroll.MinSize().Height,
+			body.MinSize().Height,
+			maxH,
+		)
+		popup.Resize(fyne.NewSize(w, h))
+	}
+	_ = bodyH
+	fitVOTD()
 
 	// Re-measure once the real layout has landed so the card fits the verse snugly.
+	// Visible() gates it: a dismissed card must not re-measure — in the app that
+	// is mere waste, but under `go test -race` a stale timer's font measurement
+	// runs concurrently with the next test's and trips go-text's single-threaded
+	// glyph cache (the real app measures only on its one UI thread).
 	time.AfterFunc(40*time.Millisecond, func() {
 		fyne.Do(func() {
-			if popup != nil {
-				popup.Resize(fyne.NewSize(w, body.MinSize().Height+150))
+			if popup != nil && popup.Visible() {
+				fitVOTD()
 			}
 		})
 	})

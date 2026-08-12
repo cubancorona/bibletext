@@ -331,11 +331,11 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// "outside" it, so it can't self-dismiss.
 		popup = widget.NewPopUp(card, cnv)
 		w, h := pickerVerseSize(cnv)
-		popup.Resize(fyne.NewSize(w, h))
 		topY := float32(12)
 		if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 			topY = pos.Y + 12
 		}
+		popup.Resize(fyne.NewSize(w, h))
 		x := (cnv.Size().Width - w) / 2
 		if x < 0 {
 			x = 0
@@ -350,16 +350,31 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// it by exactly the rest so its bottom lands on the keyboard top. Geometry only
 		// shifts INSIDE the full-screen card (the popup is never resized), so the picker
 		// can't self-dismiss. Guarded against a closed popup.
+		var lastOverlap float32 // the keyboard's current on-screen overlap (0 = hidden)
 		if kbInset != nil {
-			belowCard := cnv.Size().Height - topY - h // card bottom → screen bottom
-			cardPad := 2 * theme.Padding()            // surface wraps the body in NewPadded twice
+			cardPad := 2 * theme.Padding() // surface wraps the body in NewPadded twice
 			gKeyboardInsetSetter = func(overlap float32) {
 				if popup == nil || !popup.Visible() {
 					return
 				}
+				lastOverlap = overlap
+				belowCard := cnv.Size().Height - topY - h // card bottom → screen bottom
 				inset := overlap - belowCard - cardPad
 				if inset < 0 {
 					inset = 0
+				}
+				// CLAMPED against the card, not taken on faith. The popup is
+				// sized to h, but the non-modal renderer floors at the content's
+				// MinSize — and this spacer is part of that minimum, so on a
+				// short canvas (landscape) an unclamped inset grew the card
+				// PAST h and pushed the verse row it exists to protect off the
+				// bottom of the screen (audit finding). The ceiling is however
+				// much slack the card actually has.
+				if maxInset := h - (card.MinSize().Height - kbInset.MinSize().Height); inset > maxInset {
+					inset = maxInset
+					if inset < 0 {
+						inset = 0
+					}
 				}
 				kbInset.SetMinSize(fyne.NewSize(0, inset))
 				body.Refresh()
@@ -386,6 +401,45 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// which bypasses closePicker — so the reading overlay would stay suppressed and the
 		// pane blank. Poll until the popup is gone by ANY route, then restore the overlay
 		// + stop receiving keyboard updates (idempotent with closePicker).
+		// REFIT WHEN THE CANVAS CHANGES SHAPE. Fyne deliberately does not
+		// resize PopUp overlays on a canvas resize, so after a rotation this
+		// card kept its portrait height on a landscape canvas — the verse
+		// fields and the Go button, the picker's only commit path, hung off the
+		// bottom of the screen (audit finding, upheld 3/3).
+		//
+		// (An adjustResize manifest entry briefly rode along here to make this
+		// refit double as Android's keyboard lift — reverted the same day: an
+		// IME-shrunk canvas flips the LIVE smallest-dimension tablet test on
+		// landscape Android tablets, and layoutWatcher then thrashes the whole
+		// window between the regular and compact layouts mid-keystroke,
+		// dismissing the keyboard each time. Android's lift needs the iOS
+		// approach instead: the IME height fed from the native side.)
+		//
+		// This is the ONE exception to the "the popup is never resized" rule
+		// above, and it does not reopen that bug: the rule exists because
+		// resizing mid-TAP re-targets the in-flight tap to the popup background
+		// and self-dismisses — and no tap spans a canvas resize.
+		lastCanvas := cnv.Size()
+		refit := func() {
+			if popup == nil || !popup.Visible() {
+				return
+			}
+			w, h = pickerVerseSize(cnv)
+			topY = 12
+			if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+				topY = pos.Y + 12
+			}
+			popup.Resize(fyne.NewSize(w, h))
+			nx := (cnv.Size().Width - w) / 2
+			if nx < 0 {
+				nx = 0
+			}
+			popup.Move(fyne.NewPos(nx, topY))
+			if gKeyboardInsetSetter != nil {
+				gKeyboardInsetSetter(lastOverlap) // re-clamp against the new geometry
+			}
+		}
+
 		var watchDismiss func()
 		watchDismiss = func() {
 			if popup == nil || !popup.Visible() {
@@ -401,6 +455,10 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 					}
 				}
 				return
+			}
+			if now := cnv.Size(); now != lastCanvas {
+				lastCanvas = now
+				refit()
 			}
 			time.AfterFunc(200*time.Millisecond, func() { fyne.Do(watchDismiss) })
 		}

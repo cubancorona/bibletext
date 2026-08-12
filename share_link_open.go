@@ -113,6 +113,11 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	selectBook(state, t.Book, false)
 	state.CurrentChapter = chapter
 	addRecentChapter(state, t.Book, chapter)
+	// A tapped link always places the view, even when it names the passage
+	// already on screen — re-opening the same link is how a reader goes BACK to
+	// the note after scrolling away (see AppState.forceReposition).
+	state.forceReposition = true
+	state.restore = nil // an arrival outranks "where you left off"; see openSearchResultRange
 
 	// Highlight the shared verses. A range uses the same inclusive model the
 	// app's own search highlight uses, so the web page and the app light up the
