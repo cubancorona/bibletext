@@ -282,7 +282,11 @@ func renderChapterList(v loadedVersion, book, slug string, chapters []int) strin
 // writeNotFound emits the SITE-WIDE 404 at the root. GitHub Pages serves it for
 // any unknown path, which is the only server-side hook a static host offers —
 // so it is where a mistyped or aging link gets rescued rather than dead-ending.
-// It is careful never to send a Catholic-only book to a version that lacks it.
+// Today that rescue is only the three whole-Bible links below: the body is
+// fixed, the `versions` argument is unused, and the #guess paragraph is left
+// empty — nothing populates it. Any per-book or per-version guessing (and the
+// care that would need, so a Catholic-only book is never offered under a version
+// lacking it) remains to be written.
 func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 	body := `<div class="wrap"><h1 class="ref">Not found</h1>` +
 		`<p class="ver">That page isn't here — but the whole Bible is.</p>` +

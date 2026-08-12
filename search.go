@@ -532,7 +532,10 @@ func termHighlightSegments(text string, terms []string, base, highlight fyne.The
 }
 
 // matchRanges returns merged, ordered byte ranges where any term occurs. It
-// bails out on multi-byte text to keep byte offsets aligned with the original.
+// bails out when lowercasing CHANGES the byte length, which is what would put
+// the offsets out of step with the original. That is rarer than "multi-byte":
+// the curly quotes and apostrophes the decoders emit lowercase to the same
+// length, so ordinary scripture text highlights normally.
 func matchRanges(text string, terms []string) []matchRange {
 	lower := strings.ToLower(text)
 	if len(lower) != len(text) {

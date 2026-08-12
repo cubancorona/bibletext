@@ -2,8 +2,9 @@ package bibletext
 
 // The cross-platform audio controller. It owns playback state for the reader's
 // play button but holds NO AVFoundation handles — those live in the per-platform
-// native files (audio_ios.go for the real engine; audio_other.go no-ops for the
-// rest). This struct only resolves audioForChapter(state) into native calls and
+// native files — audio_ios.go, audio_macos.go, audio_android.go and
+// audio_other.go, each a real engine for its platform, not a stub.
+// This struct only resolves audioForChapter(state) into native calls and
 // tracks the play state the native layer reports back, so the button can render
 // the right glyph (play vs pause, recorded vs voice).
 //

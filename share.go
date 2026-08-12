@@ -50,8 +50,10 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 }
 
 // shareVerseLink shares a link to the passage on the web reader
-// (bibletext.co.uk/read/…), so the recipient can read it — and keep reading —
-// without installing anything.
+// (bibletext.co.uk/<version>/<book-slug>/<chapter>/), so the recipient can read
+// it — and keep reading — without installing anything. There is no /read/
+// prefix: the version id is the FIRST path segment, and that shape is part of
+// the frozen URL contract (share_link.go).
 //
 // The verse span comes from the SAME positional attribution the citation uses
 // (normalizeShareSelection), so the reference in the message and the verses the

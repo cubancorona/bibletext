@@ -58,7 +58,14 @@ func (n SharedNote) key() string { return noteKey(n.VersionID, n.Book, n.Chapter
 
 // notesMax bounds the store. Notes are tiny, but the preferences blob is read
 // and written on ordinary navigation, so it must not grow without limit if
-// somebody opens hundreds of shared links. The oldest are dropped first.
+// somebody opens hundreds of shared links.
+//
+// WHICH notes are dropped is arbitrary, not oldest-first: writeNotes sorts by
+// storage key (version|book|chapter, for a byte-stable blob) and keeps the
+// TAIL, so the discards are whichever keys sort lowest — every "bsb|…" note
+// goes before any "web|…" one, and a note that arrived seconds ago can be
+// evicted while a months-old one survives. Received is not consulted here.
+// (This comment used to claim oldest-first; it never did that.)
 const notesMax = 200
 
 func readNotes(p prefStore) map[string]SharedNote {

@@ -88,7 +88,8 @@ func (s noteSort) label() string {
 // once that translation is picked again.
 //
 // Both orders are TOTAL: ties fall through to the canon, then chapter, then
-// verse, so the list never reshuffles between two renders of the same data.
+// verse, then translation — the full storage key — so the list never reshuffles
+// between two renders of the same data.
 // Notes stored before Received existed have a zero timestamp and sort as the
 // oldest, which is the truthful answer — they did arrive first.
 func sortedNotes(notes map[string]SharedNote, bookOrder map[string]int, by noteSort) []SharedNote {
@@ -115,7 +116,17 @@ func sortedNotes(notes map[string]SharedNote, bookOrder map[string]int, by noteS
 		if a.VerseLo != b.VerseLo {
 			return a.VerseLo < b.VerseLo, true
 		}
-		return false, false // genuinely equal
+		// Translation last, and it is what MAKES the order total: notes are keyed
+		// version|book|chapter (notes_store.go), so two notes can agree on book,
+		// chapter and verse and still be different notes — one from a WEB link,
+		// one from a BSB link on the same passage. Without this they compared
+		// equal, sort.Slice is not stable, and the list could reshuffle between
+		// two renders of unchanged data — the very thing the doc above promises
+		// it never does.
+		if a.VersionID != b.VersionID {
+			return a.VersionID < b.VersionID, true
+		}
+		return false, false // the same note
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if by == sortNewest && out[i].Received != out[j].Received {

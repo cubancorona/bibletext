@@ -15,8 +15,8 @@ package bibletext
 //
 // The same table serves BOTH the app's share-link builder and the site
 // generator, so a URL the app emits and a page the generator writes can never
-// disagree. bookslugs_test.go holds a golden copy of every pair: editing a slug
-// fails CI loudly, which is the point.
+// disagree. share_link_test.go holds a golden copy of every pair, and asserts
+// the table is append-only: editing a slug fails CI loudly, which is the point.
 //
 // Greek Esther and Greek Daniel deliberately share the "esther"/"daniel" slugs
 // with their shorter protocanonical forms (catholic.go carries them under the

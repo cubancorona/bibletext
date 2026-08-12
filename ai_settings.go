@@ -826,8 +826,10 @@ func providerKeyLabel(info providerInfo) string {
 }
 
 // compactTheme shrinks only the base text size of a subtree (applied via
-// container.NewThemeOverride), delegating everything else to the app theme. It
-// renders the settings sheet's chrome tighter than the 18px reading text size.
+// container.NewThemeOverride), delegating everything else to the app theme.
+// Its callers pass the size they want: the model button at 15 and the notes sort
+// button at 13 both come out smaller than the 18pt base, while the settings
+// sheet passes 18 and so is unchanged by it.
 type compactTheme struct {
 	fyne.Theme
 	text float32

@@ -159,10 +159,12 @@ actually changed, or respect `ShowAnimations()` with a discrete fallback.
 ## How the build uses it (applied by the mobile packaging scripts)
 
 `go.mod` ships **stock** Fyne with **no `replace`**, so `go build ./...`,
-`go run ./cmd/desktop`, and `go test ./...` are one-line with no setup — correct,
-because the drawloop bug is iOS-only (`//go:build darwin && ios`) and desktop
-builds don't get either patch (the caret-blink fix *would* apply to desktop, but
-the desktop CPU cost is far smaller and stock keeps those builds byte-identical).
+`go run ./cmd/desktop`, and `go test ./...` are one-line with no setup. That is a
+statement about LOCAL builds only: the three desktop release jobs in
+`.github/workflows/release.yml` run `setup-fyne-patch.sh` and inject the
+`replace` too, so the released macOS, Windows and Linux binaries carry the
+patches (the caret-blink fix and the current emoji font) just as the mobile
+builds do. Only an ad-hoc `go build` on your machine is stock.
 
 The patches are applied on **every mobile packaging path**:
 `scripts/run-ios-device.sh`, `scripts/run-ios-sim.sh`, `scripts/release-ios.sh`
@@ -260,6 +262,7 @@ drew a notdef box).
 Removal: delete the two `patches/NotoColorEmoji*` files and the `.patch`, and
 drop the three emoji lines from `setup-fyne-patch.sh`.
 
-NOTE the scope: only builds that go through the patch scripts get this —
-i.e. every MOBILE build. Desktop builds ship stock go.mod and keep the old
-set until they too build against the patched tree.
+NOTE the scope: only builds that go through the patch scripts get this — every
+MOBILE build and every desktop RELEASE build (the release workflow applies the
+patches). A local `go build`/`go run ./cmd/desktop` still uses stock go.mod and
+so still shows Fyne's old emoji set.

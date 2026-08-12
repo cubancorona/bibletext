@@ -3,9 +3,12 @@ package bibletext
 // Sizing a card sheet so it can never run off the bottom of the screen.
 //
 // THE BUG THIS EXISTS TO PREVENT. A card sheet (the Settings sheet, the audio
-// source menu, the note offer) is a non-modal widget.PopUp sized from its
-// content's MinSize and pinned near the top of the canvas. Nothing in Fyne
-// clamps that. popUpRenderer.Layout takes
+// source menu) is a NON-MODAL widget.PopUp sized from its content's MinSize and
+// pinned near the top of the canvas. Nothing in Fyne clamps that. (Modal popups
+// are a different animal and are not what this file is for: their renderer DOES
+// clamp the frame to the canvas — though children can still overflow it
+// invisibly, which is its own trap. The note offer is one of those.)
+// popUpRenderer.Layout takes
 //
 //	innerSize := p.innerSize.Max(p.MinSize())
 //

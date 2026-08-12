@@ -31,7 +31,11 @@ cd cmd/mobile  && fyne package -os iossimulator --app-id uk.co.bibletext
 
 **Patched Fyne (iOS scroll-lag + caret-CPU fixes).** `go.mod` ships **stock**
 Fyne, so `go build ./...` / `go run ./cmd/desktop` / `go test ./...` are
-one-line with no setup step. Two small in-Fyne fixes: the `drawloop`
+one-line with no setup step. FOUR in-Fyne fixes (see `patches/`, all applied
+unconditionally by `setup-fyne-patch.sh`): the Noto Color Emoji font swap
+(Fyne's bundled set is from 2016 and lacks anything newer than Emoji 11), the
+Android `onNewIntent` forward (without it warm shared links are dropped — the
+Android build hard-fails if this patch is missing), the `drawloop`
 idle-timeout change (100ms→2ms, iOS scroll lag; inert off-iOS) and the Entry
 caret discrete-blink change (the stock smooth caret fade full-canvas repaints
 ~8×/s while any entry has focus → 30-60% CPU / battery burn; the patch snaps
@@ -341,10 +345,12 @@ change can never clobber the live landing or App Store pages.
   installed here, so the pre-iOS-17 audio branch has never run) — those need a
   real device.
 - **Two reading headers — edit BOTH.** The reading toolbar is built per platform:
-  desktop + Android use `chapterHeader` (`reading.go`, via `buildReadingView`),
-  but **iOS uses its own `chapterHeaderMobile`** (`reading_ios.go`, via
-  `buildReadingViewMobile`). A header control (e.g. the audio play button) must be
-  added to *both* or it won't appear on the phone — `reading.go` alone is not the
+  desktop uses `chapterHeader` (`reading.go`, via `buildReadingView`), while
+  **both phones use `chapterHeaderMobile`** (`chapter_header_mobile.go`, tagged
+  `ios || android`, via each platform's `buildReadingViewMobile`). Android reaches
+  `chapterHeader` only through the bridge-absent Fyne fallback. A header control
+  (e.g. the audio play button) must be added to *both* or it won't appear on the
+  phones — `reading.go` alone is not the
   iOS path.
 - **Per-chapter audio (iOS + macOS + Android).** `audio.go` `recordedURLFor`
   resolves what to play, dispatched by translation so each version plays a recording made from its
@@ -366,8 +372,10 @@ change can never clobber the live landing or App Store pages.
   (the chosen source, or the per-chapter default). `audioController` (`audio_controller.go`, the package
   singleton `gAudio`, untagged) tracks play state and drives the per-platform
   `nativeAudio*` shims; the reading-header play button is `audio_button.go`
-  (recorded → MediaPlay/Pause; TTS → the bundled `iconAudioWave` waveform glyph in
-  `icons_embed.go`), shown only where `chapterAudioAvailable()` (= an engine exists AND this
+  (collapsed it is a single speaker glyph; expanded, play/pause is always
+  MediaPlay/MediaPause — `iconAudioWave` in `icons_embed.go` is the SOURCE
+  selector's glyph, person = recording vs waveform = read-aloud, not a play
+  button), shown only where `chapterAudioAvailable()` (= an engine exists AND this
   chapter has a recording or the platform has TTS).
   **The native engine runs on both Apple platforms.** `audio_ios.go` (cgo,
   `//go:build ios`) wraps AVPlayer + AVSpeechSynthesizer + AVAudioSession(.playback) +
