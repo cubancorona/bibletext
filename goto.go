@@ -318,7 +318,8 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 
 	// Verse row at the BOTTOM (above the inset spacer). Full-screen card; the popup is
 	// never resized — see the popup section.
-	body := container.NewBorder(header, verseRow, left, nil, container.NewPadded(chapterPane))
+	centerPane := container.NewPadded(chapterPane)
+	body := container.NewBorder(header, verseRow, left, nil, centerPane)
 	card := surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
 
 	if withVerse && fyne.CurrentDevice().IsMobile() {
@@ -370,8 +371,27 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 				// PAST h and pushed the verse row it exists to protect off the
 				// bottom of the screen (the implementation requirement). The ceiling is however
 				// much slack the card actually has.
-				if maxInset := h - (card.MinSize().Height - kbInset.MinSize().Height); inset > maxInset {
-					inset = maxInset
+				slack := func() float32 {
+					return h - (card.MinSize().Height - kbInset.MinSize().Height)
+				}
+				// On a SHORT canvas the grids' own minimum can leave far less
+				// slack than the keyboard needs — measured on a landscape phone:
+				// 155pt wanted against 70pt available, leaving the verse row a
+				// third of a screen UNDER the keyboard, i.e. the reader could not
+				// see the field they were typing into. Collapse the book and
+				// chapter panes in exactly that case: a reader typing a verse has
+				// already chosen both, so the row wins over the grids. They come
+				// straight back when the keyboard goes down (inset 0 fits, so the
+				// panes are shown again below).
+				if inset > slack() {
+					centerPane.Hide()
+					left.Hide()
+				} else {
+					centerPane.Show()
+					left.Show()
+				}
+				if max := slack(); inset > max {
+					inset = max
 					if inset < 0 {
 						inset = 0
 					}
@@ -412,8 +432,10 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// IME-shrunk canvas flips the LIVE smallest-dimension tablet test on
 		// landscape Android tablets, and layoutWatcher then thrashes the whole
 		// window between the regular and compact layouts mid-keystroke,
-		// dismissing the keyboard each time. Android's lift needs the iOS
-		// approach instead: the IME height fed from the native side.)
+		// dismissing the keyboard each time. Android's lift is now the iOS
+		// approach: BtBridge observes the IME on the activity window and feeds
+		// gKeyboardInsetSetter through btaKeyboardChanged — a number, never a
+		// canvas resize. API 30+; older Androids keep the status quo.)
 		//
 		// This is the ONE exception to the "the popup is never resized" rule
 		// above, and it does not reopen that bug: the rule exists because
