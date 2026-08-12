@@ -170,7 +170,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		// Named for the same reason the assistant's row is: the label must
 		// still identify the key when read on its own — and the link rides the
 		// label row, top-right of the box, matching the assistant section.
-		keyLinkRow(container.NewCenter(widget.NewLabel("API.Bible key")), link),
+		container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel("API.Bible key")), link),
 		// Field on its own full-width line: an API key is long.
 		entry,
 		container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),

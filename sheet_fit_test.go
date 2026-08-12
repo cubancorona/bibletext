@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
@@ -241,44 +240,36 @@ func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {
 	}
 }
 
-// The key sections' "status … Get a key ↗" row must never let the two collide.
-// Measured in the REAL sheet (the row is 354pt wide there, not the sheet's 382):
-// the API.Bible hint left a 13pt gap and the longer Gemini hint OVERLAPPED the
-// link by 47pt — owner-reported as cramped. keyLinkRow stacks instead of
-// overlapping, and keeps a real gap when they do share a line.
-func TestKeyLinkRowNeverCollides(t *testing.T) {
+// The key sections put "Get a key ↗" top-right of the box, on the label row.
+// Two things must hold, and BOTH were broken by a custom layout that has since
+// been removed: the label has to start at the left edge like every other row in
+// the card (it was being centred 53pt in), and the row must be ONE row high (it
+// was reserving space for a stacked fallback it never used, ~38pt of dead air in
+// every key box). A plain Border gives each side its MinSize and does both.
+func TestKeyHeaderRowIsFlushAndSingleHeight(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 
-	for _, hint := range []string{
-		"Free for personal use — no card, no charge.",
-		"key from Google AI Studio (starts with “AIza” or “AQ.”)",
-		"✓ Saved in the Keychain.",
-	} {
-		status := canvas.NewText(hint, theme.Color(theme.ColorNameForeground))
-		status.TextSize = 12
+	for _, label := range []string{"API.Bible key", "Gemini key", "ChatGPT key"} {
+		lbl := container.NewCenter(widget.NewLabel(label))
 		link := widget.NewHyperlink("Get a key ↗", nil)
-		row := keyLinkRow(status, link)
+		row := container.NewBorder(nil, nil, lbl, link)
 
-		for _, w := range []float32{354, 320, 280, 240} {
-			row.Resize(fyne.NewSize(w, row.MinSize().Height))
-			sp, lp := status.Position(), link.Position()
-			stacked := lp.Y > sp.Y+2
-			if !stacked {
-				// Sharing a line: the link must start clear of the text.
-				if gap := lp.X - (sp.X + status.MinSize().Width); gap < 0 {
-					t.Errorf("width %v, hint %q: link overlaps the status by %vpt", w, hint, -gap)
-				}
-			}
-			// Either way the link must stay inside the row.
-			if right := lp.X + link.MinSize().Width; right > w+0.5 {
-				t.Errorf("width %v, hint %q: link ends at %v, past the row", w, hint, right)
-			}
-			if lp.X < 0 {
-				t.Errorf("width %v, hint %q: link starts off the left edge at %v", w, hint, lp.X)
-			}
+		if h, want := row.MinSize().Height, link.MinSize().Height; h > want+0.5 {
+			t.Errorf("%s: row is %vpt tall for a %vpt control — dead vertical space", label, h, want)
+		}
+		row.Resize(fyne.NewSize(354, row.MinSize().Height))
+		inner := lbl.Objects[0]
+		if x := lbl.Position().X + inner.Position().X; x > 0.5 {
+			t.Errorf("%s: label text starts %vpt in, not flush left", label, x)
+		}
+		if gap := link.Position().X - (lbl.Position().X + lbl.MinSize().Width); gap < 0 {
+			t.Errorf("%s: link overlaps the label by %vpt", label, -gap)
+		}
+		if right := link.Position().X + link.Size().Width; right > 354.5 {
+			t.Errorf("%s: link ends at %v, past the row", label, right)
 		}
 	}
 }
