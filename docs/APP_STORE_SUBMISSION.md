@@ -56,8 +56,11 @@ go vet ./...
 ./scripts/release-ios.sh
 ```
 
-The last command must finish with `build/BibleText.ipa is ready (version 1.1.7,
-build 127)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
+The last command must finish with `build/BibleText.ipa is ready (version 1.1.8,
+build 157)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
+
+Run it as `BIBLETEXT_SHORT_VERSION=1.1.8 ./scripts/release-ios.sh` — the script's
+own default is "1.0", and the marketing version must match the ASC record.
 
 ## Store metadata prepared locally
 
@@ -73,12 +76,16 @@ ignored by Git). The prepared English (UK) values are:
 - Support URL: <https://bibletext.co.uk/support.html>
 - Marketing URL: <https://bibletext.co.uk/>
 - Privacy URL: <https://bibletext.co.uk/privacy.html>
-- What's New (1.1.7 DRAFT — needs the owner's approval before it goes in):
-  Find and AI study now recommend each provider's most capable model, wait long
-  enough for it to answer, and let you cancel or switch to a faster model while
-  you wait. Find results are more complete, error messages are clearer, and the
-  Find screen notices a newly added key right away. Settings reflects Grok's
-  new home, SpaceXAI. Plus cleaner shared citations.
+- What's New (1.1.8 DRAFT — needs the owner's approval before it goes in; the
+  text itself is staged at `build/appstore/metadata/en-GB/whats-new-1.1.8.txt`):
+  Someone can now send you a verse with a note attached. Tap their link and
+  BibleText opens the passage with their message beside it, in the translation
+  they were reading. Your notes are collected on the Search tab, where you can
+  search them, sort them and see when each one arrived. The New King James
+  Version is now available, and works as soon as you install the app. Settings
+  has been rebuilt around what you actually change, and reading is tidier
+  throughout: the words of Christ keep their red when a verse is highlighted,
+  and controls that were hard to make out in dark mode are now clearly drawn.
 
 `build/appstore/review_notes.txt` has current feature paths, iPad behaviour,
 the optional-AI test procedure, data flow, age-rating context, and contact
@@ -220,7 +227,8 @@ Account Holder/App Manager must confirm each item:
 2. Digital Services Act trader status and required contact display are complete.
 3. Country-specific availability declarations (including China mainland,
    Vietnam, and South Korea if applicable to the account type) are complete.
-4. Version 1.1.7 exists for iOS and is in an editable state. While it is
+4. Version 1.1.8 exists for iOS and is in an editable state (it does NOT yet —
+   see "Gate" below; it must be created before a build can attach). While it is
    editable, also set the version-level Privacy Policy URL, Marketing URL, and
    Support URL to the bibletext.co.uk pages (standing TODO from 1.1.6).
 5. English (UK) metadata, both screenshot sets, categories, price, territories,
@@ -236,7 +244,7 @@ Account Holder/App Manager must confirm each item:
 9. Release mode (manual, automatic, or phased) and the intended release date are
    selected deliberately.
 10. Upload `build/BibleText.ipa`; wait for processing and any export-compliance
-   prompts; select exactly version 1.1.7/build 127.
+   prompts; select exactly version 1.1.8/build 157.
 11. Run an installed-build smoke test on a real iPhone and iPad: first launch,
    Books/Search/Go-to, light/dark mode, rotation and Split View, Save Image and
    Photos permission, streaming/device audio with background controls, offline
