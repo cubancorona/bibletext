@@ -43,9 +43,10 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 # but this script registers a trap BELOW it and bash keeps only the last trap per
 # signal — so that one would be silently clobbered and the key file would survive
 # every build. The deletion is therefore folded into the single trap below, which
-# is the convention this script already documents. (The iOS scripts register
-# their traps ABOVE the embed call, so theirs is the one that survives and they
-# need no such fold.)
+# is the convention this script already documents. (The iOS scripts have the same
+# collision the other way round: they arm their trap ABOVE the source, so it is
+# THEIRS that gets clobbered — their go.mod restore was being eaten until they
+# were given the same fold. Registered above means clobbered, not safe.)
 source "${REPO_ROOT}/[redacted-retired-private-reference]"
 embed_bible_key
 

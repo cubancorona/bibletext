@@ -78,9 +78,10 @@ classifyLayout(width, isTablet):
   `UIUserInterfaceIdiomPad`). It's fixed for the process and known at launch —
   unlike the canvas size, which is 0 until the first layout — so an iPad's first
   real frame is already the regular layout with no phone-layout flash. It is
-  `false` everywhere off iOS (`device_other.go`), so **Android tablets and the
-  desktop are untouched** (an Android idiom check can be added later without
-  touching the shared logic).
+  `false` on the desktop (`device_other.go`, tagged `!ios && !android`), so the
+  desktop is untouched. **Android is NOT untouched**: `device_android.go`
+  implements the same predicate for tablet-sized canvases, so Android tablets get
+  the regular sidebar+split layout too — that follow-up is done, not pending.
 - **`tabletLayoutMinWidth` = 700pt**: an iPad mini in portrait (744pt) clears it;
   a half-width column on an 11" iPad (~397pt portrait) stays compact, where the
   sidebar would crowd the reading column.

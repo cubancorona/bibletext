@@ -26,9 +26,15 @@
 // at the root forever.
 //
 // A single verse link (#v16) needs NO JavaScript: each verse carries an id and
-// CSS :target draws the highlight. Ranges (#v16-18) and the platform-aware
-// "Get the app" link are the only things reader.js does, and both degrade
-// cleanly when it doesn't run.
+// CSS :target draws the highlight. Everything else on the page is reader.js:
+// verse RANGES (#v16-18 — :target can only match one id, and no element is ever
+// given the id "v16-18"), the sender's shared NOTE (decoded from the fragment
+// and rendered entirely client-side — the HTML carries no note markup at all),
+// carrying the fragment across a translation switch, the "Go to" picker upgrade,
+// the platform-aware "Get the app" link, and the note's hide/delete controls.
+// With scripting off the passage still opens and a single verse still
+// highlights; a note-bearing link renders as a bare chapter with no sign a
+// message was attached.
 package main
 
 import (

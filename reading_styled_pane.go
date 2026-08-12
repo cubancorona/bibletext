@@ -1,15 +1,15 @@
 package bibletext
 
-// The styled, selectable desktop reading pane (Windows/Linux parity project,
-// milestone 2: rendering). A pure-Go fyne widget that draws layoutChapter's
-// styled runs as positioned canvas.Text — red letters, small raised verse
-// numbers, the verse-highlight band — everything the single-style
-// widget.Entry pane cannot do, with no native embedding and no new
-// dependencies. Selection arrives in milestone 3; the desktop dispatch swap
-// (and any change visible to other platforms) is milestone 4.
+// The styled, selectable Windows/Linux reading pane. A pure-Go fyne widget that
+// draws layoutChapter's styled runs as positioned canvas.Text — red letters,
+// small raised verse numbers, the verse-highlight band — everything the
+// single-style widget.Entry pane cannot do, with no native embedding and no new
+// dependencies. Selection lives in reading_styled_select.go.
 //
-// Untagged so the widget builds and unit-tests on the the development environment; it is not
-// yet referenced by any platform's UI.
+// THIS SHIPS: readingScrollArea dispatches here whenever useStyledPane() is
+// true, which is Windows and Linux. It is untagged so it also builds and
+// unit-tests on the the development environment, which is why the file carries no //go:build
+// line — not because it is unreferenced.
 //
 // RENDERING MODEL. layoutChapter keeps TOKEN-level runs (for wrap math and,
 // later, selection hit-testing); drawing merges adjacent same-style runs into

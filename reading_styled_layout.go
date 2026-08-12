@@ -11,12 +11,15 @@ package bibletext
 //
 // Untagged ON PURPOSE (the android_chapter_html.go precedent): the layout is
 // pure geometry over chapter data, so the whole engine unit-tests on the dev
-// machine — no Windows/Linux toolchain in the loop. Only the eventual pane
-// widget's platform dispatch will be tagged.
+// machine — no Windows/Linux toolchain in the loop. Only the pane's platform
+// dispatch is tagged (useStyledPane); the engine and the pane itself are not.
 //
 // The measure function is a parameter (like rewrap's) so tests can supply a
-// deterministic ruler; production passes fyne.MeasureText at the pane's
-// rendered sizes.
+// deterministic ruler. Production passes styledReadingPane.measure — which goes
+// through Driver().RenderedTextSize with the pane's FontSource, NOT
+// fyne.MeasureText: the scripture serif is not the app font, and fyne.MeasureText
+// cannot honour a FontSource, so measuring with it would wrap to the wrong
+// width.
 
 import (
 	"strings"

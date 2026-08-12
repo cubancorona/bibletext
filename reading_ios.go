@@ -1068,11 +1068,14 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
     else dispatch_async(dispatch_get_main_queue(), block);
 }
 
-// bibleTextScrollReadingTV positions the chapter, in priority order: the
-// highlighted verse (a search jump), then a one-shot restore target (reopening
-// where the reader left off), otherwise pinned to the top. Centralised so the
-// several places that re-assert the offset (after setText, after a frame push,
-// and on deferred ticks) all agree.
+// bibleTextScrollReadingTV positions the chapter, in priority order: a one-shot
+// restore target (reopening where the reader left off), THEN the highlighted
+// verse (a search jump or an arriving link), otherwise pinned to the top.
+// Restore outranks the highlight deliberately — see the inline note below: a
+// note restored on reopen dragged the reader back to it every launch. An
+// explicit arrival clears the restore, so it still wins when it should.
+// Centralised so the several places that re-assert the offset (after setText,
+// after a frame push, and on deferred ticks) all agree.
 static void bibleTextScrollReadingTV(void) {
     if (gReadingTV == nil) return;
     NSUInteger len = gReadingTV.textStorage.length;

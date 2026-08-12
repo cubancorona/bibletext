@@ -172,7 +172,10 @@ public final class BtBridge {
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
     private static native void nativeScrolled(float frac);
 
-    // The soft keyboard's on-screen overlap, in Fyne units (dp), 0 when hidden.
+    // The soft keyboard's on-screen overlap in RAW PIXELS, 0 when hidden. Not dp
+    // and not Fyne units — those two differ (a dp is dpi/160, a Fyne unit is a
+    // point at dpi/72), and conflating them is what made the lift overshoot; the
+    // Go side converts with the live canvas scale.
     // Feeds the Go-side goto picker so its bottom verse row lifts to sit on the
     // keyboard — the Android twin of iOS's bibleTextKeyboardChanged. Observed
     // rather than adjustResize'd ON PURPOSE: resizing the canvas under the IME
@@ -358,7 +361,8 @@ public final class BtBridge {
 
     /**
      * Watch the soft keyboard's height on the ACTIVITY window (the window the
-     * IME attaches to when a Fyne field focuses) and report its overlap in dp.
+     * IME attaches to when a Fyne field focuses) and report its overlap in RAW
+     * PIXELS — see the body comment: converting to dp here is exactly the bug.
      * API 30+ only: that is where WindowInsets delivers the IME type regardless
      * of softInputMode. Older releases keep the status quo (no lift) — the
      * alternative, adjustResize, breaks landscape tablets (see

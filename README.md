@@ -94,9 +94,9 @@ go test ./...
 
 iOS device installs need Xcode signing; `scripts/run-ios-device.sh` wraps it (set
 `BIBLETEXT_TEAM_ID` to your own Apple Developer team id, and optionally
-`BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply two
-small Fyne patches to a local copy (a scroll-lag fix and a caret-blink battery
-fix) — see [`patches/README.md`](patches/README.md); `go.mod` ships stock Fyne so
+`BIBLETEXT_DEVICE_ID` to pick a specific device). The iOS scripts also apply the
+Fyne patches to a local copy (see [`patches/README.md`](patches/README.md) for
+the current set — `setup-fyne-patch.sh` applies them all); `go.mod` ships stock Fyne so
 plain `go` commands need no setup.
 
 Android toolchain setup (JDK 21, SDK + NDK — all installable under `$HOME`, no
@@ -169,9 +169,8 @@ root), signing, emulator use, and distribution are covered in
   inside a poem, as in print — in all three translations, on every platform.
   Text shares, chapter copies, and the verse of the day keep the same lines.
 - 🟥 **Red-letter mode** — the words of Christ in red, on by default and
-  switchable in Settings → Reading (iOS, Android, and macOS; the Windows/Linux
-  reading pane is a single styled widget that cannot colour a text range, so the
-  switch is hidden there).
+  switchable in Settings → Reading (every platform: the Windows/Linux styled
+  pane colours per-run text like the rest, so the switch is shown there too).
 - ✦ **Verse of the day** — a subtle sparkle in the header opens one
   Christ-centred verse that rotates daily, with a jump to read it in context.
 - 📤 **Share a verse** — from the selection menu: **Share with citation** (text +

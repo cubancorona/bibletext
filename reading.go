@@ -510,8 +510,11 @@ func chapterRenderFingerprint(state *AppState) string {
 // paragraph gaps give an unhurried feel; iPads use the U.S. Reports set — 1.3
 // leading, first-line indents (see reporterLayoutActive / reporterMeasureEm).
 // Kerning + ligatures + old-style numerals add a faint warmth on both.
-// reporterLayout is a test seam over reporterLayoutActive (constant false off
-// iOS), so host tests can exercise the iPad reporter branches of the HTML.
+// reporterLayout is a test seam over reporterLayoutActive. NOTE the default on
+// a Mac the development environment: reporterLayoutActive is true on darwin as well as iOS (the
+// desktop reads as the reporter page too — reporter_macos.go), so host tests get
+// the REPORTER layout unless they pin this seam. A test that means to assert the
+// phone layout must set it false explicitly.
 var reporterLayout = reporterLayoutActive
 
 func buildChapterHTML(state *AppState, verses []Verse) string {
@@ -1714,8 +1717,11 @@ func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
 
 // pickerVerseSize sizes the MOBILE Goto (verse) picker: a TOP-anchored, non-modal popup
 // opened near full-screen so the alphabet grid, book list and chapter grid are all
-// visible. The verse row lives at the top of the card (above the soft keyboard), so the
-// popup is never resized after opening.
+// visible. The verse row lives at the BOTTOM of the card, where the soft keyboard
+// covers it — goto.go lifts it by growing a transparent spacer beneath it rather
+// than resizing the popup, which is why the popup is never resized after opening
+// (resizing moved the field out from under an in-flight tap and self-dismissed
+// the picker).
 //
 // Unlike pickerSplitSize (which feeds a MODAL popup whose renderer clamps content down
 // to the canvas, so an over-wide value is harmless), the non-modal renderer grows the

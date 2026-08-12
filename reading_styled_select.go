@@ -1,16 +1,15 @@
 package bibletext
 
-// The SELECTION layer of the styled reading pane (milestone 3). Drag,
-// double-click, and keyboard selection over the drawn segments; copy with the
-// same authored-break fidelity as chapterText.copySelection (poem lines and
-// paragraph blanks survive, width wraps flatten to spaces); and the
-// right-click study menu with the exact verbs the shipping pane serves.
+// The SELECTION layer of the styled reading pane. Drag, double-click, and
+// keyboard selection over the drawn segments; copy with the same authored-break
+// fidelity as chapterText.copySelection (poem lines and paragraph blanks
+// survive, width wraps flatten to spaces); and the right-click study menu with
+// the exact verbs the shipping pane serves.
 //
-// Untagged and additive: still referenced by no platform's UI. The study-menu
-// construction deliberately DUPLICATES chapterText.menuForSelection rather
-// than refactoring that shared file — the unification happens at milestone 4,
-// when shared files are on the table with the full cross-platform
-// verification matrix.
+// This ships on Windows and Linux with the pane it belongs to. The study menu is
+// no longer a duplicate: studyMenu calls the SHARED selectionStudyMenu that
+// chapterText also uses, so a verb added there appears in both without being
+// added twice.
 //
 // GEOMETRY. Hit-testing works against the DRAWN segments (styledDrawRun), not
 // the layout tokens: within a segment, positions come from measuring rune

@@ -387,10 +387,13 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 @media print{.top,.pager,.foot{display:none}}
 `
 
-// readerJS holds the few things that need scripting, all progressive
-// enhancements: with JS off a single-verse link still highlights (CSS :target),
-// "Get the app" still points at the all-platforms landing page, and the only
-// thing genuinely lost is the clear-highlight control (navigating clears it).
+// readerJS holds everything the page cannot do in CSS alone. With JS off a
+// single-verse link still highlights (CSS :target) and "Get the app" still
+// points at the all-platforms landing page — but a verse RANGE does not
+// highlight, and the sender's NOTE does not appear at all, because the note
+// lives only in the fragment and only this file decodes it. That is a real
+// degradation, not a cosmetic one: a note-bearing link looks like a plain
+// chapter link to a reader without scripting.
 const readerJSTemplate = `
 (function () {
   // 0) The fragment is a KEY LIST, "&"-separated (share_link.go): the verse
