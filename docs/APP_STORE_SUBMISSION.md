@@ -1,8 +1,13 @@
-# App Store submission checklist — BibleText 1.1.7
+# App Store submission checklist — BibleText 1.1.8
 
-Prepared 1 August 2026 for 1.1.6 (build 124, since released); refreshed
-8 August 2026 for the 1.1.7 cycle (AI Find, capable-model defaults with the
-faster-model switch, SpaceXAI rename).
+Prepared 1 August 2026 for 1.1.6 (build 124); refreshed 8 August for 1.1.7
+(build 127); refreshed 12 August for the 1.1.8 cycle (shared notes, the NKJV via
+API.Bible, the Settings redesign).
+
+VERIFIED against App Store Connect on 12 August, not remembered: **1.1.6 and
+1.1.7 are both live** (READY_FOR_SALE), the highest build ever uploaded is
+**127**, and no 1.1.8 version record exists yet — one must be created before a
+build can be attached.
 
 ## Release identity
 
@@ -11,8 +16,8 @@ faster-model switch, SpaceXAI rename).
 | App | BibleText |
 | Apple app ID | `6784567351` |
 | Bundle ID | `uk.co.bibletext` |
-| Version | `1.1.7` |
-| Build | `127` |
+| Version | `1.1.8` |
+| Build | `157` |
 | Platform | Universal iPhone and iPad |
 | Minimum OS | iOS 13.0 |
 | Price | Free |
@@ -20,12 +25,12 @@ faster-model switch, SpaceXAI rename).
 | Secondary category | Education |
 | Copyright | `2026 Willow Noonan` |
 
-The public App Store version at preparation time is 1.1.6 (build 124). Do not change the
+The public App Store version at preparation time is 1.1.7 (build 127). Do not change the
 bundle ID or remove iPad support from this update.
 
 ## Locally verified release inputs
 
-- `cmd/mobile/FyneApp.toml` is the source of version 1.1.7/build 127.
+- `cmd/mobile/FyneApp.toml` is the source of version 1.1.8/build 157.
 - `scripts/release-ios.sh` derives the marketing version from that file, keeps
   exact copies of locally edited build files, builds arm64, creates an App Store
   archive, and does not upload unless `BIBLETEXT_UPLOAD=1` is explicitly set.
@@ -111,12 +116,19 @@ Upload once the current review cycle clears (screenshots are per-device-size,
 independent of app version):
 
 ```sh
+ASC_SHOTS_DIR=build/appstore/screenshots-ready-1.1.8/en-GB \
 python3 build/appstore/upload_screenshots.py
 
 ASC_DISPLAY_TYPE=APP_IPAD_PRO_3GEN_129 \
-ASC_SHOTS_DIR=build/appstore/screenshots-ready/en-GB/ipad13 \
+ASC_SHOTS_DIR=build/appstore/screenshots-ready-1.1.8/en-GB/ipad13 \
 python3 build/appstore/upload_screenshots.py
 ```
+
+ALWAYS set `ASC_SHOTS_DIR` explicitly. `upload_screenshots.py` defaults to
+`screenshots-ready/en-GB` — the superseded 1.1.6 set this section just told you
+not to use — so the bare command uploads the wrong images. The 1.1.8 filenames
+differ entirely from the 1.1.6 ones, so nothing would overwrite: you would simply
+end up with both sets on the listing.
 
 The helper resolves the current version automatically and does not submit it.
 Visually inspect the resulting order and device frame in App Store Connect.
@@ -140,9 +152,18 @@ Leave `NSPrivacyAccessedAPITypes` as declared: file timestamp (C617.1), system
 boot time (35F9.1), and user defaults (CA92.1).
 
 Publish the updated `docs/privacy.html` and `docs/support.html` to the live URLs
-before review — this cycle they rename xAI to SpaceXAI, matching the in-app
-disclosure. Editing `main` alone does not update the live site: copy the changed
-files onto a fresh checkout of `origin/gh-pages` (keeping its `CNAME`) and push.
+before review. This cycle they add the NKJV and API.Bible: support.html no longer
+says the NKJV is unselectable, and privacy.html now lists `rest.api.bible` among
+the services contacted.
+
+Publish with **`scripts/publish-site.sh`** and nothing else. Editing `main` alone
+does not update the live site, but neither should you hand-copy files onto
+`gh-pages`: that script is the ONLY publisher precisely because it writes the
+whole tree (landing pages AND the generated web reader) in one go — a hand-copy
+of the three pages deletes the reader, and a reader-only publish deletes the
+pages. It also refuses to publish if `CNAME`, `.nojekyll`, any root page, or a
+plausible number of chapter pages is missing. `--dry-run` builds and verifies
+without pushing.
 
 ## Age rating and compliance review
 

@@ -214,10 +214,12 @@ licensed:
 | World English Bible (Catholic) | WEBC | Public domain | ✅ Real text |
 | New Revised Standard Version | NRSV | National Council of the Churches of Christ | 🔒 Evaluation in progress |
 | Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
-| New King James Version | NKJV | Thomas Nelson (HarperCollins Christian) | 🔒 Evaluation in progress |
+| New King James Version | NKJV | Thomas Nelson (HarperCollins Christian) | ✅ Available — via API.Bible |
 
-**NRSV, LSB and NKJV are copyrighted** and can't be redistributed without permission, so
-in normal builds they appear in the switcher as **"Evaluation in progress — not yet
+The **NKJV is now available**: it is served by API.Bible rather than redistributed, and
+is selectable whenever an API.Bible key is present — the one this build compiles in, or
+the reader's own (Settings → Translations). **NRSV and LSB remain copyrighted** with no
+such route, so in normal builds they appear in the switcher as **"Evaluation in progress — not yet
 available"** and are **greyed out / not selectable** — no placeholder text is ever
 shown to users. The full retrieval, cache, switching, search and AI-study path is
 already wired, so each becomes a normal, selectable translation the moment a license
@@ -280,9 +282,11 @@ Release builds can carry the project's own free API.Bible key so the NKJV
 works the moment the app opens. It is compiled in by
 `scripts/embed-bible-key.sh` (from `.env.local`, into a gitignored file that
 is deleted when the build finishes — a key is never committed), and on first
-run it is written into the **normal on-device key store**, so Settings →
-Translations shows it, "Clear" removes it for good, and pasting a personal key
-replaces it.
+run it is written into the **normal on-device key store**. Settings → Translations
+says the included key is in use but does NOT display its characters — it is a
+shared credential, and the field would otherwise reveal it to anyone who taps the
+eye. "Clear" removes it for good, and pasting a personal key replaces it; a key
+the reader pastes IS shown back to them, because it is theirs.
 
 **It is a launch convenience with a hard ceiling, not a scaling plan.** The
 free Starter plan is 5,000 calls a month for the whole account; one NKJV
