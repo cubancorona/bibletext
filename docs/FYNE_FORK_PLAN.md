@@ -1,8 +1,8 @@
 # Maintaining a Fyne fork
 
-*Status: approved plan, 2026-08-11. Owner sign-offs still needed on the three
-decision points at the bottom. Supersedes the patch pipeline described in
-`patches/README.md` once executed.*
+*Status: fork-side work EXECUTED 2026-08-12 (see §7 for what stands and what
+remains). Owner sign-off still needed on the consumption flip. Supersedes the
+patch pipeline described in `patches/README.md` once the flip lands.*
 
 ## Why fork now, when we said "don't fork" a week ago
 
@@ -30,21 +30,18 @@ pin `v2.7.4`). Fyne is ~22 MB, 865 Go files. We carry 184 diff lines plus one
 **A dedicated repo — `github.com/cubancorona/fyne` — holding upstream plus a
 curated commit stack, maintained by rebase.**
 
-> **Already in hand (found 2026-08-12).** This repo **exists**: a public fork
-> of fyne-io/fyne created in late June, and a local clone at `~/Dev/fyne` with
-> both remotes wired (`origin` = the fork, `upstream` = fyne-io). The clone
-> carries the drawloop fix as a real commit — `572ea43ad` on branch
-> `fix/ios-drawloop-idle-timeout`, based on upstream `develop` (2026-06-19) —
-> plus two untracked, **never-filed** upstream drafts: `ISSUE_DRAFT.md` (the
-> iOS drawloop main-thread-park bug report, root-caused through
-> `darwin_ios.m`/CADisplayLink) and `PR_DRAFT.md` (the fix PR, issue number
-> still a placeholder). The commit exists **only on that disk** — it is not
-> pushed to the fork. Migration step 1 becomes *reuse*, not *create*: fetch
-> upstream in the clone, cut `bt-main` from the release tag, cherry-pick
-> `572ea43ad` as stack-commit ①, and push branch + drafts for safekeeping.
-> (A separate repo, `~/Dev/fyne-5422-investigation`, documents an earlier
-> upstream-issue investigation — evidence the upstream-first workflow in §4
-> has been exercised before.)
+> **Already in hand (found 2026-08-12, since built on).** The repo
+> **existed**: a public fork of fyne-io/fyne created in June, with a local
+> clone at `~/Dev/fyne` (remotes wired: `origin` = the fork, `upstream` =
+> fyne-io) carrying the June drawloop fix as commit `572ea43ad` on branch
+> `fix/ios-drawloop-idle-timeout`, plus `ISSUE_DRAFT.md`/`PR_DRAFT.md`.
+> Corrections found during execution: the issue draft **had been filed** —
+> it is [fyne-io/fyne#6368](https://github.com/fyne-io/fyne/issues/6368),
+> closed 2026-06-20 after maintainer feedback (see decision point 3) — and
+> the June commit is only *v1* of the drawloop fix: the shipped patch later
+> grew the framePainting mid-paint present-guard, so fork commit ① was built
+> from the shipped patch, not the June commit. (`~/Dev/fyne-5422-investigation`
+> is the follow-up investigation of the PR the maintainer pointed to.)
 
 - Branch `bt-main` = upstream release tag + our commits, **one commit per
   logical change, never squashed together**. Today's stack converts 1:1:
@@ -62,26 +59,29 @@ curated commit stack, maintained by rebase.**
 
 ## 2. How the app consumes it
 
-Two candidate mechanisms. **Spike this on day one** — Go's module-path vanity
-check on remote `replace` targets has bitten many forks, and five minutes of
-empiricism beats an afternoon of documentation archaeology:
+Two candidate mechanisms. **Spiked 2026-08-12 — Option 1 works empirically**,
+which flips the lean:
 
-- **Option 1 — remote replace.** Checked-in `go.mod` carries
-  `require fyne.io/fyne/v2 v2.8.0` +
-  `replace fyne.io/fyne/v2 => github.com/cubancorona/fyne/v2 v2.8.0-bt.1`.
-  Cleanest if the `/v2` tag and module-path semantics cooperate.
-- **Option 2 — committed tree.** The fork synced into `third_party/fyne`
-  (checked in; no longer gitignored) with a permanent local `replace`.
-  ~22 MB one-time in git history, near-zero deltas after. Bulletproof,
-  offline, atomic app+engine commits — an agent can fix an engine bug and its
-  app-side consequence in one commit. A sync script pulls from the fork repo,
-  which remains where the real git history and rebases live.
+- **Option 1 — remote replace (VERIFIED, now recommended).** Checked-in
+  `go.mod` carries `require fyne.io/fyne/v2 v2.7.4` +
+  `replace fyne.io/fyne/v2 => github.com/cubancorona/fyne/v2 v2.7.4-bt.2`.
+  Go's module-path check does NOT apply to replace targets: the fork keeps
+  `module fyne.io/fyne/v2` in its go.mod (zero permanent upstream diff),
+  and the spike confirmed tidy → build → the fork's code demonstrably in the
+  module cache. One constraint: **consumption is by tag only** — a direct
+  `go get github.com/cubancorona/fyne/v2@bt-main` fails the path check, so
+  every fork change that the app should see gets a new `-bt.N` tag. Published
+  tags are immortal (module proxies checksum them) — never move one; cut the
+  next number.
+- **Option 2 — committed tree.** The fallback if Option 1 ever misbehaves:
+  fork synced into a checked-in `third_party/fyne` with a local directory
+  `replace` (directory targets skip the path check — it's how the patch
+  pipeline works today). ~22 MB one-time history cost. No longer needed on
+  current evidence.
 
 Either way the CLAUDE.md invariant survives and improves: `go build ./...`,
 `go run ./cmd/desktop`, `go test -race ./...` stay one-line with no setup step
-— and now they **test the fork**. Mild preference for Option 2 in a
-solo-maintainer-plus-agents shop: it deletes the "which fork tag does this app
-commit need?" coordination problem entirely.
+— and now they **test the fork**.
 
 ## 3. What gets deleted
 
@@ -138,32 +138,70 @@ In rough value order, each tied to a wound already taken:
 
 ## 7. Migration checklist (~a day, coordinated)
 
-1. **Reuse the existing fork** (see §1): in `~/Dev/fyne`, fetch upstream, cut
-   `bt-main` from `v2.7.4`, cherry-pick `572ea43ad` (drawloop) as commit ①,
-   convert the remaining patches + font into their own commits; push `bt-main`
-   and the fix branch. Note the stack is growing: an Android new-intent patch
-   is in flight in the app repo and would ride along as a fourth code commit.
-2. **Rebase onto `v2.8.0` immediately** — upstream moved while we pinned, and
-   doing the first rebase while the stack is tiny shakes down the whole
-   process. The app then needs a 2.8 regression pass (whoever holds the app).
-3. Spike the consumption mechanism (Option 1 vs 2); pick; wire `go.mod`.
-4. Delete the patch machinery (§3); update `CLAUDE.md` + `patches/README.md`.
-5. Full matrix: host `-race` suite (now on the fork), sim build, device build,
-   Android build, desktop run.
-6. Stand up fork CI.
+**Fork-side steps 1, 2, 3 and 6 were EXECUTED 2026-08-12** (this session):
 
-**Coordination:** steps 3–4 touch `go.mod` and every build script. Land as one
+1. ✅ `bt-main` = `v2.7.4` + five commits, pushed, tagged **`v2.7.4-bt.2`**
+   (consume this; `-bt.1` predates the CI scoping and was never consumed):
+   ① drawloop 2ms + framePainting paint-guard (the SHIPPED patch, which had
+   evolved past the June commit `572ea43ad` — the guard against presenting
+   half-drawn frames came out of on-device flicker testing), ② discrete caret
+   blink, ③ Noto Color Emoji (+OFL licence; EmojiOneColor removed), ④⑤ fork
+   CI + invariant tests (`TestBTCaretBlinkIsDiscrete`,
+   `TestBTEmojiFontCoversModernEmoji` — both mutation-verified: they FAIL on
+   stock). A script-tree diff proved ①–③ byte-identical to what
+   `setup-fyne-patch.sh` ships (sole delta: a comment + gofmt fix in
+   `bundled-emoji.go`). Verified: app's full `-race` suite green against the
+   fork; `fyne package -os iossimulator` builds against it (GOOS=ios compile
+   proof); Fyne's own four CI workflows pass on `bt-main`.
+2. ✅ `bt-2.8` = the stack rebased onto `v2.8.0`, pushed. Real friction found
+   and resolved: upstream rewrote the caret animation for 2.8 (the discrete
+   blink is a re-port, not a diff replay, and upstream's new
+   `TestEntryCursorAnim` asserts the smooth fade — the fork commit adapts it),
+   and `driver.go` gained `updateAccessibility()` after `Publish()` (the
+   paint-guard clears before it). This branch is the candidate for the app's
+   2.8 move — needs the app-side regression pass first.
+3. ✅ Consumption spike — Option 1 verified (see §2).
+6. ✅ Fork CI live (`bt-ci.yml`, scoped to the invariants; Fyne's own
+   workflows run on the fork too and are the full-suite authority).
+
+**Remaining — the consumption flip (owner + whoever holds the app tree):**
+
+4. Wire `go.mod`: `replace fyne.io/fyne/v2 => github.com/cubancorona/fyne/v2
+   v2.7.4-bt.2`; delete the patch machinery (§3); update `CLAUDE.md` +
+   `patches/README.md`. NOTE: the in-flight Android new-intent patch must
+   either land as fork commit ⑥ (tag `-bt.3`) first, or the flip waits for it.
+5. Full matrix on the flipped app: host `-race` suite, sim build, device
+   build, Android build, desktop run.
+
+**Coordination:** step 4 touches `go.mod` and every build script. Land as one
 commit in a quiet window agreed with whoever holds the app tree — everything
 in flight rebases over it.
 
-## Decision points (owner)
+## Decision points (owner) — updated 2026-08-12
 
-1. **Option 1 (remote replace) vs Option 2 (committed tree).** Lean: 2. The
-   spike may decide for us.
-2. **Fork at 2.7.4 first, take 2.8.0 as a separate validated step** (lean), or
-   jump straight to 2.8.0 during migration?
-3. **Engage upstream early?** An issue/PR conversation with fyne-io about the
-   draw loop and a keyboard-inset API before building could save carrying
-   anything at all. **The homework is already done**: `~/Dev/fyne` holds a
-   finished issue draft and PR draft for the drawloop (see §1) — a "yes" here
-   is now a filing action, not a writing project.
+1. **Option 1 vs Option 2** — the spike decided: Option 1 (remote replace)
+   works with no module-path rewrite and is now the recommendation (§2).
+   Sign-off = approving the flip commit.
+2. **2.7.4 first, then 2.8.0** — executed as the lean suggested: the app can
+   flip to `v2.7.4-bt.2` as a behavioural no-op (byte-identical engine to
+   today's patched builds), and `bt-2.8` sits validated for a separate,
+   app-regression-gated move.
+3. **Engage upstream? — RESOLVED, and not by filing.** The issue draft in
+   `~/Dev/fyne` **was already filed** as
+   [fyne-io/fyne#6368](https://github.com/fyne-io/fyne/issues/6368)
+   (2026-06-20) and closed the same day after maintainer feedback:
+   andydotxyz — "this is not a common pattern … we do not support
+   multiplexing with other toolkits", while allowing that on-demand
+   rendering "may run parallel to" the GLFW run-loop work (open PR #5422 —
+   the subject of `~/Dev/fyne-5422-investigation`). So: do NOT re-file the
+   issue or the 2ms-timeout PR — the technical analysis all still holds
+   (drawloop files are byte-identical v2.7.4 → develop, verified 2026-08-12),
+   but the framing is rejected. The upstream path that remains open is
+   roadmap item 1 done properly: an **on-demand iOS rendering PR framed as
+   draw-loop efficiency** (idle frames never enter drawloop), referencing
+   #6368/#5422. Fyne requires a signed CLA (fyne.cloud/contribute/cla) for
+   non-trivial contributions — an owner action. The caret-blink and emoji
+   commits remain upstreamable on their own merits, though 2.8's new
+   TestEntryCursorAnim asserts the smooth fade, so the caret PR would be a
+   behaviour-change conversation (or an option/theme setting), not a
+   straight fix.
