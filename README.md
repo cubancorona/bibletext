@@ -275,7 +275,17 @@ NRSVue (and, if ever offered, LSB) are actually in its catalog before relying on
 3. Get each translation's **`bibleId`**: `GET /v1/bibles` returns the Bibles your
    key can access, each with an `id`. That id is your `BIBLETEXT_PROVIDER_ID_*`.
 
-### Activating a licensed version
+### The reader's own key (NKJV)
+
+The NKJV needs no operator configuration at all: it is **bring-your-own-key**.
+Any reader can create a free API.Bible account (Starter plan — non-commercial,
+no card), add the New King James Version to their app, and paste the key into
+**Settings → Translations**. The key is stored on-device (Keychain on iOS),
+the NKJV becomes selectable in the translation picker, and the text downloads
+under the reader's own API.Bible licence — refreshed at least every 30 days
+per their terms, and removed if the key is cleared.
+
+### Activating a licensed version (operator/env)
 
 Once you hold a license and have provider credentials, **no code change is
 needed** — set these environment variables (the source is `licensedAPISource`

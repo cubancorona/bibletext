@@ -120,7 +120,7 @@ var registeredVersions = []BibleVersion{
 		// only while the version is licensed and serving real text.
 		LicenseNotice: "Scripture taken from the New King James Version®. Copyright © 1982 " +
 			"by Thomas Nelson. Used by permission. All rights reserved. Text provided via API.Bible (api.bible).",
-		source: newLicensedSource("nkjv"),
+		source: newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
 }
 
@@ -169,10 +169,31 @@ func (webSource) fetch() (*BibleData, error) { return fetchWEBFromHelloAO() }
 // (<ID> is the upper-cased version id, e.g. NRSV, LSB.)
 type licensedAPISource struct {
 	versionID string
+	// defaultProviderBibleID makes the translation BYOK-capable: a reader who
+	// stores their OWN free API.Bible key in Settings unlocks it with no env
+	// configuration — their API.Bible account carries the licence for their
+	// use. Blank = env-only (translations whose provider id we have not
+	// verified stay operator-gated).
+	defaultProviderBibleID string
 }
+
+// nkjvProviderBibleID is the NKJV's id in API.Bible's catalogue (HarperCollins,
+// "Standard License"), verified live 2026-08-11.
+const nkjvProviderBibleID = "63097d2a0a2f7db3-01"
 
 func newLicensedSource(versionID string) *licensedAPISource {
 	return &licensedAPISource{versionID: versionID}
+}
+
+func newBYOKLicensedSource(versionID, providerBibleID string) *licensedAPISource {
+	return &licensedAPISource{versionID: versionID, defaultProviderBibleID: providerBibleID}
+}
+
+// byokCapable reports whether v can be unlocked by the reader's own
+// API.Bible key (as opposed to operator/env licensing only).
+func byokCapable(v BibleVersion) bool {
+	s, ok := v.source.(*licensedAPISource)
+	return ok && s.defaultProviderBibleID != ""
 }
 
 // isLicensedSource reports whether v's text comes from a licensed provider —
@@ -219,17 +240,34 @@ func purgeUnavailableLicensedCaches() {
 	}
 }
 
-func (s *licensedAPISource) apiKey() string { return strings.TrimSpace(os.Getenv("BIBLE_API_KEY")) }
-
-// licensed is the explicit operator opt-in confirming we hold rights to ship
-// this translation's text.
-func (s *licensedAPISource) licensed() bool {
-	return envTruthy(os.Getenv("BIBLETEXT_LICENSE_" + strings.ToUpper(s.versionID)))
+// apiKey resolves the provider credential: the operator's environment first
+// (development), else the reader's own key from Settings (BYOK).
+func (s *licensedAPISource) apiKey() string {
+	if k := strings.TrimSpace(os.Getenv("BIBLE_API_KEY")); k != "" {
+		return k
+	}
+	return sharedKeys().bibleAPIKey()
 }
 
-// providerVersionID is the licensed provider's id for this translation.
+// licensed reports whether rights to this translation's text are in place:
+// the explicit operator env opt-in, or — for BYOK-capable translations — the
+// reader's own stored API.Bible key (their free API.Bible app carries the
+// translation's licence for their use; a key not entitled to it simply fails
+// the fetch with the provider's clear rejection).
+func (s *licensedAPISource) licensed() bool {
+	if envTruthy(os.Getenv("BIBLETEXT_LICENSE_" + strings.ToUpper(s.versionID))) {
+		return true
+	}
+	return s.defaultProviderBibleID != "" && sharedKeys().bibleAPIKey() != ""
+}
+
+// providerVersionID is the licensed provider's id for this translation — the
+// env override wins, else the built-in id of a BYOK-capable translation.
 func (s *licensedAPISource) providerVersionID() string {
-	return strings.TrimSpace(os.Getenv("BIBLETEXT_PROVIDER_ID_" + strings.ToUpper(s.versionID)))
+	if id := strings.TrimSpace(os.Getenv("BIBLETEXT_PROVIDER_ID_" + strings.ToUpper(s.versionID))); id != "" {
+		return id
+	}
+	return s.defaultProviderBibleID
 }
 
 func (s *licensedAPISource) available() bool {
