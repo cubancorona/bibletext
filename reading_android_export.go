@@ -10,7 +10,9 @@ package bibletext
 
 import "C"
 
-import "fyne.io/fyne/v2"
+import (
+	"fyne.io/fyne/v2"
+)
 
 // btaSelectionAction is called (via the JNI thunk, on the Android UI thread)
 // when the reader picks one of BibleText's items from the text-selection
@@ -67,4 +69,35 @@ func btaReadAlongUserScrolled() {
 //export btaReadAlongFollowTapped
 func btaReadAlongFollowTapped() {
 	gAudio.resumeReadAlongFollow()
+}
+
+// btaKeyboardChanged is the Android twin of iOS's bibleTextKeyboardChanged:
+// the soft keyboard's live on-screen overlap, observed on the activity window by
+// BtBridge.installKeyboardWatcher. It feeds the goto picker's verse-row lift
+// (gKeyboardInsetSetter) and nothing else — the canvas is never resized, so the
+// tablet-layout classification never sees the IME.
+//
+// The overlap arrives in PIXELS and is converted here with the live canvas
+// scale, the same px<->unit factor pushChapterHTML uses for the text size. It
+// must NOT arrive in Android dp: a dp is dpi/160 while a Fyne unit is a POINT
+// (fyne's pixelsPerPt = dpi/72), so dp read as units overstates the lift ~2.2x
+// — which the goto card's own clamp silently absorbed in portrait and could not
+// absorb in landscape, leaving the verse row under the keyboard it exists to
+// clear (platform reproduction).
+//
+//export btaKeyboardChanged
+func btaKeyboardChanged(overlapPx C.float) {
+	px := float32(overlapPx)
+	fyne.Do(func() {
+		if gKeyboardInsetSetter == nil {
+			return
+		}
+		scale := float32(1)
+		if st := activeAIState; st != nil && st.window != nil {
+			if c := st.window.Canvas(); c != nil && c.Scale() > 0 {
+				scale = c.Scale()
+			}
+		}
+		gKeyboardInsetSetter(px / scale)
+	})
 }

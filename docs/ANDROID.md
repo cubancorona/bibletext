@@ -200,6 +200,23 @@ Fyne** (the script runs `setup-fyne-patch.sh` and injects the temporary
 battery win on Android; the iOS drawloop hunk is inert here), injects the
 dex, and re-signs.
 
+It also **replaces `classes.dex`**. The Fyne CLI packages a *prebuilt*
+`classes.dex` (gendex output baked into the tool as a base64 blob), so patching
+`third_party/fyne`'s `GoNativeActivity.java` would otherwise never reach the
+APK — which is why warm shared links were silently dropped before
+`patches/fyne-2.7.4-android-newintent.patch` existed. The script recompiles that
+patched activity with the same javac/d8 recipe gendex uses, alongside
+`android/goapp/FyneNotificationReceiver.java` (a hand-reconstructed twin of the
+receiver in the tool's dex, kept so the manifest's `<receiver>` still resolves).
+
+A side benefit: the tool's prebuilt dex comes from whatever Fyne the *CLI* was
+built against, which is NEWER than the v2.7.4 we link — it carries an
+accessibility bridge (`onInitializeAccessibilityNodeInfo`, `ROLE_*`) that v2.7.4's
+Go half never calls. Compiling `third_party/fyne`'s own Java keeps the Java and
+Go halves a *matched pair*. If the toolkit is ever upgraded to a version whose
+Go side does call those methods, `third_party/fyne` regenerates at the same
+version, so they stay matched automatically.
+
 ```bash
 # Debug/test APK (signed with the upload key, target 29) → cmd/mobile/BibleText.apk
 scripts/build-android.sh
@@ -210,7 +227,8 @@ BIBLETEXT_ANDROID_BUILD=<versionCode> scripts/build-android.sh --release
 ```
 
 The release path: `fyne release -os android` emits a signed `.aab` via
-bundletool, then the script adds `base/dex/classes2.dex` and re-signs
+bundletool, then the script swaps in `base/dex/classes.dex`, adds
+`base/dex/classes2.dex` and re-signs
 (jarsigner for the AAB; apksigner v1+v2+v3 for the debug APK, after zipalign).
 `versionCode` MUST strictly increase per Play upload. There is no `-targetSdk`
 flag (Fyne hardcodes 35); pass `-androidapi <n>` inside the script to raise

@@ -171,6 +171,15 @@ public final class BtBridge {
     private static native void nativeSelectionAction(String action, String text);
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
     private static native void nativeScrolled(float frac);
+
+    // The soft keyboard's on-screen overlap, in Fyne units (dp), 0 when hidden.
+    // Feeds the Go-side goto picker so its bottom verse row lifts to sit on the
+    // keyboard — the Android twin of iOS's bibleTextKeyboardChanged. Observed
+    // rather than adjustResize'd ON PURPOSE: resizing the canvas under the IME
+    // flips the live smallest-dimension tablet test on landscape tablets and
+    // layoutWatcher thrashes the whole window mid-keystroke (reviewed, reverted
+    // 2026-08-11). This feed touches nothing but a number.
+    private static native void nativeKeyboardChanged(float overlapPx);
     // Called on the UI thread when the reader scrolls by hand during read-along
     // (suspends follow) and when they tap the "Follow narration" pill (resumes it).
     private static native void nativeReadAlongUserScrolled();
@@ -188,10 +197,11 @@ public final class BtBridge {
     // configuration change, and re-reading the same Intent would yank the
     // reader back to the shared verse after they had navigated away.
     //
-    // A tap while the app IS running arrives at onNewIntent, which
-    // GoNativeActivity does not expose; that link is not honoured, and the app
-    // simply comes forward where the reader left off. singleTop (see the
-    // manifest) is what stops it creating a second activity instead.
+    // A tap while the app IS running arrives at onNewIntent, which the patched
+    // GoNativeActivity (patches/fyne-2.7.4-android-newintent.patch) forwards to
+    // onNewIntent below by reflection — WARM links are honoured now, not just
+    // cold launches. singleTop (see the manifest) is what makes the running
+    // activity receive it instead of a second instance being created.
     // Whether to offer writing a note. Set from Go on every reading-view build,
     // the same way aiOn gates the Study with AI item.
     // openInBrowser hands a shared link back out. A bare ACTION_VIEW would
@@ -244,6 +254,43 @@ public final class BtBridge {
         } catch (Throwable ignored) {
             // A malformed intent must never stop the reader from opening.
         }
+    }
+
+    /** onNewIntent receives a shared link tapped while the app is RUNNING —
+     *  the warm half of link delivery, forwarded from the patched
+     *  GoNativeActivity by reflection (so fyne's Java never needs a compile-
+     *  time reference to this class). Same delivery as deliverLaunchLink, but
+     *  no consumed latch: every distinct tap deserves a delivery. */
+    public static void onNewIntent(final android.content.Intent it) {
+        try {
+            if (it == null || !android.content.Intent.ACTION_VIEW.equals(it.getAction())) return;
+            android.net.Uri data = it.getData();
+            if (data == null) return;
+            nativeOpenedLink(data.toString());
+        } catch (Throwable ignored) {
+            // A malformed intent must never disturb the running reader.
+        }
+    }
+
+    /** scrollToVerse pins a verse near the top of the viewport — the ARRIVAL
+     *  scroll for a shared link's highlighted passage (the Android twin of the
+     *  highlight branch of iOS's bibleTextScrollReadingTV). It arms
+     *  pendingVerse and runs the shared post-layout applier, so it composes
+     *  with setHtml instead of racing it; a delayed re-assert catches a slow
+     *  first layout. */
+    public static void scrollToVerse(final int verse) {
+        if (verse <= 0) return;
+        UI.post(new Runnable() {
+            @Override public void run() {
+                pendingVerse = verse;
+                applyPendingScroll();
+            }
+        });
+        UI.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (pendingVerse == verse) applyPendingScroll();
+            }
+        }, 250);
     }
 
     private BtBridge() {}
@@ -306,6 +353,41 @@ public final class BtBridge {
      * Dialog down and rebuild against the live one; the Go afterRebuild re-pushes
      * the frame + visibility, so we don't auto-show here.
      */
+    // Last keyboard overlap reported, to fire the native callback only on change.
+    private static float lastImePx = -1f;
+
+    /**
+     * Watch the soft keyboard's height on the ACTIVITY window (the window the
+     * IME attaches to when a Fyne field focuses) and report its overlap in dp.
+     * API 30+ only: that is where WindowInsets delivers the IME type regardless
+     * of softInputMode. Older releases keep the status quo (no lift) — the
+     * alternative, adjustResize, breaks landscape tablets (see
+     * nativeKeyboardChanged). The listener passes the insets through to the
+     * platform handler, so NativeActivity's own inset processing is untouched.
+     */
+    private static void installKeyboardWatcher(final Activity act) {
+        if (act == null || android.os.Build.VERSION.SDK_INT < 30) return;
+        final android.view.View decor = act.getWindow().getDecorView();
+        decor.setOnApplyWindowInsetsListener(new android.view.View.OnApplyWindowInsetsListener() {
+            @Override
+            public android.view.WindowInsets onApplyWindowInsets(android.view.View v, android.view.WindowInsets insets) {
+                try {
+                    // RAW PIXELS. Do not convert to dp here: Fyne's unit is a
+                    // POINT (pixelsPerPt = dpi/72), not an Android dp (dpi/160),
+                    // so a dp value read as Fyne units overstates the lift by
+                    // ~2.2x. The Go side divides by the live canvas scale, the
+                    // same px<->unit conversion pushChapterHTML already uses.
+                    float px = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
+                    if (px != lastImePx) {
+                        lastImePx = px;
+                        nativeKeyboardChanged(px);
+                    }
+                } catch (Throwable ignored) {}
+                return v.onApplyWindowInsets(insets);
+            }
+        });
+    }
+
     public static void init(final Activity act) {
         UI.post(new Runnable() {
             @Override public void run() {
@@ -335,6 +417,7 @@ public final class BtBridge {
                 verseStarts = new int[0];
                 verseEnds = new int[0];
                 activity = act;
+                installKeyboardWatcher(act);
                 deliverLaunchLink(act);
 
                 if (lifecycleCallbacks == null && act != null) {
@@ -457,7 +540,20 @@ public final class BtBridge {
             }
         });
 
-        scroll = new ScrollView(activity);
+        // requestChildRectangleOnScreen is how a focused selectable TextView
+        // drags its cursor into view — and after setText the cursor sits at the
+        // END, so the first window-focus pass could yank a freshly positioned
+        // chapter to its last verse (platform reproduction: the arrival scroll to a
+        // shared verse randomly lost to this, and the scroll listener then
+        // misread the jump as a reader gesture and PERSISTED the end position).
+        // Every scroll we mean happens through scrollTo; the bring-into-view
+        // path is never one we asked for, so refuse it wholesale.
+        scroll = new ScrollView(activity) {
+            @Override
+            public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
+                return false;
+            }
+        };
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(true);
         scroll.addView(text, new FrameLayout.LayoutParams(
@@ -520,10 +616,12 @@ public final class BtBridge {
                     if (lastOwnScrollY >= 0 && Math.abs(y - lastOwnScrollY) <= 2) {
                         return; // our own scrollTo arriving after the timed latch expired
                     }
-                    // A reader gesture obsoletes any pending restore, and the
-                    // idle timer persists the new position once still.
+                    // A reader gesture obsoletes any pending restore (frac and
+                    // arrival verse alike), and the idle timer persists the new
+                    // position once still.
                     lastOwnScrollY = -1;
                     pendingFrac = -1f;
+                    pendingVerse = 0;
                     UI.removeCallbacks(scrollIdle);
                     UI.postDelayed(scrollIdle, 200);
                     // Read-along: a hand scroll while following suspends the
@@ -792,12 +890,43 @@ public final class BtBridge {
                 raVerse = 0;
                 buildVerseIndex(text.getText());
                 pendingFrac = frac >= 0 ? frac : -1f;
-                // Apply top-pin / restore after the text has been laid out.
-                scroll.post(new Runnable() {
-                    @Override public void run() {
-                        ownScrollTo(pendingFrac >= 0 ? Math.round(pendingFrac * scrollRange()) : 0);
+                pendingVerse = 0; // a following scrollToVerse (queued next) re-arms it
+                applyPendingScroll();
+            }
+        });
+    }
+
+    // The one-shot arrival verse. Outranks pendingFrac in applyPendingScroll:
+    // when both exist the reader ARRIVED somewhere specific; frac is the
+    // "coming back" scroll. Cleared by the first user scroll alongside it.
+    private static int pendingVerse = 0;
+
+    /** applyPendingScroll positions the text AFTER the layout that follows a
+     *  setText/scrollToVerse: verse first, else frac restore, else top. All
+     *  callers run on the UI thread, so the posts queue deterministically —
+     *  this replaced a free-standing scrollToVerse that raced setHtml's own
+     *  post-layout scroll and lost (platform reproduction: arrivals landed wherever
+     *  the previous reader stopped). */
+    private static void applyPendingScroll() {
+        if (scroll == null) return;
+        scroll.post(new Runnable() {
+            @Override public void run() {
+                if (text == null || scroll == null) return;
+                if (pendingVerse > 0) {
+                    Layout layout = text.getLayout();
+                    int[] r = (layout != null) ? verseRange(pendingVerse) : null;
+                    if (r != null) {
+                        int line = layout.getLineForOffset(r[0]);
+                        int y = text.getTotalPaddingTop() + layout.getLineTop(line) - dp(16);
+                        ownScrollTo(Math.max(y, 0));
+                        return;
                     }
-                });
+                }
+                if (pendingFrac >= 0) {
+                    ownScrollTo(Math.round(pendingFrac * scrollRange()));
+                } else {
+                    ownScrollTo(0);
+                }
             }
         });
     }
