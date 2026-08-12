@@ -207,7 +207,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		state.aiSearchCancelled = inFlight
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai
-		state.NotesMode = mode == modeNotes
+		setNotesMode(state, mode == modeNotes)
 		// On desktop the results pane only exists while IsSearching — that is how
 		// keyword results replace the reading view. Notes is a BROWSER, so it has
 		// something to show the moment it is picked, with no query submitted; it

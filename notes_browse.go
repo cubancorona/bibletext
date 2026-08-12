@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -309,6 +310,20 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	// squeezeWidthLayout: a scroll widens its content to the content's MinSize
 	// and clips the overflow sideways, with no bar to reach it (see sheet_fit.go).
 	body := container.NewVScroll(container.New(squeezeWidthLayout{}, column))
+	// Keep the reader's place in the list. Opening a note and coming back — or
+	// any rebuild while Notes mode is up — otherwise dropped them at the top of
+	// what can be a long list. Restored after layout, because a scroll clamps an
+	// offset against a content height it has not measured yet.
+	body.OnScrolled = func(p fyne.Position) { state.notesScroll = p.Y }
+	if state.notesScroll > 0 {
+		off := state.notesScroll
+		time.AfterFunc(16*time.Millisecond, func() {
+			fyne.Do(func() {
+				body.Offset = fyne.NewPos(0, off)
+				body.Refresh()
+			})
+		})
+	}
 	return container.NewBorder(head, nil, nil, nil, body)
 }
 
@@ -346,3 +361,109 @@ func newNoteBrowseCard(state *AppState, n SharedNote, content fyne.CanvasObject,
 	c.onTap = func() { openNote(state, n) }
 	return c
 }
+
+// setNotesMode is the ONE place the Notes flag moves, so leaving the mode always
+// forgets the list's scroll position. Coming back to Notes should start at the
+// top of the list; only a rebuild WHILE in Notes should return the reader to
+// where they were. Three callers set this flag (the desktop sidebar toggle, the
+// mobile toggle, and the mobile reset), and a scroll offset left behind by one
+// of them would silently reappear on a later, unrelated visit.
+func setNotesMode(state *AppState, on bool) {
+	if state == nil {
+		return
+	}
+	if !on {
+		state.notesScroll = 0
+	}
+	state.NotesMode = on
+}
+
+// showNotesList takes the reader to the notes list in the Search pane, from
+// wherever they are. Used by the count beside Settings → "Delete all notes":
+// deciding whether to delete them is exactly when you want to look at them.
+//
+// The two layouts get there differently, which is why this exists rather than a
+// call to either toggle. On DESKTOP the results pane only exists while
+// IsSearching, so Notes has to claim it the way the sidebar's own toggle does.
+// On MOBILE the Search tab owns it and surfaceSearch is what brings that tab
+// forward; without it the flag would flip under a reading view and nothing would
+// appear to happen.
+func showNotesList(state *AppState) {
+	if state == nil || !notesFeatureOn(state) {
+		return
+	}
+	setNotesMode(state, true)
+	state.IsSearching = true // desktop: Notes claims the results pane on entry
+	if state.surfaceSearch != nil {
+		state.surfaceSearch() // mobile: bring the real Search tab forward
+	}
+	state.refresh()
+}
+
+// notesCountLink is the "(3)" beside Settings → "Delete all notes": it reports
+// how many notes "all" means, and taps through to them.
+//
+// A plain tappable rather than a Hyperlink: a Hyperlink means "this leaves the
+// app" everywhere else in Settings ("Get a key ↗", "Privacy Policy ↗"), and this
+// goes somewhere inside it. It keeps the accent colour so it still reads as
+// something you can press.
+type notesCountLink struct {
+	widget.BaseWidget
+	state    *AppState
+	count    int
+	onTapped func()
+}
+
+func newNotesCountLink(state *AppState, onTapped func()) *notesCountLink {
+	c := &notesCountLink{state: state, onTapped: onTapped}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *notesCountLink) setCount(n int) {
+	c.count = n
+	c.Refresh()
+}
+
+func (c *notesCountLink) label() string {
+	if c.count <= 0 {
+		return ""
+	}
+	return "(" + strconv.Itoa(c.count) + ")"
+}
+
+func (c *notesCountLink) CreateRenderer() fyne.WidgetRenderer {
+	pal := c.state.pal()
+	txt := canvas.NewText(c.label(), pal.Accent)
+	txt.TextStyle = fyne.TextStyle{Bold: true}
+	txt.TextSize = 15
+	// A solid box behind the glyphs: Fyne's mobile hit-testing does not reliably
+	// match a bare canvas.Text renderer (the rule CLAUDE.md records), and a
+	// two-character target needs all the tap area it can get.
+	box := container.NewGridWrap(fyne.NewSize(52, 40), container.NewCenter(txt))
+	return &notesCountRenderer{link: c, txt: txt, box: box}
+}
+
+type notesCountRenderer struct {
+	link *notesCountLink
+	txt  *canvas.Text
+	box  fyne.CanvasObject
+}
+
+func (r *notesCountRenderer) Layout(s fyne.Size)           { r.box.Resize(s) }
+func (r *notesCountRenderer) MinSize() fyne.Size           { return r.box.MinSize() }
+func (r *notesCountRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.box} }
+func (r *notesCountRenderer) Destroy()                     {}
+func (r *notesCountRenderer) Refresh() {
+	r.txt.Text = r.link.label()
+	r.txt.Color = r.link.state.pal().Accent
+	r.txt.Refresh()
+}
+
+func (c *notesCountLink) Tapped(*fyne.PointEvent) {
+	if c.count > 0 && c.onTapped != nil {
+		c.onTapped()
+	}
+}
+
+var _ fyne.Tappable = (*notesCountLink)(nil)
