@@ -99,13 +99,10 @@ func showAISettings(state *AppState) {
 		// pasting a key populates the model list immediately.
 		var fetchModels func()
 
-		// The field's ROW LABEL: plain body weight, like "Text size" below —
-		// iOS-settings anatomy. (A BOLD heading here once out-shouted the
-		// section label, and removing it entirely left the filled field an
-		// anonymous row of dots — both owner design findings.) The
-		// "Get a key" link rides the status row, right-aligned — the same
-		// place it sits in the Translations section.
-		keyLabel := widget.NewLabel(info.Name + " key")
+		// The "Get a key" link rides the status row, right-aligned — the same
+		// place it sits in the Translations section. The field itself is a
+		// settingsRow ("Key | field"), so its label comes from geometry, not
+		// font styling.
 		var link fyne.CanvasObject = layout.NewSpacer()
 		if u, err := url.Parse(info.KeyURL); err == nil {
 			link = widget.NewHyperlink("Get a key ↗", u)
@@ -175,7 +172,7 @@ func showAISettings(state *AppState) {
 		refreshStatus := func() {
 			savedLabel := "✓ Saved on this device."
 			if store.keyInSecureStore(info.ID) {
-				savedLabel = "✓ Saved securely in the device keychain."
+				savedLabel = "✓ Saved in the Keychain."
 			}
 			if strings.TrimSpace(entry.Text) != "" {
 				if saveOK {
@@ -223,9 +220,6 @@ func showAISettings(state *AppState) {
 			effModel = info.Model
 		}
 		recommended := "Recommended (" + effModel + ")"
-		// Row label above the control, footnote caption below it — the same
-		// anatomy as every other labelled row on the sheet.
-		modelLabel := widget.NewLabel("Model")
 		modelCaption := canvas.NewText("Recommended keeps itself current automatically.", pal.TextMuted)
 		modelCaption.TextSize = 12
 
@@ -386,8 +380,8 @@ func showAISettings(state *AppState) {
 
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
-				keyLabel,
-				withCaret(state, entry),
+				widget.NewSeparator(),
+				settingsRow("Key", withCaret(state, entry)),
 				// Paste + Clear + Test on one row; the result label gets its OWN
 				// full-width row below. It must NOT share the row as a Border
 				// center: on a phone the three buttons leave only a sliver of
@@ -401,12 +395,9 @@ func showAISettings(state *AppState) {
 				// both key sections use.
 				container.NewBorder(nil, nil, nil, link, status),
 				result,
-				spacer(8),
-				// The model chooser speaks one step quieter than the section:
-				// sub-controls must never out-shout their section label.
-				modelLabel,
-				container.NewThemeOverride(modelBtn,
-					compactTheme{Theme: state.theme, text: 15}),
+				widget.NewSeparator(),
+				settingsRow("Model", container.NewThemeOverride(modelBtn,
+					compactTheme{Theme: state.theme, text: 15})),
 				modelCaption,
 			),
 		}
@@ -526,10 +517,9 @@ func showAISettings(state *AppState) {
 	textSize.Horizontal = cnv.Size().Width >= 500
 	textSize.Required = true
 	textSize.SetSelected(currentLabel)
-	textSizeRow := container.NewVBox(
-		widget.NewLabel("Text size"),
-		textSize,
-	)
+	// Row shape: label left, the stacked sizes filling the row (the label
+	// top-aligns against the first option).
+	textSizeRow := container.NewBorder(nil, nil, widget.NewLabel("Text size"), nil, textSize)
 
 	// In-app disclosure of where AI prompts go, shown right under the key field
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
@@ -554,7 +544,7 @@ func showAISettings(state *AppState) {
 	// The Translations section (the reader's own API.Bible key). Its area
 	// grows when a test result appears or the key arrives, so it re-measures
 	// the sheet the same way the assistant flip does.
-	bibleKeys := bibleKeySection(state, pal, func() {
+	bibleKeys, bibleKeysFooter := bibleKeySection(state, pal, func() {
 		if sizeSheet != nil {
 			sizeSheet()
 		}
@@ -598,20 +588,23 @@ func showAISettings(state *AppState) {
 	// the soft keyboard covers the lower half, and this keeps the field above it.
 	// Each group is a section label + its controls, separated by a fixed
 	// breathing gap: one quiet, repeating rhythm rather than boxes-in-boxes.
+	// Grouped-list assembly: each section is header → inset card of rows →
+	// footnote below the card. The cards are what make the sheet legible
+	// from afar.
 	form := container.NewVBox(
 		sectionLabel("ASSISTANT", pal),
-		active,
-		keyArea,
+		settingsGroup(pal, active, keyArea),
 		aiDisclosure,
 		sheetGap(),
 		sectionLabel("TRANSLATIONS", pal),
-		bibleKeys,
+		settingsGroup(pal, bibleKeys),
+		bibleKeysFooter,
 		sheetGap(),
 		sectionLabel("READING", pal),
-		textSizeRow,
+		settingsGroup(pal, textSizeRow),
 		sheetGap(),
 		sectionLabel("SHARED NOTES", pal),
-		notes,
+		settingsGroup(pal, notes),
 		notesNote,
 	)
 	if redLetterSupported() {
@@ -620,7 +613,7 @@ func showAISettings(state *AppState) {
 		// text. Under its own header so nothing floats unlabelled.
 		form.Add(sheetGap())
 		form.Add(sectionLabel("WORDS OF CHRIST", pal))
-		form.Add(redLetter)
+		form.Add(settingsGroup(pal, redLetter))
 	}
 
 	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
@@ -762,6 +755,20 @@ func sheetGap() fyne.CanvasObject {
 	r := canvas.NewRectangle(color.Transparent)
 	r.SetMinSize(fyne.NewSize(1, 16))
 	return r
+}
+
+// settingsGroup is one grouped-list inset card: a section's rows on their own
+// surface under the small-caps header. THIS is what makes the sheet read from
+// afar — labels read as labels because of containment and row geometry, not
+// font weight (three rounds of tuning boldness proved the point).
+func settingsGroup(pal palette, rows ...fyne.CanvasObject) fyne.CanvasObject {
+	return surface(container.NewVBox(rows...), pal.Surface, pal.Border, fyne.Size{})
+}
+
+// settingsRow is the grouped-list row shape: label on the left, the control
+// filling the rest of the row, label centred against the control's height.
+func settingsRow(label string, control fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel(label)), nil, control)
 }
 
 // compactTheme shrinks only the base text size of a subtree (applied via
