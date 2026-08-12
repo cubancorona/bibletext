@@ -47,6 +47,13 @@ cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
 trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
+
+# Compile in the project's own API.Bible key (from .env.local) so the NKJV
+# works out of the box; generated file is removed by its own EXIT trap, and a
+# build with no key present is simply bring-your-own-key.
+source "${REPO_ROOT}/scripts/embed-bible-key.sh"
+embed_bible_key
+
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
 # ── 1. dev signing identity under TEAM_ID ────────────────────────────────────

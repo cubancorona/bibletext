@@ -60,6 +60,12 @@ const (
 	// is no longer relevant — it was our fallback, never the reader's choice —
 	// so it must not outrank the new recommendation. See resolvedModel.
 	prefModelResolvedForPrefix = "ai.model.resolvedfor."
+	// prefBibleKeySeeded holds the fingerprint of the BUNDLED API.Bible key
+	// this install was seeded with (see bible_key_bundled.go), and
+	// prefBibleKeyCleared records that the reader deliberately removed it so
+	// it is never re-seeded.
+	prefBibleKeySeeded  = "bible.key.seeded"
+	prefBibleKeyCleared = "bible.key.cleared"
 )
 
 // newKeyStore binds to the running app's Preferences. Returns an inert store
@@ -68,6 +74,10 @@ func newKeyStore() *keyStore {
 	if app := fyne.CurrentApp(); app != nil {
 		k := &keyStore{prefs: app.Preferences(), secrets: newPlatformSecretStore()}
 		k.migrateAllKeys()
+		// Release builds carry the project's own API.Bible key; this puts it
+		// in the normal store on first run so Settings can show and remove
+		// it like any other key. A no-op in builds without one.
+		k.seedBundledBibleKey()
 		return k
 	}
 	return &keyStore{}

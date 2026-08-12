@@ -38,3 +38,7 @@ android/classes/
 # Local AI provider keys for testing (never committed) — see ai_live_test.go
 .env.local
 build/
+
+# Bundled API.Bible key, generated for one release build then deleted
+# (scripts/embed-bible-key.sh) — a key must never be committed.
+bundled_key_gen.go
