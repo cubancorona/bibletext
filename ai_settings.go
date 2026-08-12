@@ -681,8 +681,13 @@ func showAISettings(state *AppState) {
 	// background rectangle only as big as the card (hidden behind the surface
 	// fill), so it never shows as a white wall.
 	ps := aiPanelSize(cnv.Size())
+	// The sheet steps DOWN to Background now that the group cards took SurfaceAlt,
+	// so the cards still read as raised containers instead of dissolving into the
+	// sheet. It is the same pairing the reading screen already uses — a SurfaceAlt
+	// history bar on the Background ground — which is what makes Settings look
+	// like the rest of the app rather than a place with its own colour rules.
 	card = container.New(fixedWidthLayout{width: ps.Width},
-		surface(themed, pal.SurfaceAlt, pal.Border, fyne.Size{}))
+		surface(themed, pal.Background, pal.Border, fyne.Size{}))
 
 	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
 	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
@@ -794,7 +799,13 @@ const settingsCardChromeWidth = 14
 // afar — labels read as labels because of containment and row geometry, not
 // font weight (three rounds of tuning boldness proved the point).
 func settingsGroup(pal palette, rows ...fyne.CanvasObject) fyne.CanvasObject {
-	return surface(container.NewVBox(rows...), pal.Surface, pal.Border, fyne.Size{})
+	// SurfaceAlt, the history bar's colour — NOT Surface. Surface is the reading
+	// paper, and it is within one unit per channel of Input (253,252,248 against
+	// 252,251,247 in light mode), so a card painted with it is indistinguishable
+	// from a text field: the eye reads every group as an enormous empty input.
+	// Owner-reported as "abrasive… it's not a text box", which is exactly the
+	// confusion those two near-identical values produce.
+	return surface(container.NewVBox(rows...), pal.SurfaceAlt, pal.Border, fyne.Size{})
 }
 
 // settingsRow is the grouped-list row shape: label on the left, the control
