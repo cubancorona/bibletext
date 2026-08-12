@@ -24,6 +24,9 @@ var skipFwd15SVG []byte
 //go:embed assets/icons/sidebar_left.svg
 var sidebarLeftSVG []byte
 
+//go:embed assets/icons/note_bubble.svg
+var noteBubbleSVG []byte
+
 // iconAudioWave is the "read aloud / text-to-speech" source glyph (a small
 // equalizer-style waveform), marking a chapter played by on-device speech as
 // distinct from a recorded human narration (which uses theme.AccountIcon, a
@@ -62,4 +65,17 @@ var iconSidebarLeft fyne.Resource = func() fyne.Resource {
 		return theme.MenuIcon()
 	}
 	return theme.NewThemedResource(fyne.NewStaticResource("sidebar_left.svg", sidebarLeftSVG))
+}()
+
+// iconNoteBubble marks the shared-notes control: the same speech bubble a note
+// is drawn as, so the button and the thing it opens read as one object. It is
+// deliberately NOT a magnifier or a document — notes are a different corpus from
+// the scripture the Search and Find controls beside it look through, and the
+// control should say so at a glance. Falls back to a mail glyph if the asset is
+// missing.
+var iconNoteBubble fyne.Resource = func() fyne.Resource {
+	if len(noteBubbleSVG) == 0 {
+		return theme.MailComposeIcon()
+	}
+	return fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG)
 }()

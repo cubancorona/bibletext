@@ -15,16 +15,77 @@ package bibletext
 // the scripture and looks like nothing happened.
 
 import (
+	"image/color"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// noteEntrySlot is the transparent box the native compose field parks over. It
+// is a widget rather than a bare rectangle so its own Resize/Move push the
+// fresh absolute rect across to the native view — the live-tracking pattern
+// nativeReadingHost uses for the reading overlay. Without it the field's frame
+// was only re-asserted for 600ms after the sheet opened, and any later layout
+// change left the UITextView stranded where the slot used to be.
+//
+// open latches it: a slot from a closed sheet must never push frames, or a
+// stale relayout could reposition a native view belonging to nothing.
+type noteEntrySlot struct {
+	widget.BaseWidget
+	open *bool
+}
+
+func newNoteEntrySlot(open *bool) *noteEntrySlot {
+	s := &noteEntrySlot{open: open}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+func (s *noteEntrySlot) CreateRenderer() fyne.WidgetRenderer {
+	r := canvas.NewRectangle(color.Transparent)
+	r.SetMinSize(fyne.NewSize(0, 112)) // ~4 comfortable lines at 18px
+	return widget.NewSimpleRenderer(r)
+}
+
+func (s *noteEntrySlot) Resize(sz fyne.Size) {
+	s.BaseWidget.Resize(sz)
+	s.push()
+}
+
+func (s *noteEntrySlot) Move(p fyne.Position) {
+	s.BaseWidget.Move(p)
+	s.push()
+}
+
+// push projects the slot's rect immediately (responsive) and again a tick later
+// (Resize/Move can fire mid-layout, before siblings have their final heights —
+// same double-push the reading overlay uses).
+func (s *noteEntrySlot) push() {
+	if s.open == nil || !*s.open {
+		return
+	}
+	setNativeNoteEntryFrameFromObject(s)
+	time.AfterFunc(50*time.Millisecond, func() {
+		fyne.Do(func() {
+			if s.open != nil && *s.open {
+				setNativeNoteEntryFrameFromObject(s)
+			}
+		})
+	})
+}
+
+// noteEntryOnChanged is installed by the compose sheet while it is open, and
+// fired (via fyne.Do) by the native field's //export callback on every edit —
+// it drives the live character counter. nil whenever no sheet is up.
+var noteEntryOnChanged func()
 
 // promptShareNote collects an optional note, then shares the link carrying it.
 // It is a SECOND verb beside "Share as link", never a step in front of it: the
@@ -50,15 +111,26 @@ func promptShareNote(state *AppState, selectedText string) {
 	}
 	var popup *widget.PopUp
 	closed := false
+	// sheetOpen latches the native slot's frame-pushing (see noteEntrySlot): it
+	// must drop on EVERY close path, or a stale relayout of this sheet's dead
+	// slot could reposition a newer sheet's field.
+	sheetOpen := true
 	closeSheet := func() {
 		if closed {
 			return
 		}
 		closed = true
+		sheetOpen = false
+		noteEntryOnChanged = nil
+		hideNativeNoteEntry() // no-op off iOS, and when the Fyne entry was used
 		if popup != nil {
-			popup.Hide()
+			popup.Hide() // removes it from the overlay stack synchronously
 		}
-		if state.showReadingOverlay != nil {
+		// Restore the reading overlay only when nothing else owns the canvas —
+		// the same rule the keep/delete prompt follows. On the watchdog path a
+		// window rebuild may already have re-pinned everything, and another
+		// sheet may have opened since.
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
 			state.showReadingOverlay()
 		}
 	}
@@ -71,25 +143,45 @@ func promptShareNote(state *AppState, selectedText string) {
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
 
+	// On iOS the field is a REAL UITextView floated over the sheet (dictation,
+	// autocorrect, system selection, undo, VoiceOver, system emoji — see
+	// note_entry_ios.go). Everywhere else it is the Fyne entry below. noteText
+	// is the one place that knows which is live.
+	useNative := mobile && nativeNoteEntrySupported()
+
 	entry := newSearchEntry()
 	entry.SetPlaceHolder("Say something about this passage…")
+	noteText := func() string {
+		if useNative {
+			return nativeNoteEntryText()
+		}
+		return entry.Text
+	}
 
 	// A live count, because the cap is real: the note rides inside the link, and
 	// a link a messenger truncates is a link that opens nothing.
-	left := canvas.NewText("", pal.TextMuted)
-	left.TextSize = 11
+	//
+	// A WRAPPING RichText, not a canvas.Text: a canvas.Text never wraps, so the
+	// idle line's ~357pt made it the whole card's minimum width — and on a
+	// canvas narrower than that, the non-modal renderer grew the card past the
+	// screen's right edge, taking the Share button with it (the implementation requirement).
+	left := widget.NewRichText(&widget.TextSegment{
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+	})
+	left.Wrapping = fyne.TextWrapWord
 	updateLeft := func() {
-		n := utf8.RuneCountInString(strings.TrimSpace(entry.Text))
+		seg := left.Segments[0].(*widget.TextSegment)
+		n := utf8.RuneCountInString(strings.TrimSpace(noteText()))
 		switch {
 		case n == 0:
-			left.Text = "Optional. The note travels inside the link — it is never uploaded."
-			left.Color = pal.TextMuted
+			seg.Text = "Optional. The note travels inside the link — it is never uploaded."
+			seg.Style.ColorName = colorNameMuted
 		case n > NoteMaxRunes:
-			left.Text = "Too long by " + strconv.Itoa(n-NoteMaxRunes) + " — it will be shortened"
-			left.Color = pal.RedLetter
+			seg.Text = "Too long by " + strconv.Itoa(n-NoteMaxRunes) + " — it will be shortened"
+			seg.Style.ColorName = theme.ColorNameError
 		default:
-			left.Text = strconv.Itoa(NoteMaxRunes-n) + " characters left"
-			left.Color = pal.TextMuted
+			seg.Text = strconv.Itoa(NoteMaxRunes-n) + " characters left"
+			seg.Style.ColorName = colorNameMuted
 		}
 		left.Refresh()
 	}
@@ -97,7 +189,7 @@ func promptShareNote(state *AppState, selectedText string) {
 	updateLeft()
 
 	send := func() {
-		note := strings.TrimSpace(entry.Text)
+		note := strings.TrimSpace(noteText())
 		closeSheet()
 		shareVerseLinkWithNote(state, selectedText, note)
 	}
@@ -108,10 +200,19 @@ func promptShareNote(state *AppState, selectedText string) {
 	cancelBtn := widget.NewButton("Cancel", closeSheet)
 	actions := container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, sendBtn))
 
+	// The field's slot in the form. With the native view in play the slot is a
+	// transparent tracking widget — the UITextView is parked exactly over it and
+	// FOLLOWS it through every relayout, so Fyne still owns the layout and the
+	// native view just wears it.
+	entrySlot := fyne.CanvasObject(inputFrame(withCaret(state, entry), pal.Border))
+	if useNative {
+		entrySlot = newNoteEntrySlot(&sheetOpen)
+	}
+
 	form := container.NewVBox(
 		title, ref,
 		widget.NewSeparator(),
-		inputFrame(withCaret(state, entry), pal.Border),
+		entrySlot,
 		left,
 		actions,
 	)
@@ -149,7 +250,35 @@ func promptShareNote(state *AppState, selectedText string) {
 	}
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
-	focusEntry()
+
+	// A window rebuild (theme flip, rotation, a background data swap) drains
+	// every popup WITHOUT running closeSheet — Hide() is all a drain does. For
+	// the Fyne entry that was merely untidy; with a native field it would leave
+	// an orphaned UITextView floating over whatever the rebuild painted. Poll
+	// until the popup is gone by ANY route, then run the (idempotent) teardown —
+	// the same 150ms watchdog the ask sheet uses.
+	var watch func()
+	watch = func() {
+		if popup == nil || !popup.Visible() {
+			closeSheet() // idempotent; also drops the slot latch
+			return
+		}
+		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+	}
+	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+
+	if !useNative {
+		focusEntry()
+		return
+	}
+
+	// Native field: create it (keyboard comes up with it) and install the
+	// counter hook. Placement is the slot widget's job from here — its
+	// Resize/Move fired during the popup's layout pass above and keep firing on
+	// every relayout. The view stays hidden until its first real frame arrives,
+	// so mis-timing shows nothing rather than a box at (0,0).
+	showNativeNoteEntry("", "Say something about this passage…", pal)
+	noteEntryOnChanged = updateLeft
 }
 
 // showSharedNote presents a note that arrived on a link. It is deliberately a
@@ -204,11 +333,20 @@ func showSharedNote(state *AppState, note string) {
 	okBtn := widget.NewButton("Read the passage", closeCard)
 	okBtn.Importance = widget.HighImportance
 
-	form := container.NewVBox(
-		who, ref,
-		widget.NewSeparator(),
-		body,
+	// The note is the one thing here that grows — 280 runes of someone's
+	// message, possibly with blank lines — so IT scrolls while the attribution
+	// and the button stay fixed. The button matters most: this popup is modal
+	// and "Read the passage" is its ONLY dismissal, so a note tall enough to
+	// push it off a small phone stranded the reader with the reading overlay
+	// latched hidden (the implementation requirement). squeezeWidthLayout for the same reason as
+	// every scroll here: a bare VScroll widens content to its MinSize and clips
+	// it sideways (sheet_fit.go).
+	bodyScroll := container.NewVScroll(container.New(squeezeWidthLayout{}, body))
+	form := container.NewBorder(
+		container.NewVBox(who, ref, widget.NewSeparator()),
 		container.NewBorder(nil, nil, nil, container.NewHBox(okBtn)),
+		nil, nil,
+		bodyScroll,
 	)
 
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
@@ -218,7 +356,19 @@ func showSharedNote(state *AppState, note string) {
 	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
 		w = cw
 	}
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	fit := func() {
+		pos, sz := cnv.InteractiveArea()
+		maxH := sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16)
+		h := scrollingSheetHeight(
+			popup.MinSize().Height,
+			bodyScroll.MinSize().Height,
+			body.MinSize().Height,
+			maxH,
+		)
+		popup.Resize(fyne.NewSize(w, h))
+	}
+	fit()
+	fit() // wrap-accurate only after the first layout pass (the ai_settings lesson)
 }
 
 // shareNoteReference is the passage label on the compose sheet — the same

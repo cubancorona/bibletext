@@ -26,13 +26,25 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 		b.WriteString("<p>")
 		for i, v := range para {
 			if i > 0 {
-				if poeticJoin(para[i-1].Text, v.Text) {
+				switch {
+				case poeticJoin(para[i-1].Text, v.Text):
 					b.WriteString("<br>")
-				} else {
+				case isVerseHighlighted(state, para[i-1]) && isVerseHighlighted(state, v):
+					// The joining space belongs to the band, or the highlight
+					// comes out notched at every join falling mid-line. Same
+					// fix, same reason, as the iOS dialect in reading.go.
+					fmt.Fprintf(&b, `<span style="background-color:%s"> </span>`, hlBG)
+				default:
 					b.WriteString(" ")
 				}
 			}
-			fmt.Fprintf(&b, `<sup><small><font color="%s"><b>%d</b></font></small></sup>&nbsp;`, vnum, v.Verse)
+			// The number joins the band too — leaving it out punches a pale
+			// hole through the middle of the highlight (iOS parity).
+			if isVerseHighlighted(state, v) {
+				fmt.Fprintf(&b, `<span style="background-color:%s"><sup><small><font color="%s"><b>%d</b></font></small></sup>&nbsp;</span>`, hlBG, vnum, v.Verse)
+			} else {
+				fmt.Fprintf(&b, `<sup><small><font color="%s"><b>%d</b></font></small></sup>&nbsp;`, vnum, v.Verse)
+			}
 			// Authored poem lines become explicit <br> (Html.fromHtml collapses
 			// a literal "\n" as whitespace; handleBr maps <br> to "\n", and the
 			// TextView's INTER_WORD justification exempts hard-break lines, so

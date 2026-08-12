@@ -106,6 +106,30 @@ type AppState struct {
 	// survives the window rebuilds that tab switches trigger.
 	aiSearchMode bool
 
+	// NotesMode is the Search tab's third mode: browsing the notes people have
+	// shared. Mutually exclusive with aiSearchMode — searchModeOf is the one
+	// place that resolves the pair, so no caller has to remember the rule.
+	NotesMode bool
+
+	// forceReposition asks the next render to place the view even when nothing
+	// about the chapter changed.
+	//
+	// The reading panes skip their whole push — HTML rebuild AND the scroll
+	// cadence that rides on it — when the render fingerprint is unchanged. That
+	// is right for a repaint and WRONG for a navigation: tapping a note (or a
+	// search result) for the passage you are already reading produces an
+	// identical fingerprint, so the view never moved and the tap looked broken.
+	// The fingerprint's job is to avoid re-rendering, not to suppress
+	// re-positioning. Set by the explicit arrivals — a shared link, a note, a
+	// search result — and cleared by the render that honours it.
+	forceReposition bool
+
+	// NotesQuery filters the notes browser. It is deliberately NOT the keyword
+	// search query: switching Search → Notes with a scripture term still in the
+	// box would greet the reader with "no notes match" for a search they never
+	// made of their notes.
+	NotesQuery string
+
 	// Annotations is the foundation for note/highlight + research features. It is
 	// populated/persisted by future work; the reading view already renders verses
 	// as selectable, individually-referenceable blocks.
@@ -564,6 +588,22 @@ func executeSearch(state *AppState, rawQuery string) {
 		return
 	}
 
+	// A PASTED SHARE LINK opens like a tapped one. This is how notes reach the
+	// desktop at all: macOS/Windows/Linux are never handed a universal link by
+	// the OS, but a reader can paste one from a message into the box they
+	// already think of as "where I type things" — and it routes through the
+	// very same HandleShareLink the OS entry points use, notes gate, offer
+	// dialog and all. Mobile gets the same trick for free.
+	if _, isLink := ParseShareLink(trimmed); isLink {
+		if HandleShareLink(state, trimmed) {
+			clearSearchState(state)
+			if state.setSearchText != nil {
+				state.setSearchText("")
+			}
+			return
+		}
+	}
+
 	if book, chapter, verse, hasVerse, ok := state.Bible.parseReferenceQuery(trimmed); ok && hasVerse {
 		if match := state.Bible.GetVerse(book, chapter, verse); match != nil {
 			openSearchResult(state, *match)
@@ -664,7 +704,14 @@ func runSearch(state *AppState, trimmed string) {
 	state.refreshReadingOnly()
 }
 
+// openSearchResult opens a single verse. openSearchResultRange is the same act
+// for a passage that spans several — a note's range, say — kept as one function
+// so the two arrivals cannot drift apart.
 func openSearchResult(state *AppState, verse Verse) {
+	openSearchResultRange(state, verse, 0)
+}
+
+func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 	// Drop the search field's focus (and the soft keyboard) BEFORE rebuilding. When a
 	// result is tapped the Search-tab field is usually still focused; jumping to the
 	// Read tab then dismissing the keyboard can leave the field's pixels ghosting over
@@ -679,10 +726,19 @@ func openSearchResult(state *AppState, verse Verse) {
 	selectBook(state, verse.BookName, false)
 	state.CurrentChapter = verse.Chapter
 	addRecentChapter(state, verse.BookName, verse.Chapter)
+	// The reader asked to go here. Place the view even if this is the chapter
+	// already on screen with the very same verse already lit — otherwise the tap
+	// does nothing visible (see AppState.forceReposition).
+	state.forceReposition = true
+	// And drop any pending "reopen where you left off" target: it now outranks the
+	// highlight in the reading panes, so leaving it armed would send an explicit
+	// arrival to the saved position instead of the verse just asked for.
+	state.restore = nil
 	state.HighlightedBook = verse.BookName
 	state.HighlightedChapter = verse.Chapter
 	state.HighlightedVerse = verse.Verse
-	state.HasHighlightedVerse = true
+	state.HighlightedVerseEnd = endVerse
+	state.HasHighlightedVerse = verse.Verse > 0
 	state.IsSearching = false
 	state.CanReturnToSearchResults = true
 	state.refresh()

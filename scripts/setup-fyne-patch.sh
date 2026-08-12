@@ -24,6 +24,8 @@ cd "$(dirname "$0")/.."   # repo root
 FYNE_VERSION="v2.7.4"                                  # MUST match the require in go.mod
 PATCH="patches/fyne-2.7.4-ios-drawloop.patch"
 PATCH_CARET="patches/fyne-2.7.4-caret-blink.patch"
+PATCH_EMOJI="patches/fyne-2.7.4-noto-emoji.patch"
+EMOJI_FONT="patches/NotoColorEmoji.ttf"
 DEST="third_party/fyne"
 
 # Guard: the patch is tied to this exact Fyne version. If go.mod's require has
@@ -54,6 +56,12 @@ cp -R "$CACHE" "$DEST"
 chmod -R u+w "$DEST"
 patch -p1 -d "$DEST" < "$PATCH"
 patch -p1 -d "$DEST" < "$PATCH_CARET"
+patch -p1 -d "$DEST" < "$PATCH_EMOJI"
+# The emoji swap is patch + binary: the .patch retargets the embed directive, and
+# the font itself (a binary; it cannot ride a unified diff) is copied in here.
+# Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
+cp "$EMOJI_FONT" "$DEST/theme/font/NotoColorEmoji.ttf"
+rm -f "$DEST/theme/font/EmojiOneColor.otf"   # no longer embedded; leaving it would ship 4 MB of nothing
 
 # 3. Verify the patches actually landed.
 TARGET="$DEST/internal/driver/mobile/app/darwin_ios.go"
@@ -66,4 +74,9 @@ if ! grep -q "BibleText patch: discrete caret blink" "$TARGET_CARET"; then
   echo "ERROR: patch did not apply — '$TARGET_CARET' is unpatched." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink)."
+if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
+   || [ ! -s "$DEST/theme/font/NotoColorEmoji.ttf" ]; then
+  echo "ERROR: emoji swap did not land — bundled-emoji.go unpatched or font missing." >&2
+  exit 1
+fi
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji)."

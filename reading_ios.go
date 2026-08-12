@@ -544,8 +544,7 @@ static NSString *gNoteText = nil;
 static BOOL      gNoteMinimized = NO;
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
-static CAShapeLayer *gNoteCard = nil;    // the rounded card
-static CAShapeLayer *gNoteTail = nil;    // the speech tail beneath it
+static CAShapeLayer *gNoteCard = nil;    // the whole bubble: card + speech tail
 static CGFloat   gNoteBandH = 0;       // what we reserved, in points
 static CGFloat   gNoteBg[3]     = {0.99, 0.98, 0.97};
 static CGFloat   gNoteFg[3]     = {0.15, 0.13, 0.11};
@@ -585,6 +584,49 @@ static const CGFloat kNotePad = 12, kNoteGap = 10, kNoteBtn = 30;
 // The speech tail: what makes it read as somebody talking rather than a panel.
 // Matches the web bubble, which hangs a small triangle under the left shoulder.
 static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
+
+// btIOSNoteBubblePath is the bubble's whole outline — rounded card AND speech
+// tail — as ONE continuous path, for a card w wide and h tall (the view itself
+// is h + kNoteTail tall, the extra being the tail).
+//
+// One path, not two shapes, because the seam is otherwise unavoidable. Drawing a
+// rounded rect and a triangle separately means the rect's bottom stroke runs
+// straight across the mouth of the tail, and no amount of z-ordering removes it:
+// the line belongs to the card, and the card has to be on top for its fill to
+// hide the tail's own base. Here the outline simply walks along the bottom edge,
+// detours down and back for the tail, and carries on — so there is no line to
+// hide. Stroke and fill are single-pass and the join is seamless.
+//
+// Wound clockwise from the top-left corner, in UIKit's y-down space (0 = right,
+// π/2 = down), so the bottom edge is travelled right-to-left and the tail's
+// right base comes before its left.
+static UIBezierPath *btIOSNoteBubblePath(CGFloat w, CGFloat h) {
+    const CGFloat r = 10;             // matches the card's corner radius
+    const CGFloat in = 0.5;           // half the 1pt stroke, kept inside bounds
+    CGFloat left = in, top = in, right = w - in, bottom = h - in;
+    CGFloat tx0 = kNoteTailX, tx1 = kNoteTailX + kNoteTailW;
+    CGFloat apexX = kNoteTailX + kNoteTailW / 2, apexY = bottom + kNoteTail - 1;
+
+    UIBezierPath *p = [UIBezierPath bezierPath];
+    [p moveToPoint:CGPointMake(left + r, top)];
+    [p addLineToPoint:CGPointMake(right - r, top)];
+    [p addArcWithCenter:CGPointMake(right - r, top + r) radius:r
+             startAngle:-M_PI_2 endAngle:0 clockwise:YES];
+    [p addLineToPoint:CGPointMake(right, bottom - r)];
+    [p addArcWithCenter:CGPointMake(right - r, bottom - r) radius:r
+             startAngle:0 endAngle:M_PI_2 clockwise:YES];
+    [p addLineToPoint:CGPointMake(tx1, bottom)];
+    [p addLineToPoint:CGPointMake(apexX, apexY)];
+    [p addLineToPoint:CGPointMake(tx0, bottom)];
+    [p addLineToPoint:CGPointMake(left + r, bottom)];
+    [p addArcWithCenter:CGPointMake(left + r, bottom - r) radius:r
+             startAngle:M_PI_2 endAngle:M_PI clockwise:YES];
+    [p addLineToPoint:CGPointMake(left, top + r)];
+    [p addArcWithCenter:CGPointMake(left + r, top + r) radius:r
+             startAngle:M_PI endAngle:(3 * M_PI_2) clockwise:YES];
+    [p closePath];
+    return p;
+}
 
 // How tall the sticker needs to be at this width. Measured BEFORE the band is
 // reserved, because the band's height is this number — that ordering is the
@@ -685,7 +727,6 @@ static void btIOSEnsureNoteView(void) {
 
     UIView *box = [[UIView alloc] initWithFrame:CGRectZero];
     gNoteCard = nil;
-    gNoteTail = nil;
     if (gNoteMinimized) {
         // The collapsed marker is a plain pill — no tail, exactly as on the web.
         box.backgroundColor = btNoteColor(gNoteBg);
@@ -694,16 +735,14 @@ static void btIOSEnsureNoteView(void) {
         box.layer.cornerRadius = kNoteBtn / 2;
         box.clipsToBounds = YES;
     } else {
-        // Two layers, tail FIRST: the card is drawn opaque on top of it, which
-        // hides the seam where they meet. Stroking one combined path would draw
-        // a line straight across the tail's mouth.
+        // ONE layer, one continuous outline — card and tail are a single path
+        // (see btIOSNoteBubblePath). The first cut drew them as two shapes with
+        // the card opaque on top to hide the seam, but the card's own bottom
+        // stroke still ran straight across the tail's mouth: a hairline lid on
+        // the speech bubble. An outline that simply detours into the tail on its
+        // way along the bottom edge has no crossing line to hide.
         box.backgroundColor = [UIColor clearColor];
         box.clipsToBounds = NO;
-        gNoteTail = [CAShapeLayer layer];
-        gNoteTail.fillColor = btNoteColor(gNoteBg).CGColor;
-        gNoteTail.strokeColor = btNoteColor(gNoteBorder).CGColor;
-        gNoteTail.lineWidth = 1;
-        [box.layer addSublayer:gNoteTail];
         gNoteCard = [CAShapeLayer layer];
         gNoteCard.fillColor = btNoteColor(gNoteBg).CGColor;
         gNoteCard.strokeColor = btNoteColor(gNoteBorder).CGColor;
@@ -819,18 +858,9 @@ static void btIOSLayoutNote(void) {
     gNoteView.frame = CGRectMake(x, y, w, h + kNoteTail);
 
     // The card fills the top; the tail hangs under its left shoulder, pointing
-    // down at the passage the note is about.
-    CGRect card = CGRectMake(0.5, 0.5, w - 1, h - 1);
+    // down at the passage the note is about. One path for both.
     gNoteCard.frame = gNoteView.bounds;
-    gNoteCard.path = [UIBezierPath bezierPathWithRoundedRect:card cornerRadius:10].CGPath;
-
-    UIBezierPath *tp = [UIBezierPath bezierPath];
-    [tp moveToPoint:CGPointMake(kNoteTailX, h - 1)];
-    [tp addLineToPoint:CGPointMake(kNoteTailX + kNoteTailW / 2, h - 1 + kNoteTail)];
-    [tp addLineToPoint:CGPointMake(kNoteTailX + kNoteTailW, h - 1)];
-    [tp closePath];
-    gNoteTail.frame = gNoteView.bounds;
-    gNoteTail.path = tp.CGPath;
+    gNoteCard.path = btIOSNoteBubblePath(w, h).CGPath;
 
     UILabel  *who  = (UILabel *)[gNoteView viewWithTag:902];
     UILabel  *body = (UILabel *)[gNoteView viewWithTag:903];
@@ -840,6 +870,30 @@ static void btIOSLayoutNote(void) {
     body.frame = CGRectMake(kNotePad, kNotePad + 14 + 4, w - 2 * kNotePad, h - kNotePad - 14 - 4 - kNotePad);
     hide.frame = CGRectMake(w - 2 * kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
     del.frame  = CGRectMake(w - kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
+}
+
+// btIOSNoteTopY is where the top of the sticker sits in the text view's CONTENT
+// coordinates, or -1 when there is no note to worry about.
+//
+// The same arithmetic btIOSLayoutNote uses to place the sticker, deliberately —
+// the scroll target and the sticker must not be able to disagree about where the
+// note is.
+static CGFloat btIOSNoteTopY(void) {
+    if (gNoteText == nil || gReadingTV == nil) return -1;
+    if (gNoteTopInset > 0) return 14;   // reserved with the container inset
+    NSLayoutManager *lm = gReadingTV.layoutManager;
+    NSTextContainer *tc = gReadingTV.textContainer;
+    NSTextStorage   *ts = gReadingTV.textStorage;
+    if (lm == nil || tc == nil || ts == nil || ts.length == 0) return -1;
+    NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
+    NSRange para = [ts.string paragraphRangeForRange:anchor];
+    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) return -1;
+    NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+    if (g.length == 0) return -1;
+    // The FRAGMENT rect includes the spacing reserved for the band; the sticker
+    // is parked at its top.
+    CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
+    return frag.origin.y + gReadingTV.textContainerInset.top;
 }
 
 // --- Floating "Follow narration" button -------------------------------------
@@ -1022,22 +1076,14 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
 static void bibleTextScrollReadingTV(void) {
     if (gReadingTV == nil) return;
     NSUInteger len = gReadingTV.textStorage.length;
-    if (gReadingHighlightRange.location != NSNotFound &&
-        gReadingHighlightRange.length > 0 &&
-        NSMaxRange(gReadingHighlightRange) <= len) {
-        NSLayoutManager *lm = gReadingTV.layoutManager;
-        NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
-                                    actualCharacterRange:NULL];
-        CGRect rect = [lm boundingRectForGlyphRange:glyphs
-                                    inTextContainer:gReadingTV.textContainer];
-        // A little breathing room above the verse so it doesn't kiss the top.
-        CGFloat target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
-        CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
-        if (target > maxY) target = maxY;
-        if (target < 0) target = 0;
-        gReadingTV.contentOffset = CGPointMake(0, target);
-        return;
-    }
+    // ORDER MATTERS, and it is restore-before-highlight.
+    //
+    // A pending restore only ever exists on a REOPEN — the explicit arrivals (a
+    // tapped link, a note, a search result) clear it precisely so they fall
+    // through to the highlight below. So an armed restore means "the reader is
+    // coming back", and coming back should land where they stopped reading, not
+    // on whatever happens to be highlighted there. With the other order, a note
+    // restored on reopen dragged the reader back to it every launch.
     if (gReadingHasRestore && len > 0) {
         UITextView *tv = gReadingTV;
         NSLayoutManager *lm = tv.layoutManager;
@@ -1063,6 +1109,30 @@ static void bibleTextScrollReadingTV(void) {
             tv.contentOffset = CGPointMake(0, target);
             return;
         }
+    }
+    if (gReadingHighlightRange.location != NSNotFound &&
+        gReadingHighlightRange.length > 0 &&
+        NSMaxRange(gReadingHighlightRange) <= len) {
+        NSLayoutManager *lm = gReadingTV.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
+                                    actualCharacterRange:NULL];
+        CGRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gReadingTV.textContainer];
+        // A little breathing room above the verse so it doesn't kiss the top.
+        CGFloat target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
+        // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band
+        // ABOVE the paragraph holding the highlighted verse, so scrolling to the
+        // verse pushed the message off the top of the screen — and the message is
+        // the reason the link was sent. The passage follows directly under it.
+        // Taken as a minimum rather than a substitution, so this can only ever
+        // scroll further UP: nothing can put the note out of view.
+        CGFloat noteY = btIOSNoteTopY();
+        if (noteY >= 0 && noteY - 12 < target) target = noteY - 12;
+        CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
+        if (target > maxY) target = maxY;
+        if (target < 0) target = 0;
+        gReadingTV.contentOffset = CGPointMake(0, target);
+        return;
     }
     gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
 }
@@ -1261,13 +1331,29 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     gReadAlongRange = NSMakeRange(NSNotFound, 0);
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
-    // Find the highlighted verse (the .hl span becomes a background-coloured run)
-    // so we scroll to it rather than the top when arriving from a search result.
+    // Find the highlighted passage (the .hl spans become background-coloured runs)
+    // so we scroll to it rather than the top when arriving from a search result,
+    // and so a tap on it can offer "Clear highlight".
+    //
+    // EVERY run, unioned — not the first one. This used to stop at the first run,
+    // which was fine while the first run was the verse TEXT. Then the verse NUMBER
+    // joined the band (it was punching a pale hole through the middle of the
+    // highlight), and because the number is superscript it imports as its own
+    // attribute run: the registered range collapsed to the two digits. The band
+    // still LOOKED right, but only the number was tappable, so "Clear highlight"
+    // became unreachable for anyone who tapped the words — and on a link with no
+    // note there is no other way to remove a highlight. observed in practice.
+    //
+    // The union is safe because at most one passage is ever highlighted; the
+    // read-along tint is added to the live storage AFTER this import, so it cannot
+    // widen the range.
     gReadingHighlightRange = (NSRange){NSNotFound, 0};
     [as enumerateAttribute:NSBackgroundColorAttributeName
                    inRange:NSMakeRange(0, as.length) options:0
                 usingBlock:^(id value, NSRange range, BOOL *stop) {
-        if (value != nil) { gReadingHighlightRange = range; *stop = YES; }
+        if (value == nil) return;
+        if (gReadingHighlightRange.location == NSNotFound) gReadingHighlightRange = range;
+        else gReadingHighlightRange = NSUnionRange(gReadingHighlightRange, range);
     }];
     // Attach the clear-highlight tap recognizer + edit-menu interaction ONLY while a
     // verse is highlighted; during ordinary reading they're off the touch path
@@ -1967,9 +2053,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// Books tab and back, or a refresh that didn't change the text). A pending
 	// scroll restore forces the push so the scroll cadence runs. The fingerprint
 	// includes highlight + theme so a search-jump or light/dark flip still pushes.
-	if state.restore == nil && fp == lastPushedChapterFP {
+	// forceReposition defeats the skip: an explicit arrival must place the view
+	// even when the render is byte-identical (see AppState.forceReposition).
+	if state.restore == nil && !state.forceReposition && fp == lastPushedChapterFP {
 		return
 	}
+	state.forceReposition = false
 	lastPushedChapterFP = fp
 	lastPushedBookChapter = bc
 

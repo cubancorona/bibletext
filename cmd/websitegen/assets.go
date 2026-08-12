@@ -423,7 +423,45 @@ const readerJSTemplate = `
   }
 
   // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
+  // THE JOINING SPACE BETWEEN TWO VERSES BELONGS TO THE BAND.
+  //
+  // paragraphBody writes that space BETWEEN two <span class="v"> elements, so it
+  // is inside neither, and a highlighted range came out notched at every join —
+  // one gap per pair, though only the joins falling mid-line are visible, which
+  // is why the fault looked intermittent. Fixed here rather than in the markup so
+  // it repairs every page already generated, without regenerating ~3,900 files.
+  //
+  // Whitespace-only text nodes only. A <br> between two verses (a poem join) has
+  // no width, so there is nothing to bridge and the band should stop at the line
+  // end anyway.
+  function bridgeHighlightGaps() {
+    var lit = document.querySelectorAll('.v.hl');
+    for (var i = 1; i < lit.length; i++) {
+      var n = lit[i - 1].nextSibling;
+      while (n && n !== lit[i]) {
+        var next = n.nextSibling;
+        if (n.nodeType === 3 && n.textContent.length && !n.textContent.trim()) {
+          var s = document.createElement('span');
+          s.className = 'hl hlgap';
+          s.textContent = n.textContent;
+          n.parentNode.replaceChild(s, n);
+        }
+        n = next;
+      }
+    }
+  }
+
+  // Put the bridged spaces back to plain text. Without this, clearing and
+  // re-highlighting would leave stale .hlgap spans lit between verses that are
+  // no longer highlighted.
+  function dropHighlightGaps() {
+    document.querySelectorAll('.hlgap').forEach(function (el) {
+      el.parentNode.replaceChild(document.createTextNode(el.textContent), el);
+    });
+  }
+
   function highlightRange() {
+    dropHighlightGaps();
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
     var m = verseSpan();
     if (!m) return;
@@ -438,6 +476,7 @@ const readerJSTemplate = `
       el.classList.add('hl');
       if (!first) first = el;
     }
+    bridgeHighlightGaps();
     if (first && hi > lo) first.scrollIntoView({ block: 'center' });
   }
   // Clearing a highlight: tap the highlighted text and a small bubble appears at
@@ -539,6 +578,7 @@ const readerJSTemplate = `
     document.documentElement.classList.add('nohl');
     hideBubble();
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
+    dropHighlightGaps(); // the bridged joins go too, or they stay lit alone
     // replaceState fires NO hashchange, so anything reading the fragment has to
     // be updated by hand — otherwise the version switcher keeps carrying a verse
     // that is no longer highlighted.

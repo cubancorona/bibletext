@@ -98,6 +98,15 @@ type styledLayoutParams struct {
 	LineHeight float32 // baseline-to-baseline for body lines
 	ParaGap    float32 // extra gap above a paragraph's first line (not the first paragraph)
 	SpaceW     float32 // width of the inter-word space at body size
+
+	// Indent is the reporter layout's first-line paragraph indent (0 = off).
+	// GEOMETRY ONLY, deliberately: the iOS HTML path has to smuggle its indent
+	// in as literal em+en space characters (the importer drops text-indent), so
+	// its copied text carries them; here the indent never enters the selection
+	// text model, so copy stays clean. A paragraph that OPENS on a poem line
+	// skips the indent — poetry is never first-line indented in print — exactly
+	// the buildChapterHTML rule.
+	Indent float32
 }
 
 // layoutChapter lays the chapter out as styled runs. It mirrors rewrap's
@@ -130,6 +139,13 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		var cur []styledRun
 		curW := float32(0)
 		paraFirst := true
+		// Seeding curW is the whole indent mechanism: the first line's runs
+		// start that far in (place() derives X from curW) and its wrap budget
+		// shrinks by the same amount (the p.Width check); flushLine resets to 0
+		// so every later line of the paragraph sits flush left.
+		if p.Indent > 0 && len(para) > 0 && !verseIsPoetic(para[0].Text) {
+			curW = p.Indent
+		}
 
 		flushLine := func(poemBreak bool) {
 			if len(cur) == 0 {

@@ -299,6 +299,13 @@ func TestBuildChapterHTMLMixedParagraphs(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
+	// Pin PHONE typesetting explicitly. This test asserts the airy phone
+	// paragraph grammar, and the platform default no longer implies it — the
+	// host is darwin, and macOS now reads as the reporter page (the implementation requirement).
+	orig := reporterLayout
+	reporterLayout = func() bool { return false }
+	defer func() { reporterLayout = orig }()
+
 	// Enough prose to close the first paragraph (>=320 chars ending on a
 	// sentence), then poetry: only the poetry paragraph is ragged-right.
 	prose := "In the beginning God created the heavens and the earth. Now the earth was formless and void, and darkness was over the surface of the deep. And the Spirit of God was hovering over the surface of the waters. And God said, Let there be light, and there was light. And God saw that the light was good, and He separated the light from the darkness."

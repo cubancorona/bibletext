@@ -1,10 +1,12 @@
 package bibletext
 
 import (
+	"fmt"
 	"testing"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // With notes off, a note-bearing link must not just open: the app has to stop
@@ -165,5 +167,72 @@ func TestShareTargetReference(t *testing.T) {
 		if got := shareTargetReference(c.t); got != c.want {
 			t.Errorf("got %q, want %q", got, c.want)
 		}
+	}
+}
+
+// The offer's two buttons must never overlap. A Border row pins one left and one
+// right at their natural widths and does not shrink them, so on a narrow canvas
+// the right-hand button is drawn on top of the left one, hiding its label and
+// taking its taps. Every phone under ~410pt did this until the row learned to
+// stack. Only a 16 Pro Max was wide enough to look fine — which is why looking
+// at it was not enough.
+func TestOfferButtonsNeverOverlap(t *testing.T) {
+	for _, w := range []float32{320, 375, 402, 440, 834} {
+		t.Run(fmt.Sprintf("%gpt", w), func(t *testing.T) {
+			app := test.NewApp()
+			defer app.Quit()
+			th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+			app.Settings().SetTheme(th)
+			win := app.NewWindow("offer")
+			win.Resize(fyne.NewSize(w, 812))
+			st := psalm23State()
+			st.window, st.theme = win, th
+
+			offerNoteLinkChoice(st, "https://bibletext.co.uk/bsb/psalms/23/#v1",
+				ShareTarget{Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Note: "hi"})
+			pop, _ := win.Canvas().Overlays().Top().(*widget.PopUp)
+			if pop == nil {
+				t.Fatal("the offer did not open")
+			}
+			test.WidgetRenderer(pop).Layout(pop.Size())
+
+			type box struct {
+				label    string
+				lo, hi   float32
+				top, bot float32
+			}
+			var boxes []box
+			var walk func(o fyne.CanvasObject, ox, oy float32)
+			walk = func(o fyne.CanvasObject, ox, oy float32) {
+				x, y := ox+o.Position().X, oy+o.Position().Y
+				if b, ok := o.(*widget.Button); ok && b.Text != "" {
+					boxes = append(boxes, box{b.Text, x, x + b.Size().Width, y, y + b.Size().Height})
+				}
+				if c, ok := o.(*fyne.Container); ok {
+					for _, ch := range c.Objects {
+						walk(ch, x, y)
+					}
+					return
+				}
+				if wd, ok := o.(fyne.Widget); ok {
+					for _, ch := range test.WidgetRenderer(wd).Objects() {
+						walk(ch, x, y)
+					}
+				}
+			}
+			walk(pop.Content, 0, 0)
+			if len(boxes) < 2 {
+				t.Fatalf("expected both choice buttons, found %d", len(boxes))
+			}
+			for i := range boxes {
+				for j := i + 1; j < len(boxes); j++ {
+					a, b := boxes[i], boxes[j]
+					if a.lo < b.hi-0.5 && b.lo < a.hi-0.5 && a.top < b.bot-0.5 && b.top < a.bot-0.5 {
+						t.Errorf("%q and %q overlap (x %.0f-%.0f vs %.0f-%.0f, y %.0f-%.0f vs %.0f-%.0f)",
+							a.label, b.label, a.lo, a.hi, b.lo, b.hi, a.top, a.bot, b.top, b.bot)
+					}
+				}
+			}
+		})
 	}
 }
