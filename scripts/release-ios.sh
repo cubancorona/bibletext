@@ -49,10 +49,16 @@ note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 
 # Compile in the project's own API.Bible key (from .env.local) so the NKJV
-# works out of the box; generated file is removed by its own EXIT trap, and a
-# build with no key present is simply bring-your-own-key.
+# works out of the box; the generated file is removed by the re-armed trap
+# below, and a build with no key present is simply bring-your-own-key.
 source "${REPO_ROOT}/scripts/embed-bible-key.sh"
 embed_bible_key
+# Re-arm the FULL cleanup. Sourcing embed-bible-key.sh above registered an EXIT
+# trap of its own, and bash keeps only the LAST trap per signal — so it silently
+# replaced the go.mod/FyneApp.toml restore armed earlier and left a temporary
+# `replace` in go.mod after every device build. This trap does both jobs, and
+# being last, it is the one that runs.
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -f "$REPO_ROOT/bundled_key_gen.go"; rm -rf "$WORK"' EXIT
 
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
