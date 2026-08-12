@@ -82,9 +82,30 @@ func consumePendingLink(state *AppState) {
 // It deliberately does NOT switch translation to match the link. Switching can
 // trigger a multi-megabyte download behind a modal spinner, and doing that
 // unasked — possibly on cellular, possibly as someone's first sight of the app
-// — is a bad trade for a wording difference: chapter and verse numbering are
-// shared across our translations, so the passage itself is correct either way.
-// The reader can switch in the version picker if they want the exact wording.
+// — is a bad trade for what is USUALLY only a wording difference. The reader can
+// switch in the version picker if they want the exact wording.
+//
+// "Usually" is doing real work in that sentence, and this comment used to
+// overclaim it ("chapter and verse numbering are shared across our
+// translations"). Measured across all 1189 chapters of the per-verse read-along
+// tables (assets/timings/web.json vs bsb.json): books and chapters align
+// exactly, and 1177 chapters agree on verses. The 12 that do not split two ways:
+//
+//   - Ten are verses WEB carries and the BSB omits on textual-critical grounds
+//     (Matthew 17:21, 18:11, 23:14; Mark 7:16, 9:44, 9:46, 11:26, 15:28;
+//     Luke 23:17; John 5:4; Acts 28:29). Every other number in those chapters
+//     still names the same verse, so only a link landing ON an omitted verse
+//     finds nothing.
+//   - TWO are genuine renumbering, and a link across them points at the wrong
+//     text rather than at nothing: the Romans doxology. WEB has Romans 14:24-26
+//     and ends chapter 16 at v24; the BSB has neither and places those verses at
+//     Romans 16:25-27.
+//
+// So a shared link is safe to open in the reader's own translation everywhere
+// except Romans 14 and 16, where the two families disagree. Anything keyed to a
+// (book, chapter, verse) across translations — notes especially — has to reckon
+// with that pair rather than assume alignment.
+//
 // (A deuterocanonical link is the one case with no fallback; those books simply
 // aren't in the loaded canon, and selectBook leaves the reader where they are.)
 func applyShareTarget(state *AppState, t ShareTarget) {
