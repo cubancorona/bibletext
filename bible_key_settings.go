@@ -24,16 +24,14 @@ import (
 // bibleKeyProbeBudget bounds the Test call — one metadata request.
 const bibleKeyProbeBudget = 12 * time.Second
 
-// bibleKeySection builds the Translations settings group. onKeyPresence is
-// called (with the new presence) whenever the stored key appears or
-// disappears, so the sheet can re-measure itself.
-func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) fyne.CanvasObject {
+// bibleKeySection builds the Translations settings group: the rows that live
+// on the group card, and the footnote that sits below it. onKeyPresence is
+// called whenever the stored key appears or disappears (or the area grows),
+// so the sheet can re-measure itself.
+func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, footer fyne.CanvasObject) {
 	store := state.keys()
 
-	// iOS-settings anatomy: a plain row label above the field, and the
-	// explanation as a FOOTER caption below the group.
-	keyLabel := widget.NewLabel("API.Bible key")
-	footer := caption("The New King James Version downloads with your own free API.Bible key — " +
+	footer = caption("The New King James Version downloads with your own free API.Bible key — " +
 		"create a key, add the NKJV to it, then choose NKJV from the translation picker.")
 
 	entry := widget.NewPasswordEntry()
@@ -116,7 +114,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) fyne.Ca
 	refreshStatus := func() {
 		savedLabel := "✓ Saved on this device."
 		if store.keyInSecureStore(bibleKeyID) {
-			savedLabel = "✓ Saved securely in the device keychain."
+			savedLabel = "✓ Saved in the Keychain."
 		}
 		if strings.TrimSpace(entry.Text) != "" {
 			if saveOK {
@@ -156,16 +154,15 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) fyne.Ca
 		link = widget.NewHyperlink("Get a key ↗", u)
 	}
 
-	return container.NewVBox(
-		keyLabel,
-		entry,
+	rows = container.NewVBox(
+		settingsRow("Key", entry),
 		container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
 		// Status left, "Get a key ↗" right — the same row shape as the
 		// assistant key area, so the two sections read as one design.
 		container.NewBorder(nil, nil, nil, link, status),
 		result,
-		footer,
 	)
+	return rows, footer
 }
 
 // friendlyBibleKeyError keeps provider errors readable at caption length —
