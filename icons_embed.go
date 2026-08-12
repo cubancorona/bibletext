@@ -31,11 +31,21 @@ var noteBubbleSVG []byte
 // equalizer-style waveform), marking a chapter played by on-device speech as
 // distinct from a recorded human narration (which uses theme.AccountIcon, a
 // person). Falls back to VolumeUpIcon if the asset is somehow missing.
+//
+// THEMED, because it is handed to widget.NewButtonWithIcon (audio_menu.go). See
+// the note on iconNoteBubble: a bare static resource there renders the asset's
+// own fill, and every asset in this directory is fill="#000000". It sat next to
+// theme.AccountIcon, which IS themed — so on the dark page the recorded-narration
+// row showed a pale person and the read-aloud row a black smudge.
+//
+// Its other use sites (the audio card's source chip and transport buttons) wrap
+// it in theme.NewColoredResource themselves, which recolours whatever it is
+// given, so they are unaffected by this wrapper.
 var iconAudioWave fyne.Resource = func() fyne.Resource {
 	if len(soundwaveIconSVG) == 0 {
 		return theme.VolumeUpIcon()
 	}
-	return fyne.NewStaticResource("soundwave.svg", soundwaveIconSVG)
+	return theme.NewThemedResource(fyne.NewStaticResource("soundwave.svg", soundwaveIconSVG))
 }()
 
 // iconSkipBack15 / iconSkipFwd15 are the ±15-second skip glyphs (a loop arrow with
@@ -73,9 +83,28 @@ var iconSidebarLeft fyne.Resource = func() fyne.Resource {
 // the scripture the Search and Find controls beside it look through, and the
 // control should say so at a glance. Falls back to a mail glyph if the asset is
 // missing.
+//
+// WRAPPED AS A THEMED RESOURCE, and that is not decoration — it is the whole
+// reason the glyph is visible at night. Every SVG in assets/icons is a single
+// fill="#000000" path, and Fyne only ever recolours an icon it can recognise as
+// a fyne.ThemedResource: widget/button.go tints one solely when the button's
+// Importance is neither Medium nor Low, and a plain StaticResource is left
+// exactly as authored in every case. So this rendered PURE BLACK on the dark
+// rgb(25,23,21) page — owner-reported as "very difficult to see" on the Search
+// tab, where the control is deliberately LowImportance (flat) while inactive and
+// so had no fill behind it either.
+//
+// Themed, both states come out right: while inactive Fyne leaves the resource to
+// tint itself, and NewThemedResource paints it ColorNameForeground, which this
+// theme maps to the palette's Text; while ACTIVE the button is HighImportance and
+// Fyne recolours it to ForegroundOnPrimary, so it reads against the accent fill
+// instead of disappearing into it.
+//
+// The same applies at its other use site, the note banner's "Show note" button
+// (notes_banner.go), which is Medium importance and was equally black.
 var iconNoteBubble fyne.Resource = func() fyne.Resource {
 	if len(noteBubbleSVG) == 0 {
 		return theme.MailComposeIcon()
 	}
-	return fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG)
+	return theme.NewThemedResource(fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG))
 }()
