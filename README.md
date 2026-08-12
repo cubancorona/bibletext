@@ -275,6 +275,25 @@ NRSVue (and, if ever offered, LSB) are actually in its catalog before relying on
 3. Get each translation's **`bibleId`**: `GET /v1/bibles` returns the Bibles your
    key can access, each with an `id`. That id is your `BIBLETEXT_PROVIDER_ID_*`.
 
+### The NKJV key: bundled, then the reader's own
+
+Release builds can carry the project's own free API.Bible key so the NKJV
+works the moment the app opens. It is compiled in by
+`[redacted-retired-private-reference]` (from `.env.local`, into a gitignored file that
+is deleted when the build finishes — a key is never committed), and on first
+run it is written into the **normal on-device key store**, so Settings →
+Translations shows it, "Clear" removes it for good, and pasting a personal key
+replaces it.
+
+**It is a launch convenience with a hard ceiling, not a scaling plan.** The
+free Starter plan is 5,000 calls a month for the whole account; one NKJV
+download is ~197 calls and every device revalidates monthly, so the bundled
+key supports roughly **25 active devices** before a month runs dry — and when
+it does, every reader on that key (the operator included) gets fetch failures
+until the reset. The kill switch is to build without the key: new installs are
+bring-your-own-key again, and existing installs keep what they already have
+until they clear it.
+
 ### The reader's own key (NKJV)
 
 The NKJV needs no operator configuration at all: it is **bring-your-own-key**.

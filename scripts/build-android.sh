@@ -36,6 +36,13 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 # stock. (The go.mod restore lives in the single EXIT trap below — bash keeps
 # only the LAST trap per signal, so it must not be registered separately here.)
 "$REPO_ROOT/scripts/setup-fyne-patch.sh"
+
+# Compile in the project's own API.Bible key (from .env.local) so the NKJV
+# works out of the box; generated file is removed by its own EXIT trap, and a
+# build with no key present is simply bring-your-own-key.
+source "${REPO_ROOT}/[redacted-retired-private-reference]"
+embed_bible_key
+
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
 ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"

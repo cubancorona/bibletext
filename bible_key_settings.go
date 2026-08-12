@@ -116,6 +116,13 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		if store.keyInSecureStore(bibleKeyID) {
 			savedLabel = "✓ Saved in the Keychain."
 		}
+		// Say plainly when the key in use is the one that shipped with the
+		// app rather than one the reader supplied — it is a shared key with a
+		// shared quota, and a reader deciding whether to add their own
+		// deserves to know which they are looking at.
+		if store.usingBundledBibleKey() {
+			savedLabel = "✓ Included with BibleText — or paste your own."
+		}
 		if strings.TrimSpace(entry.Text) != "" {
 			if saveOK {
 				status.Text = savedLabel
@@ -138,7 +145,12 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	}
 	hadKey := store.bibleAPIKey() != ""
 	entry.OnChanged = func(s string) {
-		saveOK = store.setBibleAPIKey(strings.TrimSpace(s))
+		s = strings.TrimSpace(s)
+		saveOK = store.setBibleAPIKey(s)
+		// Emptying the field is a decision, not an accident of state: record
+		// it so the bundled key is not quietly re-seeded next launch. Typing
+		// a key again cancels that.
+		store.noteBibleKeyCleared(s == "")
 		refreshStatus()
 		if has := store.bibleAPIKey() != ""; has != hadKey {
 			hadKey = has
