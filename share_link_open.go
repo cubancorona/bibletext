@@ -113,16 +113,42 @@ func consumePendingLink(state *AppState) {
 // one rebuild, landing on the shared passage. A translation already in memory
 // switches synchronously and costs nothing.
 //
-// (A deuterocanonical link is the one case with no fallback; those books simply
-// aren't in the loaded canon, and selectBook leaves the reader where they are.)
+// (A deuterocanonical link names webc — share_link.go forces that — so the
+// switch above is what makes it openable at all. It only fails if WEBC itself
+// cannot be loaded, and then the canon check below leaves the reader put.)
 func applyShareTarget(state *AppState, t ShareTarget) {
 	if state == nil || state.Bible == nil {
 		return
 	}
-	// A link may name a book this canon doesn't have (Tobit in a 66-book
-	// translation) or a chapter beyond its end (Greek Daniel 13). Land on the
-	// nearest valid thing rather than showing an error: the contract says a bad
-	// payload is ignored, never fatal.
+
+	// note is somebody's remark on particular wording, and the shared-link
+	// contract only ever names a public-domain id (web/bsb/webc), so the target
+	// is always a translation this app can show.
+	//
+	// This runs BEFORE the canon check below, and the order is load-bearing:
+	// ShareLinkURLWithNote forces version=webc for any deuterocanonical book, so
+	// a shared Tobit link is one this app can honour — by switching to WEBC.
+	// Checking the book against the canon the reader HAPPENS to be in first made
+	// such a link do nothing at all: no passage, no note, no message, and
+	// HandleShareLink still reported success so the OS never offered the browser
+	// either.
+	//
+	// It can still mean a download, which is why this parks rather than blocks:
+	// switchVersionInteractive puts the fetch behind its own spinner, and
+	// applyLoadedVersion resumes us by consuming the parked target BEFORE its
+	// rebuild — so the reader sees one rebuild landing on the shared passage,
+	// not a flash of the old chapter first. A translation already in memory
+	// switches synchronously and falls straight through.
+	if switchToLinkVersion(state, t) {
+		return
+	}
+
+	// NOW check the canon — against the translation the link named, if we
+	// switched to it. A link may still name a book this canon lacks (a webc
+	// deuterocanon link opened where WEBC could not be loaded) or a chapter
+	// beyond its end (Greek Daniel 13). Land on the nearest valid thing rather
+	// than showing an error: the contract says a bad payload is ignored, never
+	// fatal.
 	chapters := state.Bible.GetChaptersForBook(t.Book)
 	if chapters == 0 {
 		return
@@ -133,21 +159,6 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	}
 	if chapter > chapters {
 		chapter = chapters
-	}
-
-
-	// note is somebody's remark on particular wording, and the shared-link
-	// contract only ever names a public-domain id (web/bsb/webc), so the target
-	// is always a translation this app can show.
-	//
-	// It can still mean a download, which is why this parks rather than blocks:
-	// switchVersionInteractive puts the fetch behind its own spinner, and
-	// applyLoadedVersion resumes us by consuming the parked target BEFORE its
-	// rebuild — so the reader sees one rebuild landing on the shared passage,
-	// not a flash of the old chapter first. A translation already in memory
-	// switches synchronously and falls straight through.
-	if switchToLinkVersion(state, t) {
-		return
 	}
 
 	if state.window != nil {
@@ -238,11 +249,16 @@ func deliverShareLink(rawURL string) {
 }
 
 // switchToLinkVersion moves the reader to the translation a shared link names,
-// and reports whether applyShareTarget should stand down and let the switch
-// finish the job.
+// and reports whether the caller should stand down and let the switch finish
+// the job.
 //
-// It returns true ONLY when an asynchronous load is now in flight and has taken
-// custody of the target (parked on the state, consumed by applyLoadedVersion).
+// It returns true when an asynchronous load is in flight and the target is
+// parked for applyLoadedVersion to consume. "Custody" is the intent, not a
+// guarantee: if that download FAILS, applyLoadedVersion never runs, and the
+// parked target is dropped rather than applied — the reader stays where they
+// are and the link does not open. That is the deliberate trade (a failed
+// download must not yank them somewhere), but it does mean a tapped link can
+// end in nothing visible when the network is down mid-switch.
 // A synchronous switch — the translation is already in memory — returns false,
 // because there is nothing to wait for and the caller should carry straight on.
 // So does every reason not to switch at all: same translation already, an

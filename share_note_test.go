@@ -136,11 +136,22 @@ func TestNoteInflateIsBounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bomb) > 4096 {
-		t.Skipf("bomb did not compress as expected (%d bytes)", len(bomb))
+	// NO SKIP. The original guard was `len(bomb) > 4096 → t.Skip`, on the belief
+	// that "8 MB of zeroes deflates tiny". DEFLATE cannot do that: a length/
+	// distance pair covers at most 258 bytes and costs at least 2 bits, so 8 MiB
+	// has a hard floor near 8 KB (measured: 8157 bytes at level 9). The condition
+	// was therefore ALWAYS true and this test always skipped — the inflate cap it
+	// exists to prove was never once exercised.
+	if len(bomb) == 0 {
+		t.Fatal("nothing to inflate")
 	}
 	out, err := inflateBytes(bomb)
+	// Either refuse it or truncate it — never hand back the whole bomb.
 	if err == nil && len(out) > NoteMaxRunes*4+1 {
-		t.Errorf("inflate returned %d bytes, past the cap", len(out))
+		t.Errorf("inflate returned %d bytes, past the %d cap — the bound is not enforced",
+			len(out), NoteMaxRunes*4+1)
+	}
+	if err == nil && len(out) >= 8<<20 {
+		t.Error("inflate expanded the bomb in full")
 	}
 }

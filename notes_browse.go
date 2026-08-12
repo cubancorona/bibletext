@@ -233,6 +233,27 @@ func openNote(state *AppState, n SharedNote) {
 	if n.Minimized {
 		setNoteMinimized(appPrefs(), n.VersionID, n.Book, n.Chapter, false)
 	}
+	// Go to the note's TRANSLATION first. Notes are keyed version|book|chapter,
+	// so navigating without switching looks the note up under whichever
+	// translation the reader happens to be in, finds nothing, and clears it —
+	// the reader taps a note in a list of notes and lands on a chapter with no
+	// note. The same deferral the shared-link path uses: an in-memory
+	// translation switches synchronously and we navigate below; a real download
+	// parks the target and applyLoadedVersion finishes the job.
+	if switchToLinkVersion(state, ShareTarget{
+		VersionID: n.VersionID, Book: n.Book, Chapter: n.Chapter,
+		VerseLo: n.VerseLo, VerseHi: n.VerseHi,
+	}) {
+		return
+	}
+	// The note's book may still be absent from the canon now loaded — a webc
+	// deuterocanon note read back under WEB when WEBC could not be loaded.
+	// selectBook would set the book regardless, stranding the reader on a blank
+	// pane AND persisting a dead book, which makes the NEXT launch fail its
+	// restore and drop them at Genesis 1. Leave them where they are instead.
+	if state.Bible == nil || state.Bible.GetChaptersForBook(n.Book) == 0 {
+		return
+	}
 	openSearchResultRange(state, Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}, n.VerseHi)
 }
 

@@ -35,53 +35,34 @@ func TestAISearchPromptContract(t *testing.T) {
 // a model that ignores the instruction cannot flood the results past
 // aiSearchResultCap.
 func TestResolveReferenceListHonorsCap(t *testing.T) {
+	// A corpus BIGGER than the cap, built for the purpose. The previous version
+	// drew its references from PopulateWithSampleVerses — 62 verses against a cap
+	// of 120 — so `len(got) > cap` could never hold and the `distinct > cap`
+	// branch was guarded by a condition that was always false. It passed
+	// unconditionally while appearing to police the bound.
+	const verses = aiSearchResultCap + 40
 	bd := NewBibleData()
-	bd.PopulateWithSampleVerses()
+	bd.Books = []string{"Psalms"}
+	chapter := make([]Verse, 0, verses)
+	for i := 1; i <= verses; i++ {
+		chapter = append(chapter, Verse{BookName: "Psalms", Chapter: 119, Verse: i,
+			Text: fmt.Sprintf("Line %d of the long psalm.", i)})
+	}
+	bd.Verses = map[string]map[int][]Verse{"Psalms": {119: chapter}}
 	bd.PrepareSearchIndex()
 
-	book, ok := "", false
-	var chapter int
-	var verses []Verse
-	for _, b := range bd.Books {
-		for ch, vs := range bd.Verses[b] {
-			if len(vs) > 0 {
-				book, chapter, verses, ok = b, ch, vs, true
-				break
-			}
-		}
-		if ok {
-			break
-		}
-	}
-	if !ok {
-		t.Skip("sample data has no verses")
-	}
-
-	// More distinct resolvable lines than the cap: repeat the chapter's verses
-	// with distinct verse numbers by cycling through every book's chapters.
 	var b strings.Builder
-	distinct := 0
-	for _, bk := range bd.Books {
-		for ch, vs := range bd.Verses[bk] {
-			for _, v := range vs {
-				fmt.Fprintf(&b, "%s %d:%d\n", bk, ch, v.Verse)
-				distinct++
-			}
-		}
-	}
-	if distinct <= aiSearchResultCap {
-		// Not enough sample data to exceed the cap — pad with duplicates and
-		// assert dedup instead (the cap branch is still exercised by the loop).
-		fmt.Fprintf(&b, "%s %d:%d\n", book, chapter, verses[0].Verse)
+	for i := 1; i <= verses; i++ {
+		fmt.Fprintf(&b, "Psalms 119:%d\n", i)
 	}
 
 	got := resolveReferenceList(bd, b.String())
 	if len(got) > aiSearchResultCap {
 		t.Fatalf("resolver must cap results at %d, got %d", aiSearchResultCap, len(got))
 	}
-	if distinct > aiSearchResultCap && len(got) != aiSearchResultCap {
-		t.Fatalf("with %d distinct references the resolver should fill the cap %d, got %d",
-			distinct, aiSearchResultCap, len(got))
+	if len(got) != aiSearchResultCap {
+		t.Fatalf("with %d resolvable references the resolver should FILL the cap %d, got %d",
+			verses, aiSearchResultCap, len(got))
 	}
 }
 

@@ -129,13 +129,16 @@ func TestTrailingDebouncerStaleFire(t *testing.T) {
 func TestAISearchSessionSurvivesRebuild(t *testing.T) {
 	state := &AppState{}
 
-	// Build 1's sidebar takes a pointer to the shared session and submits A.
-	build1 := &state.askSession
+	// Build 1's sidebar captures the session the way a builder does.
+	build1 := captureSessionLikeABuilder(state)
 	genA := build1.Start()
 
-	// The window rebuilds mid-flight (rotation / theme change / version switch);
-	// build 2 takes a pointer to the SAME state-held session and submits B.
-	build2 := &state.askSession
+	// The window rebuilds mid-flight (rotation / theme change / version switch)
+	// and a NEW builder captures again. Taking &state.askSession twice inline —
+	// which this test used to do — is the same address by construction, so the
+	// assertions below were a tautology about the type rather than a check that
+	// the session is state-held.
+	build2 := captureSessionLikeABuilder(state)
 	genB := build2.Start()
 
 	// A's slow completion closes over build1 — it must see itself superseded.
@@ -145,4 +148,11 @@ func TestAISearchSessionSurvivesRebuild(t *testing.T) {
 	if !build2.Current(genB) {
 		t.Error("the post-rebuild submission must be current")
 	}
+}
+
+// captureSessionLikeABuilder mimics what a sidebar builder does: reach the
+// session through the AppState it was handed. If the session ever moves back to
+// a per-build local, this returns distinct objects and the test above fails.
+func captureSessionLikeABuilder(state *AppState) *aiSearchSession {
+	return &state.askSession
 }

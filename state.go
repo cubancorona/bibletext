@@ -187,6 +187,17 @@ type AppState struct {
 	// dropped rather than yanking the reader to a passage they no longer asked
 	// for.
 	pendingLinkVersion string
+	// preferredVersion is the translation the READER chose, when the one on
+	// screen is a forced fallback (a licensed translation that could not be
+	// revalidated — offline, or the shared key's quota spent). It exists because
+	// the chosen translation is stored ONLY in the reading-state blob's Version
+	// field, which is rewritten from CurrentVersion on the first navigation and
+	// on every background/stop flush. Without it, one unlucky launch silently
+	// overwrites the reader's choice with the default and the licensed
+	// translation is forgotten for good rather than returning when they are next
+	// online. Cleared by any successful version load, so an explicit switch
+	// always wins.
+	preferredVersion string
 
 	// loadPhase drives the startup loading screen. The Bible loads on a
 	// background goroutine (so the window appears instantly and the iOS launch

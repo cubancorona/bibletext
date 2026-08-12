@@ -91,11 +91,22 @@ func TestBundledKeyStillClearable(t *testing.T) {
 	app.Settings().SetTheme(th)
 	t.Setenv("BIBLE_API_KEY", "")
 	fake := withFakeSharedKeys(t)
-	fake.setBibleAPIKey("some-key-in-the-store")
+	// The regression this guards is BUNDLED-key specific: with the bundled key in
+	// force the field renders EMPTY, so emptying it fires no OnChanged and Clear
+	// would leave the key in the store. Testing with a reader-typed key exercises
+	// the easy path and proves nothing, which is what the first draft did.
+	prev := bundledBibleKeyEnc
+	defer func() { bundledBibleKeyEnc = prev }()
+	const bundled = "the-bundled-one"
+	bundledBibleKeyEnc = obfuscateForTest(bundled)
+	fake.setBibleAPIKey(bundled)
 
 	st := sampleState()
 	st.theme = th
 	st.aiKeys = fake
+	if !fake.usingBundledBibleKey() {
+		t.Fatal("setup: the store should be holding the bundled key")
+	}
 	rows, _ := bibleKeySection(st, st.pal(), nil)
 
 	clear := findTreeButton(rows, "Clear")
@@ -119,4 +130,62 @@ func obfuscateForTest(key string) string {
 		out[i] = b ^ bundledKeyMask[i%len(bundledKeyMask)]
 	}
 	return base64.StdEncoding.EncodeToString(out)
+}
+
+// The "Get a key ↗" link must sit top-right of the REAL key box, on the label
+// row, clear of the label — checked against the section the app actually builds
+// rather than against a lookalike tree the test assembles itself. The first
+// version of this test did the latter and would have passed no matter what
+// bibleKeySection did.
+func TestRealKeySectionPutsTheLinkTopRight(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	app.Settings().SetTheme(th)
+	t.Setenv("BIBLE_API_KEY", "")
+	fake := withFakeSharedKeys(t)
+	st := sampleState()
+	st.theme = th
+	st.aiKeys = fake
+
+	rows, _ := bibleKeySection(st, st.pal(), nil)
+	// The tree must live in a canvas before absolute positions mean anything —
+	// off-canvas every object reports the same origin, which is how the earlier
+	// draft of this test "passed".
+	win := app.NewWindow("keys")
+	defer win.Close()
+	win.Resize(fyne.NewSize(400, 700))
+	win.SetContent(rows)
+	rows.Resize(fyne.NewSize(354, rows.MinSize().Height))
+
+	var link *widget.Hyperlink
+	var label *widget.Label
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch v := o.(type) {
+		case *widget.Hyperlink:
+			link = v
+		case *widget.Label:
+			if label == nil && strings.Contains(v.Text, "key") {
+				label = v
+			}
+		case *fyne.Container:
+			for _, c := range v.Objects {
+				walk(c)
+			}
+		}
+	}
+	walk(rows)
+	if link == nil || label == nil {
+		t.Fatalf("real section missing link=%v label=%v", link != nil, label != nil)
+	}
+	drv := fyne.CurrentApp().Driver()
+	lp := drv.AbsolutePositionForObject(link)
+	bp := drv.AbsolutePositionForObject(label)
+	if lp.Y > bp.Y+5 {
+		t.Errorf("link dropped below the label row (link y=%v, label y=%v)", lp.Y, bp.Y)
+	}
+	if lp.X <= bp.X {
+		t.Errorf("link is not to the right of the label (link x=%v, label x=%v)", lp.X, bp.X)
+	}
 }
