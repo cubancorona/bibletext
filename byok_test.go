@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -129,5 +130,34 @@ func TestBYOKPickerPlacement(t *testing.T) {
 	fake.setBibleAPIKey("readers-own-key")
 	if got := versionPickerOrder(); got[0].ID != "nkjv" {
 		t.Errorf("BYOK-unlocked NKJV should lead the picker, got %q", got[0].ID)
+	}
+}
+
+// TestProviderKeyLabels pins the Settings key-row labels: every provider has
+// a short name, and the row reads "<Product> key" — never a bare "Key", and
+// never the vendor parenthetical that would crowd the field beside it.
+func TestProviderKeyLabels(t *testing.T) {
+	want := map[string]string{
+		"gemini":    "Gemini key",
+		"openai":    "ChatGPT key",
+		"anthropic": "Claude key",
+		"grok":      "Grok key",
+	}
+	for _, p := range aiProviders() {
+		if p.ShortName == "" {
+			t.Errorf("provider %q has no ShortName", p.ID)
+		}
+		if strings.Contains(p.ShortName, "(") {
+			t.Errorf("provider %q ShortName %q keeps the vendor parenthetical", p.ID, p.ShortName)
+		}
+		got := providerKeyLabel(p)
+		if w, ok := want[p.ID]; ok && got != w {
+			t.Errorf("provider %q key label = %q, want %q", p.ID, got, w)
+		}
+	}
+	// A provider without a short name still names itself rather than
+	// falling back to a bare "key".
+	if got := providerKeyLabel(providerInfo{Name: "Some Provider"}); got != "Some Provider key" {
+		t.Errorf("fallback label = %q", got)
 	}
 }

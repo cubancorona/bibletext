@@ -155,7 +155,9 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	}
 
 	rows = container.NewVBox(
-		settingsRow("Key", entry),
+		// Named for the same reason the assistant's row is: the label must
+		// still identify the key when read on its own.
+		settingsRow("API.Bible key", entry),
 		container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
 		// Status left, "Get a key ↗" right — the same row shape as the
 		// assistant key area, so the two sections read as one design.

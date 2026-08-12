@@ -26,11 +26,16 @@ type aiClient interface {
 // providerInfo describes one selectable AI: identity, default model, where to get
 // a key, and a constructor.
 type providerInfo struct {
-	ID      string
-	Name    string
-	Model   string
-	KeyURL  string
-	KeyHint string
+	ID   string
+	Name string
+	// ShortName is the product alone, without the vendor parenthetical — for
+	// places where the surrounding UI already establishes the context, such
+	// as the Settings key row ("Gemini key"), where the full
+	// "Google Gemini (OpenAI-style) key" would crowd out the field beside it.
+	ShortName string
+	Model     string
+	KeyURL    string
+	KeyHint   string
 	// New builds a client for this provider. It takes the on-device key store so
 	// the returned client can self-heal its model (override → discovered → default,
 	// re-discovering on a model-not-found error). See modelResolver.
@@ -139,7 +144,7 @@ var openAIChatOnlyExclude = []string{"-pro"}
 func aiProviders() []providerInfo {
 	return []providerInfo{
 		{
-			ID: providerGemini, Name: "Google Gemini", Model: geminiModel, FastModel: geminiFastModel,
+			ID: providerGemini, Name: "Google Gemini", ShortName: "Gemini", Model: geminiModel, FastModel: geminiFastModel,
 			KeyURL: "https://aistudio.google.com/apikey", KeyHint: "key from Google AI Studio (starts with “AIza” or “AQ.”)",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
@@ -151,7 +156,7 @@ func aiProviders() []providerInfo {
 			ListModels: listGeminiModels(geminiBaseURL),
 		},
 		{
-			ID: providerOpenAI, Name: "ChatGPT (OpenAI)", Model: openAIModel, FastModel: openAIFastModel,
+			ID: providerOpenAI, Name: "ChatGPT (OpenAI)", ShortName: "ChatGPT", Model: openAIModel, FastModel: openAIFastModel,
 			KeyURL: "https://platform.openai.com/api-keys", KeyHint: "key starts with “sk-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
@@ -168,7 +173,7 @@ func aiProviders() []providerInfo {
 			ExtraModelExclude: openAIChatOnlyExclude,
 		},
 		{
-			ID: providerAnthropic, Name: "Claude (Anthropic)", Model: anthropicModel, FastModel: anthropicFastModel,
+			ID: providerAnthropic, Name: "Claude (Anthropic)", ShortName: "Claude", Model: anthropicModel, FastModel: anthropicFastModel,
 			// Anthropic's developer console moved to platform.claude.com; the old
 			// console.anthropic.com URL still redirects, but sending readers
 			// through a redirect to a differently-branded site is a worse first
@@ -188,7 +193,7 @@ func aiProviders() []providerInfo {
 			// assistant keeps the name Grok, and api.x.ai / console.x.ai still
 			// serve (a SpaceX-branded endpoint is promised with a long
 			// transition — swap grokBaseURL when it lands).
-			ID: providerGrok, Name: "Grok (SpaceXAI)", Model: grokModel, FastModel: grokFastModel,
+			ID: providerGrok, Name: "Grok (SpaceXAI)", ShortName: "Grok", Model: grokModel, FastModel: grokFastModel,
 			KeyURL: "https://console.x.ai", KeyHint: "key starts with “xai-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
