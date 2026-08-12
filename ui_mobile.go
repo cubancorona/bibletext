@@ -343,7 +343,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	// Same for notes: a mode left over from before the reader switched them off
 	// would render a browser whose toggle is no longer on screen.
 	if !notesFeatureOn(state) {
-		state.NotesMode = false
+		setNotesMode(state, false)
 	}
 
 	resultsHost := container.NewStack()
@@ -635,7 +635,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.aiSearchCancelled = inFlight // abandoning is not a zero-result answer
 		state.aiSearchMode = ai
 		state.aiSearchActive = ai // switch the results context with the mode
-		state.NotesMode = mode == modeNotes
+		setNotesMode(state, mode == modeNotes)
 		applyMode()
 	}
 	// One row owning Search / Find / the notes bubble, so the active fill can move

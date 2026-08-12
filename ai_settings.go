@@ -522,8 +522,17 @@ func showAISettings(state *AppState) {
 	// plain label and hides that it is tappable — the same reasoning as the
 	// Paste / Clear / Test row above.
 	deleteNotesBtn := widget.NewButtonWithIcon("Delete all notes", theme.DeleteIcon(), nil)
+	// The count sits beside the verb and is its own tappable: it says how much
+	// "all" is before you commit to it, and it doubles as the way TO the notes —
+	// a reader deciding whether to bin them wants to look first. It is a separate
+	// widget rather than part of the button label because a Fyne button has no
+	// tappable sub-region, and because the two actions are opposites: one reads,
+	// one destroys.
+	notesCount := newNotesCountLink(state, nil) // onTapped assigned below, once done() exists
 	refreshDeleteNotes := func() {
-		if len(readNotes(appPrefs())) == 0 {
+		n := len(readNotes(appPrefs()))
+		notesCount.setCount(n)
+		if n == 0 {
 			deleteNotesBtn.Disable()
 		} else {
 			deleteNotesBtn.Enable()
@@ -535,8 +544,15 @@ func showAISettings(state *AppState) {
 			state.refresh()
 		})
 	}
+	// Opening the list means leaving Settings, so close the sheet first — the
+	// list is behind this sheet, and navigating under an open modal would put the
+	// reader somewhere they cannot see.
+	notesCount.onTapped = func() {
+		done()
+		showNotesList(state)
+	}
 	refreshDeleteNotes()
-	deleteNotesRow := container.NewCenter(deleteNotesBtn)
+	deleteNotesRow := container.NewCenter(container.NewHBox(deleteNotesBtn, notesCount))
 
 	// Scripture text size — the app can't inherit the phone's Larger Text setting
 	// (Fyne renders its own canvas), so this is the reader's size control. Radio

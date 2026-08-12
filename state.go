@@ -198,6 +198,12 @@ type AppState struct {
 	// online. Cleared by any successful version load, so an explicit switch
 	// always wins.
 	preferredVersion string
+	// notesScroll is the notes browser's scroll position, kept while the reader
+	// stays in Notes mode so a rebuild (opening a note and coming back, a theme
+	// flip, a sort change) returns them to where they were reading rather than
+	// to the top of a long list. Cleared when Notes mode is left — coming back
+	// to the notes list fresh should start at the top.
+	notesScroll float32
 
 	// loadPhase drives the startup loading screen. The Bible loads on a
 	// background goroutine (so the window appears instantly and the iOS launch
