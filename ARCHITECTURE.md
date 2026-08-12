@@ -335,7 +335,9 @@ Three gates keep the native overlay cheap on every nav/tab tap:
   traditional Catholic order, adding the 73-book deuterocanon.
 - `licensedAPISource` — a scaffold for a licensed API provider (e.g. API.Bible),
   gated on a license opt-in **and** `BIBLE_API_KEY`. **NRSV**, **LSB** and
-  **NKJV** are wired here but copyrighted, so they are **not user-selectable**.
+  **NKJV** are wired here. NRSV and LSB are copyrighted with no licensed route, so they
+  remain **not user-selectable**; the NKJV IS selectable, served by API.Bible under a key
+  (bundled in this build, or the reader's own).
 
 `canSelect()` is true only when real, redistributable text is available, so the
 picker renders not-yet-licensed versions de-emphasized and non-tappable
