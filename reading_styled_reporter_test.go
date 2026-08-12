@@ -101,9 +101,17 @@ func TestStyledPaneReporterGate(t *testing.T) {
 	if col > m+1 {
 		t.Errorf("column %vpt exceeds the %vpt measure", col, m)
 	}
-	// Gapless paragraphs: line Ys advance by exactly the leading.
+	// Gapless paragraphs: line Ys advance by the leading and nothing more.
+	//
+	// Compared with a tolerance, not for equality: the Ys are ACCUMULATED
+	// float32 sums, so a later line's difference lands a rounding step off the
+	// leading — 23.399998 against 23.4 — and how far off depends on the
+	// platform's text metrics. Exactly that broke CI on the Linux runner while
+	// macOS and Windows passed. The property under test is "no paragraph gap
+	// was added" (a gap would be whole points), which sub-0.01 error cannot
+	// disguise.
 	for i := 1; i < len(p.lay.Lines); i++ {
-		if gap := p.lay.Lines[i].Y - p.lay.Lines[i-1].Y; gap != p.lh {
+		if gap := p.lay.Lines[i].Y - p.lay.Lines[i-1].Y; !nearlyEqual(gap, p.lh, 0.01) {
 			t.Errorf("line %d gap %v, want %v (no paragraph gap in reporter)", i, gap, p.lh)
 		}
 	}
@@ -148,4 +156,16 @@ func TestStyledPaneSelectionUsesLiveInset(t *testing.T) {
 	if back != mid {
 		t.Errorf("offset %d maps to x=%v which maps back to %d — draw and hit-test disagree by the inset", mid, x, back)
 	}
+}
+
+// nearlyEqual compares two laid-out coordinates with a tolerance. Layout
+// values are accumulated float32 sums, so equality is the wrong test for
+// anything downstream of an addition — the error is platform-dependent (it
+// showed up only on the Linux CI runner) and always far below a point.
+func nearlyEqual(got, want, tol float32) bool {
+	d := got - want
+	if d < 0 {
+		d = -d
+	}
+	return d <= tol
 }
