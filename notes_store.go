@@ -68,18 +68,34 @@ func (n SharedNote) key() string { return noteKey(n.VersionID, n.Book, n.Chapter
 // (This comment used to claim oldest-first; it never did that.)
 const notesMax = 200
 
-func readNotes(p prefStore) map[string]SharedNote {
+// readNotesChecked returns the stored notes AND whether the stored blob could be
+// read at all. The second value is the difference between "you have no notes"
+// and "I could not tell what you have", and every writer below depends on it.
+//
+// WHY IT MATTERS SO MUCH. Every mutation here is a read-modify-write: read the
+// whole set, change one entry, write the whole set back. So if a failed read
+// answered "no notes" — which is what this function used to do on a parse error
+// — the very next save, delete or minimize would serialise that emptiness over
+// the top of the reader's entire collection. One unreadable read would become
+// permanent, silent, total loss of messages that only ever existed here, and the
+// reader's next action would be the thing that destroyed them.
+//
+// Returning ok=false instead lets the writers stand down and leave the bytes
+// alone. A blob we cannot parse today may be perfectly readable to a future
+// build, or by hand; an overwritten one is gone. Nothing is shown from an
+// unreadable store either way, so refusing to write costs the reader nothing.
+func readNotesChecked(p prefStore) (map[string]SharedNote, bool) {
 	out := map[string]SharedNote{}
 	if p == nil {
-		return out
+		return out, true // no store at all: there is nothing to overwrite
 	}
 	raw := p.String(prefSharedNotes)
 	if raw == "" {
-		return out
+		return out, true // genuinely empty, and safe to write to
 	}
 	var list []SharedNote
 	if err := json.Unmarshal([]byte(raw), &list); err != nil {
-		return out
+		return out, false // UNREADABLE — callers must not persist over it
 	}
 	for _, n := range list {
 		if n.Book == "" || n.Chapter < 1 || strings.TrimSpace(n.Text) == "" {
@@ -87,7 +103,14 @@ func readNotes(p prefStore) map[string]SharedNote {
 		}
 		out[n.key()] = n
 	}
-	return out
+	return out, true
+}
+
+// readNotes is the read-only view, for callers that only display or count.
+// Anything that goes on to WRITE must use readNotesChecked and honour ok.
+func readNotes(p prefStore) map[string]SharedNote {
+	notes, _ := readNotesChecked(p)
+	return notes
 }
 
 func writeNotes(p prefStore, notes map[string]SharedNote) {
@@ -119,7 +142,10 @@ func saveNote(p prefStore, n SharedNote) {
 	if strings.TrimSpace(n.Text) == "" || n.Book == "" || n.Chapter < 1 {
 		return
 	}
-	notes := readNotes(p)
+	notes, ok := readNotesChecked(p)
+	if !ok {
+		return // unreadable store: saving one note must not erase the rest
+	}
 	// Keep the ORIGINAL arrival time when re-saving a note that is already
 	// stored. saveNote is how minimize and restore persist themselves, so
 	// stamping unconditionally would shuffle a note to the top of "newest first"
@@ -143,14 +169,20 @@ func loadNote(p prefStore, versionID, book string, chapter int) (SharedNote, boo
 
 // deleteNote removes it for good.
 func deleteNote(p prefStore, versionID, book string, chapter int) {
-	notes := readNotes(p)
+	notes, ok := readNotesChecked(p)
+	if !ok {
+		return // see readNotesChecked: deleting one must not delete all
+	}
 	delete(notes, noteKey(versionID, book, chapter))
 	writeNotes(p, notes)
 }
 
 // setNoteMinimized collapses or restores the note on a passage.
 func setNoteMinimized(p prefStore, versionID, book string, chapter int, min bool) {
-	notes := readNotes(p)
+	notes, readable := readNotesChecked(p)
+	if !readable {
+		return // see readNotesChecked: collapsing a bubble must not empty the store
+	}
 	k := noteKey(versionID, book, chapter)
 	n, ok := notes[k]
 	if !ok {
