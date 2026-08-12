@@ -381,7 +381,11 @@ func showAISettings(state *AppState) {
 		keyArea.Objects = []fyne.CanvasObject{
 			container.NewVBox(
 				widget.NewSeparator(),
-				settingsRow("Key", withCaret(state, entry)),
+				// Named, not a bare "Key": once the provider list has scrolled
+
+				// Sentence case with the product's own capitalisation, matching
+				// "Text size" below — the short name keeps the field roomy.
+				settingsRow(providerKeyLabel(info), withCaret(state, entry)),
 				// Paste + Clear + Test on one row; the result label gets its OWN
 				// full-width row below. It must NOT share the row as a Border
 				// center: on a phone the three buttons leave only a sliver of
@@ -769,6 +773,17 @@ func settingsGroup(pal palette, rows ...fyne.CanvasObject) fyne.CanvasObject {
 // filling the rest of the row, label centred against the control's height.
 func settingsRow(label string, control fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel(label)), nil, control)
+}
+
+// providerKeyLabel names the key row for a provider: the product alone
+// ("Gemini key"), since the vendor parenthetical in the picker above already
+// said whose it is and a long label squeezes the field beside it.
+func providerKeyLabel(info providerInfo) string {
+	name := info.ShortName
+	if name == "" {
+		name = info.Name
+	}
+	return name + " key"
 }
 
 // compactTheme shrinks only the base text size of a subtree (applied via
