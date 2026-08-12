@@ -53,6 +53,13 @@ func buildReadingViewMobileFyne(state *AppState) fyne.CanvasObject {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeader(state, chapterNumbers))
+	// The chapter's shared note. This fallback pane is reached when the BtBridge
+	// overlay is absent, and it used to inherit the modal arrival card; that card
+	// is gone now that every pane shows the note inline, so without this the note
+	// would have no surface here at all.
+	if banner := buildNoteBanner(state); banner != nil {
+		top.Add(banner)
+	}
 
 	return container.NewPadded(container.NewBorder(top, nil, nil, nil, paper))
 }

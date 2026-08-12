@@ -29,6 +29,8 @@ import (
 // it above the reading pane.
 func buildNoteBanner(state *AppState) fyne.CanvasObject {
 	if state == nil || !notesFeatureOn(state) || state.ActiveNote == "" {
+		if state != nil {
+		}
 		return nil
 	}
 	pal := state.pal()
