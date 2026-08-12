@@ -388,9 +388,15 @@ func showAISettings(state *AppState) {
 				widget.NewSeparator(),
 				// Named, not a bare "Key": once the provider list has scrolled
 
-				// Sentence case with the product's own capitalisation, matching
-				// "Text size" below — the short name keeps the field roomy.
-				settingsRow(providerKeyLabel(info), withCaret(state, entry)),
+				// The link rides THIS row, top-right of the box — "Get a key" is
+				// what you need BEFORE you have one, so it belongs at the start
+				// of the section rather than below the field, the buttons and
+
+				// the status line, whose text varies with state.
+				keyLinkRow(container.NewCenter(widget.NewLabel(providerKeyLabel(info))), link),
+				// The field gets its OWN full-width line under that label: an API
+				// key is long, and sharing a row with the label left it a stub.
+				withCaret(state, entry),
 				// Paste + Clear + Test on one row; the result label gets its OWN
 				// full-width row below. It must NOT share the row as a Border
 				// center: on a phone the three buttons leave only a sliver of
@@ -400,9 +406,9 @@ func showAISettings(state *AppState) {
 				// message). Hidden until a test runs, so the sheet only grows by
 				// a line or two when there's something to say.
 				container.NewHBox(pasteBtn, clearBtn, testBtn),
-				// Status left, "Get a key ↗" right — the one shared row shape
-				// both key sections use.
-				keyLinkRow(status, link),
+				// Status now has the row to itself — the link moved up to the
+				// label row, so a long hint has the full width to be read in.
+				status,
 				result,
 				widget.NewSeparator(),
 				settingsRow("Model", container.NewThemeOverride(modelBtn,
@@ -508,8 +514,14 @@ func showAISettings(state *AppState) {
 	// so a reader who wanted the messages gone but the feature ON had nowhere to
 
 	// when there is nothing stored, so the row never offers a no-op.
+	// Deliberately NOT DangerImportance: a filled red button shouts at a reader
+	// who is only passing through Settings, and the weight belongs on the
+	// confirmation (whose "Delete them" IS danger-marked), not on the way in
+
+	// rather than going borderless, because a low-importance button reads as a
+	// plain label and hides that it is tappable — the same reasoning as the
+	// Paste / Clear / Test row above.
 	deleteNotesBtn := widget.NewButtonWithIcon("Delete all notes", theme.DeleteIcon(), nil)
-	deleteNotesBtn.Importance = widget.DangerImportance
 	refreshDeleteNotes := func() {
 		if len(readNotes(appPrefs())) == 0 {
 			deleteNotesBtn.Disable()
@@ -524,7 +536,7 @@ func showAISettings(state *AppState) {
 		})
 	}
 	refreshDeleteNotes()
-	deleteNotesRow := container.NewBorder(nil, nil, nil, deleteNotesBtn)
+	deleteNotesRow := container.NewCenter(deleteNotesBtn)
 
 	// Scripture text size — the app can't inherit the phone's Larger Text setting
 	// (Fyne renders its own canvas), so this is the reader's size control. Radio

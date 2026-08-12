@@ -178,6 +178,15 @@ type AppState struct {
 	// the ORIGINAL link, not a reconstruction: only the original is guaranteed to
 	// be byte-identical to what the sender wrote.
 	pendingLinkRaw string
+	// pendingLinkVersion is the translation a parked link is WAITING for. A
+	// shared link opens in the translation it was written against, which can
+	// mean a download; the target is parked here until applyLoadedVersion lands
+	// that translation. Recording WHICH one guards the park: if some other
+	// version arrives first (the reader switched by hand mid-download, or the
+	// load fell back to a cached epoch of something else), the stale target is
+	// dropped rather than yanking the reader to a passage they no longer asked
+	// for.
+	pendingLinkVersion string
 
 	// loadPhase drives the startup loading screen. The Bible loads on a
 	// background goroutine (so the window appears instantly and the iOS launch

@@ -217,7 +217,16 @@ func rememberIncomingNote(state *AppState, t ShareTarget) {
 		return
 	}
 	saveNote(appPrefs(), SharedNote{
-		VersionID: state.currentVersion().ID,
+		// The LINK's translation, not whatever the reader happens to be in. A
+		// note is a remark on particular wording, so it belongs to the
+		// translation it was written against — and applyShareTarget now opens
+		// the link in that translation, so in the ordinary case these are the
+		// same thing. They differ only when the switch could not happen (an
+		// unknown id, or a download already in flight), and then storing it
+		// under the link's translation is still the truthful answer: the note
+		// reappears when the reader is next in that translation, rather than
+		// being filed under one it was never about.
+		VersionID: t.VersionID,
 		Book:      t.Book,
 		Chapter:   state.CurrentChapter,
 		VerseLo:   t.VerseLo,
