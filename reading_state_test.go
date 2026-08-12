@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -272,6 +273,12 @@ func TestApplyRestoredStateValidatesAgainstSavedTranslation(t *testing.T) {
 // the state object and durable preference must remain eligible for a full
 // restore.
 func TestRestoreReadingStateTranslationFailureDoesNotMutate(t *testing.T) {
+	// Point the cache at an empty temp dir. This test asserts the OFFLINE-with-no-
+	// cache path, but loadVersionFromCacheOnly reads the real cache directory — so
+	// on a machine that happens to hold a webc cache (as this one did from 18:47
+	// on 12 Aug) the "offline" load quietly succeeds from disk and the test fails,
+	// having silently been testing the developer's Library rather than the code.
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), "cache.json"))
 	origLoad := loadVersionForRestore
 	defer func() { loadVersionForRestore = origLoad }()
 	wantErr := errors.New("offline")
