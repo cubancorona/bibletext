@@ -48,11 +48,31 @@ trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$W
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 
-# Compile in the project's own API.Bible key (from .env.local) so the NKJV
-# works out of the box; the generated file is removed by the re-armed trap
-# below, and a build with no key present is simply bring-your-own-key.
+# The project's own API.Bible key can be compiled in so the NKJV works out of the
+# box — but NOT by default for a STORE build, which is a public binary.
+#
+# Three reasons, all of them the project's own (README → "The NKJV key"):
+#   1. LICENCE. "A distributed app needs commercial access ... the free Starter
+#      plan's 3 licensed Bibles are non-commercial only." An App Store release is
+#      distribution.
+#   2. EXPOSURE. bundled_key_gen.go XOR-masks the key with the constant string
+#      "bibletext-nkjv", which sits in the same binary — anyone with the .ipa can
+#      recover the key in a minute. Verified: the masked value was present in a
+#      store build made before this guard existed.
+#   3. CEILING. 5,000 calls/month for the whole account, ~197 per NKJV download,
+#      every device revalidating monthly — "roughly 25 active devices before a
+#      month runs dry", after which readers on the bundled key get failures.
+#
+# So embedding is now OPT-IN here: set BIBLETEXT_BUNDLE_KEY=1 when you have
+# commercial terms in hand (or for a small TestFlight round you are watching).
+# Without it the store build is bring-your-own-key, which is what
+# docs/support.html already tells readers.
 source "${REPO_ROOT}/scripts/embed-bible-key.sh"
-embed_bible_key
+if [ "${BIBLETEXT_BUNDLE_KEY:-0}" = "1" ]; then
+  embed_bible_key
+else
+  note "no bundled API.Bible key (store default) — readers supply their own; set BIBLETEXT_BUNDLE_KEY=1 to embed"
+fi
 # Re-arm the FULL cleanup. Sourcing embed-bible-key.sh above registered an EXIT
 # trap of its own, and bash keeps only the LAST trap per signal — so it silently
 # replaced the go.mod/FyneApp.toml restore armed earlier and left a temporary
