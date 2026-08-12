@@ -43,6 +43,21 @@ type palette struct {
 	VerseNumber   color.NRGBA // superscript verse numbers
 	RedLetter     color.NRGBA // words of Christ (red-letter mode)
 	Input         color.NRGBA
+
+	// ControlOutline draws the OFF state of a checkbox and the ring of an
+	// unselected radio — the only things ColorNameInputBorder reaches here. It is
+	// separate from Border because Border is a CARD EDGE: an edge may whisper, but
+	// a control that can be switched on has to look switchable, which WCAG puts at
+	// 3:1 against its own ground.
+	ControlOutline color.NRGBA
+
+	// Disabled / DisabledButton are the label+fill of a button that cannot be
+	// pressed. Unmapped, Fyne answered with its own greys — cool, off-palette, and
+	// 1.26:1 in dark, which made "Delete all notes" (disabled whenever there are
+	// none, i.e. on every fresh install) a blank slab. They stay quieter than the
+	// enabled pair on purpose: disabled must READ as disabled, just not as absent.
+	Disabled       color.NRGBA
+	DisabledButton color.NRGBA
 }
 
 // Light: warm parchment ground so the crisp near-white "page" appears to glow.
@@ -70,6 +85,14 @@ var lightPalette = palette{
 	VerseNumber:   color.NRGBA{R: 83, G: 104, B: 143, A: 255},  // muted slate-blue superscripts
 	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255},   // deep crimson on parchment
 	Input:         color.NRGBA{R: 252, G: 251, B: 247, A: 255},
+	// Unchanged from what Border already drew here: light-mode boxes and rings
+	// were never the problem (the fill is lighter than the card, so the control
+	// reads even at a 1.84:1 outline), and this palette is tuned and shipped.
+	ControlOutline: color.NRGBA{R: 189, G: 178, B: 159, A: 255},
+	// 2.9:1 — clearly quieter than the 13.9:1 enabled pair, and warm, where
+	// Fyne's stock disabled grey read as a cool foreign chip on the parchment.
+	Disabled:       color.NRGBA{R: 142, G: 135, B: 122, A: 255},
+	DisabledButton: color.NRGBA{R: 236, G: 232, B: 224, A: 255},
 }
 
 // Dark: warm near-black with a luminous sapphire accent — illuminated, not stark.
@@ -88,6 +111,17 @@ var darkPalette = palette{
 	VerseNumber:   color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
 	RedLetter:     color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
 	Input:         color.NRGBA{R: 38, G: 35, B: 31, A: 255},
+	// Lifted well clear of Border. Border sat 1.22:1 from SurfaceAlt, which is
+	// fine for an edge and invisible for a hairline checkbox; this is 3.1:1 on
+	// SurfaceAlt, 3.7:1 on Background and 3.4:1 on Surface, so an unticked box
+	// reads as a box on all three grounds it can land on. Warm, to stay in the
+	// palette's family rather than going neutral grey.
+	ControlOutline: color.NRGBA{R: 120, G: 112, B: 101, A: 255},
+	// 2.8:1 against the disabled fill, against 11.8:1 for the enabled pair.
+	// Fyne's unmapped defaults were #39393a on #28292e — 1.26:1, i.e. a blank
+	// cool-grey pill where the words should be.
+	Disabled:       color.NRGBA{R: 118, G: 111, B: 101, A: 255},
+	DisabledButton: color.NRGBA{R: 48, G: 44, B: 40, A: 255},
 }
 
 // bibleTheme is a Fyne theme whose colours come from the active palette. Light
@@ -165,7 +199,39 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 	case theme.ColorNameInputBackground:
 		return p.Input
 	case theme.ColorNameInputBorder:
-		return p.Border
+		// Not p.Border. In THIS app this name reaches exactly one kind of thing:
+		// the OFF state of a checkbox and the ring of an unselected radio. Fyne
+		// draws both entirely from theme icons (widget/check.go and
+		// widget/radio_item.go ask for IconNameCheckButton / IconNameRadioButton
+		// tinted with ColorNameInputBorder, and their fill with
+		// ColorNameInputBackground). Entry outlines do NOT use it here, because
+		// SizeNameInputBorder is 0 below — our own bordered surfaces draw those.
+		//
+		// p.Border is a CARD EDGE colour, and on the dark Settings cards it came
+		// to 1.22:1 against SurfaceAlt. The OFF glyphs are hairlines, so at that
+		// contrast the box and the ring simply were not there: "Show the words of
+		// Christ in red" and the whole ASSISTANT list looked like inert text until
+		// something was selected, at which point one accent dot appeared among
+		// invisible siblings. Light mode never showed it (1.84:1 outline over a
+		// fill LIGHTER than the card, so the box reads).
+		return p.ControlOutline
+	case theme.ColorNameFocus:
+		// The last member of Fyne's primary-colour quartet we had not claimed.
+		// Unmapped it fell through to the stock #006cff, which is off-palette in
+		// both variants AND follows the user's global Fyne primary preference —
+		// so a reader who had set Fyne to, say, green got green focus rings in a
+		// sapphire app.
+		return withAlpha(p.Accent, 96)
+	case theme.ColorNameMenuBackground:
+		// The verse study menu is the one popup that was not painted from the
+		// palette: unmapped, it took Fyne's cool #28292e in dark and #f5f5f5 in
+		// light, both of which read as a foreign slab over the warm page. Same
+		// answer as ColorNameOverlayBackground above, for the same reason.
+		return p.Background
+	case theme.ColorNameDisabled:
+		return p.Disabled
+	case theme.ColorNameDisabledButton:
+		return p.DisabledButton
 	case theme.ColorNamePlaceHolder, colorNameMuted:
 		return p.TextMuted
 	case theme.ColorNameSeparator:
