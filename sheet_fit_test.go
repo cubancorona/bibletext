@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
@@ -237,5 +238,47 @@ func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {
 	top, bottom := sheetBox(t, popup)
 	if h := bottom - top; h > 1600 {
 		t.Errorf("sheet grew to %vpt on a 2400pt canvas — it should stay its natural height", h)
+	}
+}
+
+// The key sections' "status … Get a key ↗" row must never let the two collide.
+// Measured in the REAL sheet (the row is 354pt wide there, not the sheet's 382):
+// the API.Bible hint left a 13pt gap and the longer Gemini hint OVERLAPPED the
+// link by 47pt — owner-reported as cramped. keyLinkRow stacks instead of
+// overlapping, and keeps a real gap when they do share a line.
+func TestKeyLinkRowNeverCollides(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	app.Settings().SetTheme(th)
+
+	for _, hint := range []string{
+		"Free for personal use — no card, no charge.",
+		"key from Google AI Studio (starts with “AIza” or “AQ.”)",
+		"✓ Saved in the Keychain.",
+	} {
+		status := canvas.NewText(hint, theme.Color(theme.ColorNameForeground))
+		status.TextSize = 12
+		link := widget.NewHyperlink("Get a key ↗", nil)
+		row := keyLinkRow(status, link)
+
+		for _, w := range []float32{354, 320, 280, 240} {
+			row.Resize(fyne.NewSize(w, row.MinSize().Height))
+			sp, lp := status.Position(), link.Position()
+			stacked := lp.Y > sp.Y+2
+			if !stacked {
+				// Sharing a line: the link must start clear of the text.
+				if gap := lp.X - (sp.X + status.MinSize().Width); gap < 0 {
+					t.Errorf("width %v, hint %q: link overlaps the status by %vpt", w, hint, -gap)
+				}
+			}
+			// Either way the link must stay inside the row.
+			if right := lp.X + link.MinSize().Width; right > w+0.5 {
+				t.Errorf("width %v, hint %q: link ends at %v, past the row", w, hint, right)
+			}
+			if lp.X < 0 {
+				t.Errorf("width %v, hint %q: link starts off the left edge at %v", w, hint, lp.X)
+			}
+		}
 	}
 }
