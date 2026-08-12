@@ -38,8 +38,14 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 "$REPO_ROOT/scripts/setup-fyne-patch.sh"
 
 # Compile in the project's own API.Bible key (from .env.local) so the NKJV
-# works out of the box; generated file is removed by its own EXIT trap, and a
-# build with no key present is simply bring-your-own-key.
+# works out of the box; a build with no key present is simply bring-your-own-key.
+# NOTE: [redacted-retired-private-reference] arms its OWN EXIT trap to delete the generated file,
+# but this script registers a trap BELOW it and bash keeps only the last trap per
+# signal — so that one would be silently clobbered and the key file would survive
+# every build. The deletion is therefore folded into the single trap below, which
+# is the convention this script already documents. (The iOS scripts register
+# their traps ABOVE the embed call, so theirs is the one that survives and they
+# need no such fold.)
 source "${REPO_ROOT}/[redacted-retired-private-reference]"
 embed_bible_key
 
@@ -51,7 +57,7 @@ WORK="$(mktemp -d /tmp/bibletext-android.XXXXXX)"
 # The trap reverts fyne's Build++ writeback to FyneApp.toml — but ONLY when the
 # file was clean at start, so it can never destroy uncommitted manual edits.
 TOML_WAS_DIRTY="$(git -C "$REPO_ROOT" status --porcelain -- cmd/mobile/FyneApp.toml 2>/dev/null || true)"
-trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex" "$APP_DIR/classes.dex"; git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
+trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex" "$APP_DIR/classes.dex" "$REPO_ROOT/bundled_key_gen.go"; git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
