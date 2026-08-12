@@ -30,6 +30,22 @@ pin `v2.7.4`). Fyne is ~22 MB, 865 Go files. We carry 184 diff lines plus one
 **A dedicated repo — `github.com/cubancorona/fyne` — holding upstream plus a
 curated commit stack, maintained by rebase.**
 
+> **Already in hand (found 2026-08-12).** This repo **exists**: a public fork
+> of fyne-io/fyne created in late June, and a local clone at `~/Dev/fyne` with
+> both remotes wired (`origin` = the fork, `upstream` = fyne-io). The clone
+> carries the drawloop fix as a real commit — `572ea43ad` on branch
+> `fix/ios-drawloop-idle-timeout`, based on upstream `develop` (2026-06-19) —
+> plus two untracked, **never-filed** upstream drafts: `ISSUE_DRAFT.md` (the
+> iOS drawloop main-thread-park bug report, root-caused through
+> `darwin_ios.m`/CADisplayLink) and `PR_DRAFT.md` (the fix PR, issue number
+> still a placeholder). The commit exists **only on that disk** — it is not
+> pushed to the fork. Migration step 1 becomes *reuse*, not *create*: fetch
+> upstream in the clone, cut `bt-main` from the release tag, cherry-pick
+> `572ea43ad` as stack-commit ①, and push branch + drafts for safekeeping.
+> (A separate repo, `~/Dev/fyne-5422-investigation`, documents an earlier
+> upstream-issue investigation — evidence the upstream-first workflow in §4
+> has been exercised before.)
+
 - Branch `bt-main` = upstream release tag + our commits, **one commit per
   logical change, never squashed together**. Today's stack converts 1:1:
   ① drawloop idle-timeout (100ms→2ms), ② discrete caret blink, ③ Noto Color
@@ -122,8 +138,11 @@ In rough value order, each tied to a wound already taken:
 
 ## 7. Migration checklist (~a day, coordinated)
 
-1. Create the fork repo from `v2.7.4`; convert the three patches + font into
-   four commits; push `bt-main`.
+1. **Reuse the existing fork** (see §1): in `~/Dev/fyne`, fetch upstream, cut
+   `bt-main` from `v2.7.4`, cherry-pick `572ea43ad` (drawloop) as commit ①,
+   convert the remaining patches + font into their own commits; push `bt-main`
+   and the fix branch. Note the stack is growing: an Android new-intent patch
+   is in flight in the app repo and would ride along as a fourth code commit.
 2. **Rebase onto `v2.8.0` immediately** — upstream moved while we pinned, and
    doing the first rebase while the stack is tiny shakes down the whole
    process. The app then needs a 2.8 regression pass (whoever holds the app).
@@ -145,4 +164,6 @@ in flight rebases over it.
    jump straight to 2.8.0 during migration?
 3. **Engage upstream early?** An issue/PR conversation with fyne-io about the
    draw loop and a keyboard-inset API before building could save carrying
-   anything at all.
+   anything at all. **The homework is already done**: `~/Dev/fyne` holds a
+   finished issue draft and PR draft for the drawloop (see §1) — a "yes" here
+   is now a filing action, not a writing project.
