@@ -48,15 +48,13 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 # THEIRS that gets clobbered — their go.mod restore was being eaten until they
 # were given the same fold. Registered above means clobbered, not safe.)
 source "${REPO_ROOT}/[redacted-retired-private-reference]"
-# A DEBUG apk is for this machine and the emulator, so the key is a convenience.
-# A --release build is a Play artifact — a public binary — and the same three
-# objections apply as for the store .ipa (see release-ios.sh): the free Starter
-# plan is non-commercial only, the XOR mask ships beside the key, and the quota
-# tops out around 25 devices. So distribution builds embed only on request.
-if [ "${1:-}" = "--release" ] && [ "${BIBLETEXT_BUNDLE_KEY:-0}" != "1" ]; then
-  echo "==> no bundled API.Bible key (release default) — set BIBLETEXT_BUNDLE_KEY=1 to embed"
-else
+# Bundled by default, per the owner's decision recorded in release-ios.sh: the
+# NKJV works on install now, and a later release drops the key so new installs
+# are bring-your-own-key. BIBLETEXT_BUNDLE_KEY=0 is that switch.
+if [ "${BIBLETEXT_BUNDLE_KEY:-1}" = "1" ]; then
   embed_bible_key
+else
+  echo "==> NO bundled API.Bible key — new installs are bring-your-own-key"
 fi
 
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )

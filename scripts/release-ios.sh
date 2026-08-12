@@ -63,15 +63,22 @@ note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 #      every device revalidating monthly — "roughly 25 active devices before a
 #      month runs dry", after which readers on the bundled key get failures.
 #
-# So embedding is now OPT-IN here: set BIBLETEXT_BUNDLE_KEY=1 when you have
-# commercial terms in hand (or for a small TestFlight round you are watching).
-# Without it the store build is bring-your-own-key, which is what
-# docs/support.html already tells readers.
+# OWNER'S DECISION (12 Aug 2026), made with the above in view: bundle it FOR NOW
+# so the NKJV works the moment someone installs, and drop it in a later release —
+# at which point new installs are bring-your-own-key while existing installs keep
+# the key already in their store (README documents exactly that transition).
+#
+# So the default is ON, and turning it off for that future release is one flag:
+#
+#   BIBLETEXT_BUNDLE_KEY=0 ./scripts/release-ios.sh
+#
+# Whichever way it goes, the build says which it did — a store .ipa should never
+# be ambiguous about whether it carries a credential.
 source "${REPO_ROOT}/[redacted-retired-private-reference]"
-if [ "${BIBLETEXT_BUNDLE_KEY:-0}" = "1" ]; then
+if [ "${BIBLETEXT_BUNDLE_KEY:-1}" = "1" ]; then
   embed_bible_key
 else
-  note "no bundled API.Bible key (store default) — readers supply their own; set BIBLETEXT_BUNDLE_KEY=1 to embed"
+  note "NO bundled API.Bible key — new installs are bring-your-own-key"
 fi
 # Re-arm the FULL cleanup. Sourcing [redacted-retired-private-reference] above registered an EXIT
 # trap of its own, and bash keeps only the LAST trap per signal — so it silently
