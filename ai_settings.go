@@ -219,9 +219,14 @@ func showAISettings(state *AppState) {
 		if effModel == "" {
 			effModel = info.Model
 		}
-		recommended := "Recommended (" + effModel + ")"
-		modelCaption := canvas.NewText("Recommended keeps itself current automatically.", pal.TextMuted)
-		modelCaption.TextSize = 12
+		// The button says "Recommended"; WHICH model that currently means goes
+		// in the caption underneath. Carrying the model id on the button made
+		// it the longest control on the sheet, and once the row gained its
+		// "Model" label there was no longer width for both — the id was
+		// clipped mid-word ("gemini-pro-lates"). The caption has a full line
+		// to itself and wraps.
+		recommended := "Recommended"
+		modelCaption := caption("Recommended keeps itself current automatically — " + effModel + " today.")
 
 		// Until (or unless) the live list arrives, the choices are Recommended
 		// plus any model already pinned, so the control is honest offline too.
