@@ -79,17 +79,16 @@ func consumePendingLink(state *AppState) {
 
 // applyShareTarget navigates to the passage a shared link names.
 //
-// It deliberately does NOT switch translation to match the link. Switching can
-// trigger a multi-megabyte download behind a modal spinner, and doing that
-// unasked — possibly on cellular, possibly as someone's first sight of the app
-// — is a bad trade for what is USUALLY only a wording difference. The reader can
-// switch in the version picker if they want the exact wording.
+// It SWITCHES to the translation the link names (owner directive). That was not
+// always so: it used to stay in the reader's translation, because switching can
+// mean a multi-megabyte download behind a spinner, possibly on cellular,
+// possibly on someone's first sight of the app — and the passage was thought to
+// be the same either way.
 //
-// "Usually" is doing real work in that sentence, and this comment used to
-// overclaim it ("chapter and verse numbering are shared across our
-// translations"). Measured across all 1189 chapters of the per-verse read-along
-// tables (assets/timings/web.json vs bsb.json): books and chapters align
-// exactly, and 1177 chapters agree on verses. The 12 that do not split two ways:
+// It is not the same either way, which is what settled it. Measured across all
+// 1189 chapters of the per-verse read-along tables (assets/timings/web.json vs
+// bsb.json): books and chapters align exactly, and 1177 chapters agree on
+// verses. The 12 that do not split two ways:
 //
 //   - Ten are verses WEB carries and the BSB omits on textual-critical grounds
 //     (Matthew 17:21, 18:11, 23:14; Mark 7:16, 9:44, 9:46, 11:26, 15:28;
@@ -101,10 +100,18 @@ func consumePendingLink(state *AppState) {
 //     and ends chapter 16 at v24; the BSB has neither and places those verses at
 //     Romans 16:25-27.
 //
-// So a shared link is safe to open in the reader's own translation everywhere
-// except Romans 14 and 16, where the two families disagree. Anything keyed to a
-// (book, chapter, verse) across translations — notes especially — has to reckon
-// with that pair rather than assume alignment.
+// So opening a link in the reader's own translation is safe everywhere except
+// Romans 14 and 16 — where it is not merely imprecise but points at DIFFERENT
+// TEXT. Rather than special-case two chapters, the link opens where it was
+// written, and the note it carries is stored under that translation too
+// (rememberIncomingNote), so a note can never be filed against wording it was
+// never about.
+//
+// The download objection is answered by deferring, not by refusing:
+// switchToLinkVersion parks the target and lets switchVersionInteractive's
+// spinner own the fetch, and applyLoadedVersion resumes us before its rebuild —
+// one rebuild, landing on the shared passage. A translation already in memory
+// switches synchronously and costs nothing.
 //
 // (A deuterocanonical link is the one case with no fallback; those books simply
 // aren't in the loaded canon, and selectBook leaves the reader where they are.)
@@ -126,6 +133,21 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	}
 	if chapter > chapters {
 		chapter = chapters
+	}
+
+	// Open it in the translation it was WRITTEN against (owner directive). A
+	// note is somebody's remark on particular wording, and the shared-link
+	// contract only ever names a public-domain id (web/bsb/webc), so the target
+	// is always a translation this app can show.
+	//
+	// It can still mean a download, which is why this parks rather than blocks:
+	// switchVersionInteractive puts the fetch behind its own spinner, and
+	// applyLoadedVersion resumes us by consuming the parked target BEFORE its
+	// rebuild — so the reader sees one rebuild landing on the shared passage,
+	// not a flash of the old chapter first. A translation already in memory
+	// switches synchronously and falls straight through.
+	if switchToLinkVersion(state, t) {
+		return
 	}
 
 	if state.window != nil {
@@ -213,4 +235,43 @@ func deliverShareLink(rawURL string) {
 		return
 	}
 	fyne.Do(func() { HandleShareLink(state, rawURL) })
+}
+
+// switchToLinkVersion moves the reader to the translation a shared link names,
+// and reports whether applyShareTarget should stand down and let the switch
+// finish the job.
+//
+// It returns true ONLY when an asynchronous load is now in flight and has taken
+// custody of the target (parked on the state, consumed by applyLoadedVersion).
+// A synchronous switch — the translation is already in memory — returns false,
+// because there is nothing to wait for and the caller should carry straight on.
+// So does every reason not to switch at all: same translation already, an
+// unknown or not-yet-selectable id, or a download already running for something
+// else (parking behind that one would let it apply our target to the wrong
+// translation).
+func switchToLinkVersion(state *AppState, t ShareTarget) bool {
+	if state == nil || t.VersionID == "" || t.VersionID == state.CurrentVersion {
+		return false
+	}
+	if state.CurrentVersion == "" {
+		return false // we don't know what we're in; never start a download on a guess
+	}
+	v, ok := versionByID(t.VersionID)
+	if !ok || !v.canSelect() {
+		return false // nothing to switch to; open it in what the reader has
+	}
+	if state.versionLoading {
+		return false // another load owns the spinner; don't queue behind it
+	}
+	_, inMem := state.loadedVersions[t.VersionID]
+	if inMem || v.isTesting() {
+		switchVersion(state, t.VersionID) // synchronous; fall through and apply
+		return false
+	}
+	// A real fetch: park the target and let the load's apply tail resume it.
+	parked := t
+	state.pendingLink = &parked
+	state.pendingLinkVersion = t.VersionID
+	switchVersionInteractive(state, t.VersionID)
+	return true
 }

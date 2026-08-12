@@ -543,6 +543,22 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	state.CurrentVersion = v.ID
 	state.currentMode = mode
 	clampToCurrentVersion(state)
+	// A shared link that asked for THIS translation was parked waiting for it —
+	// apply it now, BEFORE the rebuild below, so the rebuild paints the shared
+	// passage directly instead of flashing the old chapter first (the same
+	// ordering the startup path uses). A target waiting on some OTHER translation
+	// is stale: drop it rather than yank the reader somewhere they no longer
+	// asked for.
+	if state.pendingLinkVersion != "" {
+		if state.pendingLinkVersion == v.ID {
+			state.pendingLinkVersion = ""
+			consumePendingLink(state)
+		} else {
+			state.pendingLinkVersion = ""
+			state.pendingLink = nil
+			state.pendingLinkRaw = ""
+		}
+	}
 	// Remember the chosen translation (and current location) across launches.
 	persistReadingPosition(state)
 	rebuildWindow(state)

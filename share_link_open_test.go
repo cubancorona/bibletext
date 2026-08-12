@@ -14,6 +14,10 @@ func linkTestState() *AppState {
 		Bible:          bd,
 		CurrentBook:    "Genesis",
 		CurrentChapter: 1,
+		// The links under test name "web", so this is the same-translation case:
+		// no switch, the passage opens where the reader already is. The
+		// cross-translation paths have their own tests.
+		CurrentVersion: "web",
 		loadPhase:      loadReady,
 	}
 }
