@@ -87,8 +87,16 @@ type restoreAnchor struct {
 // frac come from the platform scroll capture (0 / false ⇒ top of chapter);
 // touchVerse/Delta come from the last scroll's initial-touch capture (0 ⇒ none).
 func snapshotReadingState(s *AppState, verse int, delta, frac float64, touchVerse int, touchDelta float64) readingState {
+	// The reader's CHOSEN translation, which is not always the one on screen: a
+	// licensed translation that could not be revalidated falls back to the
+	// default canon so the app still opens, and persisting the fallback would
+	// erase the choice.
+	version := s.CurrentVersion
+	if s.preferredVersion != "" {
+		version = s.preferredVersion
+	}
 	return readingState{
-		Version:     s.CurrentVersion,
+		Version:     version,
 		Book:        s.CurrentBook,
 		Chapter:     s.CurrentChapter,
 		AnchorVerse: verse,
@@ -351,13 +359,22 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 					// translation happened to be the licensed one.
 					//
 					// Fall through to the default canon instead: the app opens,
-					// the saved book and chapter survive (all our translations
-					// share the structure), and the licensed text returns by
-					// itself on the next launch with a connection. Nothing stale
-					// is served, so the compliance line is untouched — this is
-					// only about refusing to open the app.
+					// and the saved book and chapter survive (all our
+					// translations share the structure). Nothing stale is
+					// served, so the compliance line is untouched — this is only
+					// about refusing to open the app.
+					//
+					// preferredVersion is what makes it a fallback rather than a
+					// forgetting, and it is why the licensed text DOES come back
+					// on the next launch with a connection — an earlier version
+					// of this comment promised that while nothing implemented it. The chosen translation lives ONLY in this
+					// blob's Version field, which the next navigation rewrites
+					// from CurrentVersion — so without this, one offline launch
+					// would overwrite "nkjv" with "web" permanently and the
+					// reader would never get their translation back.
 					if isLicensedSource(v) {
 						data, loadedMode = nil, mode
+						state.preferredVersion = v.ID
 					} else {
 						return false, fmt.Errorf("restore saved %s reading state: %w", v.ID, err)
 					}

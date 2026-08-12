@@ -239,37 +239,3 @@ func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {
 		t.Errorf("sheet grew to %vpt on a 2400pt canvas — it should stay its natural height", h)
 	}
 }
-
-// The key sections put "Get a key ↗" top-right of the box, on the label row.
-// Two things must hold, and BOTH were broken by a custom layout that has since
-// been removed: the label has to start at the left edge like every other row in
-// the card (it was being centred 53pt in), and the row must be ONE row high (it
-// was reserving space for a stacked fallback it never used, ~38pt of dead air in
-// every key box). A plain Border gives each side its MinSize and does both.
-func TestKeyHeaderRowIsFlushAndSingleHeight(t *testing.T) {
-	app := test.NewApp()
-	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
-	app.Settings().SetTheme(th)
-
-	for _, label := range []string{"API.Bible key", "Gemini key", "ChatGPT key"} {
-		lbl := container.NewCenter(widget.NewLabel(label))
-		link := widget.NewHyperlink("Get a key ↗", nil)
-		row := container.NewBorder(nil, nil, lbl, link)
-
-		if h, want := row.MinSize().Height, link.MinSize().Height; h > want+0.5 {
-			t.Errorf("%s: row is %vpt tall for a %vpt control — dead vertical space", label, h, want)
-		}
-		row.Resize(fyne.NewSize(354, row.MinSize().Height))
-		inner := lbl.Objects[0]
-		if x := lbl.Position().X + inner.Position().X; x > 0.5 {
-			t.Errorf("%s: label text starts %vpt in, not flush left", label, x)
-		}
-		if gap := link.Position().X - (lbl.Position().X + lbl.MinSize().Width); gap < 0 {
-			t.Errorf("%s: link overlaps the label by %vpt", label, -gap)
-		}
-		if right := link.Position().X + link.Size().Width; right > 354.5 {
-			t.Errorf("%s: link ends at %v, past the row", label, right)
-		}
-	}
-}

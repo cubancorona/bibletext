@@ -128,6 +128,11 @@ func promptKeepOrDeleteNotes(state *AppState, onOff func(), onCancel func()) {
 	keep.Importance = widget.HighImportance
 	del := widget.NewButton("Delete them", func() {
 		deleteAllNotes(appPrefs())
+		// The store is empty; the LIVE mirror is not. Without this the banner
+		// (and the iOS sticker) keep drawing the note the reader just confirmed
+		// deleting — the render fingerprint has not changed, so nothing even
+		// repaints — until they navigate to another chapter.
+		clearLiveNote(state)
 		closeIt()
 		onOff()
 	})
@@ -216,6 +221,11 @@ func promptDeleteAllNotes(state *AppState, onDone func()) {
 	cancel.Importance = widget.HighImportance
 	del := widget.NewButton("Delete them", func() {
 		deleteAllNotes(appPrefs())
+		// The store is empty; the LIVE mirror is not. Without this the banner
+		// (and the iOS sticker) keep drawing the note the reader just confirmed
+		// deleting — the render fingerprint has not changed, so nothing even
+		// repaints — until they navigate to another chapter.
+		clearLiveNote(state)
 		closeIt()
 		if onDone != nil {
 			onDone()
@@ -236,4 +246,17 @@ func promptDeleteAllNotes(state *AppState, onDone func()) {
 		w = cw
 	}
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+}
+
+// clearLiveNote drops the note AppState is currently showing, and the highlight
+// that belongs to it. Deleting from the store is not enough: the panes render
+// from this mirror, not from the store.
+func clearLiveNote(state *AppState) {
+	if state == nil {
+		return
+	}
+	state.ActiveNote = ""
+	state.NoteMinimized = false
+	state.NoteVerseLo = 0
+	clearHighlightedVerse(state)
 }

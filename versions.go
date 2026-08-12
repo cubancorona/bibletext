@@ -542,6 +542,11 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	state.Bible = data
 	state.CurrentVersion = v.ID
 	state.currentMode = mode
+	// A translation actually loaded, so any remembered "we had to fall back"
+	// preference is spent: this is now the reader's translation, whether they
+	// picked it or the licensed one finally came back.
+	state.preferredVersion = ""
+
 	clampToCurrentVersion(state)
 	// A shared link that asked for THIS translation was parked waiting for it —
 	// apply it now, BEFORE the rebuild below, so the rebuild paints the shared
@@ -549,15 +554,31 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	// ordering the startup path uses). A target waiting on some OTHER translation
 	// is stale: drop it rather than yank the reader somewhere they no longer
 	// asked for.
+	consumed := false
 	if state.pendingLinkVersion != "" {
 		if state.pendingLinkVersion == v.ID {
 			state.pendingLinkVersion = ""
 			consumePendingLink(state)
+			consumed = true
 		} else {
 			state.pendingLinkVersion = ""
 			state.pendingLink = nil
 			state.pendingLinkRaw = ""
 		}
+	}
+	// Notes are keyed version|book|chapter, so the live mirror
+	// (ActiveNote/NoteMinimized/NoteVerseLo) belongs to the translation we just
+	// left. Re-derive it for the new one, or the old translation's note keeps
+	// rendering over different text — anchored to a verse number that need not
+	// even mean the same passage (the Romans 14/16 divergence applyShareTarget
+	// documents). The inverse failed too: a note stored under the translation
+	// being switched TO stayed invisible until the reader navigated.
+	//
+	// Skipped when a parked link was just consumed — that path went through
+	// addRecentChapter, which has already done this, and the arriving note is
+	// the one that should win.
+	if !consumed {
+		applyNoteForCurrentChapter(state)
 	}
 	// Remember the chosen translation (and current location) across launches.
 	persistReadingPosition(state)

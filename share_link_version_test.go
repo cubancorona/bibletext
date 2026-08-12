@@ -97,3 +97,41 @@ func TestParkedLinkForAnotherTranslationIsDropped(t *testing.T) {
 		t.Error("the stale link was applied — the reader was yanked to it")
 	}
 }
+
+// A shared DEUTEROCANON link must open. ShareLinkURLWithNote forces version=webc
+// for those books, so the link names a translation the app can load — but the
+// canon guard used to run BEFORE the translation switch, checking Tobit against
+// whichever 66-book canon the reader happened to be in and returning silently.
+// HandleShareLink still reported success, so the OS did not offer the browser
+// either: the tap did nothing at all, with no message.
+func TestDeuterocanonLinkIsNotDroppedByTheCanonGuard(t *testing.T) {
+	st := versionLinkState(t)
+
+	// Stand in for WEBC being already loaded, so the switch is synchronous.
+	webc, ok := versionByID("webc")
+	if !ok {
+		t.Skip("webc not registered")
+	}
+	wide := NewBibleData()
+	wide.PopulateWithSampleVerses()
+	// Give the wider canon a book the reader's current one lacks.
+	wide.Books = append(wide.Books, "Tobit")
+	if wide.Verses["Tobit"] == nil {
+		wide.Verses["Tobit"] = map[int][]Verse{3: {{BookName: "Tobit", Chapter: 3, Verse: 1, Text: "…"}}}
+	}
+	wide.PrepareSearchIndex()
+	st.loadedVersions = map[string]*BibleData{"webc": wide}
+
+	if st.Bible.GetChaptersForBook("Tobit") != 0 {
+		t.Fatal("precondition: the starting canon must NOT have Tobit")
+	}
+
+	applyShareTarget(st, ShareTarget{VersionID: webc.ID, Book: "Tobit", Chapter: 3, VerseLo: 1})
+
+	if st.CurrentVersion != webc.ID {
+		t.Errorf("did not switch to the link's translation: %q", st.CurrentVersion)
+	}
+	if st.CurrentBook != "Tobit" {
+		t.Errorf("the deuterocanon link opened nothing; book = %q", st.CurrentBook)
+	}
+}
