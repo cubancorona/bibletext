@@ -34,9 +34,26 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	footer = caption("The New King James Version downloads with your own free API.Bible key — " +
 		"create a key, add the NKJV to it, then choose NKJV from the translation picker.")
 
+	// The BUNDLED key never reaches this field. A PasswordEntry hides its
+	// characters but keeps them — one tap on the reveal eye prints the project's
+	// production credential on screen, and a stored key is the reader's to see
+	// only when it is THEIRS. Ours is a shared credential on a shared quota, and
+	// showing it invites a reader to lift it, which costs every other reader.
+	//
+	// So a bundled key shows as an empty field whose placeholder says the NKJV
+	// already works and that pasting replaces it. Nothing is hidden about the
+	// STATE — refreshStatus below says plainly that the included key is in use —
+	// only the characters are withheld. A key the reader pasted is shown exactly
+	// as before: it is theirs, and being able to check it is how they spot a
+	// truncated paste.
 	entry := widget.NewPasswordEntry()
-	entry.SetPlaceHolder("Paste your API.Bible key")
-	entry.SetText(store.bibleAPIKey())
+	usingBundled := store.usingBundledBibleKey()
+	if usingBundled {
+		entry.SetPlaceHolder("Included with BibleText — paste your own to replace it")
+	} else {
+		entry.SetPlaceHolder("Paste your API.Bible key")
+		entry.SetText(store.bibleAPIKey())
+	}
 
 	status := canvas.NewText("", pal.TextMuted)
 	status.TextSize = 12
@@ -62,8 +79,21 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		remeasure()
 	}
 
+	// keyInUse is what the app would actually send: what the reader has typed,
+	// or — when the field is deliberately empty because the bundled key is in
+	// force — the stored one. Everything below asks THIS rather than reading
+	// entry.Text, so hiding the bundled key's characters cannot quietly turn
+	// Test into "paste a key first", disable Clear, or make the status claim
+	// there is no key.
+	keyInUse := func() string {
+		if t := strings.TrimSpace(entry.Text); t != "" {
+			return t
+		}
+		return strings.TrimSpace(store.bibleAPIKey())
+	}
+
 	testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
-		key := strings.TrimSpace(entry.Text)
+		key := keyInUse()
 		result.Show()
 		remeasure() // the result line just appeared — the sheet grew
 		if key == "" {
@@ -106,8 +136,12 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 			entry.SetText(v) // fires OnChanged, which auto-saves
 		}
 	})
+	// Assigned below, once refreshStatus and the presence hook exist.
+	var clearBibleKey func()
 	clearBtn := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), func() {
-		entry.SetText("") // fires OnChanged → clears the saved key
+		if clearBibleKey != nil {
+			clearBibleKey()
+		}
 	})
 
 	saveOK := true
@@ -123,7 +157,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		if store.usingBundledBibleKey() {
 			savedLabel = "✓ Included with BibleText — or paste your own."
 		}
-		if strings.TrimSpace(entry.Text) != "" {
+		if keyInUse() != "" {
 			if saveOK {
 				status.Text = savedLabel
 				status.Color = pal.Accent
@@ -144,6 +178,24 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		status.Refresh()
 	}
 	hadKey := store.bibleAPIKey() != ""
+	// Clearing has to reach the STORE directly. With the bundled key in force the
+	// field is already empty, so emptying it again fires no OnChanged and the key
+	// would have survived a tap on Clear — the one control whose whole job is to
+	// remove it (README: "Clear removes it for good").
+	clearBibleKey = func() {
+		entry.SetText("")
+		saveOK = store.setBibleAPIKey("")
+		store.noteBibleKeyCleared(true)
+		entry.SetPlaceHolder("Paste your API.Bible key")
+		entry.Refresh()
+		refreshStatus()
+		if hadKey {
+			hadKey = false
+			if onKeyPresence != nil {
+				onKeyPresence()
+			}
+		}
+	}
 	entry.OnChanged = func(s string) {
 		s = strings.TrimSpace(s)
 		saveOK = store.setBibleAPIKey(s)
