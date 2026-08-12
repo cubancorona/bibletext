@@ -170,7 +170,15 @@ change can never clobber the live landing or App Store pages.
   `BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)" scripts/run-ios-sim.sh` (the sim
   build is packaged universal so the iPad runs it natively, idiom=pad, not iPhone
   compatibility mode). Sim quirk: synthetic `type` into Fyne entries is flaky —
-  use per-key presses. Release builds ship universal (`release-ios.sh`) — see
+  use per-key presses. **To screenshot a SHEET in the simulator:** `simctl` can
+  boot/install/launch/screenshot but cannot TAP anything, and clicking the
+  Simulator window from outside needs a desktop-automation tool plus macOS
+  accessibility, which may not be available. Dev builds therefore open a sheet
+  themselves — `BIBLETEXT_DEV_OPEN=settings|goto|versions|votd`
+  (`dev_autoopen_on.go`, behind the `bibletextdev` tag like the Links tab) — and
+  `simctl` forwards it under the `SIMCTL_CHILD_` prefix:
+  `SIMCTL_CHILD_BIBLETEXT_DEV_OPEN=settings xcrun simctl launch <udid> uk.co.bibletext`
+  then `xcrun simctl io <udid> screenshot shot.png`. Release builds ship universal (`release-ios.sh`) — see
   [`docs/IPAD.md`](docs/IPAD.md). iPads also typeset the reading pane to the
   U.S. Reports geometry (centred 27.5em native-inset column, 1.3 leading,
   indented paragraphs — `reporterLayoutActive()`, `reporterMeasureEm`; phones
