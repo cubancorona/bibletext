@@ -17,6 +17,7 @@ extern void btaSelectionAction(char *action, char *text);
 extern void btaScrolled(float frac);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
+extern void btaKeyboardChanged(float overlapDp);
 
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText) {
@@ -40,4 +41,9 @@ Java_org_bibletext_BtBridge_nativeReadAlongUserScrolled(JNIEnv *env, jclass claz
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeReadAlongFollowTapped(JNIEnv *env, jclass clazz) {
 	btaReadAlongFollowTapped();
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeKeyboardChanged(JNIEnv *env, jclass clazz, jfloat overlapDp) {
+	btaKeyboardChanged((float)overlapDp);
 }

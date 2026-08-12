@@ -25,7 +25,8 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
-                 btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM;
+                 btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
+                 btaScrollVerseM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -75,6 +76,8 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaRAClearM     = (*env)->GetStaticMethodID(env, btaClass, "readAlongClear", "()V");
 	btaRAFollowM    = (*env)->GetStaticMethodID(env, btaClass, "readAlongFollow", "(Z)V");
 	btaRAColorsM    = (*env)->GetStaticMethodID(env, btaClass, "setReadAlongColors", "(III)V");
+	// Arrival scroll: pin the shared link's highlighted verse near the top.
+	btaScrollVerseM = (*env)->GetStaticMethodID(env, btaClass, "scrollToVerse", "(I)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -88,7 +91,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
-	    btaRAColorsM == NULL) {
+	    btaRAColorsM == NULL || btaScrollVerseM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -202,6 +205,12 @@ static void btaRAFollow(uintptr_t jni_env, int show) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaRAFollowM, show ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaScrollVerse(uintptr_t jni_env, int verse) {
+	JNIEnv *env = (JNIEnv *)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaScrollVerseM, verse);
 }
 
 static void btaRAColors(uintptr_t jni_env, int highlight, int followBg, int followFg) {
@@ -507,6 +516,18 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		ch := C.CString(html)
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac))
 		C.free(unsafe.Pointer(ch))
+		// THE ARRIVAL SCROLL, which Android never had: iOS and macOS position
+		// on the highlighted verse inside their scroll cadence, but Android's
+		// only programmatic scrolls were the restore frac and read-along — a
+		// shared link opened the right chapter at the WRONG place (emulator-
+		// caught: John 11 v35 landed at v57). Restore outranks the highlight,
+		// same ordering the other panes settled on: a pending restore means
+		// the reader is coming back, not arriving.
+		if state.restore == nil && state.HasHighlightedVerse &&
+			state.HighlightedBook == state.CurrentBook &&
+			state.HighlightedChapter == state.CurrentChapter {
+			C.btaScrollVerse(C.uintptr_t(env), C.int(state.HighlightedVerse))
+		}
 	})
 
 	// Restyle the read-along highlight + "Follow narration" pill for this palette,
@@ -688,6 +709,15 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
+	// The chapter's shared note (notes_banner.go). Android renders it as this
+	// banner ABOVE the pane — the native overlay covers only the paper below,
+	// so no BtBridge machinery is needed — where iOS draws its in-text sticker
+	// instead (its own buildReadingViewMobile, untouched). Emulator-caught:
+	// the banner had been slotted only into the desktop buildReadingView, which
+	// Android's compact layout never calls.
+	if banner := buildNoteBanner(state); banner != nil {
+		top.Add(banner)
+	}
 
 	header := container.New(layout.NewCustomPaddedLayout(0, 0, theme.Padding(), 0), top)
 	body := container.NewBorder(header, nil, nil, nil, container.NewStack(paper, host))

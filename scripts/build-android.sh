@@ -51,7 +51,7 @@ WORK="$(mktemp -d /tmp/bibletext-android.XXXXXX)"
 # The trap reverts fyne's Build++ writeback to FyneApp.toml — but ONLY when the
 # file was clean at start, so it can never destroy uncommitted manual edits.
 TOML_WAS_DIRTY="$(git -C "$REPO_ROOT" status --porcelain -- cmd/mobile/FyneApp.toml 2>/dev/null || true)"
-trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex"; git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
+trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex" "$APP_DIR/classes.dex"; git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
@@ -64,6 +64,24 @@ mkdir -p "$WORK/dexout"
   "$WORK/classes/org/bibletext/"*.class
 mv "$WORK/dexout/classes.dex" "$WORK/classes2.dex"
 ls -la "$WORK/classes2.dex"
+
+note "compiling patched GoNativeActivity (+ FyneNotificationReceiver) -> replacement classes.dex"
+# The fyne CLI packages a PREBUILT classes.dex (gendex output baked into the
+# tool), so the newintent patch applied to third_party/fyne's GoNativeActivity
+# .java would never reach the APK. Recompile the patched activity ourselves —
+# same javac/d8 recipe gendex uses — plus android/goapp's reconstructed
+# FyneNotificationReceiver (the manifest's <receiver> must keep resolving),
+# and swap the result in over the tool's dex below.
+mkdir -p "$WORK/classes1" "$WORK/dexout1"
+javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d "$WORK/classes1" \
+  "$REPO_ROOT/third_party/fyne/internal/driver/mobile/app/GoNativeActivity.java" \
+  "$REPO_ROOT/android/goapp/FyneNotificationReceiver.java"
+"$BT/d8" --min-api 21 --lib "$ANDROID_JAR" --output "$WORK/dexout1" \
+  "$WORK/classes1/org/golang/app/"*.class
+mv "$WORK/dexout1/classes.dex" "$WORK/classes1.dex"
+grep -q "onNewIntent" "$REPO_ROOT/third_party/fyne/internal/driver/mobile/app/GoNativeActivity.java" \
+  || { echo "ERROR: newintent patch missing from third_party GoNativeActivity"; exit 1; }
+ls -la "$WORK/classes1.dex"
 
 if [ "${1:-}" = "--release" ]; then
   note "fyne release -os android (signed AAB)"
@@ -78,8 +96,10 @@ if [ "${1:-}" = "--release" ]; then
 
   note "injecting classes2.dex into the AAB (base/dex/) + re-signing"
   mkdir -p "$WORK/aab/base/dex"
+  cp "$WORK/classes1.dex" "$WORK/aab/base/dex/classes.dex"
   cp "$WORK/classes2.dex" "$WORK/aab/base/dex/classes2.dex"
-  (cd "$WORK/aab" && zip -q -X "$APP_DIR/BibleText.aab" base/dex/classes2.dex)
+  (cd "$WORK/aab" && zip -q -X -d "$APP_DIR/BibleText.aab" base/dex/classes.dex \
+     && zip -q -X "$APP_DIR/BibleText.aab" base/dex/classes.dex base/dex/classes2.dex)
   # Modification invalidated the jar signature — strip and re-sign.
   zip -q -d "$APP_DIR/BibleText.aab" "META-INF/*" || true
   jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
@@ -116,14 +136,23 @@ else
   unzip -l "$APP_DIR/BibleText.apk" | grep "res/mipmap-anydpi-v26/ic_launcher.xml" >/dev/null \
     || { echo "ERROR: adaptive-icon resources missing — aapt2 path not taken"; exit 1; }
 
-  note "injecting classes2.dex + zipalign + apksigner"
-  cp "$WORK/classes2.dex" "$APP_DIR"  # zip stores the path as given — add from cwd
-  (cd "$APP_DIR" && zip -q -X BibleText.apk classes2.dex && rm -f classes2.dex)
+  note "replacing classes.dex (patched GoNativeActivity) + injecting classes2.dex + zipalign + apksigner"
+  cp "$WORK/classes1.dex" "$APP_DIR/classes.dex"   # zip stores the path as given — add from cwd
+  cp "$WORK/classes2.dex" "$APP_DIR"
+  (cd "$APP_DIR" && zip -q -X -d BibleText.apk classes.dex \
+     && zip -q -X BibleText.apk classes.dex classes2.dex \
+     && rm -f classes.dex classes2.dex)
   "$BT/zipalign" -f -p 4 BibleText.apk "$WORK/aligned.apk"
   "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
     --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
     --out BibleText.apk "$WORK/aligned.apk"
   "$BT/apksigner" verify BibleText.apk
+  # Assert the swap actually landed: a silent miss here would ship an APK whose
+  # GoNativeActivity has no onNewIntent, i.e. warm shared links dropped again —
+  # the exact failure this whole path exists to prevent, and one that is
+  # invisible until someone taps a link with the app already open.
+  unzip -p BibleText.apk classes.dex | strings | grep "onNewIntent" >/dev/null \
+    || { echo "ERROR: classes.dex in the APK has no onNewIntent — the dex swap did not land"; exit 1; }
   note "done: $APP_DIR/BibleText.apk (signed with the upload key — uninstall any"
   echo "    build signed with a different key before installing)"
   ls -lh BibleText.apk

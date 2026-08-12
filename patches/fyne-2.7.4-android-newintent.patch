@@ -1,0 +1,29 @@
+--- a/internal/driver/mobile/app/GoNativeActivity.java	2026-08-12 05:55:21
++++ b/internal/driver/mobile/app/GoNativeActivity.java	2026-08-12 05:55:21
+@@ -233,7 +233,26 @@
+ 		}
+ 	}
+ 
++	// BibleText patch: warm App Links. A VIEW intent tapped while this
++	// singleTop activity is running arrives HERE, and stock GoNativeActivity
++	// drops it on the floor — the app just came forward wherever the reader
++	// left off. Forwarded to BibleText's bridge by reflection so this class
++	// (compiled with fyne's Java, before the app's own classes exist) needs no
++	// compile-time reference to it; on any other fyne app the lookup fails
++	// silently and behaviour is stock.
+ 	@Override
++	public void onNewIntent(android.content.Intent intent) {
++		super.onNewIntent(intent);
++		if (intent != null) setIntent(intent);
++		try {
++			Class.forName("org.bibletext.BtBridge")
++				.getMethod("onNewIntent", android.content.Intent.class)
++				.invoke(null, intent);
++		} catch (Throwable ignored) {
++		}
++	}
++
++	@Override
+ 	public void onCreate(Bundle savedInstanceState) {
+ 		load();
+ 		super.onCreate(savedInstanceState);

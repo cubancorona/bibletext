@@ -25,6 +25,7 @@ FYNE_VERSION="v2.7.4"                                  # MUST match the require 
 PATCH="patches/fyne-2.7.4-ios-drawloop.patch"
 PATCH_CARET="patches/fyne-2.7.4-caret-blink.patch"
 PATCH_EMOJI="patches/fyne-2.7.4-noto-emoji.patch"
+PATCH_NEWINTENT="patches/fyne-2.7.4-android-newintent.patch"
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
 DEST="third_party/fyne"
 
@@ -57,6 +58,7 @@ chmod -R u+w "$DEST"
 patch -p1 -d "$DEST" < "$PATCH"
 patch -p1 -d "$DEST" < "$PATCH_CARET"
 patch -p1 -d "$DEST" < "$PATCH_EMOJI"
+patch -p1 -d "$DEST" < "$PATCH_NEWINTENT"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
 # the font itself (a binary; it cannot ride a unified diff) is copied in here.
 # Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
@@ -72,6 +74,10 @@ fi
 TARGET_CARET="$DEST/widget/entry_cursor_anim.go"
 if ! grep -q "BibleText patch: discrete caret blink" "$TARGET_CARET"; then
   echo "ERROR: patch did not apply — '$TARGET_CARET' is unpatched." >&2
+  exit 1
+fi
+if ! grep -q "BibleText patch: warm App Links" "$DEST/internal/driver/mobile/app/GoNativeActivity.java"; then
+  echo "ERROR: patch did not apply — GoNativeActivity.java is unpatched." >&2
   exit 1
 fi
 if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
