@@ -50,15 +50,26 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			// TextView's INTER_WORD justification exempts hard-break lines, so
 			// poem lines render ragged-right as in print).
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
+			wj := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
 			switch {
+			case isVerseHighlighted(state, v) && wj:
+				// Band AND colour, not one or the other — the Android twin of the
+				// .hl/.wj pairing in reading.go. This arm did not exist, so the
+				// highlight arm below swallowed every highlighted words-of-Christ
+				// verse and it lost its red, exactly as the Apple pane did until
+				// the owner caught it on John 11:25.
+				//
+				// The <font color> nests INSIDE the background span: Html.fromHtml
+				// turns them into two independent spans over the same range, so the
+				// inner colour keeps the outer band. Still NO <b> — see below.
+				fmt.Fprintf(&b, `<span style="background-color:%s"><font color="%s">%s</font></span>`, hlBG, red, body)
 			case isVerseHighlighted(state, v):
-				// A search highlight wins visually over red-letter (as on iOS).
 				// Colour and band only — NO <b>: bolding re-typesets the verse
 				// (the bold serif sets ~17% wider), so the paragraph re-wrapped
 				// and the text jumped when the highlight cleared. Matches iOS's
 				// .hl and the desktop pane, neither of which changes weight.
 				fmt.Fprintf(&b, `<span style="background-color:%s">%s</span>`, hlBG, body)
-			case redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse):
+			case wj:
 				fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, body)
 			default:
 				b.WriteString(body)
