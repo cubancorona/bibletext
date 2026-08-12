@@ -173,7 +173,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
 		// Status left, "Get a key ↗" right — the same row shape as the
 		// assistant key area, so the two sections read as one design.
-		container.NewBorder(nil, nil, nil, link, status),
+		keyLinkRow(status, link),
 		result,
 	)
 	return rows, footer

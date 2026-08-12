@@ -402,7 +402,7 @@ func showAISettings(state *AppState) {
 				container.NewHBox(pasteBtn, clearBtn, testBtn),
 				// Status left, "Get a key ↗" right — the one shared row shape
 				// both key sections use.
-				container.NewBorder(nil, nil, nil, link, status),
+				keyLinkRow(status, link),
 				result,
 				widget.NewSeparator(),
 				settingsRow("Model", container.NewThemeOverride(modelBtn,
@@ -502,6 +502,29 @@ func showAISettings(state *AppState) {
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
 	notesNote.Wrapping = fyne.TextWrapWord
+
+	// Delete all notes: a plain, always-reachable way to clear the lot. Without
+	// it the ONLY route to deletion was the off-switch's keep-or-delete question,
+	// so a reader who wanted the messages gone but the feature ON had nowhere to
+	// go (owner request). Destructive importance, and it asks first. Disabled
+	// when there is nothing stored, so the row never offers a no-op.
+	deleteNotesBtn := widget.NewButtonWithIcon("Delete all notes", theme.DeleteIcon(), nil)
+	deleteNotesBtn.Importance = widget.DangerImportance
+	refreshDeleteNotes := func() {
+		if len(readNotes(appPrefs())) == 0 {
+			deleteNotesBtn.Disable()
+		} else {
+			deleteNotesBtn.Enable()
+		}
+	}
+	deleteNotesBtn.OnTapped = func() {
+		promptDeleteAllNotes(state, func() {
+			refreshDeleteNotes()
+			state.refresh()
+		})
+	}
+	refreshDeleteNotes()
+	deleteNotesRow := container.NewBorder(nil, nil, nil, deleteNotesBtn)
 
 	// Scripture text size — the app can't inherit the phone's Larger Text setting
 	// (Fyne renders its own canvas), so this is the reader's size control. Radio
@@ -637,7 +660,7 @@ func showAISettings(state *AppState) {
 		settingsGroup(pal, textSizeRow),
 		sheetGap(),
 		sectionLabel("SHARED NOTES", pal),
-		settingsGroup(pal, notes),
+		settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow),
 		notesNote,
 	)
 	if redLetterSupported() {

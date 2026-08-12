@@ -153,3 +153,87 @@ func promptKeepOrDeleteNotes(state *AppState, onOff func(), onCancel func()) {
 	}
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 }
+
+// promptDeleteAllNotes is the Settings → Shared notes "Delete all notes"
+// question. It is the deliberate, always-available twin of the question the
+// off-switch asks: a reader who wants the messages gone should not have to
+// discover that turning the feature off is where deletion hides, nor should they
+// have to turn a feature off to clear it.
+//
+// Deleting is destructive and irreversible — these are other people's messages
+// and nothing re-fetches them — so the safe answer is the default and the
+// destructive one is marked. onDone runs only if notes were actually deleted.
+func promptDeleteAllNotes(state *AppState, onDone func()) {
+	if state == nil || state.window == nil {
+		return
+	}
+	cnv := pickerCanvas(state)
+	if cnv == nil {
+		return
+	}
+	count := len(readNotes(appPrefs()))
+	if count == 0 {
+		return // nothing to ask about
+	}
+	pal := state.pal()
+
+	if state.hideReadingOverlay != nil {
+		state.hideReadingOverlay()
+	}
+	var popup *widget.PopUp
+	closed := false
+	closeIt := func() {
+		if closed {
+			return
+		}
+		closed = true
+		if popup != nil {
+			popup.Hide()
+		}
+		// Same rule as promptKeepOrDeleteNotes: this sits on top of the Settings
+		// sheet, so only restore the reading overlay when nothing else owns the
+		// canvas — otherwise the note sticker paints over the still-open sheet.
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
+			state.showReadingOverlay()
+		}
+	}
+
+	noun := "notes"
+	if count == 1 {
+		noun = "note"
+	}
+
+	title := canvas.NewText("Delete all notes", pal.Text)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	title.TextSize = 18
+
+	body := widget.NewLabel("This deletes all " + strconv.Itoa(count) + " saved " + noun +
+		" for good. They are messages people sent you, and nothing can fetch them back — " +
+		"the links themselves still work if you still have them.")
+	body.Wrapping = fyne.TextWrapWord
+
+	cancel := widget.NewButton("Cancel", closeIt)
+	cancel.Importance = widget.HighImportance
+	del := widget.NewButton("Delete them", func() {
+		deleteAllNotes(appPrefs())
+		closeIt()
+		if onDone != nil {
+			onDone()
+		}
+	})
+	del.Importance = widget.DangerImportance
+
+	form := container.NewVBox(
+		title, body,
+		widget.NewSeparator(),
+		container.NewBorder(nil, nil, nil, container.NewHBox(del, cancel)),
+	)
+	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	popup = widget.NewModalPopUp(card, cnv)
+	popup.Show()
+	w := float32(420)
+	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
+		w = cw
+	}
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+}
