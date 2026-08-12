@@ -11,6 +11,7 @@ package bibletext
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -206,10 +207,18 @@ func TestPurgeSurvivesBadCacheDir(t *testing.T) {
 
 		purgeUnavailableLicensedCaches() // failed removes are swallowed, not panics
 
-		if os.Geteuid() != 0 { // root ignores directory permissions
-			if _, err := os.Stat(nkjvPath); err != nil {
-				t.Errorf("remove through a read-only dir should fail silently, leaving the file: %v", err)
-			}
+		// Whether the remove actually FAILS is the platform's business, and on
+		// two platforms it legitimately succeeds: Windows does not treat a
+		// read-only directory as a bar to deleting the files inside it (that
+		// is an ACL, not a mode bit — this test went red only on the Windows
+		// runner), and root ignores directory permissions everywhere. There
+		// the guarantee under test is just the one already proven above: the
+		// purge returns instead of panicking.
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			return
+		}
+		if _, err := os.Stat(nkjvPath); err != nil {
+			t.Errorf("remove through a read-only dir should fail silently, leaving the file: %v", err)
 		}
 	})
 }
