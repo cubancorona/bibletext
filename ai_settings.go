@@ -393,7 +393,7 @@ func showAISettings(state *AppState) {
 				// of the section rather than below the field, the buttons and
 				// the status (owner directive). It also stops it competing with
 				// the status line, whose text varies with state.
-				keyLinkRow(container.NewCenter(widget.NewLabel(providerKeyLabel(info))), link),
+				container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel(providerKeyLabel(info))), link),
 				// The field gets its OWN full-width line under that label: an API
 				// key is long, and sharing a row with the label left it a stub.
 				withCaret(state, entry),

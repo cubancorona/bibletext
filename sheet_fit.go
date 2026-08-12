@@ -28,11 +28,7 @@ package bibletext
 // and nothing measured it. These two functions are pure arithmetic precisely so
 // the measurement is testable without a canvas.
 
-import (
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
-)
+import "fyne.io/fyne/v2"
 
 // sheetBottomMargin is the breathing room left under a sheet, matching the 16pt
 // gap the sheets leave above themselves.
@@ -126,71 +122,4 @@ func scrollingSheetHeight(popupMinH, scrollMinH, bodyMinH, maxH float32) float32
 		return maxH
 	}
 	return natural
-}
-
-// keyLinkRow lays a key section's status line beside its "Get a key ↗" link,
-// and stacks them when they will not both fit.
-//
-// The two key sections (assistant, API.Bible) share one row shape: status on the
-// left, link right-aligned. A plain Border gives the right slot its MinSize and
-// hands the centre everything else, so the two are always flush against each
-// other — and when the status is a long sentence they touch, which reads as
-// cramped and eventually clips (owner-reported on an iPhone against API.Bible's
-// "Free for personal use — no card, no charge.", measured at 258pt of status and
-// 113pt of link in a 392pt row).
-//
-// It is state, not section, that decides: a saved key shows a short "✓ Saved…"
-// and fits easily, while the no-key hint is the long one — so the section the
-// reader happens to be looking at with no key is the cramped one, whichever it
-// is. Hence a shared layout rather than a tweak to either.
-//
-// The status is a canvas.Text and cannot wrap, so stacking (which gives it the
-// full width) is what keeps a long hint readable on a narrow phone.
-type keyLinkLayout struct{ gap float32 }
-
-func (k keyLinkLayout) fits(objs []fyne.CanvasObject, width float32) bool {
-	if len(objs) != 2 {
-		return true
-	}
-	return objs[0].MinSize().Width+k.gap+objs[1].MinSize().Width <= width
-}
-
-func (k keyLinkLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
-	if len(objs) != 2 {
-		return fyne.Size{}
-	}
-	s, l := objs[0].MinSize(), objs[1].MinSize()
-	// Report the STACKED minimum: the row must be free to narrow past the
-	// side-by-side width without the sheet refusing, which is the whole point.
-	w := s.Width
-	if l.Width > w {
-		w = l.Width
-	}
-	return fyne.NewSize(w, s.Height+l.Height)
-}
-
-func (k keyLinkLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
-	if len(objs) != 2 {
-		return
-	}
-	status, link := objs[0], objs[1]
-	lm := link.MinSize()
-	if k.fits(objs, size.Width) {
-		sh := status.MinSize().Height
-		status.Resize(fyne.NewSize(size.Width-k.gap-lm.Width, sh))
-		status.Move(fyne.NewPos(0, (lm.Height-sh)/2))
-		link.Resize(lm)
-		link.Move(fyne.NewPos(size.Width-lm.Width, 0))
-		return
-	}
-	sm := status.MinSize()
-	status.Resize(fyne.NewSize(size.Width, sm.Height))
-	status.Move(fyne.NewPos(0, 0))
-	link.Resize(lm)
-	link.Move(fyne.NewPos(size.Width-lm.Width, sm.Height))
-}
-
-// keyLinkRow is the shared "status … Get a key ↗" row.
-func keyLinkRow(status, link fyne.CanvasObject) fyne.CanvasObject {
-	return container.New(keyLinkLayout{gap: 2 * theme.Padding()}, status, link)
 }
