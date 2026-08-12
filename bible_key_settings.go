@@ -40,16 +40,23 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	// only when it is THEIRS. Ours is a shared credential on a shared quota, and
 	// showing it invites a reader to lift it, which costs every other reader.
 	//
-	// So a bundled key shows as an empty field whose placeholder says the NKJV
-	// already works and that pasting replaces it. Nothing is hidden about the
-	// STATE — refreshStatus below says plainly that the included key is in use —
-	// only the characters are withheld. A key the reader pasted is shown exactly
-	// as before: it is theirs, and being able to check it is how they spot a
+	// So a bundled key shows as an empty field. Nothing is hidden about the STATE
+	// — refreshStatus below says plainly that the included key is in use — only
+	// the characters are withheld. A key the reader pasted is shown exactly as
+	// before: it is theirs, and being able to check it is how they spot a
 	// truncated paste.
+	//
+	// The placeholder says only what TYPING here does; the status line under the
+	// box is what says the included key is already working. It used to try to say
+	// both ("Included with BibleText — paste your own to replace it") and ran off
+	// the end of the field: measured 458pt of text at the app's 18pt body size in
+	// a box with ~281pt of usable width on a Pro Max, and ~199pt on a 320pt phone.
+	// Anything set here must be measured at 18 — theme.TextSize() is the stock 14
+	// and flatters every string by 29%.
 	entry := widget.NewPasswordEntry()
 	usingBundled := store.usingBundledBibleKey()
 	if usingBundled {
-		entry.SetPlaceHolder("Included with BibleText — paste your own to replace it")
+		entry.SetPlaceHolder("Paste your own key")
 	} else {
 		entry.SetPlaceHolder("Paste your API.Bible key")
 		entry.SetText(store.bibleAPIKey())

@@ -78,8 +78,32 @@ func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {
 	if e.Text != "" {
 		t.Errorf("field should be empty for a bundled key, got %q", e.Text)
 	}
-	if !strings.Contains(strings.ToLower(e.PlaceHolder), "included") {
-		t.Errorf("placeholder should say the key is included, got %q", e.PlaceHolder)
+	// The reader must still be TOLD the key is included — but the placeholder is
+	// not where that has to live, and it is the wrong place for it: a sentence
+	// long enough to say "included with BibleText" AND "paste your own to replace
+	// it" measured 458pt inside a field with ~199pt of usable width on a 320pt
+
+	// the status line under the box, so this asserts the SECTION says it rather
+	// than pinning it to one widget.
+	var said bool
+	for _, s := range collectText(rows) {
+		if strings.Contains(strings.ToLower(s), "included") {
+			said = true
+			break
+		}
+	}
+	if !said {
+		t.Errorf("nothing in the section tells the reader the key is included; texts = %q, placeholder = %q",
+			collectText(rows), e.PlaceHolder)
+	}
+	// And whatever the placeholder says, it has to FIT. Measured at the app's own
+	// body size (bibleTheme.Size(SizeNameText) = 18) — theme.TextSize() is the
+	// stock 14 and would flatter every string by 29%, which is how the overrun got
+	// through in the first place.
+	const narrowestUsable = 199 // 320pt phone: box inset, both paddings, reveal icon
+	if w := fyne.MeasureText(e.PlaceHolder, 18, fyne.TextStyle{}).Width; w > narrowestUsable {
+		t.Errorf("placeholder %q measures %.1fpt, overruns the %dpt field on a 320pt phone",
+			e.PlaceHolder, w, narrowestUsable)
 	}
 }
 
