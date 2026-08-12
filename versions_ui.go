@@ -413,9 +413,15 @@ func showVersionLoading(state *AppState, name string) func() {
 	sub.Alignment = fyne.TextAlignCenter
 	bar := widget.NewProgressBarInfinite()
 
+	// The bar spans the card, like the title and caption above and below it. It
+	// used to be pinned to a fixed 240pt inside a GridWrap, which left it both
+	// narrower than the card AND left-aligned under centred text — 12pt of gap
+	// on one side against 80pt on the other at iPhone width (owner-reported,
+	// then measured). A VBox stretches its children horizontally, so simply
+	// dropping the wrapper makes the bar agree with everything else in the card.
 	content := container.NewVBox(
 		title, spacer(10),
-		container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar),
+		bar,
 		spacer(8), sub,
 	)
 	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
@@ -429,7 +435,7 @@ func showVersionLoading(state *AppState, name string) func() {
 		w = 340
 	}
 	if w < 264 {
-		w = 264 // the 240pt progress bar + card padding
+		w = 264 // narrow enough for any phone, wide enough for the caption
 	}
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
