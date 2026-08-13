@@ -49,6 +49,28 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			// a literal "\n" as whitespace; handleBr maps <br> to "\n", and the
 			// TextView's INTER_WORD justification exempts hard-break lines, so
 			// poem lines render ragged-right as in print).
+			// Runs first — in the BSB the words of Christ are a span inside the
+			// verse, so the attribution and any other speaker beside it must stay
+			// black (red_letter_runs.go). Every other edition yields one run,
+			// which is the old behaviour exactly.
+			runs := trimRuns(redLetterRuns(state.CurrentVersion, v, redLetter))
+			if len(runs) > 1 {
+				hl := isVerseHighlighted(state, v)
+				for _, run := range runs {
+					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
+					switch {
+					case hl && run.Red:
+						fmt.Fprintf(&b, `<span style="background-color:%s"><font color="%s">%s</font></span>`, hlBG, red, piece)
+					case hl:
+						fmt.Fprintf(&b, `<span style="background-color:%s">%s</span>`, hlBG, piece)
+					case run.Red:
+						fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, piece)
+					default:
+						b.WriteString(piece)
+					}
+				}
+				continue
+			}
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
 			wj := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
 			switch {
