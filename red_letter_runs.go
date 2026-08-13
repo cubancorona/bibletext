@@ -1,6 +1,9 @@
 package bibletext
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // verseRun is a stretch of a verse that is uniformly Christ's words or not.
 //
@@ -71,4 +74,131 @@ func trimRuns(runs []verseRun) []verseRun {
 		}
 	}
 	return out
+}
+
+// tokenSpan is one wrap token's half-open rune range within its verse's text.
+type tokenSpan struct {
+	Start int
+	End   int
+}
+
+// verseTokenSpans locates each of verseTokens(v)'s tokens inside the verse text.
+//
+// The styled desktop pane draws one canvas.Text per token, so to ask the spans
+// whether a token is Christ's it first has to know where that token IS; tokens
+// carry no offsets of their own. verseTokens splits each authored line with
+// strings.Fields, so the tokens are the verse's whitespace-delimited fields in
+// order — plus "\n" sentinels between authored lines (zero-width here, since a
+// sentinel is never drawn) and the superscript verse number glued to the front
+// of the first one.
+//
+// The text is SCANNED rather than the offsets accumulated as token length plus
+// one space. That shortcut is what I reached for first and it is wrong: the
+// separators are not all single spaces — an authored poem line is a "\n" and
+// nothing stops the supplier emitting two spaces after a sentence — and every
+// such separator slides all the later offsets, which paints the red onto the
+// neighbouring words instead of failing. Each token is therefore checked against
+// the text it landed on, and ok=false the moment one disagrees so the caller can
+// fall back to the whole-verse answer rather than colour arbitrary words.
+func verseTokenSpans(v Verse, tokens []string) ([]tokenSpan, bool) {
+	r := []rune(v.Text)
+	spans := make([]tokenSpan, len(tokens))
+	num := superscriptNumber(v.Verse)
+	at := 0
+	first := true
+	for i, tok := range tokens {
+		if tok == "\n" {
+			spans[i] = tokenSpan{Start: at, End: at}
+			continue
+		}
+		// Only the first CONTENT token carries the number, exactly as
+		// layoutChapter strips it — a sentinel does not consume the prefix.
+		word := tok
+		if first && num != "" && strings.HasPrefix(tok, num+" ") {
+			word = strings.TrimPrefix(tok, num+" ")
+		}
+		first = false
+
+		for at < len(r) && unicode.IsSpace(r[at]) {
+			at++
+		}
+		start := at
+		for at < len(r) && !unicode.IsSpace(r[at]) {
+			at++
+		}
+		if string(r[start:at]) != word {
+			return nil, false
+		}
+		spans[i] = tokenSpan{Start: start, End: at}
+	}
+	return spans, true
+}
+
+// redLetterTokenFlags answers, token by token, which of verseTokens(v)'s tokens
+// are Christ's words: the per-token form of redLetterRuns, for a pane that can
+// only colour whole tokens because a token is the smallest thing it draws.
+//
+// A token counts as His as soon as ANY of its runes falls inside a red run.
+// That rule is NOT hypothetical, and an earlier version of this comment was
+// wrong to imply it: two shipping BSB spans end mid-token — Mark 7:34's closes
+// inside "opened!”)." and Acts 20:35's inside "receive.’”". It decides toward
+// red on purpose, because a span stopping one rune short would otherwise drop
+// the colour off a quotation's closing mark, which reads as a rendering fault
+// rather than as an editorial line.
+//
+// The consequence is a real cross-platform difference, recorded here because
+// nothing else says it: on those two verses this pane paints 3 characters red
+// that the Apple and Android panes leave in body colour, since those split at
+// rune level (redLetterRuns) while this one can only colour whole tokens.
+//
+// Every edition except the BSB yields a single run, so all the flags come back
+// the same and the pane behaves exactly as it did before spans existed. So does
+// a verse whose tokens cannot be matched back to its own text.
+func redLetterTokenFlags(versionID string, v Verse, redLetter bool, tokens []string) []bool {
+	runs := redLetterRuns(versionID, v, redLetter)
+
+	// The whole-verse answer — what every pane did before spans: red iff this
+	// verse is marked as Christ's at all. It is read off the runs rather than
+	// re-derived from isWordsOfChrist so there stays one decision, not two.
+	whole := false
+	for _, run := range runs {
+		if run.Red {
+			whole = true
+			break
+		}
+	}
+	uniform := func() []bool {
+		flags := make([]bool, len(tokens))
+		for i := range flags {
+			flags[i] = whole
+		}
+		return flags
+	}
+	if len(runs) < 2 {
+		return uniform()
+	}
+
+	// The runs partition the verse text exactly, so flattening their redness
+	// rune by rune answers for any offset a token can occupy.
+	red := make([]bool, 0, len(v.Text))
+	for _, run := range runs {
+		for range run.Text { // ranges by rune, which is what the offsets count
+			red = append(red, run.Red)
+		}
+	}
+	spans, ok := verseTokenSpans(v, tokens)
+	if !ok {
+		return uniform()
+	}
+
+	flags := make([]bool, len(tokens))
+	for i, s := range spans {
+		for j := s.Start; j < s.End && j < len(red); j++ {
+			if red[j] {
+				flags[i] = true
+				break
+			}
+		}
+	}
+	return flags
 }

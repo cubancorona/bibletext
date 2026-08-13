@@ -25,6 +25,10 @@ const (
 	colorNameHighlight   fyne.ThemeColorName = "bibleTextHighlight"
 	colorNameHighlightHi fyne.ThemeColorName = "bibleTextHighlightText"
 	colorNameMuted       fyne.ThemeColorName = "bibleTextMuted"
+	// The native panes write pal.RedLetter into their markup as a hex literal,
+	// but a RichText segment can only NAME a theme colour — so the Fyne fallback
+	// pane needs the same palette entry reachable by name.
+	colorNameRedLetter fyne.ThemeColorName = "bibleTextRedLetter"
 )
 
 // palette is the single source of truth for every colour in the UI. Routing all
@@ -257,6 +261,8 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 		return p.Highlight
 	case colorNameHighlightHi:
 		return p.HighlightText
+	case colorNameRedLetter:
+		return p.RedLetter
 	}
 
 	return theme.DefaultTheme().Color(name, variant)
