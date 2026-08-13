@@ -263,3 +263,47 @@ func TestFyneFallbackTrimsTheSingleRunPath(t *testing.T) {
 		t.Errorf("single-run body = %q, want the trimmed text — the trim was dropped or changed", body)
 	}
 }
+
+// An edition must be allowed to disagree with the WEB about whether Christ
+// speaks in a verse at all. The WEB's verse-level table used to GATE the run
+// splitter, so four verses the NKJV's own publisher reddens came out black —
+// including Luke 17:36, which the WEB does not even contain.
+func TestAnEditionsOwnTableOverridesTheWEBGate(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	app.Preferences().SetBool(prefRedLetter, true)
+
+	for _, tc := range []struct {
+		book  string
+		ch, v int
+	}{
+		{"Mark", 5, 31}, {"Luke", 24, 7}, {"Matthew", 27, 63}, {"Luke", 17, 36},
+	} {
+		key := verseKeyFor(tc.book, tc.ch, tc.v)
+		if isWordsOfChrist(tc.book, tc.ch, tc.v) {
+			t.Fatalf("fixture: %s is in the WEB table, so it cannot show the gate being overruled", key)
+		}
+		spans, ok := nkjvRedLetterSpans[key]
+		if !ok || len(spans) == 0 {
+			t.Fatalf("fixture: %s has no NKJV span data", key)
+		}
+		// A verse of exactly the recorded length so the rune guard passes.
+		v := Verse{BookName: tc.book, Chapter: tc.ch, Verse: tc.v,
+			Text: strings.Repeat("x", nkjvRedLetterRunes[key])}
+		runs := redLetterRuns("nkjv", v, true)
+		anyRed := false
+		for _, r := range runs {
+			anyRed = anyRed || r.Red
+		}
+		if !anyRed {
+			t.Errorf("%s: the NKJV marks this verse but nothing came back red — the WEB gate is still overruling it", key)
+		}
+		// ...and the WEB itself must be unaffected: it has no entry, and its
+		// own table says Christ does not speak here.
+		for _, r := range redLetterRuns("web", Verse{BookName: tc.book, Chapter: tc.ch, Verse: tc.v, Text: "plain"}, true) {
+			if r.Red {
+				t.Errorf("%s: the WEB reddened a verse its own table does not mark", key)
+			}
+		}
+	}
+}

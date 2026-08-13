@@ -27,11 +27,26 @@ type verseRun struct {
 //     NKJV have no span data yet, and the BSB's is refused when the verse text
 //     does not match what the offsets were computed against.
 func redLetterRuns(versionID string, v Verse, redLetter bool) []verseRun {
-	if !redLetter || !isWordsOfChrist(v.BookName, v.Chapter, v.Verse) {
+	if !redLetter {
 		return []verseRun{{Text: v.Text}}
 	}
+	// THE EDITION'S OWN TABLE IS THE AUTHORITY, and it is consulted FIRST.
+	//
+	// isWordsOfChrist below is the WEB's verse-level judgement, and it used to
+	// gate this function — which meant an edition could not disagree with the
+	// WEB about whether Christ speaks in a verse at all. That silently
+	// suppressed the NKJV's own marks on four verses its publisher reddens and
+	// the WEB does not: Mark 5:31, Luke 24:7, Matthew 27:63, and Luke 17:36 —
+	// which the WEB does not even contain. An NKJV reader saw no red where the
+	// NKJV puts it.
 	if spans, ok := redLetterSpansFor(versionID, v.BookName, v.Chapter, v.Verse, v.Text); ok {
 		return runsFromSpans(v.Text, spans)
+	}
+	// No table for this edition, or text that no longer matches the offsets.
+	// Fall back to the WEB's verse-level marks, which is what every pane did
+	// before spans existed.
+	if !isWordsOfChrist(v.BookName, v.Chapter, v.Verse) {
+		return []verseRun{{Text: v.Text}}
 	}
 	return []verseRun{{Text: v.Text, Red: true}}
 }
