@@ -82,9 +82,19 @@ def web_wj(usfm_dir='usfm'):
         out[BOOK[code.group(1)]]=d
     return out
 
-def toks(t): return {w for w in re.findall(r"[a-z']+",t.lower()) if w not in STOP and len(w)>2}
-def sim(a,b):
-    A,B=toks(a),toks(b)
+def toks(t, keep_short=False):
+    ws = re.findall(r"[a-z']+", t.lower())
+    if keep_short:
+        # A short utterance is mostly stopwords and short words — "Go!", "Come
+        # out of him!", "Call him." Filtering those away leaves an empty set and
+        # scores 0.0, which silently dropped several of Christ's shortest
+        # commands. For a short span, keep everything.
+        return set(ws)
+    return {w for w in ws if w not in STOP and len(w) > 2}
+
+def sim(a, b):
+    short = len(re.findall(r"[A-Za-z']+", a)) <= 5
+    A, B = toks(a, short), toks(b, short)
     if not A or not B: return 0.0
     return len(A&B)/min(len(A),len(B))          # containment, not Jaccard: a BSB
                                                 # segment is a PART of the WEB span
@@ -207,7 +217,15 @@ def build(usfm_dir, bsb, adjudications, nkjv_wj):
             hand = adjudications.get(key)
             lead, rs = regions2(t)
             picked = []
-            if hand and hand.get('whole'):
+            if hand and hand.get('single_only_matching'):
+                # Several single-quoted speeches in one verse, only some His:
+                # keep the ones whose words are what the WEB marks.
+                def content_sim(seg):
+                    A, B = toks(seg), toks(wj)
+                    return len(A & B) / min(len(A), len(B)) if A and B else 0.0
+                picked = [x for x in single_regions(t) if content_sim(t[x[0]:x[1]]) >= 0.3]
+                stats['hand'] += 1
+            elif hand and hand.get('whole'):
                 picked = [(0, len(t))]; stats['hand'] += 1
             elif hand and hand.get('single'):
                 picked = single_regions(t); stats['hand'] += 1
@@ -220,11 +238,34 @@ def build(usfm_dir, bsb, adjudications, nkjv_wj):
                         picked.append(rs[i])
             elif len(re.sub(r'[^A-Za-z]', '', other)) <= 2:
                 picked = [(0, len(t))]      # the WEB marks the whole verse
+            elif not rs and not lead:
+                # NO QUOTATION MARKS AT ALL. Two quite different situations.
+                #
+                # Mid-discourse, the BSB opens a quotation at the start of the
+                # speech and only closes it at the end, so an interior verse
+                # carries none of its own (Luke 10:22, Mark 13:14, Matthew
+                # 28:20). Those are wholly His.
+                #
+                # But the Lord's words are also written with SINGLE quotes when
+                # someone recounts them inside their own speech — Paul before
+                # the crowd in Acts 22, Peter in Acts 11. There the red belongs
+                # to the single-quoted part only.
+                singles = single_regions(t)
+                if singles and sum(e - s for s, e in singles) < len(t):
+                    picked = [x for x in singles if sim(t[x[0]:x[1]], wj) >= 0.25]
+                elif not NOT_JESUS.search(t) and len(wj) >= 0.6 * len(t):
+                    # Only when the WEB's marked words account for most of the
+                    # verse. Otherwise the verse is somebody else's sentence with
+                    # His words inside it — Acts 20:35 is Paul preaching, and
+                    # only "It is more blessed to give than to receive" is the
+                    # Lord's.
+                    picked = [(0, len(t))]
             else:
                 labels = []
                 for (s, e) in rs:
                     at, sm = attribution(t, s, e), sim(t[s:e], wj)
                     labels.append('yes' if at == 'jesus' else 'no' if at == 'other'
+                                  else 'yes' if (sm >= 0.9 and at != 'other')
                                   else 'yes' if (sm >= 0.75 and len(toks(t[s:e])) >= 4)
                                   else 'no' if sm <= 0.10 else '?')
                 if len(rs) == 1 and nkjv_marks(book, c, v):
@@ -237,6 +278,19 @@ def build(usfm_dir, bsb, adjudications, nkjv_wj):
                 if rs and nkjv_marks(book, c, v) and 'no' not in labels and not NOT_JESUS.search(t):
                     labels = ['yes'] * len(labels)
                 picked = [rs[i] for i, l in enumerate(labels) if l == 'yes']
+                # Speech carried in from the previous verse and closing here:
+                # 'But so that you may know ... authority to forgive sins…" He
+                # said to the paralytic' (Mark 2:10). The closing quote has no
+                # opener in this verse, so it forms no region and was being
+                # dropped entirely.
+                if lead and sim(t[lead[0]:lead[1]], wj) >= 0.25:
+                    picked.insert(0, lead)
+                # The Lord quoted inside somebody else's speech, single-quoted.
+                for sp in single_regions(t):
+                    if any(sp[0] >= s0 and sp[1] <= e0 for s0, e0 in picked):
+                        continue            # already inside a chosen region
+                    if sim(t[sp[0]:sp[1]], wj) >= 0.35:
+                        picked.append(sp)
             if picked:
                 picked = sorted(set(picked))
                 spans[key] = picked
