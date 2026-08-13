@@ -167,3 +167,42 @@ func TestRedLetterSpanLookupCoversTheRightEditions(t *testing.T) {
 		t.Error("nkjv: the switch is off but spans were still handed out")
 	}
 }
+
+// The WEB and WEB Catholic mark their own words of Jesus in their published
+// USFM, so like the NKJV — and unlike the BSB — nothing about these is our
+// judgement. What must hold is that the spans are the TRANSLATORS' and that a
+// verse missing from the table still renders, whole, rather than not at all.
+func TestWEBAndWEBCUseTheirOwnSpans(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	for _, tc := range []struct {
+		vid   string
+		spans map[string][]redLetterSpan
+		runes map[string]int
+	}{
+		{"web", webRedLetterSpans, webRedLetterRunes},
+		{"webc", webcRedLetterSpans, webcRedLetterRunes},
+	} {
+		if len(tc.spans) < 2000 {
+			t.Errorf("%s: only %d verses have spans; the table looks truncated", tc.vid, len(tc.spans))
+		}
+		for key, spans := range tc.spans {
+			n, ok := tc.runes[key]
+			if !ok {
+				t.Errorf("%s: %s has spans but no recorded verse length, so the guard cannot fire", tc.vid, key)
+				break
+			}
+			for _, s := range spans {
+				if s.Start < 0 || s.End > n || s.Start >= s.End {
+					t.Errorf("%s: %s span {%d,%d} outside a verse of %d runes", tc.vid, key, s.Start, s.End, n)
+					break
+				}
+			}
+		}
+		// A verse the table does not carry must fall back, not vanish: five per
+		// edition genuinely differ from eBible's revision and have no entry.
+		if _, ok := redLetterSpansFor(tc.vid, "Nonexistent", 1, 1, "whatever"); ok {
+			t.Errorf("%s: got spans for a verse that is not in the table", tc.vid)
+		}
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// Span-level words of Christ, and the lookup every reading pane goes through.
+//
 // The BSB's words of Christ, as SPANS rather than whole verses.
 //
 // The BSB ships no words-of-Jesus markup: its published USFM (ebible.org,
@@ -85,8 +87,27 @@ func redLetterSpansFor(versionID, book string, chapter, verse int, text string) 
 		return bsbRedLetterSpansFor(book, chapter, verse, text)
 	case "nkjv":
 		return nkjvRedLetterSpansFor(book, chapter, verse, text)
+	case "web":
+		return tableSpansFor(webRedLetterSpans, webRedLetterRunes, book, chapter, verse, text)
+	case "webc":
+		return tableSpansFor(webcRedLetterSpans, webcRedLetterRunes, book, chapter, verse, text)
 	}
 	return nil, false
+}
+
+// tableSpansFor is the lookup every span table shares: find the verse, then
+// refuse unless the text is the length the offsets were computed against.
+func tableSpansFor(spans map[string][]redLetterSpan, runes map[string]int,
+	book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
+	if !bsbRedLetterSpansEnabled() {
+		return nil, false
+	}
+	key := verseKeyFor(book, chapter, verse)
+	got, ok := spans[key]
+	if !ok || len([]rune(text)) != runes[key] {
+		return nil, false
+	}
+	return got, true
 }
 
 // nkjvRedLetterSpansFor mirrors the BSB accessor, including the rune-length
