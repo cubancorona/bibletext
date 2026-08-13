@@ -116,3 +116,23 @@ func bsbSpanTextForTest(key string, s redLetterSpan) string {
 	}
 	return string(r[s.Start:s.End])
 }
+
+// The switch has to be real: off, the app must fall back to exactly what it did
+// before these spans existed, or "turn it off" is not an option we actually have.
+func TestBSBRedLetterSwitch(t *testing.T) {
+	key := verseKeyFor("Mark", 8, 5)
+	text := bsbVerseFixture[key]
+
+	t.Setenv("BIBLETEXT_BSB_RED_LETTER", "0")
+	if _, ok := bsbRedLetterSpansFor("Mark", 8, 5, text); ok {
+		t.Error("switched off, but span data was still handed out")
+	}
+	t.Setenv("BIBLETEXT_BSB_RED_LETTER", "1")
+	if _, ok := bsbRedLetterSpansFor("Mark", 8, 5, text); !ok {
+		t.Error("switched on, but no span data came back")
+	}
+	t.Setenv("BIBLETEXT_BSB_RED_LETTER", "")
+	if got, want := bsbRedLetterSpansEnabled(), bsbRedLetterSpansOn; got != want {
+		t.Errorf("with nothing set the constant must decide: got %v, want %v", got, want)
+	}
+}
