@@ -511,7 +511,21 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	runBta(func(env uintptr) {
 		C.btaSetStyle(C.uintptr_t(env),
 			C.int(argbInt(pal.Text)), C.int(argbInt(pal.Background)),
-			C.float(textPx), C.float(1.7),
+			// The pitch as a multiple of the TEXT SIZE — the Java side turns it
+			// into an exact line height, so this is the same quantity CSS
+			// line-height names.
+			//
+			// It is NOT the 2.0 the Apple pane writes into its CSS. That value
+			// is nominal: the UIKit HTML importer does not honour a unitless
+			// line-height, so iOS actually draws close to the font's own
+			// leading. Matching the CSS number made Android markedly looser than
+			// the iOS pane beside it — owner-reported from the emulator, and the
+			// reason this is a measured constant rather than a shared one.
+			//
+			// It used to be 1.7 applied to the font's NATURAL line height, a
+			// larger quantity again, which is where the original looseness came
+			// from.
+			C.float(textPx), C.float(1.35),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT))
 		ch := C.CString(html)
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac))

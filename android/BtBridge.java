@@ -864,7 +864,27 @@ public final class BtBridge {
                 text.setBackgroundColor(paperColor);
                 scroll.setBackgroundColor(paperColor);
                 text.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, textSizePx);
-                text.setLineSpacing(0f, lineMult);
+                // EXACT line height, not a multiplier, so this matches the Apple
+                // pane by construction. iOS sets CSS line-height, which is a
+                // multiple of the FONT SIZE; setLineSpacing's multiplier applies
+                // to the font's NATURAL line height, which already carries the
+                // ascent, descent and leading (~1.25-1.4x the em for this
+                // serif). Passing the same number to both therefore made Android
+                // noticeably looser than iOS — owner-reported from the emulator.
+                //
+                // setLineHeight takes the pitch in pixels and is exactly CSS's
+                // line-height. It needs API 28; below that fall back to the
+                // multiplier, deriving it from the font's own metrics rather
+                // than guessing, so the two paths agree as closely as the older
+                // API allows.
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    text.setLineHeight(Math.round(lineMult * textSizePx));
+                } else {
+                    android.graphics.Paint.FontMetrics fm = text.getPaint().getFontMetrics();
+                    float natural = fm.descent - fm.ascent + fm.leading;
+                    float mult = natural > 0f ? (lineMult * textSizePx) / natural : lineMult;
+                    text.setLineSpacing(0f, mult);
+                }
                 text.setTypeface(android.graphics.Typeface.SERIF);
                 text.setPadding(padL, padT, padR, padB);
                 text.setHighlightColor((textColor & 0x00FFFFFF) | 0x33000000);
