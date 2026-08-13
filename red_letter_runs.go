@@ -27,10 +27,8 @@ func redLetterRuns(versionID string, v Verse, redLetter bool) []verseRun {
 	if !redLetter || !isWordsOfChrist(v.BookName, v.Chapter, v.Verse) {
 		return []verseRun{{Text: v.Text}}
 	}
-	if versionID == "bsb" {
-		if spans, ok := bsbRedLetterSpansFor(v.BookName, v.Chapter, v.Verse, v.Text); ok {
-			return runsFromSpans(v.Text, spans)
-		}
+	if spans, ok := redLetterSpansFor(versionID, v.BookName, v.Chapter, v.Verse, v.Text); ok {
+		return runsFromSpans(v.Text, spans)
 	}
 	return []verseRun{{Text: v.Text, Red: true}}
 }

@@ -74,6 +74,36 @@ func bsbRedLetterSpansFor(book string, chapter, verse int, text string) ([]redLe
 	return spans, true
 }
 
+// redLetterSpansFor is the one lookup every pane goes through. It answers only
+// for editions we hold span data for — the BSB, derived because it publishes
+// none, and the NKJV, whose own words-of-Jesus spans API.Bible serves. The WEB
+// and WEB Catholic have spans in their USFM but no table here yet, so they still
+// get the whole-verse answer.
+func redLetterSpansFor(versionID, book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
+	switch versionID {
+	case "bsb":
+		return bsbRedLetterSpansFor(book, chapter, verse, text)
+	case "nkjv":
+		return nkjvRedLetterSpansFor(book, chapter, verse, text)
+	}
+	return nil, false
+}
+
+// nkjvRedLetterSpansFor mirrors the BSB accessor, including the rune-length
+// guard: offsets computed against different text would colour arbitrary words.
+// It honours the same switch, so one flag turns the whole feature off.
+func nkjvRedLetterSpansFor(book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
+	if !bsbRedLetterSpansEnabled() {
+		return nil, false
+	}
+	key := verseKeyFor(book, chapter, verse)
+	spans, ok := nkjvRedLetterSpans[key]
+	if !ok || len([]rune(text)) != nkjvRedLetterRunes[key] {
+		return nil, false
+	}
+	return spans, true
+}
+
 func bsbRedLetterRuneLen(book string, chapter, verse int) int {
 	return bsbRedLetterRunes[verseKeyFor(book, chapter, verse)]
 }

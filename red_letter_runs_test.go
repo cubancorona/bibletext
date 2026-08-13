@@ -123,3 +123,47 @@ func TestAndroidPaneRedensOnlyChristsWordsInTheBSB(t *testing.T) {
 		t.Errorf("the disciples' answer was reddened:\n%s", html)
 	}
 }
+
+// The NKJV's spans are the PUBLISHER's own words-of-Jesus marks, not ours, so
+// the same verse must colour the same way — and the disciples' reply must not.
+func TestNKJVUsesItsOwnSpans(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	app.Preferences().SetBool(prefRedLetter, true)
+
+	key := verseKeyFor("Mark", 8, 5)
+	spans, ok := nkjvRedLetterSpans[key]
+	if !ok || len(spans) == 0 {
+		t.Fatal("no NKJV span data for Mark 8:5")
+	}
+	// The NKJV's own table must be independent of the BSB's — same verse, but
+	// different translations, so identical offsets would mean one overwrote the
+	// other.
+	if bsb, ok := bsbRedLetterSpans[key]; ok && len(bsb) == len(spans) && bsb[0] == spans[0] {
+		t.Error("the NKJV spans are identical to the BSB's; one table is feeding the other")
+	}
+	if n := nkjvRedLetterRunes[key]; n == 0 {
+		t.Error("no rune length recorded, so the guard cannot fire")
+	}
+}
+
+// Every edition we hold spans for must go through one lookup, and editions we
+// do not hold must still get the whole-verse answer.
+func TestRedLetterSpanLookupCoversTheRightEditions(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	text := bsbVerseFixture[verseKeyFor("Mark", 8, 5)]
+
+	if _, ok := redLetterSpansFor("bsb", "Mark", 8, 5, text); !ok {
+		t.Error("bsb: expected span data")
+	}
+	for _, vid := range []string{"web", "webc", "kjv", ""} {
+		if _, ok := redLetterSpansFor(vid, "Mark", 8, 5, text); ok {
+			t.Errorf("%q: got span data, but no table exists for it — it must fall back to the whole verse", vid)
+		}
+	}
+	t.Setenv("BIBLETEXT_BSB_RED_LETTER", "0")
+	if _, ok := redLetterSpansFor("nkjv", "Mark", 8, 5, text); ok {
+		t.Error("nkjv: the switch is off but spans were still handed out")
+	}
+}
