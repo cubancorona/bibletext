@@ -1,6 +1,10 @@
 package bibletext
 
-import "strconv"
+import (
+	"os"
+	"strconv"
+	"strings"
+)
 
 // The BSB's words of Christ, as SPANS rather than whole verses.
 //
@@ -11,6 +15,35 @@ import "strconv"
 // able" (James and John), "No one, Lord" (the woman), "Caesar's" (the
 // Pharisees). These spans are derived instead; see scripts/gen-bsb-redletter.py
 // for how, and docs/TEXTUAL-DATA.md for why each rule is shaped as it is.
+
+// bsbRedLetterSpansOn is the INTERNAL switch for this whole feature. Off, the
+// app behaves exactly as it did before the spans existed: bsbRedLetterSpansFor
+// answers "no data", and every caller falls back to reddening the whole verse
+// from the WEB's verse-level marks.
+//
+// Deliberately not a user setting. The spans are our editorial judgement rather
+// than the Berean translators' — the BSB publishes no words-of-Jesus markup at
+// all — so this is a decision the project takes, not one to put in front of a
+// reader as a preference. It is one line to flip if we decide the BSB should
+// show no derived red letters, or to promote to a setting later.
+const bsbRedLetterSpansOn = true
+
+// bsbRedLetterSpansEnabled resolves the switch, allowing an environment override
+// so the two behaviours can be compared on a device or in the simulator without
+// two builds. The constant is what ships; the variable only ever narrows or
+// widens it for whoever set it deliberately.
+//
+//	BIBLETEXT_BSB_RED_LETTER=0   force the old whole-verse behaviour
+//	BIBLETEXT_BSB_RED_LETTER=1   force the spans
+func bsbRedLetterSpansEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_BSB_RED_LETTER"))) {
+	case "0", "off", "false", "no":
+		return false
+	case "1", "on", "true", "yes":
+		return true
+	}
+	return bsbRedLetterSpansOn
+}
 
 // redLetterSpan is a half-open rune range [Start, End) within a verse's text.
 type redLetterSpan struct {
@@ -28,6 +61,9 @@ type redLetterSpan struct {
 // did before these spans existed. Painting stale offsets would colour arbitrary
 // words — worse than the coarse behaviour it replaced.
 func bsbRedLetterSpansFor(book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
+	if !bsbRedLetterSpansEnabled() {
+		return nil, false
+	}
 	spans, ok := bsbRedLetterSpans[verseKeyFor(book, chapter, verse)]
 	if !ok {
 		return nil, false
