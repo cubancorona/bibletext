@@ -211,7 +211,15 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 				flushLine(true)
 			}
 
-			red := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
+			// Per TOKEN, not per verse. In the BSB the words of Christ are a
+			// SPAN inside the verse, so the narration and the other speaker's
+			// reply beside them must stay in body colour — this used to stamp
+			// one flag on every token, which put "Seven," they replied. in red
+			// (red_letter_runs.go). Every other edition yields a single run and
+			// every flag comes back the same, which IS the old whole-verse
+			// behaviour, so nothing but the BSB moves.
+			toks := verseTokens(v)
+			redTok := redLetterTokenFlags(state.CurrentVersion, v, redLetter, toks)
 			hl := isVerseHighlighted(state, v)
 
 			// Provisional first-line record; place() may wrap the first unit
@@ -220,7 +228,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			vlIdx := len(lay.VerseLines) - 1
 
 			first := true
-			for _, tok := range verseTokens(v) {
+			for ti, tok := range toks {
 				if tok == "\n" {
 					flushLine(true) // authored poem-line boundary
 					continue
@@ -231,11 +239,11 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 					unit = []styledRun{
 						{Text: num, Kind: runVerseNum, Verse: v.Verse, Highlight: hl,
 							W: measure(num, runVerseNum)},
-						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: red, Highlight: hl,
+						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti], Highlight: hl,
 							W: measure(word, runWord)},
 					}
 				} else {
-					unit = []styledRun{{Text: tok, Kind: runWord, Verse: v.Verse, RedLetter: red,
+					unit = []styledRun{{Text: tok, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti],
 						Highlight: hl, W: measure(tok, runWord)}}
 				}
 				place(unit)

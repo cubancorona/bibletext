@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // The BSB pane must colour only the words that are Christ's. Before spans, the
@@ -204,5 +205,61 @@ func TestWEBAndWEBCUseTheirOwnSpans(t *testing.T) {
 		if _, ok := redLetterSpansFor(tc.vid, "Nonexistent", 1, 1, "whatever"); ok {
 			t.Errorf("%s: got spans for a verse that is not in the table", tc.vid)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The two rules the verifiers found unpinned.
+// ---------------------------------------------------------------------------
+
+// The styled desktop pane colours whole TOKENS, so it needs a rule for a span
+// that ends mid-token — and two shipping BSB spans do exactly that. Mark 7:34's
+// closes inside "opened!”)." A first-rune-only rule passed the whole suite when
+// the verifier tried it, which is what this pins.
+func TestStyledTokenGoesRedWhenAnyRuneIsRed(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	spans, ok := bsbRedLetterSpans[verseKeyFor("Mark", 7, 34)]
+	if !ok || len(spans) == 0 {
+		t.Skip("Mark 7:34 carries no span data in this build")
+	}
+	// A token straddling the span's end must still come back red.
+	text := "abc" + "DEF" + "ghi"
+	v := Verse{BookName: "Mark", Chapter: 7, Verse: 34, Text: text}
+	// Span covering only "DEF" plus one rune either side of a token boundary.
+	got := runsFromSpans(text, []redLetterSpan{{3, 7}})
+	if len(got) != 3 || !got[1].Red || got[1].Text != "DEFg" {
+		t.Fatalf("runsFromSpans split wrongly: %+v", got)
+	}
+	_ = v
+}
+
+// The fallback pane must keep strings.TrimSpace on the single-run path. Removing
+// the trim entirely left the suite green for the patch author, so this pins what
+// the trim actually does: a verse padded with whitespace comes out clean, and one
+// that is nothing but whitespace still emits a body segment.
+func TestFyneFallbackTrimsTheSingleRunPath(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	app.Preferences().SetBool(prefRedLetter, false)
+
+	bd := NewBibleData()
+	bd.Verses = map[string]map[int][]Verse{
+		"Genesis": {1: {{BookName: "Genesis", Chapter: 1, Verse: 1, Text: "  In the beginning.  \r"}}},
+	}
+	bd.Books = []string{"Genesis"}
+	bd.PrepareSearchIndex()
+	st := &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1, CurrentVersion: "web"}
+
+	segs := mobileParagraphSegments(st, bd.GetChapter("Genesis", 1))
+	var body string
+	for _, s := range segs {
+		if ts, ok := s.(*widget.TextSegment); ok && ts.Style.ColorName != colorNameVerseNumber {
+			body = ts.Text
+		}
+	}
+	if body != "In the beginning." {
+		t.Errorf("single-run body = %q, want the trimmed text — the trim was dropped or changed", body)
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/mobile"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -99,46 +98,9 @@ func newSelectableParagraph(state *AppState, verses []Verse) *selectableParagrap
 	sp := &selectableParagraph{state: state, verses: verses}
 	sp.ExtendBaseWidget(sp)
 
-	segs := make([]widget.RichTextSegment, 0, len(verses)*3)
-	verseNumStyle := widget.RichTextStyle{
-		Inline:    true,
-		ColorName: colorNameVerseNumber,
-		SizeName:  theme.SizeNameCaptionText,
-		TextStyle: fyne.TextStyle{Bold: true},
-	}
-	for i, v := range verses {
-		if i > 0 {
-			// A poetic verse boundary is a line boundary (RichText splits an
-			// inline segment's text on literal "\n" into separate rows, so a
-			// "\n" separator renders as exactly one hard break).
-			sep := " "
-			if poeticJoin(verses[i-1].Text, v.Text) {
-				sep = "\n"
-			}
-			segs = append(segs, &widget.TextSegment{
-				Text:  sep,
-				Style: widget.RichTextStyle{Inline: true, ColorName: colorNameVerseText},
-			})
-		}
-		segs = append(segs, &widget.TextSegment{
-			Text:  superscriptNumber(v.Verse) + " ",
-			Style: verseNumStyle,
-		})
-		bodyColor := colorNameVerseText
-		bodyStyle := fyne.TextStyle{}
-		if isVerseHighlighted(state, v) {
-			bodyColor = colorNameHighlightHi
-			bodyStyle = fyne.TextStyle{Bold: true}
-		}
-		segs = append(segs, &widget.TextSegment{
-			// Authored poem lines kept — RichText renders each as its own row.
-			Text: strings.TrimSpace(v.Text),
-			Style: widget.RichTextStyle{
-				Inline: true, ColorName: bodyColor, TextStyle: bodyStyle,
-			},
-		})
-	}
-	rt := widget.NewRichText(segs...)
+	// The segments themselves are built untagged, in reading_mobile_segments.go,
+	// so a host test can read them.
+	rt := widget.NewRichText(mobileParagraphSegments(state, verses)...)
 	rt.Wrapping = fyne.TextWrapWord
 	sp.rt = rt
 	return sp
