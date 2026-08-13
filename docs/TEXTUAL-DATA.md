@@ -247,7 +247,7 @@ That the BSB ships no red-letter data at all is a constraint on what "per-editio
 accurate" can mean for it, and a decision the project has to take deliberately
 rather than by default.
 
-### 3.3 What we currently ship, and its known defect
+### 3.3 The WEB and WEB Catholic
 
 `red_letter_data.go` is generated from the WEB's `\wj` markers and covers nine
 books: Matthew, Mark, Luke, John, Acts, 1 Corinthians, 2 Corinthians, 1 Timothy,
@@ -255,27 +255,95 @@ Revelation.
 
 - **[measured]** It reproduces the WEB source exactly: 2,059 verses, 0 missing,
   0 extra, verified by re-deriving from the USFM and diffing.
-- **[measured]** It aligns correctly onto the BSB and WEBC by verse number
-  (§2 gives the exceptions).
+- **[measured]** 2,034 of those 2,059 `\wj` spans (98.8%) are found *verbatim* in
+  the app's WEB verse text, 18 more after punctuation normalisation, and 7 differ
+  because eBible's WEB revision is not identical to the runtime supplier's.
 
-Its defect is **granularity**. The table records *verses*, not spans, so a verse
-that mixes narration and speech is reddened whole:
+It is still **verse-granular**, so a verse mixing narration and speech is
+reddened whole: **[measured]** 657 of 2,059 (32%) contain text outside the `\wj`
+span, and about 79 contain another speaker's words. Span data for these two
+editions is achievable from the same source and has not been built yet.
 
-- **[measured]** 657 of 2,059 red verses (32%) contain text outside the `\wj`
-  span.
-- **[measured]** About 79 of those contain **another speaker's words** in red.
-  Matthew 20:22 reddens "We are able" (James and John); Matthew 17:26 reddens
-  "From strangers" (Peter); John 8:11 reddens "No one, Lord" (the woman);
-  Matthew 22:21 reddens "Caesar's" (the Pharisees).
+### 3.4 The BSB, which publishes no red letters at all
 
-The remedy is span-level data, and the spans exist: **[measured]** 2,034 of the
-2,059 `\wj` spans (98.8%) are found *verbatim* in the app's WEB verse text, 18
-more match after punctuation normalisation, and 7 differ because eBible's WEB
-revision is not identical to the runtime supplier's. Per-edition accuracy is
-therefore achievable for the WEB and WEBC from their own USFM, and for the NKJV
-from API.Bible's own spans; the BSB has no source to be accurate *to*.
+**[measured]** The BSB's published USFM contains **zero** `\wj` markers. There is
+no publisher's judgement to copy, so the table in `red_letter_bsb_data.go` is
+*derived*, and this section is the record of how — because a derived editorial
+judgement about which words are Christ's should be inspectable, not taken on
+trust.
 
----
+`scripts/gen-bsb-redletter.py` combines four independent signals:
+
+1. **The WEB's `\wj` spans.** The same underlying Greek, so a verse the WEB marks
+   is a verse where Christ speaks. Supplies the candidate verses and the content
+   of what He says.
+2. **The BSB's own punctuation**, parsed into quoted regions — including a
+   *leading* region for speech carried in from the previous verse (a closing
+   quote with no opener), and single-quoted regions for the Lord quoted inside
+   someone else's speech.
+3. **The attribution**: `…,” Jesus replied` versus `…,” they answered`.
+4. **The NKJV's own `\wj`**, fetched from API.Bible for all 174 chapters of the
+   nine books, as an independent editorial witness. Only verse numbers are kept —
+   the NKJV text is licensed and is not stored. See
+   `scripts/data/nkjv-wj-verses.json`.
+
+**Rules that exist only because the obvious version was measured and found
+wrong.** Each was caught by reading the rendered output, not by reasoning:
+
+| rule | the case that forced it |
+| --- | --- |
+| Attribution outranks similarity | Matthew 22:21 — the Pharisees' "Caesar's" is textually *contained* in Christ's reply and scores 1.00 on similarity |
+| A bare pronoun is never evidence of who spoke | Luke 7:40 — `"Tell me, Teacher," he said` is Simon |
+| A quotation carrying its own attribution is a NEW speech act, not a continuation, even when nobody else is credited between them | Luke 7:40 again, after the first fix |
+| A short utterance whose words *are* the marked words is His | "Go!" (Matthew 8:32) and "Call him." (Mark 10:49) scored 0.0 because the metric drops words under four letters |
+| Short spans must be compared on content words, not stopwords | Acts 26:15 — "Who are You, Lord?" shares only stopwords with the answer, and was reddened as though Christ asked it |
+| The no-quotation fallback needs the marked words to account for most of the verse | Acts 20:35 — Paul is preaching in his own voice; only "It is more blessed to give than to receive" is the Lord's |
+
+**Systematic misses found on the second pass**, each a class rather than a
+one-off: the Lord's words in Acts written with single quotes because Paul or
+Peter is recounting them (22:7, 22:8, 22:10, 22:21, 23:11, 26:14, 26:15, 20:35);
+speech *ending* mid-verse, which forms no quoted region at all (Mark 2:10, 12:37,
+Matthew 16:4, John 6:64, 12:36); and mid-discourse verses carrying no quotation
+marks, because the BSB opens a quotation at the start of a speech and closes it
+only at the end (Luke 10:22, Mark 7:11, 13:14, Matthew 28:20).
+
+**52 cases no rule could settle were read and decided by hand.** Each decision is
+recorded with its reason in `scripts/data/bsb-redletter-adjudications.json`.
+
+**Where it lands [measured]:**
+
+| | |
+| --- | --- |
+| verses the WEB marks | 2,059 |
+| of those, absent from the BSB | 7 |
+| markable in the BSB | 2,052 |
+| **verses we mark** | **2,050** — 1,410 whole, 640 partial |
+| marked though the WEB does not | 0 |
+| left unmarked deliberately | 2 |
+
+The two deliberate exclusions: **John 8:33**, which is the crowd answering
+throughout — the WEB reddens it only because its `\wj` span runs on from the
+previous verse — and **Luke 20:23**, which contains no speech at all in the BSB.
+
+**Agreement with the NKJV's independent editorial judgement: 2,041 of 2,050 =
+99.6%** **[measured]**. The disagreements are editorial rather than errors: the
+NKJV reddens Mark 5:31 (the disciples answering) and Luke 24:7 (the angels
+quoting His earlier words, a convention the WEB does not follow), and it carries
+verses the BSB omits.
+
+**Guarding.** The spans are rune offsets into a particular rendering of each
+verse, so `red_letter_bsb_data.go` also records the verse's rune length.
+`bsbRedLetterSpansFor` refuses to answer when the supplied text is a different
+length: stale offsets would colour arbitrary words, which is worse than the
+coarse behaviour they replace.
+
+**Switching it off.** `bsbRedLetterSpansOn` in `red_letter_bsb.go` disables the
+whole feature in one line, and `BIBLETEXT_BSB_RED_LETTER=0|1` overrides it at
+runtime for comparing both behaviours on a device. It is not a user setting: this
+is our editorial judgement rather than the Berean translators', so it is the
+project's decision to take, not a preference to offer a reader. If the answer is
+that the BSB should show no derived red letters at all — which is what its
+publisher chose — that is the line to change.
 
 ## 4. Sources, exactly
 
@@ -382,6 +450,9 @@ under the same discipline:
 | --- | --- | --- | --- |
 | `versification_data.go` | the app's cache files | `scripts/gen-versification.py` | committed, validated (§2.4) |
 | `red_letter_data.go` | WEB USFM `\wj` markers | **none committed** | verified against source, but the generator was never committed — a gap |
+| `red_letter_bsb_data.go` | derived (§3.4) | `scripts/gen-bsb-redletter.py` | committed; 99.6% agreement with the NKJV, 52 hand adjudications recorded |
+| `scripts/data/bsb-redletter-adjudications.json` | hand judgement | — | every decision carries its reason |
+| `scripts/data/nkjv-wj-verses.json` | API.Bible | `scripts/gen-bsb-redletter.py` | verse numbers only; the NKJV text is licensed and is not stored |
 | `assets/timings/*.json` | per-verse read-along alignment | `scripts/audio-align` | outside this document's scope |
 | `assets/parallels` | cross-reference data | — | provenance not yet recorded here |
 
