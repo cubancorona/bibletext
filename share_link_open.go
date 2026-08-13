@@ -36,6 +36,24 @@ func HandleShareLink(state *AppState, rawURL string) bool {
 	if !ok {
 		return false
 	}
+	// PARK BEFORE ASKING. The "still loading" check has to come first, because
+	// every answer the note card offers except the browser one ends in
+	// applyShareTarget, and applyShareTarget can do nothing while state.Bible is
+	// still nil — it returns at its own guard. Asked in the other order, the card
+	// appeared over the loading spinner and BOTH in-app answers dead-ended: the
+	// reader was left on the spinner, the link was never parked, and the sender's
+	// note was never stored. Nothing is lost by waiting: consumePendingLink asks
+	// the same question again the moment the data lands, which it already did for
+	// exactly this reason ("the setting can have changed between parking and
+	// consuming").
+	if state.loadPhase != loadReady {
+		// Park it. StartBackgroundLoad consumes this the instant the Bible is
+		// ready — before its rebuild, so there is exactly one rebuild and no
+		// flash of the wrong chapter.
+		state.pendingLink = &target
+		state.pendingLinkRaw = rawURL
+		return true
+	}
 	// A link carrying a note, with notes switched off, is not ours to open
 	// unasked — but nor is it ours to silently throw away. Ask: read it in the
 	// browser, read the passage without it, or turn notes back on and read it
@@ -43,14 +61,6 @@ func HandleShareLink(state *AppState, rawURL string) bool {
 	// the app whatever the setting says.
 	if target.Note != "" && !notesFeatureOn(state) {
 		offerNoteLinkChoice(state, rawURL, target)
-		return true
-	}
-	if state.loadPhase != loadReady {
-		// Park it. StartBackgroundLoad consumes this the instant the Bible is
-		// ready — before its rebuild, so there is exactly one rebuild and no
-		// flash of the wrong chapter.
-		state.pendingLink = &target
-		state.pendingLinkRaw = rawURL
 		return true
 	}
 	applyShareTarget(state, target)
@@ -151,6 +161,30 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// fatal.
 	chapters := state.Bible.GetChaptersForBook(t.Book)
 	if chapters == 0 {
+		// THE BOOK MAY SIMPLY NOT HAVE ARRIVED YET, and on a first install it
+		// almost certainly has not. A fresh install opens on the embedded
+		// four-book Gospels seed while the complete text downloads, so a link
+		// naming anything outside Matthew–John reaches this guard — 62 of the 66
+		// books — on precisely the flow shared links exist for: someone is sent a
+		// verse, installs the app, and comes back to tap it. Returning here made
+		// that tap do nothing at all: no passage, no message, and the sender's
+		// note discarded, with no Safari fallback either (share_link_ios.go
+		// always reports the link handled).
+		//
+		// So park it and let triggerFullDownload's success tail apply it when the
+		// full text lands, the same way a link that arrives mid-startup waits for
+		// StartBackgroundLoad.
+		//
+		// NOT via pendingLinkVersion: that slot means "waiting for a TRANSLATION
+		// to load", and applyLoadedVersion consumes or discards whatever it finds
+		// parked there on the next version load. Leaving it empty keeps this park
+		// owned solely by the download that can actually satisfy it. Parking only
+		// when the slot is free likewise stops a seed park from stealing a target
+		// already waiting on a translation switch.
+		if state.seedOnly && state.fullPending && state.pendingLink == nil {
+			parked := t
+			state.pendingLink = &parked
+		}
 		return
 	}
 	chapter := t.Chapter

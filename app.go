@@ -288,6 +288,18 @@ func triggerFullDownload(state *AppState) {
 			state.Bible = full
 			state.currentMode = mode
 			state.fullPending = false
+			// The displayed text is no longer the four-book seed. Nothing else
+			// cleared this: the "showing the Gospels" banner keys off fullPending,
+			// so seedOnly stayed true for the rest of the session and any later
+			// reader of it (applyShareTarget's park below) would have been told
+			// the reader is still on the seed.
+			state.seedOnly = false
+			// A link for a book the seed does not carry was parked rather than
+			// dropped (applyShareTarget). The whole Bible is now in place, so it
+			// can finally be honoured — BEFORE the rebuild, so that rebuild paints
+			// the shared passage instead of flashing this chapter first. This is
+			// the same ordering StartBackgroundLoad and applyLoadedVersion use.
+			consumePendingLink(state)
 			rebuildWindow(state)
 		})
 	}()
