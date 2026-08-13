@@ -678,7 +678,10 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 				continue
 			}
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
-			wj := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
+			// From the runs, NOT from isWordsOfChrist again: the edition's own
+			// table has already had the final word, and asking the WEB's gate a
+			// second time here would overrule it.
+			wj := len(runs) == 1 && runs[0].Red
 			switch {
 			case isVerseHighlighted(state, v) && wj:
 				// BOTH classes, not one or the other. .hl carries only the band

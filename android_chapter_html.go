@@ -72,7 +72,8 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 				continue
 			}
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
-			wj := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
+			// From the runs — see the note in reading.go.
+			wj := len(runs) == 1 && runs[0].Red
 			switch {
 			case isVerseHighlighted(state, v) && wj:
 				// Band AND colour, not one or the other — the Android twin of the
