@@ -654,6 +654,29 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			// Authored poem lines become explicit <br> — a literal "\n" would
 			// be ordinary HTML whitespace (renders as a space). Escape first;
 			// htmlEscape leaves "\n" alone.
+			// Runs, not one blob: in the BSB the words of Christ are a SPAN
+			// inside the verse, so "he said" and the other speaker's reply beside
+			// it must not be reddened with them (red_letter_runs.go). Every other
+			// edition still yields a single run, which is the old behaviour
+			// exactly.
+			runs := trimRuns(redLetterRuns(state.CurrentVersion, v, redLetter))
+			if len(runs) > 1 {
+				hl := isVerseHighlighted(state, v)
+				for _, run := range runs {
+					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
+					switch {
+					case hl && run.Red:
+						fmt.Fprintf(&b, `<span class="hl wj">%s</span>`, piece)
+					case hl:
+						fmt.Fprintf(&b, `<span class="hl">%s</span>`, piece)
+					case run.Red:
+						fmt.Fprintf(&b, `<span class="wj">%s</span>`, piece)
+					default:
+						b.WriteString(piece)
+					}
+				}
+				continue
+			}
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
 			wj := redLetter && isWordsOfChrist(v.BookName, v.Chapter, v.Verse)
 			switch {
