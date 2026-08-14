@@ -1,0 +1,43 @@
+
+/* The notice pages spell the translations out (noticeNav) — this row is three
+   or four multi-word names, not four four-letter pills — so it has to wrap, or
+   on a 375px phone it overflows the viewport or squeezes the crumbs to nothing.
+   Right-aligned wrapping keeps it reading as one block hanging off the nav.
+
+   IT LIVES HERE, NOT IN reader.css, AND THAT IS THE POINT. reader.css is
+   content-hashed into the <link> of all 3,906 scripture pages, so adding one
+   rule there rewrites every one of them — I did exactly that and turned a
+   0-pages-changed publish into 3,914. This stylesheet is loaded only by notice
+   pages, so the rule reaches the pages that need it and nothing else moves. */
+.vers-full{flex-wrap:wrap; justify-content:flex-end; row-gap:.25rem}
+/* The explanation. Same rhythm as the 404's .guess, one size up from the
+   chrome default, because on this page the paragraph IS the content. */
+.lede{margin:0 0 1.6rem; font-size:1.05rem}
+.lede a{color:var(--accent)}
+/* Each route out is its own block with its own heading, so "open it in the app"
+   and "read it in another translation" are two offers rather than one wall. */
+.nsec{margin:0 0 1.8rem; padding:1rem 0 0; border-top:1px solid var(--border)}
+.nsec h2{margin:0 0 .5rem; font-size:1.05rem; letter-spacing:-.005em}
+.nsec p{margin:0 0 .8rem; font-size:.95rem}
+/* The button's row. NOT reader.css's .gotorow, which is the header's "Go to"
+   line and carries a bottom border to close the whole header — reused here it
+   drew a rule between the button and the line explaining it, which read as the
+   start of the next section. Same centring, no border. */
+.appbtnrow{display:flex; justify-content:center; padding:.2rem 0 0}
+/* The one action on the page, so it is allowed to be bigger than .goto — but it
+   keeps .goto's unfilled shape, because a solid accent slab next to scripture
+   chrome reads as an advert. */
+.btnapp{font-size:.95rem; padding:.6rem 1.4rem}
+.opensub{margin:.55rem 0 0; color:var(--muted); font-size:.8rem}
+/* The translation pills. A near-copy of .vpick on purpose: these are NOT
+   .vpick, because reader.js rewrites every .vpick href with the whole fragment
+   and these links must only carry the verse where the numbering agrees. Same
+   look, different owner. */
+.npick{
+  color:var(--muted); text-decoration:none; font-size:.7rem; letter-spacing:.04em;
+  border:1px solid var(--border); border-radius:999px; padding:.15rem .5rem;
+}
+.npick.on{color:var(--accent); border-color:var(--accent)}
+/* A versification caveat. Muted and italic like .empty, with room around it —
+   it qualifies the links above it and must not read as one of them. */
+.vnote{margin:.7rem 0 0; color:var(--muted); font-style:italic; font-size:.85rem}
