@@ -474,7 +474,7 @@ func showAISettings(state *AppState) {
 	closeBtn.Importance = widget.LowImportance
 	header := container.NewBorder(nil, nil, container.NewCenter(title), container.NewCenter(closeBtn))
 
-	redLetter := widget.NewCheck("Show the words of Christ in red", nil)
+	redLetter := widget.NewCheck("Show the words of King Jesus in red", nil)
 	redLetter.SetChecked(redLetterEnabled())
 	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
 
@@ -692,11 +692,16 @@ func showAISettings(state *AppState) {
 		notesNote,
 	)
 	if redLetterSupported() {
-		// The words of Christ close the sheet — the owner's standing layout
-		// choice: the last thing the reader sees before returning to the
-		// text. Under its own header so nothing floats unlabelled.
+		// His words close the sheet — the owner's standing layout choice: the
+		// last thing the reader sees before returning to the text. Under its own
+		// header so nothing floats unlabelled.
+		//
+		// The header names Him in full and the setting beneath it names Him as
+		// King (owner's wording). The two are deliberately not the same phrase:
+		// the header is the formal identification, the line the reader actually
+		// acts on is the confession.
 		form.Add(sheetGap())
-		form.Add(sectionLabel("WORDS OF CHRIST", pal))
+		form.Add(sectionLabel("WORDS OF JESUS CHRIST OF NAZARETH", pal))
 		form.Add(settingsGroup(pal, redLetter))
 	}
 
