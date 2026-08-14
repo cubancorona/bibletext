@@ -301,7 +301,28 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	}
 	sorter := container.NewThemeOverride(sortBtn, compactTheme{Theme: base, text: 13})
 
+	// THE WAY OUT. On desktop the list claims the whole results pane, and the
+	// only other exit is the sidebar's Search/Find/Notes control — which the
+	// reader never touched if they arrived from Settings → the note count, so it
+	// still reads "Search" and does not look like the thing holding them here.
+
+	// pane". A view that takes over the pane owns its own exit.
+	//
+	// Desktop only: the phones leave through the tab bar, which is always
+	// visible and already says where you are.
 	head := container.NewBorder(nil, nil, nil, sorter, container.NewPadded(line))
+	// surfaceSearch is set only by the phones (it is how they bring the Search
+	// tab forward) — the same signal showNotesList uses to tell the layouts
+	// apart, rather than a second way of asking the same question.
+	if state.surfaceSearch == nil {
+		done := widget.NewButtonWithIcon("Done", theme.NavigateBackIcon(), func() {
+			closeNotesList(state)
+		})
+		done.Importance = widget.LowImportance
+		head = container.NewBorder(nil, nil,
+			container.NewThemeOverride(done, compactTheme{Theme: base, text: 13}),
+			sorter, container.NewPadded(line))
+	}
 
 	column := container.NewVBox()
 	for _, n := range notes {
@@ -445,6 +466,25 @@ func showNotesList(state *AppState) {
 	state.IsSearching = true // desktop: Notes claims the results pane on entry
 	if state.surfaceSearch != nil {
 		state.surfaceSearch() // mobile: bring the real Search tab forward
+	}
+	state.refresh()
+}
+
+// closeNotesList is showNotesList's inverse, behind the list's own "Done" —
+// leave Notes and give the pane back to the reading view.
+//
+// It hands the pane back only when nothing ELSE is owed it: a reader who ran a
+// keyword search, switched to Notes and then pressed Done should land back on
+// their results, not have them silently discarded. That is the same condition
+// the sidebar's toggle applies when it leaves Notes (sidebar.go), and it is
+// stated once here so the two exits cannot drift apart.
+func closeNotesList(state *AppState) {
+	if state == nil {
+		return
+	}
+	setNotesMode(state, false)
+	if strings.TrimSpace(state.ActiveSearchQuery) == "" {
+		state.IsSearching = false
 	}
 	state.refresh()
 }

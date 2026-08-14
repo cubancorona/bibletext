@@ -36,8 +36,37 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 	if _, ok := loadNote(p, "web", "John", 4); ok {
 		t.Error("a note leaked onto the next chapter")
 	}
-	if _, ok := loadNote(p, "bsb", "John", 3); ok {
-		t.Error("a note leaked across translations")
+	// A note FOLLOWS the passage into another translation. It used to be
+	// confined to the translation it arrived in, on the reasoning that a remark
+	// is about particular wording — but the reader meets that rule as a note
+	// that silently disappears when they change translation, and it disappears
+	// in the ordinary case, not an exotic one: two people sharing a link often
+	// read different translations, and a link shared FROM a licensed translation
+	// comes back naming a published one, so it was the sender's own note that
+
+	got2, ok := loadNote(p, "bsb", "John", 3)
+	if !ok {
+		t.Fatal("the note did not follow the passage into the other translation")
+	}
+	if got2.Text != n.Text {
+		t.Errorf("the note changed on the way across: %q", got2.Text)
+	}
+	if got2.VersionID != "bsb" {
+		t.Errorf("a note handed to the bsb reader still claims %q", got2.VersionID)
+	}
+}
+
+// ...but only where the passage genuinely corresponds. Greek Esther is a
+// different book from Esther, not a renumbering, so a note on one says nothing
+// about the other — MapVerse calls that incommensurable and the note must stay
+// where it is rather than being planted on unrelated text.
+func TestANoteDoesNotFollowAnIncommensurablePassage(t *testing.T) {
+	p := newNotePrefs()
+	saveNote(p, SharedNote{VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
+		Text: "for such a time as this"})
+
+	if _, ok := loadNote(p, "webc", "Esther", 4); ok {
+		t.Error("a note crossed into Greek Esther, where its verse numbers mean something else")
 	}
 }
 
