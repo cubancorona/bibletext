@@ -26,9 +26,18 @@ func notesXState(t *testing.T) *AppState {
 	}
 }
 
-// Switching translation must not leave the previous translation's note drawn
-// over the new translation's text.
-func TestSwitchingTranslationDropsTheOtherTranslationsNote(t *testing.T) {
+// Switching translation CARRIES the note over, renumbered for the translation
+// being switched to.
+//
+// This test used to assert the opposite — that the note was dropped — on the
+// reasoning that a remark belongs to the wording it was written against. What a
+// reader actually met was a note that disappeared when they changed
+// translation, leaving the highlight it had placed behind with nothing to
+// explain it (owner-reported). The passage is the same passage in both, so the
+// note goes with it; where the numbering genuinely does not correspond,
+// noteFromAnotherTranslation declines (see the Greek Esther case in
+// notes_store_test.go).
+func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
@@ -52,8 +61,11 @@ func TestSwitchingTranslationDropsTheOtherTranslationsNote(t *testing.T) {
 	bd.PopulateWithSampleVerses()
 	applyLoadedVersion(st, other, bd, modeReal)
 
-	if st.ActiveNote != "" {
-		t.Errorf("the WEB note is still showing after switching to %s: %q", other.ID, st.ActiveNote)
+	if st.ActiveNote != "web note" {
+		t.Errorf("the note did not follow the passage into %s: %q", other.ID, st.ActiveNote)
+	}
+	if st.NoteVerseLo != 16 {
+		t.Errorf("the note lost its verse on the way across: %d", st.NoteVerseLo)
 	}
 }
 
@@ -181,3 +193,39 @@ func TestAnExplicitSwitchClearsTheFallbackPreference(t *testing.T) {
 }
 
 var errOfflineForTest = errors.New("offline")
+
+// A note that goes away must take ITS highlight with it. Clearing the note
+// alone left the passage marked with nothing to explain the mark — the reader
+// sees their verse highlighted and the message gone, which reads as data loss
+// (owner-reported, switching translation). Reached here through the one case
+// where a note genuinely cannot follow: Greek Esther, whose numbering does not
+// correspond.
+func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := notesXState(t)
+	st.CurrentVersion = "web"
+	st.CurrentBook, st.CurrentChapter = "Esther", 4
+	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
+		Text: "for such a time as this"})
+	applyNoteForCurrentChapter(st)
+	if st.ActiveNote == "" || !st.HasHighlightedVerse {
+		t.Fatalf("precondition: note and its highlight should be live (note=%q highlight=%v)",
+			st.ActiveNote, st.HasHighlightedVerse)
+	}
+
+	// The Catholic edition carries Greek Esther, so this note has nowhere to go.
+	st.CurrentVersion = "webc"
+	applyNoteForCurrentChapter(st)
+
+	if st.ActiveNote != "" {
+		t.Errorf("the note survived into a book its numbering does not describe: %q", st.ActiveNote)
+	}
+	if st.HasHighlightedVerse {
+		t.Error("the note's highlight was left behind — a marked verse with nothing explaining it")
+	}
+}

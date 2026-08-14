@@ -163,8 +163,83 @@ func saveNote(p prefStore, n SharedNote) {
 
 // loadNote returns the note on a passage, if there is one.
 func loadNote(p prefStore, versionID, book string, chapter int) (SharedNote, bool) {
-	n, ok := readNotes(p)[noteKey(versionID, book, chapter)]
-	return n, ok
+	notes := readNotes(p)
+	if n, ok := notes[noteKey(versionID, book, chapter)]; ok {
+		return n, ok
+	}
+	return noteFromAnotherTranslation(notes, versionID, book, chapter)
+}
+
+// noteFromAnotherTranslation finds a note left on this same PASSAGE under a
+// different translation, and returns it renumbered into this one.
+//
+// A note is a remark about a passage, and the passage is the same passage in
+// every translation — but the store is keyed version|book|chapter, so before
+// this a note simply vanished when the reader changed translation. That is not
+// an exotic case: two people sharing a link routinely read different
+// translations, and a reader sharing from a licensed translation gets their own
+// note back under a different id, because the URL may only name a published one
+// (owner-reported: NKJV note, opened, then invisible on returning to NKJV).
+//
+// The verse is MAPPED rather than copied. Chapter and verse numbers do not mean
+// the same thing across translations — the Romans doxology moves, the Song of
+// the Three pushes Daniel 3's tail down by 67 — so carrying a raw number over
+// would anchor the note to whatever happened to sit at that number. MapVerse is
+// the table built for exactly this, and its verseMapAbsent / verseMapIncommensurable
+// answers are the cases where the honest thing is to show nothing: Greek Esther
+// is a different book, not a renumbering, and a note on it means nothing here.
+func noteFromAnotherTranslation(notes map[string]SharedNote, versionID, book string, chapter int) (SharedNote, bool) {
+	// Deterministic order. Two translations can both hold a note on the same
+	// passage — the reader was sent one link in the BSB and another in the WEB —
+	// and ranging a Go map would then show a different one on different runs,
+	// which is the kind of bug that never reproduces when you look for it.
+	// Newest wins, because that is what "newest first" already promises the
+	// reader everywhere else; the version id breaks ties so the answer is total.
+	candidates := make([]SharedNote, 0, len(notes))
+	for _, n := range notes {
+		candidates = append(candidates, n)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Received != candidates[j].Received {
+			return candidates[i].Received > candidates[j].Received
+		}
+		return candidates[i].VersionID < candidates[j].VersionID
+	})
+
+	for _, n := range candidates {
+		if n.VersionID == versionID || n.Book != book {
+			continue
+		}
+		// The note's own verse decides which chapter it lands in — mapping the
+		// CHAPTER alone is not enough, because a move can cross a chapter
+		// boundary (Romans 14:24 becomes 16:25).
+		probe := n.VerseLo
+		if probe <= 0 {
+			probe = 1 // a chapter-level note: ask about the chapter's first verse
+		}
+		ch, v, res := MapVerse(n.VersionID, versionID, n.Book, n.Chapter, probe)
+		if res == verseMapAbsent || res == verseMapIncommensurable || ch != chapter {
+			continue
+		}
+		out := n
+		out.VersionID = versionID
+		out.Chapter = ch
+		if n.VerseLo > 0 {
+			out.VerseLo = v
+			// The span's end maps on its own; a span that loses its end
+			// degrades to the single verse it starts at rather than guessing.
+			out.VerseHi = v
+			if n.VerseHi > n.VerseLo {
+				if _, hv, hres := MapVerse(n.VersionID, versionID, n.Book, n.Chapter, n.VerseHi); hres == verseMapExact || hres == verseMapMoved {
+					if hv > v {
+						out.VerseHi = hv
+					}
+				}
+			}
+		}
+		return out, true
+	}
+	return SharedNote{}, false
 }
 
 // deleteNote removes it for good.
@@ -216,6 +291,17 @@ func applyNoteForCurrentChapter(state *AppState) {
 	}
 	n, ok := loadNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
 	if !ok {
+		// The note goes, and so does the highlight the note put there. Clearing
+		// only the note left a verse highlighted with nothing to explain it —
+		// the reader saw their passage marked and the message gone, and had no
+		// way to tell whether they had lost the note or imagined it
+		// (owner-reported, switching back to NKJV). A highlight that arrived for
+		// any OTHER reason — a search result, a shared link's verse — is not the
+		// note's to clear, which is what the guard below tests for.
+		if state.ActiveNote != "" && state.NoteVerseLo > 0 &&
+			state.HasHighlightedVerse && state.HighlightedVerse == state.NoteVerseLo {
+			clearHighlightedVerse(state)
+		}
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
@@ -257,7 +343,16 @@ func rememberIncomingNote(state *AppState, t ShareTarget) {
 		// unknown id, or a download already in flight), and then storing it
 		// under the link's translation is still the truthful answer: the note
 		// reappears when the reader is next in that translation, rather than
-		// being filed under one it was never about.
+		// being filed under one it was never about — including the reader who has
+		// no NKJV and stays where they are (they are told; see
+		// showLinkVersionUnavailable), whose copy of the note is then waiting
+		// correctly under nkjv if they ever unlock it.
+		// The PATH id is the sender's translation now. It used to be that a note
+		// written in NKJV came back on a link saying "web" (licensed ids were
+		// kept out of URLs entirely), so it was filed under web and the sender's
+		// own note vanished the moment they returned to NKJV — highlight still
+		// there, message gone (owner-reported). A "t=" fragment hint was built as
+		// the fix and deleted once /nkjv/ could say it in the path.
 		VersionID: t.VersionID,
 		Book:      t.Book,
 		Chapter:   state.CurrentChapter,

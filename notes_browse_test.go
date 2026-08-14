@@ -324,3 +324,51 @@ func TestNotesSortPersists(t *testing.T) {
 		t.Errorf("newest first did not stick, got %v", got)
 	}
 }
+
+// A view that takes over the whole results pane has to own its exit. Reaching
+// the notes list from Settings → the note count leaves the sidebar's
+// Search/Find/Notes control still reading "Search", so it does not look like the
+// thing holding the reader there — and there was nothing else to press
+// (owner-reported: "no way to go from the notes view back to the reading pane").
+func TestClosingTheNotesListReturnsToReading(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+
+	st := psalm23State()
+	st.CurrentBook, st.CurrentChapter = "Psalms", 23
+
+	showNotesList(st)
+	if !st.NotesMode || !st.IsSearching {
+		t.Fatalf("the list did not claim the pane: NotesMode=%v IsSearching=%v", st.NotesMode, st.IsSearching)
+	}
+
+	closeNotesList(st)
+	if st.NotesMode {
+		t.Error("Done left the reader in Notes mode")
+	}
+	if st.IsSearching {
+		t.Error("Done left the results pane up, so the reading view never came back")
+	}
+}
+
+// ...but Done must not throw away a keyword search that was running before the
+// reader stepped into Notes. The pane is owed to those results, not to Notes.
+func TestClosingTheNotesListKeepsALiveSearch(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+
+	st := psalm23State()
+	st.CurrentBook, st.CurrentChapter = "Psalms", 23
+	st.ActiveSearchQuery = "shepherd"
+
+	showNotesList(st)
+	closeNotesList(st)
+	if st.NotesMode {
+		t.Error("Done left the reader in Notes mode")
+	}
+	if !st.IsSearching {
+		t.Error("Done discarded the keyword results the reader still had running")
+	}
+}
