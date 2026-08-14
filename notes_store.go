@@ -222,7 +222,12 @@ func noteFromAnotherTranslation(notes map[string]SharedNote, versionID, book str
 			continue
 		}
 		out := n
-		out.VersionID = versionID
+		// VersionID is deliberately NOT rewritten to the reader's translation. It
+		// says where the note is STORED, and that is the only handle Hide and
+		// Delete have on it: a note displayed in the WEB but keyed under the NKJV
+		// was being deleted under "web", which deleted nothing — the reader binned
+		// somebody's message, watched it disappear, and had it come back on the next
+		// navigation. Only the LOCATION is renumbered here.
 		out.Chapter = ch
 		if n.VerseLo > 0 {
 			out.VerseLo = v
@@ -287,6 +292,7 @@ func applyNoteForCurrentChapter(state *AppState) {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
+		state.NoteVersionID = ""
 		return
 	}
 	n, ok := loadNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
@@ -305,11 +311,13 @@ func applyNoteForCurrentChapter(state *AppState) {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
+		state.NoteVersionID = ""
 		return
 	}
 	state.ActiveNote = n.Text
 	state.NoteMinimized = n.Minimized
 	state.NoteVerseLo = n.VerseLo
+	state.NoteVersionID = n.VersionID // where it really lives; see noteStoreVersion
 	if n.Minimized {
 		return
 	}
@@ -365,12 +373,25 @@ func rememberIncomingNote(state *AppState, t ShareTarget) {
 // hideCurrentNote / dropCurrentNote are what the tap menu's two verbs do, in
 // the store as well as on screen — otherwise the note would come back on the
 // reader's next visit as though they had never touched it.
+// noteStoreVersion is the translation the live note is STORED under — which is
+// the one Hide and Delete must address. Falls back to the version being read,
+// which is correct for the ordinary case where the note was written against it.
+func (s *AppState) noteStoreVersion() string {
+	if s == nil {
+		return ""
+	}
+	if s.NoteVersionID != "" {
+		return s.NoteVersionID
+	}
+	return s.currentVersion().ID
+}
+
 func hideCurrentNote(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
 	}
 	state.NoteMinimized = true
-	setNoteMinimized(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter, true)
+	setNoteMinimized(appPrefs(), state.noteStoreVersion(), state.CurrentBook, state.CurrentChapter, true)
 	clearHighlightedVerse(state)
 }
 
@@ -393,10 +414,11 @@ func dropCurrentNote(state *AppState) {
 	if state == nil {
 		return
 	}
-	deleteNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
+	deleteNote(appPrefs(), state.noteStoreVersion(), state.CurrentBook, state.CurrentChapter)
 	state.ActiveNote = ""
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
+	state.NoteVersionID = ""
 	clearHighlightedVerse(state)
 }
 

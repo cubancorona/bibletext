@@ -77,6 +77,17 @@ type AppState struct {
 	// highlight because minimizing CLEARS the highlight — without this the note
 	// would lose its anchor and its marker would jump to the top of the chapter.
 	NoteVerseLo int
+	// NoteVersionID is the translation the live note is STORED under, which is
+	// not always the one being read: a note follows its passage across
+	// translations (noteFromAnotherTranslation), so the reader can be looking at
+	// a note keyed under another id entirely.
+	//
+	// Hide and Delete need it. They addressed the note by the CURRENT version,
+	// so a followed note was deleted under a key that held nothing: the reader
+	// binned somebody's message, saw it vanish, and met it again on the next
+	// navigation. Silent non-deletion of the one kind of data that exists
+	// nowhere else.
+	NoteVersionID string
 
 	RecentChapters []ChapterVisit
 
