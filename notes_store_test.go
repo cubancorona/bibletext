@@ -51,8 +51,14 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 	if got2.Text != n.Text {
 		t.Errorf("the note changed on the way across: %q", got2.Text)
 	}
-	if got2.VersionID != "bsb" {
-		t.Errorf("a note handed to the bsb reader still claims %q", got2.VersionID)
+	// VersionID keeps saying WEB — where the note actually lives — even though a
+	// BSB reader is the one looking at it. This assertion used to demand the
+	// opposite, and that was the bug: Hide and Delete address a note by this
+	// field, so rewriting it to the reader's translation made them operate on a
+	// key holding nothing. The reader deleted somebody's message, watched it go,
+	// and met it again on the next navigation. Only the LOCATION is renumbered.
+	if got2.VersionID != "web" {
+		t.Errorf("the note lost track of where it is stored: %q", got2.VersionID)
 	}
 }
 
