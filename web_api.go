@@ -31,8 +31,56 @@ func GroupVersesIntoParagraphs(verses []Verse) [][]Verse {
 }
 
 // IsWordsOfChrist reports whether a verse falls in a red-letter range.
+//
+// DEPRECATED FOR RENDERING. This is the WEB's verse-level judgement and it is
+// version-blind, so a page rendered through it reddens the WHOLE verse and
+// reddens it identically in every translation. Use RedLetterRuns instead, which
+// asks the edition's own table. Kept because it is still the honest answer to
+// the question it actually asks ("does Christ speak in this verse at all"), and
+// removing an exported symbol is not free.
 func IsWordsOfChrist(book string, chapter, verse int) bool {
 	return isWordsOfChrist(book, chapter, verse)
+}
+
+// TextRun is a stretch of a verse that is uniformly Christ's words or is not —
+// the exported shape of what every reading pane walks to colour a verse.
+type TextRun struct {
+	Text string
+	Red  bool
+}
+
+// RedLetterRuns splits one verse of one translation into its red and not-red
+// stretches, using that translation's OWN span table.
+//
+// It exists because the web reader was the fifth rendering surface and the only
+// one left behind when per-edition spans landed: it asked IsWordsOfChrist, which
+// answers for the WEB and answers per VERSE. Two things were wrong on the page
+// as a result. Mixed-speaker verses came out entirely red — John 4:9 put the
+// Samaritan woman's words in Christ's colour — and every translation was
+// rendered with the WEB's marks, so a BSB page showed red where the BSB itself
+// does not, and no NKJV page could ever show the four verses its publisher
+// reddens and the WEB does not.
+//
+// versionID is the translation being rendered ("web", "bsb", "webc", "nkjv").
+// An unknown id degrades to the WEB's verse-level marks rather than to nothing,
+// which is what the panes did before spans existed.
+//
+// The returned runs concatenate back to the verse's text exactly, so a caller
+// can escape and emit each in turn without having to reason about offsets.
+//
+// trimRuns is applied here, not left to the caller, because every pane in the
+// app applies it (reading.go, android_chapter_html.go,
+// reading_mobile_segments.go) and the page must not be the one surface that
+// does not. It trims the verse AS A WHOLE — the old web code called
+// strings.TrimSpace on the verse text, and trimming per run instead would glue
+// "he said" onto the quotation beside it.
+func RedLetterRuns(versionID string, v Verse) []TextRun {
+	runs := trimRuns(redLetterRuns(versionID, v, true))
+	out := make([]TextRun, 0, len(runs))
+	for _, r := range runs {
+		out = append(out, TextRun{Text: r.Text, Red: r.Red})
+	}
+	return out
 }
 
 // AlphabeticalBooks orders books the way the app's "Go to" picker does — a
