@@ -177,6 +177,112 @@ func MapVerse(from, to, book string, chapter, verse int) (int, int, verseMapResu
 	return outCh, outV, verseMapExact
 }
 
+// Numbering-difference kinds returned by ChapterNumberingDifference. They are
+// plain strings rather than the unexported verseMapResult because the one
+// caller outside this package (cmd/websitegen) turns them straight into a
+// sentence for a reader, and a leaked enum would be a type it could not name.
+const (
+	// NumberingSame — every verse keeps its number; a reference may be carried
+	// across as-is.
+	NumberingSame = ""
+	// NumberingMoved — the passage is in `to`, under a different number.
+	NumberingMoved = "moved"
+	// NumberingAbsent — `from` numbers a verse here that `to` simply does not
+	// contain (the NKJV's Acts 8:37). Not a renumbering, and telling a reader it
+	// is one would be false.
+	NumberingAbsent = "absent"
+	// NumberingIncommensurable — the two translations' versions of this BOOK do
+	// not correspond verse by verse at all (WEBC's Greek Esther).
+	NumberingIncommensurable = "incommensurable"
+)
+
+// ChapterNumberingDifference reports HOW one chapter's verse numbers differ
+// between two translations — NumberingSame when they do not.
+//
+// When more than one kind applies the most severe wins, in the order
+// incommensurable, absent, moved: they describe the same chapter at different
+// scales, and a reader told only about the smallest would act on the wrong one.
+func ChapterNumberingDifference(from, to, book string, chapter, spanEnd int) string {
+	if from == to {
+		return NumberingSame
+	}
+	worst := NumberingSame
+	rank := map[string]int{NumberingSame: 0, NumberingMoved: 1, NumberingAbsent: 2, NumberingIncommensurable: 3}
+	note := func(kind string) {
+		if rank[kind] > rank[worst] {
+			worst = kind
+		}
+	}
+	check := func(verse int) {
+		ch, v, res := MapVerse(from, to, book, chapter, verse)
+		switch {
+		case res == verseMapIncommensurable:
+			note(NumberingIncommensurable)
+		case res == verseMapAbsent:
+			note(NumberingAbsent)
+		case ch != chapter || v != verse:
+			note(NumberingMoved)
+		}
+	}
+	for verse := 1; verse <= spanEnd; verse++ {
+		check(verse)
+		if worst == NumberingIncommensurable {
+			return worst
+		}
+	}
+	if d, ok := versificationDeltas[from]; ok {
+		for _, e := range d.extra {
+			if e.Book == book && e.Chapter == chapter {
+				check(e.Verse)
+			}
+		}
+		for _, m := range d.moved {
+			if m.Book == book && m.ToChapter == chapter {
+				check(m.ToVerse)
+			}
+		}
+	}
+	return worst
+}
+
+// ChapterNumberingAgrees reports whether EVERY verse of one chapter keeps its
+// own number when a reference is carried from translation `from` into `to`.
+//
+// It exists for the web reader's parallel-passage links. The server never sees
+// the verse — it rides in the fragment (share_link.go) — so the page has to
+// decide at BUILD time whether "the same verse, in another translation" is a
+// link it may offer at all. When this returns false the page offers the CHAPTER
+// and says the numbering differs there, which is the honest answer; pointing
+// confidently at a number that means a different passage is the worst failure
+// this file exists to prevent.
+//
+// spanEnd is the last verse number the chapter reaches in the REFERENCE
+// translation (the WEB) — the caller has that, because the reference is one of
+// the translations it loaded, and it does NOT have `from`'s own verse list (the
+// point of the NKJV pages is that the site holds no NKJV data at all).
+//
+// TWO THINGS THE REFERENCE'S SPAN ALONE WOULD MISS, both found by measurement
+// rather than by reading:
+//
+//   - verses `from` HAS and the reference LACKS — the NKJV's Acts 8:37,
+//     Acts 15:34, Acts 24:7 and Luke 17:36. All four happen to be numbered
+//     inside the WEB chapter's span today, but relying on that is luck.
+//   - verses `from` numbers INTO this chapter that the reference numbers
+//     elsewhere — the NKJV's Romans 16:25-27, which the WEB carries as
+//     14:24-26. The WEB's Romans 16 stops at 24, so a 1..spanEnd scan never
+//     asks about 25 and calls the chapter safe. It is not: those three verses
+//     are exactly the ones a shared link would land in the wrong place.
+//
+// It is deliberately CONSERVATIVE in the other direction: spanEnd may name
+// verses `from` does not have (the WEB's Romans 14:24-26 against the NKJV's
+// 23-verse chapter), so a chapter can be reported as disagreeing when no
+// reachable reference would actually move. The cost of that is a chapter-level
+// link and one extra sentence; the cost of the opposite is the reader being
+// shown different words from the ones they were sent.
+func ChapterNumberingAgrees(from, to, book string, chapter, spanEnd int) bool {
+	return ChapterNumberingDifference(from, to, book, chapter, spanEnd) == NumberingSame
+}
+
 // VerseExistsIn reports whether a verse named in the reference's numbering is
 // present in a translation at all. Cheaper to read than MapVerse when the caller
 // only needs to know whether to offer something.

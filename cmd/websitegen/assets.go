@@ -387,6 +387,16 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 @media print{.top,.pager,.foot{display:none}}
 `
 
+// THE BYTES OF THIS TEMPLATE ARE FROZEN IN 3,906 FILENAMES. readerJSTemplate
+// (and readerCSSTemplate above it) is content-hashed into the <script>/<link>
+// of every page that carries scripture, so editing one character here rewrites
+// all of them — which is why the notice pages (notice_assets.go) ship a second,
+// separate pair instead of adding a rule or a function to these. That includes
+// the COMMENTS inside the backticks: they are part of the shipped asset. The
+// "~3,900 files" figure in bridgeHighlightGaps below is one of them, and it is
+// left as written for that reason; the site is 5,470 files today, 3,906 of them
+// pages with .v spans to bridge.
+//
 // readerJS holds everything the page cannot do in CSS alone. With JS off a
 // single-verse link still highlights (CSS :target) and "Get the app" still
 // points at the all-platforms landing page — but a verse RANGE does not

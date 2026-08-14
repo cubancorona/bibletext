@@ -10,7 +10,7 @@
 #   CNAME      holds the custom domain. Lose it and bibletext.co.uk detaches —
 #              every shared verse link, plus the App Store privacy and support
 #              URLs, dies at once.
-#   .nojekyll  turns off Jekyll. Without it GitHub rebuilds ~3,900 files through
+#   .nojekyll  turns off Jekyll. Without it GitHub rebuilds ~5,500 files through
 #              Jekyll on every push, slowly and for no reason.
 #
 # The reader lives at the ROOT (/web/, /bsb/, /webc/), sharing the namespace with
@@ -52,7 +52,20 @@ fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
 # guard standing between a truncated build and rsync --delete.
 # Equality, not a floor: adding or removing a book must be a deliberate edit
 # here, which is exactly what this block is for.
-for spec in "web:1189" "bsb:1189" "webc:1328"; do
+#
+# THE NUMBERS MOVED when the notice pages landed (cmd/websitegen/notice.go), and
+# a fourth tree joined the list. Reading them:
+#
+#   web  1328  1189 chapters of scripture + 139 canon-gap notices (the seven
+#   bsb  1328  deuterocanonical books' 137 chapters, plus Daniel 13 and 14,
+#              which the Greek Daniel has and these editions do not)
+#   webc 1328  all scripture — WEB Catholic is the widest canon, so it has no
+#              gaps and its total is what the other two now match
+#   nkjv 1189  all notices. Every chapter the app can build a /nkjv/ share link
+#              for, and nothing else. This tree carries NO text, and the check
+#              below proves that as well as its size — a fourth tree slipping
+#              in unverified is exactly what this guard is for.
+for spec in "web:1328" "bsb:1328" "webc:1328" "nkjv:1189"; do
   id="${spec%%:*}"; want="${spec##*:}"
   got=$(find "$OUT/$id" -mindepth 3 -maxdepth 3 -name index.html | wc -l | tr -d ' ')
   [[ "$got" -eq "$want" ]] || fail "$id has $got chapter pages, expected exactly $want — generation looks truncated (or a book was added: update this list deliberately)"
@@ -64,6 +77,21 @@ done
 [[ -s "$OUT/webc/daniel/13/index.html" ]] || fail "webc/daniel/13 missing — the Catholic decode looks incomplete"
 [[ -s "$OUT/web/john/3/index.html" ]] || fail "smoke page /web/john/3/ is missing"
 grep -q 'id="v16"' "$OUT/web/john/3/index.html" || fail "John 3 has no verse anchors — deep links would not highlight"
+
+# The notice pages, both placements. The licensed one gets the strongest check
+# this script can make: it must name the translation, offer the app AND the
+# parallel passage, and carry NO verse markup. paragraphBody is the only thing
+# that writes a verse anchor or a red-letter span, so either appearing under
+# /nkjv/ means scripture reached a tree that must never hold any.
+[[ -s "$OUT/nkjv/john/3/index.html" ]] || fail "/nkjv/john/3/ is missing — NKJV share links would 404 again"
+grep -q 'New King James Version' "$OUT/nkjv/john/3/index.html" || fail "/nkjv/john/3/ does not name the translation"
+grep -q 'id="openapp"' "$OUT/nkjv/john/3/index.html" || fail "/nkjv/john/3/ has no open-in-app affordance"
+grep -q 'href="../../../web/john/3/"' "$OUT/nkjv/john/3/index.html" || fail "/nkjv/john/3/ offers no parallel passage"
+leak=$(find "$OUT/nkjv" -name index.html -print0 |
+  xargs -0 grep -lE 'class="v" id="v|class="wj"|<sup class="n"' | head -3 || true)
+[[ -z "$leak" ]] || fail "pages under /nkjv/ carry verse markup — LICENSED TEXT IS ABOUT TO BE PUBLISHED: $leak"
+[[ -s "$OUT/web/tobit/1/index.html" ]] || fail "/web/tobit/1/ is missing — the deuterocanonical gap is a 404 again"
+[[ -s "$OUT/web/daniel/13/index.html" ]] || fail "/web/daniel/13/ is missing — the Greek Daniel gap is a 404 again"
 # Assets are content-hashed (reader.<hash>.css), so this checks the pair exists
 # AND that a real page links the exact file that was built. A page pointing at a
 # stylesheet that isn't in the tree is the failure this naming scheme exists to
@@ -75,6 +103,20 @@ js=$(find "$OUT/assets" -name 'reader.*.js' | head -1)
 for asset in "$css" "$js"; do
   grep -q "assets/$(basename "$asset")" "$OUT/web/john/3/index.html" ||
     fail "pages do not reference $(basename "$asset") — the build linked an asset it did not write"
+done
+# The notice pages carry their OWN hashed pair, on top of the reader's, so that
+# adding a rule for them can never rewrite the 3,906 pages that carry scripture.
+# Same check, and one more: no page that carries scripture may request them.
+ncss=$(find "$OUT/assets" -name 'notice.*.css' | head -1)
+njs=$(find "$OUT/assets" -name 'notice.*.js' | head -1)
+[[ -s "$ncss" ]] || fail "notice stylesheet missing"
+[[ -s "$njs" ]] || fail "notice script missing"
+for asset in "$ncss" "$njs"; do
+  grep -q "assets/$(basename "$asset")" "$OUT/nkjv/john/3/index.html" ||
+    fail "notice pages do not reference $(basename "$asset") — the build linked an asset it did not write"
+  if grep -q "assets/$(basename "$asset")" "$OUT/web/john/3/index.html"; then
+    fail "a scripture page links $(basename "$asset") — the reader's assets must stay untouched by it"
+  fi
 done
 [[ -s "$OUT/404.html" ]] || fail "404.html missing"
 
