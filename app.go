@@ -299,10 +299,38 @@ func triggerFullDownload(state *AppState) {
 			// can finally be honoured — BEFORE the rebuild, so that rebuild paints
 			// the shared passage instead of flashing this chapter first. This is
 			// the same ordering StartBackgroundLoad and applyLoadedVersion use.
-			consumePendingLink(state)
+			//
+			consumeSeedParkedLink(state)
 			rebuildWindow(state)
 		})
 	}()
+}
+
+// consumeSeedParkedLink honours a link that was parked because the app was still
+// on the four-book seed — and ONLY such a link.
+//
+// pendingLinkVersion is set when switchToLinkVersion parks a target waiting for a
+// TRANSLATION to arrive. This download is not that translation: it is the
+// reader's own, filling in behind the seed. Two downloads really can be in
+// flight at once on a fresh install, and consuming unconditionally let whichever
+// finished first apply the target — so a link that asked for the NKJV was opened
+// by the WEB landing, in wording the sender never chose, and silently:
+// linkVersionUnavailable says nothing for a translation the reader can select, so
+// nothing told them.
+//
+// applyShareTarget's park already refuses the mirror image of this ("stops a seed
+// park from stealing a target already waiting on a translation switch") and
+// applyLoadedVersion has always checked the id before consuming. This is the same
+// rule on the third path, which is the one that was missing it.
+//
+// A named function rather than an inline check because the download tail runs on a
+// goroutine after a network fetch and cannot be reached from a host test; the rule
+// has to be callable to be provable.
+func consumeSeedParkedLink(state *AppState) {
+	if state == nil || state.pendingLinkVersion != "" {
+		return
+	}
+	consumePendingLink(state)
 }
 
 // InstallReadingStateFlush captures the precise within-chapter scroll position
@@ -365,6 +393,7 @@ func Run() {
 	window.SetContent(CreateMainUI(myApp, state, window))
 	ObserveSystemThemeChanges(myApp, state)
 	InstallReadingStateFlush(myApp, window, state)
+	InstallDebugCapture() // dev builds only; empty in release (debug_capture_off.go)
 	StartBackgroundLoad(myApp, window, state)
 	window.ShowAndRun()
 }

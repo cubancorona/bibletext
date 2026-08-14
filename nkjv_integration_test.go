@@ -146,50 +146,116 @@ func TestNKJVSwitchRefusedWithoutLicenseEnv(t *testing.T) {
 
 // --- Share-as-link fallback ---------------------------------------------------
 
-// TestNKJVShareLinkFallsBackToWeb extends the existing licensed-fallback case
-// (share_link_test.go covers a single nkjv verse): the fallback is EXACT — an
-// NKJV link is byte-for-byte the web link, for ranges, chapter links, and
-// note-carrying links, across every 66-canon book, and "nkjv" never appears in
-// any URL (the licensed id must never leak into a public URL).
-func TestNKJVShareLinkFallsBackToWeb(t *testing.T) {
-	cases := []struct {
+// TestNKJVShareLinkNamesNKJV asserts the OPPOSITE of what this test asserted
+// before, deliberately. It was TestNKJVShareLinkFallsBackToWeb, and it pinned
+// an NKJV link as byte-for-byte the WEB link with "nkjv" appearing nowhere in
+// any URL — on the rule that a licensed version id must never leak into a
+// public URL.
+//
+// The rule was wrong about what a licence covers. It protects the TEXT; the
+// name of a translation is not the text, and "nkjv" as a path segment discloses
+// nothing a licence has any claim on. Meanwhile the fallback quietly broke the
+// thing links exist for: the sender's own link reopened in the WEB, in wording
+// they were not reading, and the note they attached was filed against it. The
+
+// others: bibletext.co.uk/nkjv/john/... etc".
+//
+// What has NOT changed, and is still tested here: the deuterocanon still forces
+// webc, a genuinely unknown id still falls back to web, and every /web/ link is
+// byte-identical to what it was before (TestWebLinksAreByteStable).
+func TestNKJVShareLinkNamesNKJV(t *testing.T) {
+	for _, tc := range []struct {
 		name            string
 		book            string
 		chapter, lo, hi int
+		want            string
 	}{
-		{"range", "John", 3, 16, 18},
-		{"chapter link", "Psalms", 46, 0, 0},
-		{"single poetry verse", "Psalms", 46, 1, 0},
-	}
-	for _, tc := range cases {
-		got := ShareLinkURL("nkjv", tc.book, tc.chapter, tc.lo, tc.hi)
-		want := ShareLinkURL("web", tc.book, tc.chapter, tc.lo, tc.hi)
-		if got == "" || got != want {
-			t.Errorf("%s: nkjv link must equal the web link:\n got %q\nwant %q", tc.name, got, want)
-		}
-		if strings.Contains(got, "nkjv") {
-			t.Errorf("%s: licensed id leaked into a public URL: %q", tc.name, got)
+		{"range", "John", 3, 16, 18, "https://bibletext.co.uk/nkjv/john/3/#v16-18"},
+		{"chapter link", "Psalms", 46, 0, 0, "https://bibletext.co.uk/nkjv/psalms/46/"},
+		{"single poetry verse", "Psalms", 46, 1, 0, "https://bibletext.co.uk/nkjv/psalms/46/#v1"},
+	} {
+		if got := ShareLinkURL("nkjv", tc.book, tc.chapter, tc.lo, tc.hi); got != tc.want {
+			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
 		}
 	}
 
-	// A note changes nothing about the fallback.
+	// A note rides alongside the translation, exactly as it does for web/bsb.
 	got := ShareLinkURLWithNote("nkjv", "John", 3, 16, 16, "hope you love this")
-	want := ShareLinkURLWithNote("web", "John", 3, 16, 16, "hope you love this")
-	if got == "" || got != want {
-		t.Errorf("noted nkjv link must equal the noted web link:\n got %q\nwant %q", got, want)
-	}
-	if strings.Contains(got, "nkjv") {
-		t.Errorf("licensed id leaked into a noted URL: %q", got)
+	if !strings.HasPrefix(got, shareLinkBase+"/nkjv/john/3/#v16&n=") {
+		t.Errorf("noted nkjv link:\n got %q\nwant the /nkjv/ path with an n= key", got)
 	}
 
-	// Every 66-canon book: always /web/, never /nkjv/.
+	// Every 66-canon book keeps its own path. The NKJV has no deuterocanon, so
+	// nothing here should ever be rewritten to webc.
 	for _, book := range NewBibleData().Books {
 		url := ShareLinkURL("nkjv", book, 3, 16, 18)
-		if !strings.HasPrefix(url, shareLinkBase+"/web/") {
-			t.Errorf("%s: nkjv share URL must fall back to /web/: %q", book, url)
+		if !strings.HasPrefix(url, shareLinkBase+"/nkjv/") {
+			t.Errorf("%s: nkjv share URL must name /nkjv/: %q", book, url)
 		}
-		if strings.Contains(url, "nkjv") {
-			t.Errorf("%s: licensed id leaked: %q", book, url)
+	}
+
+	// The link the app emits is one the app can open again — a /nkjv/ URL that
+	// did not parse back would be worse than the old downgrade: the OS would
+	// hand it to a browser and the site serves nothing there.
+	target, ok := ParseShareLink("https://bibletext.co.uk/nkjv/john/3/#v16-18")
+	if !ok {
+		t.Fatal("an emitted /nkjv/ link must parse back; otherwise it opens a 404 in the browser")
+	}
+	if target.VersionID != "nkjv" || target.Book != "John" || target.Chapter != 3 ||
+		target.VerseLo != 16 || target.VerseHi != 18 {
+		t.Errorf("round-tripped nkjv link: %+v", target)
+	}
+}
+
+// TestWebLinksAreByteStable: links already sitting in message threads must not
+// move because a new id joined the path grammar. These strings are goldens —
+// they are what the app emitted before /nkjv/ existed.
+func TestWebLinksAreByteStable(t *testing.T) {
+	for _, tc := range []struct {
+		version, book   string
+		chapter, lo, hi int
+		want            string
+	}{
+		{"web", "John", 3, 16, 18, "https://bibletext.co.uk/web/john/3/#v16-18"},
+		{"web", "Psalms", 119, 105, 0, "https://bibletext.co.uk/web/psalms/119/#v105"},
+		{"bsb", "1 Corinthians", 13, 4, 7, "https://bibletext.co.uk/bsb/1-corinthians/13/#v4-7"},
+		{"webc", "Wisdom", 3, 1, 0, "https://bibletext.co.uk/webc/wisdom/3/#v1"},
+		// Still rewritten: the deuterocanon exists only in the Catholic canon.
+		{"web", "1 Maccabees", 2, 19, 22, "https://bibletext.co.uk/webc/1-maccabees/2/#v19-22"},
+		{"nkjv", "1 Maccabees", 2, 19, 22, "https://bibletext.co.uk/webc/1-maccabees/2/#v19-22"},
+		// Still falls back: an id nothing recognises names no reader page.
+		{"zzz", "John", 3, 16, 0, "https://bibletext.co.uk/web/john/3/#v16"},
+		{"", "John", 3, 16, 0, "https://bibletext.co.uk/web/john/3/#v16"},
+	} {
+		if got := ShareLinkURL(tc.version, tc.book, tc.chapter, tc.lo, tc.hi); got != tc.want {
+			t.Errorf("%s %s %d:%d-%d:\n got %q\nwant %q",
+				tc.version, tc.book, tc.chapter, tc.lo, tc.hi, got, tc.want)
+		}
+	}
+}
+
+// TestLinkPathVersionIDsIsNotThePublishedSet pins the split itself. The two
+// answered the same question until /nkjv/ arrived, under one name; re-merging
+// them is how someone concludes the site publishes the NKJV and either points
+// cmd/websitegen at it or relaxes its licensed-exclusion tests.
+func TestLinkPathVersionIDsIsNotThePublishedSet(t *testing.T) {
+	if webPublishedVersionIDs["nkjv"] {
+
+	}
+	if !linkPathVersionIDs["nkjv"] {
+		t.Error("a share-link path must be able to name nkjv")
+	}
+	for id := range webPublishedVersionIDs {
+		if !linkPathVersionIDs[id] {
+			t.Errorf("%q is published but cannot appear in a link path", id)
+		}
+	}
+	// Enumerated, not derived: BIBLETEXT_ENABLE_TESTING makes canSelect() true
+	// for every registered version, and a registry-wide set would start emitting
+	// paths nothing claims and nothing serves.
+	for _, id := range []string{"nrsv", "lsb"} {
+		if linkPathVersionIDs[id] {
+			t.Errorf("%q must not be a link path id: no app or site surface honours it", id)
 		}
 	}
 }

@@ -20,7 +20,15 @@ import "C"
 // deliverShareLink marshals onto the Fyne UI goroutine and drops anything that
 // isn't one of our reader links.
 //
+// Returns 1 when the URL is one of our reader links and the app has taken it,
+// 0 when it is not — the native side reports that straight back to the OS so an
+// unclaimed link falls through to the browser instead of vanishing. C int
+// rather than bool because cgo's C.int is the portable thing to hand ObjC.
+//
 //export bibleTextOpenedLink
-func bibleTextOpenedLink(cURL *C.char) {
-	deliverShareLink(C.GoString(cURL))
+func bibleTextOpenedLink(cURL *C.char) C.int {
+	if deliverShareLink(C.GoString(cURL)) {
+		return 1
+	}
+	return 0
 }

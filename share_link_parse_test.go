@@ -13,31 +13,36 @@ func TestParseShareLink(t *testing.T) {
 		ok        bool
 	}{
 		{name: "canonical single verse", url: "https://bibletext.co.uk/web/john/3/#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16}, ok: true},
 		{name: "canonical range", url: "https://bibletext.co.uk/web/john/3/#v16-18",
-			want: ShareTarget{"web", "John", 3, 16, 18, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, VerseHi: 18}, ok: true},
 		{name: "chapter only", url: "https://bibletext.co.uk/bsb/psalms/23/",
-			want: ShareTarget{"bsb", "Psalms", 23, 0, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "bsb", Book: "Psalms", Chapter: 23}, ok: true},
 		{name: "no trailing slash", url: "https://bibletext.co.uk/web/john/3#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16}, ok: true},
 		{name: "query alias", url: "https://bibletext.co.uk/web/john/3/?v=16-18",
-			want: ShareTarget{"web", "John", 3, 16, 18, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, VerseHi: 18}, ok: true},
 		{name: "http and www", url: "http://www.bibletext.co.uk/web/john/3/#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16}, ok: true},
 		{name: "hand-typed capitals", url: "https://BibleText.co.uk/WEB/John/3/#v16",
-			want: ShareTarget{"web", "John", 3, 16, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16}, ok: true},
 		{name: "numbered book", url: "https://bibletext.co.uk/web/1-corinthians/13/#v4-7",
-			want: ShareTarget{"web", "1 Corinthians", 13, 4, 7, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "1 Corinthians", Chapter: 13, VerseLo: 4, VerseHi: 7}, ok: true},
 		{name: "deuterocanon", url: "https://bibletext.co.uk/webc/1-maccabees/2/#v19-22",
-			want: ShareTarget{"webc", "1 Maccabees", 2, 19, 22, ""}, ok: true},
+			want: ShareTarget{VersionID: "webc", Book: "1 Maccabees", Chapter: 2, VerseLo: 19, VerseHi: 22}, ok: true},
+		// A translation the WEBSITE does not publish, but which a link path may
+		// name. This case used to sit in the rejected block below, as "licensed
+		// version id" — see TestNKJVShareLinkNamesNKJV for why it moved.
+		{name: "app-only translation", url: "https://bibletext.co.uk/nkjv/john/3/#v16",
+			want: ShareTarget{VersionID: "nkjv", Book: "John", Chapter: 3, VerseLo: 16}, ok: true},
 
 		// Forgiving: a mangled verse payload still lands on the right chapter.
 		{name: "backwards range keeps the first verse", url: "https://bibletext.co.uk/web/john/3/#v18-16",
-			want: ShareTarget{"web", "John", 3, 18, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 18}, ok: true},
 		{name: "garbage fragment ignored", url: "https://bibletext.co.uk/web/john/3/#vfoo",
-			want: ShareTarget{"web", "John", 3, 0, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3}, ok: true},
 		{name: "zero verse ignored", url: "https://bibletext.co.uk/web/john/3/#v0",
-			want: ShareTarget{"web", "John", 3, 0, 0, ""}, ok: true},
+			want: ShareTarget{VersionID: "web", Book: "John", Chapter: 3}, ok: true},
 
 		// NOT ours, or not a passage — these must stay in the browser. The
 		// privacy and support pages are the URLs App Store Connect points at;
@@ -48,7 +53,12 @@ func TestParseShareLink(t *testing.T) {
 		{name: "version index", url: "https://bibletext.co.uk/web/"},
 		{name: "book index", url: "https://bibletext.co.uk/web/john/"},
 		{name: "another site", url: "https://example.com/web/john/3/#v16"},
-		{name: "licensed version id", url: "https://bibletext.co.uk/nkjv/john/3/#v16"},
+		// Still a strict allow-list. A registered translation that no link path
+		// names is refused exactly like a made-up one: the app emits no such
+		// link, the site serves no such page, and accepting it would only teach
+		// the app to swallow URLs nothing produced.
+		{name: "registered but not a link path id", url: "https://bibletext.co.uk/nrsv/john/3/#v16"},
+		{name: "unknown version id", url: "https://bibletext.co.uk/esv/john/3/#v16"},
 		{name: "unknown book", url: "https://bibletext.co.uk/web/nowhere/3/"},
 		{name: "non-numeric chapter", url: "https://bibletext.co.uk/web/john/three/"},
 		{name: "empty", url: ""},
@@ -70,7 +80,7 @@ func TestParseShareLink(t *testing.T) {
 func TestShareLinkRoundTrip(t *testing.T) {
 	books := append(append([]string{}, NewBibleData().Books...), catholicBooks...)
 	for _, book := range books {
-		for _, v := range []string{"web", "bsb", "webc"} {
+		for _, v := range []string{"web", "bsb", "webc", "nkjv"} {
 			for _, span := range [][2]int{{0, 0}, {16, 0}, {16, 18}} {
 				url := ShareLinkURL(v, book, 3, span[0], span[1])
 				if url == "" {

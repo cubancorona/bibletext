@@ -69,7 +69,12 @@ func TestIncomingNoteIsFiledUnderTheLinksTranslation(t *testing.T) {
 	if _, ok := loadNote(appPrefs(), "bsb", "John", 3); !ok {
 		t.Error("note was not filed under the link's translation (bsb)")
 	}
-	if _, ok := loadNote(appPrefs(), "web", "John", 3); ok {
+	// Asked of the STORE, not through loadNote. loadNote now answers for a
+	// reader — and a reader in the WEB should indeed be shown this note, because
+	// notes follow the passage. What must still be true is where it is FILED:
+	// under the link's translation, so the note carries the wording it was
+	// written about.
+	if _, filed := readNotes(appPrefs())[noteKey("web", "John", 3)]; filed {
 		t.Error("note was filed under the reader's translation instead of the link's")
 	}
 	deleteAllNotes(appPrefs())
@@ -133,5 +138,55 @@ func TestDeuterocanonLinkIsNotDroppedByTheCanonGuard(t *testing.T) {
 	}
 	if st.CurrentBook != "Tobit" {
 		t.Errorf("the deuterocanon link opened nothing; book = %q", st.CurrentBook)
+	}
+}
+
+// The same collision from the CONSUMER's side, which is where the guard was
+// missing. Two downloads can be in flight at once on a fresh install: the
+// four-book seed filling in the reader's own translation, and a translation
+// switch that a shared link asked for. Whichever finishes first used to consume
+// the park — so an NKJV link could be applied by the WEB download landing, and
+// the reader got their own translation's wording with no message at all
+// (linkVersionUnavailable says nothing for a translation they can select).
+//
+// applyShareTarget's park already refused the mirror-image mistake; this pins
+// the other half. Found by the state-machine sweep as B_FULLDL_STEALS_PARK, and
+// it was introduced when consumePendingLink was wired into triggerFullDownload's
+// success tail without the version check applyLoadedVersion has always had.
+func TestSeedDownloadDoesNotStealATranslationsParkedLink(t *testing.T) {
+	st := versionLinkState(t)
+	parked := ShareTarget{VersionID: "nkjv", Book: "John", Chapter: 3, VerseLo: 16}
+	st.pendingLink = &parked
+	st.pendingLinkVersion = "nkjv" // waiting on a TRANSLATION, not on the seed
+
+	// The production rule itself, not a copy of it — consumeSeedParkedLink is
+	// what triggerFullDownload's success tail calls.
+	consumeSeedParkedLink(st)
+
+	if st.pendingLink == nil {
+		t.Error("the seed download consumed a target that was waiting on another translation")
+	}
+	if st.pendingLinkVersion != "nkjv" {
+		t.Errorf("the park lost the translation it was waiting for: %q", st.pendingLinkVersion)
+	}
+}
+
+// ...and the case it must NOT break: a link parked because the app was on the
+// seed carries no pendingLinkVersion, and the finishing download is exactly what
+// it was waiting for. That one has to be honoured, or 62 of the 66 books never
+// open from a link on a fresh install.
+func TestSeedDownloadHonoursASeedParkedLink(t *testing.T) {
+	st := versionLinkState(t)
+	parked := ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16}
+	st.pendingLink = &parked
+	st.pendingLinkVersion = "" // parked by applyShareTarget's seed branch
+
+	consumeSeedParkedLink(st)
+
+	if st.pendingLink != nil {
+		t.Error("a seed-parked link was left parked after the download it was waiting for")
+	}
+	if st.CurrentBook != "John" || st.CurrentChapter != 3 {
+		t.Errorf("the seed-parked link did not open: got %s %d", st.CurrentBook, st.CurrentChapter)
 	}
 }
