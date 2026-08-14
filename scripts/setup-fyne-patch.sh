@@ -26,6 +26,8 @@ PATCH="patches/fyne-2.7.4-ios-drawloop.patch"
 PATCH_CARET="patches/fyne-2.7.4-caret-blink.patch"
 PATCH_EMOJI="patches/fyne-2.7.4-noto-emoji.patch"
 PATCH_NEWINTENT="patches/fyne-2.7.4-android-newintent.patch"
+PATCH_ATOMIC="patches/fyne-2.7.4-atomic-prefs.patch"
+ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
 DEST="third_party/fyne"
 
@@ -59,10 +61,17 @@ patch -p1 -d "$DEST" < "$PATCH"
 patch -p1 -d "$DEST" < "$PATCH_CARET"
 patch -p1 -d "$DEST" < "$PATCH_EMOJI"
 patch -p1 -d "$DEST" < "$PATCH_NEWINTENT"
+patch -p1 -d "$DEST" < "$PATCH_ATOMIC"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
 # the font itself (a binary; it cannot ride a unified diff) is copied in here.
 # Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
 cp "$EMOJI_FONT" "$DEST/theme/font/NotoColorEmoji.ttf"
+# The atomic-preferences patch ships its own proof. It is copied rather than
+# diffed in because it is a whole new file, and it has to be copied on EVERY run
+# because this script deletes $DEST first — a test written straight into
+# third_party/fyne survives exactly until the next build (learned by losing it).
+# Run it with: ( cd third_party/fyne && go test ./app/ -run TestBT -v )
+cp "$ATOMIC_TEST" "$DEST/app/bt_atomic_prefs_test.go"
 rm -f "$DEST/theme/font/EmojiOneColor.otf"   # no longer embedded; leaving it would ship 4 MB of nothing
 
 # 3. Verify the patches actually landed.
@@ -80,9 +89,18 @@ if ! grep -q "BibleText patch: warm App Links" "$DEST/internal/driver/mobile/app
   echo "ERROR: patch did not apply — GoNativeActivity.java is unpatched." >&2
   exit 1
 fi
+# Both halves of the atomic-preferences patch, because they only work together:
+# the writer publishes by renaming inside Close, and saveToStorage has to stop
+# discarding that Close error. Half of this patch would silently swallow a
+# failed save.
+if ! grep -q "BibleText patch: atomic preferences write" "$DEST/app/preferences_nonweb.go" \
+   || ! grep -q "BibleText patch: a Close error is a FAILED SAVE" "$DEST/app/preferences.go"; then
+  echo "ERROR: patch did not apply — the preferences writer is unpatched (still truncating in place)." >&2
+  exit 1
+fi
 if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
    || [ ! -s "$DEST/theme/font/NotoColorEmoji.ttf" ]; then
   echo "ERROR: emoji swap did not land — bundled-emoji.go unpatched or font missing." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji)."
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write)."

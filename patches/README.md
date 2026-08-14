@@ -266,3 +266,129 @@ NOTE the scope: only builds that go through the patch scripts get this — every
 MOBILE build and every desktop RELEASE build (the release workflow applies the
 patches). A local `go build`/`go run ./cmd/desktop` still uses stock go.mod and
 so still shows Fyne's old emoji set.
+
+## Patch 5: atomic preferences write (`fyne-2.7.4-atomic-prefs.patch`)
+
+**This one is not a performance fix. It is the difference between keeping and
+losing the reader's shared notes.**
+
+Fyne rewrites the WHOLE preferences store on every change, and it opened the
+real file to do it:
+
+```go
+// app/preferences_nonweb.go, storageWriterForPath
+file, err := os.Create(path)   // O_TRUNC — the file is now zero bytes
+```
+
+`saveToStorage` then marshals the values map and writes it in one go. Between
+those two moments the reader's only copy of `preferences.json` is empty. Kill
+the process there — force quit, an iOS jetsam, a crash, the kill an app update
+performs — and everything is gone: settings, reading position, and every shared
+note. An emptied file is not even detectably broken; it parses as "no values",
+so `readNotesChecked`'s refusal-to-overwrite guard (`notes_store.go`) cannot
+help — that guard catches an *unparseable* store, and zero bytes parse fine.
+
+BibleText hits the window far harder than a settings file normally would:
+`persistReadingPosition` (`reading_state.go`) rewrites the blob on **every
+chapter turn**, and `flushReadingStateAsync` rewrites it again on **every iOS
+finger-lift**, from a background goroutine — two writers, nothing serialising
+them. It has already happened here: a torn file turned 6 notes / 6 keys into
+0 notes / 1 key on the simulator.
+
+**The fix.** `storageWriterForPath` now returns an `atomicWriter`: the blob is
+staged in `preferences.json.tmp-NNNN` **in the same directory** (rename is only
+atomic within a filesystem) and `Close` renames it over the target. A reader —
+or a relaunch after a kill — sees the whole old file or the whole new one, never
+a half of either. Every failure path removes the temp file and leaves the stored
+file untouched, because a lost save is recoverable and a published empty one is
+not.
+
+Two smaller things ride along, both required for the first to be honest:
+
+- **`preferences.go`**: `defer writer.Close()` became a deferred closure feeding
+  a named return. Close is now where the save is *published*, so its error means
+  "your preferences never reached disk" — throwing it away would have made
+  every failure silent.
+- **A once-per-process sweep** of temp files older than a day, since a process
+  killed mid-save leaves a whole copy of the store behind. The age cut-off is
+  what makes it safe: a recent temp file may belong to a live writer.
+
+**What it costs** (`go test ./app/ -run XXX -bench BenchmarkBT`, 200-note store,
+300 iterations x4; all variants measured in ONE process because this machine
+swings 2x between runs):
+
+| | ns/op |
+|---|---|
+| stock `os.Create` + write + fsync | 4.07 - 4.21 ms |
+| temp + fsync + rename | 5.37 - 5.69 ms |
+| **the shipped `atomicWriter`** | **4.86 - 5.74 ms** |
+| temp + fsync + rename + **directory fsync** | 8.44 - 9.70 ms |
+
+Note what dominates: the milliseconds are the `fsync` **stock Fyne already
+performs** (`os.File.Sync` is `fcntl(F_FULLFSYNC)` on APFS, a full device
+barrier). The patch adds roughly **+1 ms per save**.
+
+The last row is the thing we tried and removed. fsyncing the directory so the
+rename itself survives a power cut is textbook, and it cost as much again for no
+benefit against the threat we actually have: a *killed process* cannot tear a
+rename, because the page cache belongs to the kernel and outlives the process.
+Without it a power cut can lose the last save and leave the previous complete
+file — the outcome we would choose anyway. It also removes a Windows wrinkle
+(a directory handle cannot be fsynced there).
+
+**Proof ships with the patch**: `patches/testdata/atomic-prefs_test.go` is
+copied into `third_party/fyne/app/` by `setup-fyne-patch.sh` (copied, not
+diffed, because it is a whole new file — and copied on *every* run, because the
+script deletes `third_party/fyne` first; a test written straight into the
+vendored tree survives exactly until the next build). Run it with:
+
+```bash
+( cd third_party/fyne && go test ./app/ -run TestBT -v )
+```
+
+`TestBTStockWriteIsTorn` is the control — it reproduces the defect with stock's
+`os.Create` so the fix's zero means something. A representative run:
+
+```
+stock os.Create:      18216 reads, 565 EMPTY (every note lost), 21 partial/invalid
+patched atomic write: 13995 reads,   0 empty,                    0 partial/invalid
+```
+
+### Desktop coverage — check this before assuming you are covered
+
+A Fyne-side fix protects a build only if that build applies the patches. As of
+this writing **every shipped build does**: `release-ios.sh`, `run-ios-sim.sh`,
+`run-ios-device.sh`, `build-android.sh`, and all three desktop jobs in
+`.github/workflows/release.yml` (macOS arm64+Intel, Windows, Linux) call
+`setup-fyne-patch.sh` and inject the `replace`.
+
+What is NOT covered, and cannot be: a bare `go build ./cmd/desktop`, `go run
+./cmd/desktop`, the VS Code tasks, and anyone building from a clone by hand.
+`go.mod` ships stock on purpose. Those builds still truncate. That is a
+tolerable gap for a developer convenience build — but it means the protection
+lives in the *release scripts*, so **removing or bypassing the patch step in
+any packaging path silently un-fixes data loss**, not just emoji and caret
+blink. The verify-grep in `setup-fyne-patch.sh` fails the build if either half
+of this patch goes missing.
+
+### Upstream
+
+This is a clean upstream candidate — platform-neutral, no driver code, strictly
+safer on every platform, and Fyne's own `resetSavedRecently` already carries the
+comment *"writes are not always atomic"*, which is this bug seen from the other
+side. If it is ever proposed, note that the patch also deletes stock's
+`os.IsExist` fallback in `storageWriterForPath`: it was unreachable (`os.Create`
+passes `O_CREATE|O_TRUNC` without `O_EXCL`, so it never returns an exists error)
+and wrong if reached (`os.Open` hands back a read-only descriptor that would
+fail on the first `Write`).
+
+An **optional follow-up we did not take**: `watchFile` (`app/settings_desktop.go`)
+watches the whole config *directory*, so it already fires the reload callback for
+any file that changes there. Measured with fsnotify v1.9.0, one save produces
+2 events stock (`CHMOD`, `WRITE`) and 4 patched (`CREATE(tmp)`, `REMOVE`,
+`CREATE`, `RENAME(tmp)`) — of which the `REMOVE` takes fsnotify's re-watch
+branch, so reload callbacks go from 2 to 3. Same class of spurious reload Fyne
+already had, one more of them, all inside the `savedRecently` guard. Filtering
+`event.Name` against the watched path in `watchFile` would remove them all *and*
+fix the pre-existing over-firing, but it changes settings-watch behaviour too,
+so it belongs in its own patch with its own testing.
