@@ -6,6 +6,7 @@ package main
 // or verse text escaping out of its span.
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestChapterBodyKeepsPoemLines(t *testing.T) {
 		v("Psalms", 23, 1, "The LORD is my shepherd;\nI shall not want."),
 		v("Psalms", 23, 2, "He makes me lie down in green pastures;\nHe leads me beside quiet waters."),
 	}
-	got := chapterBody("Psalms", verses)
+	got := chapterBody("web", "Psalms", verses)
 	if strings.Contains(got, "\n") {
 		t.Error("a literal newline survived into the HTML — it renders as a space, flattening the poem")
 	}
@@ -48,7 +49,7 @@ func TestChapterBodyProseDoesNotBreak(t *testing.T) {
 		v("John", 3, 16, "For God so loved the world."),
 		v("John", 3, 17, "For God didn't send his Son to judge the world."),
 	}
-	got := chapterBody("John", verses)
+	got := chapterBody("web", "John", verses)
 	if strings.Contains(got, "<br>") {
 		t.Errorf("prose verses must join with a space, not a break:\n%s", got)
 	}
@@ -57,7 +58,7 @@ func TestChapterBodyProseDoesNotBreak(t *testing.T) {
 // TestChapterBodyVerseAnchors: the id is the deep-link contract. #v16 works with
 // no JavaScript only because this element exists and is named exactly "v16".
 func TestChapterBodyVerseAnchors(t *testing.T) {
-	got := chapterBody("John", []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
+	got := chapterBody("web", "John", []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
 	if !strings.Contains(got, `id="v16"`) {
 		t.Errorf(`missing id="v16" — every shared link to this verse would fail to highlight:\n%s`, got)
 	}
@@ -66,11 +67,11 @@ func TestChapterBodyVerseAnchors(t *testing.T) {
 // TestChapterBodyRedLetters: words of Christ carry the class the stylesheet
 // colours. John 3:16 is inside a red-letter range; John 3:1 is not.
 func TestChapterBodyRedLetters(t *testing.T) {
-	got := chapterBody("John", []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
+	got := chapterBody("web", "John", []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
 	if !strings.Contains(got, `class="wj"`) {
 		t.Errorf("John 3:16 should be red-letter:\n%s", got)
 	}
-	plain := chapterBody("John", []bibletext.Verse{v("John", 3, 1, "Now there was a man of the Pharisees.")})
+	plain := chapterBody("web", "John", []bibletext.Verse{v("John", 3, 1, "Now there was a man of the Pharisees.")})
 	if strings.Contains(plain, `class="wj"`) {
 		t.Errorf("John 3:1 is narration, not words of Christ:\n%s", plain)
 	}
@@ -79,7 +80,7 @@ func TestChapterBodyRedLetters(t *testing.T) {
 // TestChapterBodyEscapes: verse text is data, never markup. (Scripture contains
 // no angle brackets today; a future decoder change must not be able to inject.)
 func TestChapterBodyEscapes(t *testing.T) {
-	got := chapterBody("John", []bibletext.Verse{v("John", 1, 1, `a <script>x</script> & "quote"`)})
+	got := chapterBody("web", "John", []bibletext.Verse{v("John", 1, 1, `a <script>x</script> & "quote"`)})
 	if strings.Contains(got, "<script>") {
 		t.Errorf("verse text escaped out of its span:\n%s", got)
 	}
@@ -130,6 +131,64 @@ func TestSiteURLsMatchTheAppsLinks(t *testing.T) {
 		wantPath = strings.TrimSuffix(wantPath, "#v1") + "index.html"
 		if generated != wantPath {
 			t.Errorf("generator writes %q but the app links to %q", generated, wantPath)
+		}
+	}
+}
+
+// --- Red letters are per translation, and per stretch of a verse -------------
+//
+// The page was the fifth rendering surface and the only one still asking
+// IsWordsOfChrist when the app grew per-edition span tables. These pin the two
+// things that were wrong on it.
+
+// A verse where somebody ELSE speaks must not come out wholly red. John 4:9 is
+// the Samaritan woman answering; the BSB's table marks Christ's words in verses
+// 7 and 10 and marks nothing in 9. Rendered through the old whole-verse rule the
+// page put her words in Christ's colour.
+func TestChapterBodyRedensOnlyChristsWordsInTheBSB(t *testing.T) {
+	verses := []bibletext.Verse{
+		v("John", 4, 7, `When a Samaritan woman came to draw water, Jesus said to her, “Give Me a drink.”`),
+		v("John", 4, 9, `“You are a Jew,” said the woman. “How can you ask for a drink from me, a Samaritan woman?” (For Jews do not associate with Samaritans.)`),
+	}
+	got := chapterBody("bsb", "John", verses)
+
+	if !strings.Contains(got, `<span class="wj">“Give Me a drink.”</span>`) {
+		t.Errorf("Christ's words in v7 were not reddened on their own:\n%s", got)
+	}
+	if strings.Contains(got, `<span class="wj">“You are a Jew,”`) {
+		t.Errorf("the Samaritan woman's words were painted in Christ's colour:\n%s", got)
+	}
+	// The narration that introduces the quotation stays black.
+	if strings.Contains(got, `<span class="wj">When a Samaritan woman`) {
+		t.Errorf("the narration was swept into the red span:\n%s", got)
+	}
+}
+
+// The SAME verse rendered for two translations must use each one's own marks.
+// Version-blind rendering is what put the WEB's marks on every page.
+func TestChapterBodyRedLettersFollowTheTranslation(t *testing.T) {
+	// Mark 5:31 — the NKJV's publisher reddens Christ here and the WEB does not.
+	verse := []bibletext.Verse{
+		v("Mark", 5, 31, `But His disciples said to Him, “You see the multitude thronging You, and You say, ‘Who touched Me?’ ”`),
+	}
+	web := chapterBody("web", "Mark", verse)
+	nkjv := chapterBody("nkjv", "Mark", verse)
+	if web == nkjv {
+		t.Error("the WEB and the NKJV rendered Mark 5:31 identically; the page is still version-blind")
+	}
+}
+
+// Whatever the marks say, the page must still show the whole verse: the runs
+// concatenate back to the text, and a rendering bug that dropped one would be
+// invisible in a red/not-red assertion.
+func TestChapterBodyLosesNoTextToTheRuns(t *testing.T) {
+	text := `And looking up to heaven, He sighed deeply and said to him, “Ephphatha!” (which means, “Be opened!”).`
+	got := chapterBody("bsb", "Mark", []bibletext.Verse{v("Mark", 7, 34, text)})
+	stripped := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(got, "")
+	stripped = strings.ReplaceAll(stripped, "\u00a0", " ")
+	for _, word := range []string{"Ephphatha", "which means", "Be opened", "sighed deeply"} {
+		if !strings.Contains(stripped, word) {
+			t.Errorf("the rendered verse lost %q:\n%s", word, stripped)
 		}
 	}
 }

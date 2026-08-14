@@ -13,8 +13,30 @@ import (
 	bibletext "bibletext"
 )
 
+// pageHead carries the OPTIONAL parts of the document head. Its zero value
+// emits exactly what pageShell has always emitted, which is load-bearing: the
+// three published trees must stay byte-identical across this change, and every
+// field below is written only when non-empty.
+type pageHead struct {
+	// robots is the <meta name="robots"> content. Only the notice pages set it.
+	robots string
+	// appleBanner is the <meta name="apple-itunes-app"> content — Apple's Smart
+	// App Banner, the ONE route from a web page into the app on iOS that needs
+	// no change to the app (see openInApp in notice.go).
+	appleBanner string
+	// css/js are extra assets, linked AFTER reader.css and reader.js so the
+	// notice pages inherit the whole reader and add to it. Paths are relative to
+	// the site root; the shell prefixes them with the page's own "../" run.
+	css []string
+	js  []string
+}
+
 // pageShell wraps body content in the common document. ogDesc is plain text.
 func pageShell(title, ogTitle, ogDesc, canonical, body string, depth int) string {
+	return pageShellHead(title, ogTitle, ogDesc, canonical, body, depth, pageHead{})
+}
+
+func pageShellHead(title, ogTitle, ogDesc, canonical, body string, depth int, head pageHead) string {
 	up := strings.Repeat("../", depth)
 	var b strings.Builder
 	b.WriteString(`<!doctype html><html lang="en"><head><meta charset="utf-8">`)
@@ -28,10 +50,19 @@ func pageShell(title, ogTitle, ogDesc, canonical, body string, depth int) string
 	fmt.Fprintf(&b, `<meta name="description" content="%s">`, template.HTMLEscapeString(ogDesc))
 	b.WriteString(`<meta property="og:type" content="article">`)
 	b.WriteString(`<meta property="og:site_name" content="BibleText">`)
+	if head.robots != "" {
+		fmt.Fprintf(&b, `<meta name="robots" content="%s">`, template.HTMLEscapeString(head.robots))
+	}
+	if head.appleBanner != "" {
+		fmt.Fprintf(&b, `<meta name="apple-itunes-app" content="%s">`, template.HTMLEscapeString(head.appleBanner))
+	}
 	if canonical != "" {
 		fmt.Fprintf(&b, `<link rel="canonical" href="%s">`, template.HTMLEscapeString(canonical))
 	}
 	fmt.Fprintf(&b, `<link rel="stylesheet" href="%s%s">`, up, cssName)
+	for _, extra := range head.css {
+		fmt.Fprintf(&b, `<link rel="stylesheet" href="%s%s">`, up, extra)
+	}
 	b.WriteString(`</head><body>`)
 	b.WriteString(body)
 	// Footer is identical on every page: a quiet route to the app. The default
@@ -40,6 +71,12 @@ func pageShell(title, ogTitle, ogDesc, canonical, body string, depth int) string
 	b.WriteString(`<footer class="foot"><a id="getapp" href="https://bibletext.co.uk/">Get the BibleText app</a>` +
 		platformIcons + `</footer>`)
 	fmt.Fprintf(&b, `<script src="%s%s" defer></script>`, up, jsName)
+	// Deferred scripts run in document order, so anything here runs AFTER
+	// reader.js has finished — which is what lets notice.js assume the sender's
+	// note is already on the page.
+	for _, extra := range head.js {
+		fmt.Fprintf(&b, `<script src="%s%s" defer></script>`, up, extra)
+	}
 	b.WriteString(`</body></html>`)
 	return b.String()
 }
@@ -83,7 +120,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	b.WriteString(`</div></div>`)
 	fmt.Fprintf(&b, `<p class="ver">%s</p>`, template.HTMLEscapeString(v.Name))
 	b.WriteString(`<article class="text">`)
-	b.WriteString(chapterBody(book, verses))
+	b.WriteString(chapterBody(v.ID, book, verses))
 	b.WriteString(`</article>`)
 
 	// Prev/next keep the reader moving without going back to an index.
@@ -108,11 +145,25 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 
 // chapterBody renders verses into paragraphs using the app's own rules: a join
 // touching a poetic verse is a line break (PoeticJoin), authored "\n" inside a
-// verse becomes <br>, and words of Christ get the red-letter class. Verse ids
+// verse becomes <br>, and Christ's words get the red-letter class. Verse ids
 // are what make #v16 work with no JavaScript at all.
-func chapterBody(book string, verses []bibletext.Verse) string {
+//
+// versionID is threaded all the way down because red letters are PER
+// TRANSLATION: each edition has its own span table, and rendering one
+// translation with another's marks is exactly the bug this argument fixed.
+func chapterBody(versionID, book string, verses []bibletext.Verse) string {
 	if len(verses) == 0 {
-		return `<p class="empty">This chapter is not available in this translation.</p>`
+		// THE SENTENCE THAT USED TO BE HERE — "This chapter is not available in
+		// this translation." — IS RETIRED, not moved. It was unreachable dead
+		// code (writeVersion skipped zero-chapter books before it could get
+		// here), and it could not have done the job anyway: it named neither the
+		// book nor the translation and offered no way out, which is the dead end
+		// docs/NKJV_FLOW.md's I1 forbids. renderNotice (notice.go) is now the one
+		// place that idea lives, and it has the facts to say it properly — a
+		// heading, the reason, and a link to a translation that carries the
+		// passage. This branch stays only as a guard: a chapter that somehow
+		// exists with no verses renders as an empty article rather than a lie.
+		return ""
 	}
 	var b strings.Builder
 	// Paragraphs come from the APP's rule, not a web-specific one, so the page
@@ -128,7 +179,7 @@ func chapterBody(book string, verses []bibletext.Verse) string {
 		} else {
 			b.WriteString(`<p>`)
 		}
-		b.WriteString(paragraphBody(book, para))
+		b.WriteString(paragraphBody(versionID, book, para))
 		b.WriteString(`</p>`)
 	}
 	return b.String()
@@ -137,7 +188,7 @@ func chapterBody(book string, verses []bibletext.Verse) string {
 // paragraphBody renders the verses of one paragraph, joining them the way the
 // app does: a join touching a poetic verse is a line break, everything else is
 // a space.
-func paragraphBody(book string, verses []bibletext.Verse) string {
+func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
 	var b strings.Builder
 	for i, v := range verses {
 		if i > 0 {
@@ -149,13 +200,27 @@ func paragraphBody(book string, verses []bibletext.Verse) string {
 		}
 		fmt.Fprintf(&b, `<span class="v" id="v%d">`, v.Verse)
 		fmt.Fprintf(&b, `<sup class="n"><a href="#v%d">%d</a></sup>&nbsp;`, v.Verse, v.Verse)
-		// Escape first, then turn authored poem breaks into real <br> — a bare
-		// "\n" is only whitespace in HTML and would flatten a psalm to prose.
-		body := strings.ReplaceAll(template.HTMLEscapeString(strings.TrimSpace(v.Text)), "\n", "<br>")
-		if bibletext.IsWordsOfChrist(book, v.Chapter, v.Verse) {
-			fmt.Fprintf(&b, `<span class="wj">%s</span>`, body)
-		} else {
-			b.WriteString(body)
+		// RUNS, not a whole-verse yes/no. This asked IsWordsOfChrist until the
+		// app grew per-edition span tables and the page did not: a verse where
+		// Christ answers somebody came out entirely red, the other speaker
+		// included (John 4:9 reddened the Samaritan woman), and every
+		// translation was painted with the WEB's marks because that question
+		// takes no version. RedLetterRuns asks the edition's own table.
+		//
+		// The runs concatenate back to the verse exactly, so each is escaped and
+		// emitted in turn. Escape first, then turn authored poem breaks into
+		// real <br> — a bare "\n" is only whitespace in HTML and would flatten a
+		// psalm to prose.
+		for _, run := range bibletext.RedLetterRuns(versionID, v) {
+			text := strings.ReplaceAll(template.HTMLEscapeString(run.Text), "\n", "<br>")
+			if text == "" {
+				continue
+			}
+			if run.Red {
+				fmt.Fprintf(&b, `<span class="wj">%s</span>`, text)
+			} else {
+				b.WriteString(text)
+			}
 		}
 		b.WriteString(`</span>`)
 	}
@@ -287,6 +352,18 @@ func renderChapterList(v loadedVersion, book, slug string, chapters []int) strin
 // empty — nothing populates it. Any per-book or per-version guessing (and the
 // care that would need, so a Catholic-only book is never offered under a version
 // lacking it) remains to be written.
+//
+// THE NOTICE VERSIONS ARE DELIBERATELY NOT IN THIS LIST, and the `versions`
+// argument stays unused rather than being widened to include them. The sentence
+// above the links is "That page isn't here — but the whole Bible is", and every
+// item under it has to make that true. /nkjv/ does not: it is a signpost, not a
+// Bible, and a reader who has just failed to find a page would be sent to
+// another page with no words on it. The three that follow are the three that
+// can actually finish the sentence.
+//
+// (The canon-gap pages are a different matter and need no entry here: they live
+// at real paths under the published versions, so they are reached directly
+// rather than through the 404.)
 func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 	body := `<div class="wrap"><h1 class="ref">Not found</h1>` +
 		`<p class="ver">That page isn't here — but the whole Bible is.</p>` +
