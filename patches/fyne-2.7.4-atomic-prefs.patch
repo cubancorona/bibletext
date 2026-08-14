@@ -1,0 +1,245 @@
+--- a/app/preferences_nonweb.go
++++ b/app/preferences_nonweb.go
+@@ -3,9 +3,15 @@
+ package app
+ 
+ import (
++	"errors"
+ 	"io"
+ 	"os"
+ 	"path/filepath"
++	"strings"
++	"sync"
++	"time"
++
++	"fyne.io/fyne/v2"
+ )
+ 
+ func (p *preferences) storageWriter() (writeSyncCloser, error) {
+@@ -16,24 +22,187 @@
+ 	return p.storageReaderForPath(p.storagePath())
+ }
+ 
++// errPartialWrite marks a save whose encode failed part-way. The temp file is
++// discarded rather than renamed, so a partial blob never reaches the reader.
++var errPartialWrite = errors.New("preferences write failed part-way; not published")
++
++// BibleText patch: atomic preferences write.
++//
++// Stock Fyne opened the real preferences.json with os.Create — O_TRUNC — and
++// then let saveToStorage encode the whole values map into it. So from the
++// moment the writer is opened until the encoder's write lands, the reader's
++// only copy of that file is zero bytes long. Kill the process in that window
++// (force quit, an iOS jetsam, a crash, the kill an app update performs) and
++// everything in it is gone: settings, the reading position, and the shared
++// notes other people sent. A setting can be chosen again; a note exists
++// nowhere else. Worse, an emptied file is not detectably damaged — it parses
++// as "no values", so every guard downstream sees a legitimately empty store
++// and carries on. We watched a torn file turn 6 notes into 0 on the simulator.
++//
++// The window is short but it is entered constantly: this app rewrites the
++// whole blob on every chapter turn and again on every lifecycle flush, from
++// two goroutines that nothing serialises.
++//
++// The fix is the standard one: write the new blob to a temp file, then rename
++// it over the target. rename(2) is atomic — anyone opening the path (or
++// looking at it after a crash) sees the whole old file or the whole new one,
++// never a half of either. It is atomic only WITHIN a filesystem, which is why
++// the temp file is created in the target's own directory rather than in
++// os.TempDir.
++//
++// Ordering matters: the data has to be durable BEFORE the name is published,
++// or a power loss can leave a perfectly-named file full of zeroes — the exact
++// failure this set out to remove. saveToStorage already calls Sync() before
++// Close(), so that ordering falls out for free; Close only fsyncs itself when
++// nobody has since the last Write.
++//
++// Two fsync choices require measurement. The benchmarks ship beside this file
++// and measure every variant in one process because filesystem latency varies
++// too widely across separate runs for a useful direct comparison.
++//
++//  1. Close fsynced unconditionally, on the assumption that a second fsync of
++//     an already-clean file is free. It is not — on APFS os.File.Sync is
++//     fcntl(F_FULLFSYNC), a full device barrier — and it roughly doubled the
++//     cost of a save. Hence the `synced` flag.
++//  2. Close then fsynced the DIRECTORY, so that the rename itself would survive
++//     a power cut. Textbook, and here not worth it: it cost about as much again
++//     (4.1ms raw stock, 5.4ms temp+rename, 8.7ms adding the directory fsync;
++//     best of 4 runs, 300 iterations, 200-note store), and it buys nothing
++//     against the threat we actually have. A killed process — force quit,
++//     jetsam, crash, the kill an app update performs — cannot tear a rename:
++//     the page cache belongs to the kernel and outlives the process. Without
++//     the directory fsync a power cut can lose the LAST save and leave the
++//     previous complete file, which is the outcome we would choose anyway.
++//     Dropping it also drops a Windows wrinkle, where a directory handle cannot
++//     be fsynced at all.
++//
++// This also drops stock's os.IsExist fallback, which was dead code and wrong
++// besides: os.Create passes O_CREATE|O_TRUNC without O_EXCL, so it never
++// returns an exists error, and the fallback's os.Open handed back a READ-ONLY
++// descriptor that would have failed on the first Write anyway.
+ func (p *preferences) storageWriterForPath(path string) (writeSyncCloser, error) {
+-	err := os.MkdirAll(filepath.Dir(path), 0o700)
++	dir := filepath.Dir(path)
++	err := os.MkdirAll(dir, 0o700)
+ 	if err != nil { // this is not an exists error according to docs
+ 		return nil, err
+ 	}
+-	file, err := os.Create(path)
++
++	sweepStaleTemps(dir, filepath.Base(path))
++
++	// A unique temp name per writer, so two concurrent savers cannot scribble
++	// into each other's half-written blob. Each publishes a complete file and
++	// the later rename simply wins.
++	file, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+ 	if err != nil {
+-		if !os.IsExist(err) {
+-			return nil, err
+-		}
+-		file, err = os.Open(path) // #nosec
++		return nil, err
++	}
++	// CreateTemp makes the file 0600 where os.Create made it 0666&^umask. That
++	// is a tightening, and the containing directory is already 0700, but say so
++	// explicitly rather than inherit it by accident.
++	_ = file.Chmod(0o600)
++
++	return &atomicWriter{file: file, tmp: file.Name(), path: path}, nil
++}
++
++// sweepStale runs the temp-file sweep once per process. A ReadDir on every save
++// would be a directory scan on every chapter turn, which is exactly the kind of
++// cost this file is trying not to add.
++var sweepStale sync.Once
++
++// sweepStaleTemps removes temp files left behind by a process that was killed
++// between CreateTemp and the rename. Each is a whole copy of the store, so on a
++// device that jetsams the app regularly they would accumulate quietly inside the
++// sandbox forever.
++//
++// The age cut-off is what makes this safe: another Fyne process (or another
++// writer in this one) may have a temp file open right now, and deleting it would
++// throw away that save. A day old means nobody is coming back for it.
++func sweepStaleTemps(dir, base string) {
++	sweepStale.Do(func() {
++		entries, err := os.ReadDir(dir)
+ 		if err != nil {
+-			return nil, err
++			return
+ 		}
++		cutoff := time.Now().Add(-24 * time.Hour)
++		for _, e := range entries {
++			if e.IsDir() || !strings.HasPrefix(e.Name(), base+".tmp-") {
++				continue
++			}
++			if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {
++				os.Remove(filepath.Join(dir, e.Name()))
++			}
++		}
++	})
++}
++
++// atomicWriter stages a preferences save in a temp file and publishes it with a
++// rename on Close. It satisfies writeSyncCloser, so saveToStorage's
++// encode -> Sync -> Close sequence needs no change: Sync makes the bytes
++// durable, Close makes them visible.
++type atomicWriter struct {
++	file *os.File
++	tmp  string
++	path string
++
++	failed bool // a Write or Sync error: never publish a partial blob
++	closed bool // Close is idempotent — saveToStorage defers it, callers may repeat it
++	synced bool // durable since the last Write, so Close need not fsync again
++}
++
++func (w *atomicWriter) Write(b []byte) (int, error) {
++	n, err := w.file.Write(b)
++	w.synced = false
++	if err != nil {
++		w.failed = true
+ 	}
+-	return file, nil
++	return n, err
+ }
+ 
++func (w *atomicWriter) Sync() error {
++	err := w.file.Sync()
++	if err != nil {
++		w.failed = true
++	} else {
++		w.synced = true
++	}
++	return err
++}
++
++// Close publishes the blob, so unlike an ordinary Close its error means THE
++// SAVE DID NOT HAPPEN. saveToStorage used to discard that error with a bare
++// `defer writer.Close()`; the companion hunk in preferences.go promotes it to
++// the returned error, and the log line here is the backstop for anyone else.
++//
++// Every failure path removes the temp file and leaves the existing
++// preferences.json exactly as it was. A lost save is recoverable — the next
++// change writes again — where a published truncated blob is not.
++func (w *atomicWriter) Close() error {
++	if w.closed {
++		return nil
++	}
++	w.closed = true
++
++	var err error
++	if !w.synced { // an fsync here is a device barrier; don't pay for it twice
++		err = w.file.Sync()
++	}
++	if cerr := w.file.Close(); err == nil {
++		err = cerr
++	}
++	if w.failed && err == nil {
++		err = errPartialWrite
++	}
++	if err == nil {
++		err = os.Rename(w.tmp, w.path)
++	}
++	if err != nil {
++		os.Remove(w.tmp)
++		fyne.LogError("Preferences save not published; stored file left unchanged", err)
++		return err
++	}
++	return nil
++}
++
+ func (p *preferences) storageReaderForPath(path string) (io.ReadCloser, error) {
+ 	file, err := os.Open(path) // #nosec
+ 	if err != nil {
+--- a/app/preferences.go
++++ b/app/preferences.go
+@@ -73,16 +73,25 @@
+ 	return p.saveToStorage(storage)
+ }
+ 
+-func (p *preferences) saveToStorage(writer writeSyncCloser) error {
++func (p *preferences) saveToStorage(writer writeSyncCloser) (err error) {
+ 	p.prefLock.Lock()
+ 	p.savedRecently = true
+ 	p.prefLock.Unlock()
+ 	defer p.resetSavedRecently()
+ 
+-	defer writer.Close()
++	// BibleText patch: a Close error is a FAILED SAVE, not a cleanup nit. The
++	// non-web writer publishes the blob by renaming it into place inside Close
++	// (see preferences_nonweb.go), so `defer writer.Close()` was discarding the
++	// one error that says "your preferences never reached disk". The named
++	// return carries it to the caller, which already logs it; an encode or Sync
++	// failure still wins, being the earlier and more specific cause.
++	defer func() {
++		if cerr := writer.Close(); cerr != nil && err == nil {
++			err = cerr
++		}
++	}()
+ 	encode := json.NewEncoder(writer)
+ 
+-	var err error
+ 	p.InMemoryPreferences.ReadValues(func(values map[string]any) {
+ 		err = encode.Encode(&values)
+ 	})
