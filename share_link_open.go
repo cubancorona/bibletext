@@ -131,9 +131,18 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 		return
 	}
 	// Open it in the translation it was WRITTEN against (owner directive). A
-	// note is somebody's remark on particular wording, and the shared-link
-	// contract only ever names a public-domain id (web/bsb/webc), so the target
-	// is always a translation this app can show.
+	// note is somebody's remark on particular wording.
+	//
+	// THE TARGET IS NO LONGER ALWAYS OPENABLE. This used to read "the contract
+	// only ever names a public-domain id, so the target is always a translation
+	// this app can show", and that sentence was the stated reason nothing below
+	// had to cope. It stopped being true when /nkjv/ became a real link path: a
+	// reader without the NKJV gets a translation they cannot be switched to. What
+	// happens then is deliberate and is the whole point of the owner's "they
+	// should get a message" — the passage still opens, in whatever translation
+	// they have, and showLinkVersionUnavailable says so afterwards. The scripture
+	// is not the licensed part; leaving them staring at the wrong wording with no
+	// explanation is exactly the silent downgrade this replaced.
 	//
 	// This runs BEFORE the canon check below, and the order is load-bearing:
 	// ShareLinkURLWithNote forces version=webc for any deuterocanonical book, so
@@ -152,6 +161,12 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	if switchToLinkVersion(state, t) {
 		return
 	}
+	// Asked HERE but told at the very end: the answer only depends on t and the
+	// version we are in, neither of which the navigation below touches, and the
+	// message must go up AFTER state.refresh()/surfaceReading — on iOS and
+	// Android the native reading overlay floats above the Fyne canvas and
+	// surfaceReading would paint straight over a card raised before it.
+	unavailable := linkVersionUnavailable(state, t)
 
 	// NOW check the canon — against the translation the link named, if we
 	// switched to it. A link may still name a book this canon lacks (a webc
@@ -178,12 +193,53 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 		// NOT via pendingLinkVersion: that slot means "waiting for a TRANSLATION
 		// to load", and applyLoadedVersion consumes or discards whatever it finds
 		// parked there on the next version load. Leaving it empty keeps this park
-		// owned solely by the download that can actually satisfy it. Parking only
-		// when the slot is free likewise stops a seed park from stealing a target
-		// already waiting on a translation switch.
-		if state.seedOnly && state.fullPending && state.pendingLink == nil {
+		// owned solely by the download that can actually satisfy it.
+		//
+		// LAST TAP WINS. The guard here used to be `state.pendingLink == nil`, so
+		// the FIRST link kept the slot and a second tap did nothing at all
+		// (B_SEED_SECOND_LINK). A reader who taps A and then B wants B, and a park
+		// they cannot see is no reason to ignore them. A queue would be the wrong
+		// answer too: they tapped the second link precisely because the first had
+		// not opened.
+		//
+		// What that guard ALSO did, and what this keeps, is refuse to steal a
+		// target already waiting on a translation switch — hence the test on
+		// pendingLinkVersion rather than on the slot being empty. That target has a
+		// different consumer (applyLoadedVersion), and displacing it would strand a
+		// link nothing would ever apply.
+		if state.seedOnly && state.fullPending && state.pendingLinkVersion == "" {
+			replaced := state.pendingLink != nil
 			parked := t
 			state.pendingLink = &parked
+			// AND SAY SO. This branch used to return in silence, which is 62 of the
+			// 66 books on a fresh install: the reader taps a shared verse, the app
+			// opens, and nothing whatever happens. The "Shared in <translation>"
+			// line was even composed above and then thrown away here, so the one
+			// clue that the sender's wording differs from theirs went on the floor
+			// with everything else. Both go into the card instead.
+			heading := "Shared with you"
+			if unavailable != "" {
+				heading = "Shared in " + unavailable
+			}
+			showLinkNotice(state, heading, shareTargetReference(t), linkParkedMessage(state, replaced))
+		} else {
+			// NO PARK CAN HELP THIS ONE, so it needs the other sentence.
+			//
+			// The branch above is "it hasn't arrived yet"; this is "it isn't
+			// coming". The book is genuinely outside the canon the reader has —
+			// a deuterocanonical link when WEBC could not be loaded, or a link
+			// whose translation switch was declined — and no download in flight
+			// will change that, so promising one would be a lie.
+			//
+			// Without this the guard fell straight through to `return` and the
+			// tap did nothing whatever: no passage, no message, and on iOS no
+			// browser fallback either. It was the last silent state the
+			// enumeration in share_link_flow_test.go could still reach, and
+			// leaving it would have made the rest of this batch a half-measure —
+			// the reader cannot tell "the app ignored me" from "the app has
+			// nothing to show me", and both feel like the tap missed.
+			showLinkNotice(state, "Shared with you", shareTargetReference(t),
+				linkBookUnavailableMessage(state, t))
 		}
 		return
 	}
@@ -269,17 +325,131 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// beside the passage, the rest put the banner above the reading pane — so
 	// the modal arrival card (the pre-banner fallback) would only duplicate
 	// what is already on screen and cover the verses it points at.
+
+	// The passage is on screen; NOW say that it is not in the translation the
+	// sender used. Last, so the card sits over the passage it is talking about.
+	if unavailable != "" {
+		showLinkVersionUnavailable(state, unavailable)
+	}
+}
+
+// linkVersionUnavailable names the translation a link asked for when this reader
+// cannot be moved to it — "" when there is nothing to say. It is the question
+// switchToLinkVersion deliberately does not answer: that function reports
+// custody of the navigation, and every "no" it returns looks the same to the
+// caller.
+//
+// Only ONE of those noes deserves a message: a translation this app knows about
+// and this reader has not unlocked (today, the NKJV without a key — see
+// BibleVersion.canSelect). The others are all silent on purpose:
+//
+//   - an id we do not recognise at all: a link from a future BibleText, and
+//     "your app is too old" is not something we can say accurately. Degrading
+//     quietly is pinned by TestUnknownTranslationLinkStillOpens.
+//   - the translation we are already in, or one already loaded: nothing happened
+//     that a reader needs telling about.
+//   - a download in flight (versionLoading, or our own switch parked above):
+//     canSelect is true there, and switchVersionInteractive owns the reporting,
+//     including its own failure message.
+func linkVersionUnavailable(state *AppState, t ShareTarget) string {
+	if state == nil || t.VersionID == "" || t.VersionID == state.CurrentVersion {
+		return ""
+	}
+	v, ok := versionByID(t.VersionID)
+	if !ok || v.canSelect() {
+		return ""
+	}
+	return v.Name
+}
+
+// linkBookUnavailableMessage is what to tell a reader whose link names a book
+// their translation does not contain and no download in flight will supply.
+//
+// Pure, and separate from the rendering, for the reason linkVersionUnavailable
+// and linkParkedMessage are: the card needs a canvas and a host test has none,
+// so the WORDING lives where it can be asserted. That is not a stylistic
+// preference — the enumeration in share_link_flow_test.go decides whether a
+// state is a dead end by asking whether anything would be SAID, and it can only
+// ask a function. A message that exists solely inside a showLinkNotice call is
+// invisible to the proof, which is exactly the mistake that left this branch
+// looking unfixed after it had been fixed.
+// It answers "" when the book IS present, which makes it a question about the
+// state rather than a sentence generator — the same shape linkVersionUnavailable
+// has. Without that guard it returned a message for every link, the enumeration
+// read every state as "something was said", and the whole test went quietly
+// vacuous: 0 blocked out of 48, which is not a result anyone should have
+// believed.
+func linkBookUnavailableMessage(state *AppState, t ShareTarget) string {
+	if state == nil || t.Book == "" || state.Bible == nil {
+		return ""
+	}
+	if state.Bible.GetChaptersForBook(t.Book) > 0 {
+		return "" // the reader has this book; nothing to explain
+	}
+	return t.Book + " isn't in " + state.currentVersion().Name +
+		". Try another translation from the version picker — the deuterocanonical books " +
+		"are in the World English Bible (Catholic)."
+}
+
+// linkParkedMessage is what to tell a reader whose tapped link has been PARKED
+// rather than opened: which passage is waiting, and why it is waiting. It
+// returns "" when nothing is parked, so a caller may ask unconditionally.
+//
+// It is a pure function of the state for the same reason linkVersionUnavailable
+// is one: the card and the load-error view both need a canvas, and a host test
+// has none — so the WORDING is decided here, where it can be asserted, and the
+// rendering stays a thin call. (linkVersionUnavailable earned that shape by
+// being the only part of the silent-downgrade fix a test could see.)
+//
+// replaced says a previous park was displaced by this one. It is a parameter
+// rather than something read off the state because by the time this is called
+// the old target is already gone — the caller is the only one who still knows.
+func linkParkedMessage(state *AppState, replaced bool) string {
+	if state == nil || state.pendingLink == nil {
+		return ""
+	}
+	ref := shareTargetReference(*state.pendingLink)
+	switch {
+	case state.loadPhase == loadFailed:
+		// Deliberately does not promise WHEN. Nothing consumes this park until a
+		// Retry succeeds, and the reader is the one who taps Retry.
+		return ref + " is waiting. It will open as soon as the Bible loads."
+	case replaced:
+		return ref + " is waiting instead — this is the link that will open when the rest of the " +
+			"Bible finishes downloading. The one you tapped before it has been replaced."
+	default:
+		return ref + " isn't in the part of the Bible that has downloaded yet. The rest is still " +
+			"arriving, and this passage will open on its own as soon as it does."
+	}
 }
 
 // deliverShareLink marshals a link from a native callback onto the UI goroutine.
 // The iOS delegate callback is already on the main thread; the Android JNI one
 // is not, so everything goes through fyne.Do rather than assuming.
-func deliverShareLink(rawURL string) {
+// It returns whether the URL is one of OURS — which the caller reports straight
+// back to the OS.
+//
+// THE ANSWER IS AVAILABLE WITHOUT THE HOP, and that is the whole trick. The
+// handling has to marshal onto the Fyne UI goroutine, so the native side used to
+// return YES unconditionally and throw this answer away: iOS then believed the
+// app had handled links it refused — /web/john/ (a book index, matched by the
+// "/web/*" component of the association file), /web/psalm/23/, /web/john/three/
+// — and never offered Safari. The app foregrounded on whatever chapter it was
+// already showing, which reads as the tap having gone somewhere wrong.
+//
+// But "is this one of ours?" is answered by ParseShareLink, which is pure, cheap
+// and needs no UI thread. So it is asked HERE, synchronously, and only the
+// handling is dispatched. Invariant I2 in docs/NKJV_FLOW.md.
+func deliverShareLink(rawURL string) bool {
 	state := activeAIState // the app is single-window; this is the live state
 	if state == nil {
-		return
+		return false
+	}
+	if _, ok := ParseShareLink(rawURL); !ok {
+		return false // not ours: let the OS open it in the browser
 	}
 	fyne.Do(func() { HandleShareLink(state, rawURL) })
+	return true
 }
 
 // switchToLinkVersion moves the reader to the translation a shared link names,
@@ -300,28 +470,59 @@ func deliverShareLink(rawURL string) {
 // else (parking behind that one would let it apply our target to the wrong
 // translation).
 func switchToLinkVersion(state *AppState, t ShareTarget) bool {
-	if state == nil || t.VersionID == "" || t.VersionID == state.CurrentVersion {
+	want := t.VersionID
+	if state == nil || want == "" || want == state.CurrentVersion {
 		return false
 	}
 	if state.CurrentVersion == "" {
 		return false // we don't know what we're in; never start a download on a guess
 	}
-	v, ok := versionByID(t.VersionID)
+	// Two different noes, kept apart on purpose. An id we do not know is a link
+	// from a future BibleText: degrade quietly and open the passage where they
+	// are. A registered translation this reader has not unlocked is the case the
+	// owner asked to be told about — but the telling belongs to applyShareTarget
+	// (linkVersionUnavailable), after the passage is on screen, not to a helper
+	// whose job is deciding who navigates.
+	v, ok := versionByID(want)
 	if !ok || !v.canSelect() {
 		return false // nothing to switch to; open it in what the reader has
 	}
 	if state.versionLoading {
-		return false // another load owns the spinner; don't queue behind it
+		// PARK BEHIND IT. This used to return false — "another load owns the
+		// spinner; don't queue behind it" — and falling through was the whole of
+		// two blocked states. For a translation the reader CAN select,
+		// linkVersionUnavailable says nothing, so an /nkjv/ link tapped while any
+		// other download happened to be running opened the WEB with no message
+		// (B_SILENT_DOWNGRADE); and a deuterocanon link, whose book is in no
+		// 66-book canon, fell through to the canon check and did nothing at all
+		// (B_SILENT_NOTHING). Both looked to the reader like the tap missed.
+		//
+		// Nothing new is needed to make waiting safe: applyLoadedVersion's tail
+		// ALREADY consumes a parked target when the arriving id matches and drops
+		// it when it does not. That is exactly the rule we want here — the
+		// running load either IS the translation we want (in which case it is the
+		// fetch we would otherwise have started) or it is not (in which case the
+		// target is stale by the time it lands). So record the id and let that
+		// decide, rather than starting a second fetch or guessing now.
+		//
+		// The trade is the same one the doc comment above states for our own
+		// fetch: if the running load fails, applyLoadedVersion never runs and the
+		// target is dropped rather than applied. A failed download must not yank
+		// the reader somewhere.
+		parked := t
+		state.pendingLink = &parked
+		state.pendingLinkVersion = want
+		return true
 	}
-	_, inMem := state.loadedVersions[t.VersionID]
+	_, inMem := state.loadedVersions[want]
 	if inMem || v.isTesting() {
-		switchVersion(state, t.VersionID) // synchronous; fall through and apply
+		switchVersion(state, want) // synchronous; fall through and apply
 		return false
 	}
 	// A real fetch: park the target and let the load's apply tail resume it.
 	parked := t
 	state.pendingLink = &parked
-	state.pendingLinkVersion = t.VersionID
-	switchVersionInteractive(state, t.VersionID)
+	state.pendingLinkVersion = want
+	switchVersionInteractive(state, want)
 	return true
 }

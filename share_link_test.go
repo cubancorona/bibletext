@@ -114,9 +114,13 @@ func TestShareLinkURL(t *testing.T) {
 			want: "https://bibletext.co.uk/web/song-of-solomon/2/#v1"},
 		{name: "numbered book", version: "web", book: "1 Corinthians", chapter: 13, lo: 4, hi: 7,
 			want: "https://bibletext.co.uk/web/1-corinthians/13/#v4-7"},
-		// A licensed version must never appear in a public URL.
-		{name: "licensed version falls back to web", version: "nkjv", book: "John", chapter: 3, lo: 16,
-			want: "https://bibletext.co.uk/web/john/3/#v16"},
+		// A licensed translation names ITSELF. It used to fall back to /web/, on
+		// the rule that a licensed id must never appear in a public URL — but a
+		// licence covers the TEXT, not the name, and the fallback reopened the
+		// sender's own link in wording they were not reading. See
+		// TestNKJVShareLinkNamesNKJV.
+		{name: "licensed version names itself", version: "nkjv", book: "John", chapter: 3, lo: 16,
+			want: "https://bibletext.co.uk/nkjv/john/3/#v16"},
 		{name: "unknown version falls back to web", version: "zzz", book: "John", chapter: 3,
 			want: "https://bibletext.co.uk/web/john/3/"},
 		// Deuterocanon exists only in the Catholic canon, so the link must say so.
@@ -144,7 +148,7 @@ func TestShareLinkURL(t *testing.T) {
 // no spaces, no characters a messenger would mangle, and always a trailing
 // slash before any fragment.
 func TestShareLinkURLsAreAlwaysSafe(t *testing.T) {
-	safe := regexp.MustCompile(`^https://bibletext\.co\.uk/(web|webc|bsb)/[a-z0-9-]+/[0-9]+/(#v[0-9]+(-[0-9]+)?)?$`)
+	safe := regexp.MustCompile(`^https://bibletext\.co\.uk/(web|webc|bsb|nkjv)/[a-z0-9-]+/[0-9]+/(#v[0-9]+(-[0-9]+)?)?$`)
 	books := append(append([]string{}, NewBibleData().Books...), catholicBooks...)
 	for _, b := range books {
 		for _, v := range []string{"web", "webc", "bsb", "nkjv", ""} {

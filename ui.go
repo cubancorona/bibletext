@@ -169,6 +169,24 @@ func buildLoadErrorView(state *AppState) fyne.CanvasObject {
 		spacer(8),
 		wrappedParagraph(msg, 300),
 	)
+	// A LINK TAPPED ON THIS SCREEN IS BEING HELD, AND THE READER CANNOT TELL.
+	//
+	// HandleShareLink parks for any phase other than loadReady, including this
+	// one — and nothing consumes that park until a Retry SUCCEEDS. So a reader
+	// who taps a shared verse while this view is up gets no acknowledgement of
+	// any kind, and tapping again silently replaces what is held. Naming the
+	// passage here is the whole fix: it turns "the app ignored me" into "the app
+	// has it, and Retry is what opens it".
+	//
+	// Deliberately no promise of WHEN. The reader is the one who taps Retry, and
+	// the load may fail again.
+	if waiting := linkParkedMessage(state, false); waiting != "" {
+		note := widget.NewLabel(waiting)
+		note.Wrapping = fyne.TextWrapWord
+		note.Alignment = fyne.TextAlignCenter
+		col.Add(spacer(8))
+		col.Add(wrappedParagraph(note, 300))
+	}
 	// Surface the actual cause (timeout, rate-limit, DNS, decode error) so the failure
 	// is diagnosable rather than a generic guess.
 	if state.loadErr != nil {

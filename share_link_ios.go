@@ -36,7 +36,12 @@ package bibletext
 
 // Implemented in Go (share_link_export_apple.go, //export). It copies the
 // string immediately, so the transient UTF8String pointer is safe to pass.
-extern void bibleTextOpenedLink(char *url);
+//
+// Returns non-zero when the URL is one of our reader links. ParseShareLink runs
+// synchronously inside it, so this answer is real and both entry points below
+// hand it straight back to iOS — see deliverShareLink for why the handling can
+// still be asynchronous while the ANSWER is not.
+extern int bibleTextOpenedLink(char *url);
 
 // The class Fyne's mobile driver installs as the UIApplicationDelegate. It is
 // declared (not defined) here so the category below can extend it.
@@ -63,8 +68,13 @@ continueUserActivity:(NSUserActivity *)userActivity
     }
     // absoluteString keeps the fragment (#v16-18) — which is the whole point,
     // since the verse rides there and never reaches a server.
-    bibleTextOpenedLink((char *)url.absoluteString.UTF8String);
-    return YES;
+    //
+    // REPORT WHAT GO DECIDED. This returned YES unconditionally, so iOS believed
+    // the app had handled links it refused — /web/john/ (a book index, matched by
+    // the "/web/*" component of the association file), /web/psalm/23/,
+    // /web/john/three/ — and never fell back to Safari. The app just foregrounded
+    // on whatever chapter it was already showing.
+    return bibleTextOpenedLink((char *)url.absoluteString.UTF8String) ? YES : NO;
 }
 
 // Custom-scheme entry point. Unused today (no scheme is registered), but free.
@@ -74,8 +84,9 @@ continueUserActivity:(NSUserActivity *)userActivity
     if (url == nil) {
         return NO;
     }
-    bibleTextOpenedLink((char *)url.absoluteString.UTF8String);
-    return YES;
+    // Same rule as the Universal Link path above: an unrecognised URL is not
+    // ours to swallow.
+    return bibleTextOpenedLink((char *)url.absoluteString.UTF8String) ? YES : NO;
 }
 
 @end

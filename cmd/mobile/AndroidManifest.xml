@@ -53,7 +53,13 @@
 		     association file is: /privacy.html and /support.html are the URLs
 		     registered with App Store Connect (and linked from the app), and
 		     they must always open in the browser. Never widen this to the bare
-		     host. -->
+		     host.
+
+		     /nkjv/ is the odd one out and deliberately so: the app emits and
+		     opens those links, but the website publishes no pages under it, so
+		     an installed app is the ONLY thing that can honour them. Claiming
+		     it here is what stops an NKJV link bouncing out to a 404
+		     (share_link.go's linkPathVersionIDs is the matching list). -->
 		<intent-filter android:autoVerify="true">
 			<action android:name="android.intent.action.VIEW" />
 			<category android:name="android.intent.category.DEFAULT" />
@@ -61,6 +67,7 @@
 			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/web/" />
 			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/bsb/" />
 			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/webc/" />
+			<data android:scheme="https" android:host="bibletext.co.uk" android:pathPrefix="/nkjv/" />
 		</intent-filter>
 	</activity>
 

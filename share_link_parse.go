@@ -20,7 +20,13 @@ import (
 
 // ShareTarget is a passage named by a shared link.
 type ShareTarget struct {
-	VersionID string // always one of the published ids: web, bsb, webc
+	// VersionID is one of the ids a link path may name (linkPathVersionIDs).
+	// That is NO LONGER the same as the ids the web reader publishes, and it is
+	// no longer a promise this reader can open it: /nkjv/ is a real link path and
+	// a reader without the NKJV cannot be switched to it. Code downstream must
+	// therefore handle "the link names a translation we do not have" rather than
+	// assume it away — see applyShareTarget.
+	VersionID string
 	Book      string // canonical book name, e.g. "1 Corinthians"
 	Chapter   int    // >= 1
 	VerseLo   int    // 0 when the link names no verse (a chapter link)
@@ -80,7 +86,11 @@ func ParseShareLink(raw string) (ShareTarget, bool) {
 		return ShareTarget{}, false
 	}
 	version, slug, chapterStr := parts[0], parts[1], parts[2]
-	if !webVersionIDs[version] {
+	// A STRICT allow-list, still: /privacy.html, /support.html and the landing
+	// page are ours to leave in the browser, and they are only left there because
+	// an unrecognised first segment is refused outright. Widening this to "any
+	// three-segment path" would swallow them.
+	if !linkPathVersionIDs[version] {
 		return ShareTarget{}, false
 	}
 	book, ok := BookFromSlug(slug)

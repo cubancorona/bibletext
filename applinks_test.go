@@ -71,9 +71,50 @@ func TestAppleAppSiteAssociationScope(t *testing.T) {
 	}
 	for _, mustClaim := range []string{
 		"/web/john/3/", "/bsb/psalms/23/", "/webc/1-maccabees/2/",
+		// /nkjv/ matters MORE than the other three, not less: the site publishes
+		// no pages there, so an unclaimed NKJV link does not degrade to a web
+		// page — it degrades to a 404.
+		"/nkjv/john/3/",
 	} {
 		if !resolves(mustClaim) {
 			t.Errorf("%s is NOT claimed — shared links to it would not open the app", mustClaim)
+		}
+	}
+
+	// Every id a link path may name must be claimed, or the app emits links it
+	// cannot receive. Derived from the grammar itself so a fifth id cannot be
+	// added to share_link.go and forgotten here.
+	for id := range linkPathVersionIDs {
+		if !resolves("/" + id + "/john/3/") {
+			t.Errorf("/%s/ is a link path id but is not claimed in the association file", id)
+		}
+	}
+}
+
+// TestAndroidManifestClaimsEveryLinkPath is the same tripwire for Android. The
+// two files are edited by hand, separately, and an id added to one and not the
+// other produces a link that opens the app on one platform and 404s on the
+// other — with nothing failing at build time to say so.
+func TestAndroidManifestClaimsEveryLinkPath(t *testing.T) {
+	raw, err := os.ReadFile("cmd/mobile/AndroidManifest.xml")
+	if err != nil {
+		t.Fatalf("the custom manifest must exist — fyne's generated one claims no links: %v", err)
+	}
+	manifest := string(raw)
+	for id := range linkPathVersionIDs {
+		prefix := `android:pathPrefix="/` + id + `/"`
+		if !strings.Contains(manifest, prefix) {
+			t.Errorf("%s is missing — an emitted /%s/ link would open the browser, not the app", prefix, id)
+		}
+	}
+	// The allow-list must stay an allow-list: a bare-host claim would swallow
+	// /privacy.html and /support.html, the URLs App Store Connect and the Play
+	// listing point at.
+	for _, forbidden := range []string{
+		`android:pathPrefix="/"`, `android:pathPattern=".*"`, `android:pathPrefix=""`,
+	} {
+		if strings.Contains(manifest, forbidden) {
+			t.Errorf("%s claims the whole host — privacy and support must stay in the browser", forbidden)
 		}
 	}
 }
