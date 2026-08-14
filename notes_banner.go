@@ -24,13 +24,26 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// nativeNoteSticker is the platform answer behind a seam, the same arrangement
+// reporterLayout uses: the HOST for these tests is darwin, where the answer is
+// true, so a compile-time constant would make every banner test unrunnable on
+// the only machine that runs them. The banner still ships to Windows, Linux and
+// Android, so it still has to be testable.
+var nativeNoteSticker = func() bool { return nativeNoteStickerOnPlatform }
+
 // buildNoteBanner returns the banner for the current chapter's note, the chip
 // for a minimized one, or nil when there is nothing to show. The caller slots
 // it above the reading pane.
 func buildNoteBanner(state *AppState) fyne.CanvasObject {
 	if state == nil || !notesFeatureOn(state) || state.ActiveNote == "" {
-		if state != nil {
-		}
+		return nil
+	}
+	// Where the pane draws the note in the text itself, the banner would be the
+	// SAME note a second time, in a worse place. macOS earned its way out of
+	// here by growing the bubble (owner: the banner "doesn't move with the text,
+	// doesn't have a tail, and the hidden note placeholder is frozen at the top"
+	// — all three are what living outside the text costs).
+	if nativeNoteSticker() {
 		return nil
 	}
 	pal := state.pal()
