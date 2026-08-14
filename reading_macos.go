@@ -17,10 +17,18 @@ package bibletext
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework AppKit -framework Foundation
+#cgo LDFLAGS: -framework AppKit -framework Foundation -framework QuartzCore
 
 #import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>   // CAShapeLayer, for the note bubble's outline
 #import <stdlib.h>
+
+// The note sticker, defined far below beside the rest of its machinery. Declared
+// up here because bibleTextMacApplyHTML has to install the band right after it
+// sets the text, and bibleTextMacScrollTV has to keep the sticker in view; both
+// come first.
+static void btMacRefreshNote(void);
+static CGFloat btMacNoteTopY(void);
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
 // an AI study action; it copies both strings immediately.
@@ -31,6 +39,12 @@ extern void bibleTextStudyMenuTapped(char *action, char *text);
 extern void bibleTextReadAlongUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
 extern void bibleTextReadAlongFollowTapped(void);
+// The note sticker's three verbs (ai_menu_darwin.go, //go:build darwin — so the
+// same exports already serve iOS's bubble; macOS calls them from the same kind
+// of buttons for the same reasons).
+extern void bibleTextNoteHidden(void);
+extern void bibleTextNoteDeleted(void);
+extern void bibleTextNoteRestored(void);
 
 // Selection-menu AI gate, mirroring the Settings → Assistant choice ("None" turns
 // AI off). Set from Go (btMacSetAIEnabled) when the reading host is built and
@@ -172,6 +186,11 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 - (void)hbFollowTapped:(id)sender {
     bibleTextReadAlongFollowTapped();
 }
+// Targets of the note sticker's buttons — same arrangement as the follow pill,
+// and the same three verbs the iOS bubble posts.
+- (void)btNoteHide:(id)sender    { bibleTextNoteHidden(); }
+- (void)btNoteDelete:(id)sender  { bibleTextNoteDeleted(); }
+- (void)btNoteRestore:(id)sender { bibleTextNoteRestored(); }
 
 @end
 
@@ -490,6 +509,15 @@ static void bibleTextMacScrollTV(void) {
         NSRect rect = [lm boundingRectForGlyphRange:glyphs
                                     inTextContainer:gTextView.textContainer];
         CGFloat y = rect.origin.y + gTextView.textContainerInset.height - 16;
+        // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band
+        // ABOVE the paragraph holding the highlighted verse, so scrolling to the
+        // verse pushes the message off the top — and the message is why the link
+        // was sent. Taken as a MINIMUM rather than a substitution, so it can only
+        // ever scroll further up: nothing can put the note out of view. (The iOS
+        // twin does the same in its scroll path; without it here the bubble was
+        // drawn correctly and simply never seen.)
+        CGFloat noteY = btMacNoteTopY();
+        if (noteY >= 0 && noteY - 12 < y) y = noteY - 12;
         if (y < 0) y = 0;
         [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
         [gScroll reflectScrolledClipView:gScroll.contentView];
@@ -632,6 +660,11 @@ static BOOL bibleTextMacApplyHTML(NSData *data) {
         if (value != nil) { gMacHighlightRange = r; *stop = YES; }
     }];
     [gTextView.textStorage setAttributedString:as];
+    // AFTER the text and after the paragraphSpacingBefore-zeroing pass above —
+    // the note's band is a spacing-before on the anchor paragraph, so installing
+    // it any earlier would be wiped by that pass, and the anchor is a VERSE,
+    // which needs the text present to resolve to a character location.
+    btMacRefreshNote();
     bibleTextMacScrollTV();
     return YES;
 }
@@ -700,6 +733,462 @@ void bibleTextMacSetReadingMeasure(double m) {
     });
 }
 
+// ─── The note sticker ────────────────────────────────────────────────────────
+//
+// The AppKit twin of the iOS bubble (reading_ios.go). Ported because the Fyne
+// BANNER that stood in for it here could not do the three things that make a
+// note read as somebody talking about a passage: it sat above the pane so it
+// never moved with the text, it was a rectangle with no tail pointing at
+// anything, and the collapsed chip was frozen at the top of the pane whatever
+// verse the note belonged to. All three are the same defect — the banner lives
+// outside the text, and the note belongs inside it.
+//
+// The trick is the same one iOS uses: the sticker is a subview of the TEXT
+// VIEW, whose frame is in content coordinates, so it scrolls with the passage
+// for nothing. The band it sits in is reserved by giving the anchor paragraph a
+// paragraphSpacingBefore, so the sticker is part of the layout rather than
+// floated over it and no verse is ever covered.
+//
+// AppKit differences from the iOS original, all of which bit during the port:
+//   · NSTextView IS flipped, so y-down arithmetic carries over unchanged — but
+//     NSBezierPath's arc angles are DEGREES and are measured counter-clockwise
+//     in the view's own (flipped) space, which inverts the sense of `clockwise`
+//     relative to UIBezierPath. The path below is wound to match the iOS one
+//     visually, not textually.
+//   · textContainerInset is an NSSize, so its height applies to the top AND the
+//     bottom. Reserving the first-paragraph band there costs an equal strip of
+//     empty space after the last verse; harmless, and the alternative (a
+//     spacing-before that collapses at the top of a container) is what the iOS
+//     code had to work around too.
+//   · NSTextField/NSButton replace UILabel/UIButton, and a plain NSView needs
+//     wantsLayer before a CAShapeLayer will draw into it.
+// The sticker's container is FLIPPED. AppKit views are y-up by default, and the
+// whole bubble — the bezier outline, the label frames, the button frames — is
+// ported from UIKit, which is y-down. Drawn in a stock NSView the port came out
+// upside down in every particular: the speech tail pointed UP out of the card's
+// shoulder instead of down at the passage, and "Note from Friend" sat BELOW the
+// message it attributes. One override fixes all of it at the root, which is why
+// this is a flipped container rather than a pile of h-minus-y arithmetic.
+@interface BTFlippedView : NSView
+@end
+@implementation BTFlippedView
+- (BOOL)isFlipped { return YES; }
+
+// THE CURSOR. The sticker is a subview of an NSTextView, and a text view claims
+// the I-beam across its whole area — so the pointer stayed an I-beam over the
+// card and, worse, over its buttons and the collapsed chip, which read as "this
+// is text you can select" when it is in fact a thing you press.
+//
+// Cursor rects are the AppKit answer and they resolve innermost-first, so a rect
+// on this view wins over the text view's. The card itself takes the arrow (it is
+// a message, not selectable text — the note is deliberately not part of the text
+// model), and anything pressable takes the pointing hand.
+- (void)resetCursorRects {
+    [self addCursorRect:self.bounds cursor:[NSCursor arrowCursor]];
+    for (NSView *sub in self.subviews) {
+        if ([sub isKindOfClass:[NSButton class]]) {
+            [self addCursorRect:sub.frame cursor:[NSCursor pointingHandCursor]];
+        }
+    }
+}
+@end
+
+static NSView       *gMacNoteView = nil;
+static CAShapeLayer *gMacNoteCard = nil;
+static NSString     *gMacNoteText = nil;
+static BOOL          gMacNoteMinimized = NO;
+static NSInteger     gMacNoteAnchorVerse = 0;
+static CGFloat       gMacNoteBandH = 0;
+static CGFloat       gMacNoteTopInset = 0;
+static CGFloat gMacNoteBg[3]     = {0.99, 0.98, 0.97};
+static CGFloat gMacNoteFg[3]     = {0.15, 0.13, 0.11};
+static CGFloat gMacNoteMuted[3]  = {0.42, 0.39, 0.34};
+static CGFloat gMacNoteAccent[3] = {0.18, 0.30, 0.53};
+static CGFloat gMacNoteBorder[3] = {0.74, 0.70, 0.62};
+
+static NSColor *btMacNoteColor(CGFloat c[3]) {
+    return [NSColor colorWithSRGBRed:c[0] green:c[1] blue:c[2] alpha:1.0];
+}
+static NSFont *btMacNoteBodyFont(void) { return [NSFont systemFontOfSize:13]; }
+static NSFont *btMacNoteWhoFont(void)  { return [NSFont systemFontOfSize:10 weight:NSFontWeightSemibold]; }
+
+static const CGFloat kMacNotePad = 12, kMacNoteGap = 10, kMacNoteBtn = 24;
+static const CGFloat kMacNoteTail = 9, kMacNoteTailW = 18, kMacNoteTailX = 24;
+// Breathing room ABOVE the sticker as well as below it. The first cut reserved
+// the band and put the bubble flush at its top, which left the card's edge
+// touching the last line of the preceding paragraph while a full gap sat
+// underneath — visibly lopsided, and the collapsed chip (much shorter) read as
+// though it were sitting ON that line. The band is now gap + sticker + gap.
+//
+// The TOP gap is measured, not fixed, and it is a whole line rather than a
+// tidy-looking 10pt. Reason, established by measuring the rendered pixels
+// against what the layout manager reports: at the reporter layout's leading the
+// preceding line's INK overhangs the bottom of its own line box by most of a
+// line. Place the card 10pt below that box — which every rect the layout manager
+// will sell you says is clear — and it still lands across the bottom half of the
+// text above it. A line's height of clearance is what actually clears the
+// glyphs, and reading it off the font keeps it right at all three text sizes
+// instead of at whichever one it was tuned against.
+static CGFloat btMacNoteTopGap(NSTextStorage *ts, NSRange para) {
+    const CGFloat floorGap = 10;
+    if (ts == nil || para.length < 3) return floorGap;
+    // A character near the END of the paragraph: its start is the verse number,
+    // which is a superscript in a smaller font, and measuring that was what made
+    // an earlier attempt at this compute a clearance of zero.
+    NSFont *f = [ts attribute:NSFontAttributeName atIndex:NSMaxRange(para) - 2 effectiveRange:NULL];
+    if (f == nil) return floorGap;
+    CGFloat natural = ceil(f.ascender - f.descender + f.leading);
+    return natural > floorGap ? natural : floorGap;
+}
+
+static void btMacInstallNote(void);
+static void btMacLayoutNote(void);
+
+// The bubble's whole outline — card and speech tail — as ONE continuous path,
+// for the reason spelled out on the iOS twin: drawn as two shapes, the card's
+// bottom stroke runs straight across the mouth of the tail and no z-ordering
+// removes it, because the card must be on top for its fill to hide the tail's
+// base. Walking the bottom edge and detouring into the tail leaves no crossing
+// line to hide.
+static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
+    const CGFloat r = 10;     // matches the card's corner radius
+    const CGFloat in = 0.5;   // half the 1pt stroke, kept inside bounds
+    CGFloat left = in, top = in, right = w - in, bottom = h - in;
+    CGFloat tx0 = kMacNoteTailX, tx1 = kMacNoteTailX + kMacNoteTailW;
+    CGFloat apexX = kMacNoteTailX + kMacNoteTailW / 2, apexY = bottom + kMacNoteTail - 1;
+
+    NSBezierPath *p = [NSBezierPath bezierPath];
+    [p moveToPoint:NSMakePoint(left + r, top)];
+    [p lineToPoint:NSMakePoint(right - r, top)];
+    [p appendBezierPathWithArcWithCenter:NSMakePoint(right - r, top + r) radius:r
+                             startAngle:270 endAngle:360 clockwise:NO];
+    [p lineToPoint:NSMakePoint(right, bottom - r)];
+    [p appendBezierPathWithArcWithCenter:NSMakePoint(right - r, bottom - r) radius:r
+                             startAngle:0 endAngle:90 clockwise:NO];
+    [p lineToPoint:NSMakePoint(tx1, bottom)];
+    [p lineToPoint:NSMakePoint(apexX, apexY)];   // the tail's point, aimed at the passage
+    [p lineToPoint:NSMakePoint(tx0, bottom)];
+    [p lineToPoint:NSMakePoint(left + r, bottom)];
+    [p appendBezierPathWithArcWithCenter:NSMakePoint(left + r, bottom - r) radius:r
+                             startAngle:90 endAngle:180 clockwise:NO];
+    [p lineToPoint:NSMakePoint(left, top + r)];
+    [p appendBezierPathWithArcWithCenter:NSMakePoint(left + r, top + r) radius:r
+                             startAngle:180 endAngle:270 clockwise:NO];
+    [p closePath];
+    return p;
+}
+
+// The height of the CARD at this width. The view is this plus the tail, and the
+// reserved band is the view plus the gap. Measured BEFORE the band is reserved,
+// because the band's height IS this number.
+static CGFloat btMacNoteHeightForWidth(CGFloat w) {
+    if (gMacNoteText == nil) return 0;
+    if (gMacNoteMinimized) return kMacNoteBtn;   // the collapsed chip has no tail
+    CGFloat inner = w - 2 * kMacNotePad;
+    if (inner < 40) inner = 40;
+    NSRect r = [gMacNoteText boundingRectWithSize:NSMakeSize(inner, CGFLOAT_MAX)
+                                          options:(NSStringDrawingUsesLineFragmentOrigin |
+                                                   NSStringDrawingUsesFontLeading)
+                                       attributes:@{NSFontAttributeName: btMacNoteBodyFont()}];
+    return kMacNotePad + 13 + 4 + ceil(r.size.height) + kMacNotePad;
+}
+
+// The character range the note is anchored to. The note carries its OWN verse
+// rather than borrowing the highlight's, because minimizing CLEARS the
+// highlight — and a sticker that loses its anchor jumps to the top of the
+// chapter, which is precisely the "frozen at the top" the banner did always.
+static NSRange btMacNoteAnchorRange(NSTextStorage *ts, NSUInteger len) {
+    if (gMacNoteAnchorVerse > 0 && ts != nil) {
+        NSUInteger loc = btMacLocForVerse(ts, gMacNoteAnchorVerse);
+        if (loc != NSNotFound && loc < len) return NSMakeRange(loc, 0);
+    }
+    if (gMacHighlightRange.location != NSNotFound && NSMaxRange(gMacHighlightRange) <= len) {
+        return gMacHighlightRange;
+    }
+    return NSMakeRange(0, 0);
+}
+
+// Apply (or clear) the first-paragraph reservation, which rides the container
+// inset because paragraphSpacingBefore collapses at the top of a container.
+static void btMacApplyNoteInset(void) {
+    if (gTextView == nil) return;
+    NSSize ins = gTextView.textContainerInset;
+    CGFloat wanted = 14 + gMacNoteTopInset;   // 14 is the pane's own top inset
+    if (fabs(ins.height - wanted) > 0.5) {
+        gTextView.textContainerInset = NSMakeSize(ins.width, wanted);
+    }
+}
+
+// Reserve the band in the text. Runs AFTER the text is in the view, because the
+// anchor is a VERSE and the verse index is what turns that into a character
+// location — and after the pass that zeroes paragraphSpacingBefore across the
+// string (bibleTextMacApplyHTML), or the reservation would be wiped on every
+// render.
+static void btMacInstallNote(void) {
+    gMacNoteBandH = 0;
+    gMacNoteTopInset = 0;
+    if (gTextView == nil) return;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (gMacNoteText == nil || ts.length == 0) { btMacApplyNoteInset(); return; }
+
+    CGFloat w = gTextView.textContainer.size.width - 2 * gTextView.textContainer.lineFragmentPadding;
+    CGFloat h = btMacNoteHeightForWidth(w);
+    if (h <= 0) { btMacApplyNoteInset(); return; }
+    // The paragraph first: the top gap is read off ITS font, so the band cannot
+    // be sized before we know which paragraph it belongs to.
+    NSRange anchor = btMacNoteAnchorRange(ts, ts.length);
+    NSRange para = [ts.string paragraphRangeForRange:anchor];
+    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) {
+        btMacApplyNoteInset();
+        return;
+    }
+    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (gMacNoteMinimized ? 0 : kMacNoteTail) + kMacNoteGap;
+    if (para.location == 0) {
+        gMacNoteTopInset = gMacNoteBandH;
+        btMacApplyNoteInset();
+        return;
+    }
+    btMacApplyNoteInset();   // clears any inset left by a previous chapter
+
+    NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
+                            effectiveRange:NULL];
+    NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
+    ps.paragraphSpacingBefore = gMacNoteBandH;
+    [ts beginEditing];
+    [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
+    [ts endEditing];
+}
+
+// Build (or rebuild) the sticker's subviews for the current note and palette.
+static void btMacEnsureNoteView(void) {
+    if (gMacNoteView) { [gMacNoteView removeFromSuperview]; gMacNoteView = nil; }
+    gMacNoteCard = nil;
+    if (gMacNoteText == nil || gTextView == nil) return;
+
+    NSView *box = [[BTFlippedView alloc] initWithFrame:NSZeroRect];
+    box.wantsLayer = YES;                      // no layer, no CAShapeLayer
+    // A flipped view's layer needs telling too, or the CAShapeLayer path (which
+    // is authored y-down, like the rest of the port) draws mirrored inside it.
+    box.layer.geometryFlipped = YES;
+    box.layer.backgroundColor = NSColor.clearColor.CGColor;
+
+    if (gMacNoteMinimized) {
+        // The collapsed marker is a plain pill — no tail, exactly as on iOS and
+        // on the web.
+        box.layer.backgroundColor = btMacNoteColor(gMacNoteBg).CGColor;
+        box.layer.borderColor = btMacNoteColor(gMacNoteBorder).CGColor;
+        box.layer.borderWidth = 1;
+        box.layer.cornerRadius = kMacNoteBtn / 2;
+
+        NSButton *chip = [NSButton buttonWithTitle:@"Note" target:gTextView action:@selector(btNoteRestore:)];
+        chip.bezelStyle = NSBezelStyleInline;
+        chip.bordered = NO;
+        chip.font = btMacNoteWhoFont();
+        chip.contentTintColor = btMacNoteColor(gMacNoteMuted);
+        chip.tag = 901;
+        [box addSubview:chip];
+    } else {
+        gMacNoteCard = [CAShapeLayer layer];
+        gMacNoteCard.fillColor = btMacNoteColor(gMacNoteBg).CGColor;
+        gMacNoteCard.strokeColor = btMacNoteColor(gMacNoteBorder).CGColor;
+        gMacNoteCard.lineWidth = 1;
+        [box.layer addSublayer:gMacNoteCard];
+
+        NSTextField *who = [NSTextField labelWithString:@"Note from Friend"]; // a person, never the app
+        who.font = btMacNoteWhoFont();
+        who.textColor = btMacNoteColor(gMacNoteMuted);
+        who.tag = 902;
+        [box addSubview:who];
+
+        // TEXT, never markup — the note is somebody else's words and nothing
+        // here parses them.
+        NSTextField *body = [NSTextField labelWithString:gMacNoteText];
+        body.font = btMacNoteBodyFont();
+        body.textColor = btMacNoteColor(gMacNoteFg);
+        body.lineBreakMode = NSLineBreakByWordWrapping;
+        body.maximumNumberOfLines = 0;
+        body.tag = 903;
+        [box addSubview:body];
+
+        // Minimize first, delete second: the destructive one is never what the
+        // pointer reaches by accident.
+        NSButton *hide = [NSButton buttonWithTitle:@"–" target:gTextView action:@selector(btNoteHide:)];
+        hide.bordered = NO;
+        hide.font = [NSFont systemFontOfSize:17 weight:NSFontWeightMedium];
+        hide.contentTintColor = btMacNoteColor(gMacNoteMuted);
+        hide.tag = 904;
+        [box addSubview:hide];
+
+        NSButton *del = [NSButton buttonWithTitle:@"✕" target:gTextView action:@selector(btNoteDelete:)];
+        del.bordered = NO;
+        del.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+        del.contentTintColor = btMacNoteColor(gMacNoteMuted);
+        del.tag = 905;
+        [box addSubview:del];
+    }
+
+    // A subview of the TEXT VIEW — the scroll view's document view — so this
+    // frame is in content coordinates and the sticker scrolls with the passage
+    // for free. Layout is the only thing that has to move it.
+    [gTextView addSubview:box];
+    gMacNoteView = box;
+}
+
+// btMacNoteStickerY is where the sticker's top goes, in the text view's content
+// coordinates. ONE function, used by both the layout and the scroll target, so
+// the two cannot disagree about where the note is.
+//
+// It does not simply trust the anchor paragraph's line-fragment origin, which is
+// what the iOS twin does and what the first cut here did. The reporter layout
+// sets a line height tighter than this serif face's natural leading, so the
+// PRECEDING line's glyphs overflow the bottom of their fragment box — the card
+// was placed correctly with respect to the fragments and still landed across the
+// bottom half of the line above it. Asking the layout manager for the glyphs'
+// actual bounding rect is the measurement that matches what a reader sees.
+static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
+                                 NSTextStorage *ts, NSRange para, NSRange g) {
+    CGFloat inset = gTextView.textContainerInset.height;
+    if (gMacNoteTopInset > 0) return 14 + btMacNoteTopGap(ts, para);   // the container-inset reservation
+
+    // HANG THE CARD OFF THE PASSAGE, not off the band's top edge.
+    //
+    // The obvious placement — the anchor paragraph's line-fragment origin plus a
+    // gap, which is what the iOS twin uses — put the card across the bottom half
+    // of the line ABOVE it here, twice, for two different reasons I chased in
+    // turn (descender overflow, then the fragment origin itself). Both were
+    // guesses about how TextKit distributes paragraphSpacingBefore inside the
+    // fragment rect, and the fragment is simply not a reliable way to ask.
+    //
+    // The USED rect of the paragraph's first glyph is: it is where the reader
+    // sees the passage start. Hanging the sticker a fixed gap above that puts
+    // its tail a fixed distance from the words it points at — which is the thing
+    // that should be constant — and lets the leftover band space fall above the
+    // card, where the previous line already is.
+    // The USED rect, not the fragment rect and not boundingRectForGlyphRange —
+    // both of those report the FRAGMENT, which is precisely the box the reserved
+    // spacing lives inside, so asking either where the text starts returns where
+    // the BAND starts and the card lands a band's height too high. The used rect
+    // is the sub-box the glyphs occupy.
+    NSRect used = [lm lineFragmentUsedRectForGlyphAtIndex:g.location effectiveRange:NULL];
+    CGFloat textTop = used.origin.y + inset;
+    CGFloat stickerH = btMacNoteHeightForWidth(tc.size.width - 2 * tc.lineFragmentPadding)
+                     + (gMacNoteMinimized ? 0 : kMacNoteTail);
+    return textTop - kMacNoteGap - stickerH;
+}
+
+// Put the sticker in the band the text reserved. Runs after every layout.
+static void btMacLayoutNote(void) {
+    if (gMacNoteView == nil || gTextView == nil || gMacNoteText == nil) return;
+    NSLayoutManager *lm = gTextView.layoutManager;
+    NSTextContainer *tc = gTextView.textContainer;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (lm == nil || tc == nil || ts == nil) return;
+
+    NSRange anchor = btMacNoteAnchorRange(ts, ts.length);
+    NSRange para = [ts.string paragraphRangeForRange:anchor];
+    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) return;
+    NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+    if (g.length == 0) return;
+
+    CGFloat pad = tc.lineFragmentPadding;
+    CGFloat w = tc.size.width - 2 * pad;
+    CGFloat h = btMacNoteHeightForWidth(w);
+    CGFloat x = gTextView.textContainerInset.width + pad;
+
+    // RECONCILE THE BAND. The height is measured from the container width, and
+    // on the first render after a link opens that width is not yet final — the
+    // band comes out taller than the bubble and leaves a gap. If what we
+    // reserved no longer matches what we need, reserve again and let the layout
+    // settle; the flag stops that becoming a loop.
+    static BOOL reconciling = NO;
+    CGFloat want = btMacNoteTopGap(ts, para) + h + (gMacNoteMinimized ? 0 : kMacNoteTail) + kMacNoteGap;
+    if (!reconciling && fabs(want - gMacNoteBandH) > 1.0) {
+        reconciling = YES;
+        btMacInstallNote();
+        reconciling = NO;
+    }
+
+    CGFloat y = btMacNoteStickerY(lm, tc, ts, para, g);
+
+    if (gMacNoteMinimized) {
+        gMacNoteView.frame = NSMakeRect(x, y, 76, kMacNoteBtn);
+        NSView *chip = [gMacNoteView viewWithTag:901];
+        chip.frame = gMacNoteView.bounds;
+        // Cursor rects are cached against the frames they were built from, so a
+        // moved sticker keeps pointing-hand areas where it USED to be until this
+        // is called. Every layout ends here.
+        [gMacNoteView.window invalidateCursorRectsForView:gMacNoteView];
+        return;
+    }
+
+    gMacNoteView.frame = NSMakeRect(x, y, w, h + kMacNoteTail);
+    gMacNoteCard.frame = gMacNoteView.bounds;
+    gMacNoteCard.path = btMacNoteBubblePath(w, h).CGPath;
+
+    NSView *who  = [gMacNoteView viewWithTag:902];
+    NSView *body = [gMacNoteView viewWithTag:903];
+    NSView *hide = [gMacNoteView viewWithTag:904];
+    NSView *del  = [gMacNoteView viewWithTag:905];
+    who.frame  = NSMakeRect(kMacNotePad, kMacNotePad - 2, w - 2 * kMacNotePad - 2 * kMacNoteBtn, 13);
+    body.frame = NSMakeRect(kMacNotePad, kMacNotePad + 13 + 4,
+                            w - 2 * kMacNotePad, h - kMacNotePad - 13 - 4 - kMacNotePad);
+    hide.frame = NSMakeRect(w - 2 * kMacNoteBtn - 4, 3, kMacNoteBtn, kMacNoteBtn);
+    del.frame  = NSMakeRect(w - kMacNoteBtn - 4, 3, kMacNoteBtn, kMacNoteBtn);
+    [gMacNoteView.window invalidateCursorRectsForView:gMacNoteView];
+}
+
+// btMacNoteTopY is where the TOP of the sticker sits in the text view's content
+// coordinates, or -1 when there is no note to worry about.
+//
+// Deliberately the same arithmetic btMacLayoutNote uses to place it: the scroll
+// target and the sticker must not be able to disagree about where the note is.
+static CGFloat btMacNoteTopY(void) {
+    if (gMacNoteText == nil || gTextView == nil) return -1;
+    NSLayoutManager *lm = gTextView.layoutManager;
+    NSTextContainer *tc = gTextView.textContainer;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (lm == nil || tc == nil || ts == nil || ts.length == 0) return -1;
+    NSRange anchor = btMacNoteAnchorRange(ts, ts.length);
+    NSRange para = [ts.string paragraphRangeForRange:anchor];
+    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) return -1;
+    NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+    if (g.length == 0) return -1;
+    return btMacNoteStickerY(lm, tc, ts, para, g);
+}
+
+// btMacRefreshNote is the one entry point: reserve the band, build the sticker,
+// place it. Every caller that changes the text, the note or the geometry ends
+// here, so the three can never disagree about where the note is.
+static void btMacRefreshNote(void) {
+    if (gTextView == nil) return;
+    btMacInstallNote();
+    btMacEnsureNoteView();
+    [gTextView.layoutManager ensureLayoutForTextContainer:gTextView.textContainer];
+    btMacLayoutNote();
+}
+
+// The note the pane should draw, pushed from Go on every chapter render — so a
+// light/dark flip restyles it and a navigation replaces it.
+void bibleTextMacSetNote(const char *text, int minimized, int anchorVerse,
+                         double bgR, double bgG, double bgB,
+                         double fgR, double fgG, double fgB,
+                         double muR, double muG, double muB,
+                         double acR, double acG, double acB,
+                         double boR, double boG, double boB) {
+    NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gMacNoteText = t;
+        gMacNoteMinimized = minimized ? YES : NO;
+        gMacNoteAnchorVerse = anchorVerse;
+        gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
+        gMacNoteFg[0]=fgR; gMacNoteFg[1]=fgG; gMacNoteFg[2]=fgB;
+        gMacNoteMuted[0]=muR; gMacNoteMuted[1]=muG; gMacNoteMuted[2]=muB;
+        gMacNoteAccent[0]=acR; gMacNoteAccent[1]=acG; gMacNoteAccent[2]=acB;
+        gMacNoteBorder[0]=boR; gMacNoteBorder[1]=boG; gMacNoteBorder[2]=boB;
+        btMacRefreshNote();
+    });
+}
+
 void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
     dispatch_async(dispatch_get_main_queue(), ^{
         bibleTextMacEnsureTV();
@@ -712,6 +1201,12 @@ void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
         gScroll.frame = r;
         btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
         btMacLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
+        // The sticker's width and its reserved band both come from the container
+        // width, so a resize has to redo both — not just move the view. Without
+        // this a window drag left the bubble at its old width with the band still
+        // sized for it, which is the gap the reconcile in btMacLayoutNote exists
+        // to close.
+        if (changed) btMacRefreshNote();
         // SetHTML may have scrolled to the highlighted verse / restore target
         // while the overlay was still at its initial width; once the real frame
         // lands the text rewraps, so re-assert that position. Only when a
@@ -981,6 +1476,10 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		on = 1
 	}
 	C.btMacSetNotesEnabled(on)
+	// Before the SetHTML below, so the sticker's globals are already current when
+	// the apply block installs the band. Both hop through the main queue, which
+	// is FIFO, so this ordering holds.
+	pushNoteToPane(state)
 
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
@@ -1051,6 +1550,32 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 
 func armReadingRestore(verse int, delta, frac float64) {
 	C.bibleTextMacArmRestore(C.int(verse), C.double(delta), C.double(frac))
+}
+
+// pushNoteToPane hands the native sticker its text, its collapsed state and the
+// live palette — the macOS twin of the iOS function of the same name, called on
+// every chapter render so a light/dark flip restyles it and a navigation
+// replaces it.
+func pushNoteToPane(state *AppState) {
+	pal := state.pal()
+	cText := C.CString(state.ActiveNote)
+	defer C.free(unsafe.Pointer(cText))
+	min := C.int(0)
+	if state.NoteMinimized {
+		min = 1
+	}
+	f := func(c color.NRGBA) (C.double, C.double, C.double) {
+		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
+	}
+	bgR, bgG, bgB := f(pal.SurfaceAlt)
+	fgR, fgG, fgB := f(pal.Text)
+	muR, muG, muB := f(pal.TextMuted)
+	acR, acG, acB := f(pal.Accent)
+	boR, boG, boB := f(pal.Border)
+	// The note's OWN verse, not the highlight's — minimizing clears the
+	// highlight, and a sticker without an anchor parks at the top of the chapter.
+	C.bibleTextMacSetNote(cText, min, C.int(state.NoteVerseLo),
+		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 
 // readAlongHighlight tints the verse being narrated (0 clears) and follow-scrolls it

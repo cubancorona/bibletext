@@ -11,9 +11,22 @@ import (
 
 func bannerState(t *testing.T) *AppState {
 	t.Helper()
+	pinBannerPlatform(t)
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "Psalms", 23
 	return st
+}
+
+// pinBannerPlatform makes the tests ask the question they mean. The banner is
+// what Windows, Linux and Android show; the host running these tests is darwin,
+// where the pane draws its own in-text sticker and buildNoteBanner correctly
+// returns nil. Without pinning the seam every assertion below would be testing
+// the suppression, not the banner.
+func pinBannerPlatform(t *testing.T) {
+	t.Helper()
+	orig := nativeNoteSticker
+	nativeNoteSticker = func() bool { return false }
+	t.Cleanup(func() { nativeNoteSticker = orig })
 }
 
 func TestNoteBannerShowsTheNote(t *testing.T) {
@@ -144,6 +157,7 @@ func TestBarePassageLinkKeepsTheStoredNote(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
+	pinBannerPlatform(t) // this one builds its own state, so it pins its own seam
 
 	bd := &BibleData{
 		Books: []string{"Philemon"},
