@@ -85,7 +85,7 @@ func chapterTextScrollArea(state *AppState, verses []Verse, pal palette) fyne.Ca
 	}
 
 	paneObjects := []fyne.CanvasObject{child}
-	if chapter != nil && state.HasHighlightedVerse {
+	if chapter != nil && state.hasMark() {
 		band := canvas.NewRectangle(highlightBandColor(state.pal()))
 		band.CornerRadius = 6
 		band.Hide() // shown by readingColumn.Layout once the geometry is real

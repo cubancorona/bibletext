@@ -166,9 +166,9 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 	if st.CurrentBook != "Psalms" || st.CurrentChapter != 23 {
 		t.Errorf("did not navigate: %s %d", st.CurrentBook, st.CurrentChapter)
 	}
-	if !st.HasHighlightedVerse || st.HighlightedVerse != 1 || st.HighlightedVerseEnd != 4 {
+	if !st.hlOn() || st.hlLo() != 1 || st.hlHi() != 4 {
 		t.Errorf("expected 1-4 highlighted, got has=%v %d-%d",
-			st.HasHighlightedVerse, st.HighlightedVerse, st.HighlightedVerseEnd)
+			st.hlOn(), st.hlLo(), st.hlHi())
 	}
 }
 
@@ -180,8 +180,8 @@ func TestOpenNoteWithNoVerseDoesNotHighlight(t *testing.T) {
 
 	st := psalm23State()
 	openNote(st, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "n"})
-	if st.HasHighlightedVerse {
-		t.Errorf("a chapter-wide note highlighted verse %d", st.HighlightedVerse)
+	if st.hlOn() {
+		t.Errorf("a chapter-wide note highlighted verse %d", st.hlLo())
 	}
 }
 

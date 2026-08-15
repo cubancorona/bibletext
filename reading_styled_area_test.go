@@ -132,10 +132,7 @@ func TestStyledAreaHighlightScrollsOnce(t *testing.T) {
 	defer resetStyledWiring()
 
 	st := longPsalmState()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = "Psalms"
-	st.HighlightedChapter = 119
-	st.HighlightedVerse = 20
+	st.setHL(hlSearch, "Psalms", 119, 20, 0)
 	area := styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
 	w := test.NewWindow(area)
 	defer w.Close()

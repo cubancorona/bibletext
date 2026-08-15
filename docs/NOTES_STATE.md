@@ -35,7 +35,7 @@ the reader cannot tell a note they never had from one the app lost.
 
 Both halves have been broken in shipped code. The first half is defect 1
 (`ORPHAN_HL` below) and is **still live today** by a route nobody has walked —
-see `X4` and `X10`. The second half was defects 2 and 4; those were fixed on
+see `X4`. The second half was defects 2 and 4; those were fixed on
 2026-08-15, and the fix made `X12` reachable in their place.
 
 ## The shape of the thing
@@ -490,7 +490,7 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
 - **N1 — No mark without a meaning, and no mark destroyed that had one.** A
   highlight on screen must have something on screen that explains it; and a mark
   put there by somebody else's action must survive a verb aimed at the note.
-  *Violated by `ORPHAN_HL`, `X4`, `X10`.*
+  *Violated by `ORPHAN_HL` and `X4`. `X10` was the third and is fixed: see S1.*
 - **N2 — A verb reaches what the reader aimed it at.** Hide, Show and Delete must
   address the note whose text is on screen, and no other. *Violated by `X1`,
   `X2`, `X5`.*
@@ -522,13 +522,13 @@ the probe produced it from the shipping code.
 | ~~X2~~ | ~~Hide is a silent no-op~~ | **FIXED** `31bc97630` | 0 | — |
 | **X12** | **Delete the arriving note, the followed one takes its place** | **yes** | 4 | The message the reader binned is replaced by a stranger's, unannounced |
 | **X3** | Arriving note evicted by its own save | **yes** | pinned separately | The note is shown and was never stored |
-| **X4** | Notes-off orphans the highlight | **yes** | 11 + 1 | Defect 1, through the control whose job is to make notes stop |
+| **X4** | Notes-off orphans the highlight | **yes** | 19 + 1 | Defect 1, through the control whose job is to make notes stop |
 | **X5** | Hide/Show asymmetry | **yes** | 4 | Show appears to work and does not |
 | **X6** | Delete substitutes a different note | **yes** | 8 | A stranger's message appears where the deleted one was |
 | **X7** | More than one note on a passage is invisible | **yes** | 48 | The only way to the second note is to delete the first |
 | **X8** | Bare link strips a note's highlight | **yes** | pinned separately | An expanded note pointing at nothing |
-| **X9** | Chapter-level note leaves a ghost location | **yes** | pinned separately | Nothing today; a trap for the next writer |
-| **X10** | Hide and Delete destroy a mark they do not own | **yes** | 28 + 3 | The search result the reader was holding vanishes when they tidy a note away |
+| ~~X9~~ | ~~Chapter-level note leaves a ghost location~~ | **FIXED** S1 — unrepresentable | 0 | — |
+| ~~X10~~ | ~~Hide and Delete destroy a mark they do not own~~ | **FIXED** S1 | 0 | The search result the reader was holding vanishes when they tidy a note away |
 | **X11** | The highlight keeps the previous translation's numbering | **yes** | 3 | The wrong verse lit, or none, beside a note that WAS renumbered |
 
 "Cells" is how many combinations of the enumerated variables reach it. `X7`'s 48
@@ -676,7 +676,29 @@ nothing.
 `note="look at 16" highlight=false`, with `HighlightedBook="John"`,
 `HighlightedChapter=3`, `HighlightedVerse=16` still set — which is also `X9`.
 
-### X9 — Chapter-level note leaves a ghost location
+### X9 and X10 — FIXED by S1 (`mark.go`), 2026-08-15
+
+X10 was the subsystem's second-largest defect: Hide and Delete cleared the
+highlight unconditionally, so tidying away a note also put out the search result
+the reader was holding. It could not be fixed by a guard, because the guard had
+nothing true to test — the app did not record which of five callers had set the
+highlight, so ownership was GUESSED from "the lit verse equals the note's verse",
+true by coincidence whenever anything else landed on the same verse.
+
+`Mark` records the origin at the moment the mark is placed, so `clearMarkFromNote`
+is an equality. X9 went with it for free: absence of a mark IS `hlNone`, so there
+are no location fields left behind to outlive a false flag. That state is now
+unwritable rather than merely unwritten.
+
+One thing this exposed, recorded because the pattern is the subject of this
+document: making the clear conditional immediately orphaned four cells where a
+note-bearing link had lit its own verses as `hlLinkSpan`, which Delete then
+walked past. The resolution is semantic — `hlLinkSpan` means a link's range with
+NO note; when a link carries a note, the note is why the verse is lit and the
+note owns the mark. The enumeration caught it in the same run that confirmed X10
+dead.
+
+### X9, as it was — chapter-level note leaves a ghost location
 
 **How it is reached.** Two routes, both above under `GHOST_LOC`.
 
@@ -958,10 +980,19 @@ Three things are **not** fixed by either and must not be assumed away:
   translation) = **20 states**. Asserts N1 and N7, on Romans 14 because that is
   where the numbering actually diverges.
 
-Together they find **110 violations**, and every one is attributed to a named
-defect: `X4`×12, `X5`×4, `X6`×8, `X7`×48, `X10`×31, `X11`×3, `X12`×4.
+Together they find **87 violations**, and every one is attributed to a named
+defect: `X4`×20, `X5`×4, `X6`×8, `X7`×48, `X11`×3, `X12`×4.
 
-> **Re-measured 2026-08-15 against `31bc97630`.** This document first recorded
+> **Re-measured twice on 2026-08-15.** Second pass, after S1 (`mark.go`): 87.
+> `X10`×31 is struck — the largest defect in the subsystem after `X7` — because
+> ownership of a highlight is RECORDED now rather than inferred from a matching
+> verse number, so Hide and Delete clear only what the note placed. `X9` went
+> with it, structurally: absence of a mark IS `hlNone`, so there are no location
+> fields left to outlive the flag. `X4` grew 12→20, not by regressing but
+> because the refined orphan check stopped excusing eight arrival cells that a
+> foreign highlight had been masking.
+>
+> First pass, against `31bc97630`: This document first recorded
 > 124 violations across eight defects. `X1`×8 and `X2`×10 are **fixed** and
 > struck; `X12`×4 is new. The harness enforces both halves of that — a defect
 > covering nothing fails as FIXED, so these totals cannot quietly go stale

@@ -470,9 +470,14 @@ func chapterRenderFingerprint(state *AppState) string {
 	if redLetterEnabled() {
 		red = 1
 	}
+	// The SPAN, not the origin. Two marks on the same verses render identically
+	// whoever placed them — what differs between a note's mark and a search's is
+	// the note bubble, and the note is folded in separately below. Adding the
+	// origin here would cost a full HTML rebuild and NSAttributedString re-import
+	// for a change no pixel reflects.
 	hl := "0"
-	if state.HasHighlightedVerse {
-		hl = fmt.Sprintf("%s:%d:%d-%d", state.HighlightedBook, state.HighlightedChapter, state.HighlightedVerse, state.HighlightedVerseEnd)
+	if sp, ok := state.markSpan(); ok {
+		hl = fmt.Sprintf("%s:%d:%d-%d", sp.Book, sp.Chapter, sp.Lo, sp.Hi)
 	}
 	// state.Bible's pointer identity is part of the fingerprint: a background
 	// data swap (the Gospels-seed → full download, or the stale-epoch refresh)
@@ -823,12 +828,12 @@ func newChapterText(state *AppState, verses []Verse) *chapterText {
 		state:         state,
 		textSize:      theme.TextSize() * float32(readingTextScale()),
 	}
-	if state.HasHighlightedVerse {
+	if sp, ok := state.markSpan(); ok {
 		c.hasHighlight = true
-		c.highlightRef = VerseRef{Book: state.HighlightedBook, Chapter: state.HighlightedChapter, Verse: state.HighlightedVerse}
-		c.highlightEnd = state.HighlightedVerse
-		if state.HighlightedVerseEnd > c.highlightEnd {
-			c.highlightEnd = state.HighlightedVerseEnd
+		c.highlightRef = VerseRef{Book: sp.Book, Chapter: sp.Chapter, Verse: sp.Lo}
+		c.highlightEnd = sp.Lo
+		if sp.Hi > c.highlightEnd {
+			c.highlightEnd = sp.Hi
 		}
 	}
 	if state.window != nil {

@@ -117,8 +117,8 @@ func TestParkedSeedLinkOpensWhenTheFullBibleLands(t *testing.T) {
 	if st.CurrentBook != "Psalms" || st.CurrentChapter != 23 {
 		t.Errorf("after the download the reader is on %s %d, want Psalms 23", st.CurrentBook, st.CurrentChapter)
 	}
-	if !st.HasHighlightedVerse || st.HighlightedVerse != 1 {
-		t.Errorf("the shared verse is not highlighted (has=%v verse=%d)", st.HasHighlightedVerse, st.HighlightedVerse)
+	if !st.hlOn() || st.hlLo() != 1 {
+		t.Errorf("the shared verse is not highlighted (has=%v verse=%d)", st.hlOn(), st.hlLo())
 	}
 	if st.ActiveNote != "for you" {
 		t.Errorf("the sender's note did not survive the wait: %q", st.ActiveNote)

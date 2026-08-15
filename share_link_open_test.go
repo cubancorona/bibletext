@@ -32,9 +32,9 @@ func TestHandleShareLinkNavigatesAndHighlights(t *testing.T) {
 	if st.CurrentBook != "John" || st.CurrentChapter != 3 {
 		t.Errorf("landed on %s %d, want John 3", st.CurrentBook, st.CurrentChapter)
 	}
-	if !st.HasHighlightedVerse || st.HighlightedVerse != 16 || st.HighlightedVerseEnd != 18 {
+	if !st.hlOn() || st.hlLo() != 16 || st.hlHi() != 18 {
 		t.Errorf("highlight = %v %d-%d, want 16-18",
-			st.HasHighlightedVerse, st.HighlightedVerse, st.HighlightedVerseEnd)
+			st.hlOn(), st.hlLo(), st.hlHi())
 	}
 }
 
@@ -80,9 +80,9 @@ func TestShareLinkArrivingDuringLoadIsParkedNotDropped(t *testing.T) {
 	// The data lands.
 	st.loadPhase = loadReady
 	consumePendingLink(st)
-	if st.CurrentBook != "John" || st.CurrentChapter != 3 || st.HighlightedVerse != 16 {
+	if st.CurrentBook != "John" || st.CurrentChapter != 3 || st.hlLo() != 16 {
 		t.Errorf("after loading, want John 3:16; got %s %d:%d",
-			st.CurrentBook, st.CurrentChapter, st.HighlightedVerse)
+			st.CurrentBook, st.CurrentChapter, st.hlLo())
 	}
 	if st.pendingLink != nil {
 		t.Error("the parked link must be consumed exactly once")

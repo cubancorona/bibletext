@@ -176,7 +176,7 @@ func TestBuildSearchResultsViewKeywordStates(t *testing.T) {
 		t.Fatalf("tap navigated to %s %d, want %s %d",
 			state.CurrentBook, state.CurrentChapter, tapped.BookName, tapped.Chapter)
 	}
-	if !state.HasHighlightedVerse || state.HighlightedVerse != tapped.Verse {
+	if !state.hlOn() || state.hlLo() != tapped.Verse {
 		t.Fatalf("expected verse %d highlighted after the tap", tapped.Verse)
 	}
 	if !state.CanReturnToSearchResults {

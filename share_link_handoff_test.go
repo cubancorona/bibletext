@@ -19,7 +19,7 @@ func TestNoteLinkIsDeclinedWhenNotesAreOff(t *testing.T) {
 
 	st := psalm23State()
 	st.loadPhase = loadReady
-	st.HasHighlightedVerse = false
+	st.clearMark()
 
 	url := "https://bibletext.co.uk/bsb/psalms/23/#v1-4&n=" + EncodeNote("handed to the browser")
 	if !HandleShareLink(st, url) {
@@ -27,7 +27,7 @@ func TestNoteLinkIsDeclinedWhenNotesAreOff(t *testing.T) {
 	}
 	// The fixture clamps chapters, so the highlight — which only a real
 	// navigation sets — is the signal that the app did NOT take the link.
-	if st.HasHighlightedVerse {
+	if st.hlOn() {
 		t.Error("the app navigated instead of declining the link")
 	}
 	if st.ActiveNote != "" {
@@ -47,12 +47,12 @@ func TestPlainLinkStillOpensInTheAppWhenNotesAreOff(t *testing.T) {
 
 	st := psalm23State()
 	st.loadPhase = loadReady
-	st.HasHighlightedVerse = false
+	st.clearMark()
 
 	if !HandleShareLink(st, "https://bibletext.co.uk/bsb/psalms/23/#v1-4") {
 		t.Fatal("link not handled")
 	}
-	if !st.HasHighlightedVerse {
+	if !st.hlOn() {
 		t.Error("a plain shared link should have opened in the app, not been handed away")
 	}
 }
@@ -119,7 +119,7 @@ func TestOfferBranches(t *testing.T) {
 		if st.ActiveNote != "" {
 			t.Errorf("the note survived: %q", st.ActiveNote)
 		}
-		if !st.HasHighlightedVerse {
+		if !st.hlOn() {
 			t.Error("the passage did not open")
 		}
 		if n := len(readNotes(fyne.CurrentApp().Preferences())); n != 0 {

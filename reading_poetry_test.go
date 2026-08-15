@@ -181,10 +181,7 @@ func TestChapterTextPoetryHighlightBand(t *testing.T) {
 	defer app.Quit()
 
 	st := psalm23State()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = "Psalms"
-	st.HighlightedChapter = 23
-	st.HighlightedVerse = 2
+	st.setHL(hlSearch, "Psalms", 23, 2, 0)
 	c := newChapterText(st, st.Bible.GetChapter("Psalms", 23))
 	c.rewrap(10000)
 
@@ -234,10 +231,7 @@ func TestBuildChapterHTMLPoetryHighlightSpan(t *testing.T) {
 	defer app.Quit()
 
 	st := psalm23State()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = "Psalms"
-	st.HighlightedChapter = 23
-	st.HighlightedVerse = 2
+	st.setHL(hlSearch, "Psalms", 23, 2, 0)
 
 	html := buildChapterHTML(st, st.Bible.GetChapter("Psalms", 23))
 	want := `<span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span>`
@@ -260,10 +254,7 @@ func TestHighlightDoesNotChangeWeight(t *testing.T) {
 	defer app.Quit()
 
 	st := psalm23State()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = "Psalms"
-	st.HighlightedChapter = 23
-	st.HighlightedVerse = 2
+	st.setHL(hlSearch, "Psalms", 23, 2, 0)
 
 	// Only the .hl rule: sup.v legitimately carries a weight for the verse
 	// number, and that never changes as a highlight comes and goes.

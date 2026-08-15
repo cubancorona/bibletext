@@ -25,6 +25,7 @@ package bibletext
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,4 +54,48 @@ func devAutoOpenSheet(state *AppState) {
 			}
 		})
 	})
+}
+
+// devAutoSwitchVersion switches translation shortly after launch, so the LIVE
+// switch path can be exercised in a simulator — which cannot tap the version
+// picker. TEMPORARY investigation aid for the owner's device report that
+// switching translation keeps a note's highlight and loses the note itself.
+//
+//	SIMCTL_CHILD_BIBLETEXT_DEV_SWITCH=web xcrun simctl launch <udid> uk.co.bibletext
+func devAutoSwitchVersion(state *AppState) {
+	id := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_SWITCH")))
+	if id == "" || state == nil {
+		return
+	}
+	time.AfterFunc(6*time.Second, func() {
+		fyne.Do(func() {
+			switchVersion(state, id)
+		})
+	})
+}
+
+// devNoteDebug reports the live note state for on-screen diagnosis. TEMPORARY:
+// added while chasing the owner's report that switching translation to the WEB
+// (but not to the BSB) loses a note while keeping its highlight. It shows what
+// the app BELIEVES, so a screenshot separates "the state is wrong" from "the
+// state is right and the pane did not redraw".
+func devNoteDebug(state *AppState) string {
+	if state == nil {
+		return ""
+	}
+	if state.ActiveNote == "" {
+		return "note:none hl:" + state.mark.Origin.String()
+	}
+	return "note:" + strconv.Itoa(len(state.ActiveNote)) +
+		" in:" + state.NoteVersionID +
+		" v:" + strconv.Itoa(state.NoteVerseLo) +
+		" min:" + boolMark(state.NoteMinimized) +
+		" hl:" + state.mark.Origin.String()
+}
+
+func boolMark(b bool) string {
+	if b {
+		return "y"
+	}
+	return "n"
 }

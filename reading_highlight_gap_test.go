@@ -36,9 +36,7 @@ func romans8State(t *testing.T) *AppState {
 	bd.Books = []string{"Romans"}
 	bd.PrepareSearchIndex()
 	st := &AppState{Bible: bd, CurrentBook: "Romans", CurrentChapter: 8}
-	st.HighlightedBook, st.HighlightedChapter = "Romans", 8
-	st.HighlightedVerse, st.HighlightedVerseEnd = 1, 4
-	st.HasHighlightedVerse = true
+	st.setHL(hlSearch, "Romans", 8, 1, 4)
 	return st
 }
 
@@ -98,7 +96,7 @@ func TestNoHighlightMeansNoBand(t *testing.T) {
 	defer app.Quit()
 
 	st := romans8State(t)
-	st.HasHighlightedVerse = false
+	st.clearMark()
 
 	// Markup only, not the stylesheet: the iOS dialect always DEFINES .hl in its
 	// <style> block, so searching the whole document for "background-color" finds

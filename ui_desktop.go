@@ -97,7 +97,7 @@ func installShortcuts(state *AppState) {
 		if ev.Name != fyne.KeyEscape {
 			return
 		}
-		if !state.IsSearching && !state.HasHighlightedVerse {
+		if !state.IsSearching && !state.hasMark() {
 			return
 		}
 		if state.setSearchText != nil {

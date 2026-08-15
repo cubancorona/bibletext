@@ -95,10 +95,7 @@ func TestChapterTextHighlightBand(t *testing.T) {
 
 	// Single verse highlighted (the middle one, so y > 0).
 	mid := verses[len(verses)/2]
-	state.HasHighlightedVerse = true
-	state.HighlightedBook = mid.BookName
-	state.HighlightedChapter = mid.Chapter
-	state.HighlightedVerse = mid.Verse
+	state.setHL(hlSearch, mid.BookName, mid.Chapter, mid.Verse, 0)
 	c = newChapterText(state, verses)
 	c.rewrap(300) // narrow → the verse spans multiple wrapped lines
 	y, h, ok := c.highlightBand()
@@ -117,13 +114,12 @@ func TestChapterTextHighlightBand(t *testing.T) {
 	}
 
 	// A range (verse..verse+1) must produce a band at least as tall.
-	state.HighlightedVerseEnd = mid.Verse + 1
+	state.setHL(hlSearch, mid.BookName, mid.Chapter, mid.Verse, mid.Verse+1)
 	c2 := newChapterText(state, verses)
 	c2.rewrap(300)
 	_, h2, ok2 := c2.highlightBand()
 	if !ok2 || h2 < h-0.5 {
 		t.Errorf("range band (h=%v) must be at least the single-verse band (h=%v)", h2, h)
 	}
-	state.HasHighlightedVerse = false
-	state.HighlightedVerseEnd = 0
+	state.clearMark()
 }

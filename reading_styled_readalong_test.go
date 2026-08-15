@@ -191,11 +191,8 @@ func TestStyledReadAlongFollowBeatsSearchHighlight(t *testing.T) {
 	defer resetStyledWiring()
 
 	st := longPsalmState()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = st.CurrentBook
-	st.HighlightedChapter = st.CurrentChapter
-	st.HighlightedVerse = 25
-	defer func() { st.HasHighlightedVerse = false }()
+	st.setHL(hlSearch, st.CurrentBook, st.CurrentChapter, 25, 0)
+	defer func() { st.clearMark() }()
 	armControllerReadAlong(t, st)
 
 	w := buildStyledAreaWindow(t, st)

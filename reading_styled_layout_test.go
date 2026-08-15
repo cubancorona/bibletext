@@ -227,10 +227,7 @@ func TestStyledLayoutHighlightBand(t *testing.T) {
 	defer app.Quit()
 
 	st := psalm23State()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = "Psalms"
-	st.HighlightedChapter = 23
-	st.HighlightedVerse = 2
+	st.setHL(hlSearch, "Psalms", 23, 2, 0)
 	lay := layoutChapter(st, st.Bible.GetChapter("Psalms", 23), testLayoutParams, fixedMeasure)
 
 	if lay.HighlightStart != 2 || lay.HighlightEnd != 3 {

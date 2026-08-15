@@ -26,8 +26,8 @@ func TestSelectBookResetsToFirstAvailableChapter(t *testing.T) {
 		CurrentChapter:           99,
 		IsSearching:              true,
 		CanReturnToSearchResults: true,
-		HasHighlightedVerse:      true,
 	}
+	state.setHL(hlSearch, "Genesis", 3, 1, 0)
 
 	selectBook(state, "Genesis", true)
 
@@ -40,7 +40,7 @@ func TestSelectBookResetsToFirstAvailableChapter(t *testing.T) {
 	if state.CanReturnToSearchResults {
 		t.Fatal("expected CanReturnToSearchResults=false after selecting book")
 	}
-	if state.HasHighlightedVerse {
+	if state.hlOn() {
 		t.Fatal("expected highlight to be cleared")
 	}
 }
@@ -115,7 +115,7 @@ func TestExecuteSearchJumpsToExactVerseReference(t *testing.T) {
 	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
 		t.Fatalf("expected navigation to John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
 	}
-	if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
+	if !state.hlOn() || state.hlLo() != 16 {
 		t.Fatalf("expected verse 16 highlighted, got %+v", state)
 	}
 }
@@ -130,7 +130,7 @@ func TestSearchResultsOnlyListsWithoutNavigating(t *testing.T) {
 	if !state.IsSearching {
 		t.Fatal("expected live search to stay in results mode")
 	}
-	if state.HasHighlightedVerse {
+	if state.hlOn() {
 		t.Fatal("live search must not navigate to / highlight a verse")
 	}
 	if len(state.SearchResults) == 0 {
@@ -174,7 +174,7 @@ func TestOpenSearchResultSetsHighlightAndReturnContext(t *testing.T) {
 	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
 		t.Fatalf("expected navigation to John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
 	}
-	if !state.HasHighlightedVerse {
+	if !state.hlOn() {
 		t.Fatal("expected highlighted verse set")
 	}
 	if state.IsSearching {
@@ -348,8 +348,8 @@ func TestGoToReferenceResolvesVerseAndChapter(t *testing.T) {
 	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
 		t.Fatalf("expected John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
 	}
-	if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
-		t.Fatalf("expected verse 16 highlighted, got verse=%d hv=%v", state.HighlightedVerse, state.HasHighlightedVerse)
+	if !state.hlOn() || state.hlLo() != 16 {
+		t.Fatalf("expected verse 16 highlighted, got verse=%d hv=%v", state.hlLo(), state.hlOn())
 	}
 
 	if !goToReference(state, "Psalms 23") {
@@ -358,7 +358,7 @@ func TestGoToReferenceResolvesVerseAndChapter(t *testing.T) {
 	if state.CurrentBook != "Psalms" || state.CurrentChapter != 23 {
 		t.Fatalf("expected Psalms 23, got %s %d", state.CurrentBook, state.CurrentChapter)
 	}
-	if state.HasHighlightedVerse {
+	if state.hlOn() {
 		t.Fatal("a chapter-only reference should not highlight a verse")
 	}
 
@@ -399,20 +399,20 @@ func TestGoToChapterWithVerse(t *testing.T) {
 	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
 		t.Fatalf("expected John 3, got %s %d", state.CurrentBook, state.CurrentChapter)
 	}
-	if state.HasHighlightedVerse {
+	if state.hlOn() {
 		t.Fatal("empty verse box should not highlight a verse")
 	}
 
 	// A valid verse -> highlight it.
 	if state.Bible.GetVerse("John", 3, 16) != nil {
 		goToChapterWithVerse(state, "John", 3, "16")
-		if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
-			t.Fatalf("expected verse 16 highlighted, got hv=%v v=%d", state.HasHighlightedVerse, state.HighlightedVerse)
+		if !state.hlOn() || state.hlLo() != 16 {
+			t.Fatalf("expected verse 16 highlighted, got hv=%v v=%d", state.hlOn(), state.hlLo())
 		}
 		// A range -> highlight the whole span 16..18.
 		goToChapterWithVerse(state, "John", 3, "16-18")
-		if state.HighlightedVerse != 16 || state.HighlightedVerseEnd != 18 {
-			t.Fatalf("expected range 16-18, got start=%d end=%d", state.HighlightedVerse, state.HighlightedVerseEnd)
+		if state.hlLo() != 16 || state.hlHi() != 18 {
+			t.Fatalf("expected range 16-18, got start=%d end=%d", state.hlLo(), state.hlHi())
 		}
 		hl := func(n int) bool { return isVerseHighlighted(state, Verse{BookName: "John", Chapter: 3, Verse: n}) }
 		if !hl(16) || !hl(17) || !hl(18) {
@@ -425,7 +425,7 @@ func TestGoToChapterWithVerse(t *testing.T) {
 
 	// An out-of-range verse -> falls back to chapter top (no highlight).
 	goToChapterWithVerse(state, "John", 3, "9999")
-	if state.HasHighlightedVerse {
+	if state.hlOn() {
 		t.Fatal("out-of-range verse should fall back to chapter top, not highlight")
 	}
 }

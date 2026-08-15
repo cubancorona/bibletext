@@ -304,10 +304,12 @@ func applyNoteForCurrentChapter(state *AppState) {
 		// (owner-reported, switching back to NKJV). A highlight that arrived for
 		// any OTHER reason — a search result, a shared link's verse — is not the
 		// note's to clear, which is what the guard below tests for.
-		if state.ActiveNote != "" && state.NoteVerseLo > 0 &&
-			state.HasHighlightedVerse && state.HighlightedVerse == state.NoteVerseLo {
-			clearHighlightedVerse(state)
-		}
+		// Ownership is RECORDED now, so this is an equality rather than the
+		// guess it used to be: "the lit verse equals the note's verse, so the
+		// note must have lit it" was true by coincidence whenever a search
+		// result or a Go-to landed on the same verse, and that collateral is
+		// X10. clearMarkFromNote drops the mark only if hlNote set it.
+		state.clearMarkFromNote()
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
@@ -323,17 +325,14 @@ func applyNoteForCurrentChapter(state *AppState) {
 	}
 	// Never clobber a highlight that is already on this chapter for another
 	// reason — arriving by a search result, say. That highlight is what the
-	// reader just asked for; the note's is only a default.
-	if state.HasHighlightedVerse && state.HighlightedBook == state.CurrentBook &&
-		state.HighlightedChapter == state.CurrentChapter {
+	// reader just asked for; the note's is only a default. The origin makes
+	// "another reason" exact: a mark the NOTE itself placed on an earlier pass
+	// is not another reason, and re-asserting it is harmless.
+	if _, here := state.markHere(); here && !state.mark.fromNote() {
 		return
 	}
 	if n.VerseLo > 0 {
-		state.HighlightedBook = n.Book
-		state.HighlightedChapter = n.Chapter
-		state.HighlightedVerse = n.VerseLo
-		state.HighlightedVerseEnd = n.VerseHi
-		state.HasHighlightedVerse = true
+		state.setMark(hlNote, n.span())
 	}
 }
 
@@ -392,7 +391,10 @@ func hideCurrentNote(state *AppState) {
 	}
 	state.NoteMinimized = true
 	setNoteMinimized(appPrefs(), state.noteStoreVersion(), state.CurrentBook, state.CurrentChapter, true)
-	clearHighlightedVerse(state)
+	// Only the note's own mark. Hiding a note used to put out whatever was lit,
+	// so a reader who arrived on a search result and then collapsed a note on
+	// the same chapter lost the result they had come for (X10).
+	state.clearMarkFromNote()
 }
 
 func restoreCurrentNote(state *AppState) {
@@ -402,11 +404,7 @@ func restoreCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	setNoteMinimized(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter, false)
 	if n, ok := loadNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter); ok && n.VerseLo > 0 {
-		state.HighlightedBook = n.Book
-		state.HighlightedChapter = n.Chapter
-		state.HighlightedVerse = n.VerseLo
-		state.HighlightedVerseEnd = n.VerseHi
-		state.HasHighlightedVerse = true
+		state.setMark(hlNote, n.span())
 	}
 }
 
@@ -419,7 +417,9 @@ func dropCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
 	state.NoteVersionID = ""
-	clearHighlightedVerse(state)
+	// As in hideCurrentNote: the note's mark goes, a search result's or a
+	// shared link's stays.
+	state.clearMarkFromNote()
 }
 
 // applyNoteOnResume surfaces a stored note for the chapter the app is REOPENING

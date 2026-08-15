@@ -31,9 +31,7 @@ func john11State(t *testing.T) *AppState {
 	bd.Books = []string{"John"}
 	bd.PrepareSearchIndex()
 	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 11}
-	st.HighlightedBook, st.HighlightedChapter = "John", 11
-	st.HighlightedVerse, st.HighlightedVerseEnd = 25, 25
-	st.HasHighlightedVerse = true
+	st.setHL(hlSearch, "John", 11, 25, 25)
 	return st
 }
 

@@ -108,6 +108,11 @@ type pinnedDefect struct {
 	covers func(w notesWorld, inv string) bool
 }
 
+// X10 was struck on 2026-08-15 by S1 (mark.go). Hide and Delete used to clear
+// the highlight unconditionally; ownership is RECORDED now, so clearMarkFromNote
+// drops only a mark hlNote placed. It covered 28 cells here and 3 in the origin
+// space — the largest single defect in the subsystem after X7.
+//
 // X1 and X2 were struck on 2026-08-15, fixed by 31bc97630 ("Write the live
 // note's four fields as one value"): both verbs now address the note
 // NoteVersionID names because every arrival path writes that field. The
@@ -162,13 +167,6 @@ var knownIncoherent = []pinnedDefect{
 				(w.placement == placeBoth || (w.placement == placeFollowed && w.arrival))
 		},
 	},
-	{
-		"X10", "Hide and Delete clear the highlight unconditionally, including one they do not own",
-		func(w notesWorld, inv string) bool {
-			return inv == "N1-foreign-mark-destroyed" && w.foreignHL &&
-				(w.verb == verbHide || w.verb == verbDelete)
-		},
-	},
 }
 
 // knownOriginIncoherent is the same pin for the highlight-origin enumeration.
@@ -177,12 +175,6 @@ var knownOriginIncoherent = []pinnedOrigin{
 		"X4", "turning notes off keeps the highlight the note put there",
 		func(o hlOrigin, e hlEvent, inv string) bool {
 			return inv == "N1-orphan-highlight" && e == evNotesOff
-		},
-	},
-	{
-		"X10", "deleting a note clears a highlight that was never the note's",
-		func(o hlOrigin, e hlEvent, inv string) bool {
-			return inv == "N1-foreign-mark-destroyed" && e == evNoteDeleted && o != fromNote
 		},
 	},
 	{
@@ -400,11 +392,11 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		setNotesEnabled(false)
 	}
 
-	obs.text, obs.min, obs.hlOn = st.ActiveNote, st.NoteMinimized, st.HasHighlightedVerse
+	obs.text, obs.min, obs.hlOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
 	obs.after = readNotes(appPrefs())
 
 	addRecentChapter(st, "John", 3) // the next navigation
-	obs.afterText, obs.afterMin, obs.afterHLOn = st.ActiveNote, st.NoteMinimized, st.HasHighlightedVerse
+	obs.afterText, obs.afterMin, obs.afterHLOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
 	return obs, true
 }
 
@@ -415,14 +407,23 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 
 	// N1 — no mark without a meaning. A highlight is on screen and nothing on
 	// screen explains it: no note, and no other origin that put it there.
-	if o.afterHLOn && o.afterText == "" && !w.foreignHL {
+	// An ARRIVAL supersedes whatever was lit: the reader tapped a link naming a
+	// passage, and the app is right to move the mark to it. So in an arrival
+	// cell the foreign mark is gone for a legitimate reason, and any mark left
+	// after the note is deleted is unexplained — which is why foreignHL stops
+	// excusing this cell once arrival is true. Before S1 those 16 cells hid a
+	// real orphan behind the exclusion.
+	if o.afterHLOn && o.afterText == "" && (!w.foreignHL || w.arrival) {
 		bad = append(bad, "N1-orphan-highlight")
 	}
 	// N1 again, the other way: a mark that belongs to somebody else must survive
 	// a verb aimed at the note. The derive goes out of its way not to clobber a
 	// foreign highlight (notes_store.go:327-330); the verbs then destroy it
 	// unconditionally (:395, :422).
-	if w.foreignHL && (w.verb == verbHide || w.verb == verbDelete) && !o.hlOn {
+	// ...but only where the foreign mark was still the reader's reason for the
+	// lit verse. See the note above: an arrival replaces it first, so its absence
+	// afterwards is not the verb's doing.
+	if w.foreignHL && !w.arrival && (w.verb == verbHide || w.verb == verbDelete) && !o.hlOn {
 		bad = append(bad, "N1-foreign-mark-destroyed")
 	}
 
@@ -528,24 +529,22 @@ func flippedOthers(before, after map[string]SharedNote, aimedAt string) bool {
 
 // --- enumeration 2: the highlight's origin ----------------------------------
 
-// hlOrigin is THE VARIABLE THE APP DOES NOT RECORD. Five writers put a highlight
-// into AppState (docs/NOTES_STATE.md, "the variable nobody has written down") and
-// nothing distinguishes them afterwards, so ownership is inferred from a bare
-// verse number. This enumeration exists to state the invariant that inference is
-// standing in for.
-type hlOrigin int
-
+// The origin used to be declared HERE, as a private variable of the harness,
+// under the heading "THE VARIABLE THE APP DOES NOT RECORD" — five writers put a
+// highlight into AppState and nothing distinguished them afterwards, so
+// ownership was inferred from a bare verse number.
+//
+// S1 moved it into the production model (mark.go), which is what this harness
+// existed to argue for: a test that has to carry a variable the model lacks is
+// telling you the model lacks it. The names below are aliases onto the real
+// type, kept so the enumeration reads the same as when it was written.
 const (
-	fromNothing hlOrigin = iota
-	fromNote
-	fromSearch     // openSearchResultRange, state.go:772-778
-	fromVerseOfDay // goToVerseRange, verse_of_day.go:282-286
-	fromLinkSpan   // applyShareTarget, share_link_open.go:271-276
+	fromNothing    = hlNone
+	fromNote       = hlNote
+	fromSearch     = hlSearch
+	fromVerseOfDay = hlVerseOfDay
+	fromLinkSpan   = hlLinkSpan
 )
-
-func (o hlOrigin) String() string {
-	return [...]string{"nothing", "note", "search", "verse-of-day", "link-span"}[o]
-}
 
 type hlEvent int
 
@@ -675,7 +674,7 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 		applyShareTarget(st, ShareTarget{VersionID: "web", Book: "Romans", Chapter: 14, VerseLo: 24})
 	}
 
-	hadHL := st.HasHighlightedVerse
+	hadHL := st.hasMark()
 	fromVer := st.CurrentVersion
 
 	switch ev {
@@ -710,20 +709,21 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 		// dismissed comes back on the next navigation while its note is still
 		// expanded — correct, but only because the note re-asserts it, which is
 		// the same mechanism that strands one when the note goes.
-		if st.HasHighlightedVerse && st.ActiveNote == "" {
+		if st.hasMark() && st.ActiveNote == "" {
 			bad = append(bad, "N1-orphan-highlight")
 		}
 	default:
-		if hadHL && !st.HasHighlightedVerse && ev != evSwitchVersion {
+		if hadHL && !st.hasMark() && ev != evSwitchVersion {
 			bad = append(bad, "N1-foreign-mark-destroyed")
 		}
 	}
 
 	// N7 — one ruler. After a version switch a surviving highlight must be in the
 	// numbering of the translation now being read.
-	if ev == evSwitchVersion && st.HasHighlightedVerse {
-		ch, v, res := MapVerse(fromVer, st.CurrentVersion, st.HighlightedBook, st.HighlightedChapter, st.HighlightedVerse)
-		if res != verseMapExact && (ch != st.HighlightedChapter || v != st.HighlightedVerse) {
+	if ev == evSwitchVersion && st.hasMark() {
+		sp, _ := st.markSpan()
+		ch, v, res := MapVerse(fromVer, st.CurrentVersion, sp.Book, sp.Chapter, sp.Lo)
+		if res != verseMapExact && (ch != sp.Chapter || v != sp.Lo) {
 			bad = append(bad, "N7-stale-frame")
 		}
 	}
@@ -778,7 +778,7 @@ func TestBareLinkStripsTheNotesHighlightAndLeavesAGhost(t *testing.T) {
 	}
 	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "look at 16"})
 	addRecentChapter(st, "John", 3)
-	if !st.HasHighlightedVerse {
+	if !st.hasMark() {
 		t.Fatal("precondition: the note should have raised its highlight")
 	}
 
@@ -788,14 +788,18 @@ func TestBareLinkStripsTheNotesHighlightAndLeavesAGhost(t *testing.T) {
 	if st.ActiveNote == "" {
 		t.Fatal("the bare link blanked the stored note; that is a different defect from X8")
 	}
-	if st.HasHighlightedVerse {
+	if st.hasMark() {
 		t.Error("X8 is FIXED: the note kept its highlight across a bare chapter link. " +
 			"Strike X8 from docs/NOTES_STATE.md.")
 	}
-	// X9 — and the location fields it left behind.
-	if st.HighlightedBook == "" && st.HighlightedChapter == 0 && st.HighlightedVerse == 0 {
-		t.Error("X9 is FIXED: the else arm now clears the location too. " +
-			"Strike X9 from docs/NOTES_STATE.md.")
+	// X9 is STRUCTURALLY dead as of S1 and was struck from docs/NOTES_STATE.md.
+	// It used to be reachable because HasHighlightedVerse=false left the book,
+	// chapter and verse behind — a location outliving the flag that said to
+	// ignore it. There are no separate fields now: absence IS hlNone, and the
+	// span goes with it. The assertion that remains is that nothing can be read
+	// back out, which is a property of the type rather than of this code path.
+	if sp, ok := st.markSpan(); ok {
+		t.Errorf("a cleared mark still reports a span: %+v", sp)
 	}
 }
 
@@ -820,12 +824,12 @@ func TestChapterLevelNoteTappedInTheBrowserLeavesAGhost(t *testing.T) {
 	saveNote(appPrefs(), n)
 	openNote(st, n)
 
-	if st.HasHighlightedVerse {
+	if st.hasMark() {
 		t.Fatal("a chapter-level note should not raise a verse highlight; that is a new state")
 	}
-	if st.HighlightedBook == "" && st.HighlightedChapter == 0 {
-		t.Error("X9 is FIXED on the browser route: the location is cleared with the flag. " +
-			"Strike that half of X9 from docs/NOTES_STATE.md.")
+	// The browser half of X9, likewise structural now. See the note above.
+	if sp, ok := st.markSpan(); ok {
+		t.Errorf("a chapter-level note left a span behind: %+v", sp)
 	}
 }
 
@@ -897,18 +901,19 @@ func TestHighlightKeepsThePreviousTranslationsNumbering(t *testing.T) {
 	}
 	applyLoadedVersion(st, other, romansBible(), modeReal)
 
-	if !st.HasHighlightedVerse {
+	if !st.hasMark() {
 		t.Error("HL_FRAME is FIXED: the switch cleared the highlight. Update docs/NOTES_STATE.md.")
 		return
 	}
-	if st.HighlightedChapter == ch && st.HighlightedVerse == v {
+	sp, _ := st.markSpan()
+	if sp.Chapter == ch && sp.Lo == v {
 		t.Error("HL_FRAME is FIXED: the highlight was renumbered. Update docs/NOTES_STATE.md.")
 		return
 	}
 	// Still in the old frame. The note on the same passage HAS been mapped.
-	if st.HighlightedChapter != 14 || st.HighlightedVerse != 24 {
+	if sp.Chapter != 14 || sp.Lo != 24 {
 		t.Errorf("unexpected: the highlight moved to %d:%d, which is neither frame",
-			st.HighlightedChapter, st.HighlightedVerse)
+			sp.Chapter, sp.Lo)
 	}
 }
 

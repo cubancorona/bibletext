@@ -41,7 +41,7 @@ func TestFullUIBuildsAndExercisesPaths(t *testing.T) {
 
 	// Open a result -> reading view with a highlighted, scrolled-to verse.
 	openSearchResult(state, state.SearchResults[0])
-	if !state.HasHighlightedVerse {
+	if !state.hlOn() {
 		t.Fatal("expected a highlighted verse after opening a result")
 	}
 	if left := len(collectResultCards(win.Canvas().Content())); left != 0 {
