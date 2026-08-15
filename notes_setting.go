@@ -258,5 +258,8 @@ func clearLiveNote(state *AppState) {
 	state.ActiveNote = ""
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
+	// The stored-under id goes with them. Left behind it would misdirect the
+	// next Delete at a note the reader never had on screen.
+	state.NoteVersionID = ""
 	clearHighlightedVerse(state)
 }
