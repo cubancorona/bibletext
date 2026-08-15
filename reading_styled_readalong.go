@@ -59,10 +59,7 @@ func styledReadAlongApply(verse int, follow bool) {
 	if pane == nil {
 		return
 	}
-	if pane.raVerse != verse {
-		pane.raVerse = verse
-		pane.Refresh()
-	}
+	pane.setReadAlongVerse(verse)
 	if follow && verse > 0 {
 		styledRAFollowPending = true
 		styledReadAlongFollowScroll()
@@ -73,11 +70,10 @@ func styledReadAlongApply(verse int, follow bool) {
 func styledReadAlongClearTint() {
 	styledRAFollowPending = false
 	pane := styledPane
-	if pane == nil || pane.raVerse == 0 {
+	if pane == nil {
 		return
 	}
-	pane.raVerse = 0
-	pane.Refresh()
+	pane.setReadAlongVerse(0)
 }
 
 // styledReadAlongFollowScroll moves the narrated verse back into the comfort

@@ -74,14 +74,19 @@ func TestStyledPaneObjects(t *testing.T) {
 	if len(r.texts) == 0 || len(r.texts) > 12 {
 		t.Fatalf("unexpected draw-segment count %d for 4 poem lines", len(r.texts))
 	}
-	// Nothing is highlighted here, so there are no wash rects at all — only the
-	// read-along band and the glyphs.
+	// Nothing is highlighted and nothing is being narrated, so there are no
+	// wash rects of either kind — only the glyphs. Both washes are now sized
+	// from their span lists, so "none" costs no objects at all, where the old
+	// single read-along band was always present and merely hidden.
 	if len(r.tintRects) != 0 {
 		t.Errorf("wash rects = %d with nothing highlighted, want 0", len(r.tintRects))
 	}
-	if len(r.objects) != len(r.texts)+len(r.tintRects)+1 {
-		t.Fatalf("objects = %d, want %d wash rects + read-along band + %d texts",
-			len(r.objects), len(r.tintRects), len(r.texts))
+	if len(r.raRects) != 0 {
+		t.Errorf("narration rects = %d with nothing narrated, want 0", len(r.raRects))
+	}
+	if len(r.objects) != len(r.texts)+len(r.tintRects)+len(r.raRects) {
+		t.Fatalf("objects = %d, want %d wash + %d narration + %d texts",
+			len(r.objects), len(r.tintRects), len(r.raRects), len(r.texts))
 	}
 	// First segment of line 0 is the verse-number label at the small size.
 	if r.texts[0].TextSize >= p.textSize {

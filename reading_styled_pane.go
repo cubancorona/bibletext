@@ -104,6 +104,7 @@ type styledReadingPane struct {
 	drawRuns  []styledDrawRun
 	lineSegs  [][]styledDrawRun // drawRuns indexed by line, for hit-testing
 	tintSpans []tintSpan        // the wash rects, per line, X-bounded to the tinted runs
+	raSpans   []tintSpan        // the narration wash, same shape, its own layer above
 	lastWidth float32
 
 	// Selection state (milestone 3): rune offsets into lay.Text, -1 = none.
@@ -210,6 +211,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		p.drawRuns = append(p.drawRuns, segs...)
 	}
 	p.tintSpans = tintSpansForLayout(p.lay)
+	p.raSpans = verseSpansForLayout(p.lay, p.raVerse)
 	p.lastWidth = width
 	// Offsets shifted with the new layout — any selection is now meaningless.
 	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
@@ -286,7 +288,7 @@ type styledPaneRenderer struct {
 	// tintRects is one rectangle per tintSpan — per line, bounded to the
 	// tinted runs' own X range, never the full column.
 	tintRects []*canvas.Rectangle
-	raBand    *canvas.Rectangle
+	raRects   []*canvas.Rectangle
 	selRects  []*canvas.Rectangle
 	texts     []*canvas.Text
 	objects   []fyne.CanvasObject
@@ -314,9 +316,18 @@ func (r *styledPaneRenderer) rebuild() {
 		r.tintRects = append(r.tintRects, rect)
 		r.objects = append(r.objects, rect)
 	}
-	r.raBand = canvas.NewRectangle(styledReadAlongTint)
-	r.raBand.Hide()
-	r.objects = append(r.objects, r.raBand)
+	// The narration wash, on its own layer ABOVE the verse wash: the two are
+	// meant to be seen together (styledReadAlongTint is translucent), so this
+	// cannot be folded into the run's single Tint value. Same per-line,
+	// X-bounded shape though — a full-column band here washed whatever verse
+	// shared the narrated verse's first and last lines, and won over the
+	// corrected highlight wherever they met.
+	r.raRects = r.raRects[:0]
+	for range p.raSpans {
+		rect := canvas.NewRectangle(styledReadAlongTint)
+		r.raRects = append(r.raRects, rect)
+		r.objects = append(r.objects, rect)
+	}
 
 	selColor := p.pal.Accent
 	selColor.A = 70
@@ -407,15 +418,21 @@ func (r *styledPaneRenderer) position() {
 		r.tintRects[i].Hide()
 	}
 
-	// Read-along tint across the narrated verse's lines.
-	if first, last, ok := p.verseLineSpan(p.raVerse); ok {
-		top := p.lay.Lines[first].Y
-		bot := p.lay.Lines[last].Y + p.lay.Lines[last].H
-		r.raBand.Move(fyne.NewPos(p.extraInset, top))
-		r.raBand.Resize(fyne.NewSize(p.lastWidth-2*p.extraInset, bot-top))
-		r.raBand.Show()
-	} else {
-		r.raBand.Hide()
+	// The narration wash, bounded the same way — and through insetX() like
+	// everything else. It used to position at extraInset, twelve points
+	// (styledPaneInset) left of the column every other object starts at.
+	for i, sp := range p.raSpans {
+		if i >= len(r.raRects) || sp.Line >= len(p.lay.Lines) {
+			break
+		}
+		ln := p.lay.Lines[sp.Line]
+		rect := r.raRects[i]
+		rect.Move(fyne.NewPos(p.insetX()+sp.LineX0, ln.Y))
+		rect.Resize(fyne.NewSize(sp.LineX1-sp.LineX0, ln.H))
+		rect.Show()
+	}
+	for i := len(p.raSpans); i < len(r.raRects); i++ {
+		r.raRects[i].Hide()
 	}
 
 	lh := p.lh
@@ -486,6 +503,25 @@ func (p *styledReadingPane) yForVerse(verse int) (float32, bool) {
 // the scroll position (mirrors chapterText.highlightLine >= 0).
 func (p *styledReadingPane) highlightOwnsScroll() bool {
 	return p.lay != nil && p.highlightFirstLine() >= 0
+}
+
+// setReadAlongVerse moves the narration wash, keeping raVerse and raSpans in
+// lockstep.
+//
+// ONE WRITER, on purpose. The wash used to be a single always-present rectangle
+// whose geometry position() derived from raVerse on the spot, so it could not go
+// stale. Per-line rects are sized in rebuild() from raSpans, and Refresh() calls
+// rebuild() WITHOUT a relayout — so a raVerse written on its own would have left
+// the narration lighting the previous verse until the next resize. Two fields
+// standing for one fact is the shape that produced this subsystem's worst
+// defects; here they are assigned together or not at all.
+func (p *styledReadingPane) setReadAlongVerse(verse int) {
+	if p == nil || p.raVerse == verse {
+		return
+	}
+	p.raVerse = verse
+	p.raSpans = verseSpansForLayout(p.lay, verse)
+	p.Refresh()
 }
 
 // verseLineSpan returns the [first,last] line indexes the verse's runs touch —
