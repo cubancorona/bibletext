@@ -1,3 +1,13 @@
+# The notes subsystem, reworked — SUPERSEDED
+
+> **Superseded 2026-08-15 by [`NOTES_SCRAPBOOK.md`](NOTES_SCRAPBOOK.md).**
+> This design assumed at most one note per chapter per translation, and no
+> sender. The owner then specified a scrapbook: many notes over years, from
+> different people, across translations, with overlapping highlights. Kept for
+> the reasoning that survived — the cap living in one function, the projection
+> type, the store left alone — and because its staging order for the HIGHLIGHT
+> family (S1/S2 there) was executed and is sound. Do not build from it.
+
 # The notes subsystem, reworked
 
 > **Companion to [`NOTES_STATE.md`](NOTES_STATE.md).** That document is the

@@ -106,3 +106,33 @@ func TestShareLinkRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// The fragment is a key list, so its meaning must not depend on field order.
+//
+// The app used to read only the field before the first "&" while the published
+// web reader split every field and took "v=" from any of them
+// (cmd/websitegen/assets.go, fragKeys). Nothing we emit reached that gap —
+// ShareLinkURL always writes the verse first — but the two halves of one URL
+// contract disagreed, and the next key added ahead of "v" would have made a
+// shared verse land on the site and not in the app.
+func TestVersePayloadIsOrderIndependent(t *testing.T) {
+	for _, c := range []struct {
+		frag   string
+		lo, hi int
+	}{
+		{"v16", 16, 0},
+		{"v16-18", 16, 18},
+		{"v16&n=abc", 16, 0},
+		{"n=abc&v16", 16, 0},  // the note first: used to yield no verse
+		{"n=abc&v=16", 16, 0}, // the explicit spelling, likewise
+		{"v=16-18&n=abc", 16, 18},
+		{"n=abc", 0, 0},
+		{"version=3", 0, 0}, // a future key that merely starts with "v"
+		{"", 0, 0},
+	} {
+		lo, hi := parseVersePayload(c.frag, "")
+		if lo != c.lo || hi != c.hi {
+			t.Errorf("%q gave lo=%d hi=%d, want %d/%d", c.frag, lo, hi, c.lo, c.hi)
+		}
+	}
+}
