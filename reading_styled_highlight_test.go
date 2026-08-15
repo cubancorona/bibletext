@@ -18,6 +18,8 @@ package bibletext
 
 import (
 	"image/color"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -266,4 +268,41 @@ func TestStyledReadAlongDoesNotSpillOntoLineNeighbours(t *testing.T) {
 	if !covered {
 		t.Error("the narrated verse's own words are not washed")
 	}
+}
+
+// A rendered look at the wash, for eyes rather than for assertions.
+//
+// The structural checks above prove the rects are bounded to the right runs;
+// they cannot tell you whether the result LOOKS like a highlight. This renders
+// the case that matters — a marked verse sharing its lines with unmarked
+// neighbours — through the real renderer with real fonts, and writes a PNG when
+// BIBLETEXT_PANE_SNAPSHOT_DIR is set. No simulator and no screen permission,
+// which is what makes it usable while working unattended.
+//
+// CAVEAT, and it is the open question on this work: the face resolved here is
+// the Mac's. Windows and Linux resolve a different serif through the same
+// painter, and different metrics move the wrap points that decide where these
+// rects begin and end. This shows the geometry is right; it does not show the
+// geometry is right THERE. That still wants linux-visual-smoke.yml.
+func TestStyledPaneVisualHighlight(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	shot := func(name string, lo, hi int) {
+		st := sharedLineState()
+		if lo > 0 {
+			st.setHL(hlSearch, "Ruth", 1, lo, hi)
+		}
+		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
+		w := test.NewWindow(p)
+		defer w.Close()
+		w.Resize(fyne.NewSize(420, 200))
+		img := w.Canvas().Capture()
+		if dir := os.Getenv("BIBLETEXT_PANE_SNAPSHOT_DIR"); dir != "" {
+			writePNG(t, filepath.Join(dir, name), img)
+		}
+	}
+	shot("wash-none.png", 0, 0)
+	shot("wash-middle-verse.png", 2, 2)
+	shot("wash-range.png", 2, 3)
 }
