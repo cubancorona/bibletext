@@ -64,3 +64,41 @@ func TestTappedLinkAlwaysAsksToReposition(t *testing.T) {
 		t.Error("a tapped link must place the view even when it names the current passage")
 	}
 }
+
+// The Go-to box, a cross-reference and the verse of the day all arrive through
+// goToVerseRange, and it is the one explicit arrival that never said so.
+//
+// It got away with it while the Apple panes folded the WASH into their single
+// render fingerprint: a new mark changed the fingerprint, the push rebuilt, and
+// the rebuild's scroll cadence happened to land on the verse. A wash change is a
+// live attribute mutation now (reading_tint_apple.go) and deliberately does not
+// scroll — a highlight arriving under the reader's eye must not move the page —
+// so the intent has to be declared, exactly as the three arrivals above declare
+// it. The hard case is the same one they pin: the verse is already lit, so
+// nothing about the render changes and only forceReposition can say "go there".
+//
+// AND ONLY WHERE THAT IS TRUE. This is the arrival the wash model added, and
+// unlike the other three it would otherwise reach every platform: on Android the
+// rebuild still carries the scroll, so the flag turns a Go-to onto the chapter
+// already open into a re-render the gate used to skip, and on Windows/Linux
+// nothing reads or clears it at all. Hence washIsLiveMutation — asserted here in
+// both directions, because "we scoped it" and "we forgot it" look identical from
+// the Apple side.
+func TestGoToVerseRangeAsksToRepositionWhereTheWashIsAMutation(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := psalm23State()
+	st.CurrentBook, st.CurrentChapter = "Psalms", 23
+	st.setHL(hlVerseOfDay, "Psalms", 23, 4, 4)
+	st.forceReposition = false
+
+	goToVerseRange(st, "Psalms", 23, 4, 4)
+	if st.forceReposition != washIsLiveMutation {
+		if washIsLiveMutation {
+			t.Error("a Go-to for the verse already lit must still ask to reposition")
+		} else {
+			t.Error("a pane whose rebuild carries the scroll must not be asked to reposition")
+		}
+	}
+}

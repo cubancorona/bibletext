@@ -416,8 +416,12 @@ func (c *audioController) resumeReadAlongFollow() {
 // native reading overlay after it was rebuilt from scratch — Android recreates the
 // activity (rotation, background→foreground) and BtBridge resets its read-along
 // state (verse index, current span, pill) while the controller's copy stays intact.
-// Called from afterRebuild (reading_android.go). No-op when nothing is armed. On the
-// Apple platforms the overlay isn't torn down this way, so it's simply never called.
+// Called from afterRebuild (reading_android.go). No-op when nothing is armed. The
+// Apple panes do not tear the overlay down, so they never call this; what they
+// need across a body rebuild is carried by the push itself — see
+// bibleTextIOSBeginChapterPush / bibleTextMacBeginChapterPush, which tell the
+// pane whether the chapter is CHANGING and let it keep its own narration wash
+// across a same-chapter re-import.
 func (c *audioController) reassertReadAlong() {
 	c.mu.Lock()
 	armed := c.loaded && c.readAlong != nil

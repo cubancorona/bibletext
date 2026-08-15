@@ -288,6 +288,27 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 	})
 	state.IsSearching = false
 	state.CanReturnToSearchResults = false
+	// The reader asked to BE somewhere, so the view must go there — the same
+	// declaration openSearchResultRange and a tapped link already make (see
+	// AppState.forceReposition).
+	//
+	// It used to be carried accidentally, by the mark: the native panes folded
+	// the wash into their one render fingerprint, so a new mark forced a rebuild
+	// and the rebuild's scroll cadence happened to land on it. Now that a wash
+	// change is a live mutation with no scroll of its own — which is right, a
+	// wash arriving under the reader's eye must not move the page — the intent
+	// has to be said out loud. Saying it also fixes the case that never worked:
+	// a Go-to for the verse already marked produced an identical fingerprint,
+	// skipped the push entirely, and did nothing at all.
+	//
+	// ONLY WHERE THAT IS TRUE, though. This is the one arrival the wash model
+	// added, and it is the one that reaches every platform: elsewhere the rebuild
+	// still carries the scroll, so declaring it here would buy nothing and cost an
+	// Android re-render the gate used to skip — and on Windows/Linux it would set a
+	// flag nothing ever clears (washIsLiveMutation, reading_tint_apple.go).
+	if washIsLiveMutation {
+		state.forceReposition = true
+	}
 	state.refresh()
 	if state.surfaceReading != nil {
 		state.surfaceReading()

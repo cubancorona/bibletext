@@ -22,6 +22,7 @@ package bibletext
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>   // CAShapeLayer, for the note bubble's outline
 #import <stdlib.h>
+#import <time.h>
 
 // The note sticker, defined far below beside the rest of its machinery. Declared
 // up here because bibleTextMacApplyHTML has to install the band right after it
@@ -282,10 +283,119 @@ static NSInteger btMacVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
 }
 
 // ---- Read-along: highlight the verse being narrated + gently follow-scroll -------
-// gReadAlongRange is the char range currently tinted (its number run through just
-// before the next verse's), so each tick can clear the previous verse cheaply.
-static NSRange  gReadAlongRange = {NSNotFound, 0};
+// gReadAlongVerse is the verse the narration is on, and it is the ONLY thing
+// remembered about it — see the iOS twin for why the char range that used to sit
+// beside it was the half that goes stale.
+static NSInteger gReadAlongVerse = 0;
 static NSColor *gReadAlongColor = nil;
+
+// ---- The chapter's wash model ------------------------------------------------
+//
+// The macOS twin of reading_ios.go's block of the same name, and deliberately
+// line-for-line its shape: what each verse's background SHOULD BE, pushed from
+// Go (reading_tint_apple.go) out of the one function that answers that for every
+// surface. A character has exactly ONE NSBackgroundColorAttributeName and two
+// things want it — the chapter's wash and the narration's — so the narration
+// cannot be allowed to "clear" what it did not put there.
+#define BT_MAX_TINT_RUNS 32
+typedef struct { int lo; int hi; double r, g, b, a; } BTTintRun;
+typedef struct { int n; BTTintRun r[BT_MAX_TINT_RUNS]; } BTTintModel;
+static BTTintModel gTint = {0};
+
+// Which chapter the STORAGE holds, and the verse the narration is on — see the
+// iOS twin for both, which this mirrors line for line. The short version: the
+// model crosses as VERSE NUMBERS, so a failed import (bibleTextMacApplyHTML
+// returns NO and leaves the previous chapter in place) would have the next
+// mutation light verse 3 of the wrong chapter; and a body rebuild of the SAME
+// chapter mid-playback must carry the narration wash across its own re-import
+// rather than drop it until the next verse tick.
+static int  gBodyGenPending = 0;
+static int  gBodyGenApplied = 0;
+static BOOL gTintUnpainted  = NO;
+static NSInteger gPendingReadAlongVerse = 0;
+
+// --- Timing, for the two paths this seam exists to tell apart -----------------
+// Off unless BIBLETEXT_PERF is set in the environment. It prints the two costs
+// the design claim rests on: the NSAttributedString re-import a wash change USED
+// to pay, and the live range mutation it pays now.
+static int btMacPerfOn(void) {
+    static int on = -1;
+    if (on < 0) { const char *e = getenv("BIBLETEXT_PERF"); on = (e && *e && *e != '0') ? 1 : 0; }
+    return on;
+}
+static uint64_t btMacPerfNow(void) { return btMacPerfOn() ? clock_gettime_nsec_np(CLOCK_MONOTONIC) : 0; }
+static void btMacPerfLog(const char *what, uint64_t t0) {
+    if (!btMacPerfOn() || t0 == 0) return;
+    NSLog(@"bibletext-perf: %s %.3f ms", what,
+          (double)(clock_gettime_nsec_np(CLOCK_MONOTONIC) - t0) / 1e6);
+}
+
+// btMacTintRunForVerse returns the index of the run washing `verse`, or -1.
+static int btMacTintRunForVerse(NSInteger verse) {
+    for (int i = 0; i < gTint.n; i++)
+        if (verse >= gTint.r[i].lo && verse <= gTint.r[i].hi) return i;
+    return -1;
+}
+
+// EVERY COLOUR IN THIS BLOCK IS sRGB, AND THAT IS NOT A STYLE CHOICE.
+//
+// The wash a verse carries can arrive by two roads: the HTML importer reads
+// `background-color: #ffe08a` out of buildChapterHTML's stylesheet and resolves
+// it as sRGB, and the live mutation below builds an NSColor from the SAME three
+// numbers. -colorWithCalibratedRed: reads them as NSCalibratedRGB, which is a
+// different space: (255,224,138) there lands on sRGB (255,229,155). So a verse
+// the mutation repainted came back a paler, greener gold than the one beside it
+// that the import had painted — one mark rendered in two colours, permanently,
+// because nothing rebuilds after a repaint. iOS never had it (UIColor's
+// -colorWithRed: is sRGB), which is exactly the twin divergence tint.go's shared
+// wash table exists to stop. -colorWithSRGBRed: is what the rest of this file
+// already uses for palette colours crossing this boundary (btMacNoteColor).
+static NSColor *btMacTintColor(int i) {
+    if (i < 0 || i >= gTint.n) return nil;
+    return [NSColor colorWithSRGBRed:gTint.r[i].r green:gTint.r[i].g
+                                blue:gTint.r[i].b alpha:gTint.r[i].a];
+}
+
+// The narration wash, ONCE — see the iOS twin. sRGB for the same reason as
+// btMacTintColor, and additionally so that the two halves of one narrated verse
+// cannot disagree: btMacOverlayColor's arithmetic treats these constants as sRGB
+// and emits sRGB, while btMacPaintVerseWash paints the tail beyond the chapter
+// wash with this colour directly.
+static const CGFloat kBTReadAlong[4] = {1.0, 0.80, 0.30, 0.32};
+
+static NSColor *btMacReadAlongColor(void) {
+    if (gReadAlongColor == nil)
+        gReadAlongColor = [NSColor colorWithSRGBRed:kBTReadAlong[0] green:kBTReadAlong[1]
+                                               blue:kBTReadAlong[2] alpha:kBTReadAlong[3]];
+    return gReadAlongColor;
+}
+
+// btMacOverlayColor composites the narration wash OVER a chapter wash.
+//
+// The narration tint is translucent BECAUSE it is meant to be seen through —
+// that is how the styled pane draws it, on its own layer above the verse wash.
+// TextKit has no second layer here: one attribute, one colour. So the layering
+// is done in arithmetic instead, source-over, and the note's gold shows through
+// the narration's amber exactly as it does on the desktop styled pane.
+//
+// The base arrives from btMacTintColor, which is sRGB, so the conversion below
+// is an identity today — it stays as the guard that the arithmetic and the
+// colour it composites over are read in the SAME space, whatever a future
+// caller hands in.
+static NSColor *btMacOverlayColor(NSColor *base) {
+    NSColor *b = [base colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
+    if (b == nil) return btMacReadAlongColor();
+    CGFloat br = 0, bg = 0, bb = 0, ba = 0;
+    [b getRed:&br green:&bg blue:&bb alpha:&ba];
+    const CGFloat ar = kBTReadAlong[0], ag = kBTReadAlong[1],
+                  ab = kBTReadAlong[2], aa = kBTReadAlong[3];
+    CGFloat oa = aa + ba * (1 - aa);
+    if (oa <= 0) return btMacReadAlongColor();
+    return [NSColor colorWithSRGBRed:(ar * aa + br * ba * (1 - aa)) / oa
+                               green:(ag * aa + bg * ba * (1 - aa)) / oa
+                                blue:(ab * aa + bb * ba * (1 - aa)) / oa
+                               alpha:oa];
+}
 // gReadAlongActive marks a live read-along; gReadAlongUserLatch makes the
 // user-scrolled callback one-shot (reset when following resumes or read-along ends);
 // gReadAlongOwnScroll is raised around OUR OWN follow-scroll so the bounds-change
@@ -315,16 +425,19 @@ static void btMacStyleFollowBtn(void) {
     ps.alignment = NSTextAlignmentCenter;
     NSDictionary *attrs = @{
         NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold],
-        NSForegroundColorAttributeName: [NSColor colorWithCalibratedRed:gMacFollowFg[0]
-                                                                  green:gMacFollowFg[1]
-                                                                   blue:gMacFollowFg[2] alpha:1.0],
+        // sRGB, like every other palette colour crossing this boundary (and like
+        // the iOS pill, whose -colorWithRed: is sRGB) — the numbers are the app
+        // palette's, and NSCalibratedRGB would land them somewhere else.
+        NSForegroundColorAttributeName: [NSColor colorWithSRGBRed:gMacFollowFg[0]
+                                                            green:gMacFollowFg[1]
+                                                             blue:gMacFollowFg[2] alpha:1.0],
         NSParagraphStyleAttributeName: ps,
     };
     gMacFollowBtn.attributedTitle =
         [[NSAttributedString alloc] initWithString:@"Follow narration" attributes:attrs];
     gMacFollowBtn.layer.backgroundColor =
-        [NSColor colorWithCalibratedRed:gMacFollowBg[0] green:gMacFollowBg[1]
-                                   blue:gMacFollowBg[2] alpha:0.78].CGColor; // semi-transparent
+        [NSColor colorWithSRGBRed:gMacFollowBg[0] green:gMacFollowBg[1]
+                             blue:gMacFollowBg[2] alpha:0.78].CGColor; // semi-transparent
 }
 
 // btMacLayoutFollowBtn centres the pill over the reading pane's bottom edge.
@@ -412,6 +525,223 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     return NSMakeRange(start, nextLoc - start);
 }
 
+// btMacRunSpanRange is the whole character span of verses lo..hi, untrimmed.
+static NSRange btMacRunSpanRange(NSTextStorage *ts, int lo, int hi) {
+    NSRange a = btMacReadAlongRange(ts, lo);
+    if (a.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
+    NSRange b = (hi > lo) ? btMacReadAlongRange(ts, hi) : a;
+    NSUInteger end = (b.location == NSNotFound) ? NSMaxRange(a) : NSMaxRange(b);
+    if (end < NSMaxRange(a)) end = NSMaxRange(a);
+    if (end > ts.length) end = ts.length;
+    if (a.location >= end) return NSMakeRange(NSNotFound, 0);
+    return NSMakeRange(a.location, end - a.location);
+}
+
+// btMacRunWashRange is run i's OUTER bound: its span, trimmed of trailing
+// whitespace. Per RUN, not per verse — see the iOS twin for why that distinction
+// is the band's shape (the join between two washed verses is inside the band;
+// the space after the last one is not). What is actually painted inside it is
+// btMacPaintRunWash's business, which also takes the inter-verse breaks back out.
+static NSRange btMacRunWashRange(NSTextStorage *ts, int i) {
+    if (i < 0 || i >= gTint.n) return NSMakeRange(NSNotFound, 0);
+    NSRange r = btMacRunSpanRange(ts, gTint.r[i].lo, gTint.r[i].hi);
+    if (r.location == NSNotFound) return r;
+    NSCharacterSet *ws = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    while (r.length > 0 &&
+           [ws characterIsMember:[ts.string characterAtIndex:NSMaxRange(r) - 1]])
+        r.length--;
+    return r.length > 0 ? r : NSMakeRange(NSNotFound, 0);
+}
+
+// btMacUnwashBreaks removes the background from every BREAK CHARACTER in a
+// range, which is the one rule that makes a painted band the same shape as an
+// imported one.
+//
+// MEASURED, not assumed. Feeding the importer
+//     <span class="hl">washed one<br>washed two</span>
+// and asking for the background at each break gives:
+//     idx 16  BREAK(U+2028)  background=NONE
+//     idx 33  BREAK(U+000A)  background=NONE
+// — so a break is bare even when it sits INSIDE the highlighted span. TextKit
+// paints a background-attributed break out to the right margin, which is why an
+// unwashed one is not a detail: a band that keeps it grows a full-width tail off
+// every poem line and every paragraph end, permanently, because nothing rebuilds
+// after a live repaint.
+//
+// This replaces a narrower rule that stripped only the break before the NEXT
+// VERSE NUMBER. That was written from the HTML markup, where an intra-verse <br>
+// really is nested inside the .hl span — but what the markup CONTAINS and what
+// the importer PAINTS are different questions, and only the second one decides
+// pixels. The narrow rule left every poetic verse the wrong shape, on a
+// single-verse mark, on both panes.
+static void btMacUnwashBreaks(NSTextStorage *ts, NSRange r) {
+    if (r.location == NSNotFound || r.length == 0) return;
+    NSString *s = ts.string;
+    NSUInteger end = NSMaxRange(r);
+    if (end > s.length) return;
+    NSCharacterSet *ws = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    for (NSUInteger i = r.location; i < end; i++) {
+        unichar ch = [s characterAtIndex:i];
+        if (ch != '\n' && ch != '\r' && ch != 0x2028 && ch != 0x2029) continue;
+        // The WHOLE whitespace run around the break: the reporter layout's
+        // first-line indent (EM SPACE + EN SPACE) is written by the <p> that
+        // FOLLOWS the break and is outside the span as well. A join space whose
+        // run holds no break is inside the band and stays.
+        NSUInteger lo = i, hi = i;
+        while (lo > r.location && [ws characterIsMember:[s characterAtIndex:lo - 1]]) lo--;
+        while (hi < end && [ws characterIsMember:[s characterAtIndex:hi]]) hi++;
+        [ts removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(lo, hi - lo)];
+        i = hi;
+    }
+}
+
+// btMacChapterWashRange is the part of `verse` the CHAPTER wash covers: its own
+// span inside the run, minus the break the HTML leaves bare between it and the
+// verse after it.
+static NSRange btMacChapterWashRange(NSTextStorage *ts, NSInteger verse) {
+    NSRange run = btMacRunWashRange(ts, btMacTintRunForVerse(verse));
+    NSRange v = btMacReadAlongRange(ts, verse);
+    if (run.location == NSNotFound || v.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
+    NSRange x = NSIntersectionRange(run, v);
+    if (x.length == 0) return NSMakeRange(NSNotFound, 0);
+    return x.length > 0 ? x : NSMakeRange(NSNotFound, 0);
+}
+
+// btMacPaintRunWash paints run i's chapter wash the shape buildChapterHTML gives
+// it: the whole span, then every BREAK CHARACTER inside it taken back out. See
+// the iOS twin for why the difference is visible.
+static void btMacPaintRunWash(NSTextStorage *ts, int i, NSColor *c) {
+    if (i < 0 || i >= gTint.n || c == nil) return;
+    NSRange r = btMacRunWashRange(ts, i);
+    if (r.location == NSNotFound) return;
+    [ts addAttribute:NSBackgroundColorAttributeName value:c range:r];
+    btMacUnwashBreaks(ts, r);
+}
+
+// btMacPaintVerseWash sets the one background attribute each character of
+// `verse` may carry, FROM THE MODEL — the chapter wash underneath, the narration
+// over it, or their composite where both apply.
+//
+// This is the restoreTint / applyTint pair, and deliberately one function:
+// narrated==NO is "put back what should be here now", narrated==YES is "and lay
+// the narration over it". Written as two functions they would be two lists of
+// what a verse's background can be, and the erasing bug this replaces was
+// exactly one of those lists being shorter than the other.
+static void btMacPaintVerseWash(NSTextStorage *ts, NSInteger verse, BOOL narrated) {
+    if (verse <= 0 || ts == nil) return;
+    NSRange whole = btMacReadAlongRange(ts, verse);
+    if (whole.location == NSNotFound || NSMaxRange(whole) > ts.length) return;
+    [ts removeAttribute:NSBackgroundColorAttributeName range:whole];
+    NSRange wash = btMacChapterWashRange(ts, verse);
+    NSColor *base = btMacTintColor(btMacTintRunForVerse(verse));
+    if (wash.location != NSNotFound && base != nil)
+        [ts addAttribute:NSBackgroundColorAttributeName
+                   value:(narrated ? btMacOverlayColor(base) : base) range:wash];
+    if (!narrated) {
+        // A break is bare however it came to be painted — see btMacUnwashBreaks.
+        btMacUnwashBreaks(ts, whole);
+        return;
+    }
+    NSUInteger from = (wash.location != NSNotFound) ? NSMaxRange(wash) : whole.location;
+    if (from < NSMaxRange(whole))
+        [ts addAttribute:NSBackgroundColorAttributeName value:btMacReadAlongColor()
+                   range:NSMakeRange(from, NSMaxRange(whole) - from)];
+    btMacUnwashBreaks(ts, whole);
+}
+
+// btMacRefreshHighlightRange re-derives the scroll/tap target from the model,
+// for the live-mutation path. bibleTextMacApplyHTML derives the same thing from
+// the freshly imported background runs; here there is no import to enumerate.
+static void btMacRefreshHighlightRange(NSTextStorage *ts) {
+    NSRange u = (NSRange){NSNotFound, 0};
+    for (int i = 0; i < gTint.n; i++) {
+        NSRange r = btMacRunWashRange(ts, i);
+        if (r.location == NSNotFound) continue;
+        u = (u.location == NSNotFound) ? r : NSUnionRange(u, r);
+    }
+    gMacHighlightRange = u;
+}
+
+// bibleTextMacSetTintRuns replaces the chapter's wash model.
+//
+// repaint==0 means "the HTML about to arrive already carries this wash" — the
+// full-rebuild path, where painting now would wash the OUTGOING chapter's verses
+// for a frame. repaint==1 is the whole point of the seam: the text on screen is
+// already right and only the wash changed, so the change is an attribute over a
+// known range instead of buildChapterHTML plus a complete NSAttributedString
+// re-import.
+void bibleTextMacSetTintRuns(const BTTintRun *runs, int n, int repaint) {
+    BTTintModel m; m.n = 0;
+    if (n > BT_MAX_TINT_RUNS) n = BT_MAX_TINT_RUNS;
+    for (int i = 0; i < n && runs != NULL; i++) m.r[m.n++] = runs[i];
+    BOOL paint = repaint != 0;
+    void (^block)(void) = ^{
+        BTTintModel old = gTint;
+        gTint = m;
+        if (!paint || gTextView == nil) return;
+        // The storage has to be the string this model was computed for — see the
+        // gBodyGenPending block above, and the iOS twin.
+        if (gBodyGenApplied != gBodyGenPending) {
+            gTintUnpainted = YES;
+            NSLog(@"bibletext(mac): wash mutation deferred — storage is not the pushed chapter");
+            return;
+        }
+        NSTextStorage *ts = gTextView.textStorage;
+        if (ts.length == 0) return;
+        uint64_t t0 = btMacPerfNow();
+        [ts beginEditing];
+        // Clear the OLD wash first: the model is the only writer of these ranges,
+        // so what it painted last time is exactly what has to come off, and a
+        // verse that has just LOST its wash is otherwise left lit.
+        for (int i = 0; i < old.n; i++) {
+            NSRange r = btMacRunSpanRange(ts, old.r[i].lo, old.r[i].hi);
+            if (r.location != NSNotFound)
+                [ts removeAttribute:NSBackgroundColorAttributeName range:r];
+        }
+        for (int i = 0; i < gTint.n; i++) btMacPaintRunWash(ts, i, btMacTintColor(i));
+        // The narration keeps its place whatever the chapter wash just did —
+        // including when the wash it was sitting on has just gone away.
+        if (gReadAlongVerse > 0) btMacPaintVerseWash(ts, gReadAlongVerse, YES);
+        [ts endEditing];
+        btMacRefreshHighlightRange(ts);
+        // A wash change can arrive with the window long idle (a note cleared from
+        // a menu, a link handled while the app was in the background), where a
+        // coalesced display update can drop an attribute change's invalidation.
+        [gTextView setNeedsDisplayInRect:gTextView.visibleRect];
+        btMacPerfLog("tint-mutate", t0);
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
+}
+
+// bibleTextMacBeginChapterPush announces the body push about to be sent.
+// sameChapter is 1 when it re-renders the chapter already on screen and 0 when it
+// replaces it; a same-chapter push carries the live narration verse across its own
+// re-import. The iOS twin, and see gPendingReadAlongVerse there for the whole of it.
+void bibleTextMacBeginChapterPush(int sameChapter) {
+    dispatch_block_t block = ^{
+        gBodyGenPending++;
+        gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : 0;
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
+}
+
+// btMacRepaintChapterWashFromModel re-asserts the whole model over a freshly
+// imported string — the recovery for a mutation refused while the storage was not
+// the model's. See the iOS twin.
+static void btMacRepaintChapterWashFromModel(void) {
+    if (gTextView == nil) return;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (ts.length == 0) return;
+    [ts beginEditing];
+    [ts removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(0, ts.length)];
+    for (int i = 0; i < gTint.n; i++) btMacPaintRunWash(ts, i, btMacTintColor(i));
+    [ts endEditing];
+}
+
+// bibleTextMacReadAlongClear takes the narration wash off, PUTTING BACK whatever
+// the chapter says belongs on that verse rather than removing the attribute.
 void bibleTextMacReadAlongClear(void) {
     // Reachable from the Fyne goroutine (main on macOS) but also from AVSpeechSynthesizer
     // delegate callbacks, whose thread is not documented — marshal to main like the iOS twin.
@@ -421,9 +751,9 @@ void bibleTextMacReadAlongClear(void) {
     }
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
-    if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length) {
+    if (gReadAlongVerse > 0) {
         [ts beginEditing];
-        [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
+        btMacPaintVerseWash(ts, gReadAlongVerse, NO);
         [ts endEditing];
         // Unlike the per-tick highlight (always mid-playback, window active), this
         // clear can fire after long idle — e.g. closing the audio card much later —
@@ -431,14 +761,20 @@ void bibleTextMacReadAlongClear(void) {
         // invalidation. Force the repaint so the tint never visibly lingers.
         [gTextView setNeedsDisplayInRect:gTextView.visibleRect];
     }
-    gReadAlongRange = NSMakeRange(NSNotFound, 0);
+    gReadAlongVerse = 0;
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
 }
 
-// bibleTextMacHighlightVerse tints the narrated verse (clearing the previous one) and
-// follow-scrolls only when the verse has drifted out of a comfortable band, so the
-// text isn't yanked on every verse. verse<=0 just clears (recording's intro).
+// bibleTextMacHighlightVerse tints the narrated verse (restoring the previous one
+// to whatever the chapter says belongs on it) and follow-scrolls only when the
+// verse has drifted out of a comfortable band, so the text isn't yanked on every
+// verse. verse<=0 just clears (recording's intro).
+//
+// MOVING OFF A VERSE IS A REPAINT, NOT AN ERASE. This used to removeAttribute
+// over the range it had tinted, which is only correct when nothing was
+// underneath — over a verse carrying a note or a search hit it deleted the
+// reader's own mark as the audio walked past. btMacPaintVerseWash asks the model.
 void bibleTextMacHighlightVerse(int verse, int follow) {
     if (![NSThread isMainThread]) {   // see bibleTextMacReadAlongClear
         dispatch_async(dispatch_get_main_queue(), ^{ bibleTextMacHighlightVerse(verse, follow); });
@@ -446,20 +782,22 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
     }
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
+    uint64_t t0 = btMacPerfNow();
     [ts beginEditing];
-    if (gReadAlongRange.location != NSNotFound && NSMaxRange(gReadAlongRange) <= ts.length)
-        [ts removeAttribute:NSBackgroundColorAttributeName range:gReadAlongRange];
-    gReadAlongRange = NSMakeRange(NSNotFound, 0);
+    if (gReadAlongVerse > 0) btMacPaintVerseWash(ts, gReadAlongVerse, NO);
+    gReadAlongVerse = 0;
+    NSRange painted = NSMakeRange(NSNotFound, 0);
     if (verse > 0) {
         NSRange r = btMacReadAlongRange(ts, verse);
         if (r.location != NSNotFound && NSMaxRange(r) <= ts.length) {
-            if (gReadAlongColor == nil)
-                gReadAlongColor = [NSColor colorWithCalibratedRed:1.0 green:0.80 blue:0.30 alpha:0.32];
-            [ts addAttribute:NSBackgroundColorAttributeName value:gReadAlongColor range:r];
-            gReadAlongRange = r;
+            btMacPaintVerseWash(ts, verse, YES);
+            gReadAlongVerse = verse;
+            painted = r;   // local: the follow-scroll below is its only reader
         }
     }
     [ts endEditing];
+    if (btMacPerfOn()) NSLog(@"bibletext-perf: readalong-verse %d", verse);
+    btMacPerfLog("readalong-move", t0);
     gReadAlongActive = (verse > 0);
     if (follow) gReadAlongUserLatch = NO;   // following again → re-arm the one-shot
 
@@ -472,9 +810,9 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
     // document sits at origin 0; when it doesn't, the content lands offset below the top,
     // leaving a stale gap above verse 1.) Only scrolls when the verse drifts above the top
     // or past 70% down, so the text isn't yanked on every verse.
-    if (gReadAlongRange.location != NSNotFound) {
+    if (painted.location != NSNotFound) {
         NSLayoutManager *lm = gTextView.layoutManager;
-        NSRange g = [lm glyphRangeForCharacterRange:gReadAlongRange actualCharacterRange:NULL];
+        NSRange g = [lm glyphRangeForCharacterRange:painted actualCharacterRange:NULL];
         NSRect rect = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
         CGFloat vTop = rect.origin.y + gTextView.textContainerInset.height;
         NSRect vis = gTextView.visibleRect;
@@ -492,6 +830,49 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
 // verse (a search jump), then a one-shot restore target (reopening where the
 // reader left off), otherwise the very top. NSTextView is flipped, so larger y is
 // further down; we scroll the clip view to the target glyph rect.
+// btMacScrollToHighlight lands the view on the chapter's wash, returning NO when
+// there is none to land on. Factored out of bibleTextMacScrollTV so the
+// reposition can be issued WITHOUT a re-import — see the iOS twin
+// (btIOSScrollToHighlight) for why that is the whole point of the seam.
+//
+// The frame-origin normalisation stays with the CALLER, because both branches
+// below need it and this one can also be reached on its own.
+static BOOL btMacScrollToHighlight(void) {
+    if (gTextView == nil || gScroll == nil) return NO;
+    { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
+    if (gMacHighlightRange.location == NSNotFound ||
+        gMacHighlightRange.length == 0 ||
+        NSMaxRange(gMacHighlightRange) > gTextView.textStorage.length) return NO;
+    NSLayoutManager *lm = gTextView.layoutManager;
+    NSRange glyphs = [lm glyphRangeForCharacterRange:gMacHighlightRange
+                                actualCharacterRange:NULL];
+    NSRect rect = [lm boundingRectForGlyphRange:glyphs
+                                inTextContainer:gTextView.textContainer];
+    CGFloat y = rect.origin.y + gTextView.textContainerInset.height - 16;
+    // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band ABOVE
+    // the paragraph holding the highlighted verse, so scrolling to the verse
+    // pushes the message off the top — and the message is why the link was sent.
+    // Taken as a MINIMUM rather than a substitution, so it can only ever scroll
+    // further up: nothing can put the note out of view. (The iOS twin does the
+    // same in its scroll path; without it here the bubble was drawn correctly and
+    // simply never seen.)
+    CGFloat noteY = btMacNoteTopY();
+    if (noteY >= 0 && noteY - 12 < y) y = noteY - 12;
+    if (y < 0) y = 0;
+    [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
+    [gScroll reflectScrolledClipView:gScroll.contentView];
+    return YES;
+}
+
+// bibleTextMacScrollToHighlight is the REPOSITION half of an arrival, on its own
+// — the macOS twin of bibleTextIOSScrollToHighlight, and the reason
+// state.forceReposition no longer has to mean "re-import the chapter".
+void bibleTextMacScrollToHighlight(void) {
+    dispatch_block_t block = ^{ btMacScrollToHighlight(); };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
+}
+
 static void bibleTextMacScrollTV(void) {
     if (gTextView == nil || gScroll == nil) return;
     // Programmatic scrolling (e.g. read-along follow-scroll) can leave the
@@ -500,29 +881,7 @@ static void bibleTextMacScrollTV(void) {
     // which assumes the document sits at origin 0 — a stale origin would land the
     // content offset below the top (a gap above verse 1). Normalize it first.
     { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
-    if (gMacHighlightRange.location != NSNotFound &&
-        gMacHighlightRange.length > 0 &&
-        NSMaxRange(gMacHighlightRange) <= gTextView.textStorage.length) {
-        NSLayoutManager *lm = gTextView.layoutManager;
-        NSRange glyphs = [lm glyphRangeForCharacterRange:gMacHighlightRange
-                                    actualCharacterRange:NULL];
-        NSRect rect = [lm boundingRectForGlyphRange:glyphs
-                                    inTextContainer:gTextView.textContainer];
-        CGFloat y = rect.origin.y + gTextView.textContainerInset.height - 16;
-        // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band
-        // ABOVE the paragraph holding the highlighted verse, so scrolling to the
-        // verse pushes the message off the top — and the message is why the link
-        // was sent. Taken as a MINIMUM rather than a substitution, so it can only
-        // ever scroll further up: nothing can put the note out of view. (The iOS
-        // twin does the same in its scroll path; without it here the bubble was
-        // drawn correctly and simply never seen.)
-        CGFloat noteY = btMacNoteTopY();
-        if (noteY >= 0 && noteY - 12 < y) y = noteY - 12;
-        if (y < 0) y = 0;
-        [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
-        [gScroll reflectScrolledClipView:gScroll.contentView];
-        return;
-    }
+    if (btMacScrollToHighlight()) return;
     if (gMacHasRestore) {
         NSLayoutManager *lm = gTextView.layoutManager;
         NSTextStorage *ts = gTextView.textStorage;
@@ -639,10 +998,12 @@ static BOOL bibleTextMacApplyHTML(NSData *data) {
         NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
     };
     NSError *err = nil;
+    uint64_t t0 = btMacPerfNow();
     NSMutableAttributedString *as =
         [[NSMutableAttributedString alloc] initWithData:data options:opts
                                      documentAttributes:nil error:&err];
     if (as == nil) return NO;
+    btMacPerfLog("html-import", t0);
     // The HTML importer injects a phantom paragraphSpacingBefore on the first
     // paragraph; zero it so the chapter starts flush at the top.
     [as enumerateAttribute:NSParagraphStyleAttributeName
@@ -653,13 +1014,42 @@ static BOOL bibleTextMacApplyHTML(NSData *data) {
         ps.paragraphSpacingBefore = 0;
         [as addAttribute:NSParagraphStyleAttributeName value:ps range:r];
     }];
-    gMacHighlightRange = (NSRange){NSNotFound, 0};
-    [as enumerateAttribute:NSBackgroundColorAttributeName
-                   inRange:NSMakeRange(0, as.length) options:0
-                usingBlock:^(id value, NSRange r, BOOL *stop) {
-        if (value != nil) { gMacHighlightRange = r; *stop = YES; }
-    }];
+    // New chapter text: a narration wash from the previous chapter must not be
+    // "restored" against the new storage (audio already stopped via stopAudioForNav).
+    // ALL THREE, like the iOS twin: gReadAlongActive left YES with nothing painted
+    // is a lie, and the bounds observer above acts on it — one scroll belonging to
+    // no live narration would latch gReadAlongUserLatch and kill follow-scroll for
+    // the rest of the recording.
+    gReadAlongVerse = 0;
+    gReadAlongActive = NO;
+    gReadAlongUserLatch = NO;
     [gTextView.textStorage setAttributedString:as];
+    // The storage now holds the chapter Go announced; anything refused while it
+    // did not gets re-asserted. See gBodyGenPending.
+    gBodyGenApplied = gBodyGenPending;
+    if (gTintUnpainted) { btMacRepaintChapterWashFromModel(); gTintUnpainted = NO; }
+    // WHERE THE HIGHLIGHT RANGE COMES FROM: the MODEL, on this path as well as on
+    // the mutation path (btMacRefreshHighlightRange), so the import and the
+    // mutation cannot give different scroll targets for the same chapter. It used
+    // to take the FIRST imported background run and stop, which is the union's
+    // answer only while there is one run — and this whole model exists for the
+    // plural case. (The iOS twin unions on both paths for the same reason.)
+    btMacRefreshHighlightRange(gTextView.textStorage);
+    // Put the narration back if it is still live on this chapter — a body rebuild
+    // mid-playback (hiding a note, a theme flip, a text-size change) otherwise
+    // drops its wash until the next verse tick. Painted, not follow-scrolled: the
+    // scroll below owns where the view lands.
+    if (gPendingReadAlongVerse > 0) {
+        NSTextStorage *rts = gTextView.textStorage;
+        NSRange rr = btMacReadAlongRange(rts, gPendingReadAlongVerse);
+        if (rr.location != NSNotFound && NSMaxRange(rr) <= rts.length) {
+            [rts beginEditing];
+            btMacPaintVerseWash(rts, gPendingReadAlongVerse, YES);
+            [rts endEditing];
+            gReadAlongVerse = gPendingReadAlongVerse;
+            gReadAlongActive = YES;
+        }
+    }
     // AFTER the text and after the paragraphSpacingBefore-zeroing pass above —
     // the note's band is a spacing-before on the anchor paragraph, so installing
     // it any earlier would be wiped by that pass, and the anchor is a VERSE,
@@ -1463,10 +1853,10 @@ func syncNativeAIMenu(state *AppState) {
 }
 
 // lastPushedBookChapter is the "book|chapter" held by the NSTextView — distinct
-// from lastPushedChapterFP (which also folds in theme/red-letter/highlight/data
-// identity), so a genuine chapter change (pin to top) is distinguishable from a
-// same-chapter re-render (preserve the reader's scroll). Mirrors the iOS and
-// Android twins.
+// from lastPushedBodyFP (which also folds in theme/red-letter/data identity), so
+// a genuine chapter change (pin to top) is distinguishable from a same-chapter
+// re-render (preserve the reader's scroll). Mirrors the iOS and Android twins;
+// the combined lastPushedChapterFP is Android's alone now.
 var lastPushedBookChapter string
 
 func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
@@ -1495,7 +1885,12 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		C.bibleTextMacSetReadingMeasure(0)
 	}
 	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
-	fp := chapterRenderFingerprint(state)
+	// TWO fingerprints, because the two changes cost different things to apply —
+	// the body only by a rebuild + re-import, the wash by one attribute over a
+	// known range of the string already on screen (chapterBodyFingerprint,
+	// reading.go). The iOS twin (pushChapterHTML) splits identically.
+	body := chapterBodyFingerprint(state)
+	tintFP := chapterTint(state).fingerprint()
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
 	// Same-chapter RE-render — the fingerprint changed but the book+chapter did
 	// not (a light/dark flip, red-letter toggle, or background data swap). The
@@ -1504,7 +1899,10 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// restore, exactly as the iOS twin does (pushChapterHTML). Without this a
 	// system dark→light switch yanked a mid-chapter desktop reader to the top —
 	// and the next flush then persisted that top-of-chapter position.
-	if state.restore == nil && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
+	//
+	// The BODY fingerprint, not the whole render's: a wash-only change no longer
+	// replaces the text view's content, so there is no scroll snap to pre-empt.
+	if state.restore == nil && bc == lastPushedBookChapter && body != lastPushedBodyFP {
 		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
 			state.restore = &restoreAnchor{
 				Book:    state.CurrentBook,
@@ -1521,17 +1919,45 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// the top. A normal push disarms it.
 	armPendingRestore(state)
 	// Skip the HTML rebuild + NSAttributedString re-import when the NSTextView
-	// already holds this exact chapter render (mirrors the iOS gate in
+	// already holds this chapter's TEXT (mirrors the iOS gate in
 	// pushChapterHTML); a pending scroll restore forces the push. SetHTML consumes
 	// the C string synchronously, so freeing right after the call is safe.
-	if state.restore != nil || state.forceReposition || fp != lastPushedChapterFP {
+	//
+	// THE WASH IS NOT A REASON TO REBUILD — a wash-only change is a live range
+	// mutation on the attributed string already on screen. See pushChapterHTML.
+	// Nor is forceReposition: "place the view" is a scroll
+	// (bibleTextMacScrollToHighlight), not a re-import, and treating it as one made
+	// the fast path unreachable for every mark that ARRIVES.
+	if state.restore != nil || body != lastPushedBodyFP {
+		// Read BEFORE lastPushedBookChapter moves — see the iOS twin: a
+		// same-chapter re-render may carry a live narration wash across its own
+		// re-import, a chapter change must not.
+		sameChapter := C.int(0)
+		if bc == lastPushedBookChapter {
+			sameChapter = 1
+		}
 		state.forceReposition = false
-		lastPushedChapterFP = fp
+		lastPushedBodyFP = body
+		lastPushedTintFP = tintFP
 		lastPushedBookChapter = bc
+		// The model FIRST and unpainted: the HTML below carries this very wash.
+		setNativeTint(state, verses)
+		// Announce the push: the same-chapter answer above, plus the generation
+		// that tells a landed chapter from a failed import (gBodyGenPending).
+		C.bibleTextMacBeginChapterPush(sameChapter)
 		html := buildChapterHTML(state, verses)
 		c := C.CString(html)
 		C.bibleTextMacTVSetHTML(c)
 		C.free(unsafe.Pointer(c))
+	} else {
+		if tintFP != lastPushedTintFP {
+			lastPushedTintFP = tintFP
+			applyNativeTint(state, verses)
+		}
+		if state.forceReposition {
+			state.forceReposition = false
+			C.bibleTextMacScrollToHighlight()
+		}
 	}
 	// Keep the floating "Follow narration" pill styled for the current palette
 	// (this build runs on every theme flip).
@@ -1576,6 +2002,39 @@ func pushNoteToPane(state *AppState) {
 	// highlight, and a sticker without an anchor parks at the top of the chapter.
 	C.bibleTextMacSetNote(cText, min, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
+}
+
+// setNativeTint / applyNativeTint hand the chapter's wash model
+// (reading_tint_apple.go) to the NSTextView — the macOS half of the pair, kept
+// name-for-name with the iOS one so the audio controller and the push gate call
+// the same thing on both panes.
+//
+//   - setNativeTint records the model and paints nothing, because the HTML about
+//     to be imported already carries the wash.
+//   - applyNativeTint paints it onto the attributed string already on screen: no
+//     buildChapterHTML, no re-import, no re-assertion of the scroll position.
+//
+// Passing &runs[0] is within the cgo pointer rules — the C side copies into its
+// own fixed table before returning and never retains the Go memory.
+func setNativeTint(state *AppState, verses []Verse) { pushNativeTint(state, verses, 0) }
+
+func applyNativeTint(state *AppState, verses []Verse) { pushNativeTint(state, verses, 1) }
+
+func pushNativeTint(state *AppState, verses []Verse, repaint C.int) {
+	runs := nativeTintRuns(state, verses)
+	if len(runs) == 0 {
+		C.bibleTextMacSetTintRuns(nil, 0, repaint)
+		return
+	}
+	c := make([]C.BTTintRun, len(runs))
+	for i, r := range runs {
+		c[i] = C.BTTintRun{
+			lo: C.int(r.Lo), hi: C.int(r.Hi),
+			r: C.double(float64(r.Wash.R) / 255), g: C.double(float64(r.Wash.G) / 255),
+			b: C.double(float64(r.Wash.B) / 255), a: C.double(float64(r.Wash.A) / 255),
+		}
+	}
+	C.bibleTextMacSetTintRuns(&c[0], C.int(len(c)), repaint)
 }
 
 // readAlongHighlight tints the verse being narrated (0 clears) and follow-scrolls it
