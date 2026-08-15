@@ -129,24 +129,33 @@ const shareLinkHost = "bibletext.co.uk"
 // or, failing that, the ?v= alias ("16-18"). Anything unparseable yields no
 // verse rather than an error: the chapter is still the right place to land.
 //
-// The fragment is a key list, so the verse is whatever sits before the first
-// "&" — everything after it belongs to other keys (the note, and whatever is
-// added later). Taking only the first field is what makes an unknown key
-// harmless here rather than something that swallows the verse.
+// The fragment is a KEY LIST, and the verse is read from whichever field
+// carries it rather than from the first field only.
+//
+// It used to take just the leading field, on the reasoning that an unknown key
+// would then be harmless. It is harmless either way, and the narrow version
+// disagreed with the published web reader, which splits every field and accepts
+// "v=" wherever it appears (cmd/websitegen/assets.go, fragKeys). Nothing we emit
+// hits that today because ShareLinkURL always writes the verse first
+// (share_link.go:136-142) — but the divergence is one new key away from being
+// real, and a grammar whose meaning depends on field order is not a grammar.
+// Both spellings are accepted at any position: the bare "v16" the reader emits,
+// and the explicit "v=16" the key list implies.
 func parseVersePayload(frag, query string) (lo, hi int) {
-	if i := strings.IndexByte(frag, '&'); i >= 0 {
-		frag = frag[:i]
-	}
-	frag = strings.TrimSpace(frag)
-
-	// The verse key, in either spelling: the bare "v16" the reader emits, or the
-	// explicit "v=16" the key grammar implies.
 	var payload string
-	switch {
-	case strings.HasPrefix(frag, "v="):
-		payload = frag[len("v="):]
-	case strings.HasPrefix(frag, "v"):
-		payload = frag[len("v"):]
+	for _, field := range strings.Split(frag, "&") {
+		field = strings.TrimSpace(field)
+		switch {
+		case strings.HasPrefix(field, "v="):
+			payload = field[len("v="):]
+		case len(field) > 1 && field[0] == 'v' && field[1] >= '0' && field[1] <= '9':
+			// A bare verse token. The digit test keeps it from swallowing any
+			// future key that merely starts with "v".
+			payload = field[1:]
+		}
+		if payload != "" {
+			break
+		}
 	}
 	if payload == "" {
 		// No verse in the fragment — try the ?v= alias.
