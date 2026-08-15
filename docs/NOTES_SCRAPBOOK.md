@@ -1340,3 +1340,122 @@ address.** A note is addressed by its own `NoteID` and nothing else. So a merge,
 a rename, a late-arriving name, or an account id arriving years from now changes
 what the app can SAY about a note — never which note a verb reaches, never where
 it is stored, and never whether it survives.
+
+## Where your own notes appear — decided, since the owner left it open
+
+*"The notes display pane should have a way to show notes sent by you since they
+are stored they should be viewed somehow. I'll leave this up to you, but no
+display in text for now."*
+
+**Decision: one chronological list, mixed, distinguished by the byline — not a
+separate tab and not a separate section.**
+
+The reading pane is unaffected: your own notes are stored and are **never drawn
+in the scripture text**, per the directive. This is only about the browser.
+
+Why mixed rather than separated:
+
+- The brief is a **scrapbook**, and the thing a scrapbook records is an exchange.
+  "I sent her Psalm 34 in March, she sent me Romans 8 in June" is the story;
+  splitting the two halves into different screens destroys it and leaves two
+  lists that each answer half a question.
+- It is also where this is already going. Once the person layer exists, the
+  natural view is *everything between me and one person, in order* — and that
+  view is impossible to assemble if sent and received live in different places.
+  Mixing now means the person layer is a filter over an existing list rather than
+  a third list.
+- The byline already has to carry attribution for received notes (R2). "You" is
+  one more value in a field that must exist anyway, not new machinery.
+
+What this needs, concretely:
+
+- A filter with three positions — **All · From others · From you** — defaulting to
+  All. It earns its place once the list is long, and it is the same control the
+  person layer will later extend, so it is not throwaway.
+- Own notes are **excluded from any unread or "new" count**. You are not notified
+  about your own words.
+- Sort is by time, newest first, with `Received` for incoming and the send time
+  for your own. One axis, no interleaving rules to get wrong.
+
+What is deliberately NOT decided here: whether your own notes are editable after
+sending. That is a real feature question with an answer that affects the record
+(an edited note is a new version, not a mutation, if the record stays immutable),
+and it should be decided on its own rather than smuggled in with a list layout.
+
+## One lit span at a time — the current invariant, and how to lift it
+
+Settled with the owner 2026-08-15, after looking at the tint samples:
+
+> *"Really we shouldn't be seeing this right if only one note is expanded at a
+> time? And I think highlights coming from search etc. should collapse all notes.
+> So I think we are for now looking at only one highlighted span visible at a
+> time? … but again this should be extensible so your recommendation is ok as
+> long as we record this work and make it easy to adjust later."*
+
+**Yes. The invariant follows from rules already agreed, rather than being a new
+one:**
+
+1. A note's verses are lit only while that note is EXPANDED. (Minimizing already
+   clears the highlight — it is why `NoteVerseLo` exists apart from the mark.)
+2. At most one note is expanded, possibly none. (The temporary cap.)
+3. A mark from any other origin — search, Go-to, verse of the day, a link's own
+   span — collapses every note.
+
+⇒ **At most one span is lit at any moment**, and `tintMulti` is therefore
+*currently unreachable*. It is specified, measured and recorded below, and
+nothing draws it yet.
+
+### The trap in rule 3, and the rule that avoids it
+
+"A search collapses all notes" must be a **FOCUS** change and must never write
+`Minimized` to the store.
+
+This is the same defect already rejected for the cap itself, arriving by a new
+door. A persisted collapse is byte-identical to a minimize the reader typed, so
+a search would forge minimize flags on other people's messages: the notes browser
+would report "Minimized in the chapter" for choices nobody made, and lifting the
+cap later would greet the reader with chips they never created. The store holds
+one bit and the model would need two, so the information needed to undo it is
+never recorded.
+
+> **Rule.** `Minimized` in the store means one thing only: *this reader pressed
+> minimize on this note.* Search, navigation, arrival and the cap all move FOCUS,
+> which is session state and writes nothing.
+
+### Where the invariant lives, and how to lift it
+
+One function — `drawnNotes(state) []drawnNote` — is the only thing in the tree
+that knows a number exists, and the tint layer beneath it (S3) already carries a
+per-verse tint VALUE rather than a bool. So lifting this is:
+
+| To allow | Change |
+|---|---|
+| several notes lit, one expanded | let `drawnNotes` mark unfocused notes as lit; `tintMulti` becomes reachable with no other change |
+| several notes expanded | relax the focus scalar to a set; the cap's whole residue is zero bytes, so nothing needs undoing |
+| a faint mark under minimized notes | a third tint value; the flattening layer already supports N |
+
+**Nothing about the store, the record, the wire format or the anchor changes for
+any of those.** That is the point of doing the tint work now even though only one
+span is drawn: S3 stops the Windows/Linux band spilling onto neighbouring verses
+today, and it makes multi-note tinting a data change rather than five
+simultaneous drawing changes later.
+
+### The palette, recorded now so it need not be re-derived
+
+Chosen by measurement and by the owner's eye, 2026-08-15. Kept in one place in
+`theme.go` so a change is one line per theme.
+
+| | one note | more than one *(unreachable today)* |
+|---|---|---|
+| light | `#FFE08A` *(shipped)* | `#C7DBF5` |
+| dark | `#543E10` *(shipped)* | `#2E3E5C` |
+
+Separation is by HUE, not brightness, and that was not a preference. Dark mode has
+no brightness left: red letters are LIGHT there, so a brighter band closes the gap
+on Christ's words — the brightest gold that separates at all (`#7A5D18`) drops
+them to 2.06 contrast against a 3.0 floor. The first pair tried differed by
+**ΔE 2.3**, which is below the threshold at which two patches read as different
+colours; the owner reported seeing no difference at all, which was accurate. The
+slate is ΔE 33 from the gold and scores **3.59** on red letters against the gold's
+own 3.39 — it separates better AND keeps His words clearer. Gold against blue is
+also the most robust pair for red-green colour blindness.
