@@ -1500,3 +1500,42 @@ The only row that writes to the store is the last one, which is the only row whe
 the reader said so. Three layers, cleanly separated: **`Minimized`** is what the
 reader chose and persists; **focus** is which note is open this session; and
 **suppression** is derived from the mark and stored nowhere.
+
+---
+
+## What landed early, and why the staging moved
+
+Two pieces were pulled forward out of order on 2026-08-15, after the owner asked
+what had happened to them. Recorded here because a plan that quietly stops
+matching the tree is worse than no plan.
+
+**Your own notes are stored (part of S5), and the browser draws bubbles (S7).**
+Both were scheduled behind S8 so the bubble builder could be extracted once from
+the reworked reading view rather than built twice. That reasoning was sound about
+the code and wrong about the work: neither piece depends on the new store, and
+scheduling them there parked two things the owner could SEE behind roughly
+fifteen days of deliberately invisible model work. The extraction happens once
+either way — `noteBubble` is built from the current banner now, and S8 reuses it.
+
+**Own notes live in their own list** (`notes_mine.go`, preference key
+`notes.mine`), NOT in the received store, and that is a data-loss decision:
+
+| If own notes had gone in the keyed store | Consequence |
+|---|---|
+| share a note on a chapter where a friend's note already lives | **their message is overwritten** |
+| share a second note on one chapter | **your first is overwritten** |
+
+A list has no key to collide on, own notes are never looked up by passage, and
+appending is the shape S5's store takes anyway. So this is the direction of
+travel rather than a detour — S5 merges the two lists rather than replacing this
+one.
+
+**What this changes about S5 and S7 when they arrive:**
+
+- S5 still deletes `noteKey`, `notesMax` and the passage-keyed map, and now also
+  folds `notes.mine` into the one scrapbook store. `sameNoteContent` is the dedup
+  rule already agreed with the owner and carries over unchanged.
+- S7 becomes smaller: the shared builder exists, so it is a matter of the native
+  surfaces adopting it rather than an extraction.
+- `SharedNote` already carries `Mine`, `SenderName` and `SenderID`. The latter
+  two are stored and never read, so the identity work in S9 is additive.
