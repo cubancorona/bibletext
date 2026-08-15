@@ -1,6 +1,11 @@
 package bibletext
 
-import "testing"
+import (
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+)
 
 // Your own notes survive being sent, which they did not before: "Share with
 // note" built a URL, handed it to the share sheet, and kept nothing.
@@ -188,5 +193,50 @@ func TestAnUnreadableOwnStoreIsNotOverwritten(t *testing.T) {
 	saveMyNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "new"})
 	if p.m[prefMyNotes] != "{not json" {
 		t.Errorf("the unreadable blob was overwritten: %q", p.m[prefMyNotes])
+	}
+}
+
+// The bubble has a TAIL, which is what makes it read as somebody speaking
+// rather than as a card (owner). Its geometry mirrors the native sticker.
+func TestNoteBubbleHasATail(t *testing.T) {
+	pal := lightPalette
+	b := noteBubble("a message", pal)
+	inner, ok := b.(*fyne.Container)
+	if !ok || len(inner.Objects) != 2 {
+		t.Fatalf("expected a bubble and a tail, got %#v", b)
+	}
+	if _, isImg := inner.Objects[1].(*canvas.Image); !isImg {
+		t.Fatalf("the tail is not drawn: %#v", inner.Objects[1])
+	}
+	// The tail adds its depth to the bubble's height, and sits inset from the
+	// left edge pointing down at the passage.
+	b.Resize(fyne.NewSize(240, b.MinSize().Height))
+	tail := inner.Objects[1]
+	if got := tail.Position().X; got != noteTailInset {
+		t.Errorf("tail X = %v, want %v", got, noteTailInset)
+	}
+	card := inner.Objects[0]
+	if tail.Position().Y >= card.Position().Y+card.Size().Height {
+		t.Error("the tail must overlap the bubble's border, not sit below it")
+	}
+	if b.MinSize().Height <= card.MinSize().Height {
+		t.Error("the bubble's height must make room for the tail")
+	}
+}
+
+// The translation rides in the heading, not under the bubble.
+func TestVersionAbbreviations(t *testing.T) {
+	for id, want := range map[string]string{
+		"web": "WEB", "bsb": "BSB", "webc": "WEBC", "nkjv": "NKJV", "": "",
+	} {
+		if got := noteVersionAbbrev(id); got != want {
+			t.Errorf("noteVersionAbbrev(%q) = %q, want %q", id, got, want)
+		}
+	}
+	// An id the registry has never heard of still says SOMETHING — a note is
+	// from somewhere, and saying so beats implying it came from the
+	// translation on screen.
+	if got := noteVersionAbbrev("esv"); got != "ESV" {
+		t.Errorf("unknown id gave %q", got)
 	}
 }
