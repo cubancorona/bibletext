@@ -14,5 +14,11 @@ func devAutoOpenSheet(*AppState) {}
 // devAutoSwitchVersion: see the dev twin. Empty in release builds.
 func devAutoSwitchVersion(state *AppState) {}
 
+// devAutoReadAlong: see the dev twin. Empty in release builds.
+func devAutoReadAlong(state *AppState) {}
+
+// devAutoTintBench: see the dev twin. Empty in release builds.
+func devAutoTintBench(state *AppState) {}
+
 // devNoteDebug: see the dev twin. Empty in release builds.
 func devNoteDebug(state *AppState) string { return "" }

@@ -436,13 +436,17 @@ func rebuildWindow(state *AppState) {
 	afterRebuild(state)
 }
 
-// lastPushedChapterFP is the fingerprint of the chapter HTML currently held by
-// the native reading overlay (iOS UITextView / macOS NSTextView). The native
-// push paths skip rebuilding + re-importing the HTML when it hasn't changed —
-// re-parsing the whole chapter through the NSAttributedString HTML importer is
-// the single most frequent expensive op (it fires on every tab-return-to-Read
-// and same-chapter refresh). Written only from the UI goroutine; unused on
-// platforms without a native overlay (Linux/Windows/Android).
+// lastPushedChapterFP is the fingerprint of the chapter currently held by the
+// ANDROID reading overlay, and by nothing else any more.
+//
+// It is the COMBINED question — chapterRenderFingerprint, body and wash together
+// — which is the only question Android can ask: its TextView is handed a whole
+// `Spanned`, so there is no way to change a wash except by re-rendering. The
+// Apple panes used to share this variable and now ask in two halves instead
+// (lastPushedBodyFP / lastPushedTintFP, reading_tint_apple.go), because a wash
+// change there is one attribute over a known range of the string already on
+// screen and should not pay for a rebuild. Written only from the UI goroutine;
+// unused on the platforms with no native overlay at all (Linux/Windows).
 var lastPushedChapterFP string
 
 // reporterMeasureEm is the U.S. Reports text measure in ems, measured from a
@@ -462,6 +466,41 @@ const reporterMeasureEm = 27.5
 // from a search hit vs. prev/next is the same book+chapter but renders the
 // highlighted verse differently).
 func chapterRenderFingerprint(state *AppState) string {
+	return chapterFingerprint(state, chapterTint(state).fingerprint())
+}
+
+// tintSlotFolded stands in the tint's slot when the caller is asking for the
+// BODY identity alone. Any constant would do; it is spelled as an impossible
+// tint fingerprint so a body fingerprint can never collide with a real render's.
+const tintSlotFolded = "-"
+
+// chapterBodyFingerprint is the identity of everything on the pane EXCEPT what
+// each verse is washed in.
+//
+// It exists because the two halves have completely different repair costs. A
+// change to the body — a different chapter, a light/dark flip, a data swap —
+// can only be applied by rebuilding the HTML and re-importing the whole
+// NSAttributedString, which on Psalm 119 is tens of milliseconds. A change to
+// the WASH is one attribute over a known character range on the attributed
+// string that is already there: no rebuild, no re-import, no scroll to
+// re-assert. Folding both into one string, as this file did until now, made the
+// cheap change pay the expensive change's price — every "clear highlight" tap,
+// every arriving mark, every note focus once notes go plural.
+//
+// So the Apple panes compare the two SEPARATELY (pushChapterHTML,
+// newMacReadingHost): body differs → rebuild; body same and tint differs →
+// applyNativeTint, a live range mutation. Android has no such primitive (the
+// Java TextView is handed a whole Spanned), so it keeps asking the combined
+// question through chapterRenderFingerprint.
+func chapterBodyFingerprint(state *AppState) string {
+	return chapterFingerprint(state, tintSlotFolded)
+}
+
+// chapterFingerprint is the one format both questions are asked in, with the
+// tint arriving as an argument rather than being read here — so the body and
+// the whole-render identity cannot drift apart into two hand-maintained lists
+// of what a render depends on.
+func chapterFingerprint(state *AppState, hl string) string {
 	var variant fyne.ThemeVariant
 	if app := fyne.CurrentApp(); app != nil {
 		variant = app.Settings().ThemeVariant()
@@ -470,13 +509,14 @@ func chapterRenderFingerprint(state *AppState) string {
 	if redLetterEnabled() {
 		red = 1
 	}
-	// THE TINT SOURCE FOLDS ITSELF (tint.go). This clause used to read the mark
-	// out of AppState and format it here, which is fine while the tint IS the
-	// mark and wrong the moment it stops being: a fingerprint assembled at the
-	// call site is a fingerprint that a new tint input can be added without.
+	// THE TINT SOURCE FOLDS ITSELF (tint.go), and it is handed IN rather than
+	// read here. This clause used to read the mark out of AppState and format it
+	// at this call site, which is fine while the tint IS the mark and wrong the
+	// moment it stops being: a fingerprint assembled at the call site is a
+	// fingerprint that a new tint input can be added without.
 	// chapterTints.fingerprint is written beside the fields it folds, so the
 	// function that widens the tint is the function that widens this.
-	hl := chapterTint(state).fingerprint()
+	//
 	// state.Bible's pointer identity is part of the fingerprint: a background
 	// data swap (the Gospels-seed → full download, or the stale-epoch refresh)
 	// changes the TEXT without changing version/book/chapter, and the gate
@@ -488,13 +528,23 @@ func chapterRenderFingerprint(state *AppState) string {
 	// restore and delete: the reader would tap "Delete note" and watch nothing
 	// happen. Its LENGTH stands in for its text (notes are replaced wholesale,
 	// never edited in place) so a long note costs nothing to fingerprint.
+	//
+	// ITS ANCHOR VERSE IS PART OF IT TOO, and that is not decoration. The sticker
+	// sits in a band the TEXT reserves — a paragraphSpacingBefore installed on the
+	// anchor paragraph inside the apply-HTML block, because installing it needs the
+	// text — so moving a note to a different verse is a BODY change, repairable
+	// only by the rebuild. It used to ride along by accident: moving the note moved
+	// the mark, which changed the one fingerprint. With the wash split out, a note
+	// replaced by one of identical length on another verse of the same chapter is a
+	// tint-only change, and the wash would move to the new verse while the band
+	// stayed on the old one.
 	note := "0"
 	if state.ActiveNote != "" {
 		m := 0
 		if state.NoteMinimized {
 			m = 1
 		}
-		note = fmt.Sprintf("%d.%d", len(state.ActiveNote), m)
+		note = fmt.Sprintf("%d.%d.%d", len(state.ActiveNote), m, state.NoteVerseLo)
 	}
 	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s|d%p|n%s",
 		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID(), state.Bible, note)

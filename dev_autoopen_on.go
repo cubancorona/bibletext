@@ -74,6 +74,83 @@ func devAutoSwitchVersion(state *AppState) {
 	})
 }
 
+// devAutoReadAlong drives the narration wash across a noted verse, so the one
+// thing the S2 wash model exists for can actually be SEEN in a simulator.
+//
+// The scenario is three states of one verse: a note's wash on it (BEFORE), the
+// narration sitting on top of it (DURING), and the narration gone past with the
+// note's wash back (AFTER). None of it is reachable from a script otherwise —
+// simctl cannot tap, and the recorded audio the read-along normally rides on
+// does not stream in a simulator run. So this opens a real shared link (the same
+// HandleShareLink an OS-delivered universal link calls) and then steps
+// readAlongHighlight by hand, which is exactly what the audio controller's time
+// observer does with a recording playing.
+//
+//	SIMCTL_CHILD_BIBLETEXT_DEV_READALONG=1 xcrun simctl launch <udid> uk.co.bibletext
+//
+// THE MARK CAN BE A RANGE, and on the defect that shipped it had to be: set the
+// variable to "lo-hi" (e.g. BIBLETEXT_DEV_READALONG=35-37) and the shared link
+// carries a MULTI-verse mark, with the narration walking through its middle. A
+// single-verse mark is the one shape that cannot show a band whose INTERIOR is
+// painted wrong — no interior — which is exactly how the wash range that
+// swallowed the inter-verse break passed its testing. "1" keeps the single-verse
+// scenario.
+//
+// The steps are on a fixed clock, ten seconds apart, so a screenshot burst can
+// be correlated against the device log's own timestamps: the narration lands two
+// verses BEFORE the noted one, then ON it, then past it, then stops altogether.
+// Each move prints "bibletext-perf: readalong-verse N" when BIBLETEXT_PERF is
+// set, which is what pins a capture to a step.
+func devAutoReadAlong(state *AppState) {
+	spec := strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_READALONG"))
+	if spec == "" || state == nil {
+		return
+	}
+	const (
+		book  = "John"
+		chap  = 11
+		verse = 35
+	)
+	lo, hi := verse, verse
+	if a, b, ok := strings.Cut(spec, "-"); ok {
+		if x, err := strconv.Atoi(strings.TrimSpace(a)); err == nil {
+			if y, err := strconv.Atoi(strings.TrimSpace(b)); err == nil && y >= x && x > 0 {
+				lo, hi = x, y
+			}
+		}
+	}
+	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
+	at(1500*time.Millisecond, func() {
+		// The link names the version already loaded, so the scenario exercises
+		// the wash and not a translation download.
+		HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+			book, chap, lo, hi,
+			"Read this at the hospital this morning and thought of you."))
+	})
+	at(6*time.Second, func() { readAlongHighlight(lo-2, true) })
+	at(16*time.Second, func() { readAlongHighlight(lo, true) })
+	// The last marked verse: over a RANGE this leaves the run's interior verses
+	// restored by the live mutation while the ones the import painted are
+	// untouched, which is the frame where a wrong repaint shows as one band in
+	// two golds (or with a full-width tail on the interior verse).
+	at(26*time.Second, func() { readAlongHighlight(hi, true) })
+	// A BODY REBUILD WITH THE NARRATION LIVE — what hiding or deleting a note,
+	// flipping the theme or changing the text size does mid-playback. The import
+	// starts from a fresh attributed string with no wash anywhere on it, and the
+	// narration has to come back with it rather than wait for the next verse tick.
+	at(30*time.Second, func() { devForceBodyRebuild(state) })
+	at(36*time.Second, func() { readAlongHighlight(hi+1, true) })
+	at(46*time.Second, func() { readAlongClear() })
+	// And the other half of the seam, on the same screen: clearing the mark is
+	// what the native "Clear highlight" tap does, and it is now a live attribute
+	// mutation — the note's gold goes, the text and the reader's scroll position
+	// do not move, and the log says tint-mutate rather than html-import.
+	at(56*time.Second, func() {
+		clearHighlightedVerse(state)
+		state.refreshReadingOnly()
+	})
+}
+
 // devNoteDebug reports the live note state for on-screen diagnosis. TEMPORARY:
 // added while chasing the owner's report that switching translation to the WEB
 // (but not to the BSB) loses a note while keeping its highlight. It shows what

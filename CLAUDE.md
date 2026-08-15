@@ -253,6 +253,34 @@ all 3,906 scripture pages, so the notice pages carry their own
   (`reading_styled_platform_on/off.go`); flipping the `on` constant reverts
   to the legacy `chapterText` Entry pane in one line. iOS/macOS/Android
   behaviour is untouched (false constant; macOS keeps NSTextView).
+- **One background per character (the wash model).** TextKit gives a character
+  exactly one `NSBackgroundColorAttributeName`, and two things want it: the
+  chapter's own wash (search hit / note / link span / Go-to — `chapterTint`,
+  `tint.go`) and the narration wash that walks the chapter while audio plays. So
+  the native side is never told "remove your tint": it is told what a verse's
+  wash should be NOW (`setNativeTint` / `applyNativeTint`,
+  `reading_tint_apple.go` → `bibleTextIOSSetTintRuns` /
+  `bibleTextMacSetTintRuns`) and `btIOSPaintVerseWash` / `btMacPaintVerseWash`
+  set it — chapter wash, narration, or their source-over composite where both
+  apply. `removeAttribute` over the narrated range is the bug this replaced: it
+  deleted a note's own mark as the audio walked past it. The pair is one function
+  with a `narrated` flag on purpose (restore and apply as two functions are two
+  lists of what a background can be, and the shorter one is the defect).
+  **Two invariants the mutation must match, because nothing rebuilds after it.**
+  (a) *The colour.* The wash the importer paints comes from a CSS
+  `background-color`, which is **sRGB** — so every NSColor/UIColor on this path is
+  built with `colorWithSRGBRed:` / `colorWithRed:`. `colorWithCalibratedRed:` with
+  the same numbers is a different colour (`#ffe08a` → `#ffe59b`), and macOS shipped
+  it: a repainted verse came back paler and greener than its neighbours, for good.
+  (b) *The shape.* A verse's character range runs to the NEXT verse's number, so it
+  swallows the poetic `<br>`, the `</p><p>` boundary and the reporter first-line
+  indent — none of which `buildChapterHTML` puts inside `.hl`, and TextKit paints a
+  washed break out to the right margin. `btIOSBreakTailBefore` /
+  `btMacBreakTailBefore` take those back off while keeping the join SPACE, which
+  *is* inside the band (`tint.go`'s `JoinSpace`). Pinned by
+  `reading_tint_wash_shape_test.go` over prose, poetry and a paragraph crossing in
+  both layouts. Both invariants are single-verse-invisible, which is how they
+  shipped — check a MULTI-verse mark.
 - **Native text overlays (cgo).** On macOS the reading pane is a native
   `NSTextView` and on iOS a `UITextView`, floating *above* the Fyne canvas
   (`reading_macos.go` / `reading_ios.go`, Objective-C in the cgo preamble).
@@ -290,13 +318,31 @@ all 3,906 scripture pages, so the notice pages carry their own
   (`app.go`) calls `SetTheme` only when the theme object changes — re-running it
   per build forces a full canvas theme-walk; (2) `pushChapterHTML` (iOS) /
   `newMacReadingHost` (macOS) skip the costly HTML rebuild + NSAttributedString
-  re-import when `chapterRenderFingerprint` (`reading.go`) is unchanged and no
-  scroll restore is pending — the fingerprint MUST include book/chapter/version,
-  theme variant, red-letter, the highlighted-verse identity AND the `state.Bible`
-  pointer, or a search-jump / light-dark flip would show stale text and a
-  background DATA SWAP (the Gospels-seed→full download, or the stale-epoch
-  refresh) would be skipped entirely, leaving the old decode on screen until the
-  next navigation; (3) live search is debounced via
+  re-import when the chapter's identity is unchanged and no scroll restore is
+  pending — that identity MUST include book/chapter/version, theme variant,
+  red-letter, the highlighted-verse identity AND the `state.Bible` pointer, or a
+  search-jump / light-dark flip would show stale text and a background DATA SWAP
+  (the Gospels-seed→full download, or the stale-epoch refresh) would be skipped
+  entirely, leaving the old decode on screen until the next navigation.
+  **The Apple panes ask that in TWO halves**, because the two are repaired
+  differently: `chapterBodyFingerprint` (everything except the wash) can only be
+  repaired by the rebuild + re-import, while a change to what a verse is WASHED
+  in (`chapterTints.fingerprint`, `tint.go`) is one attribute over a known
+  character range of the string already on screen — `applyNativeTint`
+  (`reading_tint_apple.go`), measured at ~3 ms against ~24 ms for the rebuild on
+  Psalm 119. Android has no such primitive (its TextView is handed a whole
+  `Spanned`) and keeps asking the combined `chapterRenderFingerprint`. Because a
+  wash change no longer rebuilds, it no longer scrolls either: **every explicit
+  arrival must set `state.forceReposition`** (`openSearchResultRange`,
+  `applyShareTarget`, and — only where the wash IS a mutation,
+  `washIsLiveMutation` — `goToVerseRange`; pinned by
+  `notes_reposition_test.go`), or "Go to John 3:16" while already on John 3
+  lights the verse without moving the view. **That flag is a SCROLL, not a
+  rebuild**: the Apple gates honour it with
+  `bibleTextIOSScrollToHighlight` / `bibleTextMacScrollToHighlight` issued
+  alongside `applyNativeTint`. Spelling it as a rebuild is what made the fast path
+  unreachable — every path that PLACES a mark sets it, so only *clearing* a mark
+  ever took the mutation; (3) live search is debounced via
   `newSearchDebouncer` (`state.go`), whose trailing timer marshals back through
   `fyne.Do`. `Verse.Ref` and `BibleData.chapterNums` are precomputed in
   `PrepareSearchIndex` (on the load goroutine) so search/nav don't re-format or

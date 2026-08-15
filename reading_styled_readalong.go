@@ -50,6 +50,25 @@ var styledRAFollowPending bool
 // scroll branch re-pins the view to the highlight inside the very Refresh a
 // follow-scroll issues, leaving follow inert whenever a search jump preceded
 // Play. Reset on rewire (a fresh pane's highlight positions once again).
+//
+// IT SURVIVES S2, AND THE SCRAPBOOK'S REASON FOR RETIRING IT WAS A MISREADING.
+// docs/NOTES_SCRAPBOOK.md files this latch under "read-along must restore, not
+// erase", as the styled pane's way of reconciling two washes that want the same
+// pixel — "the styled pane reconciles with a latch, not a model". It does not.
+// This latch says nothing about colour: it is about who owns the SCROLL
+// POSITION, and the only things that read it are styledColumn.Layout's
+// highlightOwnsScroll branch and the rewire that resets it.
+//
+// The wash collision it was supposed to be papering over does not exist on this
+// pane at all. styledReadingPane draws the narration on its own layer of
+// rectangles ABOVE the verse wash (raRects over tintRects,
+// reading_styled_pane.go), so both are visible at once and neither erases the
+// other. That collision is a TextKit constraint — one
+// NSBackgroundColorAttributeName per character — and it is confined to the two
+// Apple panes, which is exactly where restoreTint/applyTint landed
+// (reading_tint_apple.go). Retiring this latch would therefore not remove a
+// duplicate model; it would remove the only thing that lets a follow-scroll
+// survive a search jump, and read-along would go inert on Windows and Linux.
 var styledHighlightCeded bool
 
 // styledReadAlongApply tints the narrated verse (0 clears — the recording's
