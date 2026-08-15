@@ -75,6 +75,23 @@ func shareVerseLinkWithNote(state *AppState, text, note string) {
 		shareVerse(state, text, false)
 		return
 	}
+	// And keep it. Until now your own words vanished with the share sheet and
+	// survived only in whatever messenger you sent them through — which meant
+	// the app could show you every note you had RECEIVED and none you had sent.
+	// Stored in its own list (notes_mine.go), never drawn in the scripture text,
+
+	if n := strings.TrimSpace(note); n != "" {
+		saveMyNote(appPrefs(), SharedNote{
+			VersionID: version.ID,
+			Book:      state.CurrentBook,
+			Chapter:   state.CurrentChapter,
+			VerseLo:   lo,
+			VerseHi:   hi,
+			Text:      n,
+			Mine:      true,
+		})
+	}
+
 	// The note goes in the MESSAGE too, not only inside the link. It is how
 	// people share things anyway, it reaches a recipient who never taps, and it
 	// reaches one whose app is too old to read the note out of the fragment.

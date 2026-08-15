@@ -59,6 +59,9 @@ func deleteAllNotes(p prefStore) {
 		return
 	}
 	p.SetString(prefSharedNotes, "")
+	// BOTH stores. To the reader there is one thing called "your notes", and a
+	// control that emptied half of them would be lying (owner directive).
+	deleteMyNotes(p)
 }
 
 // notesFeatureOn is the single gate the rest of the app asks. It exists so no

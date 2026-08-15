@@ -1,0 +1,192 @@
+package bibletext
+
+import "testing"
+
+// Your own notes survive being sent, which they did not before: "Share with
+// note" built a URL, handed it to the share sheet, and kept nothing.
+func TestMyNoteSurvivesARoundTrip(t *testing.T) {
+	p := newNotePrefs()
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 34,
+		VerseLo: 18, Text: "synthetic note today"})
+
+	mine, ok := readMyNotes(p)
+	if !ok {
+		t.Fatal("the store did not read back")
+	}
+	if len(mine) != 1 {
+		t.Fatalf("expected one note of my own, got %d", len(mine))
+	}
+	if mine[0].Text != "synthetic note today" || !mine[0].Mine {
+		t.Errorf("came back changed: %+v", mine[0])
+	}
+	if mine[0].Received == 0 {
+		t.Error("a note you sent should be stamped with when you sent it")
+	}
+}
+
+// THE REASON OWN NOTES ARE NOT IN THE RECEIVED STORE.
+//
+// That store is a map keyed version|book|chapter and holds exactly one note per
+// key. Had your own notes gone in beside everyone else's, sharing a note on a
+// chapter where a friend's note already lived would have destroyed their
+// message — silently, and it exists nowhere else.
+func TestMyNoteCannotOverwriteAFriendsNote(t *testing.T) {
+	p := newNotePrefs()
+	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
+		Text: "a friend sent me this"})
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
+		Text: "and I sent one back"})
+
+	got, ok := loadNote(p, "web", "John", 3)
+	if !ok {
+		t.Fatal("the friend's note is gone entirely")
+	}
+	if got.Text != "a friend sent me this" {
+		t.Errorf("my note overwrote theirs: %q", got.Text)
+	}
+	if got.Mine {
+		t.Error("the note on the passage must be the one that was sent to me")
+	}
+	if mine, _ := readMyNotes(p); len(mine) != 1 {
+		t.Errorf("my own note was not kept: %d", len(mine))
+	}
+}
+
+// ...and the second reason: two of your own notes on one passage are two notes.
+// A keyed store would have kept only the newer, which is why this is a list.
+func TestTwoOfMyNotesOnOnePassageBothSurvive(t *testing.T) {
+	p := newNotePrefs()
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "first thought"})
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "second thought"})
+
+	mine, _ := readMyNotes(p)
+	if len(mine) != 2 {
+		t.Fatalf("expected both notes, got %d", len(mine))
+	}
+}
+
+
+// same words on the same passage is the same note, and must not stack up. The
+// timestamp is deliberately NOT part of that comparison — the sending device
+// stamps it, so including it would make every re-share a new note.
+func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
+	p := newNotePrefs()
+	n := SharedNote{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28, Text: "all things"}
+	saveMyNote(p, n)
+	n.Received = 0 // a fresh send: the clock has moved on
+	saveMyNote(p, n)
+
+	if mine, _ := readMyNotes(p); len(mine) != 1 {
+		t.Errorf("re-sharing the same words produced %d notes, want 1", len(mine))
+	}
+	// ...but different words on the same verse are a different note.
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28,
+		Text: "and this one too"})
+	if mine, _ := readMyNotes(p); len(mine) != 2 {
+		t.Errorf("a different note on the same verse should be kept: got %d", len(mine))
+	}
+}
+
+
+// "no display in text for now"). The reading page derives from the received
+// store alone, so this is structural rather than a rule anyone has to remember.
+func TestMyNotesNeverReachTheReadingPage(t *testing.T) {
+	p := newNotePrefs()
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "Mark", Chapter: 4, VerseLo: 39,
+		Text: "peace, be still"})
+
+	if _, ok := loadNote(p, "web", "Mark", 4); ok {
+		t.Error("a note you sent appeared on the reading page")
+	}
+	// Nor by following the passage into another translation.
+	if _, ok := loadNote(p, "bsb", "Mark", 4); ok {
+		t.Error("a note you sent followed the passage into another translation")
+	}
+	// It is still yours, and still in the list.
+	if mine, _ := readMyNotes(p); len(mine) != 1 {
+		t.Error("the note was not kept")
+	}
+}
+
+// One control, both stores. To the reader there is one thing called "your
+// notes"; a Delete all that emptied half of them would be lying.
+func TestDeleteAllClearsYourOwnNotesToo(t *testing.T) {
+	p := newNotePrefs()
+	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "theirs"})
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "mine"})
+
+	deleteAllNotes(p)
+
+	if len(readNotes(p)) != 0 {
+		t.Error("received notes survived Delete all")
+	}
+	if mine, _ := readMyNotes(p); len(mine) != 0 {
+		t.Errorf("your own notes survived Delete all: %d left", len(mine))
+	}
+}
+
+// The browser shows both, told apart by the byline rather than by living on
+// separate screens — a scrapbook records an exchange.
+func TestBrowsingShowsBothAndNamesWhoTheyAreFrom(t *testing.T) {
+	p := newNotePrefs()
+	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "theirs", Received: 100})
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "mine", Received: 200})
+
+	all := allNotesForBrowsing(p)
+	if len(all) != 2 {
+		t.Fatalf("expected both notes in one list, got %d", len(all))
+	}
+	var sawMine, sawTheirs bool
+	for _, n := range all {
+		switch noteByline(n) {
+		case "From you":
+			sawMine = true
+			if !n.Mine {
+				t.Error("byline says yours but the note does not")
+			}
+		case "From Friend":
+			sawTheirs = true
+		default:
+			t.Errorf("unattributed note: %+v", n)
+		}
+	}
+	if !sawMine || !sawTheirs {
+		t.Errorf("both must be present and attributed (mine=%v theirs=%v)", sawMine, sawTheirs)
+	}
+}
+
+func TestWhoFilterSeparatesThem(t *testing.T) {
+	notes := []SharedNote{
+		{Book: "John", Chapter: 3, Text: "theirs"},
+		{Book: "Psalms", Chapter: 23, Text: "mine", Mine: true},
+	}
+	if got := filterNotesByWho(notes, whoAnyone); len(got) != 2 {
+		t.Errorf("Everyone = %d, want 2", len(got))
+	}
+	if got := filterNotesByWho(notes, whoOthers); len(got) != 1 || got[0].Mine {
+		t.Errorf("From others = %+v", got)
+	}
+	if got := filterNotesByWho(notes, whoMe); len(got) != 1 || !got[0].Mine {
+		t.Errorf("From you = %+v", got)
+	}
+	// The filter must not scribble on its input: it is called on the shared,
+	// sorted list and a caller behind it would otherwise see a truncated set.
+	if len(notes) != 2 || notes[1].Text != "mine" {
+		t.Errorf("the source list was mutated: %+v", notes)
+	}
+}
+
+// A blob that will not parse must be left ALONE, not replaced with a good empty
+// one — that would turn an unreadable store into a silently emptied one.
+func TestAnUnreadableOwnStoreIsNotOverwritten(t *testing.T) {
+	p := newNotePrefs()
+	p.m[prefMyNotes] = "{not json"
+
+	if _, ok := readMyNotes(p); ok {
+		t.Error("garbage reported as readable")
+	}
+	saveMyNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "new"})
+	if p.m[prefMyNotes] != "{not json" {
+		t.Errorf("the unreadable blob was overwritten: %q", p.m[prefMyNotes])
+	}
+}
