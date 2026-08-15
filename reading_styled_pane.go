@@ -373,17 +373,17 @@ func (r *styledPaneRenderer) runColor(dr styledDrawRun) color.Color {
 	}
 }
 
-// tintColor is the wash a tint paints in. pal.Highlight IS the faint wash
-// colour; the tagged reading_fyne helper is unavailable to untagged code, so
-// use it directly. New tints (the notes rework's "has a note" / "more than one
-// note here") join here and nowhere else.
+// tintColor is the wash a tint paints in, from the shared table (verseTint.wash
+// in tint.go) rather than from a switch of its own.
+//
+// It had its own switch over pal.Highlight until the Android dialect and the
+// Apple stylesheet came onto the same tint model and turned out to be reaching
+// for the same field independently — three surfaces, three chances for a new
+// tint to land in two of them. tintNone paints color.NRGBA{}: fully transparent,
+// which is what an untinted stretch was always drawn as here.
 func (r *styledPaneRenderer) tintColor(t verseTint) color.Color {
-	switch t {
-	case tintHighlight:
-		return r.pane.pal.Highlight
-	default:
-		return color.NRGBA{}
-	}
+	c, _ := t.wash(r.pane.pal)
+	return c
 }
 
 // position places every object from the layout geometry.

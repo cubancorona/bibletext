@@ -92,3 +92,17 @@ func AlphabeticalBooks(books []string) []string { return alphabeticalBooks(books
 // groups and orders identically to the app rather than re-deriving the rule in
 // JavaScript, where "1 John" would file under "1".
 func FirstLetter(book string) string { return string(firstLetter(book)) }
+
+// HighlightTintClass is the CSS class a highlighted verse carries, from the app's
+// own tint table (verseTint.htmlClass, tint.go).
+//
+// The web reader is the ONE surface that cannot consume chapterTint: its pages
+// are static and the tint is chosen at read time, in reader.js, from the URL
+// fragment. What it can share is the VOCABULARY — and it must, because a shared
+// link opened in the browser and the same link opened in the app are meant to
+// light the same verses the same way. Exported so cmd/websitegen's tests can
+// assert its hand-written CSS and JS still spell the class the way the app's
+// emitter does; adding a second tint means adding a name here and a rule there,
+// and the test is what says so out loud instead of the site quietly rendering
+// the old single wash.
+func HighlightTintClass() string { return tintHighlight.htmlClass() }

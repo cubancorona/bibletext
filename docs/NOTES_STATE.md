@@ -313,7 +313,8 @@ note was derived and the don't-clobber guard stood down
   `VerseLo == 0`, so tapping one in the browser (`notes_browse.go:258`) lands here
   — measured: `book=John chapter=3 verse=0 has=false`.
 *The reader sees:* nothing today; every consumer gates on `Has` first
-(`isVerseHighlighted`, `state.go:828-838`). It is a loaded trap for the next
+(`isVerseHighlighted`, deleted in S3 — `chapterTint` in `tint.go` answers
+per verse now). It is a loaded trap for the next
 writer that sets `Has` without setting the rest.
 
 **`HL_FRAME`** — the highlight survived a version switch as a raw integer in the

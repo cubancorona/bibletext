@@ -470,15 +470,13 @@ func chapterRenderFingerprint(state *AppState) string {
 	if redLetterEnabled() {
 		red = 1
 	}
-	// The SPAN, not the origin. Two marks on the same verses render identically
-	// whoever placed them — what differs between a note's mark and a search's is
-	// the note bubble, and the note is folded in separately below. Adding the
-	// origin here would cost a full HTML rebuild and NSAttributedString re-import
-	// for a change no pixel reflects.
-	hl := "0"
-	if sp, ok := state.markSpan(); ok {
-		hl = fmt.Sprintf("%s:%d:%d-%d", sp.Book, sp.Chapter, sp.Lo, sp.Hi)
-	}
+	// THE TINT SOURCE FOLDS ITSELF (tint.go). This clause used to read the mark
+	// out of AppState and format it here, which is fine while the tint IS the
+	// mark and wrong the moment it stops being: a fingerprint assembled at the
+	// call site is a fingerprint that a new tint input can be added without.
+	// chapterTints.fingerprint is written beside the fields it folds, so the
+	// function that widens the tint is the function that widens this.
+	hl := chapterTint(state).fingerprint()
 	// state.Bible's pointer identity is part of the fingerprint: a background
 	// data swap (the Gospels-seed → full download, or the stale-epoch refresh)
 	// changes the TEXT without changing version/book/chapter, and the gate
@@ -526,9 +524,12 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	textHex := nrgbaToHex(pal.Text)
 	numHex := nrgbaToHex(pal.VerseNumber)
-	highlightBgHex := nrgbaToHex(pal.Highlight)
 	redLetterHex := nrgbaToHex(pal.RedLetter)
 	redLetter := redLetterEnabled()
+	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
+	// Nothing here decides what a wash looks like any more — it asks the tint,
+	// and writes the markup the tint's row carries.
+	tints := chapterTint(state)
 
 	// The reader's chosen text size scales the whole page: body px here, and the
 	// verse-number superscripts via their em sizing. 21px is the "Normal" base.
@@ -582,24 +583,18 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		letter-spacing: 0;
 		margin-right: 2px;
 	}`, numHex)
-	// NO font-weight here. The HTML importer resolves weight 600 to a real
-	// Georgia-Bold run, and bold Georgia sets ~17% wider than the regular face
-	// (measured: "highlighted words" 167.44pt regular vs 195.82pt bold at 21px),
-	// so highlighting a verse re-wrapped the paragraph and the text visibly
-	// jumped when the highlight was cleared. A highlight should mark the verse,
-	// not re-typeset it — the colour and the band already do that, which is what
-	// the desktop styled pane has always done (runColor, no weight change).
-	// NO colour override either. Recolouring the highlighted run threw away the
-	// red letters exactly where a reader is most likely to be looking — the verse
-	// somebody chose to send them. The band alone says "highlighted", so red stays
-	// red inside it — but ONLY because the emission below keeps .wj alongside .hl
-	// on a verse that is both. Leaving colour out of this rule is necessary for
-	// that and not sufficient on its own.
-	fmt.Fprintf(&b, `.hl {
-		background-color: %s;
-		padding: 0 2px;
-		border-radius: 2px;
-	}`, highlightBgHex)
+	// One stylesheet rule per tint that paints one, from the tint's own row
+	// (appleTintHTML, tint.go) — which is where the reasons for what the rule
+	// does NOT say are recorded, and where a second wash would add its own.
+	// Exactly one rule is emitted today.
+	for tint := verseTint(0); tint < tintCount; tint++ {
+		rule := appleTintHTML[tint].CSS
+		c, ok := tint.wash(pal)
+		if rule == "" || !ok {
+			continue
+		}
+		fmt.Fprintf(&b, rule, nrgbaToHex(c))
+	}
 	fmt.Fprintf(&b, `.wj { color: %s; }`, redLetterHex)
 	// Poetic paragraphs set ragged-right: justification would stretch short
 	// poem lines full-width (TextKit does not reliably exempt forced-break
@@ -632,30 +627,37 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			b.WriteString("&#8195;&#8194;")
 		}
 		for i, v := range para {
+			// The tint decides the markup, and the markup comes from the tint's
+			// own row (appleTintHTML, tint.go) rather than from a branch here.
+			// Each format takes exactly ONE argument — see tintHTML for why that
+			// is a measurement and not a preference.
+			mk := markupFor(appleTintHTML[:], tints.of(v))
 			if i > 0 {
 				switch {
 				case poeticJoin(para[i-1].Text, v.Text):
 					b.WriteString("<br>")
-				case isVerseHighlighted(state, para[i-1]) && isVerseHighlighted(state, v):
+				case tints.joins(para[i-1], v):
 					// THE JOINING SPACE IS PART OF THE BAND. Written bare it
 					// belongs to neither verse's span, so a highlighted range
 					// came out with a notch punched through it at every join
 					// that happened to fall mid-line — field-reported, and the
 					// same hole the verse NUMBER used to leave. Joins that fall
 					// at a line wrap hid it, which is why only some showed.
-					b.WriteString(`<span class="hl"> </span>`)
+					//
+					// tints.joins, not two "is it tinted" tests: the space is
+					// inside the band only when BOTH verses are under the SAME
+					// wash. Identical at k=1 (there is one tint), and the rule
+					// that stops one note's band running into another's.
+					b.WriteString(mk.JoinSpace)
 				default:
 					b.WriteByte(' ')
 				}
 			}
-			// The number joins the highlight when its verse is highlighted:
-			// leaving it out punched a pale hole in the middle of the band,
-			// which reads as a rendering fault rather than as a highlight.
-			if isVerseHighlighted(state, v) {
-				fmt.Fprintf(&b, `<sup class="v hl">%d</sup><span class="hl">&nbsp;</span>`, v.Verse)
-			} else {
-				fmt.Fprintf(&b, `<sup class="v">%d</sup>&nbsp;`, v.Verse)
-			}
+			// The number joins the wash when its verse carries one: leaving it
+			// out punched a pale hole in the middle of the band, which reads as
+			// a rendering fault rather than as a highlight. Which of those two
+			// shapes gets written is mk.Number's business now.
+			fmt.Fprintf(&b, mk.Number, v.Verse)
 			// Authored poem lines become explicit <br> — a literal "\n" would
 			// be ordinary HTML whitespace (renders as a space). Escape first;
 			// htmlEscape leaves "\n" alone.
@@ -666,19 +668,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			// exactly.
 			runs := trimRuns(redLetterRuns(state.CurrentVersion, v, redLetter))
 			if len(runs) > 1 {
-				hl := isVerseHighlighted(state, v)
 				for _, run := range runs {
 					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
-					switch {
-					case hl && run.Red:
-						fmt.Fprintf(&b, `<span class="hl wj">%s</span>`, piece)
-					case hl:
-						fmt.Fprintf(&b, `<span class="hl">%s</span>`, piece)
-					case run.Red:
-						fmt.Fprintf(&b, `<span class="wj">%s</span>`, piece)
-					default:
-						b.WriteString(piece)
-					}
+					writeTintedHTML(&b, mk, run.Red, piece)
 				}
 				continue
 			}
@@ -686,30 +678,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			// From the runs, NOT from isWordsOfChrist again: the edition's own
 			// table has already had the final word, and asking the WEB's gate a
 			// second time here would overrule it.
-			wj := len(runs) == 1 && runs[0].Red
-			switch {
-			case isVerseHighlighted(state, v) && wj:
-				// BOTH classes, not one or the other. .hl carries only the band
-				// and .wj only the colour, so together they paint red letters ON
-				// the highlight — which is the entire reason the band is a
-				// background rather than a recolour (see the .hl comment above).
-				//
-				// This used to be an either/or switch whose highlight arm won, so
-				// a highlighted words-of-Christ verse silently lost its red and
-				// came out in body colour — in BOTH light and dark (owner-caught
-				// in the simulator: John 11:25 rendered black under the band while
-				// v26 beside it stayed red). The CSS already promised red survived
-				// the band; this emission was what broke the promise. The verse
-				// NUMBER has carried two classes (`v hl`) all along, which is what
-				// proves the HTML importer honours them.
-				fmt.Fprintf(&b, `<span class="hl wj">%s</span>`, body)
-			case isVerseHighlighted(state, v):
-				fmt.Fprintf(&b, `<span class="hl">%s</span>`, body)
-			case wj:
-				fmt.Fprintf(&b, `<span class="wj">%s</span>`, body)
-			default:
-				b.WriteString(body)
-			}
+			writeTintedHTML(&b, mk, len(runs) == 1 && runs[0].Red, body)
 		}
 		b.WriteString("</p>")
 	}
@@ -777,10 +746,18 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 type chapterText struct {
 	widget.Entry
 
-	paragraphs   [][]Verse
-	highlightRef VerseRef
-	highlightEnd int // last verse of the highlighted range (== .Verse for one verse)
-	hasHighlight bool
+	paragraphs [][]Verse
+	// tints is the chapter's tint answer (tint.go), captured at construction —
+	// the same source the other four renderers read. It replaced a
+	// hand-rolled copy of isVerseHighlighted's comparison (a VerseRef, a last
+	// verse and a bool, tested inline in rewrap), which is exactly the sixth
+	// copy of the rule this seam exists to delete.
+	//
+	// This pane draws ONE band over a line RANGE and therefore cannot render a
+	// second tint truthfully; when one arrives it must either grow per-line
+	// rects like the styled pane or stop claiming to draw the wash. Asking the
+	// shared answer is what will make that visible instead of silent.
+	tints        chapterTints
 	clipboard    fyne.Clipboard
 	parentScroll *container.Scroll
 	state        *AppState // drives the selection study menu (TappedSecondary)
@@ -824,17 +801,10 @@ const entryScrollNone = 3
 func newChapterText(state *AppState, verses []Verse) *chapterText {
 	c := &chapterText{
 		paragraphs:    groupVersesIntoParagraphs(verses),
+		tints:         chapterTint(state),
 		highlightLine: -1,
 		state:         state,
 		textSize:      theme.TextSize() * float32(readingTextScale()),
-	}
-	if sp, ok := state.markSpan(); ok {
-		c.hasHighlight = true
-		c.highlightRef = VerseRef{Book: sp.Book, Chapter: sp.Chapter, Verse: sp.Lo}
-		c.highlightEnd = sp.Lo
-		if sp.Hi > c.highlightEnd {
-			c.highlightEnd = sp.Hi
-		}
 	}
 	if state.window != nil {
 		c.clipboard = state.window.Clipboard()
@@ -899,10 +869,29 @@ func (c *chapterText) rewrap(width float32) {
 				// Print poetry breaks at every verse boundary inside a poem.
 				hardBreak()
 			}
-			inRange := c.hasHighlight &&
-				v.BookName == c.highlightRef.Book && v.Chapter == c.highlightRef.Chapter &&
-				v.Verse >= c.highlightRef.Verse && v.Verse <= c.highlightEnd
-			hl := inRange && v.Verse == c.highlightRef.Verse
+			inRange := c.tints.of(v) != tintNone
+			// The band opens on the span's OWN Lo verse, which is what this
+			// tested before the tint seam landed (`v.Verse ==
+			// c.highlightRef.Verse`, and highlightRef.Verse was the span's Lo).
+			//
+			// It was briefly rewritten as "the first tinted verse we reach", on
+			// the reasoning that the tinted verses are contiguous and ascend
+			// from Lo so the two must agree. They do not agree when Lo is not in
+			// the rendered list, and that is reachable rather than theoretical:
+			// WEB and BSB omit Mark 9:44, 9:46, 11:26, Matthew 17:21, John 5:4
+			// and Acts 8:37 outright, and a mark can come from a stored note's
+			// span or a link fragment with nothing checking the verse exists
+			// here. Old behaviour: no band at all. New: a band from the first
+			// verse that IS present.
+			//
+			// The newer behaviour is very likely the better one — leaving
+			// highlightLine at -1 while highlightEndLine is set is an incoherent
+			// state that silently suppresses the wash. But S3's whole claim is
+			// that it changes nothing, and this subsystem has produced six
+			// defects out of improvements smuggled into commits that said they
+			// were invisible. The change is filed separately, on its own
+			// evidence, where it can be judged as what it is.
+			hl := inRange && v.Verse == c.tints.at.Lo
 			if hl {
 				c.highlightLine = lineNo + len(lines)
 			}

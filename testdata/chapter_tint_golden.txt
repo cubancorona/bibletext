@@ -1,0 +1,1733 @@
+### prose/no-mark | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/no-mark | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/no-mark | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/no-mark | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=0 override=false x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=0 override=false x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=0 override=false x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=0 override=false x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=0 override=false x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=0 override=false x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=0 override=false x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=0 override=false x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=0 override=false x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=0 override=false x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=0 override=false x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=0 override=false x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=0 override=false x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=0 override=false x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=0 override=false x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=0 override=false x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=0 override=false x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=0 override=false x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=0 override=false x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=0 override=false x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=0 override=false x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=0 override=false x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=0 override=false x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=0 override=false x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/no-mark | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/no-mark | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### prose/range-1-4 | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">1</sup><span class="hl">&nbsp;</span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/range-1-4 | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v hl">1</sup><span class="hl">&nbsp;</span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/range-1-4 | android-html
+<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">Therefore, there is now no condemnation.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For the law of the Spirit set you free.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For what the law was powerless to do.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">So that the righteous standard is fulfilled.</span> <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/range-1-4 | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=1 override=true x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=1 override=true x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=1 override=true x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=1 override=true x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=1 override=true x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=1 override=true x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=1 override=true x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=1 override=true x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=1 override=true x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=1 override=true x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=1 override=true x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=1 override=true x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=1 override=true x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=1 override=true x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=1 override=true x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=1 override=true x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=1 override=true x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=1 override=true x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=1 override=true x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=1 override=true x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=1 override=true x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=1 override=true x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=1 override=true x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=1 override=true x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=1 override=true x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=1 override=true x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=1 override=true x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=1 override=true x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=1 override=true x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=1 override=true x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=1 override=true x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=1 override=true x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=1 override=true x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=1 override=true x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+wash line=0 tint=1 x0=0.0 x1=179.0
+wash line=1 tint=1 x0=0.0 x1=218.0
+wash line=2 tint=1 x0=0.0 x1=197.0
+wash line=3 tint=1 x0=0.0 x1=208.0
+wash line=4 tint=1 x0=0.0 x1=198.0
+wash line=5 tint=1 x0=0.0 x1=70.0
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/range-1-4 | legacy-fyne-pane
+highlightLine=0 highlightEndLine=3 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/range-1-4 | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### prose/single-3 | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/single-3 | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/single-3 | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For what the law was powerless to do.</span> <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/single-3 | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=0 override=false x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=0 override=false x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=0 override=false x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=0 override=false x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=0 override=false x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=0 override=false x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=0 override=false x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=0 override=false x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=0 override=false x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=0 override=false x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=0 override=false x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=0 override=false x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=1 override=true x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=1 override=true x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=1 override=true x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=1 override=true x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=1 override=true x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=1 override=true x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=1 override=true x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=1 override=true x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=1 override=true x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=0 override=false x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=0 override=false x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=0 override=false x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=0 override=false x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=0 override=false x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+wash line=2 tint=1 x0=135.0 x1=197.0
+wash line=3 tint=1 x0=0.0 x1=181.0
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/single-3 | legacy-fyne-pane
+highlightLine=1 highlightEndLine=2 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/single-3 | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### prose/mark-on-another-chapter | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/mark-on-another-chapter | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/mark-on-another-chapter | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/mark-on-another-chapter | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=0 override=false x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=0 override=false x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=0 override=false x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=0 override=false x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=0 override=false x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=0 override=false x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=0 override=false x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=0 override=false x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=0 override=false x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=0 override=false x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=0 override=false x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=0 override=false x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=0 override=false x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=0 override=false x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=0 override=false x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=0 override=false x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=0 override=false x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=0 override=false x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=0 override=false x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=0 override=false x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=0 override=false x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=0 override=false x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=0 override=false x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=0 override=false x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/mark-on-another-chapter | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/mark-on-another-chapter | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### prose/mark-on-another-book | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/mark-on-another-book | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/mark-on-another-book | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/mark-on-another-book | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=0 override=false x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=0 override=false x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=0 override=false x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=0 override=false x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=0 override=false x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=0 override=false x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=0 override=false x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=0 override=false x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=0 override=false x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=0 override=false x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=0 override=false x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=0 override=false x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=0 override=false x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=0 override=false x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=0 override=false x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=0 override=false x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=0 override=false x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=0 override=false x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=0 override=false x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=0 override=false x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=0 override=false x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=0 override=false x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=0 override=false x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=0 override=false x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/mark-on-another-book | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/mark-on-another-book | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### prose/mark-past-the-last-verse | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/mark-past-the-last-verse | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/mark-past-the-last-verse | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/mark-past-the-last-verse | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=0 override=false x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=0 override=false x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=0 override=false x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=0 override=false x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=0 override=false x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=0 override=false x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=0 override=false x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=0 override=false x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=0 override=false x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=0 override=false x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=0 override=false x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=0 override=false x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=0 override=false x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=0 override=false x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=0 override=false x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=0 override=false x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=0 override=false x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=0 override=false x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=0 override=false x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=0 override=false x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=0 override=false x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=0 override=false x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=0 override=false x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=0 override=false x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/mark-past-the-last-verse | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/mark-past-the-last-verse | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### prose/chapter-level-mark | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/chapter-level-mark | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+
+### prose/chapter-level-mark | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+
+### prose/chapter-level-mark | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=70.0 off=2 "Therefore,"
+  run v1 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=13 "there"
+  run v1 kind=0 red=false tint=0 override=false x=122.0 w=14.0 off=19 "is"
+  run v1 kind=0 red=false tint=0 override=false x=140.0 w=21.0 off=22 "now"
+  run v1 kind=0 red=false tint=0 override=false x=165.0 w=14.0 off=26 "no"
+line 1 y=24.0 paraFirst=false poemBreak=false [29,63)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=91.0 off=29 "condemnation."
+  run v2 kind=1 red=false tint=0 override=false x=95.0 w=5.0 off=43 "²"
+  run v2 kind=0 red=false tint=0 override=false x=104.0 w=21.0 off=45 "For"
+  run v2 kind=0 red=false tint=0 override=false x=129.0 w=21.0 off=49 "the"
+  run v2 kind=0 red=false tint=0 override=false x=154.0 w=21.0 off=53 "law"
+  run v2 kind=0 red=false tint=0 override=false x=179.0 w=14.0 off=57 "of"
+  run v2 kind=0 red=false tint=0 override=false x=197.0 w=21.0 off=60 "the"
+line 2 y=48.0 paraFirst=false poemBreak=false [64,95)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=42.0 off=64 "Spirit"
+  run v2 kind=0 red=false tint=0 override=false x=46.0 w=21.0 off=71 "set"
+  run v2 kind=0 red=false tint=0 override=false x=71.0 w=21.0 off=75 "you"
+  run v2 kind=0 red=false tint=0 override=false x=96.0 w=35.0 off=79 "free."
+  run v3 kind=1 red=false tint=0 override=false x=135.0 w=5.0 off=85 "³"
+  run v3 kind=0 red=false tint=0 override=false x=144.0 w=21.0 off=87 "For"
+  run v3 kind=0 red=false tint=0 override=false x=169.0 w=28.0 off=91 "what"
+line 3 y=72.0 paraFirst=false poemBreak=false [96,129)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=96 "the"
+  run v3 kind=0 red=false tint=0 override=false x=25.0 w=21.0 off=100 "law"
+  run v3 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=104 "was"
+  run v3 kind=0 red=false tint=0 override=false x=75.0 w=63.0 off=108 "powerless"
+  run v3 kind=0 red=false tint=0 override=false x=142.0 w=14.0 off=118 "to"
+  run v3 kind=0 red=false tint=0 override=false x=160.0 w=21.0 off=121 "do."
+  run v4 kind=1 red=false tint=0 override=false x=185.0 w=5.0 off=125 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=194.0 w=14.0 off=127 "So"
+line 4 y=96.0 paraFirst=false poemBreak=false [130,160)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=28.0 off=130 "that"
+  run v4 kind=0 red=false tint=0 override=false x=32.0 w=21.0 off=135 "the"
+  run v4 kind=0 red=false tint=0 override=false x=57.0 w=63.0 off=139 "righteous"
+  run v4 kind=0 red=false tint=0 override=false x=124.0 w=56.0 off=149 "standard"
+  run v4 kind=0 red=false tint=0 override=false x=184.0 w=14.0 off=158 "is"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,188)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=70.0 off=161 "fulfilled."
+  run v5 kind=1 red=false tint=0 override=false x=74.0 w=5.0 off=172 "⁵"
+  run v5 kind=0 red=false tint=0 override=false x=83.0 w=35.0 off=174 "Those"
+  run v5 kind=0 red=false tint=0 override=false x=122.0 w=21.0 off=180 "who"
+  run v5 kind=0 red=false tint=0 override=false x=147.0 w=28.0 off=184 "live"
+line 6 y=144.0 paraFirst=false poemBreak=false [189,212)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=189 "according"
+  run v5 kind=0 red=false tint=0 override=false x=67.0 w=14.0 off=199 "to"
+  run v5 kind=0 red=false tint=0 override=false x=85.0 w=21.0 off=202 "the"
+  run v5 kind=0 red=false tint=0 override=false x=110.0 w=42.0 off=206 "flesh."
+height=168.0 text="¹ Therefore, there is now no\ncondemnation. ² For the law of the\nSpirit set you free. ³ For what\nthe law was powerless to do. ⁴ So\nthat the righteous standard is\nfulfilled. ⁵ Those who live\naccording to the flesh."
+
+
+### prose/chapter-level-mark | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=6
+verseLines=[{1 0} {2 0} {3 1} {4 2} {5 3}]
+text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit set you free. ³ For what the\nlaw was powerless to do. ⁴ So that the righteous\nstandard is fulfilled. ⁵ Those who live according to\nthe flesh."
+
+
+### prose/chapter-level-mark | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Therefore, there is now no condemnation.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For the law of the Spirit set you free.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For what the law was powerless to do.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"So that the righteous standard is fulfilled.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Those who live according to the flesh.", parent:(*widget.RichText)(nil)}
+
+
+### poetry/no-mark | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+
+### poetry/no-mark | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+
+### poetry/no-mark | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p>
+
+### poetry/no-mark | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=true [0,26)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=21.0 off=2 "The"
+  run v1 kind=0 red=false tint=0 override=false x=34.0 w=28.0 off=6 "LORD"
+  run v1 kind=0 red=false tint=0 override=false x=66.0 w=14.0 off=11 "is"
+  run v1 kind=0 red=false tint=0 override=false x=84.0 w=14.0 off=14 "my"
+  run v1 kind=0 red=false tint=0 override=false x=102.0 w=63.0 off=17 "shepherd;"
+line 1 y=24.0 paraFirst=false poemBreak=true [27,44)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=7.0 off=27 "I"
+  run v1 kind=0 red=false tint=0 override=false x=11.0 w=35.0 off=29 "shall"
+  run v1 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=35 "not"
+  run v1 kind=0 red=false tint=0 override=false x=75.0 w=35.0 off=39 "want."
+line 2 y=48.0 paraFirst=false poemBreak=false [45,76)
+  run v2 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=45 "²"
+  run v2 kind=0 red=false tint=0 override=false x=9.0 w=14.0 off=47 "He"
+  run v2 kind=0 red=false tint=0 override=false x=27.0 w=35.0 off=50 "makes"
+  run v2 kind=0 red=false tint=0 override=false x=66.0 w=14.0 off=56 "me"
+  run v2 kind=0 red=false tint=0 override=false x=84.0 w=21.0 off=59 "lie"
+  run v2 kind=0 red=false tint=0 override=false x=109.0 w=28.0 off=63 "down"
+  run v2 kind=0 red=false tint=0 override=false x=141.0 w=14.0 off=68 "in"
+  run v2 kind=0 red=false tint=0 override=false x=159.0 w=35.0 off=71 "green"
+line 3 y=72.0 paraFirst=false poemBreak=true [77,86)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=63.0 off=77 "pastures;"
+line 4 y=96.0 paraFirst=false poemBreak=true [87,119)
+  run v2 kind=0 red=false tint=0 override=false x=0.0 w=14.0 off=87 "He"
+  run v2 kind=0 red=false tint=0 override=false x=18.0 w=35.0 off=90 "leads"
+  run v2 kind=0 red=false tint=0 override=false x=57.0 w=14.0 off=96 "me"
+  run v2 kind=0 red=false tint=0 override=false x=75.0 w=42.0 off=99 "beside"
+  run v2 kind=0 red=false tint=0 override=false x=121.0 w=35.0 off=106 "quiet"
+  run v2 kind=0 red=false tint=0 override=false x=160.0 w=49.0 off=112 "waters."
+line 5 y=120.0 paraFirst=false poemBreak=true [120,142)
+  run v3 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=120 "³"
+  run v3 kind=0 red=false tint=0 override=false x=9.0 w=14.0 off=122 "He"
+  run v3 kind=0 red=false tint=0 override=false x=27.0 w=56.0 off=125 "restores"
+  run v3 kind=0 red=false tint=0 override=false x=87.0 w=14.0 off=134 "my"
+  run v3 kind=0 red=false tint=0 override=false x=105.0 w=35.0 off=137 "soul;"
+line 6 y=144.0 paraFirst=false poemBreak=false [143,167)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=14.0 off=143 "He"
+  run v3 kind=0 red=false tint=0 override=false x=18.0 w=42.0 off=146 "guides"
+  run v3 kind=0 red=false tint=0 override=false x=64.0 w=14.0 off=153 "me"
+  run v3 kind=0 red=false tint=0 override=false x=82.0 w=14.0 off=156 "in"
+  run v3 kind=0 red=false tint=0 override=false x=100.0 w=35.0 off=159 "paths"
+  run v3 kind=0 red=false tint=0 override=false x=139.0 w=14.0 off=165 "of"
+line 7 y=168.0 paraFirst=false poemBreak=true [168,182)
+  run v3 kind=0 red=false tint=0 override=false x=0.0 w=98.0 off=168 "righteousness."
+line 8 y=192.0 paraFirst=false poemBreak=false [183,215)
+  run v4 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=183 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=9.0 w=28.0 off=185 "Even"
+  run v4 kind=0 red=false tint=0 override=false x=41.0 w=42.0 off=190 "though"
+  run v4 kind=0 red=false tint=0 override=false x=87.0 w=7.0 off=197 "I"
+  run v4 kind=0 red=false tint=0 override=false x=98.0 w=28.0 off=199 "walk"
+  run v4 kind=0 red=false tint=0 override=false x=130.0 w=49.0 off=204 "through"
+  run v4 kind=0 red=false tint=0 override=false x=183.0 w=21.0 off=212 "the"
+line 9 y=216.0 paraFirst=false poemBreak=true [216,223)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=49.0 off=216 "valley,"
+line 10 y=240.0 paraFirst=false poemBreak=false [224,244)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=7.0 off=224 "I"
+  run v4 kind=0 red=false tint=0 override=false x=11.0 w=28.0 off=226 "will"
+  run v4 kind=0 red=false tint=0 override=false x=43.0 w=28.0 off=231 "fear"
+  run v4 kind=0 red=false tint=0 override=false x=75.0 w=14.0 off=236 "no"
+  run v4 kind=0 red=false tint=0 override=false x=93.0 w=35.0 off=239 "evil."
+height=264.0 text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in green\npastures;\nHe leads me beside quiet waters.\n³ He restores my soul;\nHe guides me in paths of\nrighteousness.\n⁴ Even though I walk through the\nvalley,\nI will fear no evil."
+
+
+### poetry/no-mark | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=9
+verseLines=[{1 0} {2 2} {3 4} {4 6}]
+text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in green pastures;\nHe leads me beside quiet waters.\n³ He restores my soul;\nHe guides me in paths of righteousness.\n⁴ Even though I walk through the valley,\nI will fear no evil."
+
+
+### poetry/no-mark | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"The LORD is my shepherd;\nI shall not want.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"He makes me lie down in green pastures;\nHe leads me beside quiet waters.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"He restores my soul;\nHe guides me in paths of righteousness.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Even though I walk through the valley,\nI will fear no evil.", parent:(*widget.RichText)(nil)}
+
+
+### poetry/range-2-3 | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+
+### poetry/range-2-3 | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+
+### poetry/range-2-3 | android-html
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p>
+
+### poetry/range-2-3 | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=true [0,26)
+  run v1 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "¹"
+  run v1 kind=0 red=false tint=0 override=false x=9.0 w=21.0 off=2 "The"
+  run v1 kind=0 red=false tint=0 override=false x=34.0 w=28.0 off=6 "LORD"
+  run v1 kind=0 red=false tint=0 override=false x=66.0 w=14.0 off=11 "is"
+  run v1 kind=0 red=false tint=0 override=false x=84.0 w=14.0 off=14 "my"
+  run v1 kind=0 red=false tint=0 override=false x=102.0 w=63.0 off=17 "shepherd;"
+line 1 y=24.0 paraFirst=false poemBreak=true [27,44)
+  run v1 kind=0 red=false tint=0 override=false x=0.0 w=7.0 off=27 "I"
+  run v1 kind=0 red=false tint=0 override=false x=11.0 w=35.0 off=29 "shall"
+  run v1 kind=0 red=false tint=0 override=false x=50.0 w=21.0 off=35 "not"
+  run v1 kind=0 red=false tint=0 override=false x=75.0 w=35.0 off=39 "want."
+line 2 y=48.0 paraFirst=false poemBreak=false [45,76)
+  run v2 kind=1 red=false tint=1 override=true x=0.0 w=5.0 off=45 "²"
+  run v2 kind=0 red=false tint=1 override=true x=9.0 w=14.0 off=47 "He"
+  run v2 kind=0 red=false tint=1 override=true x=27.0 w=35.0 off=50 "makes"
+  run v2 kind=0 red=false tint=1 override=true x=66.0 w=14.0 off=56 "me"
+  run v2 kind=0 red=false tint=1 override=true x=84.0 w=21.0 off=59 "lie"
+  run v2 kind=0 red=false tint=1 override=true x=109.0 w=28.0 off=63 "down"
+  run v2 kind=0 red=false tint=1 override=true x=141.0 w=14.0 off=68 "in"
+  run v2 kind=0 red=false tint=1 override=true x=159.0 w=35.0 off=71 "green"
+line 3 y=72.0 paraFirst=false poemBreak=true [77,86)
+  run v2 kind=0 red=false tint=1 override=true x=0.0 w=63.0 off=77 "pastures;"
+line 4 y=96.0 paraFirst=false poemBreak=true [87,119)
+  run v2 kind=0 red=false tint=1 override=true x=0.0 w=14.0 off=87 "He"
+  run v2 kind=0 red=false tint=1 override=true x=18.0 w=35.0 off=90 "leads"
+  run v2 kind=0 red=false tint=1 override=true x=57.0 w=14.0 off=96 "me"
+  run v2 kind=0 red=false tint=1 override=true x=75.0 w=42.0 off=99 "beside"
+  run v2 kind=0 red=false tint=1 override=true x=121.0 w=35.0 off=106 "quiet"
+  run v2 kind=0 red=false tint=1 override=true x=160.0 w=49.0 off=112 "waters."
+line 5 y=120.0 paraFirst=false poemBreak=true [120,142)
+  run v3 kind=1 red=false tint=1 override=true x=0.0 w=5.0 off=120 "³"
+  run v3 kind=0 red=false tint=1 override=true x=9.0 w=14.0 off=122 "He"
+  run v3 kind=0 red=false tint=1 override=true x=27.0 w=56.0 off=125 "restores"
+  run v3 kind=0 red=false tint=1 override=true x=87.0 w=14.0 off=134 "my"
+  run v3 kind=0 red=false tint=1 override=true x=105.0 w=35.0 off=137 "soul;"
+line 6 y=144.0 paraFirst=false poemBreak=false [143,167)
+  run v3 kind=0 red=false tint=1 override=true x=0.0 w=14.0 off=143 "He"
+  run v3 kind=0 red=false tint=1 override=true x=18.0 w=42.0 off=146 "guides"
+  run v3 kind=0 red=false tint=1 override=true x=64.0 w=14.0 off=153 "me"
+  run v3 kind=0 red=false tint=1 override=true x=82.0 w=14.0 off=156 "in"
+  run v3 kind=0 red=false tint=1 override=true x=100.0 w=35.0 off=159 "paths"
+  run v3 kind=0 red=false tint=1 override=true x=139.0 w=14.0 off=165 "of"
+line 7 y=168.0 paraFirst=false poemBreak=true [168,182)
+  run v3 kind=0 red=false tint=1 override=true x=0.0 w=98.0 off=168 "righteousness."
+line 8 y=192.0 paraFirst=false poemBreak=false [183,215)
+  run v4 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=183 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=9.0 w=28.0 off=185 "Even"
+  run v4 kind=0 red=false tint=0 override=false x=41.0 w=42.0 off=190 "though"
+  run v4 kind=0 red=false tint=0 override=false x=87.0 w=7.0 off=197 "I"
+  run v4 kind=0 red=false tint=0 override=false x=98.0 w=28.0 off=199 "walk"
+  run v4 kind=0 red=false tint=0 override=false x=130.0 w=49.0 off=204 "through"
+  run v4 kind=0 red=false tint=0 override=false x=183.0 w=21.0 off=212 "the"
+line 9 y=216.0 paraFirst=false poemBreak=true [216,223)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=49.0 off=216 "valley,"
+line 10 y=240.0 paraFirst=false poemBreak=false [224,244)
+  run v4 kind=0 red=false tint=0 override=false x=0.0 w=7.0 off=224 "I"
+  run v4 kind=0 red=false tint=0 override=false x=11.0 w=28.0 off=226 "will"
+  run v4 kind=0 red=false tint=0 override=false x=43.0 w=28.0 off=231 "fear"
+  run v4 kind=0 red=false tint=0 override=false x=75.0 w=14.0 off=236 "no"
+  run v4 kind=0 red=false tint=0 override=false x=93.0 w=35.0 off=239 "evil."
+wash line=2 tint=1 x0=0.0 x1=194.0
+wash line=3 tint=1 x0=0.0 x1=63.0
+wash line=4 tint=1 x0=0.0 x1=209.0
+wash line=5 tint=1 x0=0.0 x1=140.0
+wash line=6 tint=1 x0=0.0 x1=153.0
+wash line=7 tint=1 x0=0.0 x1=98.0
+height=264.0 text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in green\npastures;\nHe leads me beside quiet waters.\n³ He restores my soul;\nHe guides me in paths of\nrighteousness.\n⁴ Even though I walk through the\nvalley,\nI will fear no evil."
+
+
+### poetry/range-2-3 | legacy-fyne-pane
+highlightLine=2 highlightEndLine=5 totalLines=9
+verseLines=[{1 0} {2 2} {3 4} {4 6}]
+text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in green pastures;\nHe leads me beside quiet waters.\n³ He restores my soul;\nHe guides me in paths of righteousness.\n⁴ Even though I walk through the valley,\nI will fear no evil."
+
+
+### poetry/range-2-3 | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"The LORD is my shepherd;\nI shall not want.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"² ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"He makes me lie down in green pastures;\nHe leads me beside quiet waters.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"³ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"He restores my soul;\nHe guides me in paths of righteousness.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"Even though I walk through the valley,\nI will fear no evil.", parent:(*widget.RichText)(nil)}
+
+
+### red/whole-verse-under-the-band | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">15</sup><span class="hl">&nbsp;</span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl">&nbsp;</span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+
+### red/whole-verse-under-the-band | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v hl">15</sup><span class="hl">&nbsp;</span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl">&nbsp;</span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+
+### red/whole-verse-under-the-band | android-html
+<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>15</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">that whoever believes in Him may have eternal life.</font></span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>16</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font></span> <sup><small><font color="#53688f"><b>17</b></font></small></sup>&nbsp;<font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
+
+### red/whole-verse-under-the-band | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,31)
+  run v15 kind=1 red=false tint=1 override=true x=0.0 w=10.0 off=0 "¹⁵"
+  run v15 kind=0 red=true tint=1 override=true x=14.0 w=28.0 off=3 "that"
+  run v15 kind=0 red=true tint=1 override=true x=46.0 w=49.0 off=8 "whoever"
+  run v15 kind=0 red=true tint=1 override=true x=99.0 w=56.0 off=16 "believes"
+  run v15 kind=0 red=true tint=1 override=true x=159.0 w=14.0 off=25 "in"
+  run v15 kind=0 red=true tint=1 override=true x=177.0 w=21.0 off=28 "Him"
+line 1 y=24.0 paraFirst=false poemBreak=false [32,65)
+  run v15 kind=0 red=true tint=1 override=true x=0.0 w=21.0 off=32 "may"
+  run v15 kind=0 red=true tint=1 override=true x=25.0 w=28.0 off=36 "have"
+  run v15 kind=0 red=true tint=1 override=true x=57.0 w=49.0 off=41 "eternal"
+  run v15 kind=0 red=true tint=1 override=true x=110.0 w=35.0 off=49 "life."
+  run v16 kind=1 red=false tint=1 override=true x=149.0 w=10.0 off=55 "¹⁶"
+  run v16 kind=0 red=true tint=1 override=true x=163.0 w=21.0 off=58 "For"
+  run v16 kind=0 red=true tint=1 override=true x=188.0 w=21.0 off=62 "God"
+line 2 y=48.0 paraFirst=false poemBreak=false [66,97)
+  run v16 kind=0 red=true tint=1 override=true x=0.0 w=14.0 off=66 "so"
+  run v16 kind=0 red=true tint=1 override=true x=18.0 w=35.0 off=69 "loved"
+  run v16 kind=0 red=true tint=1 override=true x=57.0 w=21.0 off=75 "the"
+  run v16 kind=0 red=true tint=1 override=true x=82.0 w=35.0 off=79 "world"
+  run v16 kind=0 red=true tint=1 override=true x=121.0 w=28.0 off=85 "that"
+  run v16 kind=0 red=true tint=1 override=true x=153.0 w=14.0 off=90 "He"
+  run v16 kind=0 red=true tint=1 override=true x=171.0 w=28.0 off=93 "gave"
+line 3 y=72.0 paraFirst=false poemBreak=false [98,130)
+  run v16 kind=0 red=true tint=1 override=true x=0.0 w=21.0 off=98 "His"
+  run v16 kind=0 red=true tint=1 override=true x=25.0 w=21.0 off=102 "one"
+  run v16 kind=0 red=true tint=1 override=true x=50.0 w=21.0 off=106 "and"
+  run v16 kind=0 red=true tint=1 override=true x=75.0 w=28.0 off=110 "only"
+  run v16 kind=0 red=true tint=1 override=true x=107.0 w=28.0 off=115 "Son."
+  run v17 kind=1 red=false tint=0 override=false x=139.0 w=10.0 off=120 "¹⁷"
+  run v17 kind=0 red=true tint=0 override=false x=153.0 w=21.0 off=123 "For"
+  run v17 kind=0 red=true tint=0 override=false x=178.0 w=21.0 off=127 "God"
+line 4 y=96.0 paraFirst=false poemBreak=false [131,160)
+  run v17 kind=0 red=true tint=0 override=false x=0.0 w=21.0 off=131 "did"
+  run v17 kind=0 red=true tint=0 override=false x=25.0 w=21.0 off=135 "not"
+  run v17 kind=0 red=true tint=0 override=false x=50.0 w=28.0 off=139 "send"
+  run v17 kind=0 red=true tint=0 override=false x=82.0 w=21.0 off=144 "His"
+  run v17 kind=0 red=true tint=0 override=false x=107.0 w=21.0 off=148 "Son"
+  run v17 kind=0 red=true tint=0 override=false x=132.0 w=28.0 off=152 "into"
+  run v17 kind=0 red=true tint=0 override=false x=164.0 w=21.0 off=157 "the"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,181)
+  run v17 kind=0 red=true tint=0 override=false x=0.0 w=35.0 off=161 "world"
+  run v17 kind=0 red=true tint=0 override=false x=39.0 w=14.0 off=167 "to"
+  run v17 kind=0 red=true tint=0 override=false x=57.0 w=49.0 off=170 "condemn"
+  run v17 kind=0 red=true tint=0 override=false x=110.0 w=21.0 off=178 "it."
+wash line=0 tint=1 x0=0.0 x1=198.0
+wash line=1 tint=1 x0=0.0 x1=209.0
+wash line=2 tint=1 x0=0.0 x1=199.0
+wash line=3 tint=1 x0=0.0 x1=135.0
+height=144.0 text="¹⁵ that whoever believes in Him\nmay have eternal life. ¹⁶ For God\nso loved the world that He gave\nHis one and only Son. ¹⁷ For God\ndid not send His Son into the\nworld to condemn it."
+
+
+### red/whole-verse-under-the-band | legacy-fyne-pane
+highlightLine=0 highlightEndLine=2 totalLines=5
+verseLines=[{15 0} {16 1} {17 2}]
+text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God so loved the world that He gave\nHis one and only Son. ¹⁷ For God did not send His\nSon into the world to condemn it."
+
+
+### red/whole-verse-under-the-band | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"that whoever believes in Him may have eternal life.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹⁶ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For God so loved the world that He gave His one and only Son.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹⁷ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For God did not send His Son into the world to condemn it.", parent:(*widget.RichText)(nil)}
+
+
+### red/whole-verse-no-mark | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">15</sup>&nbsp;<span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup>&nbsp;<span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+
+### red/whole-verse-no-mark | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">15</sup>&nbsp;<span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup>&nbsp;<span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+
+### red/whole-verse-no-mark | android-html
+<p><sup><small><font color="#53688f"><b>15</b></font></small></sup>&nbsp;<font color="#b23a2e">that whoever believes in Him may have eternal life.</font> <sup><small><font color="#53688f"><b>16</b></font></small></sup>&nbsp;<font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font> <sup><small><font color="#53688f"><b>17</b></font></small></sup>&nbsp;<font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
+
+### red/whole-verse-no-mark | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=false [0,31)
+  run v15 kind=1 red=false tint=0 override=false x=0.0 w=10.0 off=0 "¹⁵"
+  run v15 kind=0 red=true tint=0 override=false x=14.0 w=28.0 off=3 "that"
+  run v15 kind=0 red=true tint=0 override=false x=46.0 w=49.0 off=8 "whoever"
+  run v15 kind=0 red=true tint=0 override=false x=99.0 w=56.0 off=16 "believes"
+  run v15 kind=0 red=true tint=0 override=false x=159.0 w=14.0 off=25 "in"
+  run v15 kind=0 red=true tint=0 override=false x=177.0 w=21.0 off=28 "Him"
+line 1 y=24.0 paraFirst=false poemBreak=false [32,65)
+  run v15 kind=0 red=true tint=0 override=false x=0.0 w=21.0 off=32 "may"
+  run v15 kind=0 red=true tint=0 override=false x=25.0 w=28.0 off=36 "have"
+  run v15 kind=0 red=true tint=0 override=false x=57.0 w=49.0 off=41 "eternal"
+  run v15 kind=0 red=true tint=0 override=false x=110.0 w=35.0 off=49 "life."
+  run v16 kind=1 red=false tint=0 override=false x=149.0 w=10.0 off=55 "¹⁶"
+  run v16 kind=0 red=true tint=0 override=false x=163.0 w=21.0 off=58 "For"
+  run v16 kind=0 red=true tint=0 override=false x=188.0 w=21.0 off=62 "God"
+line 2 y=48.0 paraFirst=false poemBreak=false [66,97)
+  run v16 kind=0 red=true tint=0 override=false x=0.0 w=14.0 off=66 "so"
+  run v16 kind=0 red=true tint=0 override=false x=18.0 w=35.0 off=69 "loved"
+  run v16 kind=0 red=true tint=0 override=false x=57.0 w=21.0 off=75 "the"
+  run v16 kind=0 red=true tint=0 override=false x=82.0 w=35.0 off=79 "world"
+  run v16 kind=0 red=true tint=0 override=false x=121.0 w=28.0 off=85 "that"
+  run v16 kind=0 red=true tint=0 override=false x=153.0 w=14.0 off=90 "He"
+  run v16 kind=0 red=true tint=0 override=false x=171.0 w=28.0 off=93 "gave"
+line 3 y=72.0 paraFirst=false poemBreak=false [98,130)
+  run v16 kind=0 red=true tint=0 override=false x=0.0 w=21.0 off=98 "His"
+  run v16 kind=0 red=true tint=0 override=false x=25.0 w=21.0 off=102 "one"
+  run v16 kind=0 red=true tint=0 override=false x=50.0 w=21.0 off=106 "and"
+  run v16 kind=0 red=true tint=0 override=false x=75.0 w=28.0 off=110 "only"
+  run v16 kind=0 red=true tint=0 override=false x=107.0 w=28.0 off=115 "Son."
+  run v17 kind=1 red=false tint=0 override=false x=139.0 w=10.0 off=120 "¹⁷"
+  run v17 kind=0 red=true tint=0 override=false x=153.0 w=21.0 off=123 "For"
+  run v17 kind=0 red=true tint=0 override=false x=178.0 w=21.0 off=127 "God"
+line 4 y=96.0 paraFirst=false poemBreak=false [131,160)
+  run v17 kind=0 red=true tint=0 override=false x=0.0 w=21.0 off=131 "did"
+  run v17 kind=0 red=true tint=0 override=false x=25.0 w=21.0 off=135 "not"
+  run v17 kind=0 red=true tint=0 override=false x=50.0 w=28.0 off=139 "send"
+  run v17 kind=0 red=true tint=0 override=false x=82.0 w=21.0 off=144 "His"
+  run v17 kind=0 red=true tint=0 override=false x=107.0 w=21.0 off=148 "Son"
+  run v17 kind=0 red=true tint=0 override=false x=132.0 w=28.0 off=152 "into"
+  run v17 kind=0 red=true tint=0 override=false x=164.0 w=21.0 off=157 "the"
+line 5 y=120.0 paraFirst=false poemBreak=false [161,181)
+  run v17 kind=0 red=true tint=0 override=false x=0.0 w=35.0 off=161 "world"
+  run v17 kind=0 red=true tint=0 override=false x=39.0 w=14.0 off=167 "to"
+  run v17 kind=0 red=true tint=0 override=false x=57.0 w=49.0 off=170 "condemn"
+  run v17 kind=0 red=true tint=0 override=false x=110.0 w=21.0 off=178 "it."
+height=144.0 text="¹⁵ that whoever believes in Him\nmay have eternal life. ¹⁶ For God\nso loved the world that He gave\nHis one and only Son. ¹⁷ For God\ndid not send His Son into the\nworld to condemn it."
+
+
+### red/whole-verse-no-mark | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=5
+verseLines=[{15 0} {16 1} {17 2}]
+text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God so loved the world that He gave\nHis one and only Son. ¹⁷ For God did not send His\nSon into the world to condemn it."
+
+
+### red/whole-verse-no-mark | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"that whoever believes in Him may have eternal life.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹⁶ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For God so loved the world that He gave His one and only Son.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"¹⁷ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"For God did not send His Son into the world to condemn it.", parent:(*widget.RichText)(nil)}
+
+
+### red/bsb-spans-under-the-band | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl">&nbsp;</span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+
+### red/bsb-spans-under-the-band | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm">&#8195;&#8194;<sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl">&nbsp;</span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+
+### red/bsb-spans-under-the-band | android-html
+<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">His disciples replied to Him.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">“How many loaves do you have?”</font></span><span style="background-color:#ffe08a"> Jesus asked.<br>“Seven,” they replied.</span><br><sup><small><font color="#53688f"><b>6</b></font></small></sup>&nbsp;And He instructed the crowd to sit down.</p>
+
+### red/bsb-spans-under-the-band | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=true [0,31)
+  run v4 kind=1 red=false tint=1 override=true x=0.0 w=5.0 off=0 "⁴"
+  run v4 kind=0 red=false tint=1 override=true x=9.0 w=21.0 off=2 "His"
+  run v4 kind=0 red=false tint=1 override=true x=34.0 w=63.0 off=6 "disciples"
+  run v4 kind=0 red=false tint=1 override=true x=101.0 w=49.0 off=16 "replied"
+  run v4 kind=0 red=false tint=1 override=true x=154.0 w=14.0 off=24 "to"
+  run v4 kind=0 red=false tint=1 override=true x=172.0 w=28.0 off=27 "Him."
+line 1 y=24.0 paraFirst=false poemBreak=false [32,64)
+  run v5 kind=1 red=false tint=1 override=true x=0.0 w=5.0 off=32 "⁵"
+  run v5 kind=0 red=true tint=1 override=true x=9.0 w=28.0 off=34 "“How"
+  run v5 kind=0 red=true tint=1 override=true x=41.0 w=28.0 off=39 "many"
+  run v5 kind=0 red=true tint=1 override=true x=73.0 w=42.0 off=44 "loaves"
+  run v5 kind=0 red=true tint=1 override=true x=119.0 w=14.0 off=51 "do"
+  run v5 kind=0 red=true tint=1 override=true x=137.0 w=21.0 off=54 "you"
+  run v5 kind=0 red=true tint=1 override=true x=162.0 w=42.0 off=58 "have?”"
+line 2 y=48.0 paraFirst=false poemBreak=true [65,77)
+  run v5 kind=0 red=false tint=1 override=true x=0.0 w=35.0 off=65 "Jesus"
+  run v5 kind=0 red=false tint=1 override=true x=39.0 w=42.0 off=71 "asked."
+line 3 y=72.0 paraFirst=false poemBreak=true [78,100)
+  run v5 kind=0 red=false tint=1 override=true x=0.0 w=56.0 off=78 "“Seven,”"
+  run v5 kind=0 red=false tint=1 override=true x=60.0 w=28.0 off=87 "they"
+  run v5 kind=0 red=false tint=1 override=true x=92.0 w=56.0 off=92 "replied."
+line 4 y=96.0 paraFirst=false poemBreak=false [101,133)
+  run v6 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=101 "⁶"
+  run v6 kind=0 red=false tint=0 override=false x=9.0 w=21.0 off=103 "And"
+  run v6 kind=0 red=false tint=0 override=false x=34.0 w=14.0 off=107 "He"
+  run v6 kind=0 red=false tint=0 override=false x=52.0 w=70.0 off=110 "instructed"
+  run v6 kind=0 red=false tint=0 override=false x=126.0 w=21.0 off=121 "the"
+  run v6 kind=0 red=false tint=0 override=false x=151.0 w=35.0 off=125 "crowd"
+  run v6 kind=0 red=false tint=0 override=false x=190.0 w=14.0 off=131 "to"
+line 5 y=120.0 paraFirst=false poemBreak=false [134,143)
+  run v6 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=134 "sit"
+  run v6 kind=0 red=false tint=0 override=false x=25.0 w=35.0 off=138 "down."
+wash line=0 tint=1 x0=0.0 x1=200.0
+wash line=1 tint=1 x0=0.0 x1=204.0
+wash line=2 tint=1 x0=0.0 x1=81.0
+wash line=3 tint=1 x0=0.0 x1=148.0
+height=144.0 text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?”\nJesus asked.\n“Seven,” they replied.\n⁶ And He instructed the crowd to\nsit down."
+
+
+### red/bsb-spans-under-the-band | legacy-fyne-pane
+highlightLine=0 highlightEndLine=2 totalLines=5
+verseLines=[{4 0} {5 1} {6 3}]
+text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” Jesus asked.\n“Seven,” they replied.\n⁶ And He instructed the crowd to sit down."
+
+
+### red/bsb-spans-under-the-band | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"His disciples replied to Him.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"“How many loaves do you have?”", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextHighlightText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" Jesus asked.\n“Seven,” they replied.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁶ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"And He instructed the crowd to sit down.", parent:(*widget.RichText)(nil)}
+
+
+### red/bsb-spans-no-mark | apple-html reporter=false
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 2.0;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0 0 24px 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">4</sup>&nbsp;His disciples replied to Him.<br><sup class="v">5</sup>&nbsp;<span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+
+### red/bsb-spans-no-mark | apple-html reporter=true
+<html><head><style>body {
+		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+		font-size: 21px;
+		color: #25221d;
+		line-height: 1.3;
+		letter-spacing: 0.004em;
+		margin: 0; padding: 0;
+		-webkit-text-size-adjust: 100%;
+		-webkit-font-smoothing: antialiased;
+		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
+	}p {
+		margin: 0;
+		text-align: justify;
+		hyphens: auto;
+		-webkit-hyphens: auto;
+	}sup.v {
+		color: #53688f;
+		font-weight: 600;
+		font-size: 0.66em;
+		letter-spacing: 0;
+		margin-right: 2px;
+	}.hl {
+		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm">&#8195;&#8194;<sup class="v">4</sup>&nbsp;His disciples replied to Him.<br><sup class="v">5</sup>&nbsp;<span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+
+### red/bsb-spans-no-mark | android-html
+<p><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;His disciples replied to Him.<br><sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;<font color="#b23a2e">“How many loaves do you have?”</font> Jesus asked.<br>“Seven,” they replied.<br><sup><small><font color="#53688f"><b>6</b></font></small></sup>&nbsp;And He instructed the crowd to sit down.</p>
+
+### red/bsb-spans-no-mark | styled-layout
+line 0 y=0.0 paraFirst=true poemBreak=true [0,31)
+  run v4 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=0 "⁴"
+  run v4 kind=0 red=false tint=0 override=false x=9.0 w=21.0 off=2 "His"
+  run v4 kind=0 red=false tint=0 override=false x=34.0 w=63.0 off=6 "disciples"
+  run v4 kind=0 red=false tint=0 override=false x=101.0 w=49.0 off=16 "replied"
+  run v4 kind=0 red=false tint=0 override=false x=154.0 w=14.0 off=24 "to"
+  run v4 kind=0 red=false tint=0 override=false x=172.0 w=28.0 off=27 "Him."
+line 1 y=24.0 paraFirst=false poemBreak=false [32,64)
+  run v5 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=32 "⁵"
+  run v5 kind=0 red=true tint=0 override=false x=9.0 w=28.0 off=34 "“How"
+  run v5 kind=0 red=true tint=0 override=false x=41.0 w=28.0 off=39 "many"
+  run v5 kind=0 red=true tint=0 override=false x=73.0 w=42.0 off=44 "loaves"
+  run v5 kind=0 red=true tint=0 override=false x=119.0 w=14.0 off=51 "do"
+  run v5 kind=0 red=true tint=0 override=false x=137.0 w=21.0 off=54 "you"
+  run v5 kind=0 red=true tint=0 override=false x=162.0 w=42.0 off=58 "have?”"
+line 2 y=48.0 paraFirst=false poemBreak=true [65,77)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=35.0 off=65 "Jesus"
+  run v5 kind=0 red=false tint=0 override=false x=39.0 w=42.0 off=71 "asked."
+line 3 y=72.0 paraFirst=false poemBreak=true [78,100)
+  run v5 kind=0 red=false tint=0 override=false x=0.0 w=56.0 off=78 "“Seven,”"
+  run v5 kind=0 red=false tint=0 override=false x=60.0 w=28.0 off=87 "they"
+  run v5 kind=0 red=false tint=0 override=false x=92.0 w=56.0 off=92 "replied."
+line 4 y=96.0 paraFirst=false poemBreak=false [101,133)
+  run v6 kind=1 red=false tint=0 override=false x=0.0 w=5.0 off=101 "⁶"
+  run v6 kind=0 red=false tint=0 override=false x=9.0 w=21.0 off=103 "And"
+  run v6 kind=0 red=false tint=0 override=false x=34.0 w=14.0 off=107 "He"
+  run v6 kind=0 red=false tint=0 override=false x=52.0 w=70.0 off=110 "instructed"
+  run v6 kind=0 red=false tint=0 override=false x=126.0 w=21.0 off=121 "the"
+  run v6 kind=0 red=false tint=0 override=false x=151.0 w=35.0 off=125 "crowd"
+  run v6 kind=0 red=false tint=0 override=false x=190.0 w=14.0 off=131 "to"
+line 5 y=120.0 paraFirst=false poemBreak=false [134,143)
+  run v6 kind=0 red=false tint=0 override=false x=0.0 w=21.0 off=134 "sit"
+  run v6 kind=0 red=false tint=0 override=false x=25.0 w=35.0 off=138 "down."
+height=144.0 text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?”\nJesus asked.\n“Seven,” they replied.\n⁶ And He instructed the crowd to\nsit down."
+
+
+### red/bsb-spans-no-mark | legacy-fyne-pane
+highlightLine=-1 highlightEndLine=-1 totalLines=5
+verseLines=[{4 0} {5 1} {6 3}]
+text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” Jesus asked.\n“Seven,” they replied.\n⁶ And He instructed the crowd to sit down."
+
+
+### red/bsb-spans-no-mark | richtext-fallback
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁴ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"His disciples replied to Him.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁵ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextRedLetter", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"“How many loaves do you have?”", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:" Jesus asked.\n“Seven,” they replied.", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"\n", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseNumber", Inline:true, SizeName:"helperText", TextStyle:fyne.TextStyle{Bold:true, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"⁶ ", parent:(*widget.RichText)(nil)}
+&widget.TextSegment{Style:widget.RichTextStyle{Alignment:0, ColorName:"bibleTextVerseText", Inline:true, SizeName:"", TextStyle:fyne.TextStyle{Bold:false, Italic:false, Monospace:false, Symbol:false, TabWidth:0, Underline:false}, concealed:false}, Text:"And He instructed the crowd to sit down.", parent:(*widget.RichText)(nil)}
+
+

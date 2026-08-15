@@ -1,6 +1,8 @@
 package bibletext
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -71,6 +73,116 @@ func TestChapterRenderFingerprintDistinguishesHighlightedVerse(t *testing.T) {
 	}
 	if chapterRenderFingerprint(mk(16)) == chapterRenderFingerprint(mk(17)) {
 		t.Fatal("fingerprint should differ for different highlighted verses")
+	}
+}
+
+// --- The fingerprint against the TINT, not against the mark it happens to
+// derive from today. ---
+//
+// chapterRenderFingerprint now folds chapterTints.fingerprint (tint.go). The
+// property that must survive the notes rework is stated here in terms of what
+// the reader sees: enumerate marks, paint the chapter with each, and require
+// that two chapters that would be PAINTED DIFFERENTLY never share a
+// fingerprint. Miss that and the native overlays skip a rebuild the reader
+// needed — a wash that will not clear, which is the failure the note clause in
+// chapterRenderFingerprint was added for.
+
+// tintVector is what the reader would see: the tint of every verse of the
+// chapter, in order. Two states with the same vector paint the same chapter.
+func tintVector(s *AppState, verses []Verse) string {
+	tints := chapterTint(s)
+	var b strings.Builder
+	for _, v := range verses {
+		fmt.Fprintf(&b, "%d,", tints.of(v))
+	}
+	return b.String()
+}
+
+func TestFingerprintChangesWheneverTheTintDoes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	verses := proseChapter() // Romans 8:1-5
+	marks := []struct {
+		name   string
+		lo, hi int
+		clear  bool
+	}{
+		{name: "no mark", clear: true},
+		{name: "1", lo: 1},
+		{name: "2", lo: 2},
+		{name: "1-4", lo: 1, hi: 4},
+		{name: "2-4", lo: 2, hi: 4},
+		{name: "1-5", lo: 1, hi: 5},
+		{name: "5", lo: 5},
+		// The same single verse, spelled both ways the mark-setters spell it.
+		// covers() reads them identically, so they PAINT identically and must
+		// fold identically — the "no flap" arm of this test, and the reason
+		// chapterTints.fingerprint normalises rather than printing the raw span.
+		{name: "3 as Hi=0", lo: 3, hi: 0},
+		{name: "3 as Hi=3", lo: 3, hi: 3},
+		// A chapter-level mark covers no verse at all: it paints what no mark
+		// paints, and must fold the same way.
+		{name: "chapter-level", lo: 0, hi: 0},
+	}
+
+	// ONE AppState, re-marked in place. Building a state per row would make this
+	// test pass no matter what the tint clause did: chapterRenderFingerprint
+	// folds state.Bible's POINTER (a background data swap must not be skipped),
+	// so a fresh BibleData per row gives every row a different fingerprint for a
+	// reason that has nothing to do with tints. Caught by mutating
+	// chapterTints.fingerprint and watching this test stay green.
+	s := tintState("Romans", 8, "web", verses)
+
+	type row struct{ name, vec, fp string }
+	var rows []row
+	for _, m := range marks {
+		if m.clear {
+			s.clearMark()
+		} else {
+			s.setHL(hlSearch, "Romans", 8, m.lo, m.hi)
+		}
+		rows = append(rows, row{m.name, tintVector(s, verses), chapterRenderFingerprint(s)})
+	}
+	for i := range rows {
+		for j := i + 1; j < len(rows); j++ {
+			if rows[i].vec != rows[j].vec && rows[i].fp == rows[j].fp {
+				t.Errorf("%s and %s paint differently (%s vs %s) but share fingerprint %q — "+
+					"the second render would be skipped and the wash would be wrong on screen",
+					rows[i].name, rows[j].name, rows[i].vec, rows[j].vec, rows[i].fp)
+			}
+			if rows[i].vec == rows[j].vec && rows[i].fp != rows[j].fp {
+				t.Errorf("%s and %s paint identically (%s) but differ in fingerprint (%q vs %q) — "+
+					"a rebuild for no visible change",
+					rows[i].name, rows[j].name, rows[i].vec, rows[i].fp, rows[j].fp)
+			}
+		}
+	}
+}
+
+// The ONE place the fingerprint is deliberately coarser than the tint: a mark on
+// a chapter that is not on screen tints nothing here and still moves the
+// fingerprint. Pinned so the trade is a decision rather than an accident — the
+// alternative is walking the chapter's verse list on the path whose whole
+// purpose is not doing work, to save a rebuild for a state the app reaches only
+// in the instant between setting a mark and navigating to it.
+func TestFingerprintIsCoarserThanTheTintForOffChapterMarks(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	verses := proseChapter()
+	// One state, re-marked — same reason as above: two states would differ by
+	// their Bible pointer and prove nothing.
+	s := tintState("Romans", 8, "web", verses)
+	unmarkedVec, unmarkedFP := tintVector(s, verses), chapterRenderFingerprint(s)
+	s.setHL(hlSearch, "Romans", 9, 1, 4)
+
+	if a, b := unmarkedVec, tintVector(s, verses); a != b {
+		t.Fatalf("a mark on another chapter must tint nothing here: %s vs %s", a, b)
+	}
+	if unmarkedFP == chapterRenderFingerprint(s) {
+		t.Fatal("expected the fingerprint to fold the mark's own chapter " +
+			"(if this now matches, the gate got finer — update tint.go's fingerprint comment)")
 	}
 }
 

@@ -824,10 +824,11 @@ func clearSearchState(state *AppState) {
 	clearHighlightedVerse(state)
 }
 
-func isVerseHighlighted(state *AppState, verse Verse) bool {
-	sp, ok := state.markSpan()
-	if !ok || !sp.sameChapter(verse.BookName, verse.Chapter) {
-		return false
-	}
-	return sp.covers(verse.Verse)
-}
+// isVerseHighlighted USED TO LIVE HERE. It is deleted, not shimmed.
+//
+// It answered a bool, and every one of its five callers was a renderer deciding
+// what to paint. That is now chapterTint(state).of(verse) — one answer per
+// chapter, a VALUE rather than a bool, in tint.go. Keeping this as a thin
+// wrapper would have left a second way to ask the same question, spelled as the
+// bool the notes rework has to stop it being; the next person adding a surface
+// would have found the easier one.
