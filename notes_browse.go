@@ -518,16 +518,29 @@ func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 18
 
+	// The translation in parentheses after the reference, quiet and small
+
+	// another fact about WHICH PASSAGE this is, and it reads as one heading
+	// with the reference instead of as a second line making a second claim.
+	// Abbreviated — "John 3:16 (WEB)" — because the full name at this size
+	// competes with the reference it is qualifying.
+	head0 := fyne.CanvasObject(ref)
+	if abbrev := noteVersionAbbrev(n.VersionID); abbrev != "" {
+		v := canvas.NewText("("+abbrev+")", pal.TextMuted)
+		v.TextSize = 12
+		head0 = container.NewHBox(ref, container.NewCenter(v))
+	}
+
 	// The date rides on the reference's own line, muted and small, pushed to the
 	// far edge. Given a line of its own it would read as a second fact about the
 	// note; up here it reads as part of the heading, which is what a date is.
 	// Centred vertically so the smaller text sits on the reference's optical
 	// middle rather than hanging from the top of the row.
-	head := fyne.CanvasObject(ref)
+	head := head0
 	if when := noteDateLabel(n.Received, time.Now()); when != "" {
 		stamp := canvas.NewText(when, pal.TextMuted)
 		stamp.TextSize = 12
-		head = container.NewBorder(nil, nil, ref, container.NewCenter(stamp))
+		head = container.NewBorder(nil, nil, head0, container.NewCenter(stamp))
 	}
 
 	// The note's own words, in the SAME bubble the reading page draws, with the
@@ -535,7 +548,7 @@ func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject
 	// would read as part of the message rather than as the app saying where it
 	// came from. A collapsed note still shows its text here; the browser is
 	// where you read them, the chapter is where you chose how much to see.
-	body := noteBubbleWithByline(n.Text, noteByline(n), noteVersionName(n.VersionID), pal)
+	body := noteBubbleWithByline(n.Text, noteByline(n), pal)
 
 	rows := container.NewVBox(head, body)
 	if n.Minimized {
