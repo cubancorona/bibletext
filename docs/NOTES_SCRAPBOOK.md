@@ -1267,3 +1267,76 @@ Both halves have been broken in shipped code, in opposite directions, which is w
 - **Every number in this document is an M3 Max, and nothing was rendered.** No phone timings, no simulator, no Windows or Linux build, no screenshots. The AppKit importer probes behind the overlap section are AppKit, not UIKit. The contrast figures are computed, not sampled — though my ΔE reproduces `theme.go`'s own recorded light-band figure of 44.7 exactly, which is the one calibration I have.
 - **Delete-one rewrites the whole blob.** A reader tidying up will do it thirty times in a row, each a full-file write, on the reader's most destructive verb. The tempting escape — a tombstone with deferred compaction — I reject: the reader was told the message is gone and the text would still be on disk. If this bites, the honest fix is to accept the cost or change what Delete promises, not to leave the words there quietly.
 - **Sub-verse spans remain impossible and now look easy.** The document model would carry a character offset without blinking; nothing else in the stack can — not the store, not `#v<lo>[-<hi>]`, not `VerseSpan`, not any of the five emitters, and `share.go:975-986` already rounds a mid-verse selection to whole verses. Making the model look capable of something the stack is not invites somebody to try.
+---
+
+# Identity — the decision record
+
+> Settled with the owner on 2026-08-15, after the panel. **This section overrides
+> the panel's `sender` section above wherever they disagree.**
+
+## The constraint, stated plainly
+
+**There are no accounts and no servers, and there is no plan for either.** The app
+is offline, on-device, and has never had a login. Therefore:
+
+> **No two notes can be known to come from the same person unless the reader says
+> so.** Any grouping beyond a single install is USER-INITIATED, always.
+
+The owner's words: *"I don't think we can do that without some kind of
+user-initiated linking because we don't have accounts or servers. But, again, we
+would like to build with these things in mind so we are not frozen out later."*
+
+## What a sender id is, and what it is NOT
+
+Each install mints one opaque `SenderID` the first time its reader shares a note,
+and every note it sends carries it. It is not a name, not an account, and not a
+fingerprint of the device — just a value that is stable for as long as that
+install lives.
+
+| It CAN | It CANNOT |
+|---|---|
+| group every note from one install of one app | recognise the same person on a second device |
+| survive the sender renaming themselves | survive a reinstall, or a restored backup on new hardware |
+| give a merge a durable thing to merge | tell you WHO anybody is |
+
+So the id does the small, honest part automatically, and the reader does the rest
+by hand. **Getting this wrong in the confident direction would be worse than not
+having it** — an app that silently claims two people are one has misattributed
+somebody's message, which is the one thing this subsystem must never do.
+
+## What ships now
+
+- Every stored note carries `Kind` (`mine` | `received`) and `SenderID`.
+- **Own notes are STORED but never drawn in the reading text** (owner directive).
+  They appear in the notes browser, which needs a way to show them — a filter or
+  a section, marked "from you".
+- The byline says **"You"** or **"Friend"**. No name is collected, no name is
+  displayed, and the share sheet has no name field.
+- **Delete-all clears your own notes too** (owner directive). It is one store.
+
+## What is designed but NOT built
+
+Reserved so that adding them later is additive rather than a migration:
+
+1. **A name field.** `SenderName` rides in the record and on the wire, decoded and
+   stored from day one, simply never written and never shown. When the share sheet
+   grows the field, old notes keep saying "Friend" and nothing has to be rewritten.
+   The field is untrusted text and its validation rules — length, no newlines,
+   bidi isolation on display, no impersonation of app chrome — belong with the
+   display, not with the store.
+2. **The person layer.** A reader-owned mapping from a SET of `SenderID`s to one
+   `Person`, with a reader-chosen alias. Merge and un-merge are both user actions.
+   Nothing in the note record points at a `Person` — the mapping is a separate,
+   rebuildable structure, so losing it loses a preference and never a note.
+3. **An account id, if servers ever exist.** The record has room for a second
+   identity field alongside `SenderID`. Because unknown fields are preserved
+   across read-modify-write, a build that knows nothing about accounts will carry
+   an account id through untouched rather than destroying it.
+
+## The rule that keeps all three possible
+
+**Identity is additive metadata on an immutable record, never part of its
+address.** A note is addressed by its own `NoteID` and nothing else. So a merge,
+a rename, a late-arriving name, or an account id arriving years from now changes
+what the app can SAY about a note — never which note a verb reaches, never where
+it is stored, and never whether it survives.
