@@ -25,9 +25,7 @@ func TestOpeningANoteAlwaysAsksToReposition(t *testing.T) {
 	// so nothing about the render would change and the skip gate would swallow it.
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "Psalms", 23
-	st.HighlightedBook, st.HighlightedChapter = "Psalms", 23
-	st.HighlightedVerse, st.HighlightedVerseEnd = 1, 4
-	st.HasHighlightedVerse = true
+	st.setHL(hlNote, "Psalms", 23, 1, 4)
 	st.forceReposition = false
 
 	openNote(st, n)
@@ -42,9 +40,7 @@ func TestOpeningASearchResultAlwaysAsksToReposition(t *testing.T) {
 
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "Psalms", 23
-	st.HighlightedBook, st.HighlightedChapter = "Psalms", 23
-	st.HighlightedVerse = 4
-	st.HasHighlightedVerse = true
+	st.setHL(hlNote, "Psalms", 23, 4, 0)
 	st.forceReposition = false
 
 	openSearchResult(st, Verse{BookName: "Psalms", Chapter: 23, Verse: 4})

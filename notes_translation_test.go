@@ -107,8 +107,7 @@ func TestDeletingAllNotesClearsTheOneOnScreen(t *testing.T) {
 	st := notesXState(t)
 	st.ActiveNote = "still here"
 	st.NoteVerseLo = 16
-	st.HasHighlightedVerse = true
-	st.HighlightedVerse = 16
+	st.setHL(hlNote, st.CurrentBook, st.CurrentChapter, 16, 0)
 
 	deleteAllNotes(appPrefs())
 	clearLiveNote(st)
@@ -116,7 +115,7 @@ func TestDeletingAllNotesClearsTheOneOnScreen(t *testing.T) {
 	if st.ActiveNote != "" || st.NoteVerseLo != 0 {
 		t.Errorf("note still live after delete-all: %q verse=%d", st.ActiveNote, st.NoteVerseLo)
 	}
-	if st.HasHighlightedVerse {
+	if st.hlOn() {
 		t.Error("the note's highlight outlived the note")
 	}
 }
@@ -213,9 +212,9 @@ func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
 		Text: "for such a time as this"})
 	applyNoteForCurrentChapter(st)
-	if st.ActiveNote == "" || !st.HasHighlightedVerse {
+	if st.ActiveNote == "" || !st.hlOn() {
 		t.Fatalf("precondition: note and its highlight should be live (note=%q highlight=%v)",
-			st.ActiveNote, st.HasHighlightedVerse)
+			st.ActiveNote, st.hlOn())
 	}
 
 	// The Catholic edition carries Greek Esther, so this note has nowhere to go.
@@ -225,7 +224,7 @@ func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	if st.ActiveNote != "" {
 		t.Errorf("the note survived into a book its numbering does not describe: %q", st.ActiveNote)
 	}
-	if st.HasHighlightedVerse {
+	if st.hlOn() {
 		t.Error("the note's highlight was left behind — a marked verse with nothing explaining it")
 	}
 }

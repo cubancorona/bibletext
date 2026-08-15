@@ -63,6 +63,12 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
 	chapText := fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total)
+	// TEMPORARY, dev builds only: what the note state actually is, on screen, so a
+	// switch that loses the note can be diagnosed from a screenshot instead of
+	// guessed at. Empty in release builds (dev_autoopen_off.go).
+	if d := devNoteDebug(state); d != "" {
+		chapText += "   " + d
+	}
 	if total <= 1 {
 		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}

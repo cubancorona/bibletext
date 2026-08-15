@@ -158,10 +158,7 @@ func TestFyneRestoreYieldsToHighlightJump(t *testing.T) {
 	state := sampleState()
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 	// A search-jump highlight owns the scroll; a stale restore must not fight it.
-	state.HasHighlightedVerse = true
-	state.HighlightedBook = state.CurrentBook
-	state.HighlightedChapter = state.CurrentChapter
-	state.HighlightedVerse = verses[len(verses)-1].Verse
+	state.setHL(hlSearch, state.CurrentBook, state.CurrentChapter, verses[len(verses)-1].Verse, 0)
 	state.restore = &restoreAnchor{Book: state.CurrentBook, Chapter: state.CurrentChapter, Frac: 0.1}
 
 	w := buildTestPane(t, state)
@@ -172,6 +169,6 @@ func TestFyneRestoreYieldsToHighlightJump(t *testing.T) {
 	}
 
 	// Reset the highlight so later tests in this binary see clean state.
-	state.HasHighlightedVerse = false
+	state.clearMark()
 	state.restore = nil
 }

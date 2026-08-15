@@ -62,11 +62,9 @@ type AppState struct {
 	// a stale response repaint a newer query's results.
 	askSession aiSearchSession
 
-	HighlightedBook     string
-	HighlightedChapter  int
-	HighlightedVerse    int // start of the highlighted range (a single verse for search/QOTD)
-	HighlightedVerseEnd int // inclusive end; 0 or < start means a single verse
-	HasHighlightedVerse bool
+	// mark is the highlight: WHICH verses are lit, in WHAT numbering, and — the
+	// part that was missing — WHY. See Mark.
+	mark Mark
 
 	// The note attached to that highlight, when the reader arrived on a shared
 	// link carrying one. Minimized means the reader collapsed it: the note is
@@ -771,11 +769,17 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 	// highlight in the reading panes, so leaving it armed would send an explicit
 	// arrival to the saved position instead of the verse just asked for.
 	state.restore = nil
-	state.HighlightedBook = verse.BookName
-	state.HighlightedChapter = verse.Chapter
-	state.HighlightedVerse = verse.Verse
-	state.HighlightedVerseEnd = endVerse
-	state.HasHighlightedVerse = verse.Verse > 0
+	if verse.Verse > 0 {
+		state.setMark(hlSearch, VerseSpan{
+			VersionID: state.currentVersion().ID,
+			Book:      verse.BookName,
+			Chapter:   verse.Chapter,
+			Lo:        verse.Verse,
+			Hi:        endVerse,
+		})
+	} else {
+		state.clearMark()
+	}
 	state.IsSearching = false
 	state.CanReturnToSearchResults = true
 	state.refresh()
@@ -800,11 +804,7 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 }
 
 func clearHighlightedVerse(state *AppState) {
-	state.HighlightedBook = ""
-	state.HighlightedChapter = 0
-	state.HighlightedVerse = 0
-	state.HighlightedVerseEnd = 0
-	state.HasHighlightedVerse = false
+	state.clearMark()
 }
 
 func clearSearchState(state *AppState) {
@@ -825,15 +825,9 @@ func clearSearchState(state *AppState) {
 }
 
 func isVerseHighlighted(state *AppState, verse Verse) bool {
-	if !state.HasHighlightedVerse {
+	sp, ok := state.markSpan()
+	if !ok || !sp.sameChapter(verse.BookName, verse.Chapter) {
 		return false
 	}
-	if state.HighlightedBook != verse.BookName || state.HighlightedChapter != verse.Chapter {
-		return false
-	}
-	end := state.HighlightedVerseEnd
-	if end < state.HighlightedVerse {
-		end = state.HighlightedVerse // 0/unset (or a single verse) → just the start
-	}
-	return verse.Verse >= state.HighlightedVerse && verse.Verse <= end
+	return sp.covers(verse.Verse)
 }

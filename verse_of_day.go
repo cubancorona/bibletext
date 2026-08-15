@@ -279,11 +279,13 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 	selectBook(state, book, false)
 	state.CurrentChapter = chapter
 	addRecentChapter(state, book, chapter)
-	state.HighlightedBook = book
-	state.HighlightedChapter = chapter
-	state.HighlightedVerse = start
-	state.HighlightedVerseEnd = end
-	state.HasHighlightedVerse = true
+	state.setMark(hlVerseOfDay, VerseSpan{
+		VersionID: state.currentVersion().ID,
+		Book:      book,
+		Chapter:   chapter,
+		Lo:        start,
+		Hi:        end,
+	})
 	state.IsSearching = false
 	state.CanReturnToSearchResults = false
 	state.refresh()

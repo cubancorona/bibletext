@@ -33,10 +33,7 @@ func TestChapterRenderFingerprintChangesOnNavigation(t *testing.T) {
 		// epoch upgrade landed but the overlay kept showing flattened poetry.
 		{"data swap", func(s *AppState) { s.Bible = &BibleData{} }},
 		{"highlight on", func(s *AppState) {
-			s.HasHighlightedVerse = true
-			s.HighlightedBook = "John"
-			s.HighlightedChapter = 3
-			s.HighlightedVerse = 16
+			s.setHL(hlSearch, "John", 3, 16, 0)
 		}},
 	}
 	for _, tc := range cases {
@@ -54,10 +51,8 @@ func TestChapterRenderFingerprintChangesOnNavigation(t *testing.T) {
 // (clearHighlightedVerse + refreshReadingOnly) would be skipped by the gate and the
 // .hl background wash would linger on screen.
 func TestChapterRenderFingerprintChangesWhenHighlightCleared(t *testing.T) {
-	s := &AppState{
-		CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3,
-		HasHighlightedVerse: true, HighlightedBook: "John", HighlightedChapter: 3, HighlightedVerse: 16,
-	}
+	s := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3}
+	s.setHL(hlSearch, "John", 3, 16, 0)
 	before := chapterRenderFingerprint(s)
 	clearHighlightedVerse(s)
 	after := chapterRenderFingerprint(s)
@@ -70,10 +65,9 @@ func TestChapterRenderFingerprintChangesWhenHighlightCleared(t *testing.T) {
 // gate decides whether a search-jump (highlight on a specific verse) re-renders.
 func TestChapterRenderFingerprintDistinguishesHighlightedVerse(t *testing.T) {
 	mk := func(v int) *AppState {
-		return &AppState{
-			CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3,
-			HasHighlightedVerse: true, HighlightedBook: "John", HighlightedChapter: 3, HighlightedVerse: v,
-		}
+		s := &AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 3}
+		s.setHL(hlSearch, "John", 3, v, 0)
+		return s
 	}
 	if chapterRenderFingerprint(mk(16)) == chapterRenderFingerprint(mk(17)) {
 		t.Fatal("fingerprint should differ for different highlighted verses")

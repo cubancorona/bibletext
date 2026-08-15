@@ -112,7 +112,7 @@ func TestLockedTranslationLinkOpensThePassageAndSaysSo(t *testing.T) {
 	if st.CurrentBook != "John" || st.CurrentChapter != 3 {
 		t.Errorf("the passage did not open: %s %d", st.CurrentBook, st.CurrentChapter)
 	}
-	if !st.HasHighlightedVerse || st.HighlightedVerse != 16 {
+	if !st.hlOn() || st.hlLo() != 16 {
 		t.Error("the shared verse was not highlighted")
 	}
 	// And nothing pretended the switch happened.

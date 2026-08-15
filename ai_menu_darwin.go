@@ -147,7 +147,7 @@ func bibleTextHighlightCleared() {
 		return
 	}
 	fyne.Do(func() {
-		if !state.HasHighlightedVerse {
+		if !state.hasMark() {
 			return
 		}
 		clearHighlightedVerse(state)

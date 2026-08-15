@@ -90,10 +90,7 @@ func TestStyledPaneHighlightBandGeometry(t *testing.T) {
 	defer app.Quit()
 
 	st := psalm23State()
-	st.HasHighlightedVerse = true
-	st.HighlightedBook = "Psalms"
-	st.HighlightedChapter = 23
-	st.HighlightedVerse = 2
+	st.setHL(hlSearch, "Psalms", 23, 2, 0)
 	p := newStyledReadingPane(st, st.Bible.GetChapter("Psalms", 23))
 	r := p.CreateRenderer().(*styledPaneRenderer)
 

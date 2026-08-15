@@ -20,7 +20,7 @@ func resumeState(t *testing.T) *AppState {
 	t.Helper()
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "Psalms", 23
-	st.HasHighlightedVerse = false
+	st.clearMark()
 	st.ActiveNote = ""
 	st.restore = nil
 	return st
@@ -42,9 +42,9 @@ func TestNoteComesBackOnReopen(t *testing.T) {
 	}
 	// Nothing to protect (never scrolled), so the note keeps its highlight and
 	// the reader lands on it — same as arriving on the link.
-	if !st.HasHighlightedVerse || st.HighlightedVerse != 1 || st.HighlightedVerseEnd != 4 {
+	if !st.hlOn() || st.hlLo() != 1 || st.hlHi() != 4 {
 		t.Errorf("expected the note's passage highlighted, got has=%v %d-%d",
-			st.HasHighlightedVerse, st.HighlightedVerse, st.HighlightedVerseEnd)
+			st.hlOn(), st.hlLo(), st.hlHi())
 	}
 }
 
@@ -76,9 +76,9 @@ func TestReopenRestoresTheNoteWhole(t *testing.T) {
 			if st.ActiveNote != "read this bit" {
 				t.Errorf("the note should still come back: %q", st.ActiveNote)
 			}
-			if !st.HasHighlightedVerse || st.HighlightedVerse != 1 || st.HighlightedVerseEnd != 4 {
+			if !st.hlOn() || st.hlLo() != 1 || st.hlHi() != 4 {
 				t.Errorf("the note came back without its highlight: has=%v %d-%d",
-					st.HasHighlightedVerse, st.HighlightedVerse, st.HighlightedVerseEnd)
+					st.hlOn(), st.hlLo(), st.hlHi())
 			}
 			// The saved position must survive too — the panes use it to outrank
 			// the highlight, so losing it here would hand the scroll to the note.
@@ -101,15 +101,13 @@ func TestReopenNeverTouchesAnExistingHighlight(t *testing.T) {
 
 	st := resumeState(t)
 	st.restore = &restoreAnchor{Book: "Psalms", Chapter: 23, Verse: 5}
-	st.HasHighlightedVerse = true
-	st.HighlightedBook, st.HighlightedChapter = "Psalms", 23
-	st.HighlightedVerse = 6
+	st.setHL(hlSearch, "Psalms", 23, 6, 0)
 
 	applyNoteOnResume(st)
 
-	if !st.HasHighlightedVerse || st.HighlightedVerse != 6 {
+	if !st.hlOn() || st.hlLo() != 6 {
 		t.Errorf("the reader's own highlight was discarded: has=%v verse=%d",
-			st.HasHighlightedVerse, st.HighlightedVerse)
+			st.hlOn(), st.hlLo())
 	}
 }
 
@@ -129,7 +127,7 @@ func TestReopenSurfacesNothingWhenNotesAreOff(t *testing.T) {
 	if st.ActiveNote != "" {
 		t.Errorf("a note surfaced on reopen with the feature off: %q", st.ActiveNote)
 	}
-	if st.HasHighlightedVerse {
+	if st.hlOn() {
 		t.Error("a highlight appeared on reopen with the feature off")
 	}
 }

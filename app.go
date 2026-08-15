@@ -224,6 +224,7 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			// be screenshotted in the simulator, which has no tap command. No-op
 			// (and not compiled in) for shipping builds — dev_autoopen_off.go.
 			devAutoOpenSheet(state)
+			devAutoSwitchVersion(state)
 			if state.fullPending {
 				// Opened on the embedded Gospels; download the complete Bible in the
 				// background (resilient + self-retrying) and swap it in when it lands.

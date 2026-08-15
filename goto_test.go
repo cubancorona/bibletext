@@ -170,7 +170,7 @@ func TestShowGotoPicker(t *testing.T) {
 	if state.CurrentBook != "John" || state.CurrentChapter != 3 {
 		t.Fatalf("Go landed on %s %d, want John 3", state.CurrentBook, state.CurrentChapter)
 	}
-	if !state.HasHighlightedVerse || state.HighlightedVerse != 16 {
-		t.Fatalf("Go must highlight verse 16, got hv=%v v=%d", state.HasHighlightedVerse, state.HighlightedVerse)
+	if !state.hlOn() || state.hlLo() != 16 {
+		t.Fatalf("Go must highlight verse 16, got hv=%v v=%d", state.hlOn(), state.hlLo())
 	}
 }

@@ -93,10 +93,7 @@ func TestChapterTextLocatesHighlightedVerse(t *testing.T) {
 	defer app.Quit()
 
 	state := sampleState()
-	state.HighlightedBook = "John"
-	state.HighlightedChapter = 1
-	state.HighlightedVerse = 2
-	state.HasHighlightedVerse = true
+	state.setHL(hlSearch, "John", 1, 2, 0)
 
 	ct := findChapterText(legacyPaneForTest(state))
 	if ct == nil {

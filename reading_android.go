@@ -537,10 +537,8 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		// caught: John 11 v35 landed at v57). Restore outranks the highlight,
 		// same ordering the other panes settled on: a pending restore means
 		// the reader is coming back, not arriving.
-		if state.restore == nil && state.HasHighlightedVerse &&
-			state.HighlightedBook == state.CurrentBook &&
-			state.HighlightedChapter == state.CurrentChapter {
-			C.btaScrollVerse(C.uintptr_t(env), C.int(state.HighlightedVerse))
+		if sp, here := state.markHere(); state.restore == nil && here {
+			C.btaScrollVerse(C.uintptr_t(env), C.int(sp.Lo))
 		}
 	})
 

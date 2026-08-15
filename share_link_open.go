@@ -268,15 +268,21 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// Highlight the shared verses. A range uses the same inclusive model the
 	// app's own search highlight uses, so the web page and the app light up the
 	// same verses.
+	// A bare link — one naming a chapter with no verse — must leave NOTHING
+	// behind. The old code here set HasHighlightedVerse=false and zeroed the end
+	// verse while leaving the book, chapter and start verse of the PREVIOUS mark
+	// in place (X8/GHOST_LOC): inert while the flag said to ignore it, and a trap
+	// for the next reader of those fields. clearMark has nothing to leave behind.
 	if t.VerseLo > 0 {
-		state.HighlightedBook = t.Book
-		state.HighlightedChapter = chapter
-		state.HighlightedVerse = t.VerseLo
-		state.HighlightedVerseEnd = t.VerseHi
-		state.HasHighlightedVerse = true
+		state.setMark(hlLinkSpan, VerseSpan{
+			VersionID: t.VersionID,
+			Book:      t.Book,
+			Chapter:   chapter,
+			Lo:        t.VerseLo,
+			Hi:        t.VerseHi,
+		})
 	} else {
-		state.HasHighlightedVerse = false
-		state.HighlightedVerseEnd = 0
+		state.clearMark()
 	}
 
 	state.IsSearching = false
@@ -317,6 +323,26 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 			// while the one on screen survived. The four fields are one value and
 			// have to be written as one.
 			state.NoteVersionID = t.VersionID
+			// AND the mark belongs to the NOTE, not to the link.
+			//
+			// The block above lit the link's verses as hlLinkSpan, which is right
+			// for a bare passage link and wrong here: when a link carries a note,
+			// the note is WHY those verses are lit. Leaving the mark attributed to
+			// the link meant Delete — which now clears only what the note owns —
+			// walked past it, and the reader was left with a lit verse and no
+			// message to explain it. That is ORPHAN_HL, the oldest defect in this
+			// subsystem, arriving by a new route; the enumeration caught it as
+			// four N1-orphan-highlight cells the moment the conditional clear
+			// landed. hlLinkSpan now means "a link's range with no note attached".
+			if t.VerseLo > 0 {
+				state.setMark(hlNote, VerseSpan{
+					VersionID: t.VersionID,
+					Book:      t.Book,
+					Chapter:   chapter,
+					Lo:        t.VerseLo,
+					Hi:        t.VerseHi,
+				})
+			}
 			rememberIncomingNote(state, t)
 		}
 	} else {
