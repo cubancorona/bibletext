@@ -1539,3 +1539,27 @@ one.
   surfaces adopting it rather than an extraction.
 - `SharedNote` already carries `Mine`, `SenderName` and `SenderID`. The latter
   two are stored and never read, so the identity work in S9 is additive.
+
+
+## Corrections from building it
+
+**`styledHighlightCeded` is SCROLL ownership, not colour.** This document filed
+it under "read-along must restore, not erase" and called it the styled pane's
+reconciliation "with a latch, not a model". That was a misreading. Its only
+readers are `styledColumn.Layout`'s `highlightOwnsScroll()` branch and the rewire
+that resets it: it latches once a narration follow-scroll has moved the view, so
+a search highlight — which positions the view once — stops re-pinning it inside
+the very Refresh a follow-scroll issues. The wash collision it was blamed for
+does not exist on that pane at all: the narration rects are drawn on their own
+layer ABOVE the tint rects, so both are visible and neither erases the other. The
+collision is a TextKit constraint, confined to the two Apple panes, and that is
+exactly where the restore/apply model landed. The latch stays.
+
+**A break character is never washed, and the golden fixture does not say so.**
+`testdata/chapter_tint_golden.txt` records what `buildChapterHTML` EMITS — where
+an intra-verse `<br>` really is nested inside the `.hl` span. What the markup
+contains and what the importer PAINTS are different questions, and only the
+second decides pixels. Measured against the real importer, a break comes back
+`background=NONE` even inside the span. Any rule about band shape must be written
+from the importer, not from the markup; a rule taken from the markup left every
+poetic verse with a full-width tail and a test that certified it.
