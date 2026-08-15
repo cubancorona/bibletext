@@ -17,6 +17,7 @@ package bibletext
 // none of them overlaps the box an unhighlighted neighbour's runs occupy.
 
 import (
+	"image/color"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -198,5 +199,71 @@ func TestStyledPaneHidesSurplusWashRects(t *testing.T) {
 		if rect.Visible() {
 			t.Errorf("wash rect %d of %d is still painted after the mark was cleared", i, before)
 		}
+	}
+}
+
+// The narration wash must not light a verse that merely shares a line with the
+// one being read aloud.
+//
+// This was the same defect the verse highlight had, left in place when that one
+// was fixed: raBand was a single full-column rectangle over the narrated verse's
+// LINE RANGE, and it was drawn AFTER the corrected highlight rects, so it won
+// wherever the two met. On John 3 at 560pt, 26 of 63 lines carry more than one
+// verse — so read-along routinely lit the neighbour, and did so on top of a wash
+// that had just been taught not to.
+func TestStyledReadAlongDoesNotSpillOntoLineNeighbours(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := sharedLineState()
+	p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
+	r := p.CreateRenderer().(*styledPaneRenderer)
+	// Lay out first: setReadAlongVerse derives its spans from the live layout
+	// and Refreshes, which is the order Resize produces in production.
+	p.relayout(560)
+	p.setReadAlongVerse(2) // verses 1, 2 and 3 all sit on one line
+	// setReadAlongVerse Refreshes, which reaches the widget's own cached
+	// renderer rather than the one this test holds; rebuild directly so the
+	// rects are sized from the spans it just derived.
+	r.rebuild()
+	r.Layout(fyne.NewSize(560, p.MinSize().Height))
+
+	var washes []paintedBox
+	for _, o := range r.Objects() {
+		rect, ok := o.(*canvas.Rectangle)
+		if !ok || !rect.Visible() || rect.FillColor != color.Color(styledReadAlongTint) {
+			continue
+		}
+		pos, sz := rect.Position(), rect.Size()
+		washes = append(washes, paintedBox{pos.X, pos.Y, pos.X + sz.Width, pos.Y + sz.Height})
+	}
+	if len(washes) == 0 {
+		t.Fatal("no narration wash painted for the verse being read aloud")
+	}
+	for _, neighbour := range []int{1, 3} {
+		box, ok := verseBoxOnLine(p, 0, neighbour)
+		if !ok {
+			t.Fatalf("precondition: verse %d must share line 0 with verse 2", neighbour)
+		}
+		for i, w := range washes {
+			if w.x0 < box.x1 && w.x1 > box.x0 && w.y0 < box.y1 && w.y1 > box.y0 {
+				t.Errorf("narration wash %d (%.1f..%.1f) covers unnarrated verse %d (%.1f..%.1f)",
+					i, w.x0, w.x1, neighbour, box.x0, box.x1)
+			}
+		}
+	}
+	// ...and it must still cover the verse actually being narrated.
+	own, ok := verseBoxOnLine(p, 0, 2)
+	if !ok {
+		t.Fatal("verse 2 has no box on line 0")
+	}
+	covered := false
+	for _, w := range washes {
+		if w.x0 <= own.x0 && w.x1 >= own.x1 {
+			covered = true
+		}
+	}
+	if !covered {
+		t.Error("the narrated verse's own words are not washed")
 	}
 }

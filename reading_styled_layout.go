@@ -45,6 +45,7 @@ type verseTint uint8
 const (
 	tintNone      verseTint = iota // no wash
 	tintHighlight                  // the search / cross-ref / mark band
+	tintReadAlong                  // the verse the narration is currently on
 )
 
 // overridesTextColour reports whether runs under this wash are drawn in the
@@ -330,22 +331,59 @@ type tintSpan struct {
 // joining spaces inside the wash, the same no-gaps rule the HTML dialects hold
 // (reading_highlight_gap_test.go).
 func tintSpansForLayout(lay *chapterLayout) []tintSpan {
-	if lay == nil {
+	return runSpansForLayout(lay, func(r styledRun) verseTint { return r.Tint })
+}
+
+// verseSpansForLayout is the same walk for a wash that is not carried on the
+// run — the read-along narration, which lives on the PANE (raVerse) rather
+// than in the layout, and which layers OVER the highlight rather than
+// replacing it (styledReadAlongTint is translucent, so both are meant to show).
+//
+// It exists because the read-along band had the exact defect the highlight just
+// lost: one full-column rectangle over a line range, washing whatever verse
+// happened to share the narrated verse's first and last lines, and drawn ON TOP
+// of the corrected highlight so it won wherever they met.
+func verseSpansForLayout(lay *chapterLayout, verse int) []tintSpan {
+	if verse <= 0 {
+		return nil
+	}
+	return runSpansForLayout(lay, func(r styledRun) verseTint {
+		if r.Verse == verse {
+			return tintReadAlong
+		}
+		return tintNone
+	})
+}
+
+// runSpansForLayout walks each line and coalesces contiguous runs sharing a
+// tint into ONE span per stretch.
+//
+// PER LINE is the whole point — a full-column band over a line RANGE washes the
+// neighbouring verses that share the range's first and last lines. COALESCED is
+// the other half: a rect per token would be slow and would show seams at every
+// inter-word space (and at every red-letter or verse-number boundary, since
+// those split the drawn segments but not the tint), so a stretch is closed only
+// when the tint itself changes. Spanning first.X → last.X+last.W keeps the
+// joining spaces inside the wash, the same no-gaps rule the HTML dialects hold
+// (reading_highlight_gap_test.go).
+func runSpansForLayout(lay *chapterLayout, tintOf func(styledRun) verseTint) []tintSpan {
+	if lay == nil || tintOf == nil {
 		return nil
 	}
 	var spans []tintSpan
 	for li, ln := range lay.Lines {
 		open := -1 // index into spans of the stretch still growing, -1 = none
 		for _, run := range ln.Runs {
-			if run.Tint == tintNone {
+			t := tintOf(run)
+			if t == tintNone {
 				open = -1
 				continue
 			}
-			if open >= 0 && spans[open].Tint == run.Tint {
+			if open >= 0 && spans[open].Tint == t {
 				spans[open].LineX1 = run.X + run.W
 				continue
 			}
-			spans = append(spans, tintSpan{Line: li, Tint: run.Tint, LineX0: run.X, LineX1: run.X + run.W})
+			spans = append(spans, tintSpan{Line: li, Tint: t, LineX0: run.X, LineX1: run.X + run.W})
 			open = len(spans) - 1
 		}
 	}

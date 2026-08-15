@@ -17,15 +17,20 @@ import (
 )
 
 // styledRABand digs the read-along rectangle out of the pane's renderer.
-func styledRABand(t *testing.T, pane *styledReadingPane) *canvas.Rectangle {
+// styledRARects returns the VISIBLE narration wash rectangles, in order. The
+// wash used to be one full-column rectangle over a line range; it is now one
+// per line, bounded to the narrated verse's own runs, so every assertion about
+// it is about a set.
+func styledRARects(t *testing.T, pane *styledReadingPane) []*canvas.Rectangle {
 	t.Helper()
+	var out []*canvas.Rectangle
 	for _, o := range test.WidgetRenderer(pane).Objects() {
-		if rect, ok := o.(*canvas.Rectangle); ok && rect.FillColor == color.Color(styledReadAlongTint) {
-			return rect
+		if rect, ok := o.(*canvas.Rectangle); ok && rect.Visible() &&
+			rect.FillColor == color.Color(styledReadAlongTint) {
+			out = append(out, rect)
 		}
 	}
-	t.Fatal("renderer has no read-along band")
-	return nil
+	return out
 }
 
 func buildStyledAreaWindow(t *testing.T, st *AppState) fyne.Window {
@@ -67,34 +72,51 @@ func TestStyledReadAlongTintSpansVerse(t *testing.T) {
 
 	styledReadAlongApply(3, false)
 	pane := styledPane
-	band := styledRABand(t, pane)
-	if !band.Visible() {
-		t.Fatal("tint band must show for the narrated verse")
+	rects := styledRARects(t, pane)
+	if len(rects) == 0 {
+		t.Fatal("tint must show for the narrated verse")
 	}
 	first, last, ok := pane.verseLineSpan(3)
 	if !ok {
 		t.Fatal("verse 3 must have a line span")
 	}
-	wantTop := pane.lay.Lines[first].Y
-	wantBot := pane.lay.Lines[last].Y + pane.lay.Lines[last].H
-	if band.Position().Y != wantTop || band.Position().Y+band.Size().Height != wantBot {
-		t.Errorf("band spans %v..%v, want %v..%v",
-			band.Position().Y, band.Position().Y+band.Size().Height, wantTop, wantBot)
-	}
-	// Poetic verses here occupy two authored lines each — the band must cover
-	// more than one rendered line.
+	// Poetic verses here occupy two authored lines each, so the wash is a SET
+	// covering that range — top of the first rect at the verse's first line,
+	// bottom of the last at the end of its last.
 	if last <= first {
 		t.Errorf("poetic verse should span multiple lines (got %d..%d)", first, last)
 	}
+	wantTop := pane.lay.Lines[first].Y
+	wantBot := pane.lay.Lines[last].Y + pane.lay.Lines[last].H
+	gotTop := rects[0].Position().Y
+	gotBot := rects[len(rects)-1].Position().Y + rects[len(rects)-1].Size().Height
+	if gotTop != wantTop || gotBot != wantBot {
+		t.Errorf("wash spans %v..%v, want %v..%v", gotTop, gotBot, wantTop, wantBot)
+	}
+	// And the point of the change: no rect runs the full column width.
+	for i, rect := range rects {
+		if rect.Position().X < pane.insetX() {
+			t.Errorf("rect %d starts at X=%v, left of the text column (%v)",
+				i, rect.Position().X, pane.insetX())
+		}
+		if rect.Size().Width >= pane.lastWidth-2*pane.insetX() {
+			t.Errorf("rect %d is %v wide — still a full-column band", i, rect.Size().Width)
+		}
+	}
 
-	// Advancing the narration moves the band; clearing hides it.
+	// Advancing the narration moves the wash; clearing removes it.
 	styledReadAlongApply(4, false)
-	if y4, _ := pane.yForVerse(4); styledRABand(t, pane).Position().Y != y4 {
-		t.Error("band must move to the newly narrated verse")
+	moved := styledRARects(t, pane)
+	if len(moved) == 0 {
+		t.Fatal("wash vanished when the narration advanced")
+	}
+	if y4, _ := pane.yForVerse(4); moved[0].Position().Y != y4 {
+		t.Errorf("wash must move to the newly narrated verse: got %v want %v",
+			moved[0].Position().Y, y4)
 	}
 	styledReadAlongClearTint()
-	if styledRABand(t, pane).Visible() {
-		t.Error("clear must hide the tint band")
+	if got := styledRARects(t, pane); len(got) != 0 {
+		t.Errorf("clear must remove the tint: %d rects still painted", len(got))
 	}
 }
 
