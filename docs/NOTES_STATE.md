@@ -676,6 +676,36 @@ nothing.
 `note="look at 16" highlight=false`, with `HighlightedBook="John"`,
 `HighlightedChapter=3`, `HighlightedVerse=16` still set — which is also `X9`.
 
+### X13 — a cross-chapter note cannot be reached by any verb
+
+**Measured 2026-08-15**, and it corrects this document twice over.
+
+FIRST CORRECTION: cross-chapter placement is not a category, it is ONE passage.
+Enumerating every verse of all four shipping translations gives exactly **24**
+cross-chapter mappings and every one is the Romans doxology — WEB/WEBC Romans
+14:24-26 against BSB/NKJV Romans 16:25-27 (`versification_data.go:26-28`, `:36-38`).
+Joel, Malachi, 3 John and the psalm superscriptions do **not** diverge: every
+translation here uses the same English chapter division. A design that describes
+this arm as "Hebrew vs Greek chapter divisions" is describing a problem the app
+does not have. (Add a Hebrew-numbered translation and the arm grows by hundreds —
+it is worth building for, just not worth over-describing today.)
+
+SECOND CORRECTION: the `UNREACHABLE` entry says a note that maps into another
+chapter leaves the reader "a bare chapter with no trace". For the Absent and
+Incommensurable arms that is measured and true. For the cross-chapter arm it is
+**false**: `noteFromAnotherTranslation` renumbers the note and shows it on the
+chapter the passage actually lives on. Nothing is lost and nothing is misplaced.
+
+THE ACTUAL DEFECT is downstream, and it is X1's mechanism in a dimension the X1
+fix did not touch. Hide and Delete rebuild the key's BOOK and CHAPTER from
+`state.CurrentBook` / `state.CurrentChapter` — where the reader is standing —
+while the note is filed under the chapter it came from. So a BSB reader looking
+at the doxology note on Romans 16 presses Delete, watches it go, and meets it
+again on the next navigation; Hide is the same silent no-op. `31bc97630` made
+`NoteVersionID` carry the VERSION third of the key and left the other two thirds
+reconstructed. Pinned by `notes_crosschapter_test.go`. It is the argument for an
+identity carried whole rather than for a third patch.
+
 ### X9 and X10 — FIXED by S1 (`mark.go`), 2026-08-15
 
 X10 was the subsystem's second-largest defect: Hide and Delete cleared the
