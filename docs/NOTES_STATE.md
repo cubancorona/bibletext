@@ -261,11 +261,23 @@ only way to reach the masked note from the reading view is to **delete the one i
 front of it**.
 
 **`UNREACHABLE`** — a note exists for this passage but `MapVerse` answers
-`Absent` or `Incommensurable`, or maps it into another chapter, so
-`noteFromAnotherTranslation` skips it (`notes_store.go:221-222`). Measured: a
-WEBC Greek-Esther note, read back under WEB, is not returned — and is still in
-the store.
+`Absent` or `Incommensurable`, so `noteFromAnotherTranslation` skips it
+(`notes_store.go:221-222`). Measured: a WEBC Greek-Esther note, read back under
+WEB, is not returned — and is still in the store.
 *The reader sees:* a bare chapter. No separator, no explanation, no trace.
+
+> **Corrected 2026-08-15.** This entry used to include "or maps it into another
+> chapter". That is false and was never measured: a cross-chapter note is
+> RENUMBERED and shown on the chapter its passage actually lives on. Nothing is
+> lost. The defect there is that no verb can reach it — see `X13`. Folding the
+> two together would have had the rework "fix" behaviour that is already right.
+>
+> A third case belongs here and is NOT covered by `MapVerse` at all: a note on a
+> book this translation does not contain. `MapVerse("webc","web","Tobit",1,1)`
+> answers **exact**, because `versificationDeltas` has no `web` entry to say
+> otherwise — the table reports agreement where it has no knowledge. It is
+> harmless today only because a reader cannot navigate to a book that is not
+> there. R4 must test book existence directly rather than trusting the answer.
 Recorded as `B_NOTE_NO_COUNTERPART` in `docs/NKJV_FLOW.md:137`, an open violation
 of I3. This is what **R4** exists to end.
 
