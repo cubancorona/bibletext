@@ -414,7 +414,10 @@ func TestGoToChapterWithVerse(t *testing.T) {
 		if state.hlLo() != 16 || state.hlHi() != 18 {
 			t.Fatalf("expected range 16-18, got start=%d end=%d", state.hlLo(), state.hlHi())
 		}
-		hl := func(n int) bool { return isVerseHighlighted(state, Verse{BookName: "John", Chapter: 3, Verse: n}) }
+		tints := chapterTint(state)
+		hl := func(n int) bool {
+			return tints.of(Verse{BookName: "John", Chapter: 3, Verse: n}) != tintNone
+		}
 		if !hl(16) || !hl(17) || !hl(18) {
 			t.Fatal("expected verses 16, 17 and 18 all highlighted for range 16-18")
 		}

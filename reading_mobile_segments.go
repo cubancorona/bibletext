@@ -34,6 +34,8 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 		SizeName:  theme.SizeNameCaptionText,
 		TextStyle: fyne.TextStyle{Bold: true},
 	}
+	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
+	tints := chapterTint(state)
 	segs := make([]widget.RichTextSegment, 0, len(verses)*4)
 	for i, v := range verses {
 		if i > 0 {
@@ -53,7 +55,7 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 			Text:  superscriptNumber(v.Verse) + " ",
 			Style: verseNumStyle,
 		})
-		hl := isVerseHighlighted(state, v)
+		tint := tints.of(v)
 		runs := trimRuns(redLetterRuns(state.CurrentVersion, v, redLetter))
 		// ONE run means no span data — every edition but the BSB and the NKJV,
 		// and any verse whose text no longer matches the offsets. Take the
@@ -67,7 +69,7 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 				Text: strings.TrimSpace(v.Text),
 				Style: widget.RichTextStyle{
 					Inline:    true,
-					ColorName: mobileRunColorName(red, hl),
+					ColorName: mobileRunColorName(red, tint),
 				},
 			})
 			continue
@@ -81,7 +83,7 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 				Text: run.Text,
 				Style: widget.RichTextStyle{
 					Inline:    true,
-					ColorName: mobileRunColorName(run.Red, hl),
+					ColorName: mobileRunColorName(run.Red, tint),
 				},
 			})
 		}
@@ -110,11 +112,16 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 // re-typesetting every other pane refuses to do: the bold serif sets ~17% wider,
 // so the paragraph re-wrapped and the text jumped the moment the highlight
 // cleared.
-func mobileRunColorName(red, highlighted bool) fyne.ThemeColorName {
+//
+// It takes a TINT rather than a bool because this pane's mark IS a colour: with
+// no band to paint, a second tint here can only ever be a second colour name,
+// and the switch below is where it would go. Today one tint is live and
+// colorNameHighlightHi is exactly what it produced before.
+func mobileRunColorName(red bool, tint verseTint) fyne.ThemeColorName {
 	switch {
 	case red:
 		return colorNameRedLetter
-	case highlighted:
+	case tint != tintNone:
 		return colorNameHighlightHi
 	default:
 		return colorNameVerseText

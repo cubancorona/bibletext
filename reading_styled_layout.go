@@ -33,38 +33,10 @@ const (
 	runVerseNum                // verse-number label, small + raised
 )
 
-// verseTint is the wash a verse's runs carry, per verse — NOT a bool, so the
-// renderer paints one rect per contiguous SAME-TINT stretch and two verses
-// tinted differently never share a rectangle. Today exactly one tint is in
-// use; the type is the seam the notes rework needs ("this verse has a note"
-// vs "more than one note here"), which is a distinction a bool cannot carry.
-// The zero value is deliberately "no wash", so an untinted run needs no
-// initialisation.
-type verseTint uint8
-
-const (
-	tintNone      verseTint = iota // no wash
-	tintHighlight                  // the search / cross-ref / mark band
-	tintReadAlong                  // the verse the narration is currently on
-)
-
-// overridesTextColour reports whether runs under this wash are drawn in the
-// body colour instead of their own.
-//
-// An explicit choice PER TINT, deliberately not "any tint but none". The
-// highlight band is a strong, chosen mark and a verse number's muted slate
-// disappears into it, so under that band the numbers take the body colour. A
-// tint added later must decide for itself: written as `!= tintNone`, the notes
-// rework's "this verse has a note" would have drained the colour out of every
-// verse number it touched, with no code change and no failing test to say so.
-func (t verseTint) overridesTextColour() bool {
-	switch t {
-	case tintHighlight:
-		return true
-	default:
-		return false
-	}
-}
+// verseTint, its constants and overridesTextColour used to live HERE. They moved
+// to tint.go when the other four renderers came onto the same model: a type five
+// surfaces speak — two of them behind cgo — should not be reached for out of the
+// Windows/Linux layout engine.
 
 // styledRun is one same-style span within a laid-out line. X/W are relative
 // to the line's left edge; the renderer adds the pane's own inset.
@@ -164,6 +136,8 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	}
 
 	redLetter := redLetterEnabled()
+	// ONE tint answer for the whole chapter, asked per verse below (tint.go).
+	tints := chapterTint(state)
 	y := float32(0)
 
 	for pi, para := range groupVersesIntoParagraphs(verses) {
@@ -256,10 +230,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// behaviour, so nothing but the BSB moves.
 			toks := verseTokens(v)
 			redTok := redLetterTokenFlags(state.CurrentVersion, v, redLetter, toks)
-			tint := tintNone
-			if isVerseHighlighted(state, v) {
-				tint = tintHighlight
-			}
+			tint := tints.of(v)
 
 			// Provisional first-line record; place() may wrap the first unit
 			// onto a fresh line, so the index is patched after placing.

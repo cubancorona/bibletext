@@ -12,39 +12,47 @@ import (
 
 // buildChapterHTMLAndroid emits the Html.fromHtml-safe dialect of the chapter:
 // no CSS classes (fromHtml ignores <style>), so verse numbers are
-// <sup><small><font color><b>, red-letter is <font color>, and the search-jump
-// highlight is an inline style= span (honored on API 24+).
+// <sup><small><font color><b>, red-letter is <font color>, and a verse's wash is
+// an inline style= span (honored on API 24+).
+//
+// The dialect differences all live in androidTintHTML (tint.go) now. What is
+// left here is the paragraph and join structure — which must stay identical to
+// buildChapterHTML's, because a poem that breaks in different places on two
+// platforms is the divergence this file was split out to prevent.
 func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	pal := state.pal()
-	vnum := nrgbaToHex(pal.VerseNumber)
-	red := nrgbaToHex(pal.RedLetter)
-	hlBG := nrgbaToHex(pal.Highlight)
-
 	redLetter := redLetterEnabled()
+	// ONE tint answer for the whole chapter (tint.go), asked per verse below,
+	// plus this dialect's markup for each tint. The markup table is built HERE,
+	// per render, because it carries palette colours rather than class names —
+	// so the theme is baked in once instead of at every verse.
+	tints := chapterTint(state)
+	markup := androidTintHTML(pal, nrgbaToHex(pal.VerseNumber), nrgbaToHex(pal.RedLetter))
+
 	var b strings.Builder
 	for _, para := range groupVersesIntoParagraphs(verses) {
 		b.WriteString("<p>")
 		for i, v := range para {
+			mk := markupFor(markup[:], tints.of(v))
 			if i > 0 {
 				switch {
 				case poeticJoin(para[i-1].Text, v.Text):
 					b.WriteString("<br>")
-				case isVerseHighlighted(state, para[i-1]) && isVerseHighlighted(state, v):
+				case tints.joins(para[i-1], v):
 					// The joining space belongs to the band, or the highlight
 					// comes out notched at every join falling mid-line. Same
-					// fix, same reason, as the iOS dialect in reading.go.
-					fmt.Fprintf(&b, `<span style="background-color:%s"> </span>`, hlBG)
+					// fix, same reason, as the iOS dialect in reading.go — and
+					// the same SAME-TINT rule: a join between two different
+					// washes belongs to neither.
+					b.WriteString(mk.JoinSpace)
 				default:
 					b.WriteString(" ")
 				}
 			}
 			// The number joins the band too — leaving it out punches a pale
-			// hole through the middle of the highlight (iOS parity).
-			if isVerseHighlighted(state, v) {
-				fmt.Fprintf(&b, `<span style="background-color:%s"><sup><small><font color="%s"><b>%d</b></font></small></sup>&nbsp;</span>`, hlBG, vnum, v.Verse)
-			} else {
-				fmt.Fprintf(&b, `<sup><small><font color="%s"><b>%d</b></font></small></sup>&nbsp;`, vnum, v.Verse)
-			}
+			// hole through the middle of the highlight (iOS parity). Whether it
+			// is wrapped is mk.Number's business.
+			fmt.Fprintf(&b, mk.Number, v.Verse)
 			// Authored poem lines become explicit <br> (Html.fromHtml collapses
 			// a literal "\n" as whitespace; handleBr maps <br> to "\n", and the
 			// TextView's INTER_WORD justification exempts hard-break lines, so
@@ -55,48 +63,15 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			// which is the old behaviour exactly.
 			runs := trimRuns(redLetterRuns(state.CurrentVersion, v, redLetter))
 			if len(runs) > 1 {
-				hl := isVerseHighlighted(state, v)
 				for _, run := range runs {
 					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
-					switch {
-					case hl && run.Red:
-						fmt.Fprintf(&b, `<span style="background-color:%s"><font color="%s">%s</font></span>`, hlBG, red, piece)
-					case hl:
-						fmt.Fprintf(&b, `<span style="background-color:%s">%s</span>`, hlBG, piece)
-					case run.Red:
-						fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, piece)
-					default:
-						b.WriteString(piece)
-					}
+					writeTintedHTML(&b, mk, run.Red, piece)
 				}
 				continue
 			}
 			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
 			// From the runs — see the note in reading.go.
-			wj := len(runs) == 1 && runs[0].Red
-			switch {
-			case isVerseHighlighted(state, v) && wj:
-				// Band AND colour, not one or the other — the Android twin of the
-				// .hl/.wj pairing in reading.go. This arm did not exist, so the
-				// highlight arm below swallowed every highlighted words-of-Christ
-				// verse and it lost its red, exactly as the Apple pane did until
-				// the owner caught it on John 11:25.
-				//
-				// The <font color> nests INSIDE the background span: Html.fromHtml
-				// turns them into two independent spans over the same range, so the
-				// inner colour keeps the outer band. Still NO <b> — see below.
-				fmt.Fprintf(&b, `<span style="background-color:%s"><font color="%s">%s</font></span>`, hlBG, red, body)
-			case isVerseHighlighted(state, v):
-				// Colour and band only — NO <b>: bolding re-typesets the verse
-				// (the bold serif sets ~17% wider), so the paragraph re-wrapped
-				// and the text jumped when the highlight cleared. Matches iOS's
-				// .hl and the desktop pane, neither of which changes weight.
-				fmt.Fprintf(&b, `<span style="background-color:%s">%s</span>`, hlBG, body)
-			case wj:
-				fmt.Fprintf(&b, `<font color="%s">%s</font>`, red, body)
-			default:
-				b.WriteString(body)
-			}
+			writeTintedHTML(&b, mk, len(runs) == 1 && runs[0].Red, body)
 		}
 		b.WriteString("</p>")
 	}

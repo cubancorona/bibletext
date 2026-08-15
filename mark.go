@@ -146,9 +146,21 @@ func (s *AppState) clearMarkFromNote() {
 func (s *AppState) hasMark() bool { return s != nil && s.mark.live() }
 
 // markHere returns the highlighted span if it is on the chapter currently being
-// read, and reports false otherwise. This is the ONE read path the panes use,
-// and it is where the frame check will land in S2: a mark numbered in another
-// translation must light nothing rather than the wrong verse.
+// read, and reports false otherwise.
+//
+// THE PAINTERS NO LONGER COME THROUGH HERE, and the frame check must not be
+// planted here expecting them to. chapterTint (tint.go) reads markSpan and
+// checks book and chapter against each VERSE rather than against AppState,
+// because a renderer can be handed verses for a chapter the reader is not
+// standing on. That is right, and it is orthogonal to the VERSION frame: a mark
+// numbered in another translation must still light nothing rather than the
+// wrong verse, and the check for that belongs in chapterTint, which is what the
+// surfaces actually ask.
+//
+// What still uses this: reading_android.go decides where to SCROLL, and
+// notes_store.go asks whether somebody else's mark is already on the page.
+// Both are questions about where the READER is, which is exactly what this
+// answers.
 func (s *AppState) markHere() (VerseSpan, bool) {
 	if s == nil || !s.mark.live() {
 		return VerseSpan{}, false
@@ -159,9 +171,12 @@ func (s *AppState) markHere() (VerseSpan, bool) {
 	return s.mark.At, true
 }
 
-// markSpan returns the raw span whatever chapter it is on, for the few callers
-// that legitimately need to compare against a chapter they are about to move
-// to. Prefer markHere.
+// markSpan returns the raw span whatever chapter it is on.
+//
+// This is what the PAINTERS ask, through chapterTint: they are handed a list of
+// verses and must decide per verse, so the span has to arrive unfiltered and be
+// checked against each verse's own book and chapter. Callers asking about the
+// reader's position want markHere instead.
 func (s *AppState) markSpan() (VerseSpan, bool) {
 	if s == nil || !s.mark.live() {
 		return VerseSpan{}, false
