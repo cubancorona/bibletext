@@ -48,6 +48,30 @@ type SharedNote struct {
 	// field existed simply have 0, and sort as the oldest — a wrong position for
 	// a handful of old notes is a far better outcome than a migration.
 	Received int64 `json:"ts,omitempty"`
+
+	// --- who it is from -----------------------------------------------------
+	//
+	// Mine marks a note YOU sent rather than one you were sent. It is the only
+	// one of these three the app reads today; the other two are carried,
+	// stored and never shown, so that adding a name later is additive rather
+	// than a migration. See docs/NOTES_SCRAPBOOK.md, "Identity".
+	//
+	// Own notes live in their own list (notes_mine.go), NOT in this map — the
+	// key here holds one note per version|book|chapter, so filing yours beside
+	// a friend's would overwrite one of them.
+	Mine bool `json:"me,omitempty"`
+
+	// SenderName is what the sender called themselves. RESERVED: there is no
+	// name field on the share sheet yet, nothing writes this, and nothing
+	// displays it. When it is shown it will be UNTRUSTED text — quoted, length
+	// capped, bidi isolated, and never allowed to imitate the app's own voice.
+	SenderName string `json:"sn,omitempty"`
+
+	// SenderID is an opaque per-install value. RESERVED. It can group notes
+	// from ONE install and can never survive a reinstall or reach a second
+	// device, which is why linking two senders is a reader action and not
+	// something the app infers.
+	SenderID string `json:"sid,omitempty"`
 }
 
 func noteKey(versionID, book string, chapter int) string {

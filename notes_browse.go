@@ -55,6 +55,88 @@ const prefNotesSort = "notes.sort"
 
 // notesSortPref / setNotesSortPref persist the choice, because a sort order the
 // reader picks and the app forgets every launch is a setting that does not work.
+// noteWho filters the list by who a note is from.
+//
+// Three positions, defaulting to everything. It earns its place as soon as the
+// list is long, and it is the control the person layer later extends — "from
+// Mum" is another position on this same filter rather than a fourth screen. See
+// docs/NOTES_SCRAPBOOK.md.
+type noteWho int
+
+const (
+	whoAnyone noteWho = iota
+	whoOthers
+	whoMe
+)
+
+const prefNotesWho = "notes.browse.who"
+
+func (w noteWho) label() string {
+	switch w {
+	case whoOthers:
+		return "From others"
+	case whoMe:
+		return "From you"
+	default:
+		return "Everyone"
+	}
+}
+
+// keeps reports whether a note belongs in this filter's list.
+func (w noteWho) keeps(n SharedNote) bool {
+	switch w {
+	case whoOthers:
+		return !n.Mine
+	case whoMe:
+		return n.Mine
+	default:
+		return true
+	}
+}
+
+func notesWhoPref() noteWho {
+	p := appPrefs()
+	if p == nil {
+		return whoAnyone
+	}
+	switch p.String(prefNotesWho) {
+	case "others":
+		return whoOthers
+	case "me":
+		return whoMe
+	}
+	return whoAnyone
+}
+
+func setNotesWhoPref(w noteWho) {
+	p := appPrefs()
+	if p == nil {
+		return
+	}
+	switch w {
+	case whoOthers:
+		p.SetString(prefNotesWho, "others")
+	case whoMe:
+		p.SetString(prefNotesWho, "me")
+	default:
+		p.SetString(prefNotesWho, "")
+	}
+}
+
+// filterNotesByWho keeps only the notes the filter admits.
+func filterNotesByWho(notes []SharedNote, w noteWho) []SharedNote {
+	if w == whoAnyone {
+		return notes
+	}
+	out := notes[:0:0]
+	for _, n := range notes {
+		if w.keeps(n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func notesSortPref() noteSort {
 	if p := appPrefs(); p != nil && p.String(prefNotesSort) == "book" {
 		return sortBook
@@ -93,11 +175,9 @@ func (s noteSort) label() string {
 // between two renders of the same data.
 // Notes stored before Received existed have a zero timestamp and sort as the
 // oldest, which is the truthful answer — they did arrive first.
-func sortedNotes(notes map[string]SharedNote, bookOrder map[string]int, by noteSort) []SharedNote {
+func sortedNotes(notes []SharedNote, bookOrder map[string]int, by noteSort) []SharedNote {
 	out := make([]SharedNote, 0, len(notes))
-	for _, n := range notes {
-		out = append(out, n)
-	}
+	out = append(out, notes...)
 	canonLess := func(a, b SharedNote) (bool, bool) {
 		ia, oka := bookOrder[a.Book]
 		ib, okb := bookOrder[b.Book]
@@ -126,6 +206,19 @@ func sortedNotes(notes map[string]SharedNote, bookOrder map[string]int, by noteS
 		// it never does.
 		if a.VersionID != b.VersionID {
 			return a.VersionID < b.VersionID, true
+		}
+		// Own notes are a LIST, not a keyed map, so two of them can agree on
+		// every field above and still be different notes — that is the whole
+		// reason they are a list. Without these last two the order stops being
+		// total and the list can reshuffle between renders of unchanged data.
+		if a.Mine != b.Mine {
+			return b.Mine, true // a friend's note before your own
+		}
+		if a.Received != b.Received {
+			return a.Received < b.Received, true
+		}
+		if a.Text != b.Text {
+			return a.Text < b.Text, true
 		}
 		return false, false // the same note
 	}
@@ -185,7 +278,12 @@ func browsableNotes(state *AppState) (shown []SharedNote, total int) {
 	if state == nil || !notesFeatureOn(state) {
 		return nil, 0
 	}
-	all := sortedNotes(readNotes(appPrefs()), bookOrderOf(state), notesSortPref())
+	all := sortedNotes(allNotesForBrowsing(appPrefs()), bookOrderOf(state), notesSortPref())
+	// The WHO filter narrows the pool before the text query, and `total` counts
+	// the filtered pool — so "3 of 7" answers "of the notes I asked to see",
+	// which is the question the reader is actually holding. A total that
+	// silently counted notes the filter had excluded would read as a bug.
+	all = filterNotesByWho(all, notesWhoPref())
 	return matchNotes(all, state.NotesQuery), len(all)
 }
 
@@ -269,8 +367,9 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	// nothing, and gets a different sentence: one explains the feature, the other
 	// reports a result.
 	if total == 0 {
-		hint := widget.NewLabel("Notes people share with you appear here. " +
-			"Open a link with a note and it will be kept, so you can come back to it.")
+		hint := widget.NewLabel("Notes appear here — the ones people share with you, " +
+			"and the ones you send. Open a link with a note, or share a passage with " +
+			"a note of your own, and it will be kept so you can come back to it.")
 		hint.Wrapping = fyne.TextWrapWord
 		hint.Alignment = fyne.TextAlignCenter
 		return container.NewPadded(container.NewVBox(spacer(24), hint))
@@ -301,6 +400,33 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	}
 	sorter := container.NewThemeOverride(sortBtn, compactTheme{Theme: base, text: 13})
 
+	// WHO the notes are from, cycling Everyone → From others → From you. Same
+	// shape as the sort control beside it and for the same reason: it names the
+	// state it is IN, so the reader can never wonder whether a short list is a
+	// filter or a small collection. It appears only once there is something to
+	// separate — with no notes of your own it would be a control with one
+	// meaningful position.
+	who := notesWhoPref()
+	controls := fyne.CanvasObject(sorter)
+	if mine, _ := readMyNotes(appPrefs()); len(mine) > 0 || who != whoAnyone {
+		whoBtn := widget.NewButton(who.label(), func() {
+			switch who {
+			case whoAnyone:
+				setNotesWhoPref(whoOthers)
+			case whoOthers:
+				setNotesWhoPref(whoMe)
+			default:
+				setNotesWhoPref(whoAnyone)
+			}
+			state.refresh()
+		})
+		whoBtn.Importance = widget.LowImportance
+		controls = container.NewHBox(
+			container.NewThemeOverride(whoBtn, compactTheme{Theme: base, text: 13}),
+			sorter,
+		)
+	}
+
 	// THE WAY OUT. On desktop the list claims the whole results pane, and the
 	// only other exit is the sidebar's Search/Find/Notes control — which the
 	// reader never touched if they arrived from Settings → the note count, so it
@@ -310,7 +436,7 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	//
 	// Desktop only: the phones leave through the tab bar, which is always
 	// visible and already says where you are.
-	head := container.NewBorder(nil, nil, nil, sorter, container.NewPadded(line))
+	head := container.NewBorder(nil, nil, nil, controls, container.NewPadded(line))
 	// surfaceSearch is set only by the phones (it is how they bring the Search
 	// tab forward) — the same signal showNotesList uses to tell the layouts
 	// apart, rather than a second way of asking the same question.
@@ -321,7 +447,7 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 		done.Importance = widget.LowImportance
 		head = container.NewBorder(nil, nil,
 			container.NewThemeOverride(done, compactTheme{Theme: base, text: 13}),
-			sorter, container.NewPadded(line))
+			controls, container.NewPadded(line))
 	}
 
 	column := container.NewVBox()
@@ -404,12 +530,12 @@ func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject
 		head = container.NewBorder(nil, nil, ref, container.NewCenter(stamp))
 	}
 
-	// The note's own words, wrapped, never styled as the app's voice and never
-	// as markup — the same rule the bubble follows. A collapsed note still shows
-	// its text here; the browser is where you read them, the chapter is where
-	// you chose how much of it to see.
-	body := widget.NewLabel(strings.TrimSpace(n.Text))
-	body.Wrapping = fyne.TextWrapWord
+	// The note's own words, in the SAME bubble the reading page draws, with the
+	// byline and the translation OUTSIDE it (owner directive) — inside, they
+	// would read as part of the message rather than as the app saying where it
+	// came from. A collapsed note still shows its text here; the browser is
+	// where you read them, the chapter is where you chose how much to see.
+	body := noteBubbleWithByline(n.Text, noteByline(n), noteVersionName(n.VersionID), pal)
 
 	rows := container.NewVBox(head, body)
 	if n.Minimized {

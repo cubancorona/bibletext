@@ -34,7 +34,7 @@ func TestSortedNotesUsesCanonOrder(t *testing.T) {
 		"e": {Book: "Psalms", Chapter: 23, VerseLo: 5, Text: "x"},
 		"f": {Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "x"},
 	}
-	got := sortedNotes(notes, order, sortBook)
+	got := sortedNotes(notesSlice(notes), order, sortBook)
 	want := []string{"Genesis 1", "Psalms 23:1", "Psalms 23:5", "John 3", "John 11", "Revelation 22"}
 	if len(got) != len(want) {
 		t.Fatalf("got %d notes, want %d", len(got), len(want))
@@ -54,7 +54,7 @@ func TestSortedNotesKeepsBooksTheCanonLacks(t *testing.T) {
 		"a": {Book: "Tobit", Chapter: 4, Text: "x"},
 		"b": {Book: "John", Chapter: 3, Text: "x"},
 	}
-	got := sortedNotes(notes, order, sortBook)
+	got := sortedNotes(notesSlice(notes), order, sortBook)
 	if len(got) != 2 {
 		t.Fatalf("a note was dropped: %d of 2", len(got))
 	}
@@ -218,7 +218,7 @@ func TestSortedNotesNewestFirst(t *testing.T) {
 		"b": {Book: "John", Chapter: 3, Text: "newest", Received: 300},
 		"c": {Book: "John", Chapter: 1, Text: "middle", Received: 200},
 	}
-	got := sortedNotes(notes, order, sortNewest)
+	got := sortedNotes(notesSlice(notes), order, sortNewest)
 	want := []string{"newest", "middle", "oldest"}
 	for i, w := range want {
 		if got[i].Text != w {
@@ -226,7 +226,7 @@ func TestSortedNotesNewestFirst(t *testing.T) {
 		}
 	}
 	// Same data, the other order: the canon decides instead.
-	got = sortedNotes(notes, order, sortBook)
+	got = sortedNotes(notesSlice(notes), order, sortBook)
 	wantRefs := []string{"Genesis 1", "John 1", "John 3"}
 	for i, w := range wantRefs {
 		if ref := noteReference(got[i]); ref != w {
@@ -244,9 +244,9 @@ func TestSortedNotesIsStableWithoutTimestamps(t *testing.T) {
 		"b": {Book: "Genesis", Chapter: 1, Text: "x"},
 		"c": {Book: "John", Chapter: 1, Text: "x"},
 	}
-	first := sortedNotes(notes, order, sortNewest)
+	first := sortedNotes(notesSlice(notes), order, sortNewest)
 	for i := 0; i < 5; i++ {
-		again := sortedNotes(notes, order, sortNewest)
+		again := sortedNotes(notesSlice(notes), order, sortNewest)
 		for j := range first {
 			if noteReference(first[j]) != noteReference(again[j]) {
 				t.Fatalf("order changed between renders at %d: %q then %q",
@@ -371,4 +371,16 @@ func TestClosingTheNotesListKeepsALiveSearch(t *testing.T) {
 	if !st.IsSearching {
 		t.Error("Done discarded the keyword results the reader still had running")
 	}
+}
+
+// notesSlice adapts the map fixtures to sortedNotes, which takes a LIST now
+// that a reader's own notes share the browser with the ones they were sent —
+// own notes are appended rather than keyed, because two of them can sit on the
+// same passage in the same translation.
+func notesSlice(m map[string]SharedNote) []SharedNote {
+	out := make([]SharedNote, 0, len(m))
+	for _, n := range m {
+		out = append(out, n)
+	}
+	return out
 }
