@@ -1459,3 +1459,44 @@ colours; the owner reported seeing no difference at all, which was accurate. The
 slate is ΔE 33 from the gold and scores **3.59** on red letters against the gold's
 own 3.39 — it separates better AND keeps His words clearer. Gold against blue is
 also the most robust pair for red-green colour blindness.
+
+### Suppression, not minimize — and it needs no state of its own
+
+Refined by the owner, 2026-08-15:
+
+> *"I think we can minimize a note when search results are being displayed even
+> when the user set state is expanded, and then when the search result or read in
+> context or whatever it is is cleared we just restore the note."*
+
+This is the mechanism that makes the rule above work, and it is worth stating why:
+**a suppression that RESTORES is only possible if it never writes to the store.**
+Had the collapse been persisted, there would be nothing left to restore *to* —
+the reader's expanded state would already have been overwritten by a forgery. So
+"temporary" and "writes nothing" are the same requirement seen from two sides.
+
+**It needs no new field.** The mark already records why it is there (`mark.go`),
+so suppression is DERIVED:
+
+```go
+// Notes stand down while some other reason owns the page, and come back
+// exactly as they were when it lets go. Nothing is stored, nothing is
+// restored, and nothing can fall out of sync -- there is no second copy.
+func (s *AppState) notesSuppressed() bool {
+    return s.mark.live() && !s.mark.fromNote()
+}
+```
+
+Walk it through:
+
+| | mark | notes | the reader's own state |
+|---|---|---|---|
+| reading, note open | `hlNote` | shown | expanded |
+| searches, jumps to a result | `hlSearch` | stand down | **untouched** |
+| clears the search | `hlNone` | come back open | untouched |
+| taps a note chip instead | `hlNote` | that note opens | that is the new choice |
+| explicitly minimizes | `hlNone` | chip | `Minimized` **written** — durable |
+
+The only row that writes to the store is the last one, which is the only row where
+the reader said so. Three layers, cleanly separated: **`Minimized`** is what the
+reader chose and persists; **focus** is which note is open this session; and
+**suppression** is derived from the mark and stored nowhere.
