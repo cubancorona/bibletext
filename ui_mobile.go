@@ -110,6 +110,7 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	// repaint a UITextView-overlaid tree) so this just sets the tab + rebuilds.
 	gotoReadTab := func() {
 		state.CurrentTab = 0
+		leaveSearchForRead(state, 0)
 		rebuildWindow(state)
 	}
 	state.surfaceReading = gotoReadTab
@@ -170,29 +171,6 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	return container.NewStack(base, body)
 }
 
-// overlayShouldShow is the single source of truth for native reading-overlay
-// visibility on mobile: the iOS UITextView must be visible exactly when the
-// reading view is the content actually on screen. Every place that toggles the
-// overlay derives the answer from here, and afterRebuild re-asserts it as the
-// last word after each window rebuild, so a stray async show/hide during the
-// rebuild can't leave the overlay floating over the wrong content as a blank
-// (black) rectangle.
-//
-//   - Full-screen (distraction-free) reading: always show.
-//   - Regular (tablet) layout: the reading pane is always beside the sidebar, so
-//     show whenever a search's results aren't occupying it.
-//   - Compact layout: only the Read tab hosts the reading pane, and only when no
-//     search is active.
-func overlayShouldShow(state *AppState) bool {
-	if state.IsFullScreen {
-		return true
-	}
-	if state.layoutClass() == layoutRegular {
-		return !state.IsSearching
-	}
-	return state.CurrentTab == 0 && !state.IsSearching
-}
-
 // rebuildMobileReadingPane returns the search-results view when a search is
 // active, otherwise the native reading view.
 func rebuildMobileReadingPane(state *AppState) fyne.CanvasObject {
@@ -239,6 +217,7 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 			// the rest of aiRequestBudget with no control able to stop it.
 			abandonAISearch(state)
 			state.CurrentTab = i
+			leaveSearchForRead(state, i)
 			rebuildWindow(state)
 		})
 		cells[i] = cell
