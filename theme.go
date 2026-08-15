@@ -109,8 +109,26 @@ var darkPalette = palette{
 	TextMuted:  color.NRGBA{R: 157, G: 148, B: 135, A: 255},
 	Accent:     color.NRGBA{R: 124, G: 160, B: 228, A: 255}, // luminous sapphire on near-black
 	AccentText: color.NRGBA{R: 17, G: 24, B: 40, A: 255},
-	Highlight:  color.NRGBA{R: 58, G: 43, B: 12, A: 255}, // the same amber, banked well down so the
-	// light red letters still separate from it
+	// Gold, and deliberately more of it than the amber this replaced.
+	//
+	// The old #3A2B0C measured ΔE 22.9 from the page ground where the LIGHT
+	// band measures 44.7 — about half as present, so a highlighted verse was
+	// easy to lose while scanning in the dark. This is 35.2, roughly 80% of the
+	// light band, and reads as gold rather than as brown.
+	//
+	// WHAT SETS THE CEILING IS THE RED LETTERS, NOT TASTE. They sit at
+	// RedLetter below, and the brighter the band the closer the two get:
+	// contrast of red-on-band falls 4.6 → 3.4 here, 3.1 at #5C4412, and 1.7 by
+	// #8A6828, where His words visibly sink into the gold. 3.4 keeps them clearly
+	// on top of it while body text still clears AAA at 7.9. A brighter gold is
+	// available but is a TWO-colour change — the red has to move with it (#FFB3B3
+	// restores 3.0 on a #8A6828 band) — and that wants checking on the ordinary
+	// page and against the light theme, where the reds are family.
+	//
+	// Judged on rendered output from the real pane, not swatches: a band has to
+	// carry narration and words of Christ at once, and only the renderer shows
+	// what that looks like.
+	Highlight:     color.NRGBA{R: 84, G: 62, B: 16, A: 255},
 	HighlightText: color.NRGBA{R: 182, G: 205, B: 240, A: 255}, // unused by the panes; see reading.go .hl
 	VerseNumber:   color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
 	RedLetter:     color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
