@@ -70,13 +70,18 @@ func TestStyledPaneObjects(t *testing.T) {
 	r := p.CreateRenderer().(*styledPaneRenderer)
 
 	// Wide default layout: 4 authored lines, each with a small number of
-	// merged segments — object count stays modest (band + texts).
+	// merged segments — object count stays modest (wash rects + texts).
 	if len(r.texts) == 0 || len(r.texts) > 12 {
 		t.Fatalf("unexpected draw-segment count %d for 4 poem lines", len(r.texts))
 	}
-	if len(r.objects) != len(r.texts)+2 {
-		t.Fatalf("objects = %d, want highlight band + read-along band + %d texts",
-			len(r.objects), len(r.texts))
+	// Nothing is highlighted here, so there are no wash rects at all — only the
+	// read-along band and the glyphs.
+	if len(r.tintRects) != 0 {
+		t.Errorf("wash rects = %d with nothing highlighted, want 0", len(r.tintRects))
+	}
+	if len(r.objects) != len(r.texts)+len(r.tintRects)+1 {
+		t.Fatalf("objects = %d, want %d wash rects + read-along band + %d texts",
+			len(r.objects), len(r.tintRects), len(r.texts))
 	}
 	// First segment of line 0 is the verse-number label at the small size.
 	if r.texts[0].TextSize >= p.textSize {
@@ -94,24 +99,38 @@ func TestStyledPaneHighlightBandGeometry(t *testing.T) {
 	p := newStyledReadingPane(st, st.Bible.GetChapter("Psalms", 23))
 	r := p.CreateRenderer().(*styledPaneRenderer)
 
-	if !r.band.Visible() {
-		t.Fatal("highlight band must be visible for a highlighted verse")
+	// Verse 2 is two authored poem lines → one wash rect per line, each sitting
+	// exactly on its own line's vertical band (NOT one rect spanning both).
+	if len(r.tintRects) != 2 {
+		t.Fatalf("wash rects = %d, want one per highlighted line (2)", len(r.tintRects))
 	}
-	wantTop := p.lay.Lines[2].Y
-	if got := r.band.Position().Y; got != wantTop {
-		t.Errorf("band top = %v, want %v (line 2)", got, wantTop)
-	}
-	wantH := p.lay.Lines[3].Y + p.lay.Lines[3].H - wantTop
-	if got := r.band.Size().Height; got != wantH {
-		t.Errorf("band height = %v, want %v (two poem lines)", got, wantH)
+	for i, li := range []int{2, 3} {
+		rect := r.tintRects[i]
+		if !rect.Visible() {
+			t.Errorf("wash rect %d must be visible for a highlighted verse", i)
+		}
+		ln := p.lay.Lines[li]
+		if got := rect.Position().Y; got != ln.Y {
+			t.Errorf("wash rect %d top = %v, want %v (line %d)", i, got, ln.Y, li)
+		}
+		if got := rect.Size().Height; got != ln.H {
+			t.Errorf("wash rect %d height = %v, want one line (%v)", i, got, ln.H)
+		}
+		// X-bounded to the verse's runs, not the whole column.
+		if rect.Position().X < p.insetX() {
+			t.Errorf("wash rect %d starts left of the text inset (%v < %v)", i, rect.Position().X, p.insetX())
+		}
+		if w := rect.Size().Width; w <= 0 || w > p.lastWidth-p.insetX() {
+			t.Errorf("wash rect %d width = %v, out of range for a run-bounded rect", i, w)
+		}
 	}
 
-	// No highlight → hidden.
+	// No highlight → no wash rects at all.
 	st2 := psalm23State()
 	p2 := newStyledReadingPane(st2, st2.Bible.GetChapter("Psalms", 23))
 	r2 := p2.CreateRenderer().(*styledPaneRenderer)
-	if r2.band.Visible() {
-		t.Error("band must be hidden with no highlighted verse")
+	if len(r2.tintRects) != 0 {
+		t.Errorf("wash rects = %d with no highlighted verse, want 0", len(r2.tintRects))
 	}
 }
 

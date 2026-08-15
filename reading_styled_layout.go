@@ -33,6 +33,38 @@ const (
 	runVerseNum                // verse-number label, small + raised
 )
 
+// verseTint is the wash a verse's runs carry, per verse — NOT a bool, so the
+// renderer paints one rect per contiguous SAME-TINT stretch and two verses
+// tinted differently never share a rectangle. Today exactly one tint is in
+// use; the type is the seam the notes rework needs ("this verse has a note"
+// vs "more than one note here"), which is a distinction a bool cannot carry.
+// The zero value is deliberately "no wash", so an untinted run needs no
+// initialisation.
+type verseTint uint8
+
+const (
+	tintNone      verseTint = iota // no wash
+	tintHighlight                  // the search / cross-ref / mark band
+)
+
+// overridesTextColour reports whether runs under this wash are drawn in the
+// body colour instead of their own.
+//
+// An explicit choice PER TINT, deliberately not "any tint but none". The
+// highlight band is a strong, chosen mark and a verse number's muted slate
+// disappears into it, so under that band the numbers take the body colour. A
+// tint added later must decide for itself: written as `!= tintNone`, the notes
+// rework's "this verse has a note" would have drained the colour out of every
+// verse number it touched, with no code change and no failing test to say so.
+func (t verseTint) overridesTextColour() bool {
+	switch t {
+	case tintHighlight:
+		return true
+	default:
+		return false
+	}
+}
+
 // styledRun is one same-style span within a laid-out line. X/W are relative
 // to the line's left edge; the renderer adds the pane's own inset.
 type styledRun struct {
@@ -42,7 +74,7 @@ type styledRun struct {
 	// Provenance, for styling and selection→verse attribution.
 	Verse     int
 	RedLetter bool
-	Highlight bool
+	Tint      verseTint
 
 	// Geometry (set by layout).
 	X, W float32
@@ -75,7 +107,14 @@ type styledLine struct {
 }
 
 // chapterLayout is the laid-out chapter plus the geometry indexes the
-// scroll-anchor persistence and highlight band rely on.
+// scroll-anchor persistence relies on.
+//
+// It carries NO highlight line range. It used to (HighlightStart/End), and the
+// pane painted one full-column rectangle over those lines — which lit every
+// neighbouring verse sharing the range's first or last line, because a line
+// routinely carries more than one verse. The tint now lives on the runs, where
+// it belongs, and the rectangles are derived per line from run geometry
+// (tintSpansForLayout).
 type chapterLayout struct {
 	Lines  []styledLine
 	Height float32
@@ -86,10 +125,6 @@ type chapterLayout struct {
 
 	// Text is the flat selection text model (see styledRun.Offset).
 	Text string
-
-	// HighlightStart/End are the first/last line indexes of the highlighted
-	// verse range, -1 when none — the highlight band's geometry.
-	HighlightStart, HighlightEnd int
 }
 
 // styledMeasure measures one run's text width at its rendered size.
@@ -119,7 +154,7 @@ type styledLayoutParams struct {
 // and copy semantics stay identical to the shipping pane while gaining
 // styling.
 func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measure styledMeasure) *chapterLayout {
-	lay := &chapterLayout{HighlightStart: -1, HighlightEnd: -1}
+	lay := &chapterLayout{}
 	var text strings.Builder
 	offset := 0 // rune offset into the selection text model
 	appendText := func(s string) {
@@ -220,10 +255,13 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// behaviour, so nothing but the BSB moves.
 			toks := verseTokens(v)
 			redTok := redLetterTokenFlags(state.CurrentVersion, v, redLetter, toks)
-			hl := isVerseHighlighted(state, v)
+			tint := tintNone
+			if isVerseHighlighted(state, v) {
+				tint = tintHighlight
+			}
 
 			// Provisional first-line record; place() may wrap the first unit
-			// onto a fresh line, so both indexes are patched after placing.
+			// onto a fresh line, so the index is patched after placing.
 			lay.VerseLines = append(lay.VerseLines, verseLine{verse: v.Verse, line: len(lay.Lines)})
 			vlIdx := len(lay.VerseLines) - 1
 
@@ -237,36 +275,20 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 				if num := superscriptNumber(v.Verse); first && strings.HasPrefix(tok, num+" ") {
 					word := strings.TrimPrefix(tok, num+" ")
 					unit = []styledRun{
-						{Text: num, Kind: runVerseNum, Verse: v.Verse, Highlight: hl,
+						{Text: num, Kind: runVerseNum, Verse: v.Verse, Tint: tint,
 							W: measure(num, runVerseNum)},
-						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti], Highlight: hl,
+						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti], Tint: tint,
 							W: measure(word, runWord)},
 					}
 				} else {
 					unit = []styledRun{{Text: tok, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti],
-						Highlight: hl, W: measure(tok, runWord)}}
+						Tint: tint, W: measure(tok, runWord)}}
 				}
 				place(unit)
 				if first {
 					// The line the verse's first token ACTUALLY landed on.
-					line := len(lay.Lines)
-					lay.VerseLines[vlIdx].line = line
-					if hl && lay.HighlightStart < 0 {
-						lay.HighlightStart = line
-					}
+					lay.VerseLines[vlIdx].line = len(lay.Lines)
 					first = false
-				}
-			}
-			if hl {
-				// The verse's last content line: the one under construction,
-				// or — when a trailing sentinel just flushed — the last
-				// appended line.
-				end := len(lay.Lines)
-				if len(cur) == 0 {
-					end--
-				}
-				if end > lay.HighlightEnd {
-					lay.HighlightEnd = end
 				}
 			}
 		}
@@ -275,17 +297,57 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 
 	lay.Height = y
 	lay.Text = text.String()
-	if lay.HighlightStart >= 0 {
-		last := len(lay.Lines) - 1
-		if lay.HighlightStart > last {
-			lay.HighlightStart = last
-		}
-		if lay.HighlightEnd > last {
-			lay.HighlightEnd = last
-		}
-		if lay.HighlightEnd < lay.HighlightStart {
-			lay.HighlightEnd = lay.HighlightStart
+	return lay
+}
+
+// tintSpan is one painted wash rectangle: a maximal run of same-tint tokens
+// within ONE line. X0/X1 are relative to the line's left edge, exactly like
+// styledRun.X — the renderer adds the pane's live inset.
+type tintSpan struct {
+	Line int
+	Tint verseTint
+	// LINE-RELATIVE, exactly like styledRun.X — the renderer adds insetX().
+	//
+	// Named for the ruler on purpose. selectionSpan (reading_styled_select.go)
+	// is the same {Line, X0, X1} shape ninety lines away and its X values are
+	// ABSOLUTE widget coordinates, because xForOffset has already added the
+	// inset. Two look-alike structs on opposite rulers is a copy-paste that
+	// silently displaces a rect by the whole reporter inset — 183pt at 760pt
+	// wide — and no test would catch it, because the tests build their expected
+	// boxes with the same ruler the code under test used.
+	LineX0, LineX1 float32
+}
+
+// tintSpansForLayout derives the wash rectangles from run geometry: per line,
+// per contiguous same-tint stretch.
+//
+// PER LINE is the whole point — a full-column band over a line RANGE washes the
+// neighbouring verses that share the range's first and last lines. COALESCED is
+// the other half: a rect per token would be slow and would show seams at every
+// inter-word space (and at every red-letter or verse-number boundary, since
+// those split the drawn segments but not the tint), so a stretch is closed only
+// when the tint itself changes. Spanning first.X → last.X+last.W keeps the
+// joining spaces inside the wash, the same no-gaps rule the HTML dialects hold
+// (reading_highlight_gap_test.go).
+func tintSpansForLayout(lay *chapterLayout) []tintSpan {
+	if lay == nil {
+		return nil
+	}
+	var spans []tintSpan
+	for li, ln := range lay.Lines {
+		open := -1 // index into spans of the stretch still growing, -1 = none
+		for _, run := range ln.Runs {
+			if run.Tint == tintNone {
+				open = -1
+				continue
+			}
+			if open >= 0 && spans[open].Tint == run.Tint {
+				spans[open].LineX1 = run.X + run.W
+				continue
+			}
+			spans = append(spans, tintSpan{Line: li, Tint: run.Tint, LineX0: run.X, LineX1: run.X + run.W})
+			open = len(spans) - 1
 		}
 	}
-	return lay
+	return spans
 }

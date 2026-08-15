@@ -2,9 +2,16 @@ package bibletext
 
 // The styled, selectable Windows/Linux reading pane. A pure-Go fyne widget that
 // draws layoutChapter's styled runs as positioned canvas.Text — red letters,
-// small raised verse numbers, the verse-highlight band — everything the
+// small raised verse numbers, the verse-highlight wash — everything the
 // single-style widget.Entry pane cannot do, with no native embedding and no new
 // dependencies. Selection lives in reading_styled_select.go.
+//
+// THE WASH IS PER LINE AND X-BOUNDED, exactly like a selection rect: one
+// rectangle per contiguous same-tint stretch within a line (tintSpansForLayout).
+// It used to be ONE full-column rectangle over a LINE RANGE, which lit every
+// neighbouring verse sharing the range's first or last line — 26 of John 3's 63
+// lines at 560pt carry more than one verse. Invisible with a single highlight;
+// fatal the moment two adjacent verses carry different tints.
 //
 // THIS SHIPS: readingScrollArea dispatches here whenever useStyledPane() is
 // true, which is Windows and Linux. It is untagged so it also builds and
@@ -40,7 +47,7 @@ type styledDrawRun struct {
 	Text string
 	Kind runKind
 	Red  bool
-	HL   bool
+	Tint verseTint
 
 	X float32 // relative to the line's left edge (pane adds the inset)
 
@@ -51,20 +58,20 @@ type styledDrawRun struct {
 }
 
 // mergeDrawRuns collapses a line's token runs into style segments. Adjacent
-// runs merge when kind, red-letter, and highlight all match; the model text
+// runs merge when kind, red-letter, and tint all match; the model text
 // between two adjacent runs on one line is always a single space.
 func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
 	var out []styledDrawRun
 	for _, r := range ln.Runs {
 		if n := len(out); n > 0 {
 			prev := &out[n-1]
-			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.HL == r.Highlight {
+			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint {
 				prev.Text += " " + r.Text
 				continue
 			}
 		}
 		out = append(out, styledDrawRun{
-			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, HL: r.Highlight,
+			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, Tint: r.Tint,
 			X: r.X, FirstOffset: r.Offset, Line: lineIdx,
 		})
 	}
@@ -96,6 +103,7 @@ type styledReadingPane struct {
 	lay       *chapterLayout
 	drawRuns  []styledDrawRun
 	lineSegs  [][]styledDrawRun // drawRuns indexed by line, for hit-testing
+	tintSpans []tintSpan        // the wash rects, per line, X-bounded to the tinted runs
 	lastWidth float32
 
 	// Selection state (milestone 3): rune offsets into lay.Text, -1 = none.
@@ -201,6 +209,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		p.lineSegs[li] = segs
 		p.drawRuns = append(p.drawRuns, segs...)
 	}
+	p.tintSpans = tintSpansForLayout(p.lay)
 	p.lastWidth = width
 	// Offsets shifted with the new layout — any selection is now meaningless.
 	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
@@ -246,23 +255,41 @@ func (p *styledReadingPane) MinSize() fyne.Size {
 	return fyne.NewSize(200, h)
 }
 
-// highlightY is the Y of the highlighted verse band's top (scroll-to target).
-func (p *styledReadingPane) highlightY() float32 {
-	if p.lay == nil || p.lay.HighlightStart < 0 || p.lay.HighlightStart >= len(p.lay.Lines) {
-		return 0
+// highlightFirstLine is the first line index carrying the search/cross-ref
+// highlight, -1 when nothing is highlighted. tintSpans is in line order, so the
+// first matching span is the first line.
+func (p *styledReadingPane) highlightFirstLine() int {
+	for _, sp := range p.tintSpans {
+		if sp.Tint == tintHighlight {
+			return sp.Line
+		}
 	}
-	return p.lay.Lines[p.lay.HighlightStart].Y
+	return -1
 }
 
-// styledPaneRenderer draws the merged runs plus the highlight band.
+// highlightY is the Y of the highlighted verse's first line (scroll-to target).
+func (p *styledReadingPane) highlightY() float32 {
+	if p.lay == nil {
+		return 0
+	}
+	li := p.highlightFirstLine()
+	if li < 0 || li >= len(p.lay.Lines) {
+		return 0
+	}
+	return p.lay.Lines[li].Y
+}
+
+// styledPaneRenderer draws the merged runs plus the wash rects.
 type styledPaneRenderer struct {
 	pane *styledReadingPane
 
-	band     *canvas.Rectangle
-	raBand   *canvas.Rectangle
-	selRects []*canvas.Rectangle
-	texts    []*canvas.Text
-	objects  []fyne.CanvasObject
+	// tintRects is one rectangle per tintSpan — per line, bounded to the
+	// tinted runs' own X range, never the full column.
+	tintRects []*canvas.Rectangle
+	raBand    *canvas.Rectangle
+	selRects  []*canvas.Rectangle
+	texts     []*canvas.Text
+	objects   []fyne.CanvasObject
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -271,12 +298,22 @@ func (r *styledPaneRenderer) rebuild() {
 	r.texts = r.texts[:0]
 	r.objects = r.objects[:0]
 
-	// The verse-highlight band sits BEHIND the text, like the shipping pane's;
-	// the read-along tint sits over it (the narration wash wins where the two
+	// The verse wash sits BEHIND the text, like the shipping pane's; the
+	// read-along tint sits over it (the narration wash wins where the two
 	// overlap, as on the native overlays); selection rects sit between the
-	// bands and the glyphs.
-	r.band = canvas.NewRectangle(color.NRGBA{}) // transparent until positioned
-	r.objects = append(r.objects, r.band)
+	// washes and the glyphs.
+	r.tintRects = r.tintRects[:0]
+	for _, sp := range p.tintSpans {
+		// Colour HERE, not in position(). p.tintSpans can only change inside
+		// relayout, and the only production relayout caller Refreshes straight
+		// after, so a rect's wash cannot change between rebuilds. Setting
+		// FillColor per layout pass boxed a 4-byte NRGBA into color.Color on
+		// every frame — measured at 514 allocations for a whole-chapter span,
+		// on a pane that also ships an llvmpipe (software) path.
+		rect := canvas.NewRectangle(r.tintColor(sp.Tint)) // geometry in position()
+		r.tintRects = append(r.tintRects, rect)
+		r.objects = append(r.objects, rect)
+	}
 	r.raBand = canvas.NewRectangle(styledReadAlongTint)
 	r.raBand.Hide()
 	r.objects = append(r.objects, r.raBand)
@@ -312,9 +349,9 @@ func (r *styledPaneRenderer) rebuild() {
 func (r *styledPaneRenderer) runColor(dr styledDrawRun) color.Color {
 	p := r.pane
 	switch {
-	case dr.HL && dr.Red && dr.Kind == runWord:
-		return p.pal.RedLetter // the band highlights it; the red still means something
-	case dr.HL:
+	case dr.Tint.overridesTextColour() && dr.Red && dr.Kind == runWord:
+		return p.pal.RedLetter // the wash highlights it; the red still means something
+	case dr.Tint.overridesTextColour():
 		return p.pal.Text
 	case dr.Red && dr.Kind == runWord:
 		return p.pal.RedLetter
@@ -325,6 +362,19 @@ func (r *styledPaneRenderer) runColor(dr styledDrawRun) color.Color {
 	}
 }
 
+// tintColor is the wash a tint paints in. pal.Highlight IS the faint wash
+// colour; the tagged reading_fyne helper is unavailable to untagged code, so
+// use it directly. New tints (the notes rework's "has a note" / "more than one
+// note here") join here and nowhere else.
+func (r *styledPaneRenderer) tintColor(t verseTint) color.Color {
+	switch t {
+	case tintHighlight:
+		return r.pane.pal.Highlight
+	default:
+		return color.NRGBA{}
+	}
+}
+
 // position places every object from the layout geometry.
 func (r *styledPaneRenderer) position() {
 	p := r.pane
@@ -332,18 +382,29 @@ func (r *styledPaneRenderer) position() {
 		return
 	}
 
-	// Highlight band across the highlighted line span.
-	if p.lay.HighlightStart >= 0 && p.lay.HighlightStart < len(p.lay.Lines) {
-		top := p.lay.Lines[p.lay.HighlightStart].Y
-		bot := p.lay.Lines[p.lay.HighlightEnd].Y + p.lay.Lines[p.lay.HighlightEnd].H
-		// pal.Highlight IS the faint wash colour; the tagged reading_fyne
-		// helper is unavailable to untagged code, so use it directly.
-		r.band.FillColor = p.pal.Highlight
-		r.band.Move(fyne.NewPos(p.extraInset, top))
-		r.band.Resize(fyne.NewSize(p.lastWidth-2*p.extraInset, bot-top))
-		r.band.Show()
-	} else {
-		r.band.Hide()
+	// One wash rect per tinted stretch: the tinted runs' own X range on ONE
+	// line, so a verse sharing a line with an untinted (or differently tinted)
+	// neighbour never washes it.
+	for i, sp := range p.tintSpans {
+		if i >= len(r.tintRects) || sp.Line >= len(p.lay.Lines) {
+			break
+		}
+		ln := p.lay.Lines[sp.Line]
+		rect := r.tintRects[i]
+		rect.Move(fyne.NewPos(p.insetX()+sp.LineX0, ln.Y))
+		rect.Resize(fyne.NewSize(sp.LineX1-sp.LineX0, ln.H))
+		rect.Show()
+	}
+	// Anything left over is HIDDEN, never merely skipped. The single band this
+	// replaced was immune by construction — one rect, with an explicit Hide on
+	// the else — and dropping out of the loop quietly removed that safety net:
+	// a relayout that shrinks the span list without a rebuild left the surplus
+	// rectangles painted at their old geometry. Measured as 11 ghost washes
+	// after clearing a mark. Unreachable through today's one production caller,
+	// which Refreshes immediately; restored anyway, because "unreachable" here
+	// is a property of one call site rather than of the code.
+	for i := len(p.tintSpans); i < len(r.tintRects); i++ {
+		r.tintRects[i].Hide()
 	}
 
 	// Read-along tint across the narrated verse's lines.
@@ -424,7 +485,7 @@ func (p *styledReadingPane) yForVerse(verse int) (float32, bool) {
 // highlightOwnsScroll reports whether a search/cross-ref highlight should own
 // the scroll position (mirrors chapterText.highlightLine >= 0).
 func (p *styledReadingPane) highlightOwnsScroll() bool {
-	return p.lay != nil && p.lay.HighlightStart >= 0
+	return p.lay != nil && p.highlightFirstLine() >= 0
 }
 
 // verseLineSpan returns the [first,last] line indexes the verse's runs touch —
