@@ -309,12 +309,21 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 			state.ActiveNote = t.Note
 			state.NoteMinimized = false
 			state.NoteVerseLo = t.VerseLo
+			// AND the translation it is stored under — rememberIncomingNote files
+			// it under the LINK's. Writing three of the four left the fourth
+			// saying whatever the derive above had found, which is a DIFFERENT
+			// note whenever this chapter already carried one: the reader saw the
+			// arriving note, pressed Delete, and the store lost the other one
+			// while the one on screen survived. The four fields are one value and
+			// have to be written as one.
+			state.NoteVersionID = t.VersionID
 			rememberIncomingNote(state, t)
 		}
 	} else {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
+		state.NoteVersionID = ""
 	}
 
 	state.refresh()
