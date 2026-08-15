@@ -220,8 +220,9 @@ func TestStyledLayoutOffsets(t *testing.T) {
 	}
 }
 
-// TestStyledLayoutHighlightBand: the highlighted verse range maps to the
-// correct line span, including a multi-line poetic verse.
+// TestStyledLayoutHighlightBand: the highlighted verse's own runs carry the
+// tint, and the derived wash spans land on the right lines — including a
+// multi-line poetic verse (one span per line, not one band over the range).
 func TestStyledLayoutHighlightBand(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -230,14 +231,64 @@ func TestStyledLayoutHighlightBand(t *testing.T) {
 	st.setHL(hlSearch, "Psalms", 23, 2, 0)
 	lay := layoutChapter(st, st.Bible.GetChapter("Psalms", 23), testLayoutParams, fixedMeasure)
 
-	if lay.HighlightStart != 2 || lay.HighlightEnd != 3 {
-		t.Errorf("highlight band = [%d,%d], want [2,3]", lay.HighlightStart, lay.HighlightEnd)
+	// Verse 2 occupies lines 2-3; verse 1 lines 0-1 and must stay untinted.
+	for li, ln := range lay.Lines {
+		for _, r := range ln.Runs {
+			want := tintNone
+			if r.Verse == 2 {
+				want = tintHighlight
+			}
+			if r.Tint != want {
+				t.Errorf("line %d run %q (v%d) tint = %d, want %d", li, r.Text, r.Verse, r.Tint, want)
+			}
+		}
 	}
-	// No highlight → both -1.
+
+	spans := tintSpansForLayout(lay)
+	if len(spans) != 2 || spans[0].Line != 2 || spans[1].Line != 3 {
+		t.Fatalf("wash spans = %+v, want one per line on lines 2 and 3", spans)
+	}
+	for _, sp := range spans {
+		if sp.Tint != tintHighlight {
+			t.Errorf("span %+v must carry the highlight tint", sp)
+		}
+		if sp.LineX1 <= sp.LineX0 {
+			t.Errorf("span %+v has no width", sp)
+		}
+	}
+
+	// No highlight → no tinted runs, no spans.
 	st2 := psalm23State()
 	lay2 := layoutChapter(st2, st2.Bible.GetChapter("Psalms", 23), testLayoutParams, fixedMeasure)
-	if lay2.HighlightStart != -1 || lay2.HighlightEnd != -1 {
-		t.Errorf("no-highlight band = [%d,%d], want [-1,-1]", lay2.HighlightStart, lay2.HighlightEnd)
+	if got := tintSpansForLayout(lay2); len(got) != 0 {
+		t.Errorf("no-highlight spans = %+v, want none", got)
+	}
+}
+
+// TestStyledLayoutTintSpansCoalesce: contiguous same-tint runs on a line
+// collapse into ONE span — a rect per run would be slow and visibly seamed —
+// and the span still stops at the tint boundary.
+func TestStyledLayoutTintSpansCoalesce(t *testing.T) {
+	lay := &chapterLayout{Lines: []styledLine{{
+		Y: 0, H: 20,
+		Runs: []styledRun{
+			{Text: "a", Verse: 1, X: 0, W: 10},
+			{Text: "b", Verse: 2, Tint: tintHighlight, X: 20, W: 10},
+			{Text: "c", Verse: 2, Tint: tintHighlight, X: 40, W: 10},
+			{Text: "d", Verse: 2, Tint: tintHighlight, X: 60, W: 10},
+			{Text: "e", Verse: 3, X: 80, W: 10},
+			{Text: "f", Verse: 4, Tint: tintHighlight, X: 100, W: 10},
+		},
+	}}}
+	spans := tintSpansForLayout(lay)
+	if len(spans) != 2 {
+		t.Fatalf("spans = %+v, want 2 (one coalesced stretch + one after the break)", spans)
+	}
+	if spans[0].LineX0 != 20 || spans[0].LineX1 != 70 {
+		t.Errorf("coalesced span = %.0f..%.0f, want 20..70 (joining spaces inside)", spans[0].LineX0, spans[0].LineX1)
+	}
+	if spans[1].LineX0 != 100 || spans[1].LineX1 != 110 {
+		t.Errorf("second span = %.0f..%.0f, want 100..110", spans[1].LineX0, spans[1].LineX1)
 	}
 }
 
