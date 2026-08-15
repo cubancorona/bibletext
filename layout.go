@@ -135,3 +135,62 @@ func regularSplitOffset(width float32) float64 {
 	}
 	return frac
 }
+
+// --- What the mobile shell shows, as pure state ------------------------------
+//
+// These live here rather than in ui_mobile.go so they can be TESTED. That file
+// is tagged `ios || android`, packaging does not compile tests, and the bug
+// leaveSearchForRead fixes shipped twice — a tagged test asserting it would
+// never have run on this machine and could rot without anyone noticing. The
+// styled reading pane is untagged for the same reason.
+
+// overlayShouldShow is the single source of truth for native reading-overlay
+// visibility on mobile: the iOS UITextView must be visible exactly when the
+// reading view is the content actually on screen. Every place that toggles the
+// overlay derives the answer from here, and afterRebuild re-asserts it as the
+// last word after each window rebuild, so a stray async show/hide during the
+// rebuild can't leave the overlay floating over the wrong content as a blank
+// (black) rectangle.
+//
+//   - Full-screen (distraction-free) reading: always show.
+//   - Regular (tablet) layout: the reading pane is always beside the sidebar, so
+//     show whenever a search's results aren't occupying it.
+//   - Compact layout: only the Read tab hosts the reading pane, and only when no
+//     search is active.
+func overlayShouldShow(state *AppState) bool {
+	if state.IsFullScreen {
+		return true
+	}
+	if state.layoutClass() == layoutRegular {
+		return !state.IsSearching
+	}
+	return state.CurrentTab == 0 && !state.IsSearching
+}
+
+// leaveSearchForRead turns the "showing results" flag off when the reader picks
+// the Read tab.
+//
+// THE BUG THIS FIXES, which shipped: search, get results, then tap Read. The tab
+// changed and IsSearching did not, so rebuildMobileReadingPane went on returning
+// the RESULTS view while overlayShouldShow — CurrentTab == 0 && !IsSearching —
+// went false and took the native reading overlay down with it. The reader landed
+// on a Read tab holding the search results, with no reading view and without the
+// search field and buttons that at least made the results look intentional. The
+// only way out was to tap a result. Present in 1.1.6 and 1.1.7: the tab bar,
+// rebuildMobileReadingPane and overlayShouldShow are byte-identical there, and
+// nothing on the tab-switch path has ever cleared the flag.
+//
+// Clearing it here is safe because the Search tab does not read it: its keyword
+// branch renders buildSearchResultsView unconditionally from state.SearchResults,
+// which survive. So the results are still there when the reader goes back, and
+// CanReturnToSearchResults — the reading view's own way back — is deliberately
+// left alone.
+//
+// IsSearching means "results are occupying the reading pane", and on the phone
+// that can only be true while the reader is looking at the pane it occupies.
+func leaveSearchForRead(state *AppState, tab int) {
+	if state == nil || tab != 0 {
+		return
+	}
+	state.IsSearching = false
+}
