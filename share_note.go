@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"encoding/base64"
+	"errors"
 	"io"
 	"strings"
 	"unicode/utf8"
@@ -36,6 +37,8 @@ import (
 // 290 characters of link, which messengers carry without wrapping or
 // truncating) and it bounds the abuse surface of text we will render.
 const NoteMaxRunes = 280
+
+var errNoteTooLarge = errors.New("note expands past the size a note may be")
 
 const (
 	noteFormatPlain   = 'p'
@@ -189,13 +192,41 @@ func deflateBytes(raw []byte) ([]byte, error) {
 // bomb, a few hundred bytes of link expanding to gigabytes on a phone. The cap
 // is generous against NoteMaxRunes (4 bytes per rune is the UTF-8 maximum) and
 // still refuses anything that is not plausibly a note.
+// noteMaxInflatedBytes is the most a note may expand to. A named constant, not
+// arithmetic at the call site: derived as NoteMaxRunes*4+1 it silently changes
+// meaning the day the rune cap moves, and a size limit that drifts is the shape
+// of Bitcoin's March 2013 fork — a Berkeley DB lock limit nobody had written
+// down had quietly become part of the format.
+//
+// Four bytes per rune is UTF-8's maximum, so this admits every legal note and
+// nothing else.
+const noteMaxInflatedBytes = NoteMaxRunes*4 + 1
+
 func inflateBytes(z []byte) ([]byte, error) {
 	r := flate.NewReader(bytes.NewReader(z))
 	defer r.Close()
-	limit := int64(NoteMaxRunes*4 + 1)
-	out, err := io.ReadAll(io.LimitReader(r, limit))
+
+	// Read ONE BYTE past the cap, and reject if we got it.
+	//
+	// This used to read exactly the cap through a LimitReader and return
+	// whatever came back. A LimitReader reports io.EOF at its limit, which is
+	// not an error, so a payload engineered to expand without bound came back
+	// TRUNCATED and err == nil, and the truncation was then rendered as if the
+	// sender had written it. Measured: 5,114 bytes of payload expanding to 5 MB
+	// returned 1,121 bytes and no error. That contradicted this function's own
+	// promise never to return a partially decoded note, and it is the one place
+	// in the note path where a hostile payload reached the screen.
+	//
+	// Bitcoin's discipline for the same hazard (MAX_SIZE / MAX_VECTOR_ALLOCATE):
+	// never let a declared or produced size drive an allocation, and validate
+	// BEFORE you trust. Here that means asking for more than is allowed and
+	// treating the surplus as proof of a lie.
+	out, err := io.ReadAll(io.LimitReader(r, noteMaxInflatedBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(out) > noteMaxInflatedBytes {
+		return nil, errNoteTooLarge
 	}
 	return out, nil
 }
