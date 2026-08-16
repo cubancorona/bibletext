@@ -1778,6 +1778,21 @@ import (
 // reading rectangle; the native NSTextView paints the verses on top. A
 // parchment rectangle sits behind it (the text view's background is clear).
 func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
+	// The Windows/Linux surface, when something asks for it. Default is the
+	// build-tag constant — FALSE here — so the shipping macOS path below is
+	// byte-identical and no release build can reach this branch.
+	//
+	// It exists because the two reading surfaces are mutually exclusive per
+	// platform, so on any one machine only one of them can be looked at. The
+	// verses on macOS are drawn by a native NSTextView above the canvas: there
+	// is no Fyne text in the tree, so "can the reader SEE the verses" cannot be
+	// asked here at all, and a view test on this machine could only ever check
+	// the surface it is not shipping. This is also the seam the owner asked for
+	// separately — a dev mode where macOS follows the Windows/Linux paths.
+	if useStyledPane() {
+		return styledReadingScrollArea(state, verses, pal)
+	}
+
 	// The NSTextView floats above the Fyne canvas, so any Fyne popup (the
 	// chapter picker) would render behind it. Let shared code hide/show the
 	// overlay around such popups — showChapterPicker calls these.
