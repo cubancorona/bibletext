@@ -1,6 +1,8 @@
 package bibletext
 
 import (
+	"bytes"
+	"compress/flate"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -153,5 +155,45 @@ func TestNoteInflateIsBounded(t *testing.T) {
 	}
 	if err == nil && len(out) >= 8<<20 {
 		t.Error("inflate expanded the bomb in full")
+	}
+}
+
+// A payload engineered to expand without bound must yield NO NOTE, not a
+// truncated one presented as the sender's words.
+//
+// The guard read exactly the cap through an io.LimitReader and returned what
+// came back. A LimitReader reports io.EOF at its limit, which is not an error —
+// so 5,114 bytes expanding to 5 MB returned 1,121 bytes with err == nil, and
+// those 1,121 bytes were rendered as a note somebody had written. The function's
+// own doc comment promised the opposite: "It never returns a partially decoded
+// note, because the caller's next move is to render it."
+func TestADeflateBombYieldsNoNoteAtAll(t *testing.T) {
+	var buf bytes.Buffer
+	w, err := flate.NewWriter(&buf, flate.BestCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(bytes.Repeat([]byte("A"), 5<<20)); err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+
+	if got, err := inflateBytes(buf.Bytes()); err == nil {
+		t.Errorf("%d bytes of payload expanded past the cap and came back as %d bytes "+
+			"with no error — a hostile note reaching the screen truncated",
+			buf.Len(), len(got))
+	}
+
+	// ...and the whole way in, through the real decoder, a bomb is simply no note.
+	payload := string(noteFormatDeflate) + base64.RawURLEncoding.EncodeToString(buf.Bytes())
+	if note, ok := DecodeNote(payload); ok || note != "" {
+		t.Errorf("DecodeNote showed %d characters of a deflate bomb (ok=%v)", len(note), ok)
+	}
+
+	// A real compressed note still decodes — the guard must not cost us the
+	// feature it protects.
+	long := strings.TrimSpace(strings.Repeat("a real note that compresses well. ", 8))
+	if round, ok := DecodeNote(EncodeNote(long)); !ok || round != long {
+		t.Errorf("an ordinary long note no longer survives the round trip: %q (ok=%v)", round, ok)
 	}
 }
