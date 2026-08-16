@@ -25,7 +25,18 @@ import (
 // styled one. Constant per build: true on Windows/Linux, false on the
 // native-overlay platforms and the Android Fyne fallback — their paths stay
 // byte-identical.
-func useStyledPane() bool { return styledPaneEnabledOnPlatform }
+// useStyledPane is a var, not a call to the constant, for the same reason
+// nativeNoteSticker is (notes_banner.go:32): the platform answer is a build-tag
+// constant, so on any one machine only one of the two reading surfaces exists to
+// be tested. Tests select the surface they mean to exercise; the default is the
+// exact constant the call site used before, and nothing in the app assigns it.
+//
+// This matters for view tests specifically. On darwin the verses are drawn by a
+// native NSTextView floating above the canvas, so there is no Fyne text to find
+// and "can the reader see the verses?" cannot be asked of the object tree at
+// all. Pointing this at the styled pane asks it of the surface Windows and Linux
+// actually ship.
+var useStyledPane = func() bool { return styledPaneEnabledOnPlatform }
 
 // --- Live registration (one styled pane at a time, UI goroutine only) --------
 
