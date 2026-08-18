@@ -158,30 +158,22 @@ type pinnedDefect struct {
 // substitution (N3 judged over the plan, below). The Apple sticker stays
 // arity-1 by design and stays honest by the count line in its own text —
 // richness differs per platform, truth does not.
-var knownIncoherent = []pinnedDefect{
-	{
-		"X4", "turning notes off keeps the highlight the note put there",
-		func(w notesWorld, inv string) bool {
-			return inv == "N1-orphan-highlight" && w.verb == verbNotesOff
-		},
-	},
-}
+//
+// X4 and X11 — the LAST TWO — were struck on 2026-08-18, and the lists below
+// are EMPTY: zero named violations in both spaces, for the first time since
+// the enumeration was written. X4 (55 cells here, 1 in the origin space) died
+// of turnNotesOff + the off-branch's clearMarkFromNote: every route to "off"
+// now puts out exactly the mark the live note owns and no other. X11 (3
+// cells) died of renumberMarkForVersion (mark.go): the version switch maps
+// the mark's span into the new translation through the notes' own anchor
+// machinery — the first use VerseSpan.VersionID has ever had — and clears it
+// on anything but a clean landing. An empty list is still load-bearing: any
+// violation now fails as a NEW incoherent state, with nothing to hide behind.
+var knownIncoherent = []pinnedDefect{}
 
-// knownOriginIncoherent is the same pin for the highlight-origin enumeration.
-var knownOriginIncoherent = []pinnedOrigin{
-	{
-		"X4", "turning notes off keeps the highlight the note put there",
-		func(o hlOrigin, e hlEvent, inv string) bool {
-			return inv == "N1-orphan-highlight" && e == evNotesOff
-		},
-	},
-	{
-		"X11", "the highlight has no version frame, so a switch leaves it in the old numbering",
-		func(o hlOrigin, e hlEvent, inv string) bool {
-			return inv == "N7-stale-frame" && e == evSwitchVersion && o != fromNote
-		},
-	},
-}
+// knownOriginIncoherent is the same pin for the highlight-origin enumeration —
+// also empty since X4 and X11 were struck. See the note above.
+var knownOriginIncoherent = []pinnedOrigin{}
 
 type pinnedOrigin struct {
 	name   string
@@ -266,14 +258,14 @@ func TestNotesStateSpace(t *testing.T) {
 	// The counts are deterministic, so drift means either a fix (strike and
 	// re-measure, per the contract) or a regression (this failure).
 	// NOTES-SPACE counts only. docs/NOTES_STATE.md's headline figures COMBINE
-	// this enumeration with the origin-space one (X4 reads ×56 there: 55 cells
+	// this enumeration with the origin-space one (X4 read ×56 there: 55 cells
 	// here + 1 there), and the first version of this map copied the combined
 	// number and failed its own first run. Kept as a warning: when updating
 	// after a re-measure, take the per-space split from the run output, not
-	// the doc's combined line.
-	expectedHits := map[string]int{
-		"X4": 55,
-	}
+	// the doc's combined line. EMPTY since the sixth pass — zero named
+	// violations — and the set-equality assertion above is what now holds it
+	// there.
+	expectedHits := map[string]int{}
 	for name, want := range expectedHits {
 		if hits[name] != want {
 			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
@@ -460,9 +452,10 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	case verbDelete:
 		dropCurrentNote(st)
 	case verbNotesOff:
-		// The "Keep them" answer: ai_settings.go:498-501 runs exactly this pair
-		// and nothing else. clearLiveNote is on the DELETE branch only.
-		setNotesEnabled(false)
+		// The "Keep them" answer: both Settings off-routes run turnNotesOff
+		// (ai_settings.go) — the preference flips and the mark the live note
+		// owns goes out, no other. clearLiveNote is on the DELETE branch only.
+		turnNotesOff(st)
 	}
 
 	obs.text, obs.min, obs.hlOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
@@ -853,6 +846,7 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 	}
 
 	hadHL := st.hasMark()
+	spBefore, _ := st.markSpan() // the pre-switch span, for the frame check
 	fromVer := st.CurrentVersion
 
 	switch ev {
@@ -866,7 +860,7 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 		}
 		addRecentChapter(st, "Romans", 14)
 	case evNotesOff:
-		setNotesEnabled(false)
+		turnNotesOff(st) // the real off verb — Settings and the dev toggle both
 		addRecentChapter(st, "Romans", 14)
 	case evSwitchVersion:
 		v, ok := versionByID("bsb")
@@ -896,13 +890,22 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 		}
 	}
 
-	// N7 — one ruler. After a version switch a surviving highlight must be in the
-	// numbering of the translation now being read.
-	if ev == evSwitchVersion && st.hasMark() {
-		sp, _ := st.markSpan()
-		ch, v, res := MapVerse(fromVer, st.CurrentVersion, sp.Book, sp.Chapter, sp.Lo)
-		if res != verseMapExact && (ch != sp.Chapter || v != sp.Lo) {
-			bad = append(bad, "N7-stale-frame")
+	// N7 — one ruler. After a version switch a surviving highlight must be
+	// expressed in the numbering of the translation now being read: the span's
+	// own frame must say so, and its location must agree with mapping the
+	// PRE-switch span into the new translation. (Before the X11 fix the check
+	// mapped the surviving span forward and asked whether it had moved — that
+	// spelling only made sense while the switch left the span untouched.)
+	if ev == evSwitchVersion {
+		if sp, ok := st.markSpan(); ok {
+			if !strings.EqualFold(sp.VersionID, st.CurrentVersion) {
+				bad = append(bad, "N7-stale-frame")
+			} else if spBefore.Lo > 0 {
+				ch, v, res := MapVerse(fromVer, st.CurrentVersion, spBefore.Book, spBefore.Chapter, spBefore.Lo)
+				if (res == verseMapExact || res == verseMapMoved) && (sp.Chapter != ch || sp.Lo != v) {
+					bad = append(bad, "N7-stale-frame")
+				}
+			}
 		}
 	}
 	return bad
@@ -1054,48 +1057,261 @@ func TestArrivingNoteSurvivesItsOwnSaveOnAFullStore(t *testing.T) {
 	}
 }
 
-// HL_FRAME: the highlight is not renumbered on a version switch, though the note
-// beside it is. Stated once, plainly, because it is the clearest evidence that
-// the highlight has no version frame at all.
-func TestHighlightKeepsThePreviousTranslationsNumbering(t *testing.T) {
+// HL_FRAME / X11 — FIXED 2026-08-18. The version switch renumbers the
+// highlight through the SAME anchor machinery that renumbers the note beside
+// it (renumberMarkForVersion in mark.go, called from applyLoadedVersion), so
+// the two marks are measured by one ruler at last — the first use
+// VerseSpan.VersionID has ever had. On anything but a clean landing the mark
+// is CLEARED rather than left lighting the wrong text. This test pins the
+// fixed behaviour across every arm the resolver can answer:
+//
+//   - the doxology (moved CROSS-CHAPTER): WEB Romans 14:24 IS BSB 16:25.
+//     Before the fix the mark survived the switch still saying 14:24 — the
+//     wrong verse lit, beside a note that WAS renumbered.
+//   - the identity case: the numbering agrees, the mark survives untouched
+//     (same numbers, new frame).
+//   - an absent verse (a BSB omission), Greek Esther (incommensurable), and a
+//     book the new translation does not contain: cleared, every one.
+func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
 
-	ch, v, res := MapVerse("web", "bsb", "Romans", 14, 24)
-	if res == verseMapExact {
-		t.Skip("the versification table no longer moves Romans 14:24; pick another divergence")
+	switchTo := func(t *testing.T, st *AppState, id string, data *BibleData) {
+		t.Helper()
+		v, ok := versionByID(id)
+		if !ok {
+			t.Fatalf("%s is not registered", id)
+		}
+		applyLoadedVersion(st, v, data, modeReal)
 	}
-	bd := romansBible()
-	st := &AppState{
-		Bible: bd, CurrentBook: "Romans", CurrentChapter: 14,
-		CurrentVersion: "web", loadPhase: loadReady,
-		loadedVersions: map[string]*BibleData{"web": bd},
-	}
-	goToVerseRange(st, "Romans", 14, 24, 24)
 
-	other, ok := versionByID("bsb")
-	if !ok {
-		t.Fatal("bsb is not registered")
-	}
-	applyLoadedVersion(st, other, romansBible(), modeReal)
+	t.Run("doxology moved cross-chapter", func(t *testing.T) {
+		ch, v, res := MapVerse("web", "bsb", "Romans", 14, 24)
+		if res != verseMapMoved {
+			t.Fatalf("precondition: web Romans 14:24 should MOVE into the bsb, got %d:%d (%v)", ch, v, res)
+		}
+		bd := romansBible()
+		st := &AppState{
+			Bible: bd, CurrentBook: "Romans", CurrentChapter: 14,
+			CurrentVersion: "web", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"web": bd},
+		}
+		goToVerseRange(st, "Romans", 14, 24, 24)
 
-	if !st.hasMark() {
-		t.Error("HL_FRAME is FIXED: the switch cleared the highlight. Update docs/NOTES_STATE.md.")
-		return
-	}
-	sp, _ := st.markSpan()
-	if sp.Chapter == ch && sp.Lo == v {
-		t.Error("HL_FRAME is FIXED: the highlight was renumbered. Update docs/NOTES_STATE.md.")
-		return
-	}
-	// Still in the old frame. The note on the same passage HAS been mapped.
-	if sp.Chapter != 14 || sp.Lo != 24 {
-		t.Errorf("unexpected: the highlight moved to %d:%d, which is neither frame",
-			sp.Chapter, sp.Lo)
-	}
+		switchTo(t, st, "bsb", romansBible())
+
+		sp, ok := st.markSpan()
+		if !ok {
+			t.Fatal("the mark did not survive a cleanly-mapped switch")
+		}
+		if sp.Chapter != ch || sp.Lo != v {
+			t.Errorf("the mark was not renumbered: %d:%d, want %d:%d", sp.Chapter, sp.Lo, ch, v)
+		}
+		if sp.VersionID != "bsb" {
+			t.Errorf("the surviving span's frame is %q, want the reading translation's", sp.VersionID)
+		}
+		if st.mark.Origin != hlVerseOfDay {
+			t.Errorf("renumbering changed the mark's origin: %v", st.mark.Origin)
+		}
+	})
+
+	t.Run("identity: same numbering survives untouched", func(t *testing.T) {
+		bd := romansBible()
+		st := &AppState{
+			Bible: bd, CurrentBook: "Romans", CurrentChapter: 14,
+			CurrentVersion: "web", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"web": bd},
+		}
+		goToVerseRange(st, "Romans", 14, 23, 23) // 14:23 maps exactly
+
+		switchTo(t, st, "bsb", romansBible())
+
+		sp, ok := st.markSpan()
+		if !ok {
+			t.Fatal("an identically-numbered mark did not survive the switch")
+		}
+		if sp.Chapter != 14 || sp.Lo != 23 {
+			t.Errorf("an exact mapping moved the mark: %d:%d, want 14:23", sp.Chapter, sp.Lo)
+		}
+		if sp.VersionID != "bsb" {
+			t.Errorf("the span's frame is %q, want the reading translation's", sp.VersionID)
+		}
+	})
+
+	t.Run("absent verse clears", func(t *testing.T) {
+		if _, _, res := MapVerse("web", "bsb", "Mark", 9, 44); res != verseMapAbsent {
+			t.Fatalf("precondition: web Mark 9:44 should be ABSENT from the bsb, got %v", res)
+		}
+		mk := func() *BibleData {
+			bd := NewBibleData()
+			bd.PopulateWithSampleVerses()
+			bd.Verses["Mark"][9] = []Verse{
+				{BookName: "Mark", Chapter: 9, Verse: 43, Text: "mark"},
+				{BookName: "Mark", Chapter: 9, Verse: 44, Text: "mark"},
+			}
+			return bd
+		}
+		bd := mk()
+		st := &AppState{
+			Bible: bd, CurrentBook: "Mark", CurrentChapter: 9,
+			CurrentVersion: "web", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"web": bd},
+		}
+		goToVerseRange(st, "Mark", 9, 44, 44)
+
+		switchTo(t, st, "bsb", mk())
+
+		if sp, ok := st.markSpan(); ok {
+			t.Errorf("a mark on a verse the new translation omits must clear, still lights %d:%d", sp.Chapter, sp.Lo)
+		}
+	})
+
+	t.Run("incommensurable clears (Greek Esther)", func(t *testing.T) {
+		if _, _, res := MapVerse("webc", "web", "Esther", 1, 1); res != verseMapIncommensurable {
+			t.Fatalf("precondition: webc Esther should be INCOMMENSURABLE with web, got %v", res)
+		}
+		bd := NewBibleData()
+		bd.PopulateWithSampleVerses()
+		st := &AppState{
+			Bible: bd, CurrentBook: "Esther", CurrentChapter: 1,
+			CurrentVersion: "webc", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"webc": bd},
+		}
+		goToVerseRange(st, "Esther", 1, 1, 1)
+
+		web := NewBibleData()
+		web.PopulateWithSampleVerses()
+		switchTo(t, st, "web", web)
+
+		if sp, ok := st.markSpan(); ok {
+			t.Errorf("an incommensurable mark must clear, still lights %d:%d", sp.Chapter, sp.Lo)
+		}
+	})
+
+	t.Run("book the new translation lacks clears", func(t *testing.T) {
+		bd := NewBibleData()
+		bd.PopulateWithSampleVerses()
+		st := &AppState{
+			Bible: bd, CurrentBook: "John", CurrentChapter: 3,
+			CurrentVersion: "webc", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"webc": bd},
+		}
+		// Set directly: Tobit is not in the 66-book fixture canon, so no real
+		// writer can be driven here — which is the point of the arm: the
+		// mapping TABLES claim Tobit "maps exactly" into a WEB that does not
+		// contain it, and only the book-existence test says otherwise.
+		st.setMark(hlSearch, VerseSpan{VersionID: "webc", Book: "Tobit", Chapter: 1, Lo: 1})
+
+		web := NewBibleData()
+		web.PopulateWithSampleVerses()
+		switchTo(t, st, "web", web)
+
+		if sp, ok := st.markSpan(); ok {
+			t.Errorf("a mark on a book the new translation lacks must clear, still lights %s %d:%d", sp.Book, sp.Chapter, sp.Lo)
+		}
+	})
+}
+
+// The other half of the X11 fix, pinned: an hlNote mark is NOT renumbered by
+// renumberMarkForVersion — the note projection owns it in both directions.
+// applyNoteForCurrentChapter, run by the same apply tail, re-derives the note
+// into the new translation and re-places its mark from the note itself (in
+// the reading translation's frame), or clears it when the note has no home on
+// this chapter any more.
+func TestNoteMarkIsRederivedNotRenumberedOnSwitch(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	noteNow = func() int64 { return 1_700_000_000 }
+	defer func() { noteNow = origNow }()
+
+	t.Run("re-placed, in the new frame", func(t *testing.T) {
+		deleteAllNotes(appPrefs())
+		bd := romansBible()
+		st := &AppState{
+			Bible: bd, CurrentBook: "Romans", CurrentChapter: 14,
+			CurrentVersion: "web", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"web": bd},
+		}
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Romans", Chapter: 14, VerseLo: 23, Text: "on 23"})
+		addRecentChapter(st, "Romans", 14)
+		if !st.mark.fromNote() {
+			t.Fatal("precondition: the note should own the mark")
+		}
+
+		v, ok := versionByID("bsb")
+		if !ok {
+			t.Fatal("bsb is not registered")
+		}
+		applyLoadedVersion(st, v, romansBible(), modeReal)
+
+		if st.ActiveNote != "on 23" {
+			t.Fatalf("the note did not follow the switch: %q", st.ActiveNote)
+		}
+		sp, ok := st.markSpan()
+		if !ok || !st.mark.fromNote() {
+			t.Fatal("the followed note did not re-raise its mark")
+		}
+		if sp.Chapter != 14 || sp.Lo != 23 {
+			t.Errorf("the note's mark landed at %d:%d, want 14:23", sp.Chapter, sp.Lo)
+		}
+		if sp.VersionID != "bsb" {
+			t.Errorf("the note's mark is framed %q, want the reading translation's — "+
+				"a followed note's span carries renumbered NUMBERS and must not carry its filing as the frame", sp.VersionID)
+		}
+	})
+
+	t.Run("cleared when the note leaves the chapter", func(t *testing.T) {
+		deleteAllNotes(appPrefs())
+		bd := romansBible()
+		st := &AppState{
+			Bible: bd, CurrentBook: "Romans", CurrentChapter: 14,
+			CurrentVersion: "web", loadPhase: loadReady,
+			loadedVersions: map[string]*BibleData{"web": bd},
+		}
+		// The doxology: in the BSB this note's passage lives on chapter 16, so
+		// after the switch chapter 14 holds no note — and must hold no mark.
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Romans", Chapter: 14, VerseLo: 24, Text: "doxology"})
+		addRecentChapter(st, "Romans", 14)
+		if !st.mark.fromNote() {
+			t.Fatal("precondition: the note should own the mark")
+		}
+
+		v, ok := versionByID("bsb")
+		if !ok {
+			t.Fatal("bsb is not registered")
+		}
+		applyLoadedVersion(st, v, romansBible(), modeReal)
+
+		if st.ActiveNote != "" {
+			t.Fatalf("chapter 14 should hold no note in the bsb, got %q", st.ActiveNote)
+		}
+		if sp, ok := st.markSpan(); ok {
+			t.Errorf("the departed note's mark was left behind at %d:%d — that is defect 1", sp.Chapter, sp.Lo)
+		}
+
+		// And on the chapter the passage actually lives on, the note surfaces
+		// with its mark in the new numbering — nothing was lost, only moved.
+		st.CurrentChapter = 16
+		addRecentChapter(st, "Romans", 16)
+		if st.ActiveNote != "doxology" {
+			t.Fatalf("the note did not surface on its bsb chapter: %q", st.ActiveNote)
+		}
+		sp, ok := st.markSpan()
+		if !ok || !st.mark.fromNote() {
+			t.Fatal("the note did not re-raise its mark on its new chapter")
+		}
+		if sp.Chapter != 16 || sp.Lo != 25 || sp.VersionID != "bsb" {
+			t.Errorf("the note's mark is %s %d:%d, want bsb 16:25", sp.VersionID, sp.Chapter, sp.Lo)
+		}
+	})
 }
 
 // N8, the temporary cap: this file used to hold a sentinel test asserting the

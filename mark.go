@@ -27,6 +27,8 @@ package bibletext
 // another, and a mark carried unchanged across a version switch lights the
 // wrong text. Recording the frame is what lets the read accessor decline.
 
+import "strings"
+
 // hlOrigin says who put the mark there. Every writer sets one.
 type hlOrigin int
 
@@ -152,10 +154,11 @@ func (s *AppState) hasMark() bool { return s != nil && s.mark.live() }
 // planted here expecting them to. chapterTint (tint.go) reads markSpan and
 // checks book and chapter against each VERSE rather than against AppState,
 // because a renderer can be handed verses for a chapter the reader is not
-// standing on. That is right, and it is orthogonal to the VERSION frame: a mark
-// numbered in another translation must still light nothing rather than the
-// wrong verse, and the check for that belongs in chapterTint, which is what the
-// surfaces actually ask.
+// standing on. That is right, and it is orthogonal to the VERSION frame: a
+// version switch renumbers the span into the new translation or takes it down
+// (renumberMarkForVersion, called from applyLoadedVersion), so a live mark is
+// always expressed in the reading translation's numbering and the painters
+// need no frame check of their own.
 //
 // What still uses this: reading_android.go decides where to SCROLL, and
 // notes_store.go asks whether somebody else's mark is already on the page.
@@ -182,4 +185,62 @@ func (s *AppState) markSpan() (VerseSpan, bool) {
 		return VerseSpan{}, false
 	}
 	return s.mark.At, true
+}
+
+// renumberMarkForVersion carries the highlight across a version switch — the
+// X11/HL_FRAME fix, and the first consumer VerseSpan.VersionID has ever had.
+// The span is renumbered into toVersionID through the SAME anchor machinery
+// the notes use (resolveNoteAnchor, notes_anchor.go): a transient anchor is
+// built from the span and resolved into the new translation, so the mark and
+// the note beside it can never again be measured by two rulers (N7).
+//
+// On anything but a CLEAN landing the mark is cleared rather than left
+// lighting the wrong text: the book absent from the new translation, the
+// numbering incommensurable (WEBC's Greek Esther), the verses absent (the
+// BSB's omissions), a partial landing (a span crossing one of those holes),
+// or a landing split across more than one run. A highlight is a pointer, not
+// a message — nothing is lost by taking it down, and the one thing it must
+// never do is point at the wrong verse.
+//
+// A mark the live note owns is skipped ON PURPOSE: the note projection
+// (applyNoteForCurrentChapter, run by the same apply tail) re-derives the
+// note into the new translation and re-places or clears its mark from the
+// note itself — renumbering it here too would be a second writer for the same
+// fact. Pinned by TestNoteMarkIsRederivedNotRenumberedOnSwitch.
+func renumberMarkForVersion(state *AppState, toVersionID string, bible *BibleData) {
+	if state == nil || !state.mark.live() || state.mark.fromNote() {
+		return
+	}
+	sp := state.mark.At
+	if strings.EqualFold(sp.VersionID, toVersionID) {
+		return // already expressed in this frame; nothing to map
+	}
+	transient := StoredNote{
+		VersionID: sp.VersionID,
+		Book:      sp.Book,
+		Chapter:   sp.Chapter,
+		VerseLo:   sp.Lo,
+		VerseHi:   sp.Hi,
+	}
+	pl := resolveNoteAnchor(transient, toVersionID, bible)
+	runs := append(append([]anchorRun(nil), pl.Here...), pl.Elsewhere...)
+	// Clean means: every verse landed, and landed together. placedExact is the
+	// identity case (the numbers survive untouched), placedMoved the renumber,
+	// placedOtherChapter the doxology's cross-chapter move — all fine as long
+	// as the landing is ONE run. placedPartial and every unplaced kind clear.
+	// (placedNative cannot reach here: it is the EqualFold return above.)
+	clean := len(runs) == 1 &&
+		(pl.Kind == placedExact || pl.Kind == placedMoved || pl.Kind == placedOtherChapter)
+	if !clean {
+		state.clearMark()
+		return
+	}
+	r := runs[0]
+	state.mark.At = VerseSpan{
+		VersionID: toVersionID,
+		Book:      sp.Book,
+		Chapter:   r.Chapter,
+		Lo:        r.Lo,
+		Hi:        r.Hi,
+	}
 }

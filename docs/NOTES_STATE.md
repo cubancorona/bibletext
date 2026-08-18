@@ -33,7 +33,12 @@
 > differs per platform, truth does not. `Open` is folded into the plan's
 > `Fingerprint` (its own section, deliberately outside the Apple body half
 > `noteFP`), and the display-arity defects X6, X7, X12 and X14 are struck —
-> see the re-measure. Sections marked **[INTENDED]**
+> see the re-measure. **The last two enumerated defects, X4 and X11, were
+> fixed on 2026-08-18** (`turnNotesOff` + the off-branch clear;
+> `renumberMarkForVersion`) **and the sixth re-measure records ZERO named
+> violations in both enumerations.** Of the incoherent-states table only `X8`
+> — pinned by its own named test, outside the enumerations — remains open.
+> Sections marked **[INTENDED]**
 > describe behaviour the owner has specified and the code does not have. Do not
 > read an **[INTENDED]** paragraph as a description of the app.
 >
@@ -65,9 +70,9 @@ the reader cannot tell a note they never had from one the app lost.
 > verb must reach the object the reader aimed it at.**
 
 Both halves have been broken in shipped code. The first half is defect 1
-(`ORPHAN_HL` below) and is **still live today** by a route nobody has walked —
-see `X4`. The second half was defects 2 and 4; those were fixed on
-2026-08-15, and the fix made `X12` reachable in their place.
+(`ORPHAN_HL` below); its last live route — the notes-off switch — was closed
+on 2026-08-18 (see `X4`, FIXED). The second half was defects 2 and 4; those
+were fixed on 2026-08-15, and the fix made `X12` reachable in their place.
 
 ## The shape of the thing
 
@@ -210,7 +215,9 @@ highlight here?", and it is wrong in **both directions**, both measured:
 - **Under-clears.** A note on John 3:16 goes away while a search highlight sits
   on John 3:1 — `16 != 1`, the guard declines, and the reader is left with a lit
   verse and nothing to explain it. That is defect 1, one guard away from
-  returning, and it is what `X4` reaches through a different door.
+  returning, and it is what `X4` reached through a different door (both doors
+  closed since: S1 recorded ownership; the X4 fix, 2026-08-18, closed the
+  notes-off route).
 - **Over-clears.** A note on John 3:16 goes away while an unrelated highlight
   sits on **Genesis 1:16** — `16 == 16`, and the guard destroys a mark in a
   different book. The guard tests neither book nor chapter. Measured, but by
@@ -325,6 +332,10 @@ explanation lives entirely in the reader's memory of the tap that caused it.
 *The reader sees:* a tinted verse and no message — exactly defect 1. On iOS the
 tap menu may still offer "Hide note" and "Delete note" for it, because `gHasNote`
 is a chapter-level bit (`reading_ios.go:2005-2011`, `:274-292`).
+*As of 2026-08-18 no enumerated route reaches this state.* S1 made ownership an
+equality (`clearMarkFromNote`), which closed the verb routes, and the X4 fix
+closed the last one — the notes-off switch. Kept as a named state because it is
+what any future writer of the mirror without the mark discipline would recreate.
 
 **`SPLIT`** — an expanded note whose bubble anchors at `NoteVerseLo` while the
 tint sits elsewhere, because a highlight was already on this chapter when the
@@ -348,16 +359,20 @@ note was derived and the don't-clobber guard stood down
 per verse now). It is a loaded trap for the next
 writer that sets `Has` without setting the rest.
 
-**`HL_FRAME`** — the highlight survived a version switch as a raw integer in the
-PREVIOUS translation's numbering. `applyLoadedVersion` (`versions.go:532-585`)
-neither clears nor renumbers it, though `MapVerse` — the machine built for exactly
-this — is applied to the note beside it. Measured: `MapVerse` says web
-Romans 14:24 is bsb 16:25; after the switch the highlight is still `Romans 14:24`.
-*The reader sees:* the wrong verse lit, or — where the new chapter is shorter, or
-`clampToCurrentVersion` moved the book — nothing lit while `HasHighlightedVerse`
-stays true. In that case Escape is consumed and appears to do nothing
-(`ui_desktop.go:100-108`) and the iOS clear-highlight UI stays off
+**`HL_FRAME`** — **[FIXED 2026-08-18 — see `X11`]** the highlight survived a
+version switch as a raw integer in the PREVIOUS translation's numbering.
+`applyLoadedVersion` neither cleared nor renumbered it, though `MapVerse` — the
+machine built for exactly this — was applied to the note beside it. Measured:
+`MapVerse` says web Romans 14:24 is bsb 16:25; after the switch the highlight
+was still `Romans 14:24`.
+*The reader saw:* the wrong verse lit, or — where the new chapter is shorter, or
+`clampToCurrentVersion` moved the book — nothing lit while the mark stayed live.
+In that case Escape was consumed and appeared to do nothing
+(`ui_desktop.go:100-108`) and the iOS clear-highlight UI stayed off
 (`reading_ios.go:1364`). **Two marks, two rulers.**
+*Now:* `renumberMarkForVersion` (`mark.go`, called from `applyLoadedVersion`)
+maps the span through the same anchor machinery the note uses, or clears it
+where the mapping is not clean — one ruler, N7 restored.
 
 **`READALONG`** — the SECOND highlight channel, outside `AppState` entirely:
 per-platform narration tint with its own state (`reading_styled_readalong.go:47-79`,
@@ -418,9 +433,11 @@ atomic-sidecar fix to `WIPED`.
 opens the passage. Everything comes back on switching it on.
 
 **`OFF_STUCK`** — the feature was just turned off and the reader chose "Keep
-them". That path runs `setNotesEnabled(false)` + `state.refresh()` and clears
-nothing (`ai_settings.go:498-501`); only the DELETE path calls `clearLiveNote`
-(`notes_setting.go:129-136`). The native stickers push `state.ActiveNote` with
+them". That path used to run `setNotesEnabled(false)` + `state.refresh()` and
+clear nothing; **since 2026-08-18 every off route runs `turnNotesOff`**
+(`notes_setting.go`), which also puts out the mark the live note owns — and
+ONLY that mark — so the highlight half of this state (`X4`) is gone. What
+remains is the repaint half: the native stickers push `state.ActiveNote` with
 **no feature gate** (`reading_ios.go:2107-2126`,
 `reading_macos.go:1559-1578` — the gate at `reading_macos.go:1475-1478` covers
 only the "Share with note" menu item); the Fyne banner IS gated
@@ -509,7 +526,7 @@ is where they end up **today**.
 |---|---|---|---|
 | any | navigate | `state.go:514` → `applyNoteForCurrentChapter` | re-derived from the store |
 | any | resume from background | `app.go:213` → `applyNoteOnResume` (`notes_store.go:450-455`) | re-derived |
-| any | switch translation | `versions.go:576-583` | re-derived — **note renumbered, highlight NOT** → `HL_FRAME` |
+| any | switch translation | `versions.go` (`applyLoadedVersion`) | re-derived — note renumbered, and since 2026-08-18 the highlight too (`renumberMarkForVersion`, or cleared where the mapping is not clean; `HL_FRAME`/`X11` fixed) |
 | any | shared link arrives | `share_link_open.go:302-318` | mirror overwritten **by hand**, `NoteVersionID` untouched → `X1`, `X2` |
 | `NOTE_OWN` | Hide | `notes_store.go:389-396` | `COLLAPSED` |
 | `NOTE_FOLLOWED` | Hide | same, key = `noteStoreVersion()` | `COLLAPSED` |
@@ -517,7 +534,7 @@ is where they end up **today**.
 | `COLLAPSED` (followed) | Show | `setNoteMinimizedByID(state.NoteID)` | `NOTE_FOLLOWED` — the same id Hide used (X5 fixed, S5) |
 | `NOTE_OWN` | Delete | `notes_store.go:413-423` | `BARE`, or **`NOTE_SUBSTITUTED`** on the next navigation if another translation holds one |
 | after a link over a followed note | Delete | `noteStoreVersion()` is stale | **`X1`** — the wrong note dies |
-| `NOTE_*` | notes switched off, "Keep them" | `ai_settings.go:498-501` | **`OFF_STUCK`** + **`X4`** (the highlight survives) |
+| `NOTE_*` | notes switched off, "Keep them" | `ai_settings.go` → `turnNotesOff` | `OFF` — the note's own mark cleared, a foreign mark kept (`X4` fixed); the Apple-sticker repaint lag is `OFF_STUCK`, still open |
 | `NOTE_*` | notes switched off, "Delete them" | `notes_setting.go:129-137` | `OFF`, mirror and highlight cleared |
 | `BROWSER` | tap a row | `notes_browse.go:230-259` | the note's translation, un-minimized, at the passage — or `DEADTAP` |
 | `BROWSER` | tap a chapter-level note | `notes_browse.go:258` → `state.go:772-778` | `GHOST_LOC` |
@@ -532,7 +549,9 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
 - **N1 — No mark without a meaning, and no mark destroyed that had one.** A
   highlight on screen must have something on screen that explains it; and a mark
   put there by somebody else's action must survive a verb aimed at the note.
-  *Violated by `ORPHAN_HL` and `X4`. `X10` was the third and is fixed: see S1.*
+  *Was violated by `ORPHAN_HL`/`X4` and by `X10` — all fixed: S1 recorded
+  ownership, and the X4 fix (2026-08-18) closed the last route, the notes-off
+  switch.*
 - **N2 — A verb reaches what the reader aimed it at.** Hide, Show and Delete must
   address the note whose text is on screen, and no other. *Was violated by
   `X1`, `X2`, `X5` — all fixed; every verb now takes the note's own id.*
@@ -557,8 +576,10 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   store, under the id the verbs will address. *Was violated by `X3` — fixed;
   nothing is evicted.*
 - **N7 — One ruler.** Every verse number in `AppState` is in the numbering of the
-  translation being read. *Violated by `X11`/`HL_FRAME`.* `MapVerse` is applied to
-  the note and not to the highlight.
+  translation being read. *Was violated by `X11`/`HL_FRAME` — fixed 2026-08-18:
+  `renumberMarkForVersion` applies the anchor machinery to the highlight exactly
+  as the derive applies it to the note, and clears the mark where the mapping is
+  not clean.*
 - **N8 — At most one expanded** *(temporary)*. Representable and enforced
   since S7: the PLAN caps `Open` at `planOpenLimit` (`notes_plan.go`), zero is
   legal, and the cap writes nothing — the V-invariants in the enumeration hold
@@ -576,14 +597,14 @@ the probe produced it from the shipping code.
 | ~~X2~~ | ~~Hide is a silent no-op~~ | **FIXED** `31bc97630` | 0 | — |
 | ~~X12~~ | ~~Delete the arriving note, the note it covered takes its place~~ | **FIXED** S8 — the set is drawn | 0 | — |
 | ~~X3~~ | ~~Arriving note evicted by its own save~~ | **FIXED** S5 — no cap, no eviction | 0 | — |
-| **X4** | Notes-off orphans the highlight | **yes** | 55 + 1 | Defect 1, through the control whose job is to make notes stop |
+| ~~X4~~ | ~~Notes-off orphans the highlight~~ | **FIXED** 2026-08-18 — `turnNotesOff` + the off-branch's `clearMarkFromNote` | 0 | — |
 | ~~X5~~ | ~~Hide/Show asymmetry~~ | **FIXED** S5 — verbs address a NoteID | 0 | — |
 | ~~X6~~ | ~~Delete substitutes a different note~~ | **FIXED** S8 — the set is drawn | 0 | — |
 | ~~X7~~ | ~~More than one note on a passage is invisible~~ | **FIXED** S8 — bubble, chips, unplaced group | 0 | — |
 | **X8** | Bare link strips a note's highlight | **yes** | pinned separately | An expanded note pointing at nothing |
 | ~~X9~~ | ~~Chapter-level note leaves a ghost location~~ | **FIXED** S1 — unrepresentable | 0 | — |
 | ~~X10~~ | ~~Hide and Delete destroy a mark they do not own~~ | **FIXED** S1 | 0 | The search result the reader was holding vanishes when they tidy a note away |
-| **X11** | The highlight keeps the previous translation's numbering | **yes** | 3 | The wrong verse lit, or none, beside a note that WAS renumbered |
+| ~~X11~~ | ~~The highlight keeps the previous translation's numbering~~ | **FIXED** 2026-08-18 — `renumberMarkForVersion` | 0 | — |
 | ~~X14~~ | ~~A session-focused followed note is swapped back for the default on navigation~~ | **FIXED** S8 — focus moves among visible notes | 0 | — |
 
 "Cells" is how many combinations of the enumerated variables reach it. `X7`'s 48
@@ -621,20 +642,37 @@ is a data-loss event, and the store keeps what it is given (a capacity notice
 in the browser is S11's job). `TestArrivingNoteSurvivesItsOwnSaveOnAFullStore`
 pins the fixed behaviour on a store past the old cap.
 
-### X4 — Notes-off orphans the highlight
+### X4 — FIXED 2026-08-18 — Notes-off orphaned the highlight
 
-**How it is reached.** A note with a verse span is on screen. The reader turns
-shared notes off and answers "Keep them". `ai_settings.go:498-501` runs
+As it was:
+
+**How it was reached.** A note with a verse span is on screen. The reader turns
+shared notes off and answers "Keep them". `ai_settings.go` ran
 `setNotesEnabled(false)` + `state.refresh()` and nothing else.
 
-**Why it is wrong.** The banner hides (`notes_banner.go:38`) but the highlight the
-note placed is untouched, and the off-branch of `applyNoteForCurrentChapter`
-(`notes_store.go:291-297`) blanks the mirror and **returns before the
-clear-guard**, so the next re-derive cannot rescue it either. This is defect 1,
-reachable through the one control whose entire purpose is to make notes stop.
+**Why it was wrong.** The banner hid (`notes_banner.go:38`) but the highlight the
+note placed was untouched, and the off-branch of `applyNoteForCurrentChapter`
+blanked the mirror and **returned before the clear-guard**, so the next
+re-derive could not rescue it either. This was defect 1, reachable through the
+one control whose entire purpose is to make notes stop.
 
 **Evidence.** After the switch: `note="hold on" highlight=true v=16` (stale
 mirror). After the next re-derive: `note="" highlight=true v=16`.
+
+**FIXED — in two layers, because "off" has more than one door.**
+`turnNotesOff` (`notes_setting.go`) is now the one off verb — the Settings
+switch's nothing-saved short-circuit, its "Keep them" answer, and the dev
+toggle all call it — and beside flipping the preference it runs
+`clearMarkFromNote` at the moment notes go off. And the off-branch of
+`applyNoteForCurrentChapter` (`notes_store.go`) applies the same equality on
+every later re-derive, so a route that flips the preference some other way
+still cannot strand a mark past its next derive. ONLY the note's mark goes:
+ownership is recorded (S1), so a search result or a link span the reader was
+holding on the same chapter survives — the mistake that would have recreated
+`X10` from the other side. `clearLiveNote`'s clear became `clearMarkFromNote`
+in the same change, for the same reason. The enumeration walks verb=notes-off
+from every placement and reports zero cells; the harness drives the real
+`turnNotesOff`.
 
 ### X5 — FIXED by S5 (the scrapbook store), 2026-08-18
 
@@ -846,24 +884,47 @@ origin enumeration — every combination where a foreign mark is present and the
 verb is Hide or Delete. Directly: before, `note="a note on 16" highlight=true
 v=1`; after Hide, `note="a note on 16" highlight=false v=0`.
 
-### X11 — The highlight keeps the previous translation's numbering
+### X11 — FIXED 2026-08-18 — The highlight kept the previous translation's numbering
 
-**How it is reached.** A highlight from a search, the verse of the day or a link
+As it was:
+
+**How it was reached.** A highlight from a search, the verse of the day or a link
 span sits on WEB Romans 14:24. The reader switches to the BSB.
 
-**Why it is wrong.** `MapVerse` says that verse is BSB **16:25** — the doxology,
+**Why it was wrong.** `MapVerse` says that verse is BSB **16:25** — the doxology,
 the divergence `share_link_open.go:108-111` documents by measurement. The note on
-the same passage IS renumbered (`notes_store.go:213-215`); the highlight is not,
-because `applyLoadedVersion` (`versions.go:532-585`) neither clears nor maps it,
-and because there is no field saying which numbering it is in. **Two marks, two
-rulers.** Where the new chapter is shorter, nothing lights at all while
-`HasHighlightedVerse` stays true — and then Escape is consumed doing nothing
-(`ui_desktop.go:100-108`) and the iOS clear-highlight control is not attached
-(`reading_ios.go:1364`), so the reader cannot even take it down.
+the same passage WAS renumbered; the highlight was not, because
+`applyLoadedVersion` neither cleared nor mapped it — even though the mark had
+carried its frame (`VerseSpan.VersionID`) since S1 without a single consumer.
+**Two marks, two rulers.** Where the new chapter was shorter, nothing lit at all
+while the mark stayed live — and then Escape was consumed doing nothing
+(`ui_desktop.go:100-108`) and the iOS clear-highlight control was not attached
+(`reading_ios.go:1364`), so the reader could not even take it down.
 
 **Evidence.** `MapVerse says web Romans 14:24 is bsb 16:25 (moved)`; after the
-switch the highlight is still `Romans 14:24`. Reached from all three foreign
+switch the highlight was still `Romans 14:24`. Reached from all three foreign
 origins in the origin enumeration.
+
+**FIXED — the frame finally has a consumer.** `renumberMarkForVersion`
+(`mark.go`, called from `applyLoadedVersion` right after the clamp) builds a
+transient anchor from the mark's span and resolves it through
+`resolveNoteAnchor` — the SAME machinery the note beside it uses — into the new
+translation. A clean landing (exact, moved, or the doxology's cross-chapter
+move, as long as it lands in ONE run) renumbers the span and restamps its
+frame; anything else — book absent, incommensurable (Greek Esther), verses
+absent (the BSB's omissions), a partial landing, a split landing — CLEARS the
+mark rather than lighting the wrong text. An `hlNote` mark is skipped on
+purpose: the note projection re-derives it (or clears it, when the note's
+passage left the chapter), and the same change stamped the note-mark's span
+with the READING translation's frame — a followed note's span carries
+renumbered numbers, so labelling it with the note's filing was a frame lie
+waiting for the first consumer. The derive's don't-clobber guard became
+`notesSuppressed` (the plan's own predicate) in the same change, because a
+mark renumbered cleanly onto ANOTHER chapter is still the reader's, and the
+chapter-scoped guard would have walked over it. Pinned by
+`TestHighlightRenumberedAcrossVersionSwitch` (all five arms) and
+`TestNoteMarkIsRederivedNotRenumberedOnSwitch`; the origin enumeration
+reports zero cells.
 
 ### X14 — A session-focused followed note is swapped back for the default on navigation
 
@@ -1132,8 +1193,31 @@ Three things are **not** fixed by either and must not be assumed away:
   translation) = **20 states**. Asserts N1 and N7, on Romans 14 because that is
   where the numbering actually diverges.
 
-Together they find **59 violations**, and every one is attributed to a named
-defect: `X4`×56 (55 in the notes space + 1 in the origin space), `X11`×3.
+Together they find **ZERO violations**. Both pinned lists are empty, and the
+set-equality assertion is what holds them there: any violation now fails as a
+NEW incoherent state, with nothing to hide behind.
+
+> **Re-measured on 2026-08-18, after the X4 and X11 fixes. Sixth pass: ZERO
+> named violations in both spaces** — notes space 1,280 states walked (764
+> skipped as not-offered), 0 violations; origin space 20 states, 0 violations.
+> The walked spaces are unchanged; what changed is the code. `X4` (55+1) died
+> of `turnNotesOff` + the off-branch's `clearMarkFromNote` — every route to
+> "off" now puts out exactly the mark the live note owns and no other. `X11`
+> (3) died of `renumberMarkForVersion` — the version switch renumbers the
+> mark through the notes' own anchor machinery or clears it on anything but a
+> clean landing, and the origin space's N7 check now asserts the surviving
+> span's own frame and its agreement with mapping the pre-switch span
+> forward. Two adjacent honesty fixes rode along: the note-mark's span is
+> stamped with the READING translation's frame (a followed note's span
+> carries renumbered numbers, not its filing's), and the derive's
+> don't-clobber guard became `notesSuppressed` — the plan's own predicate —
+> so a foreign mark carried cleanly onto another chapter is not walked over.
+> The V-invariants hold in all 1,280 cells. `X8` (bare link strips a note's
+> highlight) remains pinned as a named single-state test outside the
+> enumerations, and the store-shape states (`UNREADABLE`, `WIPED`,
+> `JUNK_PURGED`) and `OFF_STUCK`'s Apple repaint lag remain open and
+> documented — an empty violation list means the ENUMERATED spaces are
+> coherent, not that the backlog is.
 
 > **Re-measured on 2026-08-18, after S8 (the surfaces consume the plan).**
 > Fifth pass: 59, from the run output — notes space 55 (`X4`×55), origin

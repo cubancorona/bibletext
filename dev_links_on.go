@@ -137,7 +137,13 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	refreshStatus()
 
 	notesSwitch := widget.NewCheck("Shared notes on", func(b bool) {
-		setNotesEnabled(b)
+		if b {
+			setNotesEnabled(true)
+		} else {
+			// The same verb Settings uses: off also puts out the mark the
+			// live note owns (X4) — a dev route to "off" is still a route.
+			turnNotesOff(state)
+		}
 		refreshStatus()
 	})
 	notesSwitch.SetChecked(notesEnabled())

@@ -548,6 +548,15 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	state.preferredVersion = ""
 
 	clampToCurrentVersion(state)
+	// One ruler (N7): the highlight's span is numbered in the translation the
+	// reader just left — the frame VerseSpan.VersionID records. Renumber it
+	// into the new translation through the notes' own anchor machinery, or
+	// take it down where the mapping is not clean, so the switch can never
+	// leave the wrong verse lit (X11/HL_FRAME). A mark the live note owns is
+	// left alone here: applyNoteForCurrentChapter below re-derives the note
+	// and re-places or clears its mark from the note itself. A consumed parked
+	// link (next block) overwrites the mark with its own fresh span either way.
+	renumberMarkForVersion(state, v.ID, data)
 	// A shared link that asked for THIS translation was parked waiting for it —
 	// apply it now, BEFORE the rebuild below, so the rebuild paints the shared
 	// passage directly instead of flashing the old chapter first (the same

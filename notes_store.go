@@ -611,10 +611,16 @@ func applyNoteForCurrentChapter(state *AppState) {
 	}
 	// Off means off, but it does NOT mean gone: the stored notes stay where
 	// they are unless the reader asked for them to be deleted, so switching
-	// back on brings them all back. The return stays BEFORE the clear-guard
-	// below, which is X4's shipped shape — the plan does not fix it, it keeps
-	// it enumerated.
+	// back on brings them all back. The note's own mark goes with the note it
+	// explained — with the feature off no surface draws a note, so a mark a
+	// note placed would be a tinted verse with nothing to say why (X4, defect
+	// 1 through the off switch). Ownership is RECORDED (mark.go), so this
+	// clears ONLY a mark hlNote placed: a search result or a link span on the
+	// same chapter is not the notes feature's to take down. turnNotesOff
+	// (notes_setting.go) clears at the moment of the switch; this is the same
+	// equality on every re-derive route, so no path to "off" can strand one.
 	if !notesFeatureOn(state) {
+		state.clearMarkFromNote()
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
@@ -643,16 +649,31 @@ func applyNoteForCurrentChapter(state *AppState) {
 	if n.Minimized {
 		return
 	}
-	// Never clobber a highlight that is already on this chapter for another
-	// reason — arriving by a search result, say. That highlight is what the
-	// reader just asked for; the note's is only a default. (This is the
-	// mirror-side twin of the plan's derived suppression: the plan answers
-	// zero Open there, and the mark stays whose it was.)
-	if _, here := state.markHere(); here && !state.mark.fromNote() {
+	// Never clobber a highlight that is on the page for another reason —
+	// arriving by a search result, say. That highlight is what the reader
+	// just asked for; the note's is only a default. This is the SAME
+	// predicate as the plan's derived suppression (notesSuppressed), on
+	// purpose: it used to ask markHere — a foreign mark on THIS chapter —
+	// which was the same thing until renumberMarkForVersion could carry a
+	// mark cleanly onto another chapter (the doxology under a version
+	// switch); a chapter-scoped guard then walked over the mark the reader
+	// was holding while the plan stood the notes down for it. One predicate,
+	// two consumers, no seam.
+	if notesSuppressed(state) {
 		return
 	}
 	if n.VerseLo > 0 {
-		state.setMark(hlNote, n.span())
+		// The span's numbers are in the READING translation's numbering —
+		// displayCopy just renumbered them — so the span carries the reading
+		// frame, not the note's filing. The filing rides on the note
+		// (StoredNote.VersionID says where it LIVES); the frame rides on the
+		// span (VerseSpan.VersionID says what numbers these ARE), and a
+		// version switch consults the frame (renumberMarkForVersion). Handing
+		// the filing to the frame is how a followed note's mark would claim
+		// numbers it does not have.
+		sp := n.span()
+		sp.VersionID = state.currentVersion().ID
+		state.setMark(hlNote, sp)
 	}
 }
 
