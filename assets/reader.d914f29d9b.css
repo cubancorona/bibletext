@@ -342,6 +342,18 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 }
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
+/* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's
+   payload cannot be rendered (a newer note format, or damage). Quiet and
+   attributed to nobody — no tail (nobody is speaking), no accent edge, no
+   button, no link. Same explicit resets as .note: it sits inside .text and
+   must read as neither scripture nor a person's message. */
+.notenotice{
+  margin:1.1rem 0; padding:.8rem 1rem; scroll-margin-top:1.2rem;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  color:var(--muted); font-family:var(--ui); font-size:.9rem; line-height:1.5;
+  letter-spacing:normal; text-align:left; text-indent:0;
+  font-feature-settings:normal;
+}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
