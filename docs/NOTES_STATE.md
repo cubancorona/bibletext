@@ -9,7 +9,20 @@
 > deleted, notes live as ID-carrying records in a line-framed `notes.store`
 > blob, and every verb addresses a `StoredNote.ID`. Store-shape passages below
 > that cite the old functions are history unless struck or annotated; the
-> incoherent-states table and the re-measure notes are current. Sections marked **[INTENDED]**
+> incoherent-states table and the re-measure notes are current. **S7 (the
+> chapter plan, 2026-08-18) has since made the model plural**: `buildChapterPlan`
+> (`notes_plan.go`) derives the whole SET — every note on the passage, the R4
+> unplaced group, the tints, the notice, one fingerprint — plus a session-only
+> `noteFocus` (unset / none / a NoteID) and the at-most-one-expanded cap as a
+> view rule (`planOpenLimit`, zero store residue). The
+> `ActiveNote`/`NoteMinimized`/`NoteVerseLo`/`NoteID` quadruple still exists
+> but is now a PROJECTION of the plan's display note, written by
+> `applyNoteForCurrentChapter` and `clearLiveNote` and nobody else; the
+> surfaces still read it, byte-identically to before, until S8 points them at
+> the plan and retires it. Suppression (a live mark not owned by a note) is
+> DERIVED and stands the notes down in the PLAN (zero Open) while writing
+> nothing; the S7 mirror deliberately ignores it so nothing visible changes.
+> Sections marked **[INTENDED]**
 > describe behaviour the owner has specified and the code does not have. Do not
 > read an **[INTENDED]** paragraph as a description of the app.
 >
@@ -527,8 +540,11 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
 - **N7 — One ruler.** Every verse number in `AppState` is in the numbering of the
   translation being read. *Violated by `X11`/`HL_FRAME`.* `MapVerse` is applied to
   the note and not to the highlight.
-- **N8 — At most one expanded** *(temporary, [INTENDED])*. Not representable
-  today; see the rework.
+- **N8 — At most one expanded** *(temporary)*. Representable and enforced
+  since S7: the PLAN caps `Open` at `planOpenLimit` (`notes_plan.go`), zero is
+  legal, and the cap writes nothing — the V-invariants in the enumeration hold
+  it (at most one Open; Open never a stored-Minimized note), and
+  `TestTheCapOpensOneAndLeavesZeroStoreResidue` pins the zero-residue half.
 
 ## Incoherent states
 
@@ -539,16 +555,17 @@ the probe produced it from the shipping code.
 |---|---|---|---|---|
 | ~~X1~~ | ~~Delete kills the wrong note~~ | **FIXED** `31bc97630` | 0 | — |
 | ~~X2~~ | ~~Hide is a silent no-op~~ | **FIXED** `31bc97630` | 0 | — |
-| **X12** | **Delete the arriving note, the note it covered takes its place** | **yes** | 8 | The message the reader binned is replaced by another, unannounced |
+| **X12** | **Delete the arriving note, the note it covered takes its place** | **yes** | 24 | The message the reader binned is replaced by another, unannounced |
 | ~~X3~~ | ~~Arriving note evicted by its own save~~ | **FIXED** S5 — no cap, no eviction | 0 | — |
-| **X4** | Notes-off orphans the highlight | **yes** | 19 + 1 | Defect 1, through the control whose job is to make notes stop |
+| **X4** | Notes-off orphans the highlight | **yes** | 55 + 1 | Defect 1, through the control whose job is to make notes stop |
 | ~~X5~~ | ~~Hide/Show asymmetry~~ | **FIXED** S5 — verbs address a NoteID | 0 | — |
-| **X6** | Delete substitutes a different note | **yes** | 8 | A stranger's message appears where the deleted one was |
-| **X7** | More than one note on a passage is invisible | **yes** | 64 | The only way to the second note is to delete the first |
+| **X6** | Delete substitutes a different note | **yes** | 32 | A stranger's message appears where the deleted one was |
+| **X7** | More than one note on a passage is invisible | **yes** | 224 | The only way to the second note is to delete the first |
 | **X8** | Bare link strips a note's highlight | **yes** | pinned separately | An expanded note pointing at nothing |
 | ~~X9~~ | ~~Chapter-level note leaves a ghost location~~ | **FIXED** S1 — unrepresentable | 0 | — |
 | ~~X10~~ | ~~Hide and Delete destroy a mark they do not own~~ | **FIXED** S1 | 0 | The search result the reader was holding vanishes when they tidy a note away |
 | **X11** | The highlight keeps the previous translation's numbering | **yes** | 3 | The wrong verse lit, or none, beside a note that WAS renumbered |
+| **X14** | **A session-focused followed note is swapped back for the default on navigation** | **yes** (since S7) | 12 | The message the reader deliberately opened is replaced by the exact-key note, unannounced |
 
 "Cells" is how many combinations of the enumerated variables reach it. `X7`'s 48
 and `X10`'s 28 are not 48 and 28 defects — they are one defect each, reachable
@@ -801,6 +818,30 @@ rulers.** Where the new chapter is shorter, nothing lights at all while
 switch the highlight is still `Romans 14:24`. Reached from all three foreign
 origins in the origin enumeration.
 
+### X14 — A session-focused followed note is swapped back for the default on navigation
+
+**New with S7, reachable only through the focus it added.** A chapter holds a
+note under the translation being read and another under a different one
+(placeBoth). The reader opens the followed note — Show, which sets
+`noteFocus` to its id — and then navigates away and back.
+
+**Why it is wrong.** Navigation resets focus to the default (every chapter
+arrival starts from the default rule), and the S7 display is still arity-1:
+only ONE note reaches the mirror, and the default choice is the exact-key
+note. So the message the reader deliberately opened is replaced by a different
+person's, unannounced — N3 by the display's arity, with no verb missing.
+
+**Not a regression.** Before S7 this state did not exist because a followed
+note could not be OPENED while an exact-key note stood in front of it at all
+(that is `X7`'s masking). Focus makes the reader's choice expressible; the
+arity-1 display is what cannot honour it across a navigation. S8's set display
+retires it: a focus reset there changes which note is EXPANDED, never which
+notes are on screen.
+
+**Evidence.** Enumeration at S7: 12 cells — placeBoth × focus=followed ×
+verb ∈ {none, hide, show} × collapsed × foreignHL (delete's cells are `X6`'s,
+same mechanism through the destructive verb).
+
 ## REWORK — the straight answer
 
 **Yes.** Not on taste, and not because the code is untidy — it is unusually well
@@ -1021,20 +1062,43 @@ Three things are **not** fixed by either and must not be assumed away:
 `openSearchResultRange`, `applyLoadedVersion` and `addRecentChapter`.
 
 - **The notes space** — feature on/off × placement (none / own / followed / both)
-  × collapsed × a foreign highlight already present × a note-bearing link
-  arriving × verb (none / Hide / Show / Delete / turn notes off) = **320 states**,
-  of which 140 are skipped because the surface offers no such verb there (the
+  × collapsed × a foreign highlight already present × **session focus (unset /
+  none / the exact-key note / a followed note — the S7 axis)** × a note-bearing
+  link arriving × verb (none / Hide / Show / Delete / turn notes off) =
+  **1,280 states**, of which 764 are skipped because the surface offers no such
+  verb there or the focus names a note the world does not contain (the
   banner's Hide and Delete exist only when a note is on screen,
   `notes_banner.go:38`; the iOS pair is gated on `gHasNote`,
   `reading_ios.go:2005-2011`; and a note-bearing link with notes off never reaches
-  `applyShareTarget` at all, `share_link_open.go:62-65`). Asserts N1–N6.
+  `applyShareTarget` at all, `share_link_open.go:62-65`). Asserts N1–N6, and
+  since S7 the V-invariants over the PLAN in every cell: at most one `Open`;
+  `Open` never a stored-Minimized note; suppression means zero `Open` with the
+  notes still present; feature off means an empty PLAN, not merely an empty
+  bubble.
 - **The highlight-origin space** — origin (nothing / note / search / verse-of-day
   / link span) × event (navigate / delete the note / turn notes off / switch
   translation) = **20 states**. Asserts N1 and N7, on Romans 14 because that is
   where the numbering actually diverges.
 
-Together they find **103 violations**, and every one is attributed to a named
-defect: `X4`×20, `X6`×8, `X7`×64, `X11`×3, `X12`×8.
+Together they find **351 violations**, and every one is attributed to a named
+defect: `X4`×56, `X6`×32, `X7`×224, `X11`×3, `X12`×24, `X14`×12.
+
+> **Re-measured on 2026-08-18, after S7 (the chapter plan).** Fourth pass:
+> 351, and the growth is the AXIS, not new incoherence. The focus axis
+> quadruples the walked space (320 → 1,280 states), so every defect whose
+> cells are focus-independent scaled with it — `X7` 64→224, `X6` 8→32,
+> `X12` 8→24, `X4` (notes-space) 19→55 — while the whole pre-S7 sub-space
+> (focus=unset) reproduces the third pass EXACTLY: same 99+4 violations, same
+> attribution, which is the measured form of "S7 changed no pixel". The V
+> invariants over the plan hold in all 1,280 cells with zero violations. ONE
+> new defect is pinned: `X14`×12 — a session-focused FOLLOWED note (the reader
+> pressed Show on it) is swapped back for the exact-key default by the next
+> navigation, because navigation resets focus and the arity-1 display can draw
+> only one note. It is the display's arity debt made newly REACHABLE by focus
+> existing at all (before S7 a followed note could not be opened while an
+> exact-key note stood in front of it), not a regression of any fixed defect;
+> S8's set display retires it — a focus reset there changes which note is
+> EXPANDED, never which notes are on screen.
 
 > **Re-measured again on 2026-08-18, after S5 (the scrapbook store).** Third
 > pass: 103. `X5`×4 is struck — Hide, Show and Delete all address the live

@@ -506,8 +506,14 @@ func migrateLegacyNotes(p prefStore, s *noteStore) {
 
 // --- the display derive: what the reading pane shows ------------------------
 
-// noteForChapter picks the ONE note the reading pane draws for a passage —
-// the derive stays arity-1 for display until the plural render plan (S7).
+// noteForChapter picks the ONE note the arity-1 display draws for a passage.
+//
+// SINCE S7 THIS IS THE DEFAULT SELECTION RULE ONLY: the derive is
+// buildChapterPlan (notes_plan.go), which answers with the whole SET and calls
+// this for the shipped display default so S7 renders byte-identically to
+// before it. Its selection — native first, newest first, a collapsed native
+// note masking an expanded followed one — is the enumerated X7/COLLAPSED_MASK
+// debt, kept deliberately until S8 draws the set; S8 deletes this function.
 //
 // Placement comes from resolveNoteAnchor (notes_anchor.go), not from an inline
 // MapVerse probe: the anchor resolves to a SET of runs plus a REASON, so a
@@ -591,16 +597,23 @@ func noteForChapter(p prefStore, versionID, book string, chapter int, bible *Bib
 
 // --- the live view of all this, for the panes -------------------------------
 
-// applyNoteForCurrentChapter loads whatever note belongs to where the reader
-// is now and mirrors it into AppState — text, minimized, verse, and the ID the
-// verbs address. Called on every navigation.
+// applyNoteForCurrentChapter derives the chapter PLAN (notes_plan.go) and
+// projects its display note into the AppState mirror — text, minimized, verse,
+// and the ID the verbs address. Called on every navigation.
+//
+// THE MIRROR IS A PROJECTION NOW (S7). The model is plural — buildChapterPlan
+// answers with every note on the passage — and this function truncates it to
+// the one note the shipped surfaces draw, byte-identically to the pre-plan
+// derive. S8 points the surfaces at the plan itself and retires the mirror.
 func applyNoteForCurrentChapter(state *AppState) {
 	if state == nil {
 		return
 	}
 	// Off means off, but it does NOT mean gone: the stored notes stay where
 	// they are unless the reader asked for them to be deleted, so switching
-	// back on brings them all back.
+	// back on brings them all back. The return stays BEFORE the clear-guard
+	// below, which is X4's shipped shape — the plan does not fix it, it keeps
+	// it enumerated.
 	if !notesFeatureOn(state) {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
@@ -608,12 +621,11 @@ func applyNoteForCurrentChapter(state *AppState) {
 		state.NoteID = 0
 		return
 	}
-	n, ok := noteForChapter(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter, state.Bible)
-	if !ok {
-		// The note goes, and so does the highlight the note put there —
-		// ownership is RECORDED (mark.go), so this is an equality, and a
-		// highlight that arrived for any OTHER reason is not the note's to
-		// clear.
+	plan := buildChapterPlan(state, appPrefs(), state.Bible)
+	if plan.display < 0 {
+		// Nothing to draw. The note's own highlight goes with it — ownership
+		// is RECORDED (mark.go), so this is an equality, and a highlight that
+		// arrived for any OTHER reason is not the note's to clear.
 		state.clearMarkFromNote()
 		state.ActiveNote = ""
 		state.NoteMinimized = false
@@ -621,6 +633,9 @@ func applyNoteForCurrentChapter(state *AppState) {
 		state.NoteID = 0
 		return
 	}
+	// The display note, renumbered into the reading translation exactly as
+	// the pre-plan derive renumbered it.
+	n := displayCopy(plan.Notes[plan.display], state.currentVersion().ID, state.CurrentChapter)
 	state.ActiveNote = n.Text
 	state.NoteMinimized = n.Minimized
 	state.NoteVerseLo = n.VerseLo
@@ -630,7 +645,9 @@ func applyNoteForCurrentChapter(state *AppState) {
 	}
 	// Never clobber a highlight that is already on this chapter for another
 	// reason — arriving by a search result, say. That highlight is what the
-	// reader just asked for; the note's is only a default.
+	// reader just asked for; the note's is only a default. (This is the
+	// mirror-side twin of the plan's derived suppression: the plan answers
+	// zero Open there, and the mark stays whose it was.)
 	if _, here := state.markHere(); here && !state.mark.fromNote() {
 		return
 	}
@@ -717,7 +734,12 @@ func hideCurrentNote(state *AppState) {
 		return
 	}
 	state.NoteMinimized = true
+	// The ONLY store write any focus change may make: an explicit Hide is the
+	// one durable collapse, and Minimized means exactly "this reader pressed
+	// minimize on this note". Focus falls to NONE, never to another note —
+	// nothing may take the closed note's place under the reader's eyes (N3).
 	setNoteMinimizedByID(appPrefs(), state.NoteID, true)
+	state.focusNone()
 	// Only the note's own mark. Hiding a note used to put out whatever was
 	// lit, so a reader who arrived on a search result and then collapsed a
 	// note on the same chapter lost the result they had come for (X10).
@@ -731,9 +753,10 @@ func restoreCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	setNoteMinimizedByID(appPrefs(), state.NoteID, false)
 	if state.NoteID != 0 {
-		// Re-derive: the store is now un-minimized, so the ordinary derive
-		// refreshes the mirror and re-raises the note's own mark (without
-		// clobbering a foreign one).
+		// Show is the session act of opening THIS note: focus names it, and
+		// the re-derive refreshes the mirror from the plan and re-raises the
+		// note's own mark (without clobbering a foreign one).
+		state.focusNote(state.NoteID)
 		applyNoteForCurrentChapter(state)
 		return
 	}
@@ -759,6 +782,11 @@ func dropCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
 	state.NoteID = 0
+	// Deleting closed the open note; focus falls to NONE, not to another
+	// note. The pane stays blank until the next navigation re-derives — the
+	// substitution that follows (X6/X12) is the arity-1 display's remaining
+	// debt, enumerated, and S8's set display is what retires it.
+	state.focusNone()
 	// As in hideCurrentNote: the note's mark goes, a search result's or a
 	// shared link's stays.
 	state.clearMarkFromNote()

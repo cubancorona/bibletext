@@ -93,6 +93,13 @@ type AppState struct {
 	// it (addRecentChapter). See docs/NOTE_WIRE_FORMAT.md rule 5.
 	NoteNotice string
 
+	// noteFocus is which note is expanded THIS SESSION (notes_plan.go):
+	// unset (default rule) / none (the reader closed the open note) / a
+	// NoteID (the reader opened this one). Session-only, never stored — the
+	// at-most-one-expanded cap is a view rule with zero store residue, and
+	// suppression by a foreign mark is derived, so neither ever writes.
+	noteFocus noteFocus
+
 	RecentChapters []ChapterVisit
 
 	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,
@@ -516,6 +523,13 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 	// it expires. (applyShareTarget sets it AFTER calling us, so the arrival's
 	// own pass through here does not eat it.)
 	state.NoteNotice = ""
+	// Navigation resets focus to the default: every chapter arrival starts
+	// from the default rule, and an explicit Show or Hide lasts until the
+	// reader moves. (A version SWITCH deliberately does not come through here
+	// and keeps focus — hard case 12: the note the reader opened survives the
+	// switch.) applyShareTarget sets the arriving note's focus AFTER calling
+	// us, so an arrival's own pass does not eat it.
+	state.resetNoteFocus()
 	// Every book/chapter navigation funnels through here, so this is also the
 	// single place to pick up whatever note belongs to where the reader has just
 	// landed — that is what makes a note reappear on a later visit rather than
