@@ -1,4 +1,4 @@
-# App Store submission checklist — BibleText 1.1.8
+# App Store submission checklist — BibleText 1.2.0
 
 Prepared 1 August 2026 for 1.1.6 (build 124); refreshed 8 August for 1.1.7
 (build 127); refreshed 12 August for the 1.1.8 cycle (shared notes, the NKJV via
@@ -16,8 +16,8 @@ build can be attached.
 | App | BibleText |
 | Apple app ID | `6784567351` |
 | Bundle ID | `uk.co.bibletext` |
-| Version | `1.1.8` |
-| Build | `157` |
+| Version | `1.2.0` |
+| Build | `161` |
 | Platform | Universal iPhone and iPad |
 | Minimum OS | iOS 13.0 |
 | Price | Free |
@@ -25,12 +25,12 @@ build can be attached.
 | Secondary category | Education |
 | Copyright | `2026 Willow Noonan` |
 
-The public App Store version at preparation time is 1.1.7 (build 127). Do not change the
+The public App Store version at preparation time is 1.1.8 (build 161 of the 1.1.8 train, released 18 Aug 2026 — submitted overnight by an agent session from the 16 Aug tree; 1.2.0 is the quality fast-follow carrying the scrapbook store, the note selector, the positional citations and the day's fixes). Do not change the
 bundle ID or remove iPad support from this update.
 
 ## Locally verified release inputs
 
-- `cmd/mobile/FyneApp.toml` is the source of version 1.1.8/build 157.
+- `cmd/mobile/FyneApp.toml` is the source of version 1.2.0/build 161.
 - `scripts/release-ios.sh` derives the marketing version from that file, keeps
   exact copies of locally edited build files, builds arm64, creates an App Store
   archive, and does not upload unless `BIBLETEXT_UPLOAD=1` is explicitly set.
@@ -56,10 +56,10 @@ go vet ./...
 ./scripts/release-ios.sh
 ```
 
-The last command must finish with `build/BibleText.ipa is ready (version 1.1.8,
-build 157)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
+The last command must finish with `build/BibleText.ipa is ready (version 1.2.0,
+build 161)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
 
-Run it as `BIBLETEXT_SHORT_VERSION=1.1.8 ./scripts/release-ios.sh` — the script's
+Run it as `BIBLETEXT_SHORT_VERSION=1.2.0 ./scripts/release-ios.sh` — the script's
 own default is "1.0", and the marketing version must match the ASC record.
 
 ## Store metadata prepared locally
