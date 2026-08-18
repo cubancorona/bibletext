@@ -197,6 +197,29 @@ func devAutoNotesS8(state *AppState) {
 	}
 	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
 	switch scenario {
+	case "linkscroll":
+		// The owner's Links-tab flow, verbatim in state (the compact tab bar
+		// is CurrentTab + rebuildWindow — no widget to tap): front the Links
+		// tab, open a case on ANOTHER chapter, return to Links, open the
+		// noteless John 3 v16 case (the "Unknown fragment keys" URL), then
+		// repeat it for the same-chapter arrival. The report this reproduces:
+		// the wash lights v16 but the view does not move to it. Run with
+		// BT_SCROLL_DEBUG=1 and screenshot at 8s, 13s and 19s.
+		linksTab := func() { state.CurrentTab = 3; rebuildWindow(state) }
+		tapCase := func(url string) {
+			// The row button's body (dev_links_on.go inApp), verbatim.
+			HandleShareLink(state, url)
+			state.CurrentTab = 0
+			leaveSearchForRead(state, 0)
+			rebuildWindow(state)
+		}
+		noteless := "https://bibletext.co.uk/bsb/john/3/#v16&zz=nonsense&n2=whatever"
+		at(2*time.Second, linksTab)
+		at(4*time.Second, func() { tapCase(ShareLinkURL("bsb", "Ruth", 1, 16, 16)) })
+		at(9*time.Second, linksTab)
+		at(11*time.Second, func() { tapCase(noteless) })
+		at(15*time.Second, linksTab)
+		at(17*time.Second, func() { tapCase(noteless) })
 	case "s10ranges":
 		// Three notes with DIFFERENT verse ranges inside ONE paragraph — the
 		// WEB files John 3:14-17 as a single paragraph, and two of the ranges
