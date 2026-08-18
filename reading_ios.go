@@ -1672,11 +1672,20 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
 // there is none to land on. Factored out of bibleTextScrollReadingTV so the
 // reposition can be issued WITHOUT a re-import (bibleTextIOSScrollToHighlight).
 static BOOL btIOSScrollToHighlight(void) {
-    if (gReadingTV == nil) return NO;
+    if (gReadingTV == nil) {
+        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] native: no TV\n");
+        return NO;
+    }
     NSUInteger len = gReadingTV.textStorage.length;
     if (gReadingHighlightRange.location == NSNotFound ||
         gReadingHighlightRange.length == 0 ||
-        NSMaxRange(gReadingHighlightRange) > len) return NO;
+        NSMaxRange(gReadingHighlightRange) > len) {
+        if (getenv("BT_SCROLL_DEBUG"))
+            fprintf(stderr, "[scroll] native: NO RANGE (loc=%lu len=%lu storage=%lu)\n",
+                (unsigned long)gReadingHighlightRange.location,
+                (unsigned long)gReadingHighlightRange.length, (unsigned long)len);
+        return NO;
+    }
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
                                 actualCharacterRange:NULL];
@@ -1693,6 +1702,10 @@ static BOOL btIOSScrollToHighlight(void) {
     CGFloat noteY = btIOSNoteTopY();
     if (noteY >= 0 && noteY - 12 < target) target = noteY - 12;
     CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
+    if (getenv("BT_SCROLL_DEBUG"))
+        fprintf(stderr, "[scroll] native: target=%.0f maxY=%.0f content=%.0f bounds=%.0f hidden=%d suppressed=%d\n",
+            target, maxY, gReadingTV.contentSize.height, gReadingTV.bounds.size.height,
+            gReadingTV.hidden, gReadingSuppressed);
     if (target > maxY) target = maxY;
     if (target < 0) target = 0;
     gReadingTV.contentOffset = CGPointMake(0, target);
@@ -1744,7 +1757,11 @@ static void bibleTextScrollReadingTV(void) {
             return;
         }
     }
-    if (btIOSScrollToHighlight()) return;
+    if (btIOSScrollToHighlight()) {
+        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] cadence: landed on highlight\n");
+        return;
+    }
+    if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] cadence: pinned to TOP\n");
     gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
 }
 
@@ -2148,6 +2165,23 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
             (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore)) {
             [gReadingTV layoutIfNeeded];
             bibleTextScrollReadingTV();
+            // THE WIDTH THAT JUST LANDED MAY ITSELF BE TRANSIENT. A window
+            // rebuild (the tab return after a Links-tab arrival) lays the pane
+            // out in steps, and a re-assert computed against a mid-rebuild
+            // width parks the view at that width's offset — measured live: the
+            // same highlight resolved to target=739 against the transient
+            // layout and 1155 against the settled one, and whichever frame
+            // push fired LAST won. The setText path already schedules deferred
+            // re-asserts for exactly this reason; give the frame path the same
+            // settled last word (same guards: only while a target is armed,
+            // never against the reader's own scrolling).
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if (gReadingTV == nil || gReadingTV.dragging || gReadingTV.decelerating) return;
+                if (gReadingHighlightRange.location == NSNotFound && !gReadingHasRestore) return;
+                [gReadingTV layoutIfNeeded];
+                bibleTextScrollReadingTV();
+            });
         }
     });
 }
@@ -2368,6 +2402,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"os"
 	"time"
 	"unsafe"
 
@@ -2737,6 +2772,11 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// needs no import (bibleTextIOSScrollToHighlight), and applyNativeTint has just
 	// recomputed the range it uses, so the two are issued side by side: the fast
 	// paint AND the placement.
+	if os.Getenv("BT_SCROLL_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[scroll] push: bc=%s same=%v bodySame=%v restore=%v force=%v tab=%d\n",
+			bc, bc == lastPushedBookChapter, body == lastPushedBodyFP,
+			state.restore != nil, state.forceReposition, state.CurrentTab)
+	}
 	if state.restore == nil && body == lastPushedBodyFP {
 		if tintFP != lastPushedTintFP {
 			lastPushedTintFP = tintFP
@@ -2744,6 +2784,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		}
 		if state.forceReposition {
 			state.forceReposition = false
+			if os.Getenv("BT_SCROLL_DEBUG") != "" {
+				fmt.Fprintln(os.Stderr, "[scroll] push: FAST path issuing ScrollToHighlight")
+			}
 			C.bibleTextIOSScrollToHighlight()
 		}
 		return
@@ -2756,6 +2799,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	sameChapter := C.int(0)
 	if bc == lastPushedBookChapter {
 		sameChapter = 1
+	}
+	if os.Getenv("BT_SCROLL_DEBUG") != "" && state.forceReposition {
+		fmt.Fprintln(os.Stderr, "[scroll] push: SLOW path clearing forceReposition (import cadence owns placement)")
 	}
 	state.forceReposition = false
 	lastPushedBodyFP = body
