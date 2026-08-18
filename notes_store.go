@@ -812,14 +812,21 @@ func dropCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
 	state.NoteID = 0
-	// Deleting closed the open note; focus falls to NONE, not to another
-	// note. The pane stays blank until the next navigation re-derives — the
-	// substitution that follows (X6/X12) is the arity-1 display's remaining
-	// debt, enumerated, and S8's set display is what retires it.
+	// Focus falls to NONE — deleting is closing, not choosing a neighbour.
 	state.focusNone()
 	// As in hideCurrentNote: the note's mark goes, a search result's or a
 	// shared link's stays.
 	state.clearMarkFromNote()
+	// And the REST OF THE SET comes back. This line is the retirement of a
+	// debt the old comment here recorded: pre-S8 the pane stayed blank until
+	// the next navigation re-derived, which at arity 1 merely looked calm —
+	// and at arity 3 looked like the delete took EVERY note with it (field
+	// report: "all the note pills disappear... until I navigate away and
+	// come back"). The projection re-derives from the store the delete just
+	// wrote: the plan's remaining notes surface with their honest count, or
+	// nothing where nothing remains — the same one source of truth every
+	// other verb ends on.
+	applyNoteForCurrentChapter(state)
 }
 
 // applyNoteOnResume surfaces a stored note for the chapter the app is

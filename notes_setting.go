@@ -54,21 +54,36 @@ func setNotesEnabled(on bool) {
 
 // turnNotesOff is THE way the feature goes off, whoever asks — the Settings
 // switch's nothing-saved short-circuit, its "Keep them" answer, the dev
-// toggle. Beside flipping the preference it puts out the mark the live note
-// owns, at the moment notes go off: with the feature off no surface draws a
-// note, so a mark a note placed would be a tinted verse with nothing left to
-// explain it — defect 1 reached through the one control whose whole job is to
-// make notes stop (X4). ONLY the note's mark: ownership is recorded
-// (mark.go), and a search result or a link span on the same chapter is not
-// the notes feature's to take down. The off-branch of
-// applyNoteForCurrentChapter applies the same equality on every later
-// re-derive, so a route that flips the preference some other way still cannot
-// strand one past its next derive.
+// toggle. Beside flipping the preference it ends on the projection, at the
+// moment notes go off: the off-branch of applyNoteForCurrentChapter puts out
+// the mark the live note owns (ONLY the note's mark — ownership is recorded,
+// mark.go, and a search result or a link span on the same chapter is not the
+// notes feature's to take down; X4) AND clears the mirror the panes render
+// from. Clearing the mark alone left the mirror standing, and the Apple
+// sticker push gates on the mirror, not the feature (appleStickerPush): with
+// a note open, Settings → off → close left the sticker on the page, expanded,
+// verbs and all — tint gone — until the next navigation ran the off-branch.
+// The same off-branch applies on every later re-derive, so a route that flips
+// the preference some other way still cannot strand either past its next
+// derive.
 func turnNotesOff(state *AppState) {
 	setNotesEnabled(false)
-	if state != nil {
-		state.clearMarkFromNote()
-	}
+	applyNoteForCurrentChapter(state)
+}
+
+// turnNotesOn is the way back ON — the Settings switch's on-branch and the dev
+// toggle. Beside flipping the preference it re-derives the projection at the
+// moment of the switch: if any navigation happened while notes were off, the
+// off-branch derive cleared the mirror, so without this a chapter's stored
+// note stayed invisible on the Apple panes (the sticker push returns early on
+// an empty mirror) and unwashed on the others (only the projection re-raises
+// hlNote) until the next navigation. Same convention as every healthy verb:
+// write the preference, end on the projection; the caller triggers the repaint
+// it owns. (offerNoteLinkChoice's "turn notes back on" goes through
+// applyShareTarget instead, whose own tail is this same projection.)
+func turnNotesOn(state *AppState) {
+	setNotesEnabled(true)
+	applyNoteForCurrentChapter(state)
 }
 
 // deleteAllNotes throws away every stored note — received and sent, it is one

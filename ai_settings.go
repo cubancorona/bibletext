@@ -64,6 +64,13 @@ func showAISettings(state *AppState) {
 	// one, leaves aiEnabled unchanged and used to leave that stale panel up
 	// until the reader navigated away and back (verification).
 	aiKeyAtOpen := hasAIKey(state)
+	// The notes switch changes surface EXISTENCE the same way the assistant
+	// choice does: the sidebar/Search-tab mode row gates its notes bubble on
+	// notesFeatureOn at BUILD time, and searchModeOf validates a leftover Notes
+	// mode against the switch — so flipping it needs the same close-out rebuild
+	// the AI radio gets, or the dead "Search your notes…" field and the lit
+	// bubble sit over keyword results until a tab switch happens to rebuild.
+	notesOnAtOpen := notesFeatureOn(state)
 	// If a full rebuild happens while the sheet is open (theme-variant flip,
 	// tablet rotation), the new window was already built from live prefs —
 	// done()'s own delta rebuild/refresh would be a duplicate window swap.
@@ -441,11 +448,23 @@ func showAISettings(state *AppState) {
 	var applyAssistant func()
 	active := widget.NewRadioGroup(names, func(name string) {
 		if name == noAssistantName {
+			hadFind := state.aiSearchActive
 			store.setAIEnabled(false) // auto-save; keys are kept
 			// Drop any live Find context (an open results pane, an in-flight
 			// query) so no stale AI state — IsSearching, the back-to-results
 			// label, a late error — survives the switch to "None".
 			clearAISearchContext(state)
+			// The teardown just emptied the results context that owned the
+			// reading pane, so it repaints the pane ITSELF rather than leaning
+			// on done()'s open-vs-close delta — which nets to zero on a
+			// None→provider round trip inside one sheet session and repaints
+			// nothing, leaving the dead Find results (or, on the native panes,
+			// the reading text over the still-mounted results host) on screen
+			// until the next navigation. A mid-flight verb that mutates
+			// projection-driving state carries its own repaint.
+			if hadFind {
+				state.refresh()
+			}
 		} else if id, ok := nameToID[name]; ok {
 			store.setAIEnabled(true)
 			store.setActiveProvider(id) // auto-save
@@ -477,7 +496,8 @@ func showAISettings(state *AppState) {
 		if windowRebuildGen != rebuildGenAtOpen {
 			return // a rebuild drained us; it already built from live prefs
 		}
-		if aiSurfacesChanged(aiOnAtOpen, aiKeyAtOpen, store.aiEnabled(), hasAIKey(state)) {
+		if aiSurfacesChanged(aiOnAtOpen, aiKeyAtOpen, store.aiEnabled(), hasAIKey(state)) ||
+			notesFeatureOn(state) != notesOnAtOpen {
 			rebuildWindow(state)
 		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
 			state.refreshReadingOnly() // red-letter / text size changed → re-render the verses
@@ -502,7 +522,12 @@ func showAISettings(state *AppState) {
 	notes.SetChecked(notesEnabled())
 	notes.OnChanged = func(on bool) {
 		if on {
-			setNotesEnabled(true)
+			// turnNotesOn, not a bare setNotesEnabled: the off-route's derive
+			// cleared the mirror, so switching back on must re-project the
+			// chapter's stored note NOW — or the refresh pushes an empty
+			// mirror and the note stays invisible (Apple) or unwashed (the
+			// banner platforms) until the next navigation.
+			turnNotesOn(state)
 			state.refresh()
 			return
 		}

@@ -358,9 +358,10 @@ func deferOrRebuild(state *AppState) {
 // consumeDeferredFullRebuild runs the window rebuild a background data swap
 // deferred because the reader was inside a sheet (applyFullDownload). Called
 // from the overlay-restore closures — the moment the last sheet leaves the
-// canvas — and from refresh() as the catch-all for the platforms with no
-// native overlay dance (Windows/Linux, whose sheets have no restore closure
-// to run). Reports whether it rebuilt, so refresh() can skip its own repaint.
+// canvas; on Windows/Linux that closure is the stand-in
+// installSheetCloseConsume assigns, whose whole body is this call — and from
+// refresh() as the catch-all for any close path that runs no restore closure.
+// Reports whether it rebuilt, so refresh() can skip its own repaint.
 //
 // The flag itself is CLEARED inside rebuildWindow, not here: any full rebuild
 // satisfies a deferred one (a version switch, a theme flip), and clearing at
@@ -376,6 +377,43 @@ func consumeDeferredFullRebuild(state *AppState) bool {
 	}
 	rebuildWindow(state)
 	return true
+}
+
+// sheetConsumeClosure answers whether THIS platform needs the stand-in
+// overlay-restore closure below. A var-function seam (the nativeNoteSticker
+// arrangement): the host for the tests is darwin, where the constant is false,
+// and the closure still has to be provable there.
+var sheetConsumeClosure = func() bool { return sheetConsumeClosureOnPlatform }
+
+// installSheetCloseConsume gives the platforms WITHOUT a native reading overlay
+// (Windows/Linux) the sheet-close consume point the native platforms get from
+// their overlay-restore closures. Every popup close path already calls
+// state.showReadingOverlay when it is set; on these platforms there is no
+// overlay to restore, so the closure's only duty is consuming a rebuild that a
+// theme flip or a background data swap deferred while the sheet was open.
+// Without it the deferral had no on-close consume here at all: a REAL
+// light/dark flip under an open sheet parked fullRebuildDeferred and the WHOLE
+// window kept the stale palette after the sheet closed, until the next
+// navigation's refresh() happened to catch it — the very half-dark-window
+// class deferOrRebuild exists to fix, sitting as the entire page instead of
+// one sheet. consumeDeferredFullRebuild itself declines while any overlay
+// still owns the canvas, so the guarded and unguarded restore callers are both
+// safe to hand this closure.
+// sheetConsumeInstallGen counts installer INVOCATIONS (not installs): on the
+// native platforms the gate stands the installer down, so the only host-
+// observable truth about the WIRING — that desktop CreateMainUI still calls it
+// — is that this moved. The refuters proved the wiring was otherwise unpinned:
+// deleting the ui_desktop.go call left the whole suite green, and with it the
+// Windows/Linux stale-palette-after-sheet-close fix could silently vanish in
+// any CreateMainUI refactor. UI-goroutine only, like windowRebuildGen.
+var sheetConsumeInstallGen uint64
+
+func installSheetCloseConsume(state *AppState) {
+	sheetConsumeInstallGen++
+	if state == nil || !sheetConsumeClosure() {
+		return
+	}
+	state.showReadingOverlay = func() { consumeDeferredFullRebuild(state) }
 }
 
 // consumeSeedParkedLink honours a link that was parked because the app was still

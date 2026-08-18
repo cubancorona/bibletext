@@ -164,6 +164,19 @@ run_mutation M7 \
   "one open note; every other note on the passage vanishes without trace" \
   "$(sub_py notes_banner.go '	rows.Add(chips)' '	_ = chips // MUTATION: built, never shown')"
 
+# ── M8 ────────────────────────────────────────────────────────────────────────
+# The verb→screen class: a verb mutates the store and STOPS — no ending
+# projection, so the visible pane disagrees with the store until navigation
+# re-derives. This is the dropCurrentNote verification ("all the note pills
+# disappear... until I navigate away and come back") re-created mechanically:
+# the delete verb keeps its store write and its focus/mark bookkeeping and
+# loses only its last line, the shared projection every healthy verb ends on.
+run_mutation M8 \
+  "the delete verb writes the store but skips the ending projection" \
+  "deleting one of three notes blanks every note surface until the reader navigates away and back" \
+  "$(sub_py notes_store.go '	// other verb ends on.
+	applyNoteForCurrentChapter(state)' '	// other verb ends on. MUTATION: the ending projection call is gone.')"
+
 echo
 bold "$PASS caught, $FAIL survived"
 if [ "$FAIL" -ne 0 ]; then

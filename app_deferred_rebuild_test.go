@@ -145,9 +145,64 @@ func TestAnyFullRebuildSatisfiesTheDeferredOne(t *testing.T) {
 	}
 }
 
-// The Windows/Linux catch-all: those sheets have no overlay-restore closure
-// (state.showReadingOverlay is nil — there is no native overlay to restore),
-// so the first navigation's refresh() upgrades itself to the deferred rebuild.
+// The Windows/Linux sheet-close consume point: installSheetCloseConsume hands
+// those platforms a stand-in overlay-restore closure whose whole duty is the
+// consume, so a theme flip (the whole palette!) deferred under an open sheet
+// repaints the moment the sheet closes — not at whenever the next navigation
+// happens to run refresh(). The host is darwin, so the platform seam is
+// overridden to prove the closure.
+func TestSheetCloseConsumeStandInOnFynePanes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	state := deferredTestState(t, app)
+
+	orig := sheetConsumeClosure
+	sheetConsumeClosure = func() bool { return true }
+	defer func() { sheetConsumeClosure = orig }()
+
+	state.showReadingOverlay = nil // the Windows/Linux fact: no native overlay
+	installSheetCloseConsume(state)
+	if state.showReadingOverlay == nil {
+		t.Fatal("the stand-in closure must be installed where no native overlay exists")
+	}
+
+	// A real light/dark flip lands while the reader is inside a sheet…
+	pop := widget.NewModalPopUp(widget.NewLabel("settings stand-in"), state.window.Canvas())
+	pop.Show()
+	genBefore := windowRebuildGen
+	deferOrRebuild(state)
+	if windowRebuildGen != genBefore || !state.fullRebuildDeferred {
+		t.Fatal("precondition: the flip must defer under the sheet")
+	}
+	// …a restore that fires while a sheet still owns the canvas declines
+	// (the guarded close paths call it exactly so)…
+	state.showReadingOverlay()
+	if windowRebuildGen != genBefore {
+		t.Fatal("a sheet still owns the canvas: the stand-in must decline")
+	}
+	// …and the sheet's close is the consume.
+	pop.Hide()
+	state.showReadingOverlay()
+	if windowRebuildGen != genBefore+1 {
+		t.Fatalf("sheet closed: the deferred palette repaint must run NOW, got %d rebuilds",
+			windowRebuildGen-genBefore)
+	}
+	if state.fullRebuildDeferred {
+		t.Error("consumed: the flag must be down")
+	}
+
+	// On the native platforms the installer stands aside — their builders own
+	// the real closure, and a generic one must never shadow it.
+	sheetConsumeClosure = func() bool { return false }
+	state.showReadingOverlay = nil
+	installSheetCloseConsume(state)
+	if state.showReadingOverlay != nil {
+		t.Error("native platforms: installSheetCloseConsume must install nothing")
+	}
+}
+
+// The refresh() catch-all remains beneath the consume points above: any close
+// path that runs no restore closure still upgrades the first navigation.
 func TestRefreshConsumesTheDeferredRebuild(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -266,5 +321,29 @@ func TestDeferredRebuildCarriesTheSeedParkedLink(t *testing.T) {
 	}
 	if state.pendingLink != nil {
 		t.Error("the deferred rebuild must honour the parked link exactly as the immediate one does")
+	}
+}
+
+// The WIRING pin the refuters demanded: deleting installSheetCloseConsume's
+// call from desktop CreateMainUI left the whole suite green, because the
+// existing test calls the installer directly — proving the function, never the
+// app. On this darwin host the native builder overwrites the closure later in
+// the same build, so the only observable wiring truth is the installer's
+// invocation counter moving during CreateMainUI.
+func TestDesktopBuildWiresTheSheetCloseConsume(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	state := sampleState()
+	win := app.NewWindow("wiring")
+	t.Cleanup(win.Close)
+	state.app = app
+	state.window = win
+
+	genBefore := sheetConsumeInstallGen
+	win.SetContent(CreateMainUI(app, state, win))
+	if sheetConsumeInstallGen == genBefore {
+		t.Fatal("CreateMainUI no longer calls installSheetCloseConsume — the " +
+			"Windows/Linux sheet-close consume point is unwired, and the " +
+			"stale-palette-after-sheet-close bug it exists for is back there")
 	}
 }

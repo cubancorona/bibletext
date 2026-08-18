@@ -149,11 +149,13 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	refreshStatus()
 
 	notesSwitch := widget.NewCheck("Shared notes on", func(b bool) {
+		// The same verbs Settings uses, both directions: each ends on the
+		// projection, so the mirror the Apple sticker pushes from is right
+		// before the tab-switch rebuild repaints it — a dev route to the
+		// switch is still a route (X4, and the stale-sticker twin).
 		if b {
-			setNotesEnabled(true)
+			turnNotesOn(state)
 		} else {
-			// The same verb Settings uses: off also puts out the mark the
-			// live note owns (X4) — a dev route to "off" is still a route.
 			turnNotesOff(state)
 		}
 		refreshStatus()

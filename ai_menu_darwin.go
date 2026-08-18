@@ -160,10 +160,14 @@ func bibleTextNoteDeleted() {
 
 // bibleTextHighlightCleared fires when the reader single-taps a highlighted verse
 // and picks "Clear highlight" from the inline native menu. It drops the highlight
-// and re-renders so the .hl background wash disappears. Runs on the native UI
-// thread, so it hops to Fyne's UI goroutine before touching state. refreshReadingOnly
-// (not refresh): the sidebar doesn't reflect highlight state, so this is the
-// narrowest correct refresh. Idempotent — a double-tap's second call is a no-op.
+// and re-renders so the .hl background wash disappears — through
+// clearHighlightAndRederive, because the cleared mark may have been suppressing a
+// note (that is exactly when this menu is offered over a noted chapter), and only
+// the projection re-raises the note's own wash beside its re-opening bubble. Runs
+// on the native UI thread, so it hops to Fyne's UI goroutine before touching
+// state. refreshReadingOnly (not refresh): the sidebar doesn't reflect highlight
+// state, so this is the narrowest correct refresh. Idempotent — a double-tap's
+// second call is a no-op.
 //
 //export bibleTextHighlightCleared
 func bibleTextHighlightCleared() {
@@ -175,7 +179,7 @@ func bibleTextHighlightCleared() {
 		if !state.hasMark() {
 			return
 		}
-		clearHighlightedVerse(state)
+		clearHighlightAndRederive(state)
 		state.refreshReadingOnly()
 	})
 }
