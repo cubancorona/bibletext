@@ -151,19 +151,34 @@ func devAutoReadAlong(state *AppState) {
 	})
 }
 
-// devAutoNotesS8 drives the S8 sticker proof headlessly: three note-bearing
-// links land on ONE passage on a fixed clock, so a screenshot burst shows the
-// native sticker's honest count line rendering and UPDATING — no count with
-// one note, "1 more note on this passage" when the second arrives, "2 more
-// notes on this passage" when the third does. Each arrival is a real
-// HandleShareLink (the same entry point a tapped universal link uses) and a
-// real FOCUS change: the arriving note opens and the previous one becomes part
-// of the count. The simulator cannot tap, so the app does the arriving itself
-// — the same trick devAutoReadAlong uses, for the same reason.
+// devAutoNotesS8 drives the sticker proofs headlessly — the simulator cannot
+// tap, so the app does the arriving (and, for S9, the minimizing and the
+// searching) itself, on a fixed clock a screenshot burst can be correlated
+// against. Every arrival is a real HandleShareLink (the entry point a tapped
+// universal link uses) and every verb is the same function the sticker's own
+// buttons post through the //export callbacks.
 //
-//	SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=s8 xcrun simctl launch <udid> uk.co.bibletext
+//	SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=<scenario> xcrun simctl launch <udid> uk.co.bibletext
+//
+//	s8         three arrivals on one passage — the S8 count proof, kept
+//	s9who      three arrivals → the WHO line reads "Note from Friend · 1 of 3
+//	           on this passage" with the words alone in the bubble
+//	s9pill     three arrivals, then the reader's minimize → the pill reads
+//	           "Notes · 3" instead of hiding the set
+//	s9unplaced a WEB Esther note, then a switch to WEBC (Greek Esther, the
+//	           incommensurable numbering) → the unplaced-only pill: "1 note
+//	           cannot be shown in this translation", no empty bubble
+//	s9suppress an arrival, then a foreign mark on the same chapter (goToVerse,
+//	           the verse-of-day/Go-to writer) → the sticker stands down to
+//	           the pill; then the mark clears → the bubble restores
+//	s9trunc    105 arrivals on one verse of BSB Mark 9 plus 9 WEB notes on
+//	           Mark 9:44 (a verse the BSB does not have) → the longest
+//	           realistic WHO line ("· K of 105 on this passage · 9 not shown
+//	           here", 3-digit count) so the fit rule is visible: the FRIEND
+//	           half tail-truncates, the counts never do
 func devAutoNotesS8(state *AppState) {
-	if strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")) == "" || state == nil {
+	scenario := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")))
+	if scenario == "" || state == nil {
 		return
 	}
 	link := func(text string) {
@@ -171,9 +186,60 @@ func devAutoNotesS8(state *AppState) {
 			"John", 11, 35, 35, text))
 	}
 	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
-	at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
-	at(8*time.Second, func() { link("Second note: a second voice on the same verse.") })
-	at(16*time.Second, func() { link("Third note: and a third, so the count has to move again.") })
+	switch scenario {
+	case "s9who", "s9pill":
+		at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
+		at(6*time.Second, func() { link("Second note: a second voice on the same verse.") })
+		at(12*time.Second, func() { link("Third note: and a third, so the who line has to say 1 of 3.") })
+		if scenario == "s9pill" {
+			// The reader's minimize — the same verb the sticker's "–" button
+			// posts (bibleTextNoteHidden → hideCurrentNote).
+			at(18*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
+		}
+	case "s9unplaced":
+		at(1500*time.Millisecond, func() {
+			HandleShareLink(state, ShareLinkURLWithNote("web", "Esther", 4, 1, 1,
+				"A note on Esther in the WEB numbering."))
+		})
+		at(8*time.Second, func() { switchVersion(state, "webc") })
+	case "s9suppress":
+		at(1500*time.Millisecond, func() { link("This note will stand down while a search result is lit.") })
+		// A foreign mark on the same chapter — goToVerseRange is what the
+		// verse of the day, cross-references and the Go-to box all call. Verses
+		// beside the note's own, so the standing-down pill and the foreign
+		// mark share one screenshot frame.
+		at(8*time.Second, func() { goToVerseRange(state, "John", 11, 30, 31); state.refreshReadingOnly() })
+		// The mark clears (the native "Clear highlight" tap): released, the
+		// sticker restores by derivation alone.
+		at(16*time.Second, func() { clearHighlightedVerse(state); state.refreshReadingOnly() })
+	case "s9trunc":
+		// The longest realistic WHO line, from REAL arrivals: a 3-digit
+		// placed count and an unplaced tail on one book. Mark 9:44 exists in
+		// the WEB and not in the BSB (the span-with-a-hole case), so the WEB
+		// notes on it are unplaced while the BSB ones place.
+		for i := 0; i < 105; i++ {
+			text := "Truncation note " + strconv.Itoa(i+1) + " — filler so every arrival is distinct."
+			at(1500*time.Millisecond+time.Duration(i)*120*time.Millisecond, func() {
+				HandleShareLink(state, ShareLinkURLWithNote("bsb", "Mark", 9, 43, 43, text))
+			})
+		}
+		for i := 0; i < 9; i++ {
+			text := "Unplaced note " + strconv.Itoa(i+1) + " on the verse the BSB does not carry."
+			at(16*time.Second+time.Duration(i)*300*time.Millisecond, func() {
+				HandleShareLink(state, ShareLinkURLWithNote("web", "Mark", 9, 44, 44, text))
+			})
+		}
+		// End on the BSB chapter so the placed set is on screen with the
+		// unplaced tail in the WHO line.
+		at(22*time.Second, func() {
+			HandleShareLink(state, ShareLinkURLWithNote("bsb", "Mark", 9, 43, 43,
+				"The final note — the one the who line counts from."))
+		})
+	default: // "s8", kept as the arrival-count proof
+		at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
+		at(8*time.Second, func() { link("Second note: a second voice on the same verse.") })
+		at(16*time.Second, func() { link("Third note: and a third, so the count has to move again.") })
+	}
 }
 
 // devNoteDebug reports the live note state for on-screen diagnosis. TEMPORARY:

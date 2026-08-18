@@ -1185,8 +1185,9 @@ void bibleTextMacSetReadingMeasure(double m) {
 
 static NSView       *gMacNoteView = nil;
 static CAShapeLayer *gMacNoteCard = nil;
-static NSString     *gMacNoteText = nil;
-static BOOL          gMacNoteMinimized = NO;
+static NSString     *gMacNoteText = nil;      // the sender's words, ALONE (S9)
+static NSString     *gMacNoteWho = nil;       // the app's chrome: byline + counts, composed in Go
+static BOOL          gMacNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
 static NSInteger     gMacNoteAnchorVerse = 0;
 static CGFloat       gMacNoteBandH = 0;
 static CGFloat       gMacNoteTopInset = 0;
@@ -1234,6 +1235,45 @@ static CGFloat btMacNoteTopGap(NSTextStorage *ts, NSRange para) {
 static void btMacInstallNote(void);
 static void btMacLayoutNote(void);
 
+// btMacNotePresent / btMacNotePill — the two questions every sticker function
+// asks since S9, twins of the iOS pair. PRESENT: an unplaced-only chapter
+// pushes NO text but a who sentence — the sticker exists whenever either
+// does. PILL: the pushed minimized flag (a reader's minimize OR the plan's
+// derived suppression), and ALSO an empty text — no sender words exist, and
+// an empty sender bubble must never render, so "who without text" collapses
+// to the pill by construction.
+static BOOL btMacNotePresent(void) { return gMacNoteText != nil || gMacNoteWho != nil; }
+static BOOL btMacNotePill(void)    { return gMacNoteMinimized || gMacNoteText == nil; }
+
+static BOOL btMacSameStr(NSString *a, NSString *b) {
+    return a == b || (a != nil && b != nil && [a isEqualToString:b]);
+}
+
+// btMacFitWho keeps the WHO line's counts whole when the label is too narrow:
+// everything before the first " · " is the sender half, and it alone is
+// tail-truncated — never the count (the iOS twin is btIOSFitWho; keep them
+// matched). With no separator the field's own tail truncation stands; in the
+// degenerate case the sender half becomes a bare ellipsis.
+static NSString *btMacFitWho(NSString *who, CGFloat width, NSFont *font) {
+    if (who == nil || width <= 0) return who;
+    NSDictionary *attrs = @{NSFontAttributeName: font};
+    if ([who sizeWithAttributes:attrs].width <= width) return who;
+    NSRange sep = [who rangeOfString:@" · "];
+    if (sep.location == NSNotFound) return who;
+    NSString *counts = [who substringFromIndex:sep.location]; // " · 1 of 3 …"
+    NSString *sender = [who substringToIndex:sep.location];
+    CGFloat avail = width - ceil([counts sizeWithAttributes:attrs].width);
+    while (sender.length > 0) {
+        NSString *cand = [sender stringByAppendingString:@"…"];
+        if (ceil([cand sizeWithAttributes:attrs].width) <= avail) {
+            return [cand stringByAppendingString:counts];
+        }
+        NSRange last = [sender rangeOfComposedCharacterSequenceAtIndex:sender.length - 1];
+        sender = [sender substringToIndex:last.location];
+    }
+    return [@"…" stringByAppendingString:counts];
+}
+
 // The bubble's whole outline — card and speech tail — as ONE continuous path,
 // for the reason spelled out on the iOS twin: drawn as two shapes, the card's
 // bottom stroke runs straight across the mouth of the tail and no z-ordering
@@ -1272,8 +1312,8 @@ static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
 // reserved band is the view plus the gap. Measured BEFORE the band is reserved,
 // because the band's height IS this number.
 static CGFloat btMacNoteHeightForWidth(CGFloat w) {
-    if (gMacNoteText == nil) return 0;
-    if (gMacNoteMinimized) return kMacNoteBtn;   // the collapsed chip has no tail
+    if (!btMacNotePresent()) return 0;
+    if (btMacNotePill()) return kMacNoteBtn;     // the collapsed pill has no tail
     CGFloat inner = w - 2 * kMacNotePad;
     if (inner < 40) inner = 40;
     NSRect r = [gMacNoteText boundingRectWithSize:NSMakeSize(inner, CGFLOAT_MAX)
@@ -1319,7 +1359,7 @@ static void btMacInstallNote(void) {
     gMacNoteTopInset = 0;
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
-    if (gMacNoteText == nil || ts.length == 0) { btMacApplyNoteInset(); return; }
+    if (!btMacNotePresent() || ts.length == 0) { btMacApplyNoteInset(); return; }
 
     CGFloat w = gTextView.textContainer.size.width - 2 * gTextView.textContainer.lineFragmentPadding;
     CGFloat h = btMacNoteHeightForWidth(w);
@@ -1332,7 +1372,7 @@ static void btMacInstallNote(void) {
         btMacApplyNoteInset();
         return;
     }
-    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (gMacNoteMinimized ? 0 : kMacNoteTail) + kMacNoteGap;
+    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGap;
     if (para.location == 0) {
         gMacNoteTopInset = gMacNoteBandH;
         btMacApplyNoteInset();
@@ -1353,7 +1393,7 @@ static void btMacInstallNote(void) {
 static void btMacEnsureNoteView(void) {
     if (gMacNoteView) { [gMacNoteView removeFromSuperview]; gMacNoteView = nil; }
     gMacNoteCard = nil;
-    if (gMacNoteText == nil || gTextView == nil) return;
+    if (!btMacNotePresent() || gTextView == nil) return;
 
     NSView *box = [[BTFlippedView alloc] initWithFrame:NSZeroRect];
     box.wantsLayer = YES;                      // no layer, no CAShapeLayer
@@ -1362,15 +1402,21 @@ static void btMacEnsureNoteView(void) {
     box.layer.geometryFlipped = YES;
     box.layer.backgroundColor = NSColor.clearColor.CGColor;
 
-    if (gMacNoteMinimized) {
+    if (btMacNotePill()) {
         // The collapsed marker is a plain pill — no tail, exactly as on iOS and
-        // on the web.
+        // on the web. Since S9 it carries the pushed WHO composition
+        // ("Notes · 3", or the unplaced-only sentence), so minimizing the open
+        // note does not make the rest of the set invisible. The press is the
+        // Restore verb; with no note text behind it (unplaced-only) the Go
+        // side is a no-op, so the pill is inert exactly when there is nothing
+        // to restore.
         box.layer.backgroundColor = btMacNoteColor(gMacNoteBg).CGColor;
         box.layer.borderColor = btMacNoteColor(gMacNoteBorder).CGColor;
         box.layer.borderWidth = 1;
         box.layer.cornerRadius = kMacNoteBtn / 2;
 
-        NSButton *chip = [NSButton buttonWithTitle:@"Note" target:gTextView action:@selector(btNoteRestore:)];
+        NSButton *chip = [NSButton buttonWithTitle:(gMacNoteWho ?: @"Note")
+                                            target:gTextView action:@selector(btNoteRestore:)];
         chip.bezelStyle = NSBezelStyleInline;
         chip.bordered = NO;
         chip.font = btMacNoteWhoFont();
@@ -1384,9 +1430,13 @@ static void btMacEnsureNoteView(void) {
         gMacNoteCard.lineWidth = 1;
         [box.layer addSublayer:gMacNoteCard];
 
-        NSTextField *who = [NSTextField labelWithString:@"Note from Friend"]; // a person, never the app
+        // The WHO line is the app's chrome — the byline and the counts,
+        // pushed from Go (appleStickerPush) — never the sender's words. The
+        // fallback keeps the frame honest if a push ever missed.
+        NSTextField *who = [NSTextField labelWithString:(gMacNoteWho ?: @"Note from Friend")]; // a person, never the app
         who.font = btMacNoteWhoFont();
         who.textColor = btMacNoteColor(gMacNoteMuted);
+        who.lineBreakMode = NSLineBreakByTruncatingTail;
         who.tag = 902;
         [box addSubview:who];
 
@@ -1462,13 +1512,13 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
     NSRect used = [lm lineFragmentUsedRectForGlyphAtIndex:g.location effectiveRange:NULL];
     CGFloat textTop = used.origin.y + inset;
     CGFloat stickerH = btMacNoteHeightForWidth(tc.size.width - 2 * tc.lineFragmentPadding)
-                     + (gMacNoteMinimized ? 0 : kMacNoteTail);
+                     + (btMacNotePill() ? 0 : kMacNoteTail);
     return textTop - kMacNoteGap - stickerH;
 }
 
 // Put the sticker in the band the text reserved. Runs after every layout.
 static void btMacLayoutNote(void) {
-    if (gMacNoteView == nil || gTextView == nil || gMacNoteText == nil) return;
+    if (gMacNoteView == nil || gTextView == nil || !btMacNotePresent()) return;
     NSLayoutManager *lm = gTextView.layoutManager;
     NSTextContainer *tc = gTextView.textContainer;
     NSTextStorage *ts = gTextView.textStorage;
@@ -1491,7 +1541,7 @@ static void btMacLayoutNote(void) {
     // reserved no longer matches what we need, reserve again and let the layout
     // settle; the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = btMacNoteTopGap(ts, para) + h + (gMacNoteMinimized ? 0 : kMacNoteTail) + kMacNoteGap;
+    CGFloat want = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGap;
     if (!reconciling && fabs(want - gMacNoteBandH) > 1.0) {
         reconciling = YES;
         btMacInstallNote();
@@ -1500,8 +1550,15 @@ static void btMacLayoutNote(void) {
 
     CGFloat y = btMacNoteStickerY(lm, tc, ts, para, g);
 
-    if (gMacNoteMinimized) {
-        gMacNoteView.frame = NSMakeRect(x, y, 76, kMacNoteBtn);
+    if (btMacNotePill()) {
+        // The pill sizes to its label (it carries the count now), never
+        // narrower than the old fixed chip and never wider than the column.
+        NSString *title = gMacNoteWho ?: @"Note";
+        CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btMacNoteWhoFont()}].width);
+        CGFloat cw = tw + 24;
+        if (cw < 76) cw = 76;
+        if (cw > w) cw = w;
+        gMacNoteView.frame = NSMakeRect(x, y, cw, kMacNoteBtn);
         NSView *chip = [gMacNoteView viewWithTag:901];
         chip.frame = gMacNoteView.bounds;
         // Cursor rects are cached against the frames they were built from, so a
@@ -1519,7 +1576,12 @@ static void btMacLayoutNote(void) {
     NSView *body = [gMacNoteView viewWithTag:903];
     NSView *hide = [gMacNoteView viewWithTag:904];
     NSView *del  = [gMacNoteView viewWithTag:905];
-    who.frame  = NSMakeRect(kMacNotePad, kMacNotePad - 2, w - 2 * kMacNotePad - 2 * kMacNoteBtn, 13);
+    CGFloat whoW = w - 2 * kMacNotePad - 2 * kMacNoteBtn;
+    who.frame  = NSMakeRect(kMacNotePad, kMacNotePad - 2, whoW, 13);
+    // The fit runs HERE, where the label's real width is known: if the who
+    // line cannot fit, the sender half is tail-truncated and the counts
+    // survive whole (btMacFitWho).
+    ((NSTextField *)who).stringValue = btMacFitWho(gMacNoteWho ?: @"Note from Friend", whoW, btMacNoteWhoFont());
     body.frame = NSMakeRect(kMacNotePad, kMacNotePad + 13 + 4,
                             w - 2 * kMacNotePad, h - kMacNotePad - 13 - 4 - kMacNotePad);
     hide.frame = NSMakeRect(w - 2 * kMacNoteBtn - 4, 3, kMacNoteBtn, kMacNoteBtn);
@@ -1533,7 +1595,7 @@ static void btMacLayoutNote(void) {
 // Deliberately the same arithmetic btMacLayoutNote uses to place it: the scroll
 // target and the sticker must not be able to disagree about where the note is.
 static CGFloat btMacNoteTopY(void) {
-    if (gMacNoteText == nil || gTextView == nil) return -1;
+    if (!btMacNotePresent() || gTextView == nil) return -1;
     NSLayoutManager *lm = gTextView.layoutManager;
     NSTextContainer *tc = gTextView.textContainer;
     NSTextStorage *ts = gTextView.textStorage;
@@ -1558,16 +1620,29 @@ static void btMacRefreshNote(void) {
 }
 
 // The note the pane should draw, pushed from Go on every chapter render — so a
-// light/dark flip restyles it and a navigation replaces it.
-void bibleTextMacSetNote(const char *text, int minimized, int anchorVerse,
+// light/dark flip restyles it and a navigation replaces it. Since S9 the push
+// carries WHO beside the text (the app's chrome, composed in Go by
+// appleStickerPush), and the refresh runs only when the pushed tuple changed
+// — the iOS twin's compare, mirrored — so a presentation flip (suppression,
+// minimize, a count moving) repaints the sticker alone while an unchanged
+// push costs nothing. Colours alone never change without a body change (the
+// theme variant is folded there), so they do not join the compare; the apply
+// path's own btMacRefreshNote (bibleTextMacApplyHTML) restyles after every
+// import exactly as before.
+void bibleTextMacSetNote(const char *text, const char *who, int minimized, int anchorVerse,
                          double bgR, double bgG, double bgB,
                          double fgR, double fgG, double fgB,
                          double muR, double muG, double muB,
                          double acR, double acG, double acB,
                          double boR, double boG, double boB) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
+    NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL changed = !btMacSameStr(t, gMacNoteText) || !btMacSameStr(w, gMacNoteWho) ||
+                       gMacNoteMinimized != (minimized ? YES : NO) ||
+                       gMacNoteAnchorVerse != anchorVerse;
         gMacNoteText = t;
+        gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
         gMacNoteAnchorVerse = anchorVerse;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
@@ -1575,7 +1650,7 @@ void bibleTextMacSetNote(const char *text, int minimized, int anchorVerse,
         gMacNoteMuted[0]=muR; gMacNoteMuted[1]=muG; gMacNoteMuted[2]=muB;
         gMacNoteAccent[0]=acR; gMacNoteAccent[1]=acG; gMacNoteAccent[2]=acB;
         gMacNoteBorder[0]=boR; gMacNoteBorder[1]=boG; gMacNoteBorder[2]=boB;
-        btMacRefreshNote();
+        if (changed) btMacRefreshNote();
     });
 }
 
@@ -1993,22 +2068,31 @@ func armReadingRestore(verse int, delta, frac float64) {
 	C.bibleTextMacArmRestore(C.int(verse), C.double(delta), C.double(frac))
 }
 
-// pushNoteToPane hands the native sticker its text, its collapsed state and the
-// live palette — the macOS twin of the iOS function of the same name, called on
-// every chapter render so a light/dark flip restyles it and a navigation
-// replaces it.
+// pushNoteToPane hands the native sticker its text, its WHO line, its
+// presentation and the live palette — the macOS twin of the iOS function of
+// the same name, called on every chapter render so a light/dark flip restyles
+// it and a navigation replaces it.
 //
-// SINCE S8 THE TEXT IS THE MIRROR'S NOTE PLUS THE HONEST COUNT
-// (appleStickerText, notes_plan.go) — the whole set through the EXISTING
-// single-sticker ABI, exactly as the iOS twin. No new ObjC, no new C entry
-// point; the body fingerprint folds every plan note the count is computed
-// from, so a count change repaints and a focus flip does not re-import.
+// SINCE S9 THE PUSH IS THE FULL TUPLE (appleStickerPush, notes_plan.go),
+// exactly as the iOS twin: the bubble's body is the sender's words ALONE, and
+// everything the app says — the byline, "· 1 of 3 on this passage", "· 2 not
+// shown here", the pill's count, the unplaced-only sentence — rides in the
+// WHO parameter, the sticker's own chrome. This closes S8's recorded identity
+// gap (the count used to ride inside the sender's bubble in the sender's
+// style) with the one reviewed native change S9 exists for. The pushed pill
+// flag folds the plan's derived suppression, so a foreign mark stands the
+// sticker down to the pill and releases it — rendered by the native side's
+// own compare-and-refresh (bibleTextMacSetNote), never by a chapter
+// re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	cText := C.CString(appleStickerText(state, buildChapterPlan(state, appPrefs(), state.Bible)))
+	text, who, pill := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
+	cWho := C.CString(who)
+	defer C.free(unsafe.Pointer(cWho))
 	min := C.int(0)
-	if state.NoteMinimized {
+	if pill {
 		min = 1
 	}
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
@@ -2020,8 +2104,10 @@ func pushNoteToPane(state *AppState) {
 	acR, acG, acB := f(pal.Accent)
 	boR, boG, boB := f(pal.Border)
 	// The note's OWN verse, not the highlight's — minimizing clears the
-	// highlight, and a sticker without an anchor parks at the top of the chapter.
-	C.bibleTextMacSetNote(cText, min, C.int(state.NoteVerseLo),
+	// highlight, and a sticker without an anchor parks at the top of the
+	// chapter (an unplaced-only chapter pushes verse 0 on purpose: the top is
+	// the only honest place for notes with no verses here).
+	C.bibleTextMacSetNote(cText, cWho, min, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 

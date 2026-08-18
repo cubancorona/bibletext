@@ -670,8 +670,9 @@ static UIColor *btIOSOverlayColor(UIColor *base) {
 // rather than an input to it. The view scrolls for free because it is a subview
 // of the text view, which IS a scroll view: its frame is in content coordinates.
 static UIView   *gNoteView = nil;      // the bubble, or the collapsed chip
-static NSString *gNoteText = nil;
-static BOOL      gNoteMinimized = NO;
+static NSString *gNoteText = nil;      // the sender's words, ALONE (S9)
+static NSString *gNoteWho = nil;       // the app's chrome: byline + counts, composed in Go
+static BOOL      gNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
 static CAShapeLayer *gNoteCard = nil;    // the whole bubble: card + speech tail
@@ -686,17 +687,59 @@ static UIColor *btNoteColor(CGFloat c[3]) {
     return [UIColor colorWithRed:c[0] green:c[1] blue:c[2] alpha:1.0];
 }
 
+// btIOSNotePresent / btIOSNotePill are the two questions every sticker
+// function asks since S9. PRESENT: an unplaced-only chapter pushes NO text but
+// a who sentence — the sticker exists whenever either does. PILL: the pushed
+// minimized flag (a reader's minimize OR the plan's derived suppression), and
+// ALSO an empty text — no sender words exist, and an empty sender bubble must
+// never render, so "who without text" collapses to the pill by construction.
+static BOOL btIOSNotePresent(void) { return gNoteText != nil || gNoteWho != nil; }
+static BOOL btIOSNotePill(void)    { return gNoteMinimized || gNoteText == nil; }
+
+static void btIOSInstallNote(void);
+static void btIOSEnsureNoteView(void);
+static void btIOSLayoutNote(void);
+
+// btIOSRefreshNote re-derives the whole sticker — band, subviews, placement —
+// against the text already in the view. It is what lets a pushed change
+// render WITHOUT a chapter re-import: the body fingerprint deliberately
+// excludes the plan's derived suppression (notes_plan.go, foldFingerprint),
+// so a search arriving on a noted chapter flips the sticker to the pill
+// through here, on the wash-only path, while the attributed string stays put.
+static void btIOSRefreshNote(void) {
+    if (gReadingTV == nil || gReadingTV.textStorage.length == 0) return;
+    btIOSInstallNote();
+    btIOSEnsureNoteView();
+    btIOSLayoutNote();
+}
+
+static BOOL btIOSSameStr(NSString *a, NSString *b) {
+    return a == b || (a != nil && b != nil && [a isEqualToString:b]);
+}
+
 // The note the pane should draw, pushed from Go on every chapter render (so a
-// light/dark flip restyles it and a navigation replaces it).
-void bibleTextSetNote(const char *text, int minimized, int anchorVerse,
+// light/dark flip restyles it and a navigation replaces it). Since S9 the push
+// carries WHO beside the text — the byline and the honest counts are the
+// app's chrome, composed in Go (appleStickerPush), never the sender's words —
+// and the sticker refreshes itself when the pushed tuple changed, so a
+// presentation flip (suppression, minimize, a count moving) renders even when
+// the chapter body is byte-identical and the import path never runs. Colours
+// alone never change without a body change (the theme variant is folded
+// there), so they do not join the compare.
+void bibleTextSetNote(const char *text, const char *who, int minimized, int anchorVerse,
                       double bgR, double bgG, double bgB,
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
                       double acR, double acG, double acB,
                       double boR, double boG, double boB) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
+    NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL changed = !btIOSSameStr(t, gNoteText) || !btIOSSameStr(w, gNoteWho) ||
+                       gNoteMinimized != (minimized ? YES : NO) ||
+                       gNoteAnchorVerse != anchorVerse;
         gNoteText = t;
+        gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
         gNoteAnchorVerse = anchorVerse;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
@@ -704,6 +747,7 @@ void bibleTextSetNote(const char *text, int minimized, int anchorVerse,
         gNoteMuted[0]=muR; gNoteMuted[1]=muG; gNoteMuted[2]=muB;
         gNoteAccent[0]=acR; gNoteAccent[1]=acG; gNoteAccent[2]=acB;
         gNoteBorder[0]=boR; gNoteBorder[1]=boG; gNoteBorder[2]=boB;
+        if (changed) btIOSRefreshNote();
     });
 }
 
@@ -764,8 +808,8 @@ static UIBezierPath *btIOSNoteBubblePath(CGFloat w, CGFloat h) {
 // The height of the CARD. The view is this plus the tail (see kNoteTail), and
 // the reserved band is the view plus the gap.
 static CGFloat btIOSNoteHeightForWidth(CGFloat w) {
-    if (gNoteText == nil) return 0;
-    if (gNoteMinimized) return kNoteBtn;      // the collapsed chip has no tail
+    if (!btIOSNotePresent()) return 0;
+    if (btIOSNotePill()) return kNoteBtn;     // the collapsed pill has no tail
     CGFloat inner = w - 2 * kNotePad;
     if (inner < 40) inner = 40;
     CGRect r = [gNoteText boundingRectWithSize:CGSizeMake(inner, CGFLOAT_MAX)
@@ -808,12 +852,12 @@ static void btIOSInstallNote(void) {
     gNoteTopInset = 0;
     if (gReadingTV == nil) return;
     NSTextStorage *ts = gReadingTV.textStorage;
-    if (gNoteText == nil || ts.length == 0) { btIOSApplyNoteInset(); return; }
+    if (!btIOSNotePresent() || ts.length == 0) { btIOSApplyNoteInset(); return; }
 
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
     CGFloat h = btIOSNoteHeightForWidth(w);
     if (h <= 0) { btIOSApplyNoteInset(); return; }
-    gNoteBandH = h + (gNoteMinimized ? 0 : kNoteTail) + kNoteGap;
+    gNoteBandH = h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGap;
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
@@ -853,11 +897,11 @@ static void btIOSApplyNoteInset(void) {
 // Build (or rebuild) the sticker's subviews for the current note and palette.
 static void btIOSEnsureNoteView(void) {
     if (gNoteView) { [gNoteView removeFromSuperview]; gNoteView = nil; }
-    if (gNoteText == nil || gReadingTV == nil) return;
+    if (!btIOSNotePresent() || gReadingTV == nil) return;
 
     UIView *box = [[UIView alloc] initWithFrame:CGRectZero];
     gNoteCard = nil;
-    if (gNoteMinimized) {
+    if (btIOSNotePill()) {
         // The collapsed marker is a plain pill — no tail, exactly as on the web.
         box.backgroundColor = btNoteColor(gNoteBg);
         box.layer.borderColor = btNoteColor(gNoteBorder).CGColor;
@@ -880,19 +924,28 @@ static void btIOSEnsureNoteView(void) {
         [box.layer addSublayer:gNoteCard];
     }
 
-    if (gNoteMinimized) {
+    if (btIOSNotePill()) {
         // The collapsed marker: small, quiet, and obviously a thing to press.
+        // Since S9 it carries the pushed WHO composition ("Notes · 3", or the
+        // unplaced-only sentence), so minimizing the open note does not make
+        // the rest of the set invisible. The press is the Restore verb; with
+        // no note text behind it (unplaced-only) the Go side is a no-op, so
+        // the pill is inert exactly when there is nothing to restore.
         UIButton *chip = [UIButton buttonWithType:UIButtonTypeSystem];
-        [chip setTitle:@"  Note  " forState:UIControlStateNormal];
+        [chip setTitle:(gNoteWho ?: @"Note") forState:UIControlStateNormal];
         [chip setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
         chip.titleLabel.font = btNoteWhoFont();
+        chip.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
         [chip addTarget:gReadingTV action:@selector(btNoteRestore:)
        forControlEvents:UIControlEventTouchUpInside];
         chip.tag = 901;
         [box addSubview:chip];
     } else {
         UILabel *who = [[UILabel alloc] initWithFrame:CGRectZero];
-        who.text = @"Note from Friend";     // a person, never "from BibleText"
+        // The WHO line is the app's chrome — the byline and the counts,
+        // pushed from Go (appleStickerPush) — never the sender's words. The
+        // fallback keeps the frame honest if a push ever missed.
+        who.text = gNoteWho ?: @"Note from Friend"; // a person, never "from BibleText"
         who.font = btNoteWhoFont();
         who.textColor = btNoteColor(gNoteMuted);
         who.tag = 902;
@@ -934,9 +987,37 @@ static void btIOSEnsureNoteView(void) {
     gNoteView = box;
 }
 
+// btIOSFitWho keeps the WHO line's counts whole when the label is too narrow:
+// everything before the first " · " is the sender half, and it alone is
+// tail-truncated — a reader must never lose "· 2 of 105 on this passage" to
+// an ellipsis while the constant byline survives (the count is the honest
+// part; the byline is recoverable from the bubble itself). With no separator
+// the label's own tail truncation stands, and in the degenerate case (counts
+// alone still too wide) the sender half becomes a bare ellipsis and the label
+// tail-truncates the rest — the floor, not the design.
+static NSString *btIOSFitWho(NSString *who, CGFloat width, UIFont *font) {
+    if (who == nil || width <= 0) return who;
+    NSDictionary *attrs = @{NSFontAttributeName: font};
+    if ([who sizeWithAttributes:attrs].width <= width) return who;
+    NSRange sep = [who rangeOfString:@" · "];
+    if (sep.location == NSNotFound) return who;
+    NSString *counts = [who substringFromIndex:sep.location]; // " · 1 of 3 …"
+    NSString *sender = [who substringToIndex:sep.location];
+    CGFloat avail = width - ceil([counts sizeWithAttributes:attrs].width);
+    while (sender.length > 0) {
+        NSString *cand = [sender stringByAppendingString:@"…"];
+        if (ceil([cand sizeWithAttributes:attrs].width) <= avail) {
+            return [cand stringByAppendingString:counts];
+        }
+        NSRange last = [sender rangeOfComposedCharacterSequenceAtIndex:sender.length - 1];
+        sender = [sender substringToIndex:last.location];
+    }
+    return [@"…" stringByAppendingString:counts];
+}
+
 // Put the sticker in the band the text reserved. Runs after every layout.
 static void btIOSLayoutNote(void) {
-    if (gNoteView == nil || gReadingTV == nil || gNoteText == nil) return;
+    if (gNoteView == nil || gReadingTV == nil || !btIOSNotePresent()) return;
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSTextContainer *tc = gReadingTV.textContainer;
     if (lm == nil || tc == nil) return;
@@ -958,7 +1039,7 @@ static void btIOSLayoutNote(void) {
     // no longer matches what we need, reserve again and let the layout settle;
     // the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = h + (gNoteMinimized ? 0 : kNoteTail) + kNoteGap;
+    CGFloat want = h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGap;
     if (!reconciling && fabs(want - gNoteBandH) > 1.0) {
         reconciling = YES;
         btIOSInstallNote();
@@ -977,8 +1058,14 @@ static void btIOSLayoutNote(void) {
         y = frag.origin.y + gReadingTV.textContainerInset.top;
     }
 
-    if (gNoteMinimized) {
-        CGFloat cw = 86;
+    if (btIOSNotePill()) {
+        // The pill sizes to its label (it carries the count now), never
+        // narrower than the old fixed chip and never wider than the column.
+        NSString *title = gNoteWho ?: @"Note";
+        CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btNoteWhoFont()}].width);
+        CGFloat cw = tw + 28;
+        if (cw < 86) cw = 86;
+        if (cw > w) cw = w;
         gNoteView.frame = CGRectMake(x, y, cw, kNoteBtn);
         UIView *chip = [gNoteView viewWithTag:901];
         chip.frame = gNoteView.bounds;
@@ -996,7 +1083,12 @@ static void btIOSLayoutNote(void) {
     UILabel  *body = (UILabel *)[gNoteView viewWithTag:903];
     UIButton *hide = (UIButton *)[gNoteView viewWithTag:904];
     UIButton *del  = (UIButton *)[gNoteView viewWithTag:905];
-    who.frame  = CGRectMake(kNotePad, kNotePad - 2, w - 2 * kNotePad - 2 * kNoteBtn, 14);
+    CGFloat whoW = w - 2 * kNotePad - 2 * kNoteBtn;
+    who.frame  = CGRectMake(kNotePad, kNotePad - 2, whoW, 14);
+    // The fit runs HERE, where the label's real width is known: if the who
+    // line cannot fit, the sender half is tail-truncated and the counts
+    // survive whole (btIOSFitWho).
+    who.text = btIOSFitWho(gNoteWho ?: @"Note from Friend", whoW, btNoteWhoFont());
     body.frame = CGRectMake(kNotePad, kNotePad + 14 + 4, w - 2 * kNotePad, h - kNotePad - 14 - 4 - kNotePad);
     hide.frame = CGRectMake(w - 2 * kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
     del.frame  = CGRectMake(w - kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
@@ -1009,7 +1101,7 @@ static void btIOSLayoutNote(void) {
 // the scroll target and the sticker must not be able to disagree about where the
 // note is.
 static CGFloat btIOSNoteTopY(void) {
-    if (gNoteText == nil || gReadingTV == nil) return -1;
+    if (!btIOSNotePresent() || gReadingTV == nil) return -1;
     if (gNoteTopInset > 0) return 14;   // reserved with the container inset
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSTextContainer *tc = gReadingTV.textContainer;
@@ -2460,9 +2552,12 @@ var lastPushedBookChapter string
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
 	// Tell the native tap menu what this chapter's highlight means, so it offers
-	// the note's verbs rather than "Clear highlight" when a note owns it.
+	// the note's verbs rather than "Clear highlight" when a note owns it. While
+	// the plan is SUPPRESSED (a foreign mark owns the page) the wash on screen
+	// is the search's or the link's, not the note's, so the menu must say
+	// "Clear highlight" — the note is standing down as the pill.
 	hasNote := 0
-	if state.ActiveNote != "" && !state.NoteMinimized {
+	if state.ActiveNote != "" && !state.NoteMinimized && !notesSuppressed(state) {
 		hasNote = 1
 	}
 	C.bibleTextSetHasNote(C.int(hasNote))
@@ -2610,32 +2705,30 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 	return int(t.verse), float64(t.delta), t.ok != 0
 }
 
-// pushNoteToPane hands the native sticker its text, its collapsed state and the
-// live palette. Called on every chapter render, so a light/dark flip restyles
-// it and a navigation replaces it — the same cadence as the follow pill.
+// pushNoteToPane hands the native sticker its text, its WHO line, its
+// presentation and the live palette. Called on every chapter render, so a
+// light/dark flip restyles it and a navigation replaces it — the same cadence
+// as the follow pill.
 //
-// SINCE S8 THE TEXT IS THE MIRROR'S NOTE PLUS THE HONEST COUNT
-// (appleStickerText, notes_plan.go): "N more notes on this passage", "N notes
-// cannot be shown in this translation" — the whole set, folded into the
-// EXISTING single-sticker ABI. No new ObjC, no new C entry point; the
-// fingerprint gate already covers it because the body half (noteFP) folds
-// every plan note the count is computed from.
-//
-// KNOWN IDENTITY GAP, deliberate until S9: the count rides in the BODY label,
-// inside the sender's bubble, in the sender's own style — so "1 more note on
-// this passage" can read as something the sender typed, which bends the rule
-// that the app never speaks inside the bubble. The clean fix is the WHO line,
-// and that line is an ObjC constant this step may not touch (no new ObjC was
-// the brief's own constraint). S9 rebuilds the byline on every surface —
-// replacing the literal "Note from Friend" — and moves the count there in the
-// same, reviewed change. Recorded by review; do not ship a release with notes
-// enabled before S9 lands.
+// SINCE S9 THE PUSH IS THE FULL TUPLE (appleStickerPush, notes_plan.go): the
+// bubble's body is the sender's words ALONE, and everything the app says —
+// the byline, "· 1 of 3 on this passage", "· 2 not shown here", the pill's
+// count, the unplaced-only sentence — rides in the WHO parameter, the
+// sticker's own chrome. This closes S8's recorded identity gap (the count
+// used to ride inside the sender's bubble in the sender's style) with the one
+// reviewed native change S9 exists for. The pushed pill flag folds the plan's
+// derived suppression, so a foreign mark stands the sticker down to the pill
+// and releases it — rendered by the native side's own compare-and-refresh
+// (bibleTextSetNote), never by a chapter re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	cText := C.CString(appleStickerText(state, buildChapterPlan(state, appPrefs(), state.Bible)))
+	text, who, pill := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
+	cWho := C.CString(who)
+	defer C.free(unsafe.Pointer(cWho))
 	min := C.int(0)
-	if state.NoteMinimized {
+	if pill {
 		min = 1
 	}
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
@@ -2648,7 +2741,9 @@ func pushNoteToPane(state *AppState) {
 	boR, boG, boB := f(pal.Border)
 	// The note's OWN verse, not the highlight's — minimizing clears the
 	// highlight, and a marker without an anchor jumps to the top of the chapter.
-	C.bibleTextSetNote(cText, min, C.int(state.NoteVerseLo),
+	// (An unplaced-only chapter pushes verse 0: its pill parks at the top,
+	// which is the only honest place for notes with no verses here.)
+	C.bibleTextSetNote(cText, cWho, min, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 

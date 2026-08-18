@@ -750,6 +750,15 @@ func restoreCurrentNote(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
 	}
+	// Pressing the pill is the reader choosing this note as the page's reason,
+	// exactly like tapping its chip in the Fyne banner (the identity table:
+	// "taps a note chip instead → that is the new choice") — so a foreign mark
+	// stands aside and the suppression it caused releases. Without this, the
+	// press did nothing visible while a search result was lit: the restore
+	// re-derived into a still-suppressed plan and the sticker stayed a pill.
+	if state.mark.live() && !state.mark.fromNote() {
+		state.clearMark()
+	}
 	state.NoteMinimized = false
 	setNoteMinimizedByID(appPrefs(), state.NoteID, false)
 	if state.NoteID != 0 {
