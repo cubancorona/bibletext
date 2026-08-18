@@ -490,7 +490,7 @@ func showAISettings(state *AppState) {
 			return
 		}
 		// Nothing saved yet — no question worth asking.
-		if len(readNotes(appPrefs())) == 0 {
+		if storedNoteCount(appPrefs()) == 0 {
 			setNotesEnabled(false)
 			state.refresh()
 			return
@@ -530,7 +530,7 @@ func showAISettings(state *AppState) {
 	// one destroys.
 	notesCount := newNotesCountLink(state, nil) // onTapped assigned below, once done() exists
 	refreshDeleteNotes := func() {
-		n := len(readNotes(appPrefs()))
+		n := storedNoteCount(appPrefs())
 		notesCount.setCount(n)
 		if n == 0 {
 			deleteNotesBtn.Disable()

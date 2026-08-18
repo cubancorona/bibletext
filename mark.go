@@ -183,15 +183,3 @@ func (s *AppState) markSpan() (VerseSpan, bool) {
 	}
 	return s.mark.At, true
 }
-
-// noteSpan builds the span for a note, in the numbering the note itself is
-// stored under.
-func (n SharedNote) span() VerseSpan {
-	return VerseSpan{
-		VersionID: n.VersionID,
-		Book:      n.Book,
-		Chapter:   n.Chapter,
-		Lo:        n.VerseLo,
-		Hi:        n.VerseHi,
-	}
-}

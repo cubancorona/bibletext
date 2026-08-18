@@ -1,8 +1,15 @@
 # The notes subsystem, as a state machine
 
-> **Status.** Sections marked **[OBSERVED]** describe code that exists today,
-> with `file:line`, and every behavioural claim in them was run against the real
-> functions rather than read off the page. Sections marked **[INTENDED]**
+> **Status.** Sections marked **[OBSERVED]** describe code as it stood when
+> they were measured, with `file:line`, and every behavioural claim in them was
+> run against the real functions rather than read off the page. **S5 (the
+> scrapbook store, 2026-08-18) has since replaced the passage-keyed store**:
+> `noteKey`, `notesMax`, `loadNote`, `saveNote`, `deleteNote`,
+> `setNoteMinimized`, `noteFromAnotherTranslation` and `noteStoreVersion` are
+> deleted, notes live as ID-carrying records in a line-framed `notes.store`
+> blob, and every verb addresses a `StoredNote.ID`. Store-shape passages below
+> that cite the old functions are history unless struck or annotated; the
+> incoherent-states table and the re-measure notes are current. Sections marked **[INTENDED]**
 > describe behaviour the owner has specified and the code does not have. Do not
 > read an **[INTENDED]** paragraph as a description of the app.
 >
@@ -338,14 +345,12 @@ different rule. The fix for the two channels fighting is a **latch, not a model*
 
 ### Verb states
 
-**`COLLAPSED_STUCK`** — `COLLAPSED` where the note is FOLLOWED. Hide addresses
-`noteStoreVersion()` (`notes_store.go:394`); Show addresses `currentVersion().ID`
-(`:403`). The restore lands on a key that holds nothing and `setNoteMinimized`
-returns in silence (`:267-270`). Measured: after Show, mirror `false`, **store
-`true`**, and after the next navigation `true` again.
-*The reader sees:* the note opens, looks normal, and collapses again on the next
-navigation as though they had never touched it. A verb that appears to work and
-does not.
+**`COLLAPSED_STUCK`** — **[FIXED by S5]** `COLLAPSED` where the note is
+FOLLOWED. Hide used to address `noteStoreVersion()` and Show
+`currentVersion().ID`, so the restore landed on a key holding nothing and
+returned in silence: the note opened, looked normal, and collapsed again on
+the next navigation. Both verbs now address the live note's `StoredNote.ID`,
+so the pair cannot diverge — see `X5`.
 
 **`NOTE_SUBSTITUTED`** — a version change (or a Delete) re-derives and `loadNote`
 finds a different note. `versions.go:576-583` re-derives; `notes_store.go:165-171`
@@ -485,14 +490,14 @@ is where they end up **today**.
 | `NOTE_OWN` | Hide | `notes_store.go:389-396` | `COLLAPSED` |
 | `NOTE_FOLLOWED` | Hide | same, key = `noteStoreVersion()` | `COLLAPSED` |
 | `COLLAPSED` (own) | Show | `notes_store.go:398-411` | `NOTE_OWN` |
-| `COLLAPSED` (followed) | Show | same, key = `currentVersion().ID` | **`COLLAPSED_STUCK`** — store never changed |
+| `COLLAPSED` (followed) | Show | `setNoteMinimizedByID(state.NoteID)` | `NOTE_FOLLOWED` — the same id Hide used (X5 fixed, S5) |
 | `NOTE_OWN` | Delete | `notes_store.go:413-423` | `BARE`, or **`NOTE_SUBSTITUTED`** on the next navigation if another translation holds one |
 | after a link over a followed note | Delete | `noteStoreVersion()` is stale | **`X1`** — the wrong note dies |
 | `NOTE_*` | notes switched off, "Keep them" | `ai_settings.go:498-501` | **`OFF_STUCK`** + **`X4`** (the highlight survives) |
 | `NOTE_*` | notes switched off, "Delete them" | `notes_setting.go:129-137` | `OFF`, mirror and highlight cleared |
 | `BROWSER` | tap a row | `notes_browse.go:230-259` | the note's translation, un-minimized, at the passage — or `DEADTAP` |
 | `BROWSER` | tap a chapter-level note | `notes_browse.go:258` → `state.go:772-778` | `GHOST_LOC` |
-| store at 200 | a link arrives | `notes_store.go:126-129` | **`X3`** — stored and evicted by the same write |
+| store past the old cap | a link arrives | S5: no cap, no eviction | stored and kept (X3 fixed) |
 
 ## Invariants
 
@@ -505,8 +510,8 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   put there by somebody else's action must survive a verb aimed at the note.
   *Violated by `ORPHAN_HL` and `X4`. `X10` was the third and is fixed: see S1.*
 - **N2 — A verb reaches what the reader aimed it at.** Hide, Show and Delete must
-  address the note whose text is on screen, and no other. *Violated by `X1`,
-  `X2`, `X5`.*
+  address the note whose text is on screen, and no other. *Was violated by
+  `X1`, `X2`, `X5` — all fixed; every verb now takes the note's own id.*
 - **N3 — No silent substitution.** The text in the bubble must not change to a
   different note's without something saying so. *Violated by `X6`,
   `NOTE_SUBSTITUTED`.*
@@ -514,10 +519,11 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   `X7` (`NOTE_MASKED`, `COLLAPSED_MASK`) and by `UNREACHABLE`.* This is I3
   restated for the store rather than for the link.
 - **N5 — An explicit minimize is honoured, and nothing auto-expands.** All
-  collapsed is a legal resting state. *Held today for the own-key case; violated
-  by `X2` and `COLLAPSED_STUCK`/`X5`.*
+  collapsed is a legal resting state. *Was violated by `X2` and
+  `COLLAPSED_STUCK`/`X5` — both fixed.*
 - **N6 — The mirror agrees with the store.** A note on screen is a note in the
-  store, under the key the verbs will address. *Violated by `X3`.*
+  store, under the id the verbs will address. *Was violated by `X3` — fixed;
+  nothing is evicted.*
 - **N7 — One ruler.** Every verse number in `AppState` is in the numbering of the
   translation being read. *Violated by `X11`/`HL_FRAME`.* `MapVerse` is applied to
   the note and not to the highlight.
@@ -533,12 +539,12 @@ the probe produced it from the shipping code.
 |---|---|---|---|---|
 | ~~X1~~ | ~~Delete kills the wrong note~~ | **FIXED** `31bc97630` | 0 | — |
 | ~~X2~~ | ~~Hide is a silent no-op~~ | **FIXED** `31bc97630` | 0 | — |
-| **X12** | **Delete the arriving note, the followed one takes its place** | **yes** | 4 | The message the reader binned is replaced by a stranger's, unannounced |
-| **X3** | Arriving note evicted by its own save | **yes** | pinned separately | The note is shown and was never stored |
+| **X12** | **Delete the arriving note, the note it covered takes its place** | **yes** | 8 | The message the reader binned is replaced by another, unannounced |
+| ~~X3~~ | ~~Arriving note evicted by its own save~~ | **FIXED** S5 — no cap, no eviction | 0 | — |
 | **X4** | Notes-off orphans the highlight | **yes** | 19 + 1 | Defect 1, through the control whose job is to make notes stop |
-| **X5** | Hide/Show asymmetry | **yes** | 4 | Show appears to work and does not |
+| ~~X5~~ | ~~Hide/Show asymmetry~~ | **FIXED** S5 — verbs address a NoteID | 0 | — |
 | **X6** | Delete substitutes a different note | **yes** | 8 | A stranger's message appears where the deleted one was |
-| **X7** | More than one note on a passage is invisible | **yes** | 48 | The only way to the second note is to delete the first |
+| **X7** | More than one note on a passage is invisible | **yes** | 64 | The only way to the second note is to delete the first |
 | **X8** | Bare link strips a note's highlight | **yes** | pinned separately | An expanded note pointing at nothing |
 | ~~X9~~ | ~~Chapter-level note leaves a ghost location~~ | **FIXED** S1 — unrepresentable | 0 | — |
 | ~~X10~~ | ~~Hide and Delete destroy a mark they do not own~~ | **FIXED** S1 | 0 | The search result the reader was holding vanishes when they tidy a note away |
@@ -565,22 +571,19 @@ a defect out of the fix for the previous defect five times running, which is the
 argument for the rework rather than a sixth patch.
 
 
-### X3 — Arriving note evicted by its own save
+### X3 — FIXED by S5 (the scrapbook store), 2026-08-18
 
-**How it is reached.** The store holds `notesMax` notes. A link arrives.
-`rememberIncomingNote` saves it; `writeNotes` (`notes_store.go:116-135`) sorts by
-storage key and keeps the TAIL, so any key sorting below the 200 survivors is
-discarded **on the very write that stored it**. `applyShareTarget` has already set
-`ActiveNote` from `t.Note`, so the reader sees it.
+As it was: the store held at most `notesMax` (200) notes and `writeNotes`
+sorted by storage key and kept the TAIL, so an arriving note whose key sorted
+below the survivors was discarded **on the very write that stored it** — shown
+to the reader, never stored, gone on the next navigation. Which notes were
+destroyed depended on the alphabetical order of the translation id: every
+`"bsb|…"` note went before any `"web|…"` one.
 
-**Why it is wrong.** I3 says a note is never silently dropped. This drops it at
-the moment of arrival, shows it anyway, and loses it on the next navigation with
-no message. `"bsb|…"` sorts below every `"web|…"`, so which notes are destroyed
-depends on nothing a reader can perceive. Hide and Delete then address a key that
-no longer exists and return in silence.
-
-**Evidence.** 200 stored; link arrives; "the arriving note was NEVER STORED
-(evicted by its own write)"; next navigation `note=""`.
+S5 deleted `notesMax` and the sort-and-keep-tail eviction outright: eviction
+is a data-loss event, and the store keeps what it is given (a capacity notice
+in the browser is S11's job). `TestArrivingNoteSurvivesItsOwnSaveOnAFullStore`
+pins the fixed behaviour on a store past the old cap.
 
 ### X4 — Notes-off orphans the highlight
 
@@ -597,18 +600,19 @@ reachable through the one control whose entire purpose is to make notes stop.
 **Evidence.** After the switch: `note="hold on" highlight=true v=16` (stale
 mirror). After the next re-derive: `note="" highlight=true v=16`.
 
-### X5 — Hide/Show asymmetry
+### X5 — FIXED by S5 (the scrapbook store), 2026-08-18
 
-**How it is reached.** A followed note (stored under BSB, read in the WEB). Hide,
-then Show.
+As it was: `hideCurrentNote` addressed `noteStoreVersion()` while
+`restoreCurrentNote` addressed `currentVersion().ID`, so on a followed note the
+restore landed on an empty key and returned in silence — the two verbs of one
+pair did not address the same object.
 
-**Why it is wrong.** `hideCurrentNote` addresses `noteStoreVersion()`
-(`notes_store.go:394`); `restoreCurrentNote` addresses `currentVersion().ID`
-(`:403`). The restore lands on an empty key and returns in silence. **The two
-verbs of one pair do not address the same object.**
-
-**Evidence.** After Show: mirror `minimized=false`, **STORE `minimized=true`**;
-after the next navigation `minimized=true`.
+S5 removed the possibility rather than patching the second verb: every verb
+takes the live note's `StoredNote.ID` (`AppState.NoteID`), handed to the
+mirror by the derive, and `noteStoreVersion()` — the function that rebuilt a
+third of the address from where the reader was standing — is deleted. The
+enumeration reported X5 covering zero violations and it was struck from
+`knownIncoherent` in the same change.
 
 ### X6 — Delete substitutes a different note
 
@@ -689,7 +693,7 @@ nothing.
 `note="look at 16" highlight=false`, with `HighlightedBook="John"`,
 `HighlightedChapter=3`, `HighlightedVerse=16` still set — which is also `X9`.
 
-### X13 — a cross-chapter note cannot be reached by any verb
+### X13 — FIXED by S5 — a cross-chapter note could not be reached by any verb
 
 **Measured 2026-08-15**, and it corrects this document twice over.
 
@@ -709,15 +713,21 @@ Incommensurable arms that is measured and true. For the cross-chapter arm it is
 **false**: `noteFromAnotherTranslation` renumbers the note and shows it on the
 chapter the passage actually lives on. Nothing is lost and nothing is misplaced.
 
-THE ACTUAL DEFECT is downstream, and it is X1's mechanism in a dimension the X1
-fix did not touch. Hide and Delete rebuild the key's BOOK and CHAPTER from
+THE ACTUAL DEFECT was downstream, and it was X1's mechanism in a dimension the
+X1 fix did not touch. Hide and Delete rebuilt the key's BOOK and CHAPTER from
 `state.CurrentBook` / `state.CurrentChapter` — where the reader is standing —
 while the note is filed under the chapter it came from. So a BSB reader looking
-at the doxology note on Romans 16 presses Delete, watches it go, and meets it
-again on the next navigation; Hide is the same silent no-op. `31bc97630` made
-`NoteVersionID` carry the VERSION third of the key and left the other two thirds
-reconstructed. Pinned by `notes_crosschapter_test.go`. It is the argument for an
-identity carried whole rather than for a third patch.
+at the doxology note on Romans 16 pressed Delete, watched it go, and met it
+again on the next navigation; Hide was the same silent no-op. `31bc97630` made
+`NoteVersionID` carry the VERSION third of the key and left the other two
+thirds reconstructed. It was the argument for an identity carried whole rather
+than for a third patch.
+
+**FIXED by S5 (the scrapbook store), 2026-08-18 — by exactly that identity.**
+Every verb addresses `StoredNote.ID`, which rides with the note through the
+cross-chapter follow, so there is no address left to rebuild and nothing to
+miss. `notes_crosschapter_test.go` flipped from pinning the defect to pinning
+the fixed behaviour, and keeps the history of why the arm exists.
 
 ### X9 and X10 — FIXED by S1 (`mark.go`), 2026-08-15
 
@@ -1023,8 +1033,24 @@ Three things are **not** fixed by either and must not be assumed away:
   translation) = **20 states**. Asserts N1 and N7, on Romans 14 because that is
   where the numbering actually diverges.
 
-Together they find **87 violations**, and every one is attributed to a named
-defect: `X4`×20, `X5`×4, `X6`×8, `X7`×48, `X11`×3, `X12`×4.
+Together they find **103 violations**, and every one is attributed to a named
+defect: `X4`×20, `X6`×8, `X7`×64, `X11`×3, `X12`×8.
+
+> **Re-measured again on 2026-08-18, after S5 (the scrapbook store).** Third
+> pass: 103. `X5`×4 is struck — Hide, Show and Delete all address the live
+> note's `StoredNote.ID`, so the two verbs of one pair can no longer address
+> different objects — and `X13` and `X3` (both pinned as named single-state
+> tests rather than as enumeration cells) died of the same change: the ID rides
+> with a cross-chapter note, and the cap and its eviction are deleted. The
+> total RISES 87→103, and honestly so: deleting the passage key means an
+> arriving note no longer destroys a same-translation note already on the
+> chapter, so those placeOwn+arrival cells now hold two live notes where the
+> old store silently held one. The arity-1 display then owes them the same
+> debts as every other multi-note cell — `X7` grew 48→64 (the invisibility)
+> and `X12` 4→8 (delete the arrival, the covered note surfaces). What the old
+> totals were hiding was data loss; the new ones report the display model's
+> remaining arity problem, which is S7's work. Nothing else moved: `X4`×20,
+> `X6`×8, `X11`×3 as before.
 
 > **Re-measured twice on 2026-08-15.** Second pass, after S1 (`mark.go`): 87.
 > `X10`×31 is struck — the largest defect in the subsystem after `X7` — because
@@ -1058,7 +1084,7 @@ new violation hide among a hundred that look the same.
 **What it cannot reach.** The panes. Everything above lives in `AppState` and the
 store; whether iOS's sticker actually stops drawing after `X4`, or whether the
 render fingerprint suppresses a repaint, is native code behind cgo and is asserted
-here by inspection with `file:line`. `X3` needs the store at `notesMax`, `X8` and
+here by inspection with `file:line`. `X3` needed the store at the old cap, `X8` and
 `X9` need a link with no verse, and the frame case needs two chapters of Romans —
 all four are pinned as named single-state tests rather than as cross-product
 cells, because carrying three more axes to reach them would say nothing new about

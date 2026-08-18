@@ -36,10 +36,10 @@ func TestOffKeepsTheNotesUnlessAskedToDelete(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
-	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "kept"})
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "kept"})
 
 	setNotesEnabled(false)
-	if len(readNotes(p)) != 1 {
+	if storedNoteCount(p) != 1 {
 		t.Error("turning notes off destroyed the stored note")
 	}
 
@@ -61,13 +61,13 @@ func TestDeleteAllNotesEmptiesTheStore(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
-	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "a"})
-	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 4, Text: "b"})
-	if len(readNotes(p)) != 2 {
-		t.Fatalf("setup: expected 2, got %d", len(readNotes(p)))
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, Text: "a"})
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 4, Text: "b"})
+	if storedNoteCount(p) != 2 {
+		t.Fatalf("setup: expected 2, got %d", storedNoteCount(p))
 	}
 	deleteAllNotes(p)
-	if got := len(readNotes(p)); got != 0 {
+	if got := storedNoteCount(p); got != 0 {
 		t.Errorf("expected the store emptied, got %d", got)
 	}
 }
@@ -90,7 +90,7 @@ func TestOffDoesNotStoreAnIncomingNote(t *testing.T) {
 	if st.ActiveNote != "" {
 		t.Errorf("note surfaced while off: %q", st.ActiveNote)
 	}
-	if n := len(readNotes(fyne.CurrentApp().Preferences())); n != 0 {
+	if n := storedNoteCount(fyne.CurrentApp().Preferences()); n != 0 {
 		t.Errorf("note was stored while off (%d in the store)", n)
 	}
 }

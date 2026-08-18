@@ -59,6 +59,15 @@ type ShareTarget struct {
 	NoteChapter int
 	NoteLo      int // first run of the 'a' record; 0 when absent
 	NoteHi      int
+
+	// What the payload carried that this build could NOT use, preserved so the
+	// store can keep it and a future forward/re-share can re-emit it
+	// (docs/NOTE_WIRE_FORMAT.md rule 3). NoteSkipped is DecodedNote.Skipped
+	// concatenated — each skipped record is self-framing (tag+len+value), so
+	// the stream splits again — and NoteOpaque is the stop byte and everything
+	// after it. Strings, not byte slices, so ShareTarget stays comparable.
+	NoteSkipped string
+	NoteOpaque  string
 }
 
 // ParseShareLink parses a BibleText web-reader URL into the passage it names.
@@ -143,6 +152,10 @@ func ParseShareLink(raw string) (ShareTarget, bool) {
 				t.NoteLo = rec.Runs[0].Lo
 				t.NoteHi = rec.Runs[0].Hi
 			}
+			for _, sk := range rec.Skipped {
+				t.NoteSkipped += string(sk)
+			}
+			t.NoteOpaque = string(rec.Opaque)
 		}
 	}
 	return t, true

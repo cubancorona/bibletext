@@ -31,7 +31,7 @@ func TestNoteComesBackOnReopen(t *testing.T) {
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
-	saveNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "This got me through last night."})
 
 	st := resumeState(t)
@@ -58,7 +58,7 @@ func TestReopenRestoresTheNoteWhole(t *testing.T) {
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
-	saveNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "read this bit"})
 
 	for _, tc := range []struct {
@@ -96,7 +96,7 @@ func TestReopenNeverTouchesAnExistingHighlight(t *testing.T) {
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
-	saveNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "note"})
 
 	st := resumeState(t)
@@ -116,7 +116,7 @@ func TestReopenSurfacesNothingWhenNotesAreOff(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
-	saveNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "hidden"})
 	setNotesEnabled(false)
 	defer setNotesEnabled(true)
@@ -149,7 +149,7 @@ func TestArrivalsClearTheSavedPosition(t *testing.T) {
 			openSearchResult(st, Verse{BookName: "Psalms", Chapter: 23, Verse: 2})
 		},
 		"note from the browser": func(st *AppState) {
-			openNote(st, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+			openNote(st, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 				VerseLo: 1, VerseHi: 4, Text: "n"})
 		},
 	} {

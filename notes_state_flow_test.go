@@ -122,18 +122,24 @@ type pinnedDefect struct {
 // Striking them is what made X12 visible, and the two facts belong together:
 // while Delete was missing the arriving note, it was also masking the
 // substitution that follows a successful one.
+//
+// X5 was struck with S5 (the scrapbook store): Hide, Show and Delete all
+// address StoredNote.ID — the identity the derive hands the mirror — so the
+// two verbs of one pair can no longer address different objects. It covered
+// 4 cells. X13, its cross-chapter sibling (pinned in
+// notes_crosschapter_test.go rather than here), died of the same change.
+//
+// S5 also WIDENED two predicates honestly, because deleting the passage key
+// exposed cells the old overwrite used to hide: a note arriving on a chapter
+// that already holds a SAME-translation note no longer destroys it, so those
+// placeOwn+arrival cells now hold two live notes — X7's invisibility and, on
+// delete, X12's substitution, reachable from a region where the old store
+// simply lost the first note (the strictly worse outcome).
 var knownIncoherent = []pinnedDefect{
 	{
 		"X4", "turning notes off keeps the highlight the note put there",
 		func(w notesWorld, inv string) bool {
 			return inv == "N1-orphan-highlight" && w.verb == verbNotesOff
-		},
-	},
-	{
-		"X5", "Hide addresses noteStoreVersion(), Show addresses currentVersion()",
-		func(w notesWorld, inv string) bool {
-			return (inv == "N2-show-missed" || inv == "N5-show-not-honoured") &&
-				w.placement == placeFollowed && w.collapsed && !w.arrival && w.verb == verbShow
 		},
 	},
 	{
@@ -145,7 +151,7 @@ var knownIncoherent = []pinnedDefect{
 	{
 		// X6's mechanism in the region X1 used to occupy. It is not a new
 		// defect and 31bc97630 did not create it: loadNote has always fallen
-		// through to noteFromAnotherTranslation, so a second note has always
+		// through to the followed note, so a second note has always
 		// been waiting to take the deleted one's place. What that commit
 		// changed is that Delete now WORKS on an arriving note, and a delete
 		// that misses cannot expose the note behind it.
@@ -154,17 +160,18 @@ var knownIncoherent = []pinnedDefect{
 		// destroyed a note they were not looking at (X1, data gone); now the
 		// right note dies and a different one appears unannounced (confusing,
 		// nothing lost). Both violate N3, and only the arity-1 read fixes it.
-		"X12", "delete the arriving note and the followed one silently takes its place",
+		"X12", "delete the arriving note and the note it had been covering silently takes its place",
 		func(w notesWorld, inv string) bool {
 			return inv == "N3-substituted" &&
-				w.placement == placeFollowed && w.arrival && w.verb == verbDelete
+				(w.placement == placeFollowed || w.placement == placeOwn) &&
+				w.arrival && w.verb == verbDelete
 		},
 	},
 	{
-		"X7", "loadNote returns one note; the rest of the passage's notes have no trace",
+		"X7", "the reading pane draws one note; the rest of the passage's notes have no trace",
 		func(w notesWorld, inv string) bool {
 			return inv == "N4-store-note-invisible" &&
-				(w.placement == placeBoth || (w.placement == placeFollowed && w.arrival))
+				(w.placement == placeBoth || w.arrival)
 		},
 	},
 }
@@ -201,9 +208,8 @@ func TestNotesStateSpace(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 	defer setNotesEnabled(true)
 
-	// Pin the clock: noteFromAnotherTranslation orders candidates by Received
-	// (notes_store.go:202-207), so a real clock would make which note follows
-	// depend on how fast the test ran.
+	// Pin the clock: the derive orders candidates by Received, so a real clock
+	// would make which note follows depend on how fast the test ran.
 	origNow := noteNow
 	noteNow = func() int64 { return 1_700_000_000 }
 	defer func() { noteNow = origNow }()
@@ -274,7 +280,7 @@ func TestNotesStateSpace(t *testing.T) {
 // which is when a store that disagrees with the mirror finally shows.
 type notesObs struct {
 	shownText string // what was on screen when the reader reached for the verb
-	shownKey  string // the store key the mirror said that note lived under
+	shownID   uint64 // the identity the mirror said the verbs would address
 
 	text string // immediately after the verb
 	min  bool
@@ -284,9 +290,9 @@ type notesObs struct {
 	afterMin  bool
 	afterHLOn bool
 
-	before map[string]SharedNote // the store, before the verb
-	after  map[string]SharedNote // the store, after
-	mapped int                   // notes in the store that belong to this passage HERE
+	before []StoredNote // the store, before the verb
+	after  []StoredNote // the store, after
+	mapped int          // notes in the store that belong to this passage HERE
 }
 
 // runNotesFlow drives the REAL functions for one combination: the store helpers,
@@ -311,19 +317,20 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		loadedVersions: map[string]*BibleData{"web": bd},
 	}
 
-	// The exact-key note carries the world's collapsed flag; the followed one in
-	// placeBoth stays expanded, which is the masking case (COLLAPSED_MASK / X7).
-	own := SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "note under web", Minimized: w.collapsed}
-	other := SharedNote{VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "note under bsb"}
+	// The exact-version note carries the world's collapsed flag; the followed
+	// one in placeBoth stays expanded, which is the masking case
+	// (COLLAPSED_MASK / X7).
+	own := StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "note under web", Minimized: w.collapsed}
+	other := StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "note under bsb"}
 	switch w.placement {
 	case placeOwn:
-		saveNote(appPrefs(), own)
+		addNote(appPrefs(), own)
 	case placeFollowed:
 		other.Minimized = w.collapsed
-		saveNote(appPrefs(), other)
+		addNote(appPrefs(), other)
 	case placeBoth:
-		saveNote(appPrefs(), other)
-		saveNote(appPrefs(), own)
+		addNote(appPrefs(), other)
+		addNote(appPrefs(), own)
 	}
 
 	setNotesEnabled(w.featureOn)
@@ -338,10 +345,10 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		addRecentChapter(st, "John", 3)
 	}
 
-	// A note-bearing link landing on the chapter the reader is already on. This
-	// is the one event that writes the mirror BY HAND rather than deriving it
-	// (share_link_open.go:308-313) — three fields of four — which is why it
-	// belongs on the cross-product and not in a case somebody thought of.
+	// A note-bearing link landing on the chapter the reader is already on. The
+	// arrival stores the note and then writes the mirror by hand — including
+	// the stored identity the verbs address — which is why it belongs on the
+	// cross-product and not in a case somebody thought of.
 	//
 	// With notes OFF the link never reaches applyShareTarget at all: it takes the
 	// offer card (share_link_open.go:62-65), which mutates nothing. Driving the
@@ -357,8 +364,8 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	}
 
 	obs.shownText = st.ActiveNote
-	obs.shownKey = st.noteStoreVersion()
-	obs.before = readNotes(appPrefs())
+	obs.shownID = st.NoteID
+	obs.before = allNotesForBrowsing(appPrefs())
 
 	// Which stored notes belong to THIS passage as the reader is reading it? The
 	// reading view can show at most one, whatever this number is.
@@ -393,7 +400,7 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	}
 
 	obs.text, obs.min, obs.hlOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
-	obs.after = readNotes(appPrefs())
+	obs.after = allNotesForBrowsing(appPrefs())
 
 	addRecentChapter(st, "John", 3) // the next navigation
 	obs.afterText, obs.afterMin, obs.afterHLOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
@@ -481,7 +488,7 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 	return bad
 }
 
-func storeHolds(notes map[string]SharedNote, text string) bool {
+func storeHolds(notes []StoredNote, text string) bool {
 	for _, n := range notes {
 		if n.Text == text {
 			return true
@@ -490,7 +497,7 @@ func storeHolds(notes map[string]SharedNote, text string) bool {
 	return false
 }
 
-func minimizedInStore(notes map[string]SharedNote, text string) bool {
+func minimizedInStore(notes []StoredNote, text string) bool {
 	for _, n := range notes {
 		if n.Text == text {
 			return n.Minimized
@@ -499,15 +506,24 @@ func minimizedInStore(notes map[string]SharedNote, text string) bool {
 	return false // not there at all is not "minimized"
 }
 
+func noteByIDIn(notes []StoredNote, id uint64) (StoredNote, bool) {
+	for _, n := range notes {
+		if n.ID == id {
+			return n, true
+		}
+	}
+	return StoredNote{}, false
+}
+
 // lostOthers names a note that disappeared from the store although the reader
 // aimed Delete at a different one.
-func lostOthers(before, after map[string]SharedNote, aimedAt string) string {
-	for k, n := range before {
+func lostOthers(before, after []StoredNote, aimedAt string) string {
+	for _, n := range before {
 		if n.Text == aimedAt {
 			continue
 		}
-		if _, still := after[k]; !still {
-			return k
+		if _, still := noteByIDIn(after, n.ID); !still {
+			return n.Text
 		}
 	}
 	return ""
@@ -515,12 +531,12 @@ func lostOthers(before, after map[string]SharedNote, aimedAt string) string {
 
 // flippedOthers reports a note whose collapsed state changed although the reader
 // aimed Hide or Show at a different one.
-func flippedOthers(before, after map[string]SharedNote, aimedAt string) bool {
-	for k, n := range before {
+func flippedOthers(before, after []StoredNote, aimedAt string) bool {
+	for _, n := range before {
 		if n.Text == aimedAt {
 			continue
 		}
-		if a, still := after[k]; still && a.Minimized != n.Minimized {
+		if a, still := noteByIDIn(after, n.ID); still && a.Minimized != n.Minimized {
 			return true
 		}
 	}
@@ -658,7 +674,7 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 	// cell. It sits on v23, which MapVerse leaves alone; the FOREIGN origins take
 	// v24, which moves. That separation is what lets one assertion tell an
 	// unrenumbered mark from a correctly-placed one.
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Romans", Chapter: 14, VerseLo: 23, Text: "the note"})
+	seeded, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Romans", Chapter: 14, VerseLo: 23, Text: "the note"})
 	addRecentChapter(st, "Romans", 14)
 
 	switch origin {
@@ -684,7 +700,7 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 		if st.ActiveNote != "" {
 			dropCurrentNote(st)
 		} else {
-			deleteNote(appPrefs(), "web", "Romans", 14)
+			deleteNoteByID(appPrefs(), seeded.ID)
 		}
 		addRecentChapter(st, "Romans", 14)
 	case evNotesOff:
@@ -776,7 +792,7 @@ func TestBareLinkStripsTheNotesHighlightAndLeavesAGhost(t *testing.T) {
 		CurrentVersion: "web", loadPhase: loadReady,
 		loadedVersions: map[string]*BibleData{"web": bd},
 	}
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "look at 16"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "look at 16"})
 	addRecentChapter(st, "John", 3)
 	if !st.hasMark() {
 		t.Fatal("precondition: the note should have raised its highlight")
@@ -820,8 +836,10 @@ func TestChapterLevelNoteTappedInTheBrowserLeavesAGhost(t *testing.T) {
 		CurrentVersion: "web", loadPhase: loadReady,
 		loadedVersions: map[string]*BibleData{"web": bd},
 	}
-	n := SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "about the whole chapter"}
-	saveNote(appPrefs(), n)
+	n, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, Text: "about the whole chapter"})
+	if !ok {
+		t.Fatal("the note was not stored")
+	}
 	openNote(st, n)
 
 	if st.hasMark() {
@@ -835,18 +853,23 @@ func TestChapterLevelNoteTappedInTheBrowserLeavesAGhost(t *testing.T) {
 
 // --- the single-state facts the cross-product cannot reach ------------------
 
-// X3: a note stored and evicted by the same write. The cross-product cannot see
-// this — it needs the store already at notesMax, which is a capacity axis, not a
-// state axis. Pinned here so a fix to writeNotes turns this red.
-func TestArrivingNoteEvictedByItsOwnSave(t *testing.T) {
+// X3 — STRUCK by S5. The old store held at most 200 notes and evicted past the
+// cap by ALPHABETICAL ORDER of the storage key, so an arriving note could be
+// discarded by the very write that stored it while the reader was looking at
+// it on screen. The scrapbook store has NO cap and NO eviction — eviction is a
+// data-loss event — so this now pins the fixed behaviour: an arrival onto a
+// store far past the old cap is stored, shown, and still there after the next
+// navigation, and nothing else went missing.
+func TestArrivingNoteSurvivesItsOwnSaveOnAFullStore(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
 
-	for i := 0; i < notesMax; i++ {
-		saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Psalms", Chapter: i + 1, Text: fmt.Sprintf("filler %d", i)})
+	const fillers = 250 // past the old notesMax of 200
+	for i := 0; i < fillers; i++ {
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: i + 1, Text: fmt.Sprintf("filler %d", i)})
 	}
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
@@ -855,21 +878,17 @@ func TestArrivingNoteEvictedByItsOwnSave(t *testing.T) {
 		CurrentVersion: "web", loadPhase: loadReady,
 		loadedVersions: map[string]*BibleData{"web": bd},
 	}
-	// "web|John|3" sorts below every "web|Psalms|…", so this key is in the head
-	// writeNotes discards. The link names the translation already open, so no
-	// switch is involved and the arrival is applied rather than parked.
 	applyShareTarget(st, ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Note: "just arrived"})
 
 	if st.ActiveNote != "just arrived" {
 		t.Fatalf("precondition: the arriving note should be on screen, got %q", st.ActiveNote)
 	}
-	if _, stored := readNotes(appPrefs())["bsb|John|3"]; stored {
-		t.Error("X3 is FIXED: the arriving note survived its own write. " +
-			"Strike X3 from docs/NOTES_STATE.md and delete this test's expectation.")
+	if got := storedNoteCount(appPrefs()); got != fillers+1 {
+		t.Errorf("the store evicted: %d notes, want %d — eviction is a data-loss event", got, fillers+1)
 	}
 	addRecentChapter(st, "John", 3)
-	if st.ActiveNote != "" {
-		t.Error("X3 is FIXED: the note survived the next navigation. Update docs/NOTES_STATE.md.")
+	if st.ActiveNote != "just arrived" {
+		t.Errorf("the arriving note did not survive the next navigation: %q", st.ActiveNote)
 	}
 }
 
@@ -936,7 +955,7 @@ func TestTheAtMostOneExpandedCapIsNotRepresentable(t *testing.T) {
 		loadedVersions: map[string]*BibleData{"web": bd},
 	}
 	for _, id := range []string{"web", "bsb", "webc"} {
-		saveNote(appPrefs(), SharedNote{VersionID: id, Book: "John", Chapter: 3, VerseLo: 16, Text: "note under " + id})
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: id, Book: "John", Chapter: 3, VerseLo: 16, Text: "note under " + id})
 	}
 	addRecentChapter(st, "John", 3)
 
@@ -951,7 +970,7 @@ func TestTheAtMostOneExpandedCapIsNotRepresentable(t *testing.T) {
 		t.Fatal("precondition: one of the three should be live")
 	}
 	expanded := 0
-	for _, n := range readNotes(appPrefs()) {
+	for _, n := range allNotesForBrowsing(appPrefs()) {
 		if !n.Minimized {
 			expanded++
 		}

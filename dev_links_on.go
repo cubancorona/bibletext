@@ -129,7 +129,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		if notesEnabled() {
 			on = "on"
 		}
-		status.Text = "Notes are " + on + " · " + itoa(len(readNotes(appPrefs()))) + " stored"
+		status.Text = "Notes are " + on + " · " + itoa(storedNoteCount(appPrefs())) + " stored"
 		status.Refresh()
 	}
 	refreshStatus()
@@ -142,7 +142,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	wipe := widget.NewButton("Delete all stored notes", func() {
 		deleteAllNotes(appPrefs())
-		state.ActiveNote, state.NoteMinimized, state.NoteVerseLo = "", false, 0
+		clearLiveNote(state)
 		refreshStatus()
 		state.refresh()
 	})

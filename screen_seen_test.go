@@ -155,7 +155,7 @@ func TestKeyViewsAreNotBlank(t *testing.T) {
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, Text: "a note to look at"})
 
 	for _, tc := range []struct {
@@ -194,7 +194,7 @@ func TestNotesBrowserShowsAWayOut(t *testing.T) {
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, Text: "a note to look at"})
 
 	st := psalm23State()

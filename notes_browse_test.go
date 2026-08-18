@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"sort"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -9,13 +10,13 @@ import (
 
 func TestNoteReference(t *testing.T) {
 	for _, tc := range []struct {
-		n    SharedNote
+		n    StoredNote
 		want string
 	}{
-		{SharedNote{Book: "John", Chapter: 11, VerseLo: 35, VerseHi: 35}, "John 11:35"},
-		{SharedNote{Book: "John", Chapter: 11, VerseLo: 35}, "John 11:35"},
-		{SharedNote{Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4}, "Psalms 23:1-4"},
-		{SharedNote{Book: "Psalms", Chapter: 23}, "Psalms 23"}, // whole chapter
+		{StoredNote{Book: "John", Chapter: 11, VerseLo: 35, VerseHi: 35}, "John 11:35"},
+		{StoredNote{Book: "John", Chapter: 11, VerseLo: 35}, "John 11:35"},
+		{StoredNote{Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4}, "Psalms 23:1-4"},
+		{StoredNote{Book: "Psalms", Chapter: 23}, "Psalms 23"}, // whole chapter
 	} {
 		if got := noteReference(tc.n); got != tc.want {
 			t.Errorf("noteReference(%+v) = %q, want %q", tc.n, got, tc.want)
@@ -26,7 +27,7 @@ func TestNoteReference(t *testing.T) {
 // Reading order, not the alphabetical-by-key order the blob is written in.
 func TestSortedNotesUsesCanonOrder(t *testing.T) {
 	order := map[string]int{"Genesis": 0, "Psalms": 18, "John": 42, "Revelation": 65}
-	notes := map[string]SharedNote{
+	notes := map[string]StoredNote{
 		"a": {Book: "Revelation", Chapter: 22, Text: "x"},
 		"b": {Book: "Genesis", Chapter: 1, Text: "x"},
 		"c": {Book: "John", Chapter: 11, Text: "x"},
@@ -50,7 +51,7 @@ func TestSortedNotesUsesCanonOrder(t *testing.T) {
 // narrower one — sorted to the end, never dropped.
 func TestSortedNotesKeepsBooksTheCanonLacks(t *testing.T) {
 	order := map[string]int{"Genesis": 0, "John": 42}
-	notes := map[string]SharedNote{
+	notes := map[string]StoredNote{
 		"a": {Book: "Tobit", Chapter: 4, Text: "x"},
 		"b": {Book: "John", Chapter: 3, Text: "x"},
 	}
@@ -64,7 +65,7 @@ func TestSortedNotesKeepsBooksTheCanonLacks(t *testing.T) {
 }
 
 func TestMatchNotes(t *testing.T) {
-	notes := []SharedNote{
+	notes := []StoredNote{
 		{Book: "John", Chapter: 11, VerseLo: 35, Text: "Read this at the hospital"},
 		{Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Text: "Got me through the night"},
 	}
@@ -132,7 +133,7 @@ func TestBrowsableNotesRespectsTheSwitch(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
-	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "hi"})
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "hi"})
 
 	st := psalm23State()
 	st.NotesMode = true
@@ -160,7 +161,7 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "John", 3
-	openNote(st, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	openNote(st, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "n"})
 
 	if st.CurrentBook != "Psalms" || st.CurrentChapter != 23 {
@@ -179,7 +180,7 @@ func TestOpenNoteWithNoVerseDoesNotHighlight(t *testing.T) {
 	setNotesEnabled(true)
 
 	st := psalm23State()
-	openNote(st, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "n"})
+	openNote(st, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, Text: "n"})
 	if st.hlOn() {
 		t.Errorf("a chapter-wide note highlighted verse %d", st.hlLo())
 	}
@@ -193,14 +194,17 @@ func TestOpenNoteRestoresAMinimizedOne(t *testing.T) {
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
-	n := SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	n := StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "n", Minimized: true}
-	saveNote(p, n)
+	stored, ok := addNote(p, n)
+	if !ok {
+		t.Fatal("the note was not stored")
+	}
 
 	st := psalm23State()
-	openNote(st, n)
+	openNote(st, stored)
 
-	back, ok := loadNote(p, "web", "Psalms", 23)
+	back, ok := noteForChapter(p, "web", "Psalms", 23)
 	if !ok {
 		t.Fatal("the note vanished")
 	}
@@ -213,7 +217,7 @@ func TestOpenNoteRestoresAMinimizedOne(t *testing.T) {
 // arrived is the one you opened the list for.
 func TestSortedNotesNewestFirst(t *testing.T) {
 	order := map[string]int{"Genesis": 0, "John": 42}
-	notes := map[string]SharedNote{
+	notes := map[string]StoredNote{
 		"a": {Book: "Genesis", Chapter: 1, Text: "oldest", Received: 100},
 		"b": {Book: "John", Chapter: 3, Text: "newest", Received: 300},
 		"c": {Book: "John", Chapter: 1, Text: "middle", Received: 200},
@@ -239,7 +243,7 @@ func TestSortedNotesNewestFirst(t *testing.T) {
 // deterministically rather than shuffling between renders.
 func TestSortedNotesIsStableWithoutTimestamps(t *testing.T) {
 	order := map[string]int{"Genesis": 0, "John": 42}
-	notes := map[string]SharedNote{
+	notes := map[string]StoredNote{
 		"a": {Book: "John", Chapter: 3, Text: "x"},
 		"b": {Book: "Genesis", Chapter: 1, Text: "x"},
 		"c": {Book: "John", Chapter: 1, Text: "x"},
@@ -264,19 +268,20 @@ func TestMinimizingDoesNotRestampANote(t *testing.T) {
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 
+	origNow := noteNow
 	noteNow = func() int64 { return 1000 }
-	defer func() { noteNow = func() int64 { return 0 } }()
-	saveNote(p, SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "hi"})
+	defer func() { noteNow = origNow }()
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "hi"})
 
-	got, ok := loadNote(p, "web", "John", 3)
+	got, ok := noteForChapter(p, "web", "John", 3)
 	if !ok || got.Received != 1000 {
 		t.Fatalf("expected the arrival stamped at 1000, got %+v", got)
 	}
 
 	noteNow = func() int64 { return 9999 } // time passes
-	setNoteMinimized(p, "web", "John", 3, true)
+	setNoteMinimizedByID(p, got.ID, true)
 
-	got, _ = loadNote(p, "web", "John", 3)
+	got, _ = noteForChapter(p, "web", "John", 3)
 	if got.Received != 1000 {
 		t.Errorf("minimizing restamped the note: %d, want the original 1000", got.Received)
 	}
@@ -373,13 +378,22 @@ func TestClosingTheNotesListKeepsALiveSearch(t *testing.T) {
 	}
 }
 
-// notesSlice adapts the map fixtures to sortedNotes, which takes a LIST now
-// that a reader's own notes share the browser with the ones they were sent —
-// own notes are appended rather than keyed, because two of them can sit on the
-// same passage in the same translation.
-func notesSlice(m map[string]SharedNote) []SharedNote {
-	out := make([]SharedNote, 0, len(m))
-	for _, n := range m {
+// notesSlice adapts the map fixtures to sortedNotes, which takes the store's
+// list. It assigns deterministic ids by fixture key order, because every real
+// note has one and the sort's final tiebreak is the id.
+func notesSlice(m map[string]StoredNote) []StoredNote {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]StoredNote, 0, len(m))
+	for i, k := range keys {
+		n := m[k]
+		n.ID = uint64(i + 1)
+		if n.Kind == "" {
+			n.Kind = noteKindReceived
+		}
 		out = append(out, n)
 	}
 	return out

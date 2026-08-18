@@ -37,8 +37,8 @@ func TestSettingsOffersDeleteAllNotes(t *testing.T) {
 	p.Hide()
 
 	// With a note stored it must be enabled, and deleting must clear the store.
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "John", Chapter: 11, VerseLo: 35, Text: "hi"})
-	if len(readNotes(appPrefs())) != 1 {
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 11, VerseLo: 35, Text: "hi"})
+	if storedNoteCount(appPrefs()) != 1 {
 		t.Fatal("precondition: one stored note")
 	}
 	showAISettings(st)
@@ -53,7 +53,7 @@ func TestSettingsOffersDeleteAllNotes(t *testing.T) {
 	if !ok || confirm == nil {
 		t.Fatal("deleting did not ask for confirmation")
 	}
-	if len(readNotes(appPrefs())) != 1 {
+	if storedNoteCount(appPrefs()) != 1 {
 		t.Error("notes were deleted before the reader confirmed")
 	}
 	del := findTreeButton(confirm.Content, "Delete them")
@@ -61,7 +61,7 @@ func TestSettingsOffersDeleteAllNotes(t *testing.T) {
 		t.Fatal("confirmation has no 'Delete them'")
 	}
 	del.OnTapped()
-	if n := len(readNotes(appPrefs())); n != 0 {
+	if n := storedNoteCount(appPrefs()); n != 0 {
 		t.Errorf("after confirming, %d notes remain", n)
 	}
 }

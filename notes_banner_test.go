@@ -84,13 +84,17 @@ func TestNoteBannerMinimizedChipRestores(t *testing.T) {
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
-	saveNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23,
+	stored, ok := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "kept", Minimized: true})
+	if !ok {
+		t.Fatal("the note was not stored")
+	}
 
 	st := bannerState(t)
 	st.ActiveNote = "kept"
 	st.NoteMinimized = true
 	st.NoteVerseLo = 1
+	st.NoteID = stored.ID // the identity Show addresses
 
 	b := buildNoteBanner(st)
 	if b == nil {
@@ -109,7 +113,7 @@ func TestNoteBannerMinimizedChipRestores(t *testing.T) {
 	if st.NoteMinimized {
 		t.Error("the chip did not restore the note")
 	}
-	back, _ := loadNote(p, "web", "Psalms", 23)
+	back, _ := noteForChapter(p, "web", "Psalms", 23)
 	if back.Minimized {
 		t.Error("restore did not persist")
 	}
