@@ -38,8 +38,9 @@ const (
 
 // StoredNote is one record of the scrapbook store.
 //
-// The anchor (VersionID/Book/Chapter/VerseLo/VerseHi) is stored exactly as
-// today — the full anchor model is S6, not this step.
+// The anchor is VersionID/Book/Chapter plus a run set: AnchorRuns where the
+// wire carried one, else the VerseLo/VerseHi span. Resolving it into the
+// translation on screen is notes_anchor.go's job (S6), never an inline probe.
 type StoredNote struct {
 	// ID is this note's identity in the reader's scrapbook, and the ONLY thing
 	// a verb ever addresses. Minted from a persisted monotonic counter
@@ -50,13 +51,23 @@ type StoredNote struct {
 	// Kind: "received" | "mine". See NoteKind.
 	Kind NoteKind
 
-	// The anchor, as stored today. VersionID is the translation the note was
-	// written against — where it is FILED, not necessarily what is on screen.
+	// The anchor. VersionID is the translation the note was written against —
+	// where it is FILED, not necessarily what is on screen.
 	VersionID string
 	Book      string
 	Chapter   int
 	VerseLo   int
 	VerseHi   int
+
+	// AnchorRuns is the FULL anchor as a run set (S6, docs/NOTES_SCRAPBOOK.md)
+	// — what the wire's 'a' record carried, when it carried one. A resolution
+	// is a set, not a span: WEB Mark 9:43-46 lands in the BSB as [43,43] and
+	// [45,45], which VerseLo/VerseHi cannot say. Empty for a note whose link
+	// carried no 'a' record; VerseLo/VerseHi always hold the FIRST run, so
+	// everything already reading them keeps working. Additive ("ar",
+	// omitempty): a store written before this field serialises byte-identically
+	// after it.
+	AnchorRuns []anchorRun
 
 	// Text is the message. UNTRUSTED: rendered as text on every surface, never
 	// as markup.
@@ -95,20 +106,21 @@ type StoredNote struct {
 // order in the store, so it must stay stable: an unchanged store must
 // serialise to identical bytes or preferences.json churns on every write.
 type storedNoteJSON struct {
-	ID          uint64   `json:"id"`
-	Kind        NoteKind `json:"k"`
-	VersionID   string   `json:"v,omitempty"`
-	Book        string   `json:"b,omitempty"`
-	Chapter     int      `json:"c,omitempty"`
-	VerseLo     int      `json:"lo,omitempty"`
-	VerseHi     int      `json:"hi,omitempty"`
-	Text        string   `json:"t,omitempty"`
-	Minimized   bool     `json:"m,omitempty"`
-	Received    int64    `json:"ts,omitempty"`
-	SenderName  string   `json:"sn,omitempty"`
-	SenderID    string   `json:"sid,omitempty"`
-	WireSkipped []byte   `json:"ws,omitempty"`
-	WireOpaque  []byte   `json:"wo,omitempty"`
+	ID          uint64      `json:"id"`
+	Kind        NoteKind    `json:"k"`
+	VersionID   string      `json:"v,omitempty"`
+	Book        string      `json:"b,omitempty"`
+	Chapter     int         `json:"c,omitempty"`
+	VerseLo     int         `json:"lo,omitempty"`
+	VerseHi     int         `json:"hi,omitempty"`
+	AnchorRuns  []anchorRun `json:"ar,omitempty"`
+	Text        string      `json:"t,omitempty"`
+	Minimized   bool        `json:"m,omitempty"`
+	Received    int64       `json:"ts,omitempty"`
+	SenderName  string      `json:"sn,omitempty"`
+	SenderID    string      `json:"sid,omitempty"`
+	WireSkipped []byte      `json:"ws,omitempty"`
+	WireOpaque  []byte      `json:"wo,omitempty"`
 }
 
 // storedNoteKnownKeys is what UnmarshalJSON subtracts to find Extra. A key
@@ -118,7 +130,7 @@ type storedNoteJSON struct {
 // corruption.
 var storedNoteKnownKeys = map[string]bool{
 	"id": true, "k": true, "v": true, "b": true, "c": true,
-	"lo": true, "hi": true, "t": true, "m": true, "ts": true,
+	"lo": true, "hi": true, "ar": true, "t": true, "m": true, "ts": true,
 	"sn": true, "sid": true, "ws": true, "wo": true,
 }
 
@@ -128,7 +140,8 @@ func (n StoredNote) MarshalJSON() ([]byte, error) {
 	base, err := json.Marshal(storedNoteJSON{
 		ID: n.ID, Kind: n.Kind, VersionID: n.VersionID, Book: n.Book,
 		Chapter: n.Chapter, VerseLo: n.VerseLo, VerseHi: n.VerseHi,
-		Text: n.Text, Minimized: n.Minimized, Received: n.Received,
+		AnchorRuns: n.AnchorRuns,
+		Text:       n.Text, Minimized: n.Minimized, Received: n.Received,
 		SenderName: n.SenderName, SenderID: n.SenderID,
 		WireSkipped: n.WireSkipped, WireOpaque: n.WireOpaque,
 	})
@@ -185,7 +198,8 @@ func (n *StoredNote) UnmarshalJSON(data []byte) error {
 	for key, dst := range map[string]any{
 		"id": &out.ID, "k": &out.Kind, "v": &out.VersionID, "b": &out.Book,
 		"c": &out.Chapter, "lo": &out.VerseLo, "hi": &out.VerseHi,
-		"t": &out.Text, "m": &out.Minimized, "ts": &out.Received,
+		"ar": &out.AnchorRuns,
+		"t":  &out.Text, "m": &out.Minimized, "ts": &out.Received,
 		"sn": &out.SenderName, "sid": &out.SenderID,
 		"ws": &out.WireSkipped, "wo": &out.WireOpaque,
 	} {

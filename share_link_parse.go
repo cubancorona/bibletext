@@ -60,6 +60,14 @@ type ShareTarget struct {
 	NoteLo      int // first run of the 'a' record; 0 when absent
 	NoteHi      int
 
+	// NoteRuns is the 'a' record's FULL run set — "43-43,45-46" — where
+	// NoteLo/NoteHi above carry only the first run. A resolution is a set, not
+	// a span (WEB Mark 9:43-46 lands in the BSB with a hole in it), and the
+	// store files the whole set (rememberIncomingNote). A string in the
+	// noteRunsSpelling grammar, not a slice, so ShareTarget stays comparable;
+	// "" when the record was absent or empty.
+	NoteRuns string
+
 	// What the payload carried that this build could NOT use, preserved so the
 	// store can keep it and a future forward/re-share can re-emit it
 	// (docs/NOTE_WIRE_FORMAT.md rule 3). NoteSkipped is DecodedNote.Skipped
@@ -151,6 +159,7 @@ func ParseShareLink(raw string) (ShareTarget, bool) {
 			if len(rec.Runs) > 0 {
 				t.NoteLo = rec.Runs[0].Lo
 				t.NoteHi = rec.Runs[0].Hi
+				t.NoteRuns = noteRunsSpelling(rec.Runs)
 			}
 			for _, sk := range rec.Skipped {
 				t.NoteSkipped += string(sk)
@@ -177,6 +186,50 @@ func fragmentKeyPresent(frag, key string) (string, bool) {
 }
 
 const shareLinkHost = "bibletext.co.uk"
+
+// noteRunsSpelling writes a decoded run set in ShareTarget.NoteRuns' grammar:
+// runs joined by ",", each "lo" or "lo-hi" — the fragment's own verse-span
+// spelling, chosen so ShareTarget can carry the whole set and stay comparable.
+func noteRunsSpelling(runs []NoteVerseRun) string {
+	var b strings.Builder
+	for i, r := range runs {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(strconv.Itoa(r.Lo))
+		if r.Hi > r.Lo {
+			b.WriteByte('-')
+			b.WriteString(strconv.Itoa(r.Hi))
+		}
+	}
+	return b.String()
+}
+
+// noteRunsFromSpelling is the inverse. Anything malformed yields nil — the
+// first run already rode across in NoteLo/NoteHi, so a damaged tail costs the
+// extra runs, never the note.
+func noteRunsFromSpelling(s string) []NoteVerseRun {
+	if s == "" {
+		return nil
+	}
+	var runs []NoteVerseRun
+	for _, part := range strings.Split(s, ",") {
+		loStr, hiStr, ranged := strings.Cut(part, "-")
+		lo, err := strconv.Atoi(loStr)
+		if err != nil || lo < 1 {
+			return nil
+		}
+		hi := lo
+		if ranged {
+			hi, err = strconv.Atoi(hiStr)
+			if err != nil || hi < lo {
+				return nil
+			}
+		}
+		runs = append(runs, NoteVerseRun{Lo: lo, Hi: hi})
+	}
+	return runs
+}
 
 // parseVersePayload reads the verse span from the fragment ("v16", "v16-18")
 // or, failing that, the ?v= alias ("16-18"). Anything unparseable yields no

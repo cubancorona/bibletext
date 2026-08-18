@@ -52,10 +52,10 @@ func TestCrossChapterNoteIsReachedByItsVerb(t *testing.T) {
 
 	// Sanity: the note is INVISIBLE on the BSB's Romans 14 and VISIBLE,
 	// correctly renumbered, on the BSB's Romans 16. This half always worked.
-	if _, ok := noteForChapter(appPrefs(), "bsb", "Romans", 14); ok {
+	if _, ok := noteForChapter(appPrefs(), "bsb", "Romans", 14, nil); ok {
 		t.Error("the note showed on Romans 14 in a translation that files it at 16")
 	}
-	n, ok := noteForChapter(appPrefs(), "bsb", "Romans", 16)
+	n, ok := noteForChapter(appPrefs(), "bsb", "Romans", 16, nil)
 	if !ok {
 		t.Fatal("the note did not follow the doxology into Romans 16")
 	}
@@ -86,7 +86,7 @@ func TestCrossChapterNoteIsReachedByItsVerb(t *testing.T) {
 	}
 	dropCurrentNote(st)
 
-	if _, back := noteForChapter(appPrefs(), "bsb", "Romans", 16); back {
+	if _, back := noteForChapter(appPrefs(), "bsb", "Romans", 16, nil); back {
 		t.Error("X13 is BACK: the reader watched the note go and it is still there — " +
 			"a verb rebuilt an address instead of using the note's own identity")
 	}
