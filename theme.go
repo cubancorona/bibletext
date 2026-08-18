@@ -24,7 +24,13 @@ const (
 	colorNameVerseText   fyne.ThemeColorName = "bibleTextVerseText"
 	colorNameHighlight   fyne.ThemeColorName = "bibleTextHighlight"
 	colorNameHighlightHi fyne.ThemeColorName = "bibleTextHighlightText"
-	colorNameMuted       fyne.ThemeColorName = "bibleTextMuted"
+	// colorNameHighlightMulti is HighlightMulti by name, for the one surface
+	// (the RichText fallback) that can only reference palette colours through
+	// the theme. Wired now so the multi-note wash reaches every surface the way
+	// Highlight does; nothing resolves it yet (tintMulti is unreachable — see
+	// tint_multi_guard_test.go).
+	colorNameHighlightMulti fyne.ThemeColorName = "bibleTextHighlightMulti"
+	colorNameMuted          fyne.ThemeColorName = "bibleTextMuted"
 	// The native panes write pal.RedLetter into their markup as a hex literal,
 	// but a RichText segment can only NAME a theme colour — so the Fyne fallback
 	// pane needs the same palette entry reachable by name.
@@ -44,9 +50,16 @@ type palette struct {
 	AccentText    color.NRGBA // text drawn on Accent
 	Highlight     color.NRGBA // faint wash behind the highlighted verse
 	HighlightText color.NRGBA // the highlighted verse's own text
-	VerseNumber   color.NRGBA // superscript verse numbers
-	RedLetter     color.NRGBA // words of Christ (red-letter mode)
-	Input         color.NRGBA
+	// HighlightMulti is the wash where MORE THAN ONE note covers a verse
+	// (tintMulti, tint.go) — separated from Highlight by HUE, not brightness:
+	// a second amber would only read as a stronger mark, where a cool wash
+
+	// (2026-08); nothing draws it yet — one lit span at a time is the recorded
+
+	HighlightMulti color.NRGBA
+	VerseNumber    color.NRGBA // superscript verse numbers
+	RedLetter      color.NRGBA // words of Christ (red-letter mode)
+	Input          color.NRGBA
 
 	// ControlOutline draws the OFF state of a checkbox and the ring of an
 	// unselected radio — the only things ColorNameInputBorder reaches here. It is
@@ -86,9 +99,14 @@ var lightPalette = palette{
 	// "highlighted" while leaving red as red.
 	Highlight:     color.NRGBA{R: 255, G: 224, B: 138, A: 255}, // marker-pen amber
 	HighlightText: color.NRGBA{R: 36, G: 60, B: 112, A: 255},   // unused by the panes; see reading.go .hl
-	VerseNumber:   color.NRGBA{R: 83, G: 104, B: 143, A: 255},  // muted slate-blue superscripts
-	RedLetter:     color.NRGBA{R: 178, G: 58, B: 46, A: 255},   // deep crimson on parchment
-	Input:         color.NRGBA{R: 252, G: 251, B: 247, A: 255},
+	// A cool lapis-family wash beside the amber: hue separation, so "several
+	// notes here" cannot be misread as "one strong note". Red letters hold
+
+	// with its dark twin below; unreachable until asked (tintMulti).
+	HighlightMulti: color.NRGBA{R: 199, G: 219, B: 245, A: 255}, // #C7DBF5
+	VerseNumber:    color.NRGBA{R: 83, G: 104, B: 143, A: 255},  // muted slate-blue superscripts
+	RedLetter:      color.NRGBA{R: 178, G: 58, B: 46, A: 255},   // deep crimson on parchment
+	Input:          color.NRGBA{R: 252, G: 251, B: 247, A: 255},
 	// Unchanged from what Border already drew here: light-mode boxes and rings
 	// were never the problem (the fill is lighter than the card, so the control
 	// reads even at a 1.84:1 outline), and this palette is tuned and shipped.
@@ -130,9 +148,15 @@ var darkPalette = palette{
 	// what that looks like.
 	Highlight:     color.NRGBA{R: 84, G: 62, B: 16, A: 255},
 	HighlightText: color.NRGBA{R: 182, G: 205, B: 240, A: 255}, // unused by the panes; see reading.go .hl
-	VerseNumber:   color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
-	RedLetter:     color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
-	Input:         color.NRGBA{R: 38, G: 35, B: 31, A: 255},
+	// The gold band's cool twin: a deep slate-blue, apart from the gold by HUE
+	// the way the light pair is, so the two facts stay two facts in the dark
+	// as well. The soft red above it measures 3.6:1 (pinned >= 3.0 in
+
+	// asked (tintMulti).
+	HighlightMulti: color.NRGBA{R: 46, G: 62, B: 92, A: 255},    // #2E3E5C
+	VerseNumber:    color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
+	RedLetter:      color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
+	Input:          color.NRGBA{R: 38, G: 35, B: 31, A: 255},
 	// Lifted well clear of Border. Border sat 1.22:1 from SurfaceAlt, which is
 	// fine for an edge and invisible for a hairline checkbox; this is 3.1:1 on
 	// SurfaceAlt, 3.7:1 on Background and 3.4:1 on Surface, so an unticked box
@@ -279,6 +303,8 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 		return p.Highlight
 	case colorNameHighlightHi:
 		return p.HighlightText
+	case colorNameHighlightMulti:
+		return p.HighlightMulti
 	case colorNameRedLetter:
 		return p.RedLetter
 	}

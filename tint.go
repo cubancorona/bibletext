@@ -57,6 +57,16 @@ const (
 	tintHighlight                  // the search / cross-ref / mark band
 	tintReadAlong                  // the verse the narration is currently on
 
+	// tintMulti — MORE THAN ONE note covers this verse ([redacted-retired-private-reference],
+	// the tint table). Fully wired through the tables below and the palette
+
+	// #C7DBF5 / dark #2E3E5C), and deliberately UNREACHABLE: chapterTint never
+
+	// invariant. tint_multi_guard_test.go holds that line — wiring a code path
+
+	// asked for, chapterTint (and only chapterTint) widens.
+	tintMulti
+
 	// tintCount bounds the markup tables below. It is the last constant on
 	// purpose: adding a tint above it grows the tables, and a table built by
 	// range-over-tintCount cannot forget the new row.
@@ -75,6 +85,11 @@ const (
 func (t verseTint) overridesTextColour() bool {
 	switch t {
 	case tintHighlight:
+		return true
+	case tintMulti:
+		// The same decision as tintHighlight, for the same reason: this wash is
+		// a strong, chosen band, and the verse numbers' muted slate disappears
+		// into it — under the band the numbers take the body colour.
 		return true
 	default:
 		return false
@@ -98,6 +113,8 @@ func (t verseTint) wash(pal palette) (color.NRGBA, bool) {
 	switch t {
 	case tintHighlight:
 		return pal.Highlight, true
+	case tintMulti:
+		return pal.HighlightMulti, true
 	default:
 		return color.NRGBA{}, false
 	}
@@ -132,6 +149,13 @@ func (t verseTint) htmlClass() string {
 	switch t {
 	case tintHighlight:
 		return "hl"
+	case tintMulti:
+		// Same grammar as "hl", one letter of meaning: multi. Every class named
+		// here gets its stylesheet rule from the same table row (tintHTML.CSS),
+		// so the class cannot exist without its rule — the rule rides in every
+		// Apple-dialect page from the day the class is named, which is why the
+		// chapter-tint golden carries an .hlm rule no markup references yet.
+		return "hlm"
 	default:
 		return ""
 	}

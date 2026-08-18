@@ -325,6 +325,13 @@ func openNote(state *AppState, n StoredNote) {
 	if state == nil {
 		return
 	}
+	// Leaving the list for the passage: remember where in the list the reader
+	// was, so coming back to Notes returns them to this note's neighbourhood.
+	// The windowed list has no continuous scroll callback (see notesScrollRead),
+	// so the moment of leaving is when the offset is harvested.
+	if state.notesScrollRead != nil {
+		state.notesScroll = state.notesScrollRead()
+	}
 	if n.Minimized {
 		// By the note's own identity, handed here by the row that drew it —
 		// never a key rebuilt from its fields.
@@ -353,11 +360,38 @@ func openNote(state *AppState, n StoredNote) {
 	openSearchResultRange(state, Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}, n.VerseHi)
 }
 
+// notesCapacityNoticeAt is where the browser starts saying, once and quietly,
+// that the scrapbook has grown very large. It is a NOTICE, not a cap: the store
+// keeps everything it is given, always ([redacted-retired-private-reference] — eviction is a
+// data-loss event, and the old store's silent 200-entry eviction is the defect
+// this replaced). The number marks where an unbounded collection starts to have
+// a cost worth naming — load parse and preferences rewrite grow with the store —
+// years before it bites on any current device.
+const notesCapacityNoticeAt = 2000
+
+// notesCapacityLine is the one quiet sentence shown at and past the threshold.
+// The app's own chrome voice: no link, no button, no action asked of anyone —
+// because there is nothing the reader must do. It states the promise (nothing
+// is removed) before the cost (a very large scrapbook can be slow), in that
+// order, so it cannot be misread as a warning that notes are about to go away.
+func notesCapacityLine(stored int) string {
+	if stored < notesCapacityNoticeAt {
+		return ""
+	}
+	return "Every note is kept — nothing is ever removed — though a scrapbook this large can be slow on older devices."
+}
+
 // buildNotesBrowseView renders the Notes mode: a line saying what is on show,
 // the sort control, then every matching note, each tapping through to its
 // passage.
 func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
+	// A rebuild while Notes mode is up (sort flip, theme change, a note
+	// arriving) replaces the list wholesale; ask the OLD list where the reader
+	// was before building the new one at the same place.
+	if state != nil && state.notesScrollRead != nil {
+		state.notesScroll = state.notesScrollRead()
+	}
 	notes, total := browsableNotes(state)
 
 	// Nothing stored at all is a different situation from a filter that matched
@@ -447,28 +481,83 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 			controls, container.NewPadded(line))
 	}
 
-	column := container.NewVBox()
-	for _, n := range notes {
-		column.Add(noteBrowseRow(state, n, pal))
+	// THE CAPACITY NOTICE (S11b). One quiet sentence in the header once the
+	// stored count — the whole store, not the filtered view — reaches the
+	// threshold. It rides under the header line rather than in the list, so it
+	// is said once, not per scroll, and never pushes a note off screen.
+	if capacity := notesCapacityLine(storedNoteCount(appPrefs())); capacity != "" {
+		quiet := widget.NewLabel(capacity)
+		quiet.Wrapping = fyne.TextWrapWord
+		quiet.Importance = widget.LowImportance
+		head = container.NewVBox(head,
+			container.NewThemeOverride(quiet, compactTheme{Theme: base, text: 12}))
 	}
-	// squeezeWidthLayout: a scroll widens its content to the content's MinSize
-	// and clips the overflow sideways, with no bar to reach it (see sheet_fit.go).
-	body := container.NewVScroll(container.New(squeezeWidthLayout{}, column))
+
+	// THE WINDOWED LIST (S11a). A widget.List builds rows for the viewport, not
+	// for the store: the VBox-per-note it replaces built all 2,000 rows of a
+	// 2,000-note scrapbook to show the six that fit on screen (measured at 9.9 s
+	// on an M3 Max — [redacted-retired-private-reference] hard case 14 called this column the
+	// browser's only real ceiling). The ROW is unchanged: the same noteBrowseRow
+	// the column added, separator and all — the List's own separators are hidden
+	// so the row keeps drawing its own, exactly as before.
+	//
+	// Row heights vary (a bubble wraps its message), so each row measures itself
+	// as it comes into view and tells the list via SetItemHeight: resizing to the
+	// list's width first is what makes the wrapped label report its true height.
+	// Off-screen rows fall back to the template's height until first seen — the
+	// standard windowed-list trade: the scrollbar's extent is approximate until
+	// the rows near it have been visited, and no reader-visible row is ever
+	// wrong. SetItemHeight re-enters updateItem once via RefreshItem and then
+	// stops, because the re-measure of an unchanged row is byte-stable.
+	list := widget.NewList(
+		func() int { return len(notes) },
+		func() fyne.CanvasObject {
+			// The template row sizes the list's idea of an unvisited row. A real
+			// row from a real one-line note, so the estimate is a typical row and
+			// the first layout builds a viewport's worth of rows, not hundreds.
+			return container.NewVBox(noteBrowseRow(state, StoredNote{
+				Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "A note.",
+			}, pal))
+		},
+		nil, // set below: UpdateItem needs the list itself for SetItemHeight
+	)
+	list.HideSeparators = true
+	list.UpdateItem = func(id widget.ListItemID, o fyne.CanvasObject) {
+		if id < 0 || id >= len(notes) {
+			return
+		}
+		slot := o.(*fyne.Container)
+		row := noteBrowseRow(state, notes[id], pal)
+		slot.Objects = []fyne.CanvasObject{row}
+		slot.Refresh()
+		if w := list.Size().Width; w > 0 {
+			// Two passes: the first gives the wrapping labels their width (their
+			// MinSize height is only honest once they know it), the second reads
+			// the settled answer.
+			row.Resize(fyne.NewSize(w, row.MinSize().Height))
+			row.Resize(fyne.NewSize(w, row.MinSize().Height))
+			list.SetItemHeight(id, row.MinSize().Height)
+		}
+	}
 	// Keep the reader's place in the list. Opening a note and coming back — or
 	// any rebuild while Notes mode is up — otherwise dropped them at the top of
-	// what can be a long list. Restored after layout, because a scroll clamps an
-	// offset against a content height it has not measured yet.
-	body.OnScrolled = func(p fyne.Position) { state.notesScroll = p.Y }
+	// what can be a long list. Restored after layout, because a list clamps an
+	// offset against a content height it has not measured yet; harvested back
+	// via notesScrollRead (see openNote and the top of this builder).
+	// implementation verification: this closure aliases the list built by THIS call.
+	// A build whose result is never shown repoints the harvest at a fresh,
+	// unscrolled list and the reader's place dies at the next harvest. Every
+	// shipped path shows what it builds; a future speculative build must not.
+	state.notesScrollRead = list.GetScrollOffset
 	if state.notesScroll > 0 {
 		off := state.notesScroll
 		time.AfterFunc(16*time.Millisecond, func() {
 			fyne.Do(func() {
-				body.Offset = fyne.NewPos(0, off)
-				body.Refresh()
+				list.ScrollToOffset(off)
 			})
 		})
 	}
-	return container.NewBorder(head, nil, nil, nil, body)
+	return container.NewBorder(head, nil, nil, nil, list)
 }
 
 // noteBrowseRow is one note in the list: its passage, then its message. The
@@ -580,6 +669,7 @@ func setNotesMode(state *AppState, on bool) {
 	}
 	if !on {
 		state.notesScroll = 0
+		state.notesScrollRead = nil
 	}
 	state.NotesMode = on
 }
