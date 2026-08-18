@@ -43,6 +43,9 @@ extern void bibleTextHighlightCleared(void);
 extern void bibleTextNoteHidden(void);
 extern void bibleTextNoteDeleted(void);
 extern void bibleTextNoteRestored(void);
+// The expanded sticker's count region ("2 of 3 on this passage ›") — advances
+// focus to the next note on the passage, wrapping.
+extern void bibleTextNoteNextTapped(void);
 
 // Whether the highlight on screen belongs to a shared note. Declared up here
 // because the tap menu below is the first thing that reads it; Go sets it on
@@ -313,6 +316,7 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 - (void)btNoteHide:(id)sender    { bibleTextNoteHidden(); }
 - (void)btNoteDelete:(id)sender  { bibleTextNoteDeleted(); }
 - (void)btNoteRestore:(id)sender { bibleTextNoteRestored(); }
+- (void)btNoteNext:(id)sender    { bibleTextNoteNextTapped(); }
 
 - (void)btHighlightTap:(UITapGestureRecognizer *)g {
     if (g.state != UIGestureRecognizerStateEnded) return;
@@ -673,6 +677,7 @@ static UIView   *gNoteView = nil;      // the bubble, or the collapsed chip
 static NSString *gNoteText = nil;      // the sender's words, ALONE (S9)
 static NSString *gNoteWho = nil;       // the app's chrome: byline + counts, composed in Go
 static BOOL      gNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
+static BOOL      gNoteNextable = NO;   // the count region is a control (S10 next-tap)
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
 static CAShapeLayer *gNoteCard = nil;    // the whole bubble: card + speech tail
@@ -726,7 +731,7 @@ static BOOL btIOSSameStr(NSString *a, NSString *b) {
 // the chapter body is byte-identical and the import path never runs. Colours
 // alone never change without a body change (the theme variant is folded
 // there), so they do not join the compare.
-void bibleTextSetNote(const char *text, const char *who, int minimized, int anchorVerse,
+void bibleTextSetNote(const char *text, const char *who, int minimized, int nextable, int anchorVerse,
                       double bgR, double bgG, double bgB,
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
@@ -737,10 +742,12 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int anch
     dispatch_async(dispatch_get_main_queue(), ^{
         BOOL changed = !btIOSSameStr(t, gNoteText) || !btIOSSameStr(w, gNoteWho) ||
                        gNoteMinimized != (minimized ? YES : NO) ||
+                       gNoteNextable != (nextable ? YES : NO) ||
                        gNoteAnchorVerse != anchorVerse;
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
+        gNoteNextable = nextable ? YES : NO;
         gNoteAnchorVerse = anchorVerse;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
@@ -838,6 +845,30 @@ static NSRange btIOSNoteAnchorRange(NSTextStorage *ts, NSString *str, NSUInteger
     return NSMakeRange(0, 0);
 }
 
+// gNoteReservedPara is the paragraph currently carrying the band via
+// paragraphSpacingBefore, or NSNotFound. It exists because the next-tap
+// (S10) can move the sticker to ANOTHER VERSE of the string already on
+// screen — no re-import wipes the old reservation, so the install must take
+// it back itself or a phantom band lingers at the previous note's verse. On
+// a fresh import the range is stale, but the importer's zeroing pass has
+// already cleared every paragraphSpacingBefore, so the guarded clear below
+// is a no-op there.
+static NSRange gNoteReservedPara = {NSNotFound, 0};
+
+static void btIOSClearReservedPara(NSTextStorage *ts) {
+    NSRange old = gNoteReservedPara;
+    gNoteReservedPara = NSMakeRange(NSNotFound, 0);
+    if (old.location == NSNotFound || ts == nil || NSMaxRange(old) > ts.length) return;
+    NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
+                            effectiveRange:NULL];
+    if (base == nil || base.paragraphSpacingBefore == 0) return;
+    NSMutableParagraphStyle *ps = [base mutableCopy];
+    ps.paragraphSpacingBefore = 0;
+    [ts beginEditing];
+    [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
+    [ts endEditing];
+}
+
 // Install the band and the sticker. Runs AFTER the text is in the view and the
 // verse index is built, because the note's anchor is a VERSE and the index is
 // what turns a verse into a character location. Mutating the live text storage
@@ -852,6 +883,7 @@ static void btIOSInstallNote(void) {
     gNoteTopInset = 0;
     if (gReadingTV == nil) return;
     NSTextStorage *ts = gReadingTV.textStorage;
+    btIOSClearReservedPara(ts);   // the sticker may have MOVED (next-tap): take the old band back
     if (!btIOSNotePresent() || ts.length == 0) { btIOSApplyNoteInset(); return; }
 
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
@@ -881,6 +913,7 @@ static void btIOSInstallNote(void) {
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
     [ts endEditing];
+    gNoteReservedPara = para;   // so a moved sticker can take this band back
 }
 
 // Apply (or clear) the top-inset reservation.
@@ -978,6 +1011,20 @@ static void btIOSEnsureNoteView(void) {
       forControlEvents:UIControlEventTouchUpInside];
         del.tag = 905;
         [box addSubview:del];
+
+        if (gNoteNextable) {
+            // The WHO line's count region is a CONTROL when the passage holds
+            // more than one note (S10): a tap advances the sticker to the next
+            // one, wrapping. The control is a transparent button over the
+            // counts span — the affordance is the span itself, drawn in the
+            // accent with a trailing chevron (btIOSLayoutNote), the same
+            // colour language the pill and the app's links use for "press me".
+            UIButton *nxt = [UIButton buttonWithType:UIButtonTypeSystem];
+            [nxt addTarget:gReadingTV action:@selector(btNoteNext:)
+          forControlEvents:UIControlEventTouchUpInside];
+            nxt.tag = 906;
+            [box addSubview:nxt];
+        }
     }
 
     // A subview of the TEXT VIEW, not its window: a UITextView is a scroll view,
@@ -1013,6 +1060,23 @@ static NSString *btIOSFitWho(NSString *who, CGFloat width, UIFont *font) {
         sender = [sender substringToIndex:last.location];
     }
     return [@"…" stringByAppendingString:counts];
+}
+
+// btIOSWhoCountRange is the "K of N on this passage" span of a (fitted) WHO
+// line — the characters between the first " · " separator and the next one,
+// or the end. {NSNotFound,0} when the line carries no counts. The first-
+// separator split is the same idiom btIOSFitWho truncates by, and it is safe
+// against a sender's name by construction: sanitizeSenderName maps the middle
+// dot away (notes_byline.go), so the chrome's grammar is not available to
+// names.
+static NSRange btIOSWhoCountRange(NSString *who) {
+    NSRange sep = [who rangeOfString:@" · "];
+    if (sep.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
+    NSUInteger start = NSMaxRange(sep);
+    NSRange rest = NSMakeRange(start, who.length - start);
+    NSRange next = [who rangeOfString:@" · " options:0 range:rest];
+    NSUInteger end = (next.location == NSNotFound) ? who.length : next.location;
+    return NSMakeRange(start, end - start);
 }
 
 // Put the sticker in the band the text reserved. Runs after every layout.
@@ -1083,12 +1147,43 @@ static void btIOSLayoutNote(void) {
     UILabel  *body = (UILabel *)[gNoteView viewWithTag:903];
     UIButton *hide = (UIButton *)[gNoteView viewWithTag:904];
     UIButton *del  = (UIButton *)[gNoteView viewWithTag:905];
+    UIButton *nxt  = (UIButton *)[gNoteView viewWithTag:906];
     CGFloat whoW = w - 2 * kNotePad - 2 * kNoteBtn;
     who.frame  = CGRectMake(kNotePad, kNotePad - 2, whoW, 14);
     // The fit runs HERE, where the label's real width is known: if the who
     // line cannot fit, the sender half is tail-truncated and the counts
     // survive whole (btIOSFitWho).
-    who.text = btIOSFitWho(gNoteWho ?: @"Note from Friend", whoW, btNoteWhoFont());
+    NSString *fitted = btIOSFitWho(gNoteWho ?: @"Note from Friend", whoW, btNoteWhoFont());
+    NSRange counts = (gNoteNextable && nxt != nil) ? btIOSWhoCountRange(fitted)
+                                                   : NSMakeRange(NSNotFound, 0);
+    if (counts.location == NSNotFound) {
+        who.text = fitted;
+        nxt.hidden = YES;
+    } else {
+        // The counts span is the next-tap's control, so it must LOOK pressable:
+        // the accent colour plus a trailing chevron, both the app's own chrome —
+        // no new words, and nothing in the sender's style.
+        NSString *shown = [fitted stringByReplacingCharactersInRange:NSMakeRange(NSMaxRange(counts), 0)
+                                                          withString:@" ›"];
+        NSRange lit = NSMakeRange(counts.location, counts.length + 2);
+        NSDictionary *attrs = @{NSFontAttributeName: btNoteWhoFont()};
+        NSMutableAttributedString *a = [[NSMutableAttributedString alloc]
+            initWithString:shown
+                attributes:@{NSFontAttributeName: btNoteWhoFont(),
+                             NSForegroundColorAttributeName: btNoteColor(gNoteMuted)}];
+        [a addAttribute:NSForegroundColorAttributeName value:btNoteColor(gNoteAccent) range:lit];
+        who.attributedText = a;
+        // The transparent button sits over the lit span, measured from the
+        // string itself so it tracks the fit, widened a little for a thumb.
+        CGFloat pre = ceil([[shown substringToIndex:lit.location] sizeWithAttributes:attrs].width);
+        CGFloat lw  = ceil([[shown substringWithRange:lit] sizeWithAttributes:attrs].width);
+        CGFloat bx = kNotePad + pre - 8;
+        if (bx < kNotePad - 8) bx = kNotePad - 8;
+        CGFloat bw = lw + 24;
+        if (bx + bw > kNotePad + whoW + 8) bw = kNotePad + whoW + 8 - bx;
+        nxt.hidden = NO;
+        nxt.frame = CGRectMake(bx, 0, bw, kNotePad + 14 + 2);
+    }
     body.frame = CGRectMake(kNotePad, kNotePad + 14 + 4, w - 2 * kNotePad, h - kNotePad - 14 - 4 - kNotePad);
     hide.frame = CGRectMake(w - 2 * kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
     del.frame  = CGRectMake(w - kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
@@ -2722,7 +2817,7 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 // (bibleTextSetNote), never by a chapter re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	text, who, pill := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	text, who, pill, next := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2730,6 +2825,10 @@ func pushNoteToPane(state *AppState) {
 	min := C.int(0)
 	if pill {
 		min = 1
+	}
+	nx := C.int(0)
+	if next {
+		nx = 1
 	}
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
@@ -2743,7 +2842,7 @@ func pushNoteToPane(state *AppState) {
 	// highlight, and a marker without an anchor jumps to the top of the chapter.
 	// (An unplaced-only chapter pushes verse 0: its pill parks at the top,
 	// which is the only honest place for notes with no verses here.)
-	C.bibleTextSetNote(cText, cWho, min, C.int(state.NoteVerseLo),
+	C.bibleTextSetNote(cText, cWho, min, nx, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 

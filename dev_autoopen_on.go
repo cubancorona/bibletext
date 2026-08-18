@@ -176,6 +176,12 @@ func devAutoReadAlong(state *AppState) {
 //	           realistic WHO line ("· K of 105 on this passage · 9 not shown
 //	           here", 3-digit count) so the fit rule is visible: the FRIEND
 //	           half tail-truncates, the counts never do
+//	s10next    the SELECTION proof: three arrivals on one passage, then the
+//	           count region's next-tap three times through the real //export
+//	           (devNoteNextTap → bibleTextNoteNextTapped) — the who line
+//	           walks 1 of 3 → 2 of 3 → 3 of 3 → 1 of 3 with the bubble
+//	           swapping under it, and with BIBLETEXT_PERF set the log says
+//	           tint-mutate between the taps, never html-import
 func devAutoNotesS8(state *AppState) {
 	scenario := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")))
 	if scenario == "" || state == nil {
@@ -187,6 +193,16 @@ func devAutoNotesS8(state *AppState) {
 	}
 	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
 	switch scenario {
+	case "s10next":
+		at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
+		at(6*time.Second, func() { link("Second note: a second voice on the same verse.") })
+		at(12*time.Second, func() { link("Third note: and a third, so the who line has to say 1 of 3.") })
+		// The taps go through the REAL callback (bibleTextNoteNextTapped), raw
+		// AfterFunc rather than at(): the export hops to Fyne's goroutine
+		// itself, exactly as it does when the native button posts it.
+		for _, d := range []time.Duration{18 * time.Second, 26 * time.Second, 34 * time.Second} {
+			time.AfterFunc(d, func() { devNoteNextTap(state) })
+		}
 	case "s9who", "s9pill":
 		at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
 		at(6*time.Second, func() { link("Second note: a second voice on the same verse.") })
