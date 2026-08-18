@@ -178,7 +178,8 @@ spec. So these are named, pinned, and tested:
 
 | limit | rule |
 |---|---|
-| `noteMaxInflatedBytes` | a named constant, not arithmetic at the call site. Read one byte past it and treat the surplus as proof of a lie. **Was broken** — see below. |
+| `noteMaxInflatedBytes` | a named constant, not arithmetic at the call site. Read one byte past it and treat the surplus as proof of a lie. **Was broken** — see below. FROZEN at `NoteMaxRunes*4+1` for the legacy `'p'`/`'z'` framings, which carry only text. |
+| `noteMaxRecordBytes` | the `'r'`/`'d'` RECORD STREAM cap — raw length and inflated length, one number (4096). A record stream carries more than the text (the anchor records, the reserved sender fields, unknown fields a build must skip-and-preserve), so the legacy cap would refuse legal notes; this one bounds what a hostile payload can make a phone hold instead. Named here because it is part of the format from the first shipped build: it may GROW in a later build (old readers would then refuse the biggest new payloads as damaged — a degradation), it may never shrink. |
 | `NoteMaxRunes` | encoder-side truncation; the decoder must not enforce a rune cap and refuse a note over it |
 | URL length | encoder-only, degrading in a defined order; the decoder must NEVER enforce it |
 | non-minimal varints | required minimal on emit, **accepted** on decode (Go's `binary.Uvarint` accepts `80 00` as 0) |
@@ -215,6 +216,22 @@ Recorded so nobody cargo-cults it later.
 - **Threat model.** Ours is a messenger truncating a URL, our own encoder
   misbehaving on an untested platform, and a prankster crafting a hostile
   fragment. Only the last is adversarial.
+
+## Accepted hazards, named rather than discovered
+
+- **A truncation landing exactly on a record boundary yields a shorter note, not
+  a damaged one.** Canonical emission order is ascending by tag, so `t` precedes
+  `v`; a messenger that cuts the URL precisely after the `t` record produces a
+  payload that decodes ok with the full text and no translation record, and the
+  note files under the (lossy) path version. Every other cut point is damaged.
+  The window is narrow — it requires the `r` form (long notes take `d`, where any
+  cut breaks the DEFLATE stream) and a cut on the exact boundary — and the
+  alternative, refusing notes missing `v`, violates "missing must degrade, never
+  destroy". Accepted, with eyes open.
+- **The base64 tolerance is exactly: url-safe alphabet, correctly-formed
+  trailing padding.** A `+` or `/` spelling, interior `=`, or wrong-length
+  padding is damaged. The web reader initially forgave all three (atob accepts
+  both alphabets); pinned in the corpus after review.
 
 ## Conformance corpus
 

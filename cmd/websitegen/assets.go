@@ -370,6 +370,18 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 }
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
+/* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's
+   payload cannot be rendered (a newer note format, or damage). Quiet and
+   attributed to nobody — no tail (nobody is speaking), no accent edge, no
+   button, no link. Same explicit resets as .note: it sits inside .text and
+   must read as neither scripture nor a person's message. */
+.notenotice{
+  margin:1.1rem 0; padding:.8rem 1rem; scroll-margin-top:1.2rem;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  color:var(--muted); font-family:var(--ui); font-size:.9rem; line-height:1.5;
+  letter-spacing:normal; text-align:left; text-indent:0;
+  font-feature-settings:normal;
+}
 .foot{max-width:40rem; margin:0 auto; padding:0 1.6rem 2.5rem; text-align:center}
 .foot a{color:var(--muted); font-size:.8rem; text-decoration:none}
 .foot a:hover{color:var(--accent); text-decoration:underline}
@@ -806,56 +818,364 @@ const readerJSTemplate = `
   var gotoBtn = document.getElementById('gotobtn');
   if (gotoBtn) gotoBtn.addEventListener('click', openGoto);
 
-  // 1b) THE SENDER'S NOTE. The link may carry one in the "n" key; it is the
-  // same payload the app writes (share_note.go): a format byte, then UTF-8,
-  // raw or raw-DEFLATE'd, then unpadded base64url.
+  // 1b) THE SENDER'S NOTE. The link may carry one in the "n" key; the payload
+  // is the app's record codec (share_note.go is the reference implementation,
+  // docs/NOTE_WIRE_FORMAT.md the frozen spec, and testdata/note_vectors.txt
+  // the corpus BOTH decoders must agree on): a framing byte — 'r' records raw,
+  // 'd' records DEFLATE'd, 'p'/'z' legacy bare text, 'A'-'Z' reserved for a
+  // newer format — then <tag><uvarint len><value> records, unpadded base64url.
   //
   // It is UNTRUSTED TEXT — anyone can write a link. It is inserted with
   // textContent and never as markup, no part of it is ever made a live link,
   // and the bubble says whose it is, because a note styled as though BibleText
   // said it would be a phishing kit on our own domain.
-  function decodeNote(payload) {
-    if (!payload) return Promise.resolve('');
-    var bytes;
-    try {
-      var b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-      while (b64.length % 4) b64 += '=';
-      var bin = atob(b64);
-      bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    } catch (e) { return Promise.resolve(''); }
-    if (bytes.length < 2) return Promise.resolve('');
+  //
+  // Between the two NOTE_DECODER markers the code is PURE — no DOM, nothing
+  // from the page — because cmd/websitegen's conformance test extracts exactly
+  // that span and walks it over the same vector file as the Go decoder. Keep
+  // it that way.
+  /*__NOTE_DECODER_BEGIN__*/
+  var NOTE_MAX_RUNES = 280;
+  var NOTE_MAX_INFLATED = NOTE_MAX_RUNES * 4 + 1; // legacy 'z' cap — frozen
+  var NOTE_MAX_RECORD_BYTES = 4096;               // 'r'/'d' stream cap — frozen
+  // The two sentences of docs/NOTE_WIRE_FORMAT.md rule 5. No call to action,
+  // no link, never an install prompt; share_note.go carries the same strings.
+  var NOTE_MSG_NEWER = 'This link carries a note written in a newer note format.';
+  var NOTE_MSG_DAMAGED = "This link's note looks damaged.";
 
-    var tag = bytes[0], body = bytes.subarray(1);
-    var utf8 = function (b) { return new TextDecoder('utf-8', { fatal: false }).decode(b); };
-    if (tag === 112 /* p */) return Promise.resolve(cleanNote(utf8(body)));
-    if (tag !== 122 /* z */) return Promise.resolve('');   // a format we do not know
-    if (typeof DecompressionStream !== 'function') return Promise.resolve('');
+  var NOTE_LENS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51,
+    59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+  var NOTE_LEXT = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,
+    4, 5, 5, 5, 5, 0];
+  var NOTE_DISTS = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385,
+    513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+  var NOTE_DEXT = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10,
+    10, 11, 11, 12, 12, 13, 13];
+  var NOTE_CLORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+  // Canonical Huffman table from code lengths, or null when over-subscribed.
+  function noteHuffConstruct(lengths, n, allowIncomplete) {
+    var count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    var i, len;
+    for (i = 0; i < n; i++) count[lengths[i] || 0]++;
+    var left = 1, total = 0;
+    for (len = 1; len <= 15; len++) {
+      left <<= 1;
+      left -= count[len];
+      if (left < 0) return null;
+      total += count[len];
+    }
+    // INCOMPLETE tables are rejected for DYNAMIC blocks, exactly as Go rejects
+    // them — with Go's one exception: a single symbol of code length 1, the
+    // degenerate one-distance-code table RFC 1951 lets an encoder emit. This
+    // used to check only over-subscription (left < 0), which accepted
+    // incomplete tables Go refuses; a hand-built stream then decoded as a NOTE
+    // here and as DAMAGED in the app — two decoders, two formats, found by
+    // differential fuzzing against compress/flate.
+    //
+    // allowIncomplete exists for the FIXED tables and nothing else: RFC
+    // 1951's fixed DISTANCE table is incomplete BY SPECIFICATION (30 codes in
+    // 32 slots), and Go never notices because it reads fixed-block distances
+    // as raw 5-bit values without building a table at all. Applying the
+    // dynamic rule to it made every fixed-Huffman block crash — the first
+    // version of this very fix, caught by the conformance corpus.
+    if (!allowIncomplete && left > 0 && !(total === 1 && count[1] === 1)) return null;
+    var offs = [0, 0];
+    for (len = 1; len < 15; len++) offs[len + 1] = offs[len] + count[len];
+    var symbol = [];
+    for (i = 0; i < n; i++) if (lengths[i]) symbol[offs[lengths[i]]++] = i;
+    return { count: count, symbol: symbol };
+  }
+
+  var noteFixedHuff = null;
+
+  // Raw-DEFLATE inflate (RFC 1951), self-contained, in the classic puff()
+  // shape. DecompressionStream is NOT usable here: it errors on trailing bytes
+  // after the final block, and the frozen format ACCEPTS them — Go's
+  // compress/flate stops at the final block and returns nil, and byte-for-byte
+  // agreement with the app decoder is the whole point. Returns a byte array,
+  // or null on ANY error — including inflating past the limit, which mirrors
+  // Go's read-one-byte-past-the-cap bomb refusal.
+  function noteInflateRaw(src, limit) {
+    var pos = 0, bitbuf = 0, bitcnt = 0, out = [], err = false;
+
+    function bits(need) {
+      var val = bitbuf;
+      while (bitcnt < need) {
+        if (pos >= src.length) { err = true; return 0; }
+        val |= src[pos++] << bitcnt;
+        bitcnt += 8;
+      }
+      bitbuf = val >>> need;
+      bitcnt -= need;
+      return val & ((1 << need) - 1);
+    }
+
+    function decode(h) {
+      var code = 0, first = 0, index = 0;
+      for (var len = 1; len <= 15; len++) {
+        code |= bits(1);
+        if (err) return -1;
+        var count = h.count[len];
+        if (code - first < count) return h.symbol[index + (code - first)];
+        index += count;
+        first += count;
+        first <<= 1;
+        code <<= 1;
+      }
+      return -1;
+    }
+
+    function push(b) {
+      out.push(b);
+      if (out.length > limit) err = true;
+    }
+
+    function codes(lencode, distcode) {
+      for (;;) {
+        var sym = decode(lencode);
+        if (sym < 0 || err) return false;
+        if (sym < 256) {
+          push(sym);
+          if (err) return false;
+        } else if (sym === 256) {
+          return true;
+        } else {
+          sym -= 257;
+          if (sym >= 29) return false;
+          var len = NOTE_LENS[sym] + bits(NOTE_LEXT[sym]);
+          if (err) return false;
+          var dsym = decode(distcode);
+          if (dsym < 0 || err) return false;
+          var dist = NOTE_DISTS[dsym] + bits(NOTE_DEXT[dsym]);
+          if (err) return false;
+          if (dist > out.length) return false;
+          while (len--) {
+            push(out[out.length - dist]);
+            if (err) return false;
+          }
+        }
+      }
+    }
+
+    function stored() {
+      bitbuf = 0; bitcnt = 0;              // discard to a byte boundary
+      if (pos + 4 > src.length) return false;
+      var len = src[pos] | (src[pos + 1] << 8);
+      var nlen = src[pos + 2] | (src[pos + 3] << 8);
+      pos += 4;
+      if (len !== ((~nlen) & 0xffff)) return false;
+      if (pos + len > src.length) return false;
+      for (var i = 0; i < len; i++) {
+        push(src[pos + i]);
+        if (err) return false;
+      }
+      pos += len;
+      return true;
+    }
+
+    function dynamicTables() {
+      var nlen = bits(5) + 257, ndist = bits(5) + 1, ncode = bits(4) + 4;
+      if (err || nlen > 286 || ndist > 30) return null;
+      var lengths = [], i;
+      for (i = 0; i < 19; i++) lengths[i] = 0;
+      for (i = 0; i < ncode; i++) lengths[NOTE_CLORDER[i]] = bits(3);
+      if (err) return null;
+      var clcode = noteHuffConstruct(lengths, 19);
+      if (!clcode) return null;
+      var symlens = [], index = 0;
+      while (index < nlen + ndist) {
+        var sym = decode(clcode);
+        if (sym < 0 || err) return null;
+        if (sym < 16) {
+          symlens[index++] = sym;
+        } else {
+          var repLen = 0, count;
+          if (sym === 16) {
+            if (index === 0) return null;
+            repLen = symlens[index - 1];
+            count = 3 + bits(2);
+          } else if (sym === 17) {
+            count = 3 + bits(3);
+          } else {
+            count = 11 + bits(7);
+          }
+          if (err || index + count > nlen + ndist) return null;
+          while (count--) symlens[index++] = repLen;
+        }
+      }
+      if (!symlens[256]) return null;      // no end-of-block code
+      var lc = noteHuffConstruct(symlens.slice(0, nlen), nlen);
+      var dc = noteHuffConstruct(symlens.slice(nlen), ndist);
+      if (!lc || !dc) return null;
+      return { len: lc, dist: dc };
+    }
+
+    var last, type, blockOK;
+    do {
+      last = bits(1);
+      type = bits(2);
+      if (err) return null;
+      if (type === 0) {
+        blockOK = stored();
+      } else if (type === 1) {
+        if (!noteFixedHuff) {
+          var fl = [], fi;
+          for (fi = 0; fi < 144; fi++) fl[fi] = 8;
+          for (; fi < 256; fi++) fl[fi] = 9;
+          for (; fi < 280; fi++) fl[fi] = 7;
+          for (; fi < 288; fi++) fl[fi] = 8;
+          var fd = [];
+          for (fi = 0; fi < 30; fi++) fd[fi] = 5;
+          noteFixedHuff = { len: noteHuffConstruct(fl, 288, true), dist: noteHuffConstruct(fd, 30, true) };
+        }
+        blockOK = codes(noteFixedHuff.len, noteFixedHuff.dist);
+      } else if (type === 2) {
+        var dyn = dynamicTables();
+        blockOK = dyn ? codes(dyn.len, dyn.dist) : false;
+      } else {
+        blockOK = false;
+      }
+      if (!blockOK || err) return null;
+    } while (!last);
+    return out;                            // trailing input bytes are ignored
+  }
+
+  function noteBase64Bytes(payload) {
     try {
-      var ds = new DecompressionStream('deflate-raw');
-      var stream = new Blob([body]).stream().pipeThrough(ds);
-      return new Response(stream).arrayBuffer()
-        .then(function (buf) { return cleanNote(utf8(new Uint8Array(buf))); })
-        .catch(function () { return ''; });
-    } catch (e) { return Promise.resolve(''); }
+      // EXACTLY what the app accepts, no more. Go uses RawURLEncoding — the
+      // url-safe alphabet with no padding — and tolerates one thing beyond it:
+      // correctly-formed TRAILING padding (it switches to URLEncoding when the
+      // payload ends in '='). atob accepts the standard alphabet too, so
+      // mapping -_ to +/ and topping up '=' quietly took payloads the app
+      // calls damaged: a '+' or '/' spelling, interior '=', or short padding
+      // atob would forgive once we padded it. Each was an ok-here /
+      // damaged-in-app divergence.
+      if (/[+\/]/.test(payload)) return null;
+      var eq = payload.indexOf('=');
+      if (eq !== -1) {
+        if (!/^[A-Za-z0-9_-]+={1,2}$/.test(payload) || payload.length % 4 !== 0) return null;
+      }
+      var b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      if (eq === -1) { while (b64.length % 4) b64 += '='; }
+      var bin = atob(b64);
+      var out = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    } catch (e) { return null; }
+  }
+
+  // Strict UTF-8, or null. THE FIX for a real divergence: this decoder used
+  // to decode non-fatally, rendering U+FFFD where the app decoder shows
+  // nothing — invalid UTF-8 is DAMAGED here exactly as it is in Go
+  // (utf8.Valid).
+  function noteUTF8(bytes) {
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(
+        bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+    } catch (e) { return null; }
   }
 
   // The browser half of normalizeNote (share_note.go): strip the control
-  // characters and bidi overrides that let text hide or reverse itself, keep
-  // the newlines that make a note readable, and cap the length.
+  // characters and bidi overrides that let text hide or reverse itself — and
+  // U+FFFD, which Go's rune walk drops — keep the newlines that make a note
+  // readable, and cap the length in code points.
   function cleanNote(s) {
     if (!s) return '';
     s = s.replace(/\r\n?/g, '\n')
          // C0 and C1 controls, keeping tab (09) and newline (0a).
          .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
-         // Bidi marks, embeddings, isolates, and the BOM.
-         .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+         // Bidi marks, embeddings, isolates, the BOM — and U+FFFD.
+         .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\ufffd]/g, '')
          .replace(/\n{3,}/g, '\n\n')
          .trim();
     var runes = Array.from(s);
-    if (runes.length > 280) s = runes.slice(0, 280).join('').trim();
+    if (runes.length > NOTE_MAX_RUNES) s = runes.slice(0, NOTE_MAX_RUNES).join('').trim();
     return s;
   }
+
+  // binary.Uvarint's twin: [value, bytesRead]; bytesRead <= 0 is an error
+  // (0 = truncated, negative = overflow), exactly Go's contract.
+  function noteUvarint(s, at) {
+    var x = 0, mult = 1;
+    for (var k = 0; k < 10; k++) {
+      if (at + k >= s.length) return [0, 0];
+      var b = s[at + k];
+      if (b < 0x80) {
+        if (k === 9 && b > 1) return [0, -10];
+        return [x + b * mult, k + 1];
+      }
+      x += (b & 0x7f) * mult;
+      mult *= 128;
+    }
+    return [0, -10];
+  }
+
+  function noteLegacyText(raw) {
+    var s = noteUTF8(raw);
+    if (s === null) return { outcome: 'damaged', text: '' };
+    var text = cleanNote(s);
+    if (!text) return { outcome: 'damaged', text: '' };
+    return { outcome: 'ok', text: text };
+  }
+
+  // The record stream. Reject ONLY framing failures; any order; duplicate tag
+  // first-occurrence-wins; unknown lowercase tags skipped by their length;
+  // unknown UPPERCASE = a newer format; 0xFF = stop and render what we have.
+  // The page renders only 't' — the app additionally decodes v/b/c/a, none of
+  // which can change the outcome, and preserves what it skips (the page never
+  // re-emits, so it has nothing to preserve for).
+  function noteParseRecords(s) {
+    var textRaw = null, sawText = false;
+    var i = 0;
+    while (i < s.length) {
+      var tag = s[i];
+      if (tag === 0xff) break;             // stop: render what was read
+      i++;
+      var uv = noteUvarint(s, i);
+      if (uv[1] <= 0) return { outcome: 'damaged', text: '' };
+      var len = uv[0];
+      // Checked against the REMAINING bytes before any offset arithmetic.
+      if (len > s.length - i - uv[1]) return { outcome: 'damaged', text: '' };
+      i += uv[1];
+      var val = s.slice(i, i + len);
+      i += len;
+      if (tag >= 65 && tag <= 90) return { outcome: 'newer', text: '' };
+      if (tag === 116 /* t */ && !sawText) {
+        sawText = true;
+        textRaw = val;
+      }
+    }
+    if (!sawText) return { outcome: 'damaged', text: '' };
+    return noteLegacyText(textRaw);
+  }
+
+  // decodeNotePayload — the whole decoder: {outcome: 'ok'|'newer'|'damaged',
+  // text}. Synchronous, pure, corpus-tested against the Go decoder.
+  function decodeNotePayload(payload) {
+    var damaged = { outcome: 'damaged', text: '' };
+    payload = (payload || '').trim();
+    if (!payload) return damaged;
+    var bytes = noteBase64Bytes(payload);
+    if (!bytes || bytes.length < 2) return damaged;
+    var b0 = bytes[0], body = bytes.subarray(1);
+    if (b0 === 112 /* p */) return noteLegacyText(body);
+    if (b0 === 122 /* z */) {
+      var raw = noteInflateRaw(body, NOTE_MAX_INFLATED);
+      return raw === null ? damaged : noteLegacyText(raw);
+    }
+    if (b0 === 114 /* r */) {
+      if (body.length > NOTE_MAX_RECORD_BYTES) return damaged;
+      return noteParseRecords(body);
+    }
+    if (b0 === 100 /* d */) {
+      var stream = noteInflateRaw(body, NOTE_MAX_RECORD_BYTES);
+      return stream === null ? damaged : noteParseRecords(stream);
+    }
+    if (b0 >= 65 && b0 <= 90) return { outcome: 'newer', text: '' };
+    return damaged;                        // unknown byte 0: framing, fail closed
+  }
+  /*__NOTE_DECODER_END__*/
 
   var noteBox = null, noteChip = null;
 
@@ -1013,10 +1333,34 @@ const readerJSTemplate = `
     }
   }
 
+  // THE COULD-NOT-READ NOTICE. When the payload cannot be rendered the reader
+  // is TOLD, in the note's own place in the flow — never silently
+  // (docs/NOTE_WIRE_FORMAT.md rule 5). It is the app's sentence, not a
+  // person's, so: no byline, no buttons, NO LINK and no install prompt — a
+  // note arrives inside a message thread, and "update to read this" is a
+  // phishing template in our own typeface on our own domain.
+  var noticeBox = null;
+  function hideNotice() { if (noticeBox) { noticeBox.remove(); noticeBox = null; } }
+  function showNotice(msg) {
+    hideNotice();
+    var box = document.createElement('aside');
+    box.className = 'notenotice';
+    box.textContent = msg;                 // our own fixed sentence, still TEXT
+    anchorToPassage(box);
+    noticeBox = box;
+  }
+
   function renderNote() {
-    var payload = fragKeys().n;
-    if (!payload) { hideNote(); return; }
-    decodeNote(payload).then(function (text) { if (text) showNote(text); });
+    hideNote();
+    hideNotice();
+    var keys = fragKeys();
+    // Only a fragment that CARRIES an "n" key gets a verdict: a plain passage
+    // link shows nothing here. An "n=" that arrived EMPTY is a verdict —
+    // damaged — exactly as in the app's parser (share_link_parse.go).
+    if (!('n' in keys)) return;
+    var got = decodeNotePayload(keys.n);
+    if (got.outcome === 'ok') { showNote(got.text); return; }
+    showNotice(got.outcome === 'newer' ? NOTE_MSG_NEWER : NOTE_MSG_DAMAGED);
   }
 
   renderNote();

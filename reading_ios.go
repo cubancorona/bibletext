@@ -2259,6 +2259,17 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeaderMobile(state, chapterNumbers))
+	// The unreadable-payload notice (docs/NOTE_WIRE_FORMAT.md rule 5). On iOS a
+	// decoded NOTE is drawn by the native sticker inside the text, so the Fyne
+	// banner normally has no business here — but the notice is not a note, and
+	// the sticker never draws it. Without this line, iOS — the platform where a
+	// shared link most often arrives, in a message thread — was the one place
+	// the reader was told NOTHING when a payload could not be read. The banner
+	// returns the quiet notice surface for NoteNotice and nil otherwise, so
+	// this adds no object in the ordinary case.
+	if notice := buildNoteBanner(state); notice != nil {
+		top.Add(notice)
+	}
 
 	// Inset the whole header column (history bar, back-to-results bar, and the
 	// chapter heading) by one theme pad on the LEFT so its text lines up directly

@@ -23,13 +23,13 @@ func TestNoteRoundTrip(t *testing.T) {
 			t.Errorf("EncodeNote(%q) produced nothing", note)
 			continue
 		}
-		got, ok := DecodeNote(payload)
-		if !ok {
-			t.Errorf("DecodeNote failed for %q (payload %q)", note, payload)
+		rec, outcome := DecodeNote(payload)
+		if outcome != NoteOutcomeOK {
+			t.Errorf("DecodeNote failed for %q (payload %q, outcome %d)", note, payload, outcome)
 			continue
 		}
-		if want := normalizeNote(note); got != want {
-			t.Errorf("round trip changed the note:\n got %q\nwant %q", got, want)
+		if want := normalizeNote(note); rec.Text != want {
+			t.Errorf("round trip changed the note:\n got %q\nwant %q", rec.Text, want)
 		}
 		// The payload has to survive a URL fragment untouched.
 		if strings.ContainsAny(payload, "&=#?/ ") {
@@ -38,17 +38,43 @@ func TestNoteRoundTrip(t *testing.T) {
 	}
 }
 
-// Deflate must be used only when it actually helps, and the tag must say which
-// so the decoder never guesses.
+// The full wire record — text plus the note's own anchor — must round-trip
+// with every field intact.
+func TestNoteWireRoundTrip(t *testing.T) {
+	w := NoteWire{
+		Text:    "Read this one slowly.",
+		Version: "nkjv",
+		Book:    "John",
+		Chapter: 3,
+		VerseLo: 16,
+		VerseHi: 18,
+	}
+	rec, outcome := DecodeNote(EncodeNoteWire(w))
+	if outcome != NoteOutcomeOK {
+		t.Fatalf("outcome = %d, want ok", outcome)
+	}
+	if rec.Text != w.Text || rec.Version != "nkjv" || rec.Book != "John" || rec.Chapter != 3 {
+		t.Errorf("fields lost: %+v", rec)
+	}
+	if len(rec.Runs) != 1 || rec.Runs[0] != (NoteVerseRun{Lo: 16, Hi: 18}) {
+		t.Errorf("runs lost: %+v", rec.Runs)
+	}
+	if len(rec.Skipped) != 0 || rec.Opaque != nil {
+		t.Errorf("nothing should be skipped in our own payload: %+v", rec)
+	}
+}
+
+// Deflate must be used only when it actually helps, and the format byte must
+// say which so the decoder never guesses. 'p'/'z' are never emitted again.
 func TestNoteCompressionOnlyWhenSmaller(t *testing.T) {
 	short := "Thinking of you."
 	long := strings.Repeat("the same words over and over ", 9)
 
-	if got := decodeTag(t, EncodeNote(short)); got != noteFormatPlain {
-		t.Errorf("a short note should stay plain, got tag %q", got)
+	if got := decodeTag(t, EncodeNote(short)); got != noteFormatRecords {
+		t.Errorf("a short note should stay raw ('r'), got tag %q", got)
 	}
-	if got := decodeTag(t, EncodeNote(long)); got != noteFormatDeflate {
-		t.Errorf("a long repetitive note should deflate, got tag %q", got)
+	if got := decodeTag(t, EncodeNote(long)); got != noteFormatRecordsZ {
+		t.Errorf("a long repetitive note should deflate ('d'), got tag %q", got)
 	}
 	// And deflating must genuinely shrink it.
 	if len(EncodeNote(long)) >= len(long) {
@@ -76,10 +102,12 @@ func decodeTag(t *testing.T, payload string) byte {
 func TestNoteRejectsHostileInput(t *testing.T) {
 	for _, payload := range []string{
 		"", " ", "!!!!", "////", "=", "==",
-		"AAAA",                         // decodes, but the tag is unknown
+		"AAAA",                         // decodes, but byte 0 is unknown
 		"cA",                           // tag 'p' with no body
 		"eg",                           // tag 'z' with no body
 		"e" + strings.Repeat("A", 400), // tag 'z' with garbage
+		"cg",                           // tag 'r' with no body
+		"ZA",                           // tag 'd' with no body
 		strings.Repeat("A", 5000),
 	} {
 		func() {
@@ -88,7 +116,7 @@ func TestNoteRejectsHostileInput(t *testing.T) {
 					t.Errorf("DecodeNote(%.20q) panicked: %v", payload, r)
 				}
 			}()
-			if got, ok := DecodeNote(payload); ok && got == "" {
+			if rec, outcome := DecodeNote(payload); outcome == NoteOutcomeOK && rec.Text == "" {
 				t.Errorf("DecodeNote(%.20q) reported ok with an empty note", payload)
 			}
 		}()
@@ -125,10 +153,10 @@ func TestNoteCapIsCountedInRunes(t *testing.T) {
 	if !utf8.ValidString(got) {
 		t.Error("truncation split a rune")
 	}
-	round, ok := DecodeNote(EncodeNote(long))
-	if !ok || utf8.RuneCountInString(round) != NoteMaxRunes {
-		t.Errorf("a too-long note should round-trip at the cap, got %d runes (ok=%v)",
-			utf8.RuneCountInString(round), ok)
+	round, outcome := DecodeNote(EncodeNote(long))
+	if outcome != NoteOutcomeOK || utf8.RuneCountInString(round.Text) != NoteMaxRunes {
+		t.Errorf("a too-long note should round-trip at the cap, got %d runes (outcome=%d)",
+			utf8.RuneCountInString(round.Text), outcome)
 	}
 }
 
@@ -147,14 +175,16 @@ func TestNoteInflateIsBounded(t *testing.T) {
 	if len(bomb) == 0 {
 		t.Fatal("nothing to inflate")
 	}
-	out, err := inflateBytes(bomb)
-	// Either refuse it or truncate it — never hand back the whole bomb.
-	if err == nil && len(out) > NoteMaxRunes*4+1 {
-		t.Errorf("inflate returned %d bytes, past the %d cap — the bound is not enforced",
-			len(out), NoteMaxRunes*4+1)
-	}
-	if err == nil && len(out) >= 8<<20 {
-		t.Error("inflate expanded the bomb in full")
+	for _, limit := range []int{noteMaxInflatedBytes, noteMaxRecordBytes} {
+		out, err := inflateBytes(bomb, limit)
+		// Either refuse it or truncate it — never hand back the whole bomb.
+		if err == nil && len(out) > limit {
+			t.Errorf("inflate returned %d bytes, past the %d cap — the bound is not enforced",
+				len(out), limit)
+		}
+		if err == nil && len(out) >= 8<<20 {
+			t.Error("inflate expanded the bomb in full")
+		}
 	}
 }
 
@@ -178,22 +208,29 @@ func TestADeflateBombYieldsNoNoteAtAll(t *testing.T) {
 	}
 	w.Close()
 
-	if got, err := inflateBytes(buf.Bytes()); err == nil {
-		t.Errorf("%d bytes of payload expanded past the cap and came back as %d bytes "+
-			"with no error — a hostile note reaching the screen truncated",
-			buf.Len(), len(got))
+	for _, limit := range []int{noteMaxInflatedBytes, noteMaxRecordBytes} {
+		if got, err := inflateBytes(buf.Bytes(), limit); err == nil {
+			t.Errorf("%d bytes of payload expanded past the %d cap and came back as %d bytes "+
+				"with no error — a hostile note reaching the screen truncated",
+				buf.Len(), limit, len(got))
+		}
 	}
 
-	// ...and the whole way in, through the real decoder, a bomb is simply no note.
-	payload := string(noteFormatDeflate) + base64.RawURLEncoding.EncodeToString(buf.Bytes())
-	if note, ok := DecodeNote(payload); ok || note != "" {
-		t.Errorf("DecodeNote showed %d characters of a deflate bomb (ok=%v)", len(note), ok)
+	// ...and the whole way in, through the real decoder, a bomb is simply no
+	// note — DAMAGED, under both the legacy 'z' framing and the record 'd' one.
+	for _, format := range []byte{noteFormatDeflate, noteFormatRecordsZ} {
+		payload := base64.RawURLEncoding.EncodeToString(append([]byte{format}, buf.Bytes()...))
+		if rec, outcome := DecodeNote(payload); outcome != NoteOutcomeDamaged || rec.Text != "" {
+			t.Errorf("format %q: DecodeNote showed %d characters of a deflate bomb (outcome=%d)",
+				format, len(rec.Text), outcome)
+		}
 	}
 
 	// A real compressed note still decodes — the guard must not cost us the
 	// feature it protects.
 	long := strings.TrimSpace(strings.Repeat("a real note that compresses well. ", 8))
-	if round, ok := DecodeNote(EncodeNote(long)); !ok || round != long {
-		t.Errorf("an ordinary long note no longer survives the round trip: %q (ok=%v)", round, ok)
+	if round, outcome := DecodeNote(EncodeNote(long)); outcome != NoteOutcomeOK || round.Text != long {
+		t.Errorf("an ordinary long note no longer survives the round trip: %q (outcome=%d)",
+			round.Text, outcome)
 	}
 }
