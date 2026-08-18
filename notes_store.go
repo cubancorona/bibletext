@@ -293,6 +293,13 @@ func addNote(p prefStore, n StoredNote) (StoredNote, bool) {
 				s.notes[i].WireOpaque = n.WireOpaque
 				changed = true
 			}
+			if len(e.AnchorRuns) == 0 && len(n.AnchorRuns) > 0 {
+				// Same rule for the run set: a copy stored by a build that read
+				// only the first run gains the full anchor when the same link
+				// is re-opened by this one.
+				s.notes[i].AnchorRuns = n.AnchorRuns
+				changed = true
+			}
 			if changed {
 				writeNoteStore(p, s)
 			}
@@ -502,13 +509,19 @@ func migrateLegacyNotes(p prefStore, s *noteStore) {
 // noteForChapter picks the ONE note the reading pane draws for a passage —
 // the derive stays arity-1 for display until the plural render plan (S7).
 //
-// Exact version match first; else the note FOLLOWS its passage from another
-// translation, renumbered by MapVerse. Deterministic order throughout: newest
-// Received first, version id then id breaking ties, so the same store always
-// shows the same note. The returned record's LOCATION is renumbered into the
-// reading translation where it followed; its VersionID still says where it is
-// filed, and its ID is the handle every verb addresses.
-func noteForChapter(p prefStore, versionID, book string, chapter int) (StoredNote, bool) {
+// Placement comes from resolveNoteAnchor (notes_anchor.go), not from an inline
+// MapVerse probe: the anchor resolves to a SET of runs plus a REASON, so a
+// note is shown exactly when a resolved run lands on this chapter, and the
+// unplaced arms (no such book here, incommensurable numbering, verses absent)
+// decline honestly instead of trusting a table that answers "the numbering
+// agrees" for books it has never heard of.
+//
+// Notes filed under the translation being read come first — home, byte-exact —
+// then followed notes from other translations, renumbered. Deterministic order
+// throughout: newest Received first, version id then id breaking ties, so the
+// same store always shows the same note. bible is the reading translation's
+// loaded data, consulted for book existence (nil skips that test).
+func noteForChapter(p prefStore, versionID, book string, chapter int, bible *BibleData) (StoredNote, bool) {
 	s := readNoteStore(p)
 	var candidates []StoredNote
 	for _, n := range s.notes {
@@ -530,11 +543,16 @@ func noteForChapter(p prefStore, versionID, book string, chapter int) (StoredNot
 		return a.ID > b.ID // newest arrival breaks the remaining tie
 	})
 
-	// Exact: filed under the translation being read, on this very chapter.
-	// Selection deliberately ignores Minimized — a collapsed note is still the
-	// chapter's note, shown as a chip (the shipped semantics).
+	// Native: filed under the translation being read. Returned byte-exact —
+	// no mapping ran, so the note comes home even where the delta tables are
+	// wrong about its translation. Selection deliberately ignores Minimized —
+	// a collapsed note is still the chapter's note, shown as a chip (the
+	// shipped semantics).
 	for _, n := range candidates {
-		if strings.EqualFold(n.VersionID, versionID) && n.Book == book && n.Chapter == chapter {
+		if !strings.EqualFold(n.VersionID, versionID) || n.Book != book {
+			continue
+		}
+		if _, on := placementRunOn(resolveNoteAnchor(n, versionID, bible), chapter); on {
 			return n, true
 		}
 	}
@@ -542,39 +560,29 @@ func noteForChapter(p prefStore, versionID, book string, chapter int) (StoredNot
 	// Followed: the passage is the same passage in every translation, so the
 	// note goes with it — mapped, not copied, because chapter and verse
 	// numbers do not mean the same thing across translations (the Romans
-	// doxology moves). verseMapAbsent / verseMapIncommensurable are the cases
-	// where the honest thing is to show nothing: Greek Esther is a different
-	// book, not a renumbering.
+	// doxology moves). The unplaced arms are the cases where the honest thing
+	// is to show nothing: Greek Esther is a different book, not a renumbering,
+	// and a book this translation does not contain has nowhere to show a note
+	// however confidently the table maps it.
 	for _, n := range candidates {
 		if strings.EqualFold(n.VersionID, versionID) || n.Book != book {
 			continue
 		}
-		probe := n.VerseLo
-		if probe <= 0 {
-			probe = 1 // a chapter-level note: ask about the chapter's first verse
-		}
-		ch, v, res := MapVerse(n.VersionID, versionID, n.Book, n.Chapter, probe)
-		if res == verseMapAbsent || res == verseMapIncommensurable || ch != chapter {
+		run, on := placementRunOn(resolveNoteAnchor(n, versionID, bible), chapter)
+		if !on {
 			continue
 		}
 		out := n
 		// VersionID is deliberately NOT rewritten: it says where the note is
-		// FILED. Only the location is renumbered — and the ID rides along, so
-		// the verbs address the record wherever its passage displays (X13's
-		// fix: nothing rebuilds a key from where the reader is standing).
-		out.Chapter = ch
+		// FILED. Only the location is renumbered — the covering run's first
+		// Lo/Hi becomes the mirror anchor (the arity-1 display; the plural
+		// plan is S7) — and the ID rides along, so the verbs address the
+		// record wherever its passage displays (X13's fix: nothing rebuilds a
+		// key from where the reader is standing).
+		out.Chapter = chapter
 		if n.VerseLo > 0 {
-			out.VerseLo = v
-			// The span's end maps on its own; a span that loses its end
-			// degrades to the single verse it starts at rather than guessing.
-			out.VerseHi = v
-			if n.VerseHi > n.VerseLo {
-				if _, hv, hres := MapVerse(n.VersionID, versionID, n.Book, n.Chapter, n.VerseHi); hres == verseMapExact || hres == verseMapMoved {
-					if hv > v {
-						out.VerseHi = hv
-					}
-				}
-			}
+			out.VerseLo = run.Lo
+			out.VerseHi = run.Hi
 		}
 		return out, true
 	}
@@ -600,7 +608,7 @@ func applyNoteForCurrentChapter(state *AppState) {
 		state.NoteID = 0
 		return
 	}
-	n, ok := noteForChapter(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
+	n, ok := noteForChapter(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter, state.Bible)
 	if !ok {
 		// The note goes, and so does the highlight the note put there —
 		// ownership is RECORDED (mark.go), so this is an equality, and a
@@ -635,27 +643,66 @@ func applyNoteForCurrentChapter(state *AppState) {
 // the stored record — the caller mirrors its ID into AppState so the verbs
 // can reach it. ok=false when nothing was stored (no note, or the store is
 // unreadable and stood the write down).
+//
+// EVERYTHING FILED COMES FROM THE TARGET, NOTHING FROM AppState. This used to
+// read Chapter: state.CurrentChapter — the chapter the READER was standing on,
+// not the one the link named — and was only ever right because applyShareTarget
+// happened to navigate first (and wrong the moment navigation clamped the
+// chapter). A record that can see where the reader is standing will eventually
+// record where the reader is standing; the note is filed under the LINK's
+// anchor ([redacted-retired-private-reference], hard case 11).
 func rememberIncomingNote(state *AppState, t ShareTarget) (StoredNote, bool) {
 	if state == nil || strings.TrimSpace(t.Note) == "" {
 		return StoredNote{}, false
 	}
 	return addNote(appPrefs(), StoredNote{
 		Kind: noteKindReceived,
-		// The LINK's translation, not whatever the reader happens to be in. A
+		// The LINK's anchor, not whatever the reader happens to be reading. A
 		// note is a remark on particular wording, so it belongs to the
-		// translation it was written against — and the payload's own 'v'
-		// record outranks the lossy path (noteStorageTarget).
-		VersionID: t.VersionID,
-		Book:      t.Book,
-		Chapter:   state.CurrentChapter,
-		VerseLo:   t.VerseLo,
-		VerseHi:   t.VerseHi,
-		Text:      t.Note,
+		// translation it was written against — and the payload's own
+		// v/b/c/a records outrank the lossy path (noteStorageTarget).
+		VersionID:  t.VersionID,
+		Book:       t.Book,
+		Chapter:    t.Chapter,
+		VerseLo:    t.VerseLo,
+		VerseHi:    t.VerseHi,
+		AnchorRuns: storableNoteRuns(t),
+		Text:       t.Note,
 		// What the payload carried that this build could not use, preserved so
 		// a future forward/re-share can re-emit it (spec rule 3).
 		WireSkipped: []byte(t.NoteSkipped),
 		WireOpaque:  []byte(t.NoteOpaque),
 	})
+}
+
+// maxStoredAnchorRuns bounds the run set one note may file. A genuine 'a'
+// record holds one selection, split at most where a projection genuinely
+// splits (the doxology: two runs); the wire grammar, though, admits ~2,000
+// runs inside its byte cap, and a declared count must never buy unbounded
+// resolution work on every navigation. Far above any honest anchor, far below
+// abuse.
+const maxStoredAnchorRuns = 32
+
+// storableNoteRuns is the wire's full 'a' run set as the store files it: every
+// run, in the storage target's own chapter (the wire carries one 'c' for the
+// whole set), single verses in the store's Hi==0 spelling.
+func storableNoteRuns(t ShareTarget) []anchorRun {
+	wire := noteRunsFromSpelling(t.NoteRuns)
+	if len(wire) == 0 {
+		return nil
+	}
+	if len(wire) > maxStoredAnchorRuns {
+		wire = wire[:maxStoredAnchorRuns]
+	}
+	runs := make([]anchorRun, 0, len(wire))
+	for _, r := range wire {
+		run := anchorRun{Chapter: t.Chapter, Lo: r.Lo}
+		if r.Hi > r.Lo {
+			run.Hi = r.Hi
+		}
+		runs = append(runs, run)
+	}
+	return runs
 }
 
 // hideCurrentNote / restoreCurrentNote / dropCurrentNote are the verbs. Each

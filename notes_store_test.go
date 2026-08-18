@@ -45,7 +45,7 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 		t.Fatalf("the note was not stored: ok=%v id=%d", ok, stored.ID)
 	}
 
-	got, ok := noteForChapter(p, "web", "John", 3)
+	got, ok := noteForChapter(p, "web", "John", 3, nil)
 	if !ok {
 		t.Fatal("the note did not come back")
 	}
@@ -55,7 +55,7 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 	if got.ID != stored.ID {
 		t.Errorf("the note came back under a different identity: %d, stored as %d", got.ID, stored.ID)
 	}
-	if _, ok := noteForChapter(p, "web", "John", 4); ok {
+	if _, ok := noteForChapter(p, "web", "John", 4, nil); ok {
 		t.Error("a note leaked onto the next chapter")
 	}
 	// A note FOLLOWS the passage into another translation. It used to be
@@ -66,7 +66,7 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 	// read different translations, and a link shared FROM a licensed translation
 	// comes back naming a published one, so it was the sender's own note that
 
-	got2, ok := noteForChapter(p, "bsb", "John", 3)
+	got2, ok := noteForChapter(p, "bsb", "John", 3, nil)
 	if !ok {
 		t.Fatal("the note did not follow the passage into the other translation")
 	}
@@ -93,7 +93,7 @@ func TestANoteDoesNotFollowAnIncommensurablePassage(t *testing.T) {
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
 		Text: "for such a time as this"})
 
-	if _, ok := noteForChapter(p, "webc", "Esther", 4); ok {
+	if _, ok := noteForChapter(p, "webc", "Esther", 4, nil); ok {
 		t.Error("a note crossed into Greek Esther, where its verse numbers mean something else")
 	}
 }
@@ -106,15 +106,15 @@ func TestMinimizeIsRemembered(t *testing.T) {
 	stored, _ := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "slowly"})
 
 	setNoteMinimizedByID(p, stored.ID, true)
-	if n, _ := noteForChapter(p, "web", "Psalms", 23); !n.Minimized {
+	if n, _ := noteForChapter(p, "web", "Psalms", 23, nil); !n.Minimized {
 		t.Error("minimize was not stored")
 	}
 	setNoteMinimizedByID(p, stored.ID, false)
-	if n, _ := noteForChapter(p, "web", "Psalms", 23); n.Minimized {
+	if n, _ := noteForChapter(p, "web", "Psalms", 23, nil); n.Minimized {
 		t.Error("restore was not stored")
 	}
 	// And the text survives both.
-	if n, _ := noteForChapter(p, "web", "Psalms", 23); n.Text != "slowly" {
+	if n, _ := noteForChapter(p, "web", "Psalms", 23, nil); n.Text != "slowly" {
 		t.Errorf("text lost through minimize/restore: %q", n.Text)
 	}
 }
@@ -123,7 +123,7 @@ func TestDeleteIsForGood(t *testing.T) {
 	p := newNotePrefs()
 	stored, _ := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, Text: "x"})
 	deleteNoteByID(p, stored.ID)
-	if _, ok := noteForChapter(p, "web", "John", 3); ok {
+	if _, ok := noteForChapter(p, "web", "John", 3, nil); ok {
 		t.Error("the note came back after delete")
 	}
 }
@@ -145,7 +145,7 @@ func TestSecondNoteOnSamePassageKeepsBoth(t *testing.T) {
 		t.Fatalf("expected both notes kept, got %d", got)
 	}
 	// The reading pane's arity-1 derive shows the newest.
-	n, _ := noteForChapter(p, "web", "John", 3)
+	n, _ := noteForChapter(p, "web", "John", 3, nil)
 	if n.Text != "second" {
 		t.Errorf("expected the newer note on the reading pane, got %q", n.Text)
 	}
@@ -220,7 +220,7 @@ func TestNoteTextIsNotTrustedFromTheStore(t *testing.T) {
 	p := newNotePrefs()
 	hostile := "<script>alert(1)</script>"
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, Text: hostile})
-	n, _ := noteForChapter(p, "web", "John", 3)
+	n, _ := noteForChapter(p, "web", "John", 3, nil)
 	// The store keeps text verbatim — escaping is the RENDERER's job, and this
 	// pins that we are not quietly relying on the store to sanitise.
 	if n.Text != hostile {
@@ -265,7 +265,7 @@ func TestUnknownFieldsSurviveAReadModifyWrite(t *testing.T) {
 		t.Errorf("a newer build's fields were destroyed by an older build's rewrite:\n%s", blob)
 	}
 	// And the known fields of that record still read.
-	n, ok := noteForChapter(p, "web", "John", 3)
+	n, ok := noteForChapter(p, "web", "John", 3, nil)
 	if !ok || n.Text != "hello" || n.ID != 7 {
 		t.Errorf("the future-field record did not read back: %+v ok=%v", n, ok)
 	}

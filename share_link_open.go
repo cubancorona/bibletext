@@ -391,29 +391,44 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 
 // noteStorageTarget is the target as the NOTE should be filed, which is not
 // quite the target as the PAGE navigates. The payload's own records are
-// authoritative for the note's anchor where they are present
+// authoritative for the note's anchor wherever they are present
 // (docs/NOTE_WIRE_FORMAT.md): 'v' because the path version is lossy by
-// construction, and 'a' because the runs are the span the sender actually
-// selected. The fragment's verse span still navigates the page — that is not
-// this function's business.
+// construction, 'b' and 'c' because the path names where the page opens while
+// the record names what the sender wrote about, and 'a' because the runs are
+// the span the sender actually selected. The fragment's verse span still
+// navigates the page — that is not this function's business.
 //
-// 'b' and 'c' are decoded and surfaced on the target (NoteBook/NoteChapter)
-// but deliberately NOT applied to storage yet: today's store files a note
-// under the chapter the arrival navigated to (rememberIncomingNote reads
-// state.CurrentChapter — notes_store.go, out of scope here), so honouring a
-// wire book/chapter that disagreed with the path would tear the stored anchor
-// in half — book from the wire, chapter from the navigation. Everything our
-// own encoder emits has b/c equal to the path's book/chapter, so nothing real
-// is lost; the scrapbook store (S5/S6) is where the full anchor lands.
+// (S4 decoded b/c but deliberately did not apply them, because the store of
+// that day filed a note under the chapter the arrival NAVIGATED to and a
+// disagreeing wire chapter would have torn the anchor in half. The scrapbook
+// store files the whole anchor from this target and reads nothing from the
+// navigation — rememberIncomingNote — so the wire's v/b/c/a are now
+// authoritative for what is filed, exactly as the prior implementation they would
+// become.)
 func noteStorageTarget(t ShareTarget) ShareTarget {
 	if t.NoteVersion != "" {
 		t.VersionID = t.NoteVersion
+	}
+	if t.NoteBook != "" {
+		t.Book = t.NoteBook
+	}
+	if t.NoteChapter > 0 {
+		t.Chapter = t.NoteChapter
 	}
 	if t.NoteLo > 0 {
 		t.VerseLo, t.VerseHi = t.NoteLo, t.NoteHi
 		if t.VerseHi <= t.VerseLo {
 			t.VerseHi = 0 // the store's single-verse spelling
 		}
+	} else if t.NoteBook != "" || t.NoteChapter > 0 {
+		// The wire named a book or chapter but NO verse run: a chapter-level
+		// note. The verse from the PATH's fragment must not be grafted onto
+		// it — the fragment names where the page scrolls, and the wire's
+		// silence about verses is the sender's statement that the note is
+		// about the chapter. Our own encoder always emits 'a' alongside a
+		// verse span, so only a hand-built wire reaches this; implementation verification the
+		// graft filed such a note under a verse its sender never named.
+		t.VerseLo, t.VerseHi = 0, 0
 	}
 	return t
 }

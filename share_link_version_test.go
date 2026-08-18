@@ -66,7 +66,7 @@ func TestIncomingNoteIsFiledUnderTheLinksTranslation(t *testing.T) {
 		VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Note: "this one",
 	})
 
-	if _, ok := noteForChapter(appPrefs(), "bsb", "John", 3); !ok {
+	if _, ok := noteForChapter(appPrefs(), "bsb", "John", 3, nil); !ok {
 		t.Error("note was not filed under the link's translation (bsb)")
 	}
 	// Asked of the STORE, not through the display derive — a reader in the

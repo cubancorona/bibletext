@@ -39,7 +39,7 @@ func TestMyNoteCannotOverwriteAFriendsNote(t *testing.T) {
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
 		Text: "and I sent one back"})
 
-	got, ok := noteForChapter(p, "web", "John", 3)
+	got, ok := noteForChapter(p, "web", "John", 3, nil)
 	if !ok {
 		t.Fatal("the friend's note is gone entirely")
 	}
@@ -97,11 +97,11 @@ func TestMyNotesNeverReachTheReadingPage(t *testing.T) {
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "Mark", Chapter: 4, VerseLo: 39,
 		Text: "peace, be still"})
 
-	if _, ok := noteForChapter(p, "web", "Mark", 4); ok {
+	if _, ok := noteForChapter(p, "web", "Mark", 4, nil); ok {
 		t.Error("a note you sent appeared on the reading page")
 	}
 	// Nor by following the passage into another translation.
-	if _, ok := noteForChapter(p, "bsb", "Mark", 4); ok {
+	if _, ok := noteForChapter(p, "bsb", "Mark", 4, nil); ok {
 		t.Error("a note you sent followed the passage into another translation")
 	}
 	// It is still yours, and still in the list.

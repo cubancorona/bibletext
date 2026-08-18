@@ -113,7 +113,7 @@ func TestNoteBannerMinimizedChipRestores(t *testing.T) {
 	if st.NoteMinimized {
 		t.Error("the chip did not restore the note")
 	}
-	back, _ := noteForChapter(p, "web", "Psalms", 23)
+	back, _ := noteForChapter(p, "web", "Psalms", 23, nil)
 	if back.Minimized {
 		t.Error("restore did not persist")
 	}

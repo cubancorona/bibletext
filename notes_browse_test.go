@@ -204,7 +204,7 @@ func TestOpenNoteRestoresAMinimizedOne(t *testing.T) {
 	st := psalm23State()
 	openNote(st, stored)
 
-	back, ok := noteForChapter(p, "web", "Psalms", 23)
+	back, ok := noteForChapter(p, "web", "Psalms", 23, nil)
 	if !ok {
 		t.Fatal("the note vanished")
 	}
@@ -273,7 +273,7 @@ func TestMinimizingDoesNotRestampANote(t *testing.T) {
 	defer func() { noteNow = origNow }()
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "hi"})
 
-	got, ok := noteForChapter(p, "web", "John", 3)
+	got, ok := noteForChapter(p, "web", "John", 3, nil)
 	if !ok || got.Received != 1000 {
 		t.Fatalf("expected the arrival stamped at 1000, got %+v", got)
 	}
@@ -281,7 +281,7 @@ func TestMinimizingDoesNotRestampANote(t *testing.T) {
 	noteNow = func() int64 { return 9999 } // time passes
 	setNoteMinimizedByID(p, got.ID, true)
 
-	got, _ = noteForChapter(p, "web", "John", 3)
+	got, _ = noteForChapter(p, "web", "John", 3, nil)
 	if got.Received != 1000 {
 		t.Errorf("minimizing restamped the note: %d, want the original 1000", got.Received)
 	}
