@@ -146,8 +146,8 @@ type chapterPlan struct {
 
 	// Fingerprint is this plan's identity: deterministic, byte-stable
 	// run-to-run over an unchanged world, changing whenever anything a
-	// surface draws from the plan changes. See foldFingerprint for what is
-	// folded and for the one deliberate omission (Open).
+	// surface draws from the plan changes — Open included, since S8 first
+	// drew it. See foldFingerprint for the three-part split.
 	Fingerprint string
 
 	// noteFP is the note half of Fingerprint — everything except the wash —
@@ -157,8 +157,12 @@ type chapterPlan struct {
 
 	// display is the index in Notes of the ONE note the arity-1 mirror draws
 	// (-1: nothing), replicating the shipped selection exactly — see
-	// planDisplayIndex. It is the S7 truncation seam: S8 deletes it along
-	// with the mirror.
+	// planDisplayIndex. Since S8 it is the APPLE seam: the Fyne surfaces read
+	// the plan itself (notes_banner.go), while the mirror survives as the
+	// native sticker's projection — the display note is the sticker's bubble
+	// and the rest of the set rides in its text as an honest count
+	// (appleStickerText). It is also the note the cap opens (the plan's
+	// Open), so the bubble and the mirror can never disagree.
 	display int
 }
 
@@ -361,12 +365,17 @@ func displayCopy(d drawnNote, versionID string, chapter int) StoredNote {
 // are one spelling, the chapterTints.fingerprint lesson); per unplaced note
 // its ID and kind. Then the wash, as its own half.
 //
-// THE ONE DELIBERATE OMISSION: Open. In this step no pixel depends on it — the
-// surfaces render the mirror, which carries the display note and its STORED
-// Minimized — and folding it would turn every suppression flip (a search
-// arriving on a chapter with a note) into a full NSAttributedString re-import,
-// the exact cost the body/tint split exists to avoid. S8 folds Open in the
-// same commit that makes a surface draw it.
+// OPEN IS FOLDED — INTO THE WHOLE, NOT INTO noteFP. S7 deliberately omitted
+// Open because no pixel depended on it; S8 draws it (the banner's bubble vs
+// chip is Open), so the S7 trap is sprung in the same commit: Open joins
+// Fingerprint as its own middle section. It stays OUT of noteFP on purpose —
+// noteFP is the Apple BODY half (chapterBodyFingerprint, reading.go), and the
+// Apple sticker draws the MIRROR plus the count lines (appleStickerText), none
+// of which depend on Open. Folding Open there would turn every suppression
+// flip (a search arriving on a chapter with a note) into a full
+// NSAttributedString re-import, the exact cost the body/tint split exists to
+// avoid; the invariant that the body half folds everything the sticker text
+// depends on is pinned by TestAppleStickerTextIsFoldedByTheBodyFingerprint.
 func (p *chapterPlan) foldFingerprint() {
 	var b strings.Builder
 	if p.Notice != "" {
@@ -398,5 +407,67 @@ func (p *chapterPlan) foldFingerprint() {
 	if p.noteFP == "" {
 		p.noteFP = "0"
 	}
-	p.Fingerprint = p.noteFP + "&" + p.Tints.fingerprint()
+	var open strings.Builder
+	for _, d := range p.Notes {
+		if d.Open {
+			fmt.Fprintf(&open, "o%d;", d.Note.ID)
+		}
+	}
+	p.Fingerprint = p.noteFP + "&" + open.String() + "&" + p.Tints.fingerprint()
+}
+
+// --- the Apple sticker's text (S8) -------------------------------------------
+//
+// The first plural release ships the Apple surfaces through the EXISTING
+// single-sticker ABI (bibleTextSetNote / bibleTextMacSetNote): the open note
+// keeps the native sticker exactly as before, and the REST of the set is an
+// honest count folded into the sticker's own text. Zero new ObjC, zero new C
+// ABI, on the two surfaces where a defect is least testable
+// ([redacted-retired-private-reference], S8: "de-risk it"). A legal, non-lying subset:
+// nothing is invisible — the sticker says how many more notes the passage
+// carries, and how many cannot be shown in this translation — and platforms
+// differ in richness, not truth; the Fyne banner draws the same set as chips.
+
+// stickerCountLines are the count sentences, in the app's own quiet voice.
+// openID is the note the sticker's bubble already shows (0 for a mirror-only
+// session note, which is in no plan — every plan note then counts as "more").
+func stickerCountLines(plan chapterPlan, openID uint64) []string {
+	others := 0
+	for _, d := range plan.Notes {
+		if d.Note.ID != openID {
+			others++
+		}
+	}
+	var lines []string
+	switch {
+	case others == 1:
+		lines = append(lines, "1 more note on this passage")
+	case others > 1:
+		lines = append(lines, fmt.Sprintf("%d more notes on this passage", others))
+	}
+	switch u := len(plan.Unplaced); {
+	case u == 1:
+		lines = append(lines, "1 note cannot be shown in this translation")
+	case u > 1:
+		lines = append(lines, fmt.Sprintf("%d notes cannot be shown in this translation", u))
+	}
+	return lines
+}
+
+// appleStickerText is what pushNoteToPane hands the existing ABI: the mirror's
+// note (the Apple projection, unchanged) plus the count lines, blank-line
+// separated so they read as the sticker's own footer rather than as the
+// sender's words running on. Everything here is folded by the Apple body
+// fingerprint — the mirror through chapterFingerprint's own clauses, the
+// counts through noteFP's per-note entries — so the sticker text cannot change
+// without the body half changing (verified by test, not assumed).
+func appleStickerText(state *AppState, plan chapterPlan) string {
+	if state == nil || state.ActiveNote == "" {
+		return ""
+	}
+	lines := stickerCountLines(plan, state.NoteID)
+	if len(lines) == 0 {
+		return state.ActiveNote
+	}
+	return state.ActiveNote + "\n\n" + strings.Join(lines, "\n")
 }

@@ -2613,9 +2613,26 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 // pushNoteToPane hands the native sticker its text, its collapsed state and the
 // live palette. Called on every chapter render, so a light/dark flip restyles
 // it and a navigation replaces it — the same cadence as the follow pill.
+//
+// SINCE S8 THE TEXT IS THE MIRROR'S NOTE PLUS THE HONEST COUNT
+// (appleStickerText, notes_plan.go): "N more notes on this passage", "N notes
+// cannot be shown in this translation" — the whole set, folded into the
+// EXISTING single-sticker ABI. No new ObjC, no new C entry point; the
+// fingerprint gate already covers it because the body half (noteFP) folds
+// every plan note the count is computed from.
+//
+// KNOWN IDENTITY GAP, deliberate until S9: the count rides in the BODY label,
+// inside the sender's bubble, in the sender's own style — so "1 more note on
+// this passage" can read as something the sender typed, which bends the rule
+// that the app never speaks inside the bubble. The clean fix is the WHO line,
+// and that line is an ObjC constant this step may not touch (no new ObjC was
+// the brief's own constraint). S9 rebuilds the byline on every surface —
+// replacing the literal "Note from Friend" — and moves the count there in the
+// same, reviewed change. Recorded by review; do not ship a release with notes
+// enabled before S9 lands.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	cText := C.CString(state.ActiveNote)
+	cText := C.CString(appleStickerText(state, buildChapterPlan(state, appPrefs(), state.Bible)))
 	defer C.free(unsafe.Pointer(cText))
 	min := C.int(0)
 	if state.NoteMinimized {

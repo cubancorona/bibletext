@@ -227,6 +227,7 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			devAutoSwitchVersion(state)
 			devAutoReadAlong(state)
 			devAutoTintBench(state)
+			devAutoNotesS8(state)
 			if state.fullPending {
 				// Opened on the embedded Gospels; download the complete Bible in the
 				// background (resilient + self-retrying) and swap it in when it lands.

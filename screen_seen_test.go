@@ -21,9 +21,9 @@ import (
 // a non-zero size once the window has laid it out.
 //
 // The acceptance gate for this file is scripts/view-test-gate.sh, which applies
-// six mutations that each break something a reader would see and requires the
-// suite to go red for every one. These tests exist to close M2, M3 and M6, which
-// the suite could not feel before them.
+// seven mutations that each break something a reader would see and requires the
+// suite to go red for every one. These tests exist to close M2, M3, M6 and M7,
+// which the suite could not feel before them.
 
 // seenLeaves lays root out in a real window and returns the drawable leaves the
 // reader can see.
@@ -179,6 +179,127 @@ func TestKeyViewsAreNotBlank(t *testing.T) {
 					"looking at a blank screen", tc.name, len(seen), tc.least)
 			}
 		})
+	}
+}
+
+// seenSeparator lays root out in a real window and reports whether a VISIBLE
+// widget.Separator with a real size survives — a separator has no text, so the
+// text walk cannot witness one, and the leaf walk descends past the widget
+// into its renderer's bare rectangle, which every surface() card also has.
+func seenSeparator(t *testing.T, root fyne.CanvasObject, size fyne.Size) bool {
+	t.Helper()
+	w := test.NewWindow(root)
+	t.Cleanup(w.Close)
+	w.Resize(size)
+	found := false
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		if o == nil || !o.Visible() {
+			return
+		}
+		if sep, ok := o.(*widget.Separator); ok {
+			if sz := sep.Size(); sz.Width > 0 && sz.Height > 0 {
+				found = true
+			}
+			return
+		}
+		if sc, ok := o.(*container.Scroll); ok {
+			walk(sc.Content)
+			return
+		}
+		if c, ok := o.(*fyne.Container); ok {
+			for _, ch := range c.Objects {
+				walk(ch)
+			}
+			return
+		}
+		if wdg, ok := o.(fyne.Widget); ok {
+			if r := test.WidgetRenderer(wdg); r != nil {
+				for _, ch := range r.Objects() {
+					walk(ch)
+				}
+			}
+		}
+	}
+	walk(root)
+	return found
+}
+
+// M7 — every note on the passage is SEEN on the banner (S8): the open note's
+// text, a chip per other placed note carrying its citation and translation
+// label, a separator, and the unplaced group's chip with its reason sentence.
+// The gate's M7 mutation drops the chips row and this walk is what must feel
+// it — a note whose only trace was in the tree would be exactly the "present
+// but invisible" failure this file exists for.
+func TestNoteBannerShowsTheWholeSet(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	pinBannerPlatform(t)
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	now := int64(1_700_000_000)
+	noteNow = func() int64 { now++; return now }
+	defer func() { noteNow = origNow }()
+
+	// Three notes on one chapter: two placed under different translations
+	// (web = native and open, bsb = a followed chip with its label) and one
+	// whose numbering cannot land here at all (webc's Greek Esther — the R4
+	// unplaced group).
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
+		VerseLo: 1, Text: "the words that are open"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "Esther", Chapter: 4,
+		VerseLo: 2, Text: "the followed body"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
+		VerseLo: 3, Text: "the greek esther body"})
+
+	st := planTestState(t)
+	st.Bible.Verses["Esther"] = map[int][]Verse{4: {
+		{BookName: "Esther", Chapter: 4, Verse: 1, Text: "for such a time as this"},
+		{BookName: "Esther", Chapter: 4, Verse: 2, Text: "verse two"},
+		{BookName: "Esther", Chapter: 4, Verse: 3, Text: "verse three"},
+	}}
+	st.CurrentBook, st.CurrentChapter = "Esther", 4
+	applyNoteForCurrentChapter(st)
+
+	size := fyne.NewSize(700, 700)
+	got := seenText(t, buildNoteBanner(st), size)
+	for _, want := range []string{
+		"the words that are open",     // the open bubble's body
+		"from friend",                 // the byline, outside the bubble
+		"esther 4:2 (bsb)",            // the followed note's chip, with its label
+		"esther 4:3 (webc)",           // the unplaced note's chip, with its label
+		"the numbering here does not", // the R4 sentence beneath it
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the reader cannot see %q on the banner.\nseen:\n%s", want, got)
+		}
+	}
+	for _, hidden := range []string{"the followed body", "the greek esther body"} {
+		if strings.Contains(got, hidden) {
+			t.Errorf("a chip is showing its note's body (%q) — chips carry the citation, not the words", hidden)
+		}
+	}
+	// The separator between the placed set and the unplaced group survives
+	// layout — it carries no text, so seenText cannot witness it and the walk
+	// has to look for the widget itself, laid out and visible.
+	if !seenSeparator(t, buildNoteBanner(st), size) {
+		t.Error("no separator is visible between the placed notes and the unplaced group")
+	}
+
+	// Suppression: a foreign mark stands the notes down — chips only, zero
+	// open, the whole strip quiet, and nothing lost.
+	goToVerseRange(st, "Esther", 4, 1, 1)
+	got = seenText(t, buildNoteBanner(st), size)
+	if strings.Contains(got, "the words that are open") {
+		t.Errorf("suppressed, yet a note is still open:\n%s", got)
+	}
+	for _, want := range []string{"esther 4:1", "esther 4:2 (bsb)", "esther 4:3 (webc)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("suppression lost a chip (%q) — stand down means chips, not absence.\nseen:\n%s", want, got)
+		}
 	}
 }
 

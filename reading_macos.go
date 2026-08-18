@@ -1997,9 +1997,15 @@ func armReadingRestore(verse int, delta, frac float64) {
 // live palette — the macOS twin of the iOS function of the same name, called on
 // every chapter render so a light/dark flip restyles it and a navigation
 // replaces it.
+//
+// SINCE S8 THE TEXT IS THE MIRROR'S NOTE PLUS THE HONEST COUNT
+// (appleStickerText, notes_plan.go) — the whole set through the EXISTING
+// single-sticker ABI, exactly as the iOS twin. No new ObjC, no new C entry
+// point; the body fingerprint folds every plan note the count is computed
+// from, so a count change repaints and a focus flip does not re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	cText := C.CString(state.ActiveNote)
+	cText := C.CString(appleStickerText(state, buildChapterPlan(state, appPrefs(), state.Bible)))
 	defer C.free(unsafe.Pointer(cText))
 	min := C.int(0)
 	if state.NoteMinimized {

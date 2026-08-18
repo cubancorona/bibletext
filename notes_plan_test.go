@@ -8,6 +8,7 @@ package bibletext
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -246,11 +247,12 @@ func planIDs(list []drawnNote) []uint64 {
 	return out
 }
 
-// NOTHING VISIBLE CHANGES (S7 rule 5): the banner's rendered text for the
-// single-note case, driven through the REAL store and derive, is exactly what
-// it was before the plan existed — bubble and chip both. The strings below
-// were captured against the pre-S7 tree; if this fails, the projection has
-// changed a pixel the step promised not to.
+// The single-note banner, pinned string-for-string. Until S8 this test held
+// the S7 promise that nothing visible changed; S8 changed the surface ON
+// PURPOSE — the shared tailed bubble with the byline outside and the citation
+// heading, and a chip that names its note instead of a bare "Show note" — so
+// the strings below pin the S8 shape: bubble ↔ chip round-trips through the
+// real verbs must land exactly here.
 func TestNoteBannerRendersIdenticallyThroughThePlan(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -266,20 +268,20 @@ func TestNoteBannerRendersIdenticallyThroughThePlan(t *testing.T) {
 	applyNoteForCurrentChapter(st)
 
 	got := seenText(t, buildNoteBanner(st), fyne.NewSize(700, 400))
-	want := "note from friend psalms 23 this got me through last night."
+	want := "psalms 23:1 this got me through last night. from friend"
 	if got != want {
 		t.Errorf("expanded banner changed:\n got %q\nwant %q", got, want)
 	}
 
 	hideCurrentNote(st)
 	got = seenText(t, buildNoteBanner(st), fyne.NewSize(700, 400))
-	if want = "show note"; got != want {
+	if want = "psalms 23:1 · today · hidden"; got != want {
 		t.Errorf("chip changed:\n got %q\nwant %q", got, want)
 	}
 
 	restoreCurrentNote(st)
 	got = seenText(t, buildNoteBanner(st), fyne.NewSize(700, 400))
-	want = "note from friend psalms 23 this got me through last night."
+	want = "psalms 23:1 this got me through last night. from friend"
 	if got != want {
 		t.Errorf("restored banner changed:\n got %q\nwant %q", got, want)
 	}
@@ -355,6 +357,113 @@ func TestNavigationResetsTheFocus(t *testing.T) {
 	plan := buildChapterPlan(st, appPrefs(), st.Bible)
 	if got := planOpenCount(plan); got != 1 {
 		t.Errorf("navigation must reset a closed focus to the default: %d open, want 1", got)
+	}
+}
+
+// S8 sprang the recorded S7 trap: Open is FOLDED into the plan's Fingerprint
+// (the banner draws it now), while the note half (noteFP) — the Apple BODY
+// fingerprint's input — deliberately ignores it: the sticker draws the mirror
+// plus the counts, none of which depend on Open, so a suppression flip or an
+// explicit close repaints the Fyne banner without forcing a native
+// NSAttributedString re-import.
+func TestFingerprintFoldsOpenButTheBodyHalfIgnoresIt(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3,
+		VerseLo: 16, Text: "the open one"})
+
+	st := planTestState(t)
+	addRecentChapter(st, "John", 3)
+	base := buildChapterPlan(st, appPrefs(), st.Bible)
+	if _, ok := base.openNote(); !ok {
+		t.Fatal("precondition: the note should be open at rest")
+	}
+
+	// The reader explicitly closes it: Open flips, nothing else does.
+	st.focusNone()
+	closed := buildChapterPlan(st, appPrefs(), st.Bible)
+	if _, ok := closed.openNote(); ok {
+		t.Fatal("precondition: focus none should close the note")
+	}
+	if closed.Fingerprint == base.Fingerprint {
+		t.Error("Open is not folded: the plan's Fingerprint did not move when the open note closed — " +
+			"the S7 trap (a field the fingerprint forgot) is sprung open again")
+	}
+	if closed.noteFP != base.noteFP {
+		t.Errorf("the note half must ignore Open — folding it there re-imports the whole "+
+			"NSAttributedString on every focus flip:\n %q\nvs %q", closed.noteFP, base.noteFP)
+	}
+}
+
+// The Apple sticker's text (mirror + count lines) must be FOLDED by the body
+// fingerprint: whenever the text the push would hand the ABI changes, the body
+// half changes with it — and a flip that leaves the text alone (suppression)
+// leaves the body half alone. Verified, not assumed (the brief's task 4).
+func TestAppleStickerTextIsFoldedByTheBodyFingerprint(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3,
+		VerseLo: 16, Text: "the first note"})
+	st := planTestState(t)
+	addRecentChapter(st, "John", 3)
+
+	snap := func() (string, string) {
+		plan := buildChapterPlan(st, appPrefs(), st.Bible)
+		return appleStickerText(st, plan), chapterBodyFingerprint(st)
+	}
+
+	text1, body1 := snap()
+	if text1 == "" {
+		t.Fatal("precondition: the sticker should carry the note")
+	}
+
+	// A second note arrives on the passage: the count line appears, and the
+	// body fingerprint must move with it or the sticker would keep lying.
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3,
+		VerseLo: 16, Text: "the second note"})
+	applyNoteForCurrentChapter(st)
+	text2, body2 := snap()
+	if text2 == text1 {
+		t.Fatalf("the count line did not appear: %q", text2)
+	}
+	if !strings.Contains(text2, "1 more note on this passage") {
+		t.Errorf("the sticker text should carry the honest count: %q", text2)
+	}
+	if body2 == body1 {
+		t.Error("the sticker text changed and the body fingerprint did not — the native pane would skip the repaint")
+	}
+
+	// An unplaced note on the reading BOOK: the second sentence, same duty.
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
+		VerseLo: 1, Text: "greek esther"})
+	st2 := planTestState(t)
+	st2.Bible.Verses["Esther"] = map[int][]Verse{4: {{BookName: "Esther", Chapter: 4, Verse: 1, Text: "esther"}}}
+	st2.CurrentBook, st2.CurrentChapter = "Esther", 4
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
+		VerseLo: 1, Text: "an esther note"})
+	applyNoteForCurrentChapter(st2)
+	plan2 := buildChapterPlan(st2, appPrefs(), st2.Bible)
+	if got := appleStickerText(st2, plan2); !strings.Contains(got, "1 note cannot be shown in this translation") {
+		t.Errorf("the unplaced sentence is missing from the sticker text: %q", got)
+	}
+
+	// A suppression flip leaves the sticker text alone, so it must leave the
+	// body half alone too — that is the whole point of keeping Open out of it.
+	openSearchResultRange(st, Verse{BookName: "John", Chapter: 3, Verse: 1}, 0)
+	text3, body3 := snap()
+	if text3 != text2 {
+		t.Fatalf("a suppression flip changed the sticker text:\n %q\nvs %q", text3, text2)
+	}
+	if body3 != body2 {
+		t.Error("a suppression flip moved the body fingerprint — every search arrival would " +
+			"re-import the whole NSAttributedString")
 	}
 }
 

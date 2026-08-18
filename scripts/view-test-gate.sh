@@ -153,6 +153,17 @@ run_mutation M6 \
 		return container.NewVBox()
 	}')"
 
+# ── M7 ────────────────────────────────────────────────────────────────────────
+# S8's own failure mode: the banner keeps the open bubble and quietly drops the
+# chips row, so every other note on the passage is invisible again — X7 by a
+# rendering slip instead of a model slip. The chips are still BUILT (the loop
+# runs, the widgets exist); they are simply never added to the screen, which is
+# precisely the "present but unseen" class this gate exists to feel.
+run_mutation M7 \
+  "the chips row is dropped from the banner" \
+  "one open note; every other note on the passage vanishes without trace" \
+  "$(sub_py notes_banner.go '	rows.Add(chips)' '	_ = chips // MUTATION: built, never shown')"
+
 echo
 bold "$PASS caught, $FAIL survived"
 if [ "$FAIL" -ne 0 ]; then

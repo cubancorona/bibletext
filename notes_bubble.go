@@ -39,19 +39,26 @@ const (
 // run visibly across the tail's mouth — which is what would make it read as a
 // triangle stuck to a box rather than as one shape.
 func noteTailSVG(fill, stroke color.Color) fyne.Resource {
-	hex := func(c color.Color) string {
+	// SIX hex digits, alpha as its own attribute. Fyne's SVG loader rejects
+	// #RRGGBBAA outright ("color string ... is not length 3 or 6"), and the
+	// original 8-digit spelling here meant the tail image FAILED TO LOAD on
+	// every build since the bubble shipped — the bubble rendered as a plain
+	// card and the failure was one quiet log line in a test nobody grepped.
+	hex := func(c color.Color) (string, float64) {
 		r, g, b, a := c.RGBA()
-		return fmt.Sprintf("#%02X%02X%02X%02X", r>>8, g>>8, b>>8, a>>8)
+		return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8), float64(a>>8) / 255
 	}
+	fillHex, fillA := hex(fill)
+	strokeHex, strokeA := hex(stroke)
 	w, d := noteTailWidth, noteTailDepth
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+
-			`<path d="M0 0 L%d %d L%d 0 Z" fill="%s"/>`+
-			`<path d="M0 0 L%d %d L%d 0" fill="none" stroke="%s" stroke-width="1" `+
+			`<path d="M0 0 L%d %d L%d 0 Z" fill="%s" fill-opacity="%.3f"/>`+
+			`<path d="M0 0 L%d %d L%d 0" fill="none" stroke="%s" stroke-opacity="%.3f" stroke-width="1" `+
 			`stroke-linejoin="round"/></svg>`,
 		w, d+1, w, d+1,
-		w/2, d, w, hex(fill),
-		w/2, d, w, hex(stroke),
+		w/2, d, w, fillHex, fillA,
+		w/2, d, w, strokeHex, strokeA,
 	)
 	return fyne.NewStaticResource("note-tail.svg", []byte(svg))
 }
