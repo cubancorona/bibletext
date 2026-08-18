@@ -176,6 +176,10 @@ func devAutoReadAlong(state *AppState) {
 //	           realistic WHO line ("· K of 105 on this passage · 9 not shown
 //	           here", 3-digit count) so the fit rule is visible: the FRIEND
 //	           half tail-truncates, the counts never do
+//	s10ranges  three notes with DIFFERENT verse ranges inside ONE paragraph
+//	           (WEB John 3:14-17; two ranges overlap at v16), then two
+//	           next-taps — the wash bands only the open note's range and
+//	           moves within the paragraph as the taps walk the set
 //	s10next    the SELECTION proof: three arrivals on one passage, then the
 //	           count region's next-tap three times through the real //export
 //	           (devNoteNextTap → bibleTextNoteNextTapped) — the who line
@@ -193,6 +197,23 @@ func devAutoNotesS8(state *AppState) {
 	}
 	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
 	switch scenario {
+	case "s10ranges":
+		// Three notes with DIFFERENT verse ranges inside ONE paragraph — the
+		// WEB files John 3:14-17 as a single paragraph, and two of the ranges
+		// overlap at verse 16. The proof the owner asked to see: the wash
+		// always bands the OPEN note's own range and nothing else (one lit
+		// span), and the next-taps walk the set with the band moving WITHIN
+		// the paragraph.
+		ranged := func(lo, hi int, text string) {
+			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+				"John", 3, lo, hi, text))
+		}
+		at(1500*time.Millisecond, func() { ranged(14, 15, "On 14-15: the serpent lifted up, so the Son must be.") })
+		at(6*time.Second, func() { ranged(16, 16, "On 16 alone: the verse everybody knows.") })
+		at(12*time.Second, func() { ranged(16, 17, "On 16-17: not to condemn the world, but to save it.") })
+		for _, d := range []time.Duration{18 * time.Second, 26 * time.Second} {
+			time.AfterFunc(d, func() { devNoteNextTap(state) })
+		}
 	case "s10next":
 		at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
 		at(6*time.Second, func() { link("Second note: a second voice on the same verse.") })
