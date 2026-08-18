@@ -320,8 +320,14 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 	// and any other full rebuild satisfies it too (rebuildWindow clears the
 	// flag and consumes the parked link itself).
 	if state.window != nil && state.window.Canvas().Overlays().Top() != nil {
+		if os.Getenv("BT_SHEET_DEBUG") != "" {
+			fmt.Fprintln(os.Stderr, "[sheet] applyFullDownload: overlay open, rebuild DEFERRED")
+		}
 		state.fullRebuildDeferred = true
 		return
+	}
+	if os.Getenv("BT_SHEET_DEBUG") != "" {
+		fmt.Fprintln(os.Stderr, "[sheet] applyFullDownload: no overlay, rebuilding now")
 	}
 	// A link for a book the seed does not carry was parked rather than
 	// dropped (applyShareTarget). The whole Bible is now in place, so it
@@ -329,6 +335,23 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 	// the shared passage instead of flashing this chapter first. This is
 	// the same ordering StartBackgroundLoad and applyLoadedVersion use.
 	consumeSeedParkedLink(state)
+	rebuildWindow(state)
+}
+
+// deferOrRebuild is the background-completion spelling of rebuildWindow: the
+// rebuild happens NOW when nothing would be lost, and waits for the sheet the
+// reader is inside otherwise. Used by the paths a reader never triggered from
+// the sheet itself — the theme observer today; applyFullDownload keeps its own
+// copy of the check because its immediate path must consume the seed-parked
+// link first.
+func deferOrRebuild(state *AppState) {
+	if state != nil && state.window != nil && state.window.Canvas().Overlays().Top() != nil {
+		if os.Getenv("BT_SHEET_DEBUG") != "" {
+			fmt.Fprintln(os.Stderr, "[sheet] deferOrRebuild: overlay open, rebuild DEFERRED")
+		}
+		state.fullRebuildDeferred = true
+		return
+	}
 	rebuildWindow(state)
 }
 
@@ -473,19 +496,48 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 	systemThemeOnce.Do(func() {
 		ch := make(chan fyne.Settings, 1)
 		myApp.Settings().AddChangeListener(ch)
-		lastVariant := myApp.Settings().ThemeVariant()
+		// The variant the WINDOW was last built with — compared at rebuild
+		// time, on the UI goroutine, not event-to-event on the listener
+		// goroutine. The difference is not pedantry: when iOS backgrounds the
+		// app it snapshots it in BOTH appearances for the app switcher, so
+		// the variant flips away and back and the listener hears two
+		// changes. Event-to-event each leg looks like a real change, the
+		// queued rebuilds run on restore, and the drain takes the sheet the
+		// reader left open with it (verification: "Settings open, background,
+		// restore — the sheet is gone"). Against the built variant, a round
+		// trip nets to no change and both queued closures no-op; a REAL
+		// overnight flip still differs and still rebuilds — with the drain
+		// that exists precisely for that flip's stale-palette sheet.
+		builtVariant := myApp.Settings().ThemeVariant()
 		go func() {
 			for range ch {
-				v := myApp.Settings().ThemeVariant()
-				if v == lastVariant {
-					continue // theme object changed but not the variant — ignore
-				}
-				lastVariant = v
 				fyne.Do(func() {
 					if state.stopping.Load() {
 						return
 					}
-					rebuildWindow(state)
+					v := myApp.Settings().ThemeVariant()
+					if os.Getenv("BT_SHEET_DEBUG") != "" {
+						fmt.Fprintf(os.Stderr, "[sheet] theme event: built=%v now=%v\n", builtVariant, v)
+					}
+					if v == builtVariant {
+						return // net no-change: a snapshot round trip, or no variant in it at all
+					}
+					builtVariant = v
+					// The built-variant compare alone cannot save an open sheet:
+					// the round trip's two closures interleave with the settings
+					// updates, so each leg reads as a real change at execution
+					// time (measured — the instrumented sim logs built=0 now=1
+					// then built=1 now=0, one rebuild each, sheet drained). No
+					// timer or flag can outrace that delivery. What CAN hold is
+					// pure state: while a sheet owns the canvas, defer the
+					// rebuild to the moment it leaves — the same machinery as
+					// applyFullDownload, consumed by the overlay-restore
+					// closures and satisfied by any other rebuild. The round
+					// trip then nets to one repaint with the settled variant on
+					// close; a REAL flip with a sheet open repaints on close
+					// too, trading the sheet-yank for a briefly stale palette
+					// behind an overlay the reader is actively using.
+					deferOrRebuild(state)
 				})
 			}
 		}()

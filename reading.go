@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -387,6 +390,11 @@ func rebuildWindow(state *AppState) {
 	if state.fullRebuildDeferred {
 		state.fullRebuildDeferred = false
 		consumeSeedParkedLink(state)
+	}
+	if os.Getenv("BT_SHEET_DEBUG") != "" {
+		if _, file, line, ok := runtime.Caller(1); ok {
+			fmt.Fprintf(os.Stderr, "[sheet] rebuildWindow from %s:%d\n", filepath.Base(file), line)
+		}
 	}
 	windowRebuildGen++
 	// Belt-and-braces: drain any lingering overlays before swapping content. On

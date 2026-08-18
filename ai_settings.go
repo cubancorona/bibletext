@@ -8,8 +8,10 @@ package bibletext
 
 import (
 	"context"
+	"fmt"
 	"image/color"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -452,6 +454,9 @@ func showAISettings(state *AppState) {
 		if closed {
 			return
 		}
+		if os.Getenv("BT_SHEET_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "[sheet] done() closing\n")
+		}
 		closed = true
 		if popup != nil {
 			popup.Hide()
@@ -806,6 +811,10 @@ func showAISettings(state *AppState) {
 	}
 	var watchDismiss func()
 	watchDismiss = func() {
+		if os.Getenv("BT_SHEET_DEBUG") != "" && popup != nil {
+			fmt.Fprintf(os.Stderr, "[sheet] watch: visible=%v onStack=%v top=%v\n",
+				popup.Visible(), onOverlayStack(), cnv.Overlays().Top() != nil)
+		}
 		if popup == nil || !popup.Visible() || !onOverlayStack() {
 			// Skip the close-out when ANOTHER overlay owns the canvas by the
 			// time this poll fires (the reader reopened a sheet within one
