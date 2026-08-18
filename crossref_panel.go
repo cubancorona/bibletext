@@ -16,7 +16,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func showCrossRefs(state *AppState, text string) {
+func showCrossRefs(state *AppState, text string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -38,7 +38,7 @@ func showCrossRefs(state *AppState, text string) {
 	title := canvas.NewText("Cross-references", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 22
-	src := canvas.NewText(citationForSelection(state, text), pal.Accent)
+	src := canvas.NewText(citationForSelection(state, text, span), pal.Accent)
 	src.TextStyle = fyne.TextStyle{Bold: true}
 	src.TextSize = subheadingTextSize
 	header := container.NewVBox(title, src, widget.NewSeparator())
@@ -132,7 +132,7 @@ func showCrossRefs(state *AppState, text string) {
 		// crossRefsForSelection always returns the embedded Gospel parallels (offline),
 		// plus the TSK cross-references when they loaded — so a TSK fetch failure still
 		// shows parallels, and we only surface the error when there's nothing at all.
-		refs := crossRefsForSelection(state, text)
+		refs := crossRefsForSelection(state, text, span)
 		fyne.Do(func() {
 			if len(refs) == 0 && err != nil {
 				setMessage("Couldn't load cross-references.\nCheck your connection and try again.")

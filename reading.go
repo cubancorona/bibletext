@@ -1281,7 +1281,10 @@ func (c *chapterText) selectionMenu() *fyne.Menu {
 }
 
 func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
-	return selectionStudyMenu(c.state, sel,
+	// The legacy Entry pane has no positional selection model (Entry exposes
+	// only the selected STRING), so its dispatches carry the zero span and the
+	// text-matching fallback attributes the verses.
+	return selectionStudyMenu(c.state, sel, selSpan{},
 		func() {
 			if c.clipboard != nil {
 				c.clipboard.SetContent(c.copySelection())
@@ -1293,8 +1296,10 @@ func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
 // selectionStudyMenu builds the desktop selection menu — Copy / Select all,
 // then (with a selection) Study with AI, Share, Cross-references, in the same
 // order and gating as the native menus. Shared by BOTH desktop panes
-// (chapterText and the styled pane), so the verb set can never diverge.
-func selectionStudyMenu(state *AppState, sel string, copyFn, selectAllFn func()) *fyne.Menu {
+// (chapterText and the styled pane), so the verb set can never diverge. span is
+// the selection's positionally-resolved verse range (zero from the legacy
+// Entry pane, which has none).
+func selectionStudyMenu(state *AppState, sel string, span selSpan, copyFn, selectAllFn func()) *fyne.Menu {
 	copyItem := fyne.NewMenuItem("Copy", copyFn)
 	copyItem.Disabled = sel == ""
 	selectAll := fyne.NewMenuItem("Select all", selectAllFn)
@@ -1305,39 +1310,39 @@ func selectionStudyMenu(state *AppState, sel string, copyFn, selectAllFn func())
 
 		shareChildren := []*fyne.MenuItem{
 			fyne.NewMenuItem("Share with citation", func() {
-				dispatchSelectionAction(state, selActionShareCite, sel)
+				dispatchSelectionAction(state, selActionShareCite, sel, span)
 			}),
 			fyne.NewMenuItem("Share as image", func() {
-				dispatchSelectionAction(state, selActionShareImage, sel)
+				dispatchSelectionAction(state, selActionShareImage, sel, span)
 			}),
 			fyne.NewMenuItem("Share as link", func() {
-				dispatchSelectionAction(state, selActionShareLink, sel)
+				dispatchSelectionAction(state, selActionShareLink, sel, span)
 			}),
 		}
 		// Writing a note is offered only while the feature is on, the same way
 		// the AI verbs vanish when the assistant is set to None.
 		if notesFeatureOn(state) {
 			shareChildren = append(shareChildren, fyne.NewMenuItem("Share with note", func() {
-				dispatchSelectionAction(state, selActionShareNote, sel)
+				dispatchSelectionAction(state, selActionShareNote, sel, span)
 			}))
 		}
 		shareItem := fyne.NewMenuItem("Share", nil)
 		shareItem.ChildMenu = fyne.NewMenu("", shareChildren...)
 		xrefItem := fyne.NewMenuItem("Cross-references", func() {
-			dispatchSelectionAction(state, selActionCrossRef, sel)
+			dispatchSelectionAction(state, selActionCrossRef, sel, span)
 		})
 
 		if aiFeaturesEnabled(state) {
 			aiItem := fyne.NewMenuItem("Study with AI", nil)
 			aiItem.ChildMenu = fyne.NewMenu("",
 				fyne.NewMenuItem("Explain", func() {
-					dispatchAIAction(state, aiActionExplain, sel)
+					dispatchAIAction(state, aiActionExplain, sel, span)
 				}),
 				fyne.NewMenuItem("Analyze context", func() {
-					dispatchAIAction(state, aiActionContext, sel)
+					dispatchAIAction(state, aiActionContext, sel, span)
 				}),
 				fyne.NewMenuItem("Analyze translation", func() {
-					dispatchAIAction(state, aiActionTranslation, sel)
+					dispatchAIAction(state, aiActionTranslation, sel, span)
 				}),
 			)
 			items = append(items, aiItem, shareItem, xrefItem)

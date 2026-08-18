@@ -121,7 +121,7 @@ func TestVerseOfDayFitsShortCanvas(t *testing.T) {
 // and pushed the Share button past the right edge below ~357pt.
 func TestComposeSheetFitsNarrowPhone(t *testing.T) {
 	st, win := smallPhone(t)
-	promptShareNote(st, "For God so loved the world")
+	promptShareNote(st, "For God so loved the world", selSpan{})
 	p := topPopup(t, win)
 	test.WidgetRenderer(p).Layout(p.Size())
 

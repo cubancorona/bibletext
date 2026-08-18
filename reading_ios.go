@@ -23,10 +23,13 @@ package bibletext
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
 // an AI study action; it copies both strings immediately, so passing the
-// transient UTF8String pointers is safe.
-extern void bibleTextAIMenuTapped(char *action, char *text);
+// transient UTF8String pointers is safe. lo/hi is the selection's verse span,
+// resolved here against the verse-number index of the attributed string the
+// selection was made in (0,0 = unresolved) — position, not text, decides which
+// verses a share or cross-reference cites.
+extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
-extern void bibleTextStudyMenuTapped(char *action, char *text);
+extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi);
 // Called when the reader finishes scrolling, to persist the live scroll position.
 // iOS's app-background lifecycle hook is unreliable, so we save continuously
 // (on scroll-end) instead, keeping the saved position current even on a hard kill.
@@ -123,6 +126,10 @@ static BOOL       gMarkerApplied = NO;
 static void btIOSApplyMarker(void); // defined below; used in bibleTextApplyHTML + arm
 static void btIOSClearMarker(void); // forward decl: scrollViewDidScroll clears on drag
 static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used by btIOSApplyMarker
+// The verse whose number run is the last at or before a character index — the
+// scroll-anchor mapping, reused by the selection menu to turn the selected
+// range into a verse span.
+static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc);
 
 // Character range of the highlighted verse (set when arriving from a search
 // result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
@@ -159,11 +166,20 @@ static UITapGestureRecognizer *gHighlightTap = nil;
         return [UIMenu menuWithChildren:suggestedActions];
     }
     NSString *captured = [[textView.text substringWithRange:range] copy];
+    // The selection's verse span, resolved NOW against the same storage the
+    // captured text came from (the verse index is rebuilt on every text
+    // assignment, and the menu dismisses on any selection change, so the two
+    // cannot disagree). The span is [last verse number at or before the range's
+    // first char, last verse number at or before its last char] — a selection
+    // touching a verse's NUMBER starts at that number's location, so it
+    // resolves to that verse. 0 means "above verse 1" (the heading); Go clamps.
+    int spanLo = (int)btIOSVerseAtIndex(textView.textStorage, range.location, NULL);
+    int spanHi = (int)btIOSVerseAtIndex(textView.textStorage, NSMaxRange(range) - 1, NULL);
 
     UIAction * (^make)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
+            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi);
         }];
     };
 
@@ -178,7 +194,7 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     UIAction * (^study)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String);
+            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi);
         }];
     };
     NSMutableArray *shareKids = [NSMutableArray arrayWithArray:@[

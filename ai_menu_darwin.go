@@ -56,35 +56,42 @@ func bibleTextKeyboardChanged(height C.double) {
 // bibleTextAIMenuTapped is called from the HBReadingTextView subclasses when the
 // user picks an AI study action. It runs on the native UI thread, so it copies the
 // C strings right away and hops onto Fyne's UI goroutine before showing anything.
+// lo/hi is the selection's verse span, resolved by the pane against the verse
+// numbers of the attributed string the selection was made in — the position is
+// authoritative for which verses are cited, and it would otherwise be discarded
+// at this boundary and re-derived (wrongly, on repeated wording) from the text.
+// 0,0 = unresolved.
 //
 //export bibleTextAIMenuTapped
-func bibleTextAIMenuTapped(cAction, cText *C.char) {
+func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi C.int) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
+	span := selSpanFromNative(int(lo), int(hi))
 	state := activeAIState
 	if state == nil {
 		return
 	}
 	fyne.Do(func() {
-		dispatchAIAction(state, action, text)
+		dispatchAIAction(state, action, text, span)
 	})
 }
 
 // bibleTextStudyMenuTapped is the sibling callback for the non-AI selection-menu
 // actions (Share verse, and — as they land — Cross-references and Word study).
 // Same threading contract as above: copy the C strings, then hop to Fyne's UI
-// goroutine before touching any state.
+// goroutine before touching any state. Same lo/hi contract as above.
 //
 //export bibleTextStudyMenuTapped
-func bibleTextStudyMenuTapped(cAction, cText *C.char) {
+func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi C.int) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
+	span := selSpanFromNative(int(lo), int(hi))
 	state := activeAIState
 	if state == nil {
 		return
 	}
 	fyne.Do(func() {
-		dispatchSelectionAction(state, action, text)
+		dispatchSelectionAction(state, action, text, span)
 	})
 }
 

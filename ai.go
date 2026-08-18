@@ -243,7 +243,11 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 
 // dispatchAIAction is the entry point the native selection-menu callback calls
 // (on the Fyne UI goroutine). It opens the result panel, which drives the fetch.
-func dispatchAIAction(state *AppState, action, selectedText string) {
+// span rides the same ABI as the study dispatch so both callbacks carry the
+// selection's position; the AI prompts name only book+chapter (buildAIPrompt),
+// so nothing here consumes it yet — an AI verb that cites verses must take it
+// from this parameter, never re-derive it from the words.
+func dispatchAIAction(state *AppState, action, selectedText string, _ selSpan) {
 	if state == nil {
 		return
 	}

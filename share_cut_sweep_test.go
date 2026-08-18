@@ -86,7 +86,7 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 	if !strings.Contains(strings.TrimSpace(raw), " ") {
 		return
 	}
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if text == "" {
 		return
 	}
@@ -144,7 +144,7 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 	// COMPLETE quotation — material after the final punctuation is never
 	// marked (BB 5.3(b)(iv) / Indigo R39.9) — so words in FOLLOWING sentences
 	// don't count as omissions; only an unterminated text can omit words.
-	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0))
 	hasMark := strings.Contains(quote, " . . . ")
 	core := strings.TrimRight(text, " \u201d\u2019\"'")
 	completed := false
@@ -165,7 +165,7 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 	// restoreShareLineBreaks re-inserts must be EXACTLY the flattened spaces —
 	// collapsing it back must reproduce the pipeline text (content-preserving),
 	// and any inserted break must land between words, never inside one.
-	restored := restoreShareLineBreaks(st, text)
+	restored := restoreShareLineBreaks(st, text, -1, 0)
 	if collapseSpaces(strings.ReplaceAll(restored, "\n", " ")) != collapseSpaces(text) {
 		t.Fatalf("%s: restore pass altered content:\n text %q\n rest %q", label, text, restored)
 	}
@@ -311,7 +311,7 @@ func TestRaggedMarkerCutSweep(t *testing.T) {
 				}
 				raw := rendered[wStart:e]
 				label := fmt.Sprintf("%s %d marker-cut@%d", cc.book, cc.chapter, e)
-				text, _ := prepareShareQuote(st, raw)
+				text, _, _, _ := prepareShareQuote(st, raw, selSpan{})
 				if text == "" {
 					continue
 				}

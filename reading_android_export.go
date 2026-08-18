@@ -18,12 +18,16 @@ import (
 // when the reader picks one of BibleText's items from the text-selection
 // toolbar. Same action strings as iOS; the strings are copied before this
 // call returns, and dispatch happens on the Fyne goroutine into the shared,
-// untagged AI/share/cross-reference code.
+// untagged AI/share/cross-reference code. lo/hi is the selection's verse span,
+// resolved in Java against the Spanned's verse index (BtBridge.verseAtOffset)
+// — same contract as the Apple exports: position decides which verses are
+// cited, 0,0 = unresolved.
 //
 //export btaSelectionAction
-func btaSelectionAction(cAction, cText *C.char) {
+func btaSelectionAction(cAction, cText *C.char, lo, hi C.int) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
+	span := selSpanFromNative(int(lo), int(hi))
 	state := activeAIState
 	if state == nil || text == "" {
 		return
@@ -31,9 +35,9 @@ func btaSelectionAction(cAction, cText *C.char) {
 	fyne.Do(func() {
 		switch action {
 		case "ask", "explain", "context", "translation":
-			dispatchAIAction(state, action, text)
+			dispatchAIAction(state, action, text, span)
 		default:
-			dispatchSelectionAction(state, action, text)
+			dispatchSelectionAction(state, action, text, span)
 		}
 	})
 }

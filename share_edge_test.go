@@ -27,40 +27,40 @@ func john3EdgeState() *AppState {
 func TestShareNilAndDegenerateContracts(t *testing.T) {
 	st := john3EdgeState()
 
-	if text, cite := prepareShareQuote(nil, "abc"); text != "abc" || cite != "" {
+	if text, cite, _, _ := prepareShareQuote(nil, "abc", selSpan{}); text != "abc" || cite != "" {
 		t.Errorf("nil state: got (%q, %q), want (abc, \"\")", text, cite)
 	}
-	if _, _, _, ok := normalizeShareSelection(nil, "x"); ok {
+	if _, _, _, _, ok := normalizeShareSelection(nil, "x", selSpan{}); ok {
 		t.Error("nil state must not normalize")
 	}
-	if _, _, _, ok := normalizeShareSelection(st, "   "); ok {
+	if _, _, _, _, ok := normalizeShareSelection(st, "   ", selSpan{}); ok {
 		t.Error("whitespace-only selection must not normalize")
 	}
-	if _, _, _, ok := normalizeShareSelection(st, "17"); ok {
+	if _, _, _, _, ok := normalizeShareSelection(st, "17", selSpan{}); ok {
 		t.Error("a bare verse number alone shares nothing via the normalized path")
 	}
-	if got := completeTrailingSentence(nil, "abc"); got != "abc" {
+	if got := completeTrailingSentence(nil, "abc", -1); got != "abc" {
 		t.Errorf("nil state completion must be verbatim: %q", got)
 	}
-	if got := completeTrailingSentence(st, "zzz not here"); got != "zzz not here" {
+	if got := completeTrailingSentence(st, "zzz not here", -1); got != "zzz not here" {
 		t.Errorf("unlocatable text must be verbatim: %q", got)
 	}
-	if got := completeTrailingSentence(st, ""); got != "" {
+	if got := completeTrailingSentence(st, "", -1); got != "" {
 		t.Errorf("empty completion: %q", got)
 	}
 	if got := addEndOmission("”", '.'); got != "”" {
 		t.Errorf("closing-mark-only input must take no mark: %q", got)
 	}
-	if got := citationForSelection(nil, "x"); got != "" {
+	if got := citationForSelection(nil, "x", selSpan{}); got != "" {
 		t.Errorf("nil-state citation: %q", got)
 	}
-	if got := citationForSelection(&AppState{CurrentBook: "John", CurrentChapter: 3}, "x"); got != "John 3" {
+	if got := citationForSelection(&AppState{CurrentBook: "John", CurrentChapter: 3}, "x", selSpan{}); got != "John 3" {
 		t.Errorf("nil-Bible citation falls back to chapter: %q", got)
 	}
 	// The dispatcher's guards are side-effect-free for nil/blank/unknown.
-	dispatchSelectionAction(nil, selActionShareCite, "x")
-	dispatchSelectionAction(st, selActionShareCite, "   ")
-	dispatchSelectionAction(st, "no-such-action", "x")
+	dispatchSelectionAction(nil, selActionShareCite, "x", selSpan{})
+	dispatchSelectionAction(st, selActionShareCite, "   ", selSpan{})
+	dispatchSelectionAction(st, "no-such-action", "x", selSpan{})
 }
 
 // A drag ending exactly on a dangling next-verse marker with NOTHING after it
@@ -70,7 +70,7 @@ func TestShareNilAndDegenerateContracts(t *testing.T) {
 func TestShareSelectionDegenerateFragments(t *testing.T) {
 	st := john3EdgeState()
 
-	text, cite := prepareShareQuote(st, "For God so loved the world, that he gave his one and only Son. 17")
+	text, cite, _, _ := prepareShareQuote(st, "For God so loved the world, that he gave his one and only Son. 17", selSpan{})
 	if strings.Contains(text, "17") {
 		t.Errorf("trailing bare marker survived: %q", text)
 	}
@@ -79,13 +79,13 @@ func TestShareSelectionDegenerateFragments(t *testing.T) {
 	}
 
 	// Sub-word fragments: the normalized path declines; legacy shares verbatim.
-	if _, _, _, ok := normalizeShareSelection(st, "Fo"); ok {
+	if _, _, _, _, ok := normalizeShareSelection(st, "Fo", selSpan{}); ok {
 		t.Error("a lone leading word fragment must not normalize")
 	}
-	if _, _, _, ok := normalizeShareSelection(st, "od"); ok {
+	if _, _, _, _, ok := normalizeShareSelection(st, "od", selSpan{}); ok {
 		t.Error("a lone trailing word fragment must not normalize")
 	}
-	if text, _ := prepareShareQuote(st, "Fo"); text != "Fo" {
+	if text, _, _, _ := prepareShareQuote(st, "Fo", selSpan{}); text != "Fo" {
 		t.Errorf("sub-word fragment falls back to verbatim: %q", text)
 	}
 }
@@ -95,7 +95,7 @@ func TestShareSelectionDegenerateFragments(t *testing.T) {
 // whole word.
 func TestShareSelectionSubWordFragment(t *testing.T) {
 	st := john3EdgeState()
-	text, cite := prepareShareQuote(st, "lov")
+	text, cite, _, _ := prepareShareQuote(st, "lov", selSpan{})
 	if text != "lov" {
 		t.Errorf("sub-word drag shares the fragment verbatim (legacy path): %q", text)
 	}
@@ -115,7 +115,7 @@ func TestShareEllipsisRuneTerminal(t *testing.T) {
 		}}},
 	}
 	st := &AppState{Bible: bd, CurrentBook: "Test", CurrentChapter: 1}
-	if got := completeTrailingSentence(st, "The words trailed off"); got != "The words trailed off…" {
+	if got := completeTrailingSentence(st, "The words trailed off", -1); got != "The words trailed off…" {
 		t.Errorf("'…' must be restorable as a terminal: %q", got)
 	}
 	if got := addEndOmission("The words trailed off…", '.'); got != "The words trailed off…" {
@@ -142,7 +142,7 @@ func TestShareSelectionPoetryDisplayShape(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
 
 	raw := "The LORD is my shepherd;\u2028I shall not want.\n2\u00a0He makes me lie down in green pastures;\nHe leads me beside quiet waters."
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.ContainsAny(text, "\n\u2028\u00a0") {
 		t.Errorf("pipeline text must be flat: %q", text)
 	}
@@ -152,7 +152,7 @@ func TestShareSelectionPoetryDisplayShape(t *testing.T) {
 	if cite != "Psalms 23:1–2" {
 		t.Errorf("citation = %q, want Psalms 23:1–2", cite)
 	}
-	restored := restoreShareLineBreaks(st, text)
+	restored := restoreShareLineBreaks(st, text, -1, 0)
 	want := "The LORD is my shepherd;\nI shall not want.\nHe makes me lie down in green pastures;\nHe leads me beside quiet waters."
 	if restored != want {
 		t.Errorf("restored lines:\n got %q\nwant %q", restored, want)
@@ -164,7 +164,7 @@ func TestShareSelectionPoetryDisplayShape(t *testing.T) {
 func TestShareNewlineSpanningSelection(t *testing.T) {
 	st := john3EdgeState()
 	raw := "For God so loved the world,\nthat he gave his one and only Son.\n\n17 For God didn’t send his Son"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.ContainsAny(text, "\n") {
 		t.Errorf("newlines must be flattened: %q", text)
 	}
@@ -187,7 +187,7 @@ func TestShareUnterminatedChapterEnd(t *testing.T) {
 		}}},
 	}
 	st := &AppState{Bible: bd, CurrentBook: "Test", CurrentChapter: 1}
-	if got := completeTrailingSentence(st, "The grass withers the flower fades"); got != "The grass withers the flower fades" {
+	if got := completeTrailingSentence(st, "The grass withers the flower fades", -1); got != "The grass withers the flower fades" {
 		t.Errorf("no terminal exists to restore — text must be verbatim: %q", got)
 	}
 }
@@ -198,7 +198,7 @@ func TestShareUnterminatedChapterEnd(t *testing.T) {
 // adjacent-punctuation practice (e.g. Maizebook 5.3(d)).
 func TestShareOrphanPunctuationTrimmed(t *testing.T) {
 	st := john3EdgeState()
-	text, _ := prepareShareQuote(st, ". For God didn’t send his Son")
+	text, _, _, _ := prepareShareQuote(st, ". For God didn’t send his Son", selSpan{})
 	if strings.HasPrefix(text, ".") {
 		t.Errorf("leading orphan terminal must be dropped: %q", text)
 	}
@@ -214,7 +214,7 @@ func TestShareOrphanPunctuationTrimmed(t *testing.T) {
 		}}},
 	}
 	st2 := &AppState{Bible: bd, CurrentBook: "Test", CurrentChapter: 1}
-	text2, _ := prepareShareQuote(st2, "And the prophets, wrote:")
+	text2, _, _, _ := prepareShareQuote(st2, "And the prophets, wrote:", selSpan{})
 	if strings.HasSuffix(text2, ":") {
 		t.Errorf("trailing clause colon before an omission must be dropped: %q", text2)
 	}
@@ -236,11 +236,11 @@ func TestShareMixedJoinRestoreParity(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "Exodus", CurrentChapter: 15}
 
 	raw := "Then Moses and the Israelites sang this song to the LORD: 2 The LORD is my strength and my song, and He has become my salvation."
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if cite != "Exodus 15:1–2" {
 		t.Errorf("citation = %q, want Exodus 15:1–2", cite)
 	}
-	restored := restoreShareLineBreaks(st, text)
+	restored := restoreShareLineBreaks(st, text, -1, 0)
 	want := "Then Moses and the Israelites sang this song to the LORD:\nThe LORD is my strength and my song,\nand He has become my salvation."
 	if restored != want {
 		t.Errorf("mixed-join restore:\n got %q\nwant %q", restored, want)

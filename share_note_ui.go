@@ -91,7 +91,7 @@ var noteEntryOnChanged func()
 // It is a SECOND verb beside "Share as link", never a step in front of it: the
 // plain share stays one tap, because most shares carry no note and a modal in
 // everyone's way to serve the minority is the wrong trade.
-func promptShareNote(state *AppState, selectedText string) {
+func promptShareNote(state *AppState, selectedText string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -139,7 +139,7 @@ func promptShareNote(state *AppState, selectedText string) {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
 
-	ref := canvas.NewText(shareNoteReference(state, selectedText), pal.Accent)
+	ref := canvas.NewText(shareNoteReference(state, selectedText, span), pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
 
@@ -191,7 +191,7 @@ func promptShareNote(state *AppState, selectedText string) {
 	send := func() {
 		note := strings.TrimSpace(noteText())
 		closeSheet()
-		shareVerseLinkWithNote(state, selectedText, note)
+		shareVerseLinkWithNote(state, selectedText, note, span)
 	}
 	entry.OnSubmitted = func(string) { send() }
 
@@ -284,8 +284,8 @@ func promptShareNote(state *AppState, selectedText string) {
 // shareNoteReference is the passage label on the compose sheet — the same
 // citation the share itself will carry, so the writer can see what they are
 // attaching the note to.
-func shareNoteReference(state *AppState, selection string) string {
-	if _, cite := prepareShareQuote(state, selection); cite != "" {
+func shareNoteReference(state *AppState, selection string, span selSpan) string {
+	if _, cite, _, _ := prepareShareQuote(state, selection, span); cite != "" {
 		return cite
 	}
 	return state.CurrentBook + " " + strconv.Itoa(state.CurrentChapter)

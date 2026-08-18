@@ -144,7 +144,7 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	onState.aiKeys = newKeyStoreWith(newFakePrefs())
 	onWin := app.NewWindow("ai on")
 	onState.window = onWin
-	dispatchAIAction(onState, aiActionAsk, "In the beginning")
+	dispatchAIAction(onState, aiActionAsk, "In the beginning", selSpan{})
 	if onWin.Canvas().Overlays().Top() == nil {
 		t.Fatal("control failed: with AI on, an Ask dispatch must open the question sheet")
 	}
@@ -155,11 +155,11 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	state := aiOffState()
 	win := app.NewWindow("ai off")
 	state.window = win
-	dispatchAIAction(state, aiActionExplain, "In the beginning")
+	dispatchAIAction(state, aiActionExplain, "In the beginning", selSpan{})
 	if top := win.Canvas().Overlays().Top(); top != nil {
 		t.Fatalf("AI-off Explain dispatch opened an overlay: %T", top)
 	}
-	dispatchAIAction(state, aiActionAsk, "In the beginning")
+	dispatchAIAction(state, aiActionAsk, "In the beginning", selSpan{})
 	if top := win.Canvas().Overlays().Top(); top != nil {
 		t.Fatalf("AI-off Ask dispatch opened an overlay: %T", top)
 	}

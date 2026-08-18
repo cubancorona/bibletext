@@ -142,7 +142,7 @@ func TestBluebookCitationForm(t *testing.T) {
 		if sel == "" {
 			sel = joinVerses(c.verses)
 		}
-		if got := citationForSelection(state, sel); got != c.want {
+		if got := citationForSelection(state, sel, selSpan{}); got != c.want {
 			t.Errorf("%s [%s]:\n got %q\nwant %q", c.name, c.src, got, c.want)
 		}
 	}
@@ -159,7 +159,7 @@ func TestBluebookDashes(t *testing.T) {
 	cite := citationForSelection(state, joinVerses(map[int]string{
 		16: "For God so loved the world, that he gave his one and only Son, that whoever believes in him should not perish.",
 		17: "For God didn't send his Son into the world to judge the world, but that the world should be saved through him.",
-	}))
+	}), selSpan{})
 	if !strings.ContainsRune(cite, '–') {
 		t.Errorf("range citation must use an en dash (U+2013); got %q", cite)
 	}
@@ -320,7 +320,7 @@ func TestBluebookSharePipeline(t *testing.T) {
 		st := bbChapter("John", 11, map[int]string{35: "Jesus wept."})
 		st.CurrentBook, st.CurrentChapter = "John", 11
 		quote := formatBibleQuote(cleanQuoteText(st, "35 Jesus wept."))
-		cite := citationForSelection(st, "Jesus wept.")
+		cite := citationForSelection(st, "Jesus wept.", selSpan{})
 		got := composeShareText(quote, cite, "World English Bible")
 		want := "“Jesus wept.”\n\n— John 11:35 (World English Bible)"
 		if got != want {
@@ -370,7 +370,7 @@ func TestBluebookFragmentPinsToVerse(t *testing.T) {
 	full := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
 	st := bbChapter("John", 18, map[int]string{38: full})
 	frag := "What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him." // leading “ omitted
-	if got := citationForSelection(st, frag); got != "John 18:38" {
+	if got := citationForSelection(st, frag, selSpan{}); got != "John 18:38" {
 		t.Errorf("a fragment must still pin to John 18:38, got %q", got)
 	}
 }
@@ -383,7 +383,7 @@ func TestBluebookFragmentSharePipeline(t *testing.T) {
 	st := bbChapter("John", 18, map[int]string{38: full})
 	frag := "What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
-	cite := citationForSelection(st, frag)
+	cite := citationForSelection(st, frag, selSpan{})
 	got := composeShareText(quote, cite, "Berean Standard Bible")
 	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no basis for a charge against Him.’”\n\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
@@ -465,16 +465,16 @@ func TestBluebookTerminalPunctuation(t *testing.T) {
 		25: "Jesus said to her, “I am the resurrection and the life. He who believes in me will still live, even if he dies.",
 		26: "Whoever lives and believes in me will never die. Do you believe this?”",
 	})
-	if got := originalSentenceTerminal(st, "Whoever lives and believes in me will never die. Do you believe"); got != '?' {
+	if got := originalSentenceTerminal(st, "Whoever lives and believes in me will never die. Do you believe", -1, 0); got != '?' {
 		t.Errorf("cut inside a question: got %q, want '?'", got)
 	}
-	if got := originalSentenceTerminal(st, "text that appears nowhere"); got != '.' {
+	if got := originalSentenceTerminal(st, "text that appears nowhere", -1, 0); got != '.' {
 		t.Errorf("unmatched selection must fall back to '.': got %q", got)
 	}
 
 	// End to end: the whole pipeline renders “…never die. Do you believe . . . ?”.
 	sel := "Whoever lives and believes in me will never die. Do you believe"
-	quote := formatBibleQuote(cleanQuoteText(st, sel), originalSentenceTerminal(st, sel))
+	quote := formatBibleQuote(cleanQuoteText(st, sel), originalSentenceTerminal(st, sel, -1, 0))
 	if want := "“Whoever lives and believes in me will never die. Do you believe . . . ?”"; quote != want {
 		t.Errorf("pipeline:\n got %q\nwant %q", quote, want)
 	}
@@ -490,7 +490,7 @@ func TestBluebookEndOmissionPipeline(t *testing.T) {
 	st := bbChapter("John", 18, map[int]string{38: full})
 	frag := "What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no"
 	quote := formatBibleQuote(cleanQuoteText(st, frag))
-	cite := citationForSelection(st, frag)
+	cite := citationForSelection(st, frag, selSpan{})
 	got := composeShareText(quote, cite, "Berean Standard Bible")
 	want := "“‘What is truth?’ Pilate asked. And having said this, he went out again to the Jews and told them, ‘I find no . . . .’”\n\n— John 18:38 (Berean Standard Bible)"
 	if got != want {
@@ -516,8 +516,8 @@ func TestBluebookActsShareCards(t *testing.T) {
 
 	// Card A — Acts 2:25 alone (inline; inner single closed).
 	selA := acts2[25]
-	quoteA := formatBibleQuote(cleanQuoteText(st, selA), originalSentenceTerminal(st, selA))
-	gotA := composeShareText(quoteA, citationForSelection(st, selA), "Berean Standard Bible")
+	quoteA := formatBibleQuote(cleanQuoteText(st, selA), originalSentenceTerminal(st, selA, -1, 0))
+	gotA := composeShareText(quoteA, citationForSelection(st, selA, selSpan{}), "Berean Standard Bible")
 	wantA := "“David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.’”\n\n— Acts 2:25 (Berean Standard Bible)"
 	if gotA != wantA {
 		t.Errorf("Card A (Acts 2:25):\n got %q\nwant %q", gotA, wantA)
@@ -525,8 +525,8 @@ func TestBluebookActsShareCards(t *testing.T) {
 
 	// Card B — Acts 2:22 through a mid-sentence cut in v24 (block; four dots).
 	selB := acts2[22] + " " + acts2[23] + " But God raised Him from the dead"
-	quoteB := formatBibleQuote(cleanQuoteText(st, selB), originalSentenceTerminal(st, selB))
-	gotB := composeShareText(quoteB, citationForSelection(st, selB), "Berean Standard Bible")
+	quoteB := formatBibleQuote(cleanQuoteText(st, selB), originalSentenceTerminal(st, selB, -1, 0))
+	gotB := composeShareText(quoteB, citationForSelection(st, selB, selSpan{}), "Berean Standard Bible")
 	wantB := "Men of Israel, listen to this message: Jesus of Nazareth was a man certified by God to you by miracles, wonders, and signs, which God did among you through Him, as you yourselves know. He was delivered up by God’s set plan and foreknowledge, and you, by the hands of the lawless, put Him to death by nailing Him to the cross. But God raised Him from the dead . . . .\n\n— Acts 2:22–24 (Berean Standard Bible)"
 	if gotB != wantB {
 		t.Errorf("Card B (Acts 2:22–24):\n got %q\nwant %q", gotB, wantB)
@@ -552,7 +552,7 @@ func TestBluebookOutOfScope(t *testing.T) {
 		3: "Blessed are the poor in spirit, for theirs is the Kingdom of Heaven, a promise sure.",
 		4: "Blessed are those who mourn, for they shall be comforted in the fullness of time.",
 		5: "Blessed are the gentle, for they shall inherit the earth that the Lord has made.",
-	}))
+	}), selSpan{})
 	if strings.ContainsRune(cite, ',') || strings.ContainsRune(cite, ';') {
 		t.Errorf("contiguous selection must be one range, not a comma/semicolon list; got %q", cite)
 	}

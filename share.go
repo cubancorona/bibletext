@@ -26,8 +26,10 @@ const (
 )
 
 // dispatchSelectionAction routes a non-AI selection-menu action from the native
-// callback (already on the Fyne UI goroutine).
-func dispatchSelectionAction(state *AppState, action, text string) {
+// callback (already on the Fyne UI goroutine). span is the selection's
+// positionally-resolved verse range (selection_span.go); zero when the source
+// pane has no positional model.
+func dispatchSelectionAction(state *AppState, action, text string, span selSpan) {
 	if state == nil {
 		return
 	}
@@ -37,15 +39,15 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 	}
 	switch action {
 	case selActionShareCite:
-		shareVerse(state, text, false)
+		shareVerse(state, text, false, span)
 	case selActionShareImage:
-		shareVerse(state, text, true)
+		shareVerse(state, text, true, span)
 	case selActionShareLink:
-		shareVerseLink(state, text)
+		shareVerseLink(state, text, span)
 	case selActionShareNote:
-		promptShareNote(state, text)
+		promptShareNote(state, text, span)
 	case selActionCrossRef:
-		showCrossRefs(state, text)
+		showCrossRefs(state, text, span)
 	}
 }
 
@@ -63,16 +65,13 @@ func dispatchSelectionAction(state *AppState, action, text string) {
 // shareVerseLinkWithNote is shareVerseLink carrying the sender's note. An empty
 // note produces exactly the link shareVerseLink would have, so the two paths
 // cannot drift apart.
-func shareVerseLinkWithNote(state *AppState, text, note string) {
-	_, cite := prepareShareQuote(state, text)
+func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
+	_, cite, _, _ := prepareShareQuote(state, text, span)
 	version := state.currentVersion()
-	lo, hi := 0, 0
-	if _, l, h, ok := normalizeShareSelection(state, text); ok {
-		lo, hi = l, h
-	}
+	lo, hi := linkVersesForSelection(state, text, span)
 	url := ShareLinkURLWithNote(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note)
 	if url == "" {
-		shareVerse(state, text, false)
+		shareVerse(state, text, false, span)
 		return
 	}
 	// And keep it. Until now your own words vanished with the share sheet and
@@ -101,16 +100,13 @@ func shareVerseLinkWithNote(state *AppState, text, note string) {
 	nativeShareText(msg)
 }
 
-func shareVerseLink(state *AppState, text string) {
-	_, cite := prepareShareQuote(state, text)
+func shareVerseLink(state *AppState, text string, span selSpan) {
+	_, cite, _, _ := prepareShareQuote(state, text, span)
 	version := state.currentVersion()
-	lo, hi := 0, 0
-	if _, l, h, ok := normalizeShareSelection(state, text); ok {
-		lo, hi = l, h
-	}
+	lo, hi := linkVersesForSelection(state, text, span)
 	url := ShareLinkURL(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi)
 	if url == "" {
-		shareVerse(state, text, false) // no link possible — share the words instead
+		shareVerse(state, text, false, span) // no link possible — share the words instead
 		return
 	}
 	// Citation first, then the URL on its own line: messengers unfurl a link on
@@ -118,15 +114,35 @@ func shareVerseLink(state *AppState, text string) {
 	nativeShareText(cite + " (" + version.Name + ")\n" + url)
 }
 
+// linkVersesForSelection is the URL fragment's verse range: the positional
+// attribution when the selection normalizes, else the span's verses (clamped
+// through selectionVerses, whose span path runs the SAME normalize — so a
+// declined normalize falls to the span verbatim there). The second tier is what
+// keeps the message coherent when normalize declines a selection the span still
+// resolves (a single partial word): the citation beside the URL names the
+// verse, so a chapter-level link under it read as a broken fragment (refuter
+// finding). Both zero = an honest chapter link, exactly as before.
+func linkVersesForSelection(state *AppState, text string, span selSpan) (lo, hi int) {
+	if _, l, h, _, ok := normalizeShareSelection(state, text, span); ok {
+		return l, h
+	}
+	if span.valid() {
+		if vs := selectionVerses(state, text, span); len(vs) > 0 {
+			return vs[0].Verse, vs[len(vs)-1].Verse
+		}
+	}
+	return 0, 0
+}
+
 // shareVerse formats the selection in Bluebook style (see formatBibleQuote /
 // citationForSelection) and hands it to the native share sheet, as text or a
 // rendered image. The translation is spelled OUT in the parenthetical, not given as
 // an initialism — the Bluebook always names the version in full (e.g. "(King
 // James)"), so we use "(World English Bible)" / "(Berean Standard Bible)".
-func shareVerse(state *AppState, text string, asImage bool) {
-	cleaned, cite := prepareShareQuote(state, text)
+func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
+	cleaned, cite, at, baseLen := prepareShareQuote(state, text, span)
 	version := state.currentVersion().Name
-	terminal := originalSentenceTerminal(state, cleaned)
+	terminal := originalSentenceTerminal(state, cleaned, at, baseLen)
 	// BOTH shares retain authored structure: source poetry lines and the reading
 	// view's paragraph boundaries. They are rebuilt from the chapter data, never
 	// copied from rendered wrapping, so resizing the reader cannot change what is
@@ -134,7 +150,7 @@ func shareVerse(state *AppState, text string, asImage bool) {
 	// without this the card could not break a psalm even though its renderer
 	// knows how (poemSegments) — a card is the one surface where a flattened
 	// psalm is most conspicuous.
-	cleaned = restoreShareLineBreaks(state, cleaned)
+	cleaned = restoreShareLineBreaks(state, cleaned, at, baseLen)
 	quote := formatBibleQuote(cleaned, terminal)
 	if asImage {
 		// Don't share blind: show the rendered card for review (with Regenerate)
@@ -200,12 +216,20 @@ func cleanQuoteText(state *AppState, raw string) string {
 // verse lost its only (partial) word is apparatus with nothing to introduce
 // and is dropped with it. Falls back to the legacy probe-based path whenever
 // the selection cannot be located in the chapter's prose.
-func prepareShareQuote(state *AppState, raw string) (text, cite string) {
-	if t, lo, hi, ok := normalizeShareSelection(state, raw); ok {
-		return completeTrailingSentence(state, t), verseRangeCitation(state, lo, hi)
+// The last two returns carry the LOCATION so the pipeline's later stages never
+// re-find the text: at = the located start of the quote in chapterProse's
+// coordinates (-1 when the legacy path could not pin it), baseLen = the byte
+// length of the located portion (completeTrailingSentence only ever APPENDS, so
+// text[:baseLen] is exactly the located string). Re-finding was the same
+// first-match defect the span fixed for the citation, one stage later: for
+// repeated wording the completion and the line-break restore ran against the
+// EARLIER copy's surroundings (sweep findings share.go:332/:565/:846).
+func prepareShareQuote(state *AppState, raw string, span selSpan) (text, cite string, at, baseLen int) {
+	if t, lo, hi, idx, ok := normalizeShareSelection(state, raw, span); ok {
+		return completeTrailingSentence(state, t, idx), verseRangeCitation(state, lo, hi), idx, len(t)
 	}
-	cleaned := completeTrailingSentence(state, cleanQuoteText(state, raw))
-	return cleaned, citationForSelection(state, raw)
+	cleaned := completeTrailingSentence(state, cleanQuoteText(state, raw), -1)
+	return cleaned, citationForSelection(state, raw, span), -1, 0
 }
 
 // chapterProse joins the current chapter's verses (marker-free, spaces
@@ -320,18 +344,31 @@ func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
 }
 
 // restoreShareLineBreaks replaces only the structural spaces that fall wholly
-// inside the selected text. The selection is first located in the flattened
-// chapter, so soft wrapping from any platform is neither inspected nor retained.
-func restoreShareLineBreaks(state *AppState, text string) string {
+// inside the selected text. The selection is located POSITIONALLY when the
+// caller carries the offset (at/baseLen from prepareShareQuote —
+// chapterShareStructure's flat string shares chapterProse's coordinates, an
+// invariant TestChapterProseAndShareStructureAgree pins), so soft wrapping from
+// any platform is neither inspected nor retained and repeated wording restores
+// the SELECTED copy's structure, not the first copy's. The text search survives
+// only for the legacy unlocated path — where it also quietly failed whenever
+// the completion had appended past a skipped quote-closer (the completed text
+// is no longer a contiguous substring), losing the quote's poem breaks; the
+// positional path restores those too, because only text[:baseLen] must match.
+func restoreShareLineBreaks(state *AppState, text string, at, baseLen int) string {
 	flat, breaks := chapterShareStructure(state)
 	if text == "" || flat == "" || len(breaks) == 0 {
 		return text
 	}
-	start := strings.Index(flat, text)
+	start, end := -1, -1
+	if at >= 0 && baseLen > 0 && baseLen <= len(text) && at+baseLen <= len(flat) &&
+		flat[at:at+baseLen] == text[:baseLen] {
+		start, end = at, at+baseLen
+	} else if i := strings.Index(flat, text); i >= 0 {
+		start, end = i, i+len(text)
+	}
 	if start < 0 {
 		return text
 	}
-	end := start + len(text)
 
 	var b strings.Builder
 	last := 0
@@ -363,14 +400,43 @@ func isWordRune(r rune) bool {
 // normalizeShareSelection cleans a raw selection for sharing and attributes it
 // to its verse range positionally. ok=false when the selection can't be pinned
 // in the chapter (caller falls back to the legacy path).
-func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi int, ok bool) {
+//
+// span narrows WHERE the locate looks: strings.Index alone finds the FIRST
+// occurrence, so a selection of repeated wording (Psalm 136's refrain) located
+// at the earlier verse's copy and was cited there. With a valid span the search
+// runs inside the span verses' region of the corpus first — the attribution
+// below still derives from the located position, so a trim that drops a verse
+// still drops it from the citation. The whole-corpus search remains as the
+// safety net for a span that somehow disagrees with the words.
+func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	if state == nil || state.Bible == nil {
-		return "", 0, 0, false
+		return "", 0, 0, -1, false
 	}
 	s := stripVerseMarkers(state, collapseSpaces(raw))
 	corpus, spans := chapterProse(state)
 	if s == "" || corpus == "" {
-		return "", 0, 0, false
+		return "", 0, 0, -1, false
+	}
+
+	rStart, rEnd, haveRegion := 0, len(corpus), false
+	if span.valid() {
+		for _, sp := range spans {
+			if sp.verse >= span.lo && sp.verse <= span.hi {
+				if !haveRegion {
+					rStart = sp.start
+					haveRegion = true
+				}
+				rEnd = sp.end
+			}
+		}
+	}
+	locate := func(s string) int {
+		if haveRegion {
+			if i := strings.Index(corpus[rStart:rEnd], s); i >= 0 {
+				return rStart + i
+			}
+		}
+		return strings.Index(corpus, s)
 	}
 
 	// A trailing bare verse-number token (the selection stopped right after a
@@ -382,7 +448,7 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 	for _, sp := range spans {
 		validNum[strconv.Itoa(sp.verse)] = true
 	}
-	for strings.Index(corpus, s) < 0 {
+	for locate(s) < 0 {
 		i := strings.LastIndexByte(strings.TrimSpace(s), ' ')
 		last := strings.TrimSpace(s)
 		if i >= 0 {
@@ -392,14 +458,14 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 			break
 		}
 		if i < 0 {
-			return "", 0, 0, false // the selection was only the number
+			return "", 0, 0, -1, false // the selection was only the number
 		}
 		s = strings.TrimSpace(strings.TrimSpace(s)[:i])
 	}
 
-	idx := strings.Index(corpus, s)
+	idx := locate(s)
 	if idx < 0 {
-		return "", 0, 0, false
+		return "", 0, 0, -1, false
 	}
 
 	// Mid-word END repair: if the character right after the selection is a
@@ -411,7 +477,7 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 			if r, _ := utf8.DecodeRuneInString(corpus[end:]); isWordRune(r) {
 				cut := strings.LastIndexByte(s, ' ')
 				if cut <= 0 {
-					return "", 0, 0, false // a single partial word — nothing left
+					return "", 0, 0, -1, false // a single partial word — nothing left
 				}
 				s = strings.TrimSpace(s[:cut])
 				for {
@@ -420,17 +486,17 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 					if j >= 0 {
 						last = s[j+1:]
 					}
-					if !validNum[last] || strings.Index(corpus, s) >= 0 {
+					if !validNum[last] || locate(s) >= 0 {
 						break
 					}
 					if j < 0 {
-						return "", 0, 0, false
+						return "", 0, 0, -1, false
 					}
 					s = strings.TrimSpace(s[:j])
 				}
-				idx = strings.Index(corpus, s)
+				idx = locate(s)
 				if idx < 0 {
-					return "", 0, 0, false
+					return "", 0, 0, -1, false
 				}
 				continue
 			}
@@ -451,9 +517,9 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 		if r == '.' || r == ',' || r == ';' || r == ':' || r == '!' || r == '?' ||
 			r == '…' || r == '—' || r == ')' || r == ']' || r == '”' || r == '’' {
 			s = strings.TrimSpace(s[size:])
-			idx = strings.Index(corpus, s)
+			idx = locate(s)
 			if idx < 0 || s == "" {
-				return "", 0, 0, false
+				return "", 0, 0, -1, false
 			}
 			continue
 		}
@@ -464,11 +530,11 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 		if r == ',' || r == ';' || r == ':' || r == '—' {
 			s = strings.TrimSpace(s[:len(s)-size])
 			if s == "" {
-				return "", 0, 0, false
+				return "", 0, 0, -1, false
 			}
-			idx = strings.Index(corpus, s)
+			idx = locate(s)
 			if idx < 0 {
-				return "", 0, 0, false
+				return "", 0, 0, -1, false
 			}
 			continue
 		}
@@ -483,15 +549,15 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 		}
 		cut := strings.IndexByte(s, ' ')
 		if cut < 0 {
-			return "", 0, 0, false
+			return "", 0, 0, -1, false
 		}
 		s = strings.TrimSpace(s[cut+1:])
 		if s == "" {
-			return "", 0, 0, false
+			return "", 0, 0, -1, false
 		}
-		idx = strings.Index(corpus, s)
+		idx = locate(s)
 		if idx < 0 {
-			return "", 0, 0, false
+			return "", 0, 0, -1, false
 		}
 	}
 
@@ -506,9 +572,9 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 		}
 	}
 	if lo == 0 {
-		return "", 0, 0, false
+		return "", 0, 0, -1, false
 	}
-	return s, lo, hi, true
+	return s, lo, hi, idx, true
 }
 
 // completeTrailingSentence restores the ORIGINAL final punctuation when a
@@ -523,7 +589,12 @@ func normalizeShareSelection(state *AppState, raw string) (text string, lo, hi i
 // terminal (addEndOmission then sees a complete sentence and adds no mark);
 // if any word intervenes, leave the text alone and let the ellipsis do its
 // honest work. No-op whenever the selection can't be located.
-func completeTrailingSentence(state *AppState, s string) string {
+// at is the selection's located offset in chapterProse coordinates when the
+// caller has one (normalizeShareSelection computed it), -1 otherwise. The
+// positional path is what keeps repeated wording honest: located at the FIRST
+// copy, the forward scan read the wrong copy's surroundings and completed (or
+// refused to complete) the wrong sentence.
+func completeTrailingSentence(state *AppState, s string, at int) string {
 	if state == nil || state.Bible == nil || s == "" {
 		return s
 	}
@@ -531,7 +602,12 @@ func completeTrailingSentence(state *AppState, s string) string {
 		return s // already complete
 	}
 	corpus, _ := chapterProse(state)
-	idx := strings.Index(corpus, s)
+	idx := -1
+	if at >= 0 && at+len(s) <= len(corpus) && strings.HasPrefix(corpus[at:], s) {
+		idx = at
+	} else {
+		idx = strings.Index(corpus, s)
+	}
 	if idx < 0 {
 		return s
 	}
@@ -795,7 +871,12 @@ func bracketStartCapital(s string) string {
 // scanning forward — Rule 5.3(b)(iii) retains "the final punctuation of the sentence
 // being quoted" in the four-dot slot, so a question cut short shares as " . . . ?".
 // Falls back to a period when the selection can't be pinned in the chapter.
-func originalSentenceTerminal(state *AppState, sel string) rune {
+//
+// at/baseLen are the pipeline's located coordinates (-1/0 when unlocated): the
+// scan then starts after the LOCATED text, so repeated wording reads the
+// selected copy's sentence — and reads it even when the completion has appended
+// past a skipped quote-closer, where the string search cannot match at all.
+func originalSentenceTerminal(state *AppState, sel string, at, baseLen int) rune {
 	if state == nil || state.Bible == nil {
 		return '.'
 	}
@@ -812,11 +893,17 @@ func originalSentenceTerminal(state *AppState, sel string) rune {
 	}
 	chapter := b.String()
 	s := collapseSpaces(sel)
-	idx := strings.Index(chapter, s)
+	idx, scanFrom := -1, 0
+	if at >= 0 && baseLen > 0 && baseLen <= len(s) && at+baseLen <= len(chapter) &&
+		chapter[at:at+baseLen] == s[:baseLen] {
+		idx, scanFrom = at, at+baseLen
+	} else if i := strings.Index(chapter, s); i >= 0 {
+		idx, scanFrom = i, i+len(s)
+	}
 	if idx < 0 {
 		return '.'
 	}
-	for _, r := range chapter[idx+len(s):] {
+	for _, r := range chapter[scanFrom:] {
 		switch r {
 		case '.', '…':
 			return '.'
@@ -976,7 +1063,7 @@ func balanceQuoteMarks(s string) string {
 // selected text by matching it against the verses of the current chapter, so a
 // shared selection carries an accurate citation. Falls back to "Book C" when the
 // selection can't be pinned to specific verses (e.g. a partial phrase).
-func citationForSelection(state *AppState, text string) string {
+func citationForSelection(state *AppState, text string, span selSpan) string {
 	if state == nil {
 		return ""
 	}
@@ -984,11 +1071,12 @@ func citationForSelection(state *AppState, text string) string {
 	if state.Bible == nil {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
-	// selectionVerses matches in BOTH directions (the selection contains a verse, or a
-	// verse contains the selection) so a partial selection — e.g. one that omits the
-	// verse's leading quotation mark — still pins to the verse it falls within, rather
-	// than dropping to the chapter-only fallback.
-	matched := selectionVerses(state, text)
+	// A valid span resolves the verses positionally; without one, selectionVerses
+	// matches in BOTH directions (the selection contains a verse, or a verse
+	// contains the selection) so a partial selection — e.g. one that omits the
+	// verse's leading quotation mark — still pins to the verse it falls within,
+	// rather than dropping to the chapter-only fallback.
+	matched := selectionVerses(state, text, span)
 	if len(matched) == 0 {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
