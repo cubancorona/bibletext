@@ -1415,6 +1415,8 @@ static void btMacInstallNote(void) {
         return;
     }
     gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGap;
+    if (getenv("BT_NOTE_GEOM")) fprintf(stderr, "[geom] install: w=%.1f h=%.1f topGap=%.1f bandH=%.1f para={%lu,%lu}\n",
+        w, h, btMacNoteTopGap(ts, para), gMacNoteBandH, (unsigned long)para.location, (unsigned long)para.length);
     if (para.location == 0) {
         gMacNoteTopInset = gMacNoteBandH;
         btMacApplyNoteInset();
@@ -1565,10 +1567,38 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
     // spacing lives inside, so asking either where the text starts returns where
     // the BAND starts and the card lands a band's height too high. The used rect
     // is the sub-box the glyphs occupy.
+    // The queries below are only as good as the layout behind them, and the
+    // install (or its reconcile) has just EDITED this paragraph's style —
+    // asked too soon, the used rect answers with pre-edit geometry, the card
+    // sticks a band too high, and nothing after corrects it (field report:
+    // the bubble covering the previous paragraph's last line with a dead gap
+    // under its tail, on the desktop). Force the paragraph's layout current
+    // before asking anything.
+    [lm ensureLayoutForCharacterRange:para];
     NSRect used = [lm lineFragmentUsedRectForGlyphAtIndex:g.location effectiveRange:NULL];
-    CGFloat textTop = used.origin.y + inset;
+    NSRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
+    NSParagraphStyle *eff = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
+                           effectiveRange:NULL];
+    // Cross-check the used rect against the band's own arithmetic: TextKit
+    // lays paragraphSpacingBefore INSIDE the first line's fragment (measured:
+    // used.y == frag.y + spacingBefore, exactly), so the passage can never
+    // start above frag.y + spacingBefore. A used rect claiming otherwise is
+    // the stale answer above — take the honest one.
+    CGFloat textTopRaw = used.origin.y;
+    if (eff != nil && eff.paragraphSpacingBefore > 0) {
+        CGFloat floorY = frag.origin.y + eff.paragraphSpacingBefore;
+        if (textTopRaw < floorY) textTopRaw = floorY;
+    }
+    CGFloat textTop = textTopRaw + inset;
     CGFloat stickerH = btMacNoteHeightForWidth(tc.size.width - 2 * tc.lineFragmentPadding)
                      + (btMacNotePill() ? 0 : kMacNoteTail);
+    if (getenv("BT_NOTE_GEOM")) {
+        fprintf(stderr, "[geom] layout: used.y=%.1f frag.y=%.1f frag.h=%.1f inset=%.1f stickerH=%.1f "
+                        "bandH=%.1f spacingBefore=%.1f y=%.1f\n",
+            used.origin.y, frag.origin.y, frag.size.height, inset, stickerH,
+            gMacNoteBandH, eff ? eff.paragraphSpacingBefore : -1,
+            textTop - kMacNoteGap - stickerH);
+    }
     return textTop - kMacNoteGap - stickerH;
 }
 
@@ -1967,6 +1997,11 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 		// text when reading, nothing when search results are showing (so closing
 		// settings mid-search doesn't paint verses over the results).
 		setReadingOverlayVisible(!state.IsSearching)
+		// The sheet the reader was inside has left the canvas: run the window
+		// rebuild a background data swap deferred to spare it (no-op otherwise,
+		// and non-recursive — rebuildWindow downs the flag before re-running
+		// this closure).
+		consumeDeferredFullRebuild(state)
 	}
 
 	if len(verses) == 0 {
