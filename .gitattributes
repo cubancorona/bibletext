@@ -1,0 +1,9 @@
+# Byte-precise fixtures: the tint golden is compared byte-for-byte
+# (chapter_tint_golden_test.go) and the wire-format conformance corpus
+# (testdata/note_vectors.txt) is walked by exact payload — a CRLF smudge from
+# Git for Windows' autocrlf default is a test failure that exists only on
+# Windows checkouts (CI caught it: TestChapterTintGolden red on the windows
+# runner alone). The Fyne patches are applied with git apply and are equally
+# ending-sensitive.
+testdata/** -text
+patches/** -text
