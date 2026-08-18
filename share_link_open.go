@@ -344,6 +344,19 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 				// expansion — an explicit minimize is honoured and nothing
 				// auto-expands (N5); the store's history was already being
 				// preserved.
+				// Tapping a link that IS this note is the Show verb, exactly as
+				// tapping its chip is: the stored Minimized is cleared before
+				// the projection, so the note OPENS. This reverses the S7
+				// decision that a re-arrival honours the stored minimize — the
+
+				// the note when clicking") and it reads as a broken tap, not
+				// as a respected preference. N5's rule is that nothing
+				// AUTO-expands; a deliberate tap on the note's own link is not
+				// automation, it is the most explicit naming of this note the
+
+				if stored.Minimized {
+					setNoteMinimizedByID(appPrefs(), stored.ID, false)
+				}
 				state.focusNote(stored.ID)
 				applyNoteForCurrentChapter(state)
 				// The reader tapped a link NAMING VERSES, and the tap must

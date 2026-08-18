@@ -202,3 +202,45 @@ func TestWireVersionIsAuthoritativeForStorage(t *testing.T) {
 		t.Errorf("note ALSO stored under the lossy path translation")
 	}
 }
+
+// Tapping a note's own link is the Show verb: a stored minimize does not make
+// the tap look broken.
+//
+
+// the note when clicking" — the note had been minimized in earlier testing,
+// the dedup preserved the flag, and the re-arrival honoured it (the S7
+// decision). That reading of N5 was wrong: the rule is that nothing
+// AUTO-expands, and a deliberate tap on the link that IS this note is the
+// most explicit naming of it the reader has — the same act as tapping its
+// chip, which un-minimizes.
+func TestReopeningANotesOwnLinkExpandsIt(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := noticeState()
+	url := ShareLinkURLWithNote("web", "Genesis", 1, 1, 1, "tap me twice")
+	target, ok := ParseShareLink(url)
+	if !ok {
+		t.Fatal("link did not parse")
+	}
+	applyShareTarget(st, target)
+	if st.ActiveNote == "" || st.NoteMinimized {
+		t.Fatalf("precondition: first arrival should show the note open (%q min=%v)",
+			st.ActiveNote, st.NoteMinimized)
+	}
+	hideCurrentNote(st) // the reader minimizes it...
+
+	target2, _ := ParseShareLink(url)
+	applyShareTarget(st, target2) // ...and later taps the same link again
+
+	if st.NoteMinimized || st.ActiveNote == "" {
+		t.Errorf("re-tapping the note's own link left it minimized (%q min=%v) — "+
+			"the tap reads as broken", st.ActiveNote, st.NoteMinimized)
+	}
+	if n, ok := findStoredNote(appPrefs(), "web", "Genesis", 1); !ok || n.Minimized {
+		t.Error("the stored minimize must be CLEARED, as the chip tap clears it")
+	}
+}
