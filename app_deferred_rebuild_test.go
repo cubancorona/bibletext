@@ -203,6 +203,43 @@ func TestSwitchedAwayCompletionOnlyCaches(t *testing.T) {
 	}
 }
 
+// The theme observer's spelling: iOS snapshots a backgrounding app in BOTH
+// appearances, so the variant round-trips and each leg reads as a real change
+// at execution time (measured on the instrumented sim — no compare or timer
+// can outrace the delivery). deferOrRebuild is what keeps the sheet alive:
+// rebuild now with a clear canvas, defer to sheet-close otherwise.
+func TestThemeRebuildDefersWhileASheetIsOpen(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	state := deferredTestState(t, app)
+
+	genBefore := windowRebuildGen
+	pop := widget.NewModalPopUp(widget.NewLabel("settings stand-in"), state.window.Canvas())
+	pop.Show()
+
+	deferOrRebuild(state)
+
+	if windowRebuildGen != genBefore {
+		t.Fatal("the variant flip rebuilt over an open sheet — the snapshot round trip kills it again")
+	}
+	if !pop.Visible() || !state.fullRebuildDeferred {
+		t.Fatal("the sheet must survive, and the rebuild must be remembered")
+	}
+
+	pop.Hide()
+	if !consumeDeferredFullRebuild(state) {
+		t.Fatal("sheet closed: the deferred repaint must run")
+	}
+
+	// And with a clear canvas the same call rebuilds immediately — today's
+	// behavior for a variant change while the reader is just reading.
+	genBefore = windowRebuildGen
+	deferOrRebuild(state)
+	if windowRebuildGen != genBefore+1 {
+		t.Fatal("no sheet: the variant change must rebuild right away")
+	}
+}
+
 // A link parked while the app was on the seed rides the DEFERRED rebuild just
 // as it rides the immediate one: the rebuild that finally runs paints the
 // shared passage, not the chapter the reader happened to be on.
