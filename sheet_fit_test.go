@@ -239,3 +239,38 @@ func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {
 		t.Errorf("sheet grew to %vpt on a 2400pt canvas — it should stay its natural height", h)
 	}
 }
+
+// The owner's 2026-08-18 decision, pinned: while settingsTapOutsideCloses is
+// false the sheet is MODAL — a tap (or the start of a scroll-drag) that lands
+// off the card must NOT dismiss it. Accidental closes while scrolling were the
+// report; the ✕ is the close verb now.
+func TestSettingsSheetIgnoresOutsideTaps(t *testing.T) {
+	if settingsTapOutsideCloses {
+		t.Skip("tap-outside dismissal is gated ON; this pin covers the modal mode")
+	}
+	app := test.NewApp()
+	defer app.Quit()
+	win := app.NewWindow("Settings")
+	win.Resize(fyne.NewSize(440, 956))
+	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	app.Settings().SetTheme(th)
+
+	state := sampleState()
+	state.window = win
+	state.theme = th
+	state.aiKeys = newKeyStoreWith(newFakePrefs())
+	state.aiKeys.setAIEnabled(true)
+
+	popup := pickerPopup(t, state, showAISettings)
+	if !popup.Visible() {
+		t.Fatal("precondition: the sheet is open")
+	}
+
+	// The top-left corner is outside the centered card on every screen size.
+	test.TapCanvas(win.Canvas(), fyne.NewPos(2, 2))
+
+	if !popup.Visible() {
+		t.Fatal("a tap outside the card dismissed the sheet — the accidental-close-" +
+			"while-scrolling report, back again")
+	}
+}
