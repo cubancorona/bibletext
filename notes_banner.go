@@ -35,7 +35,19 @@ var nativeNoteSticker = func() bool { return nativeNoteStickerOnPlatform }
 // for a minimized one, or nil when there is nothing to show. The caller slots
 // it above the reading pane.
 func buildNoteBanner(state *AppState) fyne.CanvasObject {
-	if state == nil || !notesFeatureOn(state) || state.ActiveNote == "" {
+	if state == nil || !notesFeatureOn(state) {
+		return nil
+	}
+	// A payload that could not be rendered is TOLD, in the note's place
+	// (docs/NOTE_WIRE_FORMAT.md rule 5): quiet non-chrome styling, attributed
+	// to nobody, no call to action, no link. This branch runs BEFORE the
+	// native-sticker suppression below on purpose — the in-text sticker only
+	// ever draws a decoded note, so there is nothing for a notice to duplicate,
+	// and without this the macOS reader would never be told at all.
+	if state.NoteNotice != "" {
+		return buildNoteNotice(state)
+	}
+	if state.ActiveNote == "" {
 		return nil
 	}
 	// Where the pane draws the note in the text itself, the banner would be the
@@ -86,4 +98,18 @@ func buildNoteBanner(state *AppState) fyne.CanvasObject {
 		container.NewVBox(container.NewHBox(who, ref), body),
 	)
 	return surface(container.NewPadded(inner), pal.SurfaceAlt, pal.Border, fyne.Size{})
+}
+
+// buildNoteNotice renders the could-not-read-the-note sentence where the note
+// bubble would have been. Deliberately BARE: no byline (it is from nobody), no
+// reference row, no buttons, no link — a reader in a message thread must never
+// see anything here that reads as "tap this" or "install that"
+// (docs/NOTE_WIRE_FORMAT.md rule 5, and the phishing argument behind it). The
+// text is the app's, so LowImportance keeps it quieter than a person's words.
+func buildNoteNotice(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+	body := widget.NewLabel(state.NoteNotice)
+	body.Wrapping = fyne.TextWrapWord
+	body.Importance = widget.LowImportance
+	return surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
 }

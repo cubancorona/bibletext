@@ -141,7 +141,27 @@ func ShareLinkURLWithNote(versionID, book string, chapter, lo, hi int, note stri
 	default:
 		keys = append(keys, "v"+strconv.Itoa(lo))
 	}
-	if payload := EncodeNote(note); payload != "" {
+	// The note payload carries its OWN anchor beside the text (share_note.go):
+	// 'v' is the SENDER's translation id — the caller's, because the PATH is
+	// lossy by construction (webc is forced for the deuterocanon just above,
+	// and an unknown id falls back to web), and reconstructing the sender's
+	// translation from the path is identity rebuilt from context. Only when the
+	// caller gave nothing usable does the path version stand in, so 'v' is
+	// always present on anything we emit. 'b'/'c'/'a' name the passage in the
+	// wire's own frame; the fragment's verse span above remains what navigates
+	// the page.
+	noteVersion := strings.ToLower(strings.TrimSpace(versionID))
+	if noteWireVersionID(noteVersion) == "" {
+		noteVersion = version
+	}
+	if payload := (EncodeNoteWire(NoteWire{
+		Text:    note,
+		Version: noteVersion,
+		Book:    book,
+		Chapter: chapter,
+		VerseLo: lo,
+		VerseHi: hi,
+	})); payload != "" {
 		keys = append(keys, "n="+payload)
 	}
 	// NO TRANSLATION KEY HERE — the PATH carries the translation now.

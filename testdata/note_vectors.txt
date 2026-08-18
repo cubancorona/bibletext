@@ -1,0 +1,90 @@
+# The shared-note conformance corpus (docs/NOTE_WIRE_FORMAT.md).
+#
+# APPEND-ONLY. Every decoder BibleText has — the Go decoder in share_note.go
+# and the web reader's decoder in cmd/websitegen/assets.go — must agree on
+# every line here, forever. A rule that lives only in an encoder's behaviour is
+# the rule the second implementation silently breaks; these lines are the rule
+# written down. Never edit or remove a line; add new ones at the end.
+#
+# Format, one vector per line:
+#   <base64url payload> <expected outcome: ok|newer|damaged> [expected text]
+# The expected text is everything after the outcome word, verbatim (single
+# line — vectors with newlines in the text do not belong in this file).
+# Blank lines and lines starting with '#' are ignored.
+# ordinary 'r': t+v+b+c+a, our own encoder
+cmEDARASYgEqYwEDdBVSZWFkIHRoaXMgb25lIHNsb3dseS52A2JzYg ok Read this one slowly.
+# ordinary 'd': long enough that DEFLATE wins
+ZEpkZmRkTGIUSmYUL3nOWJKRqlCcmJuqUJ5flFKskF-WWqSQmJcCYQwfyTLm8tQkQAAAAP__ ok the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over
+# decoder accepts any record order
+cnYDd2VidBRyZWNvcmRzLW91dC1vZi1vcmRlcg ok records-out-of-order
+# duplicate tag: first occurrence wins
+cnQKZmlyc3Qtd2luc3QMc2Vjb25kLWxvc2Vz ok first-wins
+# non-minimal uvarint length accepted
+cnSEAG5vdGU ok note
+# zero-length value on an unknown lowercase tag
+cngAdAt6ZXJvLWxlbi1vaw ok zero-len-ok
+# trailing garbage after a complete DEFLATE stream
+ZGTGQQ2AMBQDUCtVg4-ydbBkENLfC-4RwO1liznXvA_sb1TgiIycQtdYjFCxeIEW2JqeqP_xBQAA___erb7v ok trailing bytes after the deflate stream are accepted accepted accepted
+# truncated record
+cnQJZnU damaged
+# record length past the end
+cnRkeA damaged
+# unknown lowercase tag skipped, note still shown
+cnEDAQIDdBV1bmtub3duLWxvd2VyLXNraXBwZWQ ok unknown-lower-skipped
+# unknown UPPERCASE tag: a newer note format
+cnQGaGlkZGVuUQEB newer
+# unknown lowercase byte 0
+eHQEdGFpbA damaged
+# byte 0 'A': reserved for a newer format
+QQECAw newer
+# byte 0 'Z' with a valid record tail: still newer, never parsed
+WnQEdGFpbA newer
+# 0xFF: stop parsing, render what was read, preserve the rest
+cnQPYmVmb3JlLXRoZS1zdG9w_wCZ ok before-the-stop
+# legacy 'p': decode forever
+cGEgbGVnYWN5IHBsYWluIG5vdGU ok a legacy plain note
+# legacy 'z': decode forever
+ekpUyElNT0yuVEhJTctJLElNUcjLL0kFBAAA__8 ok a legacy deflated note
+# deflate bomb: 1 MiB of zeros, refused by the size cap
+ZOzAMQEAAADCIPunNsReGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABA9AAAAP__ damaged
+# deflate bomb under the legacy 'z' framing
+euzAMQEAAADCIPunNsReGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABA9AAAAP__ damaged
+# invalid UTF-8 in 't'
+cnQD__79 damaged
+# invalid UTF-8 under legacy 'p'
+cMMo damaged
+# empty record stream ('r' with no records is under 2 bytes)
+cg damaged
+# missing 't'
+cnYDd2Vi damaged
+# 't' empty after normalisation
+cnQDICAg damaged
+# not base64
+!!!! damaged
+# 'd' whose body is not a DEFLATE stream
+ZN6t damaged
+# padded base64 tolerated (we never emit it)
+cHBhZGRlZCBvaw== ok padded ok
+# control characters stripped by normalisation
+cnQPa2VlcAF0aGlzAmNsZWFu ok keepthisclean
+# 'b' alone with a truncated uvarint value and no 't'
+cmICyMg damaged
+
+# --- appended after implementation verification of the first S4 round -----------------
+# A DEFLATE dynamic block whose literal table is INCOMPLETE (5 codes of length
+# 3 in an 8-slot space). Go's compress/flate rejects incomplete tables (except
+# the degenerate single length-1 code); the web reader's first inflate accepted
+# them, so this exact payload decoded as a NOTE on the web and DAMAGED in the
+# app — two decoders, two formats, found by differential fuzzing. Hand-built by
+# a reviewer; pinned so neither decoder can drift on it again.
+ZAXAMQkAAAACMDCt_vbHGVQA damaged
+# The standard base64 alphabet ('+'/'/') where the app requires url-safe. The
+# web reader mapped -_ to +/ and let atob accept BOTH spellings, so this 'd'
+# payload (a valid vector re-spelled with + and /) rendered on the web and is
+# damaged in the app. The app's rule is the frozen one: RawURL alphabet only,
+# with correctly-formed trailing '=' padding tolerated.
+ZEpkZmRkTGIUSmYUL3nOWJKRqlCcmJuqUJ5flFKskF+WWqSQmJcCYQwfyTLm8tQkQAAAAP// damaged
+# Trailing padding of the WRONG LENGTH: a payload whose unpadded length is
+# 4k+2 must carry '==' or nothing; a single '=' is malformed in Go's
+# URLEncoding, and the web reader used to top it up and forgive it.
+cmEDARASYgEqYwEDdBVSZWFkIHRoaXMgb25lIHNsb3dseS52A2JzYg= damaged

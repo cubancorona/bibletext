@@ -87,6 +87,14 @@ type AppState struct {
 	// nowhere else.
 	NoteVersionID string
 
+	// NoteNotice is the sentence shown in the note's place when a link's
+	// payload could NOT be rendered — a newer note format, or damage
+	// (noteOutcomeMessage). Session-only and never stored: it is the app
+	// reporting on a payload, not a message from a person, so it is attributed
+	// to nobody, carries no action and no link, and the next navigation clears
+	// it (addRecentChapter). See docs/NOTE_WIRE_FORMAT.md rule 5.
+	NoteNotice string
+
 	RecentChapters []ChapterVisit
 
 	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,
@@ -505,6 +513,11 @@ func addRecentChapter(state *AppState, book string, chapter int) {
 		}
 	}
 	state.RecentChapters = updated
+	// A could-not-read-the-note notice belongs to the arrival that raised it,
+	// and every navigation funnels through here — so this is the single place
+	// it expires. (applyShareTarget sets it AFTER calling us, so the arrival's
+	// own pass through here does not eat it.)
+	state.NoteNotice = ""
 	// Every book/chapter navigation funnels through here, so this is also the
 	// single place to pick up whatever note belongs to where the reader has just
 	// landed — that is what makes a note reappear on a later visit rather than

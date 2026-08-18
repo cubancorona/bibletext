@@ -322,7 +322,14 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 			// arriving note, pressed Delete, and the store lost the other one
 			// while the one on screen survived. The four fields are one value and
 			// have to be written as one.
-			state.NoteVersionID = t.VersionID
+			//
+			// The WIRE's 'v' record outranks the path when it is present
+			// (noteStorageTarget): the path is lossy — webc forced for the
+			// deuterocanon, an unknown id falling back to web — and the record
+			// is the sender saying what they were actually reading. This field
+			// must match what rememberIncomingNote files under, or Hide and
+			// Delete address a key that holds nothing.
+			state.NoteVersionID = noteStorageTarget(t).VersionID
 			// AND the mark belongs to the NOTE, not to the link.
 			//
 			// The block above lit the link's verses as hlLinkSpan, which is right
@@ -343,7 +350,17 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 					Hi:        t.VerseHi,
 				})
 			}
-			rememberIncomingNote(state, t)
+			rememberIncomingNote(state, noteStorageTarget(t))
+		} else if msg := noteOutcomeMessage(t.NoteOutcome); msg != "" {
+			// The link carried a payload this build could not render — a newer
+			// format, or damage. TELL the reader, in the note's place, in the
+			// banner's quiet non-chrome styling, attributed to nobody, with no
+			// call to action and no link (docs/NOTE_WIRE_FORMAT.md rule 5: a
+			// silent drop is unrecoverable, but the sender still has the text,
+			// so a message lets the recipient say "your note didn't come
+			// through"). The passage has already opened above; nothing is
+			// stored, and the next navigation clears it (addRecentChapter).
+			state.NoteNotice = msg
 		}
 	} else {
 		state.ActiveNote = ""
@@ -366,6 +383,35 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	if unavailable != "" {
 		showLinkVersionUnavailable(state, unavailable)
 	}
+}
+
+// noteStorageTarget is the target as the NOTE should be filed, which is not
+// quite the target as the PAGE navigates. The payload's own records are
+// authoritative for the note's anchor where they are present
+// (docs/NOTE_WIRE_FORMAT.md): 'v' because the path version is lossy by
+// construction, and 'a' because the runs are the span the sender actually
+// selected. The fragment's verse span still navigates the page — that is not
+// this function's business.
+//
+// 'b' and 'c' are decoded and surfaced on the target (NoteBook/NoteChapter)
+// but deliberately NOT applied to storage yet: today's store files a note
+// under the chapter the arrival navigated to (rememberIncomingNote reads
+// state.CurrentChapter — notes_store.go, out of scope here), so honouring a
+// wire book/chapter that disagreed with the path would tear the stored anchor
+// in half — book from the wire, chapter from the navigation. Everything our
+// own encoder emits has b/c equal to the path's book/chapter, so nothing real
+// is lost; the scrapbook store (S5/S6) is where the full anchor lands.
+func noteStorageTarget(t ShareTarget) ShareTarget {
+	if t.NoteVersion != "" {
+		t.VersionID = t.NoteVersion
+	}
+	if t.NoteLo > 0 {
+		t.VerseLo, t.VerseHi = t.NoteLo, t.NoteHi
+		if t.VerseHi <= t.VerseLo {
+			t.VerseHi = 0 // the store's single-verse spelling
+		}
+	}
+	return t
 }
 
 // linkVersionUnavailable names the translation a link asked for when this reader

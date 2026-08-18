@@ -39,6 +39,26 @@ type ShareTarget struct {
 	// markup, and never styled as if BibleText said it — see
 	// docs/SHARED_NOTES.md → Security.
 	Note string
+
+	// NoteOutcome says what became of the link's note payload:
+	// NoteOutcomeNone when the fragment carried no "n" key at all, otherwise
+	// DecodeNote's verdict. The two failure outcomes are TOLD to the reader in
+	// the note's place (share_link_open.go) — never silently dropped, never a
+	// call to action (docs/NOTE_WIRE_FORMAT.md rule 5). The passage opens in
+	// every case.
+	NoteOutcome NoteOutcome
+
+	// The note's OWN anchor, from the payload's v/b/c/a records — set only on
+	// NoteOutcomeOK, zero when the record was absent. These are AUTHORITATIVE
+	// for the NOTE where present: the path is lossy (webc forced for the
+	// deuterocanon, unknown ids falling back to web), so the wire says what the
+	// sender was actually reading. They do not navigate — the fragment verse
+	// span above remains what places the page.
+	NoteVersion string
+	NoteBook    string
+	NoteChapter int
+	NoteLo      int // first run of the 'a' record; 0 when absent
+	NoteHi      int
 }
 
 // ParseShareLink parses a BibleText web-reader URL into the passage it names.
@@ -103,24 +123,44 @@ func ParseShareLink(raw string) (ShareTarget, bool) {
 	}
 
 	lo, hi := parseVersePayload(frag, query)
-	note, _ := DecodeNote(fragmentKey(frag, "n"))
-	return ShareTarget{
+	t := ShareTarget{
 		VersionID: version, Book: book, Chapter: chapter,
-		VerseLo: lo, VerseHi: hi, Note: note,
-	}, true
-}
-
-// fragmentKey reads one key out of the fragment's "&"-separated key list,
-// returning "" when it is absent. Keys we do not recognise are simply not asked
-// for, which is how the grammar stays open: a link written by a future version
-// still parses for everything this version does understand.
-func fragmentKey(frag, key string) string {
-	for _, kv := range strings.Split(frag, "&") {
-		if v, found := strings.CutPrefix(strings.TrimSpace(kv), key+"="); found {
-			return v
+		VerseLo: lo, VerseHi: hi,
+	}
+	// Only a fragment that actually CARRIES an "n" key gets a note verdict: a
+	// plain passage link must stay NoteOutcomeNone, or every note-less link
+	// would read as "damaged" and the reader would be told about a note that
+	// never existed. (An "n=" with an empty payload IS a verdict — damaged.)
+	if payload, present := fragmentKeyPresent(frag, "n"); present {
+		rec, outcome := DecodeNote(payload)
+		t.NoteOutcome = outcome
+		if outcome == NoteOutcomeOK {
+			t.Note = rec.Text
+			t.NoteVersion = rec.Version
+			t.NoteBook = rec.Book
+			t.NoteChapter = rec.Chapter
+			if len(rec.Runs) > 0 {
+				t.NoteLo = rec.Runs[0].Lo
+				t.NoteHi = rec.Runs[0].Hi
+			}
 		}
 	}
-	return ""
+	return t, true
+}
+
+// fragmentKeyPresent reads one key out of the fragment's "&"-separated key
+// list, and says whether the key was there at all — "" with present=true is a
+// key that arrived empty, which for "n" is a verdict (damaged) rather than an
+// absence. Keys we do not recognise are simply not asked for, which is how the
+// grammar stays open: a link written by a future version still parses for
+// everything this version does understand.
+func fragmentKeyPresent(frag, key string) (string, bool) {
+	for _, kv := range strings.Split(frag, "&") {
+		if v, found := strings.CutPrefix(strings.TrimSpace(kv), key+"="); found {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 const shareLinkHost = "bibletext.co.uk"
