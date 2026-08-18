@@ -160,8 +160,8 @@ type chapterPlan struct {
 	// planDisplayIndex. Since S8 it is the APPLE seam: the Fyne surfaces read
 	// the plan itself (notes_banner.go), while the mirror survives as the
 	// native sticker's projection — the display note is the sticker's bubble
-	// and the rest of the set rides in its text as an honest count
-	// (appleStickerText). It is also the note the cap opens (the plan's
+	// and the rest of the set rides in its WHO line as an honest count
+	// (appleStickerPush). It is also the note the cap opens (the plan's
 	// Open), so the bubble and the mirror can never disagree.
 	display int
 }
@@ -370,12 +370,15 @@ func displayCopy(d drawnNote, versionID string, chapter int) StoredNote {
 // chip is Open), so the S7 trap is sprung in the same commit: Open joins
 // Fingerprint as its own middle section. It stays OUT of noteFP on purpose —
 // noteFP is the Apple BODY half (chapterBodyFingerprint, reading.go), and the
-// Apple sticker draws the MIRROR plus the count lines (appleStickerText), none
-// of which depend on Open. Folding Open there would turn every suppression
-// flip (a search arriving on a chapter with a note) into a full
+// Apple sticker draws the MIRROR plus the who-line counts (appleStickerPush),
+// none of which depend on Open. Folding Open there would turn every
+// suppression flip (a search arriving on a chapter with a note) into a full
 // NSAttributedString re-import, the exact cost the body/tint split exists to
-// avoid; the invariant that the body half folds everything the sticker text
-// depends on is pinned by TestAppleStickerTextIsFoldedByTheBodyFingerprint.
+// avoid; since S9 the suppression flip DOES change the pushed presentation
+// (the sticker stands down to the pill), and that repaint is the native
+// side's own compare-and-refresh, never an import. The invariant that the
+// body half folds everything else the push depends on is pinned by
+// TestAppleStickerPushIsFoldedByTheBodyFingerprint.
 func (p *chapterPlan) foldFingerprint() {
 	var b strings.Builder
 	if p.Notice != "" {
@@ -416,58 +419,109 @@ func (p *chapterPlan) foldFingerprint() {
 	p.Fingerprint = p.noteFP + "&" + open.String() + "&" + p.Tints.fingerprint()
 }
 
-// --- the Apple sticker's text (S8) -------------------------------------------
+// --- the Apple sticker's push (S8 count, S9 byline) --------------------------
 //
-// The first plural release ships the Apple surfaces through the EXISTING
-// single-sticker ABI (bibleTextSetNote / bibleTextMacSetNote): the open note
-// keeps the native sticker exactly as before, and the REST of the set is an
-// honest count folded into the sticker's own text. Zero new ObjC, zero new C
-// ABI, on the two surfaces where a defect is least testable
-// ([redacted-retired-private-reference], S8: "de-risk it"). A legal, non-lying subset:
-// nothing is invisible — the sticker says how many more notes the passage
-// carries, and how many cannot be shown in this translation — and platforms
-// differ in richness, not truth; the Fyne banner draws the same set as chips.
+// The Apple surfaces still ride the single-sticker ABI (bibleTextSetNote /
+// bibleTextMacSetNote), and since S9 that ABI carries a WHO string beside the
+// text: the bubble holds ONLY the sender's words, and everything the app
+// itself has to say — the byline, the honest counts, the R4 sentence — is the
+// WHO line, the sticker's own chrome, attributed to nobody but the app. S8
+// folded the counts into the body through the then-frozen ABI and recorded
+// the lie it bent ("1 more note on this passage" could read as something the
+// sender typed); S9 is the one tuple change that unbends it.
+//
+// appleStickerPush is the WHOLE pushed presentation, computed in one place so
+// the two panes cannot diverge:
+//
+//   - text — the sender's words, alone. "" when no note is open here.
+//   - who  — expanded: senderByline + " · K of N on this passage" when the
+//     plan holds more + " · U not shown here" when unplaced exist. Pill:
+//     "Note" / "Notes · N" (+" · U not shown"), so minimizing the open note
+//     no longer makes the rest of the set invisible (S8 implementation verification). An
+//     unplaced-ONLY chapter pushes text="" and the sentence as the who, and
+//     the native side collapses to the pill for it — no sender text exists,
+//     and an empty sender bubble must never render (the implementation requirement: within
+//     the ABI, "no text but a who" IS the pill presentation).
+//   - pill — minimized, OR the plan is suppressed (a foreign mark owns the
+//     page): the sticker stands down to the pill and restores by itself when
+//     the mark clears, the Apple twin of the banner showing chips only (S8
+//     implementation verification; nothing is stored). Also forced for unplaced-only.
+//
+// WHAT GATES THE REDRAW. Everything here except suppression is folded by the
+// Apple BODY fingerprint (the mirror through chapterFingerprint's clauses,
+// counts and the K position through noteFP's per-note entries and display id)
+// — so any of those changing forces the full re-import that used to be the
+// only sticker rebuild. Suppression is deliberately NOT in the body half: a
+// search arriving must not re-import the chapter. The native side therefore
+// compares the pushed tuple itself and refreshes the sticker alone when it
+// changed (btIOSRefreshNote / btMacRefreshNote) — a suppression flip is a
+// sticker-only repaint, never an import. Pinned by
+// TestAppleStickerPushIsFoldedByTheBodyFingerprint.
 
-// stickerCountLines are the count sentences, in the app's own quiet voice.
-// openID is the note the sticker's bubble already shows (0 for a mirror-only
-// session note, which is in no plan — every plan note then counts as "more").
-func stickerCountLines(plan chapterPlan, openID uint64) []string {
-	others := 0
-	for _, d := range plan.Notes {
-		if d.Note.ID != openID {
-			others++
+// appleStickerPush composes what pushNoteToPane hands the native ABI.
+func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill bool) {
+	if state == nil {
+		return "", "", false
+	}
+	unplaced := len(plan.Unplaced)
+	if state.ActiveNote == "" {
+		if unplaced == 0 {
+			return "", "", false // nothing here: no sticker at all
+		}
+		return "", stickerUnplacedOnlyWho(unplaced), true
+	}
+
+	// The open note's 1-based position in the plan's stable order, and the
+	// total. A mirror-only session note (an arrival the store refused) is in
+	// no plan: it leads the count and every plan note counts after it.
+	placed := len(plan.Notes)
+	pos, inPlan := 1, false
+	for i := range plan.Notes {
+		if state.NoteID != 0 && plan.Notes[i].Note.ID == state.NoteID {
+			pos, inPlan = i+1, true
+			break
 		}
 	}
-	var lines []string
-	switch {
-	case others == 1:
-		lines = append(lines, "1 more note on this passage")
-	case others > 1:
-		lines = append(lines, fmt.Sprintf("%d more notes on this passage", others))
+	if !inPlan {
+		placed++
 	}
-	switch u := len(plan.Unplaced); {
-	case u == 1:
-		lines = append(lines, "1 note cannot be shown in this translation")
-	case u > 1:
-		lines = append(lines, fmt.Sprintf("%d notes cannot be shown in this translation", u))
+
+	if state.NoteMinimized || notesSuppressed(state) {
+		return state.ActiveNote, stickerPillWho(placed, unplaced), true
 	}
-	return lines
+
+	var n StoredNote // zero value reads as a received note: "Note from Friend"
+	if inPlan && plan.display >= 0 {
+		n = plan.Notes[plan.display].Note
+	}
+	who = senderByline(n)
+	if placed > 1 {
+		who += fmt.Sprintf(" · %d of %d on this passage", pos, placed)
+	}
+	if unplaced > 0 {
+		who += fmt.Sprintf(" · %d not shown here", unplaced)
+	}
+	return state.ActiveNote, who, false
 }
 
-// appleStickerText is what pushNoteToPane hands the existing ABI: the mirror's
-// note (the Apple projection, unchanged) plus the count lines, blank-line
-// separated so they read as the sticker's own footer rather than as the
-// sender's words running on. Everything here is folded by the Apple body
-// fingerprint — the mirror through chapterFingerprint's own clauses, the
-// counts through noteFP's per-note entries — so the sticker text cannot change
-// without the body half changing (verified by test, not assumed).
-func appleStickerText(state *AppState, plan chapterPlan) string {
-	if state == nil || state.ActiveNote == "" {
-		return ""
+// stickerPillWho is the collapsed sticker's label: short (the pill sizes to
+// it), but the whole set — "Note", "Notes · 3", "Note · 2 not shown".
+func stickerPillWho(placed, unplaced int) string {
+	s := "Note"
+	if placed > 1 {
+		s = fmt.Sprintf("Notes · %d", placed)
 	}
-	lines := stickerCountLines(plan, state.NoteID)
-	if len(lines) == 0 {
-		return state.ActiveNote
+	if unplaced > 0 {
+		s += fmt.Sprintf(" · %d not shown", unplaced)
 	}
-	return state.ActiveNote + "\n\n" + strings.Join(lines, "\n")
+	return s
+}
+
+// stickerUnplacedOnlyWho is the R4-only chapter's pill sentence — the same
+// copy the S8 count line used, now in the chrome where it belongs.
+func stickerUnplacedOnlyWho(u int) string {
+	if u == 1 {
+		return "1 note cannot be shown in this translation"
+	}
+	return fmt.Sprintf("%d notes cannot be shown in this translation", u)
 }

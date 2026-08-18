@@ -398,11 +398,13 @@ func TestFingerprintFoldsOpenButTheBodyHalfIgnoresIt(t *testing.T) {
 	}
 }
 
-// The Apple sticker's text (mirror + count lines) must be FOLDED by the body
-// fingerprint: whenever the text the push would hand the ABI changes, the body
-// half changes with it — and a flip that leaves the text alone (suppression)
-// leaves the body half alone. Verified, not assumed (the brief's task 4).
-func TestAppleStickerTextIsFoldedByTheBodyFingerprint(t *testing.T) {
+// The Apple push (S9): the bubble's body is the sender's words ALONE, the WHO
+// line is the app's chrome carrying the byline and the counts, and everything
+// the push depends on EXCEPT the derived suppression is folded by the body
+// fingerprint. A suppression flip changes only the pushed presentation (pill)
+// and must leave the body half alone — that repaint is the native side's own
+// compare-and-refresh, never a chapter re-import.
+func TestAppleStickerPushIsFoldedByTheBodyFingerprint(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
@@ -414,56 +416,137 @@ func TestAppleStickerTextIsFoldedByTheBodyFingerprint(t *testing.T) {
 	st := planTestState(t)
 	addRecentChapter(st, "John", 3)
 
-	snap := func() (string, string) {
-		plan := buildChapterPlan(st, appPrefs(), st.Bible)
-		return appleStickerText(st, plan), chapterBodyFingerprint(st)
+	snap := func() (string, string, bool, string) {
+		text, who, pill := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+		return text, who, pill, chapterBodyFingerprint(st)
 	}
 
-	text1, body1 := snap()
-	if text1 == "" {
-		t.Fatal("precondition: the sticker should carry the note")
+	text1, who1, pill1, body1 := snap()
+	if text1 != "the first note" {
+		t.Fatalf("the bubble must hold the sender's words alone, got %q", text1)
+	}
+	if who1 != "Note from Friend" {
+		t.Fatalf("one note: the who line is the plain byline, got %q", who1)
+	}
+	if pill1 {
+		t.Fatal("an open note must not push the pill")
 	}
 
-	// A second note arrives on the passage: the count line appears, and the
-	// body fingerprint must move with it or the sticker would keep lying.
+	// A second note arrives on the passage: the count joins the WHO line (the
+	// body stays the sender's words), and the body fingerprint must move with
+	// it or the native pane would skip the repaint.
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3,
 		VerseLo: 16, Text: "the second note"})
 	applyNoteForCurrentChapter(st)
-	text2, body2 := snap()
-	if text2 == text1 {
-		t.Fatalf("the count line did not appear: %q", text2)
+	text2, who2, _, body2 := snap()
+	if text2 == "" || strings.Contains(text2, "more note") {
+		t.Fatalf("the count must never ride in the body: %q", text2)
 	}
-	if !strings.Contains(text2, "1 more note on this passage") {
-		t.Errorf("the sticker text should carry the honest count: %q", text2)
+	if !strings.Contains(who2, "of 2 on this passage") {
+		t.Errorf("the who line should carry the honest count: %q", who2)
 	}
 	if body2 == body1 {
-		t.Error("the sticker text changed and the body fingerprint did not — the native pane would skip the repaint")
+		t.Error("the who line changed and the body fingerprint did not — the native pane would skip the repaint")
 	}
 
-	// An unplaced note on the reading BOOK: the second sentence, same duty.
-	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
-		VerseLo: 1, Text: "greek esther"})
-	st2 := planTestState(t)
-	st2.Bible.Verses["Esther"] = map[int][]Verse{4: {{BookName: "Esther", Chapter: 4, Verse: 1, Text: "esther"}}}
-	st2.CurrentBook, st2.CurrentChapter = "Esther", 4
-	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
-		VerseLo: 1, Text: "an esther note"})
-	applyNoteForCurrentChapter(st2)
-	plan2 := buildChapterPlan(st2, appPrefs(), st2.Bible)
-	if got := appleStickerText(st2, plan2); !strings.Contains(got, "1 note cannot be shown in this translation") {
-		t.Errorf("the unplaced sentence is missing from the sticker text: %q", got)
-	}
-
-	// A suppression flip leaves the sticker text alone, so it must leave the
-	// body half alone too — that is the whole point of keeping Open out of it.
+	// A suppression flip: the pushed presentation becomes the pill with the
+	// set's count, the words and the body half do not move.
 	openSearchResultRange(st, Verse{BookName: "John", Chapter: 3, Verse: 1}, 0)
-	text3, body3 := snap()
+	text3, who3, pill3, body3 := snap()
+	if !pill3 {
+		t.Error("a foreign mark must stand the sticker down to the pill")
+	}
+	if who3 != "Notes · 2" {
+		t.Errorf("the suppressed pill should carry the set's count, got %q", who3)
+	}
 	if text3 != text2 {
-		t.Fatalf("a suppression flip changed the sticker text:\n %q\nvs %q", text3, text2)
+		t.Errorf("a suppression flip changed the pushed words:\n %q\nvs %q", text3, text2)
 	}
 	if body3 != body2 {
 		t.Error("a suppression flip moved the body fingerprint — every search arrival would " +
 			"re-import the whole NSAttributedString")
+	}
+
+	// Releasing the mark restores the expanded push, by derivation alone.
+	st.clearMark()
+	_, who4, pill4, _ := snap()
+	if pill4 || !strings.Contains(who4, "of 2 on this passage") {
+		t.Errorf("clearing the mark must restore the expanded sticker, got pill=%v who=%q", pill4, who4)
+	}
+}
+
+// The who line and the pill, composed over every S9 shape: position counts,
+// the unplaced tail, the minimized pill, and the unplaced-only chapter that
+// pushes no body at all (the implementation requirement: text-less who IS the pill).
+func TestAppleStickerPushComposition(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	// Three placed notes plus one the translation cannot show. The reading
+	// book must be one the sample bible carries; the unplaced note rides on
+	// the same BOOK under a version whose numbering does not correspond.
+	st := planTestState(t)
+	st.Bible.Verses["Esther"] = map[int][]Verse{4: {{BookName: "Esther", Chapter: 4, Verse: 1, Text: "esther"}}}
+	st.CurrentBook, st.CurrentChapter = "Esther", 4
+	for _, text := range []string{"first", "second", "third"} {
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
+			VerseLo: 1, Text: text})
+	}
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
+		VerseLo: 1, Text: "greek esther"})
+	applyNoteForCurrentChapter(st)
+
+	text, who, pill := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	if pill {
+		t.Fatal("expanded: not a pill")
+	}
+	if text == "" {
+		t.Fatal("expanded: the bubble carries the open note's words")
+	}
+	wantPrefix := "Note from Friend · "
+	if !strings.HasPrefix(who, wantPrefix) ||
+		!strings.Contains(who, "of 3 on this passage") ||
+		!strings.Contains(who, "· 1 not shown here") {
+		t.Errorf("who = %q, want byline · K of 3 on this passage · 1 not shown here", who)
+	}
+
+	// Minimize: the pill carries the whole set, placed and unplaced.
+	hideCurrentNote(st)
+	_, who, pill = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	if !pill || who != "Notes · 3 · 1 not shown" {
+		t.Errorf("minimized pill = %q (pill=%v), want %q", who, pill, "Notes · 3 · 1 not shown")
+	}
+
+	// The unplaced-only chapter: no sender text exists, so the push is the
+	// pill presentation with the sentence — never an empty sender bubble.
+	deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
+		VerseLo: 1, Text: "greek esther"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 5,
+		VerseLo: 1, Text: "greek esther again"})
+	applyNoteForCurrentChapter(st)
+	text, who, pill = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	if text != "" {
+		t.Errorf("unplaced-only: no sender words exist to show, got %q", text)
+	}
+	if !pill {
+		t.Error("unplaced-only: must collapse to the pill presentation")
+	}
+	if who != "2 notes cannot be shown in this translation" {
+		t.Errorf("unplaced-only who = %q", who)
+	}
+
+	// And a single-note chapter still pushes the plain pill label when
+	// minimized — today's presentation, unchanged.
+	deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
+		VerseLo: 1, Text: "only note", Minimized: true})
+	applyNoteForCurrentChapter(st)
+	if _, who, pill = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !pill || who != "Note" {
+		t.Errorf("single minimized note: pill=%v who=%q, want the plain \"Note\"", pill, who)
 	}
 }
 

@@ -65,8 +65,8 @@ func buildNoteBanner(state *AppState) fyne.CanvasObject {
 	}
 	// Where the pane draws the notes in the text itself, the banner would be
 	// the same set a second time, in a worse place. The Apple panes carry the
-	// open note as the native sticker and the rest of the set as the sticker's
-	// own count line (appleStickerText) — richness differs, truth does not.
+	// open note as the native sticker and the rest of the set in the sticker's
+	// own WHO line (appleStickerPush) — richness differs, truth does not.
 	if nativeNoteSticker() {
 		return nil
 	}

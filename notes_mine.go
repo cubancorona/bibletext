@@ -14,13 +14,14 @@ package bibletext
 // saveMyNote / readMyNotes are the Kind=mine reads and writes of that store
 // and live beside it.
 
-// noteByline is who the note is from, for display. Untrusted names do not
-// appear here yet: there is no name field on the share sheet, so a received
-// note can only say "Friend". SenderName is carried and stored and simply not
-// read — see [redacted-retired-private-reference], "Identity".
+// noteByline is who the note is from, for the Fyne surfaces (the banner and
+// the browser). The PERSON half routes through senderName (notes_byline.go)
+// with every other surface, so the dormant name path is one constant away on
+// all of them at once — today it can only say "Friend", because
+// senderNamesEnabled is false and there is no name field on the share sheet.
 func noteByline(n StoredNote) string {
 	if n.Kind == noteKindMine {
 		return "From you"
 	}
-	return "From Friend"
+	return "From " + senderName(n)
 }
