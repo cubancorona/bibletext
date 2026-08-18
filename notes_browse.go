@@ -29,7 +29,7 @@ import (
 
 // noteReference is the passage a note is attached to, as a reader would write
 // it: "John 11:35", "Psalms 23:1-4", or just "Psalms 23" for a whole chapter.
-func noteReference(n SharedNote) string {
+func noteReference(n StoredNote) string {
 	ref := n.Book + " " + strconv.Itoa(n.Chapter)
 	switch {
 	case n.VerseLo > 0 && n.VerseHi > n.VerseLo:
@@ -83,12 +83,12 @@ func (w noteWho) label() string {
 }
 
 // keeps reports whether a note belongs in this filter's list.
-func (w noteWho) keeps(n SharedNote) bool {
+func (w noteWho) keeps(n StoredNote) bool {
 	switch w {
 	case whoOthers:
-		return !n.Mine
+		return n.Kind != noteKindMine
 	case whoMe:
-		return n.Mine
+		return n.Kind == noteKindMine
 	default:
 		return true
 	}
@@ -124,7 +124,7 @@ func setNotesWhoPref(w noteWho) {
 }
 
 // filterNotesByWho keeps only the notes the filter admits.
-func filterNotesByWho(notes []SharedNote, w noteWho) []SharedNote {
+func filterNotesByWho(notes []StoredNote, w noteWho) []StoredNote {
 	if w == whoAnyone {
 		return notes
 	}
@@ -175,10 +175,10 @@ func (s noteSort) label() string {
 // between two renders of the same data.
 // Notes stored before Received existed have a zero timestamp and sort as the
 // oldest, which is the truthful answer — they did arrive first.
-func sortedNotes(notes []SharedNote, bookOrder map[string]int, by noteSort) []SharedNote {
-	out := make([]SharedNote, 0, len(notes))
+func sortedNotes(notes []StoredNote, bookOrder map[string]int, by noteSort) []StoredNote {
+	out := make([]StoredNote, 0, len(notes))
 	out = append(out, notes...)
-	canonLess := func(a, b SharedNote) (bool, bool) {
+	canonLess := func(a, b StoredNote) (bool, bool) {
 		ia, oka := bookOrder[a.Book]
 		ib, okb := bookOrder[b.Book]
 		if oka != okb {
@@ -197,28 +197,24 @@ func sortedNotes(notes []SharedNote, bookOrder map[string]int, by noteSort) []Sh
 		if a.VerseLo != b.VerseLo {
 			return a.VerseLo < b.VerseLo, true
 		}
-		// Translation last, and it is what MAKES the order total: notes are keyed
-		// version|book|chapter (notes_store.go), so two notes can agree on book,
-		// chapter and verse and still be different notes — one from a WEB link,
-		// one from a BSB link on the same passage. Without this they compared
-		// equal, sort.Slice is not stable, and the list could reshuffle between
+		// Two notes can agree on book, chapter and verse and still be
+		// different notes — the store has no passage key to collide on — so the
+		// order keeps falling through: translation, kind, arrival time, and
+		// finally the ID, which is unique and makes the order TOTAL. Without a
+		// total order sort.Slice (not stable) could reshuffle the list between
 		// two renders of unchanged data — the very thing the doc above promises
 		// it never does.
 		if a.VersionID != b.VersionID {
 			return a.VersionID < b.VersionID, true
 		}
-		// Own notes are a LIST, not a keyed map, so two of them can agree on
-		// every field above and still be different notes — that is the whole
-		// reason they are a list. Without these last two the order stops being
-		// total and the list can reshuffle between renders of unchanged data.
-		if a.Mine != b.Mine {
-			return b.Mine, true // a friend's note before your own
+		if a.Kind != b.Kind {
+			return a.Kind != noteKindMine, true // a friend's note before your own
 		}
 		if a.Received != b.Received {
 			return a.Received < b.Received, true
 		}
-		if a.Text != b.Text {
-			return a.Text < b.Text, true
+		if a.ID != b.ID {
+			return a.ID < b.ID, true
 		}
 		return false, false // the same note
 	}
@@ -238,18 +234,18 @@ func sortedNotes(notes []SharedNote, bookOrder map[string]int, by noteSort) []Sh
 // matchNotes filters notes by a query, matching the note's TEXT and its
 // REFERENCE — a reader looking for "john 11" means the passage, and one looking
 // for "hospital" means the message; both are the same box. Case-insensitive,
-// plain substring: with at most notesMax short notes there is nothing here worth
+// plain substring: over a store of short notes there is nothing here worth
 // an index, and a fuzzy match would only produce results the reader cannot
 // explain.
 //
 // An empty query matches everything, which is what makes the mode a browser
 // first and a search second.
-func matchNotes(notes []SharedNote, query string) []SharedNote {
+func matchNotes(notes []StoredNote, query string) []StoredNote {
 	q := strings.ToLower(strings.TrimSpace(query))
 	if q == "" {
 		return notes
 	}
-	out := make([]SharedNote, 0, len(notes))
+	out := make([]StoredNote, 0, len(notes))
 	for _, n := range notes {
 		if strings.Contains(strings.ToLower(n.Text), q) ||
 			strings.Contains(strings.ToLower(noteReference(n)), q) {
@@ -274,7 +270,7 @@ func bookOrderOf(state *AppState) map[string]int {
 // browsableNotes is the list the Notes mode shows for the current query, and
 // storedNoteCount is how many there are in total — the two numbers the header
 // line needs to say "3 of 7".
-func browsableNotes(state *AppState) (shown []SharedNote, total int) {
+func browsableNotes(state *AppState) (shown []StoredNote, total int) {
 	if state == nil || !notesFeatureOn(state) {
 		return nil, 0
 	}
@@ -325,18 +321,19 @@ func notesHeaderLine(shown, total int, query string) string {
 // A minimized note is restored on the way. The reader has just tapped the note
 // in a list of notes; landing on a chapter showing only a collapsed marker would
 // be answering a different question from the one they asked.
-func openNote(state *AppState, n SharedNote) {
+func openNote(state *AppState, n StoredNote) {
 	if state == nil {
 		return
 	}
 	if n.Minimized {
-		setNoteMinimized(appPrefs(), n.VersionID, n.Book, n.Chapter, false)
+		// By the note's own identity, handed here by the row that drew it —
+		// never a key rebuilt from its fields.
+		setNoteMinimizedByID(appPrefs(), n.ID, false)
 	}
-	// Go to the note's TRANSLATION first. Notes are keyed version|book|chapter,
-	// so navigating without switching looks the note up under whichever
-	// translation the reader happens to be in, finds nothing, and clears it —
-	// the reader taps a note in a list of notes and lands on a chapter with no
-	// note. The same deferral the shared-link path uses: an in-memory
+	// Go to the note's TRANSLATION first — the passage the note is about is a
+	// passage of the translation it was written against, and the derive can
+	// only follow it elsewhere where the numbering corresponds. The same
+	// deferral the shared-link path uses: an in-memory
 	// translation switches synchronously and we navigate below; a real download
 	// parks the target and applyLoadedVersion finishes the job.
 	if switchToLinkVersion(state, ShareTarget{
@@ -513,7 +510,7 @@ func noteDateLabel(ts int64, now time.Time) string {
 	}
 }
 
-func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject {
+func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
 	ref := canvas.NewText(noteReference(n), pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 18
@@ -565,7 +562,7 @@ func noteBrowseRow(state *AppState, n SharedNote, pal palette) fyne.CanvasObject
 // newNoteBrowseCard is a search-result card that opens a note instead of a
 // verse — same widget, so the row's hover, tap target and spacing cannot drift
 // from the search hits beside it.
-func newNoteBrowseCard(state *AppState, n SharedNote, content fyne.CanvasObject, pal palette) *searchResultCard {
+func newNoteBrowseCard(state *AppState, n StoredNote, content fyne.CanvasObject, pal palette) *searchResultCard {
 	c := newSearchResultCard(state, Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}, content, pal)
 	c.onTap = func() { openNote(state, n) }
 	return c

@@ -73,7 +73,7 @@ func TestNoteOfferStillHappensOnceLoaded(t *testing.T) {
 	if st.ActiveNote != "" {
 		t.Errorf("a note was shown although shared notes are switched off: %q", st.ActiveNote)
 	}
-	if n := len(readNotes(appPrefs())); n != 0 {
+	if n := storedNoteCount(appPrefs()); n != 0 {
 		t.Errorf("a note was stored although shared notes are switched off (%d stored)", n)
 	}
 }

@@ -35,7 +35,7 @@ func notesXState(t *testing.T) *AppState {
 // translation, leaving the highlight it had placed behind with nothing to
 
 // note goes with it; where the numbering genuinely does not correspond,
-// noteFromAnotherTranslation declines (see the Greek Esther case in
+// the derive declines (see the Greek Esther case in
 // notes_store_test.go).
 func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	app := test.NewApp()
@@ -47,7 +47,7 @@ func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	st := notesXState(t)
 	st.CurrentBook, st.CurrentChapter = "John", 3
 	// A note that belongs to WEB only.
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "web note"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "web note"})
 	applyNoteForCurrentChapter(st)
 	if st.ActiveNote != "web note" {
 		t.Fatalf("precondition: the WEB note should be live, got %q", st.ActiveNote)
@@ -80,7 +80,7 @@ func TestSwitchingTranslationPicksUpThatTranslationsNote(t *testing.T) {
 
 	st := notesXState(t)
 	st.CurrentBook, st.CurrentChapter = "John", 3
-	saveNote(appPrefs(), SharedNote{VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "bsb note"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "bsb note"})
 
 	other, ok := versionByID("bsb")
 	if !ok {
@@ -209,7 +209,7 @@ func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	st := notesXState(t)
 	st.CurrentVersion = "web"
 	st.CurrentBook, st.CurrentChapter = "Esther", 4
-	saveNote(appPrefs(), SharedNote{VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
 		Text: "for such a time as this"})
 	applyNoteForCurrentChapter(st)
 	if st.ActiveNote == "" || !st.hlOn() {

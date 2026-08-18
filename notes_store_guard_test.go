@@ -1,29 +1,28 @@
 package bibletext
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
 
 // notesBlobStore is a prefStore that holds exactly what a real one would: the
-// raw string. The point of these tests is what ends up IN that string, so
-// nothing here may inspect a parsed side-copy — a fake that stored notes as a
-// map would pass even if the production code wrote rubbish.
+// raw string under the store key. The point of these tests is what ends up IN
+// that string, so nothing here may inspect a parsed side-copy — a fake that
+// stored notes as a map would pass even if the production code wrote rubbish.
 type notesBlobStore struct {
 	raw    string
 	writes int
 }
 
 func (s *notesBlobStore) String(key string) string {
-	if key != prefSharedNotes {
+	if key != prefNotesStore {
 		return ""
 	}
 	return s.raw
 }
 
 func (s *notesBlobStore) SetString(key, v string) {
-	if key != prefSharedNotes {
+	if key != prefNotesStore {
 		return
 	}
 	s.raw = v
@@ -41,28 +40,25 @@ func (s *notesBlobStore) StringWithFallback(_, f string) string  { return f }
 func (s *notesBlobStore) BoolWithFallback(_ string, f bool) bool { return f }
 func (s *notesBlobStore) IntWithFallback(_ string, f int) int    { return f }
 
-// A store whose blob cannot be parsed must survive every mutation untouched.
-// Before the guard, each of these calls read "no notes", then serialised that
-// emptiness back — one unreadable read destroyed the lot, permanently, and the
-// reader's own next tap was what did it.
-//
-// setNoteMinimized is deliberately NOT in this table. It looks up the note first
-// and returns before writing when the key is absent, so an unreadable blob left
-// it inert even before the guard — a subtest for it would pass with the guard
-// removed and would therefore prove nothing. It still carries the check, because
-// relying on an early return elsewhere in the function is not a property anyone
-// should have to re-derive when editing it.
-func TestUnreadableNotesBlobIsNeverOverwritten(t *testing.T) {
-	const corrupt = `[{"v":"web","b":"John","c":3,"t":"truncated mid-w`
+// A store whose value yields NOTHING recognisable must survive every mutation
+// untouched — the whole-store stand-down. (Per-LINE damage beside readable
+// records is the quarantine's business instead, and is writable; see
+// TestJunkLinesAreQuarantinedNotShownAndNotDestroyed.) Before the guard, a
+// failed read answered "no notes", and the reader's own next tap serialised
+// that emptiness over their entire collection.
+func TestUnreadableNotesStoreIsNeverOverwritten(t *testing.T) {
+	const corrupt = `{"id":1,"k":"received","v":"web","b":"John","c":3,"t":"truncated mid-w`
 
 	for _, tc := range []struct {
 		name string
 		act  func(p prefStore)
 	}{
-		{"saveNote", func(p prefStore) {
-			saveNote(p, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "new one"})
+		{"addNote", func(p prefStore) {
+			addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, Text: "new one"})
 		}},
-		{"deleteNote", func(p prefStore) { deleteNote(p, "web", "John", 3) }},
+		{"deleteNoteByID", func(p prefStore) { deleteNoteByID(p, 1) }},
+		{"setNoteMinimizedByID", func(p prefStore) { setNoteMinimizedByID(p, 1, true) }},
+		{"deleteAllNotes", func(p prefStore) { deleteAllNotes(p) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &notesBlobStore{raw: corrupt}
@@ -82,16 +78,13 @@ func TestUnreadableNotesBlobIsNeverOverwritten(t *testing.T) {
 // ever be saved at all.
 func TestEmptyNotesStoreStillAcceptsWrites(t *testing.T) {
 	s := &notesBlobStore{}
-	saveNote(s, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "first note"})
+	addNote(s, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, Text: "first note"})
 	if s.writes != 1 {
 		t.Fatalf("writes = %d, want 1 — an empty store must be writable", s.writes)
 	}
-	var list []SharedNote
-	if err := json.Unmarshal([]byte(s.raw), &list); err != nil {
-		t.Fatalf("stored blob does not parse: %v (%q)", err, s.raw)
-	}
-	if len(list) != 1 || list[0].Book != "Psalms" {
-		t.Fatalf("stored %+v, want the one Psalms note", list)
+	notes := readNoteStore(s).notes
+	if len(notes) != 1 || notes[0].Book != "Psalms" {
+		t.Fatalf("stored %+v, want the one Psalms note (blob %q)", notes, s.raw)
 	}
 }
 
@@ -99,23 +92,88 @@ func TestEmptyNotesStoreStillAcceptsWrites(t *testing.T) {
 // about refusing BAD reads, not about refusing to work.
 func TestReadableNotesStoreRoundTrips(t *testing.T) {
 	s := &notesBlobStore{}
-	saveNote(s, SharedNote{VersionID: "web", Book: "John", Chapter: 3, Text: "one"})
-	saveNote(s, SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, Text: "two"})
-	if got := len(readNotes(s)); got != 2 {
+	one, _ := addNote(s, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, Text: "one"})
+	addNote(s, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, Text: "two"})
+	if got := len(readNoteStore(s).notes); got != 2 {
 		t.Fatalf("stored %d notes, want 2 (blob %q)", got, s.raw)
 	}
-	deleteNote(s, "web", "John", 3)
-	notes := readNotes(s)
+	deleteNoteByID(s, one.ID)
+	notes := readNoteStore(s).notes
 	if len(notes) != 1 {
 		t.Fatalf("after deleting one, %d remain, want 1", len(notes))
 	}
-	if _, still := notes[noteKey("web", "John", 3)]; still {
-		t.Error("the deleted note is still there")
-	}
-	if _, kept := notes[noteKey("web", "Psalms", 23)]; !kept {
+	if notes[0].Book != "Psalms" {
 		t.Error("deleting John 3 also removed Psalms 23")
 	}
 	if strings.Contains(s.raw, `"John"`) {
 		t.Errorf("the deleted note is still in the stored blob: %q", s.raw)
+	}
+}
+
+// The pre-S5 stores migrate into the scrapbook store at first read: the old
+// map's entries become Kind=received records, the old own-notes list becomes
+// Kind=mine records, and the legacy keys are cleared ONLY after the new
+// store's write is verified by reading it back.
+func TestLegacyStoresMigrateOnFirstRead(t *testing.T) {
+	p := newNotePrefs()
+	p.m[prefLegacySharedNotes] = `[{"v":"web","b":"John","c":3,"lo":16,"t":"from a friend","ts":100,"m":true,"sn":"[redacted-fixture-name]","sid":"9a3f01c7528e"},` +
+		`{"v":"bsb","b":"Psalms","c":23,"t":"another","ts":200}]`
+	p.m[prefLegacyMyNotes] = `[{"v":"web","b":"Romans","c":8,"lo":28,"t":"sent to [redacted-family-reference]","ts":300,"me":true}]`
+
+	all := allNotesForBrowsing(p)
+	if len(all) != 3 {
+		t.Fatalf("migrated %d notes, want 3: %+v", len(all), all)
+	}
+	var friend, own StoredNote
+	for _, n := range all {
+		switch n.Text {
+		case "from a friend":
+			friend = n
+		case "sent to [redacted-family-reference]":
+			own = n
+		}
+	}
+	if friend.Kind != noteKindReceived || !friend.Minimized || friend.Received != 100 ||
+		friend.SenderName != "[redacted-fixture-name]" || friend.SenderID != "9a3f01c7528e" || friend.VerseLo != 16 {
+		t.Errorf("the received note lost fields in migration: %+v", friend)
+	}
+	if own.Kind != noteKindMine || own.Received != 300 {
+		t.Errorf("the own note did not migrate as Kind=mine: %+v", own)
+	}
+	if friend.ID == 0 || own.ID == 0 {
+		t.Error("migrated notes were not given identities")
+	}
+	if p.m[prefLegacySharedNotes] != "" || p.m[prefLegacyMyNotes] != "" {
+		t.Error("the legacy keys were not cleared after a verified write")
+	}
+	// Idempotent: a restored backup re-introducing the old blobs must not
+	// duplicate what already migrated (dedup: content tuple + kind).
+	p.m[prefLegacySharedNotes] = `[{"v":"web","b":"John","c":3,"lo":16,"t":"from a friend","ts":100}]`
+	if got := len(allNotesForBrowsing(p)); got != 3 {
+		t.Errorf("re-migration duplicated notes: %d, want 3", got)
+	}
+}
+
+// A legacy blob that will not parse is quarantined into the new store
+// VERBATIM — best-effort migration never drops bytes it cannot read — and the
+// old key is still cleared, because the bytes now live in the quarantine.
+func TestUnreadableLegacyBlobIsQuarantinedNotDropped(t *testing.T) {
+	p := newNotePrefs()
+	corrupt := `[{"v":"web","b":"John","c":3,"t":"truncated mid-w`
+	p.m[prefLegacySharedNotes] = corrupt
+
+	if got := len(allNotesForBrowsing(p)); got != 0 {
+		t.Fatalf("an unreadable legacy blob produced %d notes", got)
+	}
+	if !strings.Contains(p.m[prefNotesStore], corrupt) {
+		t.Errorf("the unreadable legacy bytes were dropped, not quarantined:\n%q", p.m[prefNotesStore])
+	}
+	if p.m[prefLegacySharedNotes] != "" {
+		t.Error("the legacy key was left behind after its bytes were quarantined")
+	}
+	// And the quarantined bytes survive later writes.
+	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, Text: "new"})
+	if !strings.Contains(p.m[prefNotesStore], corrupt) {
+		t.Error("a later write destroyed the quarantined legacy bytes")
 	}
 }

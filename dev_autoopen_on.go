@@ -164,7 +164,7 @@ func devNoteDebug(state *AppState) string {
 		return "note:none hl:" + state.mark.Origin.String()
 	}
 	return "note:" + strconv.Itoa(len(state.ActiveNote)) +
-		" in:" + state.NoteVersionID +
+		" id:" + strconv.FormatUint(state.NoteID, 10) +
 		" v:" + strconv.Itoa(state.NoteVerseLo) +
 		" min:" + boolMark(state.NoteMinimized) +
 		" hl:" + state.mark.Origin.String()

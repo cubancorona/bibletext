@@ -65,7 +65,7 @@ func TestArrivalTellsTheReaderAboutAnUnreadableNote(t *testing.T) {
 		if st.ActiveNote != "" {
 			t.Errorf("%s: ActiveNote = %q, want none", tc.name, st.ActiveNote)
 		}
-		if n := len(readNotes(appPrefs())); n != 0 {
+		if n := storedNoteCount(appPrefs()); n != 0 {
 			t.Errorf("%s: %d notes stored from an unreadable payload", tc.name, n)
 		}
 		// And the next navigation clears it — the notice belongs to the arrival.
@@ -191,14 +191,14 @@ func TestWireVersionIsAuthoritativeForStorage(t *testing.T) {
 	if st.ActiveNote != "from the nkjv" {
 		t.Fatalf("note not shown: %q", st.ActiveNote)
 	}
-	if st.NoteVersionID != "nkjv" {
-		t.Errorf("live mirror says %q, want nkjv", st.NoteVersionID)
+	stored, ok := findStoredNote(appPrefs(), "nkjv", "John", 3)
+	if !ok {
+		t.Errorf("note not stored under the wire's translation; store: %v", allNotesForBrowsing(appPrefs()))
 	}
-	notes := readNotes(appPrefs())
-	if _, ok := notes[noteKey("nkjv", "John", 3)]; !ok {
-		t.Errorf("note not stored under the wire's translation; store: %v", notes)
+	if st.NoteID != stored.ID {
+		t.Errorf("live mirror addresses id %d, want the stored note's %d", st.NoteID, stored.ID)
 	}
-	if _, ok := notes[noteKey("web", "John", 3)]; ok {
+	if _, ok := findStoredNote(appPrefs(), "web", "John", 3); ok {
 		t.Errorf("note ALSO stored under the lossy path translation")
 	}
 }

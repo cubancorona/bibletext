@@ -52,16 +52,32 @@ func setNotesEnabled(on bool) {
 	p.SetString(prefNotesEnabled, "off")
 }
 
-// deleteAllNotes throws away every stored note. Only ever called from the
-// explicit "delete them" answer when the switch is turned off.
+// deleteAllNotes throws away every stored note — received and sent, it is one
+// store — after the reader explicitly confirmed.
+//
+// It writes the one-line header sentinel, NEVER the empty string: an empty
+// value means "new reader", and a deliberate wipe must stay distinguishable
+// from a value-level loss (notes_store.go). The ID counter is deliberately NOT
+// reset — an ID, once issued, is never reused, however much is deleted.
+//
+// The quarantine goes too: "delete all" is the reader's explicit, confirmed
+// destructive verb, and a control that promised everything gone while quietly
+// keeping unreadable bytes would be lying. It stands down only when the store
+// is unreadable as a whole — the same never-overwrite-what-you-cannot-read
+// contract every writer honours (and the UI disables the control there anyway,
+// because an unreadable store counts zero notes).
 func deleteAllNotes(p prefStore) {
 	if p == nil {
 		return
 	}
-	p.SetString(prefSharedNotes, "")
-	// BOTH stores. To the reader there is one thing called "your notes", and a
-	// control that emptied half of them would be lying (owner directive).
-	deleteMyNotes(p)
+	if !readNoteStoreRaw(p).ok {
+		return
+	}
+	p.SetString(prefNotesStore, notesWipedSentinel)
+	// The pre-S5 blobs go with it: "all" must not leave un-migrated notes
+	// behind to resurrect on the next read.
+	p.SetString(prefLegacySharedNotes, "")
+	p.SetString(prefLegacyMyNotes, "")
 }
 
 // notesFeatureOn is the single gate the rest of the app asks. It exists so no
@@ -87,7 +103,7 @@ func promptKeepOrDeleteNotes(state *AppState, onOff func(), onCancel func()) {
 		return
 	}
 	pal := state.pal()
-	count := len(readNotes(appPrefs()))
+	count := storedNoteCount(appPrefs())
 
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
@@ -179,7 +195,7 @@ func promptDeleteAllNotes(state *AppState, onDone func()) {
 	if cnv == nil {
 		return
 	}
-	count := len(readNotes(appPrefs()))
+	count := storedNoteCount(appPrefs())
 	if count == 0 {
 		return // nothing to ask about
 	}
@@ -261,8 +277,8 @@ func clearLiveNote(state *AppState) {
 	state.ActiveNote = ""
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
-	// The stored-under id goes with them. Left behind it would misdirect the
-	// next Delete at a note the reader never had on screen.
-	state.NoteVersionID = ""
+	// The identity goes with them. Left behind it would misdirect the next
+	// Delete at a note the reader never had on screen.
+	state.NoteID = 0
 	clearHighlightedVerse(state)
 }

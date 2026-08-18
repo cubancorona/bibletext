@@ -6,19 +6,14 @@ import (
 	"fyne.io/fyne/v2/test"
 )
 
-// ActiveNote, NoteMinimized, NoteVerseLo and NoteVersionID are ONE VALUE, and
-// every writer has to write all four. Two of them wrote three.
-//
-// NoteVersionID exists so Hide and Delete reach a note that FOLLOWED from
-// another translation. Left stale it does the opposite of its job: the incoming
-// link path set the first three and left the fourth naming whatever the derive
-// had just found — a different note whenever the chapter already carried one.
-// The reader saw the arriving note, pressed Delete, and the store lost the OTHER
-// person's message while the one on screen survived and came back on the next
-// navigation. Deleting the wrong message is the one mistake with no undo.
-//
-// Found by the notes state enumeration (docs/NOTES_STATE.md, X1) rather than by
-// anybody using the app, which is the argument for that document existing.
+// The live note's IDENTITY is one value, and every writer of the mirror has to
+// write it. Its ancestor was four loose fields (ActiveNote / NoteMinimized /
+// NoteVerseLo / NoteVersionID) of which two writers wrote three — so Delete
+// followed a stale field to a DIFFERENT note whenever the chapter already
+// carried one, and the store lost the other person's message while the one on
+// screen survived (X1, found by the notes state enumeration). The mirror now
+// carries StoredNote.ID, handed to it by the derive or the arrival path, and
+// the verbs address that and nothing else.
 func TestDeleteReachesTheNoteOnScreenNotAStaleOne(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -31,31 +26,34 @@ func TestDeleteReachesTheNoteOnScreenNotAStaleOne(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3,
 		CurrentVersion: "web", loadPhase: loadReady}
 
-	// Friend's note is stored under the BSB only. The reader is in the WEB, where it
-	// FOLLOWS — so the derive sets NoteVersionID to "bsb", correctly.
-	saveNote(appPrefs(), SharedNote{VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "Friend's note"})
+	// Friend's note is stored under the BSB only. The reader is in the WEB, where
+	// it FOLLOWS — so the derive hands the mirror Friend's note's identity.
+	Friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "Friend's note"})
+	if !ok {
+		t.Fatal("precondition: Friend's note was not stored")
+	}
 	applyNoteForCurrentChapter(st)
-	if st.NoteVersionID != "bsb" {
-		t.Fatalf("precondition: the bsb note should have followed, got %q", st.NoteVersionID)
+	if st.NoteID != Friend.ID {
+		t.Fatalf("precondition: the bsb note should have followed, got id %d want %d", st.NoteID, Friend.ID)
 	}
 
-	// Now a link arrives carrying a NEW note. rememberIncomingNote files it under
-	// the LINK's translation (web), and the three-field write leaves
-	// NoteVersionID still saying "bsb" — the note that is no longer on screen.
+	// Now a link arrives carrying a NEW note. The arrival stores it and points
+	// the mirror at ITS identity — the note actually on screen.
 	applyShareTarget(st, ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
 		Note: "a friend's note"})
 
-	t.Logf("on screen: %q   but NoteVersionID says: %q", st.ActiveNote, st.NoteVersionID)
+	t.Logf("on screen: %q   mirror id: %d", st.ActiveNote, st.NoteID)
+	if st.NoteID == Friend.ID {
+		t.Fatal("the arrival left the mirror addressing the note that is no longer on screen — X1's tear")
+	}
 
 	// The reader deletes what is in front of them.
 	dropCurrentNote(st)
 
-	_, mumSurvives := readNotes(appPrefs())[noteKey("bsb", "John", 3)]
-	_, friendSurvives := readNotes(appPrefs())[noteKey("web", "John", 3)]
-	if !mumSurvives {
-		t.Error("REPRODUCED: deleting the friend's note destroyed Friend's note instead")
+	if _, mumSurvives := findStoredNote(appPrefs(), "bsb", "John", 3); !mumSurvives {
+		t.Error("deleting the friend's note destroyed Friend's note instead")
 	}
-	if friendSurvives {
-		t.Error("REPRODUCED: the note the reader deleted is still in the store")
+	if _, friendSurvives := findStoredNote(appPrefs(), "web", "John", 3); friendSurvives {
+		t.Error("the note the reader deleted is still in the store")
 	}
 }

@@ -527,7 +527,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	// Its own field, and its own query: switching Search → Notes with a scripture
 	// term still in the box would answer "no notes match" to a search the reader
 	// never made of their notes. Filtering is live and undebounced — it is a
-	// substring scan over at most notesMax short strings already in memory.
+	// substring scan over short strings already in memory.
 	notesEntry := newSearchEntry()
 	notesEntry.SetPlaceHolder("Search your notes…")
 	notesEntry.SetText(state.NotesQuery)

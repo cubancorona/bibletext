@@ -66,15 +66,14 @@ func TestIncomingNoteIsFiledUnderTheLinksTranslation(t *testing.T) {
 		VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Note: "this one",
 	})
 
-	if _, ok := loadNote(appPrefs(), "bsb", "John", 3); !ok {
+	if _, ok := noteForChapter(appPrefs(), "bsb", "John", 3); !ok {
 		t.Error("note was not filed under the link's translation (bsb)")
 	}
-	// Asked of the STORE, not through loadNote. loadNote now answers for a
-	// reader — and a reader in the WEB should indeed be shown this note, because
-	// notes follow the passage. What must still be true is where it is FILED:
-	// under the link's translation, so the note carries the wording it was
-	// written about.
-	if _, filed := readNotes(appPrefs())[noteKey("web", "John", 3)]; filed {
+	// Asked of the STORE, not through the display derive — a reader in the
+	// WEB should indeed be shown this note, because notes follow the passage.
+	// What must still be true is where it is FILED: under the link's
+	// translation, so the note carries the wording it was written about.
+	if _, filed := findStoredNote(appPrefs(), "web", "John", 3); filed {
 		t.Error("note was filed under the reader's translation instead of the link's")
 	}
 	deleteAllNotes(appPrefs())

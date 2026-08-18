@@ -183,10 +183,10 @@ func TestNoteOnALockedTranslationLinkIsFiledUnderThatTranslation(t *testing.T) {
 	if st.ActiveNote != "this verse carried me" {
 		t.Errorf("the sender's note was not surfaced: %q", st.ActiveNote)
 	}
-	if _, ok := readNotes(appPrefs())[noteKey("nkjv", "John", 3)]; !ok {
+	if _, ok := findStoredNote(appPrefs(), "nkjv", "John", 3); !ok {
 		t.Error("the note was not filed under nkjv, the translation it was written in")
 	}
-	if _, wrong := readNotes(appPrefs())[noteKey("web", "John", 3)]; wrong {
+	if _, wrong := findStoredNote(appPrefs(), "web", "John", 3); wrong {
 		t.Error("the note was filed under the reader's translation instead of the link's")
 	}
 }

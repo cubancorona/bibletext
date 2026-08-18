@@ -312,24 +312,29 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 		// just put that stored note in place, and it stays (platform reproduction: a
 		// note-less link blanked the saved note's banner).
 		if t.Note != "" {
-			state.ActiveNote = t.Note
-			state.NoteMinimized = false
-			state.NoteVerseLo = t.VerseLo
-			// AND the translation it is stored under — rememberIncomingNote files
-			// it under the LINK's. Writing three of the four left the fourth
-			// saying whatever the derive above had found, which is a DIFFERENT
-			// note whenever this chapter already carried one: the reader saw the
-			// arriving note, pressed Delete, and the store lost the other one
-			// while the one on screen survived. The four fields are one value and
-			// have to be written as one.
-			//
+			// Store FIRST, then mirror: the verbs address the live note by its
+			// StoredNote.ID, so the mirror needs the identity the store minted
+			// (or found — a re-opened link dedups to the record already held,
+			// whose Received and Minimized are preserved; the arrival still
+			// SHOWS the note expanded for this session, because the reader just
+			// tapped a link carrying it, but the store keeps their history).
 			// The WIRE's 'v' record outranks the path when it is present
 			// (noteStorageTarget): the path is lossy — webc forced for the
 			// deuterocanon, an unknown id falling back to web — and the record
-			// is the sender saying what they were actually reading. This field
-			// must match what rememberIncomingNote files under, or Hide and
-			// Delete address a key that holds nothing.
-			state.NoteVersionID = noteStorageTarget(t).VersionID
+			// is the sender saying what they were actually reading.
+			stored, remembered := rememberIncomingNote(state, noteStorageTarget(t))
+			state.ActiveNote = t.Note
+			state.NoteMinimized = false
+			state.NoteVerseLo = t.VerseLo
+			// The identity the verbs address. Zero when the store stood the
+			// write down (unreadable store): the note is shown for this session
+			// and the verbs quietly have nothing to reach — which is still
+			// strictly better than the old rebuilt-key delete that could reach
+			// the WRONG note (X1).
+			state.NoteID = 0
+			if remembered {
+				state.NoteID = stored.ID
+			}
 			// AND the mark belongs to the NOTE, not to the link.
 			//
 			// The block above lit the link's verses as hlLinkSpan, which is right
@@ -350,7 +355,6 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 					Hi:        t.VerseHi,
 				})
 			}
-			rememberIncomingNote(state, noteStorageTarget(t))
 		} else if msg := noteOutcomeMessage(t.NoteOutcome); msg != "" {
 			// The link carried a payload this build could not render — a newer
 			// format, or damage. TELL the reader, in the note's place, in the
@@ -366,7 +370,7 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
-		state.NoteVersionID = ""
+		state.NoteID = 0
 	}
 
 	state.refresh()

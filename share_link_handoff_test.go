@@ -33,7 +33,7 @@ func TestNoteLinkIsDeclinedWhenNotesAreOff(t *testing.T) {
 	if st.ActiveNote != "" {
 		t.Errorf("a note was surfaced: %q", st.ActiveNote)
 	}
-	if n := len(readNotes(fyne.CurrentApp().Preferences())); n != 0 {
+	if n := storedNoteCount(fyne.CurrentApp().Preferences()); n != 0 {
 		t.Errorf("a note was stored while off (%d)", n)
 	}
 }
@@ -122,7 +122,7 @@ func TestOfferBranches(t *testing.T) {
 		if !st.hlOn() {
 			t.Error("the passage did not open")
 		}
-		if n := len(readNotes(fyne.CurrentApp().Preferences())); n != 0 {
+		if n := storedNoteCount(fyne.CurrentApp().Preferences()); n != 0 {
 			t.Errorf("a dropped note was stored anyway (%d)", n)
 		}
 		if notesEnabled() {
@@ -146,7 +146,7 @@ func TestOfferBranches(t *testing.T) {
 		if st.ActiveNote != "the message" {
 			t.Errorf("the note did not arrive: %q", st.ActiveNote)
 		}
-		if n := len(readNotes(fyne.CurrentApp().Preferences())); n != 1 {
+		if n := storedNoteCount(fyne.CurrentApp().Preferences()); n != 1 {
 			t.Errorf("expected the note stored once, got %d", n)
 		}
 	})

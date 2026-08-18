@@ -19,7 +19,7 @@ func TestOpeningANoteAlwaysAsksToReposition(t *testing.T) {
 	defer app.Quit()
 	setNotesEnabled(true)
 
-	n := SharedNote{VersionID: "web", Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Text: "n"}
+	n := StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Text: "n"}
 
 	// The hard case: ALREADY on the chapter, with that very range already lit —
 	// so nothing about the render would change and the skip gate would swallow it.

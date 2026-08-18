@@ -1,22 +1,37 @@
 package bibletext
 
-// Where shared notes live once they have arrived.
+// Where notes live once they belong to the reader — the scrapbook store
+// (S5, [redacted-retired-private-reference]).
 //
-// A note comes in on a link and then belongs to the reader, not to the link:
-// it stays on that passage until they delete it, survives relaunch, and comes
-// back when they return to the chapter. That is the whole reason this file
-// exists rather than the note living in AppState for the life of one screen.
+// ONE STORE, LINE-FRAMED, APPEND-FRIENDLY. The value under notes.store is one
+// JSON object per line (JSONL). Per-record framing is spec rule 2 of the
+// long-term foundation: one corrupt line costs ONE record, not the scrapbook.
+// Unparseable lines are QUARANTINED VERBATIM — kept in memory, re-emitted
+// byte-for-byte on every write, never deleted, never counted as notes. The app
+// never deletes what it cannot parse. (The store this replaced filtered junk
+// on read and the next unrelated write made that permanent.)
 //
-// Storage is the same shape reading_state.go uses — one JSON blob in
-// fyne.Preferences, a testable core taking a prefStore so unit tests can pass a
-// fake, and a nil store meaning "no app running", which makes every call a safe
-// no-op. Notes are small and few; there is no reason for anything cleverer.
+// NO KEY, NO CAP, NO EVICTION. The old store was a map keyed
+// version|book|chapter — so a second note on a passage silently destroyed the
+// first — and it evicted past 200 entries by ALPHABETICAL ORDER of the storage
+// key, which discarded every "bsb|…" note before any "web|…" one and could
+// evict an arriving note by the very write that stored it (X3). Eviction is a
+// data-loss event; this store keeps what it is given. (The browser's capacity
+// notice is S11.)
 //
-// KEYED BY PASSAGE, one note per version+book+chapter. A second note arriving
-// for the same chapter replaces the first: two people sending notes on the same
-// passage is a real thing, but two bubbles competing for the same paragraph is
-// not a screen anybody wants, and the newest message is the one the reader just
-// opened.
+// WRITERS STAND DOWN when the store is unreadable AS A WHOLE (a value that is
+// present but yields nothing recognisable): every mutation is a
+// read-modify-write, so a failed read that answered "no notes" would serialise
+// emptiness over the reader's collection and their next action would be the
+// thing that destroyed it. Per-line damage is quarantined, not a stand-down.
+//
+// AN EMPTY VALUE MEANS "NEW READER", never "wiped": deleteAllNotes
+// (notes_setting.go) writes the one-line header sentinel {"wiped":true}
+// instead of "", so a deliberate wipe is distinguishable from a value-level
+// loss. (What that sentinel cannot catch is whole-file truncation — the
+// sentinel lives in the same preferences.json — but shipped builds apply
+// patches/fyne-2.7.4-atomic-prefs.patch, so a torn preferences write cannot
+// publish a truncated file in a shipped build.)
 
 import (
 	"encoding/json"
@@ -26,217 +41,514 @@ import (
 	"time"
 )
 
-const prefSharedNotes = "shared.notes"
+const (
+	// prefNotesStore is the JSONL scrapbook store.
+	prefNotesStore = "notes.store"
+	// prefNotesNextID is the ID counter: the LAST allocated id, decimal. Its
+	// own key, deliberately: deletion never touches it, so an ID is never
+	// reused however much of the store is deleted.
+	prefNotesNextID = "notes.store.nextid"
 
-// SharedNote is a note the reader received, and what it is attached to.
-type SharedNote struct {
-	VersionID string `json:"v"`
-	Book      string `json:"b"`
-	Chapter   int    `json:"c"`
-	VerseLo   int    `json:"lo,omitempty"`
-	VerseHi   int    `json:"hi,omitempty"`
-	Text      string `json:"t"`
+	// The pre-S5 stores, read once by migration and then cleared.
+	prefLegacySharedNotes = "shared.notes"
+	prefLegacyMyNotes     = "notes.mine"
 
-	// Minimized: the reader collapsed it. The note is kept and so is its verse
-	// range — neither the bubble nor its highlight shows until they bring it
-	// back, which is what makes minimize different from delete.
-	Minimized bool `json:"m,omitempty"`
+	// notesWipedSentinel is line 1 of a deliberately emptied store.
+	notesWipedSentinel = `{"wiped":true}`
+)
 
-	// Received is when the note arrived, as a Unix time in seconds. It exists so
-	// the browser can offer "newest first", which is what a reader actually wants
-	// from a list of messages. omitempty and additive: notes stored before this
-	// field existed simply have 0, and sort as the oldest — a wrong position for
-	// a handful of old notes is a far better outcome than a migration.
-	Received int64 `json:"ts,omitempty"`
-
-	// --- who it is from -----------------------------------------------------
-	//
-	// Mine marks a note YOU sent rather than one you were sent. It is the only
-	// one of these three the app reads today; the other two are carried,
-	// stored and never shown, so that adding a name later is additive rather
-	// than a migration. See [redacted-retired-private-reference], "Identity".
-	//
-	// Own notes live in their own list (notes_mine.go), NOT in this map — the
-	// key here holds one note per version|book|chapter, so filing yours beside
-	// a friend's would overwrite one of them.
-	Mine bool `json:"me,omitempty"`
-
-	// SenderName is what the sender called themselves. RESERVED: there is no
-	// name field on the share sheet yet, nothing writes this, and nothing
-	// displays it. When it is shown it will be UNTRUSTED text — quoted, length
-	// capped, bidi isolated, and never allowed to imitate the app's own voice.
-	SenderName string `json:"sn,omitempty"`
-
-	// SenderID is an opaque per-install value. RESERVED. It can group notes
-	// from ONE install and can never survive a reinstall or reach a second
-	// device, which is why linking two senders is a reader action and not
-	// something the app infers.
-	SenderID string `json:"sid,omitempty"`
+// noteStore is the parsed store: every record, every quarantined line, and
+// whether the value as a whole could be read.
+type noteStore struct {
+	notes      []StoredNote // ID ascending — arrival order, byte-stable writes
+	quarantine []string     // lines that did not parse, verbatim, re-emitted at the tail
+	wiped      bool         // the header sentinel was present
+	ok         bool         // false: value present but nothing recognisable — writers stand down
 }
 
-func noteKey(versionID, book string, chapter int) string {
-	return strings.ToLower(versionID) + "|" + book + "|" + strconv.Itoa(chapter)
-}
-
-func (n SharedNote) key() string { return noteKey(n.VersionID, n.Book, n.Chapter) }
-
-// notesMax bounds the store. Notes are tiny, but the preferences blob is read
-// and written on ordinary navigation, so it must not grow without limit if
-// somebody opens hundreds of shared links.
-//
-// WHICH notes are dropped is arbitrary, not oldest-first: writeNotes sorts by
-// storage key (version|book|chapter, for a byte-stable blob) and keeps the
-// TAIL, so the discards are whichever keys sort lowest — every "bsb|…" note
-// goes before any "web|…" one, and a note that arrived seconds ago can be
-// evicted while a months-old one survives. Received is not consulted here.
-// (This comment used to claim oldest-first; it never did that.)
-const notesMax = 200
-
-// readNotesChecked returns the stored notes AND whether the stored blob could be
-// read at all. The second value is the difference between "you have no notes"
-// and "I could not tell what you have", and every writer below depends on it.
-//
-// WHY IT MATTERS SO MUCH. Every mutation here is a read-modify-write: read the
-// whole set, change one entry, write the whole set back. So if a failed read
-// answered "no notes" — which is what this function used to do on a parse error
-// — the very next save, delete or minimize would serialise that emptiness over
-// the top of the reader's entire collection. One unreadable read would become
-// permanent, silent, total loss of messages that only ever existed here, and the
-// reader's next action would be the thing that destroyed them.
-//
-// Returning ok=false instead lets the writers stand down and leave the bytes
-// alone. A blob we cannot parse today may be perfectly readable to a future
-// build, or by hand; an overwritten one is gone. Nothing is shown from an
-// unreadable store either way, so refusing to write costs the reader nothing.
-func readNotesChecked(p prefStore) (map[string]SharedNote, bool) {
-	out := map[string]SharedNote{}
+// readNoteStoreRaw parses the store value without running migration.
+func readNoteStoreRaw(p prefStore) *noteStore {
+	s := &noteStore{ok: true}
 	if p == nil {
-		return out, true // no store at all: there is nothing to overwrite
+		return s // no app: nothing to read, nothing to overwrite
 	}
-	raw := p.String(prefSharedNotes)
+	raw := p.String(prefNotesStore)
 	if raw == "" {
-		return out, true // genuinely empty, and safe to write to
+		return s // a new reader — genuinely empty, safe to write to
 	}
-	var list []SharedNote
-	if err := json.Unmarshal([]byte(raw), &list); err != nil {
-		return out, false // UNREADABLE — callers must not persist over it
-	}
-	for _, n := range list {
-		if n.Book == "" || n.Chapter < 1 || strings.TrimSpace(n.Text) == "" {
-			continue // a half-written or hand-edited blob must not resurrect junk
+	recognised := false
+	for lineNo, line := range strings.Split(raw, "\n") {
+		if line == "" {
+			continue
 		}
-		out[n.key()] = n
+		var probe map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &probe); err != nil {
+			s.quarantine = appendQuarantine(s.quarantine, line)
+			continue
+		}
+		// The wiped sentinel is recognised ONLY as the FIRST line, and only
+		// when the line carries no record id. "Any line with a wiped key" was
+		// the first rule here, and it let a FUTURE build's record-level field
+		// named "wiped" destroy the record it rode on and falsely mark the
+		// whole store wiped — the reviewer spliced "wiped":false into a live
+		// record and watched it vanish without reaching quarantine. A field
+		// name must never be a trapdoor; position and shape make the sentinel
+		// unforgeable by a record.
+		_, hasWiped := probe["wiped"]
+		_, hasID := probe["id"]
+		if lineNo == 0 && hasWiped && !hasID {
+			s.wiped = true
+			recognised = true
+			continue
+		}
+		var n StoredNote
+		if err := json.Unmarshal([]byte(line), &n); err != nil || n.ID == 0 {
+			// Parseable JSON that is not a record this build can address.
+			// Quarantined, not judged: a future build may know what it is.
+			s.quarantine = appendQuarantine(s.quarantine, line)
+			continue
+		}
+		s.notes = append(s.notes, n)
+		recognised = true
 	}
-	return out, true
+	if !recognised {
+		// A present value in which nothing was recognisable at all. This is
+		// readNotesChecked's old ok=false contract, preserved and for the same
+		// reason: never overwrite what you cannot read.
+		s.ok = false
+		return s
+	}
+	sort.SliceStable(s.notes, func(i, j int) bool { return s.notes[i].ID < s.notes[j].ID })
+	return s
 }
 
-// readNotes is the read-only view, for callers that only display or count.
-// Anything that goes on to WRITE must use readNotesChecked and honour ok.
-func readNotes(p prefStore) map[string]SharedNote {
-	notes, _ := readNotesChecked(p)
-	return notes
+// noteStoreCache is the parsed store, valid while the raw preferences value is
+// byte-identical to cacheRaw.
+//
+// The store is read on EVERY navigation (applyNoteForCurrentChapter), and
+// parsing is three json.Unmarshal passes per record — measured at 3.9ms for
+// 500 notes and 15ms for 2,000, per navigation, against ~0.3ms for the old
+// map. That is the iOS scroll budget spent on re-parsing bytes that have not
+// changed. The raw string is the cache key because it is the whole truth: only
+// this process writes the value, and even an external change (a synced
+// preferences file) changes the bytes and misses the cache. The UI is
+// single-goroutine (fyne.Do), matching every other package-level cache here.
+var (
+	noteStoreCacheRaw string
+	noteStoreCache    *noteStore
+)
+
+// readNoteStore reads the store and, when the pre-S5 blobs still hold
+// anything, folds them in first (once — the legacy keys are cleared after a
+// verified write). Every reader and every writer goes through here.
+func readNoteStore(p prefStore) *noteStore {
+	if p != nil {
+		if raw := p.String(prefNotesStore); raw != "" && raw == noteStoreCacheRaw && noteStoreCache != nil {
+			// Migration is not consulted on a cache hit on purpose: a hit means
+			// the store bytes exist and are unchanged, and the legacy fold-in
+			// happened on the miss that populated the cache.
+			return noteStoreCache
+		}
+	}
+	s := readNoteStoreRaw(p)
+	migrateLegacyNotes(p, s)
+	if p != nil && s.ok {
+		noteStoreCacheRaw = p.String(prefNotesStore)
+		noteStoreCache = s
+	}
+	return s
 }
 
-func writeNotes(p prefStore, notes map[string]SharedNote) {
-	if p == nil {
+// serializeNoteStore renders the store to the exact bytes writeNoteStore
+// stores: header sentinel if wiped, then records by ID ascending, then the
+// quarantine verbatim. No map is ranged anywhere, so an unchanged store
+// serialises to identical bytes and Fyne's set() short-circuits with no file
+// write at all.
+func serializeNoteStore(s *noteStore) string {
+	var lines []string
+	if s.wiped {
+		lines = append(lines, notesWipedSentinel)
+	}
+	for _, n := range s.notes {
+		b, err := json.Marshal(n)
+		if err != nil {
+			continue // unencodable record: skip the line, never the store
+		}
+		lines = append(lines, string(b))
+	}
+	lines = append(lines, s.quarantine...)
+	return strings.Join(lines, "\n")
+}
+
+func writeNoteStore(p prefStore, s *noteStore) {
+	if p == nil || !s.ok {
 		return
 	}
-	list := make([]SharedNote, 0, len(notes))
-	for _, n := range notes {
-		list = append(list, n)
-	}
-	// A stable order keeps the stored blob byte-identical when nothing changed,
-	// which keeps the preferences file from churning on every navigation.
-	sort.Slice(list, func(i, j int) bool { return list[i].key() < list[j].key() })
-	if len(list) > notesMax {
-		list = list[len(list)-notesMax:]
-	}
-	data, err := json.Marshal(list)
-	if err != nil {
-		return
-	}
-	p.SetString(prefSharedNotes, string(data))
+	raw := serializeNoteStore(s)
+	p.SetString(prefNotesStore, raw)
+	// The writer's own result primes the cache: the next navigation reads what
+	// was just written without re-parsing it.
+	noteStoreCacheRaw = raw
+	noteStoreCache = s
 }
 
-// saveNote stores (or replaces) the note on a passage.
+// nextNoteID allocates a fresh, never-reused id and persists the counter in
+// the same mutation. The counter is the authority — NOT max(existing)+1,
+// because deleting the newest note must not free its id. The max() below is
+// recovery only: if the counter key itself is lost or damaged, restarting at 1
+// would re-issue ids that live notes still hold, so the store's own high-water
+// mark floors it. (Ids of notes deleted before such a loss can no longer be
+// protected; that is the honest limit of a counter that lives in preferences.)
+
+// appendQuarantine keeps a line the store cannot parse, EXACTLY ONCE.
+//
+// Byte-identical quarantine entries are collapsed because the two paths that
+// feed this both replay: a crash inside migrateLegacyNotes' write-then-clear
+// window re-quarantines the same corrupt legacy blob on the next launch, and a
+// backup restore reintroduces the legacy key wholesale. Without the dedup each
+// replay grew the store by another copy of the same unparseable bytes,
+// forever. Deduping by bytes is safe precisely because quarantine is defined
+// as byte-preservation: two identical lines carry identical information.
+func appendQuarantine(q []string, line string) []string {
+	for _, have := range q {
+		if have == line {
+			return q
+		}
+	}
+	return append(q, line)
+}
+
+func nextNoteID(p prefStore, s *noteStore) uint64 {
+	var last uint64
+	if p != nil {
+		if v, err := strconv.ParseUint(strings.TrimSpace(p.String(prefNotesNextID)), 10, 64); err == nil {
+			last = v
+		}
+	}
+	for _, n := range s.notes {
+		if n.ID > last {
+			last = n.ID
+		}
+	}
+	// Quarantined lines can carry ids too — a record damaged in one FIELD is
+	// quarantined whole, identity and all, and a future build may repair and
+	// re-admit it. Recovery that ignored them could re-mint a quarantined id
+	// for a brand-new note, and an id that means two notes is the one thing an
+	// identity must never do. Best-effort by design: a line whose very id is
+	// unreadable cannot collide with anything, because re-admission would fail
+	// on it too.
+	for _, line := range s.quarantine {
+		var probe struct {
+			ID uint64 `json:"id"`
+		}
+		if json.Unmarshal([]byte(line), &probe) == nil && probe.ID > last {
+			last = probe.ID
+		}
+	}
+	last++
+	if p != nil {
+		p.SetString(prefNotesNextID, strconv.FormatUint(last, 10))
+	}
+	return last
+}
+
 // noteNow is the clock, indirected so tests can pin it.
 var noteNow = func() int64 { return time.Now().Unix() }
 
-func saveNote(p prefStore, n SharedNote) {
+// addNote appends a note to the store and returns the stored record — which
+// is the EXISTING record when the same note is already there.
+//
+// DEDUP is sameNoteContent (the content tuple, never payload bytes) plus the
+// kind: same tuple + same Kind = same note. On a duplicate the stored record
+// is preserved untouched — Received and Minimized are the reader's history
+// with the note, and a re-opened link must not rewrite it.
+//
+// ok=false means the note was NOT stored: the store is unreadable and every
+// writer stands down (see the file header).
+func addNote(p prefStore, n StoredNote) (StoredNote, bool) {
 	if strings.TrimSpace(n.Text) == "" || n.Book == "" || n.Chapter < 1 {
-		return
+		return StoredNote{}, false
 	}
-	notes, ok := readNotesChecked(p)
-	if !ok {
-		return // unreadable store: saving one note must not erase the rest
+	if n.Kind == "" {
+		n.Kind = noteKindReceived
 	}
-	// Keep the ORIGINAL arrival time when re-saving a note that is already
-	// stored. saveNote is how minimize and restore persist themselves, so
-	// stamping unconditionally would shuffle a note to the top of "newest first"
-	// every time the reader collapsed it — the list would reorder itself under
-	// their hand for no reason they could see.
-	if prev, ok := notes[n.key()]; ok && n.Received == 0 {
-		n.Received = prev.Received
+	s := readNoteStore(p)
+	if !s.ok {
+		return StoredNote{}, false
+	}
+	for i, e := range s.notes {
+		if e.Kind == n.Kind && sameNoteContent(e, n) {
+			// The same note, re-opened — but this arrival's payload may carry
+			// unknown wire records the stored copy lacks (an older link opened
+			// first, a newer re-share second). Spec rule 3 preserves unknown
+			// records; discarding the fresher ones on a dedup hit quietly
+			// destroyed them. First-wins where BOTH have leftovers, adopt
+			// where the stored copy has none.
+			changed := false
+			if len(e.WireSkipped) == 0 && len(n.WireSkipped) > 0 {
+				s.notes[i].WireSkipped = n.WireSkipped
+				changed = true
+			}
+			if len(e.WireOpaque) == 0 && len(n.WireOpaque) > 0 {
+				s.notes[i].WireOpaque = n.WireOpaque
+				changed = true
+			}
+			if changed {
+				writeNoteStore(p, s)
+			}
+			return s.notes[i], true
+		}
 	}
 	if n.Received == 0 {
 		n.Received = noteNow()
 	}
-	notes[n.key()] = n
-	writeNotes(p, notes)
+	n.ID = nextNoteID(p, s)
+	s.notes = append(s.notes, n)
+	writeNoteStore(p, s)
+	return n, true
 }
 
-// loadNote returns the note on a passage, if there is one.
-func loadNote(p prefStore, versionID, book string, chapter int) (SharedNote, bool) {
-	notes := readNotes(p)
-	if n, ok := notes[noteKey(versionID, book, chapter)]; ok {
-		return n, ok
+// deleteNoteByID removes one record for good. The id is handed to the caller
+// by the surface that drew the note — never rebuilt from where the reader is
+// standing, which is what let Delete miss a cross-chapter note (X13) and made
+// Hide and Show address different objects (X5).
+func deleteNoteByID(p prefStore, id uint64) {
+	if id == 0 {
+		return
 	}
-	return noteFromAnotherTranslation(notes, versionID, book, chapter)
-}
-
-// noteFromAnotherTranslation finds a note left on this same PASSAGE under a
-// different translation, and returns it renumbered into this one.
-//
-// A note is a remark about a passage, and the passage is the same passage in
-// every translation — but the store is keyed version|book|chapter, so before
-// this a note simply vanished when the reader changed translation. That is not
-// an exotic case: two people sharing a link routinely read different
-// translations, and a reader sharing from a licensed translation gets their own
-// note back under a different id, because the URL may only name a published one
-// (owner-reported: NKJV note, opened, then invisible on returning to NKJV).
-//
-// The verse is MAPPED rather than copied. Chapter and verse numbers do not mean
-// the same thing across translations — the Romans doxology moves, the Song of
-// the Three pushes Daniel 3's tail down by 67 — so carrying a raw number over
-// would anchor the note to whatever happened to sit at that number. MapVerse is
-// the table built for exactly this, and its verseMapAbsent / verseMapIncommensurable
-// answers are the cases where the honest thing is to show nothing: Greek Esther
-// is a different book, not a renumbering, and a note on it means nothing here.
-func noteFromAnotherTranslation(notes map[string]SharedNote, versionID, book string, chapter int) (SharedNote, bool) {
-	// Deterministic order. Two translations can both hold a note on the same
-	// passage — the reader was sent one link in the BSB and another in the WEB —
-	// and ranging a Go map would then show a different one on different runs,
-	// which is the kind of bug that never reproduces when you look for it.
-	// Newest wins, because that is what "newest first" already promises the
-	// reader everywhere else; the version id breaks ties so the answer is total.
-	candidates := make([]SharedNote, 0, len(notes))
-	for _, n := range notes {
-		candidates = append(candidates, n)
+	s := readNoteStore(p)
+	if !s.ok {
+		return
 	}
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].Received != candidates[j].Received {
-			return candidates[i].Received > candidates[j].Received
+	for i, n := range s.notes {
+		if n.ID == id {
+			s.notes = append(s.notes[:i], s.notes[i+1:]...)
+			writeNoteStore(p, s)
+			return
 		}
-		return candidates[i].VersionID < candidates[j].VersionID
-	})
+	}
+}
 
-	for _, n := range candidates {
-		if n.VersionID == versionID || n.Book != book {
+// setNoteMinimizedByID collapses or restores one record.
+func setNoteMinimizedByID(p prefStore, id uint64, min bool) {
+	if id == 0 {
+		return
+	}
+	s := readNoteStore(p)
+	if !s.ok {
+		return
+	}
+	for i := range s.notes {
+		if s.notes[i].ID == id {
+			if s.notes[i].Minimized == min {
+				return
+			}
+			s.notes[i].Minimized = min
+			writeNoteStore(p, s)
+			return
+		}
+	}
+}
+
+// displayableNote reports whether a record is a note this build can show at
+// all. Records that fail this are still carried through every rewrite — they
+// may be a future build's — they just are not drawn or counted.
+func displayableNote(n StoredNote) bool {
+	if n.Kind != noteKindReceived && n.Kind != noteKindMine {
+		return false
+	}
+	return n.Book != "" && n.Chapter >= 1 && strings.TrimSpace(n.Text) != ""
+}
+
+// allNotesForBrowsing returns every note the app holds — received and sent —
+// in arrival order, for the notes list. One list, mixed, because a scrapbook
+// records an EXCHANGE; the browser owns the ordering (sortedNotes).
+func allNotesForBrowsing(p prefStore) []StoredNote {
+	var out []StoredNote
+	for _, n := range readNoteStore(p).notes {
+		if displayableNote(n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// storedNoteCount is how many notes "Delete all notes" would delete — both
+// kinds, because it is one store and one control.
+func storedNoteCount(p prefStore) int {
+	return len(allNotesForBrowsing(p))
+}
+
+// readMyNotes returns the notes the reader has sent, oldest first, and whether
+// the store could be read at all — Kind=mine reads of the one store.
+func readMyNotes(p prefStore) ([]StoredNote, bool) {
+	s := readNoteStore(p)
+	if !s.ok {
+		return nil, false
+	}
+	var out []StoredNote
+	for _, n := range s.notes {
+		if n.Kind == noteKindMine && displayableNote(n) {
+			out = append(out, n)
+		}
+	}
+	return out, true
+}
+
+// saveMyNote appends a note the reader just sent — a Kind=mine write of the
+// one store. Two of your own notes on one passage are two notes; the same
+// words re-shared are one (sameNoteContent, owner).
+func saveMyNote(p prefStore, n StoredNote) {
+	n.Kind = noteKindMine
+	addNote(p, n)
+}
+
+// --- migration from the pre-S5 stores ---------------------------------------
+
+// legacySharedNote is the old SharedNote wire shape, kept only so migration
+// can read the two pre-S5 blobs.
+type legacySharedNote struct {
+	VersionID  string `json:"v"`
+	Book       string `json:"b"`
+	Chapter    int    `json:"c"`
+	VerseLo    int    `json:"lo"`
+	VerseHi    int    `json:"hi"`
+	Text       string `json:"t"`
+	Minimized  bool   `json:"m"`
+	Received   int64  `json:"ts"`
+	Mine       bool   `json:"me"`
+	SenderName string `json:"sn"`
+	SenderID   string `json:"sid"`
+}
+
+// migrateLegacyNotes folds the old shared.notes map and notes.mine list into
+
+// only migration and a failed one is accepted): a legacy blob that will not
+// parse is quarantined into the new store VERBATIM rather than dropped, and
+// the old keys are cleared ONLY after the new store's write is verified by
+// reading it back.
+func migrateLegacyNotes(p prefStore, s *noteStore) {
+	if p == nil || !s.ok {
+		return
+	}
+	rawShared := p.String(prefLegacySharedNotes)
+	rawMine := p.String(prefLegacyMyNotes)
+	if strings.TrimSpace(rawShared) == "" && strings.TrimSpace(rawMine) == "" {
+		return
+	}
+
+	convert := func(raw string, kind NoteKind) {
+		if strings.TrimSpace(raw) == "" {
+			return
+		}
+		var list []legacySharedNote
+		if err := json.Unmarshal([]byte(raw), &list); err != nil {
+			// Unreadable old blob: its raw bytes go to quarantine, where every
+			// rewrite carries them, rather than being dropped.
+			s.quarantine = appendQuarantine(s.quarantine, raw)
+			return
+		}
+		// Oldest first, so ID order matches arrival order.
+		sort.SliceStable(list, func(i, j int) bool { return list[i].Received < list[j].Received })
+		for _, l := range list {
+			k := kind
+			if l.Mine {
+				k = noteKindMine
+			}
+			n := StoredNote{
+				Kind: k, VersionID: l.VersionID, Book: l.Book, Chapter: l.Chapter,
+				VerseLo: l.VerseLo, VerseHi: l.VerseHi, Text: l.Text,
+				Minimized: l.Minimized, Received: l.Received,
+				SenderName: l.SenderName, SenderID: l.SenderID,
+			}
+			if l.Book == "" || l.Chapter < 1 || strings.TrimSpace(l.Text) == "" {
+				// Parseable but not a note this build recognises. Quarantine its
+				// own re-encoding rather than judging it away.
+				if b, err := json.Marshal(l); err == nil {
+					s.quarantine = appendQuarantine(s.quarantine, string(b))
+				}
+				continue
+			}
+			dup := false
+			for _, e := range s.notes {
+				if e.Kind == n.Kind && sameNoteContent(e, n) {
+					dup = true
+					break
+				}
+			}
+			if dup {
+				continue // a restored backup re-importing what already migrated
+			}
+			n.ID = nextNoteID(p, s)
+			s.notes = append(s.notes, n)
+		}
+	}
+	convert(rawShared, noteKindReceived)
+	convert(rawMine, noteKindMine)
+
+	// The old keys are cleared ONLY after a successful write of the new store,
+	// verified by reading the value back. If the write did not land (a fake
+	// store in tests, or anything stranger), the legacy blobs stay put and
+	// migration simply runs again next read.
+	writeNoteStore(p, s)
+	if p.String(prefNotesStore) == serializeNoteStore(s) {
+		p.SetString(prefLegacySharedNotes, "")
+		p.SetString(prefLegacyMyNotes, "")
+	}
+}
+
+// --- the display derive: what the reading pane shows ------------------------
+
+// noteForChapter picks the ONE note the reading pane draws for a passage —
+// the derive stays arity-1 for display until the plural render plan (S7).
+//
+// Exact version match first; else the note FOLLOWS its passage from another
+// translation, renumbered by MapVerse. Deterministic order throughout: newest
+// Received first, version id then id breaking ties, so the same store always
+// shows the same note. The returned record's LOCATION is renumbered into the
+// reading translation where it followed; its VersionID still says where it is
+// filed, and its ID is the handle every verb addresses.
+func noteForChapter(p prefStore, versionID, book string, chapter int) (StoredNote, bool) {
+	s := readNoteStore(p)
+	var candidates []StoredNote
+	for _, n := range s.notes {
+
+		// directive); only received notes reach the reading page.
+		if n.Kind != noteKindReceived || !displayableNote(n) {
 			continue
 		}
-		// The note's own verse decides which chapter it lands in — mapping the
-		// CHAPTER alone is not enough, because a move can cross a chapter
-		// boundary (Romans 14:24 becomes 16:25).
+		candidates = append(candidates, n)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		a, b := candidates[i], candidates[j]
+		if a.Received != b.Received {
+			return a.Received > b.Received // newest first
+		}
+		if a.VersionID != b.VersionID {
+			return a.VersionID < b.VersionID
+		}
+		return a.ID > b.ID // newest arrival breaks the remaining tie
+	})
+
+	// Exact: filed under the translation being read, on this very chapter.
+	// Selection deliberately ignores Minimized — a collapsed note is still the
+	// chapter's note, shown as a chip (the shipped semantics).
+	for _, n := range candidates {
+		if strings.EqualFold(n.VersionID, versionID) && n.Book == book && n.Chapter == chapter {
+			return n, true
+		}
+	}
+
+	// Followed: the passage is the same passage in every translation, so the
+	// note goes with it — mapped, not copied, because chapter and verse
+	// numbers do not mean the same thing across translations (the Romans
+	// doxology moves). verseMapAbsent / verseMapIncommensurable are the cases
+	// where the honest thing is to show nothing: Greek Esther is a different
+	// book, not a renumbering.
+	for _, n := range candidates {
+		if strings.EqualFold(n.VersionID, versionID) || n.Book != book {
+			continue
+		}
 		probe := n.VerseLo
 		if probe <= 0 {
 			probe = 1 // a chapter-level note: ask about the chapter's first verse
@@ -246,12 +558,10 @@ func noteFromAnotherTranslation(notes map[string]SharedNote, versionID, book str
 			continue
 		}
 		out := n
-		// VersionID is deliberately NOT rewritten to the reader's translation. It
-		// says where the note is STORED, and that is the only handle Hide and
-		// Delete have on it: a note displayed in the WEB but keyed under the NKJV
-		// was being deleted under "web", which deleted nothing — the reader binned
-		// somebody's message, watched it disappear, and had it come back on the next
-		// navigation. Only the LOCATION is renumbered here.
+		// VersionID is deliberately NOT rewritten: it says where the note is
+		// FILED. Only the location is renumbered — and the ID rides along, so
+		// the verbs address the record wherever its passage displays (X13's
+		// fix: nothing rebuilds a key from where the reader is standing).
 		out.Chapter = ch
 		if n.VerseLo > 0 {
 			out.VerseLo = v
@@ -268,90 +578,51 @@ func noteFromAnotherTranslation(notes map[string]SharedNote, versionID, book str
 		}
 		return out, true
 	}
-	return SharedNote{}, false
-}
-
-// deleteNote removes it for good.
-func deleteNote(p prefStore, versionID, book string, chapter int) {
-	notes, ok := readNotesChecked(p)
-	if !ok {
-		return // see readNotesChecked: deleting one must not delete all
-	}
-	delete(notes, noteKey(versionID, book, chapter))
-	writeNotes(p, notes)
-}
-
-// setNoteMinimized collapses or restores the note on a passage.
-func setNoteMinimized(p prefStore, versionID, book string, chapter int, min bool) {
-	notes, readable := readNotesChecked(p)
-	if !readable {
-		return // see readNotesChecked: collapsing a bubble must not empty the store
-	}
-	k := noteKey(versionID, book, chapter)
-	n, ok := notes[k]
-	if !ok {
-		return
-	}
-	n.Minimized = min
-	notes[k] = n
-	writeNotes(p, notes)
+	return StoredNote{}, false
 }
 
 // --- the live view of all this, for the panes -------------------------------
 
-// applyNoteForCurrentChapter loads whatever note belongs to where the reader is
-// now and mirrors it into AppState, so the reading panes have one field to look
-// at rather than a store to query. Called on every navigation.
-//
-// A minimized note restores its own highlight state too: the highlight belongs
-// to the note, so it must not come back on its own while the note is collapsed.
+// applyNoteForCurrentChapter loads whatever note belongs to where the reader
+// is now and mirrors it into AppState — text, minimized, verse, and the ID the
+// verbs address. Called on every navigation.
 func applyNoteForCurrentChapter(state *AppState) {
 	if state == nil {
 		return
 	}
-	// Off means off, but it does NOT mean gone: the stored notes stay where they
-	// are unless the reader asked for them to be deleted, so switching back on
-	// brings them all back.
+	// Off means off, but it does NOT mean gone: the stored notes stay where
+	// they are unless the reader asked for them to be deleted, so switching
+	// back on brings them all back.
 	if !notesFeatureOn(state) {
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
-		state.NoteVersionID = ""
+		state.NoteID = 0
 		return
 	}
-	n, ok := loadNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
+	n, ok := noteForChapter(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter)
 	if !ok {
-		// The note goes, and so does the highlight the note put there. Clearing
-		// only the note left a verse highlighted with nothing to explain it —
-		// the reader saw their passage marked and the message gone, and had no
-		// way to tell whether they had lost the note or imagined it
-		// (owner-reported, switching back to NKJV). A highlight that arrived for
-		// any OTHER reason — a search result, a shared link's verse — is not the
-		// note's to clear, which is what the guard below tests for.
-		// Ownership is RECORDED now, so this is an equality rather than the
-		// guess it used to be: "the lit verse equals the note's verse, so the
-		// note must have lit it" was true by coincidence whenever a search
-		// result or a Go-to landed on the same verse, and that collateral is
-		// X10. clearMarkFromNote drops the mark only if hlNote set it.
+		// The note goes, and so does the highlight the note put there —
+		// ownership is RECORDED (mark.go), so this is an equality, and a
+		// highlight that arrived for any OTHER reason is not the note's to
+		// clear.
 		state.clearMarkFromNote()
 		state.ActiveNote = ""
 		state.NoteMinimized = false
 		state.NoteVerseLo = 0
-		state.NoteVersionID = ""
+		state.NoteID = 0
 		return
 	}
 	state.ActiveNote = n.Text
 	state.NoteMinimized = n.Minimized
 	state.NoteVerseLo = n.VerseLo
-	state.NoteVersionID = n.VersionID // where it really lives; see noteStoreVersion
+	state.NoteID = n.ID // the identity every verb addresses, carried whole
 	if n.Minimized {
 		return
 	}
 	// Never clobber a highlight that is already on this chapter for another
 	// reason — arriving by a search result, say. That highlight is what the
-	// reader just asked for; the note's is only a default. The origin makes
-	// "another reason" exact: a mark the NOTE itself placed on an earlier pass
-	// is not another reason, and re-asserting it is harmless.
+	// reader just asked for; the note's is only a default.
 	if _, here := state.markHere(); here && !state.mark.fromNote() {
 		return
 	}
@@ -360,64 +631,49 @@ func applyNoteForCurrentChapter(state *AppState) {
 	}
 }
 
-// rememberIncomingNote stores a note that just arrived on a link.
-func rememberIncomingNote(state *AppState, t ShareTarget) {
+// rememberIncomingNote stores a note that just arrived on a link and returns
+// the stored record — the caller mirrors its ID into AppState so the verbs
+// can reach it. ok=false when nothing was stored (no note, or the store is
+// unreadable and stood the write down).
+func rememberIncomingNote(state *AppState, t ShareTarget) (StoredNote, bool) {
 	if state == nil || strings.TrimSpace(t.Note) == "" {
-		return
+		return StoredNote{}, false
 	}
-	saveNote(appPrefs(), SharedNote{
+	return addNote(appPrefs(), StoredNote{
+		Kind: noteKindReceived,
 		// The LINK's translation, not whatever the reader happens to be in. A
 		// note is a remark on particular wording, so it belongs to the
-		// translation it was written against — and applyShareTarget now opens
-		// the link in that translation, so in the ordinary case these are the
-		// same thing. They differ only when the switch could not happen (an
-		// unknown id, or a download already in flight), and then storing it
-		// under the link's translation is still the truthful answer: the note
-		// reappears when the reader is next in that translation, rather than
-		// being filed under one it was never about — including the reader who has
-		// no NKJV and stays where they are (they are told; see
-		// showLinkVersionUnavailable), whose copy of the note is then waiting
-		// correctly under nkjv if they ever unlock it.
-		// The PATH id is the sender's translation now. It used to be that a note
-		// written in NKJV came back on a link saying "web" (licensed ids were
-		// kept out of URLs entirely), so it was filed under web and the sender's
-		// own note vanished the moment they returned to NKJV — highlight still
-		// there, message gone (owner-reported). A "t=" fragment hint was built as
-		// the fix and deleted once /nkjv/ could say it in the path.
+		// translation it was written against — and the payload's own 'v'
+		// record outranks the lossy path (noteStorageTarget).
 		VersionID: t.VersionID,
 		Book:      t.Book,
 		Chapter:   state.CurrentChapter,
 		VerseLo:   t.VerseLo,
 		VerseHi:   t.VerseHi,
 		Text:      t.Note,
+		// What the payload carried that this build could not use, preserved so
+		// a future forward/re-share can re-emit it (spec rule 3).
+		WireSkipped: []byte(t.NoteSkipped),
+		WireOpaque:  []byte(t.NoteOpaque),
 	})
 }
 
-// hideCurrentNote / dropCurrentNote are what the tap menu's two verbs do, in
-// the store as well as on screen — otherwise the note would come back on the
-// reader's next visit as though they had never touched it.
-// noteStoreVersion is the translation the live note is STORED under — which is
-// the one Hide and Delete must address. Falls back to the version being read,
-// which is correct for the ordinary case where the note was written against it.
-func (s *AppState) noteStoreVersion() string {
-	if s == nil {
-		return ""
-	}
-	if s.NoteVersionID != "" {
-		return s.NoteVersionID
-	}
-	return s.currentVersion().ID
-}
-
+// hideCurrentNote / restoreCurrentNote / dropCurrentNote are the verbs. Each
+// addresses AppState.NoteID — the identity of the note whose text is on
+// screen, handed to the mirror by the derive — and NEVER a key rebuilt from
+// state.CurrentBook / CurrentChapter / currentVersion(). Rebuilding the key
+// from where the reader is standing is what deleted the wrong note (X1), made
+// Hide and Show address different objects (X5), and left a cross-chapter note
+// unreachable by any verb (X13).
 func hideCurrentNote(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
 	}
 	state.NoteMinimized = true
-	setNoteMinimized(appPrefs(), state.noteStoreVersion(), state.CurrentBook, state.CurrentChapter, true)
-	// Only the note's own mark. Hiding a note used to put out whatever was lit,
-	// so a reader who arrived on a search result and then collapsed a note on
-	// the same chapter lost the result they had come for (X10).
+	setNoteMinimizedByID(appPrefs(), state.NoteID, true)
+	// Only the note's own mark. Hiding a note used to put out whatever was
+	// lit, so a reader who arrived on a search result and then collapsed a
+	// note on the same chapter lost the result they had come for (X10).
 	state.clearMarkFromNote()
 }
 
@@ -426,9 +682,24 @@ func restoreCurrentNote(state *AppState) {
 		return
 	}
 	state.NoteMinimized = false
-	setNoteMinimized(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter, false)
-	if n, ok := loadNote(appPrefs(), state.currentVersion().ID, state.CurrentBook, state.CurrentChapter); ok && n.VerseLo > 0 {
-		state.setMark(hlNote, n.span())
+	setNoteMinimizedByID(appPrefs(), state.NoteID, false)
+	if state.NoteID != 0 {
+		// Re-derive: the store is now un-minimized, so the ordinary derive
+		// refreshes the mirror and re-raises the note's own mark (without
+		// clobbering a foreign one).
+		applyNoteForCurrentChapter(state)
+		return
+	}
+	// A note that never reached the store (it arrived while the store was
+	// unreadable): the mirror is all there is, so re-raise its mark from it.
+	if state.NoteVerseLo > 0 {
+		state.setMark(hlNote, VerseSpan{
+			VersionID: state.currentVersion().ID,
+			Book:      state.CurrentBook,
+			Chapter:   state.CurrentChapter,
+			Lo:        state.NoteVerseLo,
+			Hi:        state.NoteVerseLo,
+		})
 	}
 }
 
@@ -436,41 +707,25 @@ func dropCurrentNote(state *AppState) {
 	if state == nil {
 		return
 	}
-	deleteNote(appPrefs(), state.noteStoreVersion(), state.CurrentBook, state.CurrentChapter)
+	deleteNoteByID(appPrefs(), state.NoteID)
 	state.ActiveNote = ""
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
-	state.NoteVersionID = ""
+	state.NoteID = 0
 	// As in hideCurrentNote: the note's mark goes, a search result's or a
 	// shared link's stays.
 	state.clearMarkFromNote()
 }
 
-// applyNoteOnResume surfaces a stored note for the chapter the app is REOPENING
-// into.
+// applyNoteOnResume surfaces a stored note for the chapter the app is
+// REOPENING into.
 //
 // It exists because reopening never went through addRecentChapter. The restore
 // path sets book and chapter directly (reading_state.go), so nothing called
-// applyNoteForCurrentChapter and the chapter the reader last had open came back
-// bare — the note only appeared once they navigated away and returned, by which
-// point every OTHER chapter's note had shown up correctly. observed in practice, and
-// exactly as confusing as it sounds.
-//
-// REOPENING IS NOT ARRIVING, though, and the difference decides the SCROLL —
-// but only the scroll. Arriving on a link should land the reader on the message;
-// reopening should land them where they stopped reading, which may be a long way
-// past the note.
-//
-// The first attempt bought that by dropping the note's highlight on resume, so
-// it could not capture the scroll. That was the wrong price: the note came back
-// bare, a bubble pointing at nothing, and it read as a fault — reported as one.
-// A note and the passage it marks are one object; showing half of it is worse
-// than either alternative.
-//
-// So the note is restored WHOLE, and the scroll is settled where it belongs: a
-// pending restore now outranks the highlight in the reading panes, and the
-// explicit arrivals clear the restore so they still land on their passage. See
-// AppState.restore and openSearchResultRange.
+// applyNoteForCurrentChapter and the chapter the reader last had open came
+// back bare. The note is restored WHOLE — bubble and highlight — and the
+// scroll is settled in the reading panes, where a pending restore outranks the
+// highlight (see AppState.restore and openSearchResultRange).
 func applyNoteOnResume(state *AppState) {
 	if state == nil {
 		return
