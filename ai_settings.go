@@ -23,6 +23,18 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// settingsTapOutsideCloses gates the sheet's tap-anywhere-outside dismissal
+
+// the convenience, so the sheet is MODAL for now — the ✕ is the close verb,
+// and a tap or drag that misses the card does nothing. The whole outside-tap
+// arrangement stays behind this constant, one flip from returning: the
+// non-modal popup, the innerSize/fitSheet dance that keeps Fyne's
+// isInsideContent boundary honest, and the watchdog that catches Fyne's
+// built-in outside-tap Hide (which never calls done()). The watchdog itself
+// still runs in both modes — a rebuild's drain also closes the popup without
+// done(), whichever kind it is.
+const settingsTapOutsideCloses = false
+
 func showAISettings(state *AppState) {
 	if state == nil || state.window == nil {
 		return
@@ -712,7 +724,11 @@ func showAISettings(state *AppState) {
 		form.Add(settingsGroup(pal, redLetter))
 	}
 
-	hint := canvas.NewText("Changes save automatically — tap outside to close.", pal.TextMuted)
+	hintCopy := "Changes save automatically."
+	if settingsTapOutsideCloses {
+		hintCopy = "Changes save automatically — tap outside to close."
+	}
+	hint := canvas.NewText(hintCopy, pal.TextMuted)
 	hint.TextSize = 11
 
 	// The settings body scrolls; the title bar and the closing hint do not. A sheet
@@ -752,12 +768,26 @@ func showAISettings(state *AppState) {
 	card = container.New(fixedWidthLayout{width: ps.Width},
 		surface(themed, pal.Background, pal.Border, fyne.Size{}))
 
-	// A NON-modal popup: leaves the reading page visible (undimmed) behind it and
-	// dismisses on a tap OUTSIDE the card. Resize it to the card's size FIRST — Fyne gates
-	// the tap-to-dismiss on PopUp.isInsideContent, which reads innerSize, and without an
-	// explicit Resize innerSize stays zero so EVERY tap (even on the card) counts as
-	// "outside" and closes the sheet. (Same as the Goto picker's popup.)
-	popup = widget.NewPopUp(card, cnv)
+	// Which popup this is decides how it closes (settingsTapOutsideCloses):
+	//
+	// MODAL (the current choice): a dim scrim behind the card, the ✕ is the
+	// close verb, and a tap or scroll-drag that misses the card does NOTHING —
+
+	// happen, because Fyne's modal popup swallows outside events instead of
+	// closing on them.
+	//
+	// NON-modal (gated off): leaves the reading page visible (undimmed) behind
+	// it and dismisses on a tap OUTSIDE the card. Resize it to the card's size
+	// FIRST — Fyne gates the tap-to-dismiss on PopUp.isInsideContent, which
+	// reads innerSize, and without an explicit Resize innerSize stays zero so
+	// EVERY tap (even on the card) counts as "outside" and closes the sheet.
+	// (Same as the Goto picker's popup.) The Resize-before-show below runs in
+	// both modes; it is load-bearing only in this one.
+	if settingsTapOutsideCloses {
+		popup = widget.NewPopUp(card, cnv)
+	} else {
+		popup = widget.NewModalPopUp(card, cnv)
+	}
 	x := (cnv.Size().Width - ps.Width) / 2
 	if x < 0 {
 		x = 0
