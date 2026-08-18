@@ -640,8 +640,11 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	}`, numHex)
 	// One stylesheet rule per tint that paints one, from the tint's own row
 	// (appleTintHTML, tint.go) — which is where the reasons for what the rule
-	// does NOT say are recorded, and where a second wash would add its own.
-	// Exactly one rule is emitted today.
+	// does NOT say are recorded, and where a second wash adds its own. Two
+	// rules today: .hl, and .hlm for the multi-note wash — whose class no
+	// markup references yet (tintMulti is unreachable; tint.go), so the rule
+	// rides unused. Emitting it with the class rather than with the first use
+	// is the table's own guarantee: a named class always has its rule.
 	for tint := verseTint(0); tint < tintCount; tint++ {
 		rule := appleTintHTML[tint].CSS
 		c, ok := tint.wash(pal)

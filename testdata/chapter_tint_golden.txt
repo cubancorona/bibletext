@@ -24,6 +24,10 @@
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/no-mark | apple-html reporter=true
@@ -50,6 +54,10 @@
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -159,6 +167,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">1</sup><span class="hl">&nbsp;</span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/range-1-4 | apple-html reporter=true
@@ -185,6 +197,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v hl">1</sup><span class="hl">&nbsp;</span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -300,6 +316,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/single-3 | apple-html reporter=true
@@ -326,6 +346,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -437,6 +461,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-on-another-chapter | apple-html reporter=true
@@ -463,6 +491,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -572,6 +604,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-on-another-book | apple-html reporter=true
@@ -598,6 +634,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -707,6 +747,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-past-the-last-verse | apple-html reporter=true
@@ -733,6 +777,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -842,6 +890,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
 
 ### prose/chapter-level-mark | apple-html reporter=true
@@ -868,6 +920,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
@@ -977,6 +1033,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
 
 ### poetry/no-mark | apple-html reporter=true
@@ -1003,6 +1063,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
@@ -1121,6 +1185,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
 
 ### poetry/range-2-3 | apple-html reporter=true
@@ -1147,6 +1215,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
@@ -1271,6 +1343,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">15</sup><span class="hl">&nbsp;</span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl">&nbsp;</span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
 
 ### red/whole-verse-under-the-band | apple-html reporter=true
@@ -1297,6 +1373,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v hl">15</sup><span class="hl">&nbsp;</span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl">&nbsp;</span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
@@ -1400,6 +1480,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">15</sup>&nbsp;<span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup>&nbsp;<span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
 
 ### red/whole-verse-no-mark | apple-html reporter=true
@@ -1426,6 +1510,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">15</sup>&nbsp;<span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup>&nbsp;<span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
@@ -1525,6 +1613,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl">&nbsp;</span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
 
 ### red/bsb-spans-under-the-band | apple-html reporter=true
@@ -1551,6 +1643,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm">&#8195;&#8194;<sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl">&nbsp;</span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
@@ -1643,6 +1739,10 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		background-color: #ffe08a;
 		padding: 0 2px;
 		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
+		padding: 0 2px;
+		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">4</sup>&nbsp;His disciples replied to Him.<br><sup class="v">5</sup>&nbsp;<span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
 
 ### red/bsb-spans-no-mark | apple-html reporter=true
@@ -1669,6 +1769,10 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		margin-right: 2px;
 	}.hl {
 		background-color: #ffe08a;
+		padding: 0 2px;
+		border-radius: 2px;
+	}.hlm {
+		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
 	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm">&#8195;&#8194;<sup class="v">4</sup>&nbsp;His disciples replied to Him.<br><sup class="v">5</sup>&nbsp;<span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>

@@ -226,6 +226,13 @@ type AppState struct {
 	// to the top of a long list. Cleared when Notes mode is left — coming back
 	// to the notes list fresh should start at the top.
 	notesScroll float32
+	// notesScrollRead reads the LIVE list's scroll offset. The windowed list
+	// (widget.List) does not expose a scroll callback the way a raw VScroll
+	// does, so instead of saving continuously the browser leaves a way to ask
+	// the current view where it is, and the two moments that replace it — the
+	// next buildNotesBrowseView, and openNote leaving for the passage — harvest
+	// the offset into notesScroll first. Cleared with notesScroll.
+	notesScrollRead func() float32
 
 	// loadPhase drives the startup loading screen. The Bible loads on a
 	// background goroutine (so the window appears instantly and the iOS launch

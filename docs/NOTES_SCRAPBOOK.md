@@ -707,8 +707,8 @@ const (
 	// "another note is here too". Light #FFE9A8, dark #48370F.
 	tintOther
 	// tintMulti — one step AWAY from the paper. Live only when NOTHING is
-	// focused: "more than one note covers this verse". Light #F5C24A, dark
-	// #5C4412. tintOther and tintMulti are never co-present.
+	// focused: "more than one note covers this verse". Light #C7DBF5 (was #F5C24A in the panel synthesis; superseded by the owner-approved hue pair), dark
+	// #2E3E5C (was #5C4412; superseded — see the tint decision record). tintOther and tintMulti are never co-present.
 	tintMulti
 )
 
@@ -966,7 +966,7 @@ I computed these in-tree. My ΔE reproduces `theme.go`'s own recorded light-band
 |---|---|---|---|---|
 | `tintNote` (shipped) | `#FFE08A` | 44.7 | 4.60 | 12.29 |
 | `tintOther` | `#FFE9A8` | 33.0 | **4.94** | 13.19 |
-| `tintMulti` | `#F5C24A` | 65.5 | 3.59 | 9.58 |
+| `tintMulti` | `#C7DBF5 (was #F5C24A in the panel synthesis; superseded by the owner-approved hue pair)` | 65.5 | 3.59 | 9.58 |
 
 **DARK** (paper `#221F1C`, red `#E57373`):
 
@@ -974,11 +974,11 @@ I computed these in-tree. My ΔE reproduces `theme.go`'s own recorded light-band
 |---|---|---|---|---|
 | `tintNote` (shipped) | `#543E10` | 32.3 | 3.39 | 7.94 |
 | `tintOther` | **`#48370F`** | 27.2 | **3.84** | 9.00 |
-| `tintMulti` | `#5C4412` | 35.5 | 3.07 | 7.18 |
+| `tintMulti` | `#2E3E5C (was #5C4412; superseded — see the tint decision record)` | 35.5 | 3.07 | 7.18 |
 
 **This is the correction to Correspondence's dark palette.** It proposed `#3A2B0C` for the quiet tint — the exact colour `theme.go:114-117` records rejecting ("ΔE 22.9 where the LIGHT band measures 44.7... easy to lose while scanning"). My measurement puts it at 20.5. `#48370F` sits at 27.2 — **84% of the shipped band's presence, 33% more than the rejected value** — and its red-letter contrast *improves* to 3.84.
 
-**Ceiling, from `theme.go`'s own note:** red-on-band falls 4.6 → 3.4 → 3.1 at `#5C4412` → **1.7 by `#8A6828`, where His words visibly sink into the gold.** There is no third depth away from the paper. Extend `theme_contrast_test.go` to assert red-letter-on-`tintMulti` and on-`tintOther` in both themes, and **judge both on the rendered pane before shipping** — `theme.go:128-130` says that is the only way this palette has ever been decided, and I have not rendered anything.
+**Ceiling, from `theme.go`'s own note:** red-on-band falls 4.6 → 3.4 → 3.1 at `#2E3E5C (was #5C4412; superseded — see the tint decision record)` → **1.7 by `#8A6828`, where His words visibly sink into the gold.** There is no third depth away from the paper. Extend `theme_contrast_test.go` to assert red-letter-on-`tintMulti` and on-`tintOther` in both themes, and **judge both on the rendered pane before shipping** — `theme.go:128-130` says that is the only way this palette has ever been decided, and I have not rendered anything.
 
 ## Per surface
 
@@ -1249,7 +1249,7 @@ Both halves have been broken in shipped code, in opposite directions, which is w
 - **Does 1.1.8 ship with notes, or without?** This is the only genuinely time-critical decision. Nothing about notes is in any shipped release (verified), so the wire format is free — but only until 1.1.8 goes to the App Store. After that, a reader on 1.1.8 sees *nothing* for a link written by any later build, which is a note silently lost with no way to recover it. Two options, no third: (a) hold notes out of 1.1.8 and ship the rest, or (b) delay 1.1.8 until the new codec lands (~1 week of the work below). I recommend (a) — 1.1.8 is already built and verified, and this buys the notes work all the time it needs.
 - **Should the app remember the notes YOU send, not just the ones you receive?** Today "Share with note" keeps nothing: the moment the share sheet closes, your own words exist only in the messenger thread. Storing them costs one field and turns the scrapbook into a record of a conversation rather than an inbox. The cost is that your own notes appear in your own list, which some people will want and some will find cluttered. Recommend yes, marked "from you" and kept out of any unread count.
 - **Should the app let you say "these two are the same person"?** A friend who reinstalls the app, or writes from both a phone and a tablet, will show up as two separate senders — and nothing on screen would say so, which means "everything Mum has sent me" would quietly give you half the answer. The fix is a button that merges them (and un-merges them). It is the single most valuable thing in the people side of this design, and also the most extra UI. Recommend yes, but it is droppable if you want notes shipping sooner.
-- **Two new highlight shades need your eye, not a measurement.** When more than one note covers a verse, the app needs a second and third shade of the highlight band. I have chosen values by measurement — light `#FFE9A8` and `#F5C24A`, dark `#48370F` and `#5C4412` — and checked the red-letter text stays legible on all of them. But your own note in `theme.go` says this palette has only ever been decided by looking at the real page, never at swatches. Please look at all four on a red-letter chapter in both light and dark before it ships.
+- **Two new highlight shades need your eye, not a measurement.** When more than one note covers a verse, the app needs a second and third shade of the highlight band. I have chosen values by measurement — light `#FFE9A8` and `#C7DBF5 (was #F5C24A in the panel synthesis; superseded by the owner-approved hue pair)`, dark `#48370F` and `#2E3E5C (was #5C4412; superseded — see the tint decision record)` — and checked the red-letter text stays legible on all of them. But your own note in `theme.go` says this palette has only ever been decided by looking at the real page, never at swatches. Please look at all four on a red-letter chapter in both light and dark before it ships.
 - **Do you want a name field on the share sheet at all?** Notes can travel with a name you choose ("Anna"), or anonymously. Anonymous leaks less and is the safer default — but a scrapbook where every note says "from someone" is not much of a scrapbook. My recommendation: leave it blank by default, and the *first* time you write a note, the sheet asks once, with an obvious way to skip. Say if you'd rather it never ask.
 
 ######################################################################

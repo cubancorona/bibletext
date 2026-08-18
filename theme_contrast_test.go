@@ -139,6 +139,57 @@ func TestDisabledButtonsAreLegibleAndOnPalette(t *testing.T) {
 	}
 }
 
+// The multi-note wash (S12: HighlightMulti, light #C7DBF5 / dark #2E3E5C) is a
+// band scripture sits ON, and the hardest thing scripture puts on a band is the
+// red letters — the dark Highlight comment records that the red, not taste, is
+// what sets a band's ceiling. So the tokens are pinned where they can fail:
+// red-on-wash must clear 3:1 (WCAG's large-text/graphics minimum, the same bar
+// the shipped gold band is argued against) in BOTH themes, and body text must
+// stay clearly readable on it. Computed here, in the same units the palette
+// comments use, so the 4.2:1 / 3.6:1 the comments claim is checked, not quoted.
+//
+// The washes are also pinned to their approval rationale: separation from
+// Highlight by HUE, not brightness. Both Highlight tokens are warm (R > B) and
+// both HighlightMulti tokens must stay cool (B > R) — a second warm wash would
+// read as a stronger mark rather than as a different fact.
+func TestMultiNoteWashKeepsScriptureLegible(t *testing.T) {
+	th := &bibleTheme{}
+	for _, variant := range []struct {
+		name string
+		v    fyne.ThemeVariant
+		pal  palette
+	}{
+		{"light", theme.VariantLight, lightPalette},
+		{"dark", theme.VariantDark, darkPalette},
+	} {
+		wash := variant.pal.HighlightMulti
+		if got := contrastRatio(variant.pal.RedLetter, wash); got < 3.0 {
+			t.Errorf("%s: red letters on the multi-note wash = %.2f:1, want >= 3.0:1 — "+
+				"His words would sink into the band", variant.name, got)
+		}
+		if got := contrastRatio(variant.pal.Text, wash); got < 4.5 {
+			t.Errorf("%s: body text on the multi-note wash = %.2f:1, want >= 4.5:1 (AA)",
+				variant.name, got)
+		}
+		if wash.B <= wash.R {
+			t.Errorf("%s: HighlightMulti rgb(%d,%d,%d) is not cool — the approved pair is "+
+				"separated from the warm Highlight by hue, not brightness",
+				variant.name, wash.R, wash.G, wash.B)
+		}
+		hl := variant.pal.Highlight
+		if hl.R <= hl.B {
+			t.Errorf("%s: Highlight rgb(%d,%d,%d) is no longer warm — the hue separation "+
+				"between the two washes has collapsed", variant.name, hl.R, hl.G, hl.B)
+		}
+		// And the token is reachable BY NAME, for the surface that can only ask
+		// the theme (the RichText fallback).
+		if got := asNRGBA(t, th.Color(colorNameHighlightMulti, variant.v)); got != wash {
+			t.Errorf("%s: colorNameHighlightMulti resolves to rgba(%d,%d,%d,%d), not the palette token",
+				variant.name, got.R, got.G, got.B, got.A)
+		}
+	}
+}
+
 // Colour names the app never mapped fell through to Fyne's defaults, which are
 // off-palette in both variants — and ColorNameFocus additionally follows the
 // user's GLOBAL Fyne primary preference, so someone whose Fyne is green got
