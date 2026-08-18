@@ -684,6 +684,11 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 		} else {
 			hideNativeReadingOverlay()
 		}
+		// The sheet the reader was inside has left the canvas: run the window
+		// rebuild a background data swap deferred to spare it (no-op otherwise,
+		// and non-recursive — rebuildWindow downs the flag before re-running
+		// this closure).
+		consumeDeferredFullRebuild(state)
 	}
 
 	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)

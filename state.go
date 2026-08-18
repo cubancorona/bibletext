@@ -266,6 +266,14 @@ type AppState struct {
 	// connection can never stack overlapping full-Bible downloads. UI-goroutine only.
 	fullDownloading bool
 
+	// fullRebuildDeferred: a background data swap (applyFullDownload) landed
+	// while a sheet owned the canvas, so its window rebuild — which drains
+	// every overlay — is parked rather than yanking the sheet out from under
+	// the reader. Set only by applyFullDownload; cleared only by rebuildWindow
+	// (any full rebuild satisfies it); consumed by consumeDeferredFullRebuild
+	// from the overlay-restore closures and refresh(). UI-goroutine only.
+	fullRebuildDeferred bool
+
 	// versionLoading guards switchVersionInteractive to ONE in-flight interactive
 	// translation load: the loading modal used to be the interaction block, but
 	// rebuildWindow (theme-variant flip, tablet rotation) can evict it
@@ -372,6 +380,14 @@ func (s *AppState) baseBible() *BibleData {
 }
 
 func (s *AppState) refresh() {
+	// The catch-all consume for a deferred background rebuild
+	// (applyFullDownload): on Windows/Linux there is no overlay-restore
+	// closure to run when a sheet closes, so the first navigation after it
+	// upgrades to the full rebuild — which repaints everything this refresh
+	// would have, plus the chrome the swap changed (the downloading banner).
+	if consumeDeferredFullRebuild(s) {
+		return
+	}
 	if s.showReading != nil {
 		s.showReading()
 	}
