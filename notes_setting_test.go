@@ -94,3 +94,45 @@ func TestOffDoesNotStoreAnIncomingNote(t *testing.T) {
 		t.Errorf("note was stored while off (%d in the store)", n)
 	}
 }
+
+// Turning notes off puts the note's mark out AT THAT MOMENT — not at the next
+// navigation.
+//
+// The implementation verification that demanded this pin: deleting clearMarkFromNote from
+// turnNotesOff left the ENTIRE suite green, including all 1,280 enumeration
+// cells, because the harness observes after the next derive — where the
+// off-branch backstop rescues the mark. On the real Settings route the switch
+// is followed by a refresh, not a derive, so under that mutation the note's
+// tint genuinely stayed lit on screen until the reader navigated. The moment
+// half and the backstop half are two different promises; this holds the first.
+func TestNotesOffClearsTheNoteMarkImmediately(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "lit by me"})
+
+	st := psalm23State()
+	applyNoteForCurrentChapter(st)
+	if !st.mark.fromNote() {
+		t.Fatal("precondition: the note should have raised its mark")
+	}
+
+	turnNotesOff(st)
+
+	if st.hasMark() {
+		t.Error("the note's mark survived the OFF switch itself — it must not wait " +
+			"for the next navigation to be rescued")
+	}
+
+	// ...and a mark the note does NOT own survives the same switch.
+	setNotesEnabled(true)
+	applyNoteForCurrentChapter(st)
+	st.setHL(hlSearch, "Psalms", 23, 4, 0)
+	turnNotesOff(st)
+	if sp, ok := st.markSpan(); !ok || st.mark.Origin != hlSearch || sp.Lo != 4 {
+		t.Error("the reader's own search mark must survive notes going off")
+	}
+}

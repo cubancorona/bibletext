@@ -52,6 +52,25 @@ func setNotesEnabled(on bool) {
 	p.SetString(prefNotesEnabled, "off")
 }
 
+// turnNotesOff is THE way the feature goes off, whoever asks — the Settings
+// switch's nothing-saved short-circuit, its "Keep them" answer, the dev
+// toggle. Beside flipping the preference it puts out the mark the live note
+// owns, at the moment notes go off: with the feature off no surface draws a
+// note, so a mark a note placed would be a tinted verse with nothing left to
+// explain it — defect 1 reached through the one control whose whole job is to
+// make notes stop (X4). ONLY the note's mark: ownership is recorded
+// (mark.go), and a search result or a link span on the same chapter is not
+// the notes feature's to take down. The off-branch of
+// applyNoteForCurrentChapter applies the same equality on every later
+// re-derive, so a route that flips the preference some other way still cannot
+// strand one past its next derive.
+func turnNotesOff(state *AppState) {
+	setNotesEnabled(false)
+	if state != nil {
+		state.clearMarkFromNote()
+	}
+}
+
 // deleteAllNotes throws away every stored note — received and sent, it is one
 // store — after the reader explicitly confirmed.
 //
@@ -280,5 +299,8 @@ func clearLiveNote(state *AppState) {
 	// The identity goes with them. Left behind it would misdirect the next
 	// Delete at a note the reader never had on screen.
 	state.NoteID = 0
-	clearHighlightedVerse(state)
+	// Only the mark the note owns — the same rule the verbs follow (X10): a
+	// search result or a link span the reader was holding on this chapter is
+	// not a note-deletion's to put out.
+	state.clearMarkFromNote()
 }

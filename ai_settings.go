@@ -489,14 +489,16 @@ func showAISettings(state *AppState) {
 			state.refresh()
 			return
 		}
-		// Nothing saved yet — no question worth asking.
+		// Nothing saved yet — no question worth asking. turnNotesOff, not a
+		// bare setNotesEnabled: the switch also puts out the mark the live
+		// note owns, or the note's tint outlives the feature (X4).
 		if storedNoteCount(appPrefs()) == 0 {
-			setNotesEnabled(false)
+			turnNotesOff(state)
 			state.refresh()
 			return
 		}
 		promptKeepOrDeleteNotes(state, func() {
-			setNotesEnabled(false)
+			turnNotesOff(state)
 			state.refresh()
 		}, func() {
 			notes.SetChecked(true) // cancelled: put the switch back

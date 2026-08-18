@@ -217,7 +217,11 @@ func (n *StoredNote) UnmarshalJSON(data []byte) error {
 
 // span builds the highlight span for a note, in the numbering the note itself
 // carries — for a followed note that is the renumbered location the derive
-// produced, still labelled with the translation it is stored under.
+// produced, still labelled with the translation it is stored under. NOTE for
+// the mark path: a VerseSpan's VersionID is a FRAME (what numbering the
+// numbers are in, mark.go), not a filing, so applyNoteForCurrentChapter
+// re-stamps it with the reading translation before setMark — a followed
+// note's renumbered location is not in the numbering this label names.
 func (n StoredNote) span() VerseSpan {
 	return VerseSpan{
 		VersionID: n.VersionID,
