@@ -417,7 +417,7 @@ func TestAppleStickerPushIsFoldedByTheBodyFingerprint(t *testing.T) {
 	addRecentChapter(st, "John", 3)
 
 	snap := func() (string, string, bool, string) {
-		text, who, pill := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+		text, who, pill, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
 		return text, who, pill, chapterBodyFingerprint(st)
 	}
 
@@ -499,12 +499,15 @@ func TestAppleStickerPushComposition(t *testing.T) {
 		VerseLo: 1, Text: "greek esther"})
 	applyNoteForCurrentChapter(st)
 
-	text, who, pill := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	text, who, pill, next := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
 	if pill {
 		t.Fatal("expanded: not a pill")
 	}
 	if text == "" {
 		t.Fatal("expanded: the bubble carries the open note's words")
+	}
+	if !next {
+		t.Error("three placed notes expanded: the count region must be a control (next)")
 	}
 	wantPrefix := "Note from Friend · "
 	if !strings.HasPrefix(who, wantPrefix) ||
@@ -513,11 +516,15 @@ func TestAppleStickerPushComposition(t *testing.T) {
 		t.Errorf("who = %q, want byline · K of 3 on this passage · 1 not shown here", who)
 	}
 
-	// Minimize: the pill carries the whole set, placed and unplaced.
+	// Minimize: the pill carries the whole set, placed and unplaced — and the
+	// pill is never the selector (tapping it opens the focused note, as ever).
 	hideCurrentNote(st)
-	_, who, pill = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	_, who, pill, next = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
 	if !pill || who != "Notes · 3 · 1 not shown" {
 		t.Errorf("minimized pill = %q (pill=%v), want %q", who, pill, "Notes · 3 · 1 not shown")
+	}
+	if next {
+		t.Error("the pill must not carry the next control")
 	}
 
 	// The unplaced-only chapter: no sender text exists, so the push is the
@@ -528,7 +535,7 @@ func TestAppleStickerPushComposition(t *testing.T) {
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 5,
 		VerseLo: 1, Text: "greek esther again"})
 	applyNoteForCurrentChapter(st)
-	text, who, pill = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	text, who, pill, next = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
 	if text != "" {
 		t.Errorf("unplaced-only: no sender words exist to show, got %q", text)
 	}
@@ -538,6 +545,9 @@ func TestAppleStickerPushComposition(t *testing.T) {
 	if who != "2 notes cannot be shown in this translation" {
 		t.Errorf("unplaced-only who = %q", who)
 	}
+	if next {
+		t.Error("unplaced-only: nothing to advance through, next must be false")
+	}
 
 	// And a single-note chapter still pushes the plain pill label when
 	// minimized — today's presentation, unchanged.
@@ -545,7 +555,7 @@ func TestAppleStickerPushComposition(t *testing.T) {
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
 		VerseLo: 1, Text: "only note", Minimized: true})
 	applyNoteForCurrentChapter(st)
-	if _, who, pill = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !pill || who != "Note" {
+	if _, who, pill, _ = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !pill || who != "Note" {
 		t.Errorf("single minimized note: pill=%v who=%q, want the plain \"Note\"", pill, who)
 	}
 }

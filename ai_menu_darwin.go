@@ -118,6 +118,24 @@ func bibleTextNoteRestored() {
 	})
 }
 
+// bibleTextNoteNextTapped is the expanded sticker's count region being pressed
+// ("2 of 3 on this passage ›"): focus advances to the NEXT note in the plan's
+// stable order, wrapping, with a Fyne chip tap's exact semantics
+// (advanceNoteFocus, notes_plan.go). The sticker repaint rides the native
+// compare-and-refresh and the wash rides the tint mutation — no re-import.
+//
+//export bibleTextNoteNextTapped
+func bibleTextNoteNextTapped() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		advanceNoteFocus(state)
+		state.refreshReadingOnly()
+	})
+}
+
 // bibleTextNoteDeleted is the tap menu's "Delete note": the note goes for good,
 // and the highlight goes with it.
 //

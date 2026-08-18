@@ -365,35 +365,35 @@ func displayCopy(d drawnNote, versionID string, chapter int) StoredNote {
 // are one spelling, the chapterTints.fingerprint lesson); per unplaced note
 // its ID and kind. Then the wash, as its own half.
 //
-// OPEN IS FOLDED — INTO THE WHOLE, NOT INTO noteFP. S7 deliberately omitted
-// Open because no pixel depended on it; S8 draws it (the banner's bubble vs
-// chip is Open), so the S7 trap is sprung in the same commit: Open joins
-// Fingerprint as its own middle section. It stays OUT of noteFP on purpose —
-// noteFP is the Apple BODY half (chapterBodyFingerprint, reading.go), and the
-// Apple sticker draws the MIRROR plus the who-line counts (appleStickerPush),
-// none of which depend on Open. Folding Open there would turn every
-// suppression flip (a search arriving on a chapter with a note) into a full
+// OPEN, THE DISPLAY CHOICE AND EACH NOTE'S MINIMIZED FLAG ARE FOLDED — INTO
+// THE WHOLE, NOT INTO noteFP. S7 deliberately omitted Open because no pixel
+// depended on it; S8 draws it (the banner's bubble vs chip is Open), so the S7
+// trap is sprung in the same commit: the presentation joins Fingerprint as its
+// own middle section. All three stay OUT of noteFP on purpose — noteFP is the
+// Apple BODY half (chapterBodyFingerprint, reading.go), the identity of the
+// imported NSAttributedString, and the imported string does not depend on
+// WHICH note is expanded: the sticker is the native side's own subviews,
+// re-derived against the string already on screen whenever the pushed tuple
+// changes (bibleTextSetNote / bibleTextMacSetNote compare-and-refresh), and
+// the wash is the tint half. Folding any of them into the body half would
+// turn a suppression flip, an explicit close, a Hide/Show, or the next-tap's
+// focus advance (advanceNoteFocus — the who-line's own selector) into a full
 // NSAttributedString re-import, the exact cost the body/tint split exists to
-// avoid; since S9 the suppression flip DOES change the pushed presentation
-// (the sticker stands down to the pill), and that repaint is the native
-// side's own compare-and-refresh, never an import. The invariant that the
-// body half folds everything else the push depends on is pinned by
-// TestAppleStickerPushIsFoldedByTheBodyFingerprint.
+// avoid. What noteFP DOES fold is the set itself — which notes exist here,
+// their text lengths, labels and resolved runs — so an arrival or a delete
+// still re-imports (the honest price of a changed chapter identity), while a
+// change of presentation among unchanged notes rides the cheap paths. The
+// body-vs-push contract is pinned by
+// TestAppleStickerPushIsFoldedByTheBodyFingerprint and
+// TestNextTapLeavesTheBodyFingerprintAlone.
 func (p *chapterPlan) foldFingerprint() {
 	var b strings.Builder
 	if p.Notice != "" {
 		fmt.Fprintf(&b, "N%q;", p.Notice)
 	}
-	if p.display >= 0 {
-		fmt.Fprintf(&b, "d%d;", p.Notes[p.display].Note.ID)
-	}
 	fold := func(prefix string, list []drawnNote) {
 		for _, d := range list {
-			m := 0
-			if d.Note.Minimized {
-				m = 1
-			}
-			fmt.Fprintf(&b, "%s%d.%d.%d.%s.%d", prefix, d.Note.ID, m, len(d.Note.Text), d.Label, d.Placement.Kind)
+			fmt.Fprintf(&b, "%s%d.%d.%s.%d", prefix, d.Note.ID, len(d.Note.Text), d.Label, d.Placement.Kind)
 			for _, r := range d.Placement.Here {
 				hi := r.Hi
 				if hi <= r.Lo {
@@ -410,13 +410,24 @@ func (p *chapterPlan) foldFingerprint() {
 	if p.noteFP == "" {
 		p.noteFP = "0"
 	}
-	var open strings.Builder
-	for _, d := range p.Notes {
-		if d.Open {
-			fmt.Fprintf(&open, "o%d;", d.Note.ID)
+	// The presentation section: the display choice, every stored minimize, and
+	// Open — everything a surface draws that is not the imported body. Slices
+	// in the plan's stable order, so it is as flap-proof as the note half.
+	var pres strings.Builder
+	if p.display >= 0 {
+		fmt.Fprintf(&pres, "d%d;", p.Notes[p.display].Note.ID)
+	}
+	for _, list := range [][]drawnNote{p.Notes, p.Unplaced} {
+		for _, d := range list {
+			if d.Note.Minimized {
+				fmt.Fprintf(&pres, "m%d;", d.Note.ID)
+			}
+			if d.Open {
+				fmt.Fprintf(&pres, "o%d;", d.Note.ID)
+			}
 		}
 	}
-	p.Fingerprint = p.noteFP + "&" + open.String() + "&" + p.Tints.fingerprint()
+	p.Fingerprint = p.noteFP + "&" + pres.String() + "&" + p.Tints.fingerprint()
 }
 
 // --- the Apple sticker's push (S8 count, S9 byline) --------------------------
@@ -447,28 +458,37 @@ func (p *chapterPlan) foldFingerprint() {
 //     the mark clears, the Apple twin of the banner showing chips only (S8
 //     implementation verification; nothing is stored). Also forced for unplaced-only.
 //
-// WHAT GATES THE REDRAW. Everything here except suppression is folded by the
-// Apple BODY fingerprint (the mirror through chapterFingerprint's clauses,
-// counts and the K position through noteFP's per-note entries and display id)
-// — so any of those changing forces the full re-import that used to be the
-// only sticker rebuild. Suppression is deliberately NOT in the body half: a
-// search arriving must not re-import the chapter. The native side therefore
-// compares the pushed tuple itself and refreshes the sticker alone when it
-// changed (btIOSRefreshNote / btMacRefreshNote) — a suppression flip is a
-// sticker-only repaint, never an import. Pinned by
-// TestAppleStickerPushIsFoldedByTheBodyFingerprint.
+// WHAT GATES THE REDRAW. The native side compares the pushed tuple itself and
+// refreshes the sticker alone when it changed (btIOSRefreshNote /
+// btMacRefreshNote) — re-deriving band, subviews and placement against the
+// attributed string already on screen. That is the ONLY gate the sticker
+// needs: since S10 the body fingerprint folds the note SET (which notes exist
+// here, their lengths, labels, runs) and deliberately NOT the presentation
+// (which one is displayed, who is minimized, Open — foldFingerprint's middle
+// section), so a suppression flip, a Hide/Show, and the next-tap's focus
+// advance are all sticker-only repaints plus (where the mark moved) a tint
+// mutation — never a chapter re-import. An arrival or a delete still changes
+// the set, still moves the body half, and still re-imports. Pinned by
+// TestAppleStickerPushIsFoldedByTheBodyFingerprint and
+// TestNextTapLeavesTheBodyFingerprintAlone.
 
-// appleStickerPush composes what pushNoteToPane hands the native ABI.
-func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill bool) {
+// appleStickerPush composes what pushNoteToPane hands the native ABI. next is
+// S10's addition to the tuple: the expanded sticker's count region is a
+// CONTROL — a tap advances focus to the next note in the plan's stable order
+// (advanceNoteFocus) — exactly when there is more than one placed note to
+// advance through. The pill never carries it (tapping the pill opens the
+// focused note, as always), and the native side draws the affordance (the
+// accent on the counts span, a chevron) only when this is true.
+func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill, next bool) {
 	if state == nil {
-		return "", "", false
+		return "", "", false, false
 	}
 	unplaced := len(plan.Unplaced)
 	if state.ActiveNote == "" {
 		if unplaced == 0 {
-			return "", "", false // nothing here: no sticker at all
+			return "", "", false, false // nothing here: no sticker at all
 		}
-		return "", stickerUnplacedOnlyWho(unplaced), true
+		return "", stickerUnplacedOnlyWho(unplaced), true, false
 	}
 
 	// The open note's 1-based position in the plan's stable order, and the
@@ -487,7 +507,7 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	}
 
 	if state.NoteMinimized || notesSuppressed(state) {
-		return state.ActiveNote, stickerPillWho(placed, unplaced), true
+		return state.ActiveNote, stickerPillWho(placed, unplaced), true, false
 	}
 
 	var n StoredNote // zero value reads as a received note: "Note from Friend"
@@ -501,7 +521,92 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	if unplaced > 0 {
 		who += fmt.Sprintf(" · %d not shown here", unplaced)
 	}
-	return state.ActiveNote, who, false
+	return state.ActiveNote, who, false, placed > 1
+}
+
+// nextNoteFocusID is the identity of the note AFTER the one on the sticker, in
+// the plan's stable order, wrapping past the end — the note a next-tap opens.
+// 0 when there is nothing to advance to (fewer than two candidates).
+//
+// The order is the WHO line's own: the plan's stable order, with a mirror-only
+// session note (state.NoteID absent from the plan — an arrival the store
+// refused) leading the count exactly as appleStickerPush counts it, so "2 of
+// 3" always names the note the first tap lands on. A mirror-only note cannot
+// be tapped BACK to — it has no stored identity for focus to name — so the
+// wrap lands on the plan's first note: the honest floor for a note that
+// exists nowhere but the mirror. Unplaced notes are not in the rotation; they
+// have nothing on this page to open (their home is the notes browser).
+func nextNoteFocusID(state *AppState, plan chapterPlan) uint64 {
+	if state == nil || len(plan.Notes) == 0 {
+		return 0
+	}
+	if state.NoteID != 0 {
+		for i := range plan.Notes {
+			if plan.Notes[i].Note.ID == state.NoteID {
+				if len(plan.Notes) < 2 {
+					return 0
+				}
+				return plan.Notes[(i+1)%len(plan.Notes)].Note.ID
+			}
+		}
+	}
+	// The sticker's note leads the count from outside the plan (or names
+	// nothing): the next note is the plan's first.
+	return plan.Notes[0].Note.ID
+}
+
+// advanceNoteFocus is the Apple sticker's next-tap (the who-line's count
+// region, bibleTextNoteNextTapped): the NEXT note in the plan's stable order
+// opens, with the EXACT semantics of tapping that note's chip in the Fyne
+// banner (noteBannerChip) — a stored minimize is undone by the note's own ID
+// (selecting it is the Show verb), a foreign mark stands aside (the identity
+// table: "taps a note chip instead → that is the new choice"), focus names the
+// note, and the mirror is re-projected from the plan.
+//
+// One thing rides on top of the chip semantics, for the same reason
+// goToVerseRange declares it: on the panes where the wash is a live mutation
+// the sticker is IN the text, anchored to its note's verse, so advancing to a
+// note on another verse must carry the reader to it — a SCROLL, never a
+// rebuild (AppState.forceReposition), and gated on washIsLiveMutation because
+// on the other panes nothing reads or clears the flag (the banner is pinned
+// above the text there, and a chip tap does not move the page).
+func advanceNoteFocus(state *AppState) {
+	if state == nil || state.ActiveNote == "" {
+		return
+	}
+	plan := buildChapterPlan(state, appPrefs(), state.Bible)
+	id := nextNoteFocusID(state, plan)
+	if id == 0 {
+		return
+	}
+	for i := range plan.Notes {
+		if plan.Notes[i].Note.ID == id {
+			if plan.Notes[i].Note.Minimized {
+				// The tap IS the Show verb for a stored-minimized note: the
+				// one durable restore, by the note's own identity, handed
+				// here by the plan and never rebuilt.
+				setNoteMinimizedByID(appPrefs(), id, false)
+			}
+			break
+		}
+	}
+	if state.mark.live() && !state.mark.fromNote() {
+		state.clearMark()
+	}
+	state.focusNote(id)
+	applyNoteForCurrentChapter(state)
+	// An explicit arrival outranks "where you left off" — the same declaration
+	// applyShareTarget, openSearchResultRange and plain navigation all make.
+	// Without it, the restore a same-chapter re-render captured (pushChapterHTML's
+	// scroll-preserving branch) is still standing: it forces the push down the
+	// slow re-import path (the skip gate requires restore == nil) AND would
+	// out-rank the reposition below with a stale position. Measured live: with
+	// the restore standing every next-tap logged html-import ~14 ms; cleared, the
+	// tap is the sticker's own compare-and-refresh.
+	state.restore = nil
+	if washIsLiveMutation {
+		state.forceReposition = true
+	}
 }
 
 // stickerPillWho is the collapsed sticker's label: short (the pill sizes to

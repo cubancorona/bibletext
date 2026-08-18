@@ -46,6 +46,9 @@ extern void bibleTextReadAlongFollowTapped(void);
 extern void bibleTextNoteHidden(void);
 extern void bibleTextNoteDeleted(void);
 extern void bibleTextNoteRestored(void);
+// The expanded sticker's count region ("2 of 3 on this passage ›") — advances
+// focus to the next note on the passage, wrapping.
+extern void bibleTextNoteNextTapped(void);
 
 // Selection-menu AI gate, mirroring the Settings → Assistant choice ("None" turns
 // AI off). Set from Go (btMacSetAIEnabled) when the reading host is built and
@@ -192,6 +195,7 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 - (void)btNoteHide:(id)sender    { bibleTextNoteHidden(); }
 - (void)btNoteDelete:(id)sender  { bibleTextNoteDeleted(); }
 - (void)btNoteRestore:(id)sender { bibleTextNoteRestored(); }
+- (void)btNoteNext:(id)sender    { bibleTextNoteNextTapped(); }
 
 @end
 
@@ -1188,6 +1192,7 @@ static CAShapeLayer *gMacNoteCard = nil;
 static NSString     *gMacNoteText = nil;      // the sender's words, ALONE (S9)
 static NSString     *gMacNoteWho = nil;       // the app's chrome: byline + counts, composed in Go
 static BOOL          gMacNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
+static BOOL          gMacNoteNextable = NO;   // the count region is a control (S10 next-tap)
 static NSInteger     gMacNoteAnchorVerse = 0;
 static CGFloat       gMacNoteBandH = 0;
 static CGFloat       gMacNoteTopInset = 0;
@@ -1274,6 +1279,20 @@ static NSString *btMacFitWho(NSString *who, CGFloat width, NSFont *font) {
     return [@"…" stringByAppendingString:counts];
 }
 
+// btMacWhoCountRange is the "K of N on this passage" span of a (fitted) WHO
+// line — the iOS twin is btIOSWhoCountRange; keep them matched. The first-
+// separator split is safe against a sender's name by construction:
+// sanitizeSenderName maps the middle dot away (notes_byline.go).
+static NSRange btMacWhoCountRange(NSString *who) {
+    NSRange sep = [who rangeOfString:@" · "];
+    if (sep.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
+    NSUInteger start = NSMaxRange(sep);
+    NSRange rest = NSMakeRange(start, who.length - start);
+    NSRange next = [who rangeOfString:@" · " options:0 range:rest];
+    NSUInteger end = (next.location == NSNotFound) ? who.length : next.location;
+    return NSMakeRange(start, end - start);
+}
+
 // The bubble's whole outline — card and speech tail — as ONE continuous path,
 // for the reason spelled out on the iOS twin: drawn as two shapes, the card's
 // bottom stroke runs straight across the mouth of the tail and no z-ordering
@@ -1354,11 +1373,34 @@ static void btMacApplyNoteInset(void) {
 // location — and after the pass that zeroes paragraphSpacingBefore across the
 // string (bibleTextMacApplyHTML), or the reservation would be wiped on every
 // render.
+// gMacNoteReservedPara: the paragraph currently carrying the band, or
+// NSNotFound — the iOS twin's gNoteReservedPara, for the same reason: the
+// next-tap (S10) can move the sticker to another verse of the string already
+// on screen, and no re-import wipes the old reservation, so the install must
+// take it back itself. On a fresh import the zeroing pass has already cleared
+// every paragraphSpacingBefore, so the guarded clear is a no-op there.
+static NSRange gMacNoteReservedPara = {NSNotFound, 0};
+
+static void btMacClearReservedPara(NSTextStorage *ts) {
+    NSRange old = gMacNoteReservedPara;
+    gMacNoteReservedPara = NSMakeRange(NSNotFound, 0);
+    if (old.location == NSNotFound || ts == nil || NSMaxRange(old) > ts.length) return;
+    NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
+                            effectiveRange:NULL];
+    if (base == nil || base.paragraphSpacingBefore == 0) return;
+    NSMutableParagraphStyle *ps = [base mutableCopy];
+    ps.paragraphSpacingBefore = 0;
+    [ts beginEditing];
+    [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
+    [ts endEditing];
+}
+
 static void btMacInstallNote(void) {
     gMacNoteBandH = 0;
     gMacNoteTopInset = 0;
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
+    btMacClearReservedPara(ts);   // the sticker may have MOVED (next-tap): take the old band back
     if (!btMacNotePresent() || ts.length == 0) { btMacApplyNoteInset(); return; }
 
     CGFloat w = gTextView.textContainer.size.width - 2 * gTextView.textContainer.lineFragmentPadding;
@@ -1387,6 +1429,7 @@ static void btMacInstallNote(void) {
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
     [ts endEditing];
+    gMacNoteReservedPara = para;   // so a moved sticker can take this band back
 }
 
 // Build (or rebuild) the sticker's subviews for the current note and palette.
@@ -1465,6 +1508,19 @@ static void btMacEnsureNoteView(void) {
         del.contentTintColor = btMacNoteColor(gMacNoteMuted);
         del.tag = 905;
         [box addSubview:del];
+
+        if (gMacNoteNextable) {
+            // The WHO line's count region is a CONTROL when the passage holds
+            // more than one note (S10) — the iOS twin's arrangement: a
+            // transparent button over the counts span, whose affordance is
+            // the span itself drawn in the accent with a trailing chevron
+            // (btMacLayoutNote).
+            NSButton *nxt = [NSButton buttonWithTitle:@"" target:gTextView action:@selector(btNoteNext:)];
+            nxt.bordered = NO;
+            nxt.transparent = YES;
+            nxt.tag = 906;
+            [box addSubview:nxt];
+        }
     }
 
     // A subview of the TEXT VIEW — the scroll view's document view — so this
@@ -1576,12 +1632,41 @@ static void btMacLayoutNote(void) {
     NSView *body = [gMacNoteView viewWithTag:903];
     NSView *hide = [gMacNoteView viewWithTag:904];
     NSView *del  = [gMacNoteView viewWithTag:905];
+    NSButton *nxt = (NSButton *)[gMacNoteView viewWithTag:906];
     CGFloat whoW = w - 2 * kMacNotePad - 2 * kMacNoteBtn;
     who.frame  = NSMakeRect(kMacNotePad, kMacNotePad - 2, whoW, 13);
     // The fit runs HERE, where the label's real width is known: if the who
     // line cannot fit, the sender half is tail-truncated and the counts
     // survive whole (btMacFitWho).
-    ((NSTextField *)who).stringValue = btMacFitWho(gMacNoteWho ?: @"Note from Friend", whoW, btMacNoteWhoFont());
+    NSString *fitted = btMacFitWho(gMacNoteWho ?: @"Note from Friend", whoW, btMacNoteWhoFont());
+    NSRange counts = (gMacNoteNextable && nxt != nil) ? btMacWhoCountRange(fitted)
+                                                      : NSMakeRange(NSNotFound, 0);
+    if (counts.location == NSNotFound) {
+        ((NSTextField *)who).stringValue = fitted;
+        nxt.hidden = YES;
+    } else {
+        // The counts span is the next-tap's control, so it must LOOK
+        // pressable: the accent colour plus a trailing chevron — the app's
+        // own chrome, no new words (the iOS twin paints identically).
+        NSString *shown = [fitted stringByReplacingCharactersInRange:NSMakeRange(NSMaxRange(counts), 0)
+                                                          withString:@" ›"];
+        NSRange lit = NSMakeRange(counts.location, counts.length + 2);
+        NSDictionary *attrs = @{NSFontAttributeName: btMacNoteWhoFont()};
+        NSMutableAttributedString *a = [[NSMutableAttributedString alloc]
+            initWithString:shown
+                attributes:@{NSFontAttributeName: btMacNoteWhoFont(),
+                             NSForegroundColorAttributeName: btMacNoteColor(gMacNoteMuted)}];
+        [a addAttribute:NSForegroundColorAttributeName value:btMacNoteColor(gMacNoteAccent) range:lit];
+        ((NSTextField *)who).attributedStringValue = a;
+        CGFloat pre = ceil([[shown substringToIndex:lit.location] sizeWithAttributes:attrs].width);
+        CGFloat lw  = ceil([[shown substringWithRange:lit] sizeWithAttributes:attrs].width);
+        CGFloat bx = kMacNotePad + pre - 6;
+        if (bx < kMacNotePad - 6) bx = kMacNotePad - 6;
+        CGFloat bw = lw + 16;
+        if (bx + bw > kMacNotePad + whoW + 6) bw = kMacNotePad + whoW + 6 - bx;
+        nxt.hidden = NO;
+        nxt.frame = NSMakeRect(bx, 0, bw, kMacNotePad + 13 + 2);
+    }
     body.frame = NSMakeRect(kMacNotePad, kMacNotePad + 13 + 4,
                             w - 2 * kMacNotePad, h - kMacNotePad - 13 - 4 - kMacNotePad);
     hide.frame = NSMakeRect(w - 2 * kMacNoteBtn - 4, 3, kMacNoteBtn, kMacNoteBtn);
@@ -1629,7 +1714,7 @@ static void btMacRefreshNote(void) {
 // theme variant is folded there), so they do not join the compare; the apply
 // path's own btMacRefreshNote (bibleTextMacApplyHTML) restyles after every
 // import exactly as before.
-void bibleTextMacSetNote(const char *text, const char *who, int minimized, int anchorVerse,
+void bibleTextMacSetNote(const char *text, const char *who, int minimized, int nextable, int anchorVerse,
                          double bgR, double bgG, double bgB,
                          double fgR, double fgG, double fgB,
                          double muR, double muG, double muB,
@@ -1640,10 +1725,12 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int a
     dispatch_async(dispatch_get_main_queue(), ^{
         BOOL changed = !btMacSameStr(t, gMacNoteText) || !btMacSameStr(w, gMacNoteWho) ||
                        gMacNoteMinimized != (minimized ? YES : NO) ||
+                       gMacNoteNextable != (nextable ? YES : NO) ||
                        gMacNoteAnchorVerse != anchorVerse;
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
+        gMacNoteNextable = nextable ? YES : NO;
         gMacNoteAnchorVerse = anchorVerse;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
         gMacNoteFg[0]=fgR; gMacNoteFg[1]=fgG; gMacNoteFg[2]=fgB;
@@ -1840,12 +1927,14 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"sync"
 	"time"
 	"unsafe"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -2086,7 +2175,7 @@ func armReadingRestore(verse int, delta, frac float64) {
 // re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	text, who, pill := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	text, who, pill, next := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2094,6 +2183,10 @@ func pushNoteToPane(state *AppState) {
 	min := C.int(0)
 	if pill {
 		min = 1
+	}
+	nx := C.int(0)
+	if next {
+		nx = 1
 	}
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
@@ -2107,7 +2200,7 @@ func pushNoteToPane(state *AppState) {
 	// highlight, and a sticker without an anchor parks at the top of the
 	// chapter (an unplaced-only chapter pushes verse 0 on purpose: the top is
 	// the only honest place for notes with no verses here).
-	C.bibleTextMacSetNote(cText, cWho, min, C.int(state.NoteVerseLo),
+	C.bibleTextMacSetNote(cText, cWho, min, nx, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 
@@ -2197,11 +2290,42 @@ func (h *macReadingHost) Move(p fyne.Position) {
 
 // pushFrame projects the host's absolute canvas rect to the NSScrollView frame,
 // immediately and again on the next tick once the layout settles.
+//
+// The trailing re-assert is ONE shared timer, not one per call: a layout pass
+// is a burst of Resize+Move, and only the LAST geometry is worth re-asserting
+// — every earlier tick would push a frame already superseded. The single
+// timer also matters to the race detector: under the TEST driver, fyne.Do
+// from a goroutine runs inline on that goroutine, so a burst's timers all
+// firing ~60ms later used to walk the object tree concurrently
+// (AbsolutePositionForObject → Fyne's renderer cache), a race the real
+// drivers never see because they serialize fyne.Do onto the main thread.
+// macFrameMu covers the timer handle AND the walk itself, so a re-assert
+// mid-fire cannot overlap the immediate push of the next burst either.
+var (
+	macFrameMu    sync.Mutex
+	macFrameTimer *time.Timer
+)
+
 func (h *macReadingHost) pushFrame() {
 	setMacFrameFromObject(h)
-	time.AfterFunc(60*time.Millisecond, func() {
+	if _, real := fyne.CurrentApp().Driver().(desktop.Driver); !real {
+		// The TEST driver: there is no visible native pane to re-assert for,
+		// and a timer's fyne.Do runs on the timer's own goroutine there — an
+		// off-main tree walk the harness's walks can race with. The immediate
+		// push above (same goroutine as the test) is the whole job.
+		return
+	}
+	macFrameMu.Lock()
+	defer macFrameMu.Unlock()
+	if macFrameTimer != nil {
+		macFrameTimer.Reset(60 * time.Millisecond)
+		return
+	}
+	macFrameTimer = time.AfterFunc(60*time.Millisecond, func() {
 		fyne.Do(func() {
-			if macCurrentHost == h {
+			// The CURRENT host, not a captured one: the timer is shared, and
+			// by fire time a rebuild may have swapped hosts under it.
+			if h := macCurrentHost; h != nil {
 				setMacFrameFromObject(h)
 			}
 		})
@@ -2209,7 +2333,9 @@ func (h *macReadingHost) pushFrame() {
 }
 
 func setMacFrameFromObject(h *macReadingHost) {
+	macFrameMu.Lock()
 	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(h)
+	macFrameMu.Unlock()
 	sz := h.Size()
 	if sz.Width <= 0 || sz.Height <= 0 {
 		return
