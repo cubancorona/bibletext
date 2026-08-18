@@ -57,8 +57,8 @@ func TestIndigoEndOmission(t *testing.T) {
 	}
 	// And end to end through the real pipeline, with the provenance citation.
 	st := viacomState()
-	text, cite := prepareShareQuote(st, sel)
-	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	text, cite, _, _ := prepareShareQuote(st, sel, selSpan{})
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0))
 	if !strings.HasSuffix(quote, "generalized knowledge . . . .”") {
 		t.Errorf("pipeline four-dot: %q", quote[maxInt(0, len(quote)-50):])
 	}
@@ -79,8 +79,8 @@ func TestIndigoNoMarkAfterFinalPunctuation(t *testing.T) {
 		viacom1,                          // full sentence, period included
 		strings.TrimSuffix(viacom1, "."), // drag stopped before the period
 	} {
-		text, cite := prepareShareQuote(st, sel)
-		quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+		text, cite, _, _ := prepareShareQuote(st, sel, selSpan{})
+		quote := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0))
 		if strings.Contains(quote, ". . .") {
 			t.Errorf("R39.9: no ellipsis after a final punctuation mark; sel ends %q → %q",
 				sel[len(sel)-12:], quote[maxInt(0, len(quote)-40):])
@@ -144,11 +144,11 @@ func TestParenthesisBeforeTerminal(t *testing.T) {
 		t.Skip("seed text differs from the expected WEB John 1:41 wording")
 	}
 	sel := corpus[i : j+len(", Christ")]
-	text, _ := prepareShareQuote(st, sel)
+	text, _, _, _ := prepareShareQuote(st, sel, selSpan{})
 	if !strings.HasSuffix(text, "Christ).") {
 		t.Errorf("completion must traverse the parenthesis: …%q", text[maxInt(0, len(text)-25):])
 	}
-	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0))
 	if strings.Contains(quote, ". . .") {
 		t.Errorf("no words omitted — no mark belongs: %q", quote[maxInt(0, len(quote)-40):])
 	}

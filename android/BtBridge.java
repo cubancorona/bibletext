@@ -167,8 +167,11 @@ public final class BtBridge {
     };
 
     // Called from native (any thread). Selection/menu action chosen by the
-    // reader; text is the exact selected substring.
-    private static native void nativeSelectionAction(String action, String text);
+    // reader; text is the exact selected substring, lo/hi its verse span
+    // resolved against the Spanned's verse index (verseAtOffset; 0,0 when the
+    // index has nothing for it) — position, not text, decides which verses a
+    // share or cross-reference cites.
+    private static native void nativeSelectionAction(String action, String text, int lo, int hi);
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
     private static native void nativeScrolled(float frac);
 
@@ -308,7 +311,8 @@ public final class BtBridge {
     // second level (a floating toolbar cannot nest a real SubMenu inline). The
     // anchor is a zero-size view placed at the selection end's coordinates in
     // root, removed when the popup dismisses. sel was captured at tap time.
-    private static void showStudyPopup(final ActionMode mode, final String sel, int selEnd) {
+    private static void showStudyPopup(final ActionMode mode, final String sel, int selEnd,
+                                       final int selLo, final int selHi) {
         if (activity == null || root == null || text == null) return;
         float ax = 0; int ay = 0;
         Layout lay = text.getLayout();
@@ -337,7 +341,7 @@ public final class BtBridge {
                     default: return false;
                 }
                 try { mode.finish(); } catch (Throwable ignored) {}
-                nativeSelectionAction(action, sel);
+                nativeSelectionAction(action, sel, selLo, selHi);
                 return true;
             }
         });
@@ -516,13 +520,18 @@ public final class BtBridge {
             @Override public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
                 int a = text.getSelectionStart(), b = text.getSelectionEnd();
                 if (a < 0 || b < 0) return true;
-                final String sel = text.getText().subSequence(Math.min(a, b), Math.max(a, b)).toString();
+                int s0 = Math.min(a, b), s1 = Math.max(a, b);
+                final String sel = text.getText().subSequence(s0, s1).toString();
+                // The verse span, resolved NOW from the same offsets the text was
+                // captured from (the popup below may collapse the selection).
+                final int selLo = verseAtOffset(s0);
+                final int selHi = s1 > s0 ? verseAtOffset(s1 - 1) : selLo;
                 if (item.getItemId() == 200) {
                     // The inline "Study with AI": open our popup of the three
                     // actions, anchored at the selection. The selected text is
                     // captured NOW — opening the popup may collapse the selection
                     // and end the action mode.
-                    showStudyPopup(mode, sel, Math.max(a, b));
+                    showStudyPopup(mode, sel, s1, selLo, selHi);
                     return true;
                 }
                 String action;
@@ -535,7 +544,7 @@ public final class BtBridge {
                     default: return false; // submenu header (201) or system item
                 }
                 mode.finish();
-                nativeSelectionAction(action, sel);
+                nativeSelectionAction(action, sel, selLo, selHi);
                 return true;
             }
             @Override public void onDestroyActionMode(ActionMode mode) {}
@@ -738,6 +747,20 @@ public final class BtBridge {
             i++;
         }
         return any ? val : -1;
+    }
+
+    // verseAtOffset returns the verse whose number run is the last at or before
+    // character offset `off` in the current Spanned (0 = above verse 1's number,
+    // i.e. the chapter heading — the Go side clamps). verseStarts is in document
+    // order, so the last start <= off wins; an offset inside a verse's NUMBER
+    // resolves to that verse, matching the iOS btIOSVerseAtIndex contract.
+    private static int verseAtOffset(int off) {
+        int v = 0;
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseStarts[i] > off) break;
+            v = verseNums[i];
+        }
+        return v;
     }
 
     // verseRange returns {start,end} for a verse number, or null if not indexed.

@@ -195,7 +195,7 @@ func TestRealWorldGospelSweep(t *testing.T) {
 						book, ch, cleaned, strings.Join(want, " "))
 					continue
 				}
-				term := originalSentenceTerminal(state, cleaned)
+				term := originalSentenceTerminal(state, cleaned, -1, 0)
 				if term != '.' && term != '!' && term != '?' {
 					t.Errorf("%s %d: bad terminal %q", book, ch, term) // I8
 				}
@@ -212,7 +212,7 @@ func TestRealWorldGospelSweep(t *testing.T) {
 				end := min(start+n, len(words))
 				sel := strings.Join(words[start:end], " ")
 				cleaned := cleanQuoteText(state, sel)
-				term := originalSentenceTerminal(state, cleaned)
+				term := originalSentenceTerminal(state, cleaned, -1, 0)
 				if term != '.' && term != '!' && term != '?' {
 					t.Errorf("%s %d: bad terminal %q", book, ch, term) // I8
 				}
@@ -251,7 +251,7 @@ func TestRealWorldFamousPassages(t *testing.T) {
 	{
 		state := rwState(t, bd, "John", 3)
 		sel := verseText("John", 3, 16)
-		q := formatBibleQuote(cleanQuoteText(state, sel), originalSentenceTerminal(state, sel))
+		q := formatBibleQuote(cleanQuoteText(state, sel), originalSentenceTerminal(state, sel, -1, 0))
 		if !strings.HasPrefix(q, "“") || !strings.HasSuffix(q, "”") {
 			t.Errorf("John 3:16 should be inline-quoted: %q", q)
 		}
@@ -265,7 +265,7 @@ func TestRealWorldFamousPassages(t *testing.T) {
 	{
 		state := rwState(t, bd, "Matthew", 27)
 		sel := verseText("Matthew", 27, 46)
-		q := formatBibleQuote(cleanQuoteText(state, sel), originalSentenceTerminal(state, sel))
+		q := formatBibleQuote(cleanQuoteText(state, sel), originalSentenceTerminal(state, sel, -1, 0))
 		if strings.Contains(sel, "“") && !strings.Contains(q, "‘") {
 			t.Errorf("Matthew 27:46 internal quotes should nest to singles: %q", q)
 		}
@@ -282,7 +282,7 @@ func TestRealWorldFamousPassages(t *testing.T) {
 			sel = append(sel, verseText("Matthew", 5, v))
 		}
 		s := strings.Join(sel, " ")
-		q := formatBibleQuote(cleanQuoteText(state, s), originalSentenceTerminal(state, s))
+		q := formatBibleQuote(cleanQuoteText(state, s), originalSentenceTerminal(state, s, -1, 0))
 		if strings.HasPrefix(q, "“") {
 			t.Errorf("Beatitudes (50+ words) must be a block without outer marks: %q", q[:40])
 		}
@@ -292,7 +292,7 @@ func TestRealWorldFamousPassages(t *testing.T) {
 	{
 		state := rwState(t, bd, "John", 11)
 		sel := verseText("John", 11, 35)
-		q := formatBibleQuote(cleanQuoteText(state, sel), originalSentenceTerminal(state, sel))
+		q := formatBibleQuote(cleanQuoteText(state, sel), originalSentenceTerminal(state, sel, -1, 0))
 		if q != "“"+sel+"”" {
 			t.Errorf("John 11:35:\n got %q\nwant %q", q, "“"+sel+"”")
 		}

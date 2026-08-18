@@ -13,17 +13,18 @@
 
 // Implemented in Go (reading_android_export.go). The char* arguments are
 // only valid for the duration of the call — Go copies them immediately.
-extern void btaSelectionAction(char *action, char *text);
+// lo/hi is the selection's verse span, resolved in Java (0,0 = unresolved).
+extern void btaSelectionAction(char *action, char *text, int lo, int hi);
 extern void btaScrolled(float frac);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
 extern void btaKeyboardChanged(float overlapDp);
 
 JNIEXPORT void JNICALL
-Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText) {
+Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi) {
 	const char *action = (*env)->GetStringUTFChars(env, jAction, NULL);
 	const char *text = (*env)->GetStringUTFChars(env, jText, NULL);
-	btaSelectionAction((char *)action, (char *)text);
+	btaSelectionAction((char *)action, (char *)text, (int)jLo, (int)jHi);
 	(*env)->ReleaseStringUTFChars(env, jAction, action);
 	(*env)->ReleaseStringUTFChars(env, jText, text);
 }

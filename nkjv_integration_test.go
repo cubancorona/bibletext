@@ -329,7 +329,7 @@ func TestNKJVPoetryShareLines(t *testing.T) {
 	if len(breaks) != 2 {
 		t.Fatalf("want 2 structural breaks (in-verse line + poetic join), got %d: %+v", len(breaks), breaks)
 	}
-	restored := restoreShareLineBreaks(state, flat)
+	restored := restoreShareLineBreaks(state, flat, -1, 0)
 	want := "God is our refuge and strength,\na very present help in trouble.\nTherefore we won't be afraid,"
 	if restored != want {
 		t.Errorf("restored poetry lines:\n got %q\nwant %q", restored, want)
@@ -355,7 +355,7 @@ func TestNKJVProseShareStaysProse(t *testing.T) {
 	if len(breaks) != 0 {
 		t.Errorf("a short prose chapter has no structural breaks, got %+v", breaks)
 	}
-	if restored := restoreShareLineBreaks(state, flat); restored != flat {
+	if restored := restoreShareLineBreaks(state, flat, -1, 0); restored != flat {
 		t.Errorf("prose share must come back unchanged:\n got %q", restored)
 	}
 }

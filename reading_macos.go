@@ -32,10 +32,16 @@ static void btMacRefreshNote(void);
 static CGFloat btMacNoteTopY(void);
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
-// an AI study action; it copies both strings immediately.
-extern void bibleTextAIMenuTapped(char *action, char *text);
+// an AI study action; it copies both strings immediately. lo/hi is the
+// selection's verse span, resolved against the verse-number runs of the text
+// storage at action time (0,0 = unresolved) — position, not text, decides which
+// verses a share or cross-reference cites.
+extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
-extern void bibleTextStudyMenuTapped(char *action, char *text);
+extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi);
+// Defined below with the rest of the verse-number machinery (it needs the font
+// threshold); declared here because the menu handlers above it use it.
+static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi);
 // Posted when the reader scrolls by hand while read-along is live (audio_export_apple.go).
 extern void bibleTextReadAlongUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
@@ -161,30 +167,27 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     return nil;
 }
 
-- (void)hbAI_explain:(id)sender {
-    bibleTextAIMenuTapped((char *)"explain", (char *)self.hbSelectedText.UTF8String);
+// hbSendAI / hbSendStudy read the selection ONCE — text and verse span from the
+// same selectedRange, at action time — so the words dispatched and the span
+// attributing them can never come from different selections.
+- (void)hbSendAI:(const char *)action {
+    int lo = 0, hi = 0;
+    btMacVerseSpanForRange(self.textStorage, self.selectedRange, &lo, &hi);
+    bibleTextAIMenuTapped((char *)action, (char *)self.hbSelectedText.UTF8String, lo, hi);
 }
-- (void)hbAI_context:(id)sender {
-    bibleTextAIMenuTapped((char *)"context", (char *)self.hbSelectedText.UTF8String);
+- (void)hbSendStudy:(const char *)action {
+    int lo = 0, hi = 0;
+    btMacVerseSpanForRange(self.textStorage, self.selectedRange, &lo, &hi);
+    bibleTextStudyMenuTapped((char *)action, (char *)self.hbSelectedText.UTF8String, lo, hi);
 }
-- (void)hbAI_translation:(id)sender {
-    bibleTextAIMenuTapped((char *)"translation", (char *)self.hbSelectedText.UTF8String);
-}
-- (void)hbCrossRefs:(id)sender {
-    bibleTextStudyMenuTapped((char *)"crossref", (char *)self.hbSelectedText.UTF8String);
-}
-- (void)hbShare_cite:(id)sender {
-    bibleTextStudyMenuTapped((char *)"share-cite", (char *)self.hbSelectedText.UTF8String);
-}
-- (void)hbShare_image:(id)sender {
-    bibleTextStudyMenuTapped((char *)"share-image", (char *)self.hbSelectedText.UTF8String);
-}
-- (void)hbShare_link_note:(id)sender {
-    bibleTextStudyMenuTapped((char *)"share-link-note", (char *)self.hbSelectedText.UTF8String);
-}
-- (void)hbShare_link:(id)sender {
-    bibleTextStudyMenuTapped((char *)"share-link", (char *)self.hbSelectedText.UTF8String);
-}
+- (void)hbAI_explain:(id)sender     { [self hbSendAI:"explain"]; }
+- (void)hbAI_context:(id)sender     { [self hbSendAI:"context"]; }
+- (void)hbAI_translation:(id)sender { [self hbSendAI:"translation"]; }
+- (void)hbCrossRefs:(id)sender      { [self hbSendStudy:"crossref"]; }
+- (void)hbShare_cite:(id)sender     { [self hbSendStudy:"share-cite"]; }
+- (void)hbShare_image:(id)sender    { [self hbSendStudy:"share-image"]; }
+- (void)hbShare_link_note:(id)sender { [self hbSendStudy:"share-link-note"]; }
+- (void)hbShare_link:(id)sender     { [self hbSendStudy:"share-link"]; }
 // Target of the floating "Follow narration" button (btMacEnsureFollowBtn) — the
 // text view doubles as its action target so no extra controller object is needed.
 - (void)hbFollowTapped:(id)sender {
@@ -247,6 +250,36 @@ static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {
         if (val != nil && ((NSFont *)val).pointSize > maxSize) maxSize = ((NSFont *)val).pointSize;
     }];
     return maxSize > 0 ? maxSize * 0.8 : 15.0;
+}
+
+// btMacVerseSpanForRange maps a selected character range to its verse span:
+// lo/hi are the last verse-number runs at or before the range's first and last
+// characters. A selection that starts inside a verse's NUMBER run starts at or
+// after that run's location, so it resolves to that verse; one that starts
+// above verse 1's number (the chapter heading) reports lo=0 and the Go side
+// clamps to verse 1. macOS has no prebuilt verse index (unlike iOS's
+// gVerseIndex — see btIOSBuildVerseIndex, built to unhook an O(n) walk from
+// scroll-settle); this runs once per MENU ACTION, where one enumeration is
+// nothing.
+static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi) {
+    *outLo = 0; *outHi = 0;
+    if (ts == nil || sel.length == 0 || NSMaxRange(sel) > ts.length) return;
+    CGFloat thr = btMacVerseFontThreshold(ts);
+    NSUInteger start = sel.location, last = NSMaxRange(sel) - 1;
+    __block NSInteger lo = 0, hi = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (r.location > last) { *stop = YES; return; }
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
+        NSInteger v = [[ts.string substringWithRange:r] integerValue];
+        if (v <= 0) return;
+        if (r.location <= start) lo = v;
+        hi = v;
+    }];
+    *outLo = (int)lo;
+    *outHi = (int)hi;
 }
 
 // btMacLocForVerse returns the character location of `verse`'s number run, or

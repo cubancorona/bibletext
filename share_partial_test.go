@@ -40,7 +40,7 @@ func TestShareSelectionMidWordEndTrim(t *testing.T) {
 	// rest stands, and the citation covers 19–20.
 	st := acts4ShareState()
 	raw := "replied, “Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and h"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.HasSuffix(text, " h") || strings.Contains(text, " h ") {
 		t.Errorf("partial word survived: %q", text)
 	}
@@ -59,7 +59,7 @@ func TestShareSelectionDanglingMarkerDropped(t *testing.T) {
 	// formatted quote must carry NO omission mark.
 	st := acts4ShareState()
 	raw := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard.” 21 Af"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.Contains(text, "21") || strings.Contains(text, "Af") {
 		t.Errorf("dangling marker/fragment survived: %q", text)
 	}
@@ -69,7 +69,7 @@ func TestShareSelectionDanglingMarkerDropped(t *testing.T) {
 	if cite != "Acts 4:19–20" {
 		t.Errorf("citation = %q, want Acts 4:19–20", cite)
 	}
-	if q := formatBibleQuote(text, originalSentenceTerminal(st, text)); strings.Contains(q, ". . .") {
+	if q := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0)); strings.Contains(q, ". . .") {
 		t.Errorf("complete sentence must carry no omission mark: %q", q)
 	}
 }
@@ -79,14 +79,14 @@ func TestShareSelectionWholeWordExtendsCitation(t *testing.T) {
 	// its marker is stripped, and the citation extends to 19–21.
 	st := acts4ShareState()
 	raw := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard.” 21 After"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if !strings.HasSuffix(text, "heard.” After") {
 		t.Errorf("whole word from v21 must be kept, marker stripped; got %q", text)
 	}
 	if cite != "Acts 4:19–21" {
 		t.Errorf("citation = %q, want Acts 4:19–21 (any quoted word from a verse cites it)", cite)
 	}
-	if q := formatBibleQuote(text, originalSentenceTerminal(st, text)); !strings.Contains(q, ". . . .") {
+	if q := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0)); !strings.Contains(q, ". . . .") {
 		t.Errorf("mid-sentence cut must carry the four-dot omission: %q", q)
 	}
 }
@@ -95,7 +95,7 @@ func TestShareSelectionMidWordStartTrim(t *testing.T) {
 	// A drag that STARTS mid-word gets the symmetric repair.
 	st := acts4ShareState()
 	raw := "eplied, “Judge for yourselves whether it is right in God’s sight"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.HasPrefix(text, "eplied") {
 		t.Errorf("leading partial word survived: %q", text)
 	}
@@ -121,7 +121,7 @@ func TestShareSelectionLegitimateNumberUntouched(t *testing.T) {
 	}
 	st := &AppState{Bible: bd, CurrentBook: "Acts", CurrentChapter: 4}
 	raw := "the man on whom this sign of healing was performed was over 21 years old."
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if !strings.Contains(text, "over 21 years") {
 		t.Errorf("legitimate in-verse number was stripped: %q", text)
 	}
@@ -135,7 +135,7 @@ func TestShareSelectionFullVersesUnchanged(t *testing.T) {
 	// markers stripped, full range cited.
 	st := acts4ShareState()
 	raw := "But Peter and John replied, “Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard.”"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.Contains(text, "20 For") {
 		t.Errorf("marker not stripped in the full-verse case: %q", text)
 	}
@@ -157,8 +157,8 @@ func TestShareSelectionFullVersesUnchanged(t *testing.T) {
 func TestShareSelectionWhollyEnclosedSinglePair(t *testing.T) {
 	st := acts4ShareState()
 	raw := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard.” 21 Af"
-	text, cite := prepareShareQuote(st, raw)
-	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0))
 	want := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. For we cannot stop speaking about what we have seen and heard.”"
 	if quote != want {
 		t.Errorf("wholly-enclosed share:\n got %q\nwant %q", quote, want)
@@ -176,11 +176,11 @@ func TestShareSelectionWhollyEnclosedSinglePair(t *testing.T) {
 func TestShareSelectionMissingTerminalCompleted(t *testing.T) {
 	st := acts4ShareState()
 	raw := "“Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and heard"
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if !strings.HasSuffix(text, "heard.") {
 		t.Errorf("missing terminal must be restored: %q", text)
 	}
-	quote := formatBibleQuote(text, originalSentenceTerminal(st, text))
+	quote := formatBibleQuote(text, originalSentenceTerminal(st, text, -1, 0))
 	if strings.Contains(quote, ". . .") {
 		t.Errorf("no words were omitted — no ellipsis belongs: %q", quote)
 	}
@@ -207,13 +207,13 @@ func TestShareSelectionMissingQuestionTerminal(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 11}
 
 	// Stops after the question's last word → complete with "?", no ellipsis.
-	text, _ := prepareShareQuote(st, "Whoever lives and believes in me will never die. Do you believe this")
+	text, _, _, _ := prepareShareQuote(st, "Whoever lives and believes in me will never die. Do you believe this", selSpan{})
 	if !strings.HasSuffix(text, "this?") {
 		t.Errorf("question terminal must be restored: %q", text)
 	}
 	// Stops with a word still to come ("this") → the omission is real: four-dot.
-	text2, _ := prepareShareQuote(st, "Whoever lives and believes in me will never die. Do you believe")
-	q2 := formatBibleQuote(text2, originalSentenceTerminal(st, text2))
+	text2, _, _, _ := prepareShareQuote(st, "Whoever lives and believes in me will never die. Do you believe", selSpan{})
+	q2 := formatBibleQuote(text2, originalSentenceTerminal(st, text2, -1, 0))
 	if !strings.Contains(q2, ". . . ?") {
 		t.Errorf("a word IS omitted — the four-dot question form belongs: %q", q2)
 	}

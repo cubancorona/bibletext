@@ -269,11 +269,11 @@ func bookAbbrev(name string) string {
 // crossRefsForSelection aggregates the cross-references for the verse(s) the
 // selection spans, resolving target book names against the loaded translation
 // and merging duplicates (keeping the highest vote). Highest-voted first.
-func crossRefsForSelection(state *AppState, text string) []crossRef {
+func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
 	if state == nil || state.Bible == nil {
 		return nil
 	}
-	verses := selectionVerses(state, text)
+	verses := selectionVerses(state, text, span)
 	shown := map[string]bool{} // label -> already emitted
 
 	// Gospel synopsis parallels first (parallels.go): the same event in the other
@@ -332,10 +332,40 @@ func crossRefsForSelection(state *AppState, text string) []crossRef {
 }
 
 // selectionVerses returns the verses of the current chapter that the selection
-// overlaps (matching in either direction so partial selections still resolve).
-func selectionVerses(state *AppState, text string) []Verse {
+// overlaps. A valid span is answered from POSITION alone — exactly the
+// chapter's verses lo..hi, clamped to the verses that exist — because the
+// matching below cannot be trusted with scripture's repetitions: Psalm 136's
+// refrain opens the same way in all 26 verses, so a probe match cites whichever
+// verse compares first, and the 8-rune floor resolves short selections to
+// nothing at all. The matching path survives only as the fallback for
+// selections that arrive without a position (legacy Entry pane, zero span).
+func selectionVerses(state *AppState, text string, span selSpan) []Verse {
 	if state.Bible == nil {
 		return nil
+	}
+	if span.valid() {
+		lo, hi := span.lo, span.hi
+		// ONE RESOLVER FOR EVERY VERB. The share pipeline attributes the same
+		// selection positionally through normalizeShareSelection, whose trims
+		// drop a verse that contributes no words (a selection swept just past a
+		// verse's NUMBER spans lo..N natively, but no word of N is quoted). A
+		// span answered verbatim here made the crossref panel cite — and pull
+		// references for — a verse the share card rightly refused to name, for
+		// one and the same drag (verification finding). Delegating to the normalize
+		// makes the verbs agree by construction; the raw span survives as the
+		// answer only where the normalize declines outright (a selection that
+		// is ONLY a verse number, a single partial word), where "the verse the
+		// position touches" is the honest reading.
+		if _, l, h, _, ok := normalizeShareSelection(state, text, span); ok {
+			lo, hi = l, h
+		}
+		var out []Verse
+		for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+			if v.Verse >= lo && v.Verse <= hi {
+				out = append(out, v)
+			}
+		}
+		return out
 	}
 	norm := collapseSpaces(text)
 	selProbe := firstRunes(norm, 24)

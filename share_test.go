@@ -32,7 +32,7 @@ func TestCitationForSelection(t *testing.T) {
 		{"unmatched", "a phrase not present anywhere here", "John 3"},
 	}
 	for _, c := range cases {
-		if got := citationForSelection(state, c.sel); got != c.want {
+		if got := citationForSelection(state, c.sel, selSpan{}); got != c.want {
 			t.Errorf("%s: citationForSelection = %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -187,8 +187,8 @@ func TestCitedTextSharePreservesSourceLineBreaks(t *testing.T) {
 	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 19}
 
 	raw := "1 The heavens declare the glory of God. The expanse shows his handiwork."
-	cleaned, cite := prepareShareQuote(state, raw)
-	cleaned = restoreShareLineBreaks(state, cleaned)
+	cleaned, cite, _, _ := prepareShareQuote(state, raw, selSpan{})
+	cleaned = restoreShareLineBreaks(state, cleaned, -1, 0)
 	got := composeShareText(formatBibleQuote(cleaned), cite, "World English Bible")
 	want := "“The heavens declare the glory of God.\nThe expanse shows his handiwork.”\n\n— Psalms 19:1 (World English Bible)"
 	if got != want {
@@ -209,7 +209,7 @@ func TestCitedTextSharePreservesParagraphsNotSoftWraps(t *testing.T) {
 	// The reader intentionally starts verse 2 as a new paragraph once the first
 	// paragraph passes its measure; that structural break survives sharing.
 	flat := longVerse + " Second paragraph."
-	if got, want := restoreShareLineBreaks(state, flat), longVerse+"\n\nSecond paragraph."; got != want {
+	if got, want := restoreShareLineBreaks(state, flat, -1, 0), longVerse+"\n\nSecond paragraph."; got != want {
 		t.Errorf("paragraph structure:\n got %q\nwant %q", got, want)
 	}
 
@@ -221,8 +221,8 @@ func TestCitedTextSharePreservesParagraphsNotSoftWraps(t *testing.T) {
 		{BookName: "Test", Chapter: 1, Verse: 1, Text: "A line that wraps on a narrow screen."},
 	}}
 	shortState := &AppState{Bible: shortBD, CurrentBook: "Test", CurrentChapter: 1}
-	cleaned, _ := prepareShareQuote(shortState, "A line that wraps\non a narrow screen.")
-	if got, want := restoreShareLineBreaks(shortState, cleaned), "A line that wraps on a narrow screen."; got != want {
+	cleaned, _, _, _ := prepareShareQuote(shortState, "A line that wraps\non a narrow screen.", selSpan{})
+	if got, want := restoreShareLineBreaks(shortState, cleaned, -1, 0), "A line that wraps on a narrow screen."; got != want {
 		t.Errorf("soft wrap must be flattened:\n got %q\nwant %q", got, want)
 	}
 }
@@ -257,11 +257,11 @@ func TestShareRestoresRealPoetryLines(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
 
 	raw := "The LORD is my shepherd; I shall not want. 2 He makes me lie down in green pastures; He leads me beside quiet waters."
-	text, cite := prepareShareQuote(st, raw)
+	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 	if strings.Contains(text, "\n") {
 		t.Fatalf("pipeline text stays flat for Bluebook normalization: %q", text)
 	}
-	restored := restoreShareLineBreaks(st, text)
+	restored := restoreShareLineBreaks(st, text, -1, 0)
 	want := "The LORD is my shepherd;\nI shall not want.\nHe makes me lie down in green pastures;\nHe leads me beside quiet waters."
 	if restored != want {
 		t.Errorf("poetry lines:\n got %q\nwant %q", restored, want)

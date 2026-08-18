@@ -347,10 +347,45 @@ func (p *styledReadingPane) copyToClipboard() {
 
 // --- The study menu ----------------------------------------------------------
 
+// selectedVerseSpan resolves the selection's verse range POSITIONALLY: every
+// laid-out run carries its verse (styledRun.Verse — verse numbers included, so
+// a selection touching a number resolves to that verse), and a run overlaps the
+// selection when its rune range [Offset, Offset+len) crosses [selStart,
+// selEnd). Runs are in chapter order, so the first overlap is lo and the last
+// is hi. A selection covering only separator whitespace overlaps no run and
+// yields the zero span (the matching fallback applies).
+func (p *styledReadingPane) selectedVerseSpan() selSpan {
+	if p.selStart < 0 || p.selEnd <= p.selStart || p.lay == nil {
+		return selSpan{}
+	}
+	lo, hi := 0, 0
+	for _, ln := range p.lay.Lines {
+		if ln.StartOffset >= p.selEnd {
+			break
+		}
+		if ln.EndOffset <= p.selStart {
+			continue
+		}
+		for _, r := range ln.Runs {
+			if r.Offset >= p.selEnd {
+				break
+			}
+			if r.Offset+len([]rune(r.Text)) <= p.selStart {
+				continue
+			}
+			if lo == 0 {
+				lo = r.Verse
+			}
+			hi = r.Verse
+		}
+	}
+	return selSpanFromNative(lo, hi)
+}
+
 // studyMenu serves the pane's right-click menu through the SAME shared
 // builder chapterText uses (selectionStudyMenu, reading.go) — the milestone-4
 // unification that retired this file's temporary duplicate.
 func (p *styledReadingPane) studyMenu() *fyne.Menu {
-	return selectionStudyMenu(p.state, plainSelection(p.selectedRaw()),
+	return selectionStudyMenu(p.state, plainSelection(p.selectedRaw()), p.selectedVerseSpan(),
 		p.copyToClipboard, p.selectAll)
 }
