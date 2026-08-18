@@ -312,48 +312,101 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 		// just put that stored note in place, and it stays (platform reproduction: a
 		// note-less link blanked the saved note's banner).
 		if t.Note != "" {
-			// Store FIRST, then mirror: the verbs address the live note by its
-			// StoredNote.ID, so the mirror needs the identity the store minted
-			// (or found — a re-opened link dedups to the record already held,
-			// whose Received and Minimized are preserved; the arrival still
-			// SHOWS the note expanded for this session, because the reader just
-			// tapped a link carrying it, but the store keeps their history).
+			// Store FIRST, then focus, then the projection: the verbs address
+			// the live note by its StoredNote.ID, so the mirror needs the
+			// identity the store minted (or found — a re-opened link dedups to
+			// the record already held, whose Received and Minimized are
+			// preserved).
 			// The WIRE's 'v' record outranks the path when it is present
 			// (noteStorageTarget): the path is lossy — webc forced for the
 			// deuterocanon, an unknown id falling back to web — and the record
 			// is the sender saying what they were actually reading.
 			stored, remembered := rememberIncomingNote(state, noteStorageTarget(t))
-			state.ActiveNote = t.Note
-			state.NoteMinimized = false
-			state.NoteVerseLo = t.VerseLo
-			// The identity the verbs address. Zero when the store stood the
-			// write down (unreadable store): the note is shown for this session
-			// and the verbs quietly have nothing to reach — which is still
-			// strictly better than the old rebuilt-key delete that could reach
-			// the WRONG note (X1).
-			state.NoteID = 0
 			if remembered {
-				state.NoteID = stored.ID
-			}
-			// AND the mark belongs to the NOTE, not to the link.
-			//
-			// The block above lit the link's verses as hlLinkSpan, which is right
-			// for a bare passage link and wrong here: when a link carries a note,
-			// the note is WHY those verses are lit. Leaving the mark attributed to
-			// the link meant Delete — which now clears only what the note owns —
-			// walked past it, and the reader was left with a lit verse and no
-			// message to explain it. That is ORPHAN_HL, the oldest defect in this
-			// subsystem, arriving by a new route; the enumeration caught it as
-			// four N1-orphan-highlight cells the moment the conditional clear
-			// landed. hlLinkSpan now means "a link's range with no note attached".
-			if t.VerseLo > 0 {
-				state.setMark(hlNote, VerseSpan{
-					VersionID: t.VersionID,
-					Book:      t.Book,
-					Chapter:   chapter,
-					Lo:        t.VerseLo,
-					Hi:        t.VerseHi,
-				})
+				// The mark belongs to the NOTE, not to the link.
+				//
+				// The block above lit the link's verses as hlLinkSpan, which is
+				// right for a bare passage link and wrong here: when a link
+				// carries a note, the note is WHY those verses are lit. Leaving
+				// the mark attributed to the link meant Delete — which clears
+				// only what the note owns — walked past it, and the reader was
+				// left with a lit verse and no message to explain it: ORPHAN_HL
+				// by a new route, caught by the enumeration as four
+				// N1-orphan-highlight cells. hlLinkSpan now means "a link's
+				// range with no note attached", so the span is cleared here and
+				// the projection re-raises it as the note's own.
+				state.clearMark()
+				// An arrival focuses the arriving note (session), and the
+				// projection draws the mirror FROM the plan — the arrival is
+				// no longer a second, hand-written mirror writer. One shipped
+				// behaviour changes knowingly: re-opening a link whose note
+				// the reader has MINIMIZED now shows the chip, not a forced
+				// expansion — an explicit minimize is honoured and nothing
+				// auto-expands (N5); the store's history was already being
+				// preserved.
+				state.focusNote(stored.ID)
+				applyNoteForCurrentChapter(state)
+				// The reader tapped a link NAMING VERSES, and the tap must
+				// light them even when the projection raised no note's mark —
+				// which is exactly what happens when the arriving note is one
+				// the reader minimized earlier (the dedup honours the stored
+				// Minimized; the chip shows, no note opens, no hlNote is set).
+				// implementation verification the regression: pre-S7 the re-arrival relit
+				// the verse, post-S7 it lit nothing. The span goes on as
+				// hlLinkSpan — the link's own range, exactly what that origin
+				// means — so the reader's minimize stays honoured AND their
+				// tap still lands somewhere visible.
+				if !state.hasMark() && t.VerseLo > 0 {
+					state.setMark(hlLinkSpan, VerseSpan{
+						VersionID: t.VersionID,
+						Book:      t.Book,
+						Chapter:   chapter,
+						Lo:        t.VerseLo,
+						Hi:        t.VerseHi,
+					})
+				}
+				if state.NoteID != stored.ID {
+					// The note is filed on a passage OTHER than the one the
+					// reader landed on (a wire whose b/c outrank the path), so
+					// the plan for THIS chapter does not carry it. The reader
+					// still tapped a link carrying a message: show it for this
+					// session, mirror-only, exactly as before — with the
+					// stored identity so the verbs reach the right record.
+					state.ActiveNote = t.Note
+					state.NoteMinimized = false
+					state.NoteVerseLo = t.VerseLo
+					state.NoteID = stored.ID
+					if t.VerseLo > 0 {
+						state.setMark(hlNote, VerseSpan{
+							VersionID: t.VersionID,
+							Book:      t.Book,
+							Chapter:   chapter,
+							Lo:        t.VerseLo,
+							Hi:        t.VerseHi,
+						})
+					}
+				}
+			} else {
+				// The store stood the write down (unreadable as a whole). The
+				// plan cannot carry what the store refused, and blanking the
+				// note would destroy the one copy in front of the reader — so
+				// fail OPEN toward showing: the mirror alone carries it for
+				// this session, NoteID 0, and the verbs quietly have nothing
+				// to reach (still strictly better than the old rebuilt-key
+				// delete that could reach the WRONG note, X1).
+				state.ActiveNote = t.Note
+				state.NoteMinimized = false
+				state.NoteVerseLo = t.VerseLo
+				state.NoteID = 0
+				if t.VerseLo > 0 {
+					state.setMark(hlNote, VerseSpan{
+						VersionID: t.VersionID,
+						Book:      t.Book,
+						Chapter:   chapter,
+						Lo:        t.VerseLo,
+						Hi:        t.VerseHi,
+					})
+				}
 			}
 		} else if msg := noteOutcomeMessage(t.NoteOutcome); msg != "" {
 			// The link carried a payload this build could not render — a newer

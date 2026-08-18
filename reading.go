@@ -522,29 +522,34 @@ func chapterFingerprint(state *AppState, hl string) string {
 	// changes the TEXT without changing version/book/chapter, and the gate
 	// must not skip that re-render — the reader would keep the old decode
 	// (e.g. flattened poetry) until their next navigation.
-	// The note is part of what the pane draws — it reserves a band in the text
-	// and floats a sticker in it — so it has to be part of the identity of a
-	// render. Without it the skip gate below would swallow every appear, hide,
-	// restore and delete: the reader would tap "Delete note" and watch nothing
-	// happen. Its LENGTH stands in for its text (notes are replaced wholesale,
-	// never edited in place) so a long note costs nothing to fingerprint.
+	// The notes are part of what the pane draws — a note reserves a band in
+	// the text and floats a sticker in it — so they are part of the identity
+	// of a render. Without this the skip gate below would swallow every
+	// appear, hide, restore and delete: the reader would tap "Delete note"
+	// and watch nothing happen.
 	//
-	// ITS ANCHOR VERSE IS PART OF IT TOO, and that is not decoration. The sticker
-	// sits in a band the TEXT reserves — a paragraphSpacingBefore installed on the
-	// anchor paragraph inside the apply-HTML block, because installing it needs the
-	// text — so moving a note to a different verse is a BODY change, repairable
-	// only by the rebuild. It used to ride along by accident: moving the note moved
-	// the mark, which changed the one fingerprint. With the wash split out, a note
-	// replaced by one of identical length on another verse of the same chapter is a
-	// tint-only change, and the wash would move to the new verse while the band
-	// stayed on the old one.
-	note := "0"
-	if state.ActiveNote != "" {
+	// SINCE S7 THE PLAN FOLDS ITSELF (notes_plan.go), replacing the
+	// hand-rolled len(ActiveNote)+minimized+verse clause: the plan's note
+	// half carries the display note's identity, every note's minimized state,
+	// text length and resolved runs, the R4 group, and the notice — written
+	// beside the fields it folds, so the function that widens the plan is the
+	// function that widens this. The WASH stays in the hl slot (the plan's
+	// own Fingerprint carries both halves; the body question must exclude the
+	// wash so a tint change stays a live mutation, not a rebuild).
+	plan := buildChapterPlan(state, appPrefs(), state.Bible)
+	note := plan.noteFP
+	// The one thing the plan cannot see: a mirror-only session note — an
+	// arrival the store refused (NoteID 0), or one filed on another passage
+	// than the reader landed on. The mirror alone carries those, so the
+	// fingerprint folds the mirror's own clause for exactly those, or the
+	// pane would never repaint to show them.
+	if state.ActiveNote != "" &&
+		(plan.display < 0 || plan.Notes[plan.display].Note.ID != state.NoteID) {
 		m := 0
 		if state.NoteMinimized {
 			m = 1
 		}
-		note = fmt.Sprintf("%d.%d.%d", len(state.ActiveNote), m, state.NoteVerseLo)
+		note += fmt.Sprintf("!%d.%d.%d.%d", state.NoteID, len(state.ActiveNote), m, state.NoteVerseLo)
 	}
 	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s|d%p|n%s",
 		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID(), state.Bible, note)

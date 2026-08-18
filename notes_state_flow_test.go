@@ -68,21 +68,40 @@ func (v noteVerb) String() string {
 	return [...]string{"none", "hide", "show", "delete", "notes-off"}[v]
 }
 
+// noteFocusAxis is the SESSION-FOCUS axis S7 added to the model
+// (AppState.noteFocus, notes_plan.go). The design's recorded risk was that
+// without enumerating it the rework would have "moved the unwatched variable
+// rather than removed it" — so the harness walks it: no choice made, the open
+// note explicitly closed, the exact-key note opened, a followed note opened.
+type noteFocusAxis int
+
+const (
+	focusUnset        noteFocusAxis = iota // the default rule applies
+	focusNoneAx                            // the reader closed the open note
+	focusExactKey                          // the reader opened the exact-key note
+	focusFollowedNote                      // the reader opened a followed note
+)
+
+func (f noteFocusAxis) String() string {
+	return [...]string{"unset", "none", "exact", "followed"}[f]
+}
+
 // notesWorld is the slice of the world the notes subsystem branches on. Kept as
 // its own type so the enumeration is readable, and so adding a variable to the
 // subsystem means adding it HERE, where the cross-product picks it up.
 type notesWorld struct {
 	featureOn bool
 	placement notePlacement
-	collapsed bool // the note under the exact key is stored Minimized
-	foreignHL bool // a highlight from another origin is already on the chapter
-	arrival   bool // a note-bearing link landed on this chapter after the derive
+	collapsed bool          // the note under the exact key is stored Minimized
+	foreignHL bool          // a highlight from another origin is already on the chapter
+	focus     noteFocusAxis // the reader's session focus, set after the derive
+	arrival   bool          // a note-bearing link landed on this chapter after the derive
 	verb      noteVerb
 }
 
 func (w notesWorld) id() string {
-	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v arrival=%v verb=%s",
-		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.arrival, w.verb)
+	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s",
+		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb)
 }
 
 // --- what is broken today ---------------------------------------------------
@@ -174,6 +193,21 @@ var knownIncoherent = []pinnedDefect{
 				(w.placement == placeBoth || w.arrival)
 		},
 	},
+	{
+		// New with S7's focus axis, and reachable only through it: a reader
+		// who explicitly OPENED a followed note (Show) loses it to the
+		// default on the next navigation, because navigation resets focus and
+		// the arity-1 display can draw only the default's choice. The note
+		// the reader deliberately opened is swapped for the exact-key one,
+		// unannounced — N3 by the display's arity, not by any verb missing.
+		// Dies with S8: a set display draws both, so a focus reset changes
+		// which is EXPANDED, never which exists on screen.
+		"X14", "a session-focused followed note is swapped back for the default by the next navigation",
+		func(w notesWorld, inv string) bool {
+			return inv == "N3-substituted" && w.focus == focusFollowedNote &&
+				w.placement == placeBoth && w.verb != verbDelete
+		},
+	},
 }
 
 // knownOriginIncoherent is the same pin for the highlight-origin enumeration.
@@ -222,27 +256,29 @@ func TestNotesStateSpace(t *testing.T) {
 		for _, placement := range []notePlacement{placeNone, placeOwn, placeFollowed, placeBoth} {
 			for _, collapsed := range []bool{false, true} {
 				for _, foreignHL := range []bool{false, true} {
-					for _, arrival := range []bool{false, true} {
-						for _, verb := range []noteVerb{verbNone, verbHide, verbShow, verbDelete, verbNotesOff} {
-							w := notesWorld{featureOn, placement, collapsed, foreignHL, arrival, verb}
-							seen++
-							obs, offered := runNotesFlow(t, w)
-							if !offered {
-								skipped++
-								continue
-							}
-							for _, inv := range checkNotesInvariants(w, obs) {
-								total++
-								named := ""
-								for _, d := range knownIncoherent {
-									if d.covers(w, inv) {
-										named = d.name
-										hits[d.name]++
-										break
-									}
+					for _, focus := range []noteFocusAxis{focusUnset, focusNoneAx, focusExactKey, focusFollowedNote} {
+						for _, arrival := range []bool{false, true} {
+							for _, verb := range []noteVerb{verbNone, verbHide, verbShow, verbDelete, verbNotesOff} {
+								w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb}
+								seen++
+								obs, offered := runNotesFlow(t, w)
+								if !offered {
+									skipped++
+									continue
 								}
-								if named == "" {
-									unexplained = append(unexplained, w.id()+" | "+inv)
+								for _, inv := range checkNotesInvariants(w, obs) {
+									total++
+									named := ""
+									for _, d := range knownIncoherent {
+										if d.covers(w, inv) {
+											named = d.name
+											hits[d.name]++
+											break
+										}
+									}
+									if named == "" {
+										unexplained = append(unexplained, w.id()+" | "+inv)
+									}
 								}
 							}
 						}
@@ -266,6 +302,28 @@ func TestNotesStateSpace(t *testing.T) {
 				"outlives its defect makes the next reader trust a document that lies.", d.name, d.what)
 		}
 	}
+	// The COUNTS are asserted, not merely logged. implementation verification M3 (navigation
+	// no longer resets focus) survived the whole suite while the per-defect
+	// totals silently diverged from docs/NOTES_STATE.md — attribution and
+	// liveness alone let a rule rot as long as SOME cell still hit each pin.
+	// The counts are deterministic, so drift means either a fix (strike and
+	// re-measure, per the contract) or a regression (this failure).
+	// NOTES-SPACE counts only. docs/NOTES_STATE.md's headline figures COMBINE
+	// this enumeration with the origin-space one (X4 reads ×56 there: 55 cells
+	// here + 1 there), and the first version of this map copied the combined
+	// number and failed its own first run. Kept as a warning: when updating
+	// after a re-measure, take the per-space split from the run output, not
+	// the doc's combined line.
+	expectedHits := map[string]int{
+		"X4": 55, "X6": 32, "X7": 224, "X12": 24, "X14": 12,
+	}
+	for name, want := range expectedHits {
+		if hits[name] != want {
+			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
+				"and update BOTH, or find the regression", name, hits[name], want)
+		}
+	}
+
 	names := make([]string, 0, len(hits))
 	for _, d := range knownIncoherent {
 		names = append(names, fmt.Sprintf("%s×%d", d.name, hits[d.name]))
@@ -293,6 +351,36 @@ type notesObs struct {
 	before []StoredNote // the store, before the verb
 	after  []StoredNote // the store, after
 	mapped int          // notes in the store that belong to this passage HERE
+
+	// The chapter PLAN (notes_plan.go), snapshotted at the same two moments
+	// as the mirror. The V-invariants are asserted over these: the plan is
+	// the model S8's surfaces will draw, so its own coherence is enumerated
+	// from the day it exists rather than from the day it is consumed.
+	snapVerb planSnap
+	snapNav  planSnap
+}
+
+// planSnap is one buildChapterPlan answer plus the facts its invariants are
+// judged against, taken at the same instant.
+type planSnap struct {
+	plan         chapterPlan
+	suppressed   bool // a live mark not owned by a note stood the notes down
+	featureOn    bool
+	passageNotes int // received notes filed on the passage, in the store, now
+}
+
+func takePlanSnap(st *AppState) planSnap {
+	snap := planSnap{
+		plan:       buildChapterPlan(st, appPrefs(), st.Bible),
+		suppressed: notesSuppressed(st),
+		featureOn:  notesFeatureOn(st),
+	}
+	for _, n := range allNotesForBrowsing(appPrefs()) {
+		if n.Kind == noteKindReceived && n.Book == "John" && n.Chapter == 3 {
+			snap.passageNotes++
+		}
+	}
+	return snap
 }
 
 // runNotesFlow drives the REAL functions for one combination: the store helpers,
@@ -343,6 +431,32 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		goToVerseRange(st, "John", 3, 1, 1)
 	} else {
 		addRecentChapter(st, "John", 3)
+	}
+
+	// The session focus, applied AFTER the derive exactly as the reader
+	// applies it (a chip or note tapped after landing on the chapter), and
+	// re-projected the way Show re-projects. A focus value naming a note the
+	// world does not contain is not a reachable state — reported as
+	// not-offered, like a verb no surface presents.
+	switch w.focus {
+	case focusNoneAx:
+		if w.placement == placeNone {
+			return obs, false
+		}
+		st.focusNone()
+		applyNoteForCurrentChapter(st)
+	case focusExactKey:
+		if w.placement != placeOwn && w.placement != placeBoth {
+			return obs, false
+		}
+		st.focusNote(storedIDByText(t, "note under web"))
+		applyNoteForCurrentChapter(st)
+	case focusFollowedNote:
+		if w.placement != placeFollowed && w.placement != placeBoth {
+			return obs, false
+		}
+		st.focusNote(storedIDByText(t, "note under bsb"))
+		applyNoteForCurrentChapter(st)
 	}
 
 	// A note-bearing link landing on the chapter the reader is already on. The
@@ -401,10 +515,25 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 
 	obs.text, obs.min, obs.hlOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
 	obs.after = allNotesForBrowsing(appPrefs())
+	obs.snapVerb = takePlanSnap(st)
 
 	addRecentChapter(st, "John", 3) // the next navigation
 	obs.afterText, obs.afterMin, obs.afterHLOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
+	obs.snapNav = takePlanSnap(st)
 	return obs, true
+}
+
+// storedIDByText finds a seeded note's identity, the way a surface would hand
+// it to focus — from the store, never rebuilt.
+func storedIDByText(t *testing.T, text string) uint64 {
+	t.Helper()
+	for _, n := range allNotesForBrowsing(appPrefs()) {
+		if n.Text == text {
+			return n.ID
+		}
+	}
+	t.Fatalf("no stored note with text %q to focus", text)
+	return 0
 }
 
 // checkNotesInvariants returns the names of the invariants this state violates.
@@ -474,16 +603,55 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 	}
 
 	// N5 — an explicit minimize is honoured, and an explicit restore sticks.
-	if w.verb == verbHide && o.afterText != "" && !o.afterMin {
+	// Judged on the note the reader AIMED the verb at: once the display can
+	// fall to a different note (the arity-1 debt N3 already names), an
+	// expanded stranger after the navigation is a substitution, not a
+	// reversed minimize — the hidden note itself staying minimized is what
+	// this invariant asserts.
+	if w.verb == verbHide && o.afterText == o.shownText && o.afterText != "" && !o.afterMin {
 		bad = append(bad, "N5-hide-not-honoured")
 	}
-	if w.verb == verbShow && o.afterText != "" && o.afterMin {
+	if w.verb == verbShow && o.afterText == o.shownText && o.afterText != "" && o.afterMin {
 		bad = append(bad, "N5-show-not-honoured")
 	}
 
 	// N6 — the mirror agrees with the store, under the key the verbs address.
 	if o.afterText != "" && !storeHolds(o.after, o.afterText) {
 		bad = append(bad, "N6-mirror-only")
+	}
+
+	// V — the plan's own invariants (S7, notes_plan.go), asserted over both
+	// snapshots. These are properties of the new model, expected to hold in
+	// EVERY cell: any V violation is a new incoherent state, and no pinned
+	// defect may cover one.
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		open := 0
+		for _, d := range s.snap.plan.Notes {
+			if !d.Open {
+				continue
+			}
+			open++
+			if d.Note.Minimized {
+				bad = append(bad, "V2-open-minimized@"+s.when)
+			}
+		}
+		if open > planOpenLimit {
+			bad = append(bad, "V1-open-cap-exceeded@"+s.when)
+		}
+		if s.snap.suppressed && s.snap.featureOn {
+			if open > 0 {
+				bad = append(bad, "V3-suppressed-but-open@"+s.when)
+			}
+			if s.snap.passageNotes > 0 && len(s.snap.plan.Notes) == 0 {
+				bad = append(bad, "V3-suppression-emptied-the-plan@"+s.when)
+			}
+		}
+		if !s.snap.featureOn && (len(s.snap.plan.Notes) > 0 || len(s.snap.plan.Unplaced) > 0) {
+			bad = append(bad, "V4-off-plan-not-empty@"+s.when)
+		}
 	}
 	return bad
 }
@@ -936,47 +1104,9 @@ func TestHighlightKeepsThePreviousTranslationsNumbering(t *testing.T) {
 	}
 }
 
-// N8, the temporary cap, stated as the thing the model cannot yet say. This is
-// the only assertion here about INTENDED behaviour, and it is written to fail
-// the moment the model can express it — at which point the SET work has landed
-// and docs/NOTES_STATE.md's rework section is history rather than a plan.
-func TestTheAtMostOneExpandedCapIsNotRepresentable(t *testing.T) {
-	app := test.NewApp()
-	defer app.Quit()
-	setNotesEnabled(true)
-	deleteAllNotes(appPrefs())
-	defer deleteAllNotes(appPrefs())
-
-	bd := NewBibleData()
-	bd.PopulateWithSampleVerses()
-	st := &AppState{
-		Bible: bd, CurrentBook: "John", CurrentChapter: 3,
-		CurrentVersion: "web", loadPhase: loadReady,
-		loadedVersions: map[string]*BibleData{"web": bd},
-	}
-	for _, id := range []string{"web", "bsb", "webc"} {
-		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: id, Book: "John", Chapter: 3, VerseLo: 16, Text: "note under " + id})
-	}
-	addRecentChapter(st, "John", 3)
-
-	shown, total := browsableNotes(st)
-	if total != 3 || len(shown) != 3 {
-		t.Fatalf("precondition: the browser should list all three, got %d of %d", len(shown), total)
-	}
-	// The reading view carries one note in four flat fields, so "which of the
-	// three is expanded" is not a question AppState can be asked. When it can,
-	// this test should be deleted along with the rework section.
-	if st.ActiveNote == "" {
-		t.Fatal("precondition: one of the three should be live")
-	}
-	expanded := 0
-	for _, n := range allNotesForBrowsing(appPrefs()) {
-		if !n.Minimized {
-			expanded++
-		}
-	}
-	if expanded != 3 {
-		t.Errorf("the cap is now enforceable somewhere: %d of 3 notes are expanded at rest. "+
-			"If the SET model has landed, delete this test and update docs/NOTES_STATE.md.", expanded)
-	}
-}
+// N8, the temporary cap: this file used to hold a sentinel test asserting the
+// cap was NOT representable — "delete this test when the SET model lands". S7
+// landed the model: which note is expanded is a question the PLAN answers
+// (drawnNote.Open, capped by planOpenLimit), the V-invariants above enumerate
+// it, and TestTheCapOpensOneAndLeavesZeroStoreResidue (notes_plan_test.go)
+// pins the half that must stay true forever: the cap writes nothing.
