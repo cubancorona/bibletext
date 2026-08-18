@@ -347,6 +347,13 @@ func openNote(state *AppState, n StoredNote) {
 		VersionID: n.VersionID, Book: n.Book, Chapter: n.Chapter,
 		VerseLo: n.VerseLo, VerseHi: n.VerseHi,
 	}) {
+		// Parked behind a download: the navigation (and its own derive) runs in
+		// the load's apply tail, but the un-minimize above is already WRITTEN —
+		// so end on the projection and a repaint now, or the reader waits out
+		// the fetch (or its failure) looking at a list row still marked hidden,
+		// over a store that says otherwise.
+		applyNoteForCurrentChapter(state)
+		state.refresh()
 		return
 	}
 	// The note's book may still be absent from the canon now loaded — a webc
@@ -355,9 +362,43 @@ func openNote(state *AppState, n StoredNote) {
 	// pane AND persisting a dead book, which makes the NEXT launch fail its
 	// restore and drop them at Genesis 1. Leave them where they are instead.
 	if state.Bible == nil || state.Bible.GetChaptersForBook(n.Book) == 0 {
+		// The verb aborts, but the un-minimize is already stored: same rule as
+		// the parked return — the list the reader is still standing in must not
+		// keep drawing the row's hidden marker over a store that disagrees.
+		applyNoteForCurrentChapter(state)
+		state.refresh()
 		return
 	}
-	openSearchResultRange(state, Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}, n.VerseHi)
+	// The arrival is the NOTE'S OWN — never a search result's. This used to
+	// route through openSearchResultRange, which set an hlSearch mark on the
+	// note's very verses: a FOREIGN mark, so the plan stood the note down and
+	// the reader who had just tapped it in the list was greeted by the pill
+	// (field report: "takes me to the reading pane with a minimized pill").
+	// Selecting a note — its chip, its link, the count-tap, this row — is the
+	// reader choosing it as the page's reason (the identity table), so the
+	// arrival focuses it and lets the projection raise the note's own mark
+	// and wash. The navigation plumbing mirrors openSearchResultRange minus
+	// that mark; focus is set AFTER addRecentChapter, whose own derive resets
+	// it (the navigation-reset rule), and the projection re-derives with the
+	// focus in hand.
+	if state.window != nil {
+		if c := state.window.Canvas(); c != nil {
+			c.Unfocus()
+		}
+	}
+	selectBook(state, n.Book, false)
+	state.CurrentChapter = n.Chapter
+	addRecentChapter(state, n.Book, n.Chapter)
+	state.forceReposition = true
+	state.restore = nil
+	state.focusNote(n.ID)
+	applyNoteForCurrentChapter(state)
+	state.IsSearching = false
+	state.CanReturnToSearchResults = true
+	state.refresh()
+	if state.surfaceReading != nil {
+		state.surfaceReading()
+	}
 }
 
 // notesCapacityNoticeAt is where the browser starts saying, once and quietly,

@@ -277,3 +277,49 @@ func TestNextTapRotationIsDeterministic(t *testing.T) {
 		advanceNoteFocus(st)
 	}
 }
+
+// Deleting one note of several must SURFACE THE REST — the field report was
+// "all the note pills disappear... until I navigate away and come back":
+// dropCurrentNote cleared the mirror and stopped, so the pane showed nothing
+// while the store still held two notes. The delete verb now ends on the same
+// projection every other verb ends on. Walked to the bottom: each delete
+// surfaces the next of the set, and only the LAST leaves the pane bare.
+func TestDeleteOfManySurfacesTheRemaining(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	now := int64(1_700_000_000)
+	noteNow = func() int64 { now++; return now }
+	defer func() { noteNow = origNow }()
+
+	st, notes := nextTestState(t)
+	if st.NoteID != notes[2].ID {
+		t.Fatal("precondition: the newest note leads")
+	}
+
+	dropCurrentNote(st)
+	if st.ActiveNote == "" || st.NoteID == 0 {
+		t.Fatal("two notes remain and the pane shows NOTHING — the field report, pinned")
+	}
+	if st.NoteID != notes[1].ID {
+		t.Fatalf("the next of the set should surface (note %d), got %d", notes[1].ID, st.NoteID)
+	}
+	if _, who, _, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !strings.Contains(who, "of 2 on this passage") {
+		t.Errorf("who = %q, want the honest remaining count", who)
+	}
+
+	dropCurrentNote(st)
+	if st.NoteID != notes[0].ID {
+		t.Fatalf("the last remaining note should surface (note %d), got %d", notes[0].ID, st.NoteID)
+	}
+
+	dropCurrentNote(st)
+	if st.ActiveNote != "" || st.NoteID != 0 {
+		t.Error("nothing remains: the pane must finally be bare")
+	}
+	if n := storedNoteCount(appPrefs()); n != 0 {
+		t.Errorf("store should be empty, holds %d", n)
+	}
+}

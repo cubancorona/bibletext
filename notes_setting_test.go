@@ -136,3 +136,74 @@ func TestNotesOffClearsTheNoteMarkImmediately(t *testing.T) {
 		t.Error("the reader's own search mark must survive notes going off")
 	}
 }
+
+// Turning notes off clears the MIRROR at that moment too — the field the mark
+// pin above deliberately leaves one field over. appleStickerPush gates on the
+// mirror, not on the feature switch, so a mirror that outlived the switch kept
+// the sticker on the iOS/macOS page — expanded, verbs and all, tint gone —
+// until the next navigation ran the projection's off-branch. The switch's own
+// route is a refresh, not a derive, which is why the verb itself must end on
+// the projection.
+func TestNotesOffClearsTheMirrorImmediately(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "on the sticker"})
+
+	st := psalm23State()
+	applyNoteForCurrentChapter(st)
+	if st.ActiveNote == "" || st.NoteID == 0 {
+		t.Fatal("precondition: the note should be on the mirror")
+	}
+
+	turnNotesOff(st)
+
+	if st.ActiveNote != "" || st.NoteID != 0 || st.NoteVerseLo != 0 {
+		t.Errorf("the mirror survived the OFF switch (text=%q id=%d lo=%d) — the sticker "+
+			"push reads the mirror, so this is the sticker still on the page",
+			st.ActiveNote, st.NoteID, st.NoteVerseLo)
+	}
+	text, who, _, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	if text != "" || who != "" {
+		t.Errorf("the pushed tuple must carry no sticker with notes off, got text=%q who=%q", text, who)
+	}
+}
+
+// The way back ON re-projects at that moment: the off-route's derive cleared
+// the mirror, so a bare preference write left the noted chapter bare on the
+// Apple panes (appleStickerPush returns early on an empty mirror) and its
+// verse unwashed on the banner platforms (only the projection sets hlNote)
+// until the next navigation.
+func TestNotesOnReprojectsTheChapterImmediately(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 2, Text: "waiting"})
+
+	st := psalm23State()
+	setNotesEnabled(false)
+	applyNoteForCurrentChapter(st) // the navigation-while-off that empties the mirror
+	if st.ActiveNote != "" {
+		t.Fatal("precondition: off leaves the mirror empty")
+	}
+
+	turnNotesOn(st)
+
+	if st.ActiveNote != "waiting" || st.NoteID == 0 {
+		t.Errorf("the stored note must be back on the mirror the moment notes come on, got text=%q id=%d",
+			st.ActiveNote, st.NoteID)
+	}
+	if !st.mark.fromNote() {
+		t.Error("the note's own wash must be re-raised with it — the banner platforms tint from state.mark")
+	}
+	text, _, pill, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	if text != "waiting" || pill {
+		t.Errorf("the pushed tuple must carry the note expanded, got text=%q pill=%v", text, pill)
+	}
+}

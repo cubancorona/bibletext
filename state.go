@@ -381,10 +381,12 @@ func (s *AppState) baseBible() *BibleData {
 
 func (s *AppState) refresh() {
 	// The catch-all consume for a deferred background rebuild
-	// (applyFullDownload): on Windows/Linux there is no overlay-restore
-	// closure to run when a sheet closes, so the first navigation after it
-	// upgrades to the full rebuild — which repaints everything this refresh
-	// would have, plus the chrome the swap changed (the downloading banner).
+	// (applyFullDownload): the sheet-close consume points (the overlay-restore
+	// closures, including the Windows/Linux stand-in installSheetCloseConsume
+	// hands out) normally get there first; this is the backstop for any close
+	// path that never runs one, upgrading the first navigation after it to the
+	// full rebuild — which repaints everything this refresh would have, plus
+	// the chrome the swap changed (the downloading banner).
 	if consumeDeferredFullRebuild(s) {
 		return
 	}
@@ -853,6 +855,20 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 
 func clearHighlightedVerse(state *AppState) {
 	state.clearMark()
+}
+
+// clearHighlightAndRederive is the clear verb the highlight's own controls end
+// on — the native "Clear highlight" tap (bibleTextHighlightCleared) and the
+// back-to-results bar's X and Back. Clearing a foreign mark releases the
+// suppression it caused (the plan derives Open again at the next render), but
+// only the projection re-raises the note's own hlNote mark — setMark REPLACED
+// the note's mark when the foreign one went up — so a bare clear re-opened the
+// bubble with its verse unwashed until the next navigation re-derived. The
+// navigation paths keep calling clearHighlightedVerse bare: they all funnel
+// through addRecentChapter, whose own tail ends on this same projection.
+func clearHighlightAndRederive(state *AppState) {
+	clearHighlightedVerse(state)
+	applyNoteForCurrentChapter(state)
 }
 
 func clearSearchState(state *AppState) {

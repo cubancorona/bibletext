@@ -790,8 +790,15 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 	if r := []rune(label); len(r) > 0 && len(r) <= 18 {
 		text = fmt.Sprintf("Results: %q", label)
 	}
+	// Both verbs clear through clearHighlightAndRederive, not the bare clear:
+	// the search mark may have been suppressing a note on this chapter, and
+	// releasing the suppression re-opens the bubble at the next render — but
+	// only the projection re-raises the note's own hlNote wash (the mark the
+	// search REPLACED). The bare clear left the re-opened bubble's verse
+	// unwashed until the next navigation — the every-platform twin of the
+	// native Clear-highlight tap (bibleTextHighlightCleared).
 	back := widget.NewButtonWithIcon(text, theme.NavigateBackIcon(), func() {
-		clearHighlightedVerse(state)
+		clearHighlightAndRederive(state)
 		if state.surfaceSearch != nil {
 			state.surfaceSearch() // mobile: jump to the real Search tab (restores its state)
 		} else {
@@ -804,7 +811,7 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 	// X dismisses the back-to-results trail and clears the search highlight.
 	clear := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		state.CanReturnToSearchResults = false
-		clearHighlightedVerse(state)
+		clearHighlightAndRederive(state)
 		state.refreshReadingOnly()
 	})
 	clear.Importance = widget.LowImportance

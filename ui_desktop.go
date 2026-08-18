@@ -17,6 +17,11 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	state.app = app
 	state.window = window
 	registerAIState(state)
+	// Windows/Linux only (a platform-gated no-op elsewhere): with no native
+	// overlay to restore, this stand-in closure is the sheet-close moment that
+	// consumes a deferred full rebuild. macOS assigns its real closure in
+	// readingScrollArea below and is never touched by this.
+	installSheetCloseConsume(state)
 	if state.theme == nil {
 		state.theme = &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
 	}

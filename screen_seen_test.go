@@ -21,9 +21,10 @@ import (
 // a non-zero size once the window has laid it out.
 //
 // The acceptance gate for this file is scripts/view-test-gate.sh, which applies
-// seven mutations that each break something a reader would see and requires the
+// eight mutations that each break something a reader would see and requires the
 // suite to go red for every one. These tests exist to close M2, M3, M6 and M7,
-// which the suite could not feel before them.
+// which the suite could not feel before them; M8 (a verb that writes the store
+// and skips its ending projection) is closed by notes_verb_screen_test.go.
 
 // seenLeaves lays root out in a real window and returns the drawable leaves the
 // reader can see.

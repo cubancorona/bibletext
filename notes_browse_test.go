@@ -158,11 +158,16 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
+	defer deleteAllNotes(appPrefs())
 
+	stored, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Text: "n"})
+	if !ok {
+		t.Fatal("the note was not stored")
+	}
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "John", 3
-	openNote(st, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
-		VerseLo: 1, VerseHi: 4, Text: "n"})
+	openNote(st, stored)
 
 	if st.CurrentBook != "Psalms" || st.CurrentChapter != 23 {
 		t.Errorf("did not navigate: %s %d", st.CurrentBook, st.CurrentChapter)
@@ -170,6 +175,53 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 	if !st.hlOn() || st.hlLo() != 1 || st.hlHi() != 4 {
 		t.Errorf("expected 1-4 highlighted, got has=%v %d-%d",
 			st.hlOn(), st.hlLo(), st.hlHi())
+	}
+	// The mark is the NOTE'S OWN, and the note lands OPEN. The old route went
+	// through openSearchResultRange, whose hlSearch mark was FOREIGN to the
+	// note — the plan stood the chosen note down and the reader landed on the
+	// pill (field report). Choosing a note IS the Show verb, everywhere.
+	if !st.mark.fromNote() {
+		t.Error("the arrival's mark must belong to the note, not to a search")
+	}
+	if st.NoteID != stored.ID || st.ActiveNote == "" {
+		t.Errorf("the chosen note must be on the sticker: id=%d active=%q", st.NoteID, st.ActiveNote)
+	}
+	if notesSuppressed(st) {
+		t.Error("the chosen note must not arrive suppressed to a pill")
+	}
+}
+
+// The owner's report, exactly: a MINIMIZED note tapped in the list while a
+// search mark is still standing must land on the reading pane EXPANDED — not
+// as the pill. Both halves of the "sometimes" are here: the stored minimize
+// (the Show verb clears it) and the leftover foreign mark (the choice
+// displaces it).
+func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	defer deleteAllNotes(appPrefs())
+
+	stored, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 2, VerseHi: 3, Text: "n", Minimized: true})
+	if !ok {
+		t.Fatal("the note was not stored")
+	}
+	st := psalm23State()
+	// A search the reader ran earlier still owns the page.
+	goToVerseRange(st, "Psalms", 23, 1, 1)
+	if !notesSuppressed(st) {
+		t.Fatal("precondition: the foreign mark should stand the notes down")
+	}
+
+	openNote(st, stored)
+
+	if st.NoteMinimized || notesSuppressed(st) || st.ActiveNote == "" {
+		t.Fatalf("the tapped note must land OPEN: min=%v suppressed=%v active=%q",
+			st.NoteMinimized, notesSuppressed(st), st.ActiveNote)
+	}
+	if st.NoteID != stored.ID {
+		t.Errorf("the sticker holds note %d, want the tapped %d", st.NoteID, stored.ID)
 	}
 }
 
@@ -210,6 +262,78 @@ func TestOpenNoteRestoresAMinimizedOne(t *testing.T) {
 	}
 	if back.Minimized {
 		t.Error("opening a minimized note from the list should restore it")
+	}
+}
+
+// openNote's abort paths write before they bail: the un-minimize (the reader
+// asked to SEE this note) lands in the store before the version switch can
+// park or the canon check can refuse — so both early returns must end on the
+// projection and a repaint, or the reader is left standing in a list whose
+// tapped row still says "Minimized in the chapter" over a store that says
+// otherwise.
+func TestOpenNoteAbortPathsRepaintTheList(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	p := fyne.CurrentApp().Preferences()
+	setNotesEnabled(true)
+	deleteAllNotes(p)
+	defer deleteAllNotes(p)
+
+	storeMinimized := func(id uint64) bool {
+		for _, n := range allNotesForBrowsing(p) {
+			if n.ID == id {
+				return n.Minimized
+			}
+		}
+		t.Fatalf("note %d not in the store", id)
+		return false
+	}
+
+	st := planTestState(t)
+	repaints := 0
+	st.showReading = func() { repaints++ }
+	st.syncSidebar = func() {}
+
+	// The canon-check refusal: a note whose book the loaded translation does
+	// not carry (a webc deuterocanon note read back under a 66-book canon).
+	deutero, _ := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Tobit", Chapter: 4, VerseLo: 15, Text: "deutero", Minimized: true})
+	setNoteMinimizedByID(p, deutero.ID, true)
+	deutero.Minimized = true
+
+	openNote(st, deutero)
+
+	if st.CurrentBook != "John" {
+		t.Fatalf("the absent-book guard must leave the reader in place, moved to %q", st.CurrentBook)
+	}
+	if storeMinimized(deutero.ID) {
+		t.Fatal("precondition: the tap is the Show verb — the store must be un-minimized")
+	}
+	if repaints == 0 {
+		t.Error("the abort left the list standing with the row's stale hidden marker — " +
+			"the store write must end on a repaint")
+	}
+
+	// The parked-version return: another load owns the spinner, so the target
+	// parks behind it — but the un-minimize is already written.
+	parked, _ := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "bsb",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "parked", Minimized: true})
+	setNoteMinimizedByID(p, parked.ID, true)
+	parked.Minimized = true
+	st.versionLoading = true
+	repaints = 0
+
+	openNote(st, parked)
+
+	if st.pendingLink == nil || st.pendingLinkVersion != "bsb" {
+		t.Fatal("precondition: the target should be parked behind the running load")
+	}
+	if storeMinimized(parked.ID) {
+		t.Fatal("precondition: the store must be un-minimized before the park")
+	}
+	if repaints == 0 {
+		t.Error("the parked return left the list standing with the row's stale hidden marker — " +
+			"the store write must end on a repaint")
 	}
 }
 
