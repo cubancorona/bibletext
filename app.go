@@ -280,34 +280,79 @@ func triggerFullDownload(state *AppState) {
 				return
 			}
 			state.fullRetryDelay = 0
-			if state.loadedVersions != nil {
-				state.loadedVersions[version.ID] = full
-			}
-			// Only swap the live view if the reader is still on the default version (they
-			// may have switched translations while it downloaded); the cache is warm either way.
-			if state.CurrentVersion != version.ID {
-				state.fullPending = false
-				return
-			}
-			state.Bible = full
-			state.currentMode = mode
-			state.fullPending = false
-			// The displayed text is no longer the four-book seed. Nothing else
-			// cleared this: the "showing the Gospels" banner keys off fullPending,
-			// so seedOnly stayed true for the rest of the session and any later
-			// reader of it (applyShareTarget's park below) would have been told
-			// the reader is still on the seed.
-			state.seedOnly = false
-			// A link for a book the seed does not carry was parked rather than
-			// dropped (applyShareTarget). The whole Bible is now in place, so it
-			// can finally be honoured — BEFORE the rebuild, so that rebuild paints
-			// the shared passage instead of flashing this chapter first. This is
-			// the same ordering StartBackgroundLoad and applyLoadedVersion use.
-			//
-			consumeSeedParkedLink(state)
-			rebuildWindow(state)
+			applyFullDownload(state, version, full, mode)
 		})
 	}()
+}
+
+// applyFullDownload is the download's success tail, on the UI goroutine: swap
+// the fresh text into the live state, then rebuild the window — UNLESS the
+// reader is inside a sheet. A named function rather than the tail of the
+// goroutine closure for the same reason as consumeSeedParkedLink: the rule it
+// carries has to be callable to be provable.
+func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, mode dataMode) {
+	if state.loadedVersions != nil {
+		state.loadedVersions[version.ID] = full
+	}
+	// Only swap the live view if the reader is still on the default version (they
+	// may have switched translations while it downloaded); the cache is warm either way.
+	if state.CurrentVersion != version.ID {
+		state.fullPending = false
+		return
+	}
+	state.Bible = full
+	state.currentMode = mode
+	state.fullPending = false
+	// The displayed text is no longer the four-book seed. Nothing else
+	// cleared this: the "showing the Gospels" banner keys off fullPending,
+	// so seedOnly stayed true for the rest of the session and any later
+	// reader of it (applyShareTarget's park below) would have been told
+	// the reader is still on the seed.
+	state.seedOnly = false
+	// A rebuild drains every open overlay — that is its job (the half-dark
+	// sheet). But THIS rebuild is a background completion, not something the
+	// reader did, and the foreground hook retries the download on every
+	// return to the app — so a Settings sheet that was open across a
+	// backgrounding vanished the moment the retry landed (verification, and
+	// the sim reproduces it: the cache file's mtime matches the restore to
+	// the second). The DATA is applied above either way; the window swap
+	// waits for the reader to leave the sheet (consumeDeferredFullRebuild),
+	// and any other full rebuild satisfies it too (rebuildWindow clears the
+	// flag and consumes the parked link itself).
+	if state.window != nil && state.window.Canvas().Overlays().Top() != nil {
+		state.fullRebuildDeferred = true
+		return
+	}
+	// A link for a book the seed does not carry was parked rather than
+	// dropped (applyShareTarget). The whole Bible is now in place, so it
+	// can finally be honoured — BEFORE the rebuild, so that rebuild paints
+	// the shared passage instead of flashing this chapter first. This is
+	// the same ordering StartBackgroundLoad and applyLoadedVersion use.
+	consumeSeedParkedLink(state)
+	rebuildWindow(state)
+}
+
+// consumeDeferredFullRebuild runs the window rebuild a background data swap
+// deferred because the reader was inside a sheet (applyFullDownload). Called
+// from the overlay-restore closures — the moment the last sheet leaves the
+// canvas — and from refresh() as the catch-all for the platforms with no
+// native overlay dance (Windows/Linux, whose sheets have no restore closure
+// to run). Reports whether it rebuilt, so refresh() can skip its own repaint.
+//
+// The flag itself is CLEARED inside rebuildWindow, not here: any full rebuild
+// satisfies a deferred one (a version switch, a theme flip), and clearing at
+// the one place every rebuild passes through makes double-consume impossible
+// — including this function's own call, which cannot recurse because the flag
+// is already down by the time rebuildWindow re-runs the restore closure.
+func consumeDeferredFullRebuild(state *AppState) bool {
+	if state == nil || !state.fullRebuildDeferred || state.stopping.Load() {
+		return false
+	}
+	if state.window == nil || state.window.Canvas().Overlays().Top() != nil {
+		return false // another sheet still owns the canvas; its close consumes
+	}
+	rebuildWindow(state)
+	return true
 }
 
 // consumeSeedParkedLink honours a link that was parked because the app was still

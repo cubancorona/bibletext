@@ -379,6 +379,15 @@ func rebuildWindow(state *AppState) {
 	if state.app == nil || state.window == nil {
 		return
 	}
+	// A background data swap that landed while a sheet was open deferred its
+	// rebuild (applyFullDownload); ANY full rebuild satisfies it. Down the
+	// flag first — that is what makes consumeDeferredFullRebuild's own call
+	// non-recursive — and honour the seed-parked link the deferred path was
+	// carrying, so this rebuild paints the shared passage it was waiting on.
+	if state.fullRebuildDeferred {
+		state.fullRebuildDeferred = false
+		consumeSeedParkedLink(state)
+	}
 	windowRebuildGen++
 	// Belt-and-braces: drain any lingering overlays before swapping content. On
 	// mobile, SetContent only reassigns the content tree — it never touches the
