@@ -17,12 +17,23 @@
 > view rule (`planOpenLimit`, zero store residue). The
 > `ActiveNote`/`NoteMinimized`/`NoteVerseLo`/`NoteID` quadruple still exists
 > but is now a PROJECTION of the plan's display note, written by
-> `applyNoteForCurrentChapter` and `clearLiveNote` and nobody else; the
-> surfaces still read it, byte-identically to before, until S8 points them at
-> the plan and retires it. Suppression (a live mark not owned by a note) is
-> DERIVED and stands the notes down in the PLAN (zero Open) while writing
-> nothing; the S7 mirror deliberately ignores it so nothing visible changes.
-> Sections marked **[INTENDED]**
+> `applyNoteForCurrentChapter` and `clearLiveNote` and nobody else. Suppression
+> (a live mark not owned by a note) is DERIVED and stands the notes down in the
+> PLAN (zero Open) while writing nothing. **S8 (the surfaces consume the plan,
+> 2026-08-18) has since made the READER's view plural**: the Fyne banner
+> (`notes_banner.go` — Windows/Linux/Android) reads ONLY the plan and draws the
+> SET — the open note as the shared tailed bubble (byline outside, version
+> abbreviation in the heading), every other placed note as a chip (citation +
+> label + date + a quiet stored-Minimized marker; tapping focuses it), then a
+> separator and the R4 unplaced group, each with its `placementCopy` sentence.
+> The Apple panes keep the native sticker as the mirror's arity-1 projection
+> and fold an honest count into the sticker's own text through the EXISTING
+> `bibleTextSetNote` ABI ("N more notes on this passage" / "N notes cannot be
+> shown in this translation" — `appleStickerText`, `notes_plan.go`): richness
+> differs per platform, truth does not. `Open` is folded into the plan's
+> `Fingerprint` (its own section, deliberately outside the Apple body half
+> `noteFP`), and the display-arity defects X6, X7, X12 and X14 are struck —
+> see the re-measure. Sections marked **[INTENDED]**
 > describe behaviour the owner has specified and the code does not have. Do not
 > read an **[INTENDED]** paragraph as a description of the app.
 >
@@ -526,11 +537,19 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   address the note whose text is on screen, and no other. *Was violated by
   `X1`, `X2`, `X5` — all fixed; every verb now takes the note's own id.*
 - **N3 — No silent substitution.** The text in the bubble must not change to a
-  different note's without something saying so. *Violated by `X6`,
-  `NOTE_SUBSTITUTED`.*
-- **N4 — Nothing in the store is invisible from the reading view.** *Violated by
-  `X7` (`NOTE_MASKED`, `COLLAPSED_MASK`) and by `UNREACHABLE`.* This is I3
-  restated for the store rather than for the link.
+  different note's without something saying so. *Was violated by `X6`, `X12`,
+  `X14` (`NOTE_SUBSTITUTED`) — all struck by S8: the banner draws the whole
+  set, so which note is OPEN can change only among notes already on screen,
+  and the harness judges the invariant over the plan (an open note after
+  navigation that was neither the shown one nor anything visible is the
+  violation). The Apple sticker's arity-1 bubble swap is announced by the
+  count line in the sticker's own text.*
+- **N4 — Nothing in the store is invisible from the reading view.** *Was
+  violated by `X7` (`NOTE_MASKED`, `COLLAPSED_MASK`) and by `UNREACHABLE` —
+  struck by S8: every placed note is a bubble or a chip, every unplaced note
+  an R4 chip with its `placementCopy` sentence, and the harness asserts the
+  plan carries every passage note at both moments the reader could look.*
+  This is I3 restated for the store rather than for the link.
 - **N5 — An explicit minimize is honoured, and nothing auto-expands.** All
   collapsed is a legal resting state. *Was violated by `X2` and
   `COLLAPSED_STUCK`/`X5` — both fixed.*
@@ -555,17 +574,17 @@ the probe produced it from the shipping code.
 |---|---|---|---|---|
 | ~~X1~~ | ~~Delete kills the wrong note~~ | **FIXED** `31bc97630` | 0 | — |
 | ~~X2~~ | ~~Hide is a silent no-op~~ | **FIXED** `31bc97630` | 0 | — |
-| **X12** | **Delete the arriving note, the note it covered takes its place** | **yes** | 24 | The message the reader binned is replaced by another, unannounced |
+| ~~X12~~ | ~~Delete the arriving note, the note it covered takes its place~~ | **FIXED** S8 — the set is drawn | 0 | — |
 | ~~X3~~ | ~~Arriving note evicted by its own save~~ | **FIXED** S5 — no cap, no eviction | 0 | — |
 | **X4** | Notes-off orphans the highlight | **yes** | 55 + 1 | Defect 1, through the control whose job is to make notes stop |
 | ~~X5~~ | ~~Hide/Show asymmetry~~ | **FIXED** S5 — verbs address a NoteID | 0 | — |
-| **X6** | Delete substitutes a different note | **yes** | 32 | A stranger's message appears where the deleted one was |
-| **X7** | More than one note on a passage is invisible | **yes** | 224 | The only way to the second note is to delete the first |
+| ~~X6~~ | ~~Delete substitutes a different note~~ | **FIXED** S8 — the set is drawn | 0 | — |
+| ~~X7~~ | ~~More than one note on a passage is invisible~~ | **FIXED** S8 — bubble, chips, unplaced group | 0 | — |
 | **X8** | Bare link strips a note's highlight | **yes** | pinned separately | An expanded note pointing at nothing |
 | ~~X9~~ | ~~Chapter-level note leaves a ghost location~~ | **FIXED** S1 — unrepresentable | 0 | — |
 | ~~X10~~ | ~~Hide and Delete destroy a mark they do not own~~ | **FIXED** S1 | 0 | The search result the reader was holding vanishes when they tidy a note away |
 | **X11** | The highlight keeps the previous translation's numbering | **yes** | 3 | The wrong verse lit, or none, beside a note that WAS renumbered |
-| **X14** | **A session-focused followed note is swapped back for the default on navigation** | **yes** (since S7) | 12 | The message the reader deliberately opened is replaced by the exact-key note, unannounced |
+| ~~X14~~ | ~~A session-focused followed note is swapped back for the default on navigation~~ | **FIXED** S8 — focus moves among visible notes | 0 | — |
 
 "Cells" is how many combinations of the enumerated variables reach it. `X7`'s 48
 and `X10`'s 28 are not 48 and 28 defects — they are one defect each, reachable
@@ -633,6 +652,15 @@ enumeration reported X5 covering zero violations and it was struck from
 
 ### X6 — Delete substitutes a different note
 
+**FIXED by S8 (the surfaces consume the plan), 2026-08-18.** The mechanism —
+the derive falling through to the next note — still runs, and is now honest:
+the note that "appears" after a delete was already on screen as a chip beside
+the bubble the reader deleted, so nothing arrives unannounced. On Apple the
+sticker's own text said "1 more note on this passage" before the delete. The
+harness judges N3 over the plan and the predicate covers zero cells.
+
+The pre-S8 record, kept because the mechanism is instructive:
+
 **How it is reached.** Two notes on one passage, one under WEB and one under BSB.
 Read in the WEB, the exact key wins. Delete it.
 
@@ -646,6 +674,13 @@ the swap is invisible until the reader has moved on and come back.
 navigation `"note B (bsb)"`.
 
 ### X12 — Delete the arriving note, and the followed one takes its place
+
+**FIXED by S8, 2026-08-18 — with X6, of which it was always the same
+mechanism by another route.** The covered note was a visible chip the whole
+time the arrival was open, so its surfacing after the delete is a chip
+becoming the bubble, not a stranger appearing. Zero cells.
+
+The pre-S8 record:
 
 **How it is reached.** A note is stored on John 3 under BSB. A friend sends a WEB
 link with a note on the same chapter; the reader is in the WEB, so the arriving
@@ -675,6 +710,18 @@ read — one note leaving the store per chapter — closes it.
 both `foreignHL` values.
 
 ### X7 — More than one note on a passage is invisible
+
+**FIXED by S8, 2026-08-18 — the defect this whole rework was pointed at, and
+the largest ever pinned here (224 cells at its widest).** The Fyne banner
+draws every placed note (bubble or chip) and every unplaced note (chip +
+sentence); the Apple sticker carries the honest count in its own text; the
+minimized-mask sharp case dissolves because a stored-Minimized note is a chip
+beside the others, not a lid over them. `TestNoteBannerShowsTheWholeSet`
+(screen_seen_test.go) walks what SURVIVES layout, and view-gate mutation M7 —
+the chips row dropped while every widget is still built — is caught by three
+tests. Zero cells.
+
+The pre-S8 record:
 
 **How it is reached.** Any chapter holding notes under two translations — two
 people sharing links from different translations, or a note the reader already
@@ -819,6 +866,11 @@ switch the highlight is still `Romans 14:24`. Reached from all three foreign
 origins in the origin enumeration.
 
 ### X14 — A session-focused followed note is swapped back for the default on navigation
+
+**FIXED by S8, 2026-08-18 — exactly as the entry below predicted:** the set
+display retires it, because a focus reset changes which note is EXPANDED,
+never which notes are on screen. The note the reader had opened is still
+right there as a chip after the navigation. Zero cells.
 
 **New with S7, reachable only through the focus it added.** A chapter holds a
 note under the translation being read and another under a different one
@@ -1080,8 +1132,28 @@ Three things are **not** fixed by either and must not be assumed away:
   translation) = **20 states**. Asserts N1 and N7, on Romans 14 because that is
   where the numbering actually diverges.
 
-Together they find **351 violations**, and every one is attributed to a named
-defect: `X4`×56, `X6`×32, `X7`×224, `X11`×3, `X12`×24, `X14`×12.
+Together they find **59 violations**, and every one is attributed to a named
+defect: `X4`×56 (55 in the notes space + 1 in the origin space), `X11`×3.
+
+> **Re-measured on 2026-08-18, after S8 (the surfaces consume the plan).**
+> Fifth pass: 59, from the run output — notes space 55 (`X4`×55), origin
+> space 4 (`X4`×1, `X11`×3) — and the drop from 351 is FOUR STRUCK DEFECTS,
+> not a narrowed harness. The walked space is unchanged (1,280 + 20 cells);
+> what changed is what the reader can see, and two invariants are now judged
+> over it honestly: N4 asserts every passage note is ON the plan (bubble,
+> chip, or unplaced chip) at both moments the reader could look, and N3
+> asserts the open note may change only to a note that was already visible.
+> Under those, `X7`×224 (the invisibility), `X6`×32, `X12`×24 and `X14`×12
+> (the three substitution routes) cover zero cells and are struck from
+> `knownIncoherent` per the contract. What remains is exactly the pair the
+> set display cannot fix: `X4` (notes-off orphans the highlight — a
+> mark/verb defect, unchanged at 55+1) and `X11` (the highlight's missing
+> version frame, 3). The V-invariants hold in all 1,280 cells, zero
+> violations, Open now folded into the plan's fingerprint. The Apple panes
+> stay arity-1 by design: their sticker carries "N more notes on this
+> passage" / "N notes cannot be shown in this translation" in its own text
+> through the existing ABI, so the subset is announced, never silent —
+> platforms differ in richness, not truth.
 
 > **Re-measured on 2026-08-18, after S7 (the chapter plan).** Fourth pass:
 > 351, and the growth is the AXIS, not new incoherence. The focus axis

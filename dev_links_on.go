@@ -63,6 +63,8 @@ func devScenarios() []devScenario {
 		// --- the ordinary cases -------------------------------------------------
 		{"Note, mid-chapter, long paragraph", "Bubble above v34's paragraph; v35 highlighted; the note is what you land on",
 			n("John", 11, 35, 35, "Read this at the hospital this morning and thought of you.\n\nRinging on Sunday. Love you.")},
+		{"A SECOND note on the same passage (S8)", "Open the row above first. The bubble shows THIS note plus “1 more note on this passage” — the honest count through the existing sticker",
+			ShareLinkURLWithNote("web", "John", 11, 35, 35, "A second voice on the same verse — the shortest one.")},
 		{"Note on the FIRST paragraph", "Bubble above v1 — the container-inset path, not paragraphSpacingBefore",
 			n("Psalms", 23, 1, 4, "This got me through last night. Thinking of you both.")},
 		{"Note deep in a long chapter", "Psalm 119 is 176 verses: check it lands on the note, not the top",

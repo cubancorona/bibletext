@@ -148,64 +148,21 @@ type pinnedDefect struct {
 // 4 cells. X13, its cross-chapter sibling (pinned in
 // notes_crosschapter_test.go rather than here), died of the same change.
 //
-// S5 also WIDENED two predicates honestly, because deleting the passage key
-// exposed cells the old overwrite used to hide: a note arriving on a chapter
-// that already holds a SAME-translation note no longer destroys it, so those
-// placeOwn+arrival cells now hold two live notes — X7's invisibility and, on
-// delete, X12's substitution, reachable from a region where the old store
-// simply lost the first note (the strictly worse outcome).
+// X6, X7, X12 and X14 were struck with S8 (the surfaces consume the plan).
+// All four were the arity-1 DISPLAY's debts — one note drawn, the rest
+// invisible (X7, 224 cells), and three routes to a different note silently
+// taking the drawn one's place (X6×32, X12×24, X14×12) — and the set display
+// is what retires them: every placed note is a bubble or a chip and every
+// unplaced note a chip with its reason (N4 judged over the plan), so a change
+// of which note is EXPANDED is a change among notes already on screen, not a
+// substitution (N3 judged over the plan, below). The Apple sticker stays
+// arity-1 by design and stays honest by the count line in its own text —
+// richness differs per platform, truth does not.
 var knownIncoherent = []pinnedDefect{
 	{
 		"X4", "turning notes off keeps the highlight the note put there",
 		func(w notesWorld, inv string) bool {
 			return inv == "N1-orphan-highlight" && w.verb == verbNotesOff
-		},
-	},
-	{
-		"X6", "deleting the exact-key note lets another translation's note take its place",
-		func(w notesWorld, inv string) bool {
-			return inv == "N3-substituted" && w.placement == placeBoth && w.verb == verbDelete
-		},
-	},
-	{
-		// X6's mechanism in the region X1 used to occupy. It is not a new
-		// defect and 31bc97630 did not create it: loadNote has always fallen
-		// through to the followed note, so a second note has always
-		// been waiting to take the deleted one's place. What that commit
-		// changed is that Delete now WORKS on an arriving note, and a delete
-		// that misses cannot expose the note behind it.
-		//
-		// So the trade is a real improvement, not a wash: before, the reader
-		// destroyed a note they were not looking at (X1, data gone); now the
-		// right note dies and a different one appears unannounced (confusing,
-		// nothing lost). Both violate N3, and only the arity-1 read fixes it.
-		"X12", "delete the arriving note and the note it had been covering silently takes its place",
-		func(w notesWorld, inv string) bool {
-			return inv == "N3-substituted" &&
-				(w.placement == placeFollowed || w.placement == placeOwn) &&
-				w.arrival && w.verb == verbDelete
-		},
-	},
-	{
-		"X7", "the reading pane draws one note; the rest of the passage's notes have no trace",
-		func(w notesWorld, inv string) bool {
-			return inv == "N4-store-note-invisible" &&
-				(w.placement == placeBoth || w.arrival)
-		},
-	},
-	{
-		// New with S7's focus axis, and reachable only through it: a reader
-		// who explicitly OPENED a followed note (Show) loses it to the
-		// default on the next navigation, because navigation resets focus and
-		// the arity-1 display can draw only the default's choice. The note
-		// the reader deliberately opened is swapped for the exact-key one,
-		// unannounced — N3 by the display's arity, not by any verb missing.
-		// Dies with S8: a set display draws both, so a focus reset changes
-		// which is EXPANDED, never which exists on screen.
-		"X14", "a session-focused followed note is swapped back for the default by the next navigation",
-		func(w notesWorld, inv string) bool {
-			return inv == "N3-substituted" && w.focus == focusFollowedNote &&
-				w.placement == placeBoth && w.verb != verbDelete
 		},
 	},
 }
@@ -315,7 +272,7 @@ func TestNotesStateSpace(t *testing.T) {
 	// after a re-measure, take the per-space split from the run output, not
 	// the doc's combined line.
 	expectedHits := map[string]int{
-		"X4": 55, "X6": 32, "X7": 224, "X12": 24, "X14": 12,
+		"X4": 55,
 	}
 	for name, want := range expectedHits {
 		if hits[name] != want {
@@ -350,14 +307,16 @@ type notesObs struct {
 
 	before []StoredNote // the store, before the verb
 	after  []StoredNote // the store, after
-	mapped int          // notes in the store that belong to this passage HERE
 
-	// The chapter PLAN (notes_plan.go), snapshotted at the same two moments
-	// as the mirror. The V-invariants are asserted over these: the plan is
-	// the model S8's surfaces will draw, so its own coherence is enumerated
-	// from the day it exists rather than from the day it is consumed.
-	snapVerb planSnap
-	snapNav  planSnap
+	// The chapter PLAN (notes_plan.go), snapshotted at three moments: what
+	// the reader was looking at when they reached for the verb, right after
+	// the verb, and after the next navigation. Since S8 the plan IS the
+	// reading surface's model (the banner draws the whole set), so N3 and N4
+	// are judged over these snapshots, and the V-invariants hold the plan's
+	// own coherence in every cell.
+	snapShown planSnap
+	snapVerb  planSnap
+	snapNav   planSnap
 }
 
 // planSnap is one buildChapterPlan answer plus the facts its invariants are
@@ -386,10 +345,11 @@ func takePlanSnap(st *AppState) planSnap {
 // runNotesFlow drives the REAL functions for one combination: the store helpers,
 // applyNoteForCurrentChapter, the three verbs, and addRecentChapter as the
 // navigation. It reports `offered=false` for a verb no surface would present —
-// the banner's Hide/Delete exist only when ActiveNote is set (notes_banner.go:38),
-// and the iOS menu's pair is gated on gHasNote (reading_ios.go:2005-2011). Driving
-// them anyway would invent failures the app does not have, which is the harness
-// artefact share_link_flow_test.go warns about in its own comment.
+// the verbs ride on the open bubble (the banner's, or the Apple sticker's,
+// both projections of the same display note the mirror carries), and the iOS
+// menu's pair is gated on gHasNote (reading_ios.go). Driving them anyway would
+// invent failures the app does not have, which is the harness artefact
+// share_link_flow_test.go warns about in its own comment.
 func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	t.Helper()
 	var obs notesObs
@@ -479,16 +439,8 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 
 	obs.shownText = st.ActiveNote
 	obs.shownID = st.NoteID
+	obs.snapShown = takePlanSnap(st)
 	obs.before = allNotesForBrowsing(appPrefs())
-
-	// Which stored notes belong to THIS passage as the reader is reading it? The
-	// reading view can show at most one, whatever this number is.
-	for _, n := range obs.before {
-		if n.Book != "John" || n.Chapter != 3 {
-			continue
-		}
-		obs.mapped++
-	}
 
 	offered := true
 	switch w.verb {
@@ -588,18 +540,35 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 		}
 	}
 
-	// N3 — no silent substitution. Turning the feature off is the one event
-	// entitled to change what is on screen to nothing; nothing is entitled to
-	// change it to somebody else's words.
-	if w.verb != verbNotesOff && o.afterText != "" && o.afterText != o.shownText {
-		bad = append(bad, "N3-substituted")
+	// N3 — no silent substitution, judged over what the reader can SEE. Since
+	// S8 the banner draws the whole set, so the note that is OPEN may change
+	// only to a note that was already on screen — a chip becoming the bubble
+	// is a change among visible things, not a swap under the reader's eyes.
+	// A violation is an open note after the navigation that is neither the
+	// one the reader had open nor anything they could see when they acted.
+	// (The Apple sticker is the arity-1 subset of this: its bubble swap is
+	// announced by the count line riding in the sticker's own text.)
+	if w.verb != verbNotesOff {
+		shownOpenID := planOpenID(o.snapShown.plan)
+		if navID := planOpenID(o.snapNav.plan); navID != 0 && navID != shownOpenID &&
+			!planSees(o.snapShown.plan, navID) {
+			bad = append(bad, "N3-substituted")
+		}
 	}
 
-	// N4 — nothing in the store is invisible from the reading view. The reading
-	// view shows at most one note; anything beyond that has no separator, no
-	// count, and no trace.
-	if w.featureOn && w.verb != verbNotesOff && o.mapped > 1 {
-		bad = append(bad, "N4-store-note-invisible")
+	// N4 — nothing in the store is invisible from the reading view: every
+	// received note on the passage is on the banner as a bubble, a chip, or
+	// an unplaced chip with its reason (S8). Judged at both moments the
+	// reader could be looking; verbNotesOff's post-verb snapshot reports
+	// featureOn=false and is rightly quiet.
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		if s.snap.featureOn &&
+			s.snap.passageNotes > len(s.snap.plan.Notes)+len(s.snap.plan.Unplaced) {
+			bad = append(bad, "N4-store-note-invisible@"+s.when)
+		}
 	}
 
 	// N5 — an explicit minimize is honoured, and an explicit restore sticks.
@@ -654,6 +623,31 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 		}
 	}
 	return bad
+}
+
+// planOpenID is the identity of the plan's open note, 0 when nothing is open.
+func planOpenID(p chapterPlan) uint64 {
+	if d, ok := p.openNote(); ok {
+		return d.Note.ID
+	}
+	return 0
+}
+
+// planSees reports whether a note is anywhere on the plan's surface — the
+// bubble, a chip, or the unplaced group. That is exactly what a reader could
+// see on the S8 banner.
+func planSees(p chapterPlan, id uint64) bool {
+	for _, d := range p.Notes {
+		if d.Note.ID == id {
+			return true
+		}
+	}
+	for _, d := range p.Unplaced {
+		if d.Note.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func storeHolds(notes []StoredNote, text string) bool {

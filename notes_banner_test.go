@@ -33,20 +33,26 @@ func TestNoteBannerShowsTheNote(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
+		VerseLo: 1, Text: "This got me through last night."})
 
 	st := bannerState(t)
-	st.ActiveNote = "This got me through last night."
+	applyNoteForCurrentChapter(st)
 
 	b := buildNoteBanner(st)
 	if b == nil {
-		t.Fatal("no banner for an active note")
+		t.Fatal("no banner for a stored note")
 	}
 	texts := treeTexts(b)
 	joined := ""
 	for _, s := range texts {
 		joined += s + "|"
 	}
-	for _, want := range []string{"Note from Friend", "Psalms 23", "This got me through last night."} {
+	// S8: the shared bubble — the sender's citation in the heading, the byline
+	// OUTSIDE the bubble, the words inside it and nothing else.
+	for _, want := range []string{"From Friend", "Psalms 23:1", "This got me through last night."} {
 		found := false
 		for _, s := range texts {
 			if s == want {
@@ -56,6 +62,29 @@ func TestNoteBannerShowsTheNote(t *testing.T) {
 		if !found {
 			t.Errorf("banner missing %q; got %s", want, joined)
 		}
+	}
+}
+
+// A note that never reached the store (it arrived while the store was
+// unreadable) exists only in the mirror; failing open toward showing means the
+// banner draws it from there — the one thing the plan cannot see.
+func TestNoteBannerFailsOpenForAMirrorOnlySessionNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := bannerState(t)
+	st.ActiveNote = "arrived while the store was down"
+	st.NoteID = 0
+
+	b := buildNoteBanner(st)
+	if b == nil {
+		t.Fatal("no banner for a mirror-only session note — the reader would never see the message")
+	}
+	if !treeHasText(b, "arrived while the store was down") {
+		t.Errorf("the mirror-only note's text is missing: %v", treeTexts(b))
 	}
 }
 
@@ -77,32 +106,32 @@ func TestNoteBannerAbsentWhenThereIsNothingToShow(t *testing.T) {
 	setNotesEnabled(true)
 }
 
-// Minimized → a chip, not the note; pressing it restores through the same
-// store helper the iOS sticker uses.
+// Minimized → a chip carrying the citation and the quiet "hidden" marker, not
+// the note; pressing it restores through the same store helper the iOS sticker
+// uses — the chip IS the Show verb, by the note's own identity.
 func TestNoteBannerMinimizedChipRestores(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
-	stored, ok := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
+	deleteAllNotes(p)
+	defer deleteAllNotes(p)
+	_, ok := addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
 		VerseLo: 1, VerseHi: 4, Text: "kept", Minimized: true})
 	if !ok {
 		t.Fatal("the note was not stored")
 	}
 
 	st := bannerState(t)
-	st.ActiveNote = "kept"
-	st.NoteMinimized = true
-	st.NoteVerseLo = 1
-	st.NoteID = stored.ID // the identity Show addresses
+	applyNoteForCurrentChapter(st)
 
 	b := buildNoteBanner(st)
 	if b == nil {
 		t.Fatal("no chip for a minimized note")
 	}
-	chip := findTreeButton(b, "Show note")
+	chip := findTreeButton(b, "Psalms 23:1-4 · Today · hidden")
 	if chip == nil {
-		t.Fatalf("expected the Show note chip; texts: %v", treeTexts(b))
+		t.Fatalf("expected the minimized note's chip; texts: %v", treeTexts(b))
 	}
 	for _, s := range treeTexts(b) {
 		if s == "kept" {

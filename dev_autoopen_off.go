@@ -20,5 +20,8 @@ func devAutoReadAlong(state *AppState) {}
 // devAutoTintBench: see the dev twin. Empty in release builds.
 func devAutoTintBench(state *AppState) {}
 
+// devAutoNotesS8: see the dev twin. Empty in release builds.
+func devAutoNotesS8(state *AppState) {}
+
 // devNoteDebug: see the dev twin. Empty in release builds.
 func devNoteDebug(state *AppState) string { return "" }

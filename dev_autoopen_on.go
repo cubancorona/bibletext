@@ -151,6 +151,31 @@ func devAutoReadAlong(state *AppState) {
 	})
 }
 
+// devAutoNotesS8 drives the S8 sticker proof headlessly: three note-bearing
+// links land on ONE passage on a fixed clock, so a screenshot burst shows the
+// native sticker's honest count line rendering and UPDATING — no count with
+// one note, "1 more note on this passage" when the second arrives, "2 more
+// notes on this passage" when the third does. Each arrival is a real
+// HandleShareLink (the same entry point a tapped universal link uses) and a
+// real FOCUS change: the arriving note opens and the previous one becomes part
+// of the count. The simulator cannot tap, so the app does the arriving itself
+// — the same trick devAutoReadAlong uses, for the same reason.
+//
+//	SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=s8 xcrun simctl launch <udid> uk.co.bibletext
+func devAutoNotesS8(state *AppState) {
+	if strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")) == "" || state == nil {
+		return
+	}
+	link := func(text string) {
+		HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+			"John", 11, 35, 35, text))
+	}
+	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
+	at(1500*time.Millisecond, func() { link("First note: read this at the hospital this morning.") })
+	at(8*time.Second, func() { link("Second note: a second voice on the same verse.") })
+	at(16*time.Second, func() { link("Third note: and a third, so the count has to move again.") })
+}
+
 // devNoteDebug reports the live note state for on-screen diagnosis. TEMPORARY:
 // added while chasing the owner's report that switching translation to the WEB
 // (but not to the BSB) loses a note while keeping its highlight. It shows what
