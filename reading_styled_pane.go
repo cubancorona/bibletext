@@ -332,13 +332,27 @@ func (p *styledReadingPane) highlightY() float32 {
 	if li < 0 || li >= len(p.lay.Lines) {
 		return 0
 	}
-	if li == p.lay.BandLine && p.noteGeom.present {
-		// The note's own mark lights the verse the band sits above, so
-		// scrolling to the LINE would put the bubble explaining it above the
-		// fold — clipped, on the one arrival where it matters most.
+	// The note's own mark lights a verse inside the band's PARAGRAPH, so
+	// scrolling to that verse's line would put the bubble explaining it above
+	// the fold — clipped, on the one arrival where it matters most. Any line
+	// from the band's own line onward through that paragraph therefore
+	// scrolls to the band; the band sits above the whole paragraph now, so
+	// the anchor verse's line is at or below it rather than equal to it.
+	if p.noteGeom.present && p.lay.BandLine >= 0 && li >= p.lay.BandLine &&
+		li <= p.lastLineOfBandParagraph() {
 		return p.lay.BandY
 	}
 	return p.lay.Lines[li].Y
+}
+
+// lastLineOfBandParagraph is the final line of the paragraph the band opens
+// above — the paragraph whose verses the bubble is about (chapterLayout
+// records it; only the layout knows where a paragraph ends).
+func (p *styledReadingPane) lastLineOfBandParagraph() int {
+	if p.lay == nil {
+		return -1
+	}
+	return p.lay.BandLastLine
 }
 
 // styledPaneRenderer draws the merged runs plus the wash rects.
