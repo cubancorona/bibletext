@@ -3,6 +3,7 @@ package bibletext
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -19,19 +20,128 @@ import (
 
 // moment either is touched.
 //
-// The TAIL is what makes it read as somebody speaking rather than as a card.
+// ── THE NOTE SPACING SPEC ────────────────────────────────────────────────────
+//
+// ONE table, four surfaces. Before 19 Aug 2026 each of the four note surfaces
+// carried its own numbers and they disagreed on every one of them — the band
+// above the card was 0 (iOS), a measured line (macOS), 8dp (Android) and 10
+// (this pane); the pill was 30 / 24 / ~26 / 28 for the same object; and
+// Android's card used a different internal rhythm again (6 top, 4 right, 10
+
+// for one answer — "measure the pill and note vertical spacing and margins
+// visually … make sure it's the same there. Really this should be done for all
+// platforms" — so the numbers live HERE and every surface reads them.
+//
+// The natives cannot import a Go constant into Objective-C or Java, so they
+// carry named constants of their own and notes_spacing_spec_test.go PARSES
+// those three sources and asserts each literal equals this table (the mechanism
+// dev_links_guard_test.go uses on the release scripts). A push parameter was
+// the alternative and was rejected: these are compile-time layout constants,
+// not per-chapter data, and pushing them would put a wire format and a
+// three-platform ABI bump in front of every future 1pt change.
+//
+// WHAT EACH NUMBER MEANS:
+//
+//	GapAbove   the air RESERVED above the card's top edge.
+//	GapBelow   the air reserved below the drawn shape — the tail's apex for a
+//	           card, the pill's bottom edge for a pill — to the first line of
+//	           the passage. This is THE PINNED INVARIANT: it is the one
+//	           distance a reader consciously reads (tail → the words it points
+//	           at), so macOS places the sticker bottom-up off the passage and
+//	           lets every measurement error fall into the gap above, where
+//	           there is already air.
+//	Pad        the card's inner padding, all four sides.
+//	WhoGap     the who row's bottom edge → the message's first line.
+//	WhoH       NOT a literal: ceil(whoSize × noteWhoRatio), because the correct
+//	           box for an 11pt semibold system face (14) is the wrong box for a
+//	           10pt one (13, macOS). A flat 14 in this table would be a bug on
+//	           macOS.
+//	Radius     the card's corner radius. Was 8 on this pane alone — borrowed
+//	           from surface()'s chrome, never chosen for this card, while the
+//	           three natives all drew 10.
+//	PillH      the collapsed marker's height, spec'd INDEPENDENTLY of the verb
+//	           buttons. All four used to derive it from their own button metric
+//	           (30 iOS touch minimum, 24 macOS pointer, ~26 Android wrap, 28
+//	           here), which is a touch-target decision leaking into a piece of
+//	           content: the pill must not change height because a platform
+//	           moved its tap targets.
+//
+// WHAT THIS TABLE DOES NOT OWN — the residual, stated rather than pretended.
+// GapAbove is a RESERVATION. The air a reader SEES above the card is
+// GapAbove + whatever paragraph separator the reading layout already puts
+// between paragraphs, and that separator belongs to the reading page, not to
+// the note: it is the same for every paragraph in the chapter, note or no note,
+// and cancelling it under a note would give the note's paragraph LESS
+// separation than its neighbours. It is 24px on iOS phones, 0 in the reporter
+// layout (iPad/macOS/wide styled pane), one blank line on Android, and ParaGap
+// on the narrow styled pane. Named per platform in [redacted-retired-private-reference].
+//
+// THE TAIL is what makes it read as somebody speaking rather than as a card.
 // Its geometry is copied from the native sticker (reading_macos.go,
 // btMacNoteBubblePath): nine points deep, eighteen wide, twenty-four in from the
-// left, pointing DOWN at the passage. Those numbers are duplicated rather than
-// shared because the other side of the pair lives in Objective-C inside a cgo
-// preamble; the constants below name their source so a change to one is at
-// least findable from the other.
+// left, pointing DOWN at the passage.
 const (
+	noteGapAbove  = 10
+	noteGapBelow  = 10
+	notePad       = 12
+	noteWhoGap    = 4
+	noteWhoRatio  = 1.27 // whoH = ceil(whoSize × this): 14 at 11pt, 13 at 10pt
 	noteTailDepth = 9
 	noteTailWidth = 18
 	noteTailInset = 24
-	noteBubbleRad = 8 // surface()'s corner radius
+	// The FYNE bubble's corner — the notes browser's rows and the reading
+	// banner. It is surface()'s radius on purpose (theme.go), so a bubble sits
+	// inside the app's other cards without a different curve; the audio button,
+	// the crossref panel, the search rows and the version picker are all 8 too.
+	// The STICKER's own corner is noteStickerRad (the native panes use 10);
+	// they were briefly one constant, which quietly moved the browser and the
+	// banner to a curve nobody asked for (verification finding).
+	noteBubbleRad = 8
+	// The in-text sticker's corner, shared by all four note surfaces.
+	noteStickerRad = 10
+	notePillH      = 28
 )
+
+// noteSpacing is the spec above as one value, so a consumer reads a NAMED
+// field rather than a bare constant and the spec can be passed around whole.
+type noteSpacing struct {
+	GapAbove  float32
+	GapBelow  float32
+	Pad       float32
+	WhoGap    float32
+	TailDepth float32
+	TailWidth float32
+	TailInset float32
+	Radius    float32
+	PillH     float32
+}
+
+// noteMetrics is THE table. Every surface reads this or is held to it by
+// notes_spacing_spec_test.go.
+//
+// A function, not a package var: a var would let any code — or any test — assign
+// to the spec at runtime, and a spec that can be reassigned is not a spec
+// (verification finding).
+func noteMetrics() noteSpacing { return noteSpacingTable }
+
+var noteSpacingTable = noteSpacing{
+	GapAbove:  noteGapAbove,
+	GapBelow:  noteGapBelow,
+	Pad:       notePad,
+	WhoGap:    noteWhoGap,
+	TailDepth: noteTailDepth,
+	TailWidth: noteTailWidth,
+	TailInset: noteTailInset,
+	Radius:    noteStickerRad,
+	PillH:     notePillH,
+}
+
+// WhoH is the who row's box height for a given who-line font size — derived,
+// never a literal, so the same rule serves iOS's 11pt semibold (14) and macOS's
+// 10pt one (13).
+func (s noteSpacing) WhoH(size float32) float32 {
+	return float32(math.Ceil(float64(size) * noteWhoRatio))
+}
 
 // noteSVGHex spells a colour the way Fyne's SVG loader will accept it: SIX hex
 // digits, alpha as its own attribute.

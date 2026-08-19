@@ -98,7 +98,7 @@ public final class BtBridge {
     // the reserved gap from the Layout's line geometry. Verse 0 (an
     // unplaced-only chapter) reserves nothing and parks the pill at the top
     // of the text — the only honest place for notes with no verses here.
-    private static android.widget.LinearLayout noteView; // the expanded bubble
+    private static View noteView;                        // the expanded bubble
     private static TextView notePillView;                // the collapsed pill
     private static String noteText = null;   // sender's words; null = none
     private static String noteWho = null;    // the app's chrome line; null = none
@@ -800,6 +800,22 @@ public final class BtBridge {
 
     private static float clamp01(float f) { return f < 0 ? 0 : (f > 1 ? 1 : f); }
 
+    // THE SHARED NOTE SPACING SPEC — noteMetrics in notes_bubble.go, in dp.
+    // These are not this file's numbers to choose: notes_spacing_spec_test.go
+    // parses this line and fails if any of them leaves the Go table behind. Read
+    // that comment for what each one means. NOTE_WHO_H is a RULE in the table
+    // (ceil(whoSize x 1.27)); 14 is its value at this pane's 11sp who font.
+    private static final int NOTE_GAP_ABOVE = 10, NOTE_GAP_BELOW = 10, NOTE_PAD = 12,
+                             NOTE_WHO_H = 14, NOTE_WHO_GAP = 4, NOTE_TAIL = 9,
+                             NOTE_TAIL_W = 18, NOTE_TAIL_X = 24,
+                             NOTE_RADIUS = 10, NOTE_PILL_H = 28;
+    // NOT spec: the verb button's size, this platform's own touch target. The
+    // verbs used to sit IN the card's vertical flow, so an 18sp glyph plus its
+    // padding — not the spec — set the who row's height and pushed the byline
+    // about 8dp lower than on every other surface. They float over the card now,
+    // exactly as they do on iOS, macOS and the styled pane.
+    private static final int NOTE_BTN = 30;
+
     private static int dp(int v) {
         float d = activity != null ? activity.getResources().getDisplayMetrics().density : 2f;
         return Math.round(v * d);
@@ -1100,7 +1116,9 @@ public final class BtBridge {
             lp = new FrameLayout.LayoutParams(wpx, FrameLayout.LayoutParams.WRAP_CONTENT);
         }
         lp.leftMargin = side;
-        final int gap = dp(8);
+        // BOTH gaps are SPEC (noteMetrics.GapAbove / GapBelow). They were dp(8)
+        // here and 10 on the other three, chosen locally and never reconciled.
+        final int gapAbove = dp(NOTE_GAP_ABOVE), gapBelow = dp(NOTE_GAP_BELOW);
         final int noteH = v.getMeasuredHeight();
 
         int[] r = noteAnchorVerse > 0 ? verseRange(noteAnchorVerse) : null;
@@ -1113,7 +1131,11 @@ public final class BtBridge {
             content.addView(v, lp);
             return;
         }
-        applyNoteBand(r[0], noteH + gap);
+        // A gap on BOTH sides of the card — the styled pane's symmetry rule.
+        // Reserving only below left the card butting against the line above
+        // (0 against gap+tail), which the owner spotted immediately on the
+        // other platform.
+        applyNoteBand(r[0], gapAbove + noteH + gapBelow);
         // Place the sticker into the reserved gap AFTER the reflow the band
         // just caused: its top is the anchor line's (raised) top.
         final View vv = v;
@@ -1125,7 +1147,12 @@ public final class BtBridge {
                 if (vv.getParent() == null || text == null) return;
                 Layout lay = text.getLayout();
                 if (lay == null) return; // hidden overlay: the next refresh places it
-                int line = lay.getLineForOffset(off);
+                // The band belongs to the paragraph, so the sticker hangs from
+                // the paragraph's first line — not the anchor verse's line.
+                int paraOff = off;
+                CharSequence cs3 = text.getText();
+                while (paraOff > 0 && cs3.charAt(paraOff - 1) != '\n') paraOff--;
+                int line = lay.getLineForOffset(paraOff);
                 // The reserved gap is [lineTop - band, lineTop): it lives at the
                 // bottom of the PREVIOUS line's box now (applyNoteBand), so the
                 // sticker hangs from there rather than from the anchor line's
@@ -1135,7 +1162,12 @@ public final class BtBridge {
                 int lineTop = lay.getLineTop(line);
                 int gapTop = (noteBandSpan != null && noteBandSpan.below)
                         ? lineTop - noteBandSpan.band : lineTop;
-                int top = text.getTop() + text.getTotalPaddingTop() + gapTop;
+                // The card hangs gapAbove below the band's own top edge — the
+                // same arithmetic the styled pane's place() and iOS's
+                // btIOSLayoutNote use. (It was a bare dp(8) written out again
+                // here, so the reservation and the placement each had their own
+                // copy of the number.)
+                int top = text.getTop() + text.getTotalPaddingTop() + gapTop + gapAbove;
                 FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
                 p.topMargin = Math.max(0, top);
                 vv.setLayoutParams(p);
@@ -1146,10 +1178,11 @@ public final class BtBridge {
 
     /**
      * buildNoteBubble is the expanded sticker: a rounded card in the pushed
-     * surface + border colors, the WHO line with the Hide / Delete verbs,
-     * then the sender's words. The speech tail iOS draws is omitted — an
-     * honest simplification (a Path-backed drawable could add it later);
-     * nothing else differs from the iOS card.
+     * surface + border colors, the WHO line (byline + honest counts), the
+     * sender's words below it, and the Hide / Delete verbs FLOATED over the
+     * card's top right — out of its vertical flow, exactly as on iOS, macOS
+     * and the styled pane. The card's own rhythm is the shared spec's
+     * (noteMetrics, notes_bubble.go), not this file's.
      */
     // NoteBubbleDrawable paints the card and its speech TAIL as one shape — the
     // thing that makes a note read as somebody speaking rather than as a system
@@ -1201,17 +1234,47 @@ public final class BtBridge {
         @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
     }
 
+
+    /**
+     * fitWho is btIOSFitWho in Java: when the who line will not fit, the SENDER
+     * half tail-truncates and the counts survive whole. Split at the first
+     * " \u00b7 " — the same idiom iOS uses, and safe against a sender's name
+     * because sanitizeSenderName maps the middle dot away (notes_byline.go).
+     */
+    private static String fitWho(TextView v, String who, int widthPx) {
+        if (who == null || widthPx <= 0) return who;
+        android.text.TextPaint tp = v.getPaint();
+        if (tp.measureText(who) <= widthPx) return who;
+        int sep = who.indexOf(" \u00b7 ");
+        if (sep < 0) {
+            return android.text.TextUtils.ellipsize(who, tp, widthPx,
+                    android.text.TextUtils.TruncateAt.END).toString();
+        }
+        String sender = who.substring(0, sep), counts = who.substring(sep);
+        float countsW = tp.measureText(counts);
+        if (countsW >= widthPx) {
+            // Even the counts alone overflow: keep their head rather than the
+            // byline's, so "1 of 3" survives as far as it can.
+            return android.text.TextUtils.ellipsize(counts, tp, widthPx,
+                    android.text.TextUtils.TruncateAt.END).toString();
+        }
+        CharSequence head = android.text.TextUtils.ellipsize(sender, tp,
+                widthPx - countsW, android.text.TextUtils.TruncateAt.END);
+        return head + counts;
+    }
+
     private static View buildNoteBubble() {
+        // THE CARD IS THE SPEC'S CARD: pad / who row / who gap / message / pad,
+        // with the tail's depth carried in the bottom padding so no child draws
+        // into it. It used to be setPadding(12, 6, 4, 10+9) — a different
+        // internal rhythm from the other three surfaces, with the right inset
+        // patched back for the message alone by a rightMargin, so the byline and
+        // its verbs sat 8dp further right than the words below them.
         android.widget.LinearLayout box = new android.widget.LinearLayout(activity);
         box.setOrientation(android.widget.LinearLayout.VERTICAL);
         box.setBackground(new NoteBubbleDrawable(noteBg, noteBorder,
-                dp(9), dp(18), dp(24), dp(10)));
-        // The bottom padding carries the tail's depth so no child draws into it.
-        box.setPadding(dp(12), dp(6), dp(4), dp(10) + dp(9));
-
-        android.widget.LinearLayout head = new android.widget.LinearLayout(activity);
-        head.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        head.setGravity(Gravity.CENTER_VERTICAL);
+                dp(NOTE_TAIL), dp(NOTE_TAIL_W), dp(NOTE_TAIL_X), dp(NOTE_RADIUS)));
+        box.setPadding(dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD) + dp(NOTE_TAIL));
 
         TextView who = new TextView(activity);
         // The WHO line is the app's chrome — byline + honest counts, composed
@@ -1221,29 +1284,52 @@ public final class BtBridge {
         // (iOS accents only the counts; one TextView cannot split the tap, so
         // the line is the control — recorded simplification).
         String whoLabel = noteWho != null ? noteWho : "Note from Friend";
-        who.setText(noteNextable ? whoLabel + "  ›" : whoLabel);
+        whoLabel = noteNextable ? whoLabel + "  ›" : whoLabel;
+        who.setText(whoLabel);
+        who.setTag(whoLabel); // the unfitted string, for the width-aware fit below
         who.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
         who.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         who.setTextColor(noteNextable ? noteAccent : noteMuted);
-        if (noteNextable) {
-            who.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { nativeNoteNextTapped(); }
-            });
-        }
-        head.addView(who, new android.widget.LinearLayout.LayoutParams(
-                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        // Minimize first, delete second: the destructive one is never what a
-        // thumb reaches by accident (the iOS ordering).
-        head.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
-            @Override public void onClick(View v) { nativeNoteHidden(); }
-        }));
-        head.addView(noteVerb("✕", 14f, new View.OnClickListener() { // multiplication x: Delete
-            @Override public void onClick(View v) { nativeNoteDeleted(); }
-        }));
-        box.addView(head, new android.widget.LinearLayout.LayoutParams(
+        // The spec's who height is a MINIMUM, not a fixed box: dp() scales with
+        // display density and sp with the reader's font-size choice, so an
+        // 11sp line inside a 14dp box clips from about fontScale 1.08 — and
+        // Android's slider reaches 1.3, accessibility 2.0 (verification finding).
+        // At the default scale the minimum IS the spec, so the geometry the
+        // other three platforms hold to is unchanged.
+        who.setMinHeight(dp(NOTE_WHO_H));
+        who.setGravity(Gravity.CENTER_VERTICAL);
+        who.setSingleLine(true);
+        // NO ELLIPSIS. The who line is "<byline> · K of N on this passage ›" and
+        // the counts are at the END, so END-truncation drops exactly the half a
+        // reader must never lose — and would leave the next-tap overlay
+        // invisible but still tappable. iOS forbids this explicitly
+        // (btIOSFitWho, reading_ios.go: "a reader must never lose '· 2 of 105 on
+        // this passage' to an ellipsis while the constant byline survives"), and
+        // fitWho below is that rule in Java: the SENDER half gives way, the
+        // counts survive whole (verification finding).
+        // A FIXED box, spec height, with the verbs' width kept clear on the
+        // right — not a flow row whose height a glyph decides.
+        android.widget.LinearLayout.LayoutParams wlp = new android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
+        wlp.rightMargin = 2 * dp(NOTE_BTN);
+        box.addView(who, wlp);
+        // Fit at LAYOUT time, where the row's real width is known — the same
+        // moment iOS runs btIOSFitWho (btIOSLayoutNote). The unfitted string
+        // lives on the tag, so every re-layout re-fits from the original rather
+        // than from an already-truncated one; fit(fit(s)) == fit(s), and setText
+        // only fires on a real change, so this settles in one extra pass.
+        who.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override public void onLayoutChange(View v, int l, int t, int r, int b,
+                    int ol, int ot, int oR, int ob) {
+                if (!(v instanceof TextView) || !(v.getTag() instanceof String)) return;
+                TextView tv = (TextView) v;
+                int avail = (r - l) - tv.getPaddingLeft() - tv.getPaddingRight();
+                if (avail <= 0) return;
+                String fitted = fitWho(tv, (String) v.getTag(), avail);
+                if (!fitted.contentEquals(tv.getText())) tv.setText(fitted);
+            }
+        });
 
         TextView body = new TextView(activity);
         body.setText(noteText); // TEXT — nothing here parses markup
@@ -1252,20 +1338,67 @@ public final class BtBridge {
         android.widget.LinearLayout.LayoutParams blp = new android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.rightMargin = dp(8);
+        blp.topMargin = dp(NOTE_WHO_GAP);
         box.addView(body, blp);
-        noteView = box;
-        return box;
+
+        // THE VERBS FLOAT OVER THE CARD, out of its vertical flow, at its top
+        // right — the iOS/macOS/styled placement exactly (2 in from the top and
+        // right edges). In flow they set the who row's height from an 18sp glyph
+        // plus padding, which is the whole reason this card's rhythm never
+        // matched anyone else's.
+        FrameLayout wrap = new FrameLayout(activity);
+        wrap.addView(box, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT));
+        // The next-tap control is a TRANSPARENT overlay over the who line, not
+        // the who TextView itself. The who row is a fixed 14dp spec box now, and
+        // a 14dp tap target is not one; iOS has always used a separate button of
+        // exactly this height (kNotePad + kNoteWho + 2) over the same span, so
+        // the target is the card's whole top strip rather than the glyphs.
+        // Added BEFORE the verbs, so the verbs stay on top of it.
+        if (noteNextable) {
+            View nxt = new View(activity);
+            nxt.setClickable(true);
+            nxt.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { nativeNoteNextTapped(); }
+            });
+            FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    dp(NOTE_PAD + NOTE_WHO_H + 2), Gravity.TOP | Gravity.START);
+            np.rightMargin = 2 * dp(NOTE_BTN);
+            wrap.addView(nxt, np);
+        }
+        // Minimize first, delete second: the destructive one is never what a
+        // thumb reaches by accident (the iOS ordering).
+        wrap.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
+            @Override public void onClick(View v) { nativeNoteHidden(); }
+        }), noteVerbParams(2));
+        wrap.addView(noteVerb("✕", 14f, new View.OnClickListener() { // multiplication x: Delete
+            @Override public void onClick(View v) { nativeNoteDeleted(); }
+        }), noteVerbParams(1));
+        noteView = wrap;
+        return wrap;
     }
 
-    // noteVerb is one small sticker control (Hide "–" / Delete "✕"): muted,
-    // with a real touch pad around the glyph.
+    // noteVerbParams places one floated verb from the card's top-right corner:
+    // slot 1 is the rightmost. dp(2) in from both edges, as on the Apple panes.
+    private static FrameLayout.LayoutParams noteVerbParams(int slotFromRight) {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                dp(NOTE_BTN), dp(NOTE_BTN), Gravity.TOP | Gravity.END);
+        p.topMargin = dp(2);
+        p.rightMargin = dp(2) + (slotFromRight - 1) * dp(NOTE_BTN);
+        return p;
+    }
+
+    // noteVerb is one small sticker control (Hide "–" / Delete "✕"): muted, in a
+    // fixed touch box (its size is the LayoutParams' now, so the glyph is
+    // centred rather than padded out to a height of its own).
     private static TextView noteVerb(String glyph, float sp, View.OnClickListener tap) {
         TextView b = new TextView(activity);
         b.setText(glyph);
         b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, sp);
         b.setTextColor(noteMuted);
-        b.setPadding(dp(12), dp(4), dp(12), dp(4));
+        b.setGravity(Gravity.CENTER);
         b.setClickable(true);
         b.setOnClickListener(tap);
         return b;
@@ -1289,11 +1422,17 @@ public final class BtBridge {
         chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(15));
+        bg.setCornerRadius(dp(NOTE_PILL_H) / 2f);
         bg.setColor(noteBg);
         bg.setStroke(Math.max(1, dp(1)), noteBorder);
         chip.setBackground(bg);
-        chip.setPadding(dp(12), dp(6), dp(12), dp(6));
+        // The pill's height is SPEC (noteMetrics.PillH), not whatever the label
+        // plus a vertical padding happened to wrap to — it was ~26dp here, 30 on
+        // iOS and 24 on macOS, all three of them the platform's VERB BUTTON size
+        // leaking into a piece of content.
+        chip.setPadding(dp(NOTE_PAD), 0, dp(NOTE_PAD), 0);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setMinHeight(dp(NOTE_PILL_H)); // a minimum, not a box — see the who row
         chip.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { nativeNoteRestored(); }
         });
@@ -1317,13 +1456,20 @@ public final class BtBridge {
         if (!(cs instanceof Spannable)) return;
         Spannable sp = (Spannable) cs;
         if (off < 0 || off + 1 > sp.length()) return;
-        // Attach to the character BEFORE the verse and grow THAT line's descent:
-        // the reserved gap then belongs to the preceding line's box, which the
-        // verse's wash does not cover. Only a note on the very first character
-        // of a chapter has no preceding line; it keeps the ascent reservation
-        // (its verse is the first thing drawn, so nothing sits above to wash).
-        boolean below = off > 0;
-        int at = below ? off - 1 : off;
+
+        // up paragraphs… No breaking up the Word of God"). The band opens
+        // above the whole paragraph carrying the verse, never between two of
+        // its lines — the rule iOS has always followed and the styled pane now
+        // follows too. Html.fromHtml separates paragraphs with newlines, so the
+        // paragraph starts after the last '\n' at or before the verse.
+        int paraStart = off;
+        while (paraStart > 0 && sp.charAt(paraStart - 1) != '\n') paraStart--;
+        // Attach to the character BEFORE the paragraph and grow THAT line's
+        // descent: the reserved gap then belongs to a line the paragraph's own
+        // wash does not cover. A paragraph opening the chapter has no preceding
+        // line and keeps the ascent reservation (nothing above it to wash).
+        boolean below = paraStart > 0;
+        int at = below ? paraStart - 1 : paraStart;
         noteBandSpan = new NoteBandSpan(band, at, below);
         sp.setSpan(noteBandSpan, at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         // UpdateLayout makes DynamicLayout reflow; the explicit pair is
@@ -1429,7 +1575,23 @@ public final class BtBridge {
                     int[] r = (layout != null) ? verseRange(pendingVerse) : null;
                     if (r != null) {
                         int line = layout.getLineForOffset(r[0]);
-                        int y = text.getTotalPaddingTop() + layout.getLineTop(line) - dp(16);
+                        int top = layout.getLineTop(line);
+                        // ARRIVING MUST SHOW THE NOTE. The band sits above this
+                        // verse's paragraph, so scrolling to the verse's own
+                        // line puts the bubble explaining it above the fold —
+                        // clipped, on the one arrival where it matters most
+                        // (a shared link's whole point). The styled pane has
+                        // the same rule in highlightY; this is its Android
+                        // twin: when the band belongs to this verse's
+                        // paragraph, scroll to the BAND's top instead.
+                        if (noteBandSpan != null && noteAnchorVerse == pendingVerse) {
+                            int paraOff = r[0];
+                            CharSequence cs = text.getText();
+                            while (paraOff > 0 && cs.charAt(paraOff - 1) != '\n') paraOff--;
+                            int paraLine = layout.getLineForOffset(paraOff);
+                            top = layout.getLineTop(paraLine) - noteBandSpan.band;
+                        }
+                        int y = text.getTotalPaddingTop() + top - dp(16);
                         ownScrollTo(Math.max(y, 0));
                         return;
                     }

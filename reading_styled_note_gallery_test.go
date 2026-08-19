@@ -209,14 +209,19 @@ func TestStyledNoteGallery(t *testing.T) {
 					}
 					// The card must sit INSIDE the reserved band — the whole
 					// point of the layout-engine reservation.
-					if !tc.wantPill {
-						cardTop, cardBot := p.noteGeom.card.Y, p.noteGeom.card.Y+p.noteGeom.cardH
-						bandTop, bandBot := p.lay.BandY, p.lay.BandY+p.lay.BandH
-						if cardTop < bandTop-0.6 || cardBot > bandBot+0.6 {
-							t.Errorf("the card (%.1f..%.1f) escapes its band (%.1f..%.1f)",
-								cardTop, cardBot, bandTop, bandBot)
-						}
+					//
+					// card.H, not cardH: cardH is the card WITHOUT its tail
+					// (measureStyledNote), so the old spelling here would have
+					// passed a tail hanging clean out of the band's bottom into
+					// the passage — the one thing the band exists to prevent.
+					cardTop, cardBot := p.noteGeom.card.Y, p.noteGeom.card.Y+p.noteGeom.card.H
+					bandTop, bandBot := p.lay.BandY, p.lay.BandY+p.lay.BandH
+					if cardTop < bandTop-0.6 || cardBot > bandBot+0.6 {
+						t.Errorf("the card (%.1f..%.1f) escapes its band (%.1f..%.1f)",
+							cardTop, cardBot, bandTop, bandBot)
 					}
+					// And every distance in the picture is the SPEC's.
+					assertNoteSpacing(t, p)
 					// The counts span is a CONTROL only when there is a set to
 					// walk; when it is one, it must be drawn in the accent.
 					hasCounts := p.noteGeom.counts.W > 0
@@ -292,4 +297,65 @@ func devLongNoteText() string {
 		r = append(r, 'x')
 	}
 	return string(r[:NoteMaxRunes])
+}
+
+// assertNoteSpacing holds EVERY distance in the picture to the shared spec
+
+// ("measure the pill and note vertical spacing and margins visually … make sure
+// it's the same there"). It runs on all twelve permutations × light/dark, in
+// both the expanded and the pill state, so a spacing change on this pane cannot
+// land without either matching the table or moving it.
+//
+// It deliberately asserts the SAME quantities the three natives are held to by
+// name in notes_spacing_spec_test.go: gap above, gap below, card padding, who
+// row, who→body gap, tail depth, pill height. This pane is the only one whose
+// pixels can be measured on the the development environment, so it is where the numbers are
+// checked as GEOMETRY rather than as source text.
+func assertNoteSpacing(t *testing.T, p *styledReadingPane) {
+	t.Helper()
+	g := p.noteGeom
+	if !g.present {
+		return
+	}
+	const tol = 0.01
+	eq := func(what string, got, want float32) {
+		t.Helper()
+		if got < want-tol || got > want+tol {
+			t.Errorf("%s = %.2f, want %.2f (noteMetrics)", what, got, want)
+		}
+	}
+
+	// --- the band: the same air above the drawn shape as below it -------------
+	eq("gap above the card", g.card.Y-p.lay.BandY, noteMetrics().GapAbove)
+	eq("gap below the drawn shape",
+		(p.lay.BandY+p.lay.BandH)-(g.card.Y+g.card.H), noteMetrics().GapBelow)
+
+	if g.pill {
+		// The pill is a piece of CONTENT: its height is the spec's, never the
+		// verb button's (which is what all four surfaces used to derive it from).
+		eq("pill height", g.card.H, noteMetrics().PillH)
+		eq("pill height (cardH)", g.cardH, noteMetrics().PillH)
+		return
+	}
+
+	// --- the drawn shape: card + tail -----------------------------------------
+	eq("tail depth", g.card.H-g.cardH, noteMetrics().TailDepth)
+
+	// --- the card's internal rhythm: pad / who / gap / message / pad ----------
+	if g.sender.W <= 0 {
+		t.Fatal("precondition: an expanded card always draws a who line")
+	}
+	eq("card left padding", g.sender.X-g.card.X, noteMetrics().Pad)
+	eq("card top padding (who row's top)", g.sender.Y-g.card.Y, noteMetrics().Pad)
+	eq("who row height", g.sender.H, noteMetrics().WhoH(styledNoteWhoSz))
+
+	if len(g.bodyLines) == 0 {
+		t.Fatal("precondition: an expanded card always draws a message")
+	}
+	first, last := g.bodyLines[0], g.bodyLines[len(g.bodyLines)-1]
+	eq("who row bottom → message top",
+		first.Y-(g.sender.Y+g.sender.H), noteMetrics().WhoGap)
+	eq("message left padding", first.X-g.card.X, noteMetrics().Pad)
+	eq("card bottom padding",
+		g.cardH-((last.Y+last.H)-g.card.Y), noteMetrics().Pad)
 }

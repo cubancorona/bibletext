@@ -966,11 +966,11 @@ func TestStyledNoteBandIsSymmetric(t *testing.T) {
 			}
 			above := g.card.Y - p.lay.BandY
 			below := (p.lay.BandY + p.lay.BandH) - (g.card.Y + g.card.H)
-			if above < styledNoteGap-0.6 || above > styledNoteGap+0.6 {
-				t.Errorf("gap above the card = %.1f, want %.1f", above, styledNoteGap)
+			if above < styledNoteGapAbv-0.6 || above > styledNoteGapAbv+0.6 {
+				t.Errorf("gap above the card = %.1f, want %.1f", above, styledNoteGapAbv)
 			}
-			if below < styledNoteGap-0.6 || below > styledNoteGap+0.6 {
-				t.Errorf("gap below the card = %.1f, want %.1f", below, styledNoteGap)
+			if below < styledNoteGapBlw-0.6 || below > styledNoteGapBlw+0.6 {
+				t.Errorf("gap below the card = %.1f, want %.1f", below, styledNoteGapBlw)
 			}
 			// And the card still lands inside its own band.
 			if g.card.Y < p.lay.BandY-0.1 || g.card.Y+g.card.H > p.lay.BandY+p.lay.BandH+0.1 {

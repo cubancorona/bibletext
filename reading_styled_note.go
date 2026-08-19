@@ -45,15 +45,26 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// Metrics, mirroring the native stickers (reading_ios.go kNotePad/kNoteGap/
-// kNoteBtn and notes_bubble.go's tail constants, which are reused as-is).
+// Metrics. Every vertical number here is READ FROM THE SHARED SPEC
+// (noteMetrics, notes_bubble.go) rather than restated — this pane is the one
+// surface that can consume the table directly, and it is the reference the
+// three natives are held to by notes_spacing_spec_test.go.
+//
+// styledNoteBtn is the only local number: it is the VERB BUTTON's size, a
+// pointer-target decision this platform owns (iOS 30 for a thumb, macOS 24 for
+// a pointer). It is deliberately no longer the pill's height — that is
+// noteMetrics().PillH, spec'd for all four.
 const (
-	styledNotePad    = float32(12)
-	styledNoteGap    = float32(10)
-	styledNoteBtn    = float32(28)
-	styledNoteWhoH   = float32(14)
-	styledNoteWhoSz  = float32(11)
-	styledNoteWhoGap = float32(4)
+	styledNoteBtn   = float32(28)
+	styledNoteWhoSz = float32(11)
+)
+
+var (
+	styledNotePad    = noteMetrics().Pad
+	styledNoteGapAbv = noteMetrics().GapAbove
+	styledNoteGapBlw = noteMetrics().GapBelow
+	styledNoteWhoH   = noteMetrics().WhoH(styledNoteWhoSz) // 14 at 11pt
+	styledNoteWhoGap = noteMetrics().WhoGap
 )
 
 // styledNote is the pushed presentation, exactly as the three native stickers
@@ -136,19 +147,17 @@ type styledNoteGeom struct {
 // bandH is what the layout must reserve: a gap, the drawn shape, and the gap to
 // the verse it points at.
 //
-// THE GAP ABOVE IS NOT DECORATION. iOS reserves with paragraphSpacingBefore, so
-// its card always inherits the anchor PARAGRAPH's own gap above it; this pane
-// anchors to the verse's LINE, which is more precise (the tail points at the
-// verse the note is about, not at whatever verse opened the paragraph) but
-// leaves the card butting straight against the line above when the note lands
-// mid-paragraph — 0pt above against 19pt below, which the owner saw at once.
-// Reserving the same gap on both sides restores the rhythm iOS gets for free
-// and keeps the more precise anchor. Pinned by TestStyledNoteBandIsSymmetric.
+// THE GAP ABOVE IS NOT DECORATION, and both gaps are now SPEC
+// (noteMetrics().GapAbove / GapBelow, notes_bubble.go) rather than this pane's
+// own numbers: the first cut here reserved only below and left the card butting
+
+// once. Pinned by TestStyledNoteBandIsSymmetric and by the gallery's per-picture
+// spacing assertions.
 func (g styledNoteGeom) bandH() float32 {
 	if !g.present {
 		return 0
 	}
-	return styledNoteGap + g.card.H + styledNoteGap
+	return styledNoteGapAbv + g.card.H + styledNoteGapBlw
 }
 
 // hits reports whether a position is inside the sticker at all — the guard
@@ -276,8 +285,10 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 		if w > width {
 			w = width
 		}
-		g.card = styledNoteRect{X: 0, Y: 0, W: w, H: styledNoteBtn}
-		g.cardH = styledNoteBtn
+		// The pill's height is SPEC, not the verb button's size (noteMetrics
+		// records why the two were ever the same number).
+		g.card = styledNoteRect{X: 0, Y: 0, W: w, H: noteMetrics().PillH}
+		g.cardH = noteMetrics().PillH
 		return g
 	}
 
@@ -310,7 +321,12 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 	}
 
 	x := styledNotePad
-	whoY := styledNotePad - 2
+	// The who row's box starts at the card's own padding, FULL STOP. It used to
+	// start at pad-2 on this pane and on both natives — a shim nobody could
+	// justify, whose only effect was to make the stated rhythm (12 + 14 + 4)
+	// describe a card whose real who→body gap was 6 and whose real top padding
+	// was 10. The table now says what the pixels do.
+	whoY := styledNotePad
 	put := func(s string) styledNoteRect {
 		if s == "" {
 			return styledNoteRect{}
@@ -364,7 +380,7 @@ func (g *styledNoteGeom) place(x, y float32) {
 	if !g.present {
 		return
 	}
-	y += styledNoteGap
+	y += styledNoteGapAbv
 	shift := func(r *styledNoteRect) {
 		if r.W == 0 && r.H == 0 {
 			return
@@ -604,7 +620,7 @@ func noteBubblePathSVG(w, h float32, fill, stroke color.Color) fyne.Resource {
 	strokeHex, strokeA := noteSVGHex(stroke)
 
 	const in = 0.5 // half the 1pt stroke, kept inside the bounds
-	r := float32(noteBubbleRad)
+	r := float32(noteStickerRad)
 	if r > w/2 {
 		r = w / 2
 	}
