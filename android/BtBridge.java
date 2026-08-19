@@ -408,6 +408,7 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 pendingVerse = verse;
+                scrollRetries = 0;
                 if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "scrollToVerse: armed v" + verse
                         + " text=" + (text != null) + " layout=" + (text != null && text.getLayout() != null));
                 applyPendingScroll();
@@ -1631,6 +1632,8 @@ public final class BtBridge {
                 if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "setHtml: frac=" + frac
                         + " clearing pendingVerse (was " + pendingVerse + ")");
                 pendingVerse = 0; // a following scrollToVerse (queued next) re-arms it
+                pendingPlace = true; // this chapter is fresh: place it once
+                scrollRetries = 0;
                 applyPendingScroll();
             }
         });
@@ -1641,12 +1644,46 @@ public final class BtBridge {
     // "coming back" scroll. Cleared by the first user scroll alongside it.
     private static int pendingVerse = 0;
 
+    // Guards the arrival's re-ask, exactly as noteRetryPending guards the
+    // sticker's. The counter is the backstop: a pane that never lays out must
+    // not spin forever, and 40 traversals is far past any real first layout.
+    // pendingPlace is the FRAC-OR-TOP placement, and it is one-shot. Only the
+    // apply that follows a setHtml may use it: a chapter arriving fresh starts
+    // at the top (or at the restore fraction), but a LATER apply with nothing
+    // armed must do nothing at all. Without this, clearing pendingVerse on a
+    // successful arrival made scrollToVerse's own 250 ms re-assert fall through
+    // and scroll the reader back to the top — traced, immediately after the
+    // arrival it had just landed correctly.
+    private static boolean pendingPlace;
+    private static boolean scrollRetryPending;
+    private static int scrollRetries;
+    private static final int SCROLL_MAX_RETRIES = 40;
+
     /** applyPendingScroll positions the text AFTER the layout that follows a
      *  setText/scrollToVerse: verse first, else frac restore, else top. All
      *  callers run on the UI thread, so the posts queue deterministically —
      *  this replaced a free-standing scrollToVerse that raced setHtml's own
      *  post-layout scroll and lost (platform reproduction: arrivals landed wherever
-     *  the previous reader stopped). */
+     *  the previous reader stopped).
+     *
+     *  AN ARMED ARRIVAL IS NEVER SPENT ON THE TOP. It used to be: when the
+     *  pane had no Layout yet the verse arm simply fell through to the frac
+     *  restore, or to ownScrollTo(0), and the arrival was gone. There were only
+     *  ever three shots at it — setHtml's inline apply, scrollToVerse's inline
+     *  apply, and one 250 ms re-assert — and on a cold start all three can be
+     *  spent before the first measure: the reading overlay's Dialog is not
+     *  shown until a real frame arrives, so a View.post drains at
+     *  dispatchAttachedToWindow, AHEAD of layout. The reader then sits at the
+     *  top of the right chapter with the note far below, which is what the
+
+     *
+     *  Thirty lines away refreshNoteSticker already solved this class by asking
+     *  again after the layout pass (noteRetryPending) — which is why the
+     *  sticker was placed correctly at y~10300 in the very trace where the
+     *  scroll had given up. This is that same shape for the scroll: while a
+     *  verse is armed and merely UNRESOLVED, re-ask instead of falling through.
+     *  A verse that is armed and genuinely absent from the index still falls
+     *  through, because that is not a timing problem. */
     private static void applyPendingScroll() {
         if (scroll == null) return;
         scroll.post(new Runnable() {
@@ -1657,7 +1694,26 @@ public final class BtBridge {
                     int[] r = (layout != null) ? verseRange(pendingVerse) : null;
                     if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: v" + pendingVerse
                             + " layout=" + (layout != null) + " range=" + (r != null)
+                            + " attached=" + scroll.isAttachedToWindow()
                             + " indexed=" + verseNums.length + " verses");
+                    // Not laid out yet, or indexed before the text landed: ask
+                    // again after this pass rather than spending the arrival.
+                    if ((layout == null || verseNums.length == 0)
+                            && scrollRetries < SCROLL_MAX_RETRIES && !scrollRetryPending) {
+                        scrollRetryPending = true;
+                        scrollRetries++;
+                        final int want = pendingVerse;
+                        text.post(new Runnable() {
+                            @Override public void run() {
+                                scrollRetryPending = false;
+                                // Only if the arrival is STILL the live target:
+                                // the reader's own scroll clears pendingVerse,
+                                // and re-applying then would yank them back.
+                                if (pendingVerse == want) applyPendingScroll();
+                            }
+                        });
+                        return;
+                    }
                     if (r != null) {
                         int line = layout.getLineForOffset(r[0]);
                         int top = layout.getLineTop(line);
@@ -1678,16 +1734,34 @@ public final class BtBridge {
                         }
                         int y = text.getTotalPaddingTop() + top - dp(16);
                         ownScrollTo(Math.max(y, 0));
+                        // Consumed — BOTH of them. Clearing pendingVerse is what
+                        // makes scrollToVerse's 250 ms re-assert a LIVENESS test
+                        // ("did the arrival land?") rather than a second
+                        // unconditional scroll. Clearing pendingPlace is what
+                        // stops setHtml's own queued apply — which is still
+                        // behind us in the same queue — from then "placing" the
+                        // fresh chapter at the top, on top of the arrival that
+                        // just succeeded. An arrival IS the placement.
+                        pendingVerse = 0;
+                        pendingPlace = false;
+                        scrollRetries = 0;
                         return;
                     }
                 }
+                if (!pendingPlace) {
+                    // Nothing armed and no fresh chapter to place: leave the
+                    // reader exactly where they are.
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: nothing to do"
+                            + " (pendingVerse=" + pendingVerse + ") — leaving the scroll alone");
+                    return;
+                }
+                pendingPlace = false;
                 if (pendingFrac >= 0) {
-                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: FELL THROUGH to frac "
-                            + pendingFrac + " (pendingVerse=" + pendingVerse + ")");
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at frac "
+                            + pendingFrac);
                     ownScrollTo(Math.round(pendingFrac * scrollRange()));
                 } else {
-                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: FELL THROUGH to TOP"
-                            + " (pendingVerse=" + pendingVerse + ")");
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at TOP");
                     ownScrollTo(0);
                 }
             }
