@@ -1,0 +1,55 @@
+VERSION 1.2.0
+
+BibleText is a Bible reader. No account, login, or registration is required — all reading, search, navigation, and cross-references work immediately and offline once the text loads.
+
+WHAT IS NEW IN 1.2.0
+• Shared notes: a verse link can carry a short personal message from the sender. The message travels inside the link itself — there is no server and no account. See SHARED NOTES below, which is the main thing to exercise in this release.
+• A notes scrapbook on the Search tab: everything received and sent, searchable and sorted, stored only on the device.
+• Sharing is more precise: a citation names exactly the verses selected even when the same words occur twice in a chapter, and shared poetry keeps its line breaks.
+• The New King James Version works on install (see TRANSLATIONS AND KEYS).
+• Settings rebuilt into grouped sections; the words of Christ keep their red under a highlight; dark-mode controls redrawn.
+
+SHARED NOTES — HOW TO EXERCISE IT
+The feature has two halves: sending, which needs nothing but the app, and receiving, which needs a link.
+
+To send: open any chapter, press and hold to select a verse or a range, choose "Share with note", type a short message, and share it to any app (Notes or Messages to yourself is enough). The result is an ordinary https://bibletext.co.uk link.
+
+To receive: tap a link of that shape. The app opens the passage, highlights the shared verses, and shows the sender's message in a card anchored to the verse it is about. If a passage carries more than one note the card says so ("1 of 3 on this passage") and tapping that count steps through them. The card's − minimises it to a small pill and ✕ deletes the note.
+
+Two links that can be tapped directly to test receiving, both of which open a passage with a message attached:
+
+https://bibletext.co.uk/bsb/john/11/#v35&n=cmEDASMjYgEqYwELdEZUaGlua2luZyBvZiB5b3UgdG9kYXkgLSB0aGlzIHZlcnNlIGhhcyBjYXJyaWVkIG1lIHRocm91Z2ggYSBoYXJkIHdlZWsudgNic2I
+
+https://bibletext.co.uk/bsb/psalms/23/#v1-4&n=cmEDAQEEYgESYwEXdDtSZWFkaW5nIHRoaXMgYXQgdGhlIGhvc3BpdGFsIHRvbmlnaHQuIFByYXlpbmcgZm9yIHlvdSBib3RoLnYDYnNi
+
+Opening either link in a browser instead shows the same passage as a plain web page, which is what a recipient without the app sees.
+
+SHARED NOTES — PROVENANCE AND CONTROLS
+The message is encoded inside the link's URL fragment and travels only in whatever messaging app the sender chooses. There is no server, no account, no directory of users, and no way for anyone to send content to a user who did not already receive that link from them directly. A fragment is never transmitted to the website's host, so the message is not sent to the developer even when a link is opened in a browser.
+
+On receipt the message is rendered as plain TEXT — never as markup, never as a live link — and is always labelled as coming from another person ("Note from …"), never presented in the app's own voice. The recipient can minimise it, delete it, delete every stored note at once (Settings > Shared notes), or switch the whole feature off, in which case an arriving link opens the passage and discards the message.
+
+OPTIONAL AI STUDY FEATURES — BRING YOUR OWN KEY
+The AI features (Find, Explain, context/translation analysis) are OPTIONAL and inactive until the user adds their own API key for a third-party AI provider. No AI PROVIDER key is bundled in the app (the separate API.Bible key used for Bible TEXT is a different thing, disclosed under TRANSLATIONS AND KEYS below), the app is fully usable without any AI key, and the user can disable the AI features entirely (Settings → Assistant → None).
+
+To exercise the AI features during review:
+1. Tap the gear icon (top right) to open AI settings.
+2. Choose a provider (Google Gemini, OpenAI, Anthropic, or xAI/Grok) and paste a valid API key for that provider, then tap "Test key".
+3. Then either: select any passage in the reader and choose "Study with AI" → Explain; OR open the Search tab and use "Find" to search Scripture by meaning.
+(A review-only provider key can be supplied in App Review Information if needed; no provider account is required for the app's core reading, search, audio, navigation, sharing, notes, or cross-reference features.)
+
+IPAD
+On iPad the app shows a two-pane layout — a navigation sidebar (search + book list) beside the reading pane. The button at the top-left of the header hides/shows the sidebar; in portrait it starts hidden (full-width reading). Narrow Split View sizes fall back to the iPhone tab layout. All features work identically on iPhone and iPad.
+
+PRIVACY / DATA
+There is no developer-operated server. When an AI feature is used, the user's Find query or selected passage and study action are sent directly from the device to the AI provider the user chose, authenticated with the user's own key; the developer never receives or routes this data. The provider may associate and retain the request under its own account terms. App Privacy therefore declares that no data is collected from this app, which is what the app's privacy manifest (PrivacyInfo.xcprivacy) also declares: an empty NSPrivacyCollectedDataTypes and NSPrivacyTracking false. Nothing in this release changes that. Shared notes never leave the device except inside a link the user themselves sends from their own messaging app, and the API.Bible request for the NKJV carries only the passage and an API key. Bible text and cross-reference data are fetched from free public sources (bible.helloao.org, bible-api.com, openbible.info) without app account or profile data. Nothing is collected by the developer and no data is used for tracking.
+
+AGE-APPROPRIATENESS OF THE AI FEATURE
+The AI features cannot be used unless the user supplies their own third-party provider API key, which those providers (Google, OpenAI, Anthropic, xAI) issue only subject to their own age and terms-of-service requirements. AI responses are private to the individual user and are never shared with or shown to other users. Prompts are grounded in a fixed Bible-study context, and an in-app "Report" control lets users flag any AI output. These are offered as mitigating context for the content rating.
+
+TRANSLATIONS AND KEYS
+Most translations (World English Bible, WEB Catholic, Berean Standard Bible) are public domain and are fetched from free public sources. The New King James Version is served by API.Bible (rest.api.bible) under the developer's own API.Bible account: this build compiles that key in so the NKJV works on install. A user can replace it with their own free API.Bible key in Settings > Translations, or clear it entirely, in which case the NKJV is simply unavailable. The request to API.Bible carries only the passage being fetched and the key — no user data of any kind. This is separate from, and unrelated to, the optional AI provider keys described above, none of which are bundled.
+
+Privacy policy: https://bibletext.co.uk/privacy.html
+Support: https://bibletext.co.uk/support.html
+Contact: [redacted-private-email]
