@@ -262,6 +262,7 @@ import (
 	"image/color"
 	"log"
 	"math"
+	"os"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -544,6 +545,10 @@ func pushNoteToOverlay(state *AppState) {
 	cw := C.CString(who)
 	defer C.free(unsafe.Pointer(ct))
 	defer C.free(unsafe.Pointer(cw))
+	if os.Getenv("BT_NOTE_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[note] push text=%dch who=%q pill=%v next=%v anchor=%d fullscreen=%v\n",
+			len(text), who, pill, next, anchor, state.IsFullScreen)
+	}
 	runBta(func(env uintptr) {
 		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, C.int(anchor),
 			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
