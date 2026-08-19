@@ -1,11 +1,11 @@
-//go:build !darwin
+//go:build !darwin && !android
 
 package bibletext
 
-// Windows, Linux and Android: the Fyne banner above the pane (notes_banner.go)
-// is how a note is visible in NORMAL reading, so this stays false. Android
-// additionally draws a native in-text sticker in FULL-SCREEN reading only
-// (the implementation requirement: pushNoteToOverlay in reading_android.go gates on IsFullScreen,
-// where the banner is never built) — flipping this constant there would kill
-// the banner the compact layout still depends on. See the `on` twin.
+// Windows and Linux: the styled reading pane draws no sticker of its own, so
+// the Fyne banner above the pane (notes_banner.go) is how a note is visible
+// there. Android LEFT this set on 19 Aug — it now draws the native in-text
+// sticker in both of its reading modes, for parity with iOS (see the `on`
+// twin). Whether the styled pane should grow a true in-text band+bubble of its
+// own is recorded as future work in [redacted-retired-private-reference].
 const nativeNoteStickerOnPlatform = false

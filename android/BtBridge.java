@@ -1122,16 +1122,63 @@ public final class BtBridge {
      * honest simplification (a Path-backed drawable could add it later);
      * nothing else differs from the iOS card.
      */
+    // NoteBubbleDrawable paints the card and its speech TAIL as one shape — the
+    // thing that makes a note read as somebody speaking rather than as a system
+    // card. Geometry copied from the Apple panes (notes_bubble.go's
+    // noteTailDepth/Width/Inset, btMacNoteBubblePath): nine deep, eighteen
+    // wide, twenty-four in from the left, pointing DOWN at the passage. Drawn
+    // as ONE path so the border never runs across the tail's mouth.
+    private static final class NoteBubbleDrawable extends android.graphics.drawable.Drawable {
+        private final int fill, stroke, tailDepth, tailWidth, tailInset, radius;
+        NoteBubbleDrawable(int fill, int stroke, int tailDepth, int tailWidth, int tailInset, int radius) {
+            this.fill = fill; this.stroke = stroke;
+            this.tailDepth = tailDepth; this.tailWidth = tailWidth;
+            this.tailInset = tailInset; this.radius = radius;
+        }
+        private android.graphics.Path shape() {
+            android.graphics.Rect b = getBounds();
+            float l = b.left + 0.5f, t = b.top + 0.5f, r = b.right - 0.5f;
+            float bot = b.bottom - tailDepth - 0.5f;
+            float x0 = l + tailInset, x1 = x0 + tailWidth, apex = x0 + tailWidth / 2f;
+            android.graphics.Path p = new android.graphics.Path();
+            p.moveTo(l + radius, t);
+            p.lineTo(r - radius, t);
+            p.quadTo(r, t, r, t + radius);
+            p.lineTo(r, bot - radius);
+            p.quadTo(r, bot, r - radius, bot);
+            p.lineTo(x1, bot);
+            p.lineTo(apex, bot + tailDepth);   // the tail, pointing at the verse
+            p.lineTo(x0, bot);
+            p.lineTo(l + radius, bot);
+            p.quadTo(l, bot, l, bot - radius);
+            p.lineTo(l, t + radius);
+            p.quadTo(l, t, l + radius, t);
+            p.close();
+            return p;
+        }
+        @Override public void draw(android.graphics.Canvas c) {
+            android.graphics.Path p = shape();
+            android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(fill);
+            c.drawPath(p, paint);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, dp(1)));
+            paint.setColor(stroke);
+            c.drawPath(p, paint);
+        }
+        @Override public void setAlpha(int a) {}
+        @Override public void setColorFilter(android.graphics.ColorFilter f) {}
+        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+    }
+
     private static View buildNoteBubble() {
         android.widget.LinearLayout box = new android.widget.LinearLayout(activity);
         box.setOrientation(android.widget.LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(10));
-        bg.setColor(noteBg);
-        bg.setStroke(Math.max(1, dp(1)), noteBorder);
-        box.setBackground(bg);
-        box.setPadding(dp(12), dp(6), dp(4), dp(10));
+        box.setBackground(new NoteBubbleDrawable(noteBg, noteBorder,
+                dp(9), dp(18), dp(24), dp(10)));
+        // The bottom padding carries the tail's depth so no child draws into it.
+        box.setPadding(dp(12), dp(6), dp(4), dp(10) + dp(9));
 
         android.widget.LinearLayout head = new android.widget.LinearLayout(activity);
         head.setOrientation(android.widget.LinearLayout.HORIZONTAL);
