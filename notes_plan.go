@@ -609,6 +609,18 @@ func advanceNoteFocus(state *AppState) {
 	}
 }
 
+// androidStickerPush is the Android full-screen sticker's tuple (task #19) —
+// a thin alias of the Apple composition, so the WHO line, the honest counts,
+// the pill labels and the derived suppression are BYTE-identical across the
+// three native stickers and can never drift. It exists as a name (rather than
+// Android calling appleStickerPush directly) so the seam is visible and
+// host-pinned: assertStickerAgreesWithStore (notes_verb_screen_test.go) holds
+// the two to equality across every verb, and a future Android-only divergence
+// has to announce itself here.
+func androidStickerPush(state *AppState, plan chapterPlan) (text, who string, pill, next bool) {
+	return appleStickerPush(state, plan)
+}
+
 // stickerPillWho is the collapsed sticker's label: short (the pill sizes to
 // it), but the whole set — "Note", "Notes · 3", "Note · 2 not shown".
 func stickerPillWho(placed, unplaced int) string {

@@ -19,6 +19,10 @@ extern void btaScrolled(float frac);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
 extern void btaKeyboardChanged(float overlapDp);
+extern void btaNoteNextTapped(void);
+extern void btaNoteHidden(void);
+extern void btaNoteDeleted(void);
+extern void btaNoteRestored(void);
 
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi) {
@@ -47,4 +51,27 @@ Java_org_bibletext_BtBridge_nativeReadAlongFollowTapped(JNIEnv *env, jclass claz
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeKeyboardChanged(JNIEnv *env, jclass clazz, jfloat overlapDp) {
 	btaKeyboardChanged((float)overlapDp);
+}
+
+// The full-screen note sticker's verbs (task #19): next-tap on the count
+// region, Hide, Delete, and the pill's tap-to-restore — each dispatching to
+// the same Go verb the iOS sticker calls (reading_android_export.go).
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteNextTapped(JNIEnv *env, jclass clazz) {
+	btaNoteNextTapped();
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteHidden(JNIEnv *env, jclass clazz) {
+	btaNoteHidden();
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteDeleted(JNIEnv *env, jclass clazz) {
+	btaNoteDeleted();
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteRestored(JNIEnv *env, jclass clazz) {
+	btaNoteRestored();
 }

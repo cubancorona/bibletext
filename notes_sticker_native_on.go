@@ -8,6 +8,8 @@ package bibletext
 // `darwin` build tag is set for BOTH, which is exactly the set that has one.
 //
 // Where this is true the Fyne banner must stay out of the way, or the reader
-// sees the same note twice. Android's overlay has no sticker yet and still
-// shows the banner (task #19); Windows/Linux styled panes likewise.
+// sees the same note twice. Android stays false: its native sticker exists
+// only in FULL-SCREEN reading (task #19, pushNoteToOverlay), where the banner
+// is never built, while normal reading still needs the banner; Windows/Linux
+// styled panes have no sticker at all.
 const nativeNoteStickerOnPlatform = true

@@ -75,7 +75,59 @@ public final class BtBridge {
     private static Dialog dialog;
     private static FrameLayout root;   // hosts the ScrollView + the floating pill
     private static ScrollView scroll;
+    private static FrameLayout content; // the scroll's one child: the TextView + the note sticker
     private static TextView text;
+
+    // --- Shared-note sticker (full-screen reading, task #19) ----------------
+    // The Android twin of the iOS in-text note bubble (reading_ios.go
+    // bibleTextSetNote): the Go side pushes the WHOLE presentation on every
+    // chapter render — the sender's words, the WHO line (byline + honest
+    // counts, the app's own chrome), pill vs bubble, whether the count region
+    // is a next-tap control, the anchor verse, and the five palette colors —
+    // and this side compares the tuple and re-derives the views only when it
+    // changed (the iOS `changed` gate), so a presentation flip renders even
+    // when the chapter Spanned was not re-pushed. The sticker lives INSIDE
+    // the scroll content (a sibling of the TextView in `content`), so it
+    // scrolls with the verse it is anchored to — no per-scroll tracking.
+    //
+    // Geometry, honestly: iOS reserves the band with paragraphSpacingBefore
+    // on the anchor paragraph; a TextView has no per-paragraph spacing, so
+    // the band here is a one-character LineHeightSpan (NoteBandSpan) on the
+    // anchor verse's first character that raises that line's top by the
+    // measured sticker height + gap, and the sticker view is positioned into
+    // the reserved gap from the Layout's line geometry. Verse 0 (an
+    // unplaced-only chapter) reserves nothing and parks the pill at the top
+    // of the text — the only honest place for notes with no verses here.
+    private static android.widget.LinearLayout noteView; // the expanded bubble
+    private static TextView notePillView;                // the collapsed pill
+    private static String noteText = null;   // sender's words; null = none
+    private static String noteWho = null;    // the app's chrome line; null = none
+    private static boolean notePill = false;
+    private static boolean noteNextable = false;
+    private static int noteAnchorVerse = 0;
+    // Palette, pushed with every tuple (never hardcoded past these first-paint
+    // fallbacks, which match the app's light parchment).
+    private static int noteBg = 0xFFF7F3EA, noteFg = 0xFF262119, noteMuted = 0xFF6B6455,
+                       noteAccent = 0xFF2E4C87, noteBorder = 0xFFBDB49E;
+    private static NoteBandSpan noteBandSpan; // the live band, so a refresh can take it back
+
+    /**
+     * NoteBandSpan reserves the sticker's band: applied to ONE character (the
+     * anchor verse's first), it raises that single line's top/ascent by the
+     * band height, opening a gap above the verse for the sticker to sit in.
+     * UpdateLayout is what makes DynamicLayout reflow when the span is added
+     * or removed on the live Spannable.
+     */
+    private static final class NoteBandSpan
+            implements android.text.style.LineHeightSpan, android.text.style.UpdateLayout {
+        final int band;
+        NoteBandSpan(int band) { this.band = band; }
+        @Override public void chooseHeight(CharSequence t, int start, int end,
+                int spanstartv, int lineHeight, android.graphics.Paint.FontMetricsInt fm) {
+            fm.ascent -= band;
+            fm.top -= band;
+        }
+    }
 
     // --- Read-along (audio) state ------------------------------------------
     // The floating "Follow narration" pill, a child of the overlay window (the
@@ -190,6 +242,13 @@ public final class BtBridge {
     // (suspends follow) and when they tap the "Follow narration" pill (resumes it).
     private static native void nativeReadAlongUserScrolled();
     private static native void nativeReadAlongFollowTapped();
+    // The note sticker's verbs (task #19), all fired on the UI thread by the
+    // sticker's own controls; each dispatches to the SAME Go verb the iOS
+    // sticker calls (reading_android_export.go / reading_jni_android.c).
+    private static native void nativeNoteNextTapped();
+    private static native void nativeNoteHidden();
+    private static native void nativeNoteDeleted();
+    private static native void nativeNoteRestored();
     // Called on the UI thread with the full URL of a shared bibletext.co.uk
     // link the user tapped (App Links). Go decides whether it is a passage
     // link and ignores anything else.
@@ -406,8 +465,21 @@ public final class BtBridge {
                 dialog = null;
                 root = null;
                 scroll = null;
+                content = null;
                 text = null;
                 followBtn = null;
+                // The note sticker's views and band belonged to the destroyed
+                // Dialog; reset the CACHED TUPLE too, or the re-pushed setNote
+                // after recreation would compare equal and never rebuild them
+                // (the read-along reset's lesson).
+                noteView = null;
+                notePillView = null;
+                noteBandSpan = null;
+                noteText = null;
+                noteWho = null;
+                notePill = false;
+                noteNextable = false;
+                noteAnchorVerse = 0;
                 frameW = 1;
                 frameH = 1;
                 // wantShown/suppressed are re-asserted by the Go side after the
@@ -446,9 +518,13 @@ public final class BtBridge {
                                         dialog = null;
                                         root = null;
                                         scroll = null;
+                                        content = null;
                                         text = null;
                                         followBtn = null;
                                         raSpan = null;
+                                        noteView = null;
+                                        notePillView = null;
+                                        noteBandSpan = null;
                                         activity = null;
                                     }
                                 }
@@ -569,7 +645,25 @@ public final class BtBridge {
         };
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(true);
-        scroll.addView(text, new FrameLayout.LayoutParams(
+        // The scroll's one child is a FrameLayout holding the TextView AND the
+        // note sticker (task #19): a sticker inside the scrolled content rides
+        // its anchor verse natively, with no per-scroll repositioning. The
+        // TextView's own geometry (getLeft/getTop = 0) is unchanged, so the
+        // study-popup anchor math and scrollRange() still hold.
+        content = new FrameLayout(activity);
+        content.addView(text, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        // A real (or changed) WIDTH re-derives the sticker: the bubble wraps
+        // its text at the content width, and the first refresh may have run
+        // before any layout existed. Width only — the band itself changes the
+        // HEIGHT on every refresh, and reacting to that would loop.
+        content.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override public void onLayoutChange(View v, int l, int t, int r, int b,
+                    int ol, int ot, int orr, int ob) {
+                if ((r - l) != (orr - ol)) refreshNoteSticker();
+            }
+        });
+        scroll.addView(content, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
 
         // The floating "Follow narration" pill, laid out bottom-centre over the
@@ -872,6 +966,262 @@ public final class BtBridge {
         });
     }
 
+    // ---- Shared-note sticker (full-screen reading, task #19) ----------------
+
+    /**
+     * setNote pushes the sticker tuple from Go (androidStickerPush — the same
+     * composition as the iOS bibleTextSetNote push): sender text, WHO line,
+     * pill / nextable presentation, anchor verse, and the five palette colors
+     * as ARGB ints (surface, text, muted, accent, border). Compare-and-refresh:
+     * the views are re-derived only when the tuple changed, so a presentation
+     * flip renders without a chapter re-push, and an unchanged push is free.
+     * Colors alone never change without a body change (the theme variant is
+     * folded into the chapter fingerprint, and that re-push runs setHtml →
+     * refresh), so they do not join the compare — the iOS rule.
+     */
+    // text/who arrive as UTF-8 BYTES, not jstrings: a note body with emoji is
+    // 4-byte UTF-8, which is invalid modified UTF-8 and can abort NewStringUTF
+    // under CheckJNI. Decoded here with the real charset; null/empty = absent.
+    public static void setNote(final byte[] noteText_, final byte[] who_, final boolean pill,
+                               final boolean nextable, final int anchorVerse,
+                               final int bg, final int fg, final int muted,
+                               final int accent, final int border) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                String t = (noteText_ == null || noteText_.length == 0)
+                        ? null : new String(noteText_, java.nio.charset.StandardCharsets.UTF_8);
+                String w = (who_ == null || who_.length == 0)
+                        ? null : new String(who_, java.nio.charset.StandardCharsets.UTF_8);
+                boolean changed = !sameStr(t, noteText) || !sameStr(w, noteWho)
+                        || notePill != pill || noteNextable != nextable
+                        || noteAnchorVerse != anchorVerse;
+                noteText = t;
+                noteWho = w;
+                notePill = pill;
+                noteNextable = nextable;
+                noteAnchorVerse = anchorVerse;
+                noteBg = bg;
+                noteFg = fg;
+                noteMuted = muted;
+                noteAccent = accent;
+                noteBorder = border;
+                if (changed) refreshNoteSticker();
+            }
+        });
+    }
+
+    private static boolean sameStr(String a, String b) { return a == null ? b == null : a.equals(b); }
+
+    // notePresent / notePillNow are the iOS btIOSNotePresent / btIOSNotePill
+    // questions verbatim: the sticker exists whenever text OR who does, and
+    // "who without text" (an unplaced-only chapter) collapses to the pill by
+    // construction — no sender words exist, and an empty sender bubble must
+    // never render.
+    private static boolean notePresent() { return noteText != null || noteWho != null; }
+    private static boolean notePillNow() { return notePill || noteText == null; }
+
+    /**
+     * refreshNoteSticker tears the sticker down and re-derives it — views,
+     * band, placement — against the text already on screen. UI thread only.
+     * Runs from setNote (tuple changed), setHtml (fresh Spanned + verse
+     * index), and the content width listener (first layout, rotation).
+     */
+    private static void refreshNoteSticker() {
+        if (content == null || text == null) return;
+        if (noteView != null) { content.removeView(noteView); noteView = null; }
+        if (notePillView != null) { content.removeView(notePillView); notePillView = null; }
+        clearNoteBand();
+        if (!notePresent()) return;
+        int side = dp(10);
+        int wpx = content.getWidth() - 2 * side;
+        if (wpx < dp(60)) return; // no real layout yet — the width listener re-runs this
+
+        boolean pillNow = notePillNow();
+        View v = pillNow ? buildNotePill() : buildNoteBubble();
+        v.setElevation(6f);
+        FrameLayout.LayoutParams lp;
+        if (pillNow) {
+            // The pill sizes to its label (capped at the content width).
+            v.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.AT_MOST),
+                      View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            lp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                                              FrameLayout.LayoutParams.WRAP_CONTENT);
+        } else {
+            // The bubble is a full-width card, wrapped at the content measure.
+            v.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.EXACTLY),
+                      View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            lp = new FrameLayout.LayoutParams(wpx, FrameLayout.LayoutParams.WRAP_CONTENT);
+        }
+        lp.leftMargin = side;
+        final int gap = dp(8);
+        final int noteH = v.getMeasuredHeight();
+
+        int[] r = noteAnchorVerse > 0 ? verseRange(noteAnchorVerse) : null;
+        if (r == null) {
+            // Nothing to anchor to (verse 0 = unplaced-only, or a verse this
+            // translation's index does not carry): park at the top of the
+            // text with no band — the only honest place for notes with no
+            // verses here (the iOS top-inset case, minus the reservation).
+            lp.topMargin = dp(6);
+            content.addView(v, lp);
+            return;
+        }
+        applyNoteBand(r[0], noteH + gap);
+        // Place the sticker into the reserved gap AFTER the reflow the band
+        // just caused: its top is the anchor line's (raised) top.
+        final View vv = v;
+        final int off = r[0];
+        content.addView(vv, lp);
+        vv.setVisibility(View.INVISIBLE); // never flash at 0,0 before placement
+        text.post(new Runnable() {
+            @Override public void run() {
+                if (vv.getParent() == null || text == null) return;
+                Layout lay = text.getLayout();
+                if (lay == null) return; // hidden overlay: the next refresh places it
+                int line = lay.getLineForOffset(off);
+                int top = text.getTop() + text.getTotalPaddingTop() + lay.getLineTop(line);
+                FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
+                p.topMargin = Math.max(0, top);
+                vv.setLayoutParams(p);
+                vv.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    /**
+     * buildNoteBubble is the expanded sticker: a rounded card in the pushed
+     * surface + border colors, the WHO line with the Hide / Delete verbs,
+     * then the sender's words. The speech tail iOS draws is omitted — an
+     * honest simplification (a Path-backed drawable could add it later);
+     * nothing else differs from the iOS card.
+     */
+    private static View buildNoteBubble() {
+        android.widget.LinearLayout box = new android.widget.LinearLayout(activity);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(10));
+        bg.setColor(noteBg);
+        bg.setStroke(Math.max(1, dp(1)), noteBorder);
+        box.setBackground(bg);
+        box.setPadding(dp(12), dp(6), dp(4), dp(10));
+
+        android.widget.LinearLayout head = new android.widget.LinearLayout(activity);
+        head.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView who = new TextView(activity);
+        // The WHO line is the app's chrome — byline + honest counts, composed
+        // in Go — never the sender's words. When the passage holds more than
+        // one note the whole line is the next-tap control: accent + chevron
+        // say "press me", the same colour language the iOS counts span uses
+        // (iOS accents only the counts; one TextView cannot split the tap, so
+        // the line is the control — recorded simplification).
+        String whoLabel = noteWho != null ? noteWho : "Note from Friend";
+        who.setText(noteNextable ? whoLabel + "  ›" : whoLabel);
+        who.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
+        who.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        who.setTextColor(noteNextable ? noteAccent : noteMuted);
+        if (noteNextable) {
+            who.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { nativeNoteNextTapped(); }
+            });
+        }
+        head.addView(who, new android.widget.LinearLayout.LayoutParams(
+                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        // Minimize first, delete second: the destructive one is never what a
+        // thumb reaches by accident (the iOS ordering).
+        head.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
+            @Override public void onClick(View v) { nativeNoteHidden(); }
+        }));
+        head.addView(noteVerb("✕", 14f, new View.OnClickListener() { // multiplication x: Delete
+            @Override public void onClick(View v) { nativeNoteDeleted(); }
+        }));
+        box.addView(head, new android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView body = new TextView(activity);
+        body.setText(noteText); // TEXT — nothing here parses markup
+        body.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f);
+        body.setTextColor(noteFg);
+        android.widget.LinearLayout.LayoutParams blp = new android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.rightMargin = dp(8);
+        box.addView(body, blp);
+        noteView = box;
+        return box;
+    }
+
+    // noteVerb is one small sticker control (Hide "–" / Delete "✕"): muted,
+    // with a real touch pad around the glyph.
+    private static TextView noteVerb(String glyph, float sp, View.OnClickListener tap) {
+        TextView b = new TextView(activity);
+        b.setText(glyph);
+        b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, sp);
+        b.setTextColor(noteMuted);
+        b.setPadding(dp(12), dp(4), dp(12), dp(4));
+        b.setClickable(true);
+        b.setOnClickListener(tap);
+        return b;
+    }
+
+    /**
+     * buildNotePill is the collapsed marker: quiet, small, obviously a thing
+     * to press. It carries the pushed WHO composition ("Notes · 3", or the
+     * unplaced-only sentence), so minimizing the open note does not make the
+     * rest of the set invisible. The press is the Restore verb; with no note
+     * text behind it (unplaced-only) the Go side is a no-op, so the pill is
+     * inert exactly when there is nothing to restore (iOS parity).
+     */
+    private static View buildNotePill() {
+        TextView chip = new TextView(activity);
+        chip.setText(noteWho != null ? noteWho : "Note");
+        chip.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
+        chip.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        chip.setTextColor(noteMuted);
+        chip.setSingleLine(true);
+        chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(15));
+        bg.setColor(noteBg);
+        bg.setStroke(Math.max(1, dp(1)), noteBorder);
+        chip.setBackground(bg);
+        chip.setPadding(dp(12), dp(6), dp(12), dp(6));
+        chip.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { nativeNoteRestored(); }
+        });
+        notePillView = chip;
+        return chip;
+    }
+
+    private static void clearNoteBand() {
+        if (noteBandSpan == null) return;
+        CharSequence cs = text != null ? text.getText() : null;
+        if (cs instanceof Spannable) {
+            try { ((Spannable) cs).removeSpan(noteBandSpan); } catch (Throwable ignored) {}
+        }
+        noteBandSpan = null;
+    }
+
+    // applyNoteBand reserves the band above the anchor verse: a one-character
+    // span on the verse's first char raising that line's top (NoteBandSpan).
+    private static void applyNoteBand(int off, int band) {
+        CharSequence cs = text.getText();
+        if (!(cs instanceof Spannable)) return;
+        Spannable sp = (Spannable) cs;
+        if (off < 0 || off + 1 > sp.length()) return;
+        noteBandSpan = new NoteBandSpan(band);
+        sp.setSpan(noteBandSpan, off, off + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        // UpdateLayout makes DynamicLayout reflow; the explicit pair is
+        // belt-and-braces for the TextView's own wrap_content height.
+        text.requestLayout();
+        text.invalidate();
+    }
+
     /**
      * setStyle pushes the palette + typography (all sizes in PIXELS — the Go
      * side multiplies Fyne units by the canvas scale). Re-sent on every render,
@@ -936,6 +1286,11 @@ public final class BtBridge {
                 raSpan = null;
                 raVerse = 0;
                 buildVerseIndex(text.getText());
+                // The note band went with the old Spanned too; re-derive the
+                // sticker against the fresh text + verse index (the pushed
+                // tuple for this chapter arrived just before this setHtml).
+                noteBandSpan = null;
+                refreshNoteSticker();
                 pendingFrac = frac >= 0 ? frac : -1f;
                 pendingVerse = 0; // a following scrollToVerse (queued next) re-arms it
                 applyPendingScroll();
