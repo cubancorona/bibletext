@@ -176,6 +176,10 @@ func devAutoReadAlong(state *AppState) {
 //	           realistic WHO line ("· K of 105 on this passage · 9 not shown
 //	           here", 3-digit count) so the fit rule is visible: the FRIEND
 //	           half tail-truncates, the counts never do
+//	s10ctx     ONE note on John 11:6 (the second paragraph), so the arrival
+//	           clamps near the chapter top and the picture carries the
+//	           paragraph ABOVE the card and the paragraph below — the context
+//	           framing; s10ctxpill is the same, minimized
 //	s10ranges  three notes with DIFFERENT verse ranges inside ONE paragraph
 //	           (WEB John 3:14-17; two ranges overlap at v16), then two
 //	           next-taps — the wash bands only the open note's range and
@@ -197,6 +201,29 @@ func devAutoNotesS8(state *AppState) {
 	}
 	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
 	switch scenario {
+	case "s10ctx", "s10ctxpill":
+		// THE CONTEXT SHOT (owner, 19 Aug): one note framed with the paragraph
+		// above it and the paragraph below, expanded and collapsed, on every
+		// platform. John 11:6 opens the SECOND paragraph, so the arrival scroll
+		// clamps near the top of the chapter and the first paragraph stays on
+		// screen above the card — the only way to get that framing on a
+		// simulator, which has no scroll command at all.
+		at(1500*time.Millisecond, func() {
+			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+				"John", 11, 6, 6,
+				"A note with the paragraph above it and the paragraph below in view."))
+		})
+		// Minimize, then (for the expanded shot) restore. The arrival scroll
+		// pins the BAND to the top of the pane — right for an arrival, wrong
+		// for this picture, because it puts the paragraph above off-screen.
+		// Collapsing shrinks the band and settles the scroll higher; restoring
+		// leaves the card expanded with that settled position, so the frame
+		// carries the paragraph above, the note, and the paragraph below. Both
+		// verbs are the ones the sticker's own buttons post.
+		at(7*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
+		if scenario == "s10ctx" {
+			at(11*time.Second, func() { restoreCurrentNote(state); state.refreshReadingOnly() })
+		}
 	case "linkscroll":
 		// The owner's Links-tab flow, verbatim in state (the compact tab bar
 		// is CurrentTab + rebuildWindow — no widget to tap): front the Links
