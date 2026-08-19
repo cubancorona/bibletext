@@ -1700,6 +1700,18 @@ arm of `applyPendingScroll`, not the placement. It is worth fixing before the
 next Android build goes anywhere near a reader: a shared note that silently
 does not appear is indistinguishable from a shared note that was lost.
 
+**WITHDRAWN, "the arrival delivers the wrong note" (19 Aug 2026).** An earlier
+commit here (`ac4e4da9d`) claimed the Android arrival handed the surface an
+older, minimized note from elsewhere in the chapter, on the strength of a trace
+line reading `w=Note pill=true anchor=35`. That reading was wrong. With the
+who-line no longer truncated the same delivery traces as `w=Note from Friend ·
+1 of 2 on this passage pill=false anchor=35` — the right note, the right
+anchor, correctly expanded. `w=Note` was a clipped byline, and verse 35 was
+simply where the live note legitimately was. What actually made the note
+invisible is the cold-start scroll, recorded above. Left here because a
+withdrawn finding that is never withdrawn out loud gets re-derived by whoever
+reads the commit next.
+
 **MEASURED AND CLOSED, Android wash height (19 Aug 2026).** The owner reported
 the highlight sitting too high and running under the note. On the comparison
 PNG the wash measured 141px around a 74px glyph band — 55px of empty box above
