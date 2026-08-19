@@ -777,7 +777,16 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
 static UIFont *btNoteBodyFont(void) { return [UIFont systemFontOfSize:15]; }
 static UIFont *btNoteWhoFont(void)  { return [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]; }
 
-static const CGFloat kNotePad = 12, kNoteGap = 10, kNoteBtn = 30;
+// THE SHARED NOTE SPACING SPEC — noteMetrics in notes_bubble.go. These are not
+// this file's numbers to choose: notes_spacing_spec_test.go parses this line and
+// fails if any of them leaves the Go table behind. Read that comment for what
+// each one means and why the pill's height is no longer kNoteBtn's.
+static const CGFloat kNoteGapAbove = 10, kNoteGapBelow = 10, kNotePad = 12;
+static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 10;
+// kNoteBtn is NOT spec: it is the verb button's size, iOS's own 30pt thumb
+// target. The pill used to borrow it, which is how a touch-target decision came
+// to set the height of a piece of content.
+static const CGFloat kNoteBtn = 30;
 // The speech tail: what makes it read as somebody talking rather than a panel.
 // Matches the web bubble, which hangs a small triangle under the left shoulder.
 static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
@@ -798,11 +807,17 @@ static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
 // π/2 = down), so the bottom edge is travelled right-to-left and the tail's
 // right base comes before its left.
 static UIBezierPath *btIOSNoteBubblePath(CGFloat w, CGFloat h) {
-    const CGFloat r = 10;             // matches the card's corner radius
+    const CGFloat r = kNoteRad;       // the card's corner radius (spec)
     const CGFloat in = 0.5;           // half the 1pt stroke, kept inside bounds
     CGFloat left = in, top = in, right = w - in, bottom = h - in;
     CGFloat tx0 = kNoteTailX, tx1 = kNoteTailX + kNoteTailW;
-    CGFloat apexX = kNoteTailX + kNoteTailW / 2, apexY = bottom + kNoteTail - 1;
+    // The apex is kNoteTail below the card's bottom EDGE. The "- 1" that used to
+    // be here survived from the two-shape era, when the tail's top row had to
+    // overlap the card's bottom border by a point to hide it (notes_bubble.go
+    // records that defect). This is a single outline with no border to cover, so
+    // the subtraction only made the drawn tail shorter than the constant naming
+    // it — and a point shorter than the other three surfaces' tails.
+    CGFloat apexX = kNoteTailX + kNoteTailW / 2, apexY = bottom + kNoteTail;
 
     UIBezierPath *p = [UIBezierPath bezierPath];
     [p moveToPoint:CGPointMake(left + r, top)];
@@ -832,7 +847,7 @@ static UIBezierPath *btIOSNoteBubblePath(CGFloat w, CGFloat h) {
 // the reserved band is the view plus the gap.
 static CGFloat btIOSNoteHeightForWidth(CGFloat w) {
     if (!btIOSNotePresent()) return 0;
-    if (btIOSNotePill()) return kNoteBtn;     // the collapsed pill has no tail
+    if (btIOSNotePill()) return kNotePill;    // the collapsed pill has no tail
     CGFloat inner = w - 2 * kNotePad;
     if (inner < 40) inner = 40;
     CGRect r = [gNoteText boundingRectWithSize:CGSizeMake(inner, CGFLOAT_MAX)
@@ -840,7 +855,7 @@ static CGFloat btIOSNoteHeightForWidth(CGFloat w) {
                                                 NSStringDrawingUsesFontLeading)
                                     attributes:@{NSFontAttributeName: btNoteBodyFont()}
                                        context:nil];
-    return kNotePad + 14 + 4 + ceil(r.size.height) + kNotePad;
+    return kNotePad + kNoteWho + kNoteWhoGap + ceil(r.size.height) + kNotePad;
 }
 
 // The character range the note is anchored to. The note carries its OWN verse
@@ -905,7 +920,14 @@ static void btIOSInstallNote(void) {
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
     CGFloat h = btIOSNoteHeightForWidth(w);
     if (h <= 0) { btIOSApplyNoteInset(); return; }
-    gNoteBandH = h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGap;
+    // AIR ON BOTH SIDES. Until 19 Aug this band had no top term at all: the card
+    // was parked at the band's own top edge and whatever air a reader saw above
+    // it came from the previous paragraph's CSS margin — 24px on a phone, and
+    // ZERO in the reporter layout, so on iPad the card's edge touched the line
+    // above it while a full gap sat underneath. macOS had already been repaired
+    // for exactly this. The reservation is the note's; the paragraph separator
+    // is the reading page's and is left alone (noteMetrics records why).
+    gNoteBandH = kNoteGapAbove + h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGapBelow;
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
@@ -955,7 +977,7 @@ static void btIOSEnsureNoteView(void) {
         box.backgroundColor = btNoteColor(gNoteBg);
         box.layer.borderColor = btNoteColor(gNoteBorder).CGColor;
         box.layer.borderWidth = 1;
-        box.layer.cornerRadius = kNoteBtn / 2;
+        box.layer.cornerRadius = kNotePill / 2;
         box.clipsToBounds = YES;
     } else {
         // ONE layer, one continuous outline — card and tail are a single path
@@ -1119,23 +1141,25 @@ static void btIOSLayoutNote(void) {
     // no longer matches what we need, reserve again and let the layout settle;
     // the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGap;
+    CGFloat want = kNoteGapAbove + h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGapBelow;
     if (!reconciling && fabs(want - gNoteBandH) > 1.0) {
         reconciling = YES;
         btIOSInstallNote();
         reconciling = NO;
     }
 
+    // The band opens with kNoteGapAbove, so the card hangs that far below the
+    // band's own top edge — the styled pane's place() does the identical thing.
     CGFloat y;
     if (gNoteTopInset > 0) {
         // Reserved with the container inset: the sticker sits in that inset,
         // above the first line of the chapter.
-        y = 14;
+        y = 14 + kNoteGapAbove;
     } else {
         // The FRAGMENT rect includes the spacing we reserved; the USED rect is
         // where the text actually starts. The difference is the parking spot.
         CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
-        y = frag.origin.y + gReadingTV.textContainerInset.top;
+        y = frag.origin.y + gReadingTV.textContainerInset.top + kNoteGapAbove;
     }
 
     if (btIOSNotePill()) {
@@ -1146,7 +1170,7 @@ static void btIOSLayoutNote(void) {
         CGFloat cw = tw + 28;
         if (cw < 86) cw = 86;
         if (cw > w) cw = w;
-        gNoteView.frame = CGRectMake(x, y, cw, kNoteBtn);
+        gNoteView.frame = CGRectMake(x, y, cw, kNotePill);
         UIView *chip = [gNoteView viewWithTag:901];
         chip.frame = gNoteView.bounds;
         return;
@@ -1165,7 +1189,10 @@ static void btIOSLayoutNote(void) {
     UIButton *del  = (UIButton *)[gNoteView viewWithTag:905];
     UIButton *nxt  = (UIButton *)[gNoteView viewWithTag:906];
     CGFloat whoW = w - 2 * kNotePad - 2 * kNoteBtn;
-    who.frame  = CGRectMake(kNotePad, kNotePad - 2, whoW, 14);
+    // The who row's box starts at the card's own padding — no "- 2" shim, which
+    // is what used to make the stated 12 + 14 + 4 rhythm describe a card whose
+    // real top padding was 10 and whose real who→body gap was 6.
+    who.frame  = CGRectMake(kNotePad, kNotePad, whoW, kNoteWho);
     // The fit runs HERE, where the label's real width is known: if the who
     // line cannot fit, the sender half is tail-truncated and the counts
     // survive whole (btIOSFitWho).
@@ -1198,9 +1225,10 @@ static void btIOSLayoutNote(void) {
         CGFloat bw = lw + 24;
         if (bx + bw > kNotePad + whoW + 8) bw = kNotePad + whoW + 8 - bx;
         nxt.hidden = NO;
-        nxt.frame = CGRectMake(bx, 0, bw, kNotePad + 14 + 2);
+        nxt.frame = CGRectMake(bx, 0, bw, kNotePad + kNoteWho + 2);
     }
-    body.frame = CGRectMake(kNotePad, kNotePad + 14 + 4, w - 2 * kNotePad, h - kNotePad - 14 - 4 - kNotePad);
+    body.frame = CGRectMake(kNotePad, kNotePad + kNoteWho + kNoteWhoGap,
+                            w - 2 * kNotePad, h - kNotePad - kNoteWho - kNoteWhoGap - kNotePad);
     hide.frame = CGRectMake(w - 2 * kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
     del.frame  = CGRectMake(w - kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
 }
@@ -1213,7 +1241,7 @@ static void btIOSLayoutNote(void) {
 // note is.
 static CGFloat btIOSNoteTopY(void) {
     if (!btIOSNotePresent() || gReadingTV == nil) return -1;
-    if (gNoteTopInset > 0) return 14;   // reserved with the container inset
+    if (gNoteTopInset > 0) return 14 + kNoteGapAbove;   // reserved with the container inset
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSTextContainer *tc = gReadingTV.textContainer;
     NSTextStorage   *ts = gReadingTV.textStorage;
@@ -1224,9 +1252,10 @@ static CGFloat btIOSNoteTopY(void) {
     NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
     if (g.length == 0) return -1;
     // The FRAGMENT rect includes the spacing reserved for the band; the sticker
-    // is parked at its top.
+    // hangs kNoteGapAbove below its top — the same arithmetic btIOSLayoutNote
+    // uses, and it must stay the same one.
     CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
-    return frag.origin.y + gReadingTV.textContainerInset.top;
+    return frag.origin.y + gReadingTV.textContainerInset.top + kNoteGapAbove;
 }
 
 // --- Floating "Follow narration" button -------------------------------------

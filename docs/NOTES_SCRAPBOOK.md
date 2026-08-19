@@ -1555,6 +1555,139 @@ layer ABOVE the tint rects, so both are visible and neither erases the other. Th
 collision is a TextKit constraint, confined to the two Apple panes, and that is
 exactly where the restore/apply model landed. The latch stays.
 
+## THE SPACING SPEC — one table, four surfaces (19 Aug 2026)
+
+Owner: *"measure the pill and note vertical spacing and margins visually … make
+sure it's the same there? Really this should be done for all platforms"*, then
+*"And the desktop versions?"*
+
+Measured first, and the four disagreed on **every number**: the band above the
+card was 0 (iOS), a measured line (macOS), 8dp (Android) and 10 (styled); the
+pill was 30 / 24 / ~26 / 28 for the same object; the card's corner was 10 / 10 /
+10 / 8; the tail drew 8 deep on the Apple panes and 9 on the other two; and
+Android's card ran a different internal rhythm again (6 top, 4 right, 10 bottom,
+and a who row whose height was set by an 18sp verb glyph).
+
+The numbers now live in **`noteMetrics`** (`notes_bubble.go`) and nowhere else.
+
+### The spec
+
+Design units: points on the Apple panes, dp on Android, Fyne units on the styled
+pane — the same design unit in each case.
+
+| | value | what it means |
+|---|---|---|
+| `GapAbove` | **10** | air RESERVED above the card's top edge |
+| `GapBelow` | **10** | air below the DRAWN shape — the tail's apex for a card, the pill's bottom for a pill — to the first line of the passage. **The pinned invariant** |
+| `Pad` | **12** | card padding, all four sides |
+| `WhoH` | **ceil(whoSize × 1.27)** | the who row's box: 14 at 11pt, 13 at 10pt. A RULE, not a literal — a flat 14 would be the wrong box on macOS |
+| `WhoGap` | **4** | who row's bottom → the message's first line |
+| `TailDepth / Width / Inset` | **9 / 18 / 24** | unchanged; these three already agreed |
+| `Radius` | **10** | the card's corner |
+| `PillH` | **28** | the collapsed marker, spec'd independently of any verb button |
+
+### How each surface reads it
+
+The styled pane reads `noteMetrics` directly. The three natives cannot — their
+layout is Objective-C in a cgo preamble and Java — so each carries named
+constants and **`notes_spacing_spec_test.go` parses those three sources** and
+asserts every literal equals the table, plus a set of *shape* assertions naming
+the specific misuses this unification removed. A push parameter was the
+alternative and was rejected: these are compile-time layout constants, not
+per-chapter data, so pushing them would put a wire format, a three-platform
+signature change and version skew in front of every future 1pt change — and
+would still not stop a native from ignoring the pushed value in favour of a
+literal. Parsing is the mechanism `dev_links_guard_test.go`,
+`share_link_test.go`'s slug golden and `licensed_exclusion_test.go` already use,
+and it fails on the dev machine for the two platforms that cannot even be
+compiled here.
+
+The styled pane's numbers are additionally checked as **geometry** — the gallery
+(`reading_styled_note_gallery_test.go`) asserts gap above, gap below, tail depth,
+card padding, who row, who→body gap and pill height on all twelve permutations ×
+light/dark, expanded and pill. It is the only surface whose pixels can be
+measured on this machine, so it is where the table is proved rather than spelled.
+
+### The final numbers, per platform
+
+| | iOS | macOS | Android | Styled (Win/Linux) |
+|---|---|---|---|---|
+| gap above the card | **10** *(was 0)* | **max(10, one line ≈ 24)** — see the residual | **10** *(was 8)* | **10** |
+| gap below the shape | 10 | 10 | **10** *(was 8)* | 10 |
+| card padding | 12 / 12 / 12 / 12 | 12 | **12 / 12 / 12 / 12** *(was 12/6/4/10)* | 12 |
+| who row | **14** *(top was pad−2)* | **13** *(top was pad−2)* | **14, fixed box** *(was a flow row ≈ 29dp)* | **14** *(top was pad−2)* |
+| who → body | **4** *(really 6 before)* | **4** *(really 6 before)* | **4** *(was 0)* | **4** *(really 6 before)* |
+| tail drawn | **9** *(was 8: `+ tail − 1`)* | **9** *(was 8)* | 9 | 9 |
+| corner radius | 10 | 10 | 10 | **10** *(was 8)* |
+| pill height | **28** *(was 30)* | **28** *(was 24)* | **28** *(was ≈26 wrap)* | 28 |
+| band, one-line note | 10+60+9+10 = **89** | ≈24+57+9+10 ≈ **100** | 10+69+10 = **89dp** | 10+64.3+9+10 = **93.3** |
+
+One consequence worth recording: pinning Android's who row to the spec's 14dp
+took its next-tap target from ~29dp of flow row down to 14dp of glyph, so the
+control moved onto a **transparent overlay** the height of iOS's own `nxt`
+button (`Pad + WhoH + 2` = 28dp) spanning the card's top strip. The verbs are
+added after it, so they stay on top.
+
+Not spec, and deliberately so — a platform's own touch/pointer conventions:
+
+| | iOS | macOS | Android | Styled |
+|---|---|---|---|---|
+| verb button | 30 | 24 | 30 | 28 |
+| pill width | text+28, min 86 | text+24, min 76 | wraps its label | text+28, min 86 |
+| note body font | 15 | 13 | 15sp | theme size (18) |
+
+### The residuals, named rather than pretended
+
+**1. macOS reserves more air above than the other three, and keeps it.**
+`btMacNoteTopGap` is `max(GapAbove, one line of the anchor paragraph's own
+font)` — roughly 24pt at the reporter leading against everyone else's 10, so a
+macOS card carries about 14pt more air above it. It is a **measurement
+correction for TextKit's fragment geometry, not a design gap**: at the reporter
+leading the preceding line's ink overhangs the bottom of its own line box by most
+of a line, so a card placed 10pt below the box every rect the layout manager
+sells you says is clear still lands across the bottom half of the text above it.
+That was measured on rendered pixels and reported from the field. It is floored
+at the spec's `GapAbove` and it is why macOS places the sticker **bottom-up** off
+the passage: the tail→passage distance is the invariant, and the slack falls into
+the gap above, where there is already air.
+
+**2. `GapAbove` is a RESERVATION; the air a reader sees also contains the
+paragraph separator, which the note does not own.** The band opens above the
+anchor PARAGRAPH, so whatever the reading page already puts between paragraphs
+sits above it:
+
+| | separator above the band |
+|---|---|
+| iOS phone | 24px (`reading.go`'s `p { margin: 0 0 24px 0 }`) |
+| iOS iPad / macOS / wide styled pane | **0** (the reporter set has no paragraph gap) |
+| Android | one blank line ≈ 28dp (`Html.fromHtml` renders `<p>` as `\n\n`) |
+| narrow styled pane | `ParaGap` ≈ 18 |
+
+This is deliberately **not** cancelled under a note. It is the same for every
+paragraph in the chapter, note or no note, and subtracting it would give the
+note's paragraph *less* separation than its neighbours — a different wrongness,
+and one that would move the scripture rather than the sticker. So "the same air
+above and below the card" is true of the **reserved gap**, which is what the
+spec owns and what the tests assert; identical *pixels* between the card and the
+line above would mean changing the reading layout, which is out of scope here.
+On iPad, where the separator is 0, the reserved 10 is now the whole of it — and
+before this change that surface had **nothing at all** above the card while a
+full gap sat underneath, the exact defect macOS had already been repaired for.
+
+**3. The note body's font size is not in the table** — 15 / 13 / 15sp / theme
+(18). It drives the card's internal *line height* but it is a typographic choice
+per platform, not spacing, and the styled pane's 18 comes from `bibleTheme`'s UI
+size rather than from any note decision. Left alone deliberately; an owner call
+if the desktop card should read at 15 like the phone's.
+
+### What did NOT change
+
+The **anchor rule** (the band opens above the PARAGRAPH carrying the highlighted
+verse, never between its lines), the **wash discipline** (the band is advance, so
+no line box covers it), and the **verb → screen rule**. The band is still one
+paragraph's worth of advance and the sticker is still placed from the band's own
+top.
+
 ## Future work
 
 **Inline notes on the mimic/Windows/Linux pane — ✅ BUILT 2026-08-19.** The

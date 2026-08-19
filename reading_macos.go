@@ -1241,25 +1241,43 @@ static NSColor *btMacNoteColor(CGFloat c[3]) {
 static NSFont *btMacNoteBodyFont(void) { return [NSFont systemFontOfSize:13]; }
 static NSFont *btMacNoteWhoFont(void)  { return [NSFont systemFontOfSize:10 weight:NSFontWeightSemibold]; }
 
-static const CGFloat kMacNotePad = 12, kMacNoteGap = 10, kMacNoteBtn = 24;
+// THE SHARED NOTE SPACING SPEC — noteMetrics in notes_bubble.go. These are not
+// this file's numbers to choose: notes_spacing_spec_test.go parses these lines
+// and fails if any of them leaves the Go table behind. kMacNoteWho is 13 rather
+// than iOS's 14 because the spec states the who row as a RULE — ceil(whoSize ×
+// 1.27) — and this pane's who font is 10pt, not 11; a flat 14 in the table would
+// be the wrong box here.
+static const CGFloat kMacNoteGapAbove = 10, kMacNoteGapBelow = 10, kMacNotePad = 12;
+static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kMacNoteRad = 10;
+// kMacNoteBtn is NOT spec: it is the verb button's size, this platform's 24pt
+// pointer target. The pill used to borrow it (24), which is how a pointer-target
+// decision came to set the height of a piece of content.
+static const CGFloat kMacNoteBtn = 24;
 static const CGFloat kMacNoteTail = 9, kMacNoteTailW = 18, kMacNoteTailX = 24;
-// Breathing room ABOVE the sticker as well as below it. The first cut reserved
-// the band and put the bubble flush at its top, which left the card's edge
-// touching the last line of the preceding paragraph while a full gap sat
-// underneath — visibly lopsided, and the collapsed chip (much shorter) read as
-// though it were sitting ON that line. The band is now gap + sticker + gap.
+// THE ONE DELIBERATE RESIDUAL IN THE SPEC, and it lives here.
 //
-// The TOP gap is measured, not fixed, and it is a whole line rather than a
-// tidy-looking 10pt. Reason, established by measuring the rendered pixels
-// against what the layout manager reports: at the reporter layout's leading the
-// preceding line's INK overhangs the bottom of its own line box by most of a
-// line. Place the card 10pt below that box — which every rect the layout manager
-// will sell you says is clear — and it still lands across the bottom half of the
-// text above it. A line's height of clearance is what actually clears the
-// glyphs, and reading it off the font keeps it right at all three text sizes
+// Every other surface reserves exactly noteMetrics.GapAbove above the card.
+// This one reserves max(GapAbove, one line of the anchor paragraph's own font),
+// which at the reporter leading is roughly 24pt rather than 10 — so a macOS card
+// carries about 14pt more air above it than an iOS, Android or styled-pane card
+// does. It is kept because removing it reintroduces a defect that was measured
+// on rendered pixels and reported from the field, not because the number is
+// prettier.
+//
+// What it corrects: at the reporter layout's leading the preceding line's INK
+// overhangs the bottom of its own line box by most of a line. Place the card
+// 10pt below that box — which every rect the layout manager will sell you says
+// is clear — and it still lands across the bottom half of the text above it.
+// This is a MEASUREMENT CORRECTION for TextKit's fragment geometry, not a design
+// gap, and reading it off the font keeps it right at all three text sizes
 // instead of at whichever one it was tuned against.
+//
+// It is also why this pane places the sticker BOTTOM-UP off the passage
+// (btMacNoteStickerY): the tail→passage distance is the pinned invariant, and
+// any slack in the correction falls into the gap above, where there is already
+// air.
 static CGFloat btMacNoteTopGap(NSTextStorage *ts, NSRange para) {
-    const CGFloat floorGap = 10;
+    const CGFloat floorGap = kMacNoteGapAbove;   // the spec's own reservation
     if (ts == nil || para.length < 3) return floorGap;
     // A character near the END of the paragraph: its start is the verse number,
     // which is a superscript in a smaller font, and measuring that was what made
@@ -1333,11 +1351,16 @@ static NSRange btMacWhoCountRange(NSString *who) {
 // base. Walking the bottom edge and detouring into the tail leaves no crossing
 // line to hide.
 static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
-    const CGFloat r = 10;     // matches the card's corner radius
+    const CGFloat r = kMacNoteRad;   // the card's corner radius (spec)
     const CGFloat in = 0.5;   // half the 1pt stroke, kept inside bounds
     CGFloat left = in, top = in, right = w - in, bottom = h - in;
     CGFloat tx0 = kMacNoteTailX, tx1 = kMacNoteTailX + kMacNoteTailW;
-    CGFloat apexX = kMacNoteTailX + kMacNoteTailW / 2, apexY = bottom + kMacNoteTail - 1;
+    // The apex is kMacNoteTail below the card's bottom EDGE. The "- 1" that used
+    // to be here survived from the two-shape era, when the tail's top row had to
+    // overlap the card's bottom border by a point to hide it; a single outline has
+    // no border to cover, so it only made the drawn tail a point shorter than the
+    // constant naming it — and a point shorter than the other three surfaces'.
+    CGFloat apexX = kMacNoteTailX + kMacNoteTailW / 2, apexY = bottom + kMacNoteTail;
 
     NSBezierPath *p = [NSBezierPath bezierPath];
     [p moveToPoint:NSMakePoint(left + r, top)];
@@ -1365,14 +1388,14 @@ static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
 // because the band's height IS this number.
 static CGFloat btMacNoteHeightForWidth(CGFloat w) {
     if (!btMacNotePresent()) return 0;
-    if (btMacNotePill()) return kMacNoteBtn;     // the collapsed pill has no tail
+    if (btMacNotePill()) return kMacNotePill;    // the collapsed pill has no tail
     CGFloat inner = w - 2 * kMacNotePad;
     if (inner < 40) inner = 40;
     NSRect r = [gMacNoteText boundingRectWithSize:NSMakeSize(inner, CGFLOAT_MAX)
                                           options:(NSStringDrawingUsesLineFragmentOrigin |
                                                    NSStringDrawingUsesFontLeading)
                                        attributes:@{NSFontAttributeName: btMacNoteBodyFont()}];
-    return kMacNotePad + 13 + 4 + ceil(r.size.height) + kMacNotePad;
+    return kMacNotePad + kMacNoteWho + kMacNoteWhoGap + ceil(r.size.height) + kMacNotePad;
 }
 
 // The character range the note is anchored to. The note carries its OWN verse
@@ -1447,7 +1470,7 @@ static void btMacInstallNote(void) {
         btMacApplyNoteInset();
         return;
     }
-    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGap;
+    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGapBelow;
     if (getenv("BT_NOTE_GEOM")) fprintf(stderr, "[geom] install: w=%.1f h=%.1f topGap=%.1f bandH=%.1f para={%lu,%lu}\n",
         w, h, btMacNoteTopGap(ts, para), gMacNoteBandH, (unsigned long)para.location, (unsigned long)para.length);
     if (para.location == 0) {
@@ -1491,7 +1514,7 @@ static void btMacEnsureNoteView(void) {
         box.layer.backgroundColor = btMacNoteColor(gMacNoteBg).CGColor;
         box.layer.borderColor = btMacNoteColor(gMacNoteBorder).CGColor;
         box.layer.borderWidth = 1;
-        box.layer.cornerRadius = kMacNoteBtn / 2;
+        box.layer.cornerRadius = kMacNotePill / 2;
 
         NSButton *chip = [NSButton buttonWithTitle:(gMacNoteWho ?: @"Note")
                                             target:gTextView action:@selector(btNoteRestore:)];
@@ -1630,9 +1653,9 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
                         "bandH=%.1f spacingBefore=%.1f y=%.1f\n",
             used.origin.y, frag.origin.y, frag.size.height, inset, stickerH,
             gMacNoteBandH, eff ? eff.paragraphSpacingBefore : -1,
-            textTop - kMacNoteGap - stickerH);
+            textTop - kMacNoteGapBelow - stickerH);
     }
-    return textTop - kMacNoteGap - stickerH;
+    return textTop - kMacNoteGapBelow - stickerH;
 }
 
 // Put the sticker in the band the text reserved. Runs after every layout.
@@ -1660,7 +1683,7 @@ static void btMacLayoutNote(void) {
     // reserved no longer matches what we need, reserve again and let the layout
     // settle; the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGap;
+    CGFloat want = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGapBelow;
     if (!reconciling && fabs(want - gMacNoteBandH) > 1.0) {
         reconciling = YES;
         btMacInstallNote();
@@ -1677,7 +1700,7 @@ static void btMacLayoutNote(void) {
         CGFloat cw = tw + 24;
         if (cw < 76) cw = 76;
         if (cw > w) cw = w;
-        gMacNoteView.frame = NSMakeRect(x, y, cw, kMacNoteBtn);
+        gMacNoteView.frame = NSMakeRect(x, y, cw, kMacNotePill);
         NSView *chip = [gMacNoteView viewWithTag:901];
         chip.frame = gMacNoteView.bounds;
         // Cursor rects are cached against the frames they were built from, so a
@@ -1697,7 +1720,10 @@ static void btMacLayoutNote(void) {
     NSView *del  = [gMacNoteView viewWithTag:905];
     NSButton *nxt = (NSButton *)[gMacNoteView viewWithTag:906];
     CGFloat whoW = w - 2 * kMacNotePad - 2 * kMacNoteBtn;
-    who.frame  = NSMakeRect(kMacNotePad, kMacNotePad - 2, whoW, 13);
+    // The who row's box starts at the card's own padding — no "- 2" shim, which is
+    // what used to make the stated 12 + 13 + 4 rhythm describe a card whose real top
+    // padding was 10 and whose real who→body gap was 6.
+    who.frame  = NSMakeRect(kMacNotePad, kMacNotePad, whoW, kMacNoteWho);
     // The fit runs HERE, where the label's real width is known: if the who
     // line cannot fit, the sender half is tail-truncated and the counts
     // survive whole (btMacFitWho).
@@ -1728,10 +1754,11 @@ static void btMacLayoutNote(void) {
         CGFloat bw = lw + 16;
         if (bx + bw > kMacNotePad + whoW + 6) bw = kMacNotePad + whoW + 6 - bx;
         nxt.hidden = NO;
-        nxt.frame = NSMakeRect(bx, 0, bw, kMacNotePad + 13 + 2);
+        nxt.frame = NSMakeRect(bx, 0, bw, kMacNotePad + kMacNoteWho + 2);
     }
-    body.frame = NSMakeRect(kMacNotePad, kMacNotePad + 13 + 4,
-                            w - 2 * kMacNotePad, h - kMacNotePad - 13 - 4 - kMacNotePad);
+    body.frame = NSMakeRect(kMacNotePad, kMacNotePad + kMacNoteWho + kMacNoteWhoGap,
+                            w - 2 * kMacNotePad,
+                            h - kMacNotePad - kMacNoteWho - kMacNoteWhoGap - kMacNotePad);
     hide.frame = NSMakeRect(w - 2 * kMacNoteBtn - 4, 3, kMacNoteBtn, kMacNoteBtn);
     del.frame  = NSMakeRect(w - kMacNoteBtn - 4, 3, kMacNoteBtn, kMacNoteBtn);
     [gMacNoteView.window invalidateCursorRectsForView:gMacNoteView];
