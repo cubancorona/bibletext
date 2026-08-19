@@ -26,7 +26,7 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaScrollVerseM;
+                 btaScrollVerseM, btaSetNoteM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -78,6 +78,11 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaRAColorsM    = (*env)->GetStaticMethodID(env, btaClass, "setReadAlongColors", "(III)V");
 	// Arrival scroll: pin the shared link's highlighted verse near the top.
 	btaScrollVerseM = (*env)->GetStaticMethodID(env, btaClass, "scrollToVerse", "(I)V");
+	// The shared-note sticker (full-screen reading, the implementation requirement): text, WHO line,
+	// pill/next presentation, anchor verse, then the five palette colors
+	// (surface, text, muted, accent, border) as ARGB ints.
+	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
+	                                        "([B[BZZIIIIII)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -91,7 +96,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
-	    btaRAColorsM == NULL || btaScrollVerseM == NULL) {
+	    btaRAColorsM == NULL || btaScrollVerseM == NULL || btaSetNoteM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -217,6 +222,37 @@ static void btaRAColors(uintptr_t jni_env, int highlight, int followBg, int foll
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaRAColorsM, highlight, followBg, followFg);
+}
+
+// The shared-note sticker tuple (full-screen reading). Strings are copied by
+// NewStringUTF before the call returns; the Java side hops to the UI thread
+// and compares the tuple itself before touching any view.
+// btaBytes: UTF-8 bytes as a jbyteArray, NULL for empty. The note body is the
+// first USER-AUTHORED free text to cross this bridge, and emoji are 4-byte
+// UTF-8 — invalid *modified* UTF-8, which NewStringUTF may abort on under
+// CheckJNI (emulators commonly enable it). Bytes cross verbatim; Java decodes
+// with the real UTF-8 charset (verification finding).
+static jbyteArray btaBytes(JNIEnv *env, const char *s) {
+	if (s == NULL || s[0] == '\0') return NULL;
+	jsize n = (jsize)strlen(s);
+	jbyteArray a = (*env)->NewByteArray(env, n);
+	if (a == NULL) return NULL;
+	(*env)->SetByteArrayRegion(env, a, 0, n, (const jbyte*)s);
+	return a;
+}
+
+static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
+                       int pill, int next, int anchorVerse,
+                       int bg, int fg, int muted, int accent, int border) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jbyteArray t = btaBytes(env, text);
+	jbyteArray w = btaBytes(env, who);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNoteM, t, w,
+	                             pill ? JNI_TRUE : JNI_FALSE, next ? JNI_TRUE : JNI_FALSE,
+	                             anchorVerse, bg, fg, muted, accent, border);
+	if (t != NULL) (*env)->DeleteLocalRef(env, t);
+	if (w != NULL) (*env)->DeleteLocalRef(env, w);
 }
 */
 import "C"
@@ -466,13 +502,71 @@ func afterRebuild(state *AppState) {
 
 var lastPushedBookChapter string
 
+// pushNoteToOverlay hands the native sticker its tuple — the Android twin of
+// iOS pushNoteToPane (reading_ios.go). The composition is androidStickerPush
+// (notes_plan.go), a byte-identical alias of the Apple push, so the WHO line,
+// counts, pill labels and derived suppression cannot diverge across panes.
+//
+// GATED TO FULL-SCREEN READING, deliberately: in normal (compact) reading the
+// Fyne banner above the pane already draws the whole set (notes_banner.go,
+// slotted in buildReadingViewMobile below), and a Dialog sticker there would
+// show the reader the same note twice. Full-screen has no banner — before
+// this push it showed a lit span with nothing to say why (the implementation requirement). Leaving
+// full-screen pushes the empty tuple, which takes the sticker down.
+//
+// Called on EVERY chapter push, BEFORE the fingerprint skip gate — the same
+// ordering as iOS: a presentation-only flip (hide/show, suppression, a
+// next-tap between notes on the same verse) may change nothing the combined
+// render fingerprint folds, so the Java side compares the pushed tuple itself
+// and refreshes the sticker alone (BtBridge.setNote's `changed` gate, the
+// bibleTextSetNote pattern).
+func pushNoteToOverlay(state *AppState) {
+	text, who, pill, next := "", "", false, false
+	anchor := 0
+	if state.IsFullScreen {
+		text, who, pill, next = androidStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+		// The note's OWN verse, not the highlight's — minimizing clears the
+		// highlight, and a marker without an anchor jumps to the top of the
+		// chapter (the iOS lesson). Verse 0 (unplaced-only) parks at the top.
+		anchor = state.NoteVerseLo
+	}
+	pal := state.pal()
+	p, n := C.int(0), C.int(0)
+	if pill {
+		p = 1
+	}
+	if next {
+		n = 1
+	}
+	ct := C.CString(text)
+	cw := C.CString(who)
+	defer C.free(unsafe.Pointer(ct))
+	defer C.free(unsafe.Pointer(cw))
+	runBta(func(env uintptr) {
+		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, C.int(anchor),
+			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
+			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),
+			C.int(argbInt(pal.Border)))
+	})
+}
+
 // pushChapterHTML mirrors the iOS twin: fingerprint-gated re-import, restore
 // arming, and a same-chapter re-render (theme flip) preserving the live scroll.
 func pushChapterHTML(state *AppState, verses []Verse) {
+	// The sticker tuple rides every push, ahead of the skip gate (see
+	// pushNoteToOverlay) — so presentation flips render even when the Spanned
+	// is byte-identical and the gate below returns early.
+	pushNoteToOverlay(state)
+
 	fp := chapterRenderFingerprint(state)
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
 
-	if state.restore == nil && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
+	// A declared arrival (forceReposition) outranks "stay where you were": the
+	// capture below exists for re-renders the reader did not ask to move on (a
+	// theme flip, a verb's presentation change), and a next-tap's moved mark IS
+	// such a fingerprint change — capturing there parked the viewport while the
+	// sticker and tint sailed to the new verse (verification finding).
+	if state.restore == nil && !state.forceReposition && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
 		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
 			state.restore = &restoreAnchor{
 				Book:    state.CurrentBook,

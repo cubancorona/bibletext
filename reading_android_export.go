@@ -75,6 +75,91 @@ func btaReadAlongFollowTapped() {
 	gAudio.resumeReadAlongFollow()
 }
 
+// --- The full-screen note sticker's verbs (the implementation requirement) -------------------------
+//
+// Each is the Android twin of an ai_menu_darwin.go //export, dispatching to
+// the SAME Go verb the iOS sticker calls and ending on the projection +
+// repaint (the campaign rule, notes_verb_screen_test.go): refreshReadingOnly
+// rebuilds the reading view, and the rebuilt pushChapterHTML re-pushes the
+// tuple (Java compare-and-refresh) and re-renders the Spanned through the
+// combined fingerprint wherever the verb moved the mark. All four arrive on
+// the Android UI thread and hop to the Fyne goroutine before touching state.
+
+// btaNoteNextTapped is the expanded sticker's count region ("2 of 3 on this
+// passage ›"): focus advances to the next note in the plan's stable order,
+// wrapping (advanceNoteFocus, notes_plan.go). washIsLiveMutation is false on
+// Android, so the carry-to-the-new-verse ride is the re-render's own arrival
+// scroll (pushChapterHTML's btaScrollVerse on the moved mark), not
+// forceReposition.
+//
+//export btaNoteNextTapped
+func btaNoteNextTapped() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		advanceNoteFocus(state)
+		// The CARRY, Android's spelling. advanceNoteFocus gates its own
+		// forceReposition on washIsLiveMutation() — false here, because on
+		// Android a wash change re-renders rather than mutates. But the
+		// advance moved the mark to ANOTHER VERSE, and without a declared
+		// arrival the re-render's same-chapter branch captures the current
+		// position as a restore and the arrival scroll is skipped: sticker,
+		// band and tint move, the viewport stays (verification finding — invisible
+		// with the seeded notes one screenful apart, real with two far apart).
+		// This pane DOES read and clear the flag (pushChapterHTML), so the
+		// verb declares the arrival exactly as iOS does.
+		state.forceReposition = true
+		state.refreshReadingOnly()
+	})
+}
+
+// btaNoteHidden is the sticker's "–": the note and its highlight come down
+// together, and the note is KEPT so the reader can bring it back.
+//
+//export btaNoteHidden
+func btaNoteHidden() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		hideCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
+// btaNoteDeleted is the sticker's "✕": the note goes for good, and the rest
+// of the set surfaces (dropCurrentNote ends on the projection).
+//
+//export btaNoteDeleted
+func btaNoteDeleted() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		dropCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
+// btaNoteRestored is the collapsed pill being pressed: the note comes back,
+// and its highlight with it.
+//
+//export btaNoteRestored
+func btaNoteRestored() {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		restoreCurrentNote(state)
+		state.refreshReadingOnly()
+	})
+}
+
 // btaKeyboardChanged is the Android twin of iOS's bibleTextKeyboardChanged:
 // the soft keyboard's live on-screen overlap, observed on the activity window by
 // BtBridge.installKeyboardWatcher. It feeds the goto picker's verse-row lift

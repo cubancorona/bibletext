@@ -139,6 +139,41 @@ run loop — so the SAME Go `advanceAndContinue` drives it). The pieces:
 - The build script asserts the aapt2 path was taken (adaptive-icon resources in
   the output) in BOTH the debug and release branches.
 
+## Shared-note sticker (full-screen reading)
+
+Full-screen reading draws the shared note NATIVELY on the overlay (the implementation requirement,
+iOS parity): the bubble with the WHO line ("Note from Friend · 2 of 3 on this
+passage ›"), Hide ("–") / Delete ("✕") on the bubble, the count region as the
+next-tap selector when the passage holds more than one note, and the collapsed
+pill (tap = Restore) when the note is minimized or a foreign mark (search/link
+highlight) suppresses it. Normal (compact) reading keeps the Fyne banner
+(`notes_banner.go`) — the sticker is gated to `IsFullScreen` in Go
+(`pushNoteToOverlay`, reading_android.go) precisely so the reader never sees
+the note twice.
+
+The pushed tuple is composed by `androidStickerPush` (notes_plan.go) — a thin
+alias of `appleStickerPush`, so WHO lines, counts, pill labels and derived
+suppression are byte-identical to iOS (pinned by
+`notes_verb_screen_test.go`). It rides EVERY chapter push, before the
+fingerprint skip gate; `BtBridge.setNote` compares the tuple and re-derives
+the views only on change (the iOS `bibleTextSetNote` pattern), so
+presentation-only flips render without a Spanned re-push. Verbs call back over
+`nativeNoteNextTapped/Hidden/Deleted/Restored` → `reading_jni_android.c` →
+`reading_android_export.go` into the SAME Go verbs iOS uses, each ending on
+the projection + repaint.
+
+**Geometry, honestly:** iOS reserves the band with `paragraphSpacingBefore` on
+the anchor paragraph; a TextView has no per-paragraph spacing, so the band is
+a one-character `LineHeightSpan` (`NoteBandSpan`, implements `UpdateLayout` so
+DynamicLayout reflows) on the anchor verse's first character, raising that
+line's top by the measured sticker height + gap. The sticker view lives INSIDE
+the scroll content (a `FrameLayout` sibling of the TextView), positioned into
+the reserved gap from the Layout's line geometry — so it scrolls with its
+verse natively, no per-scroll tracking. Recorded simplifications vs iOS: no
+speech tail under the bubble; the WHOLE WHO line (accent + "›") is the
+next-tap control rather than just the counts span (one TextView cannot split
+the tap); an unplaced-only pill parks at the top of the text with no band.
+
 ## Known quirks
 
 - **Debug builds link `--target-sdk-version 29`** (fyne hardcodes 29 for

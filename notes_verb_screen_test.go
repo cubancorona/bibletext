@@ -100,7 +100,17 @@ func storeNotesOnChapter(st *AppState) []StoredNote {
 // did, the pushed tuple must tell the store's truth.
 func assertStickerAgreesWithStore(t *testing.T, st *AppState) {
 	t.Helper()
-	text, who, pill, next := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	text, who, pill, next := appleStickerPush(st, plan)
+	// The Android full-screen sticker rides the SAME composition (the implementation requirement):
+	// androidStickerPush is a thin alias of the Apple push, held here to
+	// byte-equality across every verb so the two native channels cannot
+	// drift — this is the Android-channel pin of the store-agreement seam.
+	aText, aWho, aPill, aNext := androidStickerPush(st, plan)
+	if aText != text || aWho != who || aPill != pill || aNext != next {
+		t.Errorf("androidStickerPush diverged from appleStickerPush: android=(%q,%q,%v,%v) apple=(%q,%q,%v,%v)",
+			aText, aWho, aPill, aNext, text, who, pill, next)
+	}
 	notes := storeNotesOnChapter(st)
 
 	if !notesEnabled() || len(notes) == 0 {
