@@ -135,22 +135,42 @@ public final class BtBridge {
             implements android.text.style.LineHeightSpan, android.text.style.UpdateLayout {
         final int band;
         final int at;
-        // The end offset of the line we inflated, this layout pass. The next
+        // below: reserve the band under the line at `at` (the line BEFORE the
+        // anchor verse) rather than above it. This is what keeps the verse's
+        // WASH off the band: Android paints a character's background across
+        // the whole line box, so inflating the ANCHOR line's ascent stretched
+        // the highlight up into the reserved space and slid it under the
+        // sticker (owner-reported from the screenshot). Reserving in the
+        // previous line's descent puts the gap outside every washed character.
+        final boolean below;
+        // The end offset of the line we adjusted, this layout pass. The next
         // call in the pass is the line that starts exactly there — the one
         // carrying our leftover metrics.
         private int inflatedTo = -1;
-        NoteBandSpan(int band, int at) { this.band = band; this.at = at; }
+        NoteBandSpan(int band, int at, boolean below) {
+            this.band = band; this.at = at; this.below = below;
+        }
         @Override public void chooseHeight(CharSequence t, int start, int end,
                 int spanstartv, int lineHeight, android.graphics.Paint.FontMetricsInt fm) {
             if (start <= at && at < end) {
-                fm.ascent -= band;
-                fm.top -= band;
+                if (below) {
+                    fm.descent += band;
+                    fm.bottom += band;
+                } else {
+                    fm.ascent -= band;
+                    fm.top -= band;
+                }
                 inflatedTo = end;
                 return;
             }
             if (start == inflatedTo) {
-                fm.ascent += band;
-                fm.top += band;
+                if (below) {
+                    fm.descent -= band;
+                    fm.bottom -= band;
+                } else {
+                    fm.ascent += band;
+                    fm.top += band;
+                }
                 inflatedTo = -1;
             }
         }
@@ -1106,7 +1126,16 @@ public final class BtBridge {
                 Layout lay = text.getLayout();
                 if (lay == null) return; // hidden overlay: the next refresh places it
                 int line = lay.getLineForOffset(off);
-                int top = text.getTop() + text.getTotalPaddingTop() + lay.getLineTop(line);
+                // The reserved gap is [lineTop - band, lineTop): it lives at the
+                // bottom of the PREVIOUS line's box now (applyNoteBand), so the
+                // sticker hangs from there rather than from the anchor line's
+                // own top. The first-character case has no previous line and
+                // keeps the old ascent reservation, where lineTop IS the gap's
+                // top.
+                int lineTop = lay.getLineTop(line);
+                int gapTop = (noteBandSpan != null && noteBandSpan.below)
+                        ? lineTop - noteBandSpan.band : lineTop;
+                int top = text.getTop() + text.getTotalPaddingTop() + gapTop;
                 FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
                 p.topMargin = Math.max(0, top);
                 vv.setLayoutParams(p);
@@ -1288,8 +1317,15 @@ public final class BtBridge {
         if (!(cs instanceof Spannable)) return;
         Spannable sp = (Spannable) cs;
         if (off < 0 || off + 1 > sp.length()) return;
-        noteBandSpan = new NoteBandSpan(band, off);
-        sp.setSpan(noteBandSpan, off, off + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        // Attach to the character BEFORE the verse and grow THAT line's descent:
+        // the reserved gap then belongs to the preceding line's box, which the
+        // verse's wash does not cover. Only a note on the very first character
+        // of a chapter has no preceding line; it keeps the ascent reservation
+        // (its verse is the first thing drawn, so nothing sits above to wash).
+        boolean below = off > 0;
+        int at = below ? off - 1 : off;
+        noteBandSpan = new NoteBandSpan(band, at, below);
+        sp.setSpan(noteBandSpan, at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         // UpdateLayout makes DynamicLayout reflow; the explicit pair is
         // belt-and-braces for the TextView's own wrap_content height.
         text.requestLayout();
