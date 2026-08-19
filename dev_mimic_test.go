@@ -53,8 +53,14 @@ func TestMimicLinuxFlipsSeams(t *testing.T) {
 	if !sheetConsumeClosure() {
 		t.Error("sheetConsumeClosure is false under mimic — a deferred rebuild under an open sheet would leak")
 	}
-	if nativeNoteSticker() {
-		t.Error("nativeNoteSticker is true under mimic — the Fyne note banner would stand down for a sticker that cannot render")
+	// INVERTED 19 AUG, with the surface it names. The styled pane now draws the
+	// note IN THE TEXT (reading_styled_note.go), so the Windows/Linux answer to
+	// "does the pane draw the note itself?" is yes — and mimic must agree, or
+	// the mode would show the retired banner and hide the very surface it
+
+	// more: it follows useStyledPane, which the same function just set.
+	if !nativeNoteSticker() {
+		t.Error("nativeNoteSticker is false under mimic — mimic would draw the retired banner instead of the styled pane's own in-text sticker")
 	}
 	if reporterLayout() {
 		t.Error("reporterLayout is true under mimic — the styled pane must own its own width-gated reporter typesetting, as on the target")

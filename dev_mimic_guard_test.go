@@ -33,8 +33,15 @@ func TestMimicAbsentFromReleaseBuilds(t *testing.T) {
 	if sheetConsumeClosure() != sheetConsumeClosureOnPlatform {
 		t.Error("sheetConsumeClosure moved off its platform constant in a release build")
 	}
-	if nativeNoteSticker() != nativeNoteStickerOnPlatform {
-		t.Error("nativeNoteSticker moved off its platform constant in a release build")
+	// nativeNoteSticker is composed, not a bare constant: since the styled pane
+	// grew its own in-text sticker the seam asks "does the pane draw the note
+	// itself?" (notes_banner.go), so the release answer is the constant OR the
+	// styled pane's own constant. Compared against that composition for the
+	// same reason the others are compared against constants — it must hold on
+	// every host GOOS the suite runs on, and on Windows/Linux the two halves
+	// disagree.
+	if nativeNoteSticker() != (nativeNoteStickerOnPlatform || styledPaneEnabledOnPlatform) {
+		t.Error("nativeNoteSticker moved off its platform answer in a release build")
 	}
 	if ttsSupported() != ttsSupportedOnPlatform {
 		t.Error("ttsSupported moved off its platform constant in a release build")

@@ -98,6 +98,24 @@ type chapterLayout struct {
 
 	// Text is the flat selection text model (see styledRun.Offset).
 	Text string
+
+	// BandLine is the line the note band opens above (-1 = no band), and
+	// BandY/BandH are the reserved rectangle in the same content coordinates
+	// as styledLine.Y.
+	//
+	// THE BAND IS ADVANCE, NOT LINE HEIGHT — exactly like ParaGap. No line's Y
+	// or H covers it, so it is disjoint from every line box by construction,
+	// and every wash this pane paints (tintSpansForLayout, verseSpansForLayout)
+	// is [ln.Y, ln.Y+ln.H) for some line. That is what makes "a washed run can
+	// never reach into the band" a property of the geometry rather than a
+	// guard: Android inflated the anchor line's ascent instead and the verse's
+	// highlight grew into the band and slid under the bubble (fixed 19 Aug by
+	// reserving in the PRECEDING line's descent), and its LineHeightSpan is
+	// paragraph-scoped so it inflated every FOLLOWING line until guarded.
+	// Neither failure has an assignment site here.
+	BandLine int
+	BandY    float32
+	BandH    float32
 }
 
 // styledMeasure measures one run's text width at its rendered size.
@@ -118,6 +136,22 @@ type styledLayoutParams struct {
 	// skips the indent — poetry is never first-line indented in print — exactly
 	// the buildChapterHTML rule.
 	Indent float32
+
+	// BandVerse / BandH reserve vertical room ABOVE that verse's first line
+	// for the in-text note sticker (reading_styled_note.go). BandH is measured
+	// by the pane BEFORE this call — the band's height is that number, and
+	// that ordering is the whole trick (the iOS twin says the same,
+	// btIOSNoteHeightForWidth). 0 in either field = no band.
+	//
+	// GEOMETRY ONLY, like Indent: it never enters the selection text model, so
+	// lay.Text is byte-identical with and without a band and copy, selection
+	// offsets and every downstream consumer are untouched. A verse that starts
+	// MID-LINE pushes the whole shared line down — the same coarse grain
+	// Android reserves at (the preceding line's descent) and iOS reserves at
+	// (the whole paragraph); forcing a break for the anchor verse would write a
+	// "\n" into the model and change what a reader copies.
+	BandVerse int
+	BandH     float32
 }
 
 // layoutChapter lays the chapter out as styled runs. It mirrors rewrap's
@@ -127,7 +161,7 @@ type styledLayoutParams struct {
 // and copy semantics stay identical to the shipping pane while gaining
 // styling.
 func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measure styledMeasure) *chapterLayout {
-	lay := &chapterLayout{}
+	lay := &chapterLayout{BandLine: -1}
 	var text strings.Builder
 	offset := 0 // rune offset into the selection text model
 	appendText := func(s string) {
@@ -260,6 +294,17 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 				if first {
 					// The line the verse's first token ACTUALLY landed on.
 					lay.VerseLines[vlIdx].line = len(lay.Lines)
+					// …and, if this is the note's anchor verse, the band opens
+					// above that line. y is the accumulating line's TOP here
+					// (flushLine writes Y: y then advances), so adding to it
+					// moves this line and everything after it down by exactly
+					// BandH and touches no line's H and no run's X/W — the wrap
+					// was decided before this point, so it is byte-identical.
+					if p.BandH > 0 && v.Verse == p.BandVerse && lay.BandLine < 0 {
+						y += p.BandH
+						lay.BandLine = len(lay.Lines)
+						lay.BandY, lay.BandH = y-p.BandH, p.BandH
+					}
 					first = false
 				}
 			}

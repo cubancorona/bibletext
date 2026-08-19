@@ -246,8 +246,19 @@ var _ fyne.SecondaryTappable = (*styledReadingPane)(nil)
 var _ fyne.Focusable = (*styledReadingPane)(nil)
 var _ desktop.Cursorable = (*styledReadingPane)(nil)
 
+// THE NOTE STICKER IS NOT TEXT. Four handlers ask one question first — is this
+// position inside the sticker's card? — because the pane is the surface Fyne
+// hands a MouseDown to (a widget.Button is Tappable, not desktop.Mouseable), so
+// without the guard pressing the bubble would collapse the reader's selection
+// and start a new one UNDER the card, and a drag begun there would select the
+// verses the bubble is sitting over. The verbs themselves fire from the
+// buttons' own callbacks; this only keeps the selection out of the way.
 func (p *styledReadingPane) MouseDown(e *desktop.MouseEvent) {
 	if e.Button != desktop.MouseButtonPrimary {
+		return
+	}
+	if p.noteGeom.hits(e.Position) {
+		p.noteGrab = true
 		return
 	}
 	p.focusSelf()
@@ -258,21 +269,31 @@ func (p *styledReadingPane) MouseDown(e *desktop.MouseEvent) {
 func (p *styledReadingPane) MouseUp(*desktop.MouseEvent) {}
 
 func (p *styledReadingPane) Dragged(e *fyne.DragEvent) {
+	if p.noteGrab {
+		return
+	}
 	if p.selAnchor < 0 {
 		p.selAnchor = p.offsetAtPos(e.Position)
 	}
 	p.setSelection(p.selAnchor, p.offsetAtPos(e.Position))
 }
 
-func (p *styledReadingPane) DragEnd() {}
+func (p *styledReadingPane) DragEnd() { p.noteGrab = false }
 
-func (p *styledReadingPane) Tapped(*fyne.PointEvent) {
+func (p *styledReadingPane) Tapped(e *fyne.PointEvent) {
+	if p.noteGrab || (e != nil && p.noteGeom.hits(e.Position)) {
+		p.noteGrab = false
+		return // a click on the card must not clear what the reader selected
+	}
 	p.focusSelf()
 	p.clearSelection()
 }
 
 // DoubleTapped selects the word under the pointer.
 func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
+	if ev != nil && p.noteGeom.hits(ev.Position) {
+		return // no word-select under the bubble
+	}
 	off := p.offsetAtPos(ev.Position)
 	runes := []rune(p.lay.Text)
 	if len(runes) == 0 {
@@ -304,6 +325,9 @@ func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
 }
 
 func (p *styledReadingPane) TappedSecondary(e *fyne.PointEvent) {
+	if e != nil && p.noteGeom.hits(e.Position) {
+		return // no study menu over somebody else's words
+	}
 	menu := p.studyMenu()
 	c := fyne.CurrentApp().Driver().CanvasForObject(p)
 	if c == nil {

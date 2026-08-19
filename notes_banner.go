@@ -45,7 +45,14 @@ import (
 // true, so a compile-time constant would make every banner test unrunnable on
 // the only machine that runs them. The banner still ships to Windows, Linux and
 // Android, so it still has to be testable.
-var nativeNoteSticker = func() bool { return nativeNoteStickerOnPlatform }
+// SINCE 19 AUG THE SEAM ASKS THE REAL QUESTION rather than naming platforms:
+// "does the reading pane draw the note itself?". The styled Windows/Linux pane
+// now does (reading_styled_note.go), so it answers yes through useStyledPane()
+// — and if styledPaneEnabledOnPlatform is ever flipped back to the legacy
+// chapterText Entry pane (the documented one-line revert), the banner RETURNS
+// automatically, because that pane has no sticker. A bare `true` on the
+// !darwin && !android constant could not do that.
+var nativeNoteSticker = func() bool { return nativeNoteStickerOnPlatform || useStyledPane() }
 
 // buildNoteBanner returns the banner for the current chapter's notes, or nil
 // when there is nothing to show. The caller slots it above the reading pane.
@@ -67,10 +74,20 @@ func buildNoteBanner(state *AppState) fyne.CanvasObject {
 	// the same set a second time, in a worse place. The Apple panes carry the
 	// open note as the native sticker and the rest of the set in the sticker's
 	// own WHO line (appleStickerPush) — richness differs, truth does not.
+	pal := state.pal()
 	if nativeNoteSticker() {
+		// THE ONE SURFACE THE STICKER CANNOT CARRY. The R4 group's sentence
+		// ("Not in this translation. Read it in <T>") does not fit a one-band
+		// sticker without roughly doubling its height, so on the styled pane
+		// those rows KEEP the banner — never lose a surface the reader had.
+		// The Apple and Android panes are byte-identical to before: they fold
+		// the unplaced COUNT into the sticker's who line and have never drawn
+		// the sentences here.
+		if useStyledPane() && len(plan.Unplaced) > 0 {
+			return noteUnplacedStrip(plan, pal)
+		}
 		return nil
 	}
-	pal := state.pal()
 	rows := container.NewVBox()
 
 	open, hasOpen := plan.openNote()
@@ -195,6 +212,18 @@ func noteBannerChip(state *AppState, d drawnNote, pal palette) fyne.CanvasObject
 	})
 	chip.Importance = widget.LowImportance
 	return container.NewHBox(chip)
+}
+
+// noteUnplacedStrip is the R4 group ALONE — what survives of the banner on a
+// platform whose pane draws the sticker in the text. It is deliberately the
+// same rows the full banner builds, from the same builder, so the two cannot
+// drift; only the bubble and the chips are gone, replaced by the sticker.
+func noteUnplacedStrip(plan chapterPlan, pal palette) fyne.CanvasObject {
+	rows := container.NewVBox()
+	for _, d := range plan.Unplaced {
+		rows.Add(noteUnplacedRow(d, pal))
+	}
+	return rows
 }
 
 // noteUnplacedRow is one R4 note: the chip line, then the placementCopy
