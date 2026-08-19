@@ -218,6 +218,43 @@ tasks have been tested on both iPhone and iPad against Apple's criteria.
   unclaimed until a device audit proves all common tasks.
 - Captions and Audio Descriptions do not apply to the Bible narration feature.
 
+## OPEN — the App Store description has fallen behind the app
+
+**Owner-raised, 19 Aug 2026, and confirmed against the live record.** The
+description sells an app roughly two releases old. What it says today:
+
+> Read the World English Bible and the Berean Standard Bible — both public
+> domain — beautifully typeset…
+
+What it leaves out:
+
+- **World English Bible (Catholic)** — public domain, the 73-book canon, in the
+  picker
+- **New King James Version** — licensed and working on install since 1.2.0
+- **Shared notes** — the headline feature of 1.2.0. (The word "notes" does
+  appear, but only in the iPad line: "Split View alongside your notes".)
+- **Audio / read-along narration**
+
+**This is the owner's copy to write**, so nothing here changes it. What has been
+added is the check.
+
+**Why it needed a different kind of check.** Every other per-release field is
+guarded by "did it move?" — that is what `preflight.py` does, and it is why the
+inherited review notes and screenshots were caught. The description is the one
+field that *should* sit still for years, so that test can never apply to it, and
+sitting still is exactly how it goes wrong: the app grows and the page describing
+it does not. Nothing would ever have flagged this.
+
+So `appstore/preflight.py` now also asks a question only the description needs:
+**does it still name what the app ships?** It checks the copy against the
+translations `registeredVersions` actually serves and against the features big
+enough to matter to someone deciding whether to install. It reports and never
+fails the run — the copy is a person's judgement, not a build artifact.
+
+Its needles are deliberately specific, and that is worth preserving: a first cut
+looked for "notes", matched "alongside your notes", and passed while the
+description said nothing about the shared-notes feature at all.
+
 ## Pre-submission read-back — run this before every submission
 
 App Store Connect **copies a new version record from the previous one**. Every

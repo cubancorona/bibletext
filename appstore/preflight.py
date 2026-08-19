@@ -47,6 +47,35 @@ PER_RELEASE = {"whatsNew", "review notes", "screenshots"}
 # report can say "unchanged, and that is fine" rather than staying silent.
 STABLE = {"description", "keywords", "marketingUrl", "supportUrl"}
 
+# THE DESCRIPTION NEEDS A DIFFERENT KIND OF CHECK, and this is the reasoning.
+# Every other per-release field is guarded by "did it move?". The description is
+# the one field that SHOULD sit still for years, so that test can never apply to
+# it — and sitting still is exactly how it goes wrong: the app grows and the
+# page describing it does not. On 19 Aug 2026 the live copy still offered "the
+# World English Bible and the Berean Standard Bible" while the app shipped four
+# readable translations, and mentioned neither shared notes nor audio.
+#
+# What CAN be checked is the claim against the code: every translation a reader
+# can actually open should be named on the page selling the app. These are the
+# ones registeredVersions (versions.go) serves today.
+DESCRIBED_TRANSLATIONS = [
+    ("World English Bible", "public domain, always available"),
+    ("Berean Standard Bible", "public domain, always available"),
+    ("World English Bible (Catholic)", "public domain, the 73-book canon"),
+    ("New King James Version", "licensed, and working on install since 1.2.0"),
+]
+
+# Features big enough that a reader deciding whether to install would want them
+# on the page. Kept short on purpose: this is not a changelog.
+# The needles are deliberately SPECIFIC. "notes" alone matched the iPad line's
+# "Split View alongside your notes" and passed the check while the description
+# said nothing whatever about the shared-notes feature — a false pass on the one
+# feature that most needs to be on the page.
+DESCRIBED_FEATURES = [
+    ("shared notes", ("shared note", "note attached", "verse with a note", "send someone a verse")),
+    ("audio / read-along narration", ("audio", "narration", "listen", "read-along", "read along")),
+]
+
 
 def asc(path):
     if not os.path.exists(ASC):
@@ -109,6 +138,25 @@ def main():
         if key in STABLE and a == b:
             note = "  (fine — this one is meant to be stable)"
         print(f" {flag} {key:16} {status}{note}")
+
+    # The description's own check — reported, never fatal: marketing copy is the
+    # owner's to write, and this can only say what looks absent.
+    desc = now.get("description", "")
+    missing_t = [t for t, _ in DESCRIBED_TRANSLATIONS if t.lower() not in desc.lower()]
+    missing_f = [name for name, needles in DESCRIBED_FEATURES
+                 if not any(n in desc.lower() for n in needles)]
+    if missing_t or missing_f:
+        print("\nTHE DESCRIPTION MAY HAVE FALLEN BEHIND THE APP:")
+        for t in missing_t:
+            why = dict(DESCRIBED_TRANSLATIONS)[t]
+            print(f"  - does not name {t} ({why})")
+        for f in missing_f:
+            print(f"  - says nothing about {f}")
+        print(
+            "  The description is the one field that SHOULD stay still between\n"
+            "  releases, so the inherited/written check above can never catch this.\n"
+            "  Not fatal — the copy is yours to write — but worth a look."
+        )
 
     if problems:
         print("\nPER-RELEASE FIELDS THAT WERE NOT WRITTEN FOR THIS RELEASE:")
