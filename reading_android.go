@@ -611,6 +611,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	if state.restore == nil && !state.forceReposition && fp == lastPushedChapterFP {
 		return
 	}
+	forcedThisPush := state.forceReposition // captured: the line below clears it
 	state.forceReposition = false
 	lastPushedChapterFP = fp
 	lastPushedBookChapter = bc
@@ -661,7 +662,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		if btScrollDebug() {
 			fmt.Fprintf(os.Stderr, "[BtScroll] push %s %d: markHere=%v lo=%d restore=%v force=%v -> arrivalScroll=%v\n",
 				state.CurrentBook, state.CurrentChapter, here, sp.Lo,
-				state.restore != nil, state.forceReposition, state.restore == nil && here)
+				state.restore != nil, forcedThisPush, state.restore == nil && here)
 		}
 		if state.restore == nil && here {
 			C.btaScrollVerse(C.uintptr_t(env), C.int(sp.Lo))

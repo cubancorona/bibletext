@@ -144,19 +144,42 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 		if styledApplyingScroll || styledScroll != scroll {
 			return
 		}
+		// IS THIS THE READER, OR FYNE CORRECTING ITSELF? fyne fires OnScrolled
+		// for its own offset CLAMPS — a window resize, a re-wrap, anything that
+		// moves the maximum offset — and a clamp is not the reader taking over.
+		// This check existed before but ran three lines too late: by then
+		// styledUserScrolled was already true and state.restore already nil, so
+		// a plain window resize cancelled the arrival scroll a shared link had
+		// just armed and threw the saved reading position away with it. The
+		// comment said clamps "must not" count as the reader; the code counted
+		// them and then returned.
+		//
+		// Moving it up is necessary but not sufficient, because "the geometry
+		// changed" alone cannot separate a clamp from a reader who scrolls
+		// immediately after resizing the window. What separates them is WHERE
+		// the offset ends up: a clamp is forced onto a BOUND — the new maximum,
+		// or zero — while a reader lands wherever they please. So both must
+		// hold: the geometry moved, and the offset is sitting on a bound.
+		v, ch := scroll.Size(), pane.MinSize().Height
+		geometryMoved := v != lastView || ch != lastContentH
+		if geometryMoved {
+			lastView, lastContentH = v, ch
+			maxY := ch - v.Height
+			if maxY < 0 {
+				maxY = 0
+			}
+			y := scroll.Offset.Y
+			const onTheBound = 0.5
+			if y <= onTheBound || y >= maxY-onTheBound {
+				return // fyne's own correction, not the reader's intent
+			}
+		}
 		styledRestoreArmed = false
 		styledUserScrolled = true
 		state.restore = nil
 		flushReadingStateAsync(state)
 		// A reader's own scroll during read-along stops the follow (the tint
-		// keeps tracking; the pill offers the way back). fyne also fires
-		// OnScrolled for its own offset CLAMPS (a window resize or re-wrap
-		// moving the max offset) — those carry a geometry change and are not
-		// the reader taking over, so they must not raise the pill.
-		if v, ch := scroll.Size(), pane.MinSize().Height; v != lastView || ch != lastContentH {
-			lastView, lastContentH = v, ch
-			return
-		}
+		// keeps tracking; the pill offers the way back).
 		styledRAFollowPending = false // the reader's intent wins over a queued follow
 		gAudio.onReadAlongUserScroll()
 	}
@@ -285,6 +308,19 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 		y := l.pane.highlightY() - 24
 		if y < 0 {
 			y = 0
+		}
+		// CLAMP THE TOP END TOO. Only the floor was clamped, so a note or a
+		// search hit near the END of a chapter asked for an offset past the
+		// scroll's maximum. fyne then clamps it itself and reports the
+		// correction through OnScrolled — which, before the fix above, was
+		// indistinguishable from the reader scrolling and cancelled the very
+		// arrival that caused it. Asking for a reachable offset means fyne has
+		// nothing to correct and nothing to report.
+		if max := l.pane.MinSize().Height - l.scroll.Size().Height; y > max {
+			y = max
+			if y < 0 {
+				y = 0
+			}
 		}
 		if y != l.scroll.Offset.Y {
 			styledApplyingScroll = true
