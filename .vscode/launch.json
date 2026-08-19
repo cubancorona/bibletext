@@ -26,6 +26,31 @@
       "cwd": "${workspaceFolder}"
     },
     {
+      "name": "Run Desktop DEV build (no debugger)",
+      // The bibletextdev tag: Links tab, dev scenarios, and the mimic switch.
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "go run -tags bibletextdev ./cmd/desktop && exit",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Run Desktop MIMIC: Linux (no debugger)",
+      // The Mac wears the Linux build — styled pane, Fyne note banner, no TTS,
+      // DejaVu→Gelasio fonts, MIMIC badge in the header. What this proves and
+      // what still needs real hardware: docs/PLATFORM_MIMIC.md.
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop && exit",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Run Desktop MIMIC: Windows (no debugger)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop && exit",
+      "cwd": "${workspaceFolder}"
+    },
+    {
       "name": "Run Packaged Desktop (.app, no debugger)",
       // Builds the macOS .app bundle, then runs its binary in the foreground
       // (so VS Code's Stop button controls it). Use this to exercise the real
@@ -64,6 +89,29 @@
       // ANTHROPIC_API_KEY / XAI_API_KEY — they override the on-device stored key).
       // Do NOT paste a real key into this committed file.
       "env": {}
+    },
+    {
+      "name": "Debug Desktop MIMIC: Linux",
+      // Delve over the LINUX code paths, on the Mac — the styled pane and the
+      // whole Win/Linux surface are pure Go under mimic, so breakpoints and
+      // stepping work in code you could previously only printf on a CI runner.
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/desktop",
+      "cwd": "${workspaceFolder}",
+      "buildFlags": "-tags bibletextdev",
+      "env": { "BIBLETEXT_MIMIC": "linux" }
+    },
+    {
+      "name": "Debug Desktop MIMIC: Windows",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/desktop",
+      "cwd": "${workspaceFolder}",
+      "buildFlags": "-tags bibletextdev",
+      "env": { "BIBLETEXT_MIMIC": "windows" }
     },
     {
       "name": "Debug Package Tests",

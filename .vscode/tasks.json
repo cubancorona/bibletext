@@ -25,6 +25,33 @@
       "problemMatcher": ["$go"]
     },
     {
+      "label": "Run Desktop (dev build)",
+      "detail": "go run with the bibletextdev tag — Links tab, dev scenarios, mimic switch available",
+      "type": "shell",
+      "command": "go run -tags bibletextdev ./cmd/desktop",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run Desktop MIMIC (Linux)",
+      "detail": "The Mac wears the Linux build: styled pane, Fyne note banner, no TTS, DejaVu→Gelasio fonts. Header shows the MIMIC badge. docs/PLATFORM_MIMIC.md says what this proves.",
+      "type": "shell",
+      "command": "BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run Desktop MIMIC (Windows)",
+      "detail": "The Mac wears the Windows build: styled pane, Fyne note banner, no TTS, Georgia stays. Header shows the MIMIC badge.",
+      "type": "shell",
+      "command": "BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
       "label": "Package Desktop (.app)",
       "detail": "fyne package -> cmd/desktop/BibleText.app",
       "type": "shell",
@@ -47,6 +74,15 @@
       "detail": "package + boot sim + install + launch (scripts/run-ios-sim.sh)",
       "type": "shell",
       "command": "./scripts/run-ios-sim.sh",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run on iOS Simulator (dev)",
+      "detail": "run-ios-sim.sh --dev — the Links tab + dev scenarios build",
+      "type": "shell",
+      "command": "./scripts/run-ios-sim.sh --dev",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -109,10 +145,19 @@
     {
       "label": "Vet",
       "type": "shell",
-      "command": "go vet ./...",
+      "command": "go vet ./... && go vet -tags bibletextdev ./...",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "test",
       "problemMatcher": ["$go"]
+    },
+    {
+      "label": "View-test gate (mutations)",
+      "detail": "scripts/view-test-gate.sh — 8 planted UI defects, every one must be caught",
+      "type": "shell",
+      "command": "./scripts/view-test-gate.sh",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": []
     },
     {
       "label": "Lint (golangci-lint)",
