@@ -1,15 +1,14 @@
-//go:build darwin
+//go:build darwin || android
 
 package bibletext
 
 // Platforms whose reading pane draws the note ITSELF — in the text, anchored to
 // the verse it is about, scrolling with the passage: the iOS UITextView bubble
-// (reading_ios.go) and its macOS NSTextView twin (reading_macos.go). The
-// `darwin` build tag is set for BOTH, which is exactly the set that has one.
+// (reading_ios.go), its macOS NSTextView twin (reading_macos.go), and since
+// task #19 the Android TextView sticker (BtBridge.setNote), which serves BOTH
+// of that platform's reading modes.
 //
 // Where this is true the Fyne banner must stay out of the way, or the reader
-// sees the same note twice. Android stays false: its native sticker exists
-// only in FULL-SCREEN reading (task #19, pushNoteToOverlay), where the banner
-// is never built, while normal reading still needs the banner; Windows/Linux
-// styled panes have no sticker at all.
+// sees the same note twice. Windows/Linux styled panes have no sticker, so
+// they keep the banner (the `off` twin).
 const nativeNoteStickerOnPlatform = true

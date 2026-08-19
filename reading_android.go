@@ -521,15 +521,17 @@ var lastPushedBookChapter string
 // and refreshes the sticker alone (BtBridge.setNote's `changed` gate, the
 // bibleTextSetNote pattern).
 func pushNoteToOverlay(state *AppState) {
-	text, who, pill, next := "", "", false, false
-	anchor := 0
-	if state.IsFullScreen {
-		text, who, pill, next = androidStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
-		// The note's OWN verse, not the highlight's — minimizing clears the
-		// highlight, and a marker without an anchor jumps to the top of the
-		// chapter (the iOS lesson). Verse 0 (unplaced-only) parks at the top.
-		anchor = state.NoteVerseLo
-	}
+	// BOTH reading modes now, not full-screen alone (owner, 19 Aug, comparing
+	// the two phones side by side): iOS draws the note IN THE TEXT above its
+	// verse — one card carrying the byline, the counts, the verbs and the tail
+	// — while Android stacked a citation row, a bubble and a byline above the
+	// whole chapter, unanchored and three times the height. Same sticker, both
+	// modes, and the Fyne banner stands down (nativeNoteSticker).
+	text, who, pill, next := androidStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	// The note's OWN verse, not the highlight's — minimizing clears the
+	// highlight, and a marker without an anchor jumps to the top of the
+	// chapter (the iOS lesson). Verse 0 (unplaced-only) parks at the top.
+	anchor := state.NoteVerseLo
 	pal := state.pal()
 	p, n := C.int(0), C.int(0)
 	if pill {
