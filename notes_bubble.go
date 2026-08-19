@@ -76,6 +76,114 @@ import (
 // layout (iPad/macOS/wide styled pane), one blank line on Android, and ParaGap
 // on the narrow styled pane. Named per platform in [redacted-retired-private-reference].
 //
+// ── THE FOUR RULES (they hold on every surface; break one and the tests bite) ─
+//
+//  1. THE BAND OPENS ABOVE THE PARAGRAPH carrying the highlighted verse, never
+//     between two of that paragraph's lines. A card wedged mid-paragraph splits
+
+//     "No breaking up the Word of God." (Whether it should open BELOW that
+//     paragraph instead is TABLED and undecided — [redacted-retired-private-reference].)
+//  2. THE BAND IS RESERVED SPACE, NOT LINE HEIGHT. It must be advance the
+//     layout adds between line boxes, never height added to one — see the
+//     techniques below for what each platform reserves with.
+//  3. NO WASH MAY REACH INTO THE BAND. A verse's highlight covers that verse's
+//     own glyphs; the reserved air is not part of any mark. Rule 2 is what
+//     makes rule 3 structural rather than a guard: if the band belongs to no
+//     line box, no line's background can paint it.
+//  4. THE PILL IS ITS OWN OBJECT. Its height is PillH, never a verb button's
+//     size; the reader's marker must not resize because a platform moved its
+//     tap targets.
+//
+// ── HOW EACH PLATFORM RESERVES THE BAND (four engines, one result) ───────────
+//
+//	iOS      NSParagraphStyle.paragraphSpacingBefore on the anchor PARAGRAPH
+//	         (reading_ios.go, btIOSInstallNote). TextKit reserves nothing
+//	         finer, which is why rule 1 reads the way it does — the paragraph
+//	         is the only granularity this API has. PECULIARITY: the spacing
+//	         COLLAPSES at the top of a text container, so a note on the
+//	         chapter's first paragraph is reserved with the container's top
+//	         inset instead (gNoteTopInset) — a real defect once: the bubble sat
+//	         on top of the opening verses.
+//	macOS    the same mechanism (reading_macos.go, btMacInstallNote) PLUS a
+//	         measured top-gap correction (btMacNoteTopGap, floored at
+//	         GapAbove): at the reporter leading the previous line's ink
+//	         overhangs its own fragment box, so a bare GapAbove read tight on
+//	         real pixels. It is a MEASUREMENT correction, not a design choice —
+//	         the one residual difference between the four, named here and in
+//	         [redacted-retired-private-reference] rather than pretended away. macOS also
+//	         places the sticker BOTTOM-UP off the passage, which is what makes
+//	         GapBelow exact there and lets error land in the air above.
+//	Android  a LineHeightSpan on the character BEFORE the paragraph, growing
+//	         THAT line's descent (android/BtBridge.java, applyNoteBand +
+//	         NoteBandSpan). TWO TRAPS, both paid for on the emulator and both
+//	         invisible to any compile check:
+//	           (a) LineHeightSpan is a PARAGRAPH span — chooseHeight runs for
+//	               EVERY line of the paragraph, so an unguarded adjustment
+//	               inflates all of them.
+//	           (b) Android reuses ONE FontMetricsInt across those calls, so
+//	               returning early is NOT neutral: the previous line's
+//	               adjustment is still in the object and the next line inherits
+//	               it. The span must put the metrics BACK on the following call.
+//	         Reserving in the PRECEDING line's descent (rather than the anchor
+//	         line's ascent) is what keeps rule 3: the verse's own background
+//	         would otherwise grow with its inflated line and slide under the
+//	         card.
+//	Styled   advance added to the running y at the paragraph's top, exactly as
+//	         ParaGap is (reading_styled_layout.go — BandVerse/BandH in,
+//	         BandLine/BandY/BandH/BandLastLine out). No line's Y or H changes,
+//	         the wrap and the selection text model stay byte-identical, and the
+//	         chapter grows by exactly the band. This is the cheapest engine of
+//	         the four and the only one where rules 2 and 3 are free.
+//
+// ── PLATFORM PECULIARITIES WORTH KNOWING BEFORE YOU CHANGE ANYTHING ──────────
+//
+//	Android units  dp tracks display density; sp tracks the READER's font-size
+//	               setting. A spec height applied as a fixed dp box around sp
+//	               text clips once the reader raises that setting (Android's
+//	               slider reaches 1.3, accessibility 2.0). Spec heights are
+//	               therefore FLOORS there (setMinHeight), never setHeight.
+//	Android text   the who line is "<byline> · K of N on this passage ›" with
+//	               the counts at the END, so END-ellipsis eats exactly the half
+//	               a reader must not lose. fitWho (Java) is btIOSFitWho's rule:
+//	               the sender half gives way, the counts survive whole.
+//	Apple fonts    fixed system faces, no Dynamic Type on this surface, so the
+//	               WhoH ratio resolves once at build time (14 at iOS's 11pt, 13
+//	               at macOS's 10pt).
+//	Styled sizes   the chrome does NOT scale with the reader's scripture text
+//	               size — the bubble is the app's furniture, not scripture.
+//
+// ── REPRODUCING WHAT YOU SEE ────────────────────────────────────────────────
+//
+//	Styled (Windows/Linux), 24 pictures, no device needed:
+//	  BIBLETEXT_PANE_SNAPSHOT_DIR=/tmp/g go test -run TestStyledNoteGallery ./
+//	  → 12 permutations × light/dark (one/two/three notes, pill, suppression,
+//	    first verse, the 280-rune cap, narrow, wide, multi-verse, poetry, and a
+//	    no-note control). Each asserts geometry BEFORE writing its PNG.
+//	The same pane, live, on this Mac:
+//	  BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop
+//	iOS simulator, three notes arriving on one passage:
+//	  SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=s10next xcrun simctl launch <udid> uk.co.bibletext
+//	Android emulator: scripts/build-android.sh, install, then deliver a real
+//	  link — adb shell am start -a android.intent.action.VIEW -d "<share url>"
+//	  (docs/ANDROID.md has the emulator recipe).
+//
+// ── ADJUSTING IT ────────────────────────────────────────────────────────────
+//
+// Change the number HERE, then run, in this order:
+//
+//	go test -run 'TestNativeNoteSpacing|TestNoteSpacingShape' ./
+//	   → fails per native source that still carries the old literal, naming the
+//	     file and the constant. Update those three, and nothing else.
+//	go test -run TestStyledNoteGallery ./        → the styled pane's geometry
+//	scripts/view-test-gate.sh                    → the planted-defect gate
+//	then LOOK: the gallery snapshots, and the platforms you changed.
+//
+// The parser can see that a native's CONSTANT matches this table and that its
+// SHAPES are right (the band formulas, the card-height formula, macOS's
+// bottom-up placement, the who row's floor). It cannot see a native computing
+// something correct-looking from correct constants in a place nobody pinned —
+// so when you add a new use site, add a `required` fragment for it too.
+//
 // THE TAIL is what makes it read as somebody speaking rather than as a card.
 // Its geometry is copied from the native sticker (reading_macos.go,
 // btMacNoteBubblePath): nine points deep, eighteen wide, twenty-four in from the
