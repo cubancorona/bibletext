@@ -1609,3 +1609,28 @@ second decides pixels. Measured against the real importer, a break comes back
 `background=NONE` even inside the span. Any rule about band shape must be written
 from the importer, not from the markup; a rule taken from the markup left every
 poetic verse with a full-width tail and a test that certified it.
+
+## TABLED, HIGH PRIORITY, NOT DECIDED — the note may belong BELOW its paragraph
+
+Owner, 19 Aug 2026, immediately after settling that the note must not break a
+paragraph: *"let's just table this as a high priority that we may **may** and
+maybe likely should move the note below the paragraph with the highlight… but
+this is not decided. but important."*
+
+So it is recorded, not acted on. What is settled today: the band opens ABOVE
+the paragraph carrying the highlighted verse, on all four surfaces. What is
+open: whether it should open BELOW that paragraph instead — the reader would
+meet the scripture first and the message after it, which is arguably the right
+order for a Bible, and the tail would point UP at the passage rather than down.
+
+If it is taken up: the anchor machinery is already paragraph-scoped everywhere
+(reading_styled_layout.go's paraCarriesVerse + BandLastLine; BtBridge's
+paraStart walk; iOS/macOS paragraphSpacingBefore, which would become
+paragraphSpacing — the AFTER twin — on the same paragraph), so the change is
+mostly "reserve after the paragraph's last line instead of before its first",
+plus flipping the tail. The scroll target (highlightY / BandLastLine) and the
+"arriving must show the bubble" rule would need re-deciding: with the note
+below, arriving at the paragraph's first verse should probably still frame the
+paragraph AND its note.
+
+Nothing about this is decided. Do not implement it without the owner saying so.
