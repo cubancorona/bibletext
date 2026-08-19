@@ -1743,36 +1743,54 @@ the path every working install takes. That trade is much worse than a missing
 note on a fallback a working install never reaches. Whoever takes it should
 establish the ordering first.
 
-**CORRECTED, Android cold-start arrival: it WORKS — it is slow on a first run
-(traced 19 Aug 2026).** This was recorded here as an open bug on the strength of
-one screenshot taken 9s after a link was delivered to a freshly-installed app:
-the chapter was right, the note was placed (traced at layout y~10300 with its
-band reserved) and the pane sat at verse 1. The conclusion — "the cold-start arm
-of applyPendingScroll never fires" — was wrong.
+**Android cold-start arrival — TWICE re-judged, and the third reading is the
+one to keep (19 Aug 2026).**
 
-BtBridge.SCROLL_DEBUG (added with this correction, the Android twin of iOS's
-BT_SCROLL_DEBUG) says what actually happens. On a first-ever run with the app's
-data wiped:
+FIRST I called it an open bug, on one screenshot taken 9s after a link reached a
+freshly-installed app: right chapter, note placed far below, reader at verse 1.
 
-    setHtml: frac=-1.0 clearing pendingVerse (was 0)      <- pre-load render
-    setHtml: frac=-1.0 clearing pendingVerse (was 0)
-    apply: FELL THROUGH to TOP (pendingVerse=0)           <- lands at the top
-    apply: FELL THROUGH to TOP (pendingVerse=0)
-    setHtml: frac=-1.0 clearing pendingVerse (was 0)      <- +8.5s, data loaded
-    scrollToVerse: armed v35 text=true layout=false
-    apply: v35 layout=true range=true indexed=57 verses   <- lands on v35
+THEN I withdrew that, on a trace of a wiped-data cold start that landed on v35
+correctly, and recorded it as "works, just slow on a first run". **That
+withdrawal claimed more than the trace supported.** Its success line reads
+`armed v35 text=true layout=false` then `apply: v35 layout=true range=true` —
+that is the ATTACHED case, where the traversal happened to run between the post
+and the runnable. It never exercised the arm that fails, and "it worked once"
+is not "it cannot fail".
 
-So the arrival scroll fires and lands correctly; it just cannot fire until the
-Bible data has loaded and the real chapter is pushed, which on a cold first run
-took 8.5 seconds. Everything before that is the loading-phase render, which
-legitimately has no verse index to scroll to. Warm arrivals, and cold starts
-where the data is already cached, land in about a second — measured both.
+WHAT WAS ACTUALLY WRONG, found by reading rather than running: an armed arrival
+that could not resolve yet was SPENT. `applyPendingScroll` fell straight through
+to the frac restore, or to `ownScrollTo(0)`, whenever `text.getLayout()` was
+null — and there were only ever three shots at it (setHtml's inline apply,
+scrollToVerse's inline apply, one 250ms re-assert). On a cold start all three
+can be spent before the first measure: the reading overlay's Dialog is not shown
+until a real frame arrives, so a `View.post` drains at
+`dispatchAttachedToWindow`, AHEAD of layout. Thirty lines away
+`refreshNoteSticker` already solved exactly this by re-asking after the layout
+pass — which is why, in the very trace where the scroll had given up, the
+STICKER was placed perfectly at y~10300. The two halves of the same arrival had
+different answers to the same timing problem.
 
-WHAT IS LEFT IS A UX QUESTION, NOT A DEFECT: for those seconds the reader who
-tapped a shared link is looking at the top of the right chapter with no
-indication that it is about to move. Worth considering whether the loading
-render should hold the arrival's verse rather than the top. Not fixed, not
-urgent, and NOT the "silently lost note" this section used to claim.
+THE FIX, three parts, all needed:
+  * while a verse is armed and merely UNRESOLVED, re-ask after the layout pass
+    instead of falling through (bounded at 40 traversals; a verse genuinely
+    absent from the index still falls through, because that is not a timing
+    problem);
+  * clear `pendingVerse` on success, which is what makes the 250ms re-assert a
+    LIVENESS test rather than a second unconditional scroll;
+  * make the frac/top placement ONE-SHOT (`pendingPlace`), armed by setHtml and
+    consumed by whichever apply satisfies it.
+
+That third part was not foreseen — it was forced by the trace. Clearing
+`pendingVerse` alone made the follow-up apply fall through to `ownScrollTo(0)`
+and yank the reader to the top IMMEDIATELY after the arrival it had just landed:
+
+    apply: v35 layout=true range=true attached=true    <- correct
+    apply: FELL THROUGH to TOP (pendingVerse=0)        <- and undone, 0ms later
+
+An arrival IS the placement, so a successful one consumes both. Verified on a
+wiped-data cold start: two loading renders place at top, the real chapter arms
+v35, the arrival lands, and every later apply reports "nothing to do — leaving
+the scroll alone". The wash sits on verse 35 in the screenshot.
 
 
 **WITHDRAWN, "the arrival delivers the wrong note" (19 Aug 2026).** An earlier
