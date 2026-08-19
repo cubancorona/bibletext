@@ -167,3 +167,86 @@ func TestStyledAreaEmptyChapter(t *testing.T) {
 		t.Error("an empty chapter must clear the wiring, not serve stale captures")
 	}
 }
+
+// A WINDOW RESIZE IS NOT THE READER SCROLLING, and the difference is what keeps
+// a shared link's arrival alive on Windows and Linux.
+//
+// fyne fires OnScrolled for its OWN offset clamps — a resize or a re-wrap moving
+// the maximum offset reports a corrected position through the same callback a
+// reader's wheel does. The handler always knew that and said so in a comment,
+// but it did the damage first and checked afterwards: styledUserScrolled was set
+// and state.restore nil'd three lines ABOVE the geometry check that returns. So
+// resizing the window cancelled an arrival the link had just armed and threw the
+// saved reading position away with it — silently, because everything still
+// rendered fine, just in the wrong place.
+func TestStyledResizeIsNotAReaderScroll(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+
+	st := longPsalmState()
+	st.restore = &restoreAnchor{Verse: 40, Frac: 0.5}
+	area := styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
+	w := test.NewWindow(area)
+	defer w.Close()
+	w.Resize(fyne.NewSize(420, 300))
+	w.Canvas().Content().Refresh()
+
+	styledUserScrolled = false
+	st.restore = &restoreAnchor{Verse: 40, Frac: 0.5}
+
+	// A resize: the view height changes, fyne re-clamps, OnScrolled fires.
+	w.Resize(fyne.NewSize(420, 500))
+	w.Canvas().Content().Refresh()
+	if styledScroll.OnScrolled != nil {
+		styledScroll.OnScrolled(styledScroll.Offset)
+	}
+
+	if styledUserScrolled {
+		t.Error("a resize was recorded as the reader taking over the scroll — " +
+			"that cancels the arrival a shared link just armed")
+	}
+	if st.restore == nil {
+		t.Error("a resize threw away the saved reading position; only a real " +
+			"reader scroll may do that")
+	}
+
+	// A REAL reader scroll still counts. Same callback, no geometry change.
+	if styledScroll.OnScrolled != nil {
+		styledScroll.OnScrolled(styledScroll.Offset)
+	}
+	if !styledUserScrolled {
+		t.Error("a genuine reader scroll must still be recorded — the fix must " +
+			"not make the handler inert")
+	}
+}
+
+// An arrival near the END of a chapter must ask for an offset the scroll can
+// actually reach. Only the floor was clamped, so a note on one of the last
+// verses asked for an offset past the maximum; fyne clamped it and reported the
+// correction through OnScrolled, which (before the fix above) read as the reader
+// scrolling and cancelled the arrival that caused it.
+func TestStyledArrivalClampsToTheScrollEnd(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+
+	st := longPsalmState()
+	last := st.Bible.GetChapter("Psalms", 119)
+	st.setHL(hlSearch, "Psalms", 119, last[len(last)-1].Verse, 0)
+
+	area := styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
+	w := test.NewWindow(area)
+	defer w.Close()
+	w.Resize(fyne.NewSize(420, 300))
+	w.Canvas().Content().Refresh()
+
+	max := styledPane.MinSize().Height - styledScroll.Size().Height
+	if max < 0 {
+		t.Skip("the fixture fits the window; there is no scroll end to clamp to")
+	}
+	if got := styledScroll.Offset.Y; got > max+0.5 {
+		t.Errorf("arrival scrolled to %.1f, past the maximum offset %.1f — fyne "+
+			"will clamp that and report the correction as a reader scroll", got, max)
+	}
+}
