@@ -218,6 +218,61 @@ tasks have been tested on both iPhone and iPad against Apple's criteria.
   unclaimed until a device audit proves all common tasks.
 - Captions and Audio Descriptions do not apply to the Bible narration feature.
 
+## App Review notes — the step that was missing until 1.2.0
+
+**Read this before every submission.** The notes App Review reads are
+`appStoreReviewDetail.notes`, and until 19 Aug 2026 nothing in this repo ever
+wrote them. What made that invisible is that App Store Connect **copies the
+previous version's review detail forward** onto each new version record, so the
+field is never empty and never looks wrong. The result:
+
+| version | notes it actually carried |
+|---|---|
+| 1.1.5, 1.1.6, 1.1.7 | "NEW IN 1.1.0 — IPAD" — three releases, unchanged |
+| 1.1.8 | "VERSION 1.1.8 — HOTFIX" (written by hand in the ASC UI) |
+| 1.2.0 | 1.1.8's hotfix notes — a search-results fix, while the release's headline feature was shared notes |
+
+**The trap to know about.** `build/appstore/review_notes.txt` looks like the
+release's review notes and is not. It is read only by `push_betareview.py` and
+`push_testflight.py`, which write `betaAppReviewDetail` — **TestFlight** review,
+a different field. It is also under `build/`, which is gitignored, so it has no
+history, never reaches CI, and is absent from a fresh clone.
+
+**Where the notes live now:** `appstore/review-notes.txt`, tracked.
+
+**What holds them honest:** `appstore_review_notes_test.go` fails on the dev
+machine and in CI when the notes still describe an older version than
+`cmd/mobile/FyneApp.toml` ships, when they contain no way to exercise the app,
+when they say nothing about shared notes while that feature ships, or when
+something that looks like an API key has been pasted in.
+
+**The procedure, every release:**
+
+1. Rewrite `appstore/review-notes.txt` for the release: what changed, and a
+   concrete path a reviewer can follow to exercise it. If the release touches
+   anything where content arrives from another person, explain its provenance
+   and the recipient's controls — that is what the notes field is for.
+2. Run `go test -run TestAppReviewNotes ./...` and let it agree the notes are
+   for this version.
+3. Read back what App Store Connect currently holds, BEFORE submitting:
+
+   ```sh
+   ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 ASC_KEY_ID=XXXX ASC_ISSUER_ID=... \
+   python3 appstore/push-review-notes.py
+   ```
+
+   It prints the live notes and says whether they match the file. Expect a
+   mismatch on a fresh version record — that is the carry-forward.
+4. Write them with `--write`. The tool refuses unless the version is still
+   editable (PREPARE_FOR_SUBMISSION and the rejected states), reads back what it
+   wrote, and fails if the two differ.
+5. Only then submit. After submitting, the notes are what the reviewer sees;
+   changing them is a deliberate decision in the ASC UI, not a script's to make.
+
+A review-only AI provider key, if Apple needs one, goes in the App Store Connect
+form at submission time — never in the tracked file. The guard test enforces
+that too.
+
 ## Account-only fields and final submission order
 
 These cannot be proved from the repository or the public product page. The
