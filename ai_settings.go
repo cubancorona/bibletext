@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -888,6 +889,20 @@ func showAISettings(state *AppState) {
 			return
 		}
 		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
+	}
+	// NOT UNDER THE TEST DRIVER. This watchdog exists for a dismissal route
+	// only a real driver has — Fyne's built-in outside-tap PopUp.Hide, which
+	// never calls done(). Under the test driver a timer's fyne.Do runs on the
+	// TIMER's own goroutine (DoFromGoroutine → EnsureNotMain), so this poll
+	// walks cnv.Overlays() concurrently with whatever the test itself is
+	// tapping. CI caught it on linux: OverlayStack.Remove writing under
+	// PopUp.Hide from the test goroutine, against this function's read.
+	//
+	// Tests dismiss the sheet through the ✕, which calls done() directly, so
+	// nothing here is lost — the same reasoning, and the same driver check, as
+	// macReadingHost.pushFrame (reading_macos.go).
+	if _, real := fyne.CurrentApp().Driver().(desktop.Driver); !real {
+		return
 	}
 	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watchDismiss) })
 }
