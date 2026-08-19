@@ -1690,6 +1690,32 @@ top.
 
 ## Future work
 
+**OPEN, Android: an arriving note does not scroll to itself on a cold start
+(observed 19 Aug 2026).** Delivering a note link for John 11:35 to a
+freshly-launched app placed the sticker correctly — the trace put it at layout
+y≈10302 with the band reserved — but the pane stayed at verse 1, so the reader
+sees an ordinary chapter opening and no note at all. Re-firing the same link at
+the already-open chapter scrolled to it correctly, so this is the cold-start
+arm of `applyPendingScroll`, not the placement. It is worth fixing before the
+next Android build goes anywhere near a reader: a shared note that silently
+does not appear is indistinguishable from a shared note that was lost.
+
+**MEASURED AND CLOSED, Android wash height (19 Aug 2026).** The owner reported
+the highlight sitting too high and running under the note. On the comparison
+PNG the wash measured 141px around a 74px glyph band — 55px of empty box above
+the text — against 97px / 11px on a fresh capture of the same passage at the
+same size. The band itself was never the cause: `NOTE_DEBUG`'s metrics dump
+shows the anchor line at its natural 97px with the whole 290px band inside the
+PREVIOUS line's descent (317 = 27 + 290), which is the property the paragraph
+rule needs. The mechanism behind the earlier 141px is NOT explained — it
+reproduces on neither the arrival nor the width-listener path now — so the
+trace was kept rather than deleted. Normalized, the two platforms now read:
+iOS 32.3pt of wash around 19.3pt of glyph (9pt above, 4pt below), Android
+35.3dp around 26.9dp (4dp above, 4.4dp below) — Android's is the tighter of
+the two above the text, so any future "too high" report should be measured
+before it is adjusted.
+
+
 **Inline notes on the mimic/Windows/Linux pane — ✅ BUILT 2026-08-19.** The
 assessment below stood, and the work landed roughly as scoped. What shipped:
 `styledLayoutParams.BandVerse/BandH` → `chapterLayout.BandLine/BandY/BandH`
