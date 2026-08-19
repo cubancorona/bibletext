@@ -101,11 +101,28 @@ if [ "${1:-}" = "--release" ]; then
   note "fyne release -os android (signed AAB)"
   cd "$APP_DIR"
   rm -f BibleText.aab
-  # Marketing version defaults to the Version in FyneApp.toml (override with
-  # BIBLETEXT_ANDROID_VERSION); the build number stays explicit per upload.
+  # Marketing version AND build number both come from FyneApp.toml, which is the
+  # tracked ledger for this app's identity.
+  #
+  # THE BUILD NUMBER USED TO DEFAULT TO 1, and it was not hypothetical: the
+  # shipped v1.1.7 artifact in ~/Library/Android/bibletext-dist reports
+  # versionCode='1' versionName='1.1.7'. `set -u` does not catch ${VAR:-1};
+  # the default just fired, silently, on a real release. Nothing keyed off
+  # versionCode could then tell two builds apart, and the first Play upload
+  # would have burned the lowest number there is.
+  #
+  # FyneApp.toml's Build is already monotonic across every tag (98, 99, 101,
+  # 124, 127, 163) and is already the iOS build number, so one ledger now
+  # answers for both stores. Override either with BIBLETEXT_ANDROID_VERSION /
+  # BIBLETEXT_ANDROID_BUILD; an unreadable ledger is a hard stop, never a 1.
   APP_VERSION="${BIBLETEXT_ANDROID_VERSION:-$(sed -n 's/^Version = "\(.*\)"/\1/p' FyneApp.toml)}"
+  APP_BUILD="${BIBLETEXT_ANDROID_BUILD:-$(sed -n 's/^Build = \([0-9]*\)/\1/p' FyneApp.toml)}"
+  [ -n "$APP_VERSION" ] || { echo "ERROR: no Version in $APP_DIR/FyneApp.toml"; exit 1; }
+  [ -n "$APP_BUILD" ] \
+    || { echo "ERROR: no Build in $APP_DIR/FyneApp.toml — refusing to default the versionCode to 1"; exit 1; }
+  note "android release $APP_VERSION (versionCode $APP_BUILD)"
   fyne release -os android -app-id uk.co.bibletext -icon Icon.png \
-    -app-version "${APP_VERSION:-1.0.0}" -app-build "${BIBLETEXT_ANDROID_BUILD:-1}" \
+    -app-version "$APP_VERSION" -app-build "$APP_BUILD" \
     -keyStore "$KS" -keyName "$KEY_ALIAS" -keyStorePass "$KS_PASS" -keyPass "$KS_PASS"
 
   note "injecting classes2.dex into the AAB (base/dex/) + re-signing"

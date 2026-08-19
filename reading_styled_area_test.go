@@ -145,11 +145,30 @@ func TestStyledAreaHighlightScrollsOnce(t *testing.T) {
 		t.Errorf("highlight scroll-to: offset %.1f, want ≈%.1f-24", got, wantY)
 	}
 
-	// And a highlight supersedes any armed restore.
+	// AND A REOPEN OUTRANKS THE HIGHLIGHT — the rule iOS states and every
+	// surface now follows (19 Aug 2026). This pane used to do the opposite:
+	// applyStyledReadingRestore disarmed the restore whenever a highlight owned
+	// the scroll, so reopening onto a chapter carrying a note or a search hit
+	// dragged the reader to it every launch instead of back to where they had
+	// stopped reading. An armed restore only ever exists on a REOPEN, because
+	// every explicit arrival clears it precisely so it falls through here.
+	styledUserScrolled, styledHighlightCeded = false, false
+	wantRestore, ok := styledPane.yForVerse(3)
+	if !ok {
+		t.Fatal("verse 3 missing from the layout")
+	}
 	armStyledRestore(3, 0, 0.1)
 	applyStyledReadingRestore(&styledColumn{scroll: styledScroll, pane: styledPane})
 	if styledRestoreArmed {
-		t.Error("a highlight jump must drop the pending restore")
+		t.Error("the restore stayed armed after it should have been applied")
+	}
+	if got := styledScroll.Offset.Y; got < wantRestore-2 || got > wantRestore+2 {
+		t.Errorf("reopen landed at %.1f, want the saved position ≈%.1f — the "+
+			"highlight took a position that belonged to the restore", got, wantRestore)
+	}
+	if !styledHighlightCeded {
+		t.Error("the restore placed the view but did not claim the placement, so " +
+			"the next layout pass will hand it to the highlight")
 	}
 }
 

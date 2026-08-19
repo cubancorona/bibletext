@@ -223,10 +223,16 @@ func applyStyledReadingRestore(col *styledColumn) {
 	if !styledRestoreArmed || col.scroll == nil || col.pane == nil {
 		return
 	}
-	if col.pane.highlightOwnsScroll() {
-		styledRestoreArmed = false // a search/xref jump owns the position
-		return
-	}
+	// RESTORE BEFORE HIGHLIGHT — this pane used to do the opposite, disarming
+	// the restore here because "a search/xref jump owns the position". iOS
+	// states the rule the other way (reading_ios.go, bibleTextIOSScrollTV) and
+	// is right: a pending restore only ever exists on a REOPEN, because every
+	// explicit arrival clears it (share_link_open.go, openSearchResultRange) so
+	// that it falls through to the highlight. An armed restore therefore means
+	// "the reader is coming back", and coming back should land where they
+	// stopped reading — not on whatever happens to be highlighted there. With
+	// the old order, reopening onto a chapter carrying a note or a search hit
+	// dragged the reader to it every launch.
 	viewH := col.scroll.Size().Height
 	contentH := col.pane.MinSize().Height
 	if viewH <= 0 || contentH <= 0 {
@@ -257,12 +263,21 @@ func applyStyledReadingRestore(col *styledColumn) {
 		y = maxOff
 	}
 	if y == col.scroll.Offset.Y {
+		// Already there — but still claim the placement, or the highlight block
+		// in Layout takes it on the next pass.
+		styledHighlightCeded = true
+		styledRestoreArmed = false
 		return
 	}
 	styledApplyingScroll = true
 	col.scroll.Offset = fyne.NewPos(0, y)
 	col.scroll.Refresh()
 	styledApplyingScroll = false
+	// The reopen has been placed. Claim it, so the highlight block in Layout
+	// does not take the position back on the very next pass, and disarm so this
+	// runs once.
+	styledHighlightCeded = true
+	styledRestoreArmed = false
 	if styledState != nil {
 		updateCurrentVisitAnchor(styledState, styledRestoreVerse, styledRestoreDelta, styledRestoreFrac)
 	}
@@ -303,8 +318,13 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	child.Resize(fyne.NewSize(w, child.MinSize().Height))
 	child.Move(fyne.NewPos(x, 0))
 
+	// styledRestoreArmed joins the guard for the same reason macOS's blocks were
+	// reordered: a reopen's saved position outranks whatever is highlighted on
+	// the page. The restore applies a few lines below, in the same pass or a
+	// later one once the sizes settle; until then the highlight must not take
+	// the position, or the reader is placed twice and sees the second.
 	if l.scroll != nil && l.pane != nil && l.pane.highlightOwnsScroll() &&
-		!styledUserScrolled && !styledHighlightCeded {
+		!styledUserScrolled && !styledHighlightCeded && !styledRestoreArmed {
 		y := l.pane.highlightY() - 24
 		if y < 0 {
 			y = 0

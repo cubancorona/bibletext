@@ -222,3 +222,32 @@ func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
 		}
 	}
 }
+
+// TestAndroidVersionCodeIsNotDefaulted — the Play version code is release
+// identity, and it had a silent default.
+//
+// scripts/build-android.sh passed `-app-build "${BIBLETEXT_ANDROID_BUILD:-1}"`.
+// `set -u` does not catch a ${VAR:-default}; it just fires. And it did fire, on
+// a real release: the shipped v1.1.7 artifact reports versionCode='1'
+// versionName='1.1.7'. Nothing keyed off the version code could then tell two
+// builds apart, and a first Play upload at 1 burns the lowest number there is.
+//
+// The build number now comes from cmd/mobile/FyneApp.toml, which is already
+// monotonic across every tag and already the iOS build number — one ledger for
+// both stores. This asserts the default form has not crept back.
+func TestAndroidVersionCodeIsNotDefaulted(t *testing.T) {
+	b, err := os.ReadFile("scripts/build-android.sh")
+	if err != nil {
+		t.Fatalf("cannot read scripts/build-android.sh: %v", err)
+	}
+	src := string(b)
+	if regexp.MustCompile(`BIBLETEXT_ANDROID_BUILD:-[0-9]`).MatchString(src) {
+		t.Error("build-android.sh defaults BIBLETEXT_ANDROID_BUILD to a literal again.\n" +
+			"That default already shipped once as versionCode=1 on v1.1.7. Derive it " +
+			"from FyneApp.toml's Build, and fail loudly when that cannot be read.")
+	}
+	if !strings.Contains(src, "refusing to default the versionCode to 1") {
+		t.Error("the hard stop for an unreadable Build is gone — an unreadable " +
+			"ledger must fail the release, never quietly become 1")
+	}
+}
