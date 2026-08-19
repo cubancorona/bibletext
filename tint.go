@@ -44,6 +44,16 @@ import (
 	"strings"
 )
 
+// washIsLiveMutation — whether a wash change on THIS build's reading pane is a
+// live attribute mutation (Apple panes: arrivals must declare forceReposition)
+// or a re-render that carries its own scroll (everywhere else). A var over the
+// platform constant washIsLiveMutationOnPlatform (reading_tint_apple.go /
+// reading_tint_other.go — the nativeNoteSticker arrangement, notes_banner.go):
+// nothing in the app assigns it; the platform-mimic dev mode (dev_mimic_on.go)
+// sets it false so goToVerseRange / next-note arrivals take exactly the
+// Windows/Linux branch on a darwin host, and tests can pin either answer.
+var washIsLiveMutation = washIsLiveMutationOnPlatform
+
 // verseTint is the wash a verse's runs carry, per verse — NOT a bool, so a
 // renderer paints one rect per contiguous SAME-TINT stretch and two verses
 // tinted differently never share a rectangle. Today exactly one tint is in use;

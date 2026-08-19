@@ -33,9 +33,9 @@ package bibletext
 // that is already on screen; it does not need the rebuild, and on Psalm 119 the
 // rebuild is two orders of magnitude dearer than the mutation.
 
-// washIsLiveMutation is true on the panes where changing what a verse is washed
-// in is an attribute mutation rather than a re-render — the two Apple panes, and
-// only them.
+// washIsLiveMutationOnPlatform is true on the panes where changing what a verse
+// is washed in is an attribute mutation rather than a re-render — the two Apple
+// panes, and only them. Read through the washIsLiveMutation var seam (tint.go).
 //
 // It is here because that is exactly where the CONSEQUENCE lives: a mutation
 // carries no scroll, so on these panes an explicit arrival has to declare
@@ -46,7 +46,7 @@ package bibletext
 // already open into a full re-render the gate used to skip
 // (reading_android.go reads and clears it), and on Windows/Linux nothing reads or
 // clears it at all, so it would latch true for the life of the process.
-const washIsLiveMutation = true
+const washIsLiveMutationOnPlatform = true
 
 // lastPushedBodyFP / lastPushedTintFP are the two halves of what the native
 // overlay currently holds, kept apart because they are repaired differently:

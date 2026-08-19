@@ -137,6 +137,15 @@ func chapterHasRecording(state *AppState) bool {
 	return len(chapterRecordings(state)) > 0
 }
 
+// ttsSupported reports whether on-device read-aloud exists here — a var over
+// the platform constant (the nativeNoteSticker arrangement, notes_banner.go):
+// the per-platform answer is ttsSupportedOnPlatform (audio_supported_*.go), and
+// nothing in the app assigns this. It is a seam so the platform-mimic dev mode
+// (dev_mimic_on.go) and tests can ask the Windows/Linux question — no
+// read-aloud row, no audio button on recording-less chapters — on a darwin
+// host.
+var ttsSupported = func() bool { return ttsSupportedOnPlatform }
+
 // chapterAudioAvailable reports whether the current chapter can actually be
 // played on THIS platform — the gate for showing the reading-header audio
 // control. Where TTS exists (Apple, Android) every chapter qualifies; on the

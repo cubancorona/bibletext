@@ -9,8 +9,9 @@ import "runtime"
 // chapter has a recording. js/wasm is a compile-check target only — no audio.
 func audioSupported() bool { return runtime.GOOS != "js" }
 
-// ttsSupported: no read-aloud engine on these hosts (no cross-platform TTS
-// worth shipping). Gates the "Read aloud" source row and, via
-// chapterAudioAvailable, hides the audio button entirely for chapters that
-// have no recording (licensed versions, the deuterocanon).
-func ttsSupported() bool { return false }
+// ttsSupportedOnPlatform: no read-aloud engine on these hosts (no
+// cross-platform TTS worth shipping). Gates the "Read aloud" source row and,
+// via chapterAudioAvailable, hides the audio button entirely for chapters that
+// have no recording (licensed versions, the deuterocanon). Read through the
+// ttsSupported var seam (audio.go).
+const ttsSupportedOnPlatform = false

@@ -493,6 +493,12 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 // event loop. Mobile entries (Fyne iOS) use the same data path but configure the
 // window differently — see cmd/mobile/main.go.
 func Run() {
+	// Dev builds only: BIBLETEXT_MIMIC=windows|linux flips the runtime seams so
+	// this build follows the Windows/Linux code paths (docs/PLATFORM_MIMIC.md).
+	// Must run before CreateMainUI (installSheetCloseConsume reads a seam) and
+	// before loadBookFonts (the font candidates are one). No-op — and not
+	// compiled in — for shipping builds (dev_mimic_off.go).
+	devApplyMimic()
 	myApp := app.NewWithID("bibletext")
 	// Start in loadPending: the window shows a spinner while the Bible loads on a
 	// background goroutine, then swaps to the reader.
