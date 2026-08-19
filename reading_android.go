@@ -499,6 +499,15 @@ func afterRebuild(state *AppState) {
 	})
 }
 
+// btScrollDebug gates the arrival-scroll trace, the Go half of BtBridge's
+// SCROLL_DEBUG and the twin of iOS's BT_SCROLL_DEBUG (reading_ios.go). Set
+// BT_SCROLL_DEBUG=1 to see, on every chapter push, whether the arrival scroll
+// was ARMED or skipped and which of its two conditions decided that. The
+// cold-start arrival is otherwise unobservable: a note can be placed perfectly
+// while the scroll never fires, and the screen looks identical to a reader who
+// simply opened the chapter.
+func btScrollDebug() bool { return os.Getenv("BT_SCROLL_DEBUG") != "" }
+
 // --- Chapter rendering --------------------------------------------------------
 
 var lastPushedBookChapter string
@@ -648,7 +657,13 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		// caught: John 11 v35 landed at v57). Restore outranks the highlight,
 		// same ordering the other panes settled on: a pending restore means
 		// the reader is coming back, not arriving.
-		if sp, here := state.markHere(); state.restore == nil && here {
+		sp, here := state.markHere()
+		if btScrollDebug() {
+			fmt.Fprintf(os.Stderr, "[BtScroll] push %s %d: markHere=%v lo=%d restore=%v force=%v -> arrivalScroll=%v\n",
+				state.CurrentBook, state.CurrentChapter, here, sp.Lo,
+				state.restore != nil, state.forceReposition, state.restore == nil && here)
+		}
+		if state.restore == nil && here {
 			C.btaScrollVerse(C.uintptr_t(env), C.int(sp.Lo))
 		}
 	})

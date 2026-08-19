@@ -114,6 +114,13 @@ public final class BtBridge {
     // the sticker misbehaves — it is what found the arrival delivering the
     // WRONG note's tuple.
     static final boolean NOTE_DEBUG = false;
+    // SCROLL_DEBUG is the Android twin of iOS's BT_SCROLL_DEBUG (reading_ios.go):
+    // it traces WHERE the pane decided to land and why — the arrival verse, the
+    // restore fraction, or the top. Off in normal builds. The cold-start arrival
+    // is invisible without it: the sticker can be placed perfectly while the
+    // scroll silently falls through to the top, and no screenshot can tell you
+    // which of the three branches ran.
+    static final boolean SCROLL_DEBUG = false;
     private static boolean noteRetryPending;
     private static NoteBandSpan noteBandSpan; // the live band, so a refresh can take it back
 
@@ -401,6 +408,8 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 pendingVerse = verse;
+                if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "scrollToVerse: armed v" + verse
+                        + " text=" + (text != null) + " layout=" + (text != null && text.getLayout() != null));
                 applyPendingScroll();
             }
         });
@@ -1608,6 +1617,8 @@ public final class BtBridge {
                 noteBandSpan = null;
                 refreshNoteSticker();
                 pendingFrac = frac >= 0 ? frac : -1f;
+                if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "setHtml: frac=" + frac
+                        + " clearing pendingVerse (was " + pendingVerse + ")");
                 pendingVerse = 0; // a following scrollToVerse (queued next) re-arms it
                 applyPendingScroll();
             }
@@ -1633,6 +1644,9 @@ public final class BtBridge {
                 if (pendingVerse > 0) {
                     Layout layout = text.getLayout();
                     int[] r = (layout != null) ? verseRange(pendingVerse) : null;
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: v" + pendingVerse
+                            + " layout=" + (layout != null) + " range=" + (r != null)
+                            + " indexed=" + verseNums.length + " verses");
                     if (r != null) {
                         int line = layout.getLineForOffset(r[0]);
                         int top = layout.getLineTop(line);
@@ -1657,8 +1671,12 @@ public final class BtBridge {
                     }
                 }
                 if (pendingFrac >= 0) {
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: FELL THROUGH to frac "
+                            + pendingFrac + " (pendingVerse=" + pendingVerse + ")");
                     ownScrollTo(Math.round(pendingFrac * scrollRange()));
                 } else {
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: FELL THROUGH to TOP"
+                            + " (pendingVerse=" + pendingVerse + ")");
                     ownScrollTo(0);
                 }
             }
