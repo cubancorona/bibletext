@@ -114,8 +114,14 @@ type chapterLayout struct {
 	// paragraph-scoped so it inflated every FOLLOWING line until guarded.
 	// Neither failure has an assignment site here.
 	BandLine int
-	BandY    float32
-	BandH    float32
+	// BandLastLine is the final line of the paragraph the band opens above —
+	// the paragraph the bubble is about. Recorded here because only the
+	// layout knows where the paragraph ends, and the scroll target needs it
+	// (highlightY: arriving at any verse of that paragraph must show the
+	// bubble, not scroll past it).
+	BandLastLine int
+	BandY        float32
+	BandH        float32
 }
 
 // styledMeasure measures one run's text width at its rendered size.
@@ -161,7 +167,7 @@ type styledLayoutParams struct {
 // and copy semantics stay identical to the shipping pane while gaining
 // styling.
 func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measure styledMeasure) *chapterLayout {
-	lay := &chapterLayout{BandLine: -1}
+	lay := &chapterLayout{BandLine: -1, BandLastLine: -1}
 	var text strings.Builder
 	offset := 0 // rune offset into the selection text model
 	appendText := func(s string) {
@@ -181,6 +187,26 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// carries the same "\n\n" join rewrap produced.
 			appendText("\n")
 			y += p.ParaGap
+		}
+
+		// THE BAND OPENS ABOVE THE WHOLE PARAGRAPH the note's verse belongs
+		// to — never between two of its lines (owner, 19 Aug: "The note
+		// should not be breaking up paragraphs… No breaking up the Word of
+		// God"). It is the rule iOS has always followed, because
+		// paragraphSpacingBefore is the only thing TextKit reserves with, and
+		// it is now the rule everywhere.
+		//
+		// Reserved HERE, before the paragraph lays out a single line, so y is
+		// the paragraph's own top: adding to it moves the paragraph and
+		// everything after it down by exactly BandH and touches no line's H
+		// and no run's X/W. The band therefore remains ADVANCE — disjoint
+		// from every line box, so no wash can reach it.
+		bandOpensHere := false
+		if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
+			y += p.BandH
+			lay.BandLine = len(lay.Lines)
+			lay.BandY, lay.BandH = y-p.BandH, p.BandH
+			bandOpensHere = true
 		}
 
 		var cur []styledRun
@@ -294,22 +320,14 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 				if first {
 					// The line the verse's first token ACTUALLY landed on.
 					lay.VerseLines[vlIdx].line = len(lay.Lines)
-					// …and, if this is the note's anchor verse, the band opens
-					// above that line. y is the accumulating line's TOP here
-					// (flushLine writes Y: y then advances), so adding to it
-					// moves this line and everything after it down by exactly
-					// BandH and touches no line's H and no run's X/W — the wrap
-					// was decided before this point, so it is byte-identical.
-					if p.BandH > 0 && v.Verse == p.BandVerse && lay.BandLine < 0 {
-						y += p.BandH
-						lay.BandLine = len(lay.Lines)
-						lay.BandY, lay.BandH = y-p.BandH, p.BandH
-					}
 					first = false
 				}
 			}
 		}
 		flushLine(false)
+		if bandOpensHere {
+			lay.BandLastLine = len(lay.Lines) - 1
+		}
 	}
 
 	lay.Height = y
@@ -346,6 +364,20 @@ type tintSpan struct {
 // when the tint itself changes. Spanning first.X → last.X+last.W keeps the
 // joining spaces inside the wash, the same no-gaps rule the HTML dialects hold
 // (reading_highlight_gap_test.go).
+// paraCarriesVerse reports whether a paragraph contains the given verse — the
+// question "which paragraph does the note's band open above".
+func paraCarriesVerse(para []Verse, verse int) bool {
+	if verse <= 0 {
+		return false
+	}
+	for _, v := range para {
+		if v.Verse == verse {
+			return true
+		}
+	}
+	return false
+}
+
 func tintSpansForLayout(lay *chapterLayout) []tintSpan {
 	return runSpansForLayout(lay, func(r styledRun) verseTint { return r.Tint })
 }

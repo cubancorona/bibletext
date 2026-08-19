@@ -110,15 +110,26 @@ func TestStyledLayoutReservesTheNoteBand(t *testing.T) {
 	if lay.BandLine < 0 {
 		t.Fatal("no band was reserved for the anchor verse")
 	}
-	var want int
+	// THE PARAGRAPH RULE (owner, 19 Aug): the band opens above the whole
+	// paragraph carrying the verse — never between two of its lines, which
+	// would break the passage in half. So BandLine is the paragraph's FIRST
+	// line, at or above the anchor verse's own line, and the anchor verse
+	// lives inside [BandLine, BandLastLine].
+	var verseLine int
 	for _, vl := range lay.VerseLines {
 		if vl.verse == 2 {
-			want = vl.line
+			verseLine = vl.line
 		}
 	}
-	if lay.BandLine != want {
-		t.Errorf("BandLine = %d, want verse 2's first line %d", lay.BandLine, want)
+	if lay.BandLine > verseLine {
+		t.Errorf("BandLine = %d is BELOW verse 2's line %d — the band must open above the paragraph",
+			lay.BandLine, verseLine)
 	}
+	if verseLine > lay.BandLastLine {
+		t.Errorf("verse 2's line %d falls outside the band's paragraph [%d..%d]",
+			verseLine, lay.BandLine, lay.BandLastLine)
+	}
+	// And the band abuts the paragraph's first line: nothing sits between.
 	if got := lay.BandY + lay.BandH; got != lay.Lines[lay.BandLine].Y {
 		t.Errorf("band bottom %.1f != anchor line top %.1f — the band must abut the line it opens",
 			got, lay.Lines[lay.BandLine].Y)
@@ -138,16 +149,48 @@ func TestStyledLayoutReservesTheNoteBand(t *testing.T) {
 // model is byte-identical, the wrap is identical, every run keeps its X/W, every
 // line above the band keeps its Y, and every line from the band on is shifted by
 // exactly BandH. Nothing else about the passage moves.
+// laterParagraphVerse is the first verse of the second paragraph — an anchor
+// that puts the note's band below the chapter's opening lines.
+// twoParagraphState is long enough that groupVersesIntoParagraphs really
+// splits it: the density test needs lines ABOVE the band to prove they do not
+// move, and a one-paragraph chapter puts the band at line 0.
+func twoParagraphState() *AppState {
+	long := "And she said to them, Do not call me Naomi, call me Mara, for the Almighty " +
+		"has dealt very bitterly with me, and I went out full and the LORD has brought " +
+		"me home again empty, so why call me Naomi seeing the LORD has testified against me. "
+	vs := make([]Verse, 0, 8)
+	for i := 1; i <= 8; i++ {
+		vs = append(vs, Verse{BookName: "Ruth", Book: "Ruth", Chapter: 2, Verse: i, Text: long})
+	}
+	bd := &BibleData{Books: []string{"Ruth"}, Verses: map[string]map[int][]Verse{"Ruth": {2: vs}}}
+	return &AppState{Bible: bd, CurrentBook: "Ruth", CurrentChapter: 2, CurrentVersion: "web"}
+}
+
+func laterParagraphVerse(verses []Verse) int {
+	paras := groupVersesIntoParagraphs(verses)
+	if len(paras) > 1 && len(paras[1]) > 0 {
+		return paras[1][0].Verse
+	}
+	if len(verses) > 0 {
+		return verses[len(verses)-1].Verse
+	}
+	return 0
+}
+
 func TestStyledNoteBandIsTheOnlyInsertedSpace(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
-	st := acts4ShareState()
-	verses := st.Bible.GetChapter("Acts", 4)
+	st := twoParagraphState()
+	verses := st.Bible.GetChapter("Ruth", 2)
 	base := testLayoutParams
 	base.Width = 320
 	banded := base
-	banded.BandVerse, banded.BandH = 20, 64
+	// Anchor in the SECOND paragraph, so the test keeps its teeth: with lines
+	// above the band, "every line above keeps its Y" is a real assertion.
+	// (The band opens above a whole paragraph now, so a first-paragraph
+	// anchor would put it at line 0 with nothing above to check.)
+	banded.BandVerse, banded.BandH = laterParagraphVerse(verses), 64
 
 	plain := layoutChapter(st, verses, base, fixedMeasure)
 	lay := layoutChapter(st, verses, banded, fixedMeasure)
@@ -158,6 +201,8 @@ func TestStyledNoteBandIsTheOnlyInsertedSpace(t *testing.T) {
 	if len(lay.Lines) != len(plain.Lines) {
 		t.Fatalf("the band re-wrapped the chapter: %d lines vs %d", len(lay.Lines), len(plain.Lines))
 	}
+	// The fixture's anchor verse (20) is in a LATER paragraph, so the band
+	// still opens below the first line — now at that paragraph's top.
 	if lay.BandLine < 1 {
 		t.Fatalf("fixture must put the band below the first line, got BandLine %d", lay.BandLine)
 	}
@@ -591,14 +636,24 @@ func TestStyledSelectionSurvivesTheBand(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
+	// Ruth 1's three verses are ONE paragraph, so the paragraph-level band
+	// opens at line 0. Selection across the band is the point of the test,
+	// and lines below it are what the drag crosses.
 	st, _ := styledNoteFixture(t, []int{2}, []string{"the words the band is for"})
 	p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
 	p.Resize(fyne.NewSize(560, 700))
-	if p.lay.BandLine <= 0 || p.lay.BandLine >= len(p.lay.Lines)-1 {
-		t.Fatalf("fixture must put the band between lines, got BandLine %d of %d",
+	if p.lay.BandLine < 0 || len(p.lay.Lines) < 3 {
+		t.Fatalf("fixture must reserve a band with lines to drag across, got BandLine %d of %d",
 			p.lay.BandLine, len(p.lay.Lines))
 	}
-	for _, li := range []int{p.lay.BandLine - 1, p.lay.BandLine, len(p.lay.Lines) - 1} {
+	// Probe above the band when a line exists there (the band can be at line
+	// 0 when its paragraph opens the chapter), on the band's own line, and at
+	// the far end of the passage.
+	probes := []int{p.lay.BandLine, len(p.lay.Lines) - 1}
+	if p.lay.BandLine > 0 {
+		probes = append([]int{p.lay.BandLine - 1}, probes...)
+	}
+	for _, li := range probes {
 		ln := p.lay.Lines[li]
 		off := ln.StartOffset + 2
 		if off >= ln.EndOffset {
