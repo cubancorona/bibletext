@@ -1202,6 +1202,22 @@ public final class BtBridge {
                 // btIOSLayoutNote use. (It was a bare dp(8) written out again
                 // here, so the reservation and the placement each had their own
                 // copy of the number.)
+                if (NOTE_DEBUG) {
+                    int pl = line > 0 ? line - 1 : 0;
+                    android.util.Log.i("BtNote", "geom: paraLine=" + line
+                            + " top=" + lay.getLineTop(line)
+                            + " bottom=" + lay.getLineBottom(line)
+                            + " base=" + lay.getLineBaseline(line)
+                            + " asc=" + lay.getLineAscent(line)
+                            + " desc=" + lay.getLineDescent(line)
+                            + " | prev top=" + lay.getLineTop(pl)
+                            + " bottom=" + lay.getLineBottom(pl)
+                            + " asc=" + lay.getLineAscent(pl)
+                            + " desc=" + lay.getLineDescent(pl)
+                            + " | band=" + (noteBandSpan != null ? noteBandSpan.band : -1)
+                            + " below=" + (noteBandSpan != null && noteBandSpan.below)
+                            + " paraOff=" + paraOff + " off=" + off);
+                }
                 int top = text.getTop() + text.getTotalPaddingTop() + gapTop + gapAbove;
                 FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
                 p.topMargin = Math.max(0, top);
