@@ -26,6 +26,14 @@ interesting".
 
 ## What enforces it
 
+- **The pill** (the collapsed marker) is spec'd like the card but has its own
+  side padding and a width floor — the pill is chrome, not a paragraph, and a
+  shrink-wrapped one reads as an accident. Its LABEL is a contract too: the who
+  font, muted ink, centred both ways. The interesting part is that measuring and
+  drawing can disagree — the styled pane measured at 11pt and drew at the
+  theme's 18 — so `TestStyledPillMatchesTheApplePill` asserts the DRAWN objects,
+  not the constants that produced them.
+
 - **`notes_spacing_spec_test.go`** parses the three native sources and fails if
   a literal or a shape leaves the Go table behind. It runs on a Mac for
   platforms a Mac cannot compile.

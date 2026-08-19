@@ -782,6 +782,10 @@ static UIFont *btNoteWhoFont(void)  { return [UIFont systemFontOfSize:11 weight:
 // fails if any of them leaves the Go table behind. Read that comment for what
 // each one means and why the pill's height is no longer kNoteBtn's.
 static const CGFloat kNoteGapAbove = 10, kNoteGapBelow = 10, kNotePad = 12;
+// The pill's side padding and width floor — spec too (noteMetrics PillPadX /
+// PillMinW), and deliberately NOT kNotePad: the pill is one line of chrome and
+// wants more air beside its text than a paragraph does.
+static const CGFloat kNotePillPadX = 14, kNotePillMinW = 86;
 static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 10;
 // kNoteBtn is NOT spec: it is the verb button's size, iOS's own 30pt thumb
 // target. The pill used to borrow it, which is how a touch-target decision came
@@ -1167,8 +1171,8 @@ static void btIOSLayoutNote(void) {
         // narrower than the old fixed chip and never wider than the column.
         NSString *title = gNoteWho ?: @"Note";
         CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btNoteWhoFont()}].width);
-        CGFloat cw = tw + 28;
-        if (cw < 86) cw = 86;
+        CGFloat cw = tw + 2 * kNotePillPadX;
+        if (cw < kNotePillMinW) cw = kNotePillMinW;
         if (cw > w) cw = w;
         gNoteView.frame = CGRectMake(x, y, cw, kNotePill);
         UIView *chip = [gNoteView viewWithTag:901];
