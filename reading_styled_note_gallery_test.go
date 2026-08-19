@@ -47,6 +47,47 @@ func galleryFixture(t *testing.T, verses []int, texts []string) (*AppState, []Ve
 	return st, st.Bible.GetChapter("Ruth", 1), "Ruth", 1
 }
 
+// contextFixture is three paragraphs with the note anchored in the MIDDLE one,
+// so a picture of it carries the paragraph above, the note, and the paragraph
+
+func contextFixture(t *testing.T, note string, pill bool) (*AppState, []Verse, string, int) {
+	t.Helper()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	t.Cleanup(func() { deleteAllNotes(appPrefs()) })
+
+	// shouldBreakParagraph closes a paragraph once it passes 320 characters and
+	// the previous verse ended on a terminal, so a verse over that length is a
+	// paragraph of its own — which is what gives this picture one paragraph
+	// above the note and one below.
+	long := "Then she arose with her daughters in law that she might return from the " +
+		"country of Moab, for she had heard in the country of Moab how the LORD had " +
+		"visited His people in giving them bread, and she went out from the place " +
+		"where she was, and her two daughters in law with her, and they went on the " +
+		"way to return to the land of Judah. "
+	vs := make([]Verse, 0, 3)
+	for i := 1; i <= 3; i++ {
+		vs = append(vs, Verse{BookName: "Ruth", Book: "Ruth", Chapter: 3, Verse: i, Text: long})
+	}
+	bd := &BibleData{Books: []string{"Ruth"}, Verses: map[string]map[int][]Verse{"Ruth": {3: vs}}}
+	st := &AppState{Bible: bd, CurrentBook: "Ruth", CurrentChapter: 3, CurrentVersion: "web"}
+
+	paras := groupVersesIntoParagraphs(vs)
+	if len(paras) < 3 {
+		t.Fatalf("fixture must make at least three paragraphs, made %d", len(paras))
+	}
+	anchor := paras[1][0].Verse // the middle paragraph's first verse
+	if _, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Ruth", Chapter: 3, VerseLo: anchor, Text: note}); !ok {
+		t.Fatal("seeding failed")
+	}
+	applyNoteForCurrentChapter(st)
+	if pill {
+		hideCurrentNote(st)
+	}
+	return st, vs, "Ruth", 3
+}
+
 func TestStyledNoteGallery(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -163,6 +204,23 @@ func TestStyledNoteGallery(t *testing.T) {
 				return st, st.Bible.GetChapter("Psalms", 23), "Psalms", 23
 			},
 			w: 520, h: 460, wantSticker: true, washVerses: []int{2},
+		},
+		{
+
+			// paragraph below, so the air on both sides can be judged against
+			// the passage rather than in isolation.
+			name: "13-context-expanded",
+			build: func(t *testing.T) (*AppState, []Verse, string, int) {
+				return contextFixture(t, "A note with a paragraph above it and a paragraph below.", false)
+			},
+			w: 560, h: 620, wantSticker: true, washVerses: []int{2},
+		},
+		{
+			name: "14-context-pill",
+			build: func(t *testing.T) (*AppState, []Verse, string, int) {
+				return contextFixture(t, "Collapsed, with the same paragraphs around it.", true)
+			},
+			w: 560, h: 620, wantSticker: true, wantPill: true,
 		},
 		{
 			name: "12-no-note-control",
