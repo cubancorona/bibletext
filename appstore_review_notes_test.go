@@ -29,6 +29,7 @@ package bibletext
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -134,6 +135,90 @@ func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 				"Shared notes are the one place this app shows a user content written "+
 				"by someone else; leaving that unexplained is how a release gets held.",
 				must.what, must.needle)
+		}
+	}
+}
+
+// TestDesktopAndMobileShipTheSameVersion — the desktop bundles carry their own
+// FyneApp.toml, and nothing had ever compared the two.
+//
+// WHAT THIS CATCHES, and it was live when the test was written: mobile said
+// 1.2.0 while cmd/desktop/FyneApp.toml still said 1.1.8. .github/workflows/
+// release.yml titles the GitHub Release from the TAG ("BibleText 1.2.0") but
+// passes no -appVersion to `fyne package`, so the macOS, Windows and Linux
+// bundles take their version from that file. Tagging v1.2.0 would therefore
+// have published a release whose desktop downloads report 1.1.8 in About /
+// Get Info — with nobody forgetting a step, because no step exists.
+//
+// It is a real convention, not two independent numbers: v1.1.5, v1.1.6 and
+// v1.1.7 all carried identical versions in both files. HEAD was the first
+// release where the bump happened on one side only.
+func TestDesktopAndMobileShipTheSameVersion(t *testing.T) {
+	read := func(path string) string {
+		t.Helper()
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("cannot read %s: %v", path, err)
+		}
+		m := regexp.MustCompile(`(?m)^\s*Version\s*=\s*"([^"]+)"`).FindStringSubmatch(string(b))
+		if m == nil {
+			t.Fatalf("no Version in %s", path)
+		}
+		return m[1]
+	}
+	desktop := read("cmd/desktop/FyneApp.toml")
+	mobile := read("cmd/mobile/FyneApp.toml")
+	if desktop != mobile {
+		t.Errorf("cmd/desktop/FyneApp.toml ships %s but cmd/mobile/FyneApp.toml ships %s.\n\n"+
+			"release.yml titles the GitHub Release from the tag and passes no -appVersion,\n"+
+			"so the desktop bundles would report %s inside a release announced as %s.\n"+
+			"Bump both, or say here why they may differ.", desktop, mobile, desktop, mobile)
+	}
+}
+
+// TestWhatsNewIsNamedForThisRelease guards the customer-facing half of the
+// carry-forward problem.
+//
+// push_metadata.py resolved the target VERSION correctly from FyneApp.toml and
+// then read the text from a constant filename, whats_new.txt. That file today
+// holds neither 1.1.8's notes nor 1.2.0's — it is an older shared-notes draft —
+// so running the documented command would have replaced the correct live 1.2.0
+// What's New with it.
+//
+// appstore/preflight.py cannot catch this: it compares the LIVE value against
+// the PREVIOUS version's, so it detects inheritance, not staleness, and a
+// wrong-but-different file sails through. Naming the file after the version is
+// what closes it, and this asserts the file that name refers to actually exists
+// and is distinct from other releases' notes.
+func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
+	want := marketingVersion(t)
+	dir := filepath.Join("build", "appstore", "metadata", "en-GB")
+	if _, err := os.Stat(dir); err != nil {
+		t.Skipf("%s is absent (build/ is gitignored — a fresh clone has no metadata yet)", dir)
+	}
+	mine := filepath.Join(dir, "whats-new-"+want+".txt")
+	b, err := os.ReadFile(mine)
+	if err != nil {
+		t.Fatalf("no What's New for the shipping version: %s is missing.\n"+
+			"push_metadata.py reads the file named for the version precisely so there "+
+			"is no \"current\" file to go stale. (%v)", mine, err)
+	}
+	if len(strings.TrimSpace(string(b))) == 0 {
+		t.Fatalf("%s is empty", mine)
+	}
+	// And it must not merely be a copy of another release's notes.
+	others, _ := filepath.Glob(filepath.Join(dir, "whats-new-*.txt"))
+	for _, o := range others {
+		if o == mine {
+			continue
+		}
+		ob, err := os.ReadFile(o)
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(ob)) == strings.TrimSpace(string(b)) {
+			t.Errorf("%s is byte-identical to %s — the release notes for %s describe "+
+				"a different release", mine, o, want)
 		}
 	}
 }
