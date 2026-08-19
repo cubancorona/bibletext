@@ -573,6 +573,7 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 			state.pendingLinkVersion = ""
 			state.pendingLink = nil
 			state.pendingLinkRaw = ""
+			state.pendingNoteOpenID = 0 // the Show intent dies with its park
 		}
 	}
 	// Notes are keyed version|book|chapter, so the live mirror

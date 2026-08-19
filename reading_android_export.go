@@ -87,10 +87,20 @@ func btaReadAlongFollowTapped() {
 
 // btaNoteNextTapped is the expanded sticker's count region ("2 of 3 on this
 // passage ›"): focus advances to the next note in the plan's stable order,
-// wrapping (advanceNoteFocus, notes_plan.go). washIsLiveMutation is false on
-// Android, so the carry-to-the-new-verse ride is the re-render's own arrival
-// scroll (pushChapterHTML's btaScrollVerse on the moved mark), not
-// forceReposition.
+// wrapping (advanceNoteFocus, notes_plan.go).
+//
+// NO CARRY, deliberately (owner, 2026-08-19 — the in-place rule, every
+// platform): the advance is a selection, so the sticker, band and tint swap in
+// place and the viewport stays put. This export used to declare the arrival
+// (forceReposition) so the re-render's arrival scroll carried the reader to
+// the new verse; without the flag, pushChapterHTML's same-chapter capture
+// branch records the current position as a restore and the re-render lands
+// back exactly where the reader was — which is now the wanted behaviour, by
+// the very mechanism that used to be the bug. That general capture-branch
+// guard stays (a theme flip must still not move the page); only the verb's
+// declaration is gone. Tradeoff, named: cycling to a note far down the
+// chapter can leave the sticker outside the viewport — the owner chose
+// in-place over carry.
 //
 //export btaNoteNextTapped
 func btaNoteNextTapped() {
@@ -100,17 +110,6 @@ func btaNoteNextTapped() {
 	}
 	fyne.Do(func() {
 		advanceNoteFocus(state)
-		// The CARRY, Android's spelling. advanceNoteFocus gates its own
-		// forceReposition on washIsLiveMutation() — false here, because on
-		// Android a wash change re-renders rather than mutates. But the
-		// advance moved the mark to ANOTHER VERSE, and without a declared
-		// arrival the re-render's same-chapter branch captures the current
-		// position as a restore and the arrival scroll is skipped: sticker,
-		// band and tint move, the viewport stays (refuter finding — invisible
-		// with the seeded notes one screenful apart, real with two far apart).
-		// This pane DOES read and clear the flag (pushChapterHTML), so the
-		// verb declares the arrival exactly as iOS does.
-		state.forceReposition = true
 		state.refreshReadingOnly()
 	})
 }

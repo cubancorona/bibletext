@@ -99,6 +99,112 @@ func TestBackToResultsDismissRestoresTheNoteWash(t *testing.T) {
 	assertNoteRestoredWhole(t, st)
 }
 
+// RELEASE GIVES BACK WHAT SUPPRESSION TOOK, NEVER MORE (owner, 2026-08-19:
+// "when I X the back to results a minimized note maximizes for some reason").
+// The three tests above are the July rule's half — the note WAS open when the
+// foreign mark arrived, so clearing re-opens it. This is the other half: the
+// reader arrives on a chapter from ELSEWHERE (a search result), so its note
+// was never open under their eyes — it arrived suppressed, a pill from the
+// first frame — and clearing the mark must leave it a pill. The reader's own
+// tap is what opens it.
+func TestClearOpensNothingTheSuppressionNeverClosed(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	if _, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "the note"}); !ok {
+		t.Fatal("seeding the note failed")
+	}
+	st := planTestState(t)
+	st.CurrentBook, st.CurrentChapter = "Psalms", 23
+	addRecentChapter(st, "Psalms", 23)
+
+	// A search result carries the reader onto John 3: the arrival's mark is
+	// foreign, so the chapter's note arrives suppressed — the reader has only
+	// ever seen the pill.
+	openSearchResultRange(st, Verse{BookName: "John", Chapter: 3, Verse: 1}, 0)
+	if !notesSuppressed(st) {
+		t.Fatal("precondition: the arrival's mark should stand the note down")
+	}
+
+	clearHighlightAndRederive(st)
+
+	if notesSuppressed(st) {
+		t.Error("the suppression must release with the clear")
+	}
+	text, _, pill, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
+	if text == "" {
+		t.Fatal("the note must still be present (as its pill) after the clear")
+	}
+	if !pill {
+		t.Error("the clear opened a note the suppression never closed — the owner's " +
+			"\"a minimized note maximizes\", pinned")
+	}
+	if st.hasMark() {
+		t.Errorf("a closed note carries no wash (Hide's rule), got %+v", st.mark)
+	}
+	if plan := buildChapterPlan(st, appPrefs(), st.Bible); func() bool {
+		_, open := plan.openNote()
+		return open
+	}() {
+		t.Error("the Fyne banner would draw the note OPEN — the plan must keep it a chip")
+	}
+
+	// The reader's own tap is the Show verb, and it opens the note whole —
+	// the pill is a closed door, not a locked one.
+	restoreCurrentNote(st)
+	if _, _, pill, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); pill {
+		t.Error("the pill press must open the note")
+	}
+	if !st.mark.fromNote() {
+		t.Error("the opened note must bring its own wash back")
+	}
+}
+
+// The same rule through the bar's X — the control the owner was pressing.
+func TestBackToResultsDismissLeavesAnUnseenNoteClosed(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	if _, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "the note"}); !ok {
+		t.Fatal("seeding the note failed")
+	}
+	st := planTestState(t)
+	st.CurrentBook, st.CurrentChapter = "Psalms", 23
+	addRecentChapter(st, "Psalms", 23)
+	openSearchResultRange(st, Verse{BookName: "John", Chapter: 3, Verse: 1}, 0)
+	if !st.CanReturnToSearchResults || !notesSuppressed(st) {
+		t.Fatal("precondition: a search arrival with the trail up and the note suppressed")
+	}
+
+	bar := backToResultsBar(st)
+	var clear *widget.Button
+	walkTree(bar, func(o fyne.CanvasObject) {
+		if b, ok := o.(*widget.Button); ok && b.Text == "" && clear == nil &&
+			b.Icon != nil && b.Icon.Name() == theme.CancelIcon().Name() {
+			clear = b
+		}
+	})
+	if clear == nil {
+		t.Fatal("no X on the back-to-results bar")
+	}
+	test.Tap(clear)
+
+	if st.CanReturnToSearchResults {
+		t.Error("the X must dismiss the trail")
+	}
+	if _, _, pill, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !pill {
+		t.Error("the X expanded a note the reader had only ever seen as a pill")
+	}
+}
+
 // The Back button clears the same mark on its way to the results, so returning
 // to the reading pane later without navigating (mobile's Read tab) must land
 // on the same restored-whole note.

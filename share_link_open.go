@@ -52,6 +52,7 @@ func HandleShareLink(state *AppState, rawURL string) bool {
 		// flash of the wrong chapter.
 		state.pendingLink = &target
 		state.pendingLinkRaw = rawURL
+		state.pendingNoteOpenID = 0 // a real link's park displaces a browser tap's intent
 		return true
 	}
 	// A link carrying a note, with notes switched off, is not ours to open
@@ -78,6 +79,22 @@ func consumePendingLink(state *AppState) {
 	raw := state.pendingLinkRaw
 	state.pendingLink = nil
 	state.pendingLinkRaw = ""
+	// A park carrying a SHOW intent came from the notes browser, not from a
+	// link (openNote → switchToLinkVersion): re-run the browser's own verb now
+	// that the translation is in memory, so the tapped note lands OPEN with
+	// its own mark — the generic arrival below would raise a bare hlLinkSpan,
+	// which is FOREIGN to the note and suppressed it to the pill (report A,
+	// mechanism 2). If the note was deleted while the download ran, fall
+	// through: the passage still opens, which is all that is left to honour.
+	if id := state.pendingNoteOpenID; id != 0 {
+		state.pendingNoteOpenID = 0
+		for _, n := range readNoteStore(appPrefs()).notes {
+			if n.ID == id {
+				openNote(state, n)
+				return
+			}
+		}
+	}
 	// The setting can have changed between parking and consuming (a cold start
 	// reads preferences after the link arrives), so ask again here.
 	if t.Note != "" && !notesFeatureOn(state) {
@@ -211,6 +228,7 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 			replaced := state.pendingLink != nil
 			parked := t
 			state.pendingLink = &parked
+			state.pendingNoteOpenID = 0 // this park is the link's, not a browser tap's
 			// AND SAY SO. This branch used to return in silence, which is 62 of the
 			// 66 books on a fresh install: the reader taps a shared verse, the app
 			// opens, and nothing whatever happens. The "Shared in <translation>"
@@ -256,6 +274,12 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 			c.Unfocus()
 		}
 	}
+	// BEFORE the navigation: what would this arrival's foreign hlLinkSpan
+	// suppress? (See AppState.suppressionTookOpen — the navigation's derive
+	// transiently opens the chapter's note, so a later capture would lie.
+	// A link CARRYING a note ends on the note's own mark, and the capture is
+	// then never consulted: the consume is guarded on a live foreign mark.)
+	state.captureSuppressionTake(t.Book, chapter)
 	selectBook(state, t.Book, false)
 	state.CurrentChapter = chapter
 	addRecentChapter(state, t.Book, chapter)
@@ -678,6 +702,10 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 		parked := t
 		state.pendingLink = &parked
 		state.pendingLinkVersion = want
+		// A fresh park starts with no Show intent: openNote re-stamps its note
+		// id AFTER this returns true; any other caller's park must not inherit
+		// a browser tap's stale one.
+		state.pendingNoteOpenID = 0
 		return true
 	}
 	_, inMem := state.loadedVersions[want]
@@ -689,6 +717,7 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 	parked := t
 	state.pendingLink = &parked
 	state.pendingLinkVersion = want
+	state.pendingNoteOpenID = 0 // as above: openNote re-stamps after the return
 	switchVersionInteractive(state, want)
 	return true
 }

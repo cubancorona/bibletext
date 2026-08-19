@@ -1555,6 +1555,28 @@ layer ABOVE the tint rects, so both are visible and neither erases the other. Th
 collision is a TextKit constraint, confined to the two Apple panes, and that is
 exactly where the restore/apply model landed. The latch stays.
 
+## Future work
+
+**Inline notes on the mimic/Windows/Linux pane** (owner question, 2026-08-19:
+"what about inline notes on mimic mode?"). Honest assessment, not a plan: the
+styled pane (`reading_styled_*.go`) owns its whole layout engine — per-run
+geometry, per-line tint rects, selection hit-testing — so unlike the Apple
+panes there is no importer in the way, and it *could* host an iOS-parity
+in-text presentation: a band opened at the note's anchor line (the pane's
+layout already computes line heights, so reserving vertical room under one
+line is a layout change, not a rendering trick) with the shared tailed bubble
+drawn into it, chips beside it, and the tap table the pane's selection
+machinery already implies. Today those platforms carry the banner above the
+pane instead (`notes_banner.go`), which is truthful and complete but not
+in-text. What it would take: a band-reservation seam in `styledLayout`
+(anchor line → extra advance), rendering the bubble/chip widgets inside the
+pane's coordinate space (or interleaving a Fyne overlay positioned off the
+pane's own line geometry), scroll-anchor arithmetic that accounts for the
+band, and read-along/selection tests over the shifted geometry — roughly the
+S8 sticker work again, minus cgo, call it 3–4 days. Worth doing only after
+the banner is felt as a limitation on those platforms; nothing in the model
+blocks it, because every surface reads the same `chapterPlan`.
+
 **A break character is never washed, and the golden fixture does not say so.**
 `testdata/chapter_tint_golden.txt` records what `buildChapterHTML` EMITS — where
 an intra-verse `<br>` really is nested inside the `.hl` span. What the markup

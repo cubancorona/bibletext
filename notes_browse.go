@@ -23,9 +23,79 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// --- the row's density budget (owner, 2026-08-19: "the notes browser takes up
+// far too much space", reported on BOTH form factors — one shared row serves
+// them, so one set of sizes fixes both). The named sizes below are what the
+// density seen-test derives its budget from (notes_browse_density_test.go):
+// change a size here and the budget moves with it; grow the row's STRUCTURE
+// and the test is what says so.
+const (
+	browseRefTextSize  float32 = 13 // the reference heading (was 18)
+	browseMetaTextSize float32 = 11 // abbrev, byline, date, the minimized marker
+	browseBodyTextSize float32 = 13 // the bubble's message text (app body is 18)
+	browseRowGap       float32 = 3  // between the row's stacked pieces (VBox gap)
+	browseRowPad       float32 = 3  // around the whole row, replacing NewPadded's 7
+	browseBubblePad    float32 = 3  // inside the bubble card (the banner keeps theme.Padding)
+	browseSepGap       float32 = 2  // between the card and its separator
+
+	// The visible body is a PREVIEW, wrap-limited: the row's tap already
+	// navigates to the passage where a received note shows in full, so the cap
+	// costs nothing there — and it is what holds a long message to a few lines
+	// instead of a screenful. (For a Kind=mine note the tap lights the passage
+	// but the text lives only here; the cap still applies — the owner chose a
+	// dense LIST, and a scrapbook row is a scrapbook row.)
+	browsePreviewMaxRunes = 220
+	browsePreviewMaxLines = 4
+)
+
+// browseRowTheme is the row-scoped override that makes the browser dense on
+// BOTH form factors: smaller body text, tighter Label inner padding, tighter
+// wrapped-line spacing. Desktop had NO row override at all — the content
+// rendered at the app's full chrome sizes (18pt body, 8pt inner padding) —
+// which is precisely the owner's "fonts and spacing need to be resized" on
+// mimic/desktop.
+type browseRowTheme struct{ fyne.Theme }
+
+func (t browseRowTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNameText:
+		return browseBodyTextSize
+	case theme.SizeNameInnerPadding:
+		return browseLabelInnerPad
+	case theme.SizeNameLineSpacing:
+		return 4
+	}
+	return t.Theme.Size(name)
+}
+
+// browseLabelInnerPad is the Label box padding inside a row (the app's is 8).
+const browseLabelInnerPad float32 = 3
+
+// notePreview caps the note text a browser row shows: at most
+// browsePreviewMaxLines authored lines and browsePreviewMaxRunes runes, with
+// an ellipsis marking the cut. Deterministic (a string function, not a layout
+// truncation) so the row's height cannot depend on render order.
+func notePreview(text string) string {
+	s := strings.TrimSpace(text)
+	cut := false
+	if lines := strings.Split(s, "\n"); len(lines) > browsePreviewMaxLines {
+		s = strings.TrimSpace(strings.Join(lines[:browsePreviewMaxLines], "\n"))
+		cut = true
+	}
+	if r := []rune(s); len(r) > browsePreviewMaxRunes {
+		s = strings.TrimSpace(string(r[:browsePreviewMaxRunes]))
+		cut = true
+	}
+	if cut {
+		s += " …"
+	}
+	return s
+}
 
 // noteReference is the passage a note is attached to, as a reader would write
 // it: "John 11:35", "Psalms 23:1-4", or just "Psalms 23" for a whole chapter.
@@ -321,6 +391,12 @@ func notesHeaderLine(shown, total int, query string) string {
 // A minimized note is restored on the way. The reader has just tapped the note
 // in a list of notes; landing on a chapter showing only a collapsed marker would
 // be answering a different question from the one they asked.
+//
+// IT RAISES NO RESULTS TRAIL (owner, 2026-08-19): a browser row is a
+// NAVIGATION, not a search hit, so CanReturnToSearchResults stays false and no
+// "back to results" bar appears over the passage. The way back to the list is
+// the Search tab's Notes mode (the tab bar on the phones, the sidebar's notes
+// bubble on desktop), which still holds the list — and its scroll position.
 func openNote(state *AppState, n StoredNote) {
 	if state == nil {
 		return
@@ -337,6 +413,17 @@ func openNote(state *AppState, n StoredNote) {
 		// never a key rebuilt from its fields.
 		setNoteMinimizedByID(appPrefs(), n.ID, false)
 	}
+	// A leftover foreign mark stands aside NOW, before any park or navigation:
+	// choosing a note is the reader choosing it as the page's reason, exactly
+	// as the chip tap and the pill press declare (restoreCurrentNote,
+	// advanceNoteFocus). Without this the mark rode along — a search hit still
+	// lit from before the reader switched the tab to Notes — and the parked
+	// path in particular waited out a whole download only to land the chosen
+	// note suppressed to the pill.
+	if state.mark.live() && !state.mark.fromNote() {
+		state.clearMark()
+		state.suppressionTookOpen = false
+	}
 	// Go to the note's TRANSLATION first — the passage the note is about is a
 	// passage of the translation it was written against, and the derive can
 	// only follow it elsewhere where the numbering corresponds. The same
@@ -347,11 +434,19 @@ func openNote(state *AppState, n StoredNote) {
 		VersionID: n.VersionID, Book: n.Book, Chapter: n.Chapter,
 		VerseLo: n.VerseLo, VerseHi: n.VerseHi,
 	}) {
-		// Parked behind a download: the navigation (and its own derive) runs in
-		// the load's apply tail, but the un-minimize above is already WRITTEN —
-		// so end on the projection and a repaint now, or the reader waits out
-		// the fetch (or its failure) looking at a list row still marked hidden,
-		// over a store that says otherwise.
+		// THE PARK REMEMBERS THE SHOW INTENT. switchToLinkVersion parks a bare
+		// ShareTarget, and the generic consume (applyShareTarget) would treat
+		// the eventual arrival as a LINK arrival: its hlLinkSpan is foreign to
+		// the note, so the note the reader tapped arrived suppressed to the
+		// pill — mechanism 2 of the owner's "often still minimized pill".
+		// consumePendingLink sees this id and re-runs THIS verb instead, now
+		// that the translation is in memory (see AppState.pendingNoteOpenID).
+		state.pendingNoteOpenID = n.ID
+		// The navigation (and its own derive) runs in the load's apply tail,
+		// but the un-minimize above is already WRITTEN — so end on the
+		// projection and a repaint now, or the reader waits out the fetch (or
+		// its failure) looking at a list row still marked hidden, over a store
+		// that says otherwise.
 		applyNoteForCurrentChapter(state)
 		state.refresh()
 		return
@@ -369,6 +464,62 @@ func openNote(state *AppState, n StoredNote) {
 		state.refresh()
 		return
 	}
+	if state.window != nil {
+		if c := state.window.Canvas(); c != nil {
+			c.Unfocus()
+		}
+	}
+	// Clamp the chapter to the loaded book — the twin of applyShareTarget's
+	// clamp. A note can name a chapter this canon does not reach (Daniel 13
+	// stored under a wider canon, read back after a refused switch), and a raw
+	// assignment landed on an invalid chapter AND persisted it, failing the
+	// next launch's restore.
+	chapter := clampChapter(state.Bible, n.Book, n.Chapter)
+	if n.Kind == noteKindMine {
+		// YOUR OWN NOTE. Mine notes are stored but never drawn in the text
+		// (owner directive; the plan excludes them), so focusing one would name
+		// an id no plan surfaces — the reader would land on the OTHER notes'
+		// pill, or on nothing, reading as a dead tap (mechanism 1 of report A).
+		// The tap is still answered: navigate, and light the note's own verse
+		// range as a Go-to arrival — hlVerseOfDay, the origin for "the reader
+		// asked to BE at this passage" — so their words' verses greet them lit.
+		// No received-note bubble is faked; the row's "From you" byline is the
+		// acknowledgment that this is your note, and the wash is the arrival's.
+		state.captureSuppressionTake(n.Book, chapter)
+		selectBook(state, n.Book, false)
+		state.CurrentChapter = chapter
+		addRecentChapter(state, n.Book, chapter)
+		state.forceReposition = true
+		state.restore = nil
+		if n.VerseLo > 0 {
+			// The span's frame is the NOTE'S OWN translation, exactly as
+			// applyShareTarget stamps t.VersionID: the verse numbers are the
+			// note's, and when the reading translation differs (the switch was
+			// refused — a lapsed license, an unknown id) the frame accessor is
+			// what declines to light foreign numbers against the wrong canon,
+			// instead of the span CLAIMING the reading frame for them (refuter
+			// finding: an NKJV Romans 16:25-27 note read under WEB lit the
+			// wrong verses — the doxology files at 14 there).
+			state.setMark(hlVerseOfDay, VerseSpan{
+				VersionID: n.VersionID,
+				Book:      n.Book,
+				Chapter:   chapter,
+				Lo:        n.VerseLo,
+				Hi:        n.VerseHi,
+			})
+		}
+		// End on the projection whatever the mark did (the verb → screen rule):
+		// the mark just raised is foreign to any RECEIVED note on this chapter,
+		// and the plan must stand those down before the repaint, not after it.
+		applyNoteForCurrentChapter(state)
+		state.IsSearching = false
+		state.CanReturnToSearchResults = false
+		state.refresh()
+		if state.surfaceReading != nil {
+			state.surfaceReading()
+		}
+		return
+	}
 	// The arrival is the NOTE'S OWN — never a search result's. This used to
 	// route through openSearchResultRange, which set an hlSearch mark on the
 	// note's very verses: a FOREIGN mark, so the plan stood the note down and
@@ -381,20 +532,15 @@ func openNote(state *AppState, n StoredNote) {
 	// that mark; focus is set AFTER addRecentChapter, whose own derive resets
 	// it (the navigation-reset rule), and the projection re-derives with the
 	// focus in hand.
-	if state.window != nil {
-		if c := state.window.Canvas(); c != nil {
-			c.Unfocus()
-		}
-	}
 	selectBook(state, n.Book, false)
-	state.CurrentChapter = n.Chapter
-	addRecentChapter(state, n.Book, n.Chapter)
+	state.CurrentChapter = chapter
+	addRecentChapter(state, n.Book, chapter)
 	state.forceReposition = true
 	state.restore = nil
 	state.focusNote(n.ID)
 	applyNoteForCurrentChapter(state)
 	state.IsSearching = false
-	state.CanReturnToSearchResults = true
+	state.CanReturnToSearchResults = false
 	state.refresh()
 	if state.surfaceReading != nil {
 		state.surfaceReading()
@@ -465,12 +611,13 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	sortBtn.Importance = widget.LowImportance
 	// Shrunk deliberately: at the app's normal chrome size a borderless button
 	// this wide reads as a heading competing with the line beside it, rather than
-	// as the small control it is.
+	// as the small control it is. browseRowTheme (13pt text, 4pt inner padding)
+	// keeps the header chrome on the same density budget as the rows below it.
 	var base fyne.Theme = theme.DefaultTheme()
 	if state.theme != nil {
 		base = state.theme
 	}
-	sorter := container.NewThemeOverride(sortBtn, compactTheme{Theme: base, text: 13})
+	sorter := container.NewThemeOverride(sortBtn, browseRowTheme{Theme: base})
 
 	// WHO the notes are from, cycling Everyone → From others → From you. Same
 	// shape as the sort control beside it and for the same reason: it names the
@@ -494,7 +641,7 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 		})
 		whoBtn.Importance = widget.LowImportance
 		controls = container.NewHBox(
-			container.NewThemeOverride(whoBtn, compactTheme{Theme: base, text: 13}),
+			container.NewThemeOverride(whoBtn, browseRowTheme{Theme: base}),
 			sorter,
 		)
 	}
@@ -508,7 +655,8 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	//
 	// Desktop only: the phones leave through the tab bar, which is always
 	// visible and already says where you are.
-	head := container.NewBorder(nil, nil, nil, controls, container.NewPadded(line))
+	linePadded := container.New(layout.NewCustomPaddedLayout(2, 2, browseRowPad, browseRowPad), line)
+	head := container.NewBorder(nil, nil, nil, controls, linePadded)
 	// surfaceSearch is set only by the phones (it is how they bring the Search
 	// tab forward) — the same signal showNotesList uses to tell the layouts
 	// apart, rather than a second way of asking the same question.
@@ -518,8 +666,8 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 		})
 		done.Importance = widget.LowImportance
 		head = container.NewBorder(nil, nil,
-			container.NewThemeOverride(done, compactTheme{Theme: base, text: 13}),
-			controls, container.NewPadded(line))
+			container.NewThemeOverride(done, browseRowTheme{Theme: base}),
+			controls, linePadded)
 	}
 
 	// THE CAPACITY NOTICE (S11b). One quiet sentence in the header once the
@@ -643,7 +791,7 @@ func noteDateLabel(ts int64, now time.Time) string {
 func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
 	ref := canvas.NewText(noteReference(n), pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = 18
+	ref.TextSize = browseRefTextSize
 
 	// The translation in parentheses after the reference, quiet and small
 	// (owner). It belongs here rather than under the bubble because it is
@@ -654,39 +802,49 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	head0 := fyne.CanvasObject(ref)
 	if abbrev := noteVersionAbbrev(n.VersionID); abbrev != "" {
 		v := canvas.NewText("("+abbrev+")", pal.TextMuted)
-		v.TextSize = 12
+		v.TextSize = browseMetaTextSize
 		head0 = container.NewHBox(ref, container.NewCenter(v))
 	}
 
-	// The date rides on the reference's own line, muted and small, pushed to the
-	// far edge. Given a line of its own it would read as a second fact about the
-	// note; up here it reads as part of the heading, which is what a date is.
-	// Centred vertically so the smaller text sits on the reference's optical
-	// middle rather than hanging from the top of the row.
-	head := head0
+	// The byline and the date fold into ONE muted fact on the heading's far
+	// edge — "From you · Today" — instead of the byline holding a full-height
+	// Label row of its own under the bubble (the single biggest line item in
+	// the owner's "takes up far too much space"). The attribution still
+	// accompanies every bubble, as it must; it is chrome, so it rides with the
+	// row's other chrome. Centred vertically so the smaller text sits on the
+	// reference's optical middle.
+	meta := noteByline(n)
 	if when := noteDateLabel(n.Received, time.Now()); when != "" {
-		stamp := canvas.NewText(when, pal.TextMuted)
-		stamp.TextSize = 12
-		head = container.NewBorder(nil, nil, head0, container.NewCenter(stamp))
+		meta += " · " + when
 	}
+	stamp := canvas.NewText(meta, pal.TextMuted)
+	stamp.TextSize = browseMetaTextSize
+	head := container.NewBorder(nil, nil, head0, container.NewCenter(stamp))
 
-	// The note's own words, in the SAME bubble the reading page draws, with the
-	// byline and the translation OUTSIDE it (owner directive) — inside, they
-	// would read as part of the message rather than as the app saying where it
-	// came from. A collapsed note still shows its text here; the browser is
+	// The note's words, in the SAME bubble the reading page draws (owner: list
+	// bubbles match reading bubbles — identity is the tailed shape, which the
+	// row-scoped theme shrinks without changing). The body is a wrap-limited
+	// PREVIEW (notePreview); the tap-through shows the whole message on the
+	// passage. A collapsed note still shows its text here; the browser is
 	// where you read them, the chapter is where you chose how much to see.
-	body := noteBubbleWithByline(n.Text, noteByline(n), pal)
+	body := noteBubblePadded(notePreview(n.Text), pal, browseBubblePad)
 
-	rows := container.NewVBox(head, body)
+	rows := container.New(layout.NewCustomPaddedVBoxLayout(browseRowGap), head, body)
 	if n.Minimized {
 		quiet := canvas.NewText("Minimized in the chapter", pal.TextMuted)
-		quiet.TextSize = 12
+		quiet.TextSize = browseMetaTextSize
 		rows.Add(quiet)
 	}
 
-	inner := container.NewPadded(rows)
+	var base fyne.Theme = theme.DefaultTheme()
+	if state != nil && state.theme != nil {
+		base = state.theme
+	}
+	inner := container.New(
+		layout.NewCustomPaddedLayout(browseRowPad, browseRowPad, browseRowPad, browseRowPad),
+		container.NewThemeOverride(rows, browseRowTheme{Theme: base}))
 	card := newNoteBrowseCard(state, n, inner, pal)
-	return container.NewVBox(card, widget.NewSeparator())
+	return container.New(layout.NewCustomPaddedVBoxLayout(browseSepGap), card, widget.NewSeparator())
 }
 
 // newNoteBrowseCard is a search-result card that opens a note instead of a
@@ -698,18 +856,28 @@ func newNoteBrowseCard(state *AppState, n StoredNote, content fyne.CanvasObject,
 	return c
 }
 
-// setNotesMode is the ONE place the Notes flag moves, so leaving the mode always
-// forgets the list's scroll position. Coming back to Notes should start at the
-// top of the list; only a rebuild WHILE in Notes should return the reader to
-// where they were. Three callers set this flag (the desktop sidebar toggle, the
-// mobile toggle, and the mobile reset), and a scroll offset left behind by one
-// of them would silently reappear on a later, unrelated visit.
+// setNotesMode is the ONE place the Notes flag moves, so leaving the mode
+// always HARVESTS the list's scroll position first. The browser remembers
+// where the reader was for the whole session (owner, 2026-08-19: "the notes
+// browser should remember its scroll position" — reversing the earlier
+// start-at-the-top rule): leave by ANY route — a row tap (openNote harvests on
+// its own, before this), the Done button, the sidebar/mobile mode toggles, a
+// tab switch — and coming back lands in the same neighbourhood, because every
+// build of the list restores notesScroll (buildNotesBrowseView). Three
+// callers set this flag (the desktop sidebar toggle, the mobile toggle, and
+// the mobile reset), and putting the harvest here is what makes the memory
+// complete instead of route-by-route.
+//
+// The READER func is dropped on the way out: it aliases the list being torn
+// down, and the next build installs its own. The OFFSET stays.
 func setNotesMode(state *AppState, on bool) {
 	if state == nil {
 		return
 	}
 	if !on {
-		state.notesScroll = 0
+		if state.notesScrollRead != nil {
+			state.notesScroll = state.notesScrollRead()
+		}
 		state.notesScrollRead = nil
 	}
 	state.NotesMode = on

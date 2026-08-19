@@ -563,13 +563,15 @@ func nextNoteFocusID(state *AppState, plan chapterPlan) uint64 {
 // table: "taps a note chip instead → that is the new choice"), focus names the
 // note, and the mirror is re-projected from the plan.
 //
-// One thing rides on top of the chip semantics, for the same reason
-// goToVerseRange declares it: on the panes where the wash is a live mutation
-// the sticker is IN the text, anchored to its note's verse, so advancing to a
-// note on another verse must carry the reader to it — a SCROLL, never a
-// rebuild (AppState.forceReposition), and gated on washIsLiveMutation because
-// on the other panes nothing reads or clears the flag (the banner is pinned
-// above the text there, and a chip tap does not move the page).
+// THE CYCLE STAYS IN PLACE — NO CARRY, ON EVERY PLATFORM (owner, 2026-08-19,
+// reversing the S10 carry: "this shouldn't change the scroll position … it
+// should sort of change right in place"). The advance is a SELECTION, not an
+// arrival: the bubble and the wash swap where they are, and the viewport does
+// not move — so this verb deliberately does NOT set forceReposition, and the
+// Android export sets none either (btaNoteNextTapped). The named tradeoff:
+// cycling to a note anchored far down the chapter can put the sticker outside
+// the viewport — the reader scrolls to it themselves. The owner chose in-place
+// over carry with that cost on the table.
 func advanceNoteFocus(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
@@ -595,18 +597,14 @@ func advanceNoteFocus(state *AppState) {
 	}
 	state.focusNote(id)
 	applyNoteForCurrentChapter(state)
-	// An explicit arrival outranks "where you left off" — the same declaration
-	// applyShareTarget, openSearchResultRange and plain navigation all make.
-	// Without it, the restore a same-chapter re-render captured (pushChapterHTML's
-	// scroll-preserving branch) is still standing: it forces the push down the
-	// slow re-import path (the skip gate requires restore == nil) AND would
-	// out-rank the reposition below with a stale position. Measured live: with
-	// the restore standing every next-tap logged html-import ~14 ms; cleared, the
-	// tap is the sticker's own compare-and-refresh.
+	// A pending restore is dropped, but NOT because the tap is an arrival: a
+	// standing restore forces the push down the slow re-import path (the skip
+	// gate requires restore == nil). Measured live: with the restore standing
+	// every next-tap logged html-import ~14 ms; cleared, the tap is the
+	// sticker's own compare-and-refresh. The old carry — forceReposition,
+	// washIsLiveMutation-gated — is deliberately GONE: the cycle changes the
+	// selection in place and never moves the viewport (see the doc above).
 	state.restore = nil
-	if washIsLiveMutation {
-		state.forceReposition = true
-	}
 }
 
 // androidStickerPush is the Android full-screen sticker's tuple (task #19) —

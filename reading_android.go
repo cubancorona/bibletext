@@ -563,9 +563,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	// A declared arrival (forceReposition) outranks "stay where you were": the
 	// capture below exists for re-renders the reader did not ask to move on (a
-	// theme flip, a verb's presentation change), and a next-tap's moved mark IS
-	// such a fingerprint change — capturing there parked the viewport while the
-	// sticker and tint sailed to the new verse (refuter finding).
+	// theme flip, a verb's presentation change). The sticker's next-tap is now
+	// deliberately IN that class — the in-place rule (owner, 2026-08-19):
+	// btaNoteNextTapped declares no arrival, so its moved mark is captured
+	// here and the re-render lands back where the reader was, sticker and
+	// tint swapped in place. The guard itself stays for the arrivals that do
+	// declare (a tapped link, a search result, a Go-to).
 	if state.restore == nil && !state.forceReposition && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
 		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
 			state.restore = &restoreAnchor{

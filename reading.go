@@ -775,29 +775,55 @@ func htmlEscape(s string) string {
 	return s
 }
 
-func backToResultsBar(state *AppState) fyne.CanvasObject {
-	pal := state.pal()
-	label := state.ActiveSearchQuery
-	// Same guard as buildSearchResultsView: with the assistant on "None" a
-	// leftover aiSearchActive must not surface the stale AI query as the label.
-	if aiFeaturesEnabled(state) && state.aiSearchActive {
-		label = state.aiSearchQuery
+// trailChipTheme sizes the back-to-results trail as one quiet line of chrome:
+// small text, tight padding, a small glyph. The trail is a breadcrumb, not
+// content — the full-width surfaced card it replaces read as a second header
+// and the owner called it out on both counts ("takes up too much space …
+// non-intrusive, clear, and elegant").
+type trailChipTheme struct{ fyne.Theme }
+
+func (t trailChipTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNameText:
+		return 13
+	case theme.SizeNameInnerPadding:
+		return 5
+	case theme.SizeNameInlineIcon:
+		return 14
 	}
-	// The query can be long (especially an AI question); Fyne buttons don't truncate,
-	// so a full label overruns the bar. Keep the button short and fixed; the query is
-	// shown truncated only if it's brief enough to fit.
-	text := "Back to results"
-	if r := []rune(label); len(r) > 0 && len(r) <= 18 {
-		text = fmt.Sprintf("Results: %q", label)
+	return t.Theme.Size(name)
+}
+
+// backToResultsBar is the results trail: ONE compact line — a small
+// "‹ Results" text control and a small ✕ at the far edge — never a surfaced
+// card, never more than one row. The query preview rides along ONLY on
+// desktop, where the pane is wide and the sidebar's field is out of the eye
+// line; on the phones the trail is just the way back, and the query is
+// waiting in the Search tab it returns to.
+func backToResultsBar(state *AppState) fyne.CanvasObject {
+	text := "‹ Results"
+	if state.surfaceSearch == nil {
+		label := state.ActiveSearchQuery
+		// Same guard as buildSearchResultsView: with the assistant on "None" a
+		// leftover aiSearchActive must not surface the stale AI query as the label.
+		if aiFeaturesEnabled(state) && state.aiSearchActive {
+			label = state.aiSearchQuery
+		}
+		// Fyne buttons don't truncate, and an AI question can be long: the
+		// preview rides only while it is short enough to stay one quiet line.
+		if r := []rune(label); len(r) > 0 && len(r) <= 18 {
+			text = fmt.Sprintf("‹ Results: %q", label)
+		}
 	}
 	// Both verbs clear through clearHighlightAndRederive, not the bare clear:
 	// the search mark may have been suppressing a note on this chapter, and
-	// releasing the suppression re-opens the bubble at the next render — but
-	// only the projection re-raises the note's own hlNote wash (the mark the
-	// search REPLACED). The bare clear left the re-opened bubble's verse
-	// unwashed until the next navigation — the every-platform twin of the
-	// native Clear-highlight tap (bibleTextHighlightCleared).
-	back := widget.NewButtonWithIcon(text, theme.NavigateBackIcon(), func() {
+	// releasing the suppression gives back exactly what it took (the report-C
+	// rule lives in that verb) — but only the projection re-raises the note's
+	// own hlNote wash (the mark the search REPLACED). The bare clear left the
+	// re-opened bubble's verse unwashed until the next navigation — the
+	// every-platform twin of the native Clear-highlight tap
+	// (bibleTextHighlightCleared).
+	back := widget.NewButton(text, func() {
 		clearHighlightAndRederive(state)
 		if state.surfaceSearch != nil {
 			state.surfaceSearch() // mobile: jump to the real Search tab (restores its state)
@@ -816,7 +842,13 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 	})
 	clear.Importance = widget.LowImportance
 
-	return surface(container.NewBorder(nil, nil, nil, clear, back), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	var base fyne.Theme = theme.DefaultTheme()
+	if state.theme != nil {
+		base = state.theme
+	}
+	return container.NewThemeOverride(
+		container.NewBorder(nil, nil, back, clear, nil),
+		trailChipTheme{Theme: base})
 }
 
 // chapterText renders an entire chapter as one read-only, selectable text block.

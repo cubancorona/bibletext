@@ -100,6 +100,23 @@ type AppState struct {
 	// suppression by a foreign mark is derived, so neither ever writes.
 	noteFocus noteFocus
 
+	// suppressionTookOpen records what the live FOREIGN mark's suppression
+	// actually took: true when the note the reader was looking at was OPEN at
+	// the moment the mark replaced its state. Session-only, never stored.
+	//
+	// It exists because release must give back what suppression took, NEVER
+	// MORE (owner, 2026-08-19, refining the July "restore when the search
+	// clears" rule): clearing the mark re-opens a note the suppression closed
+	// under the reader's eyes, and must NOT expand one that was only ever a
+	// pill — the owner's "when I X the back to results a minimized note
+	// maximizes for some reason". The capture CANNOT live in setMark: every
+	// arrival verb navigates FIRST and marks SECOND, and the navigation's own
+	// derive transiently opens the chapter's note — so at setMark time "the
+	// note was open" is true even for a note the reader never saw. Each
+	// foreign-mark verb therefore captures at ENTRY (captureSuppressionTake),
+	// before its navigation, and clearHighlightAndRederive consumes the answer.
+	suppressionTookOpen bool
+
 	RecentChapters []ChapterVisit
 
 	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,
@@ -209,6 +226,17 @@ type AppState struct {
 	// dropped rather than yanking the reader to a passage they no longer asked
 	// for.
 	pendingLinkVersion string
+	// pendingNoteOpenID is the SHOW intent riding on a parked target: the
+	// browser's openNote parked behind a translation download, and the arrival
+	// must open THAT note — not run the generic link-arrival, whose bare
+	// hlLinkSpan is FOREIGN to the note and suppressed it to the pill (the
+	// owner's "clicking a note ... often still minimized pill"). Threaded the
+	// way pendingLink carries its target: set only by openNote's parked return,
+	// consumed by consumePendingLink (which re-runs openNote now that the
+	// translation is in memory), and cleared wherever the park itself is
+	// displaced or dropped — a NEW link's park is a new intent, and a stale
+	// note id applied to it would hijack the reader's later tap. Zero = none.
+	pendingNoteOpenID uint64
 	// preferredVersion is the translation the READER chose, when the one on
 	// screen is a forced fallback (a licensed translation that could not be
 	// revalidated — offline, or the shared key's quota spent). It exists because
@@ -220,18 +248,20 @@ type AppState struct {
 	// online. Cleared by any successful version load, so an explicit switch
 	// always wins.
 	preferredVersion string
-	// notesScroll is the notes browser's scroll position, kept while the reader
-	// stays in Notes mode so a rebuild (opening a note and coming back, a theme
-	// flip, a sort change) returns them to where they were reading rather than
-	// to the top of a long list. Cleared when Notes mode is left — coming back
-	// to the notes list fresh should start at the top.
+	// notesScroll is the notes browser's scroll position, kept for the WHOLE
+	// session (owner, 2026-08-19: the browser remembers its place) so any
+	// return to the list — a rebuild while in Notes, opening a note and coming
+	// back, leaving the mode entirely and re-entering — lands the reader in
+	// the same neighbourhood rather than at the top of a long list.
 	notesScroll float32
 	// notesScrollRead reads the LIVE list's scroll offset. The windowed list
 	// (widget.List) does not expose a scroll callback the way a raw VScroll
 	// does, so instead of saving continuously the browser leaves a way to ask
-	// the current view where it is, and the two moments that replace it — the
-	// next buildNotesBrowseView, and openNote leaving for the passage — harvest
-	// the offset into notesScroll first. Cleared with notesScroll.
+	// the current view where it is, and the moments that leave or replace it —
+	// the next buildNotesBrowseView, openNote leaving for the passage, and
+	// setNotesMode(false) on every mode exit — harvest the offset into
+	// notesScroll first. The func is dropped when the list is torn down; the
+	// offset survives it.
 	notesScrollRead func() float32
 
 	// loadPhase drives the startup loading screen. The Bible loads on a
@@ -808,6 +838,10 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 		}
 	}
 
+	// BEFORE the navigation: what would this arrival's mark suppress? (The
+	// navigation's own derive transiently opens the chapter's note, so a later
+	// capture would lie — see AppState.suppressionTookOpen.)
+	state.captureSuppressionTake(verse.BookName, verse.Chapter)
 	selectBook(state, verse.BookName, false)
 	state.CurrentChapter = verse.Chapter
 	addRecentChapter(state, verse.BookName, verse.Chapter)
@@ -857,6 +891,34 @@ func clearHighlightedVerse(state *AppState) {
 	state.clearMark()
 }
 
+// captureSuppressionTake records, at a foreign-mark verb's ENTRY, whether the
+// suppression the mark is about to cause takes an OPEN note off the page. book
+// and chapter are the arrival's target: only a mark landing on the chapter the
+// reader is already standing on can take the note in front of their eyes —
+// a cross-chapter arrival suppresses a note the reader never had open, and the
+// release must not open it for them (the report-C rule).
+//
+// Called BEFORE the verb navigates, because the navigation's own derive
+// transiently opens the chapter's note and would make a later capture lie
+// (see AppState.suppressionTookOpen). When an earlier foreign mark already
+// owns the page, a new mark on the SAME chapter merely replaces it — what the
+// FIRST suppression took is still the truth, so the record is kept; a new
+// chapter restarts the question.
+func (s *AppState) captureSuppressionTake(book string, chapter int) {
+	if s == nil {
+		return
+	}
+	if s.mark.live() && !s.mark.fromNote() {
+		if book == s.CurrentBook && chapter == s.CurrentChapter {
+			return // the same page's jailer changes; the debt does not
+		}
+		s.suppressionTookOpen = false
+		return
+	}
+	s.suppressionTookOpen = s.ActiveNote != "" && !s.NoteMinimized &&
+		book == s.CurrentBook && chapter == s.CurrentChapter
+}
+
 // clearHighlightAndRederive is the clear verb the highlight's own controls end
 // on — the native "Clear highlight" tap (bibleTextHighlightCleared) and the
 // back-to-results bar's X and Back. Clearing a foreign mark releases the
@@ -866,9 +928,40 @@ func clearHighlightedVerse(state *AppState) {
 // bubble with its verse unwashed until the next navigation re-derived. The
 // navigation paths keep calling clearHighlightedVerse bare: they all funnel
 // through addRecentChapter, whose own tail ends on this same projection.
+//
+// RELEASE GIVES BACK WHAT SUPPRESSION TOOK, NEVER MORE (owner, 2026-08-19).
+// The July rule said a suppressed note RESTORES when the search clears; the
+// honest synthesis with tonight's report ("a minimized note maximizes") is:
+// if the note was OPEN when the foreign mark arrived, clearing re-opens it
+// whole (the July rule, unchanged); if it was only ever a pill here — stored-
+// minimized, or it arrived DURING the suppression and the reader never saw it
+// open — clearing leaves it a pill, and the reader's own tap is what opens it.
+// The record is the verbs' entry-time capture (captureSuppressionTake);
+// nothing here is stored, and the next navigation restarts the question.
 func clearHighlightAndRederive(state *AppState) {
+	if state == nil {
+		return
+	}
+	releaseToPill := state.mark.live() && !state.mark.fromNote() && !state.suppressionTookOpen
+	state.suppressionTookOpen = false // the suppression ends with its mark
 	clearHighlightedVerse(state)
+	if !releaseToPill {
+		applyNoteForCurrentChapter(state)
+		return
+	}
+	// The suppression took nothing open, so the release opens nothing: focus
+	// falls to NONE (the plan keeps every note a chip — N3's spelling of "do
+	// not open on release") and the Apple mirror is collapsed SESSION-ONLY —
+	// no store write, exactly like the derived suppression it replaces. The
+	// pill carries no wash, matching Hide's "bubble and highlight come down
+	// together"; the reader's tap (the pill press / a chip tap) is the Show
+	// verb and opens the note whole.
+	state.focusNone()
 	applyNoteForCurrentChapter(state)
+	if state.ActiveNote != "" {
+		state.NoteMinimized = true
+		state.clearMarkFromNote()
+	}
 }
 
 func clearSearchState(state *AppState) {

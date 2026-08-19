@@ -191,38 +191,215 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 	}
 }
 
-// The owner's report, exactly: a MINIMIZED note tapped in the list while a
-// search mark is still standing must land on the reading pane EXPANDED — not
-// as the pill. Both halves of the "sometimes" are here: the stored minimize
-// (the Show verb clears it) and the leftover foreign mark (the choice
-// displaces it).
+// The owner's report, exactly: "clicking a note from the note browser does not
+// always show it (it seems often still minimized pill)". A browser tap must
+// ALWAYS answer, through EVERY route — this is the route table. Each route is
+// a way the verify pass confirmed a tap could end at the pill, at nothing, or
+// on an invalid chapter; each row asserts the route now lands the way the
+// reader asked. Common to all: a browser arrival raises NO results trail
+// (owner clarification, 2026-08-19: a row tap is a navigation, not a search
+// hit — the way back to the list is the Search tab's Notes mode).
 func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
-	app := test.NewApp()
-	defer app.Quit()
-	setNotesEnabled(true)
-	defer deleteAllNotes(appPrefs())
+	t.Run("minimized under a leftover foreign mark", func(t *testing.T) {
+		// Both halves of the "sometimes": the stored minimize (the Show verb
+		// clears it) and the leftover foreign mark (the choice displaces it).
+		app := test.NewApp()
+		defer app.Quit()
+		setNotesEnabled(true)
+		defer deleteAllNotes(appPrefs())
 
-	stored, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 2, VerseHi: 3, Text: "n", Minimized: true})
-	if !ok {
-		t.Fatal("the note was not stored")
-	}
-	st := psalm23State()
-	// A search the reader ran earlier still owns the page.
-	goToVerseRange(st, "Psalms", 23, 1, 1)
-	if !notesSuppressed(st) {
-		t.Fatal("precondition: the foreign mark should stand the notes down")
-	}
+		stored, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "Psalms", Chapter: 23, VerseLo: 2, VerseHi: 3, Text: "n", Minimized: true})
+		if !ok {
+			t.Fatal("the note was not stored")
+		}
+		st := psalm23State()
+		// A search the reader ran earlier still owns the page.
+		goToVerseRange(st, "Psalms", 23, 1, 1)
+		if !notesSuppressed(st) {
+			t.Fatal("precondition: the foreign mark should stand the notes down")
+		}
 
-	openNote(st, stored)
+		openNote(st, stored)
 
-	if st.NoteMinimized || notesSuppressed(st) || st.ActiveNote == "" {
-		t.Fatalf("the tapped note must land OPEN: min=%v suppressed=%v active=%q",
-			st.NoteMinimized, notesSuppressed(st), st.ActiveNote)
-	}
-	if st.NoteID != stored.ID {
-		t.Errorf("the sticker holds note %d, want the tapped %d", st.NoteID, stored.ID)
-	}
+		if st.NoteMinimized || notesSuppressed(st) || st.ActiveNote == "" {
+			t.Fatalf("the tapped note must land OPEN: min=%v suppressed=%v active=%q",
+				st.NoteMinimized, notesSuppressed(st), st.ActiveNote)
+		}
+		if st.NoteID != stored.ID {
+			t.Errorf("the sticker holds note %d, want the tapped %d", st.NoteID, stored.ID)
+		}
+		if st.CanReturnToSearchResults {
+			t.Error("a browser arrival must raise no results trail")
+		}
+	})
+
+	t.Run("parked behind a download, then the translation lands", func(t *testing.T) {
+		// Report A mechanism 2: the park used to be consumed as a LINK arrival,
+		// whose bare hlLinkSpan is foreign to the note — the reader waited out
+		// the download and got the pill. The park now remembers the Show
+		// intent (pendingNoteOpenID) and the arrival re-runs openNote.
+		app := test.NewApp()
+		defer app.Quit()
+		setNotesEnabled(true)
+		deleteAllNotes(appPrefs())
+		defer deleteAllNotes(appPrefs())
+
+		stored, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb",
+			Book: "John", Chapter: 3, VerseLo: 16, Text: "bsb words", Minimized: true})
+		if !ok {
+			t.Fatal("the note was not stored")
+		}
+		st := planTestState(t)
+		st.versionLoading = true // another load owns the spinner: openNote parks behind it
+
+		openNote(st, stored)
+
+		if st.pendingLink == nil || st.pendingLinkVersion != "bsb" {
+			t.Fatal("precondition: the target should be parked behind the running load")
+		}
+		if st.pendingNoteOpenID != stored.ID {
+			t.Fatalf("the park must remember the Show intent: pendingNoteOpenID=%d, want %d",
+				st.pendingNoteOpenID, stored.ID)
+		}
+
+		// The download lands. applyLoadedVersion's tail consumes the park —
+		// and must open THAT note, not a link-arrival's suppressed pill.
+		st.versionLoading = false
+		v, vok := versionByID("bsb")
+		if !vok {
+			t.Skip("bsb not registered")
+		}
+		bd := NewBibleData()
+		bd.PopulateWithSampleVerses()
+		applyLoadedVersion(st, v, bd, modeReal)
+
+		if st.CurrentBook != "John" || st.CurrentChapter != 3 {
+			t.Fatalf("the arrival did not land on the passage: %s %d", st.CurrentBook, st.CurrentChapter)
+		}
+		if st.NoteID != stored.ID || st.ActiveNote != "bsb words" {
+			t.Fatalf("the arrival must open the tapped note: id=%d active=%q", st.NoteID, st.ActiveNote)
+		}
+		if st.NoteMinimized || notesSuppressed(st) {
+			t.Fatalf("the note arrived collapsed after the wait: min=%v suppressed=%v — "+
+				"the pill the owner reported", st.NoteMinimized, notesSuppressed(st))
+		}
+		if !st.mark.fromNote() {
+			t.Error("the arrival's mark must be the note's own, never a link span")
+		}
+		if st.pendingNoteOpenID != 0 {
+			t.Error("the Show intent must be consumed with the park")
+		}
+		if st.CanReturnToSearchResults {
+			t.Error("a browser arrival must raise no results trail")
+		}
+	})
+
+	t.Run("a park dropped by another translation drops the intent too", func(t *testing.T) {
+		app := test.NewApp()
+		defer app.Quit()
+		setNotesEnabled(true)
+		deleteAllNotes(appPrefs())
+		defer deleteAllNotes(appPrefs())
+
+		stored, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb",
+			Book: "John", Chapter: 3, VerseLo: 16, Text: "bsb words"})
+		st := planTestState(t)
+		st.versionLoading = true
+		openNote(st, stored)
+		if st.pendingNoteOpenID != stored.ID {
+			t.Fatal("precondition: the park should carry the Show intent")
+		}
+
+		// WEBC arrives instead of the BSB the park was waiting for: the stale
+		// target is dropped — and the note id must die with it, or a LATER
+		// link's park would open a note nobody just tapped.
+		st.versionLoading = false
+		other, vok := versionByID("webc")
+		if !vok {
+			t.Skip("webc not registered")
+		}
+		bd := NewBibleData()
+		bd.PopulateWithSampleVerses()
+		applyLoadedVersion(st, other, bd, modeReal)
+
+		if st.pendingNoteOpenID != 0 {
+			t.Error("the Show intent survived the park it rode on")
+		}
+	})
+
+	t.Run("your own note answers with its verses lit", func(t *testing.T) {
+		// Report A mechanism 1: mine notes are excluded from the chapter plan
+		// (owner: stored, never drawn in the text), so focusing one named an id
+		// no plan surfaces — the reader landed on the other notes' pill, or on
+		// nothing. The tap now navigates and lights the note's own range as a
+		// Go-to arrival; no received-note bubble is faked.
+		app := test.NewApp()
+		defer app.Quit()
+		setNotesEnabled(true)
+		deleteAllNotes(appPrefs())
+		defer deleteAllNotes(appPrefs())
+
+		mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+			Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "sent to Dad"})
+		if !ok {
+			t.Fatal("the note was not stored")
+		}
+		st := planTestState(t)
+		st.forceReposition = false
+
+		openNote(st, mine)
+
+		if st.CurrentBook != "Psalms" || st.CurrentChapter != 23 {
+			t.Fatalf("did not navigate: %s %d", st.CurrentBook, st.CurrentChapter)
+		}
+		sp, live := st.markSpan()
+		if !live || sp.Lo != 1 || sp.Hi != 2 {
+			t.Fatalf("your note's verses must light on arrival: live=%v span=%+v", live, sp)
+		}
+		if st.mark.fromNote() {
+			t.Error("a mine note never raises hlNote — the mark must be honest about its origin")
+		}
+		if st.mark.Origin != hlVerseOfDay {
+			t.Errorf("the arrival should read as a Go-to (the reader asked to BE here), got %v", st.mark.Origin)
+		}
+		if st.ActiveNote != "" || st.NoteID != 0 {
+			t.Errorf("no received-note bubble may be faked for your own words: active=%q id=%d",
+				st.ActiveNote, st.NoteID)
+		}
+		if !st.forceReposition {
+			t.Error("the arrival must place the view on the lit verses")
+		}
+		if st.CanReturnToSearchResults {
+			t.Error("a browser arrival must raise no results trail")
+		}
+	})
+
+	t.Run("a chapter this canon lacks is clamped, never landed on raw", func(t *testing.T) {
+		app := test.NewApp()
+		defer app.Quit()
+		setNotesEnabled(true)
+		deleteAllNotes(appPrefs())
+		defer deleteAllNotes(appPrefs())
+
+		stored, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 99, VerseLo: 1, Text: "future chapter"})
+		st := planTestState(t)
+
+		openNote(st, stored)
+
+		nums := st.Bible.GetChapterNumbersForBook("John")
+		valid := false
+		for _, c := range nums {
+			if c == st.CurrentChapter {
+				valid = true
+			}
+		}
+		if !valid {
+			t.Fatalf("landed on chapter %d, which %v does not contain — the raw assignment "+
+				"persisted an invalid chapter and broke the next launch's restore", st.CurrentChapter, nums)
+		}
+	})
 }
 
 // A whole-chapter note (no verse) must not claim a bogus highlight on verse 0.

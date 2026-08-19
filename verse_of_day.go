@@ -276,6 +276,10 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 	if end < start {
 		end = start
 	}
+	// BEFORE the navigation: what would this arrival's mark suppress? (See
+	// AppState.suppressionTookOpen — the navigation's derive transiently opens
+	// the chapter's note, so a later capture would lie.)
+	state.captureSuppressionTake(book, chapter)
 	selectBook(state, book, false)
 	state.CurrentChapter = chapter
 	addRecentChapter(state, book, chapter)
