@@ -224,6 +224,14 @@ func devAutoNotesS8(state *AppState) {
 		if scenario == "s10ctx" {
 			at(11*time.Second, func() { restoreCurrentNote(state); state.refreshReadingOnly() })
 		}
+		// …then SCROLL BACK to the paragraph above. The arrival pins the band
+		// to the top of the pane, which is right for an arrival and wrong for
+
+		// the note, and the paragraph below in one frame. armReadingRestore is
+		// the panes' own one-shot scroll target (the same machinery that
+		// reopens a chapter where the reader left off), so this asks for the
+		// verse two above the note's own and lets the pane place it.
+		at(15*time.Second, func() { armReadingRestore(4, 0, 0) })
 	case "linkscroll":
 
 		// is CurrentTab + rebuildWindow — no widget to tap): front the Links

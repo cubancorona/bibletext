@@ -109,6 +109,12 @@ public final class BtBridge {
     // fallbacks, which match the app's light parchment).
     private static int noteBg = 0xFFF7F3EA, noteFg = 0xFF262119, noteMuted = 0xFF6B6455,
                        noteAccent = 0xFF2E4C87, noteBorder = 0xFFBDB49E;
+    // NOTE_DEBUG gates the sticker's own trace (what Go pushed, whether the
+    // pane was laid out, what got built). Off in normal builds; flip it when
+    // the sticker misbehaves — it is what found the arrival delivering the
+    // WRONG note's tuple.
+    static final boolean NOTE_DEBUG = false;
+    private static boolean noteRetryPending;
     private static NoteBandSpan noteBandSpan; // the live band, so a refresh can take it back
 
     /**
@@ -1068,6 +1074,8 @@ public final class BtBridge {
                 noteMuted = muted;
                 noteAccent = accent;
                 noteBorder = border;
+                if (NOTE_DEBUG) android.util.Log.i("BtNote", "setNote t=" + (t == null ? "null" : t.length() + "ch")
+                        + " w=" + w + " pill=" + pill + " anchor=" + anchorVerse + " changed=" + changed);
                 if (changed) refreshNoteSticker();
             }
         });
@@ -1090,14 +1098,39 @@ public final class BtBridge {
      * index), and the content width listener (first layout, rotation).
      */
     private static void refreshNoteSticker() {
-        if (content == null || text == null) return;
+        if (content == null || text == null) {
+            if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: no content/text yet");
+            return;
+        }
         if (noteView != null) { content.removeView(noteView); noteView = null; }
         if (notePillView != null) { content.removeView(notePillView); notePillView = null; }
         clearNoteBand();
-        if (!notePresent()) return;
+        if (!notePresent()) {
+            if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: notePresent=false — nothing to draw");
+            return;
+        }
         int side = dp(10);
         int wpx = content.getWidth() - 2 * side;
-        if (wpx < dp(60)) return; // no real layout yet — the width listener re-runs this
+        if (wpx < dp(60)) {
+            // No real layout yet. The width LISTENER only fires when the width
+            // CHANGES, so on an arrival into an already-sized pane it never
+            // fires again and the sticker is simply never built — the band is
+            // reserved and the card is missing, which is exactly what the
+            // owner saw ("the highlight… too high": an empty reservation with
+            // nothing in it). Ask again after this layout pass instead of
+            // waiting for a change that will not come.
+            if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: content width too small (" + wpx + ") — retrying");
+            if (!noteRetryPending) {
+                noteRetryPending = true;
+                content.post(new Runnable() {
+                    @Override public void run() {
+                        noteRetryPending = false;
+                        refreshNoteSticker();
+                    }
+                });
+            }
+            return;
+        }
 
         boolean pillNow = notePillNow();
         View v = pillNow ? buildNotePill() : buildNoteBubble();
@@ -1121,6 +1154,8 @@ public final class BtBridge {
         final int gapAbove = dp(NOTE_GAP_ABOVE), gapBelow = dp(NOTE_GAP_BELOW);
         final int noteH = v.getMeasuredHeight();
 
+        if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: building, wpx=" + wpx + " pill=" + pillNow
+                + " anchor=" + noteAnchorVerse + " verseIdx=" + verseNums.length);
         int[] r = noteAnchorVerse > 0 ? verseRange(noteAnchorVerse) : null;
         if (r == null) {
             // Nothing to anchor to (verse 0 = unplaced-only, or a verse this
