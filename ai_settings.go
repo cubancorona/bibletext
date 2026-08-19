@@ -756,6 +756,13 @@ func showAISettings(state *AppState) {
 	hint := canvas.NewText(hintCopy, pal.TextMuted)
 	hint.TextSize = 11
 
+	// sheet's non-scrolling foot: the site is where the download links, the
+	// support page and the web reader live, and Settings is the one place a
+	// reader goes looking for "about this app". A Hyperlink at the hint's own
+	// size, centered, no heading, no icon — chrome, not content.
+	site := widget.NewHyperlink("bibletext.co.uk", &url.URL{Scheme: "https", Host: "bibletext.co.uk", Path: "/"})
+	siteRow := container.NewCenter(container.NewThemeOverride(site, compactTheme{Theme: state.theme, text: 11}))
+
 	// The settings body scrolls; the title bar and the closing hint do not. A sheet
 	// with a scrolling middle keeps the ✕ reachable no matter how long the body
 	// grows, which is the failure this replaced: the sheet used to be exactly as
@@ -771,7 +778,7 @@ func showAISettings(state *AppState) {
 	formScroll := container.NewVScroll(formBody)
 	inner := container.NewBorder(
 		container.NewVBox(header, widget.NewSeparator()),
-		container.NewPadded(hint),
+		container.NewPadded(container.NewVBox(hint, siteRow)),
 		nil, nil,
 		formScroll,
 	)
