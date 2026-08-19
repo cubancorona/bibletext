@@ -218,6 +218,34 @@ tasks have been tested on both iPhone and iPad against Apple's criteria.
   unclaimed until a device audit proves all common tasks.
 - Captions and Audio Descriptions do not apply to the Bible narration feature.
 
+## Pre-submission read-back — run this before every submission
+
+App Store Connect **copies a new version record from the previous one**. Every
+per-release field therefore arrives already populated, already plausible, and
+already wrong; there is no empty box to notice. It has now shipped twice:
+
+- **1.2.0's review notes** were 1.1.8's ("VERSION 1.1.8 — HOTFIX", a
+  search-results fix) while its headline feature was shared notes.
+- **1.2.0's screenshots** are byte-identical to 1.1.8's (compared by
+  `sourceFileChecksum`), and their filenames predate even the prepared
+  `screenshots-ready-1.1.8` set — so the store page for the shared-notes release
+  shows no shared note anywhere.
+
+Reading fields one at a time never caught either, because each looked fine
+alone. What catches them is the **comparison against the previous version**:
+
+```sh
+ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 ASC_KEY_ID=XXXX ASC_ISSUER_ID=... \
+python3 appstore/preflight.py
+```
+
+It is read-only, safe to run at any time, and exits non-zero when a field that
+must be release-specific — What's New, review notes, screenshots — is identical
+to the last release's. Fields that are *meant* to be stable (description,
+keywords, marketing and support URLs) are reported as unchanged and not flagged.
+
+Run it, fix what it flags, run it again, and only then submit.
+
 ## App Review notes — the step that was missing until 1.2.0
 
 **Read this before every submission.** The notes App Review reads are
