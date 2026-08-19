@@ -360,7 +360,7 @@ func devLongNoteText() string {
 // assertNoteSpacing holds EVERY distance in the picture to the shared spec
 // (noteMetrics, notes_bubble.go) — the assertion the owner's ask turns into
 // ("measure the pill and note vertical spacing and margins visually … make sure
-// it's the same there"). It runs on all twelve permutations × light/dark, in
+// it's the same there"). It runs on all fourteen permutations × light/dark, in
 // both the expanded and the pill state, so a spacing change on this pane cannot
 // land without either matching the table or moving it.
 //

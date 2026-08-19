@@ -29,7 +29,7 @@ interesting".
 - **`notes_spacing_spec_test.go`** parses the three native sources and fails if
   a literal or a shape leaves the Go table behind. It runs on a Mac for
   platforms a Mac cannot compile.
-- **`reading_styled_note_gallery_test.go`** renders 12 permutations × light and
+- **`reading_styled_note_gallery_test.go`** renders 14 permutations × light and
   dark to a real software canvas, asserting the geometry before it writes each
   PNG.
 - **`scripts/view-test-gate.sh`** plants defects in the note surfaces and

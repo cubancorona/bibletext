@@ -52,10 +52,20 @@ func buildReadingViewMobileFyne(state *AppState) fyne.CanvasObject {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeader(state, chapterNumbers))
-	// The chapter's shared note. This fallback pane is reached when the BtBridge
-	// overlay is absent, and it used to inherit the modal arrival card; that card
-	// is gone now that every pane shows the note inline, so without this the note
-	// would have no surface here at all.
+	// The chapter's shared note — and as of 19 Aug this call is INERT here, which
+	// is a known gap rather than a tidy design. buildNoteBanner asks
+	// nativeNoteSticker(), which is now true for android outright
+	// (notes_sticker_native_on.go), so it returns nil and this pane draws no note
+	// surface at all. The seam answers for the PLATFORM; this pane is the arm
+	// where the platform's sticker is precisely what is missing — it is reached
+	// only when the BtBridge dex class did not resolve (btaAvailable false), and
+	// there is no overlay to draw the sticker.
+	//
+	// It is left alone deliberately: teaching the seam to answer btaAvailable is
+	// a one-line change, but btaAvailable is set during native pane construction,
+	// and getting its timing wrong would suppress the sticker on the path every
+	// real device takes — a far worse trade than a missing note on a fallback a
+	// working install never reaches. Recorded in docs/NOTES_SCRAPBOOK.md.
 	if banner := buildNoteBanner(state); banner != nil {
 		top.Add(banner)
 	}

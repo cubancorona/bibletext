@@ -1604,7 +1604,7 @@ compiled here.
 
 The styled pane's numbers are additionally checked as **geometry** — the gallery
 (`reading_styled_note_gallery_test.go`) asserts gap above, gap below, tail depth,
-card padding, who row, who→body gap and pill height on all twelve permutations ×
+card padding, who row, who→body gap and pill height on all fourteen permutations ×
 light/dark, expanded and pill. It is the only surface whose pixels can be
 measured on this machine, so it is where the table is proved rather than spelled.
 
@@ -1689,6 +1689,22 @@ paragraph's worth of advance and the sticker is still placed from the band's own
 top.
 
 ## Future work
+
+**OPEN, Android: the Fyne fallback pane has no note surface (found 19 Aug 2026
+by a pre-push audit).** `buildReadingViewMobileFyne` (reading_mobile.go) is the
+pane used when the BtBridge dex class does not resolve — `btaAvailable` false,
+so there is no overlay and no native sticker. It calls `buildNoteBanner`, which
+asks `nativeNoteSticker()`, which is now unconditionally true for android since
+the sticker shipped: the call returns nil and the pane draws no note at all. The
+seam answers for the PLATFORM, but this pane is exactly the arm where the
+platform's sticker is missing.
+
+The one-line fix — have the android build override `nativeNoteSticker` to
+return `btaAvailable` — is deliberately NOT taken yet: `btaAvailable` is set
+during native pane construction, and mistiming it would suppress the sticker on
+the path every working install takes. That trade is much worse than a missing
+note on a fallback a working install never reaches. Whoever takes it should
+establish the ordering first.
 
 **OPEN, Android: an arriving note does not scroll to itself on a cold start
 (observed 19 Aug 2026).** Delivering a note link for John 11:35 to a
