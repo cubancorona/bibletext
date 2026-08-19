@@ -24,9 +24,21 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	title.TextSize = 17
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
+	// Dev builds running the platform mimic (BIBLETEXT_MIMIC, dev_mimic_on.go)
+	// carry a loud badge beside the title, so a screenshot from this mode can
+	// never masquerade as the real platform. devMimicLabel() is a constant ""
+	// in release builds — this whole block is dead code there.
+	titleRow := fyne.CanvasObject(title)
+	if label := devMimicLabel(); label != "" {
+		badge := canvas.NewText(label, pal.Accent)
+		badge.TextSize = 13
+		badge.TextStyle = fyne.TextStyle{Bold: true}
+		titleRow = container.NewHBox(title, badge)
+	}
+
 	// The subtitle doubles as the translation switcher (WEB / NRSV / LSB), with a
 	// TESTING badge when a version is showing placeholder text (see versions.go).
-	left := container.NewVBox(title, versionSelector(state))
+	left := container.NewVBox(titleRow, versionSelector(state))
 
 	// On the regular (iPad) layout, a leading sidebar-toggle button (the platform
 	// sidebar.left convention) hides/shows the navigation sidebar so the reader can

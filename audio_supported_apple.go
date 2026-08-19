@@ -8,6 +8,7 @@ package bibletext
 // so the reading header shows no audio control.
 func audioSupported() bool { return true }
 
-// ttsSupported: AVSpeechSynthesizer-backed read-aloud is part of both Apple
-// engines, so every chapter has an audio source even without a recording.
-func ttsSupported() bool { return true }
+// ttsSupportedOnPlatform: AVSpeechSynthesizer-backed read-aloud is part of both
+// Apple engines, so every chapter has an audio source even without a recording.
+// Read through the ttsSupported var seam (audio.go).
+const ttsSupportedOnPlatform = true

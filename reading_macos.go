@@ -2055,6 +2055,15 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 // setReadingOverlayVisible shows/hides the NSTextView (called from
 // buildReadingPane when switching between reading and search results).
 func setReadingOverlayVisible(visible bool) {
+	// When the styled pane is the reading surface (the mimic dev mode, or a test
+	// pinning the seam), there is no native overlay to show or hide — and the
+	// show path MUST not run: bibleTextMacTVShow → bibleTextMacEnsureTV would
+	// CREATE an empty native scroll view floating over the canvas. Matches
+	// reading_fyne.go's no-op. Release darwin: useStyledPane() is the false
+	// platform constant, so this branch is dead and the path is byte-identical.
+	if useStyledPane() {
+		return
+	}
 	if visible {
 		C.bibleTextMacTVShow()
 	} else {
@@ -2065,14 +2074,26 @@ func setReadingOverlayVisible(visible bool) {
 func hideNativeReadingOverlayMac() { C.bibleTextMacTVHide() }
 
 // nativeShareText / nativeShareImage present the macOS share sheet for the
-// selection-menu Share actions (see share.go).
+// selection-menu Share actions (see share.go). Under the platform-mimic dev
+// mode they take the Windows/Linux fallback bodies instead (share_fallback.go:
+// clipboard + notice popup, save-to-Downloads + file-manager reveal) so the
+// real desktop-other share UX can be eyeballed here. devMimicTarget() is a
+// constant "" in release builds (dev_mimic_off.go) — the branch is dead code.
 func nativeShareText(s string) {
+	if devMimicTarget() != "" {
+		fallbackShareText(s)
+		return
+	}
 	c := C.CString(s)
 	defer C.free(unsafe.Pointer(c))
 	C.bibleTextShareText(c)
 }
 
 func nativeShareImage(path string) {
+	if devMimicTarget() != "" {
+		fallbackShareImage(path)
+		return
+	}
 	c := C.CString(path)
 	defer C.free(unsafe.Pointer(c))
 	C.bibleTextShareImageFile(c)
@@ -2216,12 +2237,28 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 
 // captureReadingAnchor / armReadingRestore bridge the reading-position restore
 // (reading_state.go) to the native NSTextView scroll machinery.
+//
+// The styled pane delegates first — the same two-line delegation
+// reading_scroll_fyne.go carries. Unconditionally safe in release:
+// styledScroll/styledPane are only ever assigned inside styledReadingScrollArea
+// (reading_styled_area.go), which release macOS never builds, so
+// styledAnchorActive() is constant-false there and the C machinery is reached
+// exactly as before. Under the mimic dev mode it is what keeps position
+// persistence and history restore alive — without it flushReadingState would
+// read the dead NSTextView and silently save nothing.
 func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
+	if styledAnchorActive() {
+		return captureStyledAnchor()
+	}
 	a := C.bibleTextMacCaptureAnchor()
 	return int(a.verse), float64(a.delta), float64(a.frac), a.ok != 0
 }
 
 func armReadingRestore(verse int, delta, frac float64) {
+	if styledAnchorActive() {
+		armStyledRestore(verse, delta, frac)
+		return
+	}
 	C.bibleTextMacArmRestore(C.int(verse), C.double(delta), C.double(frac))
 }
 
@@ -2308,18 +2345,38 @@ func pushNativeTint(state *AppState, verses []Verse, repaint C.int) {
 // readAlongHighlight tints the verse being narrated (0 clears) and follow-scrolls it
 // into view; readAlongClear removes the tint. Both run on the macOS main thread — the
 // audio time-observer's main queue, or the Fyne UI goroutine (which is that thread).
+//
+// When the styled pane is the reading surface (the mimic dev mode) the wash is
+// forwarded to the styled helpers on the UI goroutine, exactly as
+// readalong_other.go does on Windows/Linux — the C calls below would paint an
+// invisible native view while the styled pane showed nothing. Release darwin:
+// useStyledPane() is the false platform constant; the branch is dead.
 func readAlongHighlight(verse int, follow bool) {
+	if useStyledPane() {
+		fyne.Do(func() { styledReadAlongApply(verse, follow) })
+		return
+	}
 	f := C.int(0)
 	if follow {
 		f = 1
 	}
 	C.bibleTextMacHighlightVerse(C.int(verse), f)
 }
-func readAlongClear() { C.bibleTextMacReadAlongClear() }
+func readAlongClear() {
+	if useStyledPane() {
+		fyne.Do(styledReadAlongClearTint)
+		return
+	}
+	C.bibleTextMacReadAlongClear()
+}
 
 // readAlongFollowButton shows/hides the native floating "Follow narration" pill
 // over the reading pane (audio_controller drives it around follow suspension).
 func readAlongFollowButton(show bool) {
+	if useStyledPane() {
+		fyne.Do(func() { styledReadAlongSetPill(show) })
+		return
+	}
 	s := C.int(0)
 	if show {
 		s = 1

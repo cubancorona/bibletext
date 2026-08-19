@@ -10,4 +10,4 @@ package bibletext
 // a wash change is a re-render on both, and a re-render already carries the
 // scroll. Nothing on these platforms should be asked to declare a reposition it
 // gets for free.
-const washIsLiveMutation = false
+const washIsLiveMutationOnPlatform = false
