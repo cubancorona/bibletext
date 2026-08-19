@@ -824,6 +824,12 @@ public final class BtBridge {
                              NOTE_WHO_H = 14, NOTE_WHO_GAP = 4, NOTE_TAIL = 9,
                              NOTE_TAIL_W = 18, NOTE_TAIL_X = 24,
                              NOTE_RADIUS = 10, NOTE_PILL_H = 28;
+    // The pill's side padding and width floor — spec too (noteMetrics PillPadX /
+    // PillMinW), and NOT NOTE_PAD: the pill is one line of chrome and wants more
+    // air beside its text than a paragraph does. This pane had NOTE_PAD and no
+    // floor at all, so a short label ("Note") made a visibly smaller pill here
+    // than on the phone beside it.
+    private static final int NOTE_PILL_PAD_X = 14, NOTE_PILL_MIN_W = 86;
     // NOT spec: the verb button's size, this platform's own touch target. The
     // verbs used to sit IN the card's vertical flow, so an 18sp glyph plus its
     // padding — not the spec — set the who row's height and pushed the byline
@@ -1490,9 +1496,14 @@ public final class BtBridge {
         // plus a vertical padding happened to wrap to — it was ~26dp here, 30 on
         // iOS and 24 on macOS, all three of them the platform's VERB BUTTON size
         // leaking into a piece of content.
-        chip.setPadding(dp(NOTE_PAD), 0, dp(NOTE_PAD), 0);
-        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setPadding(dp(NOTE_PILL_PAD_X), 0, dp(NOTE_PILL_PAD_X), 0);
+        // CENTER, not CENTER_VERTICAL: with a width floor the box is wider than
+        // a short label, and iOS centres its title inside the same box (a
+        // UIButton whose frame is the pill's bounds). Left-aligned text in a
+        // floored pill reads as a mistake.
+        chip.setGravity(Gravity.CENTER);
         chip.setMinHeight(dp(NOTE_PILL_H)); // a minimum, not a box — see the who row
+        chip.setMinWidth(dp(NOTE_PILL_MIN_W));
         chip.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { nativeNoteRestored(); }
         });

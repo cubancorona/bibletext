@@ -278,9 +278,9 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 		if g.pillText == "" {
 			g.pillText = "Note"
 		}
-		w := styledUIMeasure(g.pillText, styledNoteWhoSz, true).Width + 28
-		if w < 86 {
-			w = 86
+		w := styledUIMeasure(g.pillText, styledNoteWhoSz, true).Width + 2*noteMetrics().PillPadX
+		if w < noteMetrics().PillMinW {
+			w = noteMetrics().PillMinW
 		}
 		if w > width {
 			w = width
@@ -433,13 +433,34 @@ func (r *styledPaneRenderer) buildNote() {
 		r.notePill = frame
 		r.objects = append(r.objects, frame)
 
-		btn := widget.NewButton(g.pillText, func() {
+		// THE LABEL IS DRAWN, NOT LABELLED — and that is the whole difference
+		// between this pill and iOS's. A widget.Button renders its title in the
+		// THEME's text size and foreground colour: 18pt in the body ink on this
+		// pane, where iOS draws 11pt semibold in the MUTED ink (btNoteWhoFont,
+		// gNoteMuted). The pill was measured at 11pt all along
+		// (measureStyledNote, styledNoteWhoSz) and then drawn at 18, so the text
+		// overflowed a box sized for something smaller and shouted in a colour
+		// the note's own chrome never uses (owner-reported, comparing the two
+		// side by side).
+		//
+		// So the button keeps the TAP and gives up the TEXT — the same split the
+		// next-tap control next door already uses: an empty LowImportance button
+		// over drawn text. Both halves are positioned from the one geometry
+		// table in positionNote, so the hit target cannot drift off the label.
+		btn := widget.NewButton("", func() {
 			restoreCurrentNote(p.state)
 			p.state.refreshReadingOnly()
 		})
 		btn.Importance = widget.LowImportance
 		r.noteBtns = append(r.noteBtns, btn)
 		r.objects = append(r.objects, btn)
+
+		label := canvas.NewText(g.pillText, pal.TextMuted)
+		label.TextSize = styledNoteWhoSz
+		label.TextStyle = fyne.TextStyle{Bold: true}
+		label.Alignment = fyne.TextAlignCenter
+		r.noteTexts = append(r.noteTexts, label)
+		r.objects = append(r.objects, label)
 		return
 	}
 
@@ -535,6 +556,17 @@ func (r *styledPaneRenderer) positionNote() {
 		if len(r.noteBtns) > 0 {
 			r.noteBtns[0].Move(g.card.pos())
 			r.noteBtns[0].Resize(g.card.size())
+		}
+		// The label centres in the pill on BOTH axes, as iOS's chip does
+		// (chip.frame = gNoteView.bounds on a UIButton, which centres its
+		// title). Horizontally that is Alignment centre over the pill's full
+		// width; vertically it is the same "canvas.Text draws from its top-left
+		// at its intrinsic height" correction the card's chrome uses below.
+		if len(r.noteTexts) > 0 {
+			t := r.noteTexts[0]
+			h := t.MinSize().Height
+			t.Move(fyne.NewPos(g.card.X, g.card.Y+(g.card.H-h)/2))
+			t.Resize(fyne.NewSize(g.card.W, h))
 		}
 		return
 	}

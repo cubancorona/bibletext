@@ -1248,6 +1248,10 @@ static NSFont *btMacNoteWhoFont(void)  { return [NSFont systemFontOfSize:10 weig
 // 1.27) — and this pane's who font is 10pt, not 11; a flat 14 in the table would
 // be the wrong box here.
 static const CGFloat kMacNoteGapAbove = 10, kMacNoteGapBelow = 10, kMacNotePad = 12;
+// The pill's side padding and width floor — spec (noteMetrics PillPadX /
+// PillMinW). This pane had 12/76 of its own, which made the same "Notes · 3"
+// visibly narrower here than on the phone beside it.
+static const CGFloat kMacNotePillPadX = 14, kMacNotePillMinW = 86;
 static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kMacNoteRad = 10;
 // kMacNoteBtn is NOT spec: it is the verb button's size, this platform's 24pt
 // pointer target. The pill used to borrow it (24), which is how a pointer-target
@@ -1697,8 +1701,8 @@ static void btMacLayoutNote(void) {
         // narrower than the old fixed chip and never wider than the column.
         NSString *title = gMacNoteWho ?: @"Note";
         CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btMacNoteWhoFont()}].width);
-        CGFloat cw = tw + 24;
-        if (cw < 76) cw = 76;
+        CGFloat cw = tw + 2 * kMacNotePillPadX;
+        if (cw < kMacNotePillMinW) cw = kMacNotePillMinW;
         if (cw > w) cw = w;
         gMacNoteView.frame = NSMakeRect(x, y, cw, kMacNotePill);
         NSView *chip = [gMacNoteView viewWithTag:901];

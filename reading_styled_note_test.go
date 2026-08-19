@@ -583,7 +583,17 @@ func TestStyledStickerVerbsFire(t *testing.T) {
 		st, _ := styledNoteFixture(t, []int{2}, []string{"beta words on two"})
 		hideCurrentNote(st)
 		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
-		pill := seenPaneButton(t, p, size, "Note")
+		// The pill's press target carries NO text of its own — the label is
+		// drawn (canvas.Text at the who size, in the muted ink) so that it
+		// matches iOS's chip rather than the theme's button styling, exactly as
+		// the counts control above does. A collapsed sticker has this one
+		// control, so "the button with no text" names it unambiguously.
+		var pill *widget.Button
+		for _, b := range seenPaneButtons(t, p, size) {
+			if b.Text == "" {
+				pill = b
+			}
+		}
 		if pill == nil {
 			t.Fatal("no visible pill after the note was minimized")
 		}
@@ -978,5 +988,97 @@ func TestStyledNoteBandIsSymmetric(t *testing.T) {
 					g.card.Y, g.card.Y+g.card.H, p.lay.BandY, p.lay.BandY+p.lay.BandH)
 			}
 		})
+	}
+}
+
+// TestStyledPillMatchesTheApplePill holds the collapsed marker to the SAME
+// numbers and the same ink as iOS's chip, because the two sit side by side on
+// the owner's desk and any drift shows immediately (owner, 19 Aug: "in mimic
+// mode the pills don't look like iOS… spacing and coloring and text color").
+//
+// WHAT WENT WRONG BEFORE, and what this therefore guards: the pill was
+// MEASURED at the who size (11pt semibold, matching btNoteWhoFont) and then
+// DRAWN by a widget.Button, which renders its title in the THEME's size and
+// foreground ink — 18pt body ink on this pane. So the text was two-thirds
+// larger than the box had been sized for and shouted in a colour the note's own
+// chrome never uses. Measuring and drawing had drifted apart with nothing
+// holding them together; this test is that thing.
+//
+// It asserts the DRAWN objects, not the constants that produced them: a test
+// that re-reads styledNoteWhoSz would have passed happily throughout the bug.
+func TestStyledPillMatchesTheApplePill(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st, _ := styledNoteFixture(t, []int{2}, []string{"beta words on two"})
+	hideCurrentNote(st)
+	p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
+
+	w := test.NewWindow(p)
+	defer w.Close()
+	w.Resize(fyne.NewSize(560, 700))
+
+	r := p.CreateRenderer().(*styledPaneRenderer)
+	r.Layout(fyne.NewSize(560, 700))
+	g := p.noteGeom
+	if !g.present || !g.pill {
+		t.Fatal("the sticker is not a pill after hideCurrentNote")
+	}
+
+	// 1. THE BOX. iOS: gNoteView.frame height is kNotePill, corner radius
+	//    kNotePill/2, width = title + 28 clamped to [86, column].
+	if got, want := g.card.H, noteMetrics().PillH; got != want {
+		t.Errorf("pill height %v, want the spec's PillH %v", got, want)
+	}
+	if r.notePill == nil {
+		t.Fatal("no pill shape was built")
+	}
+	if got, want := r.notePill.CornerRadius, g.card.H/2; got != want {
+		t.Errorf("pill corner radius %v, want half its height %v (iOS: kNotePill/2)", got, want)
+	}
+	if g.card.W < 86 {
+		t.Errorf("pill width %v is under the floor iOS keeps (86)", g.card.W)
+	}
+
+	// 2. THE LABEL. iOS draws it in btNoteWhoFont (11pt semibold) in gNoteMuted.
+	if len(r.noteTexts) != 1 {
+		t.Fatalf("a collapsed sticker should draw exactly one text, got %d", len(r.noteTexts))
+	}
+	label := r.noteTexts[0]
+	if got, want := label.TextSize, styledNoteWhoSz; got != want {
+		t.Errorf("pill label is %vpt, want the who size %vpt — this is the exact "+
+			"drift that made the label overflow a box measured for something smaller",
+			got, want)
+	}
+	if !label.TextStyle.Bold {
+		t.Error("pill label is not bold; iOS's chip is semibold (btNoteWhoFont)")
+	}
+	if got, want := label.Color, p.pal.TextMuted; got != want {
+		t.Errorf("pill label ink is %v, want the muted ink %v — the who line is the "+
+			"app's chrome and is muted throughout on every surface", got, want)
+	}
+
+	// 3. THE LABEL FITS ITS BOX. The whole point of measuring at the who size is
+	//    that the drawn text then fits; assert the drawn width really does.
+	if lw := label.MinSize().Width; lw > g.card.W {
+		t.Errorf("pill label wants %vpx inside a %vpx pill — it would be clipped", lw, g.card.W)
+	}
+
+	// 4. THE PRESS TARGET COVERS THE WHOLE PILL, as iOS's chip does
+	//    (chip.frame = gNoteView.bounds). A label that is drawn separately from
+	//    its control is only safe while the two are placed from one table.
+	if len(r.noteBtns) != 1 {
+		t.Fatalf("a collapsed sticker should carry exactly one control, got %d", len(r.noteBtns))
+	}
+	btn := r.noteBtns[0]
+	if btn.Text != "" {
+		t.Errorf("the pill's control carries text %q; the label is drawn, so the "+
+			"button must be a transparent hit target", btn.Text)
+	}
+	if got := btn.Position(); got != g.card.pos() {
+		t.Errorf("press target at %v, pill at %v — a press would miss the label", got, g.card.pos())
+	}
+	if got := btn.Size(); got != g.card.size() {
+		t.Errorf("press target is %v, pill is %v — iOS's chip fills its bounds", got, g.card.size())
 	}
 }

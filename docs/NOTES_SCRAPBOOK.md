@@ -1688,6 +1688,43 @@ no line box covers it), and the **verb → screen rule**. The band is still one
 paragraph's worth of advance and the sticker is still placed from the band's own
 top.
 
+## The pill, unified across four surfaces (19 Aug 2026)
+
+Owner, comparing mimic mode with the phone: *"the pills don't look like iOS (for
+example in terms of spacing and coloring and text color and maybe other
+things)"*. All of it was true, and the causes were separate.
+
+**The text colour and size — a measure/draw split.** The styled pane MEASURED
+the pill at the who size (11pt semibold, `styledNoteWhoSz`, matching
+`btNoteWhoFont`) and then drew it with a `widget.Button`, which renders its
+title in the THEME's size and foreground ink: 18pt body ink. So the label was
+two-thirds larger than the box had been sized for and shouted in a colour the
+note's chrome never uses. The fix is the idiom the counts control next door
+already used — an empty `LowImportance` button as a transparent hit target, with
+the label drawn as `canvas.Text` — both placed from the one geometry table so
+the target cannot drift off the label.
+
+**The width — three surfaces, three answers.** iOS sized the pill at
+`text + 28` with a floor of 86; macOS at `text + 24` floored at 76; Android used
+the CARD's 12pt padding and had no floor at all, so a short label made a visibly
+smaller pill there than anywhere else. These are now `PillPadX` (14) and
+`PillMinW` (86) in `noteMetrics`, read by the styled pane and parsed out of all
+three natives by `notes_spacing_spec_test.go` — the same treatment `PillH` got
+when it was four different verb-button sizes.
+
+**And alignment became visible only once the floor existed.** With the box
+wider than a short label, Android's `Gravity.CENTER_VERTICAL` left the text
+against the left edge while the Apple panes centred by construction. Android is
+`Gravity.CENTER` now.
+
+WHAT HOLDS IT: the numbers by the parser test as usual, and the things that are
+NOT numbers — label font, muted ink, centring — by that test's shape checks, on
+all three natives. The fourth surface gets `TestStyledPillMatchesTheApplePill`,
+which asserts the DRAWN objects (the canvas.Text's size, weight, colour, the
+label fitting inside the box, the press target covering it) rather than the
+constants that produced them. A test that re-read `styledNoteWhoSz` would have
+passed happily throughout the bug.
+
 ## Future work
 
 **OPEN, Android: the Fyne fallback pane has no note surface (found 19 Aug 2026

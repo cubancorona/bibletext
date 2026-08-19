@@ -56,6 +56,7 @@ var nativeNoteSources = []nativeNoteSource{
 			"Pad": "kNotePad", "WhoH": "kNoteWho", "WhoGap": "kNoteWhoGap",
 			"TailDepth": "kNoteTail", "TailWidth": "kNoteTailW", "TailInset": "kNoteTailX",
 			"Radius": "kNoteRad", "PillH": "kNotePill",
+			"PillPadX": "kNotePillPadX", "PillMinW": "kNotePillMinW",
 		},
 	},
 	{
@@ -66,6 +67,7 @@ var nativeNoteSources = []nativeNoteSource{
 			"Pad": "kMacNotePad", "WhoH": "kMacNoteWho", "WhoGap": "kMacNoteWhoGap",
 			"TailDepth": "kMacNoteTail", "TailWidth": "kMacNoteTailW", "TailInset": "kMacNoteTailX",
 			"Radius": "kMacNoteRad", "PillH": "kMacNotePill",
+			"PillPadX": "kMacNotePillPadX", "PillMinW": "kMacNotePillMinW",
 		},
 	},
 	{
@@ -76,6 +78,7 @@ var nativeNoteSources = []nativeNoteSource{
 			"Pad": "NOTE_PAD", "WhoH": "NOTE_WHO_H", "WhoGap": "NOTE_WHO_GAP",
 			"TailDepth": "NOTE_TAIL", "TailWidth": "NOTE_TAIL_W", "TailInset": "NOTE_TAIL_X",
 			"Radius": "NOTE_RADIUS", "PillH": "NOTE_PILL_H",
+			"PillPadX": "NOTE_PILL_PAD_X", "PillMinW": "NOTE_PILL_MIN_W",
 		},
 	},
 }
@@ -147,6 +150,8 @@ func TestNativeNoteSpacingMatchesTheSpec(t *testing.T) {
 				"TailInset": noteMetrics().TailInset,
 				"Radius":    noteMetrics().Radius,
 				"PillH":     noteMetrics().PillH,
+				"PillPadX":  noteMetrics().PillPadX,
+				"PillMinW":  noteMetrics().PillMinW,
 			}
 			for field, name := range ns.names {
 				got := constValue(t, src, ns.path, name)
@@ -209,6 +214,12 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kNoteBtn)": "the pill borrowing the VERB BUTTON's size (30) for its height",
 			},
 			required: map[string]string{
+				"chip.titleLabel.font = btNoteWhoFont();": "the pill's label must be the WHO font; " +
+					"a pill measured at one size and drawn at another overflows its own box",
+				"[chip setTitleColor:btNoteColor(gNoteMuted)": "the pill's label is the app's chrome " +
+					"and is muted, like every who line on every surface",
+				"tw + 2 * kNotePillPadX": "the pill's side padding must be the spec's, not a bare 28",
+				"cw < kNotePillMinW":     "the pill's width floor must be the spec's, not a bare 86",
 				"gNoteBandH = kNoteGapAbove + h +": "the band must reserve air ABOVE the card, " +
 					"not only below it (this pane had no top term at all, so an iPad's card " +
 					"touched the line above)",
@@ -232,6 +243,11 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kMacNoteBtn)":      "the pill borrowing the VERB BUTTON's size (24) for its height",
 			},
 			required: map[string]string{
+				"chip.font = btMacNoteWhoFont();":                       "the pill's label must be the WHO font",
+				"chip.contentTintColor = btMacNoteColor(gMacNoteMuted)": "the pill's label is muted chrome",
+				"tw + 2 * kMacNotePillPadX": "the pill's side padding must be the spec's; this pane had " +
+					"its own 24, which made the same label narrower here than on the phone",
+				"cw < kMacNotePillMinW": "the pill's width floor must be the spec's; this pane had its own 76",
 				"const CGFloat floorGap = kMacNoteGapAbove;": "the measured top-gap correction " +
 					"must be floored at the SPEC's reservation, not at a private 10",
 				"textTop - kMacNoteGapBelow - stickerH": "the pinned invariant: the sticker hangs " +
@@ -259,6 +275,17 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"and the pill's short label may still truncate.)",
 			},
 			required: map[string]string{
+				"chip.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)": "the pill's label " +
+					"must be the WHO size in SP, so it scales with the reader's own text setting",
+				"chip.setTypeface(android.graphics.Typeface.DEFAULT_BOLD)": "the pill's label is " +
+					"semibold on the Apple panes; DEFAULT_BOLD is this platform's nearest",
+				"chip.setTextColor(noteMuted)": "the pill's label is muted chrome",
+				"chip.setPadding(dp(NOTE_PILL_PAD_X), 0, dp(NOTE_PILL_PAD_X), 0)": "the pill's side " +
+					"padding must be the spec's, not the card's NOTE_PAD",
+				"chip.setMinWidth(dp(NOTE_PILL_MIN_W))": "the pill needs the spec's width floor; without " +
+					"it a short label made a visibly smaller pill here than on iOS",
+				"chip.setGravity(Gravity.CENTER)": "with a width floor the box is wider than a short " +
+					"label, and iOS centres its title in the same box — left-aligned reads as a mistake",
 				"applyNoteBand(r[0], gapAbove + noteH + gapBelow);": "the band must reserve the " +
 					"spec's gap on both sides",
 				"+ gapTop + gapAbove;": "the sticker must hang the reserved gap below the band's top",
@@ -310,6 +337,8 @@ func TestNoteSpecIsSelfConsistent(t *testing.T) {
 		{"TailInset", noteMetrics().TailInset, 24},
 		{"Radius", noteMetrics().Radius, 10},
 		{"PillH", noteMetrics().PillH, 28},
+		{"PillPadX", noteMetrics().PillPadX, 14},
+		{"PillMinW", noteMetrics().PillMinW, 86},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("noteMetrics().%s = %v, want %v — if this is a deliberate change, "+

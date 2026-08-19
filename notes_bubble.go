@@ -65,6 +65,35 @@ import (
 //	           here), which is a touch-target decision leaking into a piece of
 //	           content: the pill must not change height because a platform
 //	           moved its tap targets.
+//	PillPadX   the pill's own SIDE padding, and deliberately not Pad: the pill
+//	           is one line of small chrome and wants more air beside its text
+//	           than a paragraph of body does, which is why iOS wrote 14 here
+//	           and 12 there. Each surface had picked its own (iOS 14, macOS 12,
+//	           Android 12) so the same label came out three widths.
+//	PillMinW   the width floor, so a short label ("Note") still reads as a
+//	           deliberate object rather than a shrink-wrapped tag. Android had
+//	           NO floor at all until 19 Aug; macOS floored at 76.
+//
+// THE PILL IS MORE THAN ITS BOX, and the rest of it is a contract too — held by
+// notes_spacing_spec_test.go's shape checks rather than by this table, because
+// they are not numbers:
+//
+//	label font   the WHO font, semibold (11pt on iOS/Android/styled, 10 on
+//	             macOS). MEASURE AND DRAW MUST AGREE: the styled pane measured
+//	             the pill at the who size and then let a widget.Button draw the
+//	             title at the THEME's size and foreground ink — 18pt body ink —
+//	             so the text was two-thirds larger than the box sized for it.
+//	             That is why the styled pane now draws a canvas.Text and keeps
+//	             the button as a transparent hit target (reading_styled_note.go).
+//	label ink    MUTED, everywhere. The who line is the APP's chrome — a byline
+//	             and a count — never the sender's words, and it is muted on all
+//	             four surfaces so the sender's own text is the only thing on the
+//	             sticker in the reading ink.
+//	label align  CENTRED in the box, on both axes. With a width floor the box is
+//	             wider than a short label, so alignment became visible: iOS and
+//	             macOS centre by construction (a button title inside bounds),
+//	             Android needed Gravity.CENTER rather than CENTER_VERTICAL, and
+//	             the styled pane sets TextAlignCenter.
 //
 // WHAT THIS TABLE DOES NOT OWN — the residual, stated rather than pretended.
 // GapAbove is a RESERVATION. The air a reader SEES above the card is
@@ -208,6 +237,15 @@ const (
 	// The in-text sticker's corner, shared by all four note surfaces.
 	noteStickerRad = 10
 	notePillH      = 28
+	// The pill's own side padding and width floor. They are NOT the card's Pad:
+	// the pill is a single line of small chrome and wants more air beside its
+	// text than a paragraph does, which is why iOS wrote 14 here and 12 there.
+	// Every surface used to pick its own pair — iOS 14/86, macOS 12/76, Android
+	// 12 with NO floor at all, the styled pane 14/86 copied from iOS — so the
+	// same "Notes · 3" came out four different widths. Same failure as PillH
+	// before it, same fix: one number, four readers.
+	notePillPadX = 14
+	notePillMinW = 86
 )
 
 // noteSpacing is the spec above as one value, so a consumer reads a NAMED
@@ -222,6 +260,8 @@ type noteSpacing struct {
 	TailInset float32
 	Radius    float32
 	PillH     float32
+	PillPadX  float32
+	PillMinW  float32
 }
 
 // noteMetrics is THE table. Every surface reads this or is held to it by
@@ -242,6 +282,8 @@ var noteSpacingTable = noteSpacing{
 	TailInset: noteTailInset,
 	Radius:    noteStickerRad,
 	PillH:     notePillH,
+	PillPadX:  notePillPadX,
+	PillMinW:  notePillMinW,
 }
 
 // WhoH is the who row's box height for a given who-line font size — derived,
