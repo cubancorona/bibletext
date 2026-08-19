@@ -918,7 +918,22 @@ static void bibleTextMacScrollTV(void) {
     // which assumes the document sits at origin 0 — a stale origin would land the
     // content offset below the top (a gap above verse 1). Normalize it first.
     { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
-    if (btMacScrollToHighlight()) return;
+    // ORDER MATTERS, and it is restore-before-highlight — the same rule iOS
+    // states and for the same reason (reading_ios.go, bibleTextIOSScrollTV).
+    //
+    // A pending restore only ever exists on a REOPEN: every explicit arrival —
+    // a tapped link, a note, a search result — clears it (share_link_open.go,
+    // openSearchResultRange) precisely so it falls through to the highlight
+    // below. So an armed restore means "the reader is coming back", and coming
+    // back should land where they stopped reading, not on whatever happens to
+    // be highlighted there. This pane had the two the other way round, so a
+    // chapter carrying a note or a search hit dragged the reader to it on every
+    // reopen — the defect iOS records as fixed, still live here and on the
+    // Windows/Linux pane until 19 Aug 2026.
+    //
+    // The restore only WINS if it resolves: the y >= 0 guard inside falls
+    // through to the highlight when the verse is gone and no fraction is
+    // usable, which is iOS's behaviour too.
     if (gMacHasRestore) {
         NSLayoutManager *lm = gTextView.layoutManager;
         NSTextStorage *ts = gTextView.textStorage;
@@ -949,6 +964,7 @@ static void bibleTextMacScrollTV(void) {
             return;
         }
     }
+    if (btMacScrollToHighlight()) return;
     [gTextView scrollRangeToVisible:NSMakeRange(0, 0)];
     [[gScroll contentView] scrollToPoint:NSZeroPoint];
     [gScroll reflectScrolledClipView:gScroll.contentView];
