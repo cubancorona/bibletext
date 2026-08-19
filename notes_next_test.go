@@ -83,8 +83,10 @@ func TestNextTapRotatesThePlanWithWrap(t *testing.T) {
 
 // Chip-tap parity: the advance clears a foreign mark (selecting a note is the
 // reader choosing it as the page's reason), un-minimizes the tapped-to note by
-// its own ID and no other (the tap IS the Show verb), and asks the Apple panes
-// to place the view (forceReposition — a scroll, never a rebuild).
+// its own ID and no other (the tap IS the Show verb) — and CYCLES IN PLACE:
+
+// where it is, the viewport stays; the far-off-note tradeoff is recorded on
+// advanceNoteFocus).
 func TestNextTapMatchesChipTapSemantics(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -133,9 +135,9 @@ func TestNextTapMatchesChipTapSemantics(t *testing.T) {
 			t.Errorf("note %q Minimized=%v after the tap — the Show verb must reach exactly the tapped-to note", n.Text, n.Minimized)
 		}
 	}
-	if st.forceReposition != washIsLiveMutation {
-		t.Errorf("forceReposition=%v, want washIsLiveMutation=%v — the sticker moved verses, the view must follow (a scroll, not a rebuild)",
-			st.forceReposition, washIsLiveMutation)
+	if st.forceReposition {
+		t.Error("the cycle must stay IN PLACE: a next-tap is a selection, not an arrival — " +
+
 	}
 }
 

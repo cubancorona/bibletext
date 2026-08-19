@@ -8,6 +8,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -97,10 +99,27 @@ func (bubbleLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 // must attribute it. noteBubbleWithByline does that; use it unless you have a
 // reason not to.
 func noteBubble(text string, pal palette) fyne.CanvasObject {
+	return noteBubblePadded(text, pal, theme.Padding())
+}
+
+// noteBubblePadded is noteBubble with the card's inner padding as a parameter.
+// The bubble's IDENTITY — the rounded bordered card and the tail — is the
+
+// not: the notes browser packs rows (browseBubblePad, notes_browse.go) while
+// the reading banner keeps the page's own theme.Padding(), which is what the
+// default above passes. surface() cannot be reused for the tight case because
+// container.NewPadded reads the GLOBAL theme padding, out of reach of any
+// row-scoped override.
+func noteBubblePadded(text string, pal palette, pad float32) fyne.CanvasObject {
 	body := widget.NewLabel(strings.TrimSpace(text))
 	body.Wrapping = fyne.TextWrapWord
 
-	card := surface(body, pal.SurfaceAlt, pal.Border, fyne.Size{})
+	frame := canvas.NewRectangle(pal.SurfaceAlt)
+	frame.StrokeColor = pal.Border
+	frame.StrokeWidth = 1
+	frame.CornerRadius = noteBubbleRad
+	card := container.NewStack(frame,
+		container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), body))
 	tail := canvas.NewImageFromResource(noteTailSVG(pal.SurfaceAlt, pal.Border))
 	tail.FillMode = canvas.ImageFillStretch
 	return container.New(bubbleLayout{}, card, tail)

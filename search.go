@@ -405,8 +405,20 @@ func buildSearchModeControls(state *AppState, onSelect func(mode searchMode)) fy
 			// Tapping the bubble while already in notes goes back to scripture, so
 			// the control is a way out as well as a way in — otherwise the only exit
 			// is a segment that looks unrelated to it.
+			//
+			// BUT ONLY WHEN THE LIST IS ACTUALLY ON SCREEN. On desktop the mode
+			// survives opening a note (openNote sets IsSearching=false and the
+			// reading pane takes over while NotesMode stays true — the row's
+			// highlight honestly says which mode the pane belongs to), so the
+			// mode alone cannot decide. Deciding on it alone made the tap a
+			// silent exit: the reader pressed the lit Notes bubble expecting
+			// the list back and got a mode flip to keyword instead — nothing
+
+			// mimic/desktop desync). Mobile always shows the list whenever the
+			// row is visible (the row lives inside the Search tab), so there
+			// the toggle-out is unconditional, as before.
 			m := modeNotes
-			if searchModeOf(state) == modeNotes {
+			if searchModeOf(state) == modeNotes && (state.surfaceSearch != nil || state.IsSearching) {
 				m = modeKeyword
 			}
 			apply(m)

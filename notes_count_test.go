@@ -73,10 +73,12 @@ func TestShowNotesListReachesTheNotes(t *testing.T) {
 	}
 }
 
-// The list's scroll survives a rebuild while in Notes mode, and is forgotten on
-// the way out — coming back should start at the top, not halfway down a list the
-// reader last saw days ago.
-func TestNotesScrollKeptWhileInNotesModeAndClearedOnExit(t *testing.T) {
+
+// "the notes browser should remember its scroll position"): a rebuild while in
+// Notes keeps it, and leaving the mode HARVESTS the live list's offset rather
+// than forgetting it — the reader returns to the same neighbourhood. Only the
+// reader func (which aliases the torn-down list) is dropped on exit.
+func TestNotesScrollRemembersAcrossLeavingTheMode(t *testing.T) {
 	st := sampleState()
 	setNotesMode(st, true)
 	st.notesScroll = 240
@@ -86,8 +88,19 @@ func TestNotesScrollKeptWhileInNotesModeAndClearedOnExit(t *testing.T) {
 		t.Errorf("scroll lost while staying in Notes mode: %v", st.notesScroll)
 	}
 
+	// The live list has scrolled since the last harvest; leaving the mode must
+	// ask IT, not trust the stale value.
+	st.notesScrollRead = func() float32 { return 512 }
 	setNotesMode(st, false) // reader leaves Notes
-	if st.notesScroll != 0 {
-		t.Errorf("scroll survived leaving Notes mode: %v", st.notesScroll)
+	if st.notesScroll != 512 {
+		t.Errorf("leaving Notes must harvest the live offset: got %v, want 512", st.notesScroll)
+	}
+	if st.notesScrollRead != nil {
+		t.Error("the reader func aliases the torn-down list and must be dropped on exit")
+	}
+
+	setNotesMode(st, true) // and coming back finds the memory intact
+	if st.notesScroll != 512 {
+		t.Errorf("re-entering Notes lost the remembered offset: %v", st.notesScroll)
 	}
 }
