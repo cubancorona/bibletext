@@ -1706,15 +1706,37 @@ the path every working install takes. That trade is much worse than a missing
 note on a fallback a working install never reaches. Whoever takes it should
 establish the ordering first.
 
-**OPEN, Android: an arriving note does not scroll to itself on a cold start
-(observed 19 Aug 2026).** Delivering a note link for John 11:35 to a
-freshly-launched app placed the sticker correctly — the trace put it at layout
-y≈10302 with the band reserved — but the pane stayed at verse 1, so the reader
-sees an ordinary chapter opening and no note at all. Re-firing the same link at
-the already-open chapter scrolled to it correctly, so this is the cold-start
-arm of `applyPendingScroll`, not the placement. It is worth fixing before the
-next Android build goes anywhere near a reader: a shared note that silently
-does not appear is indistinguishable from a shared note that was lost.
+**CORRECTED, Android cold-start arrival: it WORKS — it is slow on a first run
+(traced 19 Aug 2026).** This was recorded here as an open bug on the strength of
+one screenshot taken 9s after a link was delivered to a freshly-installed app:
+the chapter was right, the note was placed (traced at layout y~10300 with its
+band reserved) and the pane sat at verse 1. The conclusion — "the cold-start arm
+of applyPendingScroll never fires" — was wrong.
+
+BtBridge.SCROLL_DEBUG (added with this correction, the Android twin of iOS's
+BT_SCROLL_DEBUG) says what actually happens. On a first-ever run with the app's
+data wiped:
+
+    setHtml: frac=-1.0 clearing pendingVerse (was 0)      <- pre-load render
+    setHtml: frac=-1.0 clearing pendingVerse (was 0)
+    apply: FELL THROUGH to TOP (pendingVerse=0)           <- lands at the top
+    apply: FELL THROUGH to TOP (pendingVerse=0)
+    setHtml: frac=-1.0 clearing pendingVerse (was 0)      <- +8.5s, data loaded
+    scrollToVerse: armed v35 text=true layout=false
+    apply: v35 layout=true range=true indexed=57 verses   <- lands on v35
+
+So the arrival scroll fires and lands correctly; it just cannot fire until the
+Bible data has loaded and the real chapter is pushed, which on a cold first run
+took 8.5 seconds. Everything before that is the loading-phase render, which
+legitimately has no verse index to scroll to. Warm arrivals, and cold starts
+where the data is already cached, land in about a second — measured both.
+
+WHAT IS LEFT IS A UX QUESTION, NOT A DEFECT: for those seconds the reader who
+tapped a shared link is looking at the top of the right chapter with no
+indication that it is about to move. Worth considering whether the loading
+render should hold the arrival's verse rather than the top. Not fixed, not
+urgent, and NOT the "silently lost note" this section used to claim.
+
 
 **WITHDRAWN, "the arrival delivers the wrong note" (19 Aug 2026).** An earlier
 commit here (`ac4e4da9d`) claimed the Android arrival handed the surface an
