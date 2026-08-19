@@ -118,14 +118,41 @@ public final class BtBridge {
      * UpdateLayout is what makes DynamicLayout reflow when the span is added
      * or removed on the live Spannable.
      */
+    // The band above the note's anchor verse — and two Android layout traps
+    // that only the emulator could show (both measured, 19 Aug):
+    //
+    // 1. LineHeightSpan is a PARAGRAPH span: chooseHeight runs for EVERY line
+    //    of the paragraph, not just the line the span covers. Adjusting
+    //    unconditionally raised every following line by the sticker's whole
+    //    height and tore the passage apart.
+    // 2. Android reuses ONE FontMetricsInt across the paragraph's lines, so
+    //    simply RETURNING for the other lines is not neutral: our subtraction
+    //    is still sitting in the object, and the next line inherits it (traced:
+    //    the anchor line and the one after it both came out with ascent -318,
+    //    a 345px box where 85 was natural). A span that reserves space for one
+    //    line must therefore put the metrics BACK on the next call.
     private static final class NoteBandSpan
             implements android.text.style.LineHeightSpan, android.text.style.UpdateLayout {
         final int band;
-        NoteBandSpan(int band) { this.band = band; }
+        final int at;
+        // The end offset of the line we inflated, this layout pass. The next
+        // call in the pass is the line that starts exactly there — the one
+        // carrying our leftover metrics.
+        private int inflatedTo = -1;
+        NoteBandSpan(int band, int at) { this.band = band; this.at = at; }
         @Override public void chooseHeight(CharSequence t, int start, int end,
                 int spanstartv, int lineHeight, android.graphics.Paint.FontMetricsInt fm) {
-            fm.ascent -= band;
-            fm.top -= band;
+            if (start <= at && at < end) {
+                fm.ascent -= band;
+                fm.top -= band;
+                inflatedTo = end;
+                return;
+            }
+            if (start == inflatedTo) {
+                fm.ascent += band;
+                fm.top += band;
+                inflatedTo = -1;
+            }
         }
     }
 
@@ -1214,7 +1241,7 @@ public final class BtBridge {
         if (!(cs instanceof Spannable)) return;
         Spannable sp = (Spannable) cs;
         if (off < 0 || off + 1 > sp.length()) return;
-        noteBandSpan = new NoteBandSpan(band);
+        noteBandSpan = new NoteBandSpan(band, off);
         sp.setSpan(noteBandSpan, off, off + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         // UpdateLayout makes DynamicLayout reflow; the explicit pair is
         // belt-and-braces for the TextView's own wrap_content height.
