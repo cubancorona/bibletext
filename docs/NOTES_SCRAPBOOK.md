@@ -1557,8 +1557,32 @@ exactly where the restore/apply model landed. The latch stays.
 
 ## Future work
 
-**Inline notes on the mimic/Windows/Linux pane** (owner question, 2026-08-19:
-"what about inline notes on mimic mode?"). Honest assessment, not a plan: the
+**Inline notes on the mimic/Windows/Linux pane — ✅ BUILT 2026-08-19.** The
+assessment below stood, and the work landed roughly as scoped. What shipped:
+`styledLayoutParams.BandVerse/BandH` → `chapterLayout.BandLine/BandY/BandH`
+reserves the band as **advance**, exactly like `ParaGap`, so no line box covers
+it and no washed run can reach it (that is the structural answer to Android's
+inflated-ascent defect, and it needs no guard); `reading_styled_note.go` draws
+the card and tail as ONE SVG path, the byline + "K of N on this passage ›"
+counts row, the message, and − / ✕ as real `widget.Button`s inside the pane's
+renderer; the pane's four mouse handlers test one geometry table so the sticker
+never touches the selection. The banner's seam now asks the real question —
+`nativeNoteSticker = nativeNoteStickerOnPlatform || useStyledPane()` — so
+flipping `styledPaneEnabledOnPlatform` back brings the banner back by itself.
+**Two surfaces stay on the banner** on those platforms: the `NoteNotice` path
+(unchanged on every platform) and the **R4 unplaced rows**, whose sentence does
+not fit a one-band sticker. **One deliberate reduction, for the owner's
+acknowledgement:** the per-note CHIPS are gone from the reading page, replaced
+by the count — the iOS/Android surface that was asked for; every note still
+leaves a trace, is one click away, and the full list lives in the notes browser.
+Still open: the I-beam persists over the card (`desktop.Cursorable` has no
+position), a very long note at a narrow width can reserve a band taller than the
+viewport (iOS has the same property), and a second band for a second anchor is
+not built (`planOpenLimit == 1`). Tests: `reading_styled_note_test.go`, plus
+gate mutations **M9** and **M10** in `scripts/view-test-gate.sh`.
+
+The original assessment, kept because it is what the plan was judged against:
+the
 styled pane (`reading_styled_*.go`) owns its whole layout engine — per-run
 geometry, per-line tint rects, selection hit-testing — so unlike the Apple
 panes there is no importer in the way, and it *could* host an iOS-parity

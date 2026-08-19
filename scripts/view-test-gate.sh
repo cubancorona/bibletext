@@ -177,6 +177,28 @@ run_mutation M8 \
   "$(sub_py notes_store.go '	// other verb ends on.
 	applyNoteForCurrentChapter(state)' '	// other verb ends on. MUTATION: the ending projection call is gone.')"
 
+# ── M9 ────────────────────────────────────────────────────────────────────────
+# The "present but unseen" class on the NEWEST surface: the styled pane's in-text
+# note sticker. Every label is built — the byline, the counts, the sender's own
+# words — and simply never appended to the renderer's object list, so the card
+# and its buttons draw and the message inside it does not. This is M2's shape at
+# the scale of one widget, on the surface Windows and Linux now read notes on.
+run_mutation M9 \
+  "the note sticker's text is built but never added to the renderer" \
+  "an empty speech bubble in the passage: no byline, no counts, no message" \
+  "$(sub_py reading_styled_note.go '		r.noteTexts = append(r.noteTexts, t)
+		r.objects = append(r.objects, t)' '		r.noteTexts = append(r.noteTexts, t) // MUTATION: built, never shown')"
+
+# ── M10 ───────────────────────────────────────────────────────────────────────
+# A control that LOOKS pressable and is not. The counts span keeps its accent
+# colour and its chevron — the whole affordance a reader reads as "press me" —
+# while the transparent button over it is sized to nothing, so tapping it does
+# nothing at all and the reader cannot reach the other notes on the passage.
+run_mutation M10 \
+  "the sticker's counts control is drawn but its hit target is zeroed" \
+  "an accented \"2 of 3 on this passage ›\" that never responds to a click" \
+  "$(sub_py reading_styled_note.go '		g.nextHit = styledNoteRect{X: bx, Y: 0, W: bw, H: styledNotePad + styledNoteWhoH + 2}' '		g.nextHit = styledNoteRect{} // MUTATION: drawn pressable, sized to nothing')"
+
 echo
 bold "$PASS caught, $FAIL survived"
 if [ "$FAIL" -ne 0 ]; then

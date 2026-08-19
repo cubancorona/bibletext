@@ -114,6 +114,18 @@ type styledReadingPane struct {
 	// Driven by reading_styled_readalong.go on the UI goroutine.
 	raVerse int
 
+	// note is the pushed sticker presentation (reading_styled_note.go), read
+	// ONCE per pane from the shared composition; noteGeom is every rect it
+	// draws and hit-tests with, written ONLY in relayout, beside the layout it
+	// was measured for. Two fields standing for one fact is the shape that
+	// produced this subsystem's worst defects (see setReadAlongVerse), so they
+	// are assigned together or not at all.
+	note     styledNote
+	noteGeom styledNoteGeom
+	// noteGrab latches a press that began on the sticker, so a drag off the
+	// card does not turn into a text selection under it.
+	noteGrab bool
+
 	clipboard fyne.Clipboard
 }
 
@@ -129,6 +141,11 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 	if state.window != nil {
 		p.clipboard = state.window.Clipboard()
 	}
+	// The sticker's presentation is derived ONCE, before the first layout: a
+	// note change goes through a full reading-view rebuild (the same contract
+	// the banner has), so re-deriving it per resize would only re-read the
+	// preference store to be told the same thing.
+	p.note = styledNoteFor(state)
 	p.ExtendBaseWidget(p)
 	p.relayout(720) // provisional; corrected when the real width arrives
 	return p
@@ -196,13 +213,30 @@ func (p *styledReadingPane) relayout(width float32) {
 		indent = 1.5 * p.textSize
 	}
 	p.lh = lh
+	// MEASURE THE STICKER FIRST. The band's height IS this measurement, so it
+	// has to exist before the layout that reserves it — the same ordering the
+	// native panes state (btIOSNoteHeightForWidth: "measured BEFORE the band is
+	// reserved, because the band's height is this number"). One pass, no
+	// feedback loop: the card width is a function of the pane's width alone.
+	p.noteGeom = measureStyledNote(p.note, avail)
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    paraGap,
 		SpaceW:     p.measure(" ", runWord),
 		Indent:     indent,
+		BandVerse:  p.noteAnchorVerse(),
+		BandH:      p.noteGeom.bandH(),
 	}, p.measure)
+	// Absolute rects, from the pane's own ruler and the band the layout just
+	// reserved — so draw, hit-testing and the reservation cannot disagree. If
+	// nothing was reserved, nothing is drawn: a sticker parked at y=0 would sit
+	// ON the opening verses, which is worse than no sticker.
+	if p.lay.BandLine < 0 {
+		p.noteGeom = styledNoteGeom{}
+	} else {
+		p.noteGeom.place(p.insetX(), p.lay.BandY)
+	}
 	p.drawRuns = p.drawRuns[:0]
 	p.lineSegs = make([][]styledDrawRun, len(p.lay.Lines))
 	for li, ln := range p.lay.Lines {
@@ -215,6 +249,26 @@ func (p *styledReadingPane) relayout(width float32) {
 	p.lastWidth = width
 	// Offsets shifted with the new layout — any selection is now meaningless.
 	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
+}
+
+// noteAnchorVerse is the verse the band opens above: the note's own verse when
+// this chapter has it, else the chapter's first verse.
+//
+// The fallback is the iOS rule ("verse 0 parks at the top") and covers three
+// real states with ONE answer rather than three special cases in the layout
+// engine: a chapter-level note (VerseLo == 0), an unplaced-only chapter (no
+// verse to point at), and a renumbering that left the note's verse outside the
+// chapter on screen.
+func (p *styledReadingPane) noteAnchorVerse() int {
+	if !p.note.present() || len(p.verses) == 0 {
+		return 0
+	}
+	for _, v := range p.verses {
+		if v.Verse == p.note.Anchor {
+			return v.Verse
+		}
+	}
+	return p.verses[0].Verse
 }
 
 // measure is the production ruler: body text at size, verse numbers at the
@@ -278,6 +332,12 @@ func (p *styledReadingPane) highlightY() float32 {
 	if li < 0 || li >= len(p.lay.Lines) {
 		return 0
 	}
+	if li == p.lay.BandLine && p.noteGeom.present {
+		// The note's own mark lights the verse the band sits above, so
+		// scrolling to the LINE would put the bubble explaining it above the
+		// fold — clipped, on the one arrival where it matters most.
+		return p.lay.BandY
+	}
 	return p.lay.Lines[li].Y
 }
 
@@ -292,6 +352,20 @@ type styledPaneRenderer struct {
 	selRects  []*canvas.Rectangle
 	texts     []*canvas.Text
 	objects   []fyne.CanvasObject
+
+	// The in-text note sticker (reading_styled_note.go). Built LAST and
+	// appended LAST, so it paints above the glyphs — the Fyne twin of the
+	// native sticker being a subview over the text. Deliberately NOT part of
+	// r.texts, which is index-parallel to p.drawRuns in position().
+	noteCard  *canvas.Image
+	notePill  *canvas.Rectangle
+	noteTexts []*canvas.Text
+	noteBtns  []*widget.Button
+	// noteCardRes/noteCardKey cache the generated SVG: the resource is rebuilt
+	// only when the size or the palette moves, never per frame (the tint rects
+	// already learned that lesson — 514 allocations for one whole-chapter span).
+	noteCardRes fyne.Resource
+	noteCardKey string
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -354,6 +428,8 @@ func (r *styledPaneRenderer) rebuild() {
 		r.texts = append(r.texts, t)
 		r.objects = append(r.objects, t)
 	}
+	// The sticker LAST, so it paints over the glyphs it sits above.
+	r.buildNote()
 	r.position()
 }
 
@@ -453,6 +529,8 @@ func (r *styledPaneRenderer) position() {
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
 	}
+
+	r.positionNote()
 }
 
 func (r *styledPaneRenderer) Layout(size fyne.Size) {

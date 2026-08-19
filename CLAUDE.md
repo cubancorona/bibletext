@@ -253,6 +253,19 @@ all 3,906 scripture pages, so the notice pages carry their own
   (`reading_styled_platform_on/off.go`); flipping the `on` constant reverts
   to the legacy `chapterText` Entry pane in one line. iOS/macOS/Android
   behaviour is untouched (false constant; macOS keeps NSTextView).
+  **Since 19 Aug it also draws the note IN THE TEXT** (`reading_styled_note.go`),
+  the fourth surface on the shared `appleStickerPush` composition: a band
+  reserved above the note's own verse inside `layoutChapter`
+  (`styledLayoutParams.BandVerse/BandH` → `chapterLayout.BandLine/BandY/BandH`)
+  carrying a card + speech tail drawn as ONE SVG path, the byline and
+  "K of N on this passage ›" counts on one row, the message below, and − / ✕ as
+  real buttons. **The band is ADVANCE, not line height** — the same mechanism as
+  `ParaGap` — so no line box covers it and no wash can reach it; that is why
+  Android's inflated-ascent defect and its paragraph-scoped span leak have no
+  assignment site here. The banner (`notes_banner.go`) stands down through
+  `nativeNoteSticker = nativeNoteStickerOnPlatform || useStyledPane()`, keeping
+  exactly two surfaces the sticker cannot carry: the `NoteNotice` path and the
+  R4 unplaced rows. Tests: `reading_styled_note_test.go`; gate M9/M10.
 - **One background per character (the wash model).** TextKit gives a character
   exactly one `NSBackgroundColorAttributeName`, and two things want it: the
   chapter's own wash (search hit / note / link span / Go-to — `chapterTint`,

@@ -111,6 +111,15 @@ func assertStickerAgreesWithStore(t *testing.T, st *AppState) {
 		t.Errorf("androidStickerPush diverged from appleStickerPush: android=(%q,%q,%v,%v) apple=(%q,%q,%v,%v)",
 			aText, aWho, aPill, aNext, text, who, pill, next)
 	}
+	// …and the FOURTH surface: the styled Windows/Linux pane's own in-text
+	// sticker (reading_styled_note.go) rides the same composition through the
+	// same kind of alias, held here to byte-equality for the same reason — four
+	// stickers, one who-line grammar, one set of counts, one pill vocabulary.
+	sText, sWho, sPill, sNext := styledStickerPush(st, plan)
+	if sText != text || sWho != who || sPill != pill || sNext != next {
+		t.Errorf("styledStickerPush diverged from appleStickerPush: styled=(%q,%q,%v,%v) apple=(%q,%q,%v,%v)",
+			sText, sWho, sPill, sNext, text, who, pill, next)
+	}
 	notes := storeNotesOnChapter(st)
 
 	if !notesEnabled() || len(notes) == 0 {

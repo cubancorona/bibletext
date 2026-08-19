@@ -33,6 +33,20 @@ const (
 	noteBubbleRad = 8 // surface()'s corner radius
 )
 
+// noteSVGHex spells a colour the way Fyne's SVG loader will accept it: SIX hex
+// digits, alpha as its own attribute.
+//
+// Fyne rejects #RRGGBBAA outright ("color string ... is not length 3 or 6"),
+// and the original 8-digit spelling here meant the tail image FAILED TO LOAD on
+// every build since the bubble shipped — the bubble rendered as a plain card
+// and the failure was one quiet log line in a test nobody grepped. It is shared
+// with the styled pane's one-path builder (noteBubblePathSVG,
+// reading_styled_note.go) so the second SVG author cannot re-learn it.
+func noteSVGHex(c color.Color) (string, float64) {
+	r, g, b, a := c.RGBA()
+	return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8), float64(a>>8) / 255
+}
+
 // noteTailSVG draws the tail: filled, with the two SLANTED edges stroked and
 // the mouth left open so it merges into the bubble above it.
 //
@@ -41,17 +55,8 @@ const (
 // run visibly across the tail's mouth — which is what would make it read as a
 // triangle stuck to a box rather than as one shape.
 func noteTailSVG(fill, stroke color.Color) fyne.Resource {
-	// SIX hex digits, alpha as its own attribute. Fyne's SVG loader rejects
-	// #RRGGBBAA outright ("color string ... is not length 3 or 6"), and the
-	// original 8-digit spelling here meant the tail image FAILED TO LOAD on
-	// every build since the bubble shipped — the bubble rendered as a plain
-	// card and the failure was one quiet log line in a test nobody grepped.
-	hex := func(c color.Color) (string, float64) {
-		r, g, b, a := c.RGBA()
-		return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8), float64(a>>8) / 255
-	}
-	fillHex, fillA := hex(fill)
-	strokeHex, strokeA := hex(stroke)
+	fillHex, fillA := noteSVGHex(fill)
+	strokeHex, strokeA := noteSVGHex(stroke)
 	w, d := noteTailWidth, noteTailDepth
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+

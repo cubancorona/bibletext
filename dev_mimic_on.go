@@ -80,10 +80,14 @@ func devApplyMimicSeams(target string) {
 	// swap under an open sheet leaks the deferred rebuild.
 	sheetConsumeClosure = func() bool { return true }
 
-	// Notes surface as the Fyne banner above the pane (chips, notice path,
-	// hide/delete verbs) — the exact Windows/Linux surface — instead of
-	// standing down for the native in-text sticker.
-	nativeNoteSticker = func() bool { return false }
+	// nativeNoteSticker is NOT flipped here any more, and that is the point:
+	// since 19 Aug the styled pane draws its OWN in-text sticker
+	// (reading_styled_note.go), so the seam's own question — "does the pane
+	// draw the note itself?" — already answers true through useStyledPane()
+	// above, which this function has just set. Pinning it false would have made
+	// mimic show the retired banner and hide the very surface it exists to let
+	// the owner eyeball. The notice path and the R4 unplaced sentences still
+	// come from the banner on both (notes_banner.go).
 
 	// Reporter truth follows the TARGET platform: false, so the styled pane
 	// applies its own width-gated reporter typesetting (reading_styled_pane.go
