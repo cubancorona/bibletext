@@ -154,9 +154,9 @@ import (
 //
 // ── REPRODUCING WHAT YOU SEE ────────────────────────────────────────────────
 //
-//	Styled (Windows/Linux), 24 pictures, no device needed:
+//	Styled (Windows/Linux), 28 pictures, no device needed:
 //	  BIBLETEXT_PANE_SNAPSHOT_DIR=/tmp/g go test -run TestStyledNoteGallery ./
-//	  → 12 permutations × light/dark (one/two/three notes, pill, suppression,
+//	  → 14 permutations × light/dark (one/two/three notes, pill, suppression,
 //	    first verse, the 280-rune cap, narrow, wide, multi-verse, poetry, and a
 //	    no-note control). Each asserts geometry BEFORE writing its PNG.
 //	The same pane, live, on this Mac:

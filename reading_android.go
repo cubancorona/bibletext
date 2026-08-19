@@ -508,12 +508,19 @@ var lastPushedBookChapter string
 // (notes_plan.go), a byte-identical alias of the Apple push, so the WHO line,
 // counts, pill labels and derived suppression cannot diverge across panes.
 //
-// GATED TO FULL-SCREEN READING, deliberately: in normal (compact) reading the
-// Fyne banner above the pane already draws the whole set (notes_banner.go,
-// slotted in buildReadingViewMobile below), and a Dialog sticker there would
-// show the reader the same note twice. Full-screen has no banner — before
-// this push it showed a lit span with nothing to say why (the implementation requirement). Leaving
-// full-screen pushes the empty tuple, which takes the sticker down.
+// BOTH READING MODES, and it was not always so. This was once gated to
+// full-screen: compact reading had the Fyne banner above the pane drawing the
+// whole set (notes_banner.go), and a sticker there would have shown the reader
+// the same note twice, while full-screen had no banner at all and showed a lit
+// span with nothing to say why (the implementation requirement). The gate went when the sticker
+// replaced the banner outright rather than complementing it — the banner
+// stacked a citation row, a bubble and a byline above the WHOLE chapter,
+// unanchored and three times the height of iOS's card. Now
+// nativeNoteStickerOnPlatform is true for darwin || android
+// (notes_sticker_native_on.go), buildNoteBanner returns nil here, and there is
+// exactly one note surface in each mode — so there is nothing left to double
+// up with. Leaving the chapter pushes the empty tuple, which takes the sticker
+// down.
 //
 // Called on EVERY chapter push, BEFORE the fingerprint skip gate — the same
 // ordering as iOS: a presentation-only flip (hide/show, suppression, a

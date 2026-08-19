@@ -82,13 +82,24 @@ var nativeNoteSources = []nativeNoteSource{
 
 // readNativeSource reads one of the three, failing loudly if it moved — a
 // renamed file must not silently turn this suite into a no-op.
+//
+// CRLF IS NORMALISED AWAY, and it is not cosmetic. Git for Windows checks out
+// with autocrlf on by default, so on the windows CI runner every *.go and
+// *.java in the tree arrives with \r\n — .gitattributes exempts testdata/ and
+// patches/, not source. A required fragment that spans a line break (there is
+// one: "+ kNoteGapAbove;\n") then never matches, and this suite goes red on
+// windows ALONE, invisibly to every local run on this Mac. That is the third
+// time this repo has met this failure — a14b3fc0e fixed it once for the byte
+// precise fixtures — so it is fixed here at the read, where it cannot recur for
+// the next fragment somebody adds: line-ending STYLE is a property of the
+// checkout, never of the source this suite is asserting about.
 func readNativeSource(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("%s: %v (the spec's parser cannot find the source it holds)", path, err)
 	}
-	return string(b)
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
 // constValue pulls `name = <number>` out of a C or Java declaration. The word

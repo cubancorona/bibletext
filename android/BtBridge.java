@@ -1500,8 +1500,17 @@ public final class BtBridge {
         noteBandSpan = null;
     }
 
-    // applyNoteBand reserves the band above the anchor verse: a one-character
-    // span on the verse's first char raising that line's top (NoteBandSpan).
+    // applyNoteBand reserves the band above the anchor verse's PARAGRAPH: a
+    // one-character span (NoteBandSpan) on the character BEFORE the paragraph,
+    // growing that line's DESCENT. Both halves of that sentence were different
+    // on the morning of 19 Aug — the span sat on the verse's own first char and
+    // raised that line's top — and both had to change: the paragraph, because a
+    // note must not open a hole inside one (the owner's rule), and the descent,
+    // because Android paints a character's background across the whole line box,
+    // so reserving in the anchor's own ascent stretched the verse's highlight up
+    // into the gap and slid it under the card. A paragraph that opens the text
+    // has no preceding line and keeps the ascent reservation — nothing is above
+    // it to wash.
     private static void applyNoteBand(int off, int band) {
         CharSequence cs = text.getText();
         if (!(cs instanceof Spannable)) return;
