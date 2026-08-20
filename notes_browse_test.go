@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"sort"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -888,5 +889,60 @@ func TestAFriendsIdenticalNoteIsNotSwallowed(t *testing.T) {
 	}
 	if all := allNotesForBrowsing(appPrefs()); len(all) != 2 {
 		t.Errorf("expected two notes (yours and theirs), got %d", len(all))
+	}
+}
+
+// THE OWNER'S SCENARIO, END TO END: you send a note, you tap your own link, and
+// the passage shows YOUR note — once, as yours, and gone when you move on.
+//
+// This is the one that would have caught the whole family of defects: the
+// duplicate record, the "Note from Friend" attribution on your own words, and
+// the arrival showing nothing at all after the collapse.
+func TestTappingYourOwnLinkDrawsYourOwnNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	nonce := newNoteNonce()
+	// John 3 — the passage planTestState's sample Bible actually has, so the
+	// arrival is not clamped onto a different chapter.
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "sent to neutral contact", Nonce: nonce})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+
+	st := planTestState(t)
+	url := ShareLinkURLWithNoteNonce("web", "John", 3, 16, 16, "sent to neutral contact", nonce)
+	HandleShareLink(st, url)
+
+	// One note in the scrapbook, still yours.
+	all := allNotesForBrowsing(appPrefs())
+	if len(all) != 1 {
+		t.Fatalf("tapping your own link left %d notes in the scrapbook, want 1", len(all))
+	}
+	if all[0].Kind != noteKindMine || all[0].ID != mine.ID {
+		t.Errorf("your note changed identity on the round trip: %+v", all[0])
+	}
+
+	// And it is DRAWN on the passage, as yours.
+	if st.ActiveNote != "sent to neutral contact" {
+		t.Errorf("tapping your own link drew no note: active=%q — the reader followed a "+
+			"link carrying a message and was shown a highlight and nothing else",
+			st.ActiveNote)
+	}
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	_, who, _, _ := appleStickerPush(st, plan)
+	if !strings.Contains(who, "you") {
+		t.Errorf("your own words are attributed %q — they are yours", who)
+	}
+	if strings.Contains(who, "Friend") {
+		t.Errorf("your own note is bylined as a friend's: %q", who)
+	}
+	if strings.Contains(who, "of") {
+		t.Errorf("your own note joined the passage's count (%q); N describes the notes "+
+			"people sent you and must not change because you looked at your own", who)
 	}
 }
