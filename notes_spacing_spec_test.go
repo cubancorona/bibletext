@@ -214,8 +214,11 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kNoteBtn)": "the pill borrowing the VERB BUTTON's size (30) for its height",
 			},
 			required: map[string]string{
-				"gNoteOwn ? @\"✕\" : @\"🗑\"": "the closing control's mark must say what the " +
-					"press does — a bin deletes someone else's message, ✕ only puts your own away",
+				"systemImageNamed:@\"trash.fill\"": "the closing control's bin must be DRAWN " +
+					"(SF Symbols, template-tinted) rather than typed as an emoji, which renders " +
+					"at the button's font size in its own colours — a loud mark on a quiet card",
+				"if (gNoteOwn) {": "the mark must still say what the press does: a bin deletes " +
+					"someone else's message, ✕ only puts your own away",
 				"chip.titleLabel.font = btNoteWhoFont();": "the pill's label must be the WHO font; " +
 					"a pill measured at one size and drawn at another overflows its own box",
 				"[chip setTitleColor:btNoteColor(gNoteMuted)": "the pill's label is the app's chrome " +
@@ -245,7 +248,11 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kMacNoteBtn)":      "the pill borrowing the VERB BUTTON's size (24) for its height",
 			},
 			required: map[string]string{
-				"gMacNoteOwn ? @\"✕\" : @\"🗑\"":                         "the closing control's mark must say what the press does",
+				"imageWithSystemSymbolName:@\"trash.fill\"": "the closing control's bin must be " +
+					"DRAWN rather than typed as an emoji, which renders at the button's font size " +
+					"in its own colours — loud on a card whose chrome is 10pt muted",
+				"if (gMacNoteOwn) {": "the mark must still say what the press does: a bin deletes " +
+					"someone else's message, ✕ only puts your own away",
 				"chip.font = btMacNoteWhoFont();":                       "the pill's label must be the WHO font",
 				"chip.contentTintColor = btMacNoteColor(gMacNoteMuted)": "the pill's label is muted chrome",
 				"tw + 2 * kMacNotePillPadX": "the pill's side padding must be the spec's; this pane had " +

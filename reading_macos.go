@@ -1273,6 +1273,8 @@ static const CGFloat kMacNoteGapAbove = 10, kMacNoteGapBelow = 10, kMacNotePad =
 // PillMinW). This pane had 12/76 of its own, which made the same "Notes · 3"
 // visibly narrower here than on the phone beside it.
 static const CGFloat kMacNotePillPadX = 14, kMacNotePillMinW = 86;
+// The bin's DRAWN size on the card — small, like the rest of this pane's chrome.
+static const CGFloat kMacNoteTrashPt = 12;
 static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kMacNoteRad = 10;
 // kMacNoteBtn is NOT spec: it is the verb button's size, this platform's 24pt
 // pointer target. The pill used to borrow it (24), which is how a pointer-target
@@ -1587,8 +1589,34 @@ static void btMacEnsureNoteView(void) {
 
         // A bin where the press DELETES someone else's message; ✕ where it only
         // puts your own note away (see the iOS twin).
-        NSButton *del = [NSButton buttonWithTitle:(gMacNoteOwn ? @"✕" : @"🗑")
-                                           target:gTextView action:@selector(btNoteDelete:)];
+        //
+        // The bin is DRAWN, not typed. It was the 🗑 emoji, which renders at the
+        // button's font size in its own colours — a large loud mark on a card
+        // whose other chrome is 10pt muted. SF Symbols' filled trash matches
+        // the Material bin the Fyne surfaces use, and as a template image it
+        // takes the muted tint like everything else here.
+        NSButton *del;
+        if (gMacNoteOwn) {
+            del = [NSButton buttonWithTitle:@"✕" target:gTextView action:@selector(btNoteDelete:)];
+        } else {
+            NSImage *bin = nil;
+            if (@available(macOS 11.0, *)) {
+                bin = [NSImage imageWithSystemSymbolName:@"trash.fill" accessibilityDescription:@"Delete"];
+                if (bin != nil) {
+                    NSImageSymbolConfiguration *cfg =
+                        [NSImageSymbolConfiguration configurationWithPointSize:kMacNoteTrashPt
+                                                                       weight:NSFontWeightRegular];
+                    bin = [bin imageWithSymbolConfiguration:cfg];
+                    bin.template = YES;
+                }
+            }
+            if (bin != nil) {
+                del = [NSButton buttonWithImage:bin target:gTextView action:@selector(btNoteDelete:)];
+                del.contentTintColor = btMacNoteColor(gMacNoteMuted);
+            } else {
+                del = [NSButton buttonWithTitle:@"✕" target:gTextView action:@selector(btNoteDelete:)];
+            }
+        }
         del.bordered = NO;
         del.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
         del.contentTintColor = btMacNoteColor(gMacNoteMuted);
