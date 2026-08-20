@@ -49,11 +49,7 @@ func buildHistoryBar(state *AppState) fyne.CanvasObject {
 		chips.Add(hgap(10))
 	}
 
-	// The app's one bin (notes_trash_icon.go), in the chrome's muted ink —
-	// outlined and ridged rather than Fyne's solid slab, and the same mark the
-	// notes list and every note card wear. A reader should not have to work out
-	// which bin means what.
-	clear := widget.NewButtonWithIcon("", noteTrashIcon(pal.TextMuted), func() {
+	clear := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		clearHistory(state)
 		state.refreshReadingOnly()
 	})

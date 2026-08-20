@@ -566,8 +566,7 @@ func showAISettings(state *AppState) {
 	// rather than going borderless, because a low-importance button reads as a
 	// plain label and hides that it is tappable — the same reasoning as the
 	// Paste / Clear / Test row above.
-	deleteNotesBtn := widget.NewButtonWithIcon("Delete all notes",
-		noteTrashIcon(state.pal().TextMuted), nil)
+	deleteNotesBtn := widget.NewButtonWithIcon("Delete all notes", theme.DeleteIcon(), nil)
 	// The count sits beside the verb and is its own tappable: it says how much
 	// "all" is before you commit to it, and it doubles as the way TO the notes —
 	// a reader deciding whether to bin them wants to look first. It is a separate

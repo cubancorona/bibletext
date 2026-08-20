@@ -1139,7 +1139,7 @@ func TestStyledClosingGlyphMatchesWhatItDoes(t *testing.T) {
 // by carrying an icon and no text.
 func seenPaneButtonIcon(t *testing.T, p *styledReadingPane, size fyne.Size) *widget.Button {
 	t.Helper()
-	want := noteTrashIcon(lightPalette.TextMuted).Name()
+	want := fyneTheme.DeleteIcon().Name()
 	for _, b := range seenPaneButtons(t, p, size) {
 		// By NAME, not merely "has an icon": the sticker's other controls can
 		// be icon-only too, and a loose match finds whichever comes first.

@@ -818,6 +818,10 @@ static const CGFloat kNoteGapAbove = 10, kNoteGapBelow = 10, kNotePad = 12;
 // PillMinW), and deliberately NOT kNotePad: the pill is one line of chrome and
 // wants more air beside its text than a paragraph does.
 static const CGFloat kNotePillPadX = 14, kNotePillMinW = 86;
+// The bin's DRAWN size on the card. Small on purpose — the button around it
+// carries the tap area (kNoteBtn), so this only has to be legible, and the rest
+// of the card's chrome is 11pt.
+static const CGFloat kNoteTrashPt = 13;
 static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 10;
 // kNoteBtn is NOT spec: it is the verb button's size, iOS's own 30pt thumb
 // target. The pill used to borrow it, which is how a touch-target decision came
@@ -1082,9 +1086,39 @@ static void btIOSEnsureNoteView(void) {
         // else's message; ✕ where it only puts your own note away, which is
         // what navigating away would do a moment later. One mark for both would
         // have left the DESTRUCTIVE meaning as the ambiguous one.
-        [del setTitle:(gNoteOwn ? @"✕" : @"🗑") forState:UIControlStateNormal];
-        [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
-        del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+        //
+        // The bin is DRAWN, not typed. It was the 🗑 emoji, which renders at the
+        // button's font size in its own colours — a big loud mark where the
+
+        // Symbols' trash is the same outlined, ridged bin the Fyne surfaces
+        // draw (notes_trash_icon.go), and as a TEMPLATE image it takes the
+        // muted tint like every other piece of this card's furniture.
+        //
+        // kNoteTrashPt is the drawn size, deliberately small: the BUTTON is the
+        // tap target (kNoteBtn), not the drawing.
+        [del setTitle:@"" forState:UIControlStateNormal];
+        if (gNoteOwn) {
+            // Dismiss, never destroy — a mark, not a bin.
+            [del setTitle:@"✕" forState:UIControlStateNormal];
+            [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+            del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+        } else if (@available(iOS 13.0, *)) {
+            UIImageSymbolConfiguration *cfg =
+                [UIImageSymbolConfiguration configurationWithPointSize:kNoteTrashPt
+                                                               weight:UIImageSymbolWeightRegular];
+            // trash.FILL, to match the icon the Fyne surfaces use — Material's
+            // delete is a filled bin, and the app should not have an outlined
+            // one here and a solid one two rows up in the history bar.
+            UIImage *bin = [UIImage systemImageNamed:@"trash.fill" withConfiguration:cfg];
+            [del setImage:[bin imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
+                 forState:UIControlStateNormal];
+            del.tintColor = btNoteColor(gNoteMuted);
+        } else {
+            // No SF Symbols: a quiet mark rather than a missing control.
+            [del setTitle:@"✕" forState:UIControlStateNormal];
+            [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+            del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+        }
         [del addTarget:gReadingTV action:@selector(btNoteDelete:)
       forControlEvents:UIControlEventTouchUpInside];
         del.tag = 905;

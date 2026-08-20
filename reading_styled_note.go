@@ -534,11 +534,12 @@ func (r *styledPaneRenderer) buildNote() {
 	if p.note.Own {
 		del.SetText("✕") // multiplication x: dismiss, never destroy
 	} else {
-		// The app's one bin, drawn and ridged (notes_trash_icon.go) rather than
-		// the emoji this used to set as a TITLE — an emoji renders at the
-		// button's font size and in its own colours, which is how a small quiet
-		// control became a large solid one.
-		del.SetIcon(noteTrashIcon(pal.TextMuted))
+		// THE APP'S OWN DELETE ICON, not an emoji. An emoji is set as a TITLE,
+		// so it renders at the button's font size in its own colours — which is
+		// how a small quiet control became a large loud one. The theme icon is
+		// tinted like the rest of the card's furniture and is sized by the
+
+		del.SetIcon(fyneTheme.DeleteIcon())
 	}
 	del.Importance = widget.LowImportance
 	r.noteBtns = append(r.noteBtns, hide, del)

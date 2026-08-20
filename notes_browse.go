@@ -860,7 +860,7 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 // what it is given, and an undo keeps that promise where a dialog only slows
 // the deliberate case down.
 func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
-	btn := widget.NewButtonWithIcon("", noteTrashIcon(pal.TextMuted), func() {
+	btn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		if state == nil {
 			return
 		}
