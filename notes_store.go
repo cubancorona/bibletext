@@ -455,7 +455,7 @@ func findNoteByNonce(p prefStore, nonce []byte) (StoredNote, bool) {
 // saveMyNote appends a note the reader just sent — a Kind=mine write of the
 // one store. Two of your own notes on one passage are two notes; the same
 // words re-shared are one (sameNoteContent, owner).
-func saveMyNote(p prefStore, n StoredNote) {
+func saveMyNote(p prefStore, n StoredNote) (StoredNote, bool) {
 	n.Kind = noteKindMine
 	// Store what actually TRAVELLED, not what was typed. The wire runs
 	// normalizeNote on encode (share_note.go) — it collapses blank-line runs and
@@ -468,7 +468,12 @@ func saveMyNote(p prefStore, n StoredNote) {
 	if n.VerseHi <= n.VerseLo {
 		n.VerseHi = 0
 	}
-	addNote(p, n)
+	// The STORED record comes back, which matters when this deduped: sharing
+	// the same words on the same passage twice is ONE note, and the caller must
+	// put the note's original identity in the second link rather than the fresh
+	// one it minted. See share.go — a link carrying a nonce the store does not
+	// hold is a link this device cannot recognise as its own.
+	return addNote(p, n)
 }
 
 // --- migration from the pre-S5 stores ---------------------------------------

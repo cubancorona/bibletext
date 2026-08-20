@@ -865,6 +865,29 @@ func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject 
 			return
 		}
 		deleteNoteByID(appPrefs(), n.ID)
+		// FOCUS MUST NOT OUTLIVE THE RECORD IT NAMES. Deleting from here left
+		// noteFocus pointing at an id the store no longer has, and the reading
+		// page then fell to the next note in the plan and OPENED it — a
+		// stranger's message appearing, expanded, because you deleted your own
+		// from a list. Measured:
+		//
+		//	showing: active="my own words" NoteID=2 focus={true 2}
+		//	after:   active="friend words" NoteID=1 focus={true 2}  ← deleted id
+		//
+		// Every other delete path resets focus; this one was added without it.
+		// Only when the deleted note is the one focus names — deleting some
+		// other row must not close what the reader has open.
+		//
+		// focusNone, NOT resetNoteFocus. The reading page's own delete returns
+		// focus to the DEFAULT RULE on purpose, so the rest of the set comes
+		// back — the reader is looking at the passage and expects to see what
+		// remains. Deleting from the LIST is a different act: the reader is
+		// pruning a list, not reading, and the default rule would open the next
+		// note on a page they are not even looking at. Closing is the honest
+		// answer; the passage still shows a pill saying notes are there.
+		if state.noteFocus.set && state.noteFocus.id == n.ID {
+			state.focusNone()
+		}
 		// The reading page may be showing the very note just deleted, so the
 		// projection re-derives before the repaint — the verb-to-screen rule.
 		applyNoteForCurrentChapter(state)

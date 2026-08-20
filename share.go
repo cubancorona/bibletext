@@ -74,6 +74,32 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 	// reader taps their own link — without asking the words, which cannot answer
 	// (a friend may write the same thing on the same verse).
 	nonce := newNoteNonce()
+	// SAVE FIRST, THEN BUILD THE LINK, and the order is the whole point.
+	//
+	// Sharing the same words on the same passage a second time is ONE note:
+	// addNote dedups on content and hands back the record already stored, which
+	// keeps the FIRST share's nonce. Minting a fresh nonce for the second link
+	// and using it produced a link whose identity the store did not hold — so
+	// tapping your own second link stored a received duplicate and showed your
+	// words as "Note from Friend", which is the exact defect the nonce exists to
+	// prevent, reachable again just by re-sharing.
+	//
+	// So the record decides the identity, not this call: whatever nonce comes
+	// back is what goes in the link.
+	if n := strings.TrimSpace(note); n != "" {
+		stored, ok := saveMyNote(appPrefs(), StoredNote{
+			VersionID: version.ID,
+			Book:      state.CurrentBook,
+			Chapter:   state.CurrentChapter,
+			VerseLo:   lo,
+			VerseHi:   hi,
+			Text:      n,
+			Nonce:     nonce,
+		})
+		if ok && len(stored.Nonce) == noteNonceLen {
+			nonce = stored.Nonce
+		}
+	}
 	url := ShareLinkURLWithNoteNonce(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note, nonce)
 	if url == "" {
 		shareVerse(state, text, false, span)
@@ -83,18 +109,6 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 	// survived only in whatever messenger you sent them through — which meant
 	// the app could show you every note you had RECEIVED and none you had sent.
 	// Stored as a Kind=mine record in the scrapbook store, never drawn in the text,
-
-	if n := strings.TrimSpace(note); n != "" {
-		saveMyNote(appPrefs(), StoredNote{
-			VersionID: version.ID,
-			Book:      state.CurrentBook,
-			Chapter:   state.CurrentChapter,
-			VerseLo:   lo,
-			VerseHi:   hi,
-			Text:      n,
-			Nonce:     nonce,
-		})
-	}
 
 	// The note goes in the MESSAGE too, not only inside the link. It is how
 	// people share things anyway, it reaches a recipient who never taps, and it
