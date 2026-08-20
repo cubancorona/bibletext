@@ -872,7 +872,7 @@ static const CGFloat kNotePillPadX = 14, kNotePillMinW = 86;
 // and a minimize mark, and it is furniture, not a feature: at 13 it still read
 
 // tap area (kNoteBtn), so the drawing only has to be legible, not large.
-static const CGFloat kNoteTrashPt = 10.5;
+static const CGFloat kNoteTrashPt = 11.5;
 static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 10;
 // kNoteBtn is NOT spec: it is the verb button's size, iOS's own 30pt thumb
 // target. The pill used to borrow it, which is how a touch-target decision came
