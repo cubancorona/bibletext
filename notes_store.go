@@ -628,6 +628,29 @@ func applyNoteForCurrentChapter(state *AppState) {
 		return
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
+	// YOUR OWN NOTE, the requested behavior to see it. It is not in plan.Notes and so
+	// has no display index — it is the plan's own slot, filled only while
+	// noteFocus names it (buildChapterPlan). Projected exactly like a received
+	// note so every surface draws it through the one path it already has, and
+	// so the mark below is raised from the note's own span; the byline
+	// (senderByline) is what says whose words these are.
+	if plan.HasOwn {
+		own := displayCopy(plan.Own, state.currentVersion().ID, state.CurrentChapter)
+		state.ActiveNote = own.Text
+		state.NoteMinimized = false // ephemeral: never the stored Minimized bit
+		state.NoteVerseLo = own.VerseLo
+		state.NoteID = own.ID
+		if !notesSuppressed(state) && own.VerseLo > 0 {
+			state.setMark(hlNote, VerseSpan{
+				VersionID: state.currentVersion().ID,
+				Book:      state.CurrentBook,
+				Chapter:   state.CurrentChapter,
+				Lo:        own.VerseLo,
+				Hi:        own.VerseHi,
+			})
+		}
+		return
+	}
 	if plan.display < 0 {
 		// Nothing to draw. The note's own highlight goes with it — ownership
 		// is RECORDED (mark.go), so this is an equality, and a highlight that

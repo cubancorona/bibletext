@@ -476,41 +476,29 @@ func openNote(state *AppState, n StoredNote) {
 	// next launch's restore.
 	chapter := clampChapter(state.Bible, n.Book, n.Chapter)
 	if n.Kind == noteKindMine {
-		// YOUR OWN NOTE. Mine notes are stored but never drawn in the text
-		// (owner directive; the plan excludes them), so focusing one would name
-		// an id no plan surfaces — the reader would land on the OTHER notes'
-		// pill, or on nothing, reading as a dead tap (mechanism 1 of report A).
-		// The tap is still answered: navigate, and light the note's own verse
-		// range as a Go-to arrival — hlVerseOfDay, the origin for "the reader
-		// asked to BE at this passage" — so their words' verses greet them lit.
-		// No received-note bubble is faked; the row's "From you" byline is the
-		// acknowledgment that this is your note, and the wash is the arrival's.
-		state.captureSuppressionTake(n.Book, chapter)
+		// YOUR OWN NOTE, and it now behaves exactly like a received one —
+		// because the plan draws it while focus names it (chapterPlan.Own).
+		//
+		// WHAT THIS REPLACES, and why it was worse than "a dead tap": this
+		// branch used to raise an hlVerseOfDay mark on the note's verses. That
+		// origin is not fromNote (mark.go), so notesSuppressed was TRUE, and
+		// the Open loop stood every note on the chapter down. Tapping your own
+		// row did not merely fail to show your words — it collapsed a FRIEND's
+		// open note on that passage into a pill. You touched your own note and
+		// hers appeared to go away.
+		//
+		// So: no hand-set mark and no suppression capture. Focus it and let the
+		// projection raise the note's own hlNote mark and wash, which is what
+		// the received branch below has always done. The two branches are one
+		// behaviour now, differing only in the byline the projection composes
+		// ("Note from you", senderByline) — and the note is drawn only until
+		// the reader navigates away, because navigation resets focus.
 		selectBook(state, n.Book, false)
 		state.CurrentChapter = chapter
 		addRecentChapter(state, n.Book, chapter)
 		state.forceReposition = true
 		state.restore = nil
-		if n.VerseLo > 0 {
-			// The span's frame is the NOTE'S OWN translation, exactly as
-			// applyShareTarget stamps t.VersionID: the verse numbers are the
-			// note's, and when the reading translation differs (the switch was
-			// refused — a lapsed license, an unknown id) the frame accessor is
-			// what declines to light foreign numbers against the wrong canon,
-			// instead of the span CLAIMING the reading frame for them (verification
-			// finding: an NKJV Romans 16:25-27 note read under WEB lit the
-			// wrong verses — the doxology files at 14 there).
-			state.setMark(hlVerseOfDay, VerseSpan{
-				VersionID: n.VersionID,
-				Book:      n.Book,
-				Chapter:   chapter,
-				Lo:        n.VerseLo,
-				Hi:        n.VerseHi,
-			})
-		}
-		// End on the projection whatever the mark did (the verb → screen rule):
-		// the mark just raised is foreign to any RECEIVED note on this chapter,
-		// and the plan must stand those down before the repaint, not after it.
+		state.focusNote(n.ID)
 		applyNoteForCurrentChapter(state)
 		state.IsSearching = false
 		state.CanReturnToSearchResults = false

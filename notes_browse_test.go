@@ -357,15 +357,31 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		if !live || sp.Lo != 1 || sp.Hi != 2 {
 			t.Fatalf("your note's verses must light on arrival: live=%v span=%+v", live, sp)
 		}
-		if st.mark.fromNote() {
-			t.Error("a mine note never raises hlNote — the mark must be honest about its origin")
+
+		// that a mine note raises hlVerseOfDay and that no bubble is drawn. That
+		// was the honest answer while the plan could not draw an own note at
+		// all — but it had a consequence nobody had traced. hlVerseOfDay is not
+		// fromNote, so notesSuppressed was TRUE, and tapping your own row stood
+		// down every note on the chapter: a FRIEND's open note collapsed to a
+		// pill because you touched your own. The reader's report ("takes you to
+		// the reading pane with the highlight only and no note — a bit
+		// misleading") was the smaller half of it.
+		//
+		// Now your own note is drawn while focus names it, in the plan's own
+		// slot, and hidden again when you navigate away. So the mark is the
+		// NOTE's, like any other note's, and the bubble is real rather than
+		// faked — it carries your own words under "Note from you".
+		if !st.mark.fromNote() {
+			t.Errorf("your own note must raise its OWN mark now, got origin %v — "+
+				"a foreign mark here suppresses every other note on the chapter", st.mark.Origin)
 		}
-		if st.mark.Origin != hlVerseOfDay {
-			t.Errorf("the arrival should read as a Go-to (the reader asked to BE here), got %v", st.mark.Origin)
+		if st.ActiveNote != mine.Text {
+			t.Errorf("your own note must be drawn on the passage the requested behavior see it on: "+
+				"active=%q want %q", st.ActiveNote, mine.Text)
 		}
-		if st.ActiveNote != "" || st.NoteID != 0 {
-			t.Errorf("no received-note bubble may be faked for your own words: active=%q id=%d",
-				st.ActiveNote, st.NoteID)
+		if st.NoteID != mine.ID {
+			t.Errorf("the mirror must carry the note's own identity, so the verbs "+
+				"address the right record: got %d want %d", st.NoteID, mine.ID)
 		}
 		if !st.forceReposition {
 			t.Error("the arrival must place the view on the lit verses")
@@ -698,4 +714,85 @@ func notesSlice(m map[string]StoredNote) []StoredNote {
 		out = append(out, n)
 	}
 	return out
+}
+
+// TAPPING YOUR OWN NOTE MUST NOT TAKE A FRIEND'S AWAY.
+//
+// The worst part of the old mine branch was invisible in the bug report. It
+// raised an hlVerseOfDay mark, whose origin is not fromNote (mark.go), so
+// notesSuppressed was true (notes_plan.go) and the Open loop stood down every
+// note on the chapter. A reader with a friend's note open on Psalm 23 who
+// tapped their OWN note in the list watched their friend's message collapse
+// into a pill — caused by the tap, explained by nothing.
+//
+// This pins the property rather than the mechanism: after tapping your own
+// note, a received note on the same passage is still openable.
+func TestOwnNoteTapDoesNotSuppressAFriendsNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 4, Text: "synthetic note"})
+	if !ok {
+		t.Fatal("the friend's note was not stored")
+	}
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "sent to neutral contact"})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+
+	st := planTestState(t)
+	openNote(st, mine)
+
+	// The mark your own note raised is the NOTE's, so nothing is suppressed.
+	if notesSuppressed(st) {
+		t.Fatal("tapping your own note suppressed the chapter's notes — a friend's " +
+			"open note would collapse to a pill because you touched your own")
+	}
+	// And the friend's note is still there, still openable: focus it and it draws.
+	st.focusNote(friend.ID)
+	applyNoteForCurrentChapter(st)
+	if st.ActiveNote != friend.Text {
+		t.Errorf("the friend's note did not come back after your own note was tapped: "+
+			"active=%q want %q", st.ActiveNote, friend.Text)
+	}
+}
+
+// YOUR OWN NOTE IS EPHEMERAL: shown the requested behavior, gone when you move on.
+// The mechanism is noteFocus, which navigation already resets (state.go), so
+// this asserts the BEHAVIOUR rather than the wiring — if the reset ever moves,
+// this still says what the reader is promised.
+func TestOwnNoteHidesAgainOnNavigation(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "sent to neutral contact"})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+	st := planTestState(t)
+
+	openNote(st, mine)
+	if st.ActiveNote != mine.Text {
+		t.Fatalf("your own note was not drawn the requested behavior for it: %q", st.ActiveNote)
+	}
+
+	// Navigate away and back. Your own note must not follow you around.
+	addRecentChapter(st, "Psalms", 24)
+	if st.ActiveNote != "" {
+		t.Errorf("your own note followed the reader to another chapter: %q", st.ActiveNote)
+	}
+	addRecentChapter(st, "Psalms", 23)
+	if st.ActiveNote != "" {
+		t.Errorf("your own note reappeared unbidden on a later visit: %q — own notes are "+
+			"drawn only when asked for, never by simply being on the passage", st.ActiveNote)
+	}
 }
