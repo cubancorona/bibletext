@@ -106,7 +106,7 @@ func bibleTextNoteHidden() {
 	}
 	fyne.Do(func() {
 		hideCurrentNote(state)
-		state.refreshReadingOnly()
+		refreshNoteOnly(state)
 	})
 }
 
@@ -121,7 +121,7 @@ func bibleTextNoteRestored() {
 	}
 	fyne.Do(func() {
 		restoreCurrentNote(state)
-		state.refreshReadingOnly()
+		refreshNoteOnly(state)
 	})
 }
 
@@ -139,7 +139,7 @@ func bibleTextNoteNextTapped() {
 	}
 	fyne.Do(func() {
 		advanceNoteFocus(state)
-		state.refreshReadingOnly()
+		refreshNoteOnly(state)
 	})
 }
 
@@ -154,7 +154,7 @@ func bibleTextNoteDeleted() {
 	}
 	fyne.Do(func() {
 		dropCurrentNote(state)
-		state.refreshReadingOnly()
+		refreshNoteOnly(state)
 	})
 }
 
@@ -180,7 +180,7 @@ func bibleTextHighlightCleared() {
 			return
 		}
 		clearHighlightAndRederive(state)
-		state.refreshReadingOnly()
+		refreshNoteOnly(state)
 	})
 }
 

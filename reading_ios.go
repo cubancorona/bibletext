@@ -3079,6 +3079,13 @@ func setNativeTint(state *AppState, verses []Verse) { pushNativeTint(state, vers
 
 func applyNativeTint(state *AppState, verses []Verse) { pushNativeTint(state, verses, 1) }
 
+// nativeScrollToHighlight places the view on the current wash without touching
+// the text — the "place the view" half of forceReposition, spelled as a scroll
+// (reading_tint_apple.go). Named identically on both Apple panes so the shared
+// in-place note refresh (notes_refresh_apple.go) can honour a placement without
+// knowing which overlay it is talking to.
+func nativeScrollToHighlight() { C.bibleTextIOSScrollToHighlight() }
+
 func pushNativeTint(state *AppState, verses []Verse, repaint C.int) {
 	runs := nativeTintRuns(state, verses)
 	if len(runs) == 0 {
