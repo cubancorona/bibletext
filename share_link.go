@@ -110,6 +110,15 @@ func ShareLinkURL(versionID, book string, chapter, lo, hi int) string {
 // ShareLinkURL would have produced — byte for byte — so adding this feature
 // changed nothing about the links that do not use it.
 func ShareLinkURLWithNote(versionID, book string, chapter, lo, hi int, note string) string {
+	return ShareLinkURLWithNoteNonce(versionID, book, chapter, lo, hi, note, nil)
+}
+
+// ShareLinkURLWithNoteNonce is ShareLinkURLWithNote plus the note's per-share
+// identity, which the sending device keeps so it can recognise its own note
+// coming home (share_note.go, noteTagNonce). A nil nonce emits nothing and
+// produces exactly the link the plain builder would — so every existing caller,
+// and every link already in the world, is unaffected.
+func ShareLinkURLWithNoteNonce(versionID, book string, chapter, lo, hi int, note string, nonce []byte) string {
 	slug, ok := BookSlug(book)
 	if !ok {
 		return ""
@@ -161,6 +170,7 @@ func ShareLinkURLWithNote(versionID, book string, chapter, lo, hi int, note stri
 		Chapter: chapter,
 		VerseLo: lo,
 		VerseHi: hi,
+		Nonce:   nonce,
 	})); payload != "" {
 		keys = append(keys, "n="+payload)
 	}

@@ -50,6 +50,7 @@ package bibletext
 import (
 	"bytes"
 	"compress/flate"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -85,6 +86,21 @@ const (
 	noteTagRuns    = 'a' // verse runs: uvarint n, then n × (uvarint lo, uvarint hi)
 	noteTagBook    = 'b' // uvarint index into noteBookOrder (share_note_canon.go)
 	noteTagChapter = 'c' // uvarint chapter, >= 1
+	// noteTagNonce is a PER-NOTE random value, minted once when a note is
+	// shared and carried by every copy of that link. It exists so a device can
+	// recognise ITS OWN note coming home — you tap a link you sent, and the app
+	// knows it is yours rather than guessing from the words.
+	//
+	// WHY NOT CONTENT. Content is not identity: "Amen" on the same verse from a
+	// friend is a different note that happens to read the same, and collapsing
+	// on content would silently file their message as yours. The scrapbook's
+	// charter is that it keeps what it is given.
+	//
+	// WHY NOT 'i' OR 's'. Those are reserved for SENDER identity — a value that
+	// would be the same in every link you ever send, and visible to everyone
+	// each is forwarded to. This is per-NOTE: nothing links two of them, so it
+	// carries no cross-note trail. Six bytes, ~8 characters of fragment.
+	noteTagNonce   = 'n' // 6 random bytes identifying ONE shared note
 	noteTagText    = 't' // UTF-8 note text — REQUIRED
 	noteTagVersion = 'v' // sender's translation id, [a-z0-9-]{1,8}
 	noteTagStop    = 0xFF
@@ -141,6 +157,7 @@ type DecodedNote struct {
 	Book    string // canonical book name resolved from 'b', "" when absent
 	Chapter int    // 'c', 0 when absent
 	Runs    []NoteVerseRun
+	Nonce   []byte // 'n', nil when absent — see noteTagNonce
 
 	// Skipped holds every record this build could not USE, verbatim
 	// (tag+len+value): unknown lowercase tags, and known tags whose value did
@@ -160,9 +177,16 @@ type NoteWire struct {
 	Version string // the SENDER's translation id — not the (lossy) link path
 	Book    string // canonical book name
 	Chapter int
-	VerseLo int // 0 = no verse run
-	VerseHi int // 0 or < VerseLo = single verse
+	VerseLo int    // 0 = no verse run
+	VerseHi int    // 0 or < VerseLo = single verse
+	Nonce   []byte // per-note identity (noteTagNonce); nil emits nothing
 }
+
+// noteNonceLen is the width of a share's per-note identity. Six bytes is 2^48
+// values: a reader would have to share on the order of a hundred million notes
+// before two collided, and a collision costs one wrongly-collapsed note, not
+// data loss — the arrival still opens the passage.
+const noteNonceLen = 6
 
 // EncodeNote is the text-only convenience over the record encoder: a payload
 // carrying just 't'. Callers that know the passage should use EncodeNoteWire.
@@ -215,6 +239,9 @@ func EncodeNoteWire(w NoteWire) string {
 	}
 	if w.Chapter >= 1 {
 		appendRecord(noteTagChapter, buf[:binary.PutUvarint(buf[:], uint64(w.Chapter))])
+	}
+	if len(w.Nonce) == noteNonceLen {
+		appendRecord(noteTagNonce, w.Nonce)
 	}
 	appendRecord(noteTagText, []byte(text))
 	if v := noteWireVersionID(w.Version); v != "" {
@@ -358,7 +385,7 @@ func decodeNoteRecords(s []byte) (DecodedNote, NoteOutcome) {
 		}
 
 		switch tag {
-		case noteTagText, noteTagVersion, noteTagBook, noteTagChapter, noteTagRuns:
+		case noteTagText, noteTagVersion, noteTagBook, noteTagChapter, noteTagRuns, noteTagNonce:
 			if seen[tag] {
 				break // duplicate tag: first occurrence wins
 			}
@@ -425,6 +452,12 @@ func applyNoteField(d *DecodedNote, tag byte, val []byte, textRaw *[]byte, sawTe
 			return false
 		}
 		d.Runs = runs
+		return true
+	case noteTagNonce:
+		if len(val) != noteNonceLen {
+			return false // not ours to interpret; preserved verbatim like any unusable value
+		}
+		d.Nonce = append([]byte(nil), val...)
 		return true
 	}
 	return false
@@ -589,4 +622,21 @@ func inflateBytes(z []byte, limit int) ([]byte, error) {
 		return nil, errNoteTooLarge
 	}
 	return out, nil
+}
+
+// newNoteNonce mints one share's identity: noteNonceLen bytes from crypto/rand.
+//
+// crypto/rand and not math/rand, though nothing here is a secret — because a
+// predictable value would let anyone construct a link that a reader's own
+// device mistakes for one they sent, which would quietly replace a stranger's
+// note with their own. The cost of the strong source is nothing at share time.
+//
+// A failure returns nil rather than a weak value: a link without a nonce simply
+// does not collapse, which is exactly today's behaviour and no worse.
+func newNoteNonce() []byte {
+	b := make([]byte, noteNonceLen)
+	if _, err := rand.Read(b); err != nil {
+		return nil
+	}
+	return b
 }

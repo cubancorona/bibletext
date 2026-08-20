@@ -796,3 +796,97 @@ func TestOwnNoteHidesAgainOnNavigation(t *testing.T) {
 			"drawn only when asked for, never by simply being on the passage", st.ActiveNote)
 	}
 }
+
+// TAPPING YOUR OWN LINK GIVES YOU YOUR OWN NOTE — once, and as yours.
+//
+
+// into my stored notes as from me. But then if I click my own link it seems to
+// get stored again a second time as from friend."
+//
+// The key is the per-note nonce (share_note.go, noteTagNonce), not the words: a
+// friend may write the same sentence on the same verse, and collapsing on
+// content would file their message as yours and lose it.
+func TestOwnLinkComesHomeAsYours(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	nonce := newNoteNonce()
+	if len(nonce) != noteNonceLen {
+		t.Fatalf("no nonce minted: %v", nonce)
+	}
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "sent to neutral contact", Nonce: nonce})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+
+	// The link you sent, parsed back exactly as tapping it would.
+	url := ShareLinkURLWithNoteNonce("web", "Psalms", 23, 1, 1, "sent to neutral contact", nonce)
+	target, ok := ParseShareLink(url)
+	if !ok {
+		t.Fatalf("your own link did not parse: %q", url)
+	}
+	if target.NoteNonce == ([noteNonceLen]byte{}) {
+		t.Fatal("the link lost its nonce on the round trip")
+	}
+
+	st := planTestState(t)
+	got, stored := rememberIncomingNote(st, target)
+	if !stored {
+		t.Fatal("the arrival was refused outright")
+	}
+	if got.ID != mine.ID {
+		t.Errorf("tapping your own link created a second record (id %d, yours is %d) — "+
+			"your own words would then be shown back to you as a note from a friend",
+			got.ID, mine.ID)
+	}
+	if got.Kind != noteKindMine {
+		t.Errorf("your note came home as %q; it is still yours", got.Kind)
+	}
+	if all := allNotesForBrowsing(appPrefs()); len(all) != 1 {
+		t.Errorf("the scrapbook holds %d notes after a round trip of ONE note", len(all))
+	}
+}
+
+// A FRIEND'S IDENTICAL WORDS ARE STILL THEIR OWN NOTE. The failure mode the
+// nonce exists to prevent: short notes repeat ("Amen", "synthetic note"), and
+// a content-keyed collapse would fold a real message from a real person into
+// your record and show it as yours, with nothing to say it had arrived.
+func TestAFriendsIdenticalNoteIsNotSwallowed(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "Amen", Nonce: newNoteNonce()})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+	// Their link: same words, same verse, THEIR nonce.
+	url := ShareLinkURLWithNoteNonce("web", "Psalms", 23, 1, 1, "Amen", newNoteNonce())
+	target, ok := ParseShareLink(url)
+	if !ok {
+		t.Fatal("their link did not parse")
+	}
+
+	st := planTestState(t)
+	got, stored := rememberIncomingNote(st, target)
+	if !stored {
+		t.Fatal("their note was refused")
+	}
+	if got.ID == mine.ID {
+		t.Error("a friend's note was folded into yours because the words matched — " +
+			"their message is gone and the app would call it yours")
+	}
+	if got.Kind != noteKindReceived {
+		t.Errorf("their note is %q, not received", got.Kind)
+	}
+	if all := allNotesForBrowsing(appPrefs()); len(all) != 2 {
+		t.Errorf("expected two notes (yours and theirs), got %d", len(all))
+	}
+}
