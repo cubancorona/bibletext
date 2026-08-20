@@ -35,13 +35,14 @@ import (
 // change a size here and the budget moves with it; grow the row's STRUCTURE
 // and the test is what says so.
 const (
-	browseRefTextSize  float32 = 13 // the reference heading (was 18)
-	browseMetaTextSize float32 = 11 // abbrev, byline, date, the minimized marker
-	browseBodyTextSize float32 = 13 // the bubble's message text (app body is 18)
-	browseRowGap       float32 = 3  // between the row's stacked pieces (VBox gap)
-	browseRowPad       float32 = 3  // around the whole row, replacing NewPadded's 7
-	browseBubblePad    float32 = 3  // inside the bubble card (the banner keeps theme.Padding)
-	browseSepGap       float32 = 2  // between the card and its separator
+	browseRefTextSize   float32 = 13 // the reference heading (was 18)
+	browseMetaTextSize  float32 = 11 // abbrev, byline, date, the minimized marker
+	browseBodyTextSize  float32 = 13 // the bubble's message text (app body is 18)
+	browseTrashIconSize float32 = 13 // the row's delete mark; smaller than the app's inline icon
+	browseRowGap        float32 = 3  // between the row's stacked pieces (VBox gap)
+	browseRowPad        float32 = 3  // around the whole row, replacing NewPadded's 7
+	browseBubblePad     float32 = 3  // inside the bubble card (the banner keeps theme.Padding)
+	browseSepGap        float32 = 2  // between the card and its separator
 
 	// The visible body is a PREVIEW, wrap-limited: the row's tap already
 	// navigates to the passage where a received note shows in full, so the cap
@@ -69,6 +70,13 @@ func (t browseRowTheme) Size(name fyne.ThemeSizeName) float32 {
 		return browseLabelInnerPad
 	case theme.SizeNameLineSpacing:
 		return 4
+	case theme.SizeNameInlineIcon:
+		// The row's bin, smaller than the app's default inline icon (owner,
+		// twice: "not too large. Subtle", then "a bit smaller still"). The row
+		// is dense chrome — an 11pt reference and a smaller byline — and the
+		// delete is furniture beside the words, not a feature of them. The
+		// BUTTON keeps its own tap area; only the drawing shrinks.
+		return browseTrashIconSize
 	}
 	return t.Theme.Size(name)
 }

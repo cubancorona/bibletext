@@ -214,11 +214,15 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kNoteBtn)": "the pill borrowing the VERB BUTTON's size (30) for its height",
 			},
 			required: map[string]string{
-				"systemImageNamed:@\"trash.fill\"": "the closing control's bin must be DRAWN " +
+				"btIOSTrashImage(kNoteTrashPt": "the closing control's bin must be DRAWN " +
 					"(SF Symbols, template-tinted) rather than typed as an emoji, which renders " +
 					"at the button's font size in its own colours — a loud mark on a quiet card",
 				"if (gNoteOwn) {": "the mark must still say what the press does: a bin deletes " +
 					"someone else's message, ✕ only puts your own away",
+				"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z": "the card's bin must be the " +
+					"SAME drawing as theme.DeleteIcon() — this is Fyne's own path, quoted so the " +
+					"two cannot drift. SF Symbols' trash is a different, tapered bin, and using " +
+					"it here put two designs on one screen",
 				"chip.titleLabel.font = btNoteWhoFont();": "the pill's label must be the WHO font; " +
 					"a pill measured at one size and drawn at another overflows its own box",
 				"[chip setTitleColor:btNoteColor(gNoteMuted)": "the pill's label is the app's chrome " +
@@ -248,9 +252,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kMacNoteBtn)":      "the pill borrowing the VERB BUTTON's size (24) for its height",
 			},
 			required: map[string]string{
-				"imageWithSystemSymbolName:@\"trash.fill\"": "the closing control's bin must be " +
-					"DRAWN rather than typed as an emoji, which renders at the button's font size " +
-					"in its own colours — loud on a card whose chrome is 10pt muted",
+				"btMacTrashImage(kMacNoteTrashPt)": "the closing control's bin must be DRAWN, " +
+					"and drawn from FYNE's path so the app has one bin rather than two designs",
 				"if (gMacNoteOwn) {": "the mark must still say what the press does: a bin deletes " +
 					"someone else's message, ✕ only puts your own away",
 				"chip.font = btMacNoteWhoFont();":                       "the pill's label must be the WHO font",

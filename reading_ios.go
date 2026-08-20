@@ -806,6 +806,56 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
     });
 }
 
+// btIOSTrashImage draws the SAME bin the Fyne surfaces use, so the note card's
+// delete and the history bar's are one mark rather than two designs.
+//
+// Fyne's theme.DeleteIcon() is Material's "delete": a straight-sided can with
+// rounded bottom corners, a flat lid bar and a small trapezoid handle. SF
+// Symbols' trash is Apple's own drawing — tapered, different lid — and using it
+// here put two different bins in one screen (owner spotted it immediately). So
+// the path is transcribed from Fyne's own SVG, which is the source of truth:
+//
+//   body: M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z
+//   lid:  M19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z
+//
+// on a 24x24 viewBox, scaled to the requested point size. Returned as a
+// TEMPLATE image so the card tints it like the rest of its chrome.
+static UIImage *btIOSTrashImage(CGFloat pt, UIColor *tint) {
+    CGFloat s = pt / 24.0;
+    CGSize size = CGSizeMake(pt, pt);
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:size];
+    UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
+        UIBezierPath *p = [UIBezierPath bezierPath];
+        // The can.
+        [p moveToPoint:CGPointMake(6*s, 19*s)];
+        [p addCurveToPoint:CGPointMake(8*s, 21*s)
+             controlPoint1:CGPointMake(6*s, 20.1*s)
+             controlPoint2:CGPointMake(6.9*s, 21*s)];
+        [p addLineToPoint:CGPointMake(16*s, 21*s)];
+        [p addCurveToPoint:CGPointMake(18*s, 19*s)
+             controlPoint1:CGPointMake(17.1*s, 21*s)
+             controlPoint2:CGPointMake(18*s, 20.1*s)];
+        [p addLineToPoint:CGPointMake(18*s, 7*s)];
+        [p addLineToPoint:CGPointMake(6*s, 7*s)];
+        [p closePath];
+        // The lid, with its handle.
+        [p moveToPoint:CGPointMake(19*s, 4*s)];
+        [p addLineToPoint:CGPointMake(15.5*s, 4*s)];
+        [p addLineToPoint:CGPointMake(14.5*s, 3*s)];
+        [p addLineToPoint:CGPointMake(9.5*s, 3*s)];
+        [p addLineToPoint:CGPointMake(8.5*s, 4*s)];
+        [p addLineToPoint:CGPointMake(5*s, 4*s)];
+        [p addLineToPoint:CGPointMake(5*s, 6*s)];
+        [p addLineToPoint:CGPointMake(19*s, 6*s)];
+        [p closePath];
+        [[UIColor whiteColor] setFill];
+        [p fill];
+    }];
+    UIImage *tpl = [img imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    (void)tint;
+    return tpl;
+}
+
 static UIFont *btNoteBodyFont(void) { return [UIFont systemFontOfSize:15]; }
 static UIFont *btNoteWhoFont(void)  { return [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]; }
 
@@ -1103,22 +1153,9 @@ static void btIOSEnsureNoteView(void) {
             [del setTitle:@"✕" forState:UIControlStateNormal];
             [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
             del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
-        } else if (@available(iOS 13.0, *)) {
-            UIImageSymbolConfiguration *cfg =
-                [UIImageSymbolConfiguration configurationWithPointSize:kNoteTrashPt
-                                                               weight:UIImageSymbolWeightRegular];
-            // trash.FILL, to match the icon the Fyne surfaces use — Material's
-            // delete is a filled bin, and the app should not have an outlined
-            // one here and a solid one two rows up in the history bar.
-            UIImage *bin = [UIImage systemImageNamed:@"trash.fill" withConfiguration:cfg];
-            [del setImage:[bin imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
-                 forState:UIControlStateNormal];
-            del.tintColor = btNoteColor(gNoteMuted);
         } else {
-            // No SF Symbols: a quiet mark rather than a missing control.
-            [del setTitle:@"✕" forState:UIControlStateNormal];
-            [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
-            del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+            [del setImage:btIOSTrashImage(kNoteTrashPt, nil) forState:UIControlStateNormal];
+            del.tintColor = btNoteColor(gNoteMuted);
         }
         [del addTarget:gReadingTV action:@selector(btNoteDelete:)
       forControlEvents:UIControlEventTouchUpInside];

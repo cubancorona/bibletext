@@ -910,6 +910,42 @@ void bibleTextMacScrollToHighlight(void) {
     else dispatch_async(dispatch_get_main_queue(), block);
 }
 
+
+// btMacTrashImage is the iOS twin: Fyne's own Material "delete" path, so the
+// note card, the history bar and every other bin in the app are one drawing.
+// Drawn FLIPPED so the coordinates are the SVG's own, top-left origin, and the
+// transcription can be compared with reading_ios.go line for line.
+static NSImage *btMacTrashImage(CGFloat pt) {
+    return [NSImage imageWithSize:NSMakeSize(pt, pt) flipped:YES
+                   drawingHandler:^BOOL(NSRect rect) {
+        CGFloat s = pt / 24.0;
+        NSBezierPath *p = [NSBezierPath bezierPath];
+        [p moveToPoint:NSMakePoint(6*s, 19*s)];
+        [p curveToPoint:NSMakePoint(8*s, 21*s)
+          controlPoint1:NSMakePoint(6*s, 20.1*s)
+          controlPoint2:NSMakePoint(6.9*s, 21*s)];
+        [p lineToPoint:NSMakePoint(16*s, 21*s)];
+        [p curveToPoint:NSMakePoint(18*s, 19*s)
+          controlPoint1:NSMakePoint(17.1*s, 21*s)
+          controlPoint2:NSMakePoint(18*s, 20.1*s)];
+        [p lineToPoint:NSMakePoint(18*s, 7*s)];
+        [p lineToPoint:NSMakePoint(6*s, 7*s)];
+        [p closePath];
+        [p moveToPoint:NSMakePoint(19*s, 4*s)];
+        [p lineToPoint:NSMakePoint(15.5*s, 4*s)];
+        [p lineToPoint:NSMakePoint(14.5*s, 3*s)];
+        [p lineToPoint:NSMakePoint(9.5*s, 3*s)];
+        [p lineToPoint:NSMakePoint(8.5*s, 4*s)];
+        [p lineToPoint:NSMakePoint(5*s, 4*s)];
+        [p lineToPoint:NSMakePoint(5*s, 6*s)];
+        [p lineToPoint:NSMakePoint(19*s, 6*s)];
+        [p closePath];
+        [[NSColor whiteColor] setFill];
+        [p fill];
+        return YES;
+    }];
+}
+
 static void bibleTextMacScrollTV(void) {
     if (gTextView == nil || gScroll == nil) return;
     // Programmatic scrolling (e.g. read-along follow-scroll) can leave the
@@ -1599,17 +1635,8 @@ static void btMacEnsureNoteView(void) {
         if (gMacNoteOwn) {
             del = [NSButton buttonWithTitle:@"✕" target:gTextView action:@selector(btNoteDelete:)];
         } else {
-            NSImage *bin = nil;
-            if (@available(macOS 11.0, *)) {
-                bin = [NSImage imageWithSystemSymbolName:@"trash.fill" accessibilityDescription:@"Delete"];
-                if (bin != nil) {
-                    NSImageSymbolConfiguration *cfg =
-                        [NSImageSymbolConfiguration configurationWithPointSize:kMacNoteTrashPt
-                                                                       weight:NSFontWeightRegular];
-                    bin = [bin imageWithSymbolConfiguration:cfg];
-                    bin.template = YES;
-                }
-            }
+            NSImage *bin = btMacTrashImage(kMacNoteTrashPt);
+            bin.template = YES;
             if (bin != nil) {
                 del = [NSButton buttonWithImage:bin target:gTextView action:@selector(btNoteDelete:)];
                 del.contentTintColor = btMacNoteColor(gMacNoteMuted);
