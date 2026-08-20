@@ -1124,3 +1124,83 @@ func TestNoteRowTrashDeletesTheNote(t *testing.T) {
 		t.Errorf("the wrong note was deleted: %q survived", all[0].Text)
 	}
 }
+
+// PUTTING A NOTE AWAY OPENS NOTHING ELSE — the rule the codebase states as N3:
+// "nothing may take the closed one's place under the reader's eyes."
+//
+// Found by a state-transition analysis, then measured. With a friend's note
+// also on the passage, putting YOUR OWN note away opened THEIRS in its place —
+// fully expanded, with the wash jumping onto their verse:
+//
+//	before: active="my own words" id=2
+//	after:  active="friend words" id=1 markLive=true lo=17
+//
+// The plan was right throughout (openNote() reported false); the MIRROR was
+// wrong. applyNoteForCurrentChapter read the stored Minimized bit, which is
+// only one of the three things that keep a note closed — the other two, focus
+// none and suppression, it could not see. It now reads the plan's Open, which
+// folds all three.
+//
+// The fixture is the whole point: the original test had only ONE note, so the
+// display index had nowhere to fall and the defect could not appear.
+func TestPuttingYourOwnNoteAwayOpensNothingElse(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		act  func(*AppState)
+	}{
+		{"the minimize verb", hideCurrentNote},
+		{"the delete verb", dropCurrentNote},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := test.NewApp()
+			defer app.Quit()
+			setNotesEnabled(true)
+			deleteAllNotes(appPrefs())
+			defer deleteAllNotes(appPrefs())
+
+			friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+				Book: "John", Chapter: 3, VerseLo: 17, Text: "friend words"})
+			if !ok {
+				t.Fatal("the friend's note was not stored")
+			}
+			mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+				Book: "John", Chapter: 3, VerseLo: 16, Text: "my own words"})
+			if !ok {
+				t.Fatal("your note was not stored")
+			}
+
+			st := planTestState(t)
+			openNote(st, mine)
+			if st.ActiveNote != mine.Text {
+				t.Fatalf("precondition: your note must be drawn, got %q", st.ActiveNote)
+			}
+
+			tc.act(st)
+
+			// Their note may be PRESENT — the passage does have one, and saying
+			// so is honest — but it must not be OPEN, and its verse must not
+			// light. Nothing opens in the place of a note you just closed.
+			if st.ActiveNote == friend.Text && !st.NoteMinimized {
+				t.Errorf("%s: a friend's note opened in place of the one you put away — "+
+					"expanded, under the reader's eyes, unasked for", tc.name)
+			}
+			if _, live := st.markSpan(); live {
+				t.Errorf("%s: the wash moved onto another note's verse when you put "+
+					"yours away", tc.name)
+			}
+			// And whatever else happened, YOUR note survived untouched.
+			var found bool
+			for _, n := range allNotesForBrowsing(appPrefs()) {
+				if n.ID == mine.ID {
+					found = true
+					if n.Minimized {
+						t.Errorf("%s: a durable Minimized was written on your own note", tc.name)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("%s: your own note was destroyed", tc.name)
+			}
+		})
+	}
+}
