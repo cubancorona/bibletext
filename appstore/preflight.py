@@ -58,11 +58,16 @@ STABLE = {"description", "keywords", "marketingUrl", "supportUrl"}
 # What CAN be checked is the claim against the code: every translation a reader
 # can actually open should be named on the page selling the app. These are the
 # ones registeredVersions (versions.go) serves today.
+# Each entry: (name-for-the-report, tuple of phrasings that count as naming it).
+# The alternates exist because the 1.2.1 copy says "including a Catholic
+# edition" and the checker's exact-name grep called that absent — a false
+# advisory, and a checker that cries wolf trains its reader to skip the report.
 DESCRIBED_TRANSLATIONS = [
-    ("World English Bible", "public domain, always available"),
-    ("Berean Standard Bible", "public domain, always available"),
-    ("World English Bible (Catholic)", "public domain, the 73-book canon"),
-    ("New King James Version", "licensed, and working on install since 1.2.0"),
+    ("World English Bible", ("world english bible",), "public domain, always available"),
+    ("Berean Standard Bible", ("berean standard bible",), "public domain, always available"),
+    ("World English Bible (Catholic)", ("world english bible (catholic)", "catholic edition"),
+     "public domain, the 73-book canon"),
+    ("New King James Version", ("new king james version",), "licensed, works on install"),
 ]
 
 # Features big enough that a reader deciding whether to install would want them
@@ -72,7 +77,8 @@ DESCRIBED_TRANSLATIONS = [
 # said nothing whatever about the shared-notes feature — a false pass on the one
 # feature that most needs to be on the page.
 DESCRIBED_FEATURES = [
-    ("shared notes", ("shared note", "note attached", "verse with a note", "send someone a verse")),
+    ("shared notes", ("shared note", "note attached", "verse with a note", "send someone a verse",
+                      "notes from friends", "note of your own")),
     ("audio / read-along narration", ("audio", "narration", "listen", "read-along", "read along")),
 ]
 
@@ -142,14 +148,15 @@ def main():
     # The description's own check — reported, never fatal: marketing copy is the
     # owner's to write, and this can only say what looks absent.
     desc = now.get("description", "")
-    missing_t = [t for t, _ in DESCRIBED_TRANSLATIONS if t.lower() not in desc.lower()]
+    missing_t = [t for t, needles, _ in DESCRIBED_TRANSLATIONS
+                 if not any(n in desc.lower() for n in needles)]
     missing_f = [name for name, needles in DESCRIBED_FEATURES
                  if not any(n in desc.lower() for n in needles)]
     if missing_t or missing_f:
         print("\nTHE DESCRIPTION MAY HAVE FALLEN BEHIND THE APP:")
+        whys = {t: why for t, _, why in DESCRIBED_TRANSLATIONS}
         for t in missing_t:
-            why = dict(DESCRIBED_TRANSLATIONS)[t]
-            print(f"  - does not name {t} ({why})")
+            print(f"  - does not name {t} ({whys[t]})")
         for f in missing_f:
             print(f"  - says nothing about {f}")
         print(
