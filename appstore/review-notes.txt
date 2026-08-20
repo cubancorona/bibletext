@@ -1,13 +1,14 @@
-VERSION 1.2.0
+VERSION 1.2.1
 
 BibleText is a Bible reader. No account, login, or registration is required — all reading, search, navigation, and cross-references work immediately and offline once the text loads.
 
-WHAT IS NEW IN 1.2.0
-• Shared notes: a verse link can carry a short personal message from the sender. The message travels inside the link itself — there is no server and no account. See SHARED NOTES below, which is the main thing to exercise in this release.
-• A notes scrapbook on the Search tab: everything received and sent, searchable and sorted, stored only on the device.
-• Sharing is more precise: a citation names exactly the verses selected even when the same words occur twice in a chapter, and shared poetry keeps its line breaks.
-• The New King James Version works on install (see TRANSLATIONS AND KEYS).
-• Settings rebuilt into grouped sections; the words of Christ keep their red under a highlight; dark-mode controls redrawn.
+WHAT IS NEW IN 1.2.1
+This is a refinement release for the shared-notes feature 1.2.0 introduced (see SHARED NOTES below for how to exercise it), plus fixes:
+• Notes the implementation requirement themselves now display on the passage when tapped in the notes list, attributed "Note from you"; tapping one's own link no longer stores a duplicate attributed to a friend.
+• Each note row in the list carries a delete control; on the reading page a bin deletes and ✕ dismisses.
+• iPad: a note anchored to a chapter's opening verses no longer overlaps them; the notes list is capped at a readable width.
+• The NKJV's words-of-Christ (red letter) data is now complete — it was previously truncated at the NKJV's italicised supplied words.
+• Cycling between multiple notes on one passage no longer flashes the reading pane.
 
 SHARED NOTES — HOW TO EXERCISE IT
 The feature has two halves: sending, which needs nothing but the app, and receiving, which needs a link.
