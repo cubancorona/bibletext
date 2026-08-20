@@ -317,21 +317,40 @@ func noteSVGHex(c color.Color) (string, float64) {
 func noteTailSVG(fill, stroke color.Color) fyne.Resource {
 	fillHex, fillA := noteSVGHex(fill)
 	strokeHex, strokeA := noteSVGHex(stroke)
+	// noteTailLidOverlap is how far the tail's fill reaches UP over the card's
+	// bottom border. ONE point was not enough: magnified against the reading
+	// pane's one-path bubble, the border still showed as a hairline lid straight
+	// across the tail's mouth, so the tail read as a triangle stuck under a
+	// closed box (owner spotted it). The stroke is 1pt but lands on a fractional
+	// device pixel at 2x and 3x, so hiding it needs more than 1pt of cover.
+	//
+	// The alternative — drawing card and tail as ONE path, the way the reading
+	// pane does — is more correct and was tried. It costs a full-size SVG
+	// RASTERISATION per distinct bubble height, and most rows have a distinct
+	// height because each message wraps differently: measured on the real
+	// browser, first paint went 350ms to 456ms at ten notes. A rounded rectangle
+	// is drawn natively and an 18x11 tail is nothing, which is why this
+	// construction is cheap — so the fix belongs in the overlap, not the shape.
 	w, d := noteTailWidth, noteTailDepth
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+
 			`<path d="M0 0 L%d %d L%d 0 Z" fill="%s" fill-opacity="%.3f"/>`+
 			`<path d="M0 0 L%d %d L%d 0" fill="none" stroke="%s" stroke-opacity="%.3f" stroke-width="1" `+
 			`stroke-linejoin="round"/></svg>`,
-		w, d+1, w, d+1,
+		w, d+noteTailLidOverlap, w, d+noteTailLidOverlap,
 		w/2, d, w, fillHex, fillA,
 		w/2, d, w, strokeHex, strokeA,
 	)
 	return fyne.NewStaticResource("note-tail.svg", []byte(svg))
 }
 
+// noteTailLidOverlap is the cover that hides the card's bottom border behind the
+// tail's fill. The SVG draws this much extra above the tail's mouth and the
+// layout lifts the image by the same amount — one number, two readers.
+const noteTailLidOverlap = 3
+
 // bubbleLayout puts the tail under the bubble's lower-left, overlapping its
-// border by a point.
+// border by enough to hide it.
 type bubbleLayout struct{}
 
 func (bubbleLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
@@ -352,9 +371,8 @@ func (bubbleLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	if len(objects) < 2 {
 		return
 	}
-	// One point up, so the fill covers the bubble's bottom border.
-	objects[1].Move(fyne.NewPos(noteTailInset, bodyH-1))
-	objects[1].Resize(fyne.NewSize(noteTailWidth, noteTailDepth+1))
+	objects[1].Move(fyne.NewPos(noteTailInset, bodyH-noteTailLidOverlap))
+	objects[1].Resize(fyne.NewSize(noteTailWidth, noteTailDepth+noteTailLidOverlap))
 }
 
 // noteBubble draws somebody's words the way the reading page draws them.
@@ -379,87 +397,16 @@ func noteBubblePadded(text string, pal palette, pad float32) fyne.CanvasObject {
 	body := widget.NewLabel(strings.TrimSpace(text))
 	body.Wrapping = fyne.TextWrapWord
 
-	// ONE SHAPE, NOT TWO (owner, comparing this with the reading pane: "the tail
-	// looks like it has some shading issues").
-	//
-	// It was a rounded RECTANGLE with a separate tail image tucked under its
-	// lower-left, overlapping by a point so the rectangle's own bottom border
-	// would not show across the tail's mouth. Magnified, it did show: a hairline
-	// lid straight across the top of the tail, so the tail read as a triangle
-	// stuck under a closed box rather than as part of the bubble. The reading
-	// pane had already solved this — noteBubblePathSVG emits ONE outline that
-	// detours down into the tail and back along the bottom edge, so there is no
-	// crossing line to hide — and the two surfaces are supposed to draw the same
-	// bubble.
-	//
-	// The path has to be regenerated when the bubble's size changes, because the
-	// outline is built at exact coordinates rather than stretched; that is what
-	// bubbleShape below does, and it is also why the tail stays crisp instead of
-	// being scaled from an 18-point source.
-	// The outline sits BEHIND the words, and the words keep clear of the tail by
-	// taking its depth as extra bottom padding — so the shape's height is body
-	// plus tail without the message ever crossing the point.
-	return container.NewStack(
-		newBubbleShape(pal),
-		container.New(layout.NewCustomPaddedLayout(pad, pad+noteTailDepth, pad, pad), body))
+	frame := canvas.NewRectangle(pal.SurfaceAlt)
+	frame.StrokeColor = pal.Border
+	frame.StrokeWidth = 1
+	frame.CornerRadius = noteBubbleRad
+	card := container.NewStack(frame,
+		container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), body))
+	tail := canvas.NewImageFromResource(noteTailSVG(pal.SurfaceAlt, pal.Border))
+	tail.FillMode = canvas.ImageFillStretch
+	return container.New(bubbleLayout{}, card, tail)
 }
-
-// bubbleShape draws the bubble's outline — card and tail as one path — at
-// whatever size it is given, regenerating when that size changes.
-//
-// A canvas.Image cannot do this: the outline's corner radii and tail must keep
-// their shape, so the drawing has to be re-emitted at the new size rather than
-// scaled. The reading pane regenerates on a size+palette key for the same
-// reason (noteCardKey); this is the browser's smaller twin.
-type bubbleShape struct {
-	widget.BaseWidget
-	pal palette
-}
-
-func newBubbleShape(pal palette) *bubbleShape {
-	b := &bubbleShape{pal: pal}
-	b.ExtendBaseWidget(b)
-	return b
-}
-
-func (b *bubbleShape) CreateRenderer() fyne.WidgetRenderer {
-	img := canvas.NewImageFromResource(noteBubblePathSVG(1, 1, b.pal.SurfaceAlt, b.pal.Border))
-	img.FillMode = canvas.ImageFillStretch
-	return &bubbleShapeRenderer{shape: b, img: img}
-}
-
-type bubbleShapeRenderer struct {
-	shape *bubbleShape
-	img   *canvas.Image
-	last  fyne.Size
-}
-
-func (r *bubbleShapeRenderer) Layout(size fyne.Size) {
-	// noteBubblePathSVG takes the CARD's height and ADDS the tail below it: at
-	// h=51 the drawing comes out 60 tall, card bottom at 50.5, point at 59.5.
-	// So the card's height is this widget's height minus the tail's depth, and
-	// the image is then 1:1 with what was emitted — no stretch, which is what
-	// keeps the corner radii and the tail's angle true.
-	cardH := size.Height - noteTailDepth
-	if cardH < 1 {
-		cardH = 1
-	}
-	if size != r.last && size.Width >= 1 {
-		r.img.Resource = noteBubblePathSVG(size.Width, cardH, r.shape.pal.SurfaceAlt, r.shape.pal.Border)
-		// A new Resource is not picked up until the image is refreshed — without
-		// this the widget kept drawing the 1x1 placeholder it was created with,
-		// stretched across the whole bubble as a single smeared band.
-		r.img.Refresh()
-		r.last = size
-	}
-	r.img.Move(fyne.NewPos(0, 0))
-	r.img.Resize(size)
-}
-
-func (r *bubbleShapeRenderer) MinSize() fyne.Size           { return fyne.NewSize(1, 1) }
-func (r *bubbleShapeRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.img} }
-func (r *bubbleShapeRenderer) Refresh()                     { canvas.Refresh(r.img) }
-func (r *bubbleShapeRenderer) Destroy()                     {}
 
 // noteBubbleWithByline is the bubble plus the attribution that must always
 // accompany it, and the attribution sits OUTSIDE the bubble (owner directive).
