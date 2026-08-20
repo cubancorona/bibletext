@@ -1,13 +1,44 @@
-# App Store submission checklist — BibleText 1.2.0
+# App Store submission checklist — BibleText
 
 Prepared 1 August 2026 for 1.1.6 (build 124); refreshed 8 August for 1.1.7
-(build 127); refreshed 12 August for the 1.1.8 cycle (shared notes, the NKJV via
-API.Bible, the Settings redesign).
+(build 127); 12 August for 1.1.8; **20 August after 1.2.0 shipped.**
 
-VERIFIED against App Store Connect on 12 August, not remembered: **1.1.6 and
-1.1.7 are both live** (READY_FOR_SALE), the highest build ever uploaded is
-**127**, and no 1.1.8 version record exists yet — one must be created before a
-build can be attached.
+## READ THIS BEFORE ANYTHING ELSE
+
+**Nothing below is a current reading of App Store Connect.** The figures in the
+next section were true when they were written and have not been re-verified
+since; two releases have shipped over the top of them. Treat every version,
+build and state in this file as HISTORY, and get the live answer first:
+
+```bash
+ASC_KEY_PATH=~/.private_keys/AuthKey_5NVRNFVDL3.p8 ASC_KEY_ID=5NVRNFVDL3 ASC_ISSUER_ID=... python3 appstore/preflight.py
+```
+
+That tool is read-only (no PATCH, POST or DELETE — safe while a version is in
+review) and it answers the question this file cannot: which per-release fields
+of the version you are about to submit were WRITTEN for it, and which arrived by
+App Store Connect's copy-forward from the release before.
+
+It exists because this document being trusted as current is not hypothetical.
+1.2.0 went into review carrying **1.1.8's review notes** — headed "VERSION 1.1.8
+— HOTFIX" and describing a search-results fix, while its headline feature was
+shared notes — and **1.1.8's screenshots**, byte-identical by checksum, so the
+store page for the shared-notes release showed no shared note. Neither field was
+empty, so neither looked wrong. Both were inherited.
+
+### State as of 20 August 2026, and how sure I am of each line
+
+| Fact | Confidence |
+| --- | --- |
+| 1.2.0 was submitted, reviewed, approved and released | Certain — the owner confirmed approval and the other platforms were released in step |
+| 1.2.0 shipped with 1.1.8's review notes and screenshots | Certain — measured by `sourceFileChecksum` before the tooling was written |
+| `cmd/mobile/FyneApp.toml` reads 1.2.0 / build 169 | Certain — read from the tree on 20 Aug |
+| Which build number 1.2.0 was actually released as | **Unknown here** — run the preflight |
+| Whether the store description has been rewritten yet | **Unknown here** — it was still naming only WEB and BSB on 19 Aug; the preflight reports on this |
+
+The 1.2.0 screenshot set is the **known-stale item**: it is still the 9 August
+capture, taken before shared notes existed. It is not a submission blocker and
+it is the owner's call, but it should not be inherited a third time.
 
 ## Release identity
 
@@ -87,10 +118,27 @@ ignored by Git). The prepared English (UK) values are:
   throughout: the words of Christ keep their red when a verse is highlighted,
   and controls that were hard to make out in dark mode are now clearly drawn.
 
-`build/appstore/review_notes.txt` has current feature paths, iPad behaviour,
-the optional-AI test procedure, data flow, age-rating context, and contact
-details. Before submission, add a temporary review-only provider API key in App
-Review Information if Apple needs to exercise AI. Never commit that key.
+### Review notes — `appstore/review-notes.txt`, and nowhere else
+
+**The canonical review notes are `appstore/review-notes.txt`, which is TRACKED.**
+Rewrite that file for every release, then push it with:
+
+```bash
+ASC_KEY_PATH=~/.private_keys/AuthKey_5NVRNFVDL3.p8 ASC_KEY_ID=5NVRNFVDL3 ASC_ISSUER_ID=... python3 appstore/push-review-notes.py
+```
+
+`build/appstore/review_notes.txt` — the path this document named until 20 August
+— is the OLD, gitignored copy. That is the whole mechanism of the 1.2.0 miss:
+the notes lived somewhere untracked, so nothing in a review of the release diff
+could show they had not been touched, and App Store Connect had already filled
+the field with the previous version's text. A tracked file makes a stale one
+visible as an unchanged file in the diff, and `appstore_review_notes_test.go`
+fails if it still names an older version than `cmd/mobile/FyneApp.toml`.
+
+The notes cover feature paths, iPad behaviour, the optional-AI test procedure,
+data flow, age-rating context, and contact details. Before submission, add a
+temporary review-only provider API key in App Review Information if Apple needs
+to exercise AI. Never commit that key.
 
 The metadata helper resolves version/localization IDs at runtime:
 
