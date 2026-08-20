@@ -817,6 +817,19 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	// where you read them, the chapter is where you chose how much to see.
 	body := noteBubblePadded(notePreview(n.Text), pal, browseBubblePad)
 
+
+	// mark the reading page uses where a press destroys — so the two places a
+	// note can be deleted say it the same way, and neither depends on the
+	// reader remembering which control means what.
+	//
+	// It rides in a Border to the bubble's RIGHT rather than in a row of its
+	// own, so the row's height is whatever the bubble needed and the control
+	// costs nothing vertically. That is a real constraint, not a hope:
+	// TestNoteRowTrashCostsNoHeight measures the row with and without it and
+	// fails on a single pixel of growth. The bubble keeps the whole remaining
+	// width, so nothing about the message's wrap changes either.
+	body = container.NewBorder(nil, nil, nil, noteRowTrash(state, n, pal), body)
+
 	rows := container.New(layout.NewCustomPaddedVBoxLayout(browseRowGap), head, body)
 	if n.Minimized {
 		quiet := canvas.NewText("Minimized in the chapter", pal.TextMuted)
@@ -833,6 +846,36 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 		container.NewThemeOverride(rows, browseRowTheme{Theme: base}))
 	card := newNoteBrowseCard(state, n, inner, pal)
 	return container.New(layout.NewCustomPaddedVBoxLayout(browseSepGap), card, widget.NewSeparator())
+}
+
+// noteRowTrash is the row's delete control: quiet, icon-only, and vertically
+// centred so it sits on the bubble's middle whatever height the message wrapped
+// to.
+//
+// It deletes without asking, which is the same contract the reading page's bin
+// has and is defensible for the same reason: this is a list of your notes, the
+// row you press is unambiguous, and the store is the reader's to prune. If a
+// mis-tap here ever proves to be a real problem the answer is an undo, not a
+// confirmation dialog on every delete — the store's charter is that it keeps
+// what it is given, and an undo keeps that promise where a dialog only slows
+// the deliberate case down.
+func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
+	btn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+		if state == nil {
+			return
+		}
+		deleteNoteByID(appPrefs(), n.ID)
+		// The reading page may be showing the very note just deleted, so the
+		// projection re-derives before the repaint — the verb-to-screen rule.
+		applyNoteForCurrentChapter(state)
+		state.refresh()
+	})
+	btn.Importance = widget.LowImportance
+	var base fyne.Theme = theme.DefaultTheme()
+	if state != nil && state.theme != nil {
+		base = state.theme
+	}
+	return container.NewCenter(container.NewThemeOverride(btn, browseRowTheme{Theme: base}))
 }
 
 // newNoteBrowseCard is a search-result card that opens a note instead of a

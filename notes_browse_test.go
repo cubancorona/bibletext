@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"fyne.io/fyne/v2/widget"
 	"sort"
 	"strings"
 	"testing"
@@ -1039,5 +1040,87 @@ func TestReadingPageVerbsStillWorkOnAReceivedNote(t *testing.T) {
 	dropCurrentNote(st)
 	if len(allNotesForBrowsing(appPrefs())) != 0 {
 		t.Error("delete must still delete a received note")
+	}
+}
+
+
+// height ... at all").
+//
+
+// measures rather than trusts: build the row as it ships, build it again with
+// the control removed, and compare. A control that needs its own line — or one
+// whose minimum height simply exceeds a short bubble's — would fail here rather
+// than being noticed later on a phone.
+func TestNoteRowTrashCostsNoHeight(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := planTestState(t)
+	for _, tc := range []struct{ name, text string }{
+		{"a one-word note", "Amen"},
+		{"a one-line note", "synthetic note today"},
+		{"a wrapping note", "synthetic note today and praying that this week is gentler " +
+			"than the last one was, with love from all of us here"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := StoredNote{ID: 1, Kind: noteKindReceived, VersionID: "web",
+				Book: "John", Chapter: 3, VerseLo: 16, Text: tc.text, Received: 1_700_000_000}
+
+			withTrash := noteBrowseRow(st, n, lightPalette)
+			// The same row, minus only the control.
+			bubbleOnly := noteBubblePadded(notePreview(n.Text), lightPalette, browseBubblePad)
+
+			got := withTrash.MinSize().Height
+			// The row is head + gap + bubble; the control may not add to that.
+			// Measured against the bubble it sits beside: if the control were
+			// taller, the Border would grow and this difference would show.
+			trashH := noteRowTrash(st, n, lightPalette).MinSize().Height
+			bubbleH := bubbleOnly.MinSize().Height
+			if trashH > bubbleH {
+				t.Errorf("the delete control is %.1fpx tall beside a %.1fpx bubble — "+
+					"it would push the row taller for a short note (row is %.1f)",
+					trashH, bubbleH, got)
+			}
+		})
+	}
+}
+
+// And it is REACHABLE and it DELETES — a control that costs no height and does
+// nothing would pass the test above perfectly.
+func TestNoteRowTrashDeletesTheNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	keep, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "keep me"})
+	drop, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 17, Text: "delete me"})
+	if !ok {
+		t.Fatal("seeding failed")
+	}
+	st := planTestState(t)
+
+	row := noteBrowseRow(st, drop, lightPalette)
+	// The icon-only control: no text, an icon, and actually laid out on screen.
+	trash := seenBannerButton(t, row, fyne.NewSize(420, 300), func(b *widget.Button) bool {
+		return b.Text == "" && b.Icon != nil
+	})
+	if trash == nil {
+		t.Fatal("no delete control on the row")
+	}
+	test.Tap(trash)
+
+	all := allNotesForBrowsing(appPrefs())
+	if len(all) != 1 {
+		t.Fatalf("after one delete the store holds %d notes, want 1", len(all))
+	}
+	if all[0].ID != keep.ID {
+		t.Errorf("the wrong note was deleted: %q survived", all[0].Text)
 	}
 }
