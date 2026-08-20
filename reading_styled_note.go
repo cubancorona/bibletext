@@ -75,6 +75,12 @@ type styledNote struct {
 	Pill   bool   // minimized, suppressed, or unplaced-only
 	Next   bool   // the counts region is a CONTROL (more than one placed note)
 	Anchor int    // the verse the band opens above; 0 = park at the top
+	// Own marks YOUR note, drawn the requested behavior to see it. It decides one
+	// thing here: what the closing control is. On a received note that control
+	// DELETES, and wears a bin to say so; on your own it only puts the card
+	// away, and wears ✕. One glyph meaning two things was the alternative, and
+	// the destructive meaning is not the one to leave ambiguous.
+	Own bool
 }
 
 func (n styledNote) present() bool { return n.Text != "" || n.Who != "" }
@@ -97,7 +103,8 @@ func styledNoteFor(state *AppState) styledNote {
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
 	text, who, pill, next := styledStickerPush(state, plan)
-	n := styledNote{Text: text, Who: who, Pill: pill, Next: next, Anchor: state.NoteVerseLo}
+	n := styledNote{Text: text, Who: who, Pill: pill, Next: next, Anchor: state.NoteVerseLo,
+		Own: plan.HasOwn && state.NoteID != 0 && state.NoteID == plan.Own.Note.ID}
 	if !n.present() {
 		return styledNote{}
 	}
@@ -515,7 +522,16 @@ func (r *styledPaneRenderer) buildNote() {
 		p.state.refreshReadingOnly()
 	})
 	hide.Importance = widget.LowImportance
-	del := widget.NewButton("✕", func() { // multiplication x
+	// THE GLYPH SAYS WHAT THE PRESS DOES. A bin where it deletes — someone
+	// else's message, read, and the store is yours to prune — and ✕ where it
+	// only puts your own note away, which is what navigating away would do a
+	// moment later anyway. The same mark for both would have made the
+	// destructive one the ambiguous one.
+	closeGlyph := "🗑"
+	if p.note.Own {
+		closeGlyph = "✕" // multiplication x: dismiss, never destroy
+	}
+	del := widget.NewButton(closeGlyph, func() {
 		dropCurrentNote(p.state)
 		p.state.refreshReadingOnly()
 	})

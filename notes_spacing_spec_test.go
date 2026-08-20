@@ -214,6 +214,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kNoteBtn)": "the pill borrowing the VERB BUTTON's size (30) for its height",
 			},
 			required: map[string]string{
+				"gNoteOwn ? @\"✕\" : @\"🗑\"": "the closing control's mark must say what the " +
+					"press does — a bin deletes someone else's message, ✕ only puts your own away",
 				"chip.titleLabel.font = btNoteWhoFont();": "the pill's label must be the WHO font; " +
 					"a pill measured at one size and drawn at another overflows its own box",
 				"[chip setTitleColor:btNoteColor(gNoteMuted)": "the pill's label is the app's chrome " +
@@ -243,6 +245,7 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kMacNoteBtn)":      "the pill borrowing the VERB BUTTON's size (24) for its height",
 			},
 			required: map[string]string{
+				"gMacNoteOwn ? @\"✕\" : @\"🗑\"":                         "the closing control's mark must say what the press does",
 				"chip.font = btMacNoteWhoFont();":                       "the pill's label must be the WHO font",
 				"chip.contentTintColor = btMacNoteColor(gMacNoteMuted)": "the pill's label is muted chrome",
 				"tw + 2 * kMacNotePillPadX": "the pill's side padding must be the spec's; this pane had " +
@@ -275,6 +278,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"and the pill's short label may still truncate.)",
 			},
 			required: map[string]string{
+				"noteOwn ? \"✕\" : \"\\uD83D\\uDDD1\"": "the closing control's mark must say what " +
+					"the press does (the surrogate pair is the bin, U+1F5D1)",
 				"chip.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)": "the pill's label " +
 					"must be the WHO size in SP, so it scales with the reader's own text setting",
 				"chip.setTypeface(android.graphics.Typeface.DEFAULT_BOLD)": "the pill's label is " +

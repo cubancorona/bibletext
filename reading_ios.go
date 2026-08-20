@@ -694,6 +694,11 @@ static NSString *gNoteText = nil;      // the sender's words, ALONE (S9)
 static NSString *gNoteWho = nil;       // the app's chrome: byline + counts, composed in Go
 static BOOL      gNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
 static BOOL      gNoteNextable = NO;   // the count region is a control (S10 next-tap)
+// gNoteOwn: the live note is one the READER WROTE, shown because they asked for
+// it. It decides the closing control's mark — a bin deletes, ✕ only dismisses —
+// and it joins bibleTextSetNote's compare, so moving between your note and a
+// friend's repaints the sticker rather than leaving the wrong mark on it.
+static BOOL      gNoteOwn = NO;
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
 static CAShapeLayer *gNoteCard = nil;    // the whole bubble: card + speech tail
@@ -747,7 +752,7 @@ static BOOL btIOSSameStr(NSString *a, NSString *b) {
 // the chapter body is byte-identical and the import path never runs. Colours
 // alone never change without a body change (the theme variant is folded
 // there), so they do not join the compare.
-void bibleTextSetNote(const char *text, const char *who, int minimized, int nextable, int anchorVerse,
+void bibleTextSetNote(const char *text, const char *who, int minimized, int nextable, int own, int anchorVerse,
                       double bgR, double bgG, double bgB,
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
@@ -759,11 +764,13 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
         BOOL changed = !btIOSSameStr(t, gNoteText) || !btIOSSameStr(w, gNoteWho) ||
                        gNoteMinimized != (minimized ? YES : NO) ||
                        gNoteNextable != (nextable ? YES : NO) ||
+                       gNoteOwn != (own ? YES : NO) ||
                        gNoteAnchorVerse != anchorVerse;
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
         gNoteNextable = nextable ? YES : NO;
+        gNoteOwn = own ? YES : NO;
         gNoteAnchorVerse = anchorVerse;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
@@ -1046,7 +1053,11 @@ static void btIOSEnsureNoteView(void) {
         [box addSubview:hide];
 
         UIButton *del = [UIButton buttonWithType:UIButtonTypeSystem];
-        [del setTitle:@"✕" forState:UIControlStateNormal];    // multiplication x
+        // THE MARK SAYS WHAT THE PRESS DOES. A bin where it deletes someone
+        // else's message; ✕ where it only puts your own note away, which is
+        // what navigating away would do a moment later. One mark for both would
+        // have left the DESTRUCTIVE meaning as the ambiguous one.
+        [del setTitle:(gNoteOwn ? @"✕" : @"🗑") forState:UIControlStateNormal];
         [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
         del.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
         [del addTarget:gReadingTV action:@selector(btNoteDelete:)
@@ -2930,6 +2941,10 @@ func pushNoteToPane(state *AppState) {
 	if next {
 		nx = 1
 	}
+	ownFlag := C.int(0)
+	if isOwnLiveNote(state) {
+		ownFlag = 1
+	}
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
 	}
@@ -2942,7 +2957,7 @@ func pushNoteToPane(state *AppState) {
 	// highlight, and a marker without an anchor jumps to the top of the chapter.
 	// (An unplaced-only chapter pushes verse 0: its pill parks at the top,
 	// which is the only honest place for notes with no verses here.)
-	C.bibleTextSetNote(cText, cWho, min, nx, C.int(state.NoteVerseLo),
+	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 

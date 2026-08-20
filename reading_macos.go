@@ -1242,6 +1242,11 @@ static NSString     *gMacNoteText = nil;      // the sender's words, ALONE (S9)
 static NSString     *gMacNoteWho = nil;       // the app's chrome: byline + counts, composed in Go
 static BOOL          gMacNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
 static BOOL          gMacNoteNextable = NO;   // the count region is a control (S10 next-tap)
+// gMacNoteOwn: the live note is one the READER WROTE, shown because they asked.
+// It decides the closing control's mark — a bin deletes, ✕ only dismisses — and
+// it joins bibleTextMacSetNote's compare so moving between your note and a
+// friend's repaints rather than leaving the wrong mark on the card.
+static BOOL          gMacNoteOwn = NO;
 static NSInteger     gMacNoteAnchorVerse = 0;
 static CGFloat       gMacNoteBandH = 0;
 static CGFloat       gMacNoteTopInset = 0;
@@ -1580,7 +1585,10 @@ static void btMacEnsureNoteView(void) {
         hide.tag = 904;
         [box addSubview:hide];
 
-        NSButton *del = [NSButton buttonWithTitle:@"✕" target:gTextView action:@selector(btNoteDelete:)];
+        // A bin where the press DELETES someone else's message; ✕ where it only
+        // puts your own note away (see the iOS twin).
+        NSButton *del = [NSButton buttonWithTitle:(gMacNoteOwn ? @"✕" : @"🗑")
+                                           target:gTextView action:@selector(btNoteDelete:)];
         del.bordered = NO;
         del.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
         del.contentTintColor = btMacNoteColor(gMacNoteMuted);
@@ -1824,7 +1832,7 @@ static void btMacRefreshNote(void) {
 // theme variant is folded there), so they do not join the compare; the apply
 // path's own btMacRefreshNote (bibleTextMacApplyHTML) restyles after every
 // import exactly as before.
-void bibleTextMacSetNote(const char *text, const char *who, int minimized, int nextable, int anchorVerse,
+void bibleTextMacSetNote(const char *text, const char *who, int minimized, int nextable, int own, int anchorVerse,
                          double bgR, double bgG, double bgB,
                          double fgR, double fgG, double fgB,
                          double muR, double muG, double muB,
@@ -1836,11 +1844,13 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
         BOOL changed = !btMacSameStr(t, gMacNoteText) || !btMacSameStr(w, gMacNoteWho) ||
                        gMacNoteMinimized != (minimized ? YES : NO) ||
                        gMacNoteNextable != (nextable ? YES : NO) ||
+                       gMacNoteOwn != (own ? YES : NO) ||
                        gMacNoteAnchorVerse != anchorVerse;
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
         gMacNoteNextable = nextable ? YES : NO;
+        gMacNoteOwn = own ? YES : NO;
         gMacNoteAnchorVerse = anchorVerse;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
         gMacNoteFg[0]=fgR; gMacNoteFg[1]=fgG; gMacNoteFg[2]=fgB;
@@ -2314,6 +2324,15 @@ func armReadingRestore(verse int, delta, frac float64) {
 // the same name, called on every chapter render so a light/dark flip restyles
 // it and a navigation replaces it.
 //
+// macOwnFlag is 1 when the live note is one the reader WROTE — the sticker uses
+// it to choose the closing control's mark (a bin deletes, ✕ dismisses).
+func macOwnFlag(state *AppState) C.int {
+	if isOwnLiveNote(state) {
+		return 1
+	}
+	return 0
+}
+
 // SINCE S9 THE PUSH IS THE FULL TUPLE (appleStickerPush, notes_plan.go),
 // exactly as the iOS twin: the bubble's body is the sender's words ALONE, and
 // everything the app says — the byline, "· 1 of 3 on this passage", "· 2 not
@@ -2352,7 +2371,7 @@ func pushNoteToPane(state *AppState) {
 	// highlight, and a sticker without an anchor parks at the top of the
 	// chapter (an unplaced-only chapter pushes verse 0 on purpose: the top is
 	// the only honest place for notes with no verses here).
-	C.bibleTextMacSetNote(cText, cWho, min, nx, C.int(state.NoteVerseLo),
+	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
 }
 

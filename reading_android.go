@@ -82,7 +82,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// pill/next presentation, anchor verse, then the five palette colors
 	// (surface, text, muted, accent, border) as ARGB ints.
 	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
-	                                        "([B[BZZIIIIII)V");
+	                                        "([B[BZZZIIIIII)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -242,7 +242,7 @@ static jbyteArray btaBytes(JNIEnv *env, const char *s) {
 }
 
 static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
-                       int pill, int next, int anchorVerse,
+                       int pill, int next, int own, int anchorVerse,
                        int bg, int fg, int muted, int accent, int border) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
@@ -250,6 +250,7 @@ static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
 	jbyteArray w = btaBytes(env, who);
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNoteM, t, w,
 	                             pill ? JNI_TRUE : JNI_FALSE, next ? JNI_TRUE : JNI_FALSE,
+	                             own ? JNI_TRUE : JNI_FALSE,
 	                             anchorVerse, bg, fg, muted, accent, border);
 	if (t != NULL) (*env)->DeleteLocalRef(env, t);
 	if (w != NULL) (*env)->DeleteLocalRef(env, w);
@@ -561,12 +562,16 @@ func pushNoteToOverlay(state *AppState) {
 	cw := C.CString(who)
 	defer C.free(unsafe.Pointer(ct))
 	defer C.free(unsafe.Pointer(cw))
+	ownFlag := C.int(0)
+	if isOwnLiveNote(state) {
+		ownFlag = 1
+	}
 	if os.Getenv("BT_NOTE_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[note] push text=%dch who=%q pill=%v next=%v anchor=%d fullscreen=%v\n",
 			len(text), who, pill, next, anchor, state.IsFullScreen)
 	}
 	runBta(func(env uintptr) {
-		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, C.int(anchor),
+		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, ownFlag, C.int(anchor),
 			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
 			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),
 			C.int(argbInt(pal.Border)))
