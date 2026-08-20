@@ -4,9 +4,14 @@
 
 A clean, modern reader for the Bible that runs on **macOS, Windows, Linux, iOS,
 and Android** from a single Go codebase, built with [Fyne](https://fyne.io/). It presents
-public-domain translations — the **World English Bible (WEB)**, its **Catholic
-edition (WEBC)** with the deuterocanon, and the **Berean Standard Bible (BSB)** —
-in a calm, responsive reading layout, with poetry set as poetry.
+the **World English Bible (WEB)**, its **Catholic edition (WEBC)** with the
+deuterocanon, the **Berean Standard Bible (BSB)** — all public domain — and the
+licensed **New King James Version (NKJV)**, in a calm, responsive reading layout
+with poetry set as poetry and the words of Christ in red. Chapters play as
+complete human-recorded narration with read-along highlighting, and any verse
+can be sent with a short note of your own riding inside an ordinary link — it
+opens beside the passage in the app, or right in the recipient's browser. No
+accounts, no server, no ads.
 
 | Reading | Study with AI | Share as image |
 |:---:|:---:|:---:|
