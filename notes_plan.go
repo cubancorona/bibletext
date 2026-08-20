@@ -164,6 +164,22 @@ type chapterPlan struct {
 	// (appleStickerPush). It is also the note the cap opens (the plan's
 	// Open), so the bubble and the mirror can never disagree.
 	display int
+
+	// Own is YOUR OWN note, drawn on the passage only while noteFocus names
+	// it — the reader asked to see it, from the notes browser or by tapping
+	// their own link, and navigating away puts it back out of sight because
+	// navigation resets focus (state.go, resetNoteFocus).
+	//
+	// IT IS A SLOT, NOT A MEMBER OF Notes, and that is the whole design. A
+	// member that exists only while focused would make "K of N on this
+	// passage" change under the reader's finger — N is a property of the
+	// PASSAGE, not of what they happen to be looking at — and would enter the
+	// next-tap rotation, where one tap past it strands it with no chip and no
+	// way back (advanceNoteFocus walks Notes). Kept in its own slot, the
+	// counts stay received-only and honest, the rotation is untouched, and
+	// every surface can draw it by asking one question.
+	Own    drawnNote
+	HasOwn bool
 }
 
 // openNote returns the plan's expanded note, if any. At most one exists
@@ -215,9 +231,28 @@ func buildChapterPlan(state *AppState, p prefStore, bible *BibleData) chapterPla
 	// books, so the book filter is a fact about the anchor model, not an
 	// optimisation gamble.
 	s := readNoteStore(p)
+	focusedOwn := state.noteFocus.set && state.noteFocus.id != 0
 	for _, n := range s.notes {
-		// Own notes are stored but never drawn in the scripture text (owner
-		// directive); only received notes reach the reading page.
+		// YOUR OWN NOTES ARE NOT DRAWN UNBIDDEN — the directive stands, and is
+		// only narrowed: one you have explicitly ASKED to see is drawn, in its
+		// own slot, until you navigate away. Everything else about own notes is
+		// unchanged; they never join Notes, never affect the counts, and never
+		// become the default display.
+		if n.Kind == noteKindMine {
+			if !focusedOwn || n.ID != state.noteFocus.id || !displayableNote(n) || n.Book != book {
+				continue
+			}
+			pl := resolveNoteAnchor(n, versionID, bible)
+			if _, on := placementRunOn(pl, chapter); !on {
+				continue
+			}
+			label := ""
+			if pl.Kind != placedNative {
+				label = noteVersionAbbrev(n.VersionID)
+			}
+			plan.Own, plan.HasOwn = drawnNote{Note: n, Placement: pl, Label: label, Open: true}, true
+			continue
+		}
 		if n.Kind != noteKindReceived || !displayableNote(n) || n.Book != book {
 			continue
 		}
@@ -494,6 +529,23 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	// The open note's 1-based position in the plan's stable order, and the
 	// total. A mirror-only session note (an arrival the store refused) is in
 	// no plan: it leads the count and every plan note counts after it.
+	// YOUR OWN NOTE, when it is the one you asked to see. It is not a member of
+	// this passage's set, so it does not join the count and does not lead it:
+	// "K of N on this passage" describes the notes people sent you, and your
+	// own note appearing must not change N under your finger. It carries the
+	// byline alone ("Note from you"), and no next-tap, because it is not in the
+	// rotation.
+	if plan.HasOwn && state.NoteID != 0 && state.NoteID == plan.Own.Note.ID {
+		who = senderByline(plan.Own.Note)
+		if unplaced > 0 {
+			who += fmt.Sprintf(" · %d not shown here", unplaced)
+		}
+		if state.NoteMinimized || notesSuppressed(state) {
+			return state.ActiveNote, who, true, false
+		}
+		return state.ActiveNote, who, false, false
+	}
+
 	placed := len(plan.Notes)
 	pos, inPlan := 1, false
 	for i := range plan.Notes {
