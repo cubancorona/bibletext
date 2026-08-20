@@ -1204,3 +1204,82 @@ func TestPuttingYourOwnNoteAwayOpensNothingElse(t *testing.T) {
 		})
 	}
 }
+
+// WHAT YOU SENT IS WHAT IS STORED — the prerequisite the collapse rests on.
+//
+// A mutation analysis found this path unguarded: strip normalizeNote and the
+// single-verse spelling from saveMyNote and the whole suite stayed green. Both
+// exist so the sent record and the link carry the SAME note; without them the
+// nonce still matches but the two records describe different text, and any
+// future content comparison silently misses.
+func TestSaveMyNoteStoresWhatActuallyTravelled(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	for _, tc := range []struct{ name, typed string }{
+		{"a blank-line run", "First thought.\n\n\n\nSecond thought."},
+		{"over the rune cap", strings.Repeat("a very long thought indeed ", 20)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			deleteAllNotes(appPrefs())
+			saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John",
+				Chapter: 3, VerseLo: 16, VerseHi: 16, Text: tc.typed})
+
+			all := allNotesForBrowsing(appPrefs())
+			if len(all) != 1 {
+				t.Fatalf("%d notes stored, want 1", len(all))
+			}
+			got := all[0]
+			if want := normalizeNote(tc.typed); got.Text != want {
+				t.Errorf("stored %d chars, the link carries %d — the record and the "+
+					"link would describe different notes", len(got.Text), len(want))
+			}
+			// And the store's ONE spelling for a single verse.
+			if got.VerseHi != 0 {
+				t.Errorf("a one-verse note stored VerseHi=%d; the arrival stores 0, so "+
+					"the same passage would compare unequal", got.VerseHi)
+			}
+		})
+	}
+}
+
+// YOUR OWN NOTE'S BYLINE SURVIVES A CHAPTER THAT CANNOT BE REACHED.
+//
+// Also found unguarded by mutation: delete the store lookup in
+// appleStickerPush's mirror-only arm and nothing failed. That arm runs when the
+// note is not in this chapter's plan — an arrival filed on a passage this canon
+// lacks, so the chapter was clamped — and it built the who line from a ZERO
+// StoredNote, which reads as received. Your own words, under "Note from
+// Friend", on the one path where nothing downstream can correct it.
+func TestOwnNoteBylineSurvivesAClampedChapter(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	// A note on a chapter the sample Bible does not reach.
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "John", Chapter: 21, VerseLo: 25, Text: "the last verse"})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+	st := planTestState(t)
+	// The mirror carries it even though the plan for this chapter does not.
+	st.ActiveNote = mine.Text
+	st.NoteID = mine.ID
+	st.NoteVerseLo = mine.VerseLo
+
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	_, who, _, _ := appleStickerPush(st, plan)
+	if strings.Contains(who, "Friend") {
+		t.Errorf("your own words are bylined %q — the mirror-only arm must ask the "+
+			"store whose note it is rather than assuming a received one", who)
+	}
+	if !strings.Contains(who, "you") {
+		t.Errorf("your own note is bylined %q, want it attributed to you", who)
+	}
+}
