@@ -818,10 +818,11 @@ static const CGFloat kNoteGapAbove = 10, kNoteGapBelow = 10, kNotePad = 12;
 // PillMinW), and deliberately NOT kNotePad: the pill is one line of chrome and
 // wants more air beside its text than a paragraph does.
 static const CGFloat kNotePillPadX = 14, kNotePillMinW = 86;
-// The bin's DRAWN size on the card. Small on purpose — the button around it
-// carries the tap area (kNoteBtn), so this only has to be legible, and the rest
-// of the card's chrome is 11pt.
-static const CGFloat kNoteTrashPt = 13;
+// The bin's DRAWN size on the card. It sits beside an 11pt semibold who-line
+// and a minimize mark, and it is furniture, not a feature: at 13 it still read
+// as the loudest thing on a quiet card (owner, twice). The BUTTON carries the
+// tap area (kNoteBtn), so the drawing only has to be legible, not large.
+static const CGFloat kNoteTrashPt = 10.5;
 static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 10;
 // kNoteBtn is NOT spec: it is the verb button's size, iOS's own 30pt thumb
 // target. The pill used to borrow it, which is how a touch-target decision came
