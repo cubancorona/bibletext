@@ -175,7 +175,7 @@ func noteOpenBubble(state *AppState, d drawnNote, pal palette) fyne.CanvasObject
 		state.refreshReadingOnly()
 	})
 	hide.Importance = widget.LowImportance
-	del := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+	del := widget.NewButtonWithIcon("", noteTrashIcon(pal.TextMuted), func() {
 		dropCurrentNote(state)
 		state.refreshReadingOnly()
 	})

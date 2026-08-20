@@ -1,6 +1,9 @@
 package bibletext
 
 import (
+	"fmt"
+	"fyne.io/fyne/v2/widget"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -195,29 +198,49 @@ func TestAnUnreadableStoreIsNotOverwrittenBySaveMyNote(t *testing.T) {
 
 // The bubble has a TAIL, which is what makes it read as somebody speaking
 
+//
+// REWRITTEN 20 Aug 2026. The bubble used to be a rounded RECTANGLE with a
+// separate tail image tucked under its lower-left, and this test reached into
+// that structure: two objects, the second a *canvas.Image, positioned at
+// noteTailInset. Magnified against the reading pane, that construction showed
+// its seam — the rectangle's own bottom border ran straight across the tail's
+// mouth, so the tail read as a triangle stuck under a closed box. The bubble is
+// now ONE outline (noteBubblePathSVG, the same builder the reading pane uses),
+// regenerated at its real size.
+//
+// So this asserts the PROPERTY rather than the old object graph: the bubble
+// reserves the tail's depth beyond its body, and the shape it draws actually
+// contains a tail. Reaching into the container again would just pin whichever
+// construction happens to be current.
 func TestNoteBubbleHasATail(t *testing.T) {
 	pal := lightPalette
 	b := noteBubble("a message", pal)
-	inner, ok := b.(*fyne.Container)
-	if !ok || len(inner.Objects) != 2 {
-		t.Fatalf("expected a bubble and a tail, got %#v", b)
+
+	// The drawn outline is a bubbleShape, and the path it emits carries the
+	// tail — the "L" down to the point and back is what makes it a bubble.
+	shape := newBubbleShape(pal)
+	r := shape.CreateRenderer()
+	r.Layout(fyne.NewSize(240, 60))
+	img, ok := r.Objects()[0].(*canvas.Image)
+	if !ok {
+		t.Fatalf("the bubble does not draw an image: %#v", r.Objects()[0])
 	}
-	if _, isImg := inner.Objects[1].(*canvas.Image); !isImg {
-		t.Fatalf("the tail is not drawn: %#v", inner.Objects[1])
+	svg := string(img.Resource.Content())
+	if !strings.Contains(svg, "<path") {
+		t.Fatal("the bubble's outline is not a path")
 	}
-	// The tail adds its depth to the bubble's height, and sits inset from the
-	// left edge pointing down at the passage.
-	b.Resize(fyne.NewSize(240, b.MinSize().Height))
-	tail := inner.Objects[1]
-	if got := tail.Position().X; got != noteTailInset {
-		t.Errorf("tail X = %v, want %v", got, noteTailInset)
+	// The tail's point sits below the card's bottom edge: the outline must
+	// detour DOWN and back up, which is what leaves no border across its mouth.
+	// The card's bottom edge is a tail's depth above the drawing's own bottom.
+	if !strings.Contains(svg, fmt.Sprintf("L%.1f %.1f", 33.0, 60-0.5)) {
+		t.Errorf("the outline has no tail point at the expected depth.\nsvg: %s", svg)
 	}
-	card := inner.Objects[0]
-	if tail.Position().Y >= card.Position().Y+card.Size().Height {
-		t.Error("the tail must overlap the bubble's border, not sit below it")
-	}
-	if b.MinSize().Height <= card.MinSize().Height {
-		t.Error("the bubble's height must make room for the tail")
+
+	// And the bubble reserves room for the tail beyond the words themselves.
+	body := widget.NewLabel("a message")
+	if b.MinSize().Height <= body.MinSize().Height {
+		t.Errorf("the bubble's height (%.1f) makes no room for the tail beyond its "+
+			"text (%.1f)", b.MinSize().Height, body.MinSize().Height)
 	}
 }
 

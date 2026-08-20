@@ -36,7 +36,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -347,7 +346,11 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			name: "delete via the banner's own button",
 			act: func(t *testing.T, st *AppState, notes []StoredNote) {
 				del := seenBannerButton(t, buildNoteBanner(st), size, func(b *widget.Button) bool {
-					return b.Text == "" && b.Icon != nil && b.Icon.Name() == theme.DeleteIcon().Name()
+					// The app's own bin (notes_trash_icon.go) since 20 Aug, not
+					// Fyne's solid one. Matched by the RESOURCE NAME: the
+					// banner's hide control is icon-only too, and "any
+					// icon-only button" tapped hide instead of delete.
+					return b.Text == "" && b.Icon != nil && b.Icon.Name() == noteTrashIcon(lightPalette.TextMuted).Name()
 				})
 				if del == nil {
 					t.Fatal("no visible Delete button on the banner's open note")

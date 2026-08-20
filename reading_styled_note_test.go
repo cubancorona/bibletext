@@ -390,7 +390,8 @@ func TestStyledStickerIsSeen(t *testing.T) {
 		"beta words on two",      // the open note's own words
 		"note from friend",       // the byline, in the app's voice
 		"1 of 2 on this passage", // the honest count
-		"–", "🗑",                 // the verbs (a bin: on a received note this deletes)
+		"–",                      // the minimize verb; the delete is an ICON now, not a glyph —
+		// see TestStyledClosingGlyphMatchesWhatItDoes for what it wears.
 	} {
 		if !strings.Contains(seen, want) {
 			t.Errorf("the reader cannot see %q on the sticker.\nseen:\n%s", want, seen)
@@ -560,8 +561,9 @@ func TestStyledStickerVerbsFire(t *testing.T) {
 		st, _ := styledNoteFixture(t, []int{1, 2},
 			[]string{"alpha words on one", "beta words on two"})
 		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
-		// A bin, because on a RECEIVED note this control deletes.
-		del := seenPaneButton(t, p, size, "🗑")
+		// A bin, because on a RECEIVED note this control deletes. It is an
+		// icon-only button now, so it is found by having no text.
+		del := seenPaneButtonIcon(t, p, size)
 		if del == nil {
 			t.Fatal("no visible delete control on the sticker")
 		}
@@ -1099,8 +1101,8 @@ func TestStyledClosingGlyphMatchesWhatItDoes(t *testing.T) {
 		defer app.Quit()
 		st, _ := styledNoteFixture(t, []int{2}, []string{"synthetic note"})
 		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
-		if seenPaneButton(t, p, size, "🗑") == nil {
-			t.Error("a note that DELETES on press must wear a bin")
+		if seenPaneButtonIcon(t, p, size) == nil {
+			t.Error("a note that DELETES on press must wear the bin ICON")
 		}
 		if seenPaneButton(t, p, size, "✕") != nil {
 			t.Error("a received note must not offer ✕ — that mark means dismiss")
@@ -1125,9 +1127,25 @@ func TestStyledClosingGlyphMatchesWhatItDoes(t *testing.T) {
 		if seenPaneButton(t, p, size, "✕") == nil {
 			t.Error("your own note's control only dismisses, so it must wear ✕")
 		}
-		if seenPaneButton(t, p, size, "🗑") != nil {
+		if seenPaneButtonIcon(t, p, size) != nil {
 			t.Error("your own note must not wear a bin — that press does not delete, " +
 				"and a bin that does not delete is worse than no bin")
 		}
 	})
+}
+
+// seenPaneButtonIcon finds the sticker's icon-only control — the bin. The
+// delete verb wears a drawn icon rather than a glyph now, so it is identified
+// by carrying an icon and no text.
+func seenPaneButtonIcon(t *testing.T, p *styledReadingPane, size fyne.Size) *widget.Button {
+	t.Helper()
+	want := noteTrashIcon(lightPalette.TextMuted).Name()
+	for _, b := range seenPaneButtons(t, p, size) {
+		// By NAME, not merely "has an icon": the sticker's other controls can
+		// be icon-only too, and a loose match finds whichever comes first.
+		if b.Text == "" && b.Icon != nil && b.Icon.Name() == want {
+			return b
+		}
+	}
+	return nil
 }
