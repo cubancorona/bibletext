@@ -331,15 +331,31 @@ func noteTailSVG(fill, stroke color.Color) fyne.Resource {
 	// browser, first paint went 350ms to 456ms at ten notes. A rounded rectangle
 	// is drawn natively and an 18x11 tail is nothing, which is why this
 	// construction is cheap — so the fix belongs in the overlap, not the shape.
-	w, d := noteTailWidth, noteTailDepth
+	// THE GEOMETRY, because getting it wrong is invisible in code and obvious on
+	// screen. The image is w wide and (lid + d) tall, and it is positioned so
+	// that y = lid lands exactly on the card's bottom edge:
+	//
+	//	y = 0     ─┐  the LID strip: fill only, no stroke. It covers the card's
+	//	           │  own bottom border across the mouth's width, which is what
+	//	y = lid   ─┘  stops the border reading as a hairline across the tail.
+	//	              the card's bottom edge — the mouth
+	//	              the two slanted edges, stroked, meeting at
+	//	y = lid+d     the point.
+	//
+	// My first attempt drew the triangle from y=0 and left the spare height at
+	// the BOTTOM, so the whole tail sat a lid too high: its mouth was inside the
+	// card, its strokes cut across the card's interior, and it hung 6pt instead
+	// of 9. The fill hid the border either way, which is why it looked nearly
+	// right and was not (owner: "there is a border on the tail that's missing").
+	w, d, lid := noteTailWidth, noteTailDepth, noteTailLidOverlap
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+
-			`<path d="M0 0 L%d %d L%d 0 Z" fill="%s" fill-opacity="%.3f"/>`+
-			`<path d="M0 0 L%d %d L%d 0" fill="none" stroke="%s" stroke-opacity="%.3f" stroke-width="1" `+
-			`stroke-linejoin="round"/></svg>`,
-		w, d+noteTailLidOverlap, w, d+noteTailLidOverlap,
-		w/2, d, w, fillHex, fillA,
-		w/2, d, w, strokeHex, strokeA,
+			`<path d="M0 0 L%d 0 L%d %d L%d %d L0 %d Z" fill="%s" fill-opacity="%.3f"/>`+
+			`<path d="M0 %d L%d %d L%d %d" fill="none" stroke="%s" stroke-opacity="%.3f" `+
+			`stroke-width="1" stroke-linejoin="round"/></svg>`,
+		w, lid+d, w, lid+d,
+		w, w, lid, w/2, lid+d, lid, fillHex, fillA,
+		lid, w/2, lid+d, w, lid, strokeHex, strokeA,
 	)
 	return fyne.NewStaticResource("note-tail.svg", []byte(svg))
 }
