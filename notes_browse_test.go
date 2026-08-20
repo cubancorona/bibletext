@@ -1283,3 +1283,110 @@ func TestOwnNoteBylineSurvivesAClampedChapter(t *testing.T) {
 		t.Errorf("your own note is bylined %q, want it attributed to you", who)
 	}
 }
+
+// DELETING FROM THE LIST MUST NOT OPEN SOMEBODY ELSE'S NOTE, and must not leave
+// focus naming a record that no longer exists.
+//
+// The row bin was added with the verb-to-screen re-derive but without the focus
+// reset every other delete path has. Measured before the fix, with a friend's
+// note on the same passage and your own note on screen:
+//
+//	showing: active="my own words" NoteID=2 focus={true 2}
+//	after:   active="friend words" NoteID=1 focus={true 2}   ← a deleted id
+//
+// So deleting your own note from a LIST made a stranger's message appear on the
+// passage, expanded, unasked for.
+func TestDeletingFromTheListOpensNothingElse(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 17, Text: "friend words"})
+	if !ok {
+		t.Fatal("the friend's note was not stored")
+	}
+	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "my own words"})
+	if !ok {
+		t.Fatal("your note was not stored")
+	}
+
+	st := planTestState(t)
+	openNote(st, mine)
+	if st.ActiveNote != mine.Text {
+		t.Fatalf("precondition: your note must be on screen, got %q", st.ActiveNote)
+	}
+
+	// Fire the row bin's own callback on the note currently displayed.
+	row := noteBrowseRow(st, mine, lightPalette)
+	trash := seenBannerButton(t, row, fyne.NewSize(420, 300), func(b *widget.Button) bool {
+		return b.Text == "" && b.Icon != nil
+	})
+	if trash == nil {
+		t.Fatal("no delete control on the row")
+	}
+	test.Tap(trash)
+
+	if st.ActiveNote == friend.Text && !st.NoteMinimized {
+		t.Error("a friend's note opened on the passage because you deleted your own " +
+			"from the list — expanded, unasked for")
+	}
+	if st.noteFocus.set && st.noteFocus.id == mine.ID {
+		t.Error("focus still names the deleted note; it outlived the record it points at")
+	}
+	if _, live := st.markSpan(); live && st.ActiveNote == "" {
+		t.Error("a wash is lit for a note that is not on screen")
+	}
+}
+
+// RE-SHARING THE SAME NOTE STILL COMES HOME AS YOURS.
+//
+// Every share mints a fresh nonce, but sharing the same words on the same
+// passage twice is ONE note: addNote dedups on content and keeps the FIRST
+// nonce. The second link therefore carried an identity the store did not hold,
+// so tapping your own second link stored a received duplicate and showed your
+// words as "Note from Friend" — the exact defect the nonce exists to prevent,
+// reachable again just by re-sharing. The record decides the identity now.
+func TestResharingTheSameNoteStillComesHomeAsYours(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	const text = "sent to Dad"
+	first, _ := saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John",
+		Chapter: 3, VerseLo: 16, VerseHi: 16, Text: text, Nonce: newNoteNonce()})
+	// The SECOND share of the same words: a fresh nonce, deduped onto the same
+	// record, and the link must carry the record's identity rather than the new
+	// one.
+	second, ok := saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John",
+		Chapter: 3, VerseLo: 16, VerseHi: 16, Text: text, Nonce: newNoteNonce()})
+	if !ok {
+		t.Fatal("the second share was refused")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("the same words on the same passage became two notes (%d, %d)", first.ID, second.ID)
+	}
+
+	url := ShareLinkURLWithNoteNonce("web", "John", 3, 16, 16, text, second.Nonce)
+	target, ok := ParseShareLink(url)
+	if !ok {
+		t.Fatal("the second link did not parse")
+	}
+	st := planTestState(t)
+	got, stored := rememberIncomingNote(st, target)
+	if !stored {
+		t.Fatal("the arrival was refused")
+	}
+	if got.Kind != noteKindMine || got.ID != first.ID {
+		t.Errorf("tapping your own SECOND link came home as %q id=%d — your words would "+
+			"be shown back to you as a note from a friend", got.Kind, got.ID)
+	}
+	if n := len(allNotesForBrowsing(appPrefs())); n != 1 {
+		t.Errorf("one note shared twice left %d records", n)
+	}
+}
