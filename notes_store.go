@@ -34,6 +34,7 @@ package bibletext
 // publish a truncated file in a shipped build.)
 
 import (
+	"bytes"
 	"encoding/json"
 	"sort"
 	"strconv"
@@ -402,11 +403,42 @@ func readMyNotes(p prefStore) ([]StoredNote, bool) {
 	return out, true
 }
 
+// findNoteByNonce looks for a note YOU shared, by the identity minted when you
+// shared it. Kind=mine only: a received note's nonce is the SENDER's, and two
+// readers who were both sent the same link legitimately hold the same value —
+// folding on that would merge one friend's note into another's.
+func findNoteByNonce(p prefStore, nonce []byte) (StoredNote, bool) {
+	if len(nonce) != noteNonceLen {
+		return StoredNote{}, false
+	}
+	s := readNoteStore(p)
+	if !s.ok {
+		return StoredNote{}, false
+	}
+	for _, n := range s.notes {
+		if n.Kind == noteKindMine && bytes.Equal(n.Nonce, nonce) {
+			return n, true
+		}
+	}
+	return StoredNote{}, false
+}
+
 // saveMyNote appends a note the reader just sent — a Kind=mine write of the
 // one store. Two of your own notes on one passage are two notes; the same
 // words re-shared are one (sameNoteContent, owner).
 func saveMyNote(p prefStore, n StoredNote) {
 	n.Kind = noteKindMine
+	// Store what actually TRAVELLED, not what was typed. The wire runs
+	// normalizeNote on encode (share_note.go) — it collapses blank-line runs and
+	// truncates at the rune cap, and the compose sheet deliberately lets a
+	// reader write past that cap and tells them it will be shortened. Storing
+	// the raw string left the sent record and the shared link holding different
+	// text for the same note, so the two could never be recognised as one.
+	n.Text = normalizeNote(n.Text)
+	// And the store's single spelling for a one-verse note (singleVerseHi).
+	if n.VerseHi <= n.VerseLo {
+		n.VerseHi = 0
+	}
 	addNote(p, n)
 }
 
@@ -715,6 +747,27 @@ func applyNoteForCurrentChapter(state *AppState) {
 func rememberIncomingNote(state *AppState, t ShareTarget) (StoredNote, bool) {
 	if state == nil || strings.TrimSpace(t.Note) == "" {
 		return StoredNote{}, false
+	}
+	// YOUR OWN NOTE, COMING HOME. If this link carries a nonce that matches a
+	// note YOU shared, it is not an arrival from anyone — it is your own words
+	// returning, and storing a second copy is what made the app show them back
+	// to you under "Note from Friend". So: store nothing, and answer with the
+	// note you already have, so the caller focuses THAT and the passage draws
+	// it as yours.
+	//
+	// THE NONCE, NOT THE WORDS. Matching on content would fold a friend's
+	// "Amen" on the verse you already wrote "Amen" on into your record, and
+	// their message would be gone with nothing to show it ever arrived. The
+	// scrapbook keeps what it is given; identity is the only safe key, and the
+	// wire carries none except this one (share_note.go, noteTagNonce).
+	//
+	// A link from before the nonce existed, or one whose note this build could
+	// not read, has none — it stores as it always did. That is the honest
+	// fallback: a duplicate is a nuisance, a swallowed message is not.
+	if t.NoteNonce != ([noteNonceLen]byte{}) {
+		if mine, ok := findNoteByNonce(appPrefs(), t.NoteNonce[:]); ok {
+			return mine, true
+		}
 	}
 	return addNote(appPrefs(), StoredNote{
 		Kind: noteKindReceived,

@@ -69,7 +69,12 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 	_, cite, _, _ := prepareShareQuote(state, text, span)
 	version := state.currentVersion()
 	lo, hi := linkVersesForSelection(state, text, span)
-	url := ShareLinkURLWithNote(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note)
+	// One nonce, minted here, used twice: it rides in the link and it is kept on
+	// the record. That is what lets this device recognise its own note when the
+	// reader taps their own link — without asking the words, which cannot answer
+	// (a friend may write the same thing on the same verse).
+	nonce := newNoteNonce()
+	url := ShareLinkURLWithNoteNonce(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note, nonce)
 	if url == "" {
 		shareVerse(state, text, false, span)
 		return
@@ -87,6 +92,7 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 			VerseLo:   lo,
 			VerseHi:   hi,
 			Text:      n,
+			Nonce:     nonce,
 		})
 	}
 

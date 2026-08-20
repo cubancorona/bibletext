@@ -93,6 +93,13 @@ type StoredNote struct {
 	// WireOpaque is the stop byte and everything after it. Kept so a future
 	// forward/re-share can re-emit them instead of silently destroying the
 	// sender's data on its way through us (docs/NOTE_WIRE_FORMAT.md rule 3).
+	// Nonce is this note's per-share identity, minted when YOU shared it and
+	// carried in the link (noteTagNonce). It exists for one question: is this
+	// arriving note the one I sent? Content cannot answer that — a friend may
+	// write the same words on the same verse — and the wire carries no sender
+	// identity by design.
+	Nonce []byte
+
 	WireSkipped []byte
 	WireOpaque  []byte
 
@@ -119,6 +126,7 @@ type storedNoteJSON struct {
 	Received    int64       `json:"ts,omitempty"`
 	SenderName  string      `json:"sn,omitempty"`
 	SenderID    string      `json:"sid,omitempty"`
+	Nonce       []byte      `json:"nn,omitempty"`
 	WireSkipped []byte      `json:"ws,omitempty"`
 	WireOpaque  []byte      `json:"wo,omitempty"`
 }
@@ -131,7 +139,7 @@ type storedNoteJSON struct {
 var storedNoteKnownKeys = map[string]bool{
 	"id": true, "k": true, "v": true, "b": true, "c": true,
 	"lo": true, "hi": true, "ar": true, "t": true, "m": true, "ts": true,
-	"sn": true, "sid": true, "ws": true, "wo": true,
+	"sn": true, "sid": true, "nn": true, "ws": true, "wo": true,
 }
 
 // MarshalJSON emits the known fields in fixed order, then every Extra key in
@@ -143,6 +151,7 @@ func (n StoredNote) MarshalJSON() ([]byte, error) {
 		AnchorRuns: n.AnchorRuns,
 		Text:       n.Text, Minimized: n.Minimized, Received: n.Received,
 		SenderName: n.SenderName, SenderID: n.SenderID,
+		Nonce:       n.Nonce,
 		WireSkipped: n.WireSkipped, WireOpaque: n.WireOpaque,
 	})
 	if err != nil || len(n.Extra) == 0 {
@@ -201,6 +210,7 @@ func (n *StoredNote) UnmarshalJSON(data []byte) error {
 		"ar": &out.AnchorRuns,
 		"t":  &out.Text, "m": &out.Minimized, "ts": &out.Received,
 		"sn": &out.SenderName, "sid": &out.SenderID,
+		"nn": &out.Nonce,
 		"ws": &out.WireSkipped, "wo": &out.WireOpaque,
 	} {
 		if err := take(key, dst); err != nil {
@@ -243,6 +253,26 @@ func sameNoteContent(a, b StoredNote) bool {
 		a.Book == b.Book &&
 		a.Chapter == b.Chapter &&
 		a.VerseLo == b.VerseLo &&
-		a.VerseHi == b.VerseHi &&
+		singleVerseHi(a) == singleVerseHi(b) &&
 		strings.TrimSpace(a.Text) == strings.TrimSpace(b.Text)
+}
+
+// singleVerseHi is the store's ONE spelling of "a note on a single verse".
+//
+// The two writers disagreed. The send path stores VerseHi as the selection's
+// last verse, so a one-verse share is {35, 35}; the arrival zeroes it —
+// "if t.VerseHi <= t.VerseLo { t.VerseHi = 0 }" (share_link_open.go), commented
+// "the store's single-verse spelling". Both mean the same passage and
+// sameNoteContent compared them verbatim, so the same note written twice looked
+// like two different notes — which is why the sent and received copies of ONE
+// note could never be recognised as the same thing.
+//
+// Normalising in the COMPARISON rather than only on write is deliberate: it
+// makes every record already in a reader's store compare correctly, with no
+// migration to run and nothing to get wrong at 2am.
+func singleVerseHi(n StoredNote) int {
+	if n.VerseHi <= n.VerseLo {
+		return 0
+	}
+	return n.VerseHi
 }

@@ -43,9 +43,37 @@ record:    <tag: 1 byte> <len: uvarint> <value: len bytes>
 | `b` | book, index into the frozen canon table (`bookslugs.go`) | no |
 | `c` | chapter | no |
 | `a` | verse runs | no |
+| `n` | this note's own identity, 6 random bytes, minted once when the note is shared | no |
 | `f` | sender display name — **reserved**, decoded and stored, never written or shown | no |
 | `i` | sender id, 6 opaque bytes — **reserved** | no |
 | `0xFF` | **reserved**: stop parsing; everything after is opaque | — |
+
+### `n` — why a note carries an identity, and why it is per-NOTE
+
+A device has to be able to recognise its own note coming home. You share a
+verse with a message, you tap your own link later, and without this the app
+stores a second copy and shows your own words back to you under "Note from
+Friend" — which is exactly what it did until 20 Aug 2026.
+
+**Content cannot answer that question.** "Amen" on the same verse from a friend
+is a different note that happens to read the same. Collapsing on the words would
+file their message as yours and lose it, against a store whose charter is that
+it keeps what it is given.
+
+**It is per-NOTE, not per-sender, and that is the privacy line.** The reserved
+`i` and `f` are *sender* identity: one value, in every link you ever send,
+visible to everyone each is forwarded to. `n` is minted fresh for each share, so
+two links you sent carry unrelated values and nothing links them to each other
+or to you. It is 6 bytes — 2^48 values, from `crypto/rand` rather than a
+predictable source, so no one can craft a link a reader's device mistakes for
+one of their own.
+
+**It is optional in both directions.** A link without `n` — every link made
+before this existed, and every link whose note a build could not read — simply
+does not collapse, which is the older behaviour and no worse. And because `n` is
+lowercase, every already-shipped decoder skips it by its length and preserves it
+verbatim (rule 3), so old builds are unaffected and a forward from one keeps the
+identity intact.
 
 ## The five rules, and why each is the way it is
 

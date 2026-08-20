@@ -48,6 +48,20 @@ type ShareTarget struct {
 	// every case.
 	NoteOutcome NoteOutcome
 
+	// NoteNonce is the payload's per-note identity ('n'). It answers exactly one
+	// question on arrival: is this the note I sent? (share_note.go,
+	// noteTagNonce.)
+	//
+	// A fixed ARRAY, not a slice, so ShareTarget stays comparable — seven tests
+	// compare whole targets with ==, and that is a good property to keep for a
+	// value type describing a parsed link.
+	//
+	// The zero value means "no nonce": every link made before this existed, and
+	// every link whose note this build could not read. An actual all-zero nonce
+	// from crypto/rand has probability 2^-48, and its only consequence would be
+	// that one note does not collapse — the safe direction.
+	NoteNonce [noteNonceLen]byte
+
 	// The note's OWN anchor, from the payload's v/b/c/a records — set only on
 	// NoteOutcomeOK, zero when the record was absent. These are AUTHORITATIVE
 	// for the NOTE where present: the path is lossy (webc forced for the
@@ -153,6 +167,9 @@ func ParseShareLink(raw string) (ShareTarget, bool) {
 		t.NoteOutcome = outcome
 		if outcome == NoteOutcomeOK {
 			t.Note = rec.Text
+			if len(rec.Nonce) == noteNonceLen {
+				copy(t.NoteNonce[:], rec.Nonce)
+			}
 			t.NoteVersion = rec.Version
 			t.NoteBook = rec.Book
 			t.NoteChapter = rec.Chapter
