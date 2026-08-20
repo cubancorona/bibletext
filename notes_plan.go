@@ -565,6 +565,17 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	var n StoredNote // zero value reads as a received note: "Note from Friend"
 	if inPlan && plan.display >= 0 {
 		n = plan.Notes[plan.display].Note
+	} else if state.NoteID != 0 {
+		// MIRROR-ONLY, and it may still be YOUR note. This arm runs when the
+		// note is not in this chapter's plan — an arrival filed on a passage
+		// this canon cannot reach, so the chapter was clamped. The zero value
+		// above reads as a received note, which is right for a stranger's note
+		// and wrong for your own: it would attribute your words to "Friend" on
+		// the one path where nothing else can correct it. Ask the store whose
+		// note this actually is.
+		if own, ok := findNoteByID(appPrefs(), state.NoteID); ok {
+			n = own
+		}
 	}
 	who = senderByline(n)
 	if placed > 1 {

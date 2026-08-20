@@ -403,6 +403,24 @@ func readMyNotes(p prefStore) ([]StoredNote, bool) {
 	return out, true
 }
 
+// findNoteByID answers "whose note is this, really" for a note the mirror is
+// carrying but the chapter plan does not hold — the clamped-chapter arrival.
+func findNoteByID(p prefStore, id uint64) (StoredNote, bool) {
+	if id == 0 {
+		return StoredNote{}, false
+	}
+	s := readNoteStore(p)
+	if !s.ok {
+		return StoredNote{}, false
+	}
+	for _, n := range s.notes {
+		if n.ID == id {
+			return n, true
+		}
+	}
+	return StoredNote{}, false
+}
+
 // findNoteByNonce looks for a note YOU shared, by the identity minted when you
 // shared it. Kind=mine only: a received note's nonce is the SENDER's, and two
 // readers who were both sent the same link legitimately hold the same value —
