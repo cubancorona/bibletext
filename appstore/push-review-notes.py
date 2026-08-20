@@ -58,7 +58,19 @@ def asc(*args):
     body = out.stdout
     if "{" not in body:
         sys.exit(f"App Store Connect call failed:\n{out.stdout}\n{out.stderr}")
-    return json.loads(body[body.index("{"):])
+    obj = json.loads(body[body.index("{"):])
+    # AN ERROR BODY IS A FAILURE, NOT A RESULT. asc.py prints the HTTP status and
+    # the JSON either way, and the first version of this tool passed both back as
+    # if the call had worked — so a PATCH that 409'd (the notes were over
+    # Apple's 4,000-character limit) sailed through to the read-back, which then
+    # reported an unexplained "mismatch". That is exactly how 1.2.1's notes
+    # nearly shipped inherited AGAIN, and very likely how 1.2.0's actually did:
+    # the write "succeeded", the field never changed, and nothing said why.
+    if isinstance(obj, dict) and obj.get("errors"):
+        e = obj["errors"][0]
+        sys.exit(f"App Store Connect refused the call: {e.get('title')}\n"
+                 f"  {e.get('detail')}\n  ({e.get('code')})")
+    return obj
 
 
 def main():
@@ -68,6 +80,14 @@ def main():
         notes = f.read().rstrip("\n")
     if not notes.strip():
         sys.exit(f"{NOTES} is empty — refusing to blank the review notes")
+    # Apple's hard cap. Checked here, before any network call, because the API's
+    # own answer to an over-long value is a 409 at PATCH time — after the diff
+    # has been shown and the write "attempted" — and a cap discovered that late
+    # reads as a transient failure rather than as a fact about the file.
+    if len(notes) > 4000:
+        sys.exit(f"{NOTES} is {len(notes)} characters; App Store Connect caps "
+                 f"review notes at 4,000. Cut {len(notes) - 4000} characters "
+                 "before pushing — the field simply cannot hold this file.")
 
     versions = asc("get", f"/v1/apps/{APP_ID}/appStoreVersions?limit=5")["data"]
     if not versions:

@@ -65,6 +65,22 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 	notes := string(raw)
 	want := marketingVersion(t)
 
+	// 0. THE FIELD CAN HOLD THEM. App Store Connect caps review notes at 4,000
+	// characters, and its answer to a longer value is a 409 at PATCH time —
+	// which the push tool used to swallow, so the write "succeeded", the field
+	// silently kept the PREVIOUS release's notes, and the reviewer read about a
+	// hotfix while judging a notes release. The 1.2.1 file was 7,050 characters
+	// when this fired live on 20 Aug 2026, and the 1.2.0 inheritance the
+	// preflight found was almost certainly the same 409 nobody saw. Character
+	// count, not bytes: Apple counts characters, and the em dashes and curly
+	// quotes these notes are full of are multi-byte.
+	if n := len([]rune(notes)); n > 4000 {
+		t.Fatalf("appstore/review-notes.txt is %d characters; App Store Connect "+
+			"caps the field at 4,000. Cut %d characters — an over-long file "+
+			"cannot be pushed, and the store then keeps the previous release's "+
+			"notes as if that were a choice.", n, n-4000)
+	}
+
 	// 1. THE NOTES NAME THIS RELEASE. The failure this whole file exists for.
 	first := strings.TrimSpace(strings.SplitN(notes, "\n", 2)[0])
 	if !strings.Contains(first, want) {
@@ -205,6 +221,11 @@ func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
 	}
 	if len(strings.TrimSpace(string(b))) == 0 {
 		t.Fatalf("%s is empty", mine)
+	}
+	// Same 4,000-character cap as the review notes, same silent-409 failure
+	// shape if exceeded — see TestAppReviewNotesAreForThisRelease.
+	if n := len([]rune(string(b))); n > 4000 {
+		t.Fatalf("%s is %d characters; App Store Connect caps What's New at 4,000", mine, n)
 	}
 	// And it must not merely be a copy of another release's notes.
 	others, _ := filepath.Glob(filepath.Join(dir, "whats-new-*.txt"))
