@@ -323,8 +323,18 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 					t.Errorf("one delete: %d notes remain, want 2", n)
 				}
 			},
-			wantSeen:   []string{"john 3:17", "john 3:16"},
-			rejectSeen: []string{gammaText, "john 3:18", alphaText, betaText},
+			// AMENDED 20 Aug 2026: betaText moved from rejectSeen to wantSeen.
+			// The survivor is the OPEN note after a delete — the sticker has
+			// always said so ("1 of 2 on this passage", not a pill) — and the
+			// banner draws the open note's text, exactly as it draws "delta
+			// words just arrived" on the arrival row above. The old expectation
+			// pinned a DISAGREEMENT between the two surfaces: the banner showed
+			// only chips because the plan's Open was false, while the sticker
+			// showed the note expanded because the mirror ignored Open and read
+			// the stored Minimized bit alone. That is the divergence this very
+			// harness exists to catch, and it was written into its expectations.
+			wantSeen:   []string{betaText, "john 3:17", "john 3:16"},
+			rejectSeen: []string{gammaText, "john 3:18", alphaText},
 			wantText:   betaText,
 			wantWho:    []string{"1 of 2 on this passage"},
 			wantNext:   true,
@@ -349,8 +359,18 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 					t.Errorf("the tapped delete: %d notes remain, want 2", n)
 				}
 			},
-			wantSeen:   []string{"john 3:17", "john 3:16"},
-			rejectSeen: []string{gammaText, "john 3:18", alphaText, betaText},
+			// AMENDED 20 Aug 2026: betaText moved from rejectSeen to wantSeen.
+			// The survivor is the OPEN note after a delete — the sticker has
+			// always said so ("1 of 2 on this passage", not a pill) — and the
+			// banner draws the open note's text, exactly as it draws "delta
+			// words just arrived" on the arrival row above. The old expectation
+			// pinned a DISAGREEMENT between the two surfaces: the banner showed
+			// only chips because the plan's Open was false, while the sticker
+			// showed the note expanded because the mirror ignored Open and read
+			// the stored Minimized bit alone. That is the divergence this very
+			// harness exists to catch, and it was written into its expectations.
+			wantSeen:   []string{betaText, "john 3:17", "john 3:16"},
+			rejectSeen: []string{gammaText, "john 3:18", alphaText},
 			wantText:   betaText,
 			wantWho:    []string{"1 of 2 on this passage"},
 			wantNext:   true,

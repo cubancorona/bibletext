@@ -727,10 +727,25 @@ func applyNoteForCurrentChapter(state *AppState) {
 	// the pre-plan derive renumbered it.
 	n := displayCopy(plan.Notes[plan.display], state.currentVersion().ID, state.CurrentChapter)
 	state.ActiveNote = n.Text
-	state.NoteMinimized = n.Minimized
+	// THE MIRROR HONOURS THE PLAN'S Open, not the stored bit alone.
+	//
+	// Three things keep a note closed and only ONE of them is durable:
+	// Minimized (the reader pressed −), focus NONE (the reader closed the
+	// session's open note), and suppression (a foreign mark owns the page).
+	// The plan folds all three into Open; the mirror used to read Minimized and
+	// so could not see the other two.
+	//
+	// What that cost, measured: with a friend's note also on the passage,
+	// putting YOUR OWN note away opened THEIRS in its place — fully expanded,
+	// with the wash jumping onto their verse — because focus fell to none, the
+	// display index moved to their note, and the mirror asked only whether they
+	// had pressed − on it. That is exactly what N3 forbids: "nothing may take
+	// the closed one's place under the reader's eyes." The plan was right
+	// throughout (openNote() reported false); only the projection was wrong.
+	state.NoteMinimized = !plan.Notes[plan.display].Open
 	state.NoteVerseLo = n.VerseLo
 	state.NoteID = n.ID // the identity every verb addresses, carried whole
-	if n.Minimized {
+	if state.NoteMinimized {
 		return
 	}
 	// Never clobber a highlight that is on the page for another reason —
@@ -948,8 +963,21 @@ func dropCurrentNote(state *AppState) {
 	state.NoteMinimized = false
 	state.NoteVerseLo = 0
 	state.NoteID = 0
-	// Focus falls to NONE — deleting is closing, not choosing a neighbour.
-	state.focusNone()
+	// FOCUS RETURNS TO THE DEFAULT RULE, and this is not the same as the reader
+	// closing a note. A deleted note is GONE, not put away, so nothing is
+	// "taking its place under the reader's eyes" (N3) when the rest of the set
+	// comes back — and the rest of the set coming back is the owner's own
+	// requirement, from the report that deleting one note made every pill on
+	// the passage vanish.
+	//
+	// It said focusNone here, and said so in a comment ("deleting is closing,
+	// not choosing a neighbour") that the code did not actually implement: the
+	// mirror read the stored Minimized bit and never looked at focus, so the
+	// none had no effect on what was drawn and the two disagreed in silence.
+	// Making the mirror honour the plan's Open turned that dormant conflation
+	// into a real regression — the survivor pilled instead of surfacing — which
+	// is how it was found.
+	state.resetNoteFocus()
 	// As in hideCurrentNote: the note's mark goes, a search result's or a
 	// shared link's stays.
 	state.clearMarkFromNote()
