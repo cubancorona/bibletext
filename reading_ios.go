@@ -219,9 +219,34 @@ static UITapGestureRecognizer *gHighlightTap = nil;
         if ([el isKindOfClass:[UIMenu class]] &&
             [((UIMenu *)el).identifier isEqualToString:UIMenuStandardEdit]) {
             [editGroup addObject:el];
-        } else {
-            [systemRest addObject:el];
+            continue;
         }
+        // THE SYSTEM'S SHARE IS DROPPED, and only that one.
+        //
+        // It put a second thing called "Share" a few rows under ours, doing
+        // something different: the system shares the raw selected string, while
+        // "Share with citation" sends the quote WITH its reference and the
+        // translation's name (composeShareText, share.go). For a Bible reader
+        // the difference is not cosmetic — wording differs between
+        // translations, so scripture shared with no version named is scripture
+        // no one can check, and every other surface in this app is careful to
+        // say which translation it is showing.
+        //
+        // Nothing is lost. A reader who wants the words alone has Copy, in the
+        // standard-edit group kept first above; the system Share was redundant
+        // with Copy plus any app, and worse than ours for sharing.
+        //
+        // IT FAILS OPEN, deliberately. The test is UIMenuShare — UIKit's own
+        // identifier since iOS 13, read from the SDK rather than guessed — and
+        // anything this code cannot recognise is KEPT. If a later iOS renames
+        // or restructures the item, the duplicate simply comes back, which is
+        // merely today's behaviour; the alternative failure, guessing wrong and
+        // eating some other action, is one a reader could not diagnose.
+        if ([el isKindOfClass:[UIMenu class]] &&
+            [((UIMenu *)el).identifier isEqualToString:UIMenuShare]) {
+            continue;
+        }
+        [systemRest addObject:el];
     }
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray array];
     [children addObjectsFromArray:editGroup];
