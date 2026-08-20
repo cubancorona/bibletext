@@ -144,7 +144,11 @@ var openAIChatOnlyExclude = []string{"-pro"}
 func aiProviders() []providerInfo {
 	return []providerInfo{
 		{
-			ID: providerGemini, Name: "Google Gemini", ShortName: "Gemini", Model: geminiModel, FastModel: geminiFastModel,
+			// PRODUCT (VENDOR), like the other three. This read "Google Gemini"
+			// — vendor first and no parenthetical — which made it the one row
+			// in the picker that did not match its neighbours, and sorted the
+			// list by a word the reader does not choose by.
+			ID: providerGemini, Name: "Gemini (Google)", ShortName: "Gemini", Model: geminiModel, FastModel: geminiFastModel,
 			KeyURL: "https://aistudio.google.com/apikey", KeyHint: "key from Google AI Studio (starts with “AIza” or “AQ.”)",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{

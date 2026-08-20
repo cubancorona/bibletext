@@ -1310,7 +1310,7 @@ static const CGFloat kMacNoteGapAbove = 10, kMacNoteGapBelow = 10, kMacNotePad =
 // visibly narrower here than on the phone beside it.
 static const CGFloat kMacNotePillPadX = 14, kMacNotePillMinW = 86;
 // The bin's DRAWN size on the card — small, like the rest of this pane's chrome.
-static const CGFloat kMacNoteTrashPt = 10;
+static const CGFloat kMacNoteTrashPt = 11;
 static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kMacNoteRad = 10;
 // kMacNoteBtn is NOT spec: it is the verb button's size, this platform's 24pt
 // pointer target. The pill used to borrow it (24), which is how a pointer-target
