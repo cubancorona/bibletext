@@ -403,6 +403,17 @@ func readMyNotes(p prefStore) ([]StoredNote, bool) {
 	return out, true
 }
 
+// isOwnLiveNote reports whether the note the verbs would act on is one the
+// reader WROTE, rather than one they were sent. The mirror carries the
+// identity; the store says whose it is.
+func isOwnLiveNote(state *AppState) bool {
+	if state == nil || state.NoteID == 0 {
+		return false
+	}
+	n, ok := findNoteByID(appPrefs(), state.NoteID)
+	return ok && n.Kind == noteKindMine
+}
+
 // findNoteByID answers "whose note is this, really" for a note the mirror is
 // carrying but the chapter plan does not hold — the clamped-chapter arrival.
 func findNoteByID(p prefStore, id uint64) (StoredNote, bool) {
@@ -848,6 +859,19 @@ func hideCurrentNote(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
 	}
+	// YOUR OWN NOTE IS PUT AWAY, NOT MINIMIZED. It is on the passage only
+	// the requested behavior to see it, and only until you navigate away, so a
+	// durable Minimized bit would record something that is never true of it —
+	// and the notes browser, whose only reader of that bit is a sentence about
+	// being "minimized in the chapter", would then say something false. Putting
+	// it away is exactly focus falling to none: the same thing navigating away
+	// does, asked for a moment earlier.
+	if isOwnLiveNote(state) {
+		state.focusNone()
+		state.clearMarkFromNote()
+		applyNoteForCurrentChapter(state)
+		return
+	}
 	state.NoteMinimized = true
 	// The ONLY store write any focus change may make: an explicit Hide is the
 	// one durable collapse, and Minimized means exactly "this reader pressed
@@ -899,6 +923,24 @@ func restoreCurrentNote(state *AppState) {
 
 func dropCurrentNote(state *AppState) {
 	if state == nil {
+		return
+	}
+	// ✕ ON YOUR OWN NOTE DISMISSES IT; IT DOES NOT DESTROY IT.
+	//
+	// On a received note ✕ deletes, and that is right: it is someone else's
+	// message, you have read it, and the store is yours to prune. On your OWN
+	// note the same press would delete the only record of something you wrote —
+	// unconfirmed, in one tap, from a card that appeared the requested behavior to
+	// look at it and that is about to disappear on its own when you navigate
+	// away. That is not a trade any reader would knowingly make.
+	//
+	// So here it means "put it away", like −. Deleting your own note stays an
+	// explicit act in the notes browser, where you are looking at a list of
+	// your own notes and the row you press is unambiguous.
+	if isOwnLiveNote(state) {
+		state.focusNone()
+		state.clearMarkFromNote()
+		applyNoteForCurrentChapter(state)
 		return
 	}
 	deleteNoteByID(appPrefs(), state.NoteID)

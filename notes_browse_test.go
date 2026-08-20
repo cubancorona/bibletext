@@ -946,3 +946,98 @@ func TestTappingYourOwnLinkDrawsYourOwnNote(t *testing.T) {
 			"people sent you and must not change because you looked at your own", who)
 	}
 }
+
+// NOTHING YOU WROTE CAN BE LOST FROM THE READING PAGE.
+//
+// Drawing your own note made the pane's − and ✕ reachable on it for the first
+// time. Both were wrong for a card that is on the passage only because you
+// asked and only until you navigate away: − wrote a DURABLE "minimized" bit,
+// whose only reader is a browser sentence that would then be false, and ✕
+// deleted the only record of something you wrote — unconfirmed, in one press.
+//
+// Both now mean "put it away", which is what navigating away does a moment
+// later. Deleting your own note stays an explicit act in the notes browser.
+func TestReadingPageVerbsCannotDestroyYourOwnNote(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		act  func(*AppState)
+	}{
+		{"the minimize verb", hideCurrentNote},
+		{"the delete verb", dropCurrentNote},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := test.NewApp()
+			defer app.Quit()
+			setNotesEnabled(true)
+			deleteAllNotes(appPrefs())
+			defer deleteAllNotes(appPrefs())
+
+			mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+				Book: "John", Chapter: 3, VerseLo: 16, Text: "sent to neutral contact"})
+			if !ok {
+				t.Fatal("your note was not stored")
+			}
+			st := planTestState(t)
+			openNote(st, mine)
+			if st.ActiveNote != mine.Text {
+				t.Fatalf("precondition: your note must be drawn, got %q", st.ActiveNote)
+			}
+
+			tc.act(st)
+
+			// It is off the page...
+			if st.ActiveNote != "" {
+				t.Errorf("the verb did not put your note away: %q", st.ActiveNote)
+			}
+			// ...and it still EXISTS, unchanged.
+			all := allNotesForBrowsing(appPrefs())
+			if len(all) != 1 {
+				t.Fatalf("your note was destroyed from the reading page: %d notes remain", len(all))
+			}
+			if all[0].Minimized {
+				t.Error("a durable Minimized was written on a note that is only ever on " +
+					"the passage while focused — the browser would then say it is " +
+					"'minimized in the chapter', which is not true of it")
+			}
+			if all[0].Text != mine.Text {
+				t.Errorf("your note's text changed: %q", all[0].Text)
+			}
+		})
+	}
+}
+
+// And the same verbs still do their real work on a note somebody SENT you —
+// the point is not to make the pane inert, only to stop it destroying your own
+// words without asking.
+func TestReadingPageVerbsStillWorkOnAReceivedNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	theirs, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "synthetic note"})
+	if !ok {
+		t.Fatal("their note was not stored")
+	}
+	st := planTestState(t)
+	st.focusNote(theirs.ID)
+	applyNoteForCurrentChapter(st)
+	if st.ActiveNote != theirs.Text {
+		t.Fatalf("precondition: their note must be drawn, got %q", st.ActiveNote)
+	}
+
+	hideCurrentNote(st)
+	all := allNotesForBrowsing(appPrefs())
+	if len(all) != 1 || !all[0].Minimized {
+		t.Fatalf("minimize must still write the durable bit on a received note: %+v", all)
+	}
+
+	st.focusNote(theirs.ID)
+	applyNoteForCurrentChapter(st)
+	dropCurrentNote(st)
+	if len(allNotesForBrowsing(appPrefs())) != 0 {
+		t.Error("delete must still delete a received note")
+	}
+}
