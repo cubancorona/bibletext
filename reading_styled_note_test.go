@@ -390,7 +390,7 @@ func TestStyledStickerIsSeen(t *testing.T) {
 		"beta words on two",      // the open note's own words
 		"note from friend",       // the byline, in the app's voice
 		"1 of 2 on this passage", // the honest count
-		"–", "✕",                 // the verbs
+		"–", "🗑",                 // the verbs (a bin: on a received note this deletes)
 	} {
 		if !strings.Contains(seen, want) {
 			t.Errorf("the reader cannot see %q on the sticker.\nseen:\n%s", want, seen)
@@ -560,7 +560,8 @@ func TestStyledStickerVerbsFire(t *testing.T) {
 		st, _ := styledNoteFixture(t, []int{1, 2},
 			[]string{"alpha words on one", "beta words on two"})
 		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
-		del := seenPaneButton(t, p, size, "✕")
+		// A bin, because on a RECEIVED note this control deletes.
+		del := seenPaneButton(t, p, size, "🗑")
 		if del == nil {
 			t.Fatal("no visible delete control on the sticker")
 		}
@@ -1081,4 +1082,52 @@ func TestStyledPillMatchesTheApplePill(t *testing.T) {
 	if got := btn.Size(); got != g.card.size() {
 		t.Errorf("press target is %v, pill is %v — iOS's chip fills its bounds", got, g.card.size())
 	}
+}
+
+// THE CLOSING GLYPH SAYS WHAT THE PRESS DOES.
+//
+// On a received note the control deletes, and wears a bin. On YOUR OWN note it
+// only puts the card away — the note is on the passage because you asked and
+// would leave on its own when you navigate — so it wears ✕. Leaving one mark
+// for both would have made the destructive meaning the ambiguous one, on a card
+// the reader was invited to peek at.
+func TestStyledClosingGlyphMatchesWhatItDoes(t *testing.T) {
+	size := fyne.NewSize(560, 700)
+
+	t.Run("a received note offers a bin", func(t *testing.T) {
+		app := test.NewApp()
+		defer app.Quit()
+		st, _ := styledNoteFixture(t, []int{2}, []string{"thinking of you"})
+		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
+		if seenPaneButton(t, p, size, "🗑") == nil {
+			t.Error("a note that DELETES on press must wear a bin")
+		}
+		if seenPaneButton(t, p, size, "✕") != nil {
+			t.Error("a received note must not offer ✕ — that mark means dismiss")
+		}
+	})
+
+	t.Run("your own note offers a dismiss", func(t *testing.T) {
+		app := test.NewApp()
+		defer app.Quit()
+		setNotesEnabled(true)
+		deleteAllNotes(appPrefs())
+		defer deleteAllNotes(appPrefs())
+		mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+			Book: "Ruth", Chapter: 1, VerseLo: 2, Text: "sent to Dad"})
+		if !ok {
+			t.Fatal("your note was not stored")
+		}
+		st := bandFixtureState()
+		st.focusNote(mine.ID)
+		applyNoteForCurrentChapter(st)
+		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
+		if seenPaneButton(t, p, size, "✕") == nil {
+			t.Error("your own note's control only dismisses, so it must wear ✕")
+		}
+		if seenPaneButton(t, p, size, "🗑") != nil {
+			t.Error("your own note must not wear a bin — that press does not delete, " +
+				"and a bin that does not delete is worse than no bin")
+		}
+	})
 }

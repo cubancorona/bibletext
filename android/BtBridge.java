@@ -121,6 +121,9 @@ public final class BtBridge {
     // scroll silently falls through to the top, and no screenshot can tell you
     // which of the three branches ran.
     static final boolean SCROLL_DEBUG = false;
+    // noteOwn: the live note is one the READER WROTE, shown because they asked
+    // for it. It picks the closing control's mark and joins setNote's compare.
+    private static boolean noteOwn;
     private static boolean noteRetryPending;
     private static NoteBandSpan noteBandSpan; // the live band, so a refresh can take it back
 
@@ -1068,7 +1071,7 @@ public final class BtBridge {
     // 4-byte UTF-8, which is invalid modified UTF-8 and can abort NewStringUTF
     // under CheckJNI. Decoded here with the real charset; null/empty = absent.
     public static void setNote(final byte[] noteText_, final byte[] who_, final boolean pill,
-                               final boolean nextable, final int anchorVerse,
+                               final boolean nextable, final boolean own, final int anchorVerse,
                                final int bg, final int fg, final int muted,
                                final int accent, final int border) {
         UI.post(new Runnable() {
@@ -1079,11 +1082,13 @@ public final class BtBridge {
                         ? null : new String(who_, java.nio.charset.StandardCharsets.UTF_8);
                 boolean changed = !sameStr(t, noteText) || !sameStr(w, noteWho)
                         || notePill != pill || noteNextable != nextable
+                        || noteOwn != own
                         || noteAnchorVerse != anchorVerse;
                 noteText = t;
                 noteWho = w;
                 notePill = pill;
                 noteNextable = nextable;
+                noteOwn = own;
                 noteAnchorVerse = anchorVerse;
                 noteBg = bg;
                 noteFg = fg;
@@ -1440,7 +1445,9 @@ public final class BtBridge {
         wrap.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
             @Override public void onClick(View v) { nativeNoteHidden(); }
         }), noteVerbParams(2));
-        wrap.addView(noteVerb("✕", 14f, new View.OnClickListener() { // multiplication x: Delete
+        // THE MARK SAYS WHAT THE PRESS DOES: a bin where it deletes someone else's
+        // message, ✕ where it only puts your own note away (see the Apple twins).
+        wrap.addView(noteVerb(noteOwn ? "✕" : "\uD83D\uDDD1", 14f, new View.OnClickListener() {
             @Override public void onClick(View v) { nativeNoteDeleted(); }
         }), noteVerbParams(1));
         noteView = wrap;
