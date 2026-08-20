@@ -314,7 +314,28 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	if b := incompleteBibleBanner(state); b != nil {
 		headerItems = append(headerItems, b, spacer(8))
 	}
+	// A RULE BETWEEN TWO SIBLINGS, not a gap inside one.
+	//
+	// The sidebar does two unrelated jobs: the mode row above (Search / Find /
+	// Notes) drives the READING PANE, and the book list below is navigation that
+	// is always there. Stacked with only a 10pt gap and a section label at the
+	// top, that read as a hierarchy — modes on top, their content beneath — so
+	// the book list looked like the mode's output and people expected it to swap
+	// when they tapped Notes. It never does, because all three modes render into
+	// the right-hand pane instead.
+	//
+	// Owner, 20 Aug 2026, on the iPad: "the appended book list isn't clear. it
+	// looks like the search find and notes icons should be changing the side bar
+	// content." The layout was promising something the behaviour does not do.
+	//
+	// The separator is the cheap, behaviour-preserving half of the fix: it makes
+	// the two sections read as peers, so nothing above appears to own anything
+	// below. The full fix — making the mode row genuinely govern the sidebar with
+	// Books as a fourth position — is a navigation change and deliberately NOT
+	// being made in a release week.
 	headerItems = append(headerItems,
+		widget.NewSeparator(),
+		spacer(10),
 		sectionLabel("BOOKS", pal),
 		inputFrame(withCaret(state, bookFilter), pal.Border),
 	)

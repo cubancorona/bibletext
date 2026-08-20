@@ -564,6 +564,65 @@ func notesCapacityLine(stored int) string {
 	return "Every note is kept — nothing is ever removed — though a scrapbook this large can be slow on older devices."
 }
 
+// notesColumnMax is the widest the notes column is allowed to become.
+//
+// WHY A CAP AT ALL. Every piece of this view — the bubbles, the header line,
+// the empty-state sentence — was written for a phone, where the pane is about
+// 440pt and "take the width you are given" is the right answer. The iPad's
+// two-pane layout gives the same view roughly 1,150pt, and taking all of it is
+// what the owner saw on 20 Aug: a one-line note became a long thin box with its
+// words stranded at the far left, reading as an empty input field rather than
+// as something someone wrote; and with NO notes stored, the empty-state
+// sentence spread into a single hairline across the pane, so the eye went to
+// the book list in the sidebar instead and the pane looked like it had failed.
+//
+// 620 is chosen to sit just above the reading column's own measure
+// (reporterMeasureEm × body px ≈ 578pt at the default size), so a note and the
+// scripture it is about are set to about the same line length. A phone pane is
+// far narrower than this and is therefore untouched — that is deliberate: this
+// must not move a surface that already reads correctly.
+const notesColumnMax float32 = 620
+
+// notesMeasureLayout caps its child at notesColumnMax and centres it, leaving
+// the full height alone. It is a layout rather than a padded container because
+// the inset needed is a function of the pane's width, which only the layout
+// pass knows.
+type notesMeasureLayout struct{}
+
+func (notesMeasureLayout) Layout(objs []fyne.CanvasObject, s fyne.Size) {
+	for _, o := range objs {
+		w := s.Width
+		if w > notesColumnMax {
+			// Never cap BELOW what the child actually needs: a child whose own
+			// minimum is wider than the measure would be clipped, which is a
+			// worse failure than a wide column.
+			cap := notesColumnMax
+			if mw := o.MinSize().Width; mw > cap {
+				cap = mw
+			}
+			if w > cap {
+				w = cap
+			}
+		}
+		o.Resize(fyne.NewSize(w, s.Height))
+		o.Move(fyne.NewPos((s.Width-w)/2, 0))
+	}
+}
+
+func (notesMeasureLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	var m fyne.Size
+	for _, o := range objs {
+		m = m.Max(o.MinSize())
+	}
+	return m
+}
+
+// notesMeasureColumn is what every return from buildNotesBrowseView goes
+// through, so a future branch cannot forget it.
+func notesMeasureColumn(inner fyne.CanvasObject) fyne.CanvasObject {
+	return container.New(notesMeasureLayout{}, inner)
+}
+
 // buildNotesBrowseView renders the Notes mode: a line saying what is on show,
 // the sort control, then every matching note, each tapping through to its
 // passage.
@@ -586,7 +645,7 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 			"a note of your own, and it will be kept so you can come back to it.")
 		hint.Wrapping = fyne.TextWrapWord
 		hint.Alignment = fyne.TextAlignCenter
-		return container.NewPadded(container.NewVBox(spacer(24), hint))
+		return notesMeasureColumn(container.NewPadded(container.NewVBox(spacer(24), hint)))
 	}
 
 	by := notesSortPref()
@@ -742,7 +801,7 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 			})
 		})
 	}
-	return container.NewBorder(head, nil, nil, nil, list)
+	return notesMeasureColumn(container.NewBorder(head, nil, nil, nil, list))
 }
 
 // noteBrowseRow is one note in the list: its passage, then its message. The

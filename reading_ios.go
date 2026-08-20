@@ -394,6 +394,13 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 // destroy it during the app lifetime — easier to manage than re-attaching,
 // and the iOS selection state stays alive across chapter changes.
 static UITextView *gReadingTV = nil;
+
+// gNoteTopInset is DEFINED with the note globals further down; it is declared
+// here because this function is the one that writes textContainerInset, and the
+// note's first-paragraph band is reserved in that same field. One field, one
+// writer — see the comment inside btIOSApplyInsets for what having two cost.
+static CGFloat gNoteTopInset;
+
 static void btIOSApplyInsets(CGFloat w) {
     if (gReadingTV == nil || w <= 0) return;
     CGFloat side = 10; // phone default (legacy)
@@ -401,9 +408,26 @@ static void btIOSApplyInsets(CGFloat w) {
         side = floor((w - gReadingMeasure) / 2.0);
         if (side < 12) side = 12; // narrow multitasking column: keep a hair of margin
     }
+    // THE TOP INSET IS NOT A CONSTANT, and writing it as one was a bug.
+    //
+    // A note anchored to the chapter's FIRST paragraph cannot reserve its band
+    // with paragraphSpacingBefore — that collapses at the top of a text
+    // container — so btIOSInstallNote reserves it with the container's top inset
+    // instead. This function then overwrote that reservation with a bare 14 and
+    // the card was drawn straight over the opening verses.
+    //
+    // WHY IT SHOWED ON iPAD AND NOT ON THE PHONE: the reporter measure makes
+    // `side` change here, so the guard below let the write through on every
+    // build; on a phone gReadingMeasure is 0, `side` is always 10, and the guard
+    // returned before the damage. The defect was in this line the whole time —
+    // the phone just never reached it. (Found capturing 1.2.1 store shots: a
+    // note on Psalm 23:1 sat on top of "The LORD is my shepherd"; a note
+    // mid-chapter was fine, which is what pointed here.)
+    CGFloat top = 14 + gNoteTopInset;
     UIEdgeInsets cur = gReadingTV.textContainerInset;
-    if (fabs(cur.left - side) < 0.5 && fabs(cur.right - side) < 0.5) return;
-    gReadingTV.textContainerInset = UIEdgeInsetsMake(14, side, 14, side);
+    if (fabs(cur.left - side) < 0.5 && fabs(cur.right - side) < 0.5 &&
+        fabs(cur.top - top) < 0.5) return;
+    gReadingTV.textContainerInset = UIEdgeInsetsMake(top, side, 14, side);
 }
 
 void bibleTextSetReadingMeasure(double m) {
@@ -1046,14 +1070,16 @@ static void btIOSInstallNote(void) {
 }
 
 // Apply (or clear) the top-inset reservation.
+//
+// It DELEGATES rather than writing the inset itself, and that is the point: the
+// side insets belong to the reporter measure and the top belongs to the note,
+// but they are one UIEdgeInsets and the last writer wins. Two functions each
+// setting "their" half from a stale copy of the other's is exactly how the
+// first-paragraph band was being lost on iPad. btIOSApplyInsets now computes
+// the whole thing from gReadingMeasure and gNoteTopInset together.
 static void btIOSApplyNoteInset(void) {
     if (gReadingTV == nil) return;
-    UIEdgeInsets ins = gReadingTV.textContainerInset;
-    CGFloat wanted = 14 + gNoteTopInset;      // 14 is the pane's own top inset
-    if (fabs(ins.top - wanted) > 0.5) {
-        ins.top = wanted;
-        gReadingTV.textContainerInset = ins;
-    }
+    btIOSApplyInsets(gReadingTV.frame.size.width);
 }
 
 // Build (or rebuild) the sticker's subviews for the current note and palette.
