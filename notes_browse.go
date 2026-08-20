@@ -860,7 +860,7 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 // what it is given, and an undo keeps that promise where a dialog only slows
 // the deliberate case down.
 func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
-	btn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+	btn := widget.NewButtonWithIcon("", noteTrashIcon(pal.TextMuted), func() {
 		if state == nil {
 			return
 		}
@@ -898,7 +898,14 @@ func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject 
 	if state != nil && state.theme != nil {
 		base = state.theme
 	}
-	return container.NewCenter(container.NewThemeOverride(btn, browseRowTheme{Theme: base}))
+	sized := container.NewThemeOverride(btn, browseRowTheme{Theme: base})
+	// CENTRED ON THE BUBBLE'S BODY, NOT ON THE WHOLE SHAPE (owner). The bubble
+	// is body + tail, and centring on the pair pushed the bin down by half the
+	// tail's depth — it sat visibly low against the words it belongs to. The
+	// bottom padding takes the tail's depth back out, so the mark lines up with
+	// the middle of the message.
+	return container.New(layout.NewCustomPaddedLayout(0, noteTailDepth, 0, 0),
+		container.NewCenter(sized))
 }
 
 // newNoteBrowseCard is a search-result card that opens a note instead of a

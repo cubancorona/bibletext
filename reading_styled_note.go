@@ -527,14 +527,19 @@ func (r *styledPaneRenderer) buildNote() {
 	// only puts your own note away, which is what navigating away would do a
 	// moment later anyway. The same mark for both would have made the
 	// destructive one the ambiguous one.
-	closeGlyph := "🗑"
-	if p.note.Own {
-		closeGlyph = "✕" // multiplication x: dismiss, never destroy
-	}
-	del := widget.NewButton(closeGlyph, func() {
+	del := widget.NewButton("", func() {
 		dropCurrentNote(p.state)
 		p.state.refreshReadingOnly()
 	})
+	if p.note.Own {
+		del.SetText("✕") // multiplication x: dismiss, never destroy
+	} else {
+		// The app's one bin, drawn and ridged (notes_trash_icon.go) rather than
+		// the emoji this used to set as a TITLE — an emoji renders at the
+		// button's font size and in its own colours, which is how a small quiet
+		// control became a large solid one.
+		del.SetIcon(noteTrashIcon(pal.TextMuted))
+	}
 	del.Importance = widget.LowImportance
 	r.noteBtns = append(r.noteBtns, hide, del)
 	r.objects = append(r.objects, hide, del)
