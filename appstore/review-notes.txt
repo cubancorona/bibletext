@@ -1,16 +1,22 @@
-VERSION 1.2.1
+VERSION 1.2.2
 
 BibleText is a Bible reader. No account, login, or registration is required — reading, search, navigation, and cross-references work immediately and offline once the text loads.
 
-WHAT IS NEW IN 1.2.1
-A refinement release for the shared-notes feature 1.2.0 introduced (see SHARED NOTES below):
-• Notes the user wrote themselves now display on the passage when tapped in the notes list, attributed "Note from you"; tapping one's own link no longer stores a duplicate attributed to a friend.
-• Each note row in the list carries a delete control; on the reading page a bin deletes and X dismisses.
-• iPad: a note anchored to a chapter's opening verses no longer overlaps them; the notes list is capped at a readable width.
-• The NKJV's words-of-Christ (red letter) data is now complete — previously truncated at the NKJV's italicised supplied words.
-• Cycling between multiple notes on one passage no longer flashes the reading pane.
+WHAT IS NEW IN 1.2.2
+An interface release. The iPad now uses the same navigation as the iPhone, and several lists were redesigned.
+• iPad: the persistent sidebar is replaced by the same Read / Books / Search navigation the iPhone has, so both devices work the same way. In landscape that navigation sits as a rail down the left edge; rotate to portrait and it returns to the bottom.
+• The Books list is now a grid grouped under Old Testament and New Testament headings, instead of one long scrolling column.
+• Cross-references and Gospel parallels now resolve in the numbering of the translation being read. Some references previously pointed at the wrong verse in translations that number chapters differently.
+• A note the user wrote themselves now has one dismiss control instead of two that did the same thing.
+• Windows and Linux: the reading area is no longer drawn inside a bordered box, matching the other platforms.
+• Lists are held to a readable width on large screens rather than stretching the full window.
+
+HOW TO EXERCISE THE NEW NAVIGATION
+On iPad, open the app and use Read / Books / Search. Rotate the device: in landscape the three move to the left edge, in portrait they return to the bottom. Tap Books to see the grouped grid; tap any book to open it.
 
 SHARED NOTES — HOW TO EXERCISE IT
+This feature is unchanged in 1.2.2 and is described here because it is the one place the app shows content written by another person.
+
 To send: open any chapter, press and hold to select a verse, choose "Share with note", type a short message, and share it to any app (Messages to yourself is enough). The result is an ordinary https://bibletext.co.uk link.
 
 To receive, tap this link — it opens the passage with a message beside it:
@@ -19,18 +25,8 @@ The card's − minimises it; the bin deletes it. Opening the link in a browser i
 
 PROVENANCE: the message is encoded in the link's URL fragment and travels only in whatever messaging app the sender chooses. No server, no account, no user directory; a fragment is never transmitted to the website's host, so the message never reaches the developer. On receipt it is rendered as plain text, always attributed to a person ("Note from …"), never in the app's voice. The recipient can delete any note, delete all (Settings), or disable the feature entirely.
 
-OPTIONAL AI STUDY — BRING YOUR OWN KEY
-The AI features (Find, Explain, context/translation analysis) are inactive until the user adds their own API key for Gemini, OpenAI, Anthropic, or Grok. No AI provider key is bundled; the app is fully usable without one; Settings → Assistant → None removes the feature. To exercise: gear icon → choose a provider → paste a key → "Test key"; then select a passage → "Study with AI" → Explain. (A review-only key can be supplied in App Review Information; none is required for reading, search, audio, sharing, or notes.)
+AI FEATURES ARE OPTIONAL AND BRING-YOUR-OWN-KEY
+Study with AI and the Find search are off until the user enters their own provider key (Settings → Assistant). Without a key the app is a complete offline reader. No key is bundled and none is required to review the app; if a reviewer wants to exercise these, a review-only key can be supplied on request.
 
-TRANSLATIONS AND KEYS
-WEB, WEB Catholic, and BSB are public domain, fetched from free public sources. The New King James Version is served by API.Bible under the developer's own account — a compiled-in key makes it work on install; a user may substitute their own free API.Bible key in Settings, and the request carries only the passage and the key. This is separate from the AI keys above, none of which are bundled.
-
-PRIVACY
-No developer-operated server. AI requests go directly from the device to the user's chosen provider under the user's own key; the developer never receives or routes them. App Privacy declares no data collected, matching the app's privacy manifest (empty NSPrivacyCollectedDataTypes, tracking false). Shared notes leave the device only inside links the user sends from their own messaging app.
-
-IPAD
-A two-pane layout: navigation sidebar beside the reading pane; the top-left button hides it; narrow Split View falls back to the iPhone tab layout. All features work on both devices.
-
-Privacy policy: https://bibletext.co.uk/privacy.html
-Support: https://bibletext.co.uk/support.html
-Contact: cubancorona@gmail.com
+TRANSLATIONS
+World English Bible, WEB Catholic, and Berean Standard Bible are public domain and bundled. The New King James Version is licensed from Thomas Nelson and fetched over the network; its text is never redistributed by the app or the website.

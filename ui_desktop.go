@@ -39,6 +39,19 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
+	// PREVIEW: the shared compact layout, on the desktop. Off by default — the
+	// shipped desktop is the sidebar + split below, unchanged — and reachable
+	// with BIBLETEXT_DESKTOP_TABS (=1 for the bottom bar, =rail for the vertical
+	// rail) so the owner can compare them on a real window before deciding
+	// whether the desktop adopts the tab chrome at all. desktopNav owns the
+	// parsing; this asks only whether ANY preview is on.
+	if desktopNav() != desktopNavSidebar {
+		announceDesktopNav()
+		root := buildCompactUI(state)
+		installShortcuts(state)
+		return root
+	}
+
 	readingHost := container.NewStack(buildReadingPane(state))
 	state.showReading = func() {
 		readingHost.Objects = []fyne.CanvasObject{buildReadingPane(state)}

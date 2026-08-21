@@ -96,7 +96,7 @@ func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.
 	}
 
 	return container.NewStack(
-		surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{}),
+		readingGround(container.NewPadded(scroll), pal.Background),
 		styledFollowPillLayer(),
 	)
 }
