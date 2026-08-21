@@ -40,6 +40,30 @@ The 1.2.0 screenshot set is the **known-stale item**: it is still the 9 August
 capture, taken before shared notes existed. It is not a submission blocker and
 it is the owner's call, but it should not be inherited a third time.
 
+## Screenshots: what is stale, per set
+
+App Store Connect copies screenshots forward, so a stale set never looks wrong —
+it looks like a set. Check this before every submission.
+
+| Set | State | What is out of date |
+| --- | --- | --- |
+| iPad 13" | **Re-captured for 1.2.2** | Nothing. Seven shots, all NKJV, one landscape showing the left rail. The 1.2.1 iPad set is dead: it shows the sidebar 1.2.2 removed. |
+| iPhone 6.9" | **Still the 20 Aug (1.2.1) set** — owner accepted for 1.2.2 | The **Books tab** shot shows the old 66-row scrolling list; it is now a centred two-column grid with testament headings. The tab bar's icon-to-label gap is 4pt, was 2pt. Everything else on iPhone is unchanged by 1.2.2. |
+
+Re-capture notes that cost an hour to rediscover on 21 Aug 2026:
+
+- NKJV in the simulator needs **both** `BIBLE_API_KEY` and
+  `BIBLETEXT_LICENSE_NKJV=1` (via `SIMCTL_CHILD_*`). `licensed()` in versions.go
+  checks the STORED key or the licence env; the env key alone only satisfies the
+  fetch, so NKJV stays greyed out. The full canon then downloads in ~10 minutes.
+- `simctl io screenshot` always writes the **native portrait buffer** with the
+  content rotated inside it. A landscape shot therefore needs
+  `sips -r 90` then `sips -r 180` to become a true 2752x2064.
+- Rotate via Simulator's Device > Rotate Left **after** raising the right window
+  by name — `window 1` is usually a different simulator. Confirm the rotation by
+  the WINDOW SIZE changing; the screenshot's own dimensions never change.
+
+
 ## Release identity
 
 | Field | Value |
