@@ -1149,14 +1149,34 @@ static void btIOSEnsureNoteView(void) {
 
         // Minimize first, delete second: the destructive one is never what a
         // thumb reaches by accident.
-        UIButton *hide = [UIButton buttonWithType:UIButtonTypeSystem];
-        [hide setTitle:@"–" forState:UIControlStateNormal];   // en dash
-        [hide setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
-        hide.titleLabel.font = [UIFont systemFontOfSize:20 weight:UIFontWeightMedium];
-        [hide addTarget:gReadingTV action:@selector(btNoteHide:)
-       forControlEvents:UIControlEventTouchUpInside];
-        hide.tag = 904;
-        [box addSubview:hide];
+        //
+        // NOT ON YOUR OWN NOTE, where it would be a second control that does
+        // the same thing. − and ✕ both end in the identical three lines for an
+        // own note (hideCurrentNote / dropCurrentNote, notes_store.go): focus
+        // to none, its mark cleared, re-project. They arrived at that by two
+        // separate good decisions — − was made ephemeral so it would not write
+        // a durable "minimized" bit about a card that is only on screen because
+        // you asked, and ✕ was made non-destructive so one tap could not
+        // destroy the only copy of something you wrote — and nobody put them
+        // side by side. Worse, − PROMISES A PILL THAT CANNOT EXIST: an own note
+        // enters the plan only while focus names it and is built Open (notes_
+        // plan.go), so there is nothing to restore and nothing is left behind.
+        // (Owner, 20 Aug 2026: "don't they do the same thing? Because minimize
+        // seems to hide the pill also.")
+        //
+        // ✕ is the mark that survives, because "put this away" is what the
+        // press actually does. On a RECEIVED note both stay and differ: − leaves
+        // a pill you can press to bring it back, ✕ deletes.
+        if (!gNoteOwn) {
+            UIButton *hide = [UIButton buttonWithType:UIButtonTypeSystem];
+            [hide setTitle:@"–" forState:UIControlStateNormal];   // en dash
+            [hide setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+            hide.titleLabel.font = [UIFont systemFontOfSize:20 weight:UIFontWeightMedium];
+            [hide addTarget:gReadingTV action:@selector(btNoteHide:)
+           forControlEvents:UIControlEventTouchUpInside];
+            hide.tag = 904;
+            [box addSubview:hide];
+        }
 
         UIButton *del = [UIButton buttonWithType:UIButtonTypeSystem];
         // THE MARK SAYS WHAT THE PRESS DOES. A bin where it deletes someone
@@ -1326,7 +1346,7 @@ static void btIOSLayoutNote(void) {
     UIButton *hide = (UIButton *)[gNoteView viewWithTag:904];
     UIButton *del  = (UIButton *)[gNoteView viewWithTag:905];
     UIButton *nxt  = (UIButton *)[gNoteView viewWithTag:906];
-    CGFloat whoW = w - 2 * kNotePad - 2 * kNoteBtn;
+    CGFloat whoW = w - 2 * kNotePad - (gNoteOwn ? 1 : 2) * kNoteBtn;
     // The who row's box starts at the card's own padding — no "- 2" shim, which
     // is what used to make the stated 12 + 14 + 4 rhythm describe a card whose
     // real top padding was 10 and whose real who→body gap was 6.

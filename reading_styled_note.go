@@ -516,12 +516,19 @@ func (r *styledPaneRenderer) buildNote() {
 		addText(line, pal.Text, bodySz, false)
 	}
 
-	// Minimize first, delete second.
-	hide := widget.NewButton("–", func() { // en dash, as on the native stickers
-		hideCurrentNote(p.state)
-		p.state.refreshReadingOnly()
-	})
-	hide.Importance = widget.LowImportance
+	// Minimize first, delete second — but NOT ON YOUR OWN NOTE, where − and ✕
+	// run the identical three lines (hideCurrentNote / dropCurrentNote) and −
+	// promises a pill an own note can never have: it enters the plan only while
+	// focus names it, built Open. See the iOS twin for the full account.
+	r.noteHasHide = !p.note.Own
+	var hide *widget.Button
+	if r.noteHasHide {
+		hide = widget.NewButton("–", func() { // en dash, as on the native stickers
+			hideCurrentNote(p.state)
+			p.state.refreshReadingOnly()
+		})
+		hide.Importance = widget.LowImportance
+	}
 	// THE GLYPH SAYS WHAT THE PRESS DOES. A bin where it deletes — someone
 	// else's message, read, and the store is yours to prune — and ✕ where it
 	// only puts your own note away, which is what navigating away would do a
@@ -542,8 +549,12 @@ func (r *styledPaneRenderer) buildNote() {
 		del.SetIcon(fyneTheme.DeleteIcon())
 	}
 	del.Importance = widget.LowImportance
-	r.noteBtns = append(r.noteBtns, hide, del)
-	r.objects = append(r.objects, hide, del)
+	if hide != nil {
+		r.noteBtns = append(r.noteBtns, hide)
+		r.objects = append(r.objects, hide)
+	}
+	r.noteBtns = append(r.noteBtns, del)
+	r.objects = append(r.objects, del)
 }
 
 // noteCardKey identifies a generated bubble resource: regenerate only when the
@@ -626,13 +637,16 @@ func (r *styledPaneRenderer) positionNote() {
 		}
 		b++
 	}
-	if b < len(r.noteBtns) {
-		r.noteBtns[b].Move(g.hide.pos())
-		r.noteBtns[b].Resize(g.hide.size())
+	if r.noteHasHide {
+		if b < len(r.noteBtns) {
+			r.noteBtns[b].Move(g.hide.pos())
+			r.noteBtns[b].Resize(g.hide.size())
+		}
+		b++
 	}
-	if b+1 < len(r.noteBtns) {
-		r.noteBtns[b+1].Move(g.del.pos())
-		r.noteBtns[b+1].Resize(g.del.size())
+	if b < len(r.noteBtns) {
+		r.noteBtns[b].Move(g.del.pos())
+		r.noteBtns[b].Resize(g.del.size())
 	}
 }
 

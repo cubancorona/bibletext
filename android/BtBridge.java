@@ -1442,9 +1442,17 @@ public final class BtBridge {
         }
         // Minimize first, delete second: the destructive one is never what a
         // thumb reaches by accident (the iOS ordering).
-        wrap.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
-            @Override public void onClick(View v) { nativeNoteHidden(); }
-        }), noteVerbParams(2));
+        //
+        // NOT ON YOUR OWN NOTE. There − and ✕ do the same thing — both end in
+        // focus-to-none, mark cleared, re-project (hideCurrentNote /
+        // dropCurrentNote) — and − promises a pill an own note can never have,
+        // since it enters the plan only while focus names it and is built Open.
+        // Slot 1 is the rightmost, so omitting slot 2 leaves ✕ where it was.
+        if (!noteOwn) {
+            wrap.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
+                @Override public void onClick(View v) { nativeNoteHidden(); }
+            }), noteVerbParams(2));
+        }
         // THE MARK SAYS WHAT THE PRESS DOES: a bin where it deletes someone else's
         // message, ✕ where it only puts your own note away (see the Apple twins).
         wrap.addView(noteVerb(noteOwn ? "✕" : "\uD83D\uDDD1", 14f, new View.OnClickListener() {
