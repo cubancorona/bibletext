@@ -2,27 +2,38 @@ package bibletext
 
 import "testing"
 
+
+// assert the opposite for tablets — a wide iPad got layoutRegular, the sidebar
+// layout — and it is inverted here deliberately rather than deleted, because
+// the inversion IS the decision: the iPad's two reported problems (a mode row
+// that appeared to govern the sidebar, and results replacing the reading pane
+// with no way back) were both consequences of maintaining a second shape for
+// one app, and the phone's shape answers both.
+//
+// Every width and idiom the old table covered is kept, so the sweep still says
+// what happens at the boundary, in a narrow multitasking column, and before the
+// first layout pass — it just says one answer now.
 func TestClassifyLayout(t *testing.T) {
 	cases := []struct {
 		name     string
 		width    float32
 		isTablet bool
-		want     layoutClass
 	}{
-		{"phone portrait", 393, false, layoutCompact},
-		{"phone landscape (wide but not a tablet)", 932, false, layoutCompact},
-		{"phone before first layout", 0, false, layoutCompact},
-		{"ipad full-screen portrait", 834, true, layoutRegular},
-		{"ipad full-screen landscape", 1194, true, layoutRegular},
-		{"ipad mini portrait at the boundary", 744, true, layoutRegular},
-		{"ipad exactly at the breakpoint", tabletLayoutMinWidth, true, layoutRegular},
-		{"ipad just below the breakpoint (narrow split)", tabletLayoutMinWidth - 1, true, layoutCompact},
-		{"ipad 1/3 multitasking column", 320, true, layoutCompact},
-		{"ipad before first layout trusts the idiom", 0, true, layoutRegular},
+		{"phone portrait", 393, false},
+		{"phone landscape (wide but not a tablet)", 932, false},
+		{"phone before first layout", 0, false},
+		{"ipad full-screen portrait", 834, true},
+		{"ipad full-screen landscape", 1194, true},
+		{"ipad mini portrait at the boundary", 744, true},
+		{"ipad exactly at the old breakpoint", tabletLayoutMinWidth, true},
+		{"ipad just below the old breakpoint", tabletLayoutMinWidth - 1, true},
+		{"ipad 1/3 multitasking column", 320, true},
+		{"ipad before first layout", 0, true},
 	}
 	for _, c := range cases {
-		if got := classifyLayout(c.width, c.isTablet); got != c.want {
-			t.Errorf("%s: classifyLayout(%v, %v) = %v, want %v", c.name, c.width, c.isTablet, got, c.want)
+		if got := classifyLayout(c.width, c.isTablet); got != layoutCompact {
+			t.Errorf("%s: classifyLayout(%v, %v) = %v, want layoutCompact — every touch "+
+				"device takes the one mobile layout now", c.name, c.width, c.isTablet, got)
 		}
 	}
 }
