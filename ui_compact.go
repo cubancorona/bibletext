@@ -183,7 +183,7 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 		rule := canvas.NewLine(pal.Border)
 		rule.StrokeWidth = 1
 		bg := canvas.NewRectangle(pal.SurfaceAlt)
-		return container.NewStack(bg, container.NewVBox(rule, container.NewPadded(row)))
+		return container.NewStack(bg, edgeBarBody(rule, row))
 
 	case tabBarEdgeCentred:
 		// Chrome edge to edge, tabs CENTRED at their natural width — which is
@@ -196,7 +196,7 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 		rule.StrokeWidth = 1
 		bg := canvas.NewRectangle(pal.SurfaceAlt)
 		centred := container.New(tabBarCentreLayout{want: tabBarGroupWidth(len(items))}, row)
-		return container.NewStack(bg, container.NewVBox(rule, container.NewPadded(centred)))
+		return container.NewStack(bg, edgeBarBody(rule, centred))
 	}
 
 	// The reason the tablet's bar only LOOKS like it floats is worth stating,
@@ -235,6 +235,26 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 		),
 	)
 	return bar
+}
+
+// edgeBarBody stacks the hairline over the tabs with EQUAL air above and below
+// them.
+//
+// The obvious spelling — NewVBox(rule, NewPadded(tabs)) — is not symmetric, and
+// the asymmetry is invisible in the code: a VBox spaces its children by theme
+// padding, so the tabs got that 7pt PLUS the 7 from NewPadded above, and only
+// the 7 from NewPadded below. Two to one, on every phone and every tablet
+// (owner, 21 Aug 2026, on a real iPhone: "the vertical margins in the nav bar
+// are not equal").
+//
+// This is the SAME trap the tab cell's icon-to-label gap hit — a VBox's padding
+// is between its children, not something you can reason about from the call
+// site — which is why the fix here is the same: take the inter-child padding to
+// zero and state both margins explicitly.
+func edgeBarBody(rule, tabs fyne.CanvasObject) fyne.CanvasObject {
+	padded := container.New(
+		layout.NewCustomPaddedLayout(tabBarEdgePadY, tabBarEdgePadY, 0, 0), tabs)
+	return container.New(layout.NewCustomPaddedVBoxLayout(0), rule, padded)
 }
 
 // tabBarCentreLayout caps the pill at tabBarMaxWidth and centres it. Same idea
@@ -317,6 +337,12 @@ const (
 	// The tab cell's own drawing sizes. Named because the rail derives its
 	// thickness from them (tab_rail.go): a literal here and a literal there
 	// would drift the moment either moved.
+	// The air above and below the tabs in the edge-to-edge bar, on BOTH sides.
+	// Larger than the theme's 7 because the owner asked for a roomier bar and
+	// the old asymmetric spelling gave 14 above; this keeps that generosity
+	// while making the two match.
+	tabBarEdgePadY float32 = 12
+
 	tabCellIconSize  float32 = 20
 	tabCellLabelSize float32 = 10
 
@@ -811,7 +837,18 @@ func (c *tabCell) CreateRenderer() fyne.WidgetRenderer {
 		container.NewCenter(c.iconImg),
 		container.NewCenter(c.text),
 	)
-	return widget.NewSimpleRenderer(col)
+
+	// CENTRED IN THE CELL, not resting on its ceiling.
+	//
+	// A VBox lays its children out from the TOP at their minimum height and
+	// leaves any slack at the bottom, so the icon-and-label pair sat against the
+	// top of a cell that is taller than they are — which reads as the bar having
+	// more air below the labels than above the icons, no matter what the bar's
+	// own padding does (owner, 21 Aug 2026, on a real iPhone).
+	//
+	// NewCenter is the whole fix: it gives the column its minimum size and puts
+	// it in the middle of whatever the cell turns out to be.
+	return widget.NewSimpleRenderer(container.NewCenter(col))
 }
 
 // themedIcon returns the cell's icon as a colour-bound theme resource so it
