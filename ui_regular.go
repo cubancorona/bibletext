@@ -2,6 +2,25 @@
 
 package bibletext
 
+// UNREACHABLE SINCE 21 AUG 2026, AND KEPT ON PURPOSE.
+//
+// classifyLayout (layout.go) now answers layoutCompact for every touch device,
+// so nothing in the app calls buildRegularWidthUI any more: the iPad takes the
+// phone's layout, and what it needs beyond that is a readable measure on the
+// list surfaces rather than a second shape (readable_column.go).
+//
+// This file is left standing rather than deleted because the decision it
+// records is reversible and worth being able to read: it is the sidebar layout
+// the tablet used to have, with the mode row, the collapse toggle and the
+// orientation default all intact. Reviving it is a one-line change in
+// classifyLayout; reconstructing it from history would be an afternoon.
+//
+// DO NOT ADD FEATURES HERE. Nothing in this file runs, so a change made to it
+// will appear to do nothing and will drift out of step with the layout that
+// does run. The owner's reason for the merge is exactly that: "prioritize
+// compatibility and uniformity with other platforms ... so we don't have to
+// keep reworking everything for the various platforms."
+
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -47,9 +66,9 @@ func buildRegularWidthUI(state *AppState) fyne.CanvasObject {
 	// The reading pane swaps between the native reading overlay and the search
 	// results list (rebuildMobileReadingPane keys off state.IsSearching), same as
 	// the compact Read tab.
-	readingHost := container.NewStack(rebuildMobileReadingPane(state))
+	readingHost := container.NewStack(compactReadingPane(state))
 	state.showReading = func() {
-		readingHost.Objects = []fyne.CanvasObject{rebuildMobileReadingPane(state)}
+		readingHost.Objects = []fyne.CanvasObject{compactReadingPane(state)}
 		readingHost.Refresh()
 		notifyReadingOverlay(overlayShouldShow(state))
 	}
@@ -163,7 +182,18 @@ func (w *layoutWatcher) Resize(size fyne.Size) {
 	}
 	want := classifyLayout(size.Width, deviceIsTablet())
 	landscape := w.state.canvasIsLandscape()
-	changed := want != w.builtAs || (want == layoutRegular && landscape != w.builtLandscape)
+	// The orientation test is no longer conditional on the regular layout, and
+	// must not be: since 21 Aug 2026 a TABLET IN LANDSCAPE moves its navigation
+	// to a leading-edge rail (compactNavRail), so a rotation changes the compact
+	// layout too. Gated on the regular layout — which classifyLayout can no
+	// longer return — this whole clause was dead, and the rail would have
+	// appeared only on the next rebuild from some unrelated cause.
+	//
+	// Still tablets only: an Android phone installs this watcher unconditionally
+	// (layoutMayChange), and a phone's navigation does not move on rotation, so
+	// rebuilding it would be churn for no change.
+	changed := want != w.builtAs ||
+		(deviceIsTablet() && landscape != w.builtLandscape)
 	if changed {
 		w.pending = true
 		fyne.Do(func() { rebuildWindow(w.state) })

@@ -353,10 +353,26 @@ func buildSearchModeControls(state *AppState, onSelect func(mode searchMode)) fy
 	}
 
 	compact := !fyne.CurrentDevice().IsMobile()
+
+	// ONE TREATMENT ON EVERY PLATFORM: the iPad's.
+	//
+	// The inactive segment keeps a faint background of its own (MediumImportance,
+	// Fyne's default button) and the active one is filled (HighImportance). The
+	// pair then reads as one segmented control whose halves are both surfaces,
+	// with the ACTIVE half distinguished by its fill rather than by the inactive
+	// half having no surface at all.
+	//
+	// This forked until 21 Aug 2026: MediumImportance on the phones and the iPad,
+	// LowImportance (flat) on the desktop. The desktop's flattening came from
+	// 18 June ("Desktop: make the Find/Ask toggle compact + quieter") and was
+	// never applied to touch, so the two platforms drew the same control two
+	// ways. The owner compared them and chose the iPad's (21 Aug 2026: "make it
+	// match the ipad where the unselected find button has a slight background").
+	//
+	// The desktop keeps its SMALLER chip — compact below still applies
+	// smallChipTheme — because that half of the June change was about size, not
+	// about the background, and the owner asked only about the background.
 	idle := widget.MediumImportance
-	if compact {
-		idle = widget.LowImportance // flat inactive → only the active one is filled
-	}
 
 	var kwBtn, aiBtn, notesBtn *widget.Button
 	// apply is the single place the fill lives. Every control the row owns is set
