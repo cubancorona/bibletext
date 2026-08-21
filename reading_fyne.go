@@ -103,7 +103,7 @@ func chapterTextScrollArea(state *AppState, verses []Verse, pal palette) fyne.Ca
 	// native-overlay platforms, where this pane is only the inert fallback.
 	wireFyneReadingScroll(state, scroll, chapter)
 
-	return surface(container.NewPadded(scroll), pal.Background, pal.Border, fyne.Size{})
+	return readingGround(container.NewPadded(scroll), pal.Background)
 }
 
 // highlightBandColor is the translucent wash readingColumn draws OVER the

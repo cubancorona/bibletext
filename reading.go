@@ -1692,6 +1692,20 @@ const denseGridPadding = 3
 type denseGridWrapLayout struct {
 	cell fyne.Size
 	rows int
+	// centre packs the columns in the middle of the available width instead of
+	// against its left edge.
+	//
+	// A wrapping grid fits floor(width / cell) columns and has a remainder by
+	// definition — it is only ever centred by accident, when the pane happens to
+	// divide exactly. Left-packing puts that whole remainder on the right, and on
+	// an iPhone the books grid fits two 168pt cells in ~385pt, so 46pt of it
+
+	// 2026: "the book list columns are not centered on the screen").
+	//
+	// Opt-in rather than always-on: the chapter picker uses this same layout
+	// inside a popup sized around it, where the remainder is small and the grid
+	// is not being read against the screen's centre line.
+	centre bool
 }
 
 func (g *denseGridWrapLayout) cols(width float32) int {
@@ -1704,7 +1718,16 @@ func (g *denseGridWrapLayout) cols(width float32) int {
 func (g *denseGridWrapLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	cols := g.cols(size.Width)
 	g.rows = 0
-	i, x, y := 0, float32(0), float32(0)
+	x0 := float32(0)
+	if g.centre {
+		// The block's own width, not the pane's: the last row may be short, and
+		// centring on IT would stagger the columns row to row.
+		used := float32(cols)*g.cell.Width + float32(cols-1)*denseGridPadding
+		if slack := size.Width - used; slack > 0 {
+			x0 = slack / 2
+		}
+	}
+	i, x, y := 0, x0, float32(0)
 	for _, child := range objects {
 		if !child.Visible() {
 			continue
@@ -1715,7 +1738,7 @@ func (g *denseGridWrapLayout) Layout(objects []fyne.CanvasObject, size fyne.Size
 		child.Move(fyne.NewPos(x, y))
 		child.Resize(g.cell)
 		if (i+1)%cols == 0 {
-			x, y = 0, y+g.cell.Height+denseGridPadding
+			x, y = x0, y+g.cell.Height+denseGridPadding
 		} else {
 			x += g.cell.Width + denseGridPadding
 		}

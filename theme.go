@@ -384,6 +384,29 @@ func surface(content fyne.CanvasObject, bg, border color.Color, minSize fyne.Siz
 	return container.NewStack(frame, container.NewPadded(content))
 }
 
+// readingGround draws content on the flat reading ground: the page colour, no
+// border, no corner radius, and the SAME padding surface() applies — so a caller
+// swapping one for the other moves no glyph.
+//
+// WHY THIS EXISTS RATHER THAN surface(). The reading area was a card in the
+// first commit (22 May 2026), when it genuinely was a panel beside a sidebar and
+// surface() was the app's panel idiom. On 20 June 2026, 94438a850 ("parchment
+// everywhere") set out to remove it — its own message reads "flat parchment
+// reading ground (pal.Background, no card/border/divider)" — and it did so on
+// iOS. On the Fyne path it changed only the FILL argument, from pal.Surface to
+// pal.Background, and left the stroke and the 8pt radius in place. That removed
+// the card's body and kept its outline, which is what a Windows or Linux reader
+// has been looking at ever since: a stray rounded rectangle around scripture,
+// while iOS, iPadOS, Android and macOS draw it straight onto the page.
+//
+// Milestone 4 then copied the call verbatim into the styled pane, so the shipped
+// desktop reading surface inherited it without anyone re-deciding it. This
+
+func readingGround(content fyne.CanvasObject, bg color.Color) fyne.CanvasObject {
+	ground := canvas.NewRectangle(bg)
+	return container.NewStack(ground, container.NewPadded(content))
+}
+
 // inputFrame draws a thin rounded outline around an input field without adding
 // padding. We zero the theme's input-border size (to hide the read-only reading
 // caret), so fields get their outline here instead. The rectangle is
