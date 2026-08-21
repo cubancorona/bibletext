@@ -3,8 +3,32 @@ package bibletext
 // Cross-references: for a selected verse, related passages from the OpenBible.info
 // dataset (Treasury of Scripture Knowledge, CC-BY). Same model as the WEB text:
 // fetched once, cached locally (the ~2 MB zip), then fully offline. The index is
-// built lazily on first use and is translation-independent — target book names
-// are resolved against the loaded Bible at lookup time.
+// built lazily on first use.
+//
+// THE INDEX IS NUMBERED, NOT TRANSLATION-FREE. This header used to claim the
+// index was "translation-independent" because target BOOK NAMES are resolved
+// against the loaded Bible. Book names were never the hard part: the dataset is
+// keyed by chapter and verse in ONE numbering (the reference, versification.go),
+// and translations disagree about verse numbers in a small but real set of
+// places. Keying it with whatever numbering happened to be on screen, and
+// looking the target up the same way, was wrong on BOTH sides:
+//
+//   - WEB Catholic's Daniel 3 carries the Song of the Three as 3:24-90, pushing
+//     the Hebrew 3:24-30 down to 3:91-97. A row labelled "Daniel 3:25" — "the
+//     fourth is like a son of the gods" — previewed and jumped to Azariah's
+//     prayer instead, silently.
+//   - The Romans doxology sits at 16:25-27 in the BSB and NKJV and at 14:24-26
+//     in the WEB and WEB Catholic, so half the readers were told "No
+//     cross-references for this selection" on a passage that has many.
+//   - Verses some translations omit (Mark 9:44, 11:26, Matthew 17:21 …) drew a
+//     row with a blank preview whose tap went nowhere.
+//
+// So every lookup now goes through the versification tables the notes feature
+// already used (MapVerse): the SOURCE verse is mapped into the reference before
+// keying, and each TARGET is mapped back out into the translation on screen,
+// with anything absent or incommensurable dropped rather than shown blank.
+// Where the numbering agrees — which is almost everywhere — both are identities
+// and nothing changes.
 
 import (
 	"archive/zip"
@@ -269,6 +293,57 @@ func bookAbbrev(name string) string {
 // crossRefsForSelection aggregates the cross-references for the verse(s) the
 // selection spans, resolving target book names against the loaded translation
 // and merging duplicates (keeping the highest vote). Highest-voted first.
+// crossRefSourceRef maps a verse the reader has selected — numbered in whatever
+// translation is on screen — into the numbering the dataset is keyed by.
+//
+// ok is false when this translation's verse has no counterpart in the reference
+// at all: there is nothing to look up, and inventing a neighbouring number would
+// answer a question the reader did not ask.
+func crossRefSourceRef(versionID string, v Verse) (int, int, bool) {
+	ch, vs, res := MapVerse(versionID, versificationReference, v.BookName, v.Chapter, v.Verse)
+	if res == verseMapAbsent || res == verseMapIncommensurable {
+		return 0, 0, false
+	}
+	return ch, vs, true
+}
+
+// crossRefTargetIn rewrites one dataset reference into the translation on
+// screen, and reports whether it can be shown at all.
+//
+// This is the half that was producing WRONG TEXT rather than merely missing
+// text: the panel previews the target with GetVerse and the row's tap navigates
+// there, so an unmapped number in WEB Catholic's Daniel 3 previewed and jumped
+// to a different passage under the right-looking label. A row that cannot be
+// mapped is dropped — the panel would otherwise render it with a blank preview
+// and a tap that goes nowhere.
+//
+// The END of a span is mapped too, and independently: a span may begin in a
+// verse that exists and run past one that does not. When the end cannot be
+// mapped the row keeps its start and becomes a single-verse reference, which is
+// honest — it points at scripture the reader can actually see.
+func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
+	ch, vs, res := MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
+	if res == verseMapAbsent || res == verseMapIncommensurable {
+		return crossRef{}, false
+	}
+	c.Chapter, c.Verse = ch, vs
+	if c.EndV != 0 {
+		endCh := c.EndCh
+		if endCh == 0 {
+			endCh = c.Chapter
+		}
+		if ech, ev, r := MapVerse(versificationReference, versionID, c.Book, endCh, c.EndV); r != verseMapAbsent && r != verseMapIncommensurable {
+			c.EndCh, c.EndV = ech, ev
+			if c.EndCh == c.Chapter {
+				c.EndCh = 0
+			}
+		} else {
+			c.EndCh, c.EndV = 0, 0
+		}
+	}
+	return c, true
+}
+
 func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
 	if state == nil || state.Bible == nil {
 		return nil
@@ -280,13 +355,22 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	// Gospels, tagged. Embedded, so these appear even when the TSK cross-references
 	// failed to load (offline). Kept in synopsis order, not sorted by votes.
 	var parallels []crossRef
+	vid := state.currentVersion().ID
 	for _, v := range verses {
-		for _, c := range gospelParallelsForVerse(v.BookName, v.Chapter, v.Verse) {
+		srcCh, srcV, ok := crossRefSourceRef(vid, v)
+		if !ok {
+			continue
+		}
+		for _, c := range gospelParallelsForVerse(v.BookName, srcCh, srcV) {
 			name, ok := resolveBookName(state.Bible.Books, c.Book)
 			if !ok {
 				continue
 			}
 			c.Book = name
+			c, ok = crossRefTargetIn(vid, c)
+			if !ok {
+				continue
+			}
 			lbl := c.label()
 			if shown[lbl] {
 				continue
@@ -302,12 +386,20 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	if crossRefIndex != nil {
 		seen := map[string]int{} // label -> index into tsk
 		for _, v := range verses {
-			for _, c := range crossRefIndex[crossRefKey(v.BookName, v.Chapter, v.Verse)] {
+			srcCh, srcV, ok := crossRefSourceRef(vid, v)
+			if !ok {
+				continue
+			}
+			for _, c := range crossRefIndex[crossRefKey(v.BookName, srcCh, srcV)] {
 				name, ok := resolveBookName(state.Bible.Books, c.Book)
 				if !ok {
 					continue
 				}
 				c.Book = name
+				c, ok = crossRefTargetIn(vid, c)
+				if !ok {
+					continue
+				}
 				lbl := c.label()
 				if shown[lbl] {
 					continue
