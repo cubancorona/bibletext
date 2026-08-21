@@ -1616,12 +1616,18 @@ static void btMacEnsureNoteView(void) {
 
         // Minimize first, delete second: the destructive one is never what the
         // pointer reaches by accident.
-        NSButton *hide = [NSButton buttonWithTitle:@"–" target:gTextView action:@selector(btNoteHide:)];
-        hide.bordered = NO;
-        hide.font = [NSFont systemFontOfSize:17 weight:NSFontWeightMedium];
-        hide.contentTintColor = btMacNoteColor(gMacNoteMuted);
-        hide.tag = 904;
-        [box addSubview:hide];
+        //
+        // NOT ON YOUR OWN NOTE — see the iOS twin for the whole reason: − and ✕
+        // run the identical three lines there (hideCurrentNote /
+        // dropCurrentNote), and − promises a pill an own note can never have.
+        if (!gMacNoteOwn) {
+            NSButton *hide = [NSButton buttonWithTitle:@"–" target:gTextView action:@selector(btNoteHide:)];
+            hide.bordered = NO;
+            hide.font = [NSFont systemFontOfSize:17 weight:NSFontWeightMedium];
+            hide.contentTintColor = btMacNoteColor(gMacNoteMuted);
+            hide.tag = 904;
+            [box addSubview:hide];
+        }
 
         // A bin where the press DELETES someone else's message; ✕ where it only
         // puts your own note away (see the iOS twin).
@@ -1802,7 +1808,7 @@ static void btMacLayoutNote(void) {
     NSView *hide = [gMacNoteView viewWithTag:904];
     NSView *del  = [gMacNoteView viewWithTag:905];
     NSButton *nxt = (NSButton *)[gMacNoteView viewWithTag:906];
-    CGFloat whoW = w - 2 * kMacNotePad - 2 * kMacNoteBtn;
+    CGFloat whoW = w - 2 * kMacNotePad - (gMacNoteOwn ? 1 : 2) * kMacNoteBtn;
     // The who row's box starts at the card's own padding — no "- 2" shim, which is
     // what used to make the stated 12 + 13 + 4 rhythm describe a card whose real top
     // padding was 10 and whose real who→body gap was 6.

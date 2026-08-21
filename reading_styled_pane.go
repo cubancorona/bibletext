@@ -375,6 +375,11 @@ type styledPaneRenderer struct {
 	notePill  *canvas.Rectangle
 	noteTexts []*canvas.Text
 	noteBtns  []*widget.Button
+	// noteHasHide records whether the minimize control was DRAWN this build.
+	// The sticker's buttons are laid out positionally, so the layout cannot
+	// infer it: an own note omits − (it and ✕ do the same thing there), and
+	// without this the ✕ would be placed in the absent button's slot.
+	noteHasHide bool
 	// noteCardRes/noteCardKey cache the generated SVG: the resource is rebuilt
 	// only when the size or the palette moves, never per frame (the tint rects
 	// already learned that lesson — 514 allocations for one whole-chapter span).
