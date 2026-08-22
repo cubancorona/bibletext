@@ -139,26 +139,39 @@ func showAISettings(state *AppState) {
 		status := canvas.NewText("", pal.TextMuted)
 		status.TextSize = 12
 
-		result := widget.NewLabel("")
+		// THE SAME STATUS VOICE THE API.BIBLE KEY USES (bible_key_settings.go).
+		// This was a plain Label, which renders at BODY size, so the identical
+		// event — a key was tested and works — appeared in two different sizes
+		// and two different wordings in one sheet, a few hundred points apart
+
+		// status, not a headline, and both now say so the same way.
+		result := widget.NewRichText()
 		result.Wrapping = fyne.TextWrapWord
 		result.Hide()
+		setResult := func(text string) {
+			result.Segments = []widget.RichTextSegment{&widget.TextSegment{
+				Text:  text,
+				Style: widget.RichTextStyle{SizeName: theme.SizeNameCaptionText},
+			}}
+			result.Refresh()
+		}
 		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
 			key := strings.TrimSpace(entry.Text)
 			result.Show()
 			if key == "" {
-				result.SetText("Paste a key first.")
+				setResult("Paste a key first.")
 				return
 			}
-			result.SetText("Testing…")
+			setResult("Testing…")
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
 				_, err := info.New(store, key).generate(ctx, "Reply with the single word: OK")
 				fyne.Do(func() {
 					if err != nil {
-						result.SetText("✗ " + friendlyAIError(err))
+						setResult("✗ " + friendlyAIError(err))
 					} else {
-						result.SetText("✓ Working")
+						setResult("✓ Key works.\nStudy with AI and Find are ready.")
 					}
 				})
 			}()
