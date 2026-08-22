@@ -123,6 +123,18 @@ func devScenarios() []devScenario {
 			ShareLinkURLWithNote("web", "John", 14, 6, 6, "The WEB wording of this one.")},
 		{"Note in the Catholic canon (deuterocanon)", "Tobit only exists in WEBC — check the switch",
 			ShareLinkURLWithNote("webc", "Tobit", 4, 15, 15, "A deuterocanonical note.")},
+
+		// --- the LICENSED translation, which behaves differently per reader -------
+		//
+		// The only link whose outcome depends on something the recipient has
+		// rather than on the link. With the NKJV available it switches and opens
+		// like any other; without it — no key, no licence — the passage still
+		// opens in whatever translation the reader has and a message says the
+		// link was written in the New King James Version. Neither branch was
+		// reachable from this page before, which is why it is here: the branch
+		// that only some readers see is the one worth being able to tap.
+		{"Note in the NKJV (licensed)", "Switches if you have it; otherwise opens here plus a message",
+			ShareLinkURLWithNote("nkjv", "Psalms", 23, 1, 4, "Been synthetic note today. This one is for you.")},
 	}
 }
 
