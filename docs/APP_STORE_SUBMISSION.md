@@ -15,9 +15,22 @@ ASC_KEY_PATH=~/.private_keys/AuthKey_5NVRNFVDL3.p8 ASC_KEY_ID=5NVRNFVDL3 ASC_ISS
 ```
 
 That tool is read-only (no PATCH, POST or DELETE — safe while a version is in
-review) and it answers the question this file cannot: which per-release fields
-of the version you are about to submit were WRITTEN for it, and which arrived by
-App Store Connect's copy-forward from the release before.
+review) and it answers the two questions this file cannot:
+
+1. **May I submit at all?** It prints every version's LIVE state first and names
+   anything Apple currently has, because App Store Connect takes one version
+   into review at a time. A plan made without this is a plan that may not be
+   executable — and that is not hypothetical: on 21 Aug a release was planned
+   against a remembered "1.2.1 is awaiting review" that had already gone live,
+   and on 22 Aug the next release had to be deferred because 1.2.2 was still
+   queued. Both were caught by querying, never by reading.
+2. **Was this version's copy written for it?** Which per-release fields of the
+   version you are about to submit were WRITTEN for it, and which arrived by
+   App Store Connect's copy-forward from the release before.
+
+**Step 0 of every release is running it.** Not step 3, and not "if something
+looks off": the states it prints decide whether the rest of the checklist is
+even reachable today.
 
 It exists because this document being trusted as current is not hypothetical.
 1.2.0 went into review carrying **1.1.8's review notes** — headed "VERSION 1.1.8
