@@ -7,8 +7,8 @@ package bibletext
 // off BibleData.Books, so they need no per-version special-casing either way.
 //
 // Licensing. The World English Bible and Berean Standard Bible are public domain
-// and come from the free, key-less bible.helloao.org (one request each). The LSB
-// is copyrighted and requires a distribution
+// and come from the free, key-less bible.helloao.org (one request each). A
+// copyrighted translation requires a distribution
 // license (see README → "Bible versions"). Until a license + credentials are
 // configured it is NOT user-selectable: the picker shows it as "evaluation
 // in progress" and tapping is disabled, so a shipped build never exposes
@@ -103,11 +103,6 @@ var registeredVersions = []BibleVersion{
 		source:     webCatholicSource{},
 	},
 	{
-		ID: "lsb", Name: "Legacy Standard Bible", Abbrev: "LSB",
-		Publisher: "© The Lockman Foundation — license required",
-		source:    newLicensedSource("lsb"),
-	},
-	{
 		ID: "nkjv", Name: "New King James Version", Abbrev: "NKJV",
 		Publisher: "© Thomas Nelson (HarperCollins Christian) — license required",
 		// The notice Thomas Nelson requires with NKJV text, plus the visible
@@ -161,7 +156,7 @@ func (webSource) fetch() (*BibleData, error) { return fetchWEBFromHelloAO() }
 //	BIBLETEXT_LICENSE_<ID>=1      explicit "we are licensed for <ID>" opt-in
 //	BIBLETEXT_PROVIDER_ID_<ID>    the provider's bible id for this translation
 //
-// (<ID> is the upper-cased version id, e.g. LSB, NKJV.)
+// (<ID> is the upper-cased version id, e.g. NKJV.)
 type licensedAPISource struct {
 	versionID string
 	// defaultProviderBibleID makes the translation BYOK-capable: a reader who

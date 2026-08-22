@@ -18,8 +18,7 @@ package bibletext
 //
 // To build with it:  go build -tags nrsv ./...   (and --tags nrsv for fyne package)
 //
-// The LSB is deliberately NOT tagged out alongside it: the implementation requirement about the
-// NRSV alone, and it is not this file's place to widen that.
+// The LSB followed the same day, behind its own `lsb` tag (versions_lsb.go).
 func init() {
 	registeredVersions = append(registeredVersions, BibleVersion{
 		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",

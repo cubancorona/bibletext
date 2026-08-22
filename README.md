@@ -198,7 +198,7 @@ root), signing, emulator use, and distribution are covered in
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
-  The **LSB** and **NKJV** are wired in and become selectable once licensed. See
+  The **NKJV** is available with an API.Bible key. See
   [Bible versions](#bible-versions).
 
 ## Bible versions
@@ -208,33 +208,29 @@ The reader ships with three public-domain translations — the **World English B
 (Catholic)** (WEB plus the 73-book deuterocanon) — all free to distribute and fetched
 in a single request each from the free, key-less
 [bible.helloao.org](https://bible.helloao.org/). Use the **translation switcher in
-the header** (the version name beneath "BibleText") to change versions. Two licensed
-translations (**LSB**, **NKJV**) are wired in and become selectable once
-licensed:
+the header** (the version name beneath "BibleText") to change versions. One
+licensed translation (**NKJV**) is available through API.Bible:
 
 | Version | Abbrev | Rights holder | Status |
 |---|---|---|---|
 | World English Bible | WEB | Public domain | ✅ Real text |
 | Berean Standard Bible | BSB | Public domain (CC0) | ✅ Real text |
 | World English Bible (Catholic) | WEBC | Public domain | ✅ Real text |
-| Legacy Standard Bible | LSB | The Lockman Foundation | 🔒 Evaluation in progress |
 | New King James Version | NKJV | Thomas Nelson (HarperCollins Christian) | ✅ Available — via API.Bible |
 
 The **NKJV is now available**: it is served by API.Bible rather than redistributed, and
 is selectable whenever an API.Bible key is present — the one this build compiles in, or
-the reader's own (Settings → Translations). **The LSB remains copyrighted** with no
-such route, so in normal builds it appears in the switcher as **"Evaluation in progress — not yet
-available"** and is **greyed out / not selectable** — no placeholder text is ever
-shown to users. The full retrieval, cache, switching, search and AI-study path is
-already wired, so each becomes a normal, selectable translation the moment a license
+the reader's own (Settings → Translations). The full retrieval, cache, switching,
+search and AI-study path is wired for licensed translations generally, so one
+becomes a normal, selectable translation the moment a license
 is configured (see [Activating a licensed version](#activating-a-licensed-version)) —
 no UI or code change needed.
 
-For internal QA before a license lands, set `BIBLETEXT_ENABLE_TESTING=1`. That
-unlocks the not-yet-licensed versions with **clearly-labeled placeholder text** (e.g.
-`[LSB sample — licensed text not available in this testing build] John 1:1`) and a
-**TESTING** badge, so switching, navigation, search and AI study can be exercised end
-to end — without shipping copyrighted text.
+For internal QA of a licensed translation before its license lands, set
+`BIBLETEXT_ENABLE_TESTING=1`. That unlocks any not-yet-licensed version with
+**clearly-labeled placeholder text** and a **TESTING** badge, so switching,
+navigation, search and AI study can be exercised end to end — without shipping
+copyrighted text. A default build registers no such version.
 
 ### Getting a license
 
@@ -242,17 +238,6 @@ Two routes: go through an **API provider** that already carries the translation
 (simplest — it matches the `licensedAPISource` code path), or license **directly**
 from the rights holder and load the text they supply. Two real-world wrinkles to
 know before you start:
-
-- **The LSB is licensed directly, not via a public API.** The Lockman Foundation
-  distributes it through per-partner agreements, so you'll most likely receive the
-  text as a data file/feed rather than an API `bibleId`.
-
-**LSB (Legacy Standard Bible)** — copyright: **The Lockman Foundation**, managed
-with **Three Sixteen Publishing**.
-- Email **`info@316publishing.com`** to set up a licensing agreement. There's no
-  advertised self-serve API or data download — you agree terms and they provide the
-  text for your app (which then plugs in as a file-based source — see below).
-  General permissions info: <https://www.lockman.org/>.
 
 **API.Bible (`scripture.api.bible`)** — the provider the code scaffolds against,
 run by the American Bible Society; carries many popular translations. **Confirm a
@@ -307,8 +292,8 @@ configuration is removed):
 
 ```bash
 export BIBLE_API_KEY="<your provider api key>"
-export BIBLETEXT_LICENSE_LSB=1                  # explicit "we are licensed" opt-in
-export BIBLETEXT_PROVIDER_ID_LSB="<provider's bible id>"
+export BIBLETEXT_LICENSE_<ID>=1                 # explicit "we are licensed" opt-in
+export BIBLETEXT_PROVIDER_ID_<ID>="<provider's bible id>"
 ```
 
 The double gate — a license opt-in **and** credentials — makes it impossible to
@@ -316,7 +301,7 @@ ship copyrighted text by accident. Each version caches to its own file
 (`bibletext-<id>.json`) beside the WEB cache.
 
 Those env vars drive the **API-provider path** (`licensedAPISource`) — the right
-shape for a licensed translation via API.Bible. The **LSB** arrives as licensed **data**, not an
+shape for a licensed translation via API.Bible. A translation licensed DIRECTLY arrives as **data**, not an
 API, so it plugs in differently: add a small file-based `bibleSource` that parses the
 supplied text into `BibleData` (the `bibleSource` interface in `versions.go` is built
 for exactly this — `webSource`, `licensedAPISource`, and a future `licensedFileSource`

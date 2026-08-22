@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -81,8 +82,39 @@ func TestVersionSelectorUI(t *testing.T) {
 	if tappable != selectable {
 		t.Errorf("%d tappable rows, want %d — locked versions must be inert", tappable, selectable)
 	}
-	if selectable < len(bibleVersions()) && !treeHasText(popup, "Evaluation in progress — not yet available") {
-		t.Error("locked versions must carry the evaluation-in-progress note")
+	// A locked version carries the note for the REASON it is locked, and the two
+	// reasons are different: a bring-your-own-key translation is waiting for the
+	// reader's key, an unlicensed one is waiting for a licence. Asserting the
+	// evaluation wording for every locked version was only ever right while an
+	// unlicensed one shipped — once the NRSV and the LSB moved behind build
+	// tags, the only locked version left was the NKJV and the test failed
+	// demanding the wrong sentence.
+	var lockedBYOK, lockedEval int
+	for _, v := range bibleVersions() {
+		if v.canSelect() {
+			continue
+		}
+		if byokCapable(v) {
+			lockedBYOK++
+		} else {
+			lockedEval++
+		}
+	}
+	// CONTAINMENT, not equality: treeHasText matches a whole node, and these
+	// sentences embed the version names, which change as the catalogue does.
+	hasPhrase := func(want string) bool {
+		for _, s := range treeTexts(popup) {
+			if strings.Contains(s, want) {
+				return true
+			}
+		}
+		return false
+	}
+	if lockedBYOK > 0 && !hasPhrase("with your own free API.Bible key") {
+		t.Error("a locked bring-your-own-key version must say a key unlocks it")
+	}
+	if lockedEval > 0 && !treeHasText(popup, "Evaluation in progress — not yet available") {
+		t.Error("a locked unlicensed version must carry the evaluation-in-progress note")
 	}
 
 	// Exactly the active version carries the check mark.

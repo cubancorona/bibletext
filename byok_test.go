@@ -70,16 +70,16 @@ func TestBYOKUnlocksNKJV(t *testing.T) {
 	}
 
 	// The reader's key never unlocks non-BYOK licensed versions.
-	for _, id := range []string{"lsb"} {
-		v, ok := versionByID(id)
-		if !ok {
-			t.Fatalf("%s not registered", id)
-		}
+	// Built rather than looked up: the LSB is behind the `lsb` build tag now, so
+	// a default build registers no non-BYOK licensed version. The BEHAVIOUR
+	// still needs covering — a reader's API.Bible key must not unlock a source
+	// that was never wired to accept one.
+	for _, v := range []BibleVersion{evaluationVersion()} {
 		if byokCapable(v) {
-			t.Errorf("%s must not be BYOK-capable", id)
+			t.Errorf("%s must not be BYOK-capable", v.ID)
 		}
 		if v.canSelect() {
-			t.Errorf("%s must stay locked despite the reader's key", id)
+			t.Errorf("%s must stay locked despite the reader's key", v.ID)
 		}
 	}
 
