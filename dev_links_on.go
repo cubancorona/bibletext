@@ -18,6 +18,8 @@ package bibletext
 // cannot produce them — that is rather the point of testing them.
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -138,6 +140,128 @@ func devScenarios() []devScenario {
 	}
 }
 
+// devVersionCachePanel: make a translation look as though it was never
+// downloaded.
+//
+// WHY THIS EXISTS. The interesting half of a shared link is the half that only
+// SOME readers see. A /nkjv/ link switches translation and opens for anyone who
+// has the NKJV, and for anyone who does not it opens the passage in whatever
+// they are reading plus a message naming the translation the note was written
+// in. Testing the second branch used to mean finding a simulator that had never
+// fetched the text — and once any simulator HAS fetched it, that state cannot be
+
+//
+// WHAT IT ACTUALLY DOES, and the part worth reading before trusting it: deleting
+// a cache file changes what the NEXT LAUNCH finds, not what this process holds.
+// The Bible currently open is in memory and the reading state names it, so
+// clearing the cache of the translation you are reading changes nothing you can
+// see until you relaunch. Saying so on the button's own status line is the
+// difference between a working control and one that looks broken.
+func devVersionCachePanel(state *AppState) fyne.CanvasObject {
+	pal := state.pal()
+
+	head := canvas.NewText("Version caches", pal.Text)
+	head.TextStyle = fyne.TextStyle{Bold: true}
+	head.TextSize = 16
+
+	note := widget.NewLabel("Delete a translation's cached text so the app sees it as " +
+		"never downloaded. Takes effect on the NEXT LAUNCH — the open Bible stays in memory.")
+	note.Wrapping = fyne.TextWrapWord
+
+	status := canvas.NewText("", pal.TextMuted)
+	status.TextSize = 12
+
+	rows := container.NewVBox()
+
+	// cachedBytes reports what this version occupies on disk across its current
+	// epoch and every superseded one, and whether anything is there at all.
+	cachedBytes := func(v BibleVersion) (int64, bool) {
+		var total int64
+		found := false
+		paths := append([]string{cachePathForVersion(v.ID)}, supersededCachePaths(v)...)
+		for _, path := range paths {
+			if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
+				total += fi.Size()
+				found = true
+			}
+		}
+		return total, found
+	}
+
+	// clear removes the current epoch AND every superseded one. Missing the
+	// superseded files would leave the app able to open the translation offline
+	// from an older decode — which looks exactly like the delete not working.
+	clear := func(v BibleVersion) int {
+		removed := 0
+		paths := append([]string{cachePathForVersion(v.ID)}, supersededCachePaths(v)...)
+		for _, path := range paths {
+			if err := os.Remove(path); err == nil {
+				removed++
+			}
+		}
+		return removed
+	}
+
+	var rebuild func()
+	rebuild = func() {
+		rows.Objects = rows.Objects[:0]
+		anyCached := false
+		for _, v := range registeredVersions {
+			v := v
+			size, cached := cachedBytes(v)
+			if cached {
+				anyCached = true
+			}
+			label := v.Abbrev + " — not downloaded"
+			if cached {
+				label = fmt.Sprintf("%s — %.1f MB cached", v.Abbrev, float64(size)/(1024*1024))
+			}
+			if v.ID == state.CurrentVersion {
+				label += " · open now"
+			}
+			text := widget.NewLabel(label)
+			text.Wrapping = fyne.TextWrapWord
+
+			btn := widget.NewButton("Clear", func() {
+				n := clear(v)
+				switch {
+				case n == 0:
+					status.Text = v.Abbrev + ": nothing cached to clear"
+				case v.ID == state.CurrentVersion:
+					status.Text = v.Abbrev + ": cache cleared — still open in memory, relaunch to see it gone"
+				default:
+					status.Text = v.Abbrev + ": cache cleared — it will read as never downloaded"
+				}
+				status.Refresh()
+				rebuild()
+			})
+			if !cached {
+				btn.Disable()
+			}
+			rows.Add(container.NewBorder(nil, nil, nil, btn, text))
+		}
+
+		all := widget.NewButton("Clear every version cache", func() {
+			total := 0
+			for _, v := range registeredVersions {
+				total += clear(v)
+			}
+			status.Text = fmt.Sprintf("cleared %d cache file(s) — relaunch for a first-run app", total)
+			status.Refresh()
+			rebuild()
+		})
+		all.Importance = widget.DangerImportance
+		if !anyCached {
+			all.Disable()
+		}
+		rows.Add(all)
+		rows.Refresh()
+	}
+	rebuild()
+
+	return container.NewVBox(head, note, rows, status, widget.NewSeparator())
+}
+
 // buildDevLinksTab is the page itself: the switches at the top, then one row per
 // scenario. Each row's button is the whole point — it calls HandleShareLink
 // exactly as the OS does.
@@ -206,7 +330,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		widget.NewSeparator(),
 	)
 
-	column := container.NewVBox()
+	column := container.NewVBox(devVersionCachePanel(state))
 	for _, sc := range devScenarios() {
 		sc := sc
 		name := canvas.NewText(sc.name, pal.Accent)
