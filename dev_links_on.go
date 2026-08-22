@@ -164,8 +164,9 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 	head.TextStyle = fyne.TextStyle{Bold: true}
 	head.TextSize = 16
 
-	note := widget.NewLabel("Delete a translation's cached text so the app sees it as " +
-		"never downloaded. Takes effect on the NEXT LAUNCH — the open Bible stays in memory.")
+	note := widget.NewLabel("Delete a translation's cached text AND unload it, so the app " +
+		"behaves as though it was never downloaded — no relaunch needed. Clearing the one " +
+		"you are reading switches you to " + defaultVersionID + " first.")
 	note.Wrapping = fyne.TextWrapWord
 
 	status := canvas.NewText("", pal.TextMuted)
@@ -224,16 +225,47 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 
 			btn := widget.NewButton("Clear", func() {
 				n := clear(v)
+
+				// DELETING THE FILE IS NOT ENOUGH, and believing it was is what
+				// made this control lie. A loaded translation is kept in memory
+				// by id (AppState.loadedVersions), switchVersion consults that
+				// map before it ever reaches the disk, and switchToLinkVersion
+				// returns early when the link names the version already open. So
+				// a cleared NKJV still opened an /nkjv/ note instantly, with no
+				// download and no message — the cache was genuinely gone and
+				// nothing about the running app had changed (owner, 22 Aug 2026:
+				// "opened fine without downloading so maybe wasn't cleared?").
+				//
+				// To make the app actually behave as though it never had the
+				// text: move off it, then forget it. Only then does the next
+				// link take the not-downloaded path.
+				switched := false
+				if v.ID == state.CurrentVersion && v.ID != defaultVersionID {
+					switchVersion(state, defaultVersionID)
+					switched = state.CurrentVersion != v.ID
+				}
+				unloaded := false
+				if v.ID != state.CurrentVersion {
+					delete(state.loadedVersions, v.ID)
+					unloaded = true
+				}
+
 				switch {
-				case n == 0:
+				case n == 0 && !unloaded:
 					status.Text = v.Abbrev + ": nothing cached to clear"
 				case v.ID == state.CurrentVersion:
+					// The open version IS the default, so there is nowhere to
+					// move to. Say what is still true rather than pretend.
 					status.Text = v.Abbrev + ": cache cleared — still open in memory, relaunch to see it gone"
+				case switched:
+					status.Text = v.Abbrev + ": cleared and unloaded — switched to " +
+						defaultVersionID + "; a link to it will now behave as never downloaded"
 				default:
-					status.Text = v.Abbrev + ": cache cleared — it will read as never downloaded"
+					status.Text = v.Abbrev + ": cleared and unloaded — a link to it will now behave as never downloaded"
 				}
 				status.Refresh()
 				rebuild()
+				state.refresh()
 			})
 			if !cached {
 				btn.Disable()
@@ -246,9 +278,22 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 			for _, v := range registeredVersions {
 				total += clear(v)
 			}
-			status.Text = fmt.Sprintf("cleared %d cache file(s) — relaunch for a first-run app", total)
+			// Same reasoning as the per-version button: forget them in memory
+			// too, or the app keeps serving every translation it has already
+			// loaded. The one being read has to stay — there is nothing to fall
+			// back to once every cache is gone — so it is the only survivor, and
+			// the message says so.
+			kept := state.CurrentVersion
+			for id := range state.loadedVersions {
+				if id != kept {
+					delete(state.loadedVersions, id)
+				}
+			}
+			status.Text = fmt.Sprintf("cleared %d cache file(s) and unloaded all but %s "+
+				"(still open) — relaunch for a true first-run app", total, kept)
 			status.Refresh()
 			rebuild()
+			state.refresh()
 		})
 		all.Importance = widget.DangerImportance
 		if !anyCached {
