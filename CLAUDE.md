@@ -384,7 +384,7 @@ all 3,906 scripture pages, so the notice pages carry their own
   it into the cache scope. Settings sheet: `ai_settings.go` (header gear). Result panel:
   `ai_panel.go`.
 - **Bible versions (translations).** `versions.go` defines `BibleVersion` +
-  registry (WEB + WEB-Catholic + BSB public-domain; LSB/NKJV licensed; NRSV behind the `nrsv` build tag) and a `bibleSource` per
+  registry (WEB + WEB-Catholic + BSB public-domain; NKJV licensed via API.Bible; the NRSV and LSB behind the `nrsv` / `lsb` build tags) and a `bibleSource` per
   version (`webSource` = the WEB as ONE request from bible.helloao.org (it replaced
   the old per-chapter bible-api.com walk, which remains only as the seed/fallback);
   `bsbSource` (`bsb.go`) = the

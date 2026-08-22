@@ -216,7 +216,7 @@ func pick(n int, singular, plural string) string {
 }
 
 // joinNatural renders a name list the way a sentence wants it:
-// "LSB", "LSB and NKJV", "LSB, NKJV and a third".
+// "NKJV", "NKJV and a second", "NKJV, a second and a third".
 func joinNatural(names []string) string {
 	switch len(names) {
 	case 0:

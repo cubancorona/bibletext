@@ -15,11 +15,14 @@ func TestVersionRegistry(t *testing.T) {
 		publicDomain bool
 		testing      bool // expected isTesting() with no license env set
 	}{
-		"web": {"WEB", true, false},
-		// The LSB stands for "registered, licensed, not yet unlocked". The NRSV
-		// used to sit beside it and is now behind the `nrsv` build tag, so it is
-		// not in a default build to assert about.
-		"lsb":  {"LSB", false, true},
+		// What a default build actually offers. The NRSV and the LSB are both
+		// behind build tags now (versions_nrsv.go / versions_lsb.go), so there
+		// is no unlicensed EVALUATION version here to assert about — the only
+		// locked one left is the NKJV, locked for a different reason: it is
+		// bring-your-own-key and no key is configured in a test.
+		"web":  {"WEB", true, false},
+		"bsb":  {"BSB", true, false},
+		"webc": {"WEBC", true, false},
 		"nkjv": {"NKJV", false, true},
 	}
 
@@ -162,9 +165,25 @@ func fullValidBible() *BibleData {
 	return bd
 }
 
+// evaluationVersion is a licensed source with no credentials — the shape the
+// NRSV and the LSB had before both moved behind build tags.
+//
+// BUILT, NOT LOOKED UP. These tests ask "how does an unconfigured licensed
+// source behave", which is a different question from "which translations does
+// the app offer". Tying them together is what made a catalogue change break six
+// tests at once; separating them means the behaviour stays covered in a default
+// build even though no such version ships in one.
+func evaluationVersion() BibleVersion {
+	return BibleVersion{
+		ID: "lsb", Name: "Legacy Standard Bible", Abbrev: "LSB",
+		Publisher: "© The Lockman Foundation — license required",
+		source:    newLicensedSource("lsb"),
+	}
+}
+
 func TestPlaceholderMirrorsStructure(t *testing.T) {
 	base := baseSampleBible()
-	lsb, _ := versionByID("lsb")
+	lsb := evaluationVersion()
 
 	data, mode, err := loadVersionData(lsb, base)
 	if err != nil || mode != modeTesting {
@@ -214,43 +233,9 @@ func TestLoadVersionDataWebDoesNotNeedBase(t *testing.T) {
 	}
 }
 
-func TestSwitchVersionUpdatesState(t *testing.T) {
-	// LSB is a not-yet-licensed (testing) version, so it is normally not
-	// selectable; unlock internal testing mode so the switch is allowed and
-	// exercises the placeholder path.
-	t.Setenv("BIBLETEXT_ENABLE_TESTING", "1")
-
-	base := baseSampleBible()
-	state := &AppState{
-		Bible:          base,
-		CurrentVersion: "web",
-		currentMode:    modeReal,
-		loadedVersions: map[string]*BibleData{"web": base},
-		CurrentBook:    "John",
-		CurrentChapter: 1,
-	}
-
-	// No window in tests, so rebuildWindow is a no-op; the state still updates.
-	switchVersion(state, "lsb")
-	if state.CurrentVersion != "lsb" || state.currentMode != modeTesting {
-		t.Fatalf("after switch: version=%q mode=%v", state.CurrentVersion, state.currentMode)
-	}
-	if state.Bible == base {
-		t.Error("Bible should have swapped to the LSB placeholder")
-	}
-	if state.currentVersion().Abbrev != "LSB" {
-		t.Errorf("currentVersion abbrev = %q", state.currentVersion().Abbrev)
-	}
-	// Switching back to the cached base is instant and restores it.
-	switchVersion(state, "web")
-	if state.CurrentVersion != "web" || state.Bible != base {
-		t.Error("switching back to web should restore the base data")
-	}
-}
-
 func TestVersionSelectionGating(t *testing.T) {
 	web, _ := versionByID("web")
-	lsb, _ := versionByID("lsb")
+	lsb := evaluationVersion()
 
 	// Public domain is always selectable; an unlicensed copyrighted version is
 	// not selectable by default (it shows as "evaluation in progress").

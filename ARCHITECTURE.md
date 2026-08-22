@@ -334,8 +334,8 @@ Three gates keep the native overlay cheap on every nav/tab tap:
   (Catholic)**: helloao's WEBC decoded by USFM **id** (not order) and emitted in
   traditional Catholic order, adding the 73-book deuterocanon.
 - `licensedAPISource` — a scaffold for a licensed API provider (e.g. API.Bible),
-  gated on a license opt-in **and** `BIBLE_API_KEY`. **LSB** and
-  **NKJV** are wired here. The LSB is copyrighted with no licensed route, so it
+  gated on a license opt-in **and** `BIBLE_API_KEY`. The **NKJV** is wired
+  here. A copyrighted translation with no licensed route
   remain **not user-selectable**; the NKJV IS selectable, served by API.Bible under a key
   (bundled in this build, or the reader's own).
 
