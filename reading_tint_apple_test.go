@@ -125,7 +125,7 @@ func TestChapterBodyFingerprintChangesWithTheText(t *testing.T) {
 	}{
 		{"chapter", func(s *AppState) { s.CurrentChapter = 4 }},
 		{"book", func(s *AppState) { s.CurrentBook = "Mark" }},
-		{"version", func(s *AppState) { s.CurrentVersion = "nrsv" }},
+		{"version", func(s *AppState) { s.CurrentVersion = "lsb" }},
 		{"data swap", func(s *AppState) { s.Bible = &BibleData{} }},
 		{"note", func(s *AppState) { s.ActiveNote = "a message" }},
 	}

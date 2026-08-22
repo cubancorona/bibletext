@@ -36,7 +36,7 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 		titleRow = container.NewHBox(title, badge)
 	}
 
-	// The subtitle doubles as the translation switcher (WEB / NRSV / LSB), with a
+	// The subtitle doubles as the translation switcher (WEB / BSB / NKJV), with a
 	// TESTING badge when a version is showing placeholder text (see versions.go).
 	left := container.NewVBox(titleRow, versionSelector(state))
 

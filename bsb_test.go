@@ -202,12 +202,14 @@ func TestBSBRegisteredAsPublicDomain(t *testing.T) {
 		t.Errorf("BSB metadata = %q / %q", v.Name, v.Abbrev)
 	}
 
-	// Listed right after WEB, before the licensed evaluation versions.
+	// Listed right after WEB, before the licensed evaluation versions. The LSB
+	// stands in for those since the NRSV moved behind the `nrsv` build tag and
+	// is absent from a default build.
 	order := map[string]int{}
 	for i, ver := range bibleVersions() {
 		order[ver.ID] = i
 	}
-	if !(order["web"] < order["bsb"] && order["bsb"] < order["nrsv"]) {
-		t.Errorf("version order = web:%d bsb:%d nrsv:%d (want web < bsb < nrsv)", order["web"], order["bsb"], order["nrsv"])
+	if !(order["web"] < order["bsb"] && order["bsb"] < order["lsb"]) {
+		t.Errorf("version order = web:%d bsb:%d lsb:%d (want web < bsb < lsb)", order["web"], order["bsb"], order["lsb"])
 	}
 }

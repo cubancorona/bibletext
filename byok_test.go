@@ -38,7 +38,7 @@ func TestBibleKeyStoreRoundTrip(t *testing.T) {
 // TestBYOKUnlocksNKJV pins the whole BYOK contract: a reader's stored
 // API.Bible key alone unlocks the NKJV (no environment configuration), the
 // built-in provider id is used, the key's absence locks it again, and
-// non-BYOK licensed versions (NRSV/LSB) are untouched by the reader's key.
+// non-BYOK licensed versions (the LSB) are untouched by the reader's key.
 func TestBYOKUnlocksNKJV(t *testing.T) {
 	// Ensure no env leaks in from the developer's shell.
 	t.Setenv("BIBLE_API_KEY", "")
@@ -70,7 +70,7 @@ func TestBYOKUnlocksNKJV(t *testing.T) {
 	}
 
 	// The reader's key never unlocks non-BYOK licensed versions.
-	for _, id := range []string{"nrsv", "lsb"} {
+	for _, id := range []string{"lsb"} {
 		v, ok := versionByID(id)
 		if !ok {
 			t.Fatalf("%s not registered", id)

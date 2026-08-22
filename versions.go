@@ -7,10 +7,10 @@ package bibletext
 // off BibleData.Books, so they need no per-version special-casing either way.
 //
 // Licensing. The World English Bible and Berean Standard Bible are public domain
-// and come from the free, key-less bible.helloao.org (one request each). NRSV and
-// LSB are copyrighted and require a distribution
+// and come from the free, key-less bible.helloao.org (one request each). The LSB
+// is copyrighted and requires a distribution
 // license (see README → "Bible versions"). Until a license + credentials are
-// configured they are NOT user-selectable: the picker shows them as "evaluation
+// configured it is NOT user-selectable: the picker shows it as "evaluation
 // in progress" and tapping is disabled, so a shipped build never exposes
 // placeholder text to end users. The full testing/placeholder path stays in the
 // code and can be exercised for internal QA by setting BIBLETEXT_ENABLE_TESTING=1
@@ -34,7 +34,7 @@ const defaultVersionID = "web"
 
 // BibleVersion describes one selectable translation.
 type BibleVersion struct {
-	ID        string // stable id; also the per-version cache filename ("web","nrsv","lsb")
+	ID        string // stable id; also the per-version cache filename ("web","lsb","nkjv")
 	Name      string // full name, e.g. "World English Bible"
 	Abbrev    string // short label, e.g. "WEB"
 	Publisher string // one-line rights/copyright note, shown in the picker
@@ -103,11 +103,6 @@ var registeredVersions = []BibleVersion{
 		source:     webCatholicSource{},
 	},
 	{
-		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",
-		Publisher: "© National Council of the Churches of Christ — license required",
-		source:    newLicensedSource("nrsv"),
-	},
-	{
 		ID: "lsb", Name: "Legacy Standard Bible", Abbrev: "LSB",
 		Publisher: "© The Lockman Foundation — license required",
 		source:    newLicensedSource("lsb"),
@@ -166,7 +161,7 @@ func (webSource) fetch() (*BibleData, error) { return fetchWEBFromHelloAO() }
 //	BIBLETEXT_LICENSE_<ID>=1      explicit "we are licensed for <ID>" opt-in
 //	BIBLETEXT_PROVIDER_ID_<ID>    the provider's bible id for this translation
 //
-// (<ID> is the upper-cased version id, e.g. NRSV, LSB.)
+// (<ID> is the upper-cased version id, e.g. LSB, NKJV.)
 type licensedAPISource struct {
 	versionID string
 	// defaultProviderBibleID makes the translation BYOK-capable: a reader who
