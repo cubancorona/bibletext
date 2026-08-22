@@ -78,7 +78,7 @@ var webPublishedVersionIDs = map[string]bool{"web": true, "bsb": true, "webc": t
 //
 // Enumerated, never derived from the registry: canSelect() is true for every
 // registered version under BIBLETEXT_ENABLE_TESTING, so a registry-wide set
-// would start emitting /nrsv/ and /lsb/ paths that nothing claims and nothing
+// would start emitting /lsb/ paths that nothing claims and nothing
 // serves.
 var linkPathVersionIDs = func() map[string]bool {
 	m := make(map[string]bool, len(webPublishedVersionIDs)+1)

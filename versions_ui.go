@@ -193,7 +193,7 @@ func lockedVersionNames(byok bool) []string {
 }
 
 // joinNatural renders a name list the way a sentence wants it:
-// "NRSV", "NRSV and LSB", "NRSV, LSB and NKJV".
+// "LSB", "LSB and NKJV", "LSB, NKJV and a third".
 func joinNatural(names []string) string {
 	switch len(names) {
 	case 0:

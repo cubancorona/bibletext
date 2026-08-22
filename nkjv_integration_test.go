@@ -253,7 +253,7 @@ func TestLinkPathVersionIDsIsNotThePublishedSet(t *testing.T) {
 	// Enumerated, not derived: BIBLETEXT_ENABLE_TESTING makes canSelect() true
 	// for every registered version, and a registry-wide set would start emitting
 	// paths nothing claims and nothing serves.
-	for _, id := range []string{"nrsv", "lsb"} {
+	for _, id := range []string{"lsb"} {
 		if linkPathVersionIDs[id] {
 			t.Errorf("%q must not be a link path id: no app or site surface honours it", id)
 		}
@@ -365,7 +365,7 @@ func TestNKJVProseShareStaysProse(t *testing.T) {
 // TestNKJVLicenseNotice pins the attribution contract: NKJV carries the notice
 // Thomas Nelson requires plus the visible API.Bible citation, and it is the
 // ONLY registered version with a LicenseNotice (public-domain versions say
-// everything in their Publisher line; NRSV/LSB have no licence yet).
+// everything in their Publisher line; the LSB has no licence yet).
 func TestNKJVLicenseNotice(t *testing.T) {
 	v, ok := versionByID("nkjv")
 	if !ok {

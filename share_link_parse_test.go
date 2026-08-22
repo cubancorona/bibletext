@@ -57,7 +57,7 @@ func TestParseShareLink(t *testing.T) {
 		// names is refused exactly like a made-up one: the app emits no such
 		// link, the site serves no such page, and accepting it would only teach
 		// the app to swallow URLs nothing produced.
-		{name: "registered but not a link path id", url: "https://bibletext.co.uk/nrsv/john/3/#v16"},
+		{name: "registered but not a link path id", url: "https://bibletext.co.uk/lsb/john/3/#v16"},
 		{name: "unknown version id", url: "https://bibletext.co.uk/esv/john/3/#v16"},
 		{name: "unknown book", url: "https://bibletext.co.uk/web/nowhere/3/"},
 		{name: "non-numeric chapter", url: "https://bibletext.co.uk/web/john/three/"},

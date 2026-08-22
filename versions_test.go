@@ -15,8 +15,10 @@ func TestVersionRegistry(t *testing.T) {
 		publicDomain bool
 		testing      bool // expected isTesting() with no license env set
 	}{
-		"web":  {"WEB", true, false},
-		"nrsv": {"NRSV", false, true},
+		"web": {"WEB", true, false},
+		// The LSB stands for "registered, licensed, not yet unlocked". The NRSV
+		// used to sit beside it and is now behind the `nrsv` build tag, so it is
+		// not in a default build to assert about.
 		"lsb":  {"LSB", false, true},
 		"nkjv": {"NKJV", false, true},
 	}
@@ -54,9 +56,9 @@ func TestCachePathForVersion(t *testing.T) {
 	if got := cachePathForVersion("web"); got != wantWEB {
 		t.Errorf("web cache = %q, want %q", got, wantWEB)
 	}
-	wantNRSV := filepath.Join(dir, "bibletext-nrsv.json")
-	if got := cachePathForVersion("nrsv"); got != wantNRSV {
-		t.Errorf("nrsv cache = %q, want %q", got, wantNRSV)
+	wantLSB := filepath.Join(dir, "bibletext-lsb.json")
+	if got := cachePathForVersion("lsb"); got != wantLSB {
+		t.Errorf("lsb cache = %q, want %q", got, wantLSB)
 	}
 
 	// BSB carries a cacheEpoch (its decoder has changed three times), so its
@@ -107,12 +109,12 @@ func TestPurgeSupersededCaches(t *testing.T) {
 }
 
 func TestLicensedSourceAvailability(t *testing.T) {
-	s := newLicensedSource("nrsv")
+	s := newLicensedSource("lsb")
 
 	// Nothing configured -> not available.
 	t.Setenv("BIBLE_API_KEY", "")
-	t.Setenv("BIBLETEXT_LICENSE_NRSV", "")
-	t.Setenv("BIBLETEXT_PROVIDER_ID_NRSV", "")
+	t.Setenv("BIBLETEXT_LICENSE_LSB", "")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_LSB", "")
 	if s.available() {
 		t.Fatal("licensed source should be unavailable with no env")
 	}
@@ -127,8 +129,8 @@ func TestLicensedSourceAvailability(t *testing.T) {
 	}
 
 	// All three -> available (real fetch is still a scaffold, but the gate opens).
-	t.Setenv("BIBLETEXT_LICENSE_NRSV", "1")
-	t.Setenv("BIBLETEXT_PROVIDER_ID_NRSV", "abc123")
+	t.Setenv("BIBLETEXT_LICENSE_LSB", "1")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_LSB", "abc123")
 	if !s.available() {
 		t.Error("key + license opt-in + provider id should be available")
 	}
@@ -162,11 +164,11 @@ func fullValidBible() *BibleData {
 
 func TestPlaceholderMirrorsStructure(t *testing.T) {
 	base := baseSampleBible()
-	nrsv, _ := versionByID("nrsv")
+	lsb, _ := versionByID("lsb")
 
-	data, mode, err := loadVersionData(nrsv, base)
+	data, mode, err := loadVersionData(lsb, base)
 	if err != nil || mode != modeTesting {
-		t.Fatalf("loadVersionData(nrsv) = mode %v err %v", mode, err)
+		t.Fatalf("loadVersionData(lsb) = mode %v err %v", mode, err)
 	}
 
 	// Same books and per-chapter verse counts as the base.
@@ -188,7 +190,7 @@ func TestPlaceholderMirrorsStructure(t *testing.T) {
 		t.Fatal("expected placeholder verses for John 1")
 	}
 	got := pv[0].Text
-	if !strings.Contains(got, "NRSV") || !strings.Contains(got, "John 1:1") {
+	if !strings.Contains(got, "LSB") || !strings.Contains(got, "John 1:1") {
 		t.Errorf("placeholder text not labeled/referenced: %q", got)
 	}
 	if got == base.GetChapter("John", 1)[0].Text {
@@ -248,7 +250,7 @@ func TestSwitchVersionUpdatesState(t *testing.T) {
 
 func TestVersionSelectionGating(t *testing.T) {
 	web, _ := versionByID("web")
-	nrsv, _ := versionByID("nrsv")
+	lsb, _ := versionByID("lsb")
 
 	// Public domain is always selectable; an unlicensed copyrighted version is
 	// not selectable by default (it shows as "evaluation in progress").
@@ -256,14 +258,14 @@ func TestVersionSelectionGating(t *testing.T) {
 	if !web.canSelect() {
 		t.Error("web (public domain) must be selectable")
 	}
-	if nrsv.canSelect() {
-		t.Error("nrsv must not be selectable without a license or the testing flag")
+	if lsb.canSelect() {
+		t.Error("lsb must not be selectable without a license or the testing flag")
 	}
 
 	// The internal testing flag unlocks it for QA.
 	t.Setenv("BIBLETEXT_ENABLE_TESTING", "1")
-	if !nrsv.canSelect() {
-		t.Error("nrsv should be selectable when BIBLETEXT_ENABLE_TESTING=1")
+	if !lsb.canSelect() {
+		t.Error("lsb should be selectable when BIBLETEXT_ENABLE_TESTING=1")
 	}
 }
 
@@ -283,7 +285,7 @@ func TestSwitchVersionRefusesUnselectable(t *testing.T) {
 		CurrentChapter: 1,
 	}
 
-	switchVersion(state, "nrsv")
+	switchVersion(state, "lsb")
 	if state.CurrentVersion != "web" || state.Bible != base {
 		t.Errorf("switch to an unlicensed version should be a no-op; got version=%q", state.CurrentVersion)
 	}
