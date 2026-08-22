@@ -113,7 +113,52 @@ def version_fields(vid):
     return f
 
 
+# States that mean Apple currently owns the version: a second version cannot be
+# taken into review while one of these is outstanding, so a release plan built
+# without checking is a plan that cannot be executed.
+IN_REVIEW_STATES = {
+    "WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_APPLE_RELEASE",
+    "PENDING_DEVELOPER_RELEASE", "PROCESSING_FOR_APP_STORE",
+}
+
+
+def report_live_states():
+    """Print every version's live state and flag anything blocking a submission.
+
+    WHY THIS IS THE FIRST THING PRINTED. Twice in two days a release plan was
+    made against a remembered state that had already moved: 1.2.1 was recorded
+    as awaiting review when it had gone live, and 1.2.2 was assumed reviewable
+    when it was still queued and therefore blocking everything behind it. Both
+    were found by hand-querying, which is precisely the step that gets skipped.
+
+    The field comparison below answers "was this version's copy written for it".
+    It cannot answer "may I submit at all", and that is the question a release
+    starts with.
+    """
+    data = asc(f"/v1/apps/{APP_ID}/appStoreVersions?limit=10")["data"]
+    print("live version states")
+    blocking = []
+    for v in data:
+        a = v["attributes"]
+        state = a.get("appStoreState", "?")
+        mark = "  <- Apple has this one" if state in IN_REVIEW_STATES else ""
+        print(f"   {a.get('versionString',''):8} {state}{mark}")
+        if state in IN_REVIEW_STATES:
+            blocking.append((a.get("versionString", ""), state))
+    if blocking:
+        names = ", ".join(f"{v} ({s})" for v, s in blocking)
+        print(f"\n   BLOCKING: {names}.")
+        print("   App Store Connect takes one version into review at a time, so a new")
+        print("   version cannot be submitted until this clears or is removed from review.")
+    else:
+        print("\n   nothing is with Apple; a new version can be submitted.")
+    print()
+    return blocking
+
+
 def main():
+    report_live_states()
+
     versions = asc(f"/v1/apps/{APP_ID}/appStoreVersions?limit=2")["data"]
     if len(versions) < 2:
         sys.exit("need at least two versions to compare against")
