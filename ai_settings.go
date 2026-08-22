@@ -440,7 +440,14 @@ func showAISettings(state *AppState) {
 				// column (observed in practice on iPhone with the long model-gone
 				// message). Hidden until a test runs, so the sheet only grows by
 				// a line or two when there's something to say.
-				container.NewHBox(pasteBtn, clearBtn, testBtn),
+				// PASTE, TEST, CLEAR — the same order as the API.Bible key field
+				// below (bible_key_settings.go). It was Paste, Clear, Test here,
+				// which put the one destructive control between the two a reader
+				// reaches for most: a mis-tap aimed at either neighbour wiped the
+				// key. Clear sits at the end on both now, and the two fields no
+				// longer teach different muscle memory for the same three verbs
+				// in one sheet.
+				container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
 				// Status now has the row to itself — the link moved up to the
 				// label row, so a long hint has the full width to be read in.
 				status,

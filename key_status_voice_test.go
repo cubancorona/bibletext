@@ -47,3 +47,29 @@ func TestKeyTestResultsShareOneVoice(t *testing.T) {
 		}
 	}
 }
+
+// THE TWO KEY FIELDS OFFER THE SAME THREE VERBS IN THE SAME ORDER.
+//
+// They did not: the assistant's key read Paste, Clear, Test and API.Bible's
+// read Paste, Test, Clear — the same three buttons, in one sheet, teaching
+// different muscle memory. Worse, the first order put the only destructive
+// control between the two a reader reaches for most, so a mis-tap aimed at
+// either neighbour wiped the key.
+//
+// Asserted on the source because the rows are built in different files and
+// there is no shared constructor to test through; a shared constructor would
+// be the better fix if a third key field ever appears.
+func TestKeyFieldButtonsShareOneOrder(t *testing.T) {
+	order := regexp.MustCompile(`NewHBox\(pasteBtn, testBtn, clearBtn`)
+	for _, f := range []string{"ai_settings.go", "bible_key_settings.go"} {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("cannot read %s: %v", f, err)
+		}
+		if !order.MatchString(string(src)) {
+			t.Errorf("%s: the key row should read Paste, Test key, Clear — the same "+
+				"order as the other key field, with the destructive control last "+
+				"rather than between the two most-used ones", f)
+		}
+	}
+}
