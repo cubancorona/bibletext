@@ -119,12 +119,18 @@ func showVersionPicker(state *AppState) {
 	closeBtn := widget.NewButton("Close", closePicker)
 	footerItems := []fyne.CanvasObject{widget.NewSeparator()}
 	if byok := lockedVersionNames(true); len(byok) > 0 {
-		note := widget.NewLabel(joinNatural(byok) + " unlocks with your own free API.Bible key — add it in Settings.")
+		note := widget.NewLabel(joinNatural(byok) +
+			pick(len(byok), " unlocks", " unlock") +
+			" with your own free API.Bible key — add it in Settings.")
 		note.Wrapping = fyne.TextWrapWord
 		footerItems = append(footerItems, note)
 	}
 	if locked := lockedVersionNames(false); len(locked) > 0 {
-		note := widget.NewLabel(joinNatural(locked) + " are under evaluation and not yet selectable; they unlock once licensing is complete.")
+		note := widget.NewLabel(joinNatural(locked) +
+			pick(len(locked), " is", " are") +
+			" under evaluation and not yet selectable; " +
+			pick(len(locked), "it unlocks", "they unlock") +
+			" once licensing is complete.")
 		note.Wrapping = fyne.TextWrapWord
 		footerItems = append(footerItems, note)
 	}
@@ -190,6 +196,23 @@ func lockedVersionNames(byok bool) []string {
 		}
 	}
 	return names
+}
+
+// pick chooses the verb form that agrees with a list of n names.
+//
+// Both sentences these feed were written when the list they described happened
+// to have the length the wording assumed, and both were wrong at the other
+// length. Removing the NRSV left one evaluation version and the picker read
+// "LSB are under evaluation … they unlock" (owner, 22 Aug 2026); the BYOK line
+// has the mirror-image fault waiting — it says "unlocks", so a second
+// bring-your-own-key translation would make it read "X and Y unlocks".
+//
+// A list whose length is data cannot have its grammar hardcoded.
+func pick(n int, singular, plural string) string {
+	if n == 1 {
+		return singular
+	}
+	return plural
 }
 
 // joinNatural renders a name list the way a sentence wants it:
