@@ -375,7 +375,13 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		widget.NewSeparator(),
 	)
 
-	column := container.NewVBox(devVersionCachePanel(state))
+	// EVERYTHING SCROLLS, including what used to be pinned. The title, blurb,
+	// notes switch, wipe button, status line and emoji probe were the Border's
+	// fixed top slot, which on a phone is most of a screen before the first
+	// scenario is reachable — and the scenarios are the point of the page
+	// (owner, 22 Aug 2026). Nothing here needs to stay in view while scrolling:
+	// the status line is read right after tapping something, not during.
+	column := container.NewVBox(head, devVersionCachePanel(state))
 	for _, sc := range devScenarios() {
 		sc := sc
 		name := canvas.NewText(sc.name, pal.Accent)
@@ -442,9 +448,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	scroll.Offset = fyne.NewPos(0, devLinksScrollY)
 	scroll.OnScrolled = func(p fyne.Position) { devLinksScrollY = p.Y }
 
-	return container.NewBorder(
-		container.New(squeezeWidthLayout{}, container.NewPadded(head)), nil, nil, nil,
-		scroll)
+	return scroll
 }
 
 // shortenForDev keeps a long note payload from turning the row into a wall.
