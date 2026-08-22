@@ -172,10 +172,20 @@ func versionPickerOrder() []BibleVersion {
 	var licensed, public, locked []BibleVersion
 	for _, v := range bibleVersions() {
 		switch {
-		case !v.canSelect():
-			locked = append(locked, v)
-		case isLicensedSource(v):
+		case isLicensedSource(v) && (v.canSelect() || byokCapable(v)):
+			// ORDERED BY WHAT THE READER CAN DO ABOUT IT, not by whether it
+			// happens to be unlocked right now. A bring-your-own-key
+			// translation is the app's licensed offering whether or not a key
+			// is present — it is one free key away, and its row says exactly
+			// how. Bucketing it with the versions nobody can unlock sent the
+			// NKJV to the bottom of the list on any device without a key
+			// (owner, 22 Aug 2026: "NKJV should be at the top even without a
+			// key"), which reads as "unavailable curiosity" rather than "one
+			// step from here".
 			licensed = append(licensed, v)
+		case !v.canSelect():
+			// Nothing the reader can do: awaiting a licence, not a key.
+			locked = append(locked, v)
 		default:
 			public = append(public, v)
 		}

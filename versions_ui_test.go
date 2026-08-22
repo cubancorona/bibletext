@@ -201,12 +201,20 @@ func TestVersionPickerOrder(t *testing.T) {
 	if got[0].ID != "nkjv" {
 		t.Errorf("licensed NKJV should lead the picker, got %q first", got[0].ID)
 	}
-	lockedZone := false
+	// THE ZONE RULE IS ABOUT WHAT THE READER CAN ACT ON, not about selectability.
+	// It used to be "no selectable version may follow a locked one", which was
+	// right while every locked version was awaiting a licence. A
+	// bring-your-own-key translation is deliberately placed ABOVE the
+	// public-domain ones even when it has no key, so that invariant now reports
+	// the intended layout as a fault. What must still hold: a version NOBODY can
+	// unlock never precedes one the reader can use or unlock.
+	deadZone := false
 	for i, v := range got {
-		if !v.canSelect() {
-			lockedZone = true
-		} else if lockedZone {
-			t.Errorf("selectable %q at %d appears after a locked version", v.ID, i)
+		unlockableByNobody := !v.canSelect() && !byokCapable(v)
+		if unlockableByNobody {
+			deadZone = true
+		} else if deadZone {
+			t.Errorf("%q at %d is usable or unlockable, yet follows a version awaiting a licence", v.ID, i)
 		}
 	}
 	for _, name := range append(lockedVersionNames(true), lockedVersionNames(false)...) {
@@ -215,10 +223,14 @@ func TestVersionPickerOrder(t *testing.T) {
 		}
 	}
 
+	// Without a key it STILL leads: the row tells the reader how to unlock it,
+	// and burying it is what this ordering exists to prevent (owner, 22 Aug
+	// 2026). See versions_picker_order_test.go for the dedicated cases.
 	t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
+	t.Setenv("BIBLE_API_KEY", "")
 	got = versionPickerOrder()
-	if got[0].ID == "nkjv" {
-		t.Error("unlicensed NKJV must not lead the picker")
+	if got[0].ID != "nkjv" {
+		t.Errorf("keyless NKJV should still lead the picker, got %q", got[0].ID)
 	}
 	found := false
 	for _, name := range lockedVersionNames(true) {
