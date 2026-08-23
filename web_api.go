@@ -57,13 +57,12 @@ type TextRun struct {
 // answers for the WEB and answers per VERSE. Two things were wrong on the page
 // as a result. Mixed-speaker verses came out entirely red — John 4:9 put the
 // Samaritan woman's words in Christ's colour — and every translation was
-// rendered with the WEB's marks, so a BSB page showed red where the BSB itself
-// does not, and no NKJV page could ever show the four verses its publisher
-// reddens and the WEB does not.
+// rendered with the WEB's marks, so BSB and NKJV pages could not preserve their
+// publishers' different editorial decisions.
 //
 // versionID is the translation being rendered ("web", "bsb", "webc", "nkjv").
-// An unknown id degrades to the WEB's verse-level marks rather than to nothing,
-// which is what the panes did before spans existed.
+// An unknown id returns black-letter runs. Red-letter decisions are editorial,
+// so no edition is allowed to inherit another translation's marks.
 //
 // The returned runs concatenate back to the verse's text exactly, so a caller
 // can escape and emit each in turn without having to reason about offsets.

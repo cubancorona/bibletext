@@ -12,11 +12,11 @@ package bibletext
 // Esther but a different book, where no verse-to-verse correspondence exists.
 //
 // Anything that carries a reference ACROSS translations has to consult this:
-// shared links, a note stored under one translation and read in another, the
-// words-of-Christ table (generated from the WEB and applied to all four), and
-// any future "compare translations" view. Ignoring it does not fail loudly — it
-// silently shows the reader the wrong verse, which is the worst failure a Bible
-// app has.
+// shared links, notes and highlights stored under one translation and read in
+// another, and any future "compare translations" view. Red-letter data is not
+// in this list: each edition now uses only its own publisher's marks. Ignoring
+// versification does not fail loudly — it silently shows the reader the wrong
+// verse, which is the worst failure a Bible app has.
 //
 // The data lives in versification_data.go, generated from the app's OWN cache
 // files by scripts/gen-versification.py, so it describes the text actually

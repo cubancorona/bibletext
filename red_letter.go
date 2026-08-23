@@ -72,18 +72,14 @@ func (r wjRange) contains(ch, v int) bool {
 
 // wordsOfChristRanges (the WEB \wj data) lives in the generated red_letter_data.go.
 //
-// WHAT IT IS STILL FOR, now that every edition has SPAN data of its own
+// WHAT IT IS STILL FOR, now that every default edition has SPAN data of its own
 // (red_letter_web_data.go, red_letter_nkjv_data.go, red_letter_bsb_data.go):
 //
-//  1. THE FALLBACK. A verse whose text no longer matches the offsets its spans
-//     were computed against — a supplier edit — falls back to this verse-level
-//     answer rather than to nothing. Same for any edition with no table.
-//  2. THE CANDIDATE SET for the generators. Deciding which BSB verses to
-//     examine at all starts here, because the BSB publishes no marks of its own.
+//  1. The public WEB verse-level API retained for compatibility.
+//  2. Historical tests that verify the original range projection.
 //
-// It is NOT the authority any more, and must not be used as a gate: consulted
-// first, it overruled the NKJV's own publisher marks on four verses. See
-// redLetterRuns, which asks the edition's table before this one.
+// It must never be used as another edition's fallback: red-letter decisions are
+// editorial, and the BSB and NKJV intentionally disagree with the WEB.
 //
 // It has no committed generator. Regenerating it means re-deriving from the WEB
 // USFM \wj markers, exactly as scripts/gen-web-redletter.py already does — that

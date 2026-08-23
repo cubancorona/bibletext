@@ -19,33 +19,21 @@ type verseRun struct {
 //
 // Three outcomes, in order:
 //
-//   - red-letter off, or not a words-of-Christ verse → one run, not red.
-//   - the BSB, with usable span data → runs alternating between His words and
-//     the narration or other speakers around them.
-//   - anything else → one run, red. That is the whole-verse behaviour every
-//     pane had before spans existed, and it stays the fallback: the WEB and the
-//     NKJV have no span data yet, and the BSB's is refused when the verse text
-//     does not match what the offsets were computed against.
+//   - red-letter off, or the edition does not mark the verse → one black run.
+//   - usable publisher span data → alternating red and black runs.
+//   - the edition marks the verse but its offsets are stale/unavailable → one
+//     red run. This fallback stays inside the same edition's judgement.
 func redLetterRuns(versionID string, v Verse, redLetter bool) []verseRun {
 	if !redLetter {
 		return []verseRun{{Text: v.Text}}
 	}
-	// THE EDITION'S OWN TABLE IS THE AUTHORITY, and it is consulted FIRST.
-	//
-	// isWordsOfChrist below is the WEB's verse-level judgement, and it used to
-	// gate this function — which meant an edition could not disagree with the
-	// WEB about whether Christ speaks in a verse at all. That silently
-	// suppressed the NKJV's own marks on four verses its publisher reddens and
-	// the WEB does not: Mark 5:31, Luke 24:7, Matthew 27:63, and Luke 17:36 —
-	// which the WEB does not even contain. An NKJV reader saw no red where the
-	// NKJV puts it.
 	if spans, ok := redLetterSpansFor(versionID, v.BookName, v.Chapter, v.Verse, v.Text); ok {
 		return runsFromSpans(v.Text, spans)
 	}
-	// No table for this edition, or text that no longer matches the offsets.
-	// Fall back to the WEB's verse-level marks, which is what every pane did
-	// before spans existed.
-	if !isWordsOfChrist(v.BookName, v.Chapter, v.Verse) {
+	// A missing entry means black for that edition. A present entry with stale
+	// offsets remains red at verse granularity; it never consults WEB unless the
+	// selected edition itself is WEB/WEBC.
+	if !redLetterVerseMarked(versionID, v.BookName, v.Chapter, v.Verse) {
 		return []verseRun{{Text: v.Text}}
 	}
 	return []verseRun{{Text: v.Text, Red: true}}
@@ -166,9 +154,9 @@ func verseTokenSpans(v Verse, tokens []string) ([]tokenSpan, bool) {
 // that the Apple and Android panes leave in body colour, since those split at
 // rune level (redLetterRuns) while this one can only colour whole tokens.
 //
-// Every edition except the BSB yields a single run, so all the flags come back
-// the same and the pane behaves exactly as it did before spans existed. So does
-// a verse whose tokens cannot be matched back to its own text.
+// Every mapped edition may yield multiple runs. A uniformly red/black verse, or
+// a verse whose tokens cannot be matched back to its own text, takes the single
+// whole-token fallback below.
 func redLetterTokenFlags(versionID string, v Verse, redLetter bool, tokens []string) []bool {
 	runs := redLetterRuns(versionID, v, redLetter)
 

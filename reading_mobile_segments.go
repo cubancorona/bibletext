@@ -57,9 +57,9 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 		})
 		tint := tints.of(v)
 		runs := trimRuns(redLetterRuns(state.CurrentVersion, v, redLetter))
-		// ONE run means no span data — every edition but the BSB and the NKJV,
-		// and any verse whose text no longer matches the offsets. Take the
-		// original single-segment path there, keeping strings.TrimSpace rather
+		// ONE run means a uniform verse: unmarked, wholly marked, or a marked
+		// verse whose exact offsets are unavailable. Take the original
+		// single-segment path there, keeping strings.TrimSpace rather
 		// than trimRuns: they are not the same trim, and swapping them silently
 		// changed what happens to a trailing \r or U+00A0 and to a verse that is
 		// nothing but whitespace. The sibling panes guard the same way.

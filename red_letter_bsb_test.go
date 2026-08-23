@@ -23,9 +23,6 @@ func TestBSBRedLetterSpansExcludeOtherSpeakers(t *testing.T) {
 		{"Luke", 7, 40, "Simon, I have something to tell you", "Tell me, Teacher"},
 		{"Mark", 12, 16, "Whose image is this", "they answered"},
 		{"John", 11, 34, "Where have you put him", "Come and see, Lord"},
-		// Only the second quotation is the saying of Christ; the first is
-		// Deuteronomy 25:4, quoted by Paul in the same breath.
-		{"1 Timothy", 5, 18, "The worker is worthy of his wages", "muzzle an ox"},
 	} {
 		key := verseKeyFor(tc.book, tc.chapter, tc.verse)
 		spans, ok := bsbRedLetterSpans[key]
@@ -65,6 +62,9 @@ func TestBSBRedLetterSpansAreWellFormed(t *testing.T) {
 			t.Errorf("%s: spans without a recorded verse length", key)
 			continue
 		}
+		if _, ok := bsbRedLetterHashes[key]; !ok {
+			t.Errorf("%s: spans without a recorded content fingerprint", key)
+		}
 		prev := -1
 		for _, s := range spans {
 			if s.Start < 0 || s.End > n || s.Start >= s.End {
@@ -78,13 +78,16 @@ func TestBSBRedLetterSpansAreWellFormed(t *testing.T) {
 	}
 }
 
-// The rune-length guard must refuse to answer for text it was not computed
-// against, or a supplier's edit would silently repaint arbitrary words.
+// The content guard must refuse text it was not computed against, including a
+// same-length edit that the former rune-count-only guard accepted.
 func TestBSBRedLetterRefusesChangedText(t *testing.T) {
 	key := verseKeyFor("Mark", 8, 5)
 	n := bsbRedLetterRunes[key]
-	if _, ok := bsbRedLetterSpansFor("Mark", 8, 5, strings.Repeat("x", n)); !ok {
-		t.Error("refused text of the right length")
+	if _, ok := bsbRedLetterSpansFor("Mark", 8, 5, bsbVerseFixture[key]); !ok {
+		t.Error("refused the exact text used to generate the offsets")
+	}
+	if _, ok := bsbRedLetterSpansFor("Mark", 8, 5, strings.Repeat("x", n)); ok {
+		t.Error("accepted different text of the same length — stale offsets would be painted")
 	}
 	if _, ok := bsbRedLetterSpansFor("Mark", 8, 5, strings.Repeat("x", n+1)); ok {
 		t.Error("accepted text of the WRONG length — stale offsets would be painted")
@@ -97,16 +100,47 @@ func TestBSBRedLetterRefusesChangedText(t *testing.T) {
 // red_letter_bsb_data.go if the BSB text is ever updated — the rune offsets and
 // this fixture must describe the same text.
 var bsbVerseFixture = map[string]string{
-	"John 8:11":      "“No one, Lord,” she answered.\n“Then neither do I condemn you,” Jesus declared. “Now go and sin no more.”",
-	"Matthew 20:22":  "“You do not know what you are asking,” Jesus replied. “Can you drink the cup I am going to drink?”\n“We can,” the brothers answered.",
-	"Matthew 22:21":  "“Caesar’s,” they answered.\nSo Jesus told them, “Give to Caesar what is Caesar’s, and to God what is God’s.”",
-	"Matthew 17:26":  "“From others,” Peter answered.\n“Then the sons are exempt,” Jesus said to him.",
-	"Mark 8:5":       "“How many loaves do you have?” Jesus asked.\n“Seven,” they replied.",
-	"Luke 7:40":      "But Jesus answered him, “Simon, I have something to tell you.”\n“Tell me, Teacher,” he said.",
-	"Mark 12:16":     "So they brought it, and He asked them, “Whose image is this? And whose inscription?”\n“Caesar’s,” they answered.",
-	"John 11:34":     "“Where have you put him?” He asked.\n“Come and see, Lord,” they answered.",
-	"1 Timothy 5:18": "For the Scripture says, “Do not muzzle an ox while it is treading out the grain,” and, “The worker is worthy of his wages.”",
-	"John 8:33":      "“We are Abraham’s descendants,” they answered. “We have never been slaves to anyone. How can You say we will be set free?”",
+	"John 8:11":     "“No one, Lord,” she answered.\n“Then neither do I condemn you,” Jesus declared. “Now go and sin no more.”",
+	"Matthew 20:22": "“You do not know what you are asking,” Jesus replied. “Can you drink the cup I am going to drink?”\n“We can,” the brothers answered.",
+	"Matthew 22:21": "“Caesar’s,” they answered.\nSo Jesus told them, “Give to Caesar what is Caesar’s, and to God what is God’s.”",
+	"Matthew 17:26": "“From others,” Peter answered.\n“Then the sons are exempt,” Jesus said to him.",
+	"Mark 8:5":      "“How many loaves do you have?” Jesus asked.\n“Seven,” they replied.",
+	"Luke 7:40":     "But Jesus answered him, “Simon, I have something to tell you.”\n“Tell me, Teacher,” he said.",
+	"Mark 12:16":    "So they brought it, and He asked them, “Whose image is this? And whose inscription?”\n“Caesar’s,” they answered.",
+	"John 11:34":    "“Where have you put him?” He asked.\n“Come and see, Lord,” they answered.",
+	"John 8:33":     "“We are Abraham’s descendants,” they answered. “We have never been slaves to anyone. How can You say we will be set free?”",
+}
+
+func TestBSBTableMatchesPublisherVerseJudgements(t *testing.T) {
+	if got, want := len(bsbRedLetterSpans), 2042; got != want {
+		t.Fatalf("BSB marked verse count = %d, want publisher count %d", got, want)
+	}
+	runs := 0
+	for _, spans := range bsbRedLetterSpans {
+		runs += len(spans)
+	}
+	if want := 2294; runs != want {
+		t.Fatalf("BSB marked run count = %d, want publisher count %d", runs, want)
+	}
+
+	for _, key := range []string{
+		"Matthew 27:43", "Matthew 27:63", "Mark 5:31", "Mark 8:23",
+		"Luke 24:7", "Revelation 4:1",
+	} {
+		if _, ok := bsbRedLetterSpans[key]; !ok {
+			t.Errorf("%s: publisher marks the verse, but the table does not", key)
+		}
+	}
+	for _, key := range []string{
+		"1 Timothy 5:18", "John 5:12", "John 8:33", "John 8:52",
+		"John 9:11", "John 12:34", "Luke 9:55", "Luke 9:56", "Luke 20:23",
+		"Revelation 1:8", "Revelation 21:5", "Revelation 21:6",
+		"Revelation 21:7", "Revelation 21:8", "Revelation 22:14", "Revelation 22:15",
+	} {
+		if _, ok := bsbRedLetterSpans[key]; ok {
+			t.Errorf("%s: publisher leaves the verse black, but the table marks it", key)
+		}
+	}
 }
 
 func bsbSpanTextForTest(key string, s redLetterSpan) string {

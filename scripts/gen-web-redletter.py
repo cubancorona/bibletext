@@ -7,8 +7,7 @@
 
 Both editions mark the words of Jesus themselves, with \\wj … \\wj* in the USFM
 eBible publishes, so nothing here is our editorial judgement — it is the
-translators'. That is the opposite of the BSB, which publishes no such markup at
-all and whose table had to be derived (scripts/gen-bsb-redletter.py).
+translators'.
 
 NO API CALLS. Fetch the USFM once from eBible and point this at the unpacked
 directories:
@@ -19,18 +18,42 @@ directories:
 WHY THE SPANS ARE LOCATED BY TEXT rather than taken as USFM character positions:
 the runtime supplier's copy of the text is NOT byte-identical to eBible's
 revision. Matching each span's own text inside the app's verse text, tolerating
-whitespace differences, located 2,053 of 2,054 verses for the WEB and 2,052 for
-WEBC at the time of writing. Five verses per edition differ outright ("Other
-seed" where eBible has "Some seed"), get no entry, and fall back to the
-whole-verse answer — which is what the app did before spans existed, so a miss
-degrades rather than breaks.
+whitespace differences, produces exact spans where every marked run locates.
+Seven known revision differences use small, shape-checked boundary recoveries;
+generation fails on every other mismatch. A separate publisher-marked verse set
+provides a safe edition-local fallback if the runtime text later changes.
 
 See docs/TEXTUAL-DATA.md §3 for the whole picture.
 """
-import argparse, glob, json, os, re, sys
+import argparse, glob, json, os, re, subprocess, sys
 
 BOOK = {'MAT': 'Matthew', 'MRK': 'Mark', 'LUK': 'Luke', 'JHN': 'John', 'ACT': 'Acts',
         '1CO': '1 Corinthians', '2CO': '2 Corinthians', '1TI': '1 Timothy', 'REV': 'Revelation'}
+
+# The runtime supplier's WEB-family revision differs from the current eBible
+# USFM in these verses. These are boundary recoveries, not red-letter
+# judgements: each key is already publisher-marked, and the recovery merely
+# maps the publisher's \wj boundaries onto the older runtime wording.
+#
+# "whole" is used only where \wj covers the complete source verse. "quoted-tail"
+# maps a black narrative lead-in followed by one marked quotation. "two-speeches"
+# maps marked speech, black narration, then marked speech. The WEBC Mark 9:47
+# mismatch is a runtime "oF" typo inside an otherwise wholly marked verse.
+RECOVERY = {
+    ('web', 'John 3:7'): 'whole',
+    ('web', 'John 4:48'): 'quoted-tail',
+    ('web', 'Luke 8:6'): 'whole',
+    ('web', 'Luke 8:7'): 'whole',
+    ('web', 'Luke 8:8'): 'two-speeches',
+    ('web', 'Luke 12:51'): 'whole',
+    ('webc', 'John 3:7'): 'whole',
+    ('webc', 'John 4:48'): 'quoted-tail',
+    ('webc', 'Luke 8:6'): 'whole',
+    ('webc', 'Luke 8:7'): 'whole',
+    ('webc', 'Luke 8:8'): 'two-speeches',
+    ('webc', 'Luke 12:51'): 'whole',
+    ('webc', 'Mark 9:47'): 'whole',
+}
 
 
 def clean(t):
@@ -82,17 +105,48 @@ def locate(haystack, needle, frm):
     return (m.start(), m.end()) if m else None
 
 
-def build(usfm_dir, cache_path):
+def fnv1a64(text):
+    value = 0xCBF29CE484222325
+    for byte in text.encode('utf-8'):
+        value ^= byte
+        value = (value * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    return value
+
+
+def recovered_spans(edition, key, text):
+    """Map a known source/runtime revision difference to checked rune spans."""
+    kind = RECOVERY.get((edition, key))
+    if kind == 'whole':
+        return [(0, len(text))] if text else None
+    if kind == 'quoted-tail':
+        start = text.find('“')
+        end = text.rfind('”') + 1
+        if 0 < start < end == len(text):
+            return [(start, end)]
+        return None
+    if kind == 'two-speeches':
+        first_end = text.find('”') + 1
+        second_start = text.find('“', first_end)
+        if 0 < first_end < second_start < len(text) and text.endswith('”'):
+            return [(0, first_end), (second_start, len(text))]
+        return None
+    return None
+
+
+def build(edition, usfm_dir, cache_path):
     blob = json.load(open(cache_path))
     app = (blob.get('data') or blob)['Verses']
-    spans, runes = {}, {}
-    full = partial = miss = 0
+    spans, runes, hashes, marked = {}, {}, {}, set()
+    exact = recovered = 0
+    failures = []
     for book, d in wj_texts(usfm_dir).items():
         for (c, v), texts in sorted(d.items()):
+            key = f"{book} {c}:{v}"
+            marked.add(key)
             verses = {x['Verse']: x['Text'] for x in app.get(book, {}).get(str(c), [])}
             text = verses.get(v)
             if text is None:
-                miss += 1
+                failures.append(f'{key} (missing runtime verse)')
                 continue
             found, at, bad = [], 0, False
             for w in texts:
@@ -101,14 +155,18 @@ def build(usfm_dir, cache_path):
                     found.append(loc); at = loc[1]
                 else:
                     bad = True
-            if not found:
-                miss += 1
-                continue
-            key = f"{book} {c}:{v}"
-            spans[key], runes[key] = found, len(text)
-            partial += 1 if bad else 0
-            full += 0 if bad else 1
-    return spans, runes, (full, partial, miss)
+            if not found or bad:
+                found = recovered_spans(edition, key, text)
+                if not found:
+                    failures.append(f'{key} (unlocated publisher run)')
+                    continue
+                recovered += 1
+            else:
+                exact += 1
+            spans[key], runes[key], hashes[key] = found, len(text), fnv1a64(text)
+    if failures:
+        raise RuntimeError(f"{edition}: incomplete mapping: " + ', '.join(failures))
+    return spans, runes, hashes, marked, (exact, recovered)
 
 
 def main():
@@ -125,26 +183,34 @@ def main():
            "//",
            "// The WEB's and WEB Catholic's own words-of-Jesus spans, as rune offsets into",
            "// each verse's text. Both editions mark them in their published USFM (\\wj), so",
-           "// unlike the BSB nothing here is our editorial judgement — it is the",
-           "// translators'.",
+           "// nothing here is our editorial judgement — it is the translators'.",
            "//",
            "// Located by matching each span's TEXT inside the app's verse text rather than",
            "// by trusting USFM character positions: the runtime supplier's copy is not",
-           "// byte-identical to eBible's revision. A few verses per edition do not match at",
-           "// all and are simply absent here, so they fall back to the whole-verse answer.",
+           "// byte-identical to eBible's revision. Known differences use shape-checked",
+           "// boundary recoveries; generation fails on any unaccounted mismatch. The marked",
+           "// set preserves edition-local fallback if runtime text later changes.",
            ""]
     for name, usfm, cache in (('web', a.web_usfm, a.web_cache), ('webc', a.webc_usfm, a.webc_cache)):
-        spans, runes, (full, partial, miss) = build(usfm, cache)
-        print(f"{name}: {len(spans)} verses (all spans located {full}, some {partial}, none {miss})",
-              file=sys.stderr)
+        spans, runes, hashes, marked, (exact, recovered) = build(name, usfm, cache)
+        run_count = sum(len(value) for value in spans.values())
+        print(f"{name}: {len(spans)} span verses, {run_count} runs "
+              f"({exact} exact, {recovered} boundary-recovered)", file=sys.stderr)
         out.append(f"var {name}RedLetterSpans = map[string][]redLetterSpan{{")
         for k in sorted(spans):
             out.append('\t"%s": {%s},' % (k, ", ".join("{%d, %d}" % (s, e) for s, e in spans[k])))
         out += ["}", "", f"var {name}RedLetterRunes = map[string]int{{"]
         for k in sorted(runes):
             out.append('\t"%s": %d,' % (k, runes[k]))
+        out += ["}", "", f"var {name}RedLetterHashes = map[string]uint64{{"]
+        for k in sorted(hashes):
+            out.append('\t"%s": 0x%016x,' % (k, hashes[k]))
+        out += ["}", "", f"var {name}RedLetterMarked = map[string]struct{{}}{{"]
+        for k in sorted(marked):
+            out.append('\t"%s": {},' % k)
         out += ["}", ""]
     open(a.out, 'w').write("\n".join(out))
+    subprocess.run(['gofmt', '-w', a.out], check=True)
     print(f"wrote {a.out}", file=sys.stderr)
 
 

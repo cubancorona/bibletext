@@ -7,27 +7,11 @@ import (
 )
 
 // Span-level words of Christ, and the lookup every reading pane goes through.
-//
-// The BSB's words of Christ, as SPANS rather than whole verses.
-//
-// The BSB ships no words-of-Jesus markup: its published USFM (ebible.org,
-// engbsb) contains zero \wj markers, so unlike the WEB and the NKJV there is no
-// publisher's judgement to copy. Whole-verse reddening from the WEB's marks put
-// narration — and in about 79 verses another speaker's words — in red: "We are
-// able" (James and John), "No one, Lord" (the woman), "Caesar's" (the
-// Pharisees). These spans are derived instead; see scripts/gen-bsb-redletter.py
-// for how, and docs/TEXTUAL-DATA.md for why each rule is shaped as it is.
+// Each mapped edition uses only its own publisher's words-of-Jesus markup.
 
-// bsbRedLetterSpansOn is the INTERNAL switch for this whole feature. Off, the
-// app behaves exactly as it did before the spans existed: bsbRedLetterSpansFor
-// answers "no data", and every caller falls back to reddening the whole verse
-// from the WEB's verse-level marks.
-//
-// Deliberately not a user setting. The spans are our editorial judgement rather
-// than the Berean translators' — the BSB publishes no words-of-Jesus markup at
-// all — so this is a decision the project takes, not one to put in front of a
-// reader as a preference. It is one line to flip if we decide the BSB should
-// show no derived red letters, or to promote to a setting later.
+// bsbRedLetterSpansOn is an internal diagnostics switch for BSB span rendering.
+// Off, publisher-marked BSB verses remain red but fall back to whole-verse red.
+// It does not affect any other edition.
 const bsbRedLetterSpansOn = true
 
 // bsbRedLetterSpansEnabled resolves the switch, allowing an environment override
@@ -35,8 +19,8 @@ const bsbRedLetterSpansOn = true
 // two builds. The constant is what ships; the variable only ever narrows or
 // widens it for whoever set it deliberately.
 //
-//	BIBLETEXT_BSB_RED_LETTER=0   force the old whole-verse behaviour
-//	BIBLETEXT_BSB_RED_LETTER=1   force the spans
+//	BIBLETEXT_BSB_RED_LETTER=0   force BSB whole-verse rendering
+//	BIBLETEXT_BSB_RED_LETTER=1   force BSB publisher spans
 func bsbRedLetterSpansEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_BSB_RED_LETTER"))) {
 	case "0", "off", "false", "no":
@@ -56,31 +40,20 @@ type redLetterSpan struct {
 // bsbRedLetterSpansFor returns the ranges of a BSB verse that are Christ's
 // words, and whether the answer is usable at all.
 //
-// The offsets were computed against a particular rendering of the verse, so they
-// are only meaningful for text of the same length. A mismatch means the supplier
-// changed the text under us: the honest response is to report "no span data" and
-// let the caller fall back to reddening the whole verse, which is what the app
-// did before these spans existed. Painting stale offsets would colour arbitrary
-// words — worse than the coarse behaviour it replaced.
+// The offsets are accepted only for the exact runtime verse revision from which
+// they were generated. A mismatch reports no usable spans; redLetterRuns then
+// falls back to whole-verse red from this edition's own marked-verse set.
 func bsbRedLetterSpansFor(book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
 	if !bsbRedLetterSpansEnabled() {
 		return nil, false
 	}
-	spans, ok := bsbRedLetterSpans[verseKeyFor(book, chapter, verse)]
-	if !ok {
-		return nil, false
-	}
-	if len([]rune(text)) != bsbRedLetterRuneLen(book, chapter, verse) {
-		return nil, false
-	}
-	return spans, true
+	return tableSpansFor(bsbRedLetterSpans, bsbRedLetterRunes, bsbRedLetterHashes,
+		book, chapter, verse, text)
 }
 
 // redLetterSpansFor is the one lookup every pane goes through. It answers only
-// for editions we hold span data for — the BSB, derived because it publishes
-// none, and the NKJV, whose own words-of-Jesus spans API.Bible serves. The WEB
-// and WEB Catholic have spans in their USFM but no table here yet, so they still
-// get the whole-verse answer.
+// for editions whose publisher span data we hold and only when the supplied
+// verse matches the exact text revision used to generate the offsets.
 func redLetterSpansFor(versionID, book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
 	switch versionID {
 	case "bsb":
@@ -88,45 +61,70 @@ func redLetterSpansFor(versionID, book string, chapter, verse int, text string) 
 	case "nkjv":
 		return nkjvRedLetterSpansFor(book, chapter, verse, text)
 	case "web":
-		return tableSpansFor(webRedLetterSpans, webRedLetterRunes, book, chapter, verse, text)
+		return tableSpansFor(webRedLetterSpans, webRedLetterRunes, webRedLetterHashes,
+			book, chapter, verse, text)
 	case "webc":
-		return tableSpansFor(webcRedLetterSpans, webcRedLetterRunes, book, chapter, verse, text)
+		return tableSpansFor(webcRedLetterSpans, webcRedLetterRunes, webcRedLetterHashes,
+			book, chapter, verse, text)
 	}
 	return nil, false
 }
 
-// tableSpansFor is the lookup every span table shares: find the verse, then
-// refuse unless the text is the length the offsets were computed against.
-func tableSpansFor(spans map[string][]redLetterSpan, runes map[string]int,
-	book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
-	if !bsbRedLetterSpansEnabled() {
-		return nil, false
+// redLetterVerseMarked reports the edition's own verse-level judgement. Table
+// presence is enough even when a content mismatch makes the offsets unusable.
+// WEB and WEBC retain generated source-marked sets independently of their span
+// metadata so a future runtime text change can still fall back safely. An
+// edition without its own table deliberately returns false: red-letter data is
+// editorial and must never be borrowed from another translation.
+func redLetterVerseMarked(versionID, book string, chapter, verse int) bool {
+	key := verseKeyFor(book, chapter, verse)
+	switch versionID {
+	case "bsb":
+		_, ok := bsbRedLetterSpans[key]
+		return ok
+	case "nkjv":
+		_, ok := nkjvRedLetterSpans[key]
+		return ok
+	case "web":
+		_, ok := webRedLetterMarked[key]
+		return ok
+	case "webc":
+		_, ok := webcRedLetterMarked[key]
+		return ok
+	default:
+		return false
 	}
+}
+
+// tableSpansFor is the lookup every span table shares: find the verse, then
+// refuse unless both its rune length and content fingerprint match.
+func tableSpansFor(spans map[string][]redLetterSpan, runes map[string]int, hashes map[string]uint64,
+	book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
 	key := verseKeyFor(book, chapter, verse)
 	got, ok := spans[key]
-	if !ok || len([]rune(text)) != runes[key] {
+	if !ok || len([]rune(text)) != runes[key] || redLetterTextHash(text) != hashes[key] {
 		return nil, false
 	}
 	return got, true
 }
 
-// nkjvRedLetterSpansFor mirrors the BSB accessor, including the rune-length
-// guard: offsets computed against different text would colour arbitrary words.
-// It honours the same switch, so one flag turns the whole feature off.
+// nkjvRedLetterSpansFor applies the shared exact-text guard to the NKJV table.
 func nkjvRedLetterSpansFor(book string, chapter, verse int, text string) ([]redLetterSpan, bool) {
-	if !bsbRedLetterSpansEnabled() {
-		return nil, false
-	}
-	key := verseKeyFor(book, chapter, verse)
-	spans, ok := nkjvRedLetterSpans[key]
-	if !ok || len([]rune(text)) != nkjvRedLetterRunes[key] {
-		return nil, false
-	}
-	return spans, true
+	return tableSpansFor(nkjvRedLetterSpans, nkjvRedLetterRunes, nkjvRedLetterHashes,
+		book, chapter, verse, text)
 }
 
-func bsbRedLetterRuneLen(book string, chapter, verse int) int {
-	return bsbRedLetterRunes[verseKeyFor(book, chapter, verse)]
+func redLetterTextHash(text string) uint64 {
+	const (
+		offset64 = uint64(14695981039346656037)
+		prime64  = uint64(1099511628211)
+	)
+	hash := offset64
+	for index := 0; index < len(text); index++ {
+		hash ^= uint64(text[index])
+		hash *= prime64
+	}
+	return hash
 }
 
 // verseKeyFor is the "Book Chapter:Verse" key the generated tables use.

@@ -168,7 +168,7 @@ func TestStyledLayoutRedLetter(t *testing.T) {
 				Text: "For God so loved the world."},
 		}}},
 	}
-	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3}
+	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3, CurrentVersion: "web"}
 	lay := layoutChapter(st, bd.GetChapter("John", 3), testLayoutParams, fixedMeasure)
 
 	sawRed, sawPlain := false, false

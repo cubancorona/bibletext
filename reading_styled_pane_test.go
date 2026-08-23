@@ -28,7 +28,7 @@ func john3RedState() *AppState {
 				Text: "For God so loved the world, that he gave his only Son."},
 		}}},
 	}
-	return &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3}
+	return &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3, CurrentVersion: "web"}
 }
 
 func TestStyledPaneMergeRuns(t *testing.T) {

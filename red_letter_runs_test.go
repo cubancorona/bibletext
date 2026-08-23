@@ -146,10 +146,23 @@ func TestNKJVUsesItsOwnSpans(t *testing.T) {
 	if n := nkjvRedLetterRunes[key]; n == 0 {
 		t.Error("no rune length recorded, so the guard cannot fire")
 	}
+	if _, ok := nkjvRedLetterHashes[key]; !ok {
+		t.Error("no content fingerprint recorded, so same-length edits would pass the guard")
+	}
+	if got, want := len(nkjvRedLetterSpans), 2054; got != want {
+		t.Errorf("NKJV marked verse count = %d, want publisher count %d", got, want)
+	}
+	runCount := 0
+	for _, spans := range nkjvRedLetterSpans {
+		runCount += len(spans)
+	}
+	if got, want := runCount, 3484; got != want {
+		t.Errorf("NKJV run count = %d, want publisher count %d", got, want)
+	}
 }
 
-// Every edition we hold spans for must go through one lookup, and editions we
-// do not hold must still get the whole-verse answer.
+// Every edition we hold spans for goes through one lookup; another edition's
+// same verse text must not accidentally satisfy its content guard.
 func TestRedLetterSpanLookupCoversTheRightEditions(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -160,37 +173,56 @@ func TestRedLetterSpanLookupCoversTheRightEditions(t *testing.T) {
 	}
 	for _, vid := range []string{"web", "webc", "kjv", ""} {
 		if _, ok := redLetterSpansFor(vid, "Mark", 8, 5, text); ok {
-			t.Errorf("%q: got span data, but no table exists for it — it must fall back to the whole verse", vid)
+			t.Errorf("%q: accepted BSB text as its own span source", vid)
 		}
 	}
 	t.Setenv("BIBLETEXT_BSB_RED_LETTER", "0")
-	if _, ok := redLetterSpansFor("nkjv", "Mark", 8, 5, text); ok {
-		t.Error("nkjv: the switch is off but spans were still handed out")
+	if redLetterVerseMarked("nkjv", "Mark", 8, 5) != true {
+		t.Error("the BSB diagnostics switch changed the NKJV's judgement")
 	}
 }
 
 // The WEB and WEB Catholic mark their own words of Jesus in their published
-// USFM, so like the NKJV — and unlike the BSB — nothing about these is our
-// judgement. What must hold is that the spans are the TRANSLATORS' and that a
-// verse missing from the table still renders, whole, rather than not at all.
+// USFM, so like the BSB and NKJV nothing about these is our judgement. What must
+// hold is that the spans are the TRANSLATORS' and every marked source verse has
+// guarded offsets in the runtime revision.
 func TestWEBAndWEBCUseTheirOwnSpans(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	for _, tc := range []struct {
-		vid   string
-		spans map[string][]redLetterSpan
-		runes map[string]int
+		vid                 string
+		spans               map[string][]redLetterSpan
+		runes               map[string]int
+		hashes              map[string]uint64
+		marked              map[string]struct{}
+		wantSpans, wantRuns int
 	}{
-		{"web", webRedLetterSpans, webRedLetterRunes},
-		{"webc", webcRedLetterSpans, webcRedLetterRunes},
+		{"web", webRedLetterSpans, webRedLetterRunes, webRedLetterHashes,
+			webRedLetterMarked, 2059, 2290},
+		{"webc", webcRedLetterSpans, webcRedLetterRunes, webcRedLetterHashes,
+			webcRedLetterMarked, 2059, 2289},
 	} {
-		if len(tc.spans) < 2000 {
-			t.Errorf("%s: only %d verses have spans; the table looks truncated", tc.vid, len(tc.spans))
+		if got, want := len(tc.spans), tc.wantSpans; got != want {
+			t.Errorf("%s: span verse count = %d, want %d", tc.vid, got, want)
+		}
+		if got, want := len(tc.marked), 2059; got != want {
+			t.Errorf("%s: marked verse count = %d, want source count %d", tc.vid, got, want)
+		}
+		runCount := 0
+		for _, spans := range tc.spans {
+			runCount += len(spans)
+		}
+		if runCount != tc.wantRuns {
+			t.Errorf("%s: run count = %d, want source count %d", tc.vid, runCount, tc.wantRuns)
 		}
 		for key, spans := range tc.spans {
 			n, ok := tc.runes[key]
 			if !ok {
 				t.Errorf("%s: %s has spans but no recorded verse length, so the guard cannot fire", tc.vid, key)
+				break
+			}
+			if _, ok := tc.hashes[key]; !ok {
+				t.Errorf("%s: %s has spans but no content fingerprint", tc.vid, key)
 				break
 			}
 			for _, s := range spans {
@@ -200,11 +232,157 @@ func TestWEBAndWEBCUseTheirOwnSpans(t *testing.T) {
 				}
 			}
 		}
-		// A verse the table does not carry must fall back, not vanish: five per
-		// edition genuinely differ from eBible's revision and have no entry.
 		if _, ok := redLetterSpansFor(tc.vid, "Nonexistent", 1, 1, "whatever"); ok {
 			t.Errorf("%s: got spans for a verse that is not in the table", tc.vid)
 		}
+		for key := range tc.marked {
+			if _, ok := tc.spans[key]; !ok {
+				t.Errorf("%s: publisher-marked verse %s has no recovered offsets", tc.vid, key)
+			}
+		}
+	}
+}
+
+// The runtime supplier's WEB-family text predates the current eBible revision
+// in a few places. These two mixed verses prove that boundary recovery preserves
+// black narration instead of treating a source mismatch as a whole-red verse.
+func TestWEBRevisionRecoveryPreservesMixedVerseBoundaries(t *testing.T) {
+	john := "Jesus therefore said to him, “Unless you see signs and wonders, you will in no way believe.”"
+	luke := "Other fell into the good ground and grew and produced one hundred times as much fruit.” As he said these things, he called out, “He who has ears to hear, let him hear!”"
+	for _, vid := range []string{"web", "webc"} {
+		for _, tc := range []struct {
+			book             string
+			chapter, verse   int
+			text, red, black string
+		}{
+			{"John", 4, 48, john,
+				"“Unless you see signs and wonders, you will in no way believe.”",
+				"Jesus therefore said to him, "},
+			{"Luke", 8, 8, luke,
+				"Other fell into the good ground and grew and produced one hundred times as much fruit.”“He who has ears to hear, let him hear!”",
+				" As he said these things, he called out, "},
+		} {
+			var red, black strings.Builder
+			for _, run := range redLetterRuns(vid, Verse{
+				BookName: tc.book, Chapter: tc.chapter, Verse: tc.verse, Text: tc.text,
+			}, true) {
+				if run.Red {
+					red.WriteString(run.Text)
+				} else {
+					black.WriteString(run.Text)
+				}
+			}
+			if got := red.String(); got != tc.red {
+				t.Errorf("%s %s %d:%d red text = %q, want %q", vid, tc.book, tc.chapter, tc.verse, got, tc.red)
+			}
+			if got := black.String(); got != tc.black {
+				t.Errorf("%s %s %d:%d black text = %q, want %q", vid, tc.book, tc.chapter, tc.verse, got, tc.black)
+			}
+		}
+	}
+
+	webcMark := "If your eye causes you to stumble, throw it out. It is better for you to enter into God’s Kingdom with one eye, rather than having two eyes to be cast into the Gehenna oF fire,"
+	runs := redLetterRuns("webc", Verse{BookName: "Mark", Chapter: 9, Verse: 47, Text: webcMark}, true)
+	if len(runs) != 1 || !runs[0].Red || runs[0].Text != webcMark {
+		t.Errorf("WEBC Mark 9:47 typo recovery = %+v, want one wholly red run", runs)
+	}
+}
+
+func TestEveryRedLetterTableHasCompleteValidMetadata(t *testing.T) {
+	tables := []struct {
+		name   string
+		spans  map[string][]redLetterSpan
+		runes  map[string]int
+		hashes map[string]uint64
+		marked map[string]struct{}
+	}{
+		{"bsb", bsbRedLetterSpans, bsbRedLetterRunes, bsbRedLetterHashes, nil},
+		{"nkjv", nkjvRedLetterSpans, nkjvRedLetterRunes, nkjvRedLetterHashes, nil},
+		{"web", webRedLetterSpans, webRedLetterRunes, webRedLetterHashes, webRedLetterMarked},
+		{"webc", webcRedLetterSpans, webcRedLetterRunes, webcRedLetterHashes, webcRedLetterMarked},
+	}
+	for _, table := range tables {
+		if len(table.spans) != len(table.runes) || len(table.spans) != len(table.hashes) {
+			t.Errorf("%s metadata sizes: spans=%d runes=%d hashes=%d",
+				table.name, len(table.spans), len(table.runes), len(table.hashes))
+		}
+		for key, spans := range table.spans {
+			n, lengthOK := table.runes[key]
+			_, hashOK := table.hashes[key]
+			if !lengthOK || !hashOK {
+				t.Errorf("%s %s: missing length=%v or hash=%v", table.name, key, lengthOK, hashOK)
+				continue
+			}
+			if table.marked != nil {
+				if _, ok := table.marked[key]; !ok {
+					t.Errorf("%s %s: spans exist outside the publisher marked-verse set", table.name, key)
+				}
+			}
+			previousEnd := 0
+			for _, span := range spans {
+				if span.Start < previousEnd || span.Start < 0 || span.Start >= span.End || span.End > n {
+					t.Errorf("%s %s: invalid span {%d,%d} for %d runes",
+						table.name, key, span.Start, span.End, n)
+				}
+				previousEnd = span.End
+			}
+		}
+		for key := range table.runes {
+			if _, ok := table.spans[key]; !ok {
+				t.Errorf("%s %s: rune metadata without spans", table.name, key)
+			}
+		}
+		for key := range table.hashes {
+			if _, ok := table.spans[key]; !ok {
+				t.Errorf("%s %s: hash metadata without spans", table.name, key)
+			}
+		}
+	}
+}
+
+func TestEditionsNeverBorrowTheWEBFallback(t *testing.T) {
+	for _, tc := range []struct {
+		version, book  string
+		chapter, verse int
+	}{
+		{"nkjv", "1 Timothy", 5, 18},
+		{"nkjv", "Matthew", 8, 32},
+		{"nkjv", "Mark", 10, 49},
+		{"nkjv", "Revelation", 21, 5},
+		{"nkjv", "Revelation", 21, 6},
+		{"nkjv", "Revelation", 21, 7},
+		{"nkjv", "Revelation", 21, 8},
+		{"nkjv", "Revelation", 22, 14},
+		{"nkjv", "Revelation", 22, 15},
+		{"bsb", "John", 8, 33},
+		{"bsb", "Luke", 20, 23},
+		{"lsb", "John", 11, 25},
+		{"nrsv", "John", 11, 25},
+	} {
+		if !isWordsOfChrist(tc.book, tc.chapter, tc.verse) {
+			t.Fatalf("fixture: %s %s %d:%d is not marked by WEB", tc.version, tc.book, tc.chapter, tc.verse)
+		}
+		runs := redLetterRuns(tc.version, Verse{
+			BookName: tc.book, Chapter: tc.chapter, Verse: tc.verse, Text: "publisher black",
+		}, true)
+		for _, run := range runs {
+			if run.Red {
+				t.Errorf("%s %s %d:%d borrowed WEB red-letter status", tc.version, tc.book, tc.chapter, tc.verse)
+			}
+		}
+	}
+}
+
+func TestStaleOffsetsFallBackWithinTheSelectedEdition(t *testing.T) {
+	// This NKJV-only marked verse is intentionally supplied with wrong text so
+	// its content guard rejects the offsets. It must remain red from NKJV's own
+	// marked-verse set, while WEB must leave the same reference black.
+	v := Verse{BookName: "Luke", Chapter: 17, Verse: 36, Text: "stale text"}
+	if runs := redLetterRuns("nkjv", v, true); len(runs) != 1 || !runs[0].Red {
+		t.Fatalf("NKJV stale-offset fallback = %+v, want one red run", runs)
+	}
+	if runs := redLetterRuns("web", v, true); len(runs) != 1 || runs[0].Red {
+		t.Fatalf("WEB result = %+v, want one black run", runs)
 	}
 }
 
@@ -287,7 +465,8 @@ func TestAnEditionsOwnTableOverridesTheWEBGate(t *testing.T) {
 		if !ok || len(spans) == 0 {
 			t.Fatalf("fixture: %s has no NKJV span data", key)
 		}
-		// A verse of exactly the recorded length so the rune guard passes.
+		// Deliberately stale text makes the exact-content guard reject the spans.
+		// The NKJV's own marked-verse fallback must still override the old WEB gate.
 		v := Verse{BookName: tc.book, Chapter: tc.ch, Verse: tc.v,
 			Text: strings.Repeat("x", nkjvRedLetterRunes[key])}
 		runs := redLetterRuns("nkjv", v, true)

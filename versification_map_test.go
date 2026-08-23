@@ -105,10 +105,11 @@ func TestMapVerseRoundTrips(t *testing.T) {
 	}
 }
 
-// The words-of-Christ table is generated from the WEB, so every verse it marks
-// has to be checkable against another translation before it is used there. This
-// is the concrete consumer the mapping exists for.
-func TestWordsOfChristRangesMapIntoEveryTranslation(t *testing.T) {
+// The retained WEB verse-level API may still supply references to callers that
+// subsequently map them. It must not name a book whose target versification is
+// incommensurable. Rendering itself does not transfer these marks: each edition
+// now uses only its own publisher table.
+func TestWEBWordsOfChristReferencesAvoidIncommensurableBooks(t *testing.T) {
 	unmappable := map[string][]string{}
 	for book, ranges := range wordsOfChristRanges {
 		for _, r := range ranges {
