@@ -19,6 +19,17 @@ package bibletext
 // To build with it:  go build -tags nrsv ./...   (and --tags nrsv for fyne package)
 //
 // The LSB followed the same day, behind its own `lsb` tag (versions_lsb.go).
+//
+// IF IT IS EVER RESTORED, a one-line description for the picker was drafted and
+// not used (see the note above versionRow in versions_ui.go for why none of the
+// rows carry one yet):
+//
+//	A careful, ecumenical revision widely used in universities and mainline
+//	churches, updating the 1989 NRSV with newer manuscript scholarship.
+//
+// A variant naming its most-discussed feature outright, if that is wanted:
+// "… with gender-inclusive wording where the translators judge the original
+// means both."
 func init() {
 	registeredVersions = append(registeredVersions, BibleVersion{
 		ID: "nrsv", Name: "New Revised Standard Version", Abbrev: "NRSV",

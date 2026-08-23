@@ -21,6 +21,17 @@ package bibletext
 // one up in the shipping catalogue — which is the better test anyway, since it
 // stops "does the app offer this translation" and "does an unconfigured
 // licensed source behave" from being the same question.
+//
+// IF IT IS EVER RESTORED, a one-line description for the picker was drafted and
+// not used (see the note above versionRow in versions_ui.go):
+//
+//	A strictly literal revision in the NASB line, distinctive for rendering
+//	the divine name as "Yahweh" rather than "the LORD".
+//
+// That marker is worth keeping in the sentence: no translation this app ships
+// renders the divine name that way — the WEB here reads "The LORD is my
+// shepherd" — so it is the difference a reader sees within seconds of
+// switching, not a fact about lineage they have to take on trust.
 func init() {
 	registeredVersions = append(registeredVersions, BibleVersion{
 		ID: "lsb", Name: "Legacy Standard Bible", Abbrev: "LSB",

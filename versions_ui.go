@@ -246,6 +246,39 @@ func joinNatural(names []string) string {
 // progress" note — it is never wrapped in a tapBox, so users cannot reach its
 // placeholder text. (When BIBLETEXT_ENABLE_TESTING=1, such a version becomes
 // selectable and instead carries the internal TESTING placeholder tag.)
+// A ROW SAYS WHO OWNS A TRANSLATION, NEVER WHAT IT READS LIKE — considered and
+// not done, 22 Aug 2026, recorded here because the next person to look will have
+// the same idea.
+//
+// Name, publisher, status tag. Nothing tells a reader choosing between four
+// translations how they differ, which is the one thing they actually want. The
+
+// the two evaluation translations, then declined them once those were removed —
+// so the idea is unspent rather than rejected.
+//
+// TWO THINGS TO KNOW BEFORE ADDING THEM.
+//
+// Write all of them or none. Descriptions on only some rows make those rows the
+// conspicuous ones, which is the opposite of what a picker wants. Drafts that
+// were measured and read well:
+//
+//	WEB   A public-domain modern revision of the 1901 American Standard
+//	      Version, free for anyone to copy, quote or publish.
+//	BSB   A readable modern translation released into the public domain,
+//	      balancing word-for-word accuracy with natural English.
+//	WEBC  The World English Bible with the seven deuterocanonical books,
+//	      following the Catholic canon.
+//	NKJV  A modern update of the King James Version that keeps its cadence
+//	      while replacing archaic wording.
+//
+// (The two gated translations carry their own drafts — versions_nrsv.go,
+// versions_lsb.go — so a restore brings its sentence with it.)
+//
+// And watch the row height. A row already runs to three lines, and the NKJV's
+// licence notice is a wrapped paragraph; a fourth line on every row makes the
+// picker noticeably taller on the phone, where it is tightest. Worth rendering
+// at 320pt before committing to it.
+
 func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject {
 	pal := state.pal()
 	selectable := v.canSelect()
