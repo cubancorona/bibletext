@@ -27,7 +27,7 @@ import (
 // key's book and chapter from state.CurrentBook / state.CurrentChapter —
 // where the READER was standing — while the note was stored under the chapter
 // it came from. That was X1's mechanism surviving in a dimension the X1 fix
-// (31bc97630, which made NoteVersionID carry the VERSION third of the key)
+// (69d3f4ab3, which made NoteVersionID carry the VERSION third of the key)
 // did not touch: the other two thirds were still reconstructed. It was the
 // argument for an identity carried whole rather than for a third patch — and
 // the scrapbook store (S5) is that identity: every verb takes StoredNote.ID,

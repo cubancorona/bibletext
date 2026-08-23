@@ -132,7 +132,7 @@ type pinnedDefect struct {
 // drops only a mark hlNote placed. It covered 28 cells here and 3 in the origin
 // space — the largest single defect in the subsystem after X7.
 //
-// X1 and X2 were struck on 2026-08-15, fixed by 31bc97630 ("Write the live
+// X1 and X2 were struck on 2026-08-15, fixed by 69d3f4ab3 ("Write the live
 // note's four fields as one value"): both verbs now address the note
 // NoteVersionID names because every arrival path writes that field. The
 // enumeration proved them dead — each covered zero violations — and this list
