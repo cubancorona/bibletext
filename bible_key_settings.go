@@ -28,6 +28,35 @@ const bibleKeyProbeBudget = 12 * time.Second
 // on the group card, and the footnote that sits below it. onKeyPresence is
 // called whenever the stored key appears or disappears (or the area grows),
 // so the sheet can re-measure itself.
+// bibleKeyPlaceholder is what the EMPTY field should say, for the state it is
+// empty in.
+//
+// The bundled key's characters are withheld (see the note in bibleKeySection),
+// so with it in force the box is empty — and an empty box reading "Paste your
+
+// "a little confusing to have the text box have nothing in it and say paste
+// your key when a key is included"). It now describes the state instead, and
+// the Paste button beside it plus the status line under it carry "how do I
+// change this".
+//
+// WHY NOT SAY BOTH: measured at the app's 18pt body size, "Included with
+// BibleText" is 184pt and fits the ~199pt a 320pt phone gives the box, while
+// anything that also names the action runs past it — "Included — paste to
+// replace" is 223pt, and the fuller sentence tried once before was 428pt. One
+// idea is what fits.
+//
+// PURE, and taking the state rather than reading it, so the three call sites —
+// construction, Clear, and emptying the field by hand — cannot drift. That last
+// one is why this is a function at all: OnChanged clears the bundled key for
+// good, so a placeholder set only at construction would go on claiming the key
+// was included after the reader deleted it.
+func bibleKeyPlaceholder(usingBundled bool) string {
+	if usingBundled {
+		return "Included with BibleText"
+	}
+	return "Paste your API.Bible key"
+}
+
 func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, footer fyne.CanvasObject) {
 	store := state.keys()
 
@@ -55,10 +84,8 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	// and flatters every string by 29%.
 	entry := widget.NewPasswordEntry()
 	usingBundled := store.usingBundledBibleKey()
-	if usingBundled {
-		entry.SetPlaceHolder("Paste your own key")
-	} else {
-		entry.SetPlaceHolder("Paste your API.Bible key")
+	entry.SetPlaceHolder(bibleKeyPlaceholder(usingBundled))
+	if !usingBundled {
 		entry.SetText(store.bibleAPIKey())
 	}
 
@@ -193,7 +220,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		entry.SetText("")
 		saveOK = store.setBibleAPIKey("")
 		store.noteBibleKeyCleared(true)
-		entry.SetPlaceHolder("Paste your API.Bible key")
+		entry.SetPlaceHolder(bibleKeyPlaceholder(store.usingBundledBibleKey()))
 		entry.Refresh()
 		refreshStatus()
 		if hadKey {
@@ -210,6 +237,10 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		// it so the bundled key is not quietly re-seeded next launch. Typing
 		// a key again cancels that.
 		store.noteBibleKeyCleared(s == "")
+		// Emptying the field by hand clears the bundled key for good, so the
+		// placeholder must stop advertising it — the Clear button is not the
+		// only way to reach that state.
+		entry.SetPlaceHolder(bibleKeyPlaceholder(store.usingBundledBibleKey()))
 		refreshStatus()
 		if has := store.bibleAPIKey() != ""; has != hadKey {
 			hadKey = has
