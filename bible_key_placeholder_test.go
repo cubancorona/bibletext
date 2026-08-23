@@ -19,7 +19,7 @@ import (
 )
 
 func TestBibleKeyPlaceholderFollowsTheState(t *testing.T) {
-	if got, want := bibleKeyPlaceholder(true), "Included with BibleText"; got != want {
+	if got, want := bibleKeyPlaceholder(true), "[Included with BibleText]"; got != want {
 		t.Errorf("with the bundled key in force the box says %q, want %q — an empty "+
 			"box must not claim there is no key when one is working", got, want)
 	}
@@ -36,6 +36,10 @@ func TestBibleKeyPlaceholderFitsTheNarrowestField(t *testing.T) {
 	// The budget recorded in bibleKeySection: a 320pt phone leaves the box about
 	// 199pt of usable width, and the app draws body text at 18 — theme.TextSize()
 	// is the stock 14 and flatters every string by 29%.
+	//
+	// Kept as the guard even though rendering the field at 320pt showed real
+	// headroom beyond it: a conservative limit that passes is worth more than an
+	// exact one that has to be re-derived every time the sheet's padding moves.
 	const narrowest = float32(199)
 	for _, usingBundled := range []bool{true, false} {
 		s := bibleKeyPlaceholder(usingBundled)

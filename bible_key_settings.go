@@ -39,8 +39,11 @@ const bibleKeyProbeBudget = 12 * time.Second
 // the Paste button beside it plus the status line under it carry "how do I
 // change this".
 //
-// WHY NOT SAY BOTH: measured at the app's 18pt body size, "Included with
-// BibleText" is 184pt and fits the ~199pt a 320pt phone gives the box, while
+// WHY NOT SAY BOTH: measured at the app's 18pt body size, "[Included with
+// BibleText]" is 195pt and fits the ~199pt a 320pt phone gives the box — and
+// was rendered at 320pt to confirm it clears the reveal icon, since that budget
+// is a conservative estimate rather than a measured limit. Anything that also
+// names the action runs past it —
 // anything that also names the action runs past it — "Included — paste to
 // replace" is 223pt, and the fuller sentence tried once before was 428pt. One
 // idea is what fits.
@@ -52,7 +55,14 @@ const bibleKeyProbeBudget = 12 * time.Second
 // was included after the reader deleted it.
 func bibleKeyPlaceholder(usingBundled bool) string {
 	if usingBundled {
-		return "Included with BibleText"
+		// BRACKETED because it is a DESCRIPTION, not a value and not an
+		// instruction. This is a password field: text sitting where masked
+		// characters would be can read as content, and the brackets say at a
+		// glance that it is neither something typed nor something to type
+		 The other branch stays unbracketed — an
+		// imperative already reads as a hint, and bracketing an instruction
+		// would only muddle the distinction this draws.
+		return "[Included with BibleText]"
 	}
 	return "Paste your API.Bible key"
 }
