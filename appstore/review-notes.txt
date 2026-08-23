@@ -10,7 +10,8 @@ An interface release. The iPad now uses the same navigation as the iPhone, and s
 • A note the implementation requirement themselves now has one dismiss control instead of two that did the same thing.
 • Windows and Linux: the reading area is no longer drawn inside a bordered box, matching the other platforms.
 • Lists are held to a readable width on large screens rather than stretching the full window.
-• The New Revised Standard Version has been removed from the translation list. It was never selectable — it appeared as "evaluation in progress" pending a licence — and is no longer offered at all. No copyrighted text was ever shipped for it.
+• The New Revised Standard Version and the Legacy Standard Bible have been removed from the translation list. Neither was ever selectable — both appeared as "evaluation in progress" pending a licence — and neither is offered at all now. No copyrighted text was ever shipped for either.
+• The New King James Version is listed first whether or not a key is present, with a line stating how to unlock it.
 
 HOW TO EXERCISE THE NEW NAVIGATION
 On iPad, open the app and use Read / Books / Search. Rotate the device: in landscape the three move to the left edge, in portrait they return to the bottom. Tap Books to see the grouped grid; tap any book to open it.

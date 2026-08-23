@@ -40,6 +40,31 @@ jobs:
       - name: go test
         run: go test -race ./...
 
+      # THE BUILD-TAGGED CODE, WHICH NOTHING ELSE HERE COMPILES.
+      #
+      # Three bodies of code live behind tags and were invisible to CI: the two
+      # evaluation translations (versions_nrsv.go / versions_lsb.go, gated when
+      # they were taken out of the shipped app) and the dev Links tab
+      # (dev_links_on.go), which carries the shared-link scenarios and the
+      # version-cache panel. All of it could stop compiling — or its tests stop
+      # passing — with every job here still green.
+      #
+      # vet plus a plain test rather than -race for each: the tags change which
+      # FILES compile, not concurrency, so the race detector adds minutes
+      # without adding an answer. -race on the default build above still covers
+      # the shared code these tags extend.
+      - name: go vet (build tags)
+        run: |
+          go vet -tags nrsv ./...
+          go vet -tags lsb ./...
+          go vet -tags nrsv,lsb ./...
+          go vet -tags bibletextdev ./...
+
+      - name: go test (build tags)
+        run: |
+          go test -tags nrsv,lsb ./...
+          go test -tags bibletextdev ./...
+
   # The Linux job never compiles the darwin-tagged cgo (the native NSTextView
   # reading overlay + the macOS audio engine) or the ios-tagged files — i.e. the
   # app's primary platforms. This job builds and tests them on an Apple Silicon

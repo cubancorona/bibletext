@@ -221,8 +221,8 @@ licensed translation (**NKJV**) is available through API.Bible:
 The **NKJV is now available**: it is served by API.Bible rather than redistributed, and
 is selectable whenever an API.Bible key is present — the one this build compiles in, or
 the reader's own (Settings → Translations). The full retrieval, cache, switching,
-search and AI-study path is wired for licensed translations generally, so one
-becomes a normal, selectable translation the moment a license
+search and AI-study path is wired for licensed translations generally, so a newly
+licensed translation becomes a normal, selectable one the moment its license
 is configured (see [Activating a licensed version](#activating-a-licensed-version)) —
 no UI or code change needed.
 
@@ -236,8 +236,9 @@ copyrighted text. A default build registers no such version.
 
 Two routes: go through an **API provider** that already carries the translation
 (simplest — it matches the `licensedAPISource` code path), or license **directly**
-from the rights holder and load the text they supply. Two real-world wrinkles to
-know before you start:
+from the rights holder and load the text they supply. A direct licence usually
+arrives as a data file or feed rather than an API `bibleId`, which plugs in as a
+file-based source instead of the `licensedAPISource` path below.
 
 **API.Bible (`scripture.api.bible`)** — the provider the code scaffolds against,
 run by the American Bible Society; carries many popular translations. **Confirm a
