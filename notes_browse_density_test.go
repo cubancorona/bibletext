@@ -1,8 +1,8 @@
 package bibletext
 
-
-// too much space" — reported on the phone AND on mimic/desktop; one shared
-// noteBrowseRow serves both, so one budget holds both). The budget is derived
+// The browser's DENSITY: the browser took up far too much space, on the phone
+// AND on mimic/desktop alike — one shared noteBrowseRow serves both, so one
+// budget holds both. The budget is derived
 // from the sizes the row is actually built from (the browse* constants and
 // browseRowTheme, notes_browse.go) — never from magic pixels: shrink a size
 // there and the budget follows; grow the row's STRUCTURE (a new full-height
@@ -87,7 +87,7 @@ func TestBrowserRowFitsTheDensityBudget(t *testing.T) {
 	}
 }
 
-
+// The density target, measured honestly: at least TWICE the rows per screen.
 // The pre-density row measured ~130pt at the default text size — roughly five
 // rows on a 700pt phone viewport. The budgeted row must fit at least ten.
 func TestBrowserShowsTwiceTheRowsPerScreen(t *testing.T) {
@@ -103,7 +103,7 @@ func TestBrowserShowsTwiceTheRowsPerScreen(t *testing.T) {
 	h := measuredBrowseRow(t, st, typical)
 	if rows := int(phoneViewport / h); rows < 10 {
 		t.Errorf("a typical row measures %vpt — %d rows per %dpt screen, want at least 10 "+
-
+			"(twice the ~5 the pre-density row allowed)", h, rows, phoneViewport)
 	}
 }
 

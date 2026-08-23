@@ -91,7 +91,7 @@ var nativeNoteSources = []nativeNoteSource{
 // *.java in the tree arrives with \r\n — .gitattributes exempts testdata/ and
 // patches/, not source. A required fragment that spans a line break (there is
 // one: "+ kNoteGapAbove;\n") then never matches, and this suite goes red on
-// windows ALONE, invisibly to every local run on this Mac. That is the third
+// windows ALONE, invisibly to every local run on macOS. That is the third
 // time this repo has met this failure — a14b3fc0e fixed it once for the byte
 // precise fixtures — so it is fixed here at the read, where it cannot recur for
 // the next fragment somebody adds: line-ending STYLE is a property of the
@@ -238,7 +238,7 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				// The USE SITE, not only the constants: with the literals left
 				// correct, "kNotePad + 20 + 8 + …" is a 10pt-taller card that is
 				// silently off-spec, and the parser could not see it (verification
-
+				// finding 4 — card height is the very quantity that must match).
 				"return kNotePad + kNoteWho + kNoteWhoGap + ceil(r.size.height) + kNotePad;": "the " +
 					"card's height must BE the spec's formula — pad, who row, who gap, message, pad " +
 					"— not merely use the spec's constants somewhere",

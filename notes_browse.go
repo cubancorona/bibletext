@@ -28,10 +28,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-
-// far too much space", reported on BOTH form factors — one shared row serves
-// them, so one set of sizes fixes both). The named sizes below are what the
-// density seen-test derives its budget from (notes_browse_density_test.go):
+// --- the row's density budget. The notes browser's rows took far too much
+// space, on BOTH form factors — one shared row serves them, so one set of
+// sizes fixes both. The named sizes below are what the density seen-test
+// derives its budget from (notes_browse_density_test.go):
 // change a size here and the budget moves with it; grow the row's STRUCTURE
 // and the test is what says so.
 const (
@@ -48,7 +48,7 @@ const (
 	// navigates to the passage where a received note shows in full, so the cap
 	// costs nothing there — and it is what holds a long message to a few lines
 	// instead of a screenful. (For a Kind=mine note the tap lights the passage
-
+	// but the text lives only here; the cap still applies — this surface is a
 	// dense LIST, and a scrapbook row is a scrapbook row.)
 	browsePreviewMaxRunes = 220
 	browsePreviewMaxLines = 4
@@ -58,7 +58,7 @@ const (
 // BOTH form factors: smaller body text, tighter Label inner padding, tighter
 // wrapped-line spacing. Desktop had NO row override at all — the content
 // rendered at the app's full chrome sizes (18pt body, 8pt inner padding) —
-
+// which is precisely the fonts and spacing that needed resizing on
 // mimic/desktop.
 type browseRowTheme struct{ fyne.Theme }
 
@@ -71,9 +71,10 @@ func (t browseRowTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNameLineSpacing:
 		return 4
 	case theme.SizeNameInlineIcon:
-
-		// twice: "not too large. Subtle", then "a bit smaller still"). The row
-		// is dense chrome — an 11pt reference and a smaller byline — and the
+		// The row's bin, smaller than the app's default inline icon: at the
+		// default size it read as loud, and it took two passes of shrinking
+		// before it sat quietly. The row is dense chrome — an 11pt reference
+		// and a smaller byline — and the
 		// delete is furniture beside the words, not a feature of them. The
 		// BUTTON keeps its own tap area; only the drawing shrinks.
 		return browseTrashIconSize
@@ -400,9 +401,9 @@ func notesHeaderLine(shown, total int, query string) string {
 // in a list of notes; landing on a chapter showing only a collapsed marker would
 // be answering a different question from the one they asked.
 //
-
-// NAVIGATION, not a search hit, so CanReturnToSearchResults stays false and no
-// "back to results" bar appears over the passage. The way back to the list is
+// IT RAISES NO RESULTS TRAIL: a browser row is a NAVIGATION, not a search hit,
+// so CanReturnToSearchResults stays false and no "back to results" bar appears
+// over the passage. The way back to the list is
 // the Search tab's Notes mode (the tab bar on the phones, the sidebar's notes
 // bubble on desktop), which still holds the list — and its scroll position.
 func openNote(state *AppState, n StoredNote) {
@@ -446,7 +447,7 @@ func openNote(state *AppState, n StoredNote) {
 		// ShareTarget, and the generic consume (applyShareTarget) would treat
 		// the eventual arrival as a LINK arrival: its hlLinkSpan is foreign to
 		// the note, so the note the reader tapped arrived suppressed to the
-
+		// pill — mechanism 2 of the reported still-minimized pill.
 		// consumePendingLink sees this id and re-runs THIS verb instead, now
 		// that the translation is in memory (see AppState.pendingNoteOpenID).
 		state.pendingNoteOpenID = n.ID
@@ -664,8 +665,8 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	// only other exit is the sidebar's Search/Find/Notes control — which the
 	// reader never touched if they arrived from Settings → the note count, so it
 	// still reads "Search" and does not look like the thing holding them here.
-
-	// pane". A view that takes over the pane owns its own exit.
+	// The notes view offered no way back to the reading pane. A view that
+	// takes over the pane owns its own exit.
 	//
 	// Desktop only: the phones leave through the tab bar, which is always
 	// visible and already says where you are.
@@ -807,8 +808,8 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = browseRefTextSize
 
-	// The translation in parentheses after the reference, quiet and small
-
+	// The translation in parentheses after the reference, quiet and small.
+	// It belongs here rather than under the bubble because it is
 	// another fact about WHICH PASSAGE this is, and it reads as one heading
 	// with the reference instead of as a second line making a second claim.
 	// Abbreviated — "John 3:16 (WEB)" — because the full name at this size
@@ -823,7 +824,7 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	// The byline and the date fold into ONE muted fact on the heading's far
 	// edge — "From you · Today" — instead of the byline holding a full-height
 	// Label row of its own under the bubble (the single biggest line item in
-
+	// the space the row was wasting). The attribution still
 	// accompanies every bubble, as it must; it is chrome, so it rides with the
 	// row's other chrome. Centred vertically so the smaller text sits on the
 	// reference's optical middle.
@@ -835,15 +836,15 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	stamp.TextSize = browseMetaTextSize
 	head := container.NewBorder(nil, nil, head0, container.NewCenter(stamp))
 
-
-	// bubbles match reading bubbles — identity is the tailed shape, which the
-	// row-scoped theme shrinks without changing). The body is a wrap-limited
+	// The note's words, in the SAME bubble the reading page draws: list bubbles
+	// must match reading bubbles — identity is the tailed shape, which the
+	// row-scoped theme shrinks without changing. The body is a wrap-limited
 	// PREVIEW (notePreview); the tap-through shows the whole message on the
 	// passage. A collapsed note still shows its text here; the browser is
 	// where you read them, the chapter is where you chose how much to see.
 	body := noteBubblePadded(notePreview(n.Text), pal, browseBubblePad)
 
-
+	// DELETE, BESIDE THE BUBBLE AND COSTING NO HEIGHT. A bin, the same
 	// mark the reading page uses where a press destroys — so the two places a
 	// note can be deleted say it the same way, and neither depends on the
 	// reader remembering which control means what.
@@ -925,7 +926,7 @@ func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject 
 		base = state.theme
 	}
 	sized := container.NewThemeOverride(btn, browseRowTheme{Theme: base})
-
+	// CENTRED ON THE BUBBLE'S BODY, NOT ON THE WHOLE SHAPE. The bubble
 	// is body + tail, and centring on the pair pushed the bin down by half the
 	// tail's depth — it sat visibly low against the words it belongs to. The
 	// bottom padding takes the tail's depth back out, so the mark lines up with
@@ -945,9 +946,8 @@ func newNoteBrowseCard(state *AppState, n StoredNote, content fyne.CanvasObject,
 
 // setNotesMode is the ONE place the Notes flag moves, so leaving the mode
 // always HARVESTS the list's scroll position first. The browser remembers
-
-// browser should remember its scroll position" — reversing the earlier
-// start-at-the-top rule): leave by ANY route — a row tap (openNote harvests on
+// where the reader was for the whole session, reversing the earlier
+// start-at-the-top rule: leave by ANY route — a row tap (openNote harvests on
 // its own, before this), the Done button, the sidebar/mobile mode toggles, a
 // tab switch — and coming back lands in the same neighbourhood, because every
 // build of the list restores notesScroll (buildNotesBrowseView). Three

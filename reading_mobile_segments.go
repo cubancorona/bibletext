@@ -96,11 +96,11 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 //
 // Red beats the highlight. A highlighted verse used to be recoloured WHOLE to
 // colorNameHighlightHi, which swallowed the words of Christ inside it — the same
-
+// bug the native panes had until it was caught on John 11:25, where the
 // rule became: the band marks the highlight, the text keeps its own colour
 // (reading_styled_pane.go, runColor).
 //
-// This pane has no band to fall back on, and I first wrote it as if it had: a
+// This pane has no band to fall back on, and was first written as if it had: a
 // RichText segment cannot paint a background, and a paragraph here is ONE
 // wrapped RichText with no per-verse geometry to lay a rect over — obtaining
 // that geometry is the entire reason the styled desktop pane exists. So dropping

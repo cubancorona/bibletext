@@ -206,8 +206,8 @@ func TestWireVersionIsAuthoritativeForStorage(t *testing.T) {
 // Tapping a note's own link is the Show verb: a stored minimize does not make
 // the tap look broken.
 //
-
-// the note when clicking" — the note had been minimized in earlier testing,
+// Observed on device: the top dev-links case did not expand the note when
+// clicking. The note had been minimized in earlier testing,
 // the dedup preserved the flag, and the re-arrival honoured it (the S7
 // decision). That reading of N5 was wrong: the rule is that nothing
 // AUTO-expands, and a deliberate tap on the link that IS this note is the

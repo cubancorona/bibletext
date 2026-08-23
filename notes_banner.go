@@ -3,7 +3,7 @@ package bibletext
 // The note banner: how the chapter's notes are VISIBLE on the platforms whose
 // reading pane cannot float the iOS sticker (the Windows/Linux styled pane,
 // Android's overlay). One untagged Fyne widget above the reading pane serves
-
+// them all — the project's parity rule made concrete: the feature lands
 // everywhere at once, and the per-platform in-text sticker stays a possible
 // refinement, not a prerequisite.
 //

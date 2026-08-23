@@ -3,9 +3,9 @@ package bibletext
 // THE BOOKS GRID'S GROUPING, and why the split is found rather than counted.
 //
 // The books tab was 66 rows of 44pt — about 2,900pt of scrolling to reach
-// Revelation, each row spending the pane's whole width on one short word
-
-// with testament headings, which puts the whole canon on one screen.
+// Revelation, each row spending the pane's whole width on one short word,
+// which made the list awkward to move around in. It is now a grid with
+// testament headings, which puts the whole canon on one screen.
 //
 // The heading placement is the part that can silently go wrong, so it is the
 // part that is tested: a hardcoded "39" would put the New Testament label in

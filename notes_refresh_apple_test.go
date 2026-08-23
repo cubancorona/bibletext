@@ -4,9 +4,9 @@ package bibletext
 
 // THE NOTE-SELECTION REPAINT, on the panes where it was visibly wrong.
 //
-
-// multiple notes to cycle to the next note there is a delay and a flash of what
-// looks like a missized and misplaced reading pane before it stabilizes."
+// THE DEFECT: clicking a note group with several notes, to cycle to the next
+// note, produced a delay and then a flash of a missized, misplaced reading
+// pane before the pane settled.
 //
 // The cause was not the note and not the wash — both were already cheap. It was
 // that every note verb ended in a WHOLE-TREE rebuild of the reading column, and
@@ -58,7 +58,7 @@ func TestNoteRefreshStaysInPlaceWhenThePaneAlreadyHoldsTheChapter(t *testing.T) 
 	if !refreshNoteInPlace(st) {
 		t.Fatal("the in-place note refresh refused a pane that holds this very chapter.\n" +
 			"That returns every note verb to the whole-tree rebuild, and with it the\n" +
-
+			"~60ms misplaced-pane flash this path exists to avoid.")
 	}
 }
 

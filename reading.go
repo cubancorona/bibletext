@@ -777,9 +777,9 @@ func htmlEscape(s string) string {
 
 // trailChipTheme sizes the back-to-results trail as one quiet line of chrome:
 // small text, tight padding, a small glyph. The trail is a breadcrumb, not
-// content — the full-width surfaced card it replaces read as a second header
-
-// non-intrusive, clear, and elegant").
+// content — the full-width surfaced card it replaces took up too much space
+// and read as a second header; the trail has to be non-intrusive, clear and
+// elegant instead.
 type trailChipTheme struct{ fyne.Theme }
 
 func (t trailChipTheme) Size(name fyne.ThemeSizeName) float32 {
@@ -1699,8 +1699,8 @@ type denseGridWrapLayout struct {
 	// definition — it is only ever centred by accident, when the pane happens to
 	// divide exactly. Left-packing puts that whole remainder on the right, and on
 	// an iPhone the books grid fits two 168pt cells in ~385pt, so 46pt of it
-
-	// 2026: "the book list columns are not centered on the screen").
+	// stacked on one side and the canon sat visibly off-centre: the book list's
+	// columns did not read as centred on the screen.
 	//
 	// Opt-in rather than always-on: the chapter picker uses this same layout
 	// inside a popup sized around it, where the remainder is small and the grid

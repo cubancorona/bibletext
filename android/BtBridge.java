@@ -1552,7 +1552,7 @@ public final class BtBridge {
         if (!(cs instanceof Spannable)) return;
         Spannable sp = (Spannable) cs;
         if (off < 0 || off + 1 > sp.length()) return;
-
+        // THE PARAGRAPH RULE. The note must not break
         // up paragraphs… No breaking up the Word of God"). The band opens
         // above the whole paragraph carrying the verse, never between two of
         // its lines — the rule iOS has always followed and the styled pane now
@@ -1690,7 +1690,7 @@ public final class BtBridge {
      *  shown until a real frame arrives, so a View.post drains at
      *  dispatchAttachedToWindow, AHEAD of layout. The reader then sits at the
      *  top of the right chapter with the note far below, which is what the
-
+     *  as reported.
      *
      *  Thirty lines away refreshNoteSticker already solved this class by asking
      *  again after the layout pass (noteRetryPending) — which is why the

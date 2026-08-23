@@ -5,10 +5,10 @@ package bibletext
 // A shared link names its translation in the path (/nkjv/john/3/), and the app
 // switches to it — unless it is one this reader has not unlocked. Before this,
 // the app just carried on in whatever translation they were already reading:
-
-// don't have licensing they should get a message" — and the reason it matters
-// is not politeness. Verse numbering is not interchangeable (Romans 14/16
-// genuinely renumber between translations; see docs/TEXTUAL-DATA.md), so a
+// no switch, no message, no trace. The rule is plain: a reader whose copy is
+// not licensed for the link's translation gets a message — and the reason it
+// matters is not politeness. Verse numbering is not interchangeable (Romans
+// 14/16 genuinely renumber between translations; see docs/TEXTUAL-DATA.md), so a
 // reader silently landed in the wrong translation can be reading DIFFERENT text
 // from the one the sender pointed at, with nothing on screen to suggest it.
 //

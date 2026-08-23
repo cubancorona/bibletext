@@ -58,7 +58,7 @@ func devAutoOpenSheet(state *AppState) {
 
 // devAutoSwitchVersion switches translation shortly after launch, so the LIVE
 // switch path can be exercised in a simulator — which cannot tap the version
-
+// picker. TEMPORARY investigation aid for the on-device defect where
 // switching translation keeps a note's highlight and loses the note itself.
 //
 //	SIMCTL_CHILD_BIBLETEXT_DEV_SWITCH=web xcrun simctl launch <udid> uk.co.bibletext
@@ -202,9 +202,9 @@ func devAutoNotesS8(state *AppState) {
 	at := func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
 	switch scenario {
 	case "s10ctx", "s10ctxpill":
-
-		// above it and the paragraph below, expanded and collapsed, on every
-		// platform. John 11:6 opens the SECOND paragraph, so the arrival scroll
+		// THE CONTEXT SHOT: one note framed with the paragraph above it and
+		// the paragraph below, expanded and collapsed, on every platform.
+		// John 11:6 opens the SECOND paragraph, so the arrival scroll
 		// clamps near the top of the chapter and the first paragraph stays on
 		// screen above the card — the only way to get that framing on a
 		// simulator, which has no scroll command at all.
@@ -226,20 +226,20 @@ func devAutoNotesS8(state *AppState) {
 		}
 		// …then SCROLL BACK to the paragraph above. The arrival pins the band
 		// to the top of the pane, which is right for an arrival and wrong for
-
-		// the note, and the paragraph below in one frame. armReadingRestore is
-		// the panes' own one-shot scroll target (the same machinery that
-		// reopens a chapter where the reader left off), so this asks for the
-		// verse two above the note's own and lets the pane place it.
+		// this picture, which needs the paragraph above the note, the note and
+		// the paragraph below in one frame. armReadingRestore is the panes'
+		// own one-shot scroll target (the same machinery that reopens a
+		// chapter where the reader left off), so this asks for the verse two
+		// above the note's own and lets the pane place it.
 		at(15*time.Second, func() { armReadingRestore(4, 0, 0) })
 	case "linkscroll":
-
-		// is CurrentTab + rebuildWindow — no widget to tap): front the Links
-		// tab, open a case on ANOTHER chapter, return to Links, open the
-		// noteless John 3 v16 case (the "Unknown fragment keys" URL), then
-		// repeat it for the same-chapter arrival. The report this reproduces:
-		// the wash lights v16 but the view does not move to it. Run with
-		// BT_SCROLL_DEBUG=1 and screenshot at 8s, 13s and 19s.
+		// The reported Links-tab flow, reproduced verbatim in state (the
+		// compact tab bar is CurrentTab + rebuildWindow — no widget to tap):
+		// front the Links tab, open a case on ANOTHER chapter, return to
+		// Links, open the noteless John 3 v16 case (the "Unknown fragment
+		// keys" URL), then repeat it for the same-chapter arrival. The defect
+		// this reproduces: the wash lights v16 but the view does not move to
+		// it. Run with BT_SCROLL_DEBUG=1 and screenshot at 8s, 13s and 19s.
 		linksTab := func() { state.CurrentTab = 3; rebuildWindow(state) }
 		tapCase := func(url string) {
 			// The row button's body (dev_links_on.go inApp), verbatim.
@@ -258,7 +258,7 @@ func devAutoNotesS8(state *AppState) {
 	case "s10ranges":
 		// Three notes with DIFFERENT verse ranges inside ONE paragraph — the
 		// WEB files John 3:14-17 as a single paragraph, and two of the ranges
-
+		// overlap at verse 16. The proof this scenario captures: the wash
 		// always bands the OPEN note's own range and nothing else (one lit
 		// span), and the next-taps walk the set with the band moving WITHIN
 		// the paragraph.
@@ -338,7 +338,7 @@ func devAutoNotesS8(state *AppState) {
 }
 
 // devNoteDebug reports the live note state for on-screen diagnosis. TEMPORARY:
-
+// added while chasing the defect where switching translation to the WEB
 // (but not to the BSB) loses a note while keeping its highlight. It shows what
 // the app BELIEVES, so a screenshot separates "the state is wrong" from "the
 // state is right and the pane did not redraw".

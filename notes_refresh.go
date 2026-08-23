@@ -5,9 +5,9 @@ package bibletext
 // change earns. It is the narrow end of the verb→screen rule: the smallest
 // repaint that can carry the verb, and nothing wider.
 //
-
-// multiple notes to cycle to the next note there is a delay and a flash of what
-// looks like a missized and misplaced reading pane before it stabilizes."
+// THE DEFECT. On desktop, cycling to the next note in a multi-note group
+// showed a delay and a flash of a missized, misplaced reading pane before it
+// stabilized.
 //
 // WHY IT HAPPENED. All four verbs ended in state.refreshReadingOnly(), which is
 // showReading() — `readingHost.Objects = []fyne.CanvasObject{buildReadingPane(state)}`

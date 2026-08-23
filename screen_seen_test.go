@@ -306,10 +306,9 @@ func TestNoteBannerShowsTheWholeSet(t *testing.T) {
 
 // M3 — every view that takes over the screen must show a way out of it.
 //
-
-// "in mac there's no way to go from the notes view back to the reading pane".
-// The control existed in the code by then; what mattered was whether a reader
-// could SEE it.
+// The macOS notes browser shipped without one: on that platform there was no
+// visible route from the notes view back to the reading pane. The control
+// existed in the code by then; what mattered was whether a reader could SEE it.
 func TestNotesBrowserShowsAWayOut(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

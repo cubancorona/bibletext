@@ -99,8 +99,8 @@ func TestBackToResultsDismissRestoresTheNoteWash(t *testing.T) {
 	assertNoteRestoredWhole(t, st)
 }
 
-
-// "when I X the back to results a minimized note maximizes for some reason").
+// RELEASE GIVES BACK WHAT SUPPRESSION TOOK, NEVER MORE. Dismissing the
+// back-to-results trail with its X maximized a note that was sitting minimized.
 // The three tests above are the July rule's half — the note WAS open when the
 // foreign mark arrived, so clearing re-opens it. This is the other half: the
 // reader arrives on a chapter from ELSEWHERE (a search result), so its note
@@ -140,8 +140,8 @@ func TestClearOpensNothingTheSuppressionNeverClosed(t *testing.T) {
 		t.Fatal("the note must still be present (as its pill) after the clear")
 	}
 	if !pill {
-
-			"\"a minimized note maximizes\", pinned")
+		t.Error("the clear opened a note the suppression never closed — a " +
+			"minimized note must not maximize")
 	}
 	if st.hasMark() {
 		t.Errorf("a closed note carries no wash (Hide's rule), got %+v", st.mark)
@@ -164,7 +164,7 @@ func TestClearOpensNothingTheSuppressionNeverClosed(t *testing.T) {
 	}
 }
 
-
+// The same rule through the bar's X — the control the defect showed up on.
 func TestBackToResultsDismissLeavesAnUnseenNoteClosed(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

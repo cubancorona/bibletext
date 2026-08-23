@@ -1,8 +1,8 @@
 package bibletext
 
 // THE GALLERY: every note state the styled pane can draw, rendered to a real
-
-// visually — multiple notes, expanded, collapsed, highlights, spacing, etc").
+// software canvas and snapshotted, so every permutation can be checked
+// visually — multiple notes, expanded, collapsed, highlights, spacing.
 //
 // It is a TEST, not a screenshot dump: each case asserts the structural truths
 // that make its picture meaningful — the card is inside the band, the band is
@@ -49,7 +49,7 @@ func galleryFixture(t *testing.T, verses []int, texts []string) (*AppState, []Ve
 
 // contextFixture is three paragraphs with the note anchored in the MIDDLE one,
 // so a picture of it carries the paragraph above, the note, and the paragraph
-
+// below — the framing in which the air on both sides is judged.
 func contextFixture(t *testing.T, note string, pill bool) (*AppState, []Verse, string, int) {
 	t.Helper()
 	setNotesEnabled(true)
@@ -206,7 +206,7 @@ func TestStyledNoteGallery(t *testing.T) {
 			w: 520, h: 460, wantSticker: true, washVerses: []int{2},
 		},
 		{
-
+			// THE CONTEXT SHOT: a paragraph above, the note, and a
 			// paragraph below, so the air on both sides can be judged against
 			// the passage rather than in isolation.
 			name: "13-context-expanded",
@@ -358,17 +358,17 @@ func devLongNoteText() string {
 }
 
 // assertNoteSpacing holds EVERY distance in the picture to the shared spec
-
-// ("measure the pill and note vertical spacing and margins visually … make sure
-// it's the same there"). It runs on all fourteen permutations × light/dark, in
-// both the expanded and the pill state, so a spacing change on this pane cannot
-// land without either matching the table or moving it.
+// (noteMetrics, notes_bubble.go) — the pill and note vertical spacing and
+// margins, measured on the rendered picture rather than eyeballed, and held to
+// the same numbers everywhere. It runs on all fourteen permutations ×
+// light/dark, in both the expanded and the pill state, so a spacing change on
+// this pane cannot land without either matching the table or moving it.
 //
 // It deliberately asserts the SAME quantities the three natives are held to by
 // name in notes_spacing_spec_test.go: gap above, gap below, card padding, who
 // row, who→body gap, tail depth, pill height. This pane is the only one whose
-// pixels can be measured on the the development environment, so it is where the numbers are
-// checked as GEOMETRY rather than as source text.
+// pixels can be measured in-process, so it is where the numbers are checked as
+// GEOMETRY rather than as source text.
 func assertNoteSpacing(t *testing.T, p *styledReadingPane) {
 	t.Helper()
 	g := p.noteGeom

@@ -71,7 +71,7 @@ const NoteMaxRunes = 280
 var errNoteTooLarge = errors.New("note expands past the size a note may be")
 
 // The four format bytes. 'p'/'z' were never in a shipped build and are kept
-
+// decode-only forever, for pre-release dev links and the published
 // reader.js of that era.
 const (
 	noteFormatPlain    = 'p' // legacy: bare text — DECODE-ONLY

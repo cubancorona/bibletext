@@ -2,14 +2,13 @@ package bibletext
 
 // ONE CONTROL ON YOUR OWN NOTE, held across all four surfaces.
 //
-
-// for a note bubble FROM me — minimize and X? But don't they do the same thing?
-// Because minimize seems to hide the pill also."
+// THE DEFECT: in the reading pane a note bubble the reader wrote offered two
+// buttons, Minimize and Close, which did the same thing — and minimizing hid
+// the pill as well.
 //
-// He was right on both halves. For an own note hideCurrentNote and
-// dropCurrentNote take early returns whose bodies are IDENTICAL — focus to
-// none, the note's own mark cleared, re-project — so − and ✕ were two controls
-// for one verb. And "minimize hides the pill" is not a bug beside it, it is the
+// Both halves are real. For an own note hideCurrentNote and dropCurrentNote
+// take early returns whose bodies are IDENTICAL — focus to none, the note's
+// own mark cleared, re-project — so − and ✕ were two controls for one verb. And "minimize hides the pill" is not a bug beside it, it is the
 // reason: an own note enters the chapter plan only while focus names it
 // (notes_plan.go) and is built Open, so focusNone removes it outright. There is
 // no pill state for an own note to minimize INTO, which makes − a control whose

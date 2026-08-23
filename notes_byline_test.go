@@ -14,10 +14,10 @@ import (
 
 // The flag is OFF. This is the one test that would fail the moment somebody
 // flips the constant, which is exactly what it is for: the flip must be a
-
+// deliberate decision that lands together with this line changing.
 func TestSenderNamesAreDormant(t *testing.T) {
 	if senderNamesEnabled {
-
+		t.Fatal("senderNamesEnabled is on — sender names would display; this is a deliberate decision " +
 			"([redacted-retired-private-reference], Identity). If it is intended, update this test and revalidate " +
 			"every byline surface.")
 	}

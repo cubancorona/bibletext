@@ -157,8 +157,8 @@ func TestNKJVSwitchRefusedWithoutLicenseEnv(t *testing.T) {
 // nothing a licence has any claim on. Meanwhile the fallback quietly broke the
 // thing links exist for: the sender's own link reopened in the WEB, in wording
 // they were not reading, and the note they attached was filed against it. The
-
-// others: bibletext.co.uk/nkjv/john/... etc".
+// rule was changed deliberately: an NKJV link now behaves like every other
+// version's and names the version in the path (bibletext.co.uk/nkjv/john/...).
 //
 // What has NOT changed, and is still tested here: the deuterocanon still forces
 // webc, a genuinely unknown id still falls back to web, and every /web/ link is
@@ -240,7 +240,7 @@ func TestWebLinksAreByteStable(t *testing.T) {
 // cmd/websitegen at it or relaxes its licensed-exclusion tests.
 func TestLinkPathVersionIDsIsNotThePublishedSet(t *testing.T) {
 	if webPublishedVersionIDs["nkjv"] {
-
+		t.Error("the web reader must NOT publish nkjv — that half is deliberately deferred")
 	}
 	if !linkPathVersionIDs["nkjv"] {
 		t.Error("a share-link path must be able to name nkjv")

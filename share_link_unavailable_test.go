@@ -4,10 +4,10 @@ package bibletext
 //
 // Before /nkjv/ was a link path this could not happen: every id a URL could
 // carry was public-domain, and the code said so in as many words. The link now
-
-// for that case was explicit — "If they don't have licensing they should get a
-// message". These tests pin BOTH halves of the answer: the message goes up, and
-// the passage still opens.
+// carries the sender's real translation, so it can, and the answer for that
+// case is explicit: a reader without the licensing for it must be told so
+// rather than moved in silence. These tests pin BOTH halves of the answer: the
+// message goes up, and the passage still opens.
 
 import (
 	"strings"
@@ -89,7 +89,7 @@ func TestLinkVersionUnavailableOnlySpeaksForALockedTranslation(t *testing.T) {
 	}
 }
 
-
+// The core requirement, end to end: the reader is TOLD, and is not
 // silently moved. Before this, applyShareTarget navigated in whatever
 // translation they happened to be in with nothing on screen to say so — and
 // since verse numbering is not interchangeable (Romans 14/16), that can be
@@ -125,7 +125,7 @@ func TestLockedTranslationLinkOpensThePassageAndSaysSo(t *testing.T) {
 
 	pop, _ := win.Canvas().Overlays().Top().(*widget.PopUp)
 	if pop == nil {
-
+		t.Fatal("no message — this is the silent downgrade that must not return")
 	}
 	said := popupText(pop)
 	if !strings.Contains(said, "New King James Version") {

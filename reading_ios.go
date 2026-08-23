@@ -836,8 +836,8 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
 // Fyne's theme.DeleteIcon() is Material's "delete": a straight-sided can with
 // rounded bottom corners, a flat lid bar and a small trapezoid handle. SF
 // Symbols' trash is Apple's own drawing — tapered, different lid — and using it
-
-// the path is transcribed from Fyne's own SVG, which is the source of truth:
+// here put two different bins in one screen. So the path is transcribed from
+// Fyne's own SVG, which is the source of truth:
 //
 //   body: M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z
 //   lid:  M19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z
@@ -894,8 +894,9 @@ static const CGFloat kNoteGapAbove = 10, kNoteGapBelow = 10, kNotePad = 12;
 static const CGFloat kNotePillPadX = 14, kNotePillMinW = 86;
 // The bin's DRAWN size on the card. It sits beside an 11pt semibold who-line
 // and a minimize mark, and it is furniture, not a feature: at 13 it still read
-
-// tap area (kNoteBtn), so the drawing only has to be legible, not large.
+// as the loudest thing on a quiet card, even after one round of shrinking. The
+// BUTTON carries the tap area (kNoteBtn), so the drawing only has to be
+// legible, not large.
 static const CGFloat kNoteTrashPt = 12.5;
 static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 10;
 // kNoteBtn is NOT spec: it is the verb button's size, iOS's own 30pt thumb
@@ -1161,8 +1162,8 @@ static void btIOSEnsureNoteView(void) {
         // side by side. Worse, − PROMISES A PILL THAT CANNOT EXIST: an own note
         // enters the plan only while focus names it and is built Open (notes_
         // plan.go), so there is nothing to restore and nothing is left behind.
-
-        // seems to hide the pill also.")
+        // On a note the reader wrote, − and ✕ were indistinguishable: both
+        // hid the pill.
         //
         // ✕ is the mark that survives, because "put this away" is what the
         // press actually does. On a RECEIVED note both stay and differ: − leaves
@@ -1186,10 +1187,10 @@ static void btIOSEnsureNoteView(void) {
         //
         // The bin is DRAWN, not typed. It was the 🗑 emoji, which renders at the
         // button's font size in its own colours — a big loud mark where the
-
-        // Symbols' trash is the same outlined, ridged bin the Fyne surfaces
-        // draw (notes_trash_icon.go), and as a TEMPLATE image it takes the
-        // muted tint like every other piece of this card's furniture.
+        // rest of the card is quiet chrome. SF Symbols' trash is the same
+        // outlined, ridged bin the Fyne surfaces draw (notes_trash_icon.go),
+        // and as a TEMPLATE image it takes the muted tint like every other
+        // piece of this card's furniture.
         //
         // kNoteTrashPt is the drawn size, deliberately small: the BUTTON is the
         // tap target (kNoteBtn), not the drawing.

@@ -4,8 +4,7 @@ package bibletext
 //
 // The bundled API.Bible key's characters are deliberately withheld, so the
 // field sits empty while a key is working. Reading "Paste your API.Bible key"
-// there says the opposite of the truth, and the correction was below the box
-
+// there says the opposite of the truth, and the correction was below the box.
 //
 // Two things are pinned: the wording per state, and that it FITS. The fuller
 // sentence that names both the state and the action was tried once and ran off

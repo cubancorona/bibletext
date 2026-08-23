@@ -53,9 +53,10 @@ type palette struct {
 	// HighlightMulti is the wash where MORE THAN ONE note covers a verse
 	// (tintMulti, tint.go) — separated from Highlight by HUE, not brightness:
 	// a second amber would only read as a stronger mark, where a cool wash
-
-	// (2026-08); nothing draws it yet — one lit span at a time is the recorded
-
+	// beside the warm one reads as a different FACT. The two are a deliberate
+	// pair; nothing draws it yet — one lit span at a time is the recorded
+	// invariant, held by tint_multi_guard_test.go until a multi-wash is
+	// requested.
 	HighlightMulti color.NRGBA
 	VerseNumber    color.NRGBA // superscript verse numbers
 	RedLetter      color.NRGBA // words of Christ (red-letter mode)
@@ -101,8 +102,8 @@ var lightPalette = palette{
 	HighlightText: color.NRGBA{R: 36, G: 60, B: 112, A: 255},   // unused by the panes; see reading.go .hl
 	// A cool lapis-family wash beside the amber: hue separation, so "several
 	// notes here" cannot be misread as "one strong note". Red letters hold
-
-	// with its dark twin below; unreachable until asked (tintMulti).
+	// 4.2:1 on it (theme_contrast_test.go pins >= 3.0). Deliberately chosen as
+	// a pair with its dark twin below; unreachable until requested (tintMulti).
 	HighlightMulti: color.NRGBA{R: 199, G: 219, B: 245, A: 255}, // #C7DBF5
 	VerseNumber:    color.NRGBA{R: 83, G: 104, B: 143, A: 255},  // muted slate-blue superscripts
 	RedLetter:      color.NRGBA{R: 178, G: 58, B: 46, A: 255},   // deep crimson on parchment
@@ -151,8 +152,8 @@ var darkPalette = palette{
 	// The gold band's cool twin: a deep slate-blue, apart from the gold by HUE
 	// the way the light pair is, so the two facts stay two facts in the dark
 	// as well. The soft red above it measures 3.6:1 (pinned >= 3.0 in
-
-	// asked (tintMulti).
+	// theme_contrast_test.go). Deliberately chosen as a pair with #C7DBF5;
+	// unreachable until requested (tintMulti).
 	HighlightMulti: color.NRGBA{R: 46, G: 62, B: 92, A: 255},    // #2E3E5C
 	VerseNumber:    color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
 	RedLetter:      color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black
@@ -401,7 +402,7 @@ func surface(content fyne.CanvasObject, bg, border color.Color, minSize fyne.Siz
 //
 // Milestone 4 then copied the call verbatim into the styled pane, so the shipped
 // desktop reading surface inherited it without anyone re-deciding it. This
-
+// finishes the June change rather than making a new one.
 func readingGround(content fyne.CanvasObject, bg color.Color) fyne.CanvasObject {
 	ground := canvas.NewRectangle(bg)
 	return container.NewStack(ground, container.NewPadded(content))

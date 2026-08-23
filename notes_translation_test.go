@@ -33,10 +33,9 @@ func notesXState(t *testing.T) *AppState {
 // reasoning that a remark belongs to the wording it was written against. What a
 // reader actually met was a note that disappeared when they changed
 // translation, leaving the highlight it had placed behind with nothing to
-
-// note goes with it; where the numbering genuinely does not correspond,
-// the derive declines (see the Greek Esther case in
-// notes_store_test.go).
+// explain it. The passage is the same passage in both, so the note goes with
+// it; where the numbering genuinely does not correspond, the derive declines
+// (see the Greek Esther case in notes_store_test.go).
 func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -195,10 +194,10 @@ var errOfflineForTest = errors.New("offline")
 
 // A note that goes away must take ITS highlight with it. Clearing the note
 // alone left the passage marked with nothing to explain the mark — the reader
-// sees their verse highlighted and the message gone, which reads as data loss
-
-// where a note genuinely cannot follow: Greek Esther, whose numbering does not
-// correspond.
+// sees their verse highlighted and the message gone, which reads as data loss.
+// It shows up when switching translation, and is reached here through the one
+// case where a note genuinely cannot follow: Greek Esther, whose numbering does
+// not correspond.
 func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

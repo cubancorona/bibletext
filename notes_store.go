@@ -495,8 +495,8 @@ type legacySharedNote struct {
 }
 
 // migrateLegacyNotes folds the old shared.notes map and notes.mine list into
-
-// only migration and a failed one is accepted): a legacy blob that will not
+// the scrapbook store, once. Best-effort by design (the reader's own notes are
+// the only migration and a failed one is accepted): a legacy blob that will not
 // parse is quarantined into the new store VERBATIM rather than dropped, and
 // the old keys are cleared ONLY after the new store's write is verified by
 // reading it back.
@@ -597,8 +597,8 @@ func noteForChapter(p prefStore, versionID, book string, chapter int, bible *Bib
 	s := readNoteStore(p)
 	var candidates []StoredNote
 	for _, n := range s.notes {
-
-		// directive); only received notes reach the reading page.
+		// Own notes are stored but never drawn in the scripture text (a
+		// deliberate rule); only received notes reach the reading page.
 		if n.Kind != noteKindReceived || !displayableNote(n) {
 			continue
 		}
@@ -971,9 +971,9 @@ func dropCurrentNote(state *AppState) {
 	// FOCUS RETURNS TO THE DEFAULT RULE, and this is not the same as the reader
 	// closing a note. A deleted note is GONE, not put away, so nothing is
 	// "taking its place under the reader's eyes" (N3) when the rest of the set
-
-	// requirement, from the report that deleting one note made every pill on
-	// the passage vanish.
+	// comes back — and the rest of the set coming back is a deliberate
+	// requirement, from an observed defect where deleting one note made every
+	// pill on the passage vanish.
 	//
 	// It said focusNone here, and said so in a comment ("deleting is closing,
 	// not choosing a neighbour") that the code did not actually implement: the

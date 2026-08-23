@@ -539,8 +539,8 @@ var lastPushedBookChapter string
 // and refreshes the sticker alone (BtBridge.setNote's `changed` gate, the
 // bibleTextSetNote pattern).
 func pushNoteToOverlay(state *AppState) {
-
-	// the two phones side by side): iOS draws the note IN THE TEXT above its
+	// BOTH reading modes now, not full-screen alone (settled by comparing the
+	// two platforms side by side): iOS draws the note IN THE TEXT above its
 	// verse — one card carrying the byline, the counts, the verbs and the tail
 	// — while Android stacked a citation row, a bubble and a byline above the
 	// whole chapter, unanchored and three times the height. Same sticker, both
@@ -592,7 +592,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// A declared arrival (forceReposition) outranks "stay where you were": the
 	// capture below exists for re-renders the reader did not ask to move on (a
 	// theme flip, a verb's presentation change). The sticker's next-tap is now
-
+	// deliberately IN that class — that is the in-place rule:
 	// btaNoteNextTapped declares no arrival, so its moved mark is captured
 	// here and the re-render lands back where the reader was, sticker and
 	// tint swapped in place. The guard itself stays for the arrivals that do
@@ -645,7 +645,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			// is nominal: the UIKit HTML importer does not honour a unitless
 			// line-height, so iOS actually draws close to the font's own
 			// leading. Matching the CSS number made Android markedly looser than
-
+			// the iOS pane beside it — visible on the emulator, and that is the
 			// reason this is a measured constant rather than a shared one.
 			//
 			// It used to be 1.7 applied to the font's NATURAL line height, a

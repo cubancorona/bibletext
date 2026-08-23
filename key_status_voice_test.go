@@ -6,7 +6,7 @@ package bibletext
 // and both report the same event: a key was tested and it works. They said it
 // differently ("Working" against "Key works.") and, because one used a plain
 // Label and the other a caption-styled RichText, at two different SIZES, a few
-
+// hundred points apart in one scroll — visibly mismatched with both on screen.
 //
 // This pins the shape rather than the sentences: a confirmation that names what
 // works, then a line saying what it unlocks. Wording can be edited; the two

@@ -32,7 +32,7 @@ const noticeCSS = `
 
    IT LIVES HERE, NOT IN reader.css, AND THAT IS THE POINT. reader.css is
    content-hashed into the <link> of all 3,906 scripture pages, so adding one
-   rule there rewrites every one of them — I did exactly that and turned a
+   rule there rewrites every one of them — doing exactly that turned a
    0-pages-changed publish into 3,914. This stylesheet is loaded only by notice
    pages, so the rule reaches the pages that need it and nothing else moves. */
 .vers-full{flex-wrap:wrap; justify-content:flex-end; row-gap:.25rem}

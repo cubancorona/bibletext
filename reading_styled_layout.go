@@ -190,11 +190,10 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		}
 
 		// THE BAND OPENS ABOVE THE WHOLE PARAGRAPH the note's verse belongs
-
-		// should not be breaking up paragraphs… No breaking up the Word of
-		// God"). It is the rule iOS has always followed, because
-		// paragraphSpacingBefore is the only thing TextKit reserves with, and
-		// it is now the rule everywhere.
+		// to — never between two of its lines: a note band must never break a
+		// paragraph of scripture apart mid-way. It is the rule iOS has always
+		// followed, because paragraphSpacingBefore is the only thing TextKit
+		// reserves with, and it is now the rule everywhere.
 		//
 		// Reserved HERE, before the paragraph lays out a single line, so y is
 		// the paragraph's own top: adding to it moves the paragraph and

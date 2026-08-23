@@ -17,9 +17,9 @@ package bibletext
 //
 // DO NOT ADD FEATURES HERE. Nothing in this file runs, so a change made to it
 // will appear to do nothing and will drift out of step with the layout that
-
-// compatibility and uniformity with other platforms ... so we don't have to
-// keep reworking everything for the various platforms."
+// does run. The merge exists to keep this platform compatible and uniform with
+// the others, so that a change to the reading experience does not have to be
+// reworked once per platform.
 
 import (
 	"fyne.io/fyne/v2"

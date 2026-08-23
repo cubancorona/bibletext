@@ -224,8 +224,8 @@ func TestVersionPickerOrder(t *testing.T) {
 	}
 
 	// Without a key it STILL leads: the row tells the reader how to unlock it,
-
-	// 2026). See versions_picker_order_test.go for the dedicated cases.
+	// and burying it is what this ordering exists to prevent — the ordering is
+	// deliberate. See versions_picker_order_test.go for the dedicated cases.
 	t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
 	t.Setenv("BIBLE_API_KEY", "")
 	got = versionPickerOrder()

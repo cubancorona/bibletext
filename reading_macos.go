@@ -2132,8 +2132,8 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	// verses on macOS are drawn by a native NSTextView above the canvas: there
 	// is no Fyne text in the tree, so "can the reader SEE the verses" cannot be
 	// asked here at all, and a view test on this machine could only ever check
-
-	// separately — a dev mode where macOS follows the Windows/Linux paths.
+	// the surface it is not shipping. This is also the seam behind a separate
+	// dev mode: macOS following the Windows/Linux paths.
 	if useStyledPane() {
 		return styledReadingScrollArea(state, verses, pal)
 	}

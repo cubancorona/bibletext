@@ -34,12 +34,12 @@ package bibletext
 //   - Lowercase ASCII only. Pages serves case-sensitively, and the citation's
 //     en dash (John 3:16–18) must never reach a URL: messengers mangle it.
 //   - The path may name a translation the WEBSITE DOES NOT PUBLISH. It named
-
-//     "work just like the others", and the rule that kept it that way was
-//     mis-stated: what a licence protects is the TEXT, and a translation id is a
-//     name, not text. So "nkjv" in a URL gives nothing away — but it does mean
-
-//     call) and bibletext.co.uk/nkjv/john/3/ is a 404. See linkPathVersionIDs
+//     only the public-domain three until NKJV links had to behave like every
+//     other link, and the rule that kept it that way was mis-stated: what a
+//     licence protects is the TEXT, and a translation id is a name, not text.
+//     So "nkjv" in a URL gives nothing away — but it does mean /nkjv/ is
+//     APP-ONLY today, because the website half is deferred and
+//     bibletext.co.uk/nkjv/john/3/ is a 404. See linkPathVersionIDs
 //     for the two sets this split into. An id nothing recognises still falls
 //     back to WEB.
 //   - The version id is the FIRST path segment — there is no /read/ prefix. That
@@ -64,7 +64,7 @@ const shareLinkBase = "https://bibletext.co.uk"
 // read this one: the generator's list is guarded by
 // cmd/websitegen/licensed_exclusion_test.go, and a licensed translation must
 // never reach the site because a shared set drifted. Publishing NKJV pages is a
-
+// separate decision — this change deliberately does not make it.
 var webPublishedVersionIDs = map[string]bool{"web": true, "bsb": true, "webc": true}
 
 // linkPathVersionIDs are the ids a share-link PATH may name — the grammar both

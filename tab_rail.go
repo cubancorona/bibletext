@@ -2,12 +2,12 @@ package bibletext
 
 // THE iPAD BAR, TURNED VERTICAL.
 //
-
-// the iPad is: chrome running the full length of its edge, a hairline rule
-// against the content, and the destinations CENTRED along that edge at a fixed
-// slot each rather than spread or hand-spaced. This is that, with the long axis
-
-// idea of the iPad bar made vertical", "they should be centered vertically").
+// Not a new design — the same one, rotated. The grounded bar the iPad uses is:
+// chrome running the full length of its edge, a hairline rule against the
+// content, and the destinations CENTRED along that edge at a fixed slot each
+// rather than spread or hand-spaced. This is that same visual idea, with the
+// long axis turned through ninety degrees and the destinations centred
+// vertically.
 //
 // So it borrows the bar's numbers instead of inventing its own — tabBarCellTablet
 // is the slot in both, which is what makes the rail read as the same system and
@@ -37,8 +37,8 @@ import (
 // side; everything wider than that in the bar is ALONG its axis, which the rail
 // spends on height instead. So the rail's own cross-axis is the widest thing the
 // cell ever draws plus that same padding either side — 32pt of bold "Search"
-
-// little less wide, perhaps try matching the ipad margins").
+// plus 2 x 7, against the 104pt slot it started at, which read as too wide
+// beside the iPad bar's margins.
 //
 // Derived rather than written down because the alternative drifts silently: the
 // dev build adds a "Links" destination, and a translation could make any label

@@ -6,9 +6,8 @@ package bibletext
 // synopsis) is keyed in ONE numbering — the reference, versification.go. The
 // panel used to key it with whatever numbering was on screen and look the
 // target up the same way, which was wrong on both sides. Found by auditing the
-// two features against the verse-mapping work that landed long after them
-
-// versions … can you see if we have any consistency problems across versions?").
+// two features against the verse-mapping work that landed long after them,
+// looking for consistency problems across versions.
 //
 // Three shapes of defect, one cause. These tests are the mapping arithmetic
 // itself, at the exact addresses that were reported — the panel needs a loaded

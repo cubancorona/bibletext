@@ -103,14 +103,16 @@ type noticeVersion struct {
 // and a display name and nothing else, because there is nothing else a notice
 // page is allowed to know. Adding an id here publishes a signpost. Adding one
 // to publishedVersions publishes a translation, which is a licensing decision
-
+// with a rights holder behind it — licensed_exclusion_test.go keeps the two
+// apart.
 //
 // It exists because /nkjv/john/3/ was a live 404 while the app was emitting
 // exactly that URL: the link was dead for every recipient without the app, and
 // its preview was a bare URL in every message thread (B_WEB_404 and
-
-// "should have a licensing message and link to app download for all NKJV …
-// this is temporary to get things stable and clean for now".
+// B_UNFURL_NKJV in docs/NKJV_FLOW.md). The settled remedy is that every NKJV
+// path the site serves carries a licensing message and a link to download the
+// app. It is deliberately a stopgap — enough to make the URLs stable and
+// coherent — not the final shape of the site's NKJV story.
 func noticedVersions() []noticeVersion {
 	return []noticeVersion{{ID: "nkjv", Name: "New King James Version"}}
 }

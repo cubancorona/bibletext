@@ -157,9 +157,9 @@ type styledNoteGeom struct {
 // THE GAP ABOVE IS NOT DECORATION, and both gaps are now SPEC
 // (noteMetrics().GapAbove / GapBelow, notes_bubble.go) rather than this pane's
 // own numbers: the first cut here reserved only below and left the card butting
-
-// once. Pinned by TestStyledNoteBandIsSymmetric and by the gallery's per-picture
-// spacing assertions.
+// against the line above — 0pt above against 19pt below, which was obvious on
+// sight. Pinned by TestStyledNoteBandIsSymmetric and by the gallery's
+// per-picture spacing assertions.
 func (g styledNoteGeom) bandH() float32 {
 	if !g.present {
 		return 0
@@ -447,8 +447,7 @@ func (r *styledPaneRenderer) buildNote() {
 		// gNoteMuted). The pill was measured at 11pt all along
 		// (measureStyledNote, styledNoteWhoSz) and then drawn at 18, so the text
 		// overflowed a box sized for something smaller and shouted in a colour
-
-		// side by side).
+		// the note's own chrome never uses — plainly wrong beside the iOS pill.
 		//
 		// So the button keeps the TAP and gives up the TEXT — the same split the
 		// next-tap control next door already uses: an empty LowImportance button
@@ -545,7 +544,7 @@ func (r *styledPaneRenderer) buildNote() {
 		// so it renders at the button's font size in its own colours — which is
 		// how a small quiet control became a large loud one. The theme icon is
 		// tinted like the rest of the card's furniture and is sized by the
-
+		// theme, which the sticker keeps deliberately small and subtle.
 		del.SetIcon(fyneTheme.DeleteIcon())
 	}
 	del.Importance = widget.LowImportance

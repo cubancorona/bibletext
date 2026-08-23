@@ -73,10 +73,10 @@ func TestShowNotesListReachesTheNotes(t *testing.T) {
 	}
 }
 
-
-// "the notes browser should remember its scroll position"): a rebuild while in
-// Notes keeps it, and leaving the mode HARVESTS the live list's offset rather
-// than forgetting it — the reader returns to the same neighbourhood. Only the
+// The list's scroll survives EVERY route out and back, so the notes browser
+// comes back where it was left: a rebuild while in Notes keeps it, and leaving
+// the mode HARVESTS the live list's offset rather than forgetting it — the
+// reader returns to the same neighbourhood. Only the
 // reader func (which aliases the torn-down list) is dropped on exit.
 func TestNotesScrollRemembersAcrossLeavingTheMode(t *testing.T) {
 	st := sampleState()

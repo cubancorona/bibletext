@@ -1,7 +1,7 @@
 package bibletext
 
-
-// U.S. Reports typesetting). Width-gated in the styled pane: a pane wide enough
+// The desktop reporter page — deliberate desktop parity with the iPad's
+// U.S. Reports typesetting. Width-gated in the styled pane: a pane wide enough
 // for the 27.5em measure centres it at 1.3 leading with indented, gapless
 // paragraphs; a narrow pane keeps the cozy 1.55/gap layout unchanged.
 

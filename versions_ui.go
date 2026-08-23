@@ -178,10 +178,9 @@ func versionPickerOrder() []BibleVersion {
 			// translation is the app's licensed offering whether or not a key
 			// is present — it is one free key away, and its row says exactly
 			// how. Bucketing it with the versions nobody can unlock sent the
-			// NKJV to the bottom of the list on any device without a key
-
-			// key"), which reads as "unavailable curiosity" rather than "one
-			// step from here".
+			// NKJV to the bottom of the list on any device without a key, where
+			// it reads as "unavailable curiosity" rather than "one step from
+			// here" — it belongs at the top even before a key is present.
 			licensed = append(licensed, v)
 		case !v.canSelect():
 			// Nothing the reader can do: awaiting a licence, not a key.
@@ -213,7 +212,7 @@ func lockedVersionNames(byok bool) []string {
 // Both sentences these feed were written when the list they described happened
 // to have the length the wording assumed, and both were wrong at the other
 // length. Removing the NRSV left one evaluation version and the picker read
-
+// "LSB are under evaluation … they unlock"; the BYOK line
 // has the mirror-image fault waiting — it says "unlocks", so a second
 // bring-your-own-key translation would make it read "X and Y unlocks".
 //
@@ -251,10 +250,10 @@ func joinNatural(names []string) string {
 // the same idea.
 //
 // Name, publisher, status tag. Nothing tells a reader choosing between four
-// translations how they differ, which is the one thing they actually want. The
-
-// the two evaluation translations, then declined them once those were removed —
-// so the idea is unspent rather than rejected.
+// translations how they differ, which is the one thing they actually want.
+// One-sentence descriptions were drafted while deciding whether to restore the
+// two evaluation translations, then set aside once those were removed — so the
+// idea is unspent rather than rejected.
 //
 // TWO THINGS TO KNOW BEFORE ADDING THEM.
 //
@@ -482,7 +481,7 @@ func showVersionLoading(state *AppState, name string) func() {
 	// The bar spans the card, like the title and caption above and below it. It
 	// used to be pinned to a fixed 240pt inside a GridWrap, which left it both
 	// narrower than the card AND left-aligned under centred text — 12pt of gap
-
+	// on one side against 80pt on the other at iPhone width (visible by eye,
 	// then measured). A VBox stretches its children horizontally, so simply
 	// dropping the wrapper makes the bar agree with everything else in the card.
 	content := container.NewVBox(

@@ -52,12 +52,11 @@ const tabletLayoutMinWidth float32 = 700
 // when it has the width for it; the width<=0 case (before the first layout pass,
 // when the canvas has no size yet) trusts the tablet idiom so an iPad's first
 // real frame is already the regular layout.
-
-// a layout of its own — a persistent sidebar beside the reading pane — and that
-// second layout is where the iPad's problems lived: a mode row that appeared to
-// govern the sidebar while governing the far pane, and results that replaced the
-// reading pane with no way back, because the tab bar the phone has was not there
-// to return to.
+// ONE LAYOUT ON EVERY TOUCH DEVICE. The tablet used to get a layout of its own —
+// a persistent sidebar beside the reading pane — and that second layout is where
+// the iPad's problems lived: a mode row that appeared to govern the sidebar while
+// governing the far pane, and results that replaced the reading pane with no way
+// back, because the tab bar the phone has was not there to return to.
 //
 // Both were symptoms of maintaining two shapes for one app. The phone's shape
 // already answers both — the tab bar is always present, so "back to reading" is
@@ -67,10 +66,10 @@ const tabletLayoutMinWidth float32 = 700
 // stretch (readableColumn, used by the books, results and notes lists — the
 // reading pane already has the reporter measure).
 //
-
-// prioritize compatibility and uniformity with other platforms where it makes
-// sense so we don't have to keep reworking everything for the various
-// platforms." Every future feature now lands on ONE mobile layout.
+// The reason that matters for the years after this is uniformity: the app
+// prioritizes compatibility with the other platforms wherever that makes sense,
+// so a feature does not have to be reworked once per platform. Every future
+// feature now lands on ONE mobile layout.
 //
 // The tablet parameters stay declared and tested: this decision is recorded as a
 // choice, not lost by deleting the concept, and a return to a wide layout is a

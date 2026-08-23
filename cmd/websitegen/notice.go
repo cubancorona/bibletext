@@ -282,7 +282,7 @@ func noticeNav(n noticeSpec) string {
 	// know what "WEBC" stands for — and this row is one of the two routes out, so
 	// an abbreviation is a route they cannot evaluate. The offers further down
 	// already say "World English Bible (Catholic)" in full; a page that names the
-
+	// same translation two ways is talking past itself.
 	//
 	// This is the .npick row, which exists only on notice pages, so the .vpick
 	// switcher on all 3,906 scripture pages is untouched — there the abbreviation
@@ -381,8 +381,8 @@ func (n noticeSpec) absentLede() string {
 		template.HTMLEscapeString(other))
 }
 
-
-// explanation". The heading carries the explanation and the button carries the
+// openInApp is the explicit open-in-app button, incorporated with the
+// explanation. The heading carries the explanation and the button carries the
 // action, so neither can be read without the other.
 //
 // WHY THIS IS NOT A PLAIN LINK, and what each platform actually gets today:
@@ -429,8 +429,8 @@ func openInApp(n noticeSpec) string {
 	return b.String()
 }
 
-
-// note) in another version". Every variant of this page carries it; on the
+// parallelSection is the option to view the parallel passage (with its note)
+// in another version. Every variant of this page carries it; on the
 // absent-canon pages it is the only route out, which is why it is never
 // conditional.
 func parallelSection(n noticeSpec) string {

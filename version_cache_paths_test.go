@@ -2,10 +2,10 @@ package bibletext
 
 // CLEARING A VERSION'S CACHE HAS TO CLEAR EVERY EPOCH OF IT.
 //
-
-// 22 Aug 2026), and the way that button can be quietly wrong is by deleting
-// only the CURRENT epoch. Every shipping translation has had at least one
-// decoder bump, and loadVersionFromCacheOnly deliberately falls back through
+// The dev Links tab grew a "make this look never-downloaded" button, and the
+// way that button can be quietly wrong is by deleting only the CURRENT epoch.
+// Every shipping translation has had at least one decoder bump, and
+// loadVersionFromCacheOnly deliberately falls back through
 // supersededCachePaths so an offline reader is never stranded by an upgrade —
 // which means a leftover older file lets the app open the translation offline
 // after its cache was "cleared". That looks exactly like the button not

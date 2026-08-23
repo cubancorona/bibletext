@@ -275,9 +275,9 @@ func TestApplyRestoredStateValidatesAgainstSavedTranslation(t *testing.T) {
 func TestRestoreReadingStateTranslationFailureDoesNotMutate(t *testing.T) {
 	// Point the cache at an empty temp dir. This test asserts the OFFLINE-with-no-
 	// cache path, but loadVersionFromCacheOnly reads the real cache directory — so
-	// on a machine that happens to hold a webc cache (as this one did from 18:47
-	// on 12 Aug) the "offline" load quietly succeeds from disk and the test fails,
-
+	// on any machine that happens to hold a webc cache the "offline" load quietly
+	// succeeds from disk and the test passes for the wrong reason, having silently
+	// exercised whatever the local cache directory held rather than the code.
 	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), "cache.json"))
 	origLoad := loadVersionForRestore
 	defer func() { loadVersionForRestore = origLoad }()

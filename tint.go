@@ -69,12 +69,12 @@ const (
 
 	// tintMulti — MORE THAN ONE note covers this verse ([redacted-retired-private-reference],
 	// the tint table). Fully wired through the tables below and the palette
-
+	// (HighlightMulti, theme.go — a deliberate hue-separated pair, light
 	// #C7DBF5 / dark #2E3E5C), and deliberately UNREACHABLE: chapterTint never
-
-	// invariant. tint_multi_guard_test.go holds that line — wiring a code path
-
-	// asked for, chapterTint (and only chapterTint) widens.
+	// returns it, because one lit span at a time is the recorded invariant.
+	// tint_multi_guard_test.go holds that line — wiring a code path to this
+	// constant is a deliberate decision, not a side effect. When the behaviour
+	// is requested, chapterTint (and only chapterTint) widens.
 	tintMulti
 
 	// tintCount bounds the markup tables below. It is the last constant on
@@ -297,7 +297,7 @@ func androidTintHTML(pal palette, numHex, redHex string) [tintCount]tintHTML {
 // because a tint's row already knows which of those it is. That is what stops
 // the wash and the red becoming an either/or again: the arm where a washed
 // words-of-Christ verse lost its colour did not exist in either dialect until
-
+// it surfaced on John 11:25, and there is now no way to write a wash arm
 // without also having written the red-under-wash one, because they are the same
 // row of the same table.
 func writeTintedHTML(b *strings.Builder, mk tintHTML, red bool, text string) {

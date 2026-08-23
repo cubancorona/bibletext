@@ -198,7 +198,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	paraGap := lh * 0.65
 	indent := float32(0)
 	p.extraInset = 0
-
+	// THE REPORTER PAGE, when the pane can hold it (a settled decision: the
 	// desktop reads like the iPad). Same U.S. Reports set the iPad uses —
 	// centred 27.5em measure, 1.3 leading, first-line indents with no
 	// paragraph gap — gated purely on width, so a narrow window keeps

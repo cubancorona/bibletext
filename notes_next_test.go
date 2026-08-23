@@ -84,9 +84,8 @@ func TestNextTapRotatesThePlanWithWrap(t *testing.T) {
 // Chip-tap parity: the advance clears a foreign mark (selecting a note is the
 // reader choosing it as the page's reason), un-minimizes the tapped-to note by
 // its own ID and no other (the tap IS the Show verb) — and CYCLES IN PLACE:
-
-// where it is, the viewport stays; the far-off-note tradeoff is recorded on
-// advanceNoteFocus).
+// no forceReposition on any platform (the selection swaps where it is, the
+// viewport stays; the far-off-note tradeoff is recorded on advanceNoteFocus).
 func TestNextTapMatchesChipTapSemantics(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -137,7 +136,7 @@ func TestNextTapMatchesChipTapSemantics(t *testing.T) {
 	}
 	if st.forceReposition {
 		t.Error("the cycle must stay IN PLACE: a next-tap is a selection, not an arrival — " +
-
+			"forceReposition must stay false on every platform")
 	}
 }
 

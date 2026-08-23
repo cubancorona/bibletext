@@ -105,14 +105,14 @@ type AppState struct {
 	// the moment the mark replaced its state. Session-only, never stored.
 	//
 	// It exists because release must give back what suppression took, NEVER
-
-	// clears" rule): clearing the mark re-opens a note the suppression closed
-	// under the reader's eyes, and must NOT expand one that was only ever a
-
-	// maximizes for some reason". The capture CANNOT live in setMark: every
-	// arrival verb navigates FIRST and marks SECOND, and the navigation's own
-	// derive transiently opens the chapter's note — so at setMark time "the
-	// note was open" is true even for a note the reader never saw. Each
+	// MORE, refining the earlier "restore when the search clears" rule:
+	// clearing the mark re-opens a note the suppression closed under the
+	// reader's eyes, and must NOT expand one that was only ever a pill — the
+	// defect was a minimized note maximizing on its own when the
+	// back-to-results bar was dismissed. The capture CANNOT live in setMark:
+	// every arrival verb navigates FIRST and marks SECOND, and the navigation's
+	// own derive transiently opens the chapter's note — so at setMark time
+	// "the note was open" is true even for a note the reader never saw. Each
 	// foreign-mark verb therefore captures at ENTRY (captureSuppressionTake),
 	// before its navigation, and clearHighlightAndRederive consumes the answer.
 	suppressionTookOpen bool
@@ -229,10 +229,10 @@ type AppState struct {
 	// pendingNoteOpenID is the SHOW intent riding on a parked target: the
 	// browser's openNote parked behind a translation download, and the arrival
 	// must open THAT note — not run the generic link-arrival, whose bare
-	// hlLinkSpan is FOREIGN to the note and suppressed it to the pill (the
-
-	// way pendingLink carries its target: set only by openNote's parked return,
-	// consumed by consumePendingLink (which re-runs openNote now that the
+	// hlLinkSpan is FOREIGN to the note and suppressed it to the pill — tapping
+	// a note in the browser often still landed on the minimized pill. Threaded
+	// the way pendingLink carries its target: set only by openNote's parked
+	// return, consumed by consumePendingLink (which re-runs openNote now that the
 	// translation is in memory), and cleared wherever the park itself is
 	// displaced or dropped — a NEW link's park is a new intent, and a stale
 	// note id applied to it would hijack the reader's later tap. Zero = none.
@@ -249,7 +249,7 @@ type AppState struct {
 	// always wins.
 	preferredVersion string
 	// notesScroll is the notes browser's scroll position, kept for the WHOLE
-
+	// session — the browser remembers its place — so any
 	// return to the list — a rebuild while in Notes, opening a note and coming
 	// back, leaving the mode entirely and re-entering — lands the reader in
 	// the same neighbourhood rather than at the top of a long list.
@@ -929,13 +929,14 @@ func (s *AppState) captureSuppressionTake(book string, chapter int) {
 // navigation paths keep calling clearHighlightedVerse bare: they all funnel
 // through addRecentChapter, whose own tail ends on this same projection.
 //
-
-// The July rule said a suppressed note RESTORES when the search clears; the
-// honest synthesis with tonight's report ("a minimized note maximizes") is:
+// RELEASE GIVES BACK WHAT SUPPRESSION TOOK, NEVER MORE. The earlier rule said
+// a suppressed note RESTORES when the search clears; the honest synthesis with
+// the observed defect — a minimized note maximizing by itself on release — is:
 // if the note was OPEN when the foreign mark arrived, clearing re-opens it
-// whole (the July rule, unchanged); if it was only ever a pill here — stored-
-// minimized, or it arrived DURING the suppression and the reader never saw it
-// open — clearing leaves it a pill, and the reader's own tap is what opens it.
+// whole (the earlier rule, unchanged); if it was only ever a pill here —
+// stored-minimized, or it arrived DURING the suppression and the reader never
+// saw it open — clearing leaves it a pill, and the reader's own tap is what
+// opens it.
 // The record is the verbs' entry-time capture (captureSuppressionTake);
 // nothing here is stored, and the next navigation restarts the question.
 func clearHighlightAndRederive(state *AppState) {

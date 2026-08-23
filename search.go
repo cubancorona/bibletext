@@ -366,12 +366,12 @@ func buildSearchModeControls(state *AppState, onSelect func(mode searchMode)) fy
 	// LowImportance (flat) on the desktop. The desktop's flattening came from
 	// 18 June ("Desktop: make the Find/Ask toggle compact + quieter") and was
 	// never applied to touch, so the two platforms drew the same control two
-
-	// match the ipad where the unselected find button has a slight background").
+	// ways. The fork was resolved in favour of the iPad's treatment: the
+	// unselected Find button keeps a slight background on every platform.
 	//
 	// The desktop keeps its SMALLER chip — compact below still applies
 	// smallChipTheme — because that half of the June change was about size, not
-
+	// about the background, and only the background is being unified here.
 	idle := widget.MediumImportance
 
 	var kwBtn, aiBtn, notesBtn *widget.Button
@@ -429,7 +429,7 @@ func buildSearchModeControls(state *AppState, onSelect func(mode searchMode)) fy
 			// mode alone cannot decide. Deciding on it alone made the tap a
 			// silent exit: the reader pressed the lit Notes bubble expecting
 			// the list back and got a mode flip to keyword instead — nothing
-
+			// visible happened except Search lighting up (observed as the
 			// mimic/desktop desync). Mobile always shows the list whenever the
 			// row is visible (the row lives inside the Search tab), so there
 			// the toggle-out is unconditional, as before.

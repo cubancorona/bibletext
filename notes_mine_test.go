@@ -67,8 +67,8 @@ func TestTwoOfMyNotesOnOnePassageBothSurvive(t *testing.T) {
 	}
 }
 
-
-// same words on the same passage is the same note, and must not stack up. The
+// Duplicate is measured by everything being identical. Re-sharing the same
+// words on the same passage is the same note, and must not stack up. The
 // timestamp is deliberately NOT part of that comparison — the sending device
 // stamps it, so including it would make every re-share a new note.
 func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
@@ -89,9 +89,10 @@ func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
 	}
 }
 
-
-// "no display in text for now"). The reading page derives Kind=received notes
-// alone, so this is structural rather than a rule anyone has to remember.
+// Own notes are STORED but never drawn in the scripture text: displaying them
+// there is deliberately not done for now. The reading page derives
+// Kind=received notes alone, so this is structural rather than a rule anyone
+// has to remember.
 func TestMyNotesNeverReachTheReadingPage(t *testing.T) {
 	p := newNotePrefs()
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "Mark", Chapter: 4, VerseLo: 39,
@@ -194,7 +195,8 @@ func TestAnUnreadableStoreIsNotOverwrittenBySaveMyNote(t *testing.T) {
 }
 
 // The bubble has a TAIL, which is what makes it read as somebody speaking
-
+// rather than as a card — the tail is deliberate and load-bearing. Its
+// geometry mirrors the native sticker.
 func TestNoteBubbleHasATail(t *testing.T) {
 	pal := lightPalette
 	b := noteBubble("a message", pal)
@@ -220,8 +222,8 @@ func TestNoteBubbleHasATail(t *testing.T) {
 	// enough: the card's 1pt bottom border lands on a fractional device pixel at
 	// 2x and 3x, so magnified it still showed as a hairline lid straight across
 	// the tail's mouth — the tail read as a triangle stuck under a closed box
-
-	// pane). The amount is the thing to pin, not the direction.
+	// rather than as part of the bubble, unlike the reading pane's tail. The
+	// amount is the thing to pin, not the direction.
 	cardBottom := card.Position().Y + card.Size().Height
 	if got := cardBottom - tail.Position().Y; got < noteTailLidOverlap {
 		t.Errorf("the tail covers the card's border by %.1f, want at least %.1f — "+

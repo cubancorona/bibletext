@@ -33,11 +33,10 @@ const bibleKeyProbeBudget = 12 * time.Second
 //
 // The bundled key's characters are withheld (see the note in bibleKeySection),
 // so with it in force the box is empty — and an empty box reading "Paste your
-
-// "a little confusing to have the text box have nothing in it and say paste
-// your key when a key is included"). It now describes the state instead, and
-// the Paste button beside it plus the status line under it carry "how do I
-// change this".
+// API.Bible key" says there is no key when one is working: the field reads as
+// unset and asks to be filled while a working key is already in force. It now
+// describes the state instead, and the Paste button beside it plus the status
+// line under it carry "how do I change this".
 //
 // WHY NOT SAY BOTH: measured at the app's 18pt body size, "[Included with
 // BibleText]" is 195pt and fits the ~199pt a 320pt phone gives the box — and
@@ -58,10 +57,10 @@ func bibleKeyPlaceholder(usingBundled bool) string {
 		// BRACKETED because it is a DESCRIPTION, not a value and not an
 		// instruction. This is a password field: text sitting where masked
 		// characters would be can read as content, and the brackets say at a
-		// glance that it is neither something typed nor something to type
-		 The other branch stays unbracketed — an
-		// imperative already reads as a hint, and bracketing an instruction
-		// would only muddle the distinction this draws.
+		// glance that it is neither something typed nor something to type.
+		// The other branch stays unbracketed — an imperative already reads as a
+		// hint, and bracketing an instruction would only muddle the distinction
+		// this draws.
 		return "[Included with BibleText]"
 	}
 	return "Paste your API.Bible key"

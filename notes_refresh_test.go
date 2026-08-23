@@ -15,9 +15,9 @@ package bibletext
 // native pane already on screen. Ending them in state.refreshReadingOnly()
 // instead throws away and rebuilds the whole Fyne reading column, and because
 // the native view's frame TRACKS a widget in that column, the rebuild moves the
-// pane and the correction rides a 60 ms timer — the "delay and a flash of what
-
-// 19 Aug 2026. refreshNoteOnly (notes_refresh.go) does the two mutations and
+// pane and the correction rides a 60 ms timer — a visible delay, and a flash
+// during which the reading pane appears missized and misplaced.
+// refreshNoteOnly (notes_refresh.go) does the two mutations and
 // leaves the tree alone, falling back to the rebuild wherever that is not a
 // true substitute.
 //

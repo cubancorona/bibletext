@@ -17,8 +17,8 @@ import (
 // The note bubble, as the reading page draws it.
 //
 // ONE BUILDER, used by the reading banner and by the notes browser, because the
-
-// moment either is touched.
+// two surfaces have to match and two hand-built lookalikes drift the moment
+// either is touched.
 //
 // ── THE NOTE SPACING SPEC ────────────────────────────────────────────────────
 //
@@ -27,10 +27,9 @@ import (
 // above the card was 0 (iOS), a measured line (macOS), 8dp (Android) and 10
 // (this pane); the pill was 30 / 24 / ~26 / 28 for the same object; and
 // Android's card used a different internal rhythm again (6 top, 4 right, 10
-
-// for one answer — "measure the pill and note vertical spacing and margins
-// visually … make sure it's the same there. Really this should be done for all
-// platforms" — so the numbers live HERE and every surface reads them.
+// bottom, and a who row whose height was set by a verb glyph). The pill and the
+// note's vertical spacing and margins have to measure the same on every one of
+// the four surfaces, so the numbers live HERE and every surface reads them.
 //
 // The natives cannot import a Go constant into Objective-C or Java, so they
 // carry named constants of their own and notes_spacing_spec_test.go PARSES
@@ -109,9 +108,9 @@ import (
 //
 //  1. THE BAND OPENS ABOVE THE PARAGRAPH carrying the highlighted verse, never
 //     between two of that paragraph's lines. A card wedged mid-paragraph splits
-
-//     "No breaking up the Word of God." (Whether it should open BELOW that
-//     paragraph instead is TABLED and undecided — [redacted-retired-private-reference].)
+//     the passage in half, and the scripture text must never be interrupted
+//     mid-flow. (Whether it should open BELOW that paragraph instead is TABLED
+//     and undecided — [redacted-retired-private-reference].)
 //  2. THE BAND IS RESERVED SPACE, NOT LINE HEIGHT. It must be advance the
 //     layout adds between line boxes, never height added to one — see the
 //     techniques below for what each platform reserves with.
@@ -188,7 +187,7 @@ import (
 //	  → 14 permutations × light/dark (one/two/three notes, pill, suppression,
 //	    first verse, the 280-rune cap, narrow, wide, multi-verse, poetry, and a
 //	    no-note control). Each asserts geometry BEFORE writing its PNG.
-//	The same pane, live, on this Mac:
+//	The same pane, live, on macOS:
 //	  BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop
 //	iOS simulator, three notes arriving on one passage:
 //	  SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=s10next xcrun simctl launch <udid> uk.co.bibletext
@@ -321,8 +320,8 @@ func noteTailSVG(fill, stroke color.Color) fyne.Resource {
 	// bottom border. ONE point was not enough: magnified against the reading
 	// pane's one-path bubble, the border still showed as a hairline lid straight
 	// across the tail's mouth, so the tail read as a triangle stuck under a
-
-	// device pixel at 2x and 3x, so hiding it needs more than 1pt of cover.
+	// closed box. The stroke is 1pt but lands on a fractional device pixel at
+	// 2x and 3x, so hiding it needs more than 1pt of cover.
 	//
 	// The alternative — drawing card and tail as ONE path, the way the reading
 	// pane does — is more correct and was tried. It costs a full-size SVG
@@ -346,7 +345,7 @@ func noteTailSVG(fill, stroke color.Color) fyne.Resource {
 	// the BOTTOM, so the whole tail sat a lid too high: its mouth was inside the
 	// card, its strokes cut across the card's interior, and it hung 6pt instead
 	// of 9. The fill hid the border either way, which is why it looked nearly
-
+	// right and was not: on screen the tail read as a shape with no border.
 	w, d, lid := noteTailWidth, noteTailDepth, noteTailLidOverlap
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+
@@ -403,12 +402,12 @@ func noteBubble(text string, pal palette) fyne.CanvasObject {
 
 // noteBubblePadded is noteBubble with the card's inner padding as a parameter.
 // The bubble's IDENTITY — the rounded bordered card and the tail — is the
-
-// not: the notes browser packs rows (browseBubblePad, notes_browse.go) while
-// the reading banner keeps the page's own theme.Padding(), which is what the
-// default above passes. surface() cannot be reused for the tight case because
-// container.NewPadded reads the GLOBAL theme padding, out of reach of any
-// row-scoped override.
+// same everywhere, so the browser's bubbles match the reading pane's; its
+// DENSITY is not: the notes browser packs rows (browseBubblePad,
+// notes_browse.go) while the reading banner keeps the page's own
+// theme.Padding(), which is what the default above passes. surface() cannot be
+// reused for the tight case because container.NewPadded reads the GLOBAL theme
+// padding, out of reach of any row-scoped override.
 func noteBubblePadded(text string, pal palette, pad float32) fyne.CanvasObject {
 	body := widget.NewLabel(strings.TrimSpace(text))
 	body.Wrapping = fyne.TextWrapWord
@@ -425,7 +424,7 @@ func noteBubblePadded(text string, pal palette, pad float32) fyne.CanvasObject {
 }
 
 // noteBubbleWithByline is the bubble plus the attribution that must always
-
+// accompany it, and the attribution sits OUTSIDE the bubble.
 //
 // That is not decoration. Inside the bubble, a line saying who a note is from
 // would read as part of the message — as though the sender had typed it.
@@ -434,7 +433,7 @@ func noteBubblePadded(text string, pal palette, pad float32) fyne.CanvasObject {
 //
 // The TRANSLATION is not here any more: it rides in the heading beside the
 // reference, in parentheses, where it belongs with the other fact about which
-
+// passage this is.
 func noteBubbleWithByline(text, byline string, pal palette) fyne.CanvasObject {
 	rows := []fyne.CanvasObject{noteBubble(text, pal)}
 	if who := strings.TrimSpace(byline); who != "" {

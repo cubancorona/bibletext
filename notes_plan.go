@@ -20,7 +20,7 @@ package bibletext
 //
 // SUPPRESSION IS DERIVED, NEVER STORED. A live mark not owned by a note —
 // state.mark.live() && !state.mark.fromNote() — stands the notes down: zero
-
+// Open, Notes still present, and NOTHING is written. That is the rule
 // "minimize while search results are being displayed, then restore" made
 // mechanical: a suppression that restores is only possible because it never
 // wrote to the store ([redacted-retired-private-reference], "Suppression, not minimize").
@@ -35,12 +35,12 @@ import (
 	"strings"
 )
 
-// planOpenLimit is how many notes may be expanded at once — the TEMPORARY cap
-
-// honoured and nothing auto-expands). It lives HERE and nowhere else, as a
-// build constant rather than a preference, and it writes nothing: the cap is
-// maintained by the view and leaves zero bytes in the store, so lifting it a
-// year from now cannot greet a reader with chips they never closed.
+// planOpenLimit is how many notes may be expanded at once — the TEMPORARY cap:
+// at most one, and ZERO is legal (an explicit minimize is honoured and nothing
+// auto-expands). It lives HERE and nowhere else, as a build constant rather
+// than a preference, and it writes nothing: the cap is maintained by the view
+// and leaves zero bytes in the store, so lifting it a year from now cannot
+// greet a reader with chips they never closed.
 //
 // TO LIFT THE CAP: raise this number (or drop the counter). Nothing else
 // changes — not the store, not drawnNote, not the fingerprint.
@@ -626,15 +626,15 @@ func nextNoteFocusID(state *AppState, plan chapterPlan) uint64 {
 // table: "taps a note chip instead → that is the new choice"), focus names the
 // note, and the mirror is re-projected from the plan.
 //
-
-// reversing the S10 carry: "this shouldn't change the scroll position … it
-// should sort of change right in place"). The advance is a SELECTION, not an
-// arrival: the bubble and the wash swap where they are, and the viewport does
-// not move — so this verb deliberately does NOT set forceReposition, and the
-// Android export sets none either (btaNoteNextTapped). The named tradeoff:
-// cycling to a note anchored far down the chapter can put the sticker outside
-
-// over carry with that cost on the table.
+// THE CYCLE STAYS IN PLACE — NO CARRY, ON EVERY PLATFORM (reversing the S10
+// carry: advancing must not move the scroll position — the note changes right
+// where it is). The advance is a SELECTION, not an arrival: the bubble and the
+// wash swap where they are, and the viewport does not move — so this verb
+// deliberately does NOT set forceReposition, and the Android export sets none
+// either (btaNoteNextTapped). The named tradeoff: cycling to a note anchored
+// far down the chapter can put the sticker outside the viewport — the reader
+// scrolls to it themselves. In-place was chosen over carry deliberately, with
+// that cost on the table.
 func advanceNoteFocus(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return

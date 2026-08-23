@@ -4,7 +4,7 @@ package bibletext
 //
 // "Share with note" used to keep nothing: the moment the share sheet closed,
 // your own words existed only in the messenger thread. They are kept —
-
+// deliberately NOT drawn in the scripture text (by design: stored, and
 // visible in the notes list, but the reading page stays the other person's).
 //
 // They live in the ONE scrapbook store as Kind=mine records (notes_store.go).

@@ -6,7 +6,7 @@ package bibletext
 // Today the answer is a constant: "Friend" for a received note, "you" for the
 // reader's own. No name is collected, no name is displayed, and the share
 // sheet has no name field. But SenderName is CARRIED — decoded off the wire
-
+// and stored since the record codec landed — and the standing decision is to
 // design and implement ahead so a name field later is a switch-flip, not a
 // migration. So the display path exists NOW, built and table-tested, gated
 // behind one build constant that nothing sets:
@@ -45,8 +45,8 @@ import (
 	"unicode/utf8"
 )
 
-
-// ships. While false, every byline says "Friend" whatever a record carries —
+// senderNamesEnabled is the build flag that turns names on when the name
+// field ships. While false, every byline says "Friend" whatever a record carries —
 // the dormant path below is compiled, tested and unreachable.
 const senderNamesEnabled = false
 
@@ -84,8 +84,9 @@ func senderNameWithFlag(n StoredNote, enabled bool) string {
 // "Note from Friend" today, exactly the literal it replaces.
 func senderByline(n StoredNote) string {
 	if n.Kind == noteKindMine {
-
-		// this arm serves any future surface that attributes one natively.
+		// Own notes are never drawn in the reading text — that exclusion is
+		// deliberate — so this arm serves any future surface that attributes one
+		// natively.
 		return "Note from you"
 	}
 	return "Note from " + senderName(n)

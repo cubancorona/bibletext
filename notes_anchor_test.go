@@ -165,7 +165,7 @@ func TestPlacedPredicate(t *testing.T) {
 	}
 }
 
-
+// Eight arms, THREE sentences (three is deliberate): one per unplaced arm,
 // nothing for any placed arm, and nothing for placedOtherChapter — the derive
 // already shows that note on the other chapter, so there is nothing to
 // apologise for. Same rules as the S4 wire notices: quiet, attributed to

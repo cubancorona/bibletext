@@ -11,7 +11,7 @@ import (
 // Christ — the overlap that was rendering wrong. John 11:25 is used because it
 // is a real entry in wordsOfChristRanges (the table is keyed by book/chapter/
 // verse, so a fabricated book would never be red and the test would pass while
-
+// proving nothing), and because it is the verse the defect was found on.
 func john11State(t *testing.T) *AppState {
 	t.Helper()
 	if !isWordsOfChrist("John", 11, 25) {

@@ -65,7 +65,7 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 	// in the ordinary case, not an exotic one: two people sharing a link often
 	// read different translations, and a link shared FROM a licensed translation
 	// comes back naming a published one, so it was the sender's own note that
-
+	// vanished — as seen with the NKJV. John 3:16 is John 3:16 in both.
 	got2, ok := noteForChapter(p, "bsb", "John", 3, nil)
 	if !ok {
 		t.Fatal("the note did not follow the passage into the other translation")

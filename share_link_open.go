@@ -106,7 +106,7 @@ func consumePendingLink(state *AppState) {
 
 // applyShareTarget navigates to the passage a shared link names.
 //
-
+// It SWITCHES to the translation the link names, deliberately. That was not
 // always so: it used to stay in the reader's translation, because switching can
 // mean a multi-megabyte download behind a spinner, possibly on cellular,
 // possibly on someone's first sight of the app — and the passage was thought to
@@ -147,16 +147,16 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	if state == nil || state.Bible == nil {
 		return
 	}
-
-	// note is somebody's remark on particular wording.
+	// Open it in the translation it was WRITTEN against, deliberately. A note is
+	// somebody's remark on particular wording.
 	//
 	// THE TARGET IS NO LONGER ALWAYS OPENABLE. This used to read "the contract
 	// only ever names a public-domain id, so the target is always a translation
 	// this app can show", and that sentence was the stated reason nothing below
 	// had to cope. It stopped being true when /nkjv/ became a real link path: a
 	// reader without the NKJV gets a translation they cannot be switched to. What
-
-	// should get a message" — the passage still opens, in whatever translation
+	// happens then is deliberate and is the whole point of the rule that they
+	// SHOULD get a message — the passage still opens, in whatever translation
 	// they have, and showLinkVersionUnavailable says so afterwards. The scripture
 	// is not the licensed part; leaving them staring at the wrong wording with no
 	// explanation is exactly the silent downgrade this replaced.
@@ -371,13 +371,13 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 				// Tapping a link that IS this note is the Show verb, exactly as
 				// tapping its chip is: the stored Minimized is cleared before
 				// the projection, so the note OPENS. This reverses the S7
-				// decision that a re-arrival honours the stored minimize — the
-
-				// the note when clicking") and it reads as a broken tap, not
-				// as a respected preference. N5's rule is that nothing
+				// decision that a re-arrival honours the stored minimize — on
+				// a real device that behaviour left the link tap doing nothing
+				// visible (the note stayed a chip), which reads as a broken
+				// tap, not as a respected preference. N5's rule is that nothing
 				// AUTO-expands; a deliberate tap on the note's own link is not
 				// automation, it is the most explicit naming of this note the
-
+				// reader has.
 				if stored.Minimized {
 					setNoteMinimizedByID(appPrefs(), stored.ID, false)
 				}
@@ -669,8 +669,8 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 	}
 	// Two different noes, kept apart on purpose. An id we do not know is a link
 	// from a future BibleText: degrade quietly and open the passage where they
-	// are. A registered translation this reader has not unlocked is the case the
-
+	// are. A registered translation this reader has not unlocked is the case that
+	// does deserve a message — but the telling belongs to applyShareTarget
 	// (linkVersionUnavailable), after the passage is on screen, not to a helper
 	// whose job is deciding who navigates.
 	v, ok := versionByID(want)

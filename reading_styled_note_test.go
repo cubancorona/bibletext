@@ -110,7 +110,7 @@ func TestStyledLayoutReservesTheNoteBand(t *testing.T) {
 	if lay.BandLine < 0 {
 		t.Fatal("no band was reserved for the anchor verse")
 	}
-
+	// THE PARAGRAPH RULE: the band opens above the whole
 	// paragraph carrying the verse — never between two of its lines, which
 	// would break the passage in half. So BandLine is the paragraph's FIRST
 	// line, at or above the anchor verse's own line, and the anchor verse
@@ -952,8 +952,8 @@ func TestBannerKeepsWhatTheStickerCannot(t *testing.T) {
 // The band gives the card the SAME air above as below. iOS gets the top gap
 // free from paragraphSpacingBefore (its band opens above a whole paragraph);
 // this pane anchors to the verse's own line, so without this the card butted
-
-// ("spacing above the note and pill seems smaller than iOS?").
+// against the line above — 0pt against 19pt, and the mismatch was obvious at a
+// glance: both the note and the pill had less air above them than on iOS.
 func TestStyledNoteBandIsSymmetric(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -995,9 +995,9 @@ func TestStyledNoteBandIsSymmetric(t *testing.T) {
 }
 
 // TestStyledPillMatchesTheApplePill holds the collapsed marker to the SAME
-// numbers and the same ink as iOS's chip, because the two sit side by side on
-
-// mode the pills don't look like iOS… spacing and coloring and text color").
+// numbers and the same ink as iOS's chip, because the two are compared side by
+// side and any drift shows immediately — in mimic mode the pills had stopped
+// matching iOS in spacing, colouring and text colour.
 //
 // WHAT WENT WRONG BEFORE, and what this therefore guards: the pill was
 // MEASURED at the who size (11pt semibold, matching btNoteWhoFont) and then

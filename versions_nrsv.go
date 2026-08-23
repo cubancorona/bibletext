@@ -6,10 +6,9 @@ package bibletext
 //
 // It was a registered translation carrying a placeholder source: never
 // selectable, shown in the picker as "evaluation in progress", and named in the
-
-// for it gone from everything that ships (22 Aug 2026: "remove nrsv … nothing in
-// the deployed apps or docs"), while leaving the wiring for anyone who does hold
-// a licence.
+// support page as a copyrighted translation awaiting licensing. It is now out of
+// everything that ships — nothing in the deployed apps or the docs — while the
+// wiring stays for anyone who does hold a licence.
 //
 // A BUILD TAG rather than a runtime switch, deliberately. A runtime flag would
 // still carry the name, the publisher line and the provider plumbing in every

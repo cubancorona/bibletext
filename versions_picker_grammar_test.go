@@ -4,10 +4,9 @@ package bibletext
 //
 // Both were written when the list they described happened to have the length
 // the wording assumed. Removing the NRSV left one evaluation version and the
-
-// reasonably amused). The bring-your-own-key line had the mirror-image fault
-// waiting: it said "unlocks", so a second BYOK translation would have produced
-// "X and Y unlocks".
+// picker read "LSB are under evaluation … they unlock". The bring-your-own-key
+// line had the mirror-image fault waiting: it said "unlocks", so a second BYOK
+// translation would have produced "X and Y unlocks".
 //
 // Registering or removing a translation is a normal thing to do, so the
 // sentences are tested at every length that changes the verb.

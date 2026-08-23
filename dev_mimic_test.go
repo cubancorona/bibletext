@@ -56,9 +56,9 @@ func TestMimicLinuxFlipsSeams(t *testing.T) {
 	// INVERTED 19 AUG, with the surface it names. The styled pane now draws the
 	// note IN THE TEXT (reading_styled_note.go), so the Windows/Linux answer to
 	// "does the pane draw the note itself?" is yes — and mimic must agree, or
-	// the mode would show the retired banner and hide the very surface it
-
-	// more: it follows useStyledPane, which the same function just set.
+	// the mode would show the retired banner and hide the very surface mimic
+	// exists to preview. Nothing in dev_mimic_on.go pins this any more: it
+	// follows useStyledPane, which the same function just set.
 	if !nativeNoteSticker() {
 		t.Error("nativeNoteSticker is false under mimic — mimic would draw the retired banner instead of the styled pane's own in-text sticker")
 	}

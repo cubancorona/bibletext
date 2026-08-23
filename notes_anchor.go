@@ -134,10 +134,10 @@ type placement struct {
 }
 
 // placementCopy is the sentence a surface shows for an unplaced arm — THREE
-
-// surfaces, two of them behind cgo, stay buildable. Same rules as the S4 wire
-// notices (noteOutcomeMessage): attributed to nobody, no call to action, no
-// link, quiet.
+// sentences for eight arms (the collapse to three is deliberate), so the four
+// note-drawing surfaces, two of them behind cgo, stay buildable. Same rules as
+// the S4 wire notices (noteOutcomeMessage): attributed to nobody, no call to
+// action, no link, quiet.
 //
 // placedOtherChapter is deliberately NOT an unplaced sentence: the note lives
 // on the other chapter and the derive already shows it there, so this function

@@ -2,7 +2,7 @@ package bibletext
 
 // A shared link opens in the translation it was written against, and the note it
 // carries is filed under that translation — not under whatever the reader
-
+// happened to be reading. That filing rule is deliberate.
 //
 // Verse numbering is NOT interchangeable across translations (see
 // versification_test.go: Romans 14/16 genuinely renumber), which is what makes

@@ -243,9 +243,9 @@ func TestNoticePagesAlwaysOfferARouteOut(t *testing.T) {
 	}
 }
 
-
-// for on one page: the passage is named, the translation is named, there is an
-// explicit open-in-app affordance worded together with the explanation, and the
+// TestNoticeChapterPageSaysWhatItMustSay pins the four things one page must
+// do: the passage is named, the translation is named, there is an explicit
+// open-in-app affordance worded together with the explanation, and the
 // parallel passage is offered.
 func TestNoticeChapterPageSaysWhatItMustSay(t *testing.T) {
 	site, _ := noticeFixture(t)

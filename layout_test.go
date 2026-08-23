@@ -2,7 +2,7 @@ package bibletext
 
 import "testing"
 
-
+// ONE LAYOUT ON EVERY TOUCH DEVICE. This test used to
 // assert the opposite for tablets — a wide iPad got layoutRegular, the sidebar
 // layout — and it is inverted here deliberately rather than deleted, because
 // the inversion IS the decision: the iPad's two reported problems (a mode row

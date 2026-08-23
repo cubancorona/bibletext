@@ -1,8 +1,8 @@
 package bibletext
 
-
-// icon in the search box is still highlighted and clicking it does not take me
-// back from reader to notes and also then causes search to be highlighted").
+// The desktop/mimic mode row must be HONEST. THE DEFECT: the notes icon in
+// the search box stayed highlighted, clicking it did not go back from the
+// reader to the notes list, and the click then lit Search instead.
 // Three symptoms, one state model: on desktop the Notes MODE survives opening
 // a note (the reading pane takes the results pane, NotesMode stays true), and
 // the bubble's toggle-out used to fire on the mode alone — so the tap that
@@ -128,8 +128,8 @@ func TestDesktopModeRowStaysHonestThroughANoteOpen(t *testing.T) {
 		t.Error("the bubble's highlight must reflect the mode the pane belongs to")
 	}
 
-
-	// BACK TO THE LIST — not silently flip the mode and light Search.
+	// The defect's tap: the lit bubble, pressed from the reader, must take the
+	// reader BACK TO THE LIST — not silently flip the mode and light Search.
 	test.Tap(notesBtn)
 	if !st.IsSearching || searchModeOf(st) != modeNotes {
 		t.Errorf("the bubble must return the reader to the notes list: searching=%v mode=%v",

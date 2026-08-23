@@ -453,8 +453,8 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 		},
 		{
 			// Re-opening the link of a note the reader HID: the dedup finds the
-
-			// no duplicate is minted.
+			// stored record, the tap is the Show verb, and no duplicate is
+			// minted.
 			name: "link re-arrival",
 			act: func(t *testing.T, st *AppState, notes []StoredNote) {
 				hideCurrentNote(st)

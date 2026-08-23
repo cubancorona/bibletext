@@ -3,7 +3,7 @@
 package bibletext
 
 // THE LSB, BEHIND A BUILD TAG — the same treatment the NRSV got, for the same
-
+// reason: it is gated out of the default build rather than removed.
 //
 // See versions_nrsv.go for why this is a build tag and not a runtime flag: a
 // runtime switch would still carry the name, the publisher line and the

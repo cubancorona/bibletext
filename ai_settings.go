@@ -24,8 +24,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// settingsTapOutsideCloses gates the sheet's tap-anywhere-outside dismissal
-
+// settingsTapOutsideCloses gates the sheet's tap-anywhere-outside dismissal.
+// The choice is deliberate: accidental closes while scrolling outweighed
 // the convenience, so the sheet is MODAL for now — the ✕ is the close verb,
 // and a tap or drag that misses the card does nothing. The whole outside-tap
 // arrangement stays behind this constant, one flip from returning: the
@@ -142,9 +142,9 @@ func showAISettings(state *AppState) {
 		// THE SAME STATUS VOICE THE API.BIBLE KEY USES (bible_key_settings.go).
 		// This was a plain Label, which renders at BODY size, so the identical
 		// event — a key was tested and works — appeared in two different sizes
-		// and two different wordings in one sheet, a few hundred points apart
-
-		// status, not a headline, and both now say so the same way.
+		// and two different wordings in one sheet, a few hundred points apart,
+		// which reads as a mismatch with both on screen at once. A test result
+		// is a status, not a headline, and both now say so the same way.
 		result := widget.NewRichText()
 		result.Wrapping = fyne.TextWrapWord
 		result.Hide()
@@ -422,12 +422,12 @@ func showAISettings(state *AppState) {
 			container.NewVBox(
 				widget.NewSeparator(),
 				// Named, not a bare "Key": once the provider list has scrolled
-
+				// away the row must still say WHOSE key this is.
 				// The link rides THIS row, top-right of the box — "Get a key" is
 				// what you need BEFORE you have one, so it belongs at the start
 				// of the section rather than below the field, the buttons and
-
-				// the status line, whose text varies with state.
+				// the status. It also stops it competing with the status line,
+				// whose text varies with state.
 				container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel(providerKeyLabel(info))), link),
 				// The field gets its OWN full-width line under that label: an API
 				// key is long, and sharing a row with the label left it a stub.
@@ -577,12 +577,13 @@ func showAISettings(state *AppState) {
 	// Delete all notes: a plain, always-reachable way to clear the lot. Without
 	// it the ONLY route to deletion was the off-switch's keep-or-delete question,
 	// so a reader who wanted the messages gone but the feature ON had nowhere to
-
+	// go. Destructive importance, and it asks first. Disabled
 	// when there is nothing stored, so the row never offers a no-op.
 	// Deliberately NOT DangerImportance: a filled red button shouts at a reader
 	// who is only passing through Settings, and the weight belongs on the
-	// confirmation (whose "Delete them" IS danger-marked), not on the way in
-
+	// confirmation (whose "Delete them" IS danger-marked), not on the way in,
+	// where it simply reads as too loud. It keeps a button background and the
+	// trash icon
 	// rather than going borderless, because a low-importance button reads as a
 	// plain label and hides that it is tappable — the same reasoning as the
 	// Paste / Clear / Test row above.
@@ -757,12 +758,12 @@ func showAISettings(state *AppState) {
 		notesNote,
 	)
 	if redLetterSupported() {
-
+		// His words close the sheet — a standing layout choice: the
 		// last thing the reader sees before returning to the text. Under its own
 		// header so nothing floats unlabelled.
 		//
 		// The header names Him in full and the setting beneath it names Him as
-
+		// King. The two are deliberately not the same phrase:
 		// the header is the formal identification, the line the reader actually
 		// acts on is the confession.
 		form.Add(sheetGap())
@@ -776,7 +777,7 @@ func showAISettings(state *AppState) {
 	}
 	hint := canvas.NewText(hintCopy, pal.TextMuted)
 	hint.TextSize = 11
-
+	// A small, humble link home, riding under the hint in the
 	// sheet's non-scrolling foot: the site is where the download links, the
 	// support page and the web reader live, and Settings is the one place a
 	// reader goes looking for "about this app". A Hyperlink at the hint's own
@@ -825,7 +826,7 @@ func showAISettings(state *AppState) {
 	//
 	// MODAL (the current choice): a dim scrim behind the card, the ✕ is the
 	// close verb, and a tap or scroll-drag that misses the card does NOTHING —
-
+	// the accidental dismiss-while-scrolling this replaced cannot
 	// happen, because Fyne's modal popup swallows outside events instead of
 	// closing on them.
 	//
@@ -967,8 +968,9 @@ func settingsGroup(pal palette, rows ...fyne.CanvasObject) fyne.CanvasObject {
 	// paper, and it is within one unit per channel of Input (253,252,248 against
 	// 252,251,247 in light mode), so a card painted with it is indistinguishable
 	// from a text field: the eye reads every group as an enormous empty input.
-
-	// confusion those two near-identical values produce.
+	// The result reads as abrasive and not as a card at all — it is taken for a
+	// text box, which is exactly the confusion those two near-identical values
+	// produce.
 	return surface(container.NewVBox(rows...), pal.SurfaceAlt, pal.Border, fyne.Size{})
 }
 

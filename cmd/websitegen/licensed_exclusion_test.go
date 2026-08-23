@@ -127,7 +127,7 @@ func TestOnlyNoticedLicensedIDsMayBeRoots(t *testing.T) {
 		noticed[nv.ID] = true
 	}
 	if len(noticed) != 1 || !noticed["nkjv"] {
-
+		t.Errorf("noticedVersions = %v, want exactly {nkjv} — a new signpost root must be a deliberate edit here", noticed)
 	}
 	// A noticed version carries a name and NOTHING that could hold scripture.
 	// This is the structural guarantee behind the sentinel walk below.

@@ -109,7 +109,7 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 	// survived only in whatever messenger you sent them through — which meant
 	// the app could show you every note you had RECEIVED and none you had sent.
 	// Stored as a Kind=mine record in the scrapbook store, never drawn in the text,
-
+	// and visible in the notes browser — that visibility is deliberate.
 	// The note goes in the MESSAGE too, not only inside the link. It is how
 	// people share things anyway, it reaches a recipient who never taps, and it
 	// reaches one whose app is too old to read the note out of the fragment.

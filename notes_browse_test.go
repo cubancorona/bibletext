@@ -193,14 +193,14 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 	}
 }
 
-
-// always show it (it seems often still minimized pill)". A browser tap must
-// ALWAYS answer, through EVERY route — this is the route table. Each route is
-// a way the verify pass confirmed a tap could end at the pill, at nothing, or
-// on an invalid chapter; each row asserts the route now lands the way the
-// reader asked. Common to all: a browser arrival raises NO results trail
-
-// hit — the way back to the list is the Search tab's Notes mode).
+// THE DEFECT: tapping a note in the note browser did not always show it — it
+// often arrived as a minimized pill instead. A browser tap must ALWAYS
+// answer, through EVERY route — this is the route table. Each route is a way
+// the verify pass confirmed a tap could end at the pill, at nothing, or on an
+// invalid chapter; each row asserts the route now lands the way the reader
+// asked. Common to all: a browser arrival raises NO results trail — a row tap
+// is a navigation, not a search hit, and the way back to the list is the
+// Search tab's Notes mode.
 func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 	t.Run("minimized under a leftover foreign mark", func(t *testing.T) {
 		// Both halves of the "sometimes": the stored minimize (the Show verb
@@ -284,7 +284,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		}
 		if st.NoteMinimized || notesSuppressed(st) {
 			t.Fatalf("the note arrived collapsed after the wait: min=%v suppressed=%v — "+
-
+				"the collapsed-pill defect this pins", st.NoteMinimized, notesSuppressed(st))
 		}
 		if !st.mark.fromNote() {
 			t.Error("the arrival's mark must be the note's own, never a link span")
@@ -332,7 +332,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 
 	t.Run("your own note answers with its verses lit", func(t *testing.T) {
 		// Report A mechanism 1: mine notes are excluded from the chapter plan
-
+		// (stored, but never drawn in the text), so focusing one named an id
 		// no plan surfaces — the reader landed on the other notes' pill, or on
 		// nothing. The tap now navigates and lights the note's own range as a
 		// Go-to arrival; no received-note bubble is faked.
@@ -359,15 +359,15 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		if !live || sp.Lo != 1 || sp.Hi != 2 {
 			t.Fatalf("your note's verses must light on arrival: live=%v span=%+v", live, sp)
 		}
-
+		// Updated: This block used to assert the opposite:
 		// that a mine note raises hlVerseOfDay and that no bubble is drawn. That
 		// was the honest answer while the plan could not draw an own note at
 		// all — but it had a consequence nobody had traced. hlVerseOfDay is not
 		// fromNote, so notesSuppressed was TRUE, and tapping your own row stood
 		// down every note on the chapter: a FRIEND's open note collapsed to a
-		// pill because you touched your own. The reader's report ("takes you to
-		// the reading pane with the highlight only and no note — a bit
-		// misleading") was the smaller half of it.
+		// pill because you touched your own. The visible half of the defect was
+		// the smaller one: the tap landed on the reading pane with the
+		// highlight only and no note at all, which reads as misleading.
 		//
 		// Now your own note is drawn while focus names it, in the plan's own
 		// slot, and hidden again when you navigate away. So the mark is the
@@ -652,8 +652,8 @@ func TestNotesSortPersists(t *testing.T) {
 // A view that takes over the whole results pane has to own its exit. Reaching
 // the notes list from Settings → the note count leaves the sidebar's
 // Search/Find/Notes control still reading "Search", so it does not look like the
-// thing holding the reader there — and there was nothing else to press
-
+// thing holding the reader there — and there was nothing else to press, so
+// the notes view had no way back to the reading pane at all.
 func TestClosingTheNotesListReturnsToReading(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -801,9 +801,9 @@ func TestOwnNoteHidesAgainOnNavigation(t *testing.T) {
 
 // TAPPING YOUR OWN LINK GIVES YOU YOUR OWN NOTE — once, and as yours.
 //
-
-// into my stored notes as from me. But then if I click my own link it seems to
-// get stored again a second time as from friend."
+// This is the whole round trip of the defect: a sent note is filed in the
+// stored notes as from me, but opening my own link filed it a SECOND time,
+// that copy recorded as coming from a friend.
 //
 // The key is the per-note nonce (share_note.go, noteTagNonce), not the words: a
 // friend may write the same sentence on the same verse, and collapsing on
@@ -1043,10 +1043,10 @@ func TestReadingPageVerbsStillWorkOnAReceivedNote(t *testing.T) {
 	}
 }
 
-
-// height ... at all").
+// THE ROW'S DELETE CONTROL COSTS NO HEIGHT: it must not increase the row's
+// vertical height at all.
 //
-
+// The browser's density has been fought for twice already, so this
 // measures rather than trusts: build the row as it ships, build it again with
 // the control removed, and compare. A control that needs its own line — or one
 // whose minimum height simply exceeds a short bubble's — would fail here rather

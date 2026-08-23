@@ -9,10 +9,9 @@ package bibletext
 // native overlay notifier, and dropping the soft keyboard — three small seams,
 // declared per platform, rather than a whole second layout.
 //
-
-// prioritize compatibility and uniformity with other platforms where it makes
-// sense so we don't have to keep reworking everything for the various
-// platforms."
+// The reason, and the one to weigh before splitting it again: compatibility
+// and uniformity across platforms come first wherever they sensibly can, so
+// that the same work does not have to be reworked for each platform in turn.
 
 import (
 	"strings"
@@ -92,7 +91,7 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	header := buildHeader(state)
 
 	// THE NAVIGATION'S PLACE. Bottom bar everywhere by default; the left rail is
-
+	// a preview (compactNavRail) while it is undecided whether a desktop
 	// window should inherit the phone's bar or take the rail convention that
 	// pointer-driven windows use. Same destinations either way — only the edge
 	// they sit on differs.
@@ -170,7 +169,7 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 	// One layout, two presentations, and the split is a convention rather than a
 	// preference: a bar pinned across the bottom is what every iPhone app has,
 	// and a floating bar is what iPadOS itself introduced for the larger screen.
-
+	// The pill was tried on both and kept only where it belongs.
 	//
 	// Note what does NOT differ: the tabs, their order, their behaviour, and the
 	// tightened icon-to-label gap are one piece of code for both. This is the
@@ -243,9 +242,8 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 // The obvious spelling — NewVBox(rule, NewPadded(tabs)) — is not symmetric, and
 // the asymmetry is invisible in the code: a VBox spaces its children by theme
 // padding, so the tabs got that 7pt PLUS the 7 from NewPadded above, and only
-// the 7 from NewPadded below. Two to one, on every phone and every tablet
-
-// are not equal").
+// the 7 from NewPadded below. Two to one, on every phone and every tablet,
+// and plainly visible on device as unequal vertical margins in the nav bar.
 //
 // This is the SAME trap the tab cell's icon-to-label gap hit — a VBox's padding
 // is between its children, not something you can reason about from the call
@@ -299,17 +297,17 @@ func (l tabBarCentreLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
 // ONE INNER PADDING, BOTH AXES. The first cut used 6 across and 4 down while
 // giving each tab a 104pt slot for a ~34pt label — so the pill carried about
 // 40pt of dead space either side of every icon and 4pt above and below it
-
-// hardly"). The numbers below are derived rather than picked: a tab's content
-// is a 20pt icon, a 2pt gap and a 10pt label — about 35pt tall — so a single
-// 12pt pad on every side gives a ~59pt pill with the icon and the label evenly
-// inset, and the radius is half of that, which is what makes it read as a
+// — wide horizontal margins with hardly any vertical margin at all. The
+// numbers below are derived rather than picked: a tab's content is a 20pt
+// icon, a 2pt gap and a 10pt label — about 35pt tall — so a single 12pt pad
+// on every side gives a ~59pt pill with the icon and the label evenly inset,
+// and the radius is half of that, which is what makes it read as a
 // floating capsule rather than a rounded bar.
 const (
 	tabBarInsetX float32 = 14 // gap from the screen edges to the pill
 	tabBarInsetY float32 = 10 // gap from the bottom safe area to the pill
 
-
+	// The pill's inner margins, horizontal ≈ 3 × vertical. A capsule
 	// wants generous end caps and a tight cap above and below — equal padding on
 	// all four sides, which is what this was for one iteration, makes it read as
 	// a rounded rectangle that happens to have curved ends rather than as one
@@ -338,8 +336,8 @@ const (
 	// thickness from them (tab_rail.go): a literal here and a literal there
 	// would drift the moment either moved.
 	// The air above and below the tabs in the edge-to-edge bar, on BOTH sides.
-
-	// the old asymmetric spelling gave 14 above; this keeps that generosity
+	// Larger than the theme's 7 because the bar wanted to be roomier and the
+	// old asymmetric spelling gave 14 above; this keeps that generosity
 	// while making the two match.
 	tabBarEdgePadY float32 = 12
 
@@ -357,13 +355,12 @@ const (
 // to the Read tab.
 // buildMobileBooksTab is the canon as a GRID, grouped by testament.
 //
-
-// awkward — rethink it from a design and elegance and usability perspective").
-// It was 66 rows of 44pt: about 2,900pt of scrolling to reach Revelation, each
-// row spending the pane's whole width on one short word, with nothing to tell
-// you where you were except the accent on the current book. That is a phone
-// compromise, and it was inherited onto the iPad unexamined when the tablet
-// started using this view.
+// WHY IT IS NOT A LIST ANY MORE: the list was awkward, and was rethought from
+// a design, elegance and usability perspective. It was 66 rows of 44pt: about
+// 2,900pt of scrolling to reach Revelation, each row spending the pane's whole
+// width on one short word, with nothing to tell you where you were except the
+// accent on the current book. That is a phone compromise, and it was inherited
+// onto the iPad unexamined when the tablet started using this view.
 //
 // Three things change, and each is a usability answer rather than a decoration:
 //
@@ -830,7 +827,7 @@ func (c *tabCell) CreateRenderer() fyne.WidgetRenderer {
 	// and is not: VBox lays its children out with theme padding BETWEEN them, so
 	// the spacer was padded above and below and the real gap was about 10pt —
 	// enough to make the label look like a caption under the icon rather than
-
+	// part of the same control, on both form factors. A custom padded
 	// VBox takes the theme padding out of it, so the number below is the gap.
 	col := container.New(
 		layout.NewCustomPaddedVBoxLayout(tabBarIconLabelGap),
@@ -844,7 +841,7 @@ func (c *tabCell) CreateRenderer() fyne.WidgetRenderer {
 	// leaves any slack at the bottom, so the icon-and-label pair sat against the
 	// top of a cell that is taller than they are — which reads as the bar having
 	// more air below the labels than above the icons, no matter what the bar's
-
+	// own padding does — plainly visible on device.
 	//
 	// NewCenter is the whole fix: it gives the column its minimum size and puts
 	// it in the middle of whatever the cell turns out to be.
@@ -877,10 +874,10 @@ var _ fyne.Tappable = (*tabCell)(nil)
 // it. A desktop window dragged narrow becomes a phone bar on the way past, which
 // is the correct behaviour and not a special case anyone had to write.
 //
-
-// it against this on real screenshots and chose the grounded bar; the pill stays
-// implemented because the choice was between two finished things, and reversing
-// it should be a constant rather than a rebuild.
+// The floating pill was the tablet's dress until the two were compared on real
+// screenshots and the grounded bar won; the pill stays implemented because the
+// choice was between two finished things, and reversing it should be a
+// constant rather than a rebuild.
 type tabBarStyle int
 
 const (

@@ -203,13 +203,13 @@ func TestBluebookQuotationRule5(t *testing.T) {
 			"verse that OPENS a quotation is balanced, then nested + wrapped",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.",
 			"“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.”",
-
+			"leading mark must survive; balanced for a self-contained share",
 		},
 		{
 			"John 18:38: internal quotations nest to single inside the outer double",
 			"“What is truth?” Pilate asked. And having said this, he told them, “I find no basis for a charge against Him.",
 			"“‘What is truth?’ Pilate asked. And having said this, he told them, ‘I find no basis for a charge against Him.’”",
-
+			"nested quotations take single marks (Rule 5.1(b))",
 		},
 		{
 			"apostrophes are not double quotes, so the verse is still wrapped",
@@ -221,7 +221,7 @@ func TestBluebookQuotationRule5(t *testing.T) {
 			"verse that OPENS an embedded single-quoted citation is closed, not left dangling",
 			"David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.",
 			"“David says about Him: ‘I saw the Lord always before me; because He is at my right hand, I will not be shaken.’”",
-
+			"Acts 2:25 opens David's psalm citation, which closes in v28 — the inner single must be matched (Rule 5.1(b))",
 		},
 		{
 			"a curly apostrophe (God’s) is never mistaken for an unclosed inner single",
@@ -346,7 +346,7 @@ func TestBluebookSharePipeline(t *testing.T) {
 // TestBluebookQuoteMarkBalancing covers the rule that a shared fragment must be a
 // balanced, self-contained quotation: a closing mark whose opener is in the
 // surrounding (unselected) text gains a leading opener; an opener whose closer is in
-
+// the surrounding text gains a trailing closer.
 func TestBluebookQuoteMarkBalancing(t *testing.T) {
 	cases := []struct{ name, in, want string }{
 		{"already balanced is unchanged", "“Let there be light,” he said.", "“Let there be light,” he said."},
@@ -363,9 +363,9 @@ func TestBluebookQuoteMarkBalancing(t *testing.T) {
 	}
 }
 
-
-// selection that OMITS the verse's leading quotation mark must still pin to its verse
-// (bidirectional match), not fall back to the chapter-only "John 18".
+// TestBluebookFragmentPinsToVerse is the citation half of the John 18:38 fragment
+// defect: a selection that OMITS the verse's leading quotation mark must still pin
+// to its verse (bidirectional match), not fall back to the chapter-only "John 18".
 func TestBluebookFragmentPinsToVerse(t *testing.T) {
 	full := "“What is truth?” Pilate asked. And having said this, he went out again to the Jews and told them, “I find no basis for a charge against Him."
 	st := bbChapter("John", 18, map[int]string{38: full})
@@ -375,7 +375,7 @@ func TestBluebookFragmentPinsToVerse(t *testing.T) {
 	}
 }
 
-
+// TestBluebookFragmentSharePipeline is that same fragment case end to end: a fragment
 // that omits the leading quote and ends mid-quotation produces a balanced quotation
 // and the correct verse citation.
 func TestBluebookFragmentSharePipeline(t *testing.T) {
@@ -480,7 +480,7 @@ func TestBluebookTerminalPunctuation(t *testing.T) {
 	}
 }
 
-
+// TestBluebookEndOmissionPipeline is the end-omission case end to end: John 18:38
 // (BSB), the selection cut at "...I find no" (mid-sentence) and missing the leading
 // quote. Expect the leading quote balanced, the omission ellipsis added, the verse's
 // internal quotations nested down to single marks inside an outer double pair (Rule
@@ -498,10 +498,9 @@ func TestBluebookEndOmissionPipeline(t *testing.T) {
 	}
 }
 
-// TestBluebookActsShareCards pins the two user-reported Acts 2 (BSB) share cards
-
-// citation, whose closing single mark lives in v28 — the inner single must be
-// CLOSED, not left dangling (Rule 5.1(b)). Card B (Acts 2:22 through a mid-sentence
+// TestBluebookActsShareCards pins the two Acts 2 (BSB) share cards end to end.
+// Card A (Acts 2:25 alone) opens David's psalm citation, whose closing single mark
+// lives in v28 — the inner single must be CLOSED, not left dangling (Rule 5.1(b)). Card B (Acts 2:22 through a mid-sentence
 // cut in v24) is a 69-word BLOCK quotation with NO enclosing marks and a four-dot
 // end omission (Rule 5.1(a) + 5.3(b)(iii)) — the deployed build wrongly showed three
 // dots.

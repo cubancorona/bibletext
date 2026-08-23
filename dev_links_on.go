@@ -149,7 +149,7 @@ func devScenarios() []devScenario {
 // they are reading plus a message naming the translation the note was written
 // in. Testing the second branch used to mean finding a simulator that had never
 // fetched the text — and once any simulator HAS fetched it, that state cannot be
-
+// got back to from inside the app.
 //
 // WHAT IT ACTUALLY DOES, and the part worth reading before trusting it: deleting
 // a cache file changes what the NEXT LAUNCH finds, not what this process holds.
@@ -233,8 +233,8 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 				// returns early when the link names the version already open. So
 				// a cleared NKJV still opened an /nkjv/ note instantly, with no
 				// download and no message — the cache was genuinely gone and
-
-				// "opened fine without downloading so maybe wasn't cleared?").
+				// nothing about the running app had changed, so the symptom looks
+				// exactly like a clear that silently failed.
 				//
 				// To make the app actually behave as though it never had the
 				// text: move off it, then forget it. Only then does the next
@@ -378,9 +378,9 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// EVERYTHING SCROLLS, including what used to be pinned. The title, blurb,
 	// notes switch, wipe button, status line and emoji probe were the Border's
 	// fixed top slot, which on a phone is most of a screen before the first
-	// scenario is reachable — and the scenarios are the point of the page
-	 Nothing here needs to stay in view while scrolling:
-	// the status line is read right after tapping something, not during.
+	// scenario is reachable — and the scenarios are the point of the page.
+	// Nothing here needs to stay in view while scrolling: the status line is
+	// read right after tapping something, not during.
 	column := container.NewVBox(head, devVersionCachePanel(state))
 	for _, sc := range devScenarios() {
 		sc := sc

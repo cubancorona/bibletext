@@ -40,7 +40,7 @@ func TestBibleKeyStoreRoundTrip(t *testing.T) {
 // built-in provider id is used, the key's absence locks it again, and
 // non-BYOK licensed versions (the LSB) are untouched by the reader's key.
 func TestBYOKUnlocksNKJV(t *testing.T) {
-	// Ensure no env leaks in from the developer's shell.
+	// Ensure no env leaks in from the surrounding shell.
 	t.Setenv("BIBLE_API_KEY", "")
 	t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
 	t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "")

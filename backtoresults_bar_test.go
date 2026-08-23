@@ -1,13 +1,13 @@
 package bibletext
 
-
-// results button … takes up too much space … non-intrusive, clear, and
-// elegant"). These pin the compact composition at SCREEN level, the
+// The results trail is CHROME, not content: the back-to-results button took
+// up too much space, where it has to read as non-intrusive, clear and
+// elegant. These pin the compact composition at SCREEN level, the
 // screen_seen_test.go way: what a reader can see, laid out in a real window —
 // and the budget is derived from the bar's own theme sizes (trailChipTheme),
 // never from magic pixels.
 //
-
+// They also pin the clarified scope of defect B: the trail belongs to
 // GENUINE search-result arrivals only. A notes-browser row tap is a
 // navigation — it raises no trail at all (openNote, notes_browse.go).
 
@@ -40,7 +40,7 @@ func trailBarBudget(t *testing.T) float32 {
 	// trailChipTheme, so inflating the chrome's own sizes sailed through it —
 	// the density suite's twice-the-rows lesson, applied here. The trail must
 	// stay visibly SMALLER than ordinary chrome: under a default-theme button,
-
+	// the height that was reported as taking too much space.
 	std := widget.NewButton("‹ Results", func() {})
 	sw := test.NewWindow(std)
 	t.Cleanup(sw.Close)
@@ -155,7 +155,7 @@ func TestResultsTrailDropsALongQuery(t *testing.T) {
 	}
 }
 
-
+// Defect B, clarified: a search arrival shows the compact
 // trail; a notes-browser arrival shows NO trail at all. Asserted at screen
 // level on the shared reading view, which is where both arrivals land.
 func TestTrailAppearsForSearchArrivalsOnly(t *testing.T) {

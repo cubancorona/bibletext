@@ -82,9 +82,9 @@ func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {
 	// not where that has to live, and it is the wrong place for it: a sentence
 	// long enough to say "included with BibleText" AND "paste your own to replace
 	// it" measured 458pt inside a field with ~199pt of usable width on a 320pt
-
-	// the status line under the box, so this asserts the SECTION says it rather
-	// than pinning it to one widget.
+	// phone, and simply ran off the end. The message now sits on the status line
+	// under the box, so this asserts the SECTION says it rather than pinning it
+	// to one widget.
 	var said bool
 	for _, s := range collectText(rows) {
 		if strings.Contains(strings.ToLower(s), "included") {

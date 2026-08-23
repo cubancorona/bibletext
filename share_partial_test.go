@@ -36,8 +36,8 @@ func acts4ShareState() *AppState {
 }
 
 func TestShareSelectionMidWordEndTrim(t *testing.T) {
-
-	// rest stands, and the citation covers 19–20.
+	// The drag stopped inside "heard" — the orphan "h" must go, the rest
+	// stands, and the citation covers 19–20.
 	st := acts4ShareState()
 	raw := "replied, “Judge for yourselves whether it is right in God’s sight to listen to you rather than God. 20 For we cannot stop speaking about what we have seen and h"
 	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
@@ -53,7 +53,7 @@ func TestShareSelectionMidWordEndTrim(t *testing.T) {
 }
 
 func TestShareSelectionDanglingMarkerDropped(t *testing.T) {
-
+	// The drag ran two characters into verse 21 — the partial word goes (rule 1),
 	// which leaves the marker introducing nothing, so it goes too (rule 3) and
 	// the citation stays 19–20. The result ends on a complete sentence, so the
 	// formatted quote must carry NO omission mark.
@@ -148,7 +148,7 @@ func TestShareSelectionFullVersesUnchanged(t *testing.T) {
 }
 
 // TestShareSelectionWhollyEnclosedSinglePair pins Rule 5.2(f)(i)'s balanced
-
+// case end to end (that same selection re-shared after the fixes): the drag
 // captured the speakers' own opening AND closing marks with nothing outside
 // them, so the enclosing pair is dropped and the share carries ONE plain pair
 // — "omit the enclosing internal marks when the whole quotation is itself a
@@ -168,7 +168,7 @@ func TestShareSelectionWhollyEnclosedSinglePair(t *testing.T) {
 	}
 }
 
-
+// TestShareSelectionMissingTerminalCompleted pins the missing-terminal case: a drag
 // that captures every WORD of the sentence but stops short of its final
 // punctuation omits nothing — Rule 5.3's ellipsis marks omitted words, so the
 // share restores the sentence's own terminal and carries NO mark, instead of

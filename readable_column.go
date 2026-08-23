@@ -9,19 +9,18 @@ package bibletext
 // width you are given is about 440pt, and they kept taking it when the same
 // views were handed an iPad or a maximised desktop window.
 //
-
-// becomes a long thin box with its words stranded at the far left, reading as an
-// empty input field rather than as something a person wrote; a book row is a
-// name adrift in a metre of nothing; a search hit's reference and its verse end
-// up so far apart the eye has to travel between them.
+// What that looks like on both surfaces: a one-line note becomes a long thin
+// box with its words stranded at the far left, reading as an empty input field
+// rather than as something a person wrote; a book row is a name adrift in a
+// metre of nothing; a search hit's reference and its verse end up so far apart
+// the eye has to travel between them.
 //
-
-// "prioritize compatibility and uniformity with other platforms where it makes
-// sense so we don't have to keep reworking everything for the various
-// platforms"). A surface opts in by wrapping its content once; the phone is
-// untouched because its panes are narrower than the measure, and the desktop
-// sidebar is untouched for the same reason. No per-platform branch, no build
-// tag, nothing to keep in step.
+// So this is deliberately ONE helper for all of them: compatibility and
+// uniformity across platforms wherever it makes sense, so the same work is not
+// reworked once per platform. A surface opts in by wrapping its content once;
+// the phone is untouched because its panes are narrower than the measure, and
+// the desktop sidebar is untouched for the same reason. No per-platform
+// branch, no build tag, nothing to keep in step.
 //
 // It is NOT for the reading pane, which has its own typographic measure and
 // whose native overlays own their insets.

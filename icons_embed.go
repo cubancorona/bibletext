@@ -90,9 +90,9 @@ var iconSidebarLeft fyne.Resource = func() fyne.Resource {
 // a fyne.ThemedResource: widget/button.go tints one solely when the button's
 // Importance is neither Medium nor Low, and a plain StaticResource is left
 // exactly as authored in every case. So this rendered PURE BLACK on the dark
-
-// tab, where the control is deliberately LowImportance (flat) while inactive and
-// so had no fill behind it either.
+// rgb(25,23,21) page — very difficult to make out on the Search tab, where the
+// control is deliberately LowImportance (flat) while inactive and so had no fill
+// behind it either.
 //
 // Themed, both states come out right: while inactive Fyne leaves the resource to
 // tint itself, and NewThemedResource paints it ColorNameForeground, which this
