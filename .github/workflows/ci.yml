@@ -1,5 +1,4 @@
 name: CI
-# Runs on branch pushes and pull requests into main.
 
 on:
   push:
