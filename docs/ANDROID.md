@@ -291,8 +291,9 @@ HTML.
 - **Back it up somewhere safe** (password manager / offline). It is the **upload
   key**. With Google **Play App Signing** (the default), Google holds the real
   app-signing key and can reset a lost upload key via support — so losing it is
-  recoverable, but don't rely on that. SHA-256 of the current cert is recorded in
-  Verify the signing certificate fingerprint against the approved release record before packaging.
+  recoverable, but don't rely on that.
+- Before a release, verify the upload certificate's SHA-256 fingerprint directly:
+  `keytool -list -v -keystore ~/Library/Android/bibletext-signing/bibletext-upload.keystore -alias bibletext`.
 
 ## Emulator (local testing)
 
