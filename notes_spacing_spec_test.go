@@ -16,7 +16,7 @@ package bibletext
 // a wire format, a three-platform signature change and a version skew in front
 // of every future 1pt change, and would still not stop a native from ignoring
 // the pushed value in favour of a literal. Parsing costs nothing at runtime,
-// fails on the the development environment and in CI on EVERY platform's numbers at once
+// fails in both the default host test suite and CI for every platform's numbers
 // (including the two that cannot even be compiled here), and is the mechanism
 // this repo already uses to hold untestable sources honest —
 // dev_links_guard_test.go over the release scripts, share_link_test.go's slug
@@ -237,8 +237,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"+ kNoteGapAbove;\n": "the sticker must hang the reserved gap below the band's top",
 				// The USE SITE, not only the constants: with the literals left
 				// correct, "kNotePad + 20 + 8 + …" is a 10pt-taller card that is
-				// silently off-spec, and the parser could not see it (verification
-				// finding 4 — card height is the very quantity that must match).
+				// silently off-spec, and the parser could not see it unless the
+				// complete card-height formula is checked.
 				"return kNotePad + kNoteWho + kNoteWhoGap + ceil(r.size.height) + kNotePad;": "the " +
 					"card's height must BE the spec's formula — pad, who row, who gap, message, pad " +
 					"— not merely use the spec's constants somewhere",
@@ -335,8 +335,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 	}
 }
 
-// TestNoteSpecIsSelfConsistent guards the table itself: the numbers a reader of
-// [redacted-retired-private-reference] is told to expect.
+// TestNoteSpecIsSelfConsistent guards the table itself: the numbers recorded in
+// docs/NOTES_SPEC.md#sticker-spacing.
 func TestNoteSpecIsSelfConsistent(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -357,7 +357,7 @@ func TestNoteSpecIsSelfConsistent(t *testing.T) {
 	} {
 		if tc.got != tc.want {
 			t.Errorf("noteMetrics().%s = %v, want %v — if this is a deliberate change, "+
-				"[redacted-retired-private-reference]'s per-platform table has to move with it",
+				"docs/NOTES_SPEC.md#sticker-spacing has to move with it",
 				tc.name, tc.got, tc.want)
 		}
 	}

@@ -1,7 +1,7 @@
 package bibletext
 
-// Who a note is from — the ONE place that question is answered (S9,
-// [redacted-retired-private-reference] "Identity — the decision record").
+// Who a note is from — the ONE place attribution is answered
+// (docs/NOTES_SPEC.md#sender-and-attribution-contract).
 //
 // Today the answer is a constant: "Friend" for a received note, "you" for the
 // reader's own. No name is collected, no name is displayed, and the share
@@ -36,7 +36,7 @@ package bibletext
 //     phishing case docs/SHARED_NOTES.md names), or when it carries a URL-ish
 //     token (a scheme, a www. prefix, or a dotted host like "evil.com" — a
 //     byline must never be a place to smuggle a link). Homoglyphs are NOT
-//     filtered ("Аnna" with a Cyrillic А passes): they are also legitimate
+//     filtered ("Ѕample Sender" with a Cyrillic Ѕ passes): they are also legitimate
 //     names, and the isolation + quiet styling is the honest defence.
 
 import (
@@ -97,8 +97,7 @@ func senderByline(n StoredNote) string {
 // character (class Cf) goes, and the app's own separator grammar is not
 // available to the name.
 //
-// Cf AS A CLASS, not an enumerated list. The first version stripped the bidi
-// marks and the BOM by name, and implementation verification it with U+200B: a name
+// Treat Cf as a class, not an enumerated list. U+200B demonstrates why: a name
 // spelled "Bible<ZWSP>Text Support" case-folds as "bible…text support",
 // slipping the impersonation refusal, while RENDERING pixel-identically to
 // the refused string. Zero-width and joiner characters have no legitimate
@@ -140,7 +139,7 @@ func senderNameRefused(name string) bool {
 	case "bibletext", "note", "notes", "bibletext support":
 		return true
 	}
-	// "BibleText Security", "bible text", "[redacted-fixture-name] BibleText" — anything that
+	// "BibleText Security", "bible text", "Fixture BibleText" — anything that
 	// works the app's name into its own once spaces are gone. A blocklist can
 	// honestly catch exactly this impersonation and no other; wider claims
 	// (homoglyphs) are left to display, per the design doc.

@@ -1,7 +1,8 @@
 package bibletext
 
-// The anchor resolver, pinned on the MEASURED cases from
-// [redacted-retired-private-reference] — each row here is a fact that was enumerated over
+// The anchor resolver, pinned on the hard cases behind
+// docs/NOTES_SPEC.md#anchor-and-placement-contract — each row here is a fact
+// that was enumerated over
 // the real caches, not a hypothetical. The two rows that matter most are the
 // ones where MapVerse answers confidently and wrongly: Tobit "maps exactly"
 // into a WEB that does not contain it, and an unknown translation id claims
@@ -207,9 +208,9 @@ func TestWireRunSetIsFiledWholeAndRoundTripsTheStore(t *testing.T) {
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
 	st := noticeState()
-	// The reading data must CONTAIN Mark 9: the resolver now verifies a
-	// destination chapter against the reading translation (a implementation verification —
-	// without it, an anchor from an unknown table classified placedExact into
+	// The reading data must CONTAIN Mark 9: the resolver verifies a destination
+	// chapter against the reading translation. Without that check, an anchor
+	// from an unknown table can classify placedExact into
 	// a chapter the canon lacks), and in production a reader cannot stand on a
 	// chapter their translation does not have. The sample fixture has no Mark,
 	// which is a state this call site cannot reach outside a test.
@@ -280,10 +281,9 @@ func TestWireRunSetIsFiledWholeAndRoundTripsTheStore(t *testing.T) {
 	}
 }
 
-// The wire's b and c records outrank the path for what is FILED, exactly as
-// the prior implementation they would once the store could hold the full anchor:
-// the path names where the page opens, the record names what the sender wrote
-// about, and the note belongs to the second.
+// The wire's b and c records outrank the path for what is filed. The path names
+// where the page opens, while the record names what the sender wrote about; the
+// note belongs to the latter.
 func TestWireBookAndChapterAreAuthoritativeForFiling(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

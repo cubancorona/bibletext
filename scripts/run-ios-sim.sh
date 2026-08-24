@@ -17,6 +17,11 @@
 # This script is idempotent: re-run it to push a new build to the simulator.
 set -euo pipefail
 
+# Simulator packaging must not inherit unrelated provider credentials or the
+# shared release key from a shell used for live-provider testing.
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY BIBLE_API_KEY
+export GOFLAGS="" GODEBUG=""
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
@@ -65,7 +70,7 @@ plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.pli
 # "Save Image" action appears in the simulator too.
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP_DIR/$APP_NAME/Info.plist"
 
-# App Store parity (the implementation requirement): the release build deletes UIRequiresFullScreen
+# App Store parity: the release build deletes UIRequiresFullScreen
 # (iPad multitasking) and compiles the launch storyboard — the smoke builds must
 # match, or Split View/Stage Manager resizing ships untested.
 PBX() { /usr/libexec/PlistBuddy -c "$1" "$APPPLIST" 2>/dev/null || true; }
@@ -93,8 +98,8 @@ plutil -replace UIDeviceFamily -json '[1, 2]' "$APP_DIR/$APP_NAME/Info.plist"
 # Without it, SecItemAdd/SecItemUpdate return -34018 errSecMissingEntitlement
 # ("neither application-identifier nor keychain-access-groups"), so the app
 # silently falls back to Preferences — leaving the Keychain path, the pre-1.1.6
-# key migration and the "saved securely" status UNTESTABLE on the simulator
-# while working on device (the implementation requirement).
+# key migration and the "saved securely" status untestable on the simulator
+# even though the device path works.
 #
 # fyne package offers no linker hook (it sets CGO_LDFLAGS and -ldflags itself),
 # so relink just the executable with fyne's own iOS-simulator env plus the

@@ -251,10 +251,10 @@ func TestNotesStateSpace(t *testing.T) {
 				"outlives its defect makes the next reader trust a document that lies.", d.name, d.what)
 		}
 	}
-	// The COUNTS are asserted, not merely logged. implementation verification M3 (navigation
-	// no longer resets focus) survived the whole suite while the per-defect
-	// totals silently diverged from docs/NOTES_STATE.md — attribution and
-	// liveness alone let a rule rot as long as SOME cell still hit each pin.
+	// The COUNTS are asserted, not merely logged. If navigation stops resetting
+	// focus, per-defect totals can diverge from docs/NOTES_STATE.md while
+	// attribution and liveness alone let a rule rot as long as some cell still
+	// hits each pin.
 	// The counts are deterministic, so drift means either a fix (strike and
 	// re-measure, per the contract) or a regression (this failure).
 	// NOTES-SPACE counts only. docs/NOTES_STATE.md's headline figures COMBINE

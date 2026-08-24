@@ -529,7 +529,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	}
 
 	// The supersession guard lives on AppState (state.askSession) so it survives
-	// window rebuilds (observed in practice: edit the query, resubmit, progress flashes,
+	// window rebuilds (edit the query, resubmit, progress flashes,
 	// then the OLD results reappear — and the rebuild variant of the same race).
 	askSession := &state.askSession
 

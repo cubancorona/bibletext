@@ -1,7 +1,7 @@
-# Moving BibleText to Fyne 2.8 — what it costs
+# Fyne 2.8 compatibility status
 
-*Regression pass run 2026-08-12 against `cubancorona/fyne` branch `bt-2.8`
-(= upstream v2.8.0 + our fork stack). Verdict: **do not adopt yet.** The app
+The compatibility baseline is `cubancorona/fyne` branch `bt-2.8`
+(upstream v2.8.0 plus the fork stack). Decision: **do not adopt yet.** The app
 compiles and launches, but 2.8 rewrote `widget.PopUp`, and the app's popup
 layer breaks at runtime while compiling clean — the worst failure shape.
 The app stays on 2.7.4 (`v2.7.4-bt.2`); this file scopes the port.*
@@ -69,15 +69,15 @@ honoured verbatim, so several sites can now go off-screen), and a popup
 deliberately placed at exactly `(0,0)` is treated as unpositioned and re-centred
 — which defeats the top-anchored Ask/compose sheets on any zero-inset canvas.
 
-## A real 2.8 engine bug we found (not our code)
+## Upstream 2.8 engine race
 
 `internal/painter/font.go` introduces a **package-level shared**
 `shaping.HarfbuzzShaper`; 2.7.4 allocated one per call. The shaper holds mutable
 state (harfbuzz buffer, font LRU), so two goroutines measuring text concurrently
 corrupt it. This surfaced as 8 load-dependent `-race` failures, but it is **not
 a test artifact — it affects the shipping app.** This is a clean, uncontroversial
-upstream bug: worth a fork commit on `bt-2.8` and a strong upstream PR (unlike
-the drawloop, whose framing upstream rejected — see [redacted-retired-private-reference]).
+upstream bug suitable for a fork commit on `bt-2.8` and an upstream fix. See
+[`FYNE_FORK_POLICY.md`](FYNE_FORK_POLICY.md) for maintenance requirements.
 
 ## Secondary, needs eyes rather than fixes
 
@@ -111,5 +111,5 @@ Android build can go the fork route on either branch.
    mechanical (~14 sites, one pattern), root cause 2 needs care because
    `sheet_fit.go` and the popup-fit regression net were both written against the
    old renderer's arithmetic. Note the whole net currently fails at the type
-   assertion *before* it can report the geometry damage — so fix root cause 1
-   first, then let those tests tell you the truth about geometry.
+   assertion *before* it can report the geometry damage. Fix root cause 1
+   first, then use those tests to measure the geometry changes.

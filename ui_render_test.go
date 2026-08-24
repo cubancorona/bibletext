@@ -64,7 +64,7 @@ func TestFullUIBuildsAndExercisesPaths(t *testing.T) {
 
 // TestRebuildWindowHidesOverlayPopups pins the variant-flip fix: rebuildWindow
 // must DRAIN the overlay stack (an open popup would otherwise survive
-// SetContent with its build-time palette colors — the observed in practice
+// SetContent with its build-time palette colors — the resulting
 // dark-on-dark Settings sheet after an overnight dark→light switch) and it
 // must HIDE each popup rather than bare-Remove it, because the popup watchdog
 // timers poll Visible() to run their close/restore duties.

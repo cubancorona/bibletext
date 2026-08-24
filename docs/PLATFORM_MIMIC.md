@@ -1,10 +1,9 @@
-# Platform mimic — eyeballing the Windows/Linux app on macOS
+# Platform mimic — previewing the Windows/Linux app on macOS
 
-Dev-build-only mode (the implementation requirement): the macOS **dev** build follows the
-Windows/Linux code paths as closely as the codebase allows, so Windows/Linux UI
-work can be looked at on this Mac *before* the CI visual smokes. It exists
-because the Windows VM is unusable (x64 GL emulation) and the Linux ARM VM is
-audio-only.
+This dev-build-only mode makes the macOS **dev** build follow the Windows/Linux
+code paths as closely as the codebase allows. It provides a fast local preview
+before the CI visual smokes when virtualized graphics cannot reliably exercise
+the Windows UI and a Linux environment provides only audio validation.
 
 **The standing rule: this mode is the step BEFORE the CI visual smokes and
 real-hardware checks, never a replacement for them.** `linux-visual-smoke.yml`,
@@ -93,9 +92,9 @@ into.
   supplies the macOS title bar, application menu and Cmd (vs Ctrl) below any
   app seam. Functionally trivial here (the only shortcuts are Find-focus and
   Escape), but never read a mimic screenshot's title bar as evidence.
-- **Linux font inventory.** Mimic=linux drops to the embedded Gelasio because
-  the development environment no DejaVu Serif at the Linux paths — the **Linux face is
-  approximated**, and real fontconfig/distro variation is not reproducible
+- **Linux font inventory.** Mimic=linux drops to the embedded Gelasio when the
+  macOS host does not expose DejaVu Serif at the Linux paths — the **Linux face
+  is approximated**, and real fontconfig/distro variation is not reproducible
   here; only the shipped candidate chain is. (Mimic=windows is a near-exact
   match: macOS loads the same Georgia family Windows ships.)
 - **OS integration endpoints.** Explorer `/select` vs `xdg-open` vs the Mac's
@@ -114,8 +113,8 @@ into.
   the revert; the primary mimic is already truthful for `redLetterSupported`
   (true on both sides while the styled pane ships), so no red-letter routing
   was needed either.
-- A bundled **DejaVu Serif** embed for mimic=linux (the ~350 KB dev-only embed
-  the implementation verification). Gelasio approximation + this caveat was chosen instead.
+- A bundled **DejaVu Serif** embed for mimic=linux. The ~350 KB dev-only embed
+  was rejected in favor of the Gelasio approximation and this caveat.
 
 ## Tests
 

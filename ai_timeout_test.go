@@ -626,7 +626,7 @@ func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
 
 // --- Settings close must refresh the Find surface ----------------------------
 
-// TestAISurfacesChangedCoversKeyArrival locks the observed in practice case: with a
+// TestAISurfacesChangedCoversKeyArrival locks the key-arrival case: with a
 // provider already selected but no key, Find shows "Find needs your own AI
 // key". Pasting a key leaves aiEnabled() unchanged, so a rule that watches only
 // the assistant toggle leaves that panel up until the reader navigates away and

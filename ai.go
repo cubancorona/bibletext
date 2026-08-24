@@ -82,7 +82,7 @@ func friendlyAIError(err error) string {
 		case http.StatusBadRequest:
 			// Google rejects an invalid key with 400 ("API key not valid…"), not
 			// 401 — sniff the detail so a bad key doesn't read as "selection too
-			// long" (observed in practice from the settings sheet's Test key).
+			// long" in the settings sheet's Test-key flow.
 			if strings.Contains(strings.ToLower(apiErr.Details), "api key") {
 				return "That API key was rejected. Check it in AI settings."
 			}

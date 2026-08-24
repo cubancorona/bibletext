@@ -70,13 +70,14 @@ rule exists to keep out — this document lives in the repository too.
   machine".
 - **No personal account state** — which AI provider you pay for, which keys
   are saved, what is in your real preferences file.
-- **No credential identifiers.** API key ids, issuer ids, team ids, device
-  UDIDs. Use `XXXX` placeholders in documentation, consistently, and never
-  track a private key file.
-- **No personal bundle identifiers.** The shipped id is
-  `io.github.cubancorona.bibletext`. If a change renames away from an older
-  personal id, say "the previous personal bundle id" rather than reprinting
-  it.
+- **No private credential or console identifiers.** API key IDs, issuer IDs,
+  device UDIDs, and private-key filenames use `XXXX` placeholders, and private
+  key files are never tracked. Platform identifiers that must be public for a
+  feature to work—such as the shipped bundle ID and the Apple application
+  identifier in the universal-links association—are deliberate exceptions.
+- **No obsolete personal bundle identifiers.** Refer to one as "the previous
+  personal bundle id" rather than reprinting it. Use the current public bundle
+  ID only where it is functionally required.
 
 ---
 

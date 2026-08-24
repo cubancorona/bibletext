@@ -86,8 +86,8 @@ func TestCompactLayoutGallery(t *testing.T) {
 	}
 }
 
-// compactGalleryState renders from the REAL cached translation when one is on
-// this machine, and refuses to draw at all otherwise.
+// compactGalleryState renders from the real cached translation when one is
+// available locally, and refuses to draw otherwise.
 //
 // The first version of this hand-wrote six verses of Psalm 23 as plain strings,
 // and the pictures it produced were wrong in a way that is easy to miss and

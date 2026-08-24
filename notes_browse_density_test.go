@@ -64,7 +64,7 @@ func TestBrowserRowFitsTheDensityBudget(t *testing.T) {
 	st := psalm23State()
 
 	oneLine := StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms",
-		Chapter: 23, VerseLo: 1, Text: "A short word for you.", Received: 1_700_000_000}
+		Chapter: 23, VerseLo: 1, Text: "fixture short alpha", Received: 1_700_000_000}
 	if h, budget := measuredBrowseRow(t, st, oneLine), browseRowBudget(t, 1); h > budget {
 		t.Errorf("a one-line note's row measures %vpt against its %vpt budget — "+
 			"the row has grown structure its sizes do not account for", h, budget)
@@ -97,9 +97,9 @@ func TestBrowserShowsTwiceTheRowsPerScreen(t *testing.T) {
 
 	st := psalm23State()
 	typical := StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms",
-		Chapter: 23, VerseLo: 1, Text: "synthetic note this morning.", Received: 1_700_000_000}
+		Chapter: 23, VerseLo: 1, Text: "fixture density message alpha", Received: 1_700_000_000}
 
-	const phoneViewport = 700 // the fixture screen the ~5-row report was made on
+	const phoneViewport = 700 // the fixture screen where the old layout fit about five rows
 	h := measuredBrowseRow(t, st, typical)
 	if rows := int(phoneViewport / h); rows < 10 {
 		t.Errorf("a typical row measures %vpt — %d rows per %dpt screen, want at least 10 "+

@@ -54,7 +54,7 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	// screen. (Layout-agnostic: a tablet in full-screen reading looks the same
 	// as a phone, so there is no sidebar to add here.)
 	if state.IsFullScreen {
-		// The state hooks MUST be rewired to THIS tree (implementation verification): with
+		// Rewire the state hooks to this newly built tree. With
 		// narration playing, a chapter's natural end calls state.refresh() from
 		// advanceAndContinue — if showReading still pointed at the previous
 		// build's detached host, the fresh nativeReadingHost would be built into

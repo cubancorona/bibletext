@@ -29,7 +29,7 @@ byte 0     framing discriminator (NOT a semantics version — see below)
              'r'  record stream, raw
              'd'  record stream, DEFLATE (emitted only when it comes out smaller)
              'p'  legacy bare text, plain      } never shipped to a user;
-             'z'  legacy bare text, DEFLATE    } kept only for the the implementation requirement
+             'z'  legacy bare text, DEFLATE    } kept only for development compatibility links
              'A'-'Z'  RESERVED: "a newer BibleText format"
 bytes 1..  a record stream
 
@@ -259,7 +259,7 @@ Recorded so nobody cargo-cults it later.
 - **The base64 tolerance is exactly: url-safe alphabet, correctly-formed
   trailing padding.** A `+` or `/` spelling, interior `=`, or wrong-length
   padding is damaged. The web reader initially forgave all three (atob accepts
-  both alphabets); pinned in the corpus after review.
+  both alphabets); the conformance corpus pins the stricter boundary.
 
 ## Conformance corpus
 

@@ -1,6 +1,6 @@
 //go:build ios
 
-// iOS-ONLY on purpose (the implementation requirement): macOS release builds ship AD-HOC
+// iOS-ONLY on purpose: macOS release builds ship AD-HOC
 // signed (release.yml runs bare `fyne package -os darwin`, no Developer ID),
 // so the login keychain ACL binds to a code hash that changes EVERY update —
 // after which reads prompt scarily or fail as errSecAuthFailed, and since
@@ -73,7 +73,7 @@ static int btAIKeychainWrite(const char *accountUTF8, const char *valueUTF8) {
         // migrating a key out of Preferences into a ThisDeviceOnly item and then
         // erasing the Preferences copy would SILENTLY LOSE the reader's key when
         // they restore a backup or move to a new iPhone — a regression against
-        // 1.1.5, where the key travelled with preferences.json (the implementation requirement).
+        // 1.1.5, where the key travelled with preferences.json.
         // AfterFirstUnlock keeps it encrypted at rest and backup-restorable, and
         // also lets a background launch read it before the first unlock.
         NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding];

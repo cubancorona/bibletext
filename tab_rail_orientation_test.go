@@ -5,8 +5,8 @@ package bibletext
 // Two things must agree for "a tablet in landscape shows the rail" to be true
 // on screen: the rule that decides placement, and the watcher that notices the
 // rotation. The second is the one that was quietly broken — layoutWatcher only
-// re-evaluated orientation when the layout class was layoutRegular, and
-// classifyLayout stopped being able to return that on 21 Aug 2026. The clause
+// re-evaluated orientation when the layout class was layoutRegular, but
+// classifyLayout can no longer return that class. The clause
 // was dead code, so the rail would have appeared only on the next rebuild
 // triggered by something else entirely, and looked like an intermittent bug.
 //

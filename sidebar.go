@@ -63,7 +63,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 
 	// The supersession guard lives on AppState (state.askSession) so it survives
 	// window rebuilds — a local here would let a pre-rebuild completion clobber a
-	// post-rebuild query (see the observed in practice history in ai_search.go).
+	// post-rebuild query (see the state-transition details in ai_search.go).
 	askSession := &state.askSession
 
 	var runAsk func(string)
@@ -195,7 +195,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		// Mirror the mobile twin: abandon any in-flight Find and clear its
 		// progress state, or a completion dropped at the aiSearchActive guard
 		// would leak aiSearchLoading=true and toggling back to Find would show
-		// a permanent "Searching with AI…" pane (implementation verification).
+		// a permanent "Searching with AI…" pane.
 		// Toggling away mid-flight IS an abandonment, so it must land on the
 		// cancelled state — clearing the flag instead left query set and
 		// results nil, which falls through to "AI didn't find matching
@@ -324,9 +324,9 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	// when they tapped Notes. It never does, because all three modes render into
 	// the right-hand pane instead.
 	//
-	// Owner, 20 Aug 2026, on the iPad: "the appended book list isn't clear. it
-	// looks like the search find and notes icons should be changing the side bar
-	// content." The layout was promising something the behaviour does not do.
+	// On iPad, this visual hierarchy implied that the mode icons changed the
+	// book-list content. The layout was promising something the behaviour does
+	// not do.
 	//
 	// The separator is the cheap, behaviour-preserving half of the fix: it makes
 	// the two sections read as peers, so nothing above appears to own anything

@@ -1,21 +1,10 @@
 #!/usr/bin/env bash
 # The acceptance gate for the view tests.
 #
-# WHY THIS EXISTS, AND WHY IT IS A SCRIPT RATHER THAN A PARAGRAPH.
-#
-# A view-test harness was built once already: 1,310 enumerated screens across
-# seven platform profiles. It did not catch the bug it was written for. Neutering
-# the one-line fix for the Read-tab regression left the whole enumeration green,
-# removing the notes browser's only exit control was invisible to every cell, and
-# the "hidden but present" case — the entire point — was demonstrated only on the
-# one platform where it was never hard. It was rejected and is on the branch
-# view-harness-attempt-1.
-#
-# The failure was not the harness. It was that "does it catch anything?" was
-# asked AFTER the harness existed, when the answer was expensive to act on. So
-# the question is asked here, first, mechanically: each mutation below breaks
-# something a reader would SEE, and the suite must go red for it. A mutation that
-# survives names a hole, and the harness is not finished while any survive.
+# Each mutation below breaks a visible product invariant, and the view suite
+# must fail for it. Any surviving mutation identifies a coverage gap. A script
+# is required because each mutation is applied mechanically to an isolated copy
+# before the relevant tests run.
 #
 # Usage:  scripts/view-test-gate.sh            # every mutation
 #         scripts/view-test-gate.sh M3         # just one
@@ -100,10 +89,9 @@ run_mutation M1 \
 }')"
 
 # ── M2 ────────────────────────────────────────────────────────────────────────
-# The the implementation requirement: assert what is SEEN, not what is built. Every
-# object stays in the tree; one of them is simply invisible. A test that walks
-# the widget tree passes this mutation, which is exactly why walking the tree is
-# not enough.
+# Visible-output invariant: assert what is seen, not merely what is present in
+# the widget tree. Every object remains in the tree while one is invisible, so
+# a tree-only assertion passes this mutation.
 run_mutation M2 \
   "the reading pane is hidden but left in the tree" \
   "a blank reading area, with every widget still present underneath" \
@@ -111,8 +99,8 @@ run_mutation M2 \
 	paper.Hide() // MUTATION: present in the tree, invisible on screen')"
 
 # ── M3 ────────────────────────────────────────────────────────────────────────
-# V3, the way out. The macOS notes view shipped without one and the owner had to
-# report it. Removing an exit control must not be invisible.
+# V3 is the only exit from this macOS notes view. Removing it must fail the
+# visible-output gate.
 run_mutation M3 \
   "the notes browser loses its only exit control" \
   "a full-screen notes list with no way back to reading" \
@@ -167,8 +155,7 @@ run_mutation M7 \
 # ── M8 ────────────────────────────────────────────────────────────────────────
 # The verb→screen class: a verb mutates the store and STOPS — no ending
 # projection, so the visible pane disagrees with the store until navigation
-# re-derives. This is the dropCurrentNote verification ("all the note pills
-# disappear... until I navigate away and come back") re-created mechanically:
+# re-derives. The mutation recreates a stale-projection failure mechanically:
 # the delete verb keeps its store write and its focus/mark bookkeeping and
 # loses only its last line, the shared projection every healthy verb ends on.
 run_mutation M8 \

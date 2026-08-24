@@ -12,7 +12,7 @@
 # line — vectors with newlines in the text do not belong in this file).
 # Blank lines and lines starting with '#' are ignored.
 # ordinary 'r': t+v+b+c+a, our own encoder
-cmEDARASYgEqYwEDdBVSZWFkIHRoaXMgb25lIHNsb3dseS52A2JzYg ok Read this one slowly.
+cmEDARASYgEqYwEDdBVmaXh0dXJlIG1lc3NhZ2UgYWxwaGF2A2JzYg ok fixture message alpha
 # ordinary 'd': long enough that DEFLATE wins
 ZEpkZmRkTGIUSmYUL3nOWJKRqlCcmJuqUJ5flFKskF-WWqSQmJcCYQwfyTLm8tQkQAAAAP__ ok the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over the same words over and over
 # decoder accepts any record order
@@ -70,7 +70,7 @@ cnQPa2VlcAF0aGlzAmNsZWFu ok keepthisclean
 # 'b' alone with a truncated uvarint value and no 't'
 cmICyMg damaged
 
-# --- appended after implementation verification of the first S4 round -----------------
+# --- strict-decoder boundary cases -------------------------------------------
 # A DEFLATE dynamic block whose literal table is INCOMPLETE (5 codes of length
 # 3 in an 8-slot space). Go's compress/flate rejects incomplete tables (except
 # the degenerate single length-1 code); the web reader's first inflate accepted
@@ -87,4 +87,4 @@ ZEpkZmRkTGIUSmYUL3nOWJKRqlCcmJuqUJ5flFKskF+WWqSQmJcCYQwfyTLm8tQkQAAAAP// damaged
 # Trailing padding of the WRONG LENGTH: a payload whose unpadded length is
 # 4k+2 must carry '==' or nothing; a single '=' is malformed in Go's
 # URLEncoding, and the web reader used to top it up and forgive it.
-cmEDARASYgEqYwEDdBVSZWFkIHRoaXMgb25lIHNsb3dseS52A2JzYg= damaged
+cmEDARASYgEqYwEDdBVmaXh0dXJlIG1lc3NhZ2UgYWxwaGF2A2JzYg= damaged

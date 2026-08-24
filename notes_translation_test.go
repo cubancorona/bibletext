@@ -209,7 +209,7 @@ func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	st.CurrentVersion = "web"
 	st.CurrentBook, st.CurrentChapter = "Esther", 4
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
-		Text: "for such a time as this"})
+		Text: "fixture translation message alpha"})
 	applyNoteForCurrentChapter(st)
 	if st.ActiveNote == "" || !st.hlOn() {
 		t.Fatalf("precondition: note and its highlight should be live (note=%q highlight=%v)",

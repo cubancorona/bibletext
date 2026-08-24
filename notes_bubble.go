@@ -102,7 +102,8 @@ import (
 // and cancelling it under a note would give the note's paragraph LESS
 // separation than its neighbours. It is 24px on iOS phones, 0 in the reporter
 // layout (iPad/macOS/wide styled pane), one blank line on Android, and ParaGap
-// on the narrow styled pane. Named per platform in [redacted-retired-private-reference].
+// on the narrow styled pane. The boundary is recorded in
+// docs/NOTES_SPEC.md#sticker-spacing.
 //
 // ── THE FOUR RULES (they hold on every surface; break one and the tests bite) ─
 //
@@ -110,7 +111,7 @@ import (
 //     between two of that paragraph's lines. A card wedged mid-paragraph splits
 //     the passage in half, and the scripture text must never be interrupted
 //     mid-flow. (Whether it should open BELOW that paragraph instead is TABLED
-//     and undecided — [redacted-retired-private-reference].)
+//     and undecided — docs/NOTES_SPEC.md#future-work.)
 //  2. THE BAND IS RESERVED SPACE, NOT LINE HEIGHT. It must be advance the
 //     layout adds between line boxes, never height added to one — see the
 //     techniques below for what each platform reserves with.
@@ -138,7 +139,7 @@ import (
 //	         overhangs its own fragment box, so a bare GapAbove read tight on
 //	         real pixels. It is a MEASUREMENT correction, not a design choice —
 //	         the one residual difference between the four, named here and in
-//	         [redacted-retired-private-reference] rather than pretended away. macOS also
+//	         docs/NOTES_SPEC.md#sticker-spacing. macOS also
 //	         places the sticker BOTTOM-UP off the passage, which is what makes
 //	         GapBelow exact there and lets error land in the air above.
 //	Android  a LineHeightSpan on the character BEFORE the paragraph, growing
@@ -231,7 +232,7 @@ const (
 	// the crossref panel, the search rows and the version picker are all 8 too.
 	// The STICKER's own corner is noteStickerRad (the native panes use 10);
 	// they were briefly one constant, which quietly moved the browser and the
-	// banner to a curve nobody asked for (verification finding).
+	// banner away from the shared card radius.
 	noteBubbleRad = 8
 	// The in-text sticker's corner, shared by all four note surfaces.
 	noteStickerRad = 10
@@ -268,7 +269,7 @@ type noteSpacing struct {
 //
 // A function, not a package var: a var would let any code — or any test — assign
 // to the spec at runtime, and a spec that can be reassigned is not a spec
-// (verification finding).
+// at all.
 func noteMetrics() noteSpacing { return noteSpacingTable }
 
 var noteSpacingTable = noteSpacing{

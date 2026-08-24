@@ -46,7 +46,7 @@ const (
 	audioBuffering                       // recorded stream loading — intended sound, not audible yet
 )
 
-// audioController is the single Go-side owner of playback. Created at package
+// audioController is the single Go-side playback controller. Created at package
 // init; bound to the live AppState only through the methods the UI calls.
 type audioController struct {
 	mu sync.Mutex

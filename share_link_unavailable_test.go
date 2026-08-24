@@ -176,11 +176,11 @@ func TestNoteOnALockedTranslationLinkIsFiledUnderThatTranslation(t *testing.T) {
 	st := lockedNKJVState(t)
 	st.window, st.theme = win, th
 
-	url := "https://bibletext.co.uk/nkjv/john/3/#v16&n=" + EncodeNote("this verse carried me")
+	url := "https://bibletext.co.uk/nkjv/john/3/#v16&n=" + EncodeNote("fixture unavailable message")
 	if !HandleShareLink(st, url) {
 		t.Fatal("an /nkjv/ link must be recognised as one of ours")
 	}
-	if st.ActiveNote != "this verse carried me" {
+	if st.ActiveNote != "fixture unavailable message" {
 		t.Errorf("the sender's note was not surfaced: %q", st.ActiveNote)
 	}
 	if _, ok := findStoredNote(appPrefs(), "nkjv", "John", 3); !ok {

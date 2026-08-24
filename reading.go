@@ -406,9 +406,9 @@ func rebuildWindow(state *AppState) {
 	// explicit and survives any future path that rebuilds without closing first.
 	// Stop any infinite progress bars inside an overlay BEFORE evicting it:
 	// Hide() hides the popup but a running ProgressBarInfinite animation keeps
-	// marking the canvas dirty (~20fps full-tree repaints) until its owner's
-	// completion path finally lands. Stop() is idempotent, so the owner's own
-	// later stop is harmless.
+	// marking the canvas dirty (~20fps full-tree repaints) until the operation's
+	// completion path finally lands. Stop() is idempotent, so a later stop from
+	// that path is harmless.
 	var stopInfiniteBars func(fyne.CanvasObject)
 	stopInfiniteBars = func(o fyne.CanvasObject) {
 		switch t := o.(type) {
@@ -585,11 +585,10 @@ func chapterFingerprint(state *AppState, hl string) string {
 // paragraph gaps give an unhurried feel; iPads use the U.S. Reports set — 1.3
 // leading, first-line indents (see reporterLayoutActive / reporterMeasureEm).
 // Kerning + ligatures + old-style numerals add a faint warmth on both.
-// reporterLayout is a test seam over reporterLayoutActive. NOTE the default on
-// a Mac the development environment: reporterLayoutActive is true on darwin as well as iOS (the
-// desktop reads as the reporter page too — reporter_macos.go), so host tests get
-// the REPORTER layout unless they pin this seam. A test that means to assert the
-// phone layout must set it false explicitly.
+// reporterLayout is a test seam over reporterLayoutActive. On darwin,
+// reporterLayoutActive is true for both macOS and iOS because the desktop also
+// uses the reporter page (reporter_macos.go). Host tests therefore use reporter
+// layout unless they pin this seam; phone-layout tests must set it false.
 var reporterLayout = reporterLayoutActive
 
 func buildChapterHTML(state *AppState, verses []Verse) string {
@@ -715,7 +714,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 					// THE JOINING SPACE IS PART OF THE BAND. Written bare it
 					// belongs to neither verse's span, so a highlighted range
 					// came out with a notch punched through it at every join
-					// that happened to fall mid-line — observed in practice, and the
+					// that happened to fall mid-line, and the
 					// same hole the verse NUMBER used to leave. Joins that fall
 					// at a line wrap hid it, which is why only some showed.
 					//
@@ -817,8 +816,8 @@ func backToResultsBar(state *AppState) fyne.CanvasObject {
 	}
 	// Both verbs clear through clearHighlightAndRederive, not the bare clear:
 	// the search mark may have been suppressing a note on this chapter, and
-	// releasing the suppression gives back exactly what it took (the report-C
-	// rule lives in that verb) — but only the projection re-raises the note's
+	// releasing the suppression gives back exactly what it took — but only the
+	// projection re-raises the note's
 	// own hlNote wash (the mark the search REPLACED). The bare clear left the
 	// re-opened bubble's verse unwashed until the next navigation — the
 	// every-platform twin of the native Clear-highlight tap
@@ -998,13 +997,10 @@ func (c *chapterText) rewrap(width float32) {
 			// here. Old behaviour: no band at all. New: a band from the first
 			// verse that IS present.
 			//
-			// The newer behaviour is very likely the better one — leaving
-			// highlightLine at -1 while highlightEndLine is set is an incoherent
-			// state that silently suppresses the wash. But S3's whole claim is
-			// that it changes nothing, and this subsystem has produced six
-			// defects out of improvements smuggled into commits that said they
-			// were invisible. The change is filed separately, on its own
-			// evidence, where it can be judged as what it is.
+			// Falling forward to the first present verse may be preferable because
+			// highlightLine=-1 with a set highlightEndLine suppresses the wash.
+			// It is nevertheless a separate behavior change, so this compatibility
+			// path retains the exact lower-bound rule.
 			hl := inRange && v.Verse == c.tints.at.Lo
 			if hl {
 				c.highlightLine = lineNo + len(lines)

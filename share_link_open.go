@@ -83,8 +83,8 @@ func consumePendingLink(state *AppState) {
 	// link (openNote → switchToLinkVersion): re-run the browser's own verb now
 	// that the translation is in memory, so the tapped note lands OPEN with
 	// its own mark — the generic arrival below would raise a bare hlLinkSpan,
-	// which is FOREIGN to the note and suppressed it to the pill (report A,
-	// mechanism 2). If the note was deleted while the download ran, fall
+	// which is FOREIGN to the note and suppressed it to the pill. If the note
+	// was deleted while the download ran, fall
 	// through: the passage still opens, which is all that is left to honour.
 	if id := state.pendingNoteOpenID; id != 0 {
 		state.pendingNoteOpenID = 0
@@ -332,9 +332,8 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	if notesFeatureOn(state) {
 		// Only a link that actually CARRIES a note may change what's shown: a
 		// bare passage link (or one whose payload didn't decode) must not hide
-		// the note already stored on this chapter — addRecentChapter above has
-		// just put that stored note in place, and it stays (platform reproduction: a
-		// note-less link blanked the saved note's banner).
+		// the note already stored on this chapter. addRecentChapter above has
+		// already restored that note, and a note-less link must leave it intact.
 		if t.Note != "" {
 			// Store FIRST, then focus, then the projection: the verbs address
 			// the live note by its StoredNote.ID, so the mirror needs the
@@ -388,8 +387,8 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 				// which is exactly what happens when the arriving note is one
 				// the reader minimized earlier (the dedup honours the stored
 				// Minimized; the chip shows, no note opens, no hlNote is set).
-				// implementation verification the regression: pre-S7 the re-arrival relit
-				// the verse, post-S7 it lit nothing. The span goes on as
+				// Without the fallback below, that re-arrival lights nothing.
+				// The span goes on as
 				// hlLinkSpan — the link's own range, exactly what that origin
 				// means — so the reader's minimize stays honoured AND their
 				// tap still lands somewhere visible.
@@ -488,13 +487,12 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 // the span the sender actually selected. The fragment's verse span still
 // navigates the page — that is not this function's business.
 //
-// (S4 decoded b/c but deliberately did not apply them, because the store of
-// that day filed a note under the chapter the arrival NAVIGATED to and a
+// The older store decoded b/c but deliberately did not apply them because it
+// filed a note under the chapter the arrival navigated to, and a
 // disagreeing wire chapter would have torn the anchor in half. The scrapbook
 // store files the whole anchor from this target and reads nothing from the
 // navigation — rememberIncomingNote — so the wire's v/b/c/a are now
-// authoritative for what is filed, exactly as the prior implementation they would
-// become.)
+// authoritative for what is filed.
 func noteStorageTarget(t ShareTarget) ShareTarget {
 	if t.NoteVersion != "" {
 		t.VersionID = t.NoteVersion
@@ -515,9 +513,9 @@ func noteStorageTarget(t ShareTarget) ShareTarget {
 		// note. The verse from the PATH's fragment must not be grafted onto
 		// it — the fragment names where the page scrolls, and the wire's
 		// silence about verses is the sender's statement that the note is
-		// about the chapter. Our own encoder always emits 'a' alongside a
-		// verse span, so only a hand-built wire reaches this; implementation verification the
-		// graft filed such a note under a verse its sender never named.
+		// about the chapter. The encoder always emits 'a' alongside a verse
+		// span, but a crafted wire can omit it; clear the span rather than file
+		// the note under a verse its sender never named.
 		t.VerseLo, t.VerseHi = 0, 0
 	}
 	return t

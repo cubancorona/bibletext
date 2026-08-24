@@ -129,7 +129,7 @@ func TestChapterProseAndShareStructureAgree(t *testing.T) {
 // The verbs agree on the dangling-number drag: a selection swept just past the
 // next verse's NUMBER spans (2,3) natively, but no word of verse 3 is quoted —
 // the share cites verse 2, and the crossref resolver must name the same verse,
-// not pull verse 3's references (the refuters caught the two disagreeing).
+// not pull verse 3's references.
 func TestCrossrefAndShareAgreeOnDanglingNumber(t *testing.T) {
 	st := refrainChapterState()
 	sel := refrain + " 3"
@@ -152,7 +152,7 @@ func TestCrossrefAndShareAgreeOnDanglingNumber(t *testing.T) {
 
 // A single partial word: the normalize declines it (no whole word to quote) but
 // the span still knows the verse — the LINK must carry it, or the message pairs
-// a verse-level citation with a chapter-level URL (verification finding).
+// a verse-level citation with a chapter-level URL.
 func TestShareLinkKeepsSpanVersesWhenNormalizeDeclines(t *testing.T) {
 	st := refrainChapterState()
 	if _, _, _, _, ok := normalizeShareSelection(st, "lov", selSpanFromNative(2, 2)); ok {

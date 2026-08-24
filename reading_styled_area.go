@@ -4,7 +4,7 @@ package bibletext
 // chapterText's readingScrollArea on Windows/Linux (gated by useStyledPane;
 // the per-platform constants live in reading_styled_platform_*.go). Untagged
 // so the whole assembly — column layout, highlight scroll-to, anchor
-// capture/arm/apply — unit-tests on the the development environment; on iOS/macOS/Android it
+// capture/arm/apply — runs in the default host test suite; on iOS/macOS/Android it
 // is dead code behind a false constant and nothing references the shipping
 // panes' behaviour.
 //

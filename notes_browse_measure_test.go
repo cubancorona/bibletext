@@ -5,16 +5,15 @@ package bibletext
 //
 // Everything in the notes browser was written for a phone, where "take the
 // width you are given" is right because the width you are given is about 440pt.
-// The iPad's two-pane layout hands the same view roughly 1,150pt. Reported by
-// the owner on 20 Aug 2026, on two separate surfaces of the same cause:
+// The iPad's two-pane layout hands the same view roughly 1,150pt, exposing two
+// surfaces of the same cause:
 //
 //   - WITH notes: a one-line message became a long thin box with its words at
 //     the far left, reading as an empty input field rather than as something a
 //     person wrote.
 //   - WITHOUT notes: the empty-state sentence spread into a single hairline
 //     across the pane, so the eye went to the sidebar's book list instead and
-//     the pane looked like it had simply failed. ("When there are no notes it
-//     was showing the books list.")
+//     the pane looked empty while the adjacent book list drew all attention.
 //
 // The cap fixes both. What these tests hold is the pair of properties that make
 // it safe: it engages on a wide pane, and it is INERT on a phone — because the
@@ -91,9 +90,8 @@ func TestNotesColumnNeverCapsBelowWhatTheChildNeeds(t *testing.T) {
 
 // AND EVERY EXIT GOES THROUGH IT. buildNotesBrowseView returns from more than
 // one place (the empty state is a different sentence from a filter that matched
-// nothing), and a branch that forgets the wrapper is exactly how half of this
-// defect survives a fix of the other half — which is how it was actually
-// reported: the bubbles and the empty state, one cause, two sightings.
+// nothing), so every branch must apply the same wrapper. Otherwise bubbles and
+// the empty state can retain different halves of the same sizing defect.
 func TestEveryNotesBrowseReturnTakesTheMeasure(t *testing.T) {
 	src := readNativeSource(t, "notes_browse.go")
 

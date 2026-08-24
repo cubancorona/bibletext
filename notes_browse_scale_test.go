@@ -1,14 +1,14 @@
 package bibletext
 
-// S11a — the browser must hold a years-deep scrapbook ([redacted-retired-private-reference],
-// hard case 14: "the browse list's widget-per-note VBox is the only real
-// ceiling and it arrives thousands of notes before storage does").
+// Browser scalability — a years-deep collection must remain usable
+// (docs/NOTES_SPEC.md#staging-and-validation). The widget-per-note VBox is the
+// practical ceiling, and it arrives thousands of notes before storage does.
 //
 // The pin here is STRUCTURAL, not a stopwatch: a windowed list builds row
 // widgets for the rows a reader can see, so the number of note cards alive
 // after layout must stay flat as the store grows. A timing assertion would be
 // the flaky twin of the same fact. The measured build times ride along as logs
-// (run with -v) so the numbers in the S11 report stay reproducible.
+// (run with -v) so performance remains reproducible.
 
 import (
 	"encoding/json"
@@ -33,10 +33,10 @@ func seedNoteStore(t *testing.T, count int) {
 		t.Fatal("no preferences in test app")
 	}
 	texts := []string{
-		"a word for you",
-		"He makes me lie down in green pastures; He leads me beside quiet waters — this one carried me through the whole of last winter.",
-		"synthetic note this morning.",
-		"Remember synthetic note? This is the passage. Read the whole chapter when you get a quiet minute and tell me what you see in verse four.",
+		"fixture short alpha",
+		"fixture wrapping text alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron",
+		"fixture scale message alpha",
+		"fixture wrapping text beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau",
 	}
 	versions := []string{"web", "bsb", "webc"}
 	var b strings.Builder

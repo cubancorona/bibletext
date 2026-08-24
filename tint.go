@@ -13,7 +13,7 @@ package bibletext
 // That shape is fine while the answer is a bool. It stops being fine the moment
 // the answer is a VALUE — which is the whole notes rework: a verse can carry "a
 // note is here", "another note is here too", or "more than one note is here"
-// ([redacted-retired-private-reference], the tint table). With the rule copied six times,
+// (docs/NOTES_SPEC.md#overlap-and-tint-contract). With the rule copied six times,
 // adding a second tint is six simultaneous drawing changes on a subsystem whose
 // recent history is a defect per commit. With ONE function answering it, adding
 // a second tint is a change to THIS file and nothing else: every renderer
@@ -67,8 +67,9 @@ const (
 	tintHighlight                  // the search / cross-ref / mark band
 	tintReadAlong                  // the verse the narration is currently on
 
-	// tintMulti — MORE THAN ONE note covers this verse ([redacted-retired-private-reference],
-	// the tint table). Fully wired through the tables below and the palette
+	// tintMulti — MORE THAN ONE note covers this verse
+	// (docs/NOTES_SPEC.md#overlap-and-tint-contract). Fully wired through the
+	// tables below and the palette
 	// (HighlightMulti, theme.go — a deliberate hue-separated pair, light
 	// #C7DBF5 / dark #2E3E5C), and deliberately UNREACHABLE: chapterTint never
 	// returns it, because one lit span at a time is the recorded invariant.

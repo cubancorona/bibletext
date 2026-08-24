@@ -6,7 +6,7 @@ package bibletext
 // that rides on it — when the render fingerprint is unchanged. That is right for
 // a repaint and wrong for a navigation: tapping a note for the passage already on
 // screen produces a byte-identical fingerprint, so nothing moved and the tap
-// looked broken. observed in practice.
+// looked broken.
 
 import (
 	"testing"

@@ -19,9 +19,9 @@ package bibletext
 // file was not even version-controlled: no diff, no history, no CI, and absent
 // entirely from a fresh clone.
 //
-// So the notes now live HERE, tracked, and this test is what makes a stale one
-// impossible to ship quietly: it fails on the the development environment and in CI the moment
-// the marketing version moves past the version the notes describe.
+// So the notes now live HERE, tracked, and this test makes stale notes fail in
+// both the default host test suite and CI when the marketing version moves past
+// the version they describe.
 //
 // It cannot check that the notes are TRUE — only a person can — but it can
 // insist they are about this release, that they say something about the feature
@@ -127,8 +127,8 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 // TestAppReviewNotesCoverTheHeadlineFeature is the softer half: 1.2.0's notes
 // said nothing about shared notes, the one feature in this app where content
 // arrives from ANOTHER PERSON — precisely what App Review most needs explained,
-// and what the repo's own carefully-written provenance paragraph existed to
-// explain. While the notes feature ships, the notes must account for it.
+// including how the content is transported and attributed. While the notes
+// feature ships, the notes must account for it.
 func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	raw, err := os.ReadFile(reviewNotesPath)
 	if err != nil {
@@ -136,7 +136,7 @@ func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	}
 	notes := strings.ToLower(string(raw))
 
-	// The provenance claims Apple cares about for user-to-user content. Each is
+	// The privacy and attribution claims Apple cares about for user-to-user content. Each is
 	// a property the app really has (share_link.go, notes_store.go, the note
 	// surfaces render TEXT and always attribute to a person) — so if one stops
 	// being true, the fix is the app, not this list.

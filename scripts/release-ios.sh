@@ -24,7 +24,27 @@
 # after ~5-30 min of processing.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+unset BIBLE_KEY_LDFLAGS BIBLETEXT_RELEASE_LDFLAGS BIBLETEXT_REAL_GO
+export GOFLAGS="" GODEBUG=""
+case "${BASH_SOURCE[0]}" in
+  */*) script_dir_part="${BASH_SOURCE[0]%/*}" ;;
+  *) script_dir_part="." ;;
+esac
+case "$script_dir_part" in
+  /*|./*|../*) ;;
+  *) script_dir_part="./$script_dir_part" ;;
+esac
+original_dir="$PWD"
+builtin cd -P -- "$script_dir_part"
+SCRIPT_DIR="$PWD"
+builtin cd -- "$original_dir"
+unset original_dir script_dir_part
+source "${SCRIPT_DIR}/release-bible-key.sh"
+load_release_bible_key
+
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+"$REPO_ROOT/scripts/check-repository-hygiene.py"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
@@ -32,7 +52,7 @@ TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"
 IOS_MIN="13.0"
 CONFIG_VERSION="$(awk -F ' *= *' '/^Version *=/{gsub(/"/, "", $2); print $2; exit}' "$APP_DIR/FyneApp.toml")"
 SHORT_VERSION="${BIBLETEXT_SHORT_VERSION:-$CONFIG_VERSION}"   # MUST match the App Store Connect version record
-OUT_DIR="${REPO_ROOT}/build"
+OUT_DIR="${BIBLETEXT_IOS_OUT_DIR:-${REPO_ROOT}/build}"
 WORK="$(mktemp -d /tmp/bibletext-release.XXXXXX)"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
@@ -44,48 +64,14 @@ fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 # increments FyneApp.toml's Build during packaging.
 cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
 cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
-trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; [ -z "${IPA_TMP:-}" ] || rm -f "$IPA_TMP"; rm -rf "$APP_DIR/$APP_NAME" "$WORK"' EXIT
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 
-# The project's own API.Bible key can be compiled in so the NKJV works out of the
-# box — but NOT by default for a STORE build, which is a public binary.
-#
-# Three reasons, all of them the project's own (README → "The NKJV key"):
-#   1. LICENCE. "A distributed app needs commercial access ... the free Starter
-#      plan's 3 licensed Bibles are non-commercial only." An App Store release is
-#      distribution.
-#   2. EXPOSURE. bundled_key_gen.go XOR-masks the key with the constant string
-#      "bibletext-nkjv", which sits in the same binary — anyone with the .ipa can
-#      recover the key in a minute. Verified: the masked value was present in a
-#      store build made before this guard existed.
-#   3. CEILING. 5,000 calls/month for the whole account, ~197 per NKJV download,
-#      every device revalidating monthly — "roughly 25 active devices before a
-#      month runs dry", after which readers on the bundled key get failures.
-#
-# OWNER'S DECISION (12 Aug 2026), made with the above in view: bundle it FOR NOW
-# so the NKJV works the moment someone installs, and drop it in a later release —
-# at which point new installs are bring-your-own-key while existing installs keep
-# the key already in their store (README documents exactly that transition).
-#
-# So the default is ON, and turning it off for that future release is one flag:
-#
-#   BIBLETEXT_BUNDLE_KEY=0 ./scripts/release-ios.sh
-#
-# Whichever way it goes, the build says which it did — a store .ipa should never
-# be ambiguous about whether it carries a credential.
-source "${REPO_ROOT}/[redacted-retired-private-reference]"
-if [ "${BIBLETEXT_BUNDLE_KEY:-1}" = "1" ]; then
-  embed_bible_key
-else
-  note "NO bundled API.Bible key — new installs are bring-your-own-key"
-fi
-# Re-arm the FULL cleanup. Sourcing [redacted-retired-private-reference] above registered an EXIT
-# trap of its own, and bash keeps only the LAST trap per signal — so it silently
-# replaced the go.mod/FyneApp.toml restore armed earlier and left a temporary
-# `replace` in go.mod after every device build. This trap does both jobs, and
-# being last, it is the one that runs.
-trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -f "$REPO_ROOT/bundled_key_gen.go"; rm -rf "$WORK"' EXIT
+# Release builds remain keyed during the migration window. The credential was
+# isolated before any subprocess and is injected only into the final executable
+# at link time; no source file is generated in the repository.
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; [ -z "${IPA_TMP:-}" ] || rm -f "$IPA_TMP"; rm -rf "$APP_DIR/$APP_NAME" "$WORK"' EXIT
 
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
@@ -125,21 +111,31 @@ done
 
 # ── 3. fyne assembles the bundle (unsigned; we set version + re-sign below) ───
 note "fyne package -os ios (assembling bundle)"
-( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >/tmp/fyne_release_bundle.log 2>&1 ) || true
+( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >"$WORK/fyne_release_bundle.log" 2>&1 ) || true
 cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml"
-APP="$APP_DIR/$APP_NAME"
-[ -f "$APP/Info.plist" ] || { tail -20 /tmp/fyne_release_bundle.log; fail "fyne did not leave an app bundle."; }
+PACKAGED_APP="$APP_DIR/$APP_NAME"
+[ -f "$PACKAGED_APP/Info.plist" ] || { tail -20 "$WORK/fyne_release_bundle.log"; fail "fyne did not leave an app bundle."; }
+# Move the keyless Fyne bundle out of the repository before replacing its
+# executable. A signal or crash can therefore never strand a keyed `.app`
+# under cmd/mobile.
+APP="$WORK/$APP_NAME"
+mv "$PACKAGED_APP" "$APP"
 
 # ── 4. cross-compile arm64 + swap the binary in ──────────────────────────────
 note "cross-compiling Go → ios/arm64"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
 CC="$(xcrun --sdk iphoneos -f clang)"
+mkdir -p "$WORK/go-cache" "$WORK/go-tmp"
 CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
+    GOCACHE="$WORK/go-cache" GOTMPDIR="$WORK/go-tmp" \
     CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
     CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-    go build -o "$WORK/bibletext-arm64" "$REPO_ROOT/cmd/mobile"
+    go build -trimpath -ldflags "$BIBLE_KEY_LDFLAGS -s -w" \
+      -o "$WORK/bibletext-arm64" "$REPO_ROOT/cmd/mobile"
+BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+  python3 "$REPO_ROOT/scripts/verify-release-key.py" "$WORK/bibletext-arm64"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
-cp "$WORK/bibletext-arm64" "$APP/$EXE"; chmod +x "$APP/$EXE"
+mv -f "$WORK/bibletext-arm64" "$APP/$EXE"; chmod +x "$APP/$EXE"
 note "binary arch: $(lipo -archs "$APP/$EXE")"
 
 # ── 5. Info.plist tweaks for the App Store ───────────────────────────────────
@@ -269,12 +265,14 @@ plutil -extract Entitlements xml1 -o "$WORK/ent.plist" "$WORK/prof.plist"
 /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" "$WORK/ent.plist"
 /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:bibletext.co.uk" "$WORK/ent.plist"
 codesign -f -s "$CERT_HASH" --entitlements "$WORK/ent.plist" --generate-entitlement-der "$APP"
+BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+  python3 "$REPO_ROOT/scripts/verify-release-key.py" "$APP/$EXE"
 
 # ── 7. assemble an .xcarchive around BibleText.app ───────────────────────────
 note "assembling .xcarchive"
 ARCH_DIR="$WORK/BibleText.xcarchive"
 mkdir -p "$ARCH_DIR/Products/Applications"
-cp -R "$APP" "$ARCH_DIR/Products/Applications/"
+mv "$APP" "$ARCH_DIR/Products/Applications/$APP_NAME"
 cat > "$ARCH_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -328,11 +326,12 @@ fi
 
 IPA="$(ls "$WORK/export"/*.ipa 2>/dev/null | head -1)"
 [ -n "$IPA" ] || fail "exportArchive did not produce an .ipa (see log above)."
-mkdir -p "$OUT_DIR"; cp "$IPA" "$OUT_DIR/BibleText.ipa"
+BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+  python3 "$REPO_ROOT/scripts/verify-release-key.py" "$IPA"
 
 # ── 9. verify the .ipa ───────────────────────────────────────────────────────
-note "verifying build/BibleText.ipa"
-rm -rf "$WORK/verify"; unzip -q "$OUT_DIR/BibleText.ipa" -d "$WORK/verify"
+note "verifying exported IPA before publication"
+rm -rf "$WORK/verify"; unzip -q "$IPA" -d "$WORK/verify"
 VAPP="$(ls -d "$WORK/verify/Payload"/*.app)"
 echo "  arch:      $(lipo -archs "$VAPP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$VAPP/Info.plist")")"
 EXPORTED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$VAPP/Info.plist")"
@@ -348,6 +347,14 @@ if /usr/libexec/PlistBuddy -c 'Print :UIRequiresFullScreen' "$VAPP/Info.plist" >
     fail "exported app still opts out of iPad multitasking"
 fi
 codesign -dvv "$VAPP" 2>&1 | grep -iE 'Authority=Apple|TeamIdentifier' | sed 's/^/  /'
+
+# Publish only after every content, identity, privacy, signature, and keyed-build
+# check has passed. The final rename is atomic within the output directory.
+mkdir -p "$OUT_DIR"
+IPA_TMP="$OUT_DIR/.BibleText.ipa.tmp.$$"
+cp "$IPA" "$IPA_TMP"
+mv -f "$IPA_TMP" "$OUT_DIR/BibleText.ipa"
+IPA_TMP=""
 
 cat <<EOF
 

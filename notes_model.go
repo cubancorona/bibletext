@@ -1,10 +1,12 @@
 package bibletext
 
-// What a note IS, in the scrapbook store (S5 — [redacted-retired-private-reference]).
+// What a note IS in the durable record model
+// (docs/NOTES_SPEC.md#record-model).
 //
 // A StoredNote is one record in an append-friendly store built for years of
-// growth. Three properties here are load-bearing for the "Long-term foundation"
-// section of [redacted-retired-private-reference] and cannot be retrofitted later:
+// growth. Three properties here are load-bearing for the record contract at
+// docs/NOTES_SPEC.md#record-model and the store contract at
+// docs/NOTES_SPEC.md#store-contract, and cannot be retrofitted later:
 //
 //  1. IDENTITY IS CARRIED, NEVER REBUILT. A note's ID is minted once from a
 //     persisted monotonic counter and never reused — deletion must never free
@@ -59,7 +61,8 @@ type StoredNote struct {
 	VerseLo   int
 	VerseHi   int
 
-	// AnchorRuns is the FULL anchor as a run set (S6, [redacted-retired-private-reference])
+	// AnchorRuns is the FULL anchor as a run set
+	// (docs/NOTES_SPEC.md#anchor-and-placement-contract)
 	// — what the wire's 'a' record carried, when it carried one. A resolution
 	// is a set, not a span: WEB Mark 9:43-46 lands in the BSB as [43,43] and
 	// [45,45], which VerseLo/VerseHi cannot say. Empty for a note whose link
@@ -74,7 +77,8 @@ type StoredNote struct {
 	Text string
 
 	// Minimized has ONE meaning: the reader closed this note
-	// ([redacted-retired-private-reference]). Written only by a reader's press.
+	// (docs/NOTES_SPEC.md#chapter-plan-and-presentation-state). Written only
+	// by a reader's press.
 	Minimized bool
 
 	// Received is this device's clock at arrival, unix seconds.
@@ -185,12 +189,10 @@ func (n *StoredNote) UnmarshalJSON(data []byte) error {
 	// Known fields are decoded INDIVIDUALLY from an exact-case key map — never
 	// by unmarshalling the whole object into the struct. Go's struct decoding
 	// matches keys CASE-INSENSITIVELY, so a future build's field named "ID" or
-	// "Lo" or "TS" would have clobbered the known field on read while also
-	// riding along in Extra: the record's identity silently corrupted by a
-	// field this build was supposed to pass through untouched. Found by
-	// implementation verification — splicing "ID":99999 onto a record with id 1 read
-	// back as id 99999. Exact-case lookups make an unknown key exactly and
-	// only an Extra key, whatever it is named.
+	// "Lo" or "TS" would clobber the known field on read while also riding
+	// along in Extra, silently changing the record's identity. For example,
+	// appending "ID":99999 to a record with id 1 must leave id unchanged.
+	// Exact-case lookups keep every unknown key exclusively in Extra.
 	var all map[string]json.RawMessage
 	if err := json.Unmarshal(data, &all); err != nil {
 		return err

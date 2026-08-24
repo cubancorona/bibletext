@@ -279,9 +279,8 @@ func TestNextTapRotationIsDeterministic(t *testing.T) {
 	}
 }
 
-// Deleting one note of several must SURFACE THE REST — the verification was
-// "all the note pills disappear... until I navigate away and come back":
-// dropCurrentNote cleared the mirror and stopped, so the pane showed nothing
+// Deleting one note of several must SURFACE THE REST. dropCurrentNote once
+// cleared the mirror and stopped, so the pane showed nothing
 // while the store still held two notes. The delete verb now ends on the same
 // projection every other verb ends on. Walked to the bottom: each delete
 // surfaces the next of the set, and only the LAST leaves the pane bare.
@@ -302,7 +301,7 @@ func TestDeleteOfManySurfacesTheRemaining(t *testing.T) {
 
 	dropCurrentNote(st)
 	if st.ActiveNote == "" || st.NoteID == 0 {
-		t.Fatal("two notes remain and the pane shows NOTHING — the verification, pinned")
+		t.Fatal("two notes remain and the pane shows NOTHING")
 	}
 	if st.NoteID != notes[1].ID {
 		t.Fatalf("the next of the set should surface (note %d), got %d", notes[1].ID, st.NoteID)

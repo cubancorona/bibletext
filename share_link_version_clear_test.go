@@ -7,7 +7,7 @@ package bibletext
 // switchVersion consults that map before the disk, and switchToLinkVersion
 // returns early when the link names the version already open. So the dev
 // "Clear" button removed the file, changed nothing observable, and an /nkjv/
-// note still opened instantly — reported as "maybe it wasn't cleared?".
+// note still opened instantly, making the clear action appear ineffective.
 
 import (
 	"testing"
@@ -15,7 +15,7 @@ import (
 
 func TestClearingAVersionMakesALinkTakeTheUnavailablePath(t *testing.T) {
 	target, ok := ParseShareLink(
-		"https://bibletext.co.uk/nkjv/psalms/23/#v1-4&n=cmEDAQEEYgESYwEXdDBCZWVuIHRoaW5raW5nIG9mIHlvdSB0b2RheS4gVGhpcyBvbmUgaXMgZm9yIHlvdS52BG5ranY")
+		"https://bibletext.co.uk/nkjv/psalms/23/#v1-4&n=cmEDAQEEYgESYwEXdB1maXh0dXJlIHZlcnNpb24gbWVzc2FnZSBhbHBoYXYEbmtqdg")
 	if !ok {
 		t.Fatal("fixture link does not parse")
 	}

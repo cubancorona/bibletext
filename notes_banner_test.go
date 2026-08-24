@@ -36,7 +36,7 @@ func TestNoteBannerShowsTheNote(t *testing.T) {
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
-		VerseLo: 1, Text: "This got me through last night."})
+		VerseLo: 1, Text: "fixture banner message alpha"})
 
 	st := bannerState(t)
 	applyNoteForCurrentChapter(st)
@@ -52,7 +52,7 @@ func TestNoteBannerShowsTheNote(t *testing.T) {
 	}
 	// S8: the shared bubble — the sender's citation in the heading, the byline
 	// OUTSIDE the bubble, the words inside it and nothing else.
-	for _, want := range []string{"From Friend", "Psalms 23:1", "This got me through last night."} {
+	for _, want := range []string{"From Friend", "Psalms 23:1", "fixture banner message alpha"} {
 		found := false
 		for _, s := range texts {
 			if s == want {
@@ -168,13 +168,13 @@ func TestExecuteSearchOpensPastedShareLinks(t *testing.T) {
 	}
 	bd.PrepareSearchIndex()
 	st := &AppState{Bible: bd, CurrentBook: "Philemon", CurrentChapter: 1}
-	link := ShareLinkURLWithNote("web", "Philemon", 1, 1, 4, "pasted note")
+	link := ShareLinkURLWithNote("web", "Philemon", 1, 1, 4, "fixture pasted message")
 	executeSearch(st, link)
 
 	if st.CurrentBook != "Philemon" || st.CurrentChapter != 1 {
 		t.Fatalf("pasted link did not navigate: %s %d", st.CurrentBook, st.CurrentChapter)
 	}
-	if st.ActiveNote != "pasted note" {
+	if st.ActiveNote != "fixture pasted message" {
 		t.Errorf("pasted link's note not active: %q", st.ActiveNote)
 	}
 	if st.IsSearching {
@@ -185,7 +185,7 @@ func TestExecuteSearchOpensPastedShareLinks(t *testing.T) {
 // A BARE passage link (no note payload) must not blank the note already stored
 // on that chapter. Before the gate in applyShareTarget, arriving on a chapter
 // via a plain link wrote an empty ActiveNote over the stored one, so the banner
-// vanished until the reader navigated away and back (platform reproduction).
+// vanished until the reader navigated away and back.
 func TestBarePassageLinkKeepsTheStoredNote(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -203,11 +203,11 @@ func TestBarePassageLinkKeepsTheStoredNote(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "Philemon", CurrentChapter: 1}
 
 	// A note arrives on a link and is stored.
-	withNote := ShareLinkURLWithNote("web", "Philemon", 1, 1, 4, "synthetic note")
+	withNote := ShareLinkURLWithNote("web", "Philemon", 1, 1, 4, "fixture banner message beta")
 	if !HandleShareLink(st, withNote) {
 		t.Fatal("the note link was not handled")
 	}
-	if st.ActiveNote != "synthetic note" {
+	if st.ActiveNote != "fixture banner message beta" {
 		t.Fatalf("note did not arrive: %q", st.ActiveNote)
 	}
 
@@ -216,7 +216,7 @@ func TestBarePassageLinkKeepsTheStoredNote(t *testing.T) {
 	if !HandleShareLink(st, bare) {
 		t.Fatal("the bare link was not handled")
 	}
-	if st.ActiveNote != "synthetic note" {
+	if st.ActiveNote != "fixture banner message beta" {
 		t.Errorf("a bare link wiped the stored note (ActiveNote=%q)", st.ActiveNote)
 	}
 	if buildNoteBanner(st) == nil {

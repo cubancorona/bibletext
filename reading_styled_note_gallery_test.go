@@ -99,7 +99,7 @@ func TestStyledNoteGallery(t *testing.T) {
 			name: "01-single-note-expanded",
 			build: func(t *testing.T) (*AppState, []Verse, string, int) {
 				return galleryFixture(t, []int{2}, []string{
-					"Read this synthetic note this morning and synthetic note."})
+					"Fixture message alpha beta gamma delta epsilon zeta."})
 			},
 			w: 520, h: 420, wantSticker: true, washVerses: []int{2},
 		},

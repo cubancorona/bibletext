@@ -19,8 +19,9 @@ package bibletext
 // read the text back across cgo.
 //
 // The view is added to the root view controller's view, NOT the bare window —
-// same rule as the reading overlay ([redacted-retired-private-reference]): system edit actions walk the
-// responder chain for a view controller and misbehave without one.
+// same rule as the native reading overlay (see ARCHITECTURE.md): system edit
+// actions walk the responder chain for a view controller and misbehave without
+// one.
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc

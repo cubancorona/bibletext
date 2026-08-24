@@ -7,12 +7,12 @@ package bibletext
 // the host and the same code serves iPhone, iPad, macOS, Android, Windows and
 // Linux. That matters more here than usual: the reading pane is a native
 // overlay on three of those platforms, and a per-platform bubble would have
-// been four implementations of the same conversation.
+// been four implementations of the same interaction.
 //
-// Both surfaces observe the overlay invariant ([redacted-retired-private-reference] → Native text
-// overlays): the native reading view floats ABOVE the Fyne canvas, so anything
-// Fyne draws must hide it on open and restore it on close, or it renders behind
-// the scripture and looks like nothing happened.
+// Both surfaces observe the native-overlay invariant documented in
+// ARCHITECTURE.md: the native reading view floats ABOVE the Fyne canvas, so
+// anything Fyne draws must hide it on open and restore it on close, or it
+// renders behind the scripture and looks like nothing happened.
 
 import (
 	"image/color"
@@ -164,7 +164,7 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 	// A WRAPPING RichText, not a canvas.Text: a canvas.Text never wraps, so the
 	// idle line's ~357pt made it the whole card's minimum width — and on a
 	// canvas narrower than that, the non-modal renderer grew the card past the
-	// screen's right edge, taking the Share button with it (the implementation requirement).
+	// screen's right edge, taking the Share button with it.
 	left := widget.NewRichText(&widget.TextSegment{
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})

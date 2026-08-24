@@ -3,9 +3,9 @@ package bibletext
 // THE iOS SELECTION MENU'S CONTRACT, held by parsing the source.
 //
 // The menu is built in Objective-C inside a cgo preamble (reading_ios.go,
-// editMenuForTextInRange:suggestedActions:), so it cannot be exercised from a
-// Go test on this machine — the same problem notes_spacing_spec_test.go solves
-// the same way, and for the same reason: a rule nothing can check is a rule
+// editMenuForTextInRange:suggestedActions:), so it cannot be exercised by the
+// default non-iOS Go test build. notes_spacing_spec_test.go uses the same
+// source-parsing strategy, because a rule nothing can check is a rule
 // that quietly stops being true.
 //
 // WHAT IS BEING GUARDED, and why it is worth a test rather than a comment:

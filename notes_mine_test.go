@@ -12,7 +12,7 @@ import (
 func TestMyNoteSurvivesARoundTrip(t *testing.T) {
 	p := newNotePrefs()
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "Psalms", Chapter: 34,
-		VerseLo: 18, Text: "synthetic note today"})
+		VerseLo: 18, Text: "fixture outgoing message alpha"})
 
 	mine, ok := readMyNotes(p)
 	if !ok {
@@ -21,7 +21,7 @@ func TestMyNoteSurvivesARoundTrip(t *testing.T) {
 	if len(mine) != 1 {
 		t.Fatalf("expected one note of my own, got %d", len(mine))
 	}
-	if mine[0].Text != "synthetic note today" || mine[0].Kind != noteKindMine {
+	if mine[0].Text != "fixture outgoing message alpha" || mine[0].Kind != noteKindMine {
 		t.Errorf("came back changed: %+v", mine[0])
 	}
 	if mine[0].Received == 0 {
@@ -35,15 +35,15 @@ func TestMyNoteSurvivesARoundTrip(t *testing.T) {
 func TestMyNoteCannotOverwriteAFriendsNote(t *testing.T) {
 	p := newNotePrefs()
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
-		Text: "a friend sent me this"})
+		Text: "fixture received alpha"})
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
-		Text: "and I sent one back"})
+		Text: "fixture outgoing beta"})
 
 	got, ok := noteForChapter(p, "web", "John", 3, nil)
 	if !ok {
 		t.Fatal("the friend's note is gone entirely")
 	}
-	if got.Text != "a friend sent me this" {
+	if got.Text != "fixture received alpha" {
 		t.Errorf("my note overwrote theirs: %q", got.Text)
 	}
 	if got.Kind == noteKindMine {
@@ -58,8 +58,8 @@ func TestMyNoteCannotOverwriteAFriendsNote(t *testing.T) {
 // A keyed store would have kept only the newer, which is why there is no key.
 func TestTwoOfMyNotesOnOnePassageBothSurvive(t *testing.T) {
 	p := newNotePrefs()
-	saveMyNote(p, StoredNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "first thought"})
-	saveMyNote(p, StoredNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "second thought"})
+	saveMyNote(p, StoredNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture outgoing first"})
+	saveMyNote(p, StoredNote{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture outgoing second"})
 
 	mine, _ := readMyNotes(p)
 	if len(mine) != 2 {
@@ -73,7 +73,7 @@ func TestTwoOfMyNotesOnOnePassageBothSurvive(t *testing.T) {
 // stamps it, so including it would make every re-share a new note.
 func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
 	p := newNotePrefs()
-	n := StoredNote{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28, Text: "all things"}
+	n := StoredNote{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28, Text: "fixture repeated alpha"}
 	saveMyNote(p, n)
 	n.Received = 0 // a fresh send: the clock has moved on
 	saveMyNote(p, n)
@@ -83,7 +83,7 @@ func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
 	}
 	// ...but different words on the same verse are a different note.
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28,
-		Text: "and this one too"})
+		Text: "fixture repeated beta"})
 	if mine, _ := readMyNotes(p); len(mine) != 2 {
 		t.Errorf("a different note on the same verse should be kept: got %d", len(mine))
 	}
@@ -96,7 +96,7 @@ func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
 func TestMyNotesNeverReachTheReadingPage(t *testing.T) {
 	p := newNotePrefs()
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "Mark", Chapter: 4, VerseLo: 39,
-		Text: "peace, be still"})
+		Text: "fixture local-only alpha"})
 
 	if _, ok := noteForChapter(p, "web", "Mark", 4, nil); ok {
 		t.Error("a note you sent appeared on the reading page")

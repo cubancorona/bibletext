@@ -6,7 +6,7 @@ package bibletext
 // bibleTextMacHighlightVerse is the reference behaviour). The audio controller
 // stays the single source of truth; these helpers only paint and scroll.
 //
-// Untagged so the whole feature unit-tests on the the development environment. On the
+// Untagged so the whole feature runs in the default host test suite. On the
 // native-overlay platforms it is dead code: the readAlong* entry points there
 // are the native implementations, and nothing constructs a styled pane. The
 // Windows/Linux entry points live in readalong_other.go and call these on the
@@ -51,10 +51,9 @@ var styledRAFollowPending bool
 // follow-scroll issues, leaving follow inert whenever a search jump preceded
 // Play. Reset on rewire (a fresh pane's highlight positions once again).
 //
-// IT SURVIVES S2, AND THE SCRAPBOOK'S REASON FOR RETIRING IT WAS A MISREADING.
-// [redacted-retired-private-reference] files this latch under "read-along must restore, not
-// erase", as the styled pane's way of reconciling two washes that want the same
-// pixel — "the styled pane reconciles with a latch, not a model". It does not.
+// IT SURVIVES THE TINT REWORK. The tint contract is recorded at
+// docs/NOTES_SPEC.md#overlap-and-tint-contract. This latch does not reconcile
+// two colours that want the same pixel.
 // This latch says nothing about colour: it is about who owns the SCROLL
 // POSITION, and the only things that read it are styledColumn.Layout's
 // highlightOwnsScroll branch and the rewire that resets it.

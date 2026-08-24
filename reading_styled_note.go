@@ -16,7 +16,7 @@ package bibletext
 // layout engine, so the band is a LAYOUT change (styledLayoutParams.BandVerse /
 // BandH → chapterLayout.BandLine/BandY/BandH) rather than a trick over the top,
 // and every part of it — the reservation, the geometry, the hit targets, the
-// pixels — is testable on the the development environment.
+// pixels — is covered by host-side tests without cgo.
 //
 // THE FOUR LESSONS THE OTHER THREE PLATFORMS PAID FOR, and where each is held:
 //
@@ -75,11 +75,9 @@ type styledNote struct {
 	Pill   bool   // minimized, suppressed, or unplaced-only
 	Next   bool   // the counts region is a CONTROL (more than one placed note)
 	Anchor int    // the verse the band opens above; 0 = park at the top
-	// Own marks YOUR note, drawn the requested behavior to see it. It decides one
-	// thing here: what the closing control is. On a received note that control
-	// DELETES, and wears a bin to say so; on your own it only puts the card
-	// away, and wears ✕. One glyph meaning two things was the alternative, and
-	// the destructive meaning is not the one to leave ambiguous.
+	// Own marks an explicitly focused note authored locally. It determines the
+	// closing control: a received note is deleted and uses a bin, while an own
+	// note is dismissed and uses ✕. Distinct glyphs keep deletion unambiguous.
 	Own bool
 }
 

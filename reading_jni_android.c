@@ -53,8 +53,8 @@ Java_org_bibletext_BtBridge_nativeKeyboardChanged(JNIEnv *env, jclass clazz, jfl
 	btaKeyboardChanged((float)overlapDp);
 }
 
-// The full-screen note sticker's verbs (the implementation requirement): next-tap on the count
-// region, Hide, Delete, and the pill's tap-to-restore — each dispatching to
+// The full-screen note sticker supports next-tap on the count region, Hide,
+// Delete, and the pill's tap-to-restore — each dispatching to
 // the same Go verb the iOS sticker calls (reading_android_export.go).
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeNoteNextTapped(JNIEnv *env, jclass clazz) {

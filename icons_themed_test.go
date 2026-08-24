@@ -27,7 +27,7 @@ func (f forcedVariant) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.C
 // Every asset in assets/icons is a single fill="#000000" path, so an icon that
 // reaches a widget as a plain StaticResource renders BLACK whatever the theme
 // says. On the dark page (rgb(25,23,21)) that is all but invisible — which is
-// exactly how the Search tab's notes bubble was reported.
+// how the Search tab's notes bubble rendered before its resource was themed.
 //
 // Fyne recolours an icon only when it can see a fyne.ThemedResource
 // (widget/button.go tints one when Importance is neither Medium nor Low, and

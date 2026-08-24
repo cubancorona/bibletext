@@ -54,8 +54,8 @@ type AppState struct {
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32
 
-	// askSession is the ONE Find-supersession guard for the whole app (review
-	// finding): it must survive window rebuilds. When it lived as a local of
+	// askSession is the one Find-supersession guard for the whole app, so it
+	// must survive window rebuilds. Making it local to
 	// each buildSidebar / buildMobileSearchTab, a rebuild mid-flight (rotation,
 	// theme variant change, version switch) minted a fresh zeroed session while
 	// the old completion closure still held — and passed — the old one, letting
@@ -531,8 +531,8 @@ func advanceToNextChapter(state *AppState) bool {
 	}
 	// Mirror moveChapter, NOT selectBook: selectBook also resets IsSearching /
 	// CanReturnToSearchResults, and this runs from a background audio event —
-	// it must never yank away results the reader is browsing (within-book
-	// advances already leave them alone; implementation verification).
+	// it must never yank away results the reader is browsing. Within-book
+	// advances already leave them alone.
 	state.CurrentBook = books[idx+1]
 	state.CurrentChapter = clampChapter(state.Bible, state.CurrentBook, 1)
 	clearHighlightedVerse(state)
@@ -896,7 +896,7 @@ func clearHighlightedVerse(state *AppState) {
 // and chapter are the arrival's target: only a mark landing on the chapter the
 // reader is already standing on can take the note in front of their eyes —
 // a cross-chapter arrival suppresses a note the reader never had open, and the
-// release must not open it for them (the report-C rule).
+// release must not open it for them.
 //
 // Called BEFORE the verb navigates, because the navigation's own derive
 // transiently opens the chapter's note and would make a later capture lie

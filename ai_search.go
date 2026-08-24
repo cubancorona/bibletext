@@ -26,9 +26,8 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) (ca
 		// The completion is ALWAYS delivered — even when the assistant was
 		// switched to "None" mid-flight. Both callers already drop a dead
 		// result via their session/aiSearchActive checks, and the mobile one
-		// must run its spinner-stop first: swallowing the callback here left
-		// an orphaned ProgressBarInfinite repainting a detached canvas
-		// (implementation verification).
+		// must run its spinner-stop first. Swallowing the callback here leaves
+		// an orphaned ProgressBarInfinite repainting a detached canvas.
 		fyne.Do(func() { done(verses, err) })
 	}()
 	return cancelCtx
@@ -40,7 +39,7 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) (ca
 // LATEST via Current. Without this, a slow provider response for an abandoned
 // query lands late and clobbers the newer search — the reader edits the query,
 // resubmits, sees the progress bar flash, and then watches the OLD results
-// reappear (a observed in practice bug). All methods run on the Fyne UI goroutine
+// reappear. All methods run on the Fyne UI goroutine
 // (Entry/Button callbacks and fyne.Do-marshalled completions), so no lock.
 type aiSearchSession struct{ gen int }
 

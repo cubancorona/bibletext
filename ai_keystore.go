@@ -60,10 +60,11 @@ const (
 	// is no longer relevant — it was our fallback, never the reader's choice —
 	// so it must not outrank the new recommendation. See resolvedModel.
 	prefModelResolvedForPrefix = "ai.model.resolvedfor."
-	// prefBibleKeySeeded holds the fingerprint of the BUNDLED API.Bible key
-	// this install was seeded with (see bible_key_bundled.go), and
-	// prefBibleKeyCleared records that the reader deliberately removed it so
-	// it is never re-seeded.
+	// prefBibleKeySeeded is legacy provenance: older releases stored the
+	// fingerprint of the project API.Bible key they copied on-device. Current
+	// releases use it only to remove that old app-owned copy safely.
+	// prefBibleKeyCleared records that the reader deliberately disabled the
+	// compiled runtime fallback.
 	prefBibleKeySeeded  = "bible.key.seeded"
 	prefBibleKeyCleared = "bible.key.cleared"
 )
@@ -73,11 +74,14 @@ const (
 func newKeyStore() *keyStore {
 	if app := fyne.CurrentApp(); app != nil {
 		k := &keyStore{prefs: app.Preferences(), secrets: newPlatformSecretStore()}
+		// Releases before the runtime-fallback design copied the project's
+		// bundled API.Bible key into the on-device credential store. Remove only
+		// a copy whose saved fingerprint proves that the app seeded it; a
+		// reader-owned key is never changed. This must precede generic key
+		// migration so an old app-owned Preferences copy is not first copied into
+		// the platform credential store.
+		k.migrateBundledBibleKey()
 		k.migrateAllKeys()
-		// Release builds carry the project's own API.Bible key; this puts it
-		// in the normal store on first run so Settings can show and remove
-		// it like any other key. A no-op in builds without one.
-		k.seedBundledBibleKey()
 		return k
 	}
 	return &keyStore{}
@@ -88,11 +92,42 @@ func newKeyStore() *keyStore {
 // keys: Keychain on iOS, Preferences elsewhere, env var overriding both.
 const bibleKeyID = "apibible"
 
-func (k *keyStore) bibleAPIKey() string          { return k.apiKey(bibleKeyID) }
-func (k *keyStore) setBibleAPIKey(v string) bool { return k.setAPIKey(bibleKeyID, v) }
+func (k *keyStore) bibleAPIKey() string {
+	// A credential-store failure can defer legacy cleanup at startup. Retry
+	// before every effective Bible-key read while provenance remains, so a
+	// recovered store cannot cause apiKey to migrate an old app-owned copy.
+	k.migrateBundledBibleKey()
+	if key := k.apiKey(bibleKeyID); key != "" {
+		return key
+	}
+	// A release key is a runtime fallback, not a stored credential. Requiring
+	// Preferences here is intentional: before the app has bound its real store
+	// we cannot know whether the reader previously cleared the bundled key.
+	if k == nil || k.prefs == nil || k.bundledBibleKeyCleared() {
+		return ""
+	}
+	return bundledBibleKey()
+}
+
+func (k *keyStore) setBibleAPIKey(v string) bool {
+	v = strings.TrimSpace(v)
+	if !k.setAPIKey(bibleKeyID, v) {
+		return false
+	}
+	if v != "" && k != nil && k.prefs != nil &&
+		(k.secrets == nil || strings.TrimSpace(k.prefs.String(prefKeyPrefix+bibleKeyID)) == "") {
+		// A successful non-empty write is a reader action. Clear any stale
+		// provenance left by an older app-seeded copy, even when the bytes happen
+		// to equal the bundled key. If the credential-store write failed and
+		// setAPIKey fell back to Preferences, retain the provenance: an older
+		// app-seeded secure copy may still need fingerprint-gated removal.
+		k.prefs.SetString(prefBibleKeySeeded, "")
+	}
+	return true
+}
 
 // sharedKeys serves callers without an AppState (the version registry decides
-// availability from the stored Bible key). Bound to the app's Preferences on
+// availability from the effective Bible key). Bound to the app's Preferences on
 // first use once an app exists; inert before that. A test hook: overridable.
 var sharedKeys = func() *keyStore {
 	if sharedKeyStore == nil && fyne.CurrentApp() != nil {
@@ -122,8 +157,8 @@ func (k *keyStore) keyInSecureStore(id string) bool {
 }
 
 // migrateAllKeys sweeps EVERY provider's pre-1.1.6 Preferences key into the
-// credential store up front (the implementation requirement: the lazy per-provider migration
-// left non-selected providers' keys in plaintext Preferences indefinitely).
+// credential store up front. Lazy per-provider migration would leave
+// non-selected providers' keys in plaintext Preferences indefinitely.
 // apiKey carries the same logic per read; this just runs it for each provider
 // once at startup. Errors leave the legacy copy in place for the next try.
 func (k *keyStore) migrateAllKeys() {

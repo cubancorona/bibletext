@@ -4,8 +4,8 @@ package bibletext
 //
 // THE CLASS THIS PINS: a verb mutates the store or state but does not end on
 // the shared projection + repaint, so the visible pane disagrees with the
-// store until navigation re-derives (the dropCurrentNote verification: "all
-// the note pills disappear... until I navigate away and come back"). Each verb
+// store until navigation re-derives, making every note surface disappear until
+// the next navigation. Each verb
 // below runs against one 3-note fixture chapter and is then answered at
 // SCREEN level on BOTH seams:
 //
@@ -102,7 +102,7 @@ func assertStickerAgreesWithStore(t *testing.T, st *AppState) {
 	t.Helper()
 	plan := buildChapterPlan(st, appPrefs(), st.Bible)
 	text, who, pill, next := appleStickerPush(st, plan)
-	// The Android full-screen sticker rides the SAME composition (the implementation requirement):
+	// The Android full-screen sticker rides the SAME composition:
 	// androidStickerPush is a thin alias of the Apple push, held here to
 	// byte-equality across every verb so the two native channels cannot
 	// drift — this is the Android-channel pin of the store-agreement seam.

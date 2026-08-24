@@ -281,7 +281,7 @@ func TestParseVersionRank(t *testing.T) {
 
 // The model-gone message must NAME the failing model and point at the model
 // picker (with the self-healing "Recommended" escape) — a pinned model a key
-// can't invoke is the common case (observed in practice: a pinned gemini-2.5-pro on
+// can't invoke is the common case (for example, a pinned gemini-2.5-pro on
 // an un-entitled key), and "update the app" advice would be stale now that
 // models are discovered live.
 func TestFriendlyModelGoneNamesModelAndFix(t *testing.T) {
@@ -295,7 +295,7 @@ func TestFriendlyModelGoneNamesModelAndFix(t *testing.T) {
 
 // Google rejects an invalid key with 400 + "API key not valid…" (not 401) —
 // the friendly message must say key-rejected, not "selection too long"
-// (observed in practice via the settings sheet's Test key).
+// (observable through the settings sheet's Test key).
 func TestFriendlyBadKey400SaysKeyRejected(t *testing.T) {
 	err := &apiHTTPError{StatusCode: http.StatusBadRequest,
 		Details: "API key not valid. Please pass a valid API key."}

@@ -1323,9 +1323,8 @@ static const CGFloat kMacNoteTail = 9, kMacNoteTailW = 18, kMacNoteTailX = 24;
 // This one reserves max(GapAbove, one line of the anchor paragraph's own font),
 // which at the reporter leading is roughly 24pt rather than 10 — so a macOS card
 // carries about 14pt more air above it than an iOS, Android or styled-pane card
-// does. It is kept because removing it reintroduces a defect that was measured
-// on rendered pixels and reported from the field, not because the number is
-// prettier.
+// does. It is kept because removing it makes the card overlap preceding ink at
+// reporter leading, not because the number is prettier.
 //
 // What it corrects: at the reporter layout's leading the preceding line's INK
 // overhangs the bottom of its own line box by most of a line. Place the card
@@ -1715,9 +1714,9 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
     // The queries below are only as good as the layout behind them, and the
     // install (or its reconcile) has just EDITED this paragraph's style —
     // asked too soon, the used rect answers with pre-edit geometry, the card
-    // sticks a band too high, and nothing after corrects it (verification:
-    // the bubble covering the previous paragraph's last line with a dead gap
-    // under its tail, on the desktop). Force the paragraph's layout current
+    // sticks a band too high, and nothing after corrects it: the bubble covers
+    // the previous paragraph's last line and leaves a dead gap under its tail.
+    // Force the paragraph's layout current
     // before asking anything.
     [lm ensureLayoutForCharacterRange:para];
     NSRect used = [lm lineFragmentUsedRectForGlyphAtIndex:g.location effectiveRange:NULL];
@@ -2128,11 +2127,11 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	// byte-identical and no release build can reach this branch.
 	//
 	// It exists because the two reading surfaces are mutually exclusive per
-	// platform, so on any one machine only one of them can be looked at. The
+	// platform, so a single platform build exposes only one of them. The
 	// verses on macOS are drawn by a native NSTextView above the canvas: there
 	// is no Fyne text in the tree, so "can the reader SEE the verses" cannot be
-	// asked here at all, and a view test on this machine could only ever check
-	// the surface it is not shipping. This is also the seam behind a separate
+	// asked here at all, and a host-side view test can check only the alternate
+	// surface. This is also the seam behind a separate
 	// dev mode: macOS following the Windows/Linux paths.
 	if useStyledPane() {
 		return styledReadingScrollArea(state, verses, pal)
@@ -2400,7 +2399,7 @@ func macOwnFlag(state *AppState) C.int {
 // shown here", the pill's count, the unplaced-only sentence — rides in the
 // WHO parameter, the sticker's own chrome. This closes S8's recorded identity
 // gap (the count used to ride inside the sender's bubble in the sender's
-// style) with the one tuple change S9 exists for. The pushed pill
+// style) with the tuple change S9 exists for. The pushed pill
 // flag folds the plan's derived suppression, so a foreign mark stands the
 // sticker down to the pill and releases it — rendered by the native side's
 // own compare-and-refresh (bibleTextMacSetNote), never by a chapter

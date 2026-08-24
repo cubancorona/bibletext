@@ -28,6 +28,11 @@
 # ~1 year (vs a free team's 7 days) — re-run any time to reinstall.
 set -euo pipefail
 
+# Development packaging must not inherit unrelated provider credentials or the
+# shared release key from a shell used for live-provider testing.
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY BIBLE_API_KEY
+export GOFLAGS="" GODEBUG=""
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
@@ -66,17 +71,8 @@ trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$W
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 
-# Compile in the project's own API.Bible key (from .env.local) so the NKJV
-# works out of the box; the generated file is removed by the re-armed trap
-# below, and a build with no key present is simply bring-your-own-key.
-source "${REPO_ROOT}/[redacted-retired-private-reference]"
-embed_bible_key
-# Re-arm the FULL cleanup. Sourcing [redacted-retired-private-reference] above registered an EXIT
-# trap of its own, and bash keeps only the LAST trap per signal — so it silently
-# replaced the go.mod/FyneApp.toml restore armed earlier and left a temporary
-# `replace` in go.mod after every device build. This trap does both jobs, and
-# being last, it is the one that runs.
-trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -f "$REPO_ROOT/bundled_key_gen.go"; rm -rf "$WORK"' EXIT
+# Development-device builds use the reader-supplied key path. The shared
+# release credential is injected only by Store/release pipelines.
 
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
@@ -183,13 +179,13 @@ plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 
 # ── 5c. declare add-only Photos access (share sheet "Save Image") ───────────
 # Without NSPhotoLibraryAddUsageDescription, iOS silently HIDES the Save Image
-# action in the share sheet for the "Share as image" cards (observed in practice:
-# only "Save to Files" appeared). Write-only access, used solely when the
+# action in the share sheet for the "Share as image" cards; without it, only
+# "Save to Files" appears. Write-only access, used solely when the
 # reader taps Save Image — no read access, nothing is collected.
 note "adding NSPhotoLibraryAddUsageDescription (share-sheet Save Image)"
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
 
-# App Store parity (the implementation requirement): the release build deletes UIRequiresFullScreen
+# App Store parity: the release build deletes UIRequiresFullScreen
 # (iPad multitasking) and compiles the launch storyboard — the smoke builds must
 # match, or Split View/Stage Manager resizing ships untested.
 PBX() { /usr/libexec/PlistBuddy -c "$1" "$APPPLIST" 2>/dev/null || true; }

@@ -254,7 +254,7 @@ func triggerFullDownload(state *AppState) {
 	// must target THAT version. state.CurrentVersion may be a translation the
 	// saved reading state restored, which restoreReadingState already brought
 	// to its current epoch — refetching it is pure waste, and it would leave
-	// the default version's epoch bump permanently unapplied (the implementation requirement).
+	// the default version's epoch bump permanently unapplied.
 	version, _ := versionByID(defaultVersionID)
 	go func() {
 		full, mode, err := loadVersionData(version, nil) // one helloao request; caches on success
@@ -313,9 +313,8 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 	// sheet). But THIS rebuild is a background completion, not something the
 	// reader did, and the foreground hook retries the download on every
 	// return to the app — so a Settings sheet that was open across a
-	// backgrounding vanished the moment the retry landed (verification, and
-	// the sim reproduces it: the cache file's mtime matches the restore to
-	// the second). The DATA is applied above either way; the window swap
+	// backgrounding vanished the moment the retry landed. The DATA is applied
+	// above either way; the window swap
 	// waits for the reader to leave the sheet (consumeDeferredFullRebuild),
 	// and any other full rebuild satisfies it too (rebuildWindow clears the
 	// flag and consumes the parked link itself).
@@ -402,8 +401,8 @@ var sheetConsumeClosure = func() bool { return sheetConsumeClosureOnPlatform }
 // sheetConsumeInstallGen counts installer INVOCATIONS (not installs): on the
 // native platforms the gate stands the installer down, so the only host-
 // observable truth about the WIRING — that desktop CreateMainUI still calls it
-// — is that this moved. The refuters proved the wiring was otherwise unpinned:
-// deleting the ui_desktop.go call left the whole suite green, and with it the
+// — is that this moved. Without this counter, deleting the ui_desktop.go call
+// left the whole suite green, and with it the
 // Windows/Linux stale-palette-after-sheet-close fix could silently vanish in
 // any CreateMainUI refactor. UI-goroutine only, like windowRebuildGen.
 var sheetConsumeInstallGen uint64
@@ -528,7 +527,7 @@ var systemThemeOnce sync.Once
 // The rebuild goes through rebuildWindow, NOT a bare SetContent: SetContent
 // replaces only the content tree and never touches Canvas().Overlays(), so an
 // OPEN popup (the Settings sheet, a picker) survived a variant flip with its
-// captured colors while Fyne re-lit its stock widgets — the observed in practice
+// captured colors while Fyne re-lit its stock widgets — the resulting
 // dark-panel/dark-text sheet after an overnight dark→light switch with the
 // app suspended. rebuildWindow drains the overlay stack (popups close;
 // reopening shows fresh colors) and re-pins the native reading overlay.
@@ -547,8 +546,7 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 		// the variant flips away and back and the listener hears two
 		// changes. Event-to-event each leg looks like a real change, the
 		// queued rebuilds run on restore, and the drain takes the sheet the
-		// reader left open with it (verification: "Settings open, background,
-		// restore — the sheet is gone"). Against the built variant, a round
+		// reader left open with it. Against the built variant, a round
 		// trip nets to no change and both queued closures no-op; a REAL
 		// overnight flip still differs and still rebuilds — with the drain
 		// that exists precisely for that flip's stale-palette sheet.

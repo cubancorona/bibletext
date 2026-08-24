@@ -98,9 +98,8 @@ func TestOffDoesNotStoreAnIncomingNote(t *testing.T) {
 // Turning notes off puts the note's mark out AT THAT MOMENT — not at the next
 // navigation.
 //
-// The implementation verification that demanded this pin: deleting clearMarkFromNote from
-// turnNotesOff left the ENTIRE suite green, including all 1,280 enumeration
-// cells, because the harness observes after the next derive — where the
+// Deleting clearMarkFromNote from turnNotesOff is not detected by the 1,280-cell
+// enumeration because the harness observes after the next derive, where the
 // off-branch backstop rescues the mark. On the real Settings route the switch
 // is followed by a refresh, not a derive, so under that mutation the note's
 // tint genuinely stayed lit on screen until the reader navigated. The moment

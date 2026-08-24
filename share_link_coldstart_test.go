@@ -25,7 +25,7 @@ func TestColdStartParksBeforeAskingAboutNotes(t *testing.T) {
 		name string
 		url  string
 	}{
-		{"link carrying a note", ShareLinkURLWithNote("web", "John", 3, 16, 0, "synthetic note")},
+		{"link carrying a note", ShareLinkURLWithNote("web", "John", 3, 16, 0, "fixture link message")},
 		{"plain link", ShareLinkURLWithNote("web", "John", 3, 16, 0, "")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -59,7 +59,7 @@ func TestNoteOfferStillHappensOnceLoaded(t *testing.T) {
 		Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1,
 		CurrentVersion: "web", loadPhase: loadPending,
 	}
-	url := ShareLinkURLWithNote("web", "John", 3, 16, 0, "a message")
+	url := ShareLinkURLWithNote("web", "John", 3, 16, 0, "fixture queued message")
 	HandleShareLink(st, url)
 	if st.pendingLink == nil {
 		t.Fatal("precondition: the link should be parked")
@@ -92,7 +92,7 @@ func TestColdStartNoteLinkOpensNormallyWhenNotesAreOn(t *testing.T) {
 		CurrentVersion: "web", loadPhase: loadPending,
 		loadedVersions: map[string]*BibleData{"web": bd},
 	}
-	HandleShareLink(st, ShareLinkURLWithNote("web", "John", 3, 16, 0, "for you"))
+	HandleShareLink(st, ShareLinkURLWithNote("web", "John", 3, 16, 0, "fixture cold-start message"))
 	if st.pendingLink == nil {
 		t.Fatal("precondition: the link should be parked")
 	}
@@ -102,7 +102,7 @@ func TestColdStartNoteLinkOpensNormallyWhenNotesAreOn(t *testing.T) {
 	if st.CurrentBook != "John" || st.CurrentChapter != 3 {
 		t.Errorf("landed on %s %d, want John 3", st.CurrentBook, st.CurrentChapter)
 	}
-	if st.ActiveNote != "for you" {
+	if st.ActiveNote != "fixture cold-start message" {
 		t.Errorf("the note did not survive the park: %q", st.ActiveNote)
 	}
 }

@@ -1,9 +1,8 @@
 package bibletext
 
-// The styled chapter LAYOUT engine for the desktop reading-pane rewrite
-// (Windows/Linux parity project — the research verdict chose one pure-Go
-// styled+selectable pane over per-platform native embedding; see the task
-// notes). It produces positioned, styled runs from chapter data: the same
+// The styled chapter LAYOUT engine for the desktop reading pane. It uses one
+// pure-Go styled+selectable pane rather than per-platform native embedding and
+// produces positioned, styled runs from chapter data: the same
 // greedy wrap, poetry breaks, and verse geometry as chapterText's rewrap, but
 // per-run instead of per-plain-line, so a renderer can colour the words of
 // Christ, raise the verse numbers, and paint a real selection — everything

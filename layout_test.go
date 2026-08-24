@@ -5,7 +5,7 @@ import "testing"
 // ONE LAYOUT ON EVERY TOUCH DEVICE. This test used to
 // assert the opposite for tablets — a wide iPad got layoutRegular, the sidebar
 // layout — and it is inverted here deliberately rather than deleted, because
-// the inversion IS the decision: the iPad's two reported problems (a mode row
+// the inversion IS the decision: the iPad's two layout problems (a mode row
 // that appeared to govern the sidebar, and results replacing the reading pane
 // with no way back) were both consequences of maintaining a second shape for
 // one app, and the phone's shape answers both.

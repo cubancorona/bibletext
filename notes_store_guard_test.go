@@ -116,9 +116,9 @@ func TestReadableNotesStoreRoundTrips(t *testing.T) {
 // store's write is verified by reading it back.
 func TestLegacyStoresMigrateOnFirstRead(t *testing.T) {
 	p := newNotePrefs()
-	p.m[prefLegacySharedNotes] = `[{"v":"web","b":"John","c":3,"lo":16,"t":"from a friend","ts":100,"m":true,"sn":"[redacted-fixture-name]","sid":"9a3f01c7528e"},` +
-		`{"v":"bsb","b":"Psalms","c":23,"t":"another","ts":200}]`
-	p.m[prefLegacyMyNotes] = `[{"v":"web","b":"Romans","c":8,"lo":28,"t":"sent to [redacted-family-reference]","ts":300,"me":true}]`
+	p.m[prefLegacySharedNotes] = `[{"v":"web","b":"John","c":3,"lo":16,"t":"fixture received alpha","ts":100,"m":true,"sn":"Fixture Sender","sid":"010203040506"},` +
+		`{"v":"bsb","b":"Psalms","c":23,"t":"fixture received beta","ts":200}]`
+	p.m[prefLegacyMyNotes] = `[{"v":"web","b":"Romans","c":8,"lo":28,"t":"fixture outgoing alpha","ts":300,"me":true}]`
 
 	all := allNotesForBrowsing(p)
 	if len(all) != 3 {
@@ -127,14 +127,14 @@ func TestLegacyStoresMigrateOnFirstRead(t *testing.T) {
 	var friend, own StoredNote
 	for _, n := range all {
 		switch n.Text {
-		case "from a friend":
+		case "fixture received alpha":
 			friend = n
-		case "sent to [redacted-family-reference]":
+		case "fixture outgoing alpha":
 			own = n
 		}
 	}
 	if friend.Kind != noteKindReceived || !friend.Minimized || friend.Received != 100 ||
-		friend.SenderName != "[redacted-fixture-name]" || friend.SenderID != "9a3f01c7528e" || friend.VerseLo != 16 {
+		friend.SenderName != "Fixture Sender" || friend.SenderID != "010203040506" || friend.VerseLo != 16 {
 		t.Errorf("the received note lost fields in migration: %+v", friend)
 	}
 	if own.Kind != noteKindMine || own.Received != 300 {
@@ -148,7 +148,7 @@ func TestLegacyStoresMigrateOnFirstRead(t *testing.T) {
 	}
 	// Idempotent: a restored backup re-introducing the old blobs must not
 	// duplicate what already migrated (dedup: content tuple + kind).
-	p.m[prefLegacySharedNotes] = `[{"v":"web","b":"John","c":3,"lo":16,"t":"from a friend","ts":100}]`
+	p.m[prefLegacySharedNotes] = `[{"v":"web","b":"John","c":3,"lo":16,"t":"fixture received alpha","ts":100}]`
 	if got := len(allNotesForBrowsing(p)); got != 3 {
 		t.Errorf("re-migration duplicated notes: %d, want 3", got)
 	}

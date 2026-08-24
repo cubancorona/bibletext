@@ -17,10 +17,14 @@ Graphics are in [`docs/play-assets/`](play-assets/). Build to upload:
 | Free or paid | Free |
 | Category | Books & Reference |
 | Tags | Bible, Reference |
-| Contact email | the address on the Play account (Apple side uses [redacted-private-email]) |
+| Contact email | the address on the Play account (Apple side uses cubancorona@gmail.com) |
 | Website | `https://bibletext.co.uk/` |
 | Privacy policy URL | `https://bibletext.co.uk/privacy.html` |
 | Support page (optional) | `https://bibletext.co.uk/support.html` |
+
+> TODO: Replace the personal support mailbox with a project-owned address
+> consistently across the app, site pages, store metadata, and rebuilt release
+> binaries.
 
 ## Short description (80 chars max — this one is 76)
 

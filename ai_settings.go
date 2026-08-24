@@ -63,7 +63,7 @@ func showAISettings(state *AppState) {
 	// (Gemini is the default) but has no key, so Find shows "Find needs your
 	// own AI key"; pasting a key, or switching to a provider that already has
 	// one, leaves aiEnabled unchanged and used to leave that stale panel up
-	// until the reader navigated away and back (verification).
+	// until the reader navigated away and back.
 	aiKeyAtOpen := hasAIKey(state)
 	// The notes switch changes surface EXISTENCE the same way the assistant
 	// choice does: the sidebar/Search-tab mode row gates its notes bubble on
@@ -221,7 +221,7 @@ func showAISettings(state *AppState) {
 			} else if !saveOK {
 				// The Clear tapped but the credential-store delete FAILED: say
 				// so — a reader who believes a key is gone when it isn't has a
-				// false sense of removal (the implementation requirement).
+				// false sense of removal.
 				status.Text = "Couldn't remove the stored key. Please try again."
 				status.Color = theme.Color(theme.ColorNameError)
 				clearBtn.Enable()
@@ -276,7 +276,7 @@ func showAISettings(state *AppState) {
 		// a scrollable list), NOT a raw widget.Select: with ~20 live models the
 		// Select's popup fills the entire phone screen, leaving no visible
 		// "outside" to tap and no way to back out without picking something
-		// (observed in practice on iPhone). The modal matches the app's chapter-picker
+		// on iPhone. The modal matches the app's chapter-picker
 		// convention and always shows an explicit close.
 		var pickerPop *widget.PopUp
 		var pickerList *widget.List
@@ -437,7 +437,7 @@ func showAISettings(state *AppState) {
 				// center: on a phone the three buttons leave only a sliver of
 				// width, and a word-wrapped label in that sliver wraps at a few
 				// characters per line and balloons the row into a tall text
-				// column (observed in practice on iPhone with the long model-gone
+				// column (reproduced on iPhone with the long model-gone
 				// message). Hidden until a test runs, so the sheet only grows by
 				// a line or two when there's something to say.
 				// PASTE, TEST, CLEAR — the same order as the API.Bible key field
@@ -940,7 +940,7 @@ func showAISettings(state *AppState) {
 //     "Find needs your own AI key". Pasting a key (or switching to a provider
 //     that already has one) changes nothing about aiEnabled, so without this
 //     half the stale set-up panel survived until the reader navigated away and
-//     back — observed in practice.
+//     back.
 func aiSurfacesChanged(enabledAtOpen, keyAtOpen, enabledNow, keyNow bool) bool {
 	return enabledAtOpen != enabledNow || keyAtOpen != keyNow
 }

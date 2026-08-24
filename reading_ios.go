@@ -416,13 +416,11 @@ static void btIOSApplyInsets(CGFloat w) {
     // instead. This function then overwrote that reservation with a bare 14 and
     // the card was drawn straight over the opening verses.
     //
-    // WHY IT SHOWED ON iPAD AND NOT ON THE PHONE: the reporter measure makes
-    // `side` change here, so the guard below let the write through on every
-    // build; on a phone gReadingMeasure is 0, `side` is always 10, and the guard
-    // returned before the damage. The defect was in this line the whole time —
-    // the phone just never reached it. (Found capturing 1.2.1 store shots: a
-    // note on Psalm 23:1 sat on top of "The LORD is my shepherd"; a note
-    // mid-chapter was fine, which is what pointed here.)
+    // The failure is layout-specific: the reporter measure changes `side`, so
+    // the guard below permits this write on iPad. On a phone gReadingMeasure is
+    // zero, `side` remains 10, and the guard returns before the damage. A note
+    // on the first paragraph therefore needs the top reservation included here;
+    // mid-chapter notes use paragraph spacing and do not expose the overwrite.
     CGFloat top = 14 + gNoteTopInset;
     UIEdgeInsets cur = gReadingTV.textContainerInset;
     if (fabs(cur.left - side) < 0.5 && fabs(cur.right - side) < 0.5 &&
@@ -1151,19 +1149,13 @@ static void btIOSEnsureNoteView(void) {
         // Minimize first, delete second: the destructive one is never what a
         // thumb reaches by accident.
         //
-        // NOT ON YOUR OWN NOTE, where it would be a second control that does
-        // the same thing. − and ✕ both end in the identical three lines for an
-        // own note (hideCurrentNote / dropCurrentNote, notes_store.go): focus
-        // to none, its mark cleared, re-project. They arrived at that by two
-        // separate good decisions — − was made ephemeral so it would not write
-        // a durable "minimized" bit about a card that is only on screen because
-        // you asked, and ✕ was made non-destructive so one tap could not
-        // destroy the only copy of something you wrote — and nobody put them
-        // side by side. Worse, − PROMISES A PILL THAT CANNOT EXIST: an own note
-        // enters the plan only while focus names it and is built Open (notes_
-        // plan.go), so there is nothing to restore and nothing is left behind.
-        // On a note the reader wrote, − and ✕ were indistinguishable: both
-        // hid the pill.
+        // An own note needs only one control because − and ✕ both clear focus,
+        // clear the note mark, and re-project (hideCurrentNote / dropCurrentNote
+        // in notes_store.go). A durable minimized state is invalid for a note
+        // that exists in the plan only while focused, and deletion from this
+        // transient card would destroy the sole stored record without
+        // confirmation. The own-note close control is therefore non-destructive,
+        // and no minimize control is shown for a pill that cannot be restored.
         //
         // ✕ is the mark that survives, because "put this away" is what the
         // press actually does. On a RECEIVED note both stay and differ: − leaves
@@ -1538,7 +1530,7 @@ static NSRange btIOSRunSpanRange(NSTextStorage *ts, int lo, int hi) {
 // The joining space between two verses under the SAME wash is inside the band —
 // buildChapterHTML emits it inside the span deliberately, because written bare
 // it punched a notch through the highlight at every join that fell mid-line
-// (observed in practice). The space after the LAST washed verse is outside it, and
+// in practice. The space after the LAST washed verse is outside it, and
 // painting that one leaves a pale tag hanging off the end of the passage and,
 // at a paragraph end, a washed empty line.
 //

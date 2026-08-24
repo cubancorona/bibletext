@@ -109,8 +109,8 @@ func offerNoteLinkChoice(state *AppState, rawURL string, t ShareTarget) {
 	// shrink them, so on a narrow canvas the right-hand button is simply drawn
 	// ON TOP of the left one — hiding its label and stealing its taps. Measured:
 	// the two want ~380pt together, so every phone narrower than about 410pt
-	// overlapped. Caught by an audit, not by looking at it on a big phone, which
-	// is exactly why it survived being looked at.
+	// overlapped. The width comparison below keeps both actions reachable on
+	// every supported canvas size.
 	var choices fyne.CanvasObject
 	if passageOnly.MinSize().Width+inBrowser.MinSize().Width+24 <= w-sheetChromeWidth {
 		choices = container.NewBorder(nil, nil, passageOnly, container.NewHBox(inBrowser))

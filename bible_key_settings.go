@@ -8,7 +8,6 @@ package bibletext
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -38,29 +37,22 @@ const bibleKeyProbeBudget = 12 * time.Second
 // describes the state instead, and the Paste button beside it plus the status
 // line under it carry "how do I change this".
 //
-// WHY NOT SAY BOTH: measured at the app's 18pt body size, "[Included with
-// BibleText]" is 195pt and fits the ~199pt a 320pt phone gives the box — and
-// was rendered at 320pt to confirm it clears the reveal icon, since that budget
-// is a conservative estimate rather than a measured limit. Anything that also
-// names the action runs past it —
-// anything that also names the action runs past it — "Included — paste to
-// replace" is 223pt, and the fuller sentence tried once before was 428pt. One
-// idea is what fits.
+// At the app's 18pt body size, "[Included with BibleText]" is 195pt and fits
+// the approximately 199pt available at 320pt width without touching the reveal
+// icon. Copy that also describes the replacement action exceeds that budget;
+// the adjacent Paste button and status line carry the action and state details.
 //
-// PURE, and taking the state rather than reading it, so the three call sites —
+// The helper takes the state rather than reading it, so the three call sites —
 // construction, Clear, and emptying the field by hand — cannot drift. That last
 // one is why this is a function at all: OnChanged clears the bundled key for
 // good, so a placeholder set only at construction would go on claiming the key
 // was included after the reader deleted it.
 func bibleKeyPlaceholder(usingBundled bool) string {
 	if usingBundled {
-		// BRACKETED because it is a DESCRIPTION, not a value and not an
-		// instruction. This is a password field: text sitting where masked
-		// characters would be can read as content, and the brackets say at a
-		// glance that it is neither something typed nor something to type.
+		// Brackets distinguish this state description from masked field content
+		// and from the unbracketed instruction used when no key is available.
 		// The other branch stays unbracketed — an imperative already reads as a
-		// hint, and bracketing an instruction would only muddle the distinction
-		// this draws.
+		// hint.
 		return "[Included with BibleText]"
 	}
 	return "Paste your API.Bible key"
@@ -124,9 +116,9 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 
 	// keyInUse is what the app would actually send: what the reader has typed,
 	// or — when the field is deliberately empty because the bundled key is in
-	// force — the stored one. Everything below asks THIS rather than reading
-	// entry.Text, so hiding the bundled key's characters cannot quietly turn
-	// Test into "paste a key first", disable Clear, or make the status claim
+	// force — the effective runtime fallback. Everything below asks THIS rather
+	// than reading entry.Text. Hiding the bundled key's characters therefore cannot
+	// quietly turn Test into "paste a key first", disable Clear, or make the status claim
 	// there is no key.
 	keyInUse := func() string {
 		if t := strings.TrimSpace(entry.Text); t != "" {
@@ -147,7 +139,8 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), bibleKeyProbeBudget)
 			defer cancel()
-			client := &http.Client{Timeout: bibleKeyProbeBudget}
+			client := newHTTPClient()
+			client.Timeout = bibleKeyProbeBudget
 			var meta struct {
 				Data struct {
 					Name string `json:"name"`

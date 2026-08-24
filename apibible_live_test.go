@@ -3,7 +3,6 @@ package bibletext
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -28,7 +27,8 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), apiBibleRequestTimeout)
 	defer cancel()
-	client := &http.Client{Timeout: apiBibleRequestTimeout}
+	client := newHTTPClient()
+	client.Timeout = apiBibleRequestTimeout
 
 	var meta struct {
 		Data struct {

@@ -192,12 +192,9 @@ func TestStyledAreaEmptyChapter(t *testing.T) {
 //
 // fyne fires OnScrolled for its OWN offset clamps — a resize or a re-wrap moving
 // the maximum offset reports a corrected position through the same callback a
-// reader's wheel does. The handler always knew that and said so in a comment,
-// but it did the damage first and checked afterwards: styledUserScrolled was set
-// and state.restore nil'd three lines ABOVE the geometry check that returns. So
-// resizing the window cancelled an arrival the link had just armed and threw the
-// saved reading position away with it — silently, because everything still
-// rendered fine, just in the wrong place.
+// reader's wheel does. The geometry check must run before styledUserScrolled is
+// set or state.restore is cleared; otherwise a resize cancels a pending shared-
+// link arrival and discards the saved reading position.
 func TestStyledResizeIsNotAReaderScroll(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

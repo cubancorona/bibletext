@@ -134,11 +134,10 @@ const apiBibleContentQuery = "content-type=json&include-titles=false&include-not
 type apiBibleStatusError struct {
 	Status int
 	Path   string
-	Body   string
 }
 
 func (e *apiBibleStatusError) Error() string {
-	return fmt.Sprintf("HTTP %d from API.Bible for %s: %s", e.Status, e.Path, e.Body)
+	return fmt.Sprintf("HTTP %d from API.Bible for %s", e.Status, e.Path)
 }
 
 // apiBibleCallCount counts real requests issued, for quota accounting in
@@ -173,7 +172,8 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), apiBibleFetchBudget)
 	defer cancel()
-	client := &http.Client{Timeout: apiBibleRequestTimeout}
+	client := newHTTPClient()
+	client.Timeout = apiBibleRequestTimeout
 
 	// One call for the canon, with chapter lists piggybacked where the API
 	// supports it (include-chapters). Books the provider returns are matched to
@@ -473,18 +473,13 @@ func apiBibleGet(ctx context.Context, client *http.Client, apiKey, path string, 
 			lastErr = fmt.Errorf("HTTP %d from API.Bible", resp.StatusCode)
 			continue
 		default:
-			return &apiBibleStatusError{Status: resp.StatusCode, Path: path, Body: truncateForError(body)}
+			// Authenticated response bodies are deliberately omitted from errors.
+			// A provider or proxy diagnostic must not be able to echo a credential
+			// into application logs.
+			return &apiBibleStatusError{Status: resp.StatusCode, Path: path}
 		}
 	}
 	return lastErr
-}
-
-func truncateForError(b []byte) string {
-	s := strings.TrimSpace(string(b))
-	if len(s) > 200 {
-		s = s[:200] + "…"
-	}
-	return s
 }
 
 // --- Content decoding --------------------------------------------------------

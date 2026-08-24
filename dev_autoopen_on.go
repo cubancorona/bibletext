@@ -125,7 +125,7 @@ func devAutoReadAlong(state *AppState) {
 		// the wash and not a translation download.
 		HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
 			book, chap, lo, hi,
-			"Read this synthetic note this morning and synthetic note."))
+			"Fixture message alpha beta gamma delta epsilon."))
 	})
 	at(6*time.Second, func() { readAlongHighlight(lo-2, true) })
 	at(16*time.Second, func() { readAlongHighlight(lo, true) })
@@ -233,7 +233,7 @@ func devAutoNotesS8(state *AppState) {
 		// above the note's own and lets the pane place it.
 		at(15*time.Second, func() { armReadingRestore(4, 0, 0) })
 	case "linkscroll":
-		// The reported Links-tab flow, reproduced verbatim in state (the
+		// The Links-tab state sequence (the
 		// compact tab bar is CurrentTab + rebuildWindow — no widget to tap):
 		// front the Links tab, open a case on ANOTHER chapter, return to
 		// Links, open the noteless John 3 v16 case (the "Unknown fragment
@@ -266,16 +266,16 @@ func devAutoNotesS8(state *AppState) {
 			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
 				"John", 3, lo, hi, text))
 		}
-		at(1500*time.Millisecond, func() { ranged(14, 15, "On 14-15: the serpent lifted up, so the Son must be.") })
-		at(6*time.Second, func() { ranged(16, 16, "On 16 alone: the verse everybody knows.") })
-		at(12*time.Second, func() { ranged(16, 17, "On 16-17: not to condemn the world, but to save it.") })
+		at(1500*time.Millisecond, func() { ranged(14, 15, "Fixture range message 14-15.") })
+		at(6*time.Second, func() { ranged(16, 16, "Fixture range message 16.") })
+		at(12*time.Second, func() { ranged(16, 17, "Fixture range message 16-17.") })
 		for _, d := range []time.Duration{18 * time.Second, 26 * time.Second} {
 			time.AfterFunc(d, func() { devNoteNextTap(state) })
 		}
 	case "s10next":
-		at(1500*time.Millisecond, func() { link("First note: read this synthetic note this morning.") })
-		at(6*time.Second, func() { link("Second note: a second voice on the same verse.") })
-		at(12*time.Second, func() { link("Third note: and a third, so the who line has to say 1 of 3.") })
+		at(1500*time.Millisecond, func() { link("Fixture message alpha beta gamma delta epsilon.") })
+		at(6*time.Second, func() { link("Fixture same-range message two.") })
+		at(12*time.Second, func() { link("Fixture same-range message three.") })
 		// The taps go through the REAL callback (bibleTextNoteNextTapped), raw
 		// AfterFunc rather than at(): the export hops to Fyne's goroutine
 		// itself, exactly as it does when the native button posts it.
@@ -283,9 +283,9 @@ func devAutoNotesS8(state *AppState) {
 			time.AfterFunc(d, func() { devNoteNextTap(state) })
 		}
 	case "s9who", "s9pill":
-		at(1500*time.Millisecond, func() { link("First note: read this synthetic note this morning.") })
-		at(6*time.Second, func() { link("Second note: a second voice on the same verse.") })
-		at(12*time.Second, func() { link("Third note: and a third, so the who line has to say 1 of 3.") })
+		at(1500*time.Millisecond, func() { link("Fixture message alpha beta gamma delta epsilon.") })
+		at(6*time.Second, func() { link("Fixture same-range message two.") })
+		at(12*time.Second, func() { link("Fixture same-range message three.") })
 		if scenario == "s9pill" {
 			// The reader's minimize — the same verb the sticker's "–" button
 			// posts (bibleTextNoteHidden → hideCurrentNote).
@@ -294,11 +294,11 @@ func devAutoNotesS8(state *AppState) {
 	case "s9unplaced":
 		at(1500*time.Millisecond, func() {
 			HandleShareLink(state, ShareLinkURLWithNote("web", "Esther", 4, 1, 1,
-				"A note on Esther in the WEB numbering."))
+				"Fixture unplaced message alpha."))
 		})
 		at(8*time.Second, func() { switchVersion(state, "webc") })
 	case "s9suppress":
-		at(1500*time.Millisecond, func() { link("This note will stand down while a search result is lit.") })
+		at(1500*time.Millisecond, func() { link("Fixture suppressed message alpha.") })
 		// A foreign mark on the same chapter — goToVerseRange is what the
 		// verse of the day, cross-references and the Go-to box all call. Verses
 		// beside the note's own, so the standing-down pill and the foreign
@@ -313,13 +313,13 @@ func devAutoNotesS8(state *AppState) {
 		// the WEB and not in the BSB (the span-with-a-hole case), so the WEB
 		// notes on it are unplaced while the BSB ones place.
 		for i := 0; i < 105; i++ {
-			text := "Truncation note " + strconv.Itoa(i+1) + " — filler so every arrival is distinct."
+			text := "Fixture truncation message " + strconv.Itoa(i+1) + " — distinct."
 			at(1500*time.Millisecond+time.Duration(i)*120*time.Millisecond, func() {
 				HandleShareLink(state, ShareLinkURLWithNote("bsb", "Mark", 9, 43, 43, text))
 			})
 		}
 		for i := 0; i < 9; i++ {
-			text := "Unplaced note " + strconv.Itoa(i+1) + " on the verse the BSB does not carry."
+			text := "Fixture unplaced message " + strconv.Itoa(i+1) + "."
 			at(16*time.Second+time.Duration(i)*300*time.Millisecond, func() {
 				HandleShareLink(state, ShareLinkURLWithNote("web", "Mark", 9, 44, 44, text))
 			})
@@ -328,12 +328,12 @@ func devAutoNotesS8(state *AppState) {
 		// unplaced tail in the WHO line.
 		at(22*time.Second, func() {
 			HandleShareLink(state, ShareLinkURLWithNote("bsb", "Mark", 9, 43, 43,
-				"The final note — the one the who line counts from."))
+				"Fixture final count message."))
 		})
 	default: // "s8", kept as the arrival-count proof
-		at(1500*time.Millisecond, func() { link("First note: read this synthetic note this morning.") })
-		at(8*time.Second, func() { link("Second note: a second voice on the same verse.") })
-		at(16*time.Second, func() { link("Third note: and a third, so the count has to move again.") })
+		at(1500*time.Millisecond, func() { link("Fixture message alpha beta gamma delta epsilon.") })
+		at(8*time.Second, func() { link("Fixture same-range message two.") })
+		at(16*time.Second, func() { link("Fixture same-range message three.") })
 	}
 }
 

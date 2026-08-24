@@ -1088,18 +1088,16 @@ func TestStyledPillMatchesTheApplePill(t *testing.T) {
 
 // THE CLOSING GLYPH SAYS WHAT THE PRESS DOES.
 //
-// On a received note the control deletes, and wears a bin. On YOUR OWN note it
-// only puts the card away — the note is on the passage the requested behavior and
-// would leave on its own when you navigate — so it wears ✕. Leaving one mark
-// for both would have made the destructive meaning the ambiguous one, on a card
-// the reader was invited to peek at.
+// A received note is deleted and uses a bin. An own note is transient and the
+// control only dismisses it, so it uses ✕. Distinct glyphs keep the destructive
+// action unambiguous.
 func TestStyledClosingGlyphMatchesWhatItDoes(t *testing.T) {
 	size := fyne.NewSize(560, 700)
 
 	t.Run("a received note offers a bin", func(t *testing.T) {
 		app := test.NewApp()
 		defer app.Quit()
-		st, _ := styledNoteFixture(t, []int{2}, []string{"synthetic note"})
+		st, _ := styledNoteFixture(t, []int{2}, []string{"fixture styled message alpha"})
 		p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
 		if seenPaneButtonIcon(t, p, size) == nil {
 			t.Error("a note that DELETES on press must wear the bin ICON")
@@ -1116,7 +1114,7 @@ func TestStyledClosingGlyphMatchesWhatItDoes(t *testing.T) {
 		deleteAllNotes(appPrefs())
 		defer deleteAllNotes(appPrefs())
 		mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-			Book: "Ruth", Chapter: 1, VerseLo: 2, Text: "sent to neutral contact"})
+			Book: "Ruth", Chapter: 1, VerseLo: 2, Text: "fixture outgoing alpha"})
 		if !ok {
 			t.Fatal("your note was not stored")
 		}

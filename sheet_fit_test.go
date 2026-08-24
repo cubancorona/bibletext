@@ -240,10 +240,9 @@ func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {
 	}
 }
 
-// The owner's 2026-08-18 decision, pinned: while settingsTapOutsideCloses is
-// false the sheet is MODAL — a tap (or the start of a scroll-drag) that lands
-// off the card must NOT dismiss it. Accidental closes while scrolling were the
-// report; the ✕ is the close verb now.
+// While settingsTapOutsideCloses is false the sheet is MODAL: a tap (or the
+// start of a scroll-drag) that lands off the card must NOT dismiss it. This
+// prevents accidental closes while scrolling; the ✕ is the close verb.
 func TestSettingsSheetIgnoresOutsideTaps(t *testing.T) {
 	if settingsTapOutsideCloses {
 		t.Skip("tap-outside dismissal is gated ON; this pin covers the modal mode")
@@ -270,7 +269,6 @@ func TestSettingsSheetIgnoresOutsideTaps(t *testing.T) {
 	test.TapCanvas(win.Canvas(), fyne.NewPos(2, 2))
 
 	if !popup.Visible() {
-		t.Fatal("a tap outside the card dismissed the sheet — the accidental-close-" +
-			"while-scrolling report, back again")
+		t.Fatal("a tap outside the card dismissed the sheet while scrolling")
 	}
 }

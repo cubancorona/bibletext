@@ -78,7 +78,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaRAColorsM    = (*env)->GetStaticMethodID(env, btaClass, "setReadAlongColors", "(III)V");
 	// Arrival scroll: pin the shared link's highlighted verse near the top.
 	btaScrollVerseM = (*env)->GetStaticMethodID(env, btaClass, "scrollToVerse", "(I)V");
-	// The shared-note sticker (full-screen reading, the implementation requirement): text, WHO line,
+	// The shared-note sticker (full-screen reading): text, WHO line,
 	// pill/next presentation, anchor verse, then the five palette colors
 	// (surface, text, muted, accent, border) as ARGB ints.
 	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
@@ -231,7 +231,7 @@ static void btaRAColors(uintptr_t jni_env, int highlight, int followBg, int foll
 // first USER-AUTHORED free text to cross this bridge, and emoji are 4-byte
 // UTF-8 — invalid *modified* UTF-8, which NewStringUTF may abort on under
 // CheckJNI (emulators commonly enable it). Bytes cross verbatim; Java decodes
-// with the real UTF-8 charset (verification finding).
+// with the real UTF-8 charset.
 static jbyteArray btaBytes(JNIEnv *env, const char *s) {
 	if (s == NULL || s[0] == '\0') return NULL;
 	jsize n = (jsize)strlen(s);
@@ -522,7 +522,7 @@ var lastPushedBookChapter string
 // full-screen: compact reading had the Fyne banner above the pane drawing the
 // whole set (notes_banner.go), and a sticker there would have shown the reader
 // the same note twice, while full-screen had no banner at all and showed a lit
-// span with nothing to say why (the implementation requirement). The gate went when the sticker
+// span with nothing to say why. The gate went when the sticker
 // replaced the banner outright rather than complementing it — the banner
 // stacked a citation row, a bubble and a byline above the WHOLE chapter,
 // unanchored and three times the height of iOS's card. Now
@@ -861,9 +861,8 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	// The chapter's shared note (notes_banner.go). Android renders it as this
 	// banner ABOVE the pane — the native overlay covers only the paper below,
 	// so no BtBridge machinery is needed — where iOS draws its in-text sticker
-	// instead (its own buildReadingViewMobile, untouched). platform reproduction:
-	// the banner had been slotted only into the desktop buildReadingView, which
-	// Android's compact layout never calls.
+	// instead. The banner belongs here because Android's compact layout never
+	// calls the desktop buildReadingView.
 	if banner := buildNoteBanner(state); banner != nil {
 		top.Add(banner)
 	}

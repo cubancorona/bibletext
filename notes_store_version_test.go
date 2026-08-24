@@ -26,34 +26,34 @@ func TestDeleteReachesTheNoteOnScreenNotAStaleOne(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3,
 		CurrentVersion: "web", loadPhase: loadReady}
 
-	// Friend's note is stored under the BSB only. The reader is in the WEB, where
-	// it FOLLOWS — so the derive hands the mirror Friend's note's identity.
-	Friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "Friend's note"})
+	// The fixture note is stored under the BSB only. The reader is in the WEB,
+	// where it FOLLOWS — so the derive hands the mirror that note's identity.
+	versionNote, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture version-specific alpha"})
 	if !ok {
-		t.Fatal("precondition: Friend's note was not stored")
+		t.Fatal("precondition: the fixture note was not stored")
 	}
 	applyNoteForCurrentChapter(st)
-	if st.NoteID != Friend.ID {
-		t.Fatalf("precondition: the bsb note should have followed, got id %d want %d", st.NoteID, Friend.ID)
+	if st.NoteID != versionNote.ID {
+		t.Fatalf("precondition: the bsb note should have followed, got id %d want %d", st.NoteID, versionNote.ID)
 	}
 
 	// Now a link arrives carrying a NEW note. The arrival stores it and points
 	// the mirror at ITS identity — the note actually on screen.
 	applyShareTarget(st, ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16,
-		Note: "a friend's note"})
+		Note: "fixture web message alpha"})
 
 	t.Logf("on screen: %q   mirror id: %d", st.ActiveNote, st.NoteID)
-	if st.NoteID == Friend.ID {
+	if st.NoteID == versionNote.ID {
 		t.Fatal("the arrival left the mirror addressing the note that is no longer on screen — X1's tear")
 	}
 
 	// The reader deletes what is in front of them.
 	dropCurrentNote(st)
 
-	if _, mumSurvives := findStoredNote(appPrefs(), "bsb", "John", 3); !mumSurvives {
-		t.Error("deleting the friend's note destroyed Friend's note instead")
+	if _, versionNoteSurvives := findStoredNote(appPrefs(), "bsb", "John", 3); !versionNoteSurvives {
+		t.Error("deleting the WEB note destroyed the BSB fixture note instead")
 	}
-	if _, friendSurvives := findStoredNote(appPrefs(), "web", "John", 3); friendSurvives {
+	if _, webNoteSurvives := findStoredNote(appPrefs(), "web", "John", 3); webNoteSurvives {
 		t.Error("the note the reader deleted is still in the store")
 	}
 }

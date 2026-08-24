@@ -389,7 +389,7 @@ func TestParseReferenceQueryWithAliases(t *testing.T) {
 // Exactly one mode may look active. The bug this pins: the Search/Find pair and
 // the notes bubble were built as independent widgets, so the pair's apply() had
 // never heard of the bubble — tapping Find lit Find while the bubble stayed lit
-// too, two controls both claiming to be the current mode. observed in practice.
+// too, leaving two controls both claiming to be the current mode.
 func TestOnlyOneModeControlIsEverFilled(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -434,7 +434,7 @@ func TestOnlyOneModeControlIsEverFilled(t *testing.T) {
 		want *widget.Button
 	}{
 		{"notes", notesBtn, notesBtn},
-		{"find after notes", findBtn, findBtn}, // the reported bug
+		{"find after notes", findBtn, findBtn}, // the prior conflicting-selection case
 		{"notes again", notesBtn, notesBtn},
 		{"search after notes", searchBtn, searchBtn},
 		{"notes from search", notesBtn, notesBtn},

@@ -58,7 +58,7 @@ const noticeCSS = `
 /* The translation pills. A near-copy of .vpick on purpose: these are NOT
    .vpick, because reader.js rewrites every .vpick href with the whole fragment
    and these links must only carry the verse where the numbering agrees. Same
-   look, different owner. */
+   look, different link behaviour. */
 .npick{
   color:var(--muted); text-decoration:none; font-size:.7rem; letter-spacing:.04em;
   border:1px solid var(--border); border-radius:999px; padding:.15rem .5rem;

@@ -412,8 +412,8 @@ func TestRunAIActionNoKeyError(t *testing.T) {
 
 // A transient credential-store READ error must be indistinguishable from
 // neither "absent" nor success: the legacy Preferences copy keeps serving,
-// and the migration erase is SKIPPED (the implementation requirement — collapsing error to
-// absent could strand a migrated key invisible or erase the only copy).
+// and the migration erase is SKIPPED. Collapsing error to absent could strand
+// a migrated key invisible or erase the only copy.
 func TestKeyStoreReadErrorKeepsLegacyCopy(t *testing.T) {
 	prefs := &fakePrefs{m: map[string]string{prefKeyPrefix + "gemini": "legacy-key"}}
 	secrets := &fakeSecrets{m: map[string]string{}, failRead: true}

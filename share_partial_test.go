@@ -1,6 +1,6 @@
 package bibletext
 
-// The share pipeline's handling of ragged drag selections (observed in practice from
+// The share pipeline's handling of ragged drag selections (reproduced from
 // two real shares of Acts 4:19–20, BSB). The governing principles, in the
 // order they were settled:
 //   1. The ONLY content edit is the mid-word repair: Bluebook has no notation

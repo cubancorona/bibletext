@@ -2,13 +2,12 @@ package bibletext
 
 // A background completion must not close the sheet the reader is inside.
 //
-// verification (the implementation requirement): Settings open → background the iOS app → restore →
-// the sheet is gone. Mechanism: the foreground hook retries the full-Bible
+// Regression: Settings open → background the iOS app → restore → the
+// sheet disappeared. Mechanism: the foreground hook retries the full-Bible
 // download on every return to the app; when it completes, the old tail called
 // rebuildWindow, whose overlay drain exists for a different, legitimate reason
 // (the half-dark sheet after a theme flip) — and the sheet the reader was in
-// went with it. The sim reproduced it exactly: the cache file's mtime matches
-// the restore screenshot to the minute.
+// went with it.
 //
 // The rule these tests hold: applyFullDownload applies the DATA immediately,
 // always — but while a sheet owns the canvas the window rebuild is deferred
@@ -68,7 +67,7 @@ func TestBackgroundApplyDefersWhileASheetIsOpen(t *testing.T) {
 	}
 	// …and the sheet did not move.
 	if windowRebuildGen != genBefore {
-		t.Fatal("the completion rebuilt the window over an open sheet — the verification, back again")
+		t.Fatal("the completion rebuilt the window over an open sheet")
 	}
 	if !pop.Visible() {
 		t.Fatal("the sheet the reader is inside must survive the background completion")
@@ -260,8 +259,7 @@ func TestSwitchedAwayCompletionOnlyCaches(t *testing.T) {
 
 // The theme observer's spelling: iOS snapshots a backgrounding app in BOTH
 // appearances, so the variant round-trips and each leg reads as a real change
-// at execution time (measured on the instrumented sim — no compare or timer
-// can outrace the delivery). deferOrRebuild is what keeps the sheet alive:
+// at execution time. deferOrRebuild is what keeps the sheet alive:
 // rebuild now with a clear canvas, defer to sheet-close otherwise.
 func TestThemeRebuildDefersWhileASheetIsOpen(t *testing.T) {
 	app := test.NewApp()
@@ -324,7 +322,7 @@ func TestDeferredRebuildCarriesTheSeedParkedLink(t *testing.T) {
 	}
 }
 
-// The WIRING pin the refuters demanded: deleting installSheetCloseConsume's
+// The WIRING pin: deleting installSheetCloseConsume's
 // call from desktop CreateMainUI left the whole suite green, because the
 // existing test calls the installer directly — proving the function, never the
 // app. On this darwin host the native builder overwrites the closure later in

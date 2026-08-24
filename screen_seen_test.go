@@ -47,7 +47,7 @@ func seenLeaves(t *testing.T, root fyne.CanvasObject, size fyne.Size) []fyne.Can
 		// Descend GENERICALLY. Type-switching on the container types you happen
 		// to remember is how a walk quietly stops seeing things: this missed
 		// container.ThemeOverride, which wraps the notes browser's only exit
-		// control, and reported the button as unseen when a reader can see it
+		// control, and classified the button as unseen when a reader can see it
 		// perfectly well. A widget's renderer knows its children; ask it.
 		// A Scroll BEFORE the generic case: its renderer exposes a clipped
 		// wrapper rather than the content, so the generic descent stops dead at

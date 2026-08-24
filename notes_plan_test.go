@@ -264,11 +264,11 @@ func TestNoteBannerRendersIdenticallyThroughThePlan(t *testing.T) {
 	st := psalm23State()
 	st.CurrentBook, st.CurrentChapter = "Psalms", 23
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
-		VerseLo: 1, Text: "This got me through last night."})
+		VerseLo: 1, Text: "fixture plan message alpha"})
 	applyNoteForCurrentChapter(st)
 
 	got := seenText(t, buildNoteBanner(st), fyne.NewSize(700, 400))
-	want := "psalms 23:1 this got me through last night. from friend"
+	want := "psalms 23:1 fixture plan message alpha from friend"
 	if got != want {
 		t.Errorf("expanded banner changed:\n got %q\nwant %q", got, want)
 	}
@@ -281,7 +281,7 @@ func TestNoteBannerRendersIdenticallyThroughThePlan(t *testing.T) {
 
 	restoreCurrentNote(st)
 	got = seenText(t, buildNoteBanner(st), fyne.NewSize(700, 400))
-	want = "psalms 23:1 this got me through last night. from friend"
+	want = "psalms 23:1 fixture plan message alpha from friend"
 	if got != want {
 		t.Errorf("restored banner changed:\n got %q\nwant %q", got, want)
 	}
@@ -312,9 +312,9 @@ func TestBuildChapterPlanDoesNotWriteTheStore(t *testing.T) {
 	}
 }
 
-// The reader's explicit CLOSE closes. implementation verification M1 deleted the
-// focus-none branch from buildChapterPlan and every one of 1,280 enumeration
-// cells stayed green — the rule existed only in prose. Now it exists here.
+// The reader's explicit CLOSE closes. Removing the focus-none branch from
+// buildChapterPlan does not fail the state-space enumeration, so this focused
+// test holds the close invariant directly.
 func TestFocusNoneMeansNothingIsOpen(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -340,8 +340,9 @@ func TestFocusNoneMeansNothingIsOpen(t *testing.T) {
 	}
 }
 
-// Navigation resets focus to the default. implementation verification M3 removed
-// resetNoteFocus from addRecentChapter and the suite stayed green.
+// Navigation resets focus to the default. The state-space enumeration does not
+// detect removal of resetNoteFocus from addRecentChapter, so this focused test
+// holds that transition directly.
 func TestNavigationResetsTheFocus(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -477,7 +478,7 @@ func TestAppleStickerPushIsFoldedByTheBodyFingerprint(t *testing.T) {
 
 // The who line and the pill, composed over every S9 shape: position counts,
 // the unplaced tail, the minimized pill, and the unplaced-only chapter that
-// pushes no body at all (the implementation requirement: text-less who IS the pill).
+// pushes no body at all. Within the ABI, a text-less who selects the pill.
 func TestAppleStickerPushComposition(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

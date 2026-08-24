@@ -36,11 +36,10 @@ func trailBarBudget(t *testing.T) float32 {
 	w.Resize(fyne.NewSize(400, 100))
 	budget := box.MinSize().Height + 2
 
-	// THE ABSOLUTE BACKSTOP (verification F1): the structural budget above follows
+	// THE ABSOLUTE BACKSTOP: the structural budget above follows
 	// trailChipTheme, so inflating the chrome's own sizes sailed through it —
 	// the density suite's twice-the-rows lesson, applied here. The trail must
-	// stay visibly SMALLER than ordinary chrome: under a default-theme button,
-	// the height that was reported as taking too much space.
+	// stay visibly SMALLER than ordinary chrome: under a default-theme button.
 	std := widget.NewButton("‹ Results", func() {})
 	sw := test.NewWindow(std)
 	t.Cleanup(sw.Close)

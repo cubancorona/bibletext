@@ -56,7 +56,8 @@ base64url's alphabet is `A–Z a–z 0–9 - _` and the payload is unpadded, so 
 `&` nor `=` can occur inside it.
 
 Unknown keys must be **ignored, not rejected**, in every parser from the first
-release onward. That is the whole cost of never having this conversation again.
+release onward. This preserves forward compatibility without another format
+rewrite.
 
 ## The 1.1.8 question
 

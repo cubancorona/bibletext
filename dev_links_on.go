@@ -43,10 +43,9 @@ type devScenario struct {
 
 // longNote is a note at the 280-rune cap, to see the bubble at its tallest.
 func devLongNote() string {
-	s := "This is what a note looks like when somebody uses every character they are " +
-		"given, which is worth seeing because the bubble has to reserve its own band in " +
-		"the text and the band is measured from the height of this. Read it slowly and " +
-		"check nothing below is covered up. "
+	s := "Fixture long-note text alpha beta gamma delta epsilon zeta eta theta iota " +
+		"kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega. " +
+		"Fixture continuation alpha beta gamma delta epsilon zeta eta theta iota. "
 	r := []rune(s)
 	for len(r) < NoteMaxRunes {
 		r = append(r, 'x')
@@ -64,29 +63,29 @@ func devScenarios() []devScenario {
 	return []devScenario{
 		// --- the ordinary cases -------------------------------------------------
 		{"Note, mid-chapter, long paragraph", "Bubble above v34's paragraph; v35 highlighted; the note is what you land on",
-			n("John", 11, 35, 35, "Read this synthetic note this morning and synthetic note.\n\nRinging on Sunday. synthetic note.")},
+			n("John", 11, 35, 35, "Fixture paragraph alpha beta gamma.\n\nFixture paragraph delta epsilon.")},
 		{"A SECOND note on the same passage (S8/S9)", "Open the row above first. The bubble shows THIS note alone; the WHO line above it reads “Note from Friend · 1 of 2 on this passage” — the honest count in the app's own chrome",
-			ShareLinkURLWithNote("web", "John", 11, 35, 35, "A second voice on the same verse — the shortest one.")},
+			ShareLinkURLWithNote("web", "John", 11, 35, 35, "Fixture same-range message two.")},
 		{"THREE notes, SAME verse range (S10)", "Open all three rows in order. One bubble at a time; the who line counts “1 of 3 on this passage ›” and tapping the count cycles them — same range, so the wash never moves",
-			n("John", 3, 16, 16, "Same range №1: the verse everybody knows.")},
+			n("John", 3, 16, 16, "Fixture same-range message one.")},
 		{"…same range №2", "Second of the trio above — open after №1",
-			n("John", 3, 16, 16, "Same range №2: a second voice on the very same words.")},
+			n("John", 3, 16, 16, "Fixture same-range message two.")},
 		{"…same range №3", "Third of the trio — after this one the count reads 1 of 3",
-			n("John", 3, 16, 16, "Same range №3: and a third, so the selector has a set to walk.")},
+			n("John", 3, 16, 16, "Fixture same-range message three.")},
 		{"THREE notes, ONE paragraph, DIFFERENT ranges (S10)", "WEB John 3:14-17 is one paragraph. Open all three; the count-tap walks them and the wash moves WITHIN the paragraph: 14-15 → 16 → 16-17 (two overlap at v16)",
-			ShareLinkURLWithNote("web", "John", 3, 14, 15, "On 14-15: the serpent lifted up, so the Son must be.")},
+			ShareLinkURLWithNote("web", "John", 3, 14, 15, "Fixture range message 14-15.")},
 		{"…same paragraph, v16 alone", "Second range in the paragraph trio",
-			ShareLinkURLWithNote("web", "John", 3, 16, 16, "On 16 alone: the middle range of the trio.")},
+			ShareLinkURLWithNote("web", "John", 3, 16, 16, "Fixture range message 16.")},
 		{"…same paragraph, vv16-17", "Third range — overlaps the one above at v16",
-			ShareLinkURLWithNote("web", "John", 3, 16, 17, "On 16-17: not to condemn the world, but to save it.")},
+			ShareLinkURLWithNote("web", "John", 3, 16, 17, "Fixture range message 16-17.")},
 		{"Note on the FIRST paragraph", "Bubble above v1 — the container-inset path, not paragraphSpacingBefore",
-			n("Psalms", 23, 1, 4, "This got me through last night. synthetic note both.")},
+			n("Psalms", 23, 1, 4, "Fixture message alpha beta gamma delta epsilon zeta.")},
 		{"Note deep in a long chapter", "Psalm 119 is 176 verses: check it lands on the note, not the top",
-			n("Psalms", 119, 105, 105, "Your word is a lamp — this is the one I was trying to remember.")},
+			n("Psalms", 119, 105, 105, "Fixture deep-chapter message alpha.")},
 		{"Note on a verse range", "vv.1-4 all highlighted, not just the first",
-			n("Romans", 8, 1, 4, "The whole passage, not just the famous line.")},
+			n("Romans", 8, 1, 4, "Fixture verse-range message alpha.")},
 		{"Note on a whole chapter (no verse)", "No highlight at all; bubble at the top",
-			n("Philippians", 4, 0, 0, "All of it. Read it twice.")},
+			n("Philippians", 4, 0, 0, "Fixture chapter message alpha.")},
 		{"Plain link, NO note", "Straight to the verse, no bubble anywhere",
 			plain("John", 3, 16, 16)},
 		{"Plain link, chapter only", "Chapter opens at the top, nothing highlighted",
@@ -96,13 +95,13 @@ func devScenarios() []devScenario {
 		{"Note at the 280-rune cap", "The tallest bubble there can be; nothing below it covered",
 			n("Isaiah", 40, 31, 31, devLongNote())},
 		{"Note with blank lines", "Paragraph breaks kept; 3+ newlines collapsed",
-			n("Matthew", 5, 3, 10, "One.\n\n\n\n\nTwo, after far too many blank lines.")},
+			n("Matthew", 5, 3, 10, "Fixture paragraph one.\n\n\n\n\nFixture paragraph two.")},
 		{"Note with emoji + accents", "Renders as text; no tofu, no mis-measured band",
-			n("Psalms", 121, 1, 2, "Café ☕ — synthetic note 🙏 grüße!")},
+			n("Psalms", 121, 1, 2, "Fixture Unicode: café ☕ — grüße! αβγ.")},
 		{"Note trying to inject markup", "Must appear LITERALLY, never rendered as markup",
 			n("John", 1, 1, 1, "<b>bold?</b> <script>alert(1)</script> [link](http://example.com)")},
 		{"Note with bidi control characters", "The overrides are stripped by normalizeNote; text reads normally",
-			n("Proverbs", 3, 5, 6, "Trust ‮reversed?‬ and lean not ‏on‎ your own understanding.")},
+			n("Proverbs", 3, 5, 6, "Fixture ‮reversed?‬ and neutral ‏segment‎.")},
 		{"Note that is only whitespace", "Treated as NO note — plain link behaviour",
 			n("Ruth", 1, 16, 16, "   \n\n   \t  ")},
 
@@ -122,9 +121,9 @@ func devScenarios() []devScenario {
 
 		// --- other translations ---------------------------------------------------
 		{"Note in the WEB translation", "Switches translation as well as passage",
-			ShareLinkURLWithNote("web", "John", 14, 6, 6, "The WEB wording of this one.")},
+			ShareLinkURLWithNote("web", "John", 14, 6, 6, "Fixture WEB message alpha.")},
 		{"Note in the Catholic canon (deuterocanon)", "Tobit only exists in WEBC — check the switch",
-			ShareLinkURLWithNote("webc", "Tobit", 4, 15, 15, "A deuterocanonical note.")},
+			ShareLinkURLWithNote("webc", "Tobit", 4, 15, 15, "Fixture WEBC message alpha.")},
 
 		// --- the LICENSED translation, which behaves differently per reader -------
 		//
@@ -136,7 +135,7 @@ func devScenarios() []devScenario {
 		// reachable from this page before, which is why it is here: the branch
 		// that only some readers see is the one worth being able to tap.
 		{"Note in the NKJV (licensed)", "Switches if you have it; otherwise opens here plus a message",
-			ShareLinkURLWithNote("nkjv", "Psalms", 23, 1, 4, "Been synthetic note today. This one is for you.")},
+			ShareLinkURLWithNote("nkjv", "Psalms", 23, 1, 4, "Fixture version message alpha beta gamma.")},
 	}
 }
 
@@ -420,8 +419,8 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 		// The same URL handed to the browser, so the two renderings of one link
 		// can be compared without retyping it. This is how the notched-highlight
-		// report got settled: the app and the web turned out to have the same
-		// defect for the same reason, which is far easier to see side by side
+		// behavior can be compared: the app and the web once had the same defect
+		// for the same reason, which is far easier to see side by side
 		// than to reason about from one screenshot.
 		inBrowser := widget.NewButton("Open in browser", func() {
 			openLinkInBrowser(sc.url)

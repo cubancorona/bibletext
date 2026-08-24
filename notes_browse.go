@@ -138,8 +138,8 @@ const prefNotesSort = "notes.sort"
 //
 // Three positions, defaulting to everything. It earns its place as soon as the
 // list is long, and it is the control the person layer later extends — "from
-// neutral contact" is another position on this same filter rather than a fourth screen. See
-// [redacted-retired-private-reference].
+// Fixture Sender A" is another position on this same filter rather than a
+// fourth screen. See docs/NOTES_SPEC.md#sender-and-attribution-contract.
 type noteWho int
 
 const (
@@ -312,7 +312,8 @@ func sortedNotes(notes []StoredNote, bookOrder map[string]int, by noteSort) []St
 
 // matchNotes filters notes by a query, matching the note's TEXT and its
 // REFERENCE — a reader looking for "john 11" means the passage, and one looking
-// for "hospital" means the message; both are the same box. Case-insensitive,
+// for "fixture-search-alpha" means the message; both are the same box.
+// Case-insensitive,
 // plain substring: over a store of short notes there is nothing here worth
 // an index, and a fuzzy match would only produce results the reader cannot
 // explain.
@@ -355,9 +356,8 @@ func browsableNotes(state *AppState) (shown []StoredNote, total int) {
 	}
 	all := sortedNotes(allNotesForBrowsing(appPrefs()), bookOrderOf(state), notesSortPref())
 	// The WHO filter narrows the pool before the text query, and `total` counts
-	// the filtered pool — so "3 of 7" answers "of the notes I asked to see",
-	// which is the question the reader is actually holding. A total that
-	// silently counted notes the filter had excluded would read as a bug.
+	// that filtered pool. The header's "3 of 7" therefore reflects the active
+	// sender filter instead of counting notes that the filter excludes.
 	all = filterNotesByWho(all, notesWhoPref())
 	return matchNotes(all, state.NotesQuery), len(all)
 }
@@ -520,8 +520,7 @@ func openNote(state *AppState, n StoredNote) {
 	// The arrival is the NOTE'S OWN — never a search result's. This used to
 	// route through openSearchResultRange, which set an hlSearch mark on the
 	// note's very verses: a FOREIGN mark, so the plan stood the note down and
-	// the reader who had just tapped it in the list was greeted by the pill
-	// (verification: "takes me to the reading pane with a minimized pill").
+	// the reader who had just tapped it in the list was greeted by the pill.
 	// Selecting a note — its chip, its link, the count-tap, this row — is the
 	// reader choosing it as the page's reason (the identity table), so the
 	// arrival focuses it and lets the projection raise the note's own mark
@@ -546,7 +545,7 @@ func openNote(state *AppState, n StoredNote) {
 
 // notesCapacityNoticeAt is where the browser starts saying, once and quietly,
 // that the scrapbook has grown very large. It is a NOTICE, not a cap: the store
-// keeps everything it is given, always ([redacted-retired-private-reference] — eviction is a
+// keeps everything it is given, always (docs/NOTES_SPEC.md#store-contract — eviction is a
 // data-loss event, and the old store's silent 200-entry eviction is the defect
 // this replaced). The number marks where an unbounded collection starts to have
 // a cost worth naming — load parse and preferences rewrite grow with the store —
@@ -699,9 +698,9 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 
 	// THE WINDOWED LIST (S11a). A widget.List builds rows for the viewport, not
 	// for the store: the VBox-per-note it replaces built all 2,000 rows of a
-	// 2,000-note scrapbook to show the six that fit on screen (measured at 9.9 s
-	// on an M3 Max — [redacted-retired-private-reference] hard case 14 called this column the
-	// browser's only real ceiling). The ROW is unchanged: the same noteBrowseRow
+	// 2,000-note scrapbook to show the six that fit on screen. The benchmark and
+	// ceiling are documented in docs/NOTES_SPEC.md#staging-and-validation. The
+	// ROW is unchanged: the same noteBrowseRow
 	// the column added, separator and all — the List's own separators are hidden
 	// so the row keeps drawing its own, exactly as before.
 	//
@@ -748,7 +747,7 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	// what can be a long list. Restored after layout, because a list clamps an
 	// offset against a content height it has not measured yet; harvested back
 	// via notesScrollRead (see openNote and the top of this builder).
-	// implementation verification: this closure aliases the list built by THIS call.
+	// This closure aliases the list built by this call.
 	// A build whose result is never shown repoints the harvest at a fresh,
 	// unscrolled list and the reader's place dies at the next harvest. Every
 	// shipped path shows what it builds; a future speculative build must not.
@@ -898,8 +897,8 @@ func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject 
 		// stranger's message appearing, expanded, because you deleted your own
 		// from a list. Measured:
 		//
-		//	showing: active="my own words" NoteID=2 focus={true 2}
-		//	after:   active="friend words" NoteID=1 focus={true 2}  ← deleted id
+		//	showing: active="fixture outgoing beta" NoteID=2 focus={true 2}
+		//	after:   active="fixture received beta" NoteID=1 focus={true 2}  ← deleted id
 		//
 		// Every other delete path resets focus; this one was added without it.
 		// Only when the deleted note is the one focus names — deleting some
@@ -1049,8 +1048,8 @@ func (c *notesCountLink) CreateRenderer() fyne.WidgetRenderer {
 	txt.TextStyle = fyne.TextStyle{Bold: true}
 	txt.TextSize = 15
 	// A solid box behind the glyphs: Fyne's mobile hit-testing does not reliably
-	// match a bare canvas.Text renderer (the rule [redacted-retired-private-reference] records), and a
-	// two-character target needs all the tap area it can get.
+	// match a bare canvas.Text renderer, and a two-character target needs all the
+	// tap area it can get.
 	box := container.NewGridWrap(fyne.NewSize(52, 40), container.NewCenter(txt))
 	return &notesCountRenderer{link: c, txt: txt, box: box}
 }

@@ -156,9 +156,9 @@ func regularSplitOffset(width float32) float64 {
 //
 // These live here rather than in ui_mobile.go so they can be TESTED. That file
 // is tagged `ios || android`, packaging does not compile tests, and the bug
-// leaveSearchForRead fixes shipped twice — a tagged test asserting it would
-// never have run on this machine and could rot without anyone noticing. The
-// styled reading pane is untagged for the same reason.
+// leaveSearchForRead fixes shipped twice. A test in that tagged file would not
+// run in the default host test suite. The styled reading pane is untagged for
+// the same reason.
 
 // overlayShouldShow is the single source of truth for native reading-overlay
 // visibility on mobile: the iOS UITextView must be visible exactly when the

@@ -391,8 +391,8 @@ func showVerseOfDay(state *AppState) {
 	// The verse scrolls; the kicker, reference and buttons stay fixed. A long
 	// psalm verse at the Extra-large text size on a short canvas (Android
 	// split-screen is the worst) pushed the button row past the frame the modal
-	// renderer clamps to — buttons on a modal that ignores outside taps (audit
-	// finding). Under the cap the scroll never engages and the card looks
+	// renderer clamps to — buttons on a modal that ignores outside taps. Under
+	// the cap the scroll never engages and the card looks
 	// exactly as before.
 	bodyScroll := container.NewVScroll(container.New(squeezeWidthLayout{}, body))
 	content := container.NewBorder(

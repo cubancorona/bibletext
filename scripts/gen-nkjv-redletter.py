@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build the NKJV's red-letter spans from the publisher's own markup.
 
-    python3 scripts/gen-nkjv-redletter.py          # fetch (cached), then derive
+    BIBLETEXT_PROVIDER_ID_NKJV=<provider-id> \
+        python3 scripts/gen-nkjv-redletter.py      # fetch (cached), then derive
 
 The NKJV's own spans are served by API.Bible as <span class="wj">. This is the publisher's editorial
 judgement, not ours, which is the right basis for a licensed edition.
@@ -26,16 +27,54 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 
 CACHE=os.path.expanduser('~/.cache/bibletext-nkjv-html')
-KEY=PID=None
-for line in open(os.path.expanduser('~/Dev/bibletext/.env.local')):
-    if line.startswith('BIBLE_API_KEY='): KEY=line.split('=',1)[1].strip().strip('"\'')
-    if line.startswith('BIBLETEXT_PROVIDER_ID_NKJV='): PID=line.split('=',1)[1].strip().strip('"\'')
+KEY=os.environ.pop('BIBLE_API_KEY', '').strip()
+PID=os.environ.pop('BIBLETEXT_PROVIDER_ID_NKJV', '').strip()
+for personal_key_var in ('ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'XAI_API_KEY'):
+    os.environ.pop(personal_key_var, None)
+
+# This generator never opens the repository's general-purpose .env.local,
+# which may contain unrelated personal provider credentials. On macOS it may
+# use the same dedicated API.Bible Keychain item as the release pipeline.
+if not KEY and sys.platform == 'darwin':
+    result = subprocess.run(
+        ['security', 'find-generic-password', '-a', 'release',
+         '-s', 'uk.co.bibletext.apibible-release', '-w'],
+        check=False, capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        KEY = result.stdout.strip()
+    result.stdout = ''
+    result.stderr = ''
+    del result
+
+if not KEY or not PID:
+    missing = []
+    if not KEY:
+        missing.append('BIBLE_API_KEY (or the dedicated macOS Keychain item)')
+    if not PID:
+        missing.append('BIBLETEXT_PROVIDER_ID_NKJV')
+    raise SystemExit('Missing ' + ' and '.join(missing))
 BOOKS={'Matthew':('MAT',28),'Mark':('MRK',16),'Luke':('LUK',24),'John':('JHN',21),'Acts':('ACT',28),
        '1 Corinthians':('1CO',16),'2 Corinthians':('2CO',13),'1 Timothy':('1TI',6),'Revelation':('REV',22)}
 calls=0
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old = urllib.parse.urlsplit(req.full_url)
+        new = urllib.parse.urlsplit(newurl)
+        if (old.scheme.lower(), old.netloc.lower()) != (new.scheme.lower(), new.netloc.lower()):
+            raise urllib.error.HTTPError(
+                newurl, code, 'cross-origin redirect refused', headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(SameOriginRedirectHandler())
 for book,(code,n) in BOOKS.items():
     for ch in range(1,n+1):
         path=os.path.join(CACHE,f"{code}.{ch}.json")
@@ -43,13 +82,14 @@ for book,(code,n) in BOOKS.items():
         url=(f"https://api.scripture.api.bible/v1/bibles/{PID}/chapters/{code}.{ch}"
              "?content-type=html&include-notes=false&include-verse-spans=true")
         try:
-            with urllib.request.urlopen(urllib.request.Request(url,headers={'api-key':KEY}),timeout=45) as r:
+            with OPENER.open(urllib.request.Request(url,headers={'api-key':KEY}),timeout=45) as r:
                 raw=r.read()
             open(path,'wb').write(raw); calls+=1
         except Exception as e:
             print(f"  {code}.{ch}: {type(e).__name__} {e}",file=sys.stderr)
             time.sleep(2)
 print(f"API calls made this run: {calls}; cached chapters: {len(os.listdir(CACHE))}",file=sys.stderr)
+KEY = None
 
 # ---------------------------------------------------------------- derive
 # THE HALF THAT WAS MISSING. Until 20 Aug 2026 this script ended at the fetch,

@@ -11,12 +11,12 @@ import (
 
 func TestNoteRoundTrip(t *testing.T) {
 	for _, note := range []string{
-		"synthetic note today — this one carried me.",
-		"Read this morning and synthetic note.\n\nPraying, and I'll call Sunday.",
-		"Pensé en ti hoy 🙏 — este versículo me sostuvo toda la semana. ¡Te quiero!",
-		"日本語のメモ",
-		"a",
-		strings.Repeat("word ", 55), // long enough that deflate wins
+		"fixture message alpha",
+		"fixture line alpha\n\nfixture line beta",
+		"fixture Unicode: café ☕ — grüße! αβγ",
+		"フィクスチャメモ",
+		"x",
+		strings.Repeat("fixture ", 40), // long enough that deflate wins
 	} {
 		payload := EncodeNote(note)
 		if payload == "" {
@@ -42,7 +42,7 @@ func TestNoteRoundTrip(t *testing.T) {
 // with every field intact.
 func TestNoteWireRoundTrip(t *testing.T) {
 	w := NoteWire{
-		Text:    "Read this one slowly.",
+		Text:    "fixture message alpha",
 		Version: "nkjv",
 		Book:    "John",
 		Chapter: 3,
@@ -67,8 +67,8 @@ func TestNoteWireRoundTrip(t *testing.T) {
 // Deflate must be used only when it actually helps, and the format byte must
 // say which so the decoder never guesses. 'p'/'z' are never emitted again.
 func TestNoteCompressionOnlyWhenSmaller(t *testing.T) {
-	short := "synthetic note."
-	long := strings.Repeat("the same words over and over ", 9)
+	short := "fixture short"
+	long := strings.Repeat("fixture repeat ", 20)
 
 	if got := decodeTag(t, EncodeNote(short)); got != noteFormatRecords {
 		t.Errorf("a short note should stay raw ('r'), got tag %q", got)

@@ -180,7 +180,7 @@ func TestNKJVShareLinkNamesNKJV(t *testing.T) {
 	}
 
 	// A note rides alongside the translation, exactly as it does for web/bsb.
-	got := ShareLinkURLWithNote("nkjv", "John", 3, 16, 16, "hope you love this")
+	got := ShareLinkURLWithNote("nkjv", "John", 3, 16, 16, "fixture licensed message")
 	if !strings.HasPrefix(got, shareLinkBase+"/nkjv/john/3/#v16&n=") {
 		t.Errorf("noted nkjv link:\n got %q\nwant the /nkjv/ path with an n= key", got)
 	}

@@ -170,8 +170,8 @@ func (w *layoutWatcher) CreateRenderer() fyne.WidgetRenderer {
 // which read as a landscape flip here and triggered a rebuild; the rebuild's
 // fresh watcher then sampled the UNsqueezed canvas (portrait), so the next
 // layout pass "flipped" again, rebuilding forever — a visible reading-pane
-// flicker whenever the search/Find field had the keyboard up (observed in practice
-// on iPad, reproduced in the sim: 3,000+ rebuilds in under a minute). Canvas
+// flicker whenever the search/Find field had the keyboard up (3,000+ rebuilds
+// in under a minute in the simulator). Canvas
 // size ignores the keyboard, and it is the SAME source newLayoutWatcher
 // samples, so the two can never disagree and oscillate. The layout-class check
 // keys off width, which the keyboard never changes.

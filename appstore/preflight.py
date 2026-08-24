@@ -190,8 +190,8 @@ def main():
             note = "  (fine — this one is meant to be stable)"
         print(f" {flag} {key:16} {status}{note}")
 
-    # The description's own check — reported, never fatal: marketing copy is the
-    # owner's to write, and this can only say what looks absent.
+    # The description check is advisory, never fatal: this can identify text
+    # that looks absent but cannot decide the intended marketing copy.
     desc = now.get("description", "")
     missing_t = [t for t, needles, _ in DESCRIBED_TRANSLATIONS
                  if not any(n in desc.lower() for n in needles)]

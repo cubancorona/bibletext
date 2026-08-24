@@ -231,7 +231,8 @@ func purgeUnavailableLicensedCaches() {
 }
 
 // apiKey resolves the provider credential: the operator's environment first
-// (development), else the reader's own key from Settings (BYOK).
+// (development), then the reader's key from Settings, then the compiled Store
+// release fallback.
 func (s *licensedAPISource) apiKey() string {
 	if k := strings.TrimSpace(os.Getenv("BIBLE_API_KEY")); k != "" {
 		return k
@@ -240,10 +241,9 @@ func (s *licensedAPISource) apiKey() string {
 }
 
 // licensed reports whether rights to this translation's text are in place:
-// the explicit operator env opt-in, or — for BYOK-capable translations — the
-// reader's own stored API.Bible key (their free API.Bible app carries the
-// translation's licence for their use; a key not entitled to it simply fails
-// the fetch with the provider's clear rejection).
+// the explicit operator env opt-in, or — for default-provider translations —
+// an effective API.Bible key from Settings or the compiled Store fallback. A
+// key not entitled to the translation fails with the provider's rejection.
 func (s *licensedAPISource) licensed() bool {
 	if envTruthy(os.Getenv("BIBLETEXT_LICENSE_" + strings.ToUpper(s.versionID))) {
 		return true

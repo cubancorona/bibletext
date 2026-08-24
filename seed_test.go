@@ -175,8 +175,8 @@ func TestDefaultStartBookIsMatthew(t *testing.T) {
 	}
 }
 
-// TestRestoreOfflineFallsBackToSupersededCache pins the audit BLOCKER: a 1.1.5
-// reader whose last translation was BSB (or WEBC) upgrades and opens the app
+// TestRestoreOfflineFallsBackToSupersededCache pins the offline-upgrade case: a
+// 1.1.5 reader whose last translation was BSB (or WEBC) upgrades and opens the app
 // OFFLINE. The saved version's current-epoch cache does not exist yet (the
 // epoch just bumped) and the network is gone — but their previous-epoch cache
 // is a complete, valid canon on disk. The restore must serve that rather than

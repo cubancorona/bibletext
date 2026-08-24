@@ -16,17 +16,42 @@
 # and the upload keystore in ~/Library/Android/bibletext-signing/.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+unset BIBLE_KEY_LDFLAGS BIBLETEXT_RELEASE_LDFLAGS BIBLETEXT_REAL_GO
+export GOFLAGS="" GODEBUG=""
+case "${BASH_SOURCE[0]}" in
+  */*) script_dir_part="${BASH_SOURCE[0]%/*}" ;;
+  *) script_dir_part="." ;;
+esac
+case "$script_dir_part" in
+  /*|./*|../*) ;;
+  *) script_dir_part="./$script_dir_part" ;;
+esac
+original_dir="$PWD"
+builtin cd -P -- "$script_dir_part"
+SCRIPT_DIR="$PWD"
+builtin cd -- "$original_dir"
+unset original_dir script_dir_part
+source "${SCRIPT_DIR}/release-bible-key.sh"
+if [ "${1:-}" = "--release" ]; then
+  load_release_bible_key
+else
+  unset BIBLE_API_KEY
+fi
+
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+"$REPO_ROOT/scripts/check-repository-hygiene.py"
 APP_DIR="$REPO_ROOT/cmd/mobile"
 SIGN_DIR="$HOME/Library/Android/bibletext-signing"
-DIST_DIR="$HOME/Library/Android/bibletext-dist"
+DIST_DIR="${BIBLETEXT_ANDROID_DIST_DIR:-$HOME/Library/Android/bibletext-dist}"
 KS="$SIGN_DIR/bibletext-upload.keystore"
-KS_PASS="$(cat "$SIGN_DIR/keystore-password.txt")"
+KS_PASS_FILE="$SIGN_DIR/keystore-password.txt"
 KEY_ALIAS=bibletext
+[ -s "$KS_PASS_FILE" ] || { echo "ERROR: Android keystore password file is missing or empty" >&2; exit 1; }
 
 # shellcheck disable=SC1090
 source "$HOME/Library/Android/env.sh"
-export PATH="$HOME/bin:$PATH"   # bundletool wrapper
+export PATH="$(go env GOPATH)/bin:$HOME/bin:$PATH"   # fyne + bundletool wrapper
 
 # Build against the patched Fyne, like the iOS scripts (see patches/README.md).
 # Android benefits from the caret-blink battery fix (widget/entry_cursor_anim.go,
@@ -37,35 +62,16 @@ export PATH="$HOME/bin:$PATH"   # bundletool wrapper
 # only the LAST trap per signal, so it must not be registered separately here.)
 "$REPO_ROOT/scripts/setup-fyne-patch.sh"
 
-# Compile in the project's own API.Bible key (from .env.local) so the NKJV
-# works out of the box; a build with no key present is simply bring-your-own-key.
-# NOTE: [redacted-retired-private-reference] arms its OWN EXIT trap to delete the generated file,
-# but this script registers a trap BELOW it and bash keeps only the last trap per
-# signal — so that one would be silently clobbered and the key file would survive
-# every build. The deletion is therefore folded into the single trap below, which
-# is the convention this script already documents. (The iOS scripts have the same
-# collision the other way round: they arm their trap ABOVE the source, so it is
-# THEIRS that gets clobbered — their go.mod restore was being eaten until they
-# were given the same fold. Registered above means clobbered, not safe.)
-source "${REPO_ROOT}/[redacted-retired-private-reference]"
-# Bundled by default, per the owner's decision recorded in release-ios.sh: the
-# NKJV works on install now, and a later release drops the key so new installs
-# are bring-your-own-key. BIBLETEXT_BUNDLE_KEY=0 is that switch.
-if [ "${BIBLETEXT_BUNDLE_KEY:-1}" = "1" ]; then
-  embed_bible_key
-else
-  echo "==> NO bundled API.Bible key — new installs are bring-your-own-key"
-fi
-
-( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
-
 ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
 BT="$ANDROID_HOME/build-tools/35.0.0"
 WORK="$(mktemp -d /tmp/bibletext-android.XXXXXX)"
-# The trap reverts fyne's Build++ writeback to FyneApp.toml — but ONLY when the
-# file was clean at start, so it can never destroy uncommitted manual edits.
-TOML_WAS_DIRTY="$(git -C "$REPO_ROOT" status --porcelain -- cmd/mobile/FyneApp.toml 2>/dev/null || true)"
-trap 'rm -rf "$WORK"; rm -f "$APP_DIR/classes2.dex" "$APP_DIR/classes.dex" "$REPO_ROOT/bundled_key_gen.go"; git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true; if [ -z "$TOML_WAS_DIRTY" ]; then git -C "$REPO_ROOT" checkout -- cmd/mobile/FyneApp.toml 2>/dev/null || true; fi' EXIT
+cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
+cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
+# Restore the exact pre-build files, including any uncommitted operator edits.
+# Release tooling must never replace them with the committed versions.
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$WORK"; rm -f "$APP_DIR/BibleText.aab" "$APP_DIR/classes2.dex" "$APP_DIR/classes.dex" "${AAB_TMP:-}" "${APK_TMP:-}"' EXIT
+
+( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
@@ -121,34 +127,65 @@ if [ "${1:-}" = "--release" ]; then
   [ -n "$APP_BUILD" ] \
     || { echo "ERROR: no Build in $APP_DIR/FyneApp.toml — refusing to default the versionCode to 1"; exit 1; }
   note "android release $APP_VERSION (versionCode $APP_BUILD)"
+  REAL_GO="$(command -v go)"
+  mkdir -p "$WORK/bin" "$WORK/go-cache" "$WORK/go-tmp"
+  cp "$REPO_ROOT/scripts/go-release-wrapper.sh" "$WORK/bin/go"
+  chmod 700 "$WORK/bin/go"
+  # Fyne passes its own -ldflags value and otherwise overrides GOFLAGS. The
+  # temporary wrapper merges the release linker value only into c-shared Go
+  # builds, then the package verifier proves every native library contains it.
+  BIBLETEXT_REAL_GO="$REAL_GO" \
+  BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+  GOCACHE="$WORK/go-cache" GOTMPDIR="$WORK/go-tmp" \
+  PATH="$WORK/bin:$PATH" \
   fyne release -os android -app-id uk.co.bibletext -icon Icon.png \
     -app-version "$APP_VERSION" -app-build "$APP_BUILD" \
-    -keyStore "$KS" -keyName "$KEY_ALIAS" -keyStorePass "$KS_PASS" -keyPass "$KS_PASS"
+    -keyStore "$KS" -keyName "$KEY_ALIAS" \
+    -keyStorePass "$(<"$KS_PASS_FILE")" -keyPass "$(<"$KS_PASS_FILE")"
+  AAB_STAGE="$WORK/BibleText.aab"
+  mv "$APP_DIR/BibleText.aab" "$AAB_STAGE"
+  BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+    python3 "$REPO_ROOT/scripts/verify-release-key.py" "$AAB_STAGE"
 
   note "injecting classes2.dex into the AAB (base/dex/) + re-signing"
   mkdir -p "$WORK/aab/base/dex"
   cp "$WORK/classes1.dex" "$WORK/aab/base/dex/classes.dex"
   cp "$WORK/classes2.dex" "$WORK/aab/base/dex/classes2.dex"
-  (cd "$WORK/aab" && zip -q -X -d "$APP_DIR/BibleText.aab" base/dex/classes.dex \
-     && zip -q -X "$APP_DIR/BibleText.aab" base/dex/classes.dex base/dex/classes2.dex)
+  (cd "$WORK/aab" && zip -q -X -d "$AAB_STAGE" base/dex/classes.dex \
+     && zip -q -X "$AAB_STAGE" base/dex/classes.dex base/dex/classes2.dex)
   # Modification invalidated the jar signature — strip and re-sign.
-  zip -q -d "$APP_DIR/BibleText.aab" "META-INF/*" || true
+  zip -q -d "$AAB_STAGE" "META-INF/*" || true
   jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
-    -keystore "$KS" -storepass "$KS_PASS" -keypass "$KS_PASS" \
-    "$APP_DIR/BibleText.aab" "$KEY_ALIAS" >/dev/null
+    -keystore "$KS" -storepass:file "$KS_PASS_FILE" -keypass:file "$KS_PASS_FILE" \
+    "$AAB_STAGE" "$KEY_ALIAS" >/dev/null
 
   note "universal APK for sideload/Firebase"
-  mkdir -p "$DIST_DIR"
   bundletool build-apks --mode=universal --overwrite \
-    --bundle="$APP_DIR/BibleText.aab" --output="$WORK/BibleText.apks" \
+    --bundle="$AAB_STAGE" --output="$WORK/BibleText.apks" \
     --ks="$KS" --ks-key-alias="$KEY_ALIAS" \
-    --ks-pass="pass:$KS_PASS" --key-pass="pass:$KS_PASS"
-  unzip -p "$WORK/BibleText.apks" universal.apk > "$DIST_DIR/BibleText-universal.apk"
+    --ks-pass="file:$KS_PASS_FILE" --key-pass="file:$KS_PASS_FILE"
+  APK_STAGE="$WORK/BibleText-universal.apk"
+  unzip -p "$WORK/BibleText.apks" universal.apk > "$APK_STAGE"
   # Same aapt2-path assertion as the debug branch (background audio's <service>
   # only exists if the adaptive-icon resources flipped fyne onto aapt2).
-  unzip -l "$DIST_DIR/BibleText-universal.apk" | grep "mipmap-anydpi" >/dev/null \
+  unzip -l "$APK_STAGE" | grep "mipmap-anydpi" >/dev/null \
     || { echo "ERROR: adaptive-icon resources missing from release APK"; exit 1; }
-  mv "$APP_DIR/BibleText.aab" "$DIST_DIR/BibleText.aab"
+  BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+    python3 "$REPO_ROOT/scripts/verify-release-key.py" "$AAB_STAGE"
+  BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+    python3 "$REPO_ROOT/scripts/verify-release-key.py" "$APK_STAGE"
+
+  # Publish only verified packages. Copy to hidden names in the destination,
+  # then atomically rename each into its canonical release path.
+  mkdir -p "$DIST_DIR"
+  AAB_TMP="$DIST_DIR/.BibleText.aab.tmp.$$"
+  APK_TMP="$DIST_DIR/.BibleText-universal.apk.tmp.$$"
+  cp "$AAB_STAGE" "$AAB_TMP"
+  cp "$APK_STAGE" "$APK_TMP"
+  mv -f "$AAB_TMP" "$DIST_DIR/BibleText.aab"
+  AAB_TMP=""
+  mv -f "$APK_TMP" "$DIST_DIR/BibleText-universal.apk"
+  APK_TMP=""
   note "done: $DIST_DIR/BibleText.aab + BibleText-universal.apk"
   ls -lh "$DIST_DIR"
 else
@@ -175,7 +212,7 @@ else
      && rm -f classes.dex classes2.dex)
   "$BT/zipalign" -f -p 4 BibleText.apk "$WORK/aligned.apk"
   "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
-    --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
+    --ks-pass "file:$KS_PASS_FILE" --key-pass "file:$KS_PASS_FILE" \
     --out BibleText.apk "$WORK/aligned.apk"
   "$BT/apksigner" verify BibleText.apk
   # Assert the swap actually landed: a silent miss here would ship an APK whose

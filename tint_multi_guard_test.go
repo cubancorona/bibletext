@@ -1,6 +1,7 @@
 package bibletext
 
-// tintMulti IS WIRED AND MUST NOT BE REACHABLE (S12, [redacted-retired-private-reference]).
+// tintMulti IS WIRED AND MUST NOT BE REACHABLE
+// (docs/NOTES_SPEC.md#overlap-and-tint-contract).
 //
 // The palette tokens, the table rows and the stylesheet rule for the multi-note
 // wash all exist, so that turning it on is one deliberate change to chapterTint
@@ -83,7 +84,7 @@ func TestTintMultiIsUnreachableToday(t *testing.T) {
 				"draw a second wash unless the invariant is changed on purpose. If this is "+
 				"that decision, move the "+
 				"invariant deliberately: widen chapterTint, update this guard, and revalidate "+
-				"the palette on a rendered page ([redacted-retired-private-reference], S12).", u)
+				"the palette on a rendered page (docs/NOTES_SPEC.md#overlap-and-tint-contract).", u)
 		}
 	}
 	if !declared {

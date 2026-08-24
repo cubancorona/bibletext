@@ -83,16 +83,16 @@ func TestArrivalWithAReadableNoteRaisesNoNotice(t *testing.T) {
 	deleteAllNotes(appPrefs())
 
 	st := noticeState()
-	url := ShareLinkURLWithNote("web", "John", 3, 16, 18, "an ordinary note")
+	url := ShareLinkURLWithNote("web", "John", 3, 16, 18, "fixture ordinary message")
 	target, ok := ParseShareLink(url)
-	if !ok || target.Note != "an ordinary note" || target.NoteOutcome != NoteOutcomeOK {
+	if !ok || target.Note != "fixture ordinary message" || target.NoteOutcome != NoteOutcomeOK {
 		t.Fatalf("our own link did not decode: %+v ok=%v", target, ok)
 	}
 	applyShareTarget(st, target)
 	if st.NoteNotice != "" {
 		t.Errorf("a readable note raised a notice: %q", st.NoteNotice)
 	}
-	if st.ActiveNote != "an ordinary note" {
+	if st.ActiveNote != "fixture ordinary message" {
 		t.Errorf("note not shown: %q", st.ActiveNote)
 	}
 }
@@ -177,7 +177,7 @@ func TestWireVersionIsAuthoritativeForStorage(t *testing.T) {
 	// which is exactly what ShareLinkURLWithNote emits for a sender whose
 	// translation the path cannot carry.
 	payload := EncodeNoteWire(NoteWire{
-		Text: "from the nkjv", Version: "nkjv", Book: "John", Chapter: 3, VerseLo: 16,
+		Text: "fixture NKJV wire message", Version: "nkjv", Book: "John", Chapter: 3, VerseLo: 16,
 	})
 	target, ok := ParseShareLink("https://bibletext.co.uk/web/john/3/#v16&n=" + payload)
 	if !ok {
@@ -188,7 +188,7 @@ func TestWireVersionIsAuthoritativeForStorage(t *testing.T) {
 	}
 	applyShareTarget(st, target)
 
-	if st.ActiveNote != "from the nkjv" {
+	if st.ActiveNote != "fixture NKJV wire message" {
 		t.Fatalf("note not shown: %q", st.ActiveNote)
 	}
 	stored, ok := findStoredNote(appPrefs(), "nkjv", "John", 3)
@@ -221,7 +221,7 @@ func TestReopeningANotesOwnLinkExpandsIt(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	st := noticeState()
-	url := ShareLinkURLWithNote("web", "Genesis", 1, 1, 1, "tap me twice")
+	url := ShareLinkURLWithNote("web", "Genesis", 1, 1, 1, "fixture repeat-tap message")
 	target, ok := ParseShareLink(url)
 	if !ok {
 		t.Fatal("link did not parse")

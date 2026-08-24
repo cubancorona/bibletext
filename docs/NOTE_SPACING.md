@@ -45,5 +45,5 @@ interesting".
 
 ## Open question
 
-Whether the note should sit **below** its paragraph rather than above is
-tabled, high priority, and undecided — see `[redacted-retired-private-reference]`.
+Whether the note should sit **below** its paragraph rather than above remains
+undecided; see [`NOTES_SPEC.md` future work](NOTES_SPEC.md#future-work).

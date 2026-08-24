@@ -5,7 +5,7 @@ package bibletext
 // The bug these pin: the restore path sets book/chapter directly and never went
 // through addRecentChapter, so the chapter the reader last had open came back
 // with no note — while every other chapter's note appeared correctly as soon as
-// they navigated. observed in practice.
+// they navigated.
 
 import (
 	"testing"
@@ -32,12 +32,12 @@ func TestNoteComesBackOnReopen(t *testing.T) {
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
-		VerseLo: 1, VerseHi: 4, Text: "This got me through last night."})
+		VerseLo: 1, VerseHi: 4, Text: "fixture resume message alpha"})
 
 	st := resumeState(t)
 	applyNoteOnResume(st)
 
-	if st.ActiveNote != "This got me through last night." {
+	if st.ActiveNote != "fixture resume message alpha" {
 		t.Errorf("reopening did not bring the note back: %q", st.ActiveNote)
 	}
 	// Nothing to protect (never scrolled), so the note keeps its highlight and
@@ -51,7 +51,7 @@ func TestNoteComesBackOnReopen(t *testing.T) {
 // The note comes back WHOLE — bubble and highlight — even when a saved reading
 // position exists. Dropping the highlight to protect the scroll was the first
 // attempt and it was wrong: a bubble pointing at nothing reads as a fault, and
-// was reported as one. The scroll is protected in the reading panes instead,
+// looks broken. The scroll is protected in the reading panes instead,
 // where a pending restore outranks the highlight.
 func TestReopenRestoresTheNoteWhole(t *testing.T) {
 	app := test.NewApp()
@@ -59,7 +59,7 @@ func TestReopenRestoresTheNoteWhole(t *testing.T) {
 	p := fyne.CurrentApp().Preferences()
 	setNotesEnabled(true)
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Psalms", Chapter: 23,
-		VerseLo: 1, VerseHi: 4, Text: "read this bit"})
+		VerseLo: 1, VerseHi: 4, Text: "fixture resume message beta"})
 
 	for _, tc := range []struct {
 		name   string
@@ -73,7 +73,7 @@ func TestReopenRestoresTheNoteWhole(t *testing.T) {
 			st.restore = tc.anchor
 			applyNoteOnResume(st)
 
-			if st.ActiveNote != "read this bit" {
+			if st.ActiveNote != "fixture resume message beta" {
 				t.Errorf("the note should still come back: %q", st.ActiveNote)
 			}
 			if !st.hlOn() || st.hlLo() != 1 || st.hlHi() != 4 {

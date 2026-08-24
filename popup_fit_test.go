@@ -1,6 +1,6 @@
 package bibletext
 
-// Regression net for the popup-audit fixes: every dialog here once could put
+// Regression net for popup sizing: every dialog here once could put
 // content — in two cases its ONLY dismissal — outside the reachable screen.
 // Each test lays the real popup out on a small phone canvas and asserts the box
 // it occupies lands inside the glass, reusing sheetBox/findScroll from
@@ -59,7 +59,7 @@ func assertBoxOnScreen(t *testing.T, p *widget.PopUp, cnv fyne.Canvas, label str
 
 // The version-load-error dialog is modal and OK is its only way out. Un-Resized
 // it floored at the OK button's width, re-wrapping the message into a ribbon
-// hundreds of points tall that pushed OK off every phone (audit, upheld 3/3).
+// hundreds of points tall that pushed OK off every phone.
 func TestVersionLoadErrorDialogIsDismissable(t *testing.T) {
 	st, win := smallPhone(t)
 	showVersionLoadError(st, "World English Bible (Catholic)")

@@ -1,7 +1,7 @@
 package bibletext
 
-// Where notes live once they belong to the reader — the scrapbook store
-// (S5, [redacted-retired-private-reference]).
+// Where notes live once they belong to the reader
+// (docs/NOTES_SPEC.md#store-contract).
 //
 // ONE STORE, LINE-FRAMED, APPEND-FRIENDLY. The value under notes.store is one
 // JSON object per line (JSONL). Per-record framing is spec rule 2 of the
@@ -454,7 +454,7 @@ func findNoteByNonce(p prefStore, nonce []byte) (StoredNote, bool) {
 
 // saveMyNote appends a note the reader just sent — a Kind=mine write of the
 // one store. Two of your own notes on one passage are two notes; the same
-// words re-shared are one (sameNoteContent, owner).
+// words re-shared under the same mine record are one (sameNoteContent).
 func saveMyNote(p prefStore, n StoredNote) (StoredNote, bool) {
 	n.Kind = noteKindMine
 	// Store what actually TRAVELLED, not what was typed. The wire runs
@@ -694,8 +694,8 @@ func applyNoteForCurrentChapter(state *AppState) {
 		return
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
-	// YOUR OWN NOTE, the requested behavior to see it. It is not in plan.Notes and so
-	// has no display index — it is the plan's own slot, filled only while
+	// A focused own note is not in plan.Notes and therefore has no display
+	// index. It occupies the plan's own slot only while
 	// noteFocus names it (buildChapterPlan). Projected exactly like a received
 	// note so every surface draws it through the one path it already has, and
 	// so the mark below is raised from the note's own span; the byline
@@ -792,7 +792,7 @@ func applyNoteForCurrentChapter(state *AppState) {
 // happened to navigate first (and wrong the moment navigation clamped the
 // chapter). A record that can see where the reader is standing will eventually
 // record where the reader is standing; the note is filed under the LINK's
-// anchor ([redacted-retired-private-reference], hard case 11).
+// anchor (docs/NOTES_SPEC.md#anchor-and-placement-contract).
 func rememberIncomingNote(state *AppState, t ShareTarget) (StoredNote, bool) {
 	if state == nil || strings.TrimSpace(t.Note) == "" {
 		return StoredNote{}, false
@@ -879,13 +879,10 @@ func hideCurrentNote(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
 	}
-	// YOUR OWN NOTE IS PUT AWAY, NOT MINIMIZED. It is on the passage only
-	// the requested behavior to see it, and only until you navigate away, so a
-	// durable Minimized bit would record something that is never true of it —
-	// and the notes browser, whose only reader of that bit is a sentence about
-	// being "minimized in the chapter", would then say something false. Putting
-	// it away is exactly focus falling to none: the same thing navigating away
-	// does, asked for a moment earlier.
+	// AN OWN NOTE IS DISMISSED, NOT MINIMIZED. It appears on the passage only
+	// while explicitly focused and clears on navigation, so a durable Minimized
+	// bit would misrepresent its state. Dismissal therefore clears focus, just
+	// as navigation does.
 	if isOwnLiveNote(state) {
 		state.focusNone()
 		state.clearMarkFromNote()
@@ -945,18 +942,13 @@ func dropCurrentNote(state *AppState) {
 	if state == nil {
 		return
 	}
-	// ✕ ON YOUR OWN NOTE DISMISSES IT; IT DOES NOT DESTROY IT.
+	// ✕ DISMISSES AN OWN NOTE; IT DOES NOT DELETE IT.
 	//
-	// On a received note ✕ deletes, and that is right: it is someone else's
-	// message, you have read it, and the store is yours to prune. On your OWN
-	// note the same press would delete the only record of something you wrote —
-	// unconfirmed, in one tap, from a card that appeared the requested behavior to
-	// look at it and that is about to disappear on its own when you navigate
-	// away. That is not a trade any reader would knowingly make.
-	//
-	// So here it means "put it away", like −. Deleting your own note stays an
-	// explicit act in the notes browser, where you are looking at a list of
-	// your own notes and the row you press is unambiguous.
+	// On a received note, ✕ deletes the stored message. On an own note, the same
+	// press would delete the sole stored record without confirmation from a
+	// transient reading card. It therefore clears focus, like −. Deleting an own
+	// note remains an explicit action in the notes browser, where the selected
+	// row identifies the record unambiguously.
 	if isOwnLiveNote(state) {
 		state.focusNone()
 		state.clearMarkFromNote()
@@ -975,13 +967,9 @@ func dropCurrentNote(state *AppState) {
 	// requirement, from an observed defect where deleting one note made every
 	// pill on the passage vanish.
 	//
-	// It said focusNone here, and said so in a comment ("deleting is closing,
-	// not choosing a neighbour") that the code did not actually implement: the
-	// mirror read the stored Minimized bit and never looked at focus, so the
-	// none had no effect on what was drawn and the two disagreed in silence.
-	// Making the mirror honour the plan's Open turned that dormant conflation
-	// into a real regression — the survivor pilled instead of surfacing — which
-	// is how it was found.
+	// focusNone is insufficient here because the mirror derives the surviving
+	// note from its stored Minimized bit rather than from focus. Resetting focus
+	// to the default rule lets the survivor surface instead of remaining a pill.
 	state.resetNoteFocus()
 	// As in hideCurrentNote: the note's mark goes, a search result's or a
 	// shared link's stays.

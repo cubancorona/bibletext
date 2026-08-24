@@ -18,10 +18,10 @@ import (
 func TestSenderNamesAreDormant(t *testing.T) {
 	if senderNamesEnabled {
 		t.Fatal("senderNamesEnabled is on — sender names would display; this is a deliberate decision " +
-			"([redacted-retired-private-reference], Identity). If it is intended, update this test and revalidate " +
+			"(docs/NOTES_SPEC.md#sender-and-attribution-contract). If it is intended, update this test and revalidate " +
 			"every byline surface.")
 	}
-	n := StoredNote{Kind: noteKindReceived, SenderName: "[redacted-fixture-name]"}
+	n := StoredNote{Kind: noteKindReceived, SenderName: "Fixture Sender"}
 	if got := senderName(n); got != "Friend" {
 		t.Errorf("flag off: senderName = %q, want Friend whatever the record carries", got)
 	}
@@ -31,7 +31,7 @@ func TestSenderNamesAreDormant(t *testing.T) {
 	if got := noteByline(n); got != "From Friend" {
 		t.Errorf("flag off: noteByline = %q, want the banner's exact spelling", got)
 	}
-	if got := noteByline(StoredNote{Kind: noteKindMine, SenderName: "[redacted-fixture-name]"}); got != "From you" {
+	if got := noteByline(StoredNote{Kind: noteKindMine, SenderName: "Fixture Sender"}); got != "From you" {
 		t.Errorf("flag off, mine: noteByline = %q", got)
 	}
 	if got := senderByline(StoredNote{Kind: noteKindMine}); got != "Note from you" {
@@ -54,22 +54,22 @@ func TestSenderNameDisplayRules(t *testing.T) {
 		{"controls only", "\x01\x02‮", "Friend"},
 
 		// Ordinary names pass, bidi-isolated.
-		{"plain", "[redacted-fixture-name]", iso("[redacted-fixture-name]")},
-		{"spaced", "[redacted-fixture-name]", iso("[redacted-fixture-name]")},
-		{"initials", "J. R. Tolkien", iso("J. R. Tolkien")},
-		{"unicode", "Ægir Þórsson", iso("Ægir Þórsson")},
+		{"plain", "Fixture Sender", iso("Fixture Sender")},
+		{"spaced", "Fixture Sender Alpha", iso("Fixture Sender Alpha")},
+		{"initials", "F. S. Example", iso("F. S. Example")},
+		{"unicode", "Fïxture Sënder", iso("Fïxture Sënder")},
 		// Homoglyphs are NOT filtered — they are also legitimate names, and
 		// display (isolation, quiet styling) is the honest defence.
-		{"cyrillic homoglyph", "Аnna", iso("Аnna")},
+		{"cyrillic homoglyph", "Ѕample Sender", iso("Ѕample Sender")},
 
 		// One line: newlines, tabs and controls become collapsed spaces.
-		{"newline", "[redacted-fixture-name]\nRose", iso("[redacted-fixture-name]")},
-		{"crlf and tabs", "[redacted-fixture-name]\r\n\tRose", iso("[redacted-fixture-name]")},
-		{"run of blanks", "[redacted-fixture-name]", iso("[redacted-fixture-name]")},
+		{"newline", "Fixture\nSender", iso("Fixture Sender")},
+		{"crlf and tabs", "Fixture\r\n\tSender", iso("Fixture Sender")},
+		{"run of blanks", "Fixture    Sender", iso("Fixture Sender")},
 
 		// Bidi steering INSIDE a name is stripped before our isolates go on.
-		{"rlo stripped", "‮[redacted-fixture-name]", iso("[redacted-fixture-name]")},
-		{"isolates stripped", "⁦[redacted-fixture-name]⁩", iso("[redacted-fixture-name]")},
+		{"rlo stripped", "‮fixture", iso("fixture")},
+		{"isolates stripped", "⁦fixture⁩", iso("fixture")},
 
 		// The 24-rune cap, counted in runes.
 		{"at the cap", strings.Repeat("a", 24), iso(strings.Repeat("a", 24))},
@@ -84,9 +84,9 @@ func TestSenderNameDisplayRules(t *testing.T) {
 		{"notes", "notes", "Friend"},
 		{"support", "BibleText Support", "Friend"},
 		{"support spaced", "  bibletext   support ", "Friend"},
-		{"embedded", "[redacted-fixture-name] BibleText", "Friend"},
+		{"embedded", "Fixture BibleText", "Friend"},
 		{"split", "Bible Text security", "Friend"},
-		{"newline smuggle", "[redacted-fixture-name]\nBibleText Support", "Friend"},
+		{"newline smuggle", "Fixture\nBibleText Support", "Friend"},
 		// ...but a name merely CONTAINING "note" is a name.
 		{"notebook", "Notebook", iso("Notebook")},
 
@@ -97,7 +97,7 @@ func TestSenderNameDisplayRules(t *testing.T) {
 		{"dotted host", "evil.com", "Friend"},
 		{"host with path", "bibletext.co.uk/web", "Friend"},
 		{"host inside", "read evil.com now", "Friend"},
-		{"trailing dot ok", "[redacted-fixture-name]", iso("[redacted-fixture-name]")},
+		{"trailing dot ok", "Fixture S.", iso("Fixture S.")},
 	}
 	for _, c := range cases {
 		n := StoredNote{Kind: noteKindReceived, SenderName: c.in}
@@ -114,8 +114,8 @@ func TestSenderBylineComposition(t *testing.T) {
 		t.Skip("composition under the flag is exercised through senderNameWithFlag while dormant")
 	}
 	// Route the dormant branch by hand, the way the flip would.
-	n := StoredNote{Kind: noteKindReceived, SenderName: "[redacted-fixture-name]"}
-	if got := "Note from " + senderNameWithFlag(n, true); got != "Note from "+iso("[redacted-fixture-name]") {
+	n := StoredNote{Kind: noteKindReceived, SenderName: "Fixture Sender"}
+	if got := "Note from " + senderNameWithFlag(n, true); got != "Note from "+iso("Fixture Sender") {
 		t.Errorf("byline with a name = %q", got)
 	}
 	refused := StoredNote{Kind: noteKindReceived, SenderName: "BibleText Support"}
@@ -124,7 +124,7 @@ func TestSenderBylineComposition(t *testing.T) {
 	}
 }
 
-// The two dormant-path bypasses implementation verification, pinned so they stay dead.
+// Formatting and zero-width characters must not bypass the reserved-byline guard.
 func TestHostileNamesCannotWearTheChrome(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -155,9 +155,8 @@ func TestHostileNamesCannotWearTheChrome(t *testing.T) {
 	}
 }
 
-// The pill press clears a foreign mark before restoring — the same "that is
-// the new choice" rule the banner chip follows. Screenshot-only evidence
-// before this pin (implementation verification).
+// The pill press clears a foreign mark before restoring, matching the banner
+// chip's rule that the restored note becomes the active choice.
 func TestRestoringANoteClearsAForeignMark(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

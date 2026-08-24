@@ -44,7 +44,6 @@ func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {
 	fake := withFakeSharedKeys(t)
 
 	const bundled = "pretend-this-shipped-with-the-app"
-	fake.setBibleAPIKey(bundled)
 
 	st := sampleState()
 	st.theme = th
@@ -62,9 +61,8 @@ func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {
 	if bundledBibleKey() != bundled {
 		t.Fatalf("test setup: bundledBibleKey() = %q, want %q", bundledBibleKey(), bundled)
 	}
-	fake.setBibleAPIKey(bundled)
 	if !fake.usingBundledBibleKey() {
-		t.Fatal("test setup: the store should now hold the bundled key")
+		t.Fatal("test setup: the store should now use the bundled fallback")
 	}
 
 	rows, _ := bibleKeySection(st, pal, nil)
@@ -117,19 +115,18 @@ func TestBundledKeyStillClearable(t *testing.T) {
 	fake := withFakeSharedKeys(t)
 	// The regression this guards is BUNDLED-key specific: with the bundled key in
 	// force the field renders EMPTY, so emptying it fires no OnChanged and Clear
-	// would leave the key in the store. Testing with a reader-typed key exercises
+	// would leave the fallback enabled. Testing with a reader-typed key exercises
 	// the easy path and proves nothing, which is what the first draft did.
 	prev := bundledBibleKeyEnc
 	defer func() { bundledBibleKeyEnc = prev }()
 	const bundled = "the-bundled-one"
 	bundledBibleKeyEnc = obfuscateForTest(bundled)
-	fake.setBibleAPIKey(bundled)
 
 	st := sampleState()
 	st.theme = th
 	st.aiKeys = fake
 	if !fake.usingBundledBibleKey() {
-		t.Fatal("setup: the store should be holding the bundled key")
+		t.Fatal("setup: the store should be using the bundled fallback")
 	}
 	rows, _ := bibleKeySection(st, st.pal(), nil)
 
@@ -144,9 +141,15 @@ func TestBundledKeyStillClearable(t *testing.T) {
 	if got := fake.bibleAPIKey(); got != "" {
 		t.Errorf("Clear left the key in the store: %q", got)
 	}
+	if fake.usingBundledBibleKey() {
+		t.Error("Clear left the bundled fallback enabled")
+	}
+	if got := fake.prefs.String(prefKeyPrefix + bibleKeyID); got != "" {
+		t.Errorf("bundled fallback was persisted as %q", got)
+	}
 }
 
-// obfuscateForTest mirrors what [redacted-retired-private-reference] generates.
+// obfuscateForTest mirrors the release link-value preparation.
 func obfuscateForTest(key string) string {
 	raw := []byte(key)
 	out := make([]byte, len(raw))

@@ -430,7 +430,7 @@ func switchVersionInteractive(state *AppState, id string) {
 			if err != nil {
 				// Offline after a cacheEpoch bump, this version's previous-epoch
 				// cache is still a complete canon — switching to it worked in
-				// 1.1.5 and must keep working (the implementation requirement). Fall back to it
+				// 1.1.5 and must keep working. Fall back to it
 				// rather than showing "couldn't load"; the next online load
 				// upgrades the text.
 				if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
@@ -468,7 +468,7 @@ func showVersionLoading(state *AppState, name string) func() {
 	// version's name made the card's minimum width whatever the whole line
 	// wanted — wider than a phone for the WEBC's full name — and the modal
 	// renderer clamps the FRAME to the canvas while the text sails on
-	// underneath, clipped at both edges (the implementation requirement).
+	// underneath, clipped at both edges.
 	title := widget.NewLabel("Downloading " + name + "…")
 	title.Wrapping = fyne.TextWrapWord
 	title.Alignment = fyne.TextAlignCenter
@@ -559,8 +559,8 @@ func showVersionLoadError(state *AppState, name string) {
 	// cosmetic. Un-Resized, the popup floored at its content's minimum — the
 	// width of the OK button — and the wrapped message re-wrapped into a ribbon
 	// a few characters wide and hundreds of points tall, pushing OK clean off
-	// the screen: a modal with no reachable dismissal (the implementation requirement, upheld
-	// 3/3 on re-measurement). Give it a real width; the message is two short
+	// the screen: a modal with no reachable dismissal. Give it a real width;
+	// the message is two short
 	// lines at any phone width, so height follows harmlessly.
 	w := cnv.Size().Width - 48
 	if w > 380 {

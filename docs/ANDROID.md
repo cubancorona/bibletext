@@ -141,8 +141,8 @@ run loop — so the SAME Go `advanceAndContinue` drives it). The pieces:
 
 ## Shared-note sticker (full-screen reading)
 
-Full-screen reading draws the shared note NATIVELY on the overlay (the implementation requirement,
-iOS parity): the bubble with the WHO line ("Note from Friend · 2 of 3 on this
+Full-screen reading draws the shared note NATIVELY on the overlay, matching the
+iOS interaction model: the bubble with the WHO line ("Note from Friend · 2 of 3 on this
 passage ›"), Hide ("–") / Delete ("✕") on the bubble, the count region as the
 next-tap selector when the passage holds more than one note, and the collapsed
 pill (tap = Restore) when the note is minimized or a foreign mark (search/link
@@ -260,6 +260,10 @@ scripts/build-android.sh
 # → ~/Library/Android/bibletext-dist/{BibleText.aab, BibleText-universal.apk}
 BIBLETEXT_ANDROID_BUILD=<versionCode> scripts/build-android.sh --release
 ```
+
+Release builds require the dedicated API.Bible environment or macOS Keychain
+source and fail closed when it is unavailable. They never read `.env.local`;
+see [API_KEY_HANDLING.md](API_KEY_HANDLING.md).
 
 The release path: `fyne release -os android` emits a signed `.aab` via
 bundletool, then the script swaps in `base/dex/classes.dex`, adds

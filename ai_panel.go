@@ -146,7 +146,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			state.CurrentBook, state.CurrentChapter, strings.TrimSpace(question), current)
 		mu := &url.URL{
 			Scheme:   "mailto",
-			Opaque:   "[redacted-private-email]",
+			Opaque:   "cubancorona@gmail.com",
 			RawQuery: url.Values{"subject": {"BibleText: report AI content"}, "body": {mailBody}}.Encode(),
 		}
 		fyne.CurrentApp().OpenURL(mu)
@@ -217,7 +217,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// The whole waiting column sits in a scroll. Its natural height (~290pt)
 		// is FIXED while the panel's is not: on a landscape phone the body region
 		// can be half that, and the column painted its tail — Cancel included —
-		// over the footer or past the card (the implementation requirement). In the common case
+		// over the footer or past the card. In the common case
 		// the scroll has room and never engages. Spacers are gone (inside a
 		// scroll they collapse to nothing anyway); squeezeWidthLayout stops the
 		// scroll widening the column sideways (sheet_fit.go).
@@ -232,7 +232,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 				spacer(10), container.NewCenter(hint),
 				// inputFrame: the theme's button fill IS this panel's card
 				// colour (SurfaceAlt), so a bare Cancel here had no visible
-				// box at all (observed in practice). The outline restores one.
+				// box at all. The outline restores one.
 				spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
 				fasterRow,
 			))),
@@ -299,7 +299,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		}
 		// Scrolled for the same reason as the waiting column: a long provider
 		// error on a short canvas pushed the one actionable button into the
-		// footer (the implementation requirement).
+		// footer.
 		body.Objects = []fyne.CanvasObject{
 			container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewVBox(
 				spacer(8), lbl, container.NewCenter(actBtn),

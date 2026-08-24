@@ -68,8 +68,8 @@ func TestSortedNotesKeepsBooksTheCanonLacks(t *testing.T) {
 
 func TestMatchNotes(t *testing.T) {
 	notes := []StoredNote{
-		{Book: "John", Chapter: 11, VerseLo: 35, Text: "Read this synthetic note"},
-		{Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Text: "Got me through the night"},
+		{Book: "John", Chapter: 11, VerseLo: 35, Text: "fixture-search-alpha message"},
+		{Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 4, Text: "fixture-search-beta message"},
 	}
 	for _, tc := range []struct {
 		query string
@@ -77,12 +77,12 @@ func TestMatchNotes(t *testing.T) {
 		why   string
 	}{
 		{"", 2, "an empty query browses everything"},
-		{"hospital", 1, "matches the message"},
-		{"HOSPITAL", 1, "case-insensitive"},
+		{"fixture-search-alpha", 1, "matches the message"},
+		{"FIXTURE-SEARCH-ALPHA", 1, "case-insensitive"},
 		{"john", 1, "matches the reference's book"},
 		{"psalms 23", 1, "matches a full reference"},
 		{"23:1-4", 1, "matches a verse range as written"},
-		{"  night  ", 1, "query is trimmed"},
+		{"  fixture-search-beta  ", 1, "query is trimmed"},
 		{"leviticus", 0, "no match is no match"},
 	} {
 		if got := len(matchNotes(notes, tc.query)); got != tc.want {
@@ -181,7 +181,7 @@ func TestOpenNoteHighlightsTheWholeRange(t *testing.T) {
 	// The mark is the NOTE'S OWN, and the note lands OPEN. The old route went
 	// through openSearchResultRange, whose hlSearch mark was FOREIGN to the
 	// note — the plan stood the chosen note down and the reader landed on the
-	// pill (verification). Choosing a note IS the Show verb, everywhere.
+	// pill. Choosing a note IS the Show verb, everywhere.
 	if !st.mark.fromNote() {
 		t.Error("the arrival's mark must belong to the note, not to a search")
 	}
@@ -237,7 +237,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 	})
 
 	t.Run("parked behind a download, then the translation lands", func(t *testing.T) {
-		// Report A mechanism 2: the park used to be consumed as a LINK arrival,
+		// The park used to be consumed as a LINK arrival,
 		// whose bare hlLinkSpan is foreign to the note — the reader waited out
 		// the download and got the pill. The park now remembers the Show
 		// intent (pendingNoteOpenID) and the arrival re-runs openNote.
@@ -331,7 +331,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 	})
 
 	t.Run("your own note answers with its verses lit", func(t *testing.T) {
-		// Report A mechanism 1: mine notes are excluded from the chapter plan
+		// Mine notes are excluded from the chapter plan
 		// (stored, but never drawn in the text), so focusing one named an id
 		// no plan surfaces — the reader landed on the other notes' pill, or on
 		// nothing. The tap now navigates and lights the note's own range as a
@@ -343,7 +343,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		defer deleteAllNotes(appPrefs())
 
 		mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-			Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "sent to neutral contact"})
+			Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "fixture outgoing alpha"})
 		if !ok {
 			t.Fatal("the note was not stored")
 		}
@@ -359,26 +359,17 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		if !live || sp.Lo != 1 || sp.Hi != 2 {
 			t.Fatalf("your note's verses must light on arrival: live=%v span=%+v", live, sp)
 		}
-		// Updated: This block used to assert the opposite:
-		// that a mine note raises hlVerseOfDay and that no bubble is drawn. That
-		// was the honest answer while the plan could not draw an own note at
-		// all — but it had a consequence nobody had traced. hlVerseOfDay is not
-		// fromNote, so notesSuppressed was TRUE, and tapping your own row stood
-		// down every note on the chapter: a FRIEND's open note collapsed to a
-		// pill because you touched your own. The visible half of the defect was
-		// the smaller one: the tap landed on the reading pane with the
-		// highlight only and no note at all, which reads as misleading.
-		//
-		// Now your own note is drawn while focus names it, in the plan's own
-		// slot, and hidden again when you navigate away. So the mark is the
-		// NOTE's, like any other note's, and the bubble is real rather than
-		// faked — it carries your own words under "Note from you".
+		// A focused own note is drawn in its stored plan slot and hidden after
+		// navigation. Its mark must use a note origin: a generic passage mark
+		// suppresses every note on the chapter and would collapse an already-open
+		// received note. The focused bubble therefore carries the stored note and
+		// identity, while the mark identifies the note's own verse range.
 		if !st.mark.fromNote() {
-			t.Errorf("your own note must raise its OWN mark now, got origin %v — "+
+			t.Errorf("an own note must raise a note mark, got origin %v — "+
 				"a foreign mark here suppresses every other note on the chapter", st.mark.Origin)
 		}
 		if st.ActiveNote != mine.Text {
-			t.Errorf("your own note must be drawn on the passage the requested behavior see it on: "+
+			t.Errorf("an own note must be drawn on its stored passage: "+
 				"active=%q want %q", st.ActiveNote, mine.Text)
 		}
 		if st.NoteID != mine.ID {
@@ -720,8 +711,8 @@ func notesSlice(m map[string]StoredNote) []StoredNote {
 
 // TAPPING YOUR OWN NOTE MUST NOT TAKE A FRIEND'S AWAY.
 //
-// The worst part of the old mine branch was invisible in the bug report. It
-// raised an hlVerseOfDay mark, whose origin is not fromNote (mark.go), so
+// The old mine branch raised an hlVerseOfDay mark, whose origin is not fromNote
+// (mark.go), so
 // notesSuppressed was true (notes_plan.go) and the Open loop stood down every
 // note on the chapter. A reader with a friend's note open on Psalm 23 who
 // tapped their OWN note in the list watched their friend's message collapse
@@ -737,12 +728,12 @@ func TestOwnNoteTapDoesNotSuppressAFriendsNote(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 4, Text: "synthetic note"})
+		Book: "Psalms", Chapter: 23, VerseLo: 4, Text: "fixture received alpha"})
 	if !ok {
 		t.Fatal("the friend's note was not stored")
 	}
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "sent to neutral contact"})
+		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "fixture outgoing alpha"})
 	if !ok {
 		t.Fatal("your note was not stored")
 	}
@@ -764,10 +755,9 @@ func TestOwnNoteTapDoesNotSuppressAFriendsNote(t *testing.T) {
 	}
 }
 
-// YOUR OWN NOTE IS EPHEMERAL: shown the requested behavior, gone when you move on.
-// The mechanism is noteFocus, which navigation already resets (state.go), so
-// this asserts the BEHAVIOUR rather than the wiring — if the reset ever moves,
-// this still says what the reader is promised.
+// AN OWN NOTE IS EPHEMERAL: explicit focus shows it, and navigation clears it.
+// The mechanism is noteFocus, which navigation resets in state.go; this test
+// asserts the externally visible behavior rather than that implementation.
 func TestOwnNoteHidesAgainOnNavigation(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -776,7 +766,7 @@ func TestOwnNoteHidesAgainOnNavigation(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "sent to neutral contact"})
+		Book: "Psalms", Chapter: 23, VerseLo: 1, VerseHi: 2, Text: "fixture outgoing alpha"})
 	if !ok {
 		t.Fatal("your note was not stored")
 	}
@@ -784,7 +774,7 @@ func TestOwnNoteHidesAgainOnNavigation(t *testing.T) {
 
 	openNote(st, mine)
 	if st.ActiveNote != mine.Text {
-		t.Fatalf("your own note was not drawn the requested behavior for it: %q", st.ActiveNote)
+		t.Fatalf("own note was not drawn after explicit focus: %q", st.ActiveNote)
 	}
 
 	// Navigate away and back. Your own note must not follow you around.
@@ -820,13 +810,13 @@ func TestOwnLinkComesHomeAsYours(t *testing.T) {
 		t.Fatalf("no nonce minted: %v", nonce)
 	}
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "sent to neutral contact", Nonce: nonce})
+		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "fixture outgoing alpha", Nonce: nonce})
 	if !ok {
 		t.Fatal("your note was not stored")
 	}
 
 	// The link you sent, parsed back exactly as tapping it would.
-	url := ShareLinkURLWithNoteNonce("web", "Psalms", 23, 1, 1, "sent to neutral contact", nonce)
+	url := ShareLinkURLWithNoteNonce("web", "Psalms", 23, 1, 1, "fixture outgoing alpha", nonce)
 	target, ok := ParseShareLink(url)
 	if !ok {
 		t.Fatalf("your own link did not parse: %q", url)
@@ -854,7 +844,7 @@ func TestOwnLinkComesHomeAsYours(t *testing.T) {
 }
 
 // A FRIEND'S IDENTICAL WORDS ARE STILL THEIR OWN NOTE. The failure mode the
-// nonce exists to prevent: short notes repeat ("Amen", "synthetic note"), and
+// nonce exists to prevent: short fixture strings repeat, and
 // a content-keyed collapse would fold a real message from a real person into
 // your record and show it as yours, with nothing to say it had arrived.
 func TestAFriendsIdenticalNoteIsNotSwallowed(t *testing.T) {
@@ -865,12 +855,12 @@ func TestAFriendsIdenticalNoteIsNotSwallowed(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "Amen", Nonce: newNoteNonce()})
+		Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "fixture duplicate", Nonce: newNoteNonce()})
 	if !ok {
 		t.Fatal("your note was not stored")
 	}
 	// Their link: same words, same verse, THEIR nonce.
-	url := ShareLinkURLWithNoteNonce("web", "Psalms", 23, 1, 1, "Amen", newNoteNonce())
+	url := ShareLinkURLWithNoteNonce("web", "Psalms", 23, 1, 1, "fixture duplicate", newNoteNonce())
 	target, ok := ParseShareLink(url)
 	if !ok {
 		t.Fatal("their link did not parse")
@@ -893,12 +883,9 @@ func TestAFriendsIdenticalNoteIsNotSwallowed(t *testing.T) {
 	}
 }
 
-// THE OWNER'S SCENARIO, END TO END: you send a note, you tap your own link, and
-// the passage shows YOUR note — once, as yours, and gone when you move on.
-//
-// This is the one that would have caught the whole family of defects: the
-// duplicate record, the "Note from Friend" attribution on your own words, and
-// the arrival showing nothing at all after the collapse.
+// END-TO-END SCENARIO: a sent note opened through its source link appears once,
+// retains own-note attribution, and clears on navigation. This covers duplicate
+// storage, incorrect received-note attribution, and an empty arrival state.
 func TestTappingYourOwnLinkDrawsYourOwnNote(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -910,13 +897,13 @@ func TestTappingYourOwnLinkDrawsYourOwnNote(t *testing.T) {
 	// John 3 — the passage planTestState's sample Bible actually has, so the
 	// arrival is not clamped onto a different chapter.
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-		Book: "John", Chapter: 3, VerseLo: 16, Text: "sent to neutral contact", Nonce: nonce})
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture outgoing alpha", Nonce: nonce})
 	if !ok {
 		t.Fatal("your note was not stored")
 	}
 
 	st := planTestState(t)
-	url := ShareLinkURLWithNoteNonce("web", "John", 3, 16, 16, "sent to neutral contact", nonce)
+	url := ShareLinkURLWithNoteNonce("web", "John", 3, 16, 16, "fixture outgoing alpha", nonce)
 	HandleShareLink(st, url)
 
 	// One note in the scrapbook, still yours.
@@ -929,7 +916,7 @@ func TestTappingYourOwnLinkDrawsYourOwnNote(t *testing.T) {
 	}
 
 	// And it is DRAWN on the passage, as yours.
-	if st.ActiveNote != "sent to neutral contact" {
+	if st.ActiveNote != "fixture outgoing alpha" {
 		t.Errorf("tapping your own link drew no note: active=%q — the reader followed a "+
 			"link carrying a message and was shown a highlight and nothing else",
 			st.ActiveNote)
@@ -974,7 +961,7 @@ func TestReadingPageVerbsCannotDestroyYourOwnNote(t *testing.T) {
 			defer deleteAllNotes(appPrefs())
 
 			mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-				Book: "John", Chapter: 3, VerseLo: 16, Text: "sent to neutral contact"})
+				Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture outgoing alpha"})
 			if !ok {
 				t.Fatal("your note was not stored")
 			}
@@ -1018,7 +1005,7 @@ func TestReadingPageVerbsStillWorkOnAReceivedNote(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	theirs, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
-		Book: "John", Chapter: 3, VerseLo: 16, Text: "synthetic note"})
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture received alpha"})
 	if !ok {
 		t.Fatal("their note was not stored")
 	}
@@ -1060,10 +1047,10 @@ func TestNoteRowTrashCostsNoHeight(t *testing.T) {
 
 	st := planTestState(t)
 	for _, tc := range []struct{ name, text string }{
-		{"a one-word note", "Amen"},
-		{"a one-line note", "synthetic note today"},
-		{"a wrapping note", "synthetic note today and praying that this week is gentler " +
-			"than the last one was, with love from all of us here"},
+		{"a one-word note", "fixture"},
+		{"a one-line note", "fixture row message alpha"},
+		{"a wrapping note", "fixture wrapping row alpha beta gamma delta epsilon zeta eta " +
+			"theta iota kappa lambda mu nu xi omicron"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := StoredNote{ID: 1, Kind: noteKindReceived, VersionID: "web",
@@ -1132,8 +1119,8 @@ func TestNoteRowTrashDeletesTheNote(t *testing.T) {
 // also on the passage, putting YOUR OWN note away opened THEIRS in its place —
 // fully expanded, with the wash jumping onto their verse:
 //
-//	before: active="my own words" id=2
-//	after:  active="friend words" id=1 markLive=true lo=17
+//	before: active="fixture outgoing beta" id=2
+//	after:  active="fixture received beta" id=1 markLive=true lo=17
 //
 // The plan was right throughout (openNote() reported false); the MIRROR was
 // wrong. applyNoteForCurrentChapter read the stored Minimized bit, which is
@@ -1159,12 +1146,12 @@ func TestPuttingYourOwnNoteAwayOpensNothingElse(t *testing.T) {
 			defer deleteAllNotes(appPrefs())
 
 			friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
-				Book: "John", Chapter: 3, VerseLo: 17, Text: "friend words"})
+				Book: "John", Chapter: 3, VerseLo: 17, Text: "fixture received beta"})
 			if !ok {
 				t.Fatal("the friend's note was not stored")
 			}
 			mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-				Book: "John", Chapter: 3, VerseLo: 16, Text: "my own words"})
+				Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture outgoing beta"})
 			if !ok {
 				t.Fatal("your note was not stored")
 			}
@@ -1291,8 +1278,8 @@ func TestOwnNoteBylineSurvivesAClampedChapter(t *testing.T) {
 // reset every other delete path has. Measured before the fix, with a friend's
 // note on the same passage and your own note on screen:
 //
-//	showing: active="my own words" NoteID=2 focus={true 2}
-//	after:   active="friend words" NoteID=1 focus={true 2}   ← a deleted id
+//	showing: active="fixture outgoing beta" NoteID=2 focus={true 2}
+//	after:   active="fixture received beta" NoteID=1 focus={true 2}   ← a deleted id
 //
 // So deleting your own note from a LIST made a stranger's message appear on the
 // passage, expanded, unasked for.
@@ -1304,12 +1291,12 @@ func TestDeletingFromTheListOpensNothingElse(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
-		Book: "John", Chapter: 3, VerseLo: 17, Text: "friend words"})
+		Book: "John", Chapter: 3, VerseLo: 17, Text: "fixture received beta"})
 	if !ok {
 		t.Fatal("the friend's note was not stored")
 	}
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
-		Book: "John", Chapter: 3, VerseLo: 16, Text: "my own words"})
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "fixture outgoing beta"})
 	if !ok {
 		t.Fatal("your note was not stored")
 	}
@@ -1357,7 +1344,7 @@ func TestResharingTheSameNoteStillComesHomeAsYours(t *testing.T) {
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
 
-	const text = "sent to neutral contact"
+	const text = "fixture outgoing alpha"
 	first, _ := saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John",
 		Chapter: 3, VerseLo: 16, VerseHi: 16, Text: text, Nonce: newNoteNonce()})
 	// The SECOND share of the same words: a fresh nonce, deduped onto the same

@@ -231,8 +231,8 @@ func TestCitedTextSharePreservesParagraphsNotSoftWraps(t *testing.T) {
 // REAL captured node shape of Psalm 23:1-2 (bible.helloao.org, 2026-08-04):
 // decoder (poem clauses → lines) → prepareShareQuote (flattens for Bluebook
 // normalization) → restoreShareLineBreaks (re-inserts ONLY authored lines).
-// This replaces the earlier fixture that hand-authored newlines the decoder
-// could not produce (the implementation requirement).
+// This replaces an earlier fixture that hand-authored newlines the decoder
+// could not produce.
 func TestShareRestoresRealPoetryLines(t *testing.T) {
 	mk := func(raw string) []json.RawMessage {
 		var c []json.RawMessage

@@ -14,6 +14,6 @@ package bibletext
 // natively. Flip styledPaneEnabledOnPlatform back to the legacy Entry pane and
 // the banner returns on its own.
 //
-// Android LEFT this set on 19 Aug — it draws the native sticker in both of its
-// reading modes, for parity with iOS (see the `on` twin).
+// Android draws the native sticker in both reading modes for parity with iOS
+// (see the `on` twin).
 const nativeNoteStickerOnPlatform = false

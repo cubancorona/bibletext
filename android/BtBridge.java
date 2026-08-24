@@ -78,7 +78,7 @@ public final class BtBridge {
     private static FrameLayout content; // the scroll's one child: the TextView + the note sticker
     private static TextView text;
 
-    // --- Shared-note sticker (full-screen reading, the implementation requirement) ----------------
+    // --- Shared-note sticker (full-screen reading) -------------------------
     // The Android twin of the iOS in-text note bubble (reading_ios.go
     // bibleTextSetNote): the Go side pushes the WHOLE presentation on every
     // chapter render — the sender's words, the WHO line (byline + honest
@@ -156,7 +156,7 @@ public final class BtBridge {
         // WASH off the band: Android paints a character's background across
         // the whole line box, so inflating the ANCHOR line's ascent stretched
         // the highlight up into the reserved space and slid it under the
-        // sticker (owner-reported from the screenshot). Reserving in the
+        // sticker. Reserving in the
         // previous line's descent puts the gap outside every washed character.
         final boolean below;
         // The end offset of the line we adjusted, this layout pass. The next
@@ -305,7 +305,7 @@ public final class BtBridge {
     // (suspends follow) and when they tap the "Follow narration" pill (resumes it).
     private static native void nativeReadAlongUserScrolled();
     private static native void nativeReadAlongFollowTapped();
-    // The note sticker's verbs (the implementation requirement), all fired on the UI thread by the
+    // The note sticker's verbs, all fired on the UI thread by the
     // sticker's own controls; each dispatches to the SAME Go verb the iOS
     // sticker calls (reading_android_export.go / reading_jni_android.c).
     private static native void nativeNoteNextTapped();
@@ -698,11 +698,10 @@ public final class BtBridge {
         // requestChildRectangleOnScreen is how a focused selectable TextView
         // drags its cursor into view — and after setText the cursor sits at the
         // END, so the first window-focus pass could yank a freshly positioned
-        // chapter to its last verse (platform reproduction: the arrival scroll to a
-        // shared verse randomly lost to this, and the scroll listener then
-        // misread the jump as a reader gesture and PERSISTED the end position).
-        // Every scroll we mean happens through scrollTo; the bring-into-view
-        // path is never one we asked for, so refuse it wholesale.
+        // chapter to its last verse. The scroll listener would then interpret
+        // the jump as a reader gesture and persist the end position. Every
+        // intentional scroll uses scrollTo, so automatic bring-into-view must
+        // be disabled.
         scroll = new ScrollView(activity) {
             @Override
             public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
@@ -712,7 +711,7 @@ public final class BtBridge {
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(true);
         // The scroll's one child is a FrameLayout holding the TextView AND the
-        // note sticker (the implementation requirement): a sticker inside the scrolled content rides
+        // note sticker: a sticker inside the scrolled content rides
         // its anchor verse natively, with no per-scroll repositioning. The
         // TextView's own geometry (getLeft/getTop = 0) is unchanged, so the
         // study-popup anchor math and scrollRange() still hold.
@@ -1054,7 +1053,7 @@ public final class BtBridge {
         });
     }
 
-    // ---- Shared-note sticker (full-screen reading, the implementation requirement) ----------------
+    // ---- Shared-note sticker (full-screen reading) -------------------------
 
     /**
      * setNote pushes the sticker tuple from Go (androidStickerPush — the same
@@ -1136,9 +1135,8 @@ public final class BtBridge {
             // No real layout yet. The width LISTENER only fires when the width
             // CHANGES, so on an arrival into an already-sized pane it never
             // fires again and the sticker is simply never built — the band is
-            // reserved and the card is missing, which is exactly what the
-            // owner saw ("the highlight… too high": an empty reservation with
-            // nothing in it). Ask again after this layout pass instead of
+            // reserved and the card is missing, leaving the highlight too high
+            // over an empty reservation. Ask again after this layout pass instead of
             // waiting for a change that will not come.
             if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: content width too small (" + wpx + ") — retrying");
             if (!noteRetryPending) {
@@ -1189,8 +1187,8 @@ public final class BtBridge {
         }
         // A gap on BOTH sides of the card — the styled pane's symmetry rule.
         // Reserving only below left the card butting against the line above
-        // (0 against gap+tail), which the owner spotted immediately on the
-        // other platform.
+        // (0 against gap+tail), unlike the symmetric spacing on the other
+        // platforms.
         applyNoteBand(r[0], gapAbove + noteH + gapBelow);
         // Place the sticker into the reserved gap AFTER the reflow the band
         // just caused: its top is the anchor line's (raised) top.
@@ -1365,7 +1363,7 @@ public final class BtBridge {
         // The spec's who height is a MINIMUM, not a fixed box: dp() scales with
         // display density and sp with the reader's font-size choice, so an
         // 11sp line inside a 14dp box clips from about fontScale 1.08 — and
-        // Android's slider reaches 1.3, accessibility 2.0 (verification finding).
+        // Android's slider reaches 1.3, accessibility 2.0.
         // At the default scale the minimum IS the spec, so the geometry the
         // other three platforms hold to is unchanged.
         who.setMinHeight(dp(NOTE_WHO_H));
@@ -1378,7 +1376,7 @@ public final class BtBridge {
         // (btIOSFitWho, reading_ios.go: "a reader must never lose '· 2 of 105 on
         // this passage' to an ellipsis while the constant byline survives"), and
         // fitWho below is that rule in Java: the SENDER half gives way, the
-        // counts survive whole (verification finding).
+        // counts survive whole.
         // A FIXED box, spec height, with the verbs' width kept clear on the
         // right — not a flow row whose height a glyph decides.
         android.widget.LinearLayout.LayoutParams wlp = new android.widget.LinearLayout.LayoutParams(
@@ -1538,11 +1536,10 @@ public final class BtBridge {
 
     // applyNoteBand reserves the band above the anchor verse's PARAGRAPH: a
     // one-character span (NoteBandSpan) on the character BEFORE the paragraph,
-    // growing that line's DESCENT. Both halves of that sentence were different
-    // on the morning of 19 Aug — the span sat on the verse's own first char and
-    // raised that line's top — and both had to change: the paragraph, because a
-    // note must not open a hole inside one (the owner's rule), and the descent,
-    // because Android paints a character's background across the whole line box,
+    // growing that line's DESCENT. Placing the span on the verse's own first
+    // character raised that line's top. Both the paragraph location and descent
+    // matter: a note must not open a hole inside a paragraph, and Android paints
+    // a character's background across the whole line box,
     // so reserving in the anchor's own ascent stretched the verse's highlight up
     // into the gap and slid it under the card. A paragraph that opens the text
     // has no preceding line and keeps the ascent reservation — nothing is above
@@ -1552,12 +1549,10 @@ public final class BtBridge {
         if (!(cs instanceof Spannable)) return;
         Spannable sp = (Spannable) cs;
         if (off < 0 || off + 1 > sp.length()) return;
-        // THE PARAGRAPH RULE. The note must not break
-        // up paragraphs… No breaking up the Word of God"). The band opens
-        // above the whole paragraph carrying the verse, never between two of
-        // its lines — the rule iOS has always followed and the styled pane now
-        // follows too. Html.fromHtml separates paragraphs with newlines, so the
-        // paragraph starts after the last '\n' at or before the verse.
+        // THE PARAGRAPH RULE. The band opens above the whole paragraph carrying
+        // the verse, never between two of its lines. This matches the iOS and
+        // styled-pane layouts. Html.fromHtml separates paragraphs with newlines,
+        // so the paragraph starts after the last '\n' at or before the verse.
         int paraStart = off;
         while (paraStart > 0 && sp.charAt(paraStart - 1) != '\n') paraStart--;
         // Attach to the character BEFORE the paragraph and grow THAT line's
@@ -1595,7 +1590,7 @@ public final class BtBridge {
                 // to the font's NATURAL line height, which already carries the
                 // ascent, descent and leading (~1.25-1.4x the em for this
                 // serif). Passing the same number to both therefore made Android
-                // noticeably looser than iOS — owner-reported from the emulator.
+                // noticeably looser than iOS.
                 //
                 // setLineHeight takes the pitch in pixels and is exactly CSS's
                 // line-height. It needs API 28; below that fall back to the
@@ -1676,10 +1671,9 @@ public final class BtBridge {
 
     /** applyPendingScroll positions the text AFTER the layout that follows a
      *  setText/scrollToVerse: verse first, else frac restore, else top. All
-     *  callers run on the UI thread, so the posts queue deterministically —
-     *  this replaced a free-standing scrollToVerse that raced setHtml's own
-     *  post-layout scroll and lost (platform reproduction: arrivals landed wherever
-     *  the previous reader stopped).
+     *  callers run on the UI thread, so the posts queue deterministically.
+     *  A free-standing scrollToVerse can race setHtml's post-layout scroll and
+     *  leave an arrival at the previous reading position.
      *
      *  AN ARMED ARRIVAL IS NEVER SPENT ON THE TOP. It used to be: when the
      *  pane had no Layout yet the verse arm simply fell through to the frac

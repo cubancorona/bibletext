@@ -1,7 +1,7 @@
 package bibletext
 
-// Where a note points, resolved into whatever translation is on screen —
-// S6 of [redacted-retired-private-reference].
+// Where a note points, resolved into whatever translation is on screen
+// (docs/NOTES_SPEC.md#anchor-and-placement-contract).
 //
 // A verse number is not an address. Verified against this tree's own tables:
 //
@@ -253,8 +253,8 @@ func resolveNoteAnchor(n StoredNote, readingVersionID string, bible *BibleData) 
 				sawMoved = true
 			}
 			// The destination chapter must EXIST in the reading translation,
-			// the same test the chapter-level branch already applies. Review
-			// finding: without it, a verse-level anchor from an unknown
+			// the same test the chapter-level branch already applies. Without it,
+			// a verse-level anchor from an unknown
 			// translation id naming an out-of-canon chapter classified as
 			// placedExact — MapVerse's identity default trusted past the point
 			// the canon supports. Unreachable with the shipping tables, but

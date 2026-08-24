@@ -3,8 +3,8 @@
 BibleText is a cross-platform Bible reader — **macOS, Windows, Linux, iOS, and
 Android** — built from a single Go codebase on [Fyne](https://fyne.io/) (v2.7.4). This
 document covers how the pieces fit together. See [README.md](README.md) for
-features and usage, and [[redacted-retired-private-reference]]([redacted-retired-private-reference]) for the day-to-day developer
-guide and the non-obvious invariants.
+features and usage, and [AGENTS.md](AGENTS.md) for day-to-day development and
+repository hygiene.
 
 ## Big picture
 
@@ -337,7 +337,7 @@ Three gates keep the native overlay cheap on every nav/tab tap:
   gated on a license opt-in **and** `BIBLE_API_KEY`. The **NKJV** is wired
   here. A copyrighted translation with no licensed route
   remain **not user-selectable**; the NKJV IS selectable, served by API.Bible under a key
-  (bundled in this build, or the reader's own).
+  injected into Store releases at link time or supplied by the reader.
 
 `canSelect()` is true only when real, redistributable text is available, so the
 picker renders not-yet-licensed versions de-emphasized and non-tappable
@@ -532,8 +532,8 @@ From the selection menu ([share.go](share.go), dispatched by
   breaks located in the chapter data: source-authored poetry lines and the
   reader's paragraph boundaries; display wrapping is never retained. The
   formatter is pinned by corpus-grounded tests,
-  published Bluebook examples asserted verbatim, the observed in practice ragged-
-  selection cases, and a real-world sweep over the embedded Gospels seed
+  published Bluebook examples asserted verbatim, ragged-selection cases, and
+  a real-world sweep over the embedded Gospels seed
   (`bluebook_test.go`, `share_bluebook_test.go`, `share_partial_test.go`,
   `share_indigo_test.go` — the Indigo Book's public-domain Viacom worked
   family verbatim, incl. R39.9's no-mark-after-final-punctuation rule,

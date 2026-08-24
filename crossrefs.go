@@ -443,7 +443,7 @@ func selectionVerses(state *AppState, text string, span selSpan) []Verse {
 		// verse's NUMBER spans lo..N natively, but no word of N is quoted). A
 		// span answered verbatim here made the crossref panel cite — and pull
 		// references for — a verse the share card rightly refused to name, for
-		// one and the same drag (verification finding). Delegating to the normalize
+		// one and the same drag. Delegating to the normalize
 		// makes the verbs agree by construction; the raw span survives as the
 		// answer only where the normalize declines outright (a selection that
 		// is ONLY a verse number, a single partial word), where "the verse the

@@ -2,10 +2,9 @@ package bibletext
 
 // THE READING GROUND CARRIES NO OUTLINE.
 //
-// The border this pins was not added on purpose — it is what was left when
-// 94438a850 (20 June 2026, "parchment everywhere") removed the reading card's
-// FILL and not its stroke, on the one path that still draws through Fyne. It
-// then survived milestone 4 by being copied verbatim into the styled pane.
+// The border this pins was not added on purpose: flattening the reading card
+// removed its FILL but not its stroke on the Fyne path, and the styled pane
+// inherited the same surface helper.
 //
 // It survived because nothing failed when it was there. This is that test: it
 // walks the real object the desktop reading pane is built from and fails if a

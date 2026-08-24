@@ -27,7 +27,7 @@ package bibletext
 // the frozen canon order, share_note_canon.go), 'c' (chapter), 't' (text,
 // required), 'v' (sender's translation id, required when known). 'f', 'i' and
 // 's' are reserved on paper and never emitted — sender identity is a later,
-// deliberate step ([redacted-retired-private-reference]).
+// deliberate step (docs/NOTES_SPEC.md#sender-and-attribution-contract).
 //
 // DECODER RULES (tolerant; reject ONLY framing failures):
 //   - any record order accepted; duplicate tag → first occurrence wins
@@ -149,8 +149,8 @@ type NoteVerseRun struct{ Lo, Hi int }
 
 // DecodedNote is everything a payload carried that this build can read.
 // Zero-valued fields were absent; Runs distinguishes absent (nil) from
-// present-with-zero-runs (empty, a real assertion — see [redacted-retired-private-reference]
-// on the 'a' record).
+// present-with-zero-runs (empty, a real assertion — see
+// docs/NOTES_SPEC.md#wire-contract on the 'a' record).
 type DecodedNote struct {
 	Text    string // normalized; non-empty exactly when the outcome is OK
 	Version string // sender's translation id ('v'), "" when absent

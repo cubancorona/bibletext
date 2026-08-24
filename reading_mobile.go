@@ -65,7 +65,8 @@ func buildReadingViewMobileFyne(state *AppState) fyne.CanvasObject {
 	// a one-line change, but btaAvailable is set during native pane construction,
 	// and getting its timing wrong would suppress the sticker on the path every
 	// real device takes — a far worse trade than a missing note on a fallback a
-	// working install never reaches. Recorded in [redacted-retired-private-reference].
+	// working install never reaches. Recorded in
+	// docs/NOTES_SPEC.md#future-work.
 	if banner := buildNoteBanner(state); banner != nil {
 		top.Add(banner)
 	}

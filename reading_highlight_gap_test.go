@@ -6,7 +6,7 @@ package bibletext
 // bare, between the two verses' spans, so it belonged to neither. A highlighted
 // range came out notched — one hole per join — and only the joins that happened
 // to fall mid-line were visible, which is why it read as an intermittent
-// rendering fault rather than a layout bug. observed in practice from a photo of
+// rendering fault rather than a layout bug. Reproduced from a narrow-screen
 // Romans 8:1-4, and present in all three dialects: the iOS/macOS HTML, the
 // Android HTML, and the web (fixed there in JS, see cmd/websitegen/assets.go).
 

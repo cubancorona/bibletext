@@ -369,7 +369,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 				// MinSize — and this spacer is part of that minimum, so on a
 				// short canvas (landscape) an unclamped inset grew the card
 				// PAST h and pushed the verse row it exists to protect off the
-				// bottom of the screen (the implementation requirement). The ceiling is however
+				// bottom of the screen. The ceiling is however
 				// much slack the card actually has.
 				slack := func() float32 {
 					return h - (card.MinSize().Height - kbInset.MinSize().Height)
@@ -425,7 +425,7 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// resize PopUp overlays on a canvas resize, so after a rotation this
 		// card kept its portrait height on a landscape canvas — the verse
 		// fields and the Go button, the picker's only commit path, hung off the
-		// bottom of the screen (the implementation requirement, upheld 3/3).
+		// bottom of the screen.
 		//
 		// (An adjustResize manifest entry briefly rode along here to make this
 		// refit double as Android's keyboard lift — reverted the same day: an

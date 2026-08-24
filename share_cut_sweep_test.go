@@ -18,7 +18,7 @@ package bibletext
 //	C4  ELLIPSIS HONESTY, both directions: the formatted quote carries the
 //	    four-dot mark IFF at least one word stands between the cut and the
 //	    source sentence's terminal (a drag that stopped short of only the
-//	    punctuation shares clean — the observed in practice false ellipsis);
+//	    punctuation shares clean without a false ellipsis);
 //	C5  the standing formatter invariants (balance, no "…", no bare
 //	    three-dot ending) via rwCheckInvariants.
 //
@@ -161,7 +161,7 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 	}
 	rwCheckInvariants(t, label, text, quote, len(strings.Fields(text)))
 
-	// C6: the cited-text restore pass (audit addition). Whatever structure
+	// C6: the cited-text restore pass. Whatever structure
 	// restoreShareLineBreaks re-inserts must be EXACTLY the flattened spaces —
 	// collapsing it back must reproduce the pipeline text (content-preserving),
 	// and any inserted break must land between words, never inside one.

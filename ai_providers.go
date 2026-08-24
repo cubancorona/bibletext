@@ -249,8 +249,27 @@ func envVarFor(id string) string {
 // never get an answer from it: the request was killed at 30s no matter what,
 // and (worse) doAIRequest read that as a network blip and fired the same
 // expensive request again. One authority for "how long to wait", and it belongs
-// to the operation, not the transport.
-func newHTTPClient() *http.Client { return &http.Client{} }
+// to the operation, not the transport. Redirects are limited to the request's
+// original origin because several providers authenticate with custom headers;
+// Go's default cross-host stripping covers Authorization but not those headers.
+func newHTTPClient() *http.Client {
+	return &http.Client{CheckRedirect: sameOriginRedirect}
+}
+
+func sameOriginRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 {
+		return http.ErrUseLastResponse
+	}
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	origin := via[0].URL
+	if !strings.EqualFold(req.URL.Scheme, origin.Scheme) ||
+		!strings.EqualFold(req.URL.Host, origin.Host) {
+		return http.ErrUseLastResponse
+	}
+	return nil
+}
 
 // --- Gemini (generateContent) ----------------------------------------------
 
@@ -527,7 +546,10 @@ func parseAnthropicText(body []byte) (string, error) {
 // --- Shared transport -------------------------------------------------------
 
 // doAIRequest performs the request and returns the body, mapping non-200 to a
-// typed apiHTTPError (shared with the bible fetcher) carrying a short detail.
+// typed apiHTTPError (shared with the bible fetcher). Authenticated response
+// bodies are never copied into the error: a provider or proxy must not be able
+// to echo a reader's credential into UI or logs. The only retained detail is a
+// fixed local category used for model self-healing.
 //
 // It retries a couple of times on transient failures — network errors and 5xx
 // server responses, which the providers return intermittently under load — so a
@@ -567,7 +589,7 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 		if resp.StatusCode == http.StatusOK {
 			return body, nil
 		}
-		apiErr := &apiHTTPError{StatusCode: resp.StatusCode, Details: errorSnippet(body)}
+		apiErr := &apiHTTPError{StatusCode: resp.StatusCode, Details: safeAIErrorDetail(body)}
 		if resp.StatusCode >= 500 {
 			lastErr = apiErr // server error — transient, retry
 			continue
@@ -580,22 +602,25 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 // aiRetrySleep is a seam for tests.
 var aiRetrySleep = time.Sleep
 
-// errorSnippet extracts a short, human-ish message from an error response body
-// (OpenAI/Gemini use {"error":{"message":...}}; Anthropic uses the same shape).
-func errorSnippet(body []byte) string {
+// safeAIErrorDetail maps an authenticated response to a fixed local category.
+// Gemini may report an unavailable model as HTTP 400 rather than 404; retaining
+// only that category preserves model self-healing without exposing body text.
+func safeAIErrorDetail(body []byte) string {
 	var env struct {
 		Error struct {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
+	message := ""
 	if json.Unmarshal(body, &env) == nil && env.Error.Message != "" {
-		return env.Error.Message
+		message = env.Error.Message
+	} else {
+		message = string(body)
 	}
-	s := strings.TrimSpace(string(body))
-	if len(s) > 200 {
-		s = s[:200]
+	if strings.Contains(strings.ToLower(message), "model") {
+		return "model unavailable"
 	}
-	return s
+	return ""
 }
 
 var (

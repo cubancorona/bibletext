@@ -39,7 +39,7 @@ func findStoredNote(p prefStore, versionID, book string, chapter int) (StoredNot
 func TestNoteSurvivesARoundTrip(t *testing.T) {
 	p := newNotePrefs()
 	n := StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, VerseHi: 18,
-		Text: "synthetic note — this one carried me. 🙏"}
+		Text: "fixture Unicode message: café ☕ — grüße!"}
 	stored, ok := addNote(p, n)
 	if !ok || stored.ID == 0 {
 		t.Fatalf("the note was not stored: ok=%v id=%d", ok, stored.ID)
@@ -91,7 +91,7 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 func TestANoteDoesNotFollowAnIncommensurablePassage(t *testing.T) {
 	p := newNotePrefs()
 	addNote(p, StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
-		Text: "for such a time as this"})
+		Text: "fixture translation message alpha"})
 
 	if _, ok := noteForChapter(p, "webc", "Esther", 4, nil); ok {
 		t.Error("a note crossed into Greek Esther, where its verse numbers mean something else")

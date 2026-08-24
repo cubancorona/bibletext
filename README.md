@@ -219,8 +219,9 @@ licensed translation (**NKJV**) is available through API.Bible:
 | New King James Version | NKJV | Thomas Nelson (HarperCollins Christian) | ✅ Available — via API.Bible |
 
 The **NKJV is now available**: it is served by API.Bible rather than redistributed, and
-is selectable whenever an API.Bible key is present — the one this build compiles in, or
-the reader's own (Settings → Translations). The full retrieval, cache, switching,
+is selectable when an API.Bible key is present. Current Store releases include the
+project's key; a reader can replace it with their own in Settings → Translations.
+The full retrieval, cache, switching,
 search and AI-study path is wired for licensed translations generally, so a newly
 licensed translation becomes a normal, selectable one the moment its license
 is configured (see [Activating a licensed version](#activating-a-licensed-version)) —
@@ -252,36 +253,30 @@ translation is actually in its catalog before relying on it.**
 3. Get each translation's **`bibleId`**: `GET /v1/bibles` returns the Bibles your
    key can access, each with an `id`. That id is your `BIBLETEXT_PROVIDER_ID_*`.
 
-### The NKJV key: bundled, then the reader's own
+### API.Bible release credential
 
-Release builds can carry the project's own free API.Bible key so the NKJV
-works the moment the app opens. It is compiled in by
-`[redacted-retired-private-reference]` (from `.env.local`, into a gitignored file that
-is deleted when the build finishes — a key is never committed), and on first
-run it is written into the **normal on-device key store**. Settings → Translations
-says the included key is in use but does NOT display its characters — it is a
-shared credential, and the field would otherwise reveal it to anyone who taps the
-eye. "Clear" removes it for good, and pasting a personal key replaces it; a key
-the reader pastes IS shown back to them, because it is theirs.
+Current Store releases include the project's API.Bible key. The credential is
+never stored in tracked or generated repository source: release tooling reads
+only a dedicated external environment/Keychain value, transforms it in memory,
+and injects the obfuscated value into the final executable at link time. Release
+builds fail if that dedicated credential is unavailable.
 
-**It is a launch convenience with a hard ceiling, not a scaling plan.** The
-free Starter plan is 5,000 calls a month for the whole account; one NKJV
-download is ~197 calls and every device revalidates monthly, so the bundled
-key supports roughly **25 active devices** before a month runs dry — and when
-it does, every reader on that key (the operator included) gets fetch failures
-until the reset. The kill switch is to build without the key: new installs are
-bring-your-own-key again, and existing installs keep what they already have
-until they clear it.
+At runtime the compiled key is an in-memory fallback. It is not copied into
+Preferences or Keychain, and a reader-supplied key takes precedence.
+
+A client binary cannot make an embedded key secret. The obfuscation prevents an
+accidental plaintext string match, not extraction. Handling and provider follow-up
+are documented in [`docs/API_KEY_HANDLING.md`](docs/API_KEY_HANDLING.md).
 
 ### The reader's own key (NKJV)
 
-The NKJV needs no operator configuration at all: it is **bring-your-own-key**.
-Any reader can create a free API.Bible account (Starter plan — non-commercial,
-no card), add the New King James Version to their app, and paste the key into
-**Settings → Translations**. The key is stored on-device (Keychain on iOS),
-the NKJV becomes selectable in the translation picker, and the text downloads
-under the reader's own API.Bible licence — refreshed at least every 30 days
-per their terms, and removed if the key is cleared.
+As an alternative to the Store release's project fallback, the reader can use
+their own API.Bible key without operator configuration. A reader can create an
+API.Bible account, add the New King James Version to their app, and paste the
+key into **Settings → Translations**. The reader-owned key is stored on-device
+(Keychain on iOS), takes precedence over the compiled fallback, and the text
+downloads under that reader's API.Bible licence. Licensed text is refreshed at
+least every 30 days under the provider terms and removed if the key is cleared.
 
 ### Activating a licensed version (operator/env)
 

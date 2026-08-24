@@ -272,7 +272,7 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	})
 	// inputFrame: the theme fills buttons with SurfaceAlt, which is near-equal
 	// to the page ground here (and IS the card fill on the study panel), so a
-	// bare button reads as floating text (observed in practice). The outline gives it
+	// bare button reads as floating text. The outline gives it
 	// the same visible box the app's cards and fields carry.
 	items = append(items, spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)))
 

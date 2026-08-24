@@ -196,10 +196,17 @@ build-87 TestFlight scripts are guarded and are not part of this release.
 
 Use the opaque JPEG exports, not the source PNGs (the PNG files have alpha).
 
+**Replacement required before the next screenshot update:** do not reuse the
+notes-list captures under the local 1.2.1/1.2.2 or design-shot directories.
+Their fixture copy is synthetic, and OCR found no private name or identifier,
+but it reads like personal correspondence and is also present on the current
+public product page. Recapture both device sizes with neutral, explicitly
+synthetic samples, inspect the final JPEGs with OCR, and replace the live
+iPhone and iPad notes-list assets together.
+
 **Current sets: `build/appstore/screenshots-ready-1.1.8/`** (captured 9 Aug
 2026 — AI study, Matthew 1 reading view, Explain, dark mode, and the share
-card, for both slots; full capture recipes and exact upload commands in
-`build/appstore/screenshots-1.1.8/COMMIT_AND_CODE_PROTOCOL.md`):
+card, for both slots):
 
 - iPhone 6.9-inch slot: `build/appstore/screenshots-ready-1.1.8/en-GB/` —
   1320×2868 images
@@ -392,8 +399,8 @@ history, never reaches CI, and is absent from a fresh clone.
 
 **Where the notes live now:** `appstore/review-notes.txt`, tracked.
 
-**What holds them honest:** `appstore_review_notes_test.go` fails on the the development environment
- and in CI when the notes still describe an older version than
+**What holds them honest:** `appstore_review_notes_test.go` fails in the default
+host test suite and CI when the notes still describe an older version than
 `cmd/mobile/FyneApp.toml` ships, when they contain no way to exercise the app,
 when they say nothing about shared notes while that feature ships, or when
 something that looks like an API key has been pasted in.

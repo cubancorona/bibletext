@@ -1,6 +1,6 @@
 package bibletext
 
-// Edge and contract tests for the share pipeline, from the coverage audit:
+// Edge and contract tests for the share pipeline:
 // nil contracts, degenerate selections, dangling markers with no following
 // text, unterminated final verses, the '…' rune, and newline-spanning drags.
 

@@ -140,8 +140,8 @@ func shareVerseLink(state *AppState, text string, span selSpan) {
 // declined normalize falls to the span verbatim there). The second tier is what
 // keeps the message coherent when normalize declines a selection the span still
 // resolves (a single partial word): the citation beside the URL names the
-// verse, so a chapter-level link under it read as a broken fragment (verification
-// finding). Both zero = an honest chapter link, exactly as before.
+// verse, so a chapter-level link under it read as a broken fragment. Both zero
+// = an honest chapter link, exactly as before.
 func linkVersesForSelection(state *AppState, text string, span selSpan) (lo, hi int) {
 	if _, l, h, _, ok := normalizeShareSelection(state, text, span); ok {
 		return l, h

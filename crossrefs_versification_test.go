@@ -5,12 +5,11 @@ package bibletext
 // The dataset (Treasury of Scripture Knowledge, and the embedded Gospel
 // synopsis) is keyed in ONE numbering — the reference, versification.go. The
 // panel used to key it with whatever numbering was on screen and look the
-// target up the same way, which was wrong on both sides. Found by auditing the
-// two features against the verse-mapping work that landed long after them,
-// looking for consistency problems across versions.
+// target up the same way, which was wrong on both sides. Both operations must
+// go through the same verse-mapping rules across versions.
 //
 // Three shapes of defect, one cause. These tests are the mapping arithmetic
-// itself, at the exact addresses that were reported — the panel needs a loaded
+// itself, at representative mapped addresses — the panel needs a loaded
 // Bible and a downloaded dataset, so what can be pinned here is the translation
 // of an address, which is the half that was missing.
 

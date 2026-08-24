@@ -15,7 +15,7 @@ package bibletext
 //
 // THIS SHIPS: readingScrollArea dispatches here whenever useStyledPane() is
 // true, which is Windows and Linux. It is untagged so it also builds and
-// unit-tests on the the development environment, which is why the file carries no //go:build
+// runs in the default host test suite, which is why the file carries no //go:build
 // line — not because it is unreferenced.
 //
 // RENDERING MODEL. layoutChapter keeps TOKEN-level runs (for wrap math and,
@@ -198,8 +198,8 @@ func (p *styledReadingPane) relayout(width float32) {
 	paraGap := lh * 0.65
 	indent := float32(0)
 	p.extraInset = 0
-	// THE REPORTER PAGE, when the pane can hold it (a settled decision: the
-	// desktop reads like the iPad). Same U.S. Reports set the iPad uses —
+	// THE REPORTER PAGE, when the pane can hold it: the desktop reads like the
+	// iPad. Same U.S. Reports set the iPad uses —
 	// centred 27.5em measure, 1.3 leading, first-line indents with no
 	// paragraph gap — gated purely on width, so a narrow window keeps
 	// today's cozy narrow-pane layout and a resize glides between the two.

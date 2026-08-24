@@ -7,7 +7,7 @@ An interface release. The iPad now uses the same navigation as the iPhone, and s
 • iPad: the persistent sidebar is replaced by the same Read / Books / Search navigation the iPhone has, so both devices work the same way. In landscape that navigation sits as a rail down the left edge; rotate to portrait and it returns to the bottom.
 • The Books list is now a grid grouped under Old Testament and New Testament headings, instead of one long scrolling column.
 • Cross-references and Gospel parallels now resolve in the numbering of the translation being read. Some references previously pointed at the wrong verse in translations that number chapters differently.
-• A note the implementation requirement themselves now has one dismiss control instead of two that did the same thing.
+• A reader-authored note now has one dismiss control instead of two that did the same thing.
 • Windows and Linux: the reading area is no longer drawn inside a bordered box, matching the other platforms.
 • Lists are held to a readable width on large screens rather than stretching the full window.
 • The New Revised Standard Version and the Legacy Standard Bible have been removed from the translation list. Neither was ever selectable — both appeared as "evaluation in progress" pending a licence — and neither is offered at all now. No copyrighted text was ever shipped for either.
@@ -22,10 +22,10 @@ This feature is unchanged in 1.2.2 and is described here because it is the one p
 To send: open any chapter, press and hold to select a verse, choose "Share with note", type a short message, and share it to any app (Messages to yourself is enough). The result is an ordinary https://bibletext.co.uk link.
 
 To receive, tap this link — it opens the passage with a message beside it:
-https://bibletext.co.uk/bsb/psalms/23/#v1-4&n=cmEDAQEEYgESYwEXdDtSZWFkaW5nIHRoaXMgYXQgdGhlIGhvc3BpdGFsIHRvbmlnaHQuIFByYXlpbmcgZm9yIHlvdSBib3RoLnYDYnNi
+https://bibletext.co.uk/bsb/psalms/23/#v1-4&n=cmEDAQEEYgESYwEXdBxmaXh0dXJlIHJldmlldyBtZXNzYWdlIGFscGhhdgNic2I
 The card's − minimises it; the bin deletes it. Opening the link in a browser instead shows the passage as a plain web page — what a recipient without the app sees.
 
-PROVENANCE: the message is encoded in the link's URL fragment and travels only in whatever messaging app the sender chooses. No server, no account, no user directory; a fragment is never transmitted to the website's host, so the message never reaches the developer. On receipt it is rendered as plain text, always attributed to a person ("Note from …"), never in the app's voice. The recipient can delete any note, delete all (Settings), or disable the feature entirely.
+PRIVACY: the message is encoded in the link's URL fragment and travels only in whatever messaging app the sender chooses. No server, no account, no user directory; a fragment is never transmitted to the website's host, so the message never reaches the developer. On receipt it is rendered as plain text with neutral attribution, never in the app's voice. The recipient can delete any note, delete all (Settings), or disable the feature entirely.
 
 AI FEATURES ARE OPTIONAL AND BRING-YOUR-OWN-KEY
 Study with AI and the Find search are off until the user enters their own provider key (Settings → Assistant). Without a key the app is a complete offline reader. No key is bundled and none is required to review the app; if a reviewer wants to exercise these, a review-only key can be supplied on request.

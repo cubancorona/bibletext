@@ -12,7 +12,7 @@ import (
 )
 
 func TestShareLinkCarriesANote(t *testing.T) {
-	const note = "synthetic note today — this one carried me."
+	const note = "fixture message alpha"
 
 	url := ShareLinkURLWithNote("web", "John", 3, 16, 18, note)
 	if !strings.HasPrefix(url, "https://bibletext.co.uk/web/john/3/#v16-18&n=") {
@@ -68,7 +68,7 @@ func TestUnknownFragmentKeysAreIgnored(t *testing.T) {
 // A note-bearing link with no verse is a chapter link that still carries its
 // note — the fragment must not be mistaken for a verse payload.
 func TestNoteWithoutVerse(t *testing.T) {
-	url := ShareLinkURLWithNote("bsb", "Psalms", 23, 0, 0, "the whole psalm, slowly")
+	url := ShareLinkURLWithNote("bsb", "Psalms", 23, 0, 0, "fixture chapter message")
 	if !strings.Contains(url, "#n=") || strings.Contains(url, "#v") {
 		t.Fatalf("unexpected shape: %s", url)
 	}
@@ -76,7 +76,7 @@ func TestNoteWithoutVerse(t *testing.T) {
 	if !ok || got.Chapter != 23 || got.VerseLo != 0 {
 		t.Fatalf("chapter link broke: %+v ok=%v", got, ok)
 	}
-	if got.Note != "the whole psalm, slowly" {
+	if got.Note != "fixture chapter message" {
 		t.Errorf("note lost: %q", got.Note)
 	}
 }

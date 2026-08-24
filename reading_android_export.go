@@ -75,11 +75,11 @@ func btaReadAlongFollowTapped() {
 	gAudio.resumeReadAlongFollow()
 }
 
-// --- The full-screen note sticker's verbs (the implementation requirement) -------------------------
+// --- The full-screen note sticker's verbs -----------------------------------
 //
 // Each is the Android twin of an ai_menu_darwin.go //export, dispatching to
 // the SAME Go verb the iOS sticker calls and ending on the projection +
-// repaint (the campaign rule, notes_verb_screen_test.go): refreshReadingOnly
+// repaint (the contract in notes_verb_screen_test.go): refreshReadingOnly
 // rebuilds the reading view, and the rebuilt pushChapterHTML re-pushes the
 // tuple (Java compare-and-refresh) and re-renders the Spanned through the
 // combined fingerprint wherever the verb moved the mark. All four arrive on
@@ -171,7 +171,7 @@ func btaNoteRestored() {
 // (fyne's pixelsPerPt = dpi/72), so dp read as units overstates the lift ~2.2x
 // — which the goto card's own clamp silently absorbed in portrait and could not
 // absorb in landscape, leaving the verse row under the keyboard it exists to
-// clear (platform reproduction).
+// clear.
 //
 //export btaKeyboardChanged
 func btaKeyboardChanged(overlapPx C.float) {

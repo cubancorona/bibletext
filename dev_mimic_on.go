@@ -6,8 +6,8 @@ package bibletext
 // DEVELOPMENT BUILDS ONLY — see dev_mimic_off.go for why this is a build tag
 // rather than a runtime flag.
 //
-// WHY IT EXISTS (the implementation requirement). The Windows VM is unusable (GL emulation)
-// and the Linux ARM VM is audio-only, so there was no way to EYEBALL the
+// WHY IT EXISTS. The Windows VM is unusable (GL emulation)
+// and the Linux ARM VM is audio-only, so there was no way to inspect the
 // Windows/Linux UI before the CI visual smokes. Every reading-surface
 // divergence between macOS and Windows/Linux already sits behind a runtime
 // seam (a var initialised from a per-platform constant — useStyledPane,
@@ -65,7 +65,7 @@ func devApplyMimic() {
 	devApplyMimicSeams(t)
 }
 
-// devApplyMimicSeams flips every seam the platform implementation verification. Split from
+// devApplyMimicSeams flips every platform-specific seam. Split from
 // the env read so tests can drive a target directly.
 func devApplyMimicSeams(target string) {
 	// The reading surface: the styled pane Windows/Linux ship, instead of the
@@ -85,8 +85,8 @@ func devApplyMimicSeams(target string) {
 	// (reading_styled_note.go), so the seam's own question — "does the pane
 	// draw the note itself?" — already answers true through useStyledPane()
 	// above, which this function has just set. Pinning it false would have made
-	// mimic show the retired banner and hide the very surface it exists to let
-	// the owner eyeball. The notice path and the R4 unplaced sentences still
+	// mimic show the retired banner and hide the very surface this mode exposes
+	// for inspection. The notice path and the R4 unplaced sentences still
 	// come from the banner on both (notes_banner.go).
 
 	// Reporter truth follows the TARGET platform: false, so the styled pane
@@ -105,8 +105,8 @@ func devApplyMimicSeams(target string) {
 	washIsLiveMutation = false
 
 	// Scripture face: Windows ships Georgia (the same family macOS loads
-	// first, so the list stands); Linux ships DejaVu Serif, which this Mac
-	// does not have at the Linux paths — dropping the Georgia candidates lets
+	// first, so the list stands); Linux ships DejaVu Serif, which the macOS
+	// host does not expose at Linux paths. Dropping the Georgia candidates lets
 	// the styled pane fall back to the embedded Gelasio, the app's own
 	// no-serif-found path. The doc states the Linux face is approximated.
 	if target == "linux" {

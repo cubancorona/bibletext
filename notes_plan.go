@@ -1,7 +1,7 @@
 package bibletext
 
-// The chapter plan — S7 of [redacted-retired-private-reference]. The model goes plural; the
-// view does not, yet.
+// The chapter plan (docs/NOTES_SPEC.md#chapter-plan-and-presentation-state).
+// The model goes plural; the view does not, yet.
 //
 // buildChapterPlan is THE derive: one pass over the store answering "what does
 // this passage carry?" with a SET — every note that lands on the chapter, every
@@ -23,7 +23,7 @@ package bibletext
 // Open, Notes still present, and NOTHING is written. That is the rule
 // "minimize while search results are being displayed, then restore" made
 // mechanical: a suppression that restores is only possible because it never
-// wrote to the store ([redacted-retired-private-reference], "Suppression, not minimize").
+// wrote to the store (docs/NOTES_SPEC.md#chapter-plan-and-presentation-state).
 //
 // READ-ONLY, BY CONSTRUCTION. buildChapterPlan mutates nothing: not the store,
 // not AppState, not the mark. The only store write any focus change may make is
@@ -195,8 +195,8 @@ func (p chapterPlan) openNote() (drawnNote, bool) {
 
 // suppressed is the derived stand-down: some other reason owns the page.
 // Nothing is stored, nothing is restored, and nothing can fall out of sync —
-// there is no second copy ([redacted-retired-private-reference], "Suppression, not
-// minimize").
+// there is no second copy
+// (docs/NOTES_SPEC.md#chapter-plan-and-presentation-state).
 func notesSuppressed(state *AppState) bool {
 	return state != nil && state.mark.live() && !state.mark.fromNote()
 }
@@ -233,9 +233,9 @@ func buildChapterPlan(state *AppState, p prefStore, bible *BibleData) chapterPla
 	s := readNoteStore(p)
 	focusedOwn := state.noteFocus.set && state.noteFocus.id != 0
 	for _, n := range s.notes {
-		// YOUR OWN NOTES ARE NOT DRAWN UNBIDDEN — the directive stands, and is
-		// only narrowed: one the requested behavior to see is drawn, in its
-		// own slot, until you navigate away. Everything else about own notes is
+		// Own notes are not drawn automatically. An explicitly focused own note
+		// is drawn in its own slot until navigation clears that focus. Everything
+		// else about own notes is
 		// unchanged; they never join Notes, never affect the counts, and never
 		// become the default display.
 		if n.Kind == noteKindMine {
@@ -474,7 +474,7 @@ func (p *chapterPlan) foldFingerprint() {
 // WHO line, the sticker's own chrome, attributed to nobody but the app. S8
 // folded the counts into the body through the then-frozen ABI and recorded
 // the lie it bent ("1 more note on this passage" could read as something the
-// sender typed); S9 is the one tuple change that unbends it.
+// sender typed); S9 moves that chrome into the dedicated WHO field.
 //
 // appleStickerPush is the WHOLE pushed presentation, computed in one place so
 // the two panes cannot diverge:
@@ -483,15 +483,15 @@ func (p *chapterPlan) foldFingerprint() {
 //   - who  — expanded: senderByline + " · K of N on this passage" when the
 //     plan holds more + " · U not shown here" when unplaced exist. Pill:
 //     "Note" / "Notes · N" (+" · U not shown"), so minimizing the open note
-//     no longer makes the rest of the set invisible (S8 implementation verification). An
+//     preserves the rest of the set's visible count. An
 //     unplaced-ONLY chapter pushes text="" and the sentence as the who, and
 //     the native side collapses to the pill for it — no sender text exists,
-//     and an empty sender bubble must never render (the implementation requirement: within
-//     the ABI, "no text but a who" IS the pill presentation).
+//     and an empty sender bubble must never render. Within the ABI, non-empty
+//     who text with an empty body selects the pill presentation.
 //   - pill — minimized, OR the plan is suppressed (a foreign mark owns the
 //     page): the sticker stands down to the pill and restores by itself when
-//     the mark clears, the Apple twin of the banner showing chips only (S8
-//     implementation verification; nothing is stored). Also forced for unplaced-only.
+//     the mark clears, matching the banner's chips-only presentation. Nothing
+//     is stored for this temporary suppression. Also forced for unplaced-only.
 //
 // WHAT GATES THE REDRAW. The native side compares the pushed tuple itself and
 // refreshes the sticker alone when it changed (btIOSRefreshNote /
@@ -529,12 +529,11 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	// The open note's 1-based position in the plan's stable order, and the
 	// total. A mirror-only session note (an arrival the store refused) is in
 	// no plan: it leads the count and every plan note counts after it.
-	// YOUR OWN NOTE, when it is the requested behavior to see. It is not a member of
-	// this passage's set, so it does not join the count and does not lead it:
-	// "K of N on this passage" describes the notes people sent you, and your
-	// own note appearing must not change N under your finger. It carries the
-	// byline alone ("Note from you"), and no next-tap, because it is not in the
-	// rotation.
+	// A focused own note is not a member of this passage's received-note set, so
+	// it neither joins nor leads the count. "K of N on this passage" describes
+	// received notes, and displaying an own note must not change N. It carries
+	// only its byline ("Note from you") and has no next-tap because it is not in
+	// the rotation.
 	if plan.HasOwn && state.NoteID != 0 && state.NoteID == plan.Own.Note.ID {
 		who = senderByline(plan.Own.Note)
 		if unplaced > 0 {
@@ -670,7 +669,7 @@ func advanceNoteFocus(state *AppState) {
 	state.restore = nil
 }
 
-// androidStickerPush is the Android full-screen sticker's tuple (the implementation requirement) —
+// androidStickerPush is the Android full-screen sticker's tuple —
 // a thin alias of the Apple composition, so the WHO line, the honest counts,
 // the pill labels and the derived suppression are BYTE-identical across the
 // three native stickers and can never drift. It exists as a name (rather than

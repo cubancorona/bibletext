@@ -172,7 +172,7 @@ func TestPoeticJoin(t *testing.T) {
 	}
 }
 
-// --- implementation verification additions: highlight geometry, narrow wrapping, copy
+// --- Highlight geometry, narrow wrapping, copy
 // fidelity, highlight spans across poem breaks, mixed chapters, and the iPad
 // reporter indent rule (via the reporterLayout seam). ---
 
@@ -292,7 +292,7 @@ func TestBuildChapterHTMLMixedParagraphs(t *testing.T) {
 
 	// Pin PHONE typesetting explicitly. This test asserts the airy phone
 	// paragraph grammar, and the platform default no longer implies it — the
-	// host is darwin, and macOS now reads as the reporter page (the implementation requirement).
+	// host is darwin, and macOS now reads as the reporter page.
 	orig := reporterLayout
 	reporterLayout = func() bool { return false }
 	defer func() { reporterLayout = orig }()

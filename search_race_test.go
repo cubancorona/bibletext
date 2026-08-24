@@ -1,6 +1,6 @@
 package bibletext
 
-// Regression tests for the observed in practice search glitches: (1) Find — the reader
+// Regression tests for search-update races: (1) Find — the reader
 // edits the query and resubmits, but a slow completion for the ABANDONED query
 // lands late and clobbers the new search (progress bar flashes, old results
 // reappear); (2) keyword search — a debounced run whose timer already fired

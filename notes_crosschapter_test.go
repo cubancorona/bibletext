@@ -44,7 +44,7 @@ func TestCrossChapterNoteIsReachedByItsVerb(t *testing.T) {
 	// Filed by a WEB reader against Romans 14:24.
 	stored, ok := addNote(appPrefs(), StoredNote{
 		Kind: noteKindReceived, VersionID: "web", Book: "Romans", Chapter: 14, VerseLo: 24, VerseHi: 26,
-		Text: "the doxology — read this last bit",
+		Text: "fixture cross-chapter message",
 	})
 	if !ok {
 		t.Fatal("the note was not stored")
@@ -72,9 +72,8 @@ func TestCrossChapterNoteIsReachedByItsVerb(t *testing.T) {
 	// Now the reader — standing in the BSB on Romans 16, looking at the note —
 	// deletes it. The mirror is populated by the REAL derive, not by hand: a
 	// hand-set st.NoteID would keep passing if applyNoteForCurrentChapter ever
-	// stopped handing the followed note's ID to the mirror, which is exactly
-	// the wiring this test exists to hold (implementation verification on the first
-	// version).
+	// stopped handing the followed note's ID to the mirror. This test therefore
+	// derives the mirror through the production path instead of assigning it.
 	st := &AppState{CurrentVersion: "bsb", CurrentBook: "Romans", CurrentChapter: 16}
 	applyNoteForCurrentChapter(st)
 	if st.ActiveNote != n.Text {

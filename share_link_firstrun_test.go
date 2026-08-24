@@ -70,7 +70,7 @@ func TestSeedInstallParksLinksForBooksNotYetDownloaded(t *testing.T) {
 	}{
 		{"in the seed", ShareTarget{VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16}, false},
 		{"outside the seed", ShareTarget{VersionID: "web", Book: "Psalms", Chapter: 23, VerseLo: 1}, true},
-		{"outside the seed, with a note", ShareTarget{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28, Note: "synthetic note"}, true},
+		{"outside the seed, with a note", ShareTarget{VersionID: "web", Book: "Romans", Chapter: 8, VerseLo: 28, Note: "fixture first-run message"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st := seedState(t)
@@ -103,7 +103,7 @@ func TestParkedSeedLinkOpensWhenTheFullBibleLands(t *testing.T) {
 	defer app.Quit()
 
 	st := seedState(t)
-	applyShareTarget(st, ShareTarget{VersionID: "web", Book: "Psalms", Chapter: 23, VerseLo: 1, Note: "for you"})
+	applyShareTarget(st, ShareTarget{VersionID: "web", Book: "Psalms", Chapter: 23, VerseLo: 1, Note: "fixture first-run active message"})
 	if st.pendingLink == nil {
 		t.Fatal("precondition: the link should have been parked")
 	}
@@ -120,7 +120,7 @@ func TestParkedSeedLinkOpensWhenTheFullBibleLands(t *testing.T) {
 	if !st.hlOn() || st.hlLo() != 1 {
 		t.Errorf("the shared verse is not highlighted (has=%v verse=%d)", st.hlOn(), st.hlLo())
 	}
-	if st.ActiveNote != "for you" {
+	if st.ActiveNote != "fixture first-run active message" {
 		t.Errorf("the sender's note did not survive the wait: %q", st.ActiveNote)
 	}
 	if st.pendingLink != nil {

@@ -339,7 +339,7 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 		if v, ok := versionByID(rs.Version); ok && v.canSelect() {
 			data, loadedMode, err := loadVersionForRestore(v, base)
 			if err != nil {
-				// OFFLINE EPOCH-BUMP UPGRADE (audit blocker): loadVersionData
+				// OFFLINE EPOCH-BUMP UPGRADE: loadVersionData
 				// resolves only the CURRENT epoch's filename, so right after a
 				// cacheEpoch bump it misses and tries the network — and with no
 				// network the whole launch aborted to Retry even though this
@@ -454,8 +454,8 @@ func restoreRecent(saved []ChapterVisit, bd *BibleData, book string, chapter int
 		if v.Book == book && v.Chapter == chapter {
 			// Already at head — but carry over its saved scroll anchor, or a
 			// later history-bar tap back to this chapter would land at the top
-			// even though a mid-chapter position was persisted (implementation verification:
-			// the anchor is only re-stamped when the reader actually scrolls).
+			// even though a mid-chapter position was persisted. The anchor is
+			// re-stamped only when the reader actually scrolls.
 			out[0].Verse, out[0].Delta, out[0].Frac = v.Verse, v.Delta, v.Frac
 			continue
 		}

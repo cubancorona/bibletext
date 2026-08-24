@@ -2,7 +2,7 @@
 
 package bibletext
 
-// The NATIVE consumer pin the refuters demanded: reverting the "Clear
+// The NATIVE consumer pin: reverting the "Clear
 // highlight" export's body from clearHighlightAndRederive back to the bare
 // clearHighlightedVerse left the whole suite green — the shared verb and both
 // Fyne call sites were pinned, but the iOS/macOS tap where the symptom was

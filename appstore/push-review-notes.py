@@ -115,8 +115,8 @@ def main():
         sys.exit(
             f"refusing to write: the version is {state}.\n"
             "Review notes are only rewritten while a version is still editable — once it\n"
-            "is with a reviewer, changing what they were told is the owner's call to make\n"
-            "in the App Store Connect UI, deliberately, not a script's to make silently."
+            "is with a reviewer, any change must be made explicitly in the App Store\n"
+            "Connect UI rather than silently by this script."
         )
 
     payload = json.dumps({"data": {

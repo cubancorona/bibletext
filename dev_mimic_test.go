@@ -39,7 +39,7 @@ func saveMimicSeams(t *testing.T) {
 	})
 }
 
-// The linux target flips every audited seam to the Windows/Linux answer —
+// The linux target flips every platform seam to the Windows/Linux answer —
 // including hiding TTS (no read-aloud row, no audio button on recording-less
 // chapters) and dropping the Georgia font candidates.
 func TestMimicLinuxFlipsSeams(t *testing.T) {
