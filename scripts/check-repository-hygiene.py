@@ -19,15 +19,15 @@ PROCESS_GUIDE = "docs/COMMIT_AND_CODE_PROTOCOL.md"
 MAX_SEMANTIC_BYTES = 4 * 1024 * 1024
 
 FORBIDDEN_BASENAMES = {
-    "[redacted-retired-private-reference]",
+    "CLAUDE.md",
     "COMMIT_EDITMSG",
-    "FYNE_FORK_POLICY.md",
-    "[redacted-retired-private-reference]",
-    "COMMIT_AND_CODE_PROTOCOL.md",
-    "[redacted-retired-private-reference]",
+    "FYNE_28_SANDBOX.md",
+    "FYNE_FORK_PLAN.md",
+    "HANDOFF.md",
+    "NOTES_SCRAPBOOK.md",
     "SESSION_STATUS.md",
     "bundled_key_gen.go",
-    "[redacted-retired-private-reference]",
+    "embed-bible-key.sh",
 }
 FORBIDDEN_SUFFIXES = {
     ".jks",
@@ -48,6 +48,10 @@ PROCESS_PATTERNS = (
         rb"(?i)\b(?:CLAUDE\.md|SESSION_STATUS\.md|NOTES_SCRAPBOOK\.md|"
         rb"FYNE_FORK_PLAN\.md|FYNE_28_SANDBOX\.md|HANDOFF\.md|"
         rb"embed-bible-key\.sh)\b"
+    )),
+    ("signing process-record reference", re.compile(
+        rb"(?i)\b(?:sha-?256|fingerprint|cert(?:ificate)?)\b"
+        rb"(?:[^\r\n]*\r?\n)?[^\r\n]{0,120}\bsession\s+notes?\b"
     )),
     ("local home-directory path", re.compile(rb"/Users/(?!<)[^/\s]+/")),
     ("camera-roll identifier", re.compile(rb"(?i)\bIMG[_-]\d{3,}\b")),
@@ -159,6 +163,7 @@ PROCESS_POSITIVE_CASES = (
     ("conversational request framing", b"It appears on the passage you asked to see."),
     ("revision-process narration", b"// AMENDED. The previous assertion differed."),
     ("removed private/process-artifact reference", b"See SESSION_STATUS.md."),
+    ("signing process-record reference", b"The fingerprint is in the session notes."),
 )
 PROCESS_NEGATIVE_CASES = (
     b"Run this command on the macOS build host.",
