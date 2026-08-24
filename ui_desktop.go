@@ -39,14 +39,18 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
-	// PREVIEW: the shared compact layout, on the desktop. Off by default — the
-	// shipped desktop is the sidebar + split below, unchanged — and reachable
-	// with BIBLETEXT_DESKTOP_TABS (=1 for the bottom bar, =rail for the vertical
-	// rail) so the two can be compared on a real window before deciding
-	// whether the desktop adopts the tab chrome at all. desktopNav owns the
-	// parsing; this asks only whether ANY preview is on.
+	// The desktop draws the shared compact layout with a LEFT RAIL: the same
+	// chrome the phones and the iPad use, turned vertical, so one layout serves
+	// every platform and the rail keeps a pointer-and-window convention rather
+	// than a touch one.
+	//
+	// BIBLETEXT_DESKTOP_TABS overrides it — sidebar|0 for the former sidebar +
+	// split below, 1|bar for the bottom bar — so the three can still be compared
+	// on a real window. desktopNav owns the parsing; this asks only whether the
+	// compact layout is the layout. The sidebar path below is kept because it is
+	// the escape hatch, not dead code.
+	announceDesktopNav()
 	if desktopNav() != desktopNavSidebar {
-		announceDesktopNav()
 		root := buildCompactUI(state)
 		installShortcuts(state)
 		return root

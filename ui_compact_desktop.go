@@ -52,46 +52,57 @@ func dismissKeyboard(*AppState) {}
 //
 // That is the shape of the bug worth not repeating: not a wrong string, but a
 // value that two readers of the same variable disagreed about.
-type desktopNavPreview int
+type desktopNavStyle int
 
 const (
-	desktopNavSidebar desktopNavPreview = iota // shipped: sidebar + HSplit
-	desktopNavBar                              // preview: shared compact layout, bottom bar
-	desktopNavRail                             // preview: shared compact layout, left rail
+	desktopNavSidebar desktopNavStyle = iota // opt-out: the former sidebar + HSplit
+	desktopNavBar                            // comparison: compact layout, bottom bar
+	desktopNavRail                           // SHIPPED: compact layout, left rail
 )
 
 // desktopNav is the ONLY reader of BIBLETEXT_DESKTOP_TABS.
 //
-//	1 | bar   the shared compact layout with the phone/iPad bottom bar
-//	rail      the shared compact layout with the vertical rail
-//	anything else (including unset) leaves the shipped sidebar alone
-func desktopNav() desktopNavPreview {
+// The left rail IS the desktop layout now, so the variable is an override
+// rather than a way in, and an unset or unrecognised value means "no override":
+//
+//	sidebar | 0   the former sidebar + HSplit, for comparison or escape
+//	1 | bar       the compact layout with the phone/iPad bottom bar
+//	rail          the rail, stated explicitly (same as unset)
+//
+// Both readers of this decision — whether the compact layout runs at all, and
+// how it draws its navigation — must keep agreeing. They once disagreed, and
+// "rail" satisfied the second while failing the first, so the app showed the
+// sidebar while every rendered gallery showed the rail. desktop_nav_preview_test.go
+// pins the coupling.
+func desktopNav() desktopNavStyle {
 	switch os.Getenv("BIBLETEXT_DESKTOP_TABS") {
+	case "sidebar", "0":
+		return desktopNavSidebar
 	case "1", "bar":
 		return desktopNavBar
-	case "rail":
-		return desktopNavRail
 	}
-	return desktopNavSidebar
+	return desktopNavRail
 }
 
-// announceDesktopNav prints the chosen preview once per run, and only when the
-// variable is set — a shipped run says nothing.
+// announceDesktopNav names the layout on stderr, and only when the variable is
+// explicitly set — a default run says nothing.
 //
-// It exists because "the app shows the old sidebar" was indistinguishable from
-// "the app shows the rail" from outside the process: the window cannot be
-// screenshotted from here, and the render galleries bypass the gate. A line on
-// stderr is the cheapest way for a preview to be checkable rather than claimed.
+// It exists because the layout in force is otherwise unobservable from outside
+// the process: the window cannot be screenshotted from here, and the render
+// galleries call buildCompactUI directly, bypassing the gate. A line on stderr
+// is the cheapest way for an override to be checkable rather than claimed.
 func announceDesktopNav() {
-	name := map[desktopNavPreview]string{
-		desktopNavBar:  "compact layout, bottom bar",
-		desktopNavRail: "compact layout, LEFT RAIL",
-	}[desktopNav()]
-	if name == "" {
-		return // sidebar: the shipped layout, nothing to announce
+	set := os.Getenv("BIBLETEXT_DESKTOP_TABS")
+	if set == "" {
+		return // the shipped rail, chosen by default: nothing to report
 	}
-	fmt.Fprintf(os.Stderr, "BibleText: desktop navigation preview — %s "+
-		"(BIBLETEXT_DESKTOP_TABS=%q)\n", name, os.Getenv("BIBLETEXT_DESKTOP_TABS"))
+	name := map[desktopNavStyle]string{
+		desktopNavSidebar: "the former sidebar + split",
+		desktopNavBar:     "compact layout, bottom bar",
+		desktopNavRail:    "compact layout, LEFT RAIL",
+	}[desktopNav()]
+	fmt.Fprintf(os.Stderr, "BibleText: desktop navigation override — %s "+
+		"(BIBLETEXT_DESKTOP_TABS=%q)\n", name, set)
 }
 
 // compactNavRail reports whether the navigation draws as a left rail. Desktop

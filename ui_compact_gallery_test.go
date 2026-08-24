@@ -68,11 +68,15 @@ func TestCompactLayoutGallery(t *testing.T) {
 			st.app = app
 			st.theme = realTheme
 
-			// The rail cases set the preview switch for their render only.
+			// Each case names the navigation it is a picture OF, so it asks for
+			// that one explicitly rather than leaning on the default. The rail
+			// is the default now, so the bottom-bar cases are the ones that
+			// have to say so — left implicit, they would all render the rail
+			// and every "desktop-*" and "phone-*" name here would be a lie.
 			if strings.HasPrefix(tc.name, "rail") {
 				t.Setenv("BIBLETEXT_DESKTOP_TABS", "rail")
 			} else {
-				t.Setenv("BIBLETEXT_DESKTOP_TABS", "")
+				t.Setenv("BIBLETEXT_DESKTOP_TABS", "bar")
 			}
 
 			if got := tabBarStyleFor(st); got != tc.wantStyle {
