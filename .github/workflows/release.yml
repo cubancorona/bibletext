@@ -8,6 +8,7 @@
 # iOS is NOT built here: the App Store pipeline is scripts/release-ios.sh
 # (signing + the patched-Fyne step live on the Mac).
 name: Release
+# Runs only for version-tag pushes.
 
 on:
   push:
