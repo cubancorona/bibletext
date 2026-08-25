@@ -1,7 +1,6 @@
 package bibletext
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -10,11 +9,7 @@ import (
 // host Go tests. Keep the cold-start liveness wiring under a source contract so
 // a later scroll refactor cannot quietly return to a bounded pre-layout retry.
 func TestAndroidColdStartArrivalWaitsForFirstLayout(t *testing.T) {
-	raw, err := os.ReadFile("android/BtBridge.java")
-	if err != nil {
-		t.Fatalf("read Android reading bridge: %v", err)
-	}
-	src := string(raw)
+	src := readNativeSource(t, "android/BtBridge.java")
 
 	listenerStart := strings.Index(src, "text.addOnLayoutChangeListener")
 	if listenerStart < 0 {
@@ -70,11 +65,7 @@ func TestAndroidColdStartArrivalWaitsForFirstLayout(t *testing.T) {
 // fetched. The second same-chapter import must not capture the still-unplaced
 // top as a restore and erase the link arrival.
 func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
-	javaRaw, err := os.ReadFile("android/BtBridge.java")
-	if err != nil {
-		t.Fatalf("read Android reading bridge: %v", err)
-	}
-	java := string(javaRaw)
+	java := readNativeSource(t, "android/BtBridge.java")
 	if !strings.Contains(java, "setHtml(final String html, final float frac, final int arrivalVerse)") ||
 		!strings.Contains(java, "pendingVerse = arrivalVerse > 0 ? arrivalVerse : 0;") {
 		t.Fatal("Android chapter content and its arrival verse must be one UI operation")
@@ -83,11 +74,7 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 		t.Fatal("a separate Java arrival operation can race a following chapter import")
 	}
 
-	goRaw, err := os.ReadFile("reading_android.go")
-	if err != nil {
-		t.Fatalf("read Android Go bridge: %v", err)
-	}
-	goSrc := string(goRaw)
+	goSrc := readNativeSource(t, "reading_android.go")
 	for _, want := range []string{
 		`"setHtml", "(Ljava/lang/String;FI)V"`,
 		"explicitArrival := state.forceReposition || carryDataSwapArrival",
@@ -100,11 +87,7 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 		}
 	}
 
-	exportRaw, err := os.ReadFile("reading_android_export.go")
-	if err != nil {
-		t.Fatalf("read Android scroll callback: %v", err)
-	}
-	exportSrc := string(exportRaw)
+	exportSrc := readNativeSource(t, "reading_android_export.go")
 	if !strings.Contains(exportSrc, "clearAndroidDataSwapArrival(state)") {
 		t.Fatal("a genuine reader scroll must cancel the carried seed-data arrival")
 	}
@@ -142,11 +125,7 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 // all-zero top position — live behind !explicitArrival, so neither may outrank
 // the verse requested by goToVerseRange.
 func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
-	goToRaw, err := os.ReadFile("verse_of_day.go")
-	if err != nil {
-		t.Fatalf("read Go-to implementation: %v", err)
-	}
-	goToSrc := string(goToRaw)
+	goToSrc := readNativeSource(t, "verse_of_day.go")
 	goToStart := strings.Index(goToSrc, "func goToVerseRange(")
 	if goToStart < 0 {
 		t.Fatal("goToVerseRange not found")
@@ -160,11 +139,7 @@ func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
 		t.Fatal("Go-to does not declare unconditional explicit placement before refreshing")
 	}
 
-	androidRaw, err := os.ReadFile("reading_android.go")
-	if err != nil {
-		t.Fatalf("read Android renderer: %v", err)
-	}
-	androidSrc := string(androidRaw)
+	androidSrc := readNativeSource(t, "reading_android.go")
 	pushStart := strings.Index(androidSrc, "func pushChapterHTML(")
 	if pushStart < 0 {
 		t.Fatal("Android pushChapterHTML not found")
@@ -196,11 +171,7 @@ func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
 }
 
 func TestAndroidRotationReappliesScrollAfterWidthReflow(t *testing.T) {
-	raw, err := os.ReadFile("android/BtBridge.java")
-	if err != nil {
-		t.Fatalf("read Android reading bridge: %v", err)
-	}
-	src := string(raw)
+	src := readNativeSource(t, "android/BtBridge.java")
 
 	setFrameStart := strings.Index(src, "public static void setFrame")
 	if setFrameStart < 0 {

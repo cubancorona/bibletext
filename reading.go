@@ -1519,13 +1519,27 @@ func (l *readingColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 
 	if l.scroll != nil && l.chapter != nil && l.chapter.highlightLine >= 0 && !l.scrolled {
-		y := l.chapter.highlightY() - 24
-		if y < 0 {
-			y = 0
+		viewH := l.scroll.Size().Height
+		contentH := l.chapter.MinSize().Height
+		// A rewrapped chapter can still have its old scroll extent during this
+		// layout pass. Leave the one-shot unclaimed in that case: the content
+		// resize triggers a settled pass, where Fyne can retain the requested
+		// offset instead of clamping it back to zero.
+		if viewH > 0 && contentH > 0 && l.scroll.Content.Size().Height >= contentH {
+			y := l.chapter.highlightY() - 24
+			if y < 0 {
+				y = 0
+			}
+			if max := contentH - viewH; y > max {
+				y = max
+				if y < 0 {
+					y = 0
+				}
+			}
+			l.scroll.Offset = fyne.NewPos(0, y)
+			l.scrolled = true
+			l.scroll.Refresh()
 		}
-		l.scroll.Offset = fyne.NewPos(0, y)
-		l.scrolled = true
-		l.scroll.Refresh()
 	}
 
 	// Apply any pending within-chapter scroll restore (reopening where the

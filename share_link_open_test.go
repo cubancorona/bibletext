@@ -119,9 +119,13 @@ func TestShareTargetClampsOutOfRangeChapters(t *testing.T) {
 		t.Errorf("chapter clamped to %d, want %d", st.CurrentChapter, max)
 	}
 
-	// A book outside this canon leaves the reader where they are.
+	// A book outside the ACTIVE canon leaves the reader where they are. Keep
+	// this target in the version already open: this test exercises the canon
+	// guard, not the asynchronous translation loader. A cross-version target
+	// must preload its data (as the dedicated switching tests do) or wait for
+	// that loader before returning.
 	before := st.CurrentBook
-	applyShareTarget(st, ShareTarget{VersionID: "webc", Book: "Tobit", Chapter: 1})
+	applyShareTarget(st, ShareTarget{VersionID: st.CurrentVersion, Book: "Tobit", Chapter: 1})
 	if st.CurrentBook != before {
 		t.Errorf("a book absent from this translation moved the reader to %s", st.CurrentBook)
 	}

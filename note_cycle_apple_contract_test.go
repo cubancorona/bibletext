@@ -1,18 +1,13 @@
 package bibletext
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
 
 func nativeFunctionSource(t *testing.T, path, signature string) string {
 	t.Helper()
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	src := string(raw)
+	src := readNativeSource(t, path)
 	start := strings.Index(src, signature)
 	if start < 0 {
 		t.Fatalf("%s is missing %s", path, signature)
@@ -56,11 +51,7 @@ func TestAppleNextNoteControlsHaveAnAccessibleName(t *testing.T) {
 		{"reading_macos.go", `accessibilityLabel = @"Next note"`},
 		{"reading_ios.go", `accessibilityLabel = @"Next note"`},
 	} {
-		raw, err := os.ReadFile(tc.path)
-		if err != nil {
-			t.Fatalf("read %s: %v", tc.path, err)
-		}
-		if !strings.Contains(string(raw), tc.label) {
+		if !strings.Contains(readNativeSource(t, tc.path), tc.label) {
 			t.Errorf("%s note-cycle control has no accessible name", tc.path)
 		}
 	}
