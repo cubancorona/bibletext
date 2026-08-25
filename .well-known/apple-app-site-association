@@ -13,7 +13,7 @@
           { "/": "/web/*", "comment": "World English Bible reader pages." },
           { "/": "/bsb/*", "comment": "Berean Standard Bible reader pages." },
           { "/": "/webc/*", "comment": "WEB Catholic reader pages." },
-          { "/": "/nkjv/*", "comment": "NKJV shared links - app-only: the site publishes no pages here, so an installed app is the only thing that can open them. Publish this entry ONLY once a build that parses /nkjv/ is live." }
+          { "/": "/nkjv/*", "comment": "NKJV shared links open the licensed passage in the app; the website serves a no-text notice with public-domain parallels." }
         ]
       }
     ]
