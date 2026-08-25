@@ -23,5 +23,11 @@ func devAutoTintBench(state *AppState) {}
 // devAutoNotesS8: see the dev twin. Empty in release builds.
 func devAutoNotesS8(state *AppState) {}
 
+// devTraceNotePlacement is diagnostic output in development builds only.
+func devTraceNotePlacement(state *AppState, event string) {}
+
+// devAppID preserves the shipping application identity.
+func devAppID(id string) string { return id }
+
 // devNoteDebug: see the dev twin. Empty in release builds.
 func devNoteDebug(state *AppState) string { return "" }

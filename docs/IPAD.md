@@ -1,156 +1,92 @@
-# BibleText on iPad — the regular-width layout
+# BibleText on iPad — unified navigation and book typography
 
-The **one iOS binary serves both iPhone and iPad**. Rather than a separate build,
-the mobile UI chooses its chrome at **runtime** from the live canvas width, so an
-iPad gets a desktop-style two-pane layout while iPhones keep the phone layout —
-and an iPad squeezed into a narrow multitasking column falls back to the phone
-layout automatically.
+The same iOS binary serves iPhone and iPad. Since 1.2.2, every touch device uses
+one Read / Books / Search composition rather than maintaining a separate
+sidebar-and-split iPad UI.
 
-## The two layouts
+## Navigation
 
-| | Compact (phone / narrow) | Regular (iPad, wide) |
-|---|---|---|
-| Chrome | app header + full-screen tab body + bottom tab bar (Read / Books / Search) | app header + `HSplit`: **sidebar** (search/find + book list) beside the **reading pane** |
-| Built by | `buildCompactUI` (`ui_mobile.go`) | `buildRegularWidthUI` (`ui_regular.go`) |
-| Reading pane | native overlay (`buildReadingViewMobile`) | **same** native overlay |
-| Navigation | tap a book/result → switch to Read tab | sidebar is always present; picking a book just refreshes the pane |
+The destinations, state, and behaviour are shared in `ui_compact.go`:
 
-The regular layout is **structurally the desktop layout** — it reuses the
-platform-agnostic `buildSidebar` and `buildHeader` verbatim — but its reading
-pane is the mobile **native overlay** (iOS `UITextView` / Android selectable
-`TextView`), so text selection, the Study-with-AI menu, audio, and scroll
-persistence are all unchanged from the phone. The reading *typography*,
-however, is iPad-specific — see "The reading page" below.
+| Device state | Navigation placement |
+| --- | --- |
+| iPhone, any orientation | bottom tab bar |
+| iPad, portrait | bottom tab bar |
+| iPad, landscape | left navigation rail |
+
+Rotating an iPad moves the same three destinations; it does not switch to a
+different navigation model. Selecting a book or search result opens it on Read,
+and Search remains a normal destination for returning to results. Wide lists
+use `readableColumn` rather than stretching across the whole display.
+
+`compactNavRail` in `ui_mobile.go` chooses the rail for a tablet in landscape.
+`layoutWatcher` in `ui_regular.go` coalesces resize events and rebuilds when the
+resolved bar/rail placement changes. Keyboard appearance is not treated as
+rotation because orientation is read from the canvas rather than a laid-out
+child.
+
+Android tablets use the same rule. Their tablet identity follows the sw600dp
+smallest-dimension convention in `device_android.go`. Android phones also use
+the rail in landscape so fixed-height chrome cannot consume the short reading
+edge; this Android-specific policy does not change iPhone navigation.
+
+The former `buildRegularWidthUI`, sidebar toggle, 700pt split threshold, and
+HSplit sizing helpers remain in the tree as recorded/diagnostic machinery, but
+`classifyLayout` deliberately returns the shared layout for every touch device.
+They do not describe the shipped UI.
 
 ## The reading page: the U.S. Reports layout
 
-On iPads (and only iPads — `reporterLayoutActive()`, `reporter_ios.go`; phones
-and Android tablets keep the airy compact styling) the reading pane is typeset
-to the geometry of the Supreme Court's official reporter, measured from a slip
-opinion (*Villarreal v. Texas*, 24-43): a centred **27.5em text column**
-(58–60 characters per line — ~577pt at the Normal 21px base, which on an 11"
-iPad in portrait reproduces the octavo page's ~15.7%-per-side margins, and
-21px is within 4% of the printed page's physical type size), **1.3 leading**
-(print's 1.2, opened a touch for the superscript verse numbers), and
-**first-line paragraph indents with no blank lines between paragraphs**.
+The navigation is unified, but iPad reading typography remains device-specific.
+`reporterLayoutActive()` enables a centred **27.5em text column**, approximately
+58–60 characters per line at the Normal 21px base, with **1.3 leading** and
+first-line paragraph indents without blank paragraph gaps.
 
-Implementation split: the leading + paragraph grammar live in the chapter
-HTML (`buildChapterHTML`, `reading.go` — the indent is literal em+en spaces
-because the NSAttributedString HTML importer drops the `text-indent` CSS
-property), while the centred measure is NATIVE — `bibleTextSetReadingMeasure`
-→ `btIOSApplyInsets` (`reading_ios.go`) drive the `UITextView`'s
-`textContainerInset` from the live frame width, so rotation, Split View, and
-the sidebar toggle re-centre the column without an HTML re-render. The
-measure is em-based (`reporterMeasureEm × body px`), so the Settings → Text
-size choice scales the column with the type and the line always wraps at the
-reporter's character count.
+The leading and paragraph grammar live in `buildChapterHTML` (`reading.go`). The
+centred measure is native: `bibleTextSetReadingMeasure` → `btIOSApplyInsets`
+(`reading_ios.go`) updates the `UITextView.textContainerInset` from its live
+frame. Rotation, Split View, Stage Manager, and text-size changes therefore
+re-centre the column without needing a separate reading implementation.
 
-## Hiding the sidebar (the iPad convention)
+The native `UITextView` still supplies selection, Study with AI, sharing, notes,
+audio/read-along, and scroll restoration. Navigation placement does not change
+those behaviours.
 
-A leading **sidebar-toggle button** in the header (the `sidebar.left` glyph,
-`iconSidebarLeft`) hides/shows the sidebar so the reader can reclaim the full
-width — the standard iPad affordance. Shown only in the regular layout (desktop
-has its own always-on sidebar; the compact layout uses bottom tabs).
+## Testing in Simulator
 
-The **default follows orientation**: shown in landscape, collapsed in portrait,
-so a portrait iPad reads full-width like Books. `resolveSidebarDefault`
-(`layout.go`) applies that default on the first regular build and re-applies it
-whenever the orientation flips, while an explicit toggle **within the same
-orientation is preserved** (`sidebarInit` / `sidebarLandscape` track this).
-Toggling flips `state.sidebarCollapsed` and rebuilds; when collapsed the reading
-pane is built full-width (no `HSplit`) and the sidebar-widget hooks
-(`syncSidebar` / `focusSearch` / `setSearchText`) become no-ops. The native
-overlay re-clips to whichever rectangle the reading pane occupies (full width or
-the split's right pane) automatically.
-
-## How the layout is chosen
-
-`CreateMainUI` (`ui_mobile.go`) → `state.layoutClass()` (`layout.go`):
-
-```
-classifyLayout(width, isTablet):
-    phone            → compact
-    tablet & width≥700pt (or width unknown) → regular
-    tablet & width<700pt                     → compact   (narrow Split View / Slide Over)
-```
-
-- **`deviceIsTablet()`** is the UIKit interface idiom (`device_ios.go`,
-  `UIUserInterfaceIdiomPad`). It's fixed for the process and known at launch —
-  unlike the canvas size, which is 0 until the first layout — so an iPad's first
-  real frame is already the regular layout with no phone-layout flash. It is
-  `false` on the desktop (`device_other.go`, tagged `!ios && !android`), so the
-  desktop is untouched. **Android is NOT untouched**: `device_android.go`
-  implements the same predicate for tablet-sized canvases, so Android tablets get
-  the regular sidebar+split layout too — that follow-up is done, not pending.
-- **`tabletLayoutMinWidth` = 700pt**: an iPad mini in portrait (744pt) clears it;
-  a half-width column on an 11" iPad (~397pt portrait) stays compact, where the
-  sidebar would crowd the reading column.
-- **`regularSplitOffset(width)`** aims for a consistent ~250pt sidebar (clamped to
-  18–30% of width) so the panel doesn't balloon on a 13" iPad.
-
-### Reacting to width changes
-
-On a tablet, `CreateMainUI` wraps the root in **`layoutWatcher`** (`ui_regular.go`),
-a transparent widget that, on `Resize`, rebuilds the window on either of two
-triggers: the new width **crosses the compact/regular breakpoint** (Split View or
-Stage Manager resizing), or — while the layout is regular — the canvas **flips
-between portrait and landscape** (a full-screen iPad rotation never crosses the
-700pt breakpoint, so this second trigger is what re-applies the orientation-driven
-sidebar default and recomputes the split offset on rotation). A burst of resizes
-during a live drag is coalesced into one rebuild. Phones are never wrapped (they
-never hit either trigger), so the phone path is byte-for-byte unchanged.
-
-## Why the native overlay "just works" in a split
-
-The iOS `UITextView` / Android `TextView` overlay floats **above** the Fyne
-canvas, pinned to the reading host's rectangle. `setFrameFromObject`
-(`reading_ios.go`) projects the host's **actual absolute canvas rect** and size —
-so when the host occupies only the right pane of the split, the overlay lands over
-just that pane, clips to it, and follows the divider as it's dragged. There is no
-split-specific frame math. `overlayShouldShow` is layout-aware: in the regular
-layout the overlay is visible whenever search results aren't occupying the pane
-(in the compact layout it's the Read tab, with no search).
-
-## Testing in the simulator
+Use the repository wrapper so the universal device family, patched Fyne tree,
+and native bridge are all present:
 
 ```bash
+go install fyne.io/tools/cmd/fyne@v1.7.2
 BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)" scripts/run-ios-sim.sh
 ```
 
-`run-ios-sim.sh` packages the sim build **universal** (`UIDeviceFamily=[1,2]`) so
-the iPad runs it **natively** (idiom = pad). Without that, an iPhone-only build
-runs on iPad in *iPhone compatibility mode*, where the idiom reports iPhone and
-the regular layout never appears. (The **App Store** device family is separate —
-see below.) `simctl io <udid> screenshot out.png` grabs the sim framebuffer
-directly, which is handy for capturing the layout.
+Verify at least:
+
+- portrait bottom bar and landscape left rail;
+- Read / Books / Search state across rotation;
+- grouped Books grid and readable-width Search/Notes lists;
+- native reading overlay frame after rotation and Split View resizing;
+- selection menus, notes, audio, and scroll restoration;
+- reporter measure at every text-size setting; and
+- the iPhone bottom bar remains unchanged.
+
+`simctl io <udid> screenshot out.png` captures the simulator framebuffer. A
+landscape capture may be stored in the native portrait buffer and need lossless
+rotation before App Store upload; confirm the final pixel dimensions and visual
+orientation rather than relying on the filename.
 
 ## Shipping to the App Store
 
-Since **1.1.0** the release build ships **universal** (`UIDeviceFamily=[1,2]`):
-[`scripts/release-ios.sh`](../scripts/release-ios.sh) sets it explicitly, by
-default. App Review does **not** allow an update to remove a shipped device
-family, so the `BIBLETEXT_IPAD=0` iPhone-only escape hatch is for local
-experiments only — an iPhone-only upload would now be rejected.
+Every release since 1.1.0 is universal (`UIDeviceFamily=[1,2]`).
+`scripts/release-ios.sh` preserves that requirement; an iPhone-only update cannot
+remove iPad support from the existing App Store record.
 
-An App Store version with iPad support needs **iPad screenshots** in App Store
-Connect (the 13" display size is required; `simctl io <udid> screenshot` on an
-iPad Pro 13-inch simulator produces the right 2064×2752 PNGs directly, no bezel).
+App Store Connect requires current iPad screenshots. The public 1.2.2 listing
+uses eight iPhone and eight iPad images showing the unified navigation. The next
+release must read those fields back with `appstore/preflight.py` before
+submission; do not assume App Store Connect copied the intended set forward.
 
-## Verified / not-yet-verified
-
-- **Verified on iPad simulators (interactive, 11" + 13"):** the regular layout in
-  both portrait and landscape, the native overlay correctly clipped to the reading
-  pane (full-width and split); the sidebar toggle expand/collapse in both
-  orientations; the orientation default re-asserting on a live rotation both
-  directions (which also exercises the `layoutWatcher` orientation-flip rebuild);
-  search / Find with the soft keyboard up (incl. the 1.1.1 fix for the
-  keyboard-height rebuild loop — see the CRITICAL note on `layoutWatcher.Resize`
-  in `ui_regular.go`); the compact (iPhone) layout unregressed. Plus
-  `classifyLayout` / `regularSplitOffset` unit tests, `-race` suite, `go vet`,
-  iOS + Android cross-compile. Shipped: every release since 1.1.0 is universal,
-  and the reporter reading layout has shipped since 1.1.5; 1.1.5 is live on the
-  App Store and 1.1.6 (build 124) is in review.
-- **Not yet runtime-verified (covered by unit tests + logic):** the
-  compact↔regular breakpoint crossing on a live Split-View / Stage-Manager resize;
-  hardware-keyboard shortcuts on iPad (not wired — the desktop `Cmd-F` / `Esc`
-  shortcuts live in `installShortcuts`, which is desktop-only).
+Hardware-keyboard shortcuts remain desktop-only unless a later change wires
+them explicitly on iPad.

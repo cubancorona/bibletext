@@ -33,7 +33,7 @@ func TestParseShareLink(t *testing.T) {
 		// A translation the WEBSITE does not publish, but which a link path may
 		// name. This case used to sit in the rejected block below, as "licensed
 		// version id" — see TestNKJVShareLinkNamesNKJV for why it moved.
-		{name: "app-only translation", url: "https://bibletext.co.uk/nkjv/john/3/#v16",
+		{name: "licensed notice-route translation", url: "https://bibletext.co.uk/nkjv/john/3/#v16",
 			want: ShareTarget{VersionID: "nkjv", Book: "John", Chapter: 3, VerseLo: 16}, ok: true},
 
 		// Forgiving: a mangled verse payload still lands on the right chapter.

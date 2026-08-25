@@ -46,8 +46,8 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 		rebuildWindow(state)
 	}
 
-	// In the compact layout there is no sidebar to re-highlight; syncSidebar is a
-	// no-op. (The regular layout's buildSidebar wires a real one.)
+	// The shared layout has no chapter sidebar to re-highlight, so syncSidebar is
+	// a no-op. (The retained former regular layout wires a real one.)
 	state.syncSidebar = func() {}
 
 	// Build only the active tab's content — the others are constructed on

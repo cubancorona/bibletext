@@ -2,7 +2,13 @@
 
 package bibletext
 
-// devNoteNextTap drives the Apple sticker's next-tap proof; no sticker here
-// (Android and the desktop styled panes carry the Fyne banner instead, whose
-// chips are the selector), so the scenario step is a no-op.
-func devNoteNextTap(*AppState) {}
+import "fyne.io/fyne/v2"
+
+// devNoteNextTap drives the styled/native count control's shared Go verb.
+func devNoteNextTap(state *AppState) {
+	fyne.Do(func() {
+		advanceNoteFocus(state)
+		devTraceNotePlacement(state, "cycle")
+		state.refreshReadingOnly()
+	})
+}

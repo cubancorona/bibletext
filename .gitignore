@@ -2,9 +2,8 @@
 /bibletext
 /cmd/desktop/desktop
 /cmd/mobile/mobile
-# fyne's android packaging also drops the gomobile binary at the REPO ROOT,
-# which the /cmd/mobile/mobile rule above does not cover — it was tracked by
-# accident on 19 Aug and rode six commits at 37 MB a revision.
+# Fyne's Android packaging also drops the gomobile binary at the repository
+# root, which the /cmd/mobile/mobile rule above does not cover.
 /mobile
 
 # Fyne mobile packaging output (.app, .ipa, .apk, .aab and bundle dirs)

@@ -305,14 +305,11 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 	// a Go-to for the verse already marked produced an identical fingerprint,
 	// skipped the push entirely, and did nothing at all.
 	//
-	// ONLY WHERE THAT IS TRUE, though. This is the one arrival the wash model
-	// added, and it is the one that reaches every platform: elsewhere the rebuild
-	// still carries the scroll, so declaring it here would buy nothing and cost an
-	// Android re-render the gate used to skip — and on Windows/Linux it would set a
-	// flag nothing ever clears (washIsLiveMutation, reading_tint_apple.go).
-	if washIsLiveMutation {
-		state.forceReposition = true
-	}
+	// Every shipping renderer consumes this intent now. Apple pairs its live
+	// wash mutation with a scroll; Android and the styled Windows/Linux pane use
+	// it to keep same-chapter scroll carry (including a viewport parked at the
+	// top) from outranking the requested verse.
+	state.forceReposition = true
 	state.refresh()
 	if state.surfaceReading != nil {
 		state.surfaceReading()

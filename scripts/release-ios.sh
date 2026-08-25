@@ -44,6 +44,7 @@ source "${SCRIPT_DIR}/release-bible-key.sh"
 load_release_bible_key
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+python3 "$REPO_ROOT/scripts/check-support-contact.py"
 "$REPO_ROOT/scripts/check-repository-hygiene.py"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"

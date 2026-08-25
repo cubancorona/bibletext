@@ -26,7 +26,7 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaScrollVerseM, btaSetNoteM;
+                 btaSetNoteM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -51,7 +51,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 
 	btaInitM       = (*env)->GetStaticMethodID(env, btaClass, "init", "(Landroid/app/Activity;)V");
 	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIII)V");
-	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;F)V");
+	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FI)V");
 	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(F)V");
 	btaGetFracM    = (*env)->GetStaticMethodID(env, btaClass, "getScrollFrac", "()F");
 	btaSetFrameM   = (*env)->GetStaticMethodID(env, btaClass, "setFrame", "(IIII)V");
@@ -76,8 +76,6 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaRAClearM     = (*env)->GetStaticMethodID(env, btaClass, "readAlongClear", "()V");
 	btaRAFollowM    = (*env)->GetStaticMethodID(env, btaClass, "readAlongFollow", "(Z)V");
 	btaRAColorsM    = (*env)->GetStaticMethodID(env, btaClass, "setReadAlongColors", "(III)V");
-	// Arrival scroll: pin the shared link's highlighted verse near the top.
-	btaScrollVerseM = (*env)->GetStaticMethodID(env, btaClass, "scrollToVerse", "(I)V");
 	// The shared-note sticker (full-screen reading): text, WHO line,
 	// pill/next presentation, anchor verse, then the five palette colors
 	// (surface, text, muted, accent, border) as ARGB ints.
@@ -96,7 +94,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
-	    btaRAColorsM == NULL || btaScrollVerseM == NULL || btaSetNoteM == NULL) {
+	    btaRAColorsM == NULL || btaSetNoteM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -124,11 +122,11 @@ static void btaSetStyle(uintptr_t jni_env, int textColor, int paperColor, float 
 	                             sizePx, lineMult, padL, padT, padR, padB);
 }
 
-static void btaSetHtml(uintptr_t jni_env, const char *html, float frac) {
+static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	jstring s = (*env)->NewStringUTF(env, html);
-	(*env)->CallStaticVoidMethod(env, btaClass, btaSetHtmlM, s, frac);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetHtmlM, s, frac, arrivalVerse);
 	(*env)->DeleteLocalRef(env, s);
 }
 
@@ -210,12 +208,6 @@ static void btaRAFollow(uintptr_t jni_env, int show) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaRAFollowM, show ? JNI_TRUE : JNI_FALSE);
-}
-
-static void btaScrollVerse(uintptr_t jni_env, int verse) {
-	JNIEnv *env = (JNIEnv *)jni_env;
-	if (btaClass == NULL) return;
-	(*env)->CallStaticVoidMethod(env, btaClass, btaScrollVerseM, verse);
 }
 
 static void btaRAColors(uintptr_t jni_env, int highlight, int followBg, int followFg) {
@@ -484,20 +476,26 @@ func foregroundOverlayRecovery(state *AppState) {
 
 // afterRebuild re-pins the overlay after the window tree is swapped, then
 // re-asserts visibility LAST so a stray async show can't leave the overlay
-// floating over the Books/Search tabs (same cadence as iOS).
+// floating over the Books/Search tabs. Android reports several intermediate
+// object sizes while a configuration change settles, so a later pass reads the
+// live host again instead of leaving a transitional frame cached indefinitely.
 func afterRebuild(state *AppState) {
-	time.AfterFunc(150*time.Millisecond, func() {
+	reassert := func(readAlong bool) {
 		fyne.Do(func() {
 			if overlayShouldShow(state) && currentHost != nil {
 				setFrameFromObject(currentHost)
 			}
 			notifyReadingOverlay(overlayShouldShow(state))
-			// The rebuilt overlay reset its read-along state; re-issue the live
-			// highlight + follow pill so narration in progress isn't left un-tinted
-			// with no way back to follow (Android activity recreation / rotation).
-			gAudio.reassertReadAlong()
+			if readAlong {
+				// The rebuilt overlay reset its read-along state; re-issue the live
+				// highlight + follow pill so narration in progress isn't left
+				// un-tinted with no way back to follow.
+				gAudio.reassertReadAlong()
+			}
 		})
-	})
+	}
+	time.AfterFunc(150*time.Millisecond, func() { reassert(true) })
+	time.AfterFunc(700*time.Millisecond, func() { reassert(false) })
 }
 
 // btScrollDebug gates the arrival-scroll trace, the Go half of BtBridge's
@@ -512,6 +510,48 @@ func btScrollDebug() bool { return os.Getenv("BT_SCROLL_DEBUG") != "" }
 // --- Chapter rendering --------------------------------------------------------
 
 var lastPushedBookChapter string
+
+// A first-run link can render once from the embedded seed and then render the
+// same chapter again when the full Bible replaces it. Keep that explicit
+// arrival across only that data replacement; a real reader scroll cancels it.
+type androidDataSwapArrival struct {
+	state     *AppState
+	versionID string
+	book      string
+	chapter   int
+	verse     int
+}
+
+var pendingAndroidDataSwapArrival androidDataSwapArrival
+
+func armAndroidDataSwapArrival(state *AppState, verse int) {
+	pendingAndroidDataSwapArrival = androidDataSwapArrival{
+		state:     state,
+		versionID: state.currentVersion().ID,
+		book:      state.CurrentBook,
+		chapter:   state.CurrentChapter,
+		verse:     verse,
+	}
+}
+
+func clearAndroidDataSwapArrival(state *AppState) {
+	if pendingAndroidDataSwapArrival.state == state {
+		pendingAndroidDataSwapArrival = androidDataSwapArrival{}
+	}
+}
+
+func androidDataSwapArrivalFor(state *AppState, span VerseSpan, here bool) (int, bool) {
+	p := pendingAndroidDataSwapArrival
+	if p.state == nil {
+		return 0, false
+	}
+	if p.state != state || !here || p.versionID != state.currentVersion().ID ||
+		p.book != state.CurrentBook || p.chapter != state.CurrentChapter || p.verse != span.Lo {
+		pendingAndroidDataSwapArrival = androidDataSwapArrival{}
+		return 0, false
+	}
+	return p.verse, true
+}
 
 // pushNoteToOverlay hands the native sticker its tuple — the Android twin of
 // iOS pushNoteToPane (reading_ios.go). The composition is androidStickerPush
@@ -588,23 +628,35 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	fp := chapterRenderFingerprint(state)
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
+	sp, here := state.markHere()
+	carriedVerse, carryDataSwapArrival := androidDataSwapArrivalFor(state, sp, here)
+	if carryDataSwapArrival {
+		// No genuine scroll has cancelled this target, so a lifecycle/top
+		// snapshot taken before the first arrival must not outrank it.
+		state.restore = nil
+	}
+	explicitArrival := state.forceReposition || carryDataSwapArrival
+	preserveTop := false
 
 	// A declared arrival (forceReposition) outranks "stay where you were": the
 	// capture below exists for re-renders the reader did not ask to move on (a
-	// theme flip, a verb's presentation change). The sticker's next-tap is now
-	// deliberately IN that class — that is the in-place rule:
-	// btaNoteNextTapped declares no arrival, so its moved mark is captured
-	// here and the re-render lands back where the reader was, sticker and
-	// tint swapped in place. The guard itself stays for the arrivals that do
-	// declare (a tapped link, a search result, a Go-to).
-	if state.restore == nil && !state.forceReposition && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
-		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
-			state.restore = &restoreAnchor{
-				Book:    state.CurrentBook,
-				Chapter: state.CurrentChapter,
-				Verse:   v,
-				Delta:   d,
-				Frac:    f,
+	// theme flip or a presentation change). Cycling to another note anchor is
+	// an arrival; cycling between notes on the same anchor is not.
+	if state.restore == nil && !explicitArrival && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
+		if v, d, f, ok := captureReadingAnchor(); ok {
+			if v > 0 || f > 0 {
+				state.restore = &restoreAnchor{
+					Book:    state.CurrentBook,
+					Chapter: state.CurrentChapter,
+					Verse:   v,
+					Delta:   d,
+					Frac:    f,
+				}
+			} else {
+				// The top of the chapter is still reader intent. Preserve it for
+				// this replacement push so the standing note wash does not turn a
+				// same-anchor cycle into an arrival.
+				preserveTop = true
 			}
 		}
 	}
@@ -613,10 +665,10 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	// forceReposition defeats the skip: an explicit arrival must place the view
 	// even when the render is byte-identical (see AppState.forceReposition).
-	if state.restore == nil && !state.forceReposition && fp == lastPushedChapterFP {
+	if state.restore == nil && !explicitArrival && fp == lastPushedChapterFP {
 		return
 	}
-	forcedThisPush := state.forceReposition // captured: the line below clears it
+	forcedThisPush := state.forceReposition
 	state.forceReposition = false
 	lastPushedChapterFP = fp
 	lastPushedBookChapter = bc
@@ -624,6 +676,8 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	frac := float32(-1)
 	if state.restore != nil && state.restore.Frac > 0 {
 		frac = float32(state.restore.Frac)
+	} else if preserveTop {
+		frac = 0
 	}
 
 	html := buildChapterHTMLAndroid(state, verses)
@@ -634,6 +688,21 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	}
 	textPx := float32(21) * float32(readingTextScale()) * scale
 	padL, padT := int(10*scale), int(14*scale)
+	arrivalVerse := 0
+	if state.restore == nil && !preserveTop && here {
+		arrivalVerse = sp.Lo
+	}
+	if carryDataSwapArrival {
+		arrivalVerse = carriedVerse
+	}
+	if forcedThisPush && state.seedOnly && state.fullPending && arrivalVerse > 0 {
+		armAndroidDataSwapArrival(state, arrivalVerse)
+	}
+	if btScrollDebug() {
+		fmt.Fprintf(os.Stderr, "[BtScroll] push %s %d: markHere=%v lo=%d restore=%v force=%v preserveTop=%v -> arrivalVerse=%d\n",
+			state.CurrentBook, state.CurrentChapter, here, sp.Lo,
+			state.restore != nil, forcedThisPush, preserveTop, arrivalVerse)
+	}
 	runBta(func(env uintptr) {
 		C.btaSetStyle(C.uintptr_t(env),
 			C.int(argbInt(pal.Text)), C.int(argbInt(pal.Background)),
@@ -654,25 +723,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			C.float(textPx), C.float(1.35),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT))
 		ch := C.CString(html)
-		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac))
+		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse))
 		C.free(unsafe.Pointer(ch))
-		// THE ARRIVAL SCROLL, which Android never had: iOS and macOS position
-		// on the highlighted verse inside their scroll cadence, but Android's
-		// only programmatic scrolls were the restore frac and read-along — a
-		// shared link opened the right chapter at the WRONG place (emulator-
-		// caught: John 11 v35 landed at v57). Restore outranks the highlight,
-		// same ordering the other panes settled on: a pending restore means
-		// the reader is coming back, not arriving.
-		sp, here := state.markHere()
-		if btScrollDebug() {
-			fmt.Fprintf(os.Stderr, "[BtScroll] push %s %d: markHere=%v lo=%d restore=%v force=%v -> arrivalScroll=%v\n",
-				state.CurrentBook, state.CurrentChapter, here, sp.Lo,
-				state.restore != nil, forcedThisPush, state.restore == nil && here)
-		}
-		if state.restore == nil && here {
-			C.btaScrollVerse(C.uintptr_t(env), C.int(sp.Lo))
-		}
 	})
+	if carryDataSwapArrival && (!state.seedOnly || !state.fullPending) {
+		pendingAndroidDataSwapArrival = androidDataSwapArrival{}
+	}
 
 	// Restyle the read-along highlight + "Follow narration" pill for this palette,
 	// so a light/dark flip mid-narration recolors them (mirrors the iOS render).

@@ -46,7 +46,7 @@ platforms in one place, or directly:
 
 ## Build
 
-You need [Go](https://go.dev/dl/) 1.21 or newer, plus a C compiler (Fyne uses cgo):
+You need [Go](https://go.dev/dl/) 1.24 or newer, plus a C compiler (Fyne uses cgo):
 on macOS the Xcode Command Line Tools (`xcode-select --install` — Intel and Apple
 Silicon both work); on Linux also the GL/X11 headers:
 
@@ -85,8 +85,9 @@ CGO_ENABLED=1 GOARCH=amd64 go build -o bibletext-macos-amd64 ./cmd/desktop
 # Linux/Windows builds: Fyne uses cgo, so a bare GOOS=… cross-build won't work —
 # build natively on each OS, or use fyne-cross (https://github.com/fyne-io/fyne-cross).
 
-# iOS packaging (needs the Fyne CLI: go install fyne.io/tools/cmd/fyne@latest)
-cd cmd/mobile && fyne package -os iossimulator --app-id uk.co.bibletext
+# iOS simulator (needs the pinned Fyne CLI)
+go install fyne.io/tools/cmd/fyne@v1.7.2
+./scripts/run-ios-sim.sh
 
 # Android — always via the wrapper script (a bare `fyne package -os android`
 # drops the native reading overlay and the background-audio service):
@@ -126,19 +127,14 @@ root), signing, emulator use, and distribution are covered in
   dark theme.
 - 📋 **Copy** — copy the current chapter to the clipboard.
 - ⌨️ **Keyboard shortcuts** (desktop) — `Cmd/Ctrl+F` focuses search, `Esc` clears.
-- 📱 **Touch UI** (iOS & Android) — bottom-tab layout (Read / Books / Search) with
+- 📱 **Touch UI** (iOS & Android) — one Read / Books / Search layout with
   full-size touch targets and native text selection (a real `UITextView` /
-  `TextView` reading pane); the same data, search and theme code as the desktop
-  build.
-- 🖥️ **iPad layout** — on a wide iPad canvas the app switches at runtime to a
-  desktop-style two-pane layout: a navigation sidebar (search, Find, book list)
-  beside the reading pane, with a header toggle to hide the sidebar for
-  full-width reading (shown in landscape, tucked away in portrait by default).
-  Narrow Split View / Slide Over columns fall back to the phone layout
-  automatically. The reading page itself is typeset like a classic book —
-  a centred text column with generous margins, comfortable line spacing, and
-  indented paragraphs, modelled on the U.S. Reports (the Supreme Court's
-  official reporter). See [docs/IPAD.md](docs/IPAD.md).
+  `TextView` reading pane). Navigation sits along the bottom in portrait; a
+  tablet or Android phone in landscape moves the same three destinations to a
+  rail on the left so the short edge remains available for reading. iPhone
+  keeps its bottom bar. The reading page on iPad keeps a centred, book-like
+  measure with comfortable leading and indented paragraphs, modelled on the
+  U.S. Reports. See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI
   **Explain** it, **Analyze context**, or **Analyze translation**, using your own
   Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
@@ -171,7 +167,7 @@ root), signing, emulator use, and distribution are covered in
 - 📜 **Poetry as poetry** — the poetic books (Psalms, Proverbs, Job, the
   prophets' oracles, the embedded songs) display their authored verse lines —
   one poetic line per line, ragged-right, breaking at every verse boundary
-  inside a poem, as in print — in all three translations, on every platform.
+  inside a poem, as in print — in all four translations, on every platform.
   Text shares, chapter copies, and the verse of the day keep the same lines.
 - 🟥 **Red-letter mode** — the words of Christ in red, on by default and
   switchable in Settings → Reading (every platform: the Windows/Linux styled
@@ -192,9 +188,10 @@ root), signing, emulator use, and distribution are covered in
   the shared words come from. Text shares retain source poetry lines and reading
   paragraphs, but never line breaks caused only by screen wrapping. **Share as
   link** sends a `bibletext.co.uk` URL that opens the chapter in the static web
-  reader with the shared verses highlighted — no app needed on the receiving end
-  (public-domain translations only; a licensed translation's link falls back to
-  the World English Bible). All open your device's native share sheet.
+  reader with the shared verses highlighted — no app needed on the receiving end.
+  Public-domain translations show the passage; an NKJV link shows the reference,
+  attached note, public-domain parallels, and a route into the app without
+  publishing licensed text. All open your device's native share sheet.
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.
@@ -207,7 +204,7 @@ The reader ships with three public-domain translations — the **World English B
 (WEB)**, the **Berean Standard Bible (BSB)**, and the **World English Bible
 (Catholic)** (WEB plus the 73-book deuterocanon) — all free to distribute and fetched
 in a single request each from the free, key-less
-[bible.helloao.org](https://bible.helloao.org/). Use the **translation switcher in
+[bible.helloao.org](https://bible.helloao.org/docs/). Use the **translation switcher in
 the header** (the version name beneath "BibleText") to change versions. One
 licensed translation (**NKJV**) is available through API.Bible:
 
@@ -255,11 +252,12 @@ translation is actually in its catalog before relying on it.**
 
 ### API.Bible release credential
 
-Current Store releases include the project's API.Bible key. The credential is
-never stored in tracked or generated repository source: release tooling reads
-only a dedicated external environment/Keychain value, transforms it in memory,
-and injects the obfuscated value into the final executable at link time. Release
-builds fail if that dedicated credential is unavailable.
+Current distributed builds include the project's API.Bible key. The supported
+mobile development packaging scripts do as well. The credential is never stored
+in tracked or generated repository source: build tooling reads only a dedicated
+external environment/Keychain value, transforms it in memory, and injects the
+obfuscated value into the final executable at link time. Those builds fail if
+the dedicated credential is unavailable.
 
 At runtime the compiled key is an in-memory fallback. It is not copied into
 Preferences or Keychain, and a reader-supplied key takes precedence.
@@ -319,10 +317,11 @@ coming from the app's own Bible data. AI answers carry a **Report** button (to f
 any output) and the AI-settings sheet shows an in-app note explaining what leaves
 the device.
 
-You supply your own API key per provider. Keys are stored **only on this device**
+You supply your own AI-provider key per provider. AI-provider keys are stored **only on this device**
 — in the Apple Keychain on iOS (encrypted at rest, and carried across an encrypted
 backup or a move to a new device) and in the local preferences store on macOS,
-Windows, Linux, and Android — nothing is embedded in the app. Open the header
+Windows, Linux, and Android — no AI-provider key is embedded in the app. (The
+separate API.Bible fallback used to fetch the licensed NKJV is described above.) Open the header
 **gear → AI study** sheet to pick a provider and paste a key:
 
 | Provider | Model | Get a key |
@@ -390,10 +389,10 @@ bibletext/
 │   ├── bible.go cache.go fetch_bible_data.go annotation.go   (pure data layer)
 │   ├── state.go theme.go font.go                              (cross-platform UI scaffolding)
 │   ├── sidebar.go reading.go search.go history.go ui.go       (shared widgets)
-│   ├── ui_desktop.go    # //go:build !ios && !android  — HSplit + keyboard shortcuts
-│   ├── ui_mobile.go     # //go:build ios  || android   — bottom tabs (compact) + runtime layout pick
-│   ├── ui_regular.go    # //go:build ios  || android   — iPad sidebar+split (regular) layout
-│   ├── layout.go device_ios.go device_other.go               (compact/regular runtime classifier)
+│   ├── ui_desktop.go    # //go:build !ios && !android  — shared layout + keyboard shortcuts
+│   ├── ui_mobile.go     # //go:build ios  || android   — shared touch layout + native seams
+│   ├── ui_compact.go tab_rail.go                              (Read / Books / Search; bar or rail)
+│   ├── ui_regular.go layout.go                                (retained former-layout/rotation machinery)
 │   ├── reading_macos.go reading_ios.go reading_android.go     (native reading overlays)
 │   ├── audio_macos.go audio_ios.go audio_android.go           (native audio engines)
 │   └── app.go              # Run() / NewLoadingState() / StartBackgroundLoad() entry helpers
@@ -404,7 +403,7 @@ bibletext/
 │   └── BtAudioService.java # foreground service — background/lock-screen playback
 ├── scripts/                # build wrappers: build-android.sh, run-ios-*.sh, release-ios.sh
 ├── docs/ANDROID.md         # Android toolchain, build, signing, distribution
-├── docs/IPAD.md            # the iPad regular-width layout: design, testing, shipping
+├── docs/IPAD.md            # unified iPad navigation, typography, testing, shipping
 └── cmd/
     ├── desktop/main.go     # `go build ./cmd/desktop`
     └── mobile/                # iOS: scripts/run-ios-*.sh · Android: scripts/build-android.sh
@@ -426,7 +425,7 @@ The application's source code is licensed under the **[Apache License 2.0](LICEN
 Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
 
 - Scripture: **World English Bible** and **Berean Standard Bible** — public domain
-  (via [bible.helloao.org](https://bible.helloao.org/)).
+  (via [bible.helloao.org](https://bible.helloao.org/docs/)).
 - Audio narration: **BSB** by Barry Hays (**CC0**) and **WEB** by David Williams
   (**public domain**), streamed from the project's
   [audio mirror](https://github.com/cubancorona/bibletext-audio).

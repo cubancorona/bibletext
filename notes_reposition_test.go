@@ -77,14 +77,11 @@ func TestTappedLinkAlwaysAsksToReposition(t *testing.T) {
 // it. The hard case is the same one they pin: the verse is already lit, so
 // nothing about the render changes and only forceReposition can say "go there".
 //
-// AND ONLY WHERE THAT IS TRUE. This is the arrival the wash model added, and
-// unlike the other three it would otherwise reach every platform: on Android the
-// rebuild still carries the scroll, so the flag turns a Go-to onto the chapter
-// already open into a re-render the gate used to skip, and on Windows/Linux
-// nothing reads or clears it at all. Hence washIsLiveMutation — asserted here in
-// both directions, because "we scoped it" and "we forgot it" look identical from
-// the Apple side.
-func TestGoToVerseRangeAsksToRepositionWhereTheWashIsAMutation(t *testing.T) {
+// Every shipping pane now consumes forceReposition: Apple pairs it with the
+// live wash mutation, while Android and the styled Windows/Linux pane use it to
+// suppress same-chapter carry. The declaration therefore belongs to the verb,
+// not to a platform predicate.
+func TestGoToVerseRangeAlwaysAsksToReposition(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
@@ -94,11 +91,7 @@ func TestGoToVerseRangeAsksToRepositionWhereTheWashIsAMutation(t *testing.T) {
 	st.forceReposition = false
 
 	goToVerseRange(st, "Psalms", 23, 4, 4)
-	if st.forceReposition != washIsLiveMutation {
-		if washIsLiveMutation {
-			t.Error("a Go-to for the verse already lit must still ask to reposition")
-		} else {
-			t.Error("a pane whose rebuild carries the scroll must not be asked to reposition")
-		}
+	if !st.forceReposition {
+		t.Error("a Go-to for the verse already lit must ask every renderer to reposition")
 	}
 }

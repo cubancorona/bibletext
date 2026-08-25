@@ -12,7 +12,7 @@ package bibletext
 // divergence between macOS and Windows/Linux already sits behind a runtime
 // seam (a var initialised from a per-platform constant — useStyledPane,
 // sheetConsumeClosure, nativeNoteSticker, reporterLayout, ttsSupported,
-// washIsLiveMutation); this file is the one place that flips them all to the
+// and font candidates); this file is the one place that flips them all to the
 // target platform's answers at startup. The full covered/not-covered contract
 // lives in docs/PLATFORM_MIMIC.md — the CI visual smokes and real hardware
 // remain the final word.
@@ -98,11 +98,6 @@ func devApplyMimicSeams(target string) {
 	// row and, via chapterAudioAvailable, the whole audio button on chapters
 	// with no recording (licensed versions, the deuterocanon).
 	ttsSupported = func() bool { return false }
-
-	// A wash change on the styled pane is a re-render that carries its own
-	// scroll — arrivals must NOT declare forceReposition (which nothing would
-	// clear here; see reading_tint_apple.go).
-	washIsLiveMutation = false
 
 	// Scripture face: Windows ships Georgia (the same family macOS loads
 	// first, so the list stands); Linux ships DejaVu Serif, which the macOS

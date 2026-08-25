@@ -12,10 +12,16 @@ import re
 import subprocess
 import sys
 
+from support_contact_config import (
+    SupportContactConfigurationError,
+    parse_support_email,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SELF = "scripts/check-repository-hygiene.py"
 PROCESS_GUIDE = "docs/COMMIT_AND_CODE_PROTOCOL.md"
+PUBLIC_SUPPORT_CONFIG = "config/support-email.txt"
 MAX_SEMANTIC_BYTES = 4 * 1024 * 1024
 
 FORBIDDEN_BASENAMES = {
@@ -353,6 +359,22 @@ def content_problems(path: str, data: bytes, secrets: list[tuple[str, bytes]]) -
 
 def scan_current(secrets: list[tuple[str, bytes]]) -> list[str]:
     failures: list[str] = []
+    try:
+        support_raw = (ROOT / PUBLIC_SUPPORT_CONFIG).read_bytes()
+    except OSError:
+        failures.append(f"{PUBLIC_SUPPORT_CONFIG}: required configuration is missing")
+        support_raw = b""
+    try:
+        support_email = parse_support_email(support_raw)
+        support_valid = True
+    except SupportContactConfigurationError:
+        support_email = b""
+        support_valid = False
+    if support_raw and not support_valid:
+        failures.append(
+            f"{PUBLIC_SUPPORT_CONFIG}: must contain exactly one conservative "
+            "ASCII email address"
+        )
     for path in tracked_paths():
         worktree_path = ROOT / path
         if problem := path_problem(path):
@@ -374,6 +396,16 @@ def scan_current(secrets: list[tuple[str, bytes]]) -> list[str]:
         for source, data in candidates:
             for problem in content_problems(path, data, secrets):
                 failures.append(f"{path} [{source}]: {problem}")
+            if (
+                support_valid
+                and source == "working tree"
+                and path != PUBLIC_SUPPORT_CONFIG
+                and support_email in data
+            ):
+                failures.append(
+                    f"{path} [{source}]: duplicates the public support address; "
+                    f"use {PUBLIC_SUPPORT_CONFIG} or a generated marker"
+                )
     return failures
 
 

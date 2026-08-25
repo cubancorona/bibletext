@@ -18,10 +18,10 @@ func dismissKeyboard(state *AppState) {
 	}
 }
 
-// CreateMainUI (mobile) lays the app out as three full-screen tabs across the
-// bottom: Read, Books, Search. Phones don't have room for the desktop's HSplit,
-// and iOS users don't expect a persistent sidebar — tapping a book or a search
-// hit selects it and switches to the Read tab automatically.
+// CreateMainUI (mobile) uses the shared Read / Books / Search layout. Navigation
+// sits at the bottom in portrait, and moves to a leading rail on tablets and
+// Android phones in landscape. Tapping a book or search hit selects it and
+// returns to Read automatically.
 //
 // Like the desktop layout, navigation swaps the Read tab's content rather than
 // rebuilding the chrome, so the search field never loses focus mid-keystroke.
@@ -73,10 +73,9 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return container.NewStack(base, readingHost)
 	}
 
-	// Pick the layout from the live canvas width: a wide-enough tablet gets the
-	// regular sidebar+split layout (ui_regular.go); everything else (phones, and
-	// a tablet squeezed into a narrow multitasking column) gets the compact
-	// bottom-tab layout below.
+	// classifyLayout currently always selects the shared layout. Keep the former
+	// regular branch explicit so restoring it would require a deliberate change
+	// at the classifier rather than resurrecting hidden platform logic.
 	var root fyne.CanvasObject
 	if state.layoutClass() == layoutRegular {
 		root = buildRegularWidthUI(state)
@@ -84,11 +83,9 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		root = buildCompactUI(state)
 	}
 
-	// Wrap the root wherever the layout could change at runtime: iPads (static
-	// idiom), and ALL of Android — there the tablet test reads live window
-	// dimensions, which are 0×0 before the first layout, so the watcher must be
-	// armed to catch the real size (it stays inert on phones: the class never
-	// changes). iPhone paths remain unwrapped and byte-for-byte unchanged.
+	// Tablets need the watcher so rotation moves navigation between bottom bar
+	// and rail. Android is always watched because its live dimensions arrive after
+	// the first build and its phone landscape policy also moves navigation.
 	if layoutMayChange() {
 		return newLayoutWatcher(state, root)
 	}
@@ -111,21 +108,28 @@ func compactReadingPane(state *AppState) fyne.CanvasObject {
 	return buildReadingViewMobile(state)
 }
 
-// compactNavRail: A TABLET IN LANDSCAPE PUTS ITS NAVIGATION ON THE LEADING EDGE.
+// compactNavRail puts navigation on the leading edge when vertical room is the
+// scarcer resource: tablets in landscape on both platforms, and Android phones
+// in landscape. iPhone keeps its existing bottom bar.
 //
 // The same reasoning as the desktop's (tab_rail.go): in landscape the scarce
 // axis is vertical, and a bottom bar spends a full strip of it on three icons
 // while the horizontal axis has room to spare. Rotate back to portrait and the
 // bar returns, because there the trade runs the other way.
 //
-// Phones never do this at any orientation. A landscape phone has less height
-// still, but it has no width to spare either — the rail would take it out of a
-// reading measure that is already the tightest on any device.
+// Android phones need the additional case because their fixed-height header,
+// history, chapter toolbar and bottom bar can consume the whole short edge. The
+// narrow rail gives that height back while spending a small part of the long
+// edge. This is a placement change only; destinations and state are unchanged.
 //
 // Orientation comes from the CANVAS, not from a layout pass: the soft keyboard
 // shrinks the laid-out height and would otherwise read as a rotation. See the
 // note on layoutWatcher.Resize, which is the same trap and cost 3,000 rebuilds
 // a minute when it was got wrong.
 func compactNavRail(state *AppState) bool {
-	return deviceIsTablet() && state.canvasIsLandscape()
+	if state == nil || state.window == nil {
+		return mobileRailWanted(deviceIsTablet(), phoneLandscapeNavRail(), 0, 0)
+	}
+	sz := state.window.Canvas().Size()
+	return mobileRailWanted(deviceIsTablet(), phoneLandscapeNavRail(), sz.Width, sz.Height)
 }

@@ -26,10 +26,13 @@ bare `fyne package`** — the overlay's Java half ships as `classes2.dex`, which
 that script compiles and injects. A plain `fyne package` build still runs, but
 silently falls back to the old Fyne-widget reading pane (no native selection).
 
-**Verified 2026-07-04** on the API-35 arm64 emulator: native selection (handles
-+ floating toolbar), each study action reaching the Go panel (Explain →
-Explanation panel), overlay hide on tab switch + suppress behind the AI modal,
-scroll-position persistence, reading, Books, live Search, and the Bible cache.
+**Verified 2026-08-24** on an Android 16 / API-36 arm64 emulator: wiped-data
+and warm App Links preserve their verse target; portrait → landscape → portrait
+keeps the native reading pane visible and anchored; the landscape rail switches
+between Read, Books and Search; the compiled release fallback performs a keyed
+NKJV fetch; and background narration retains its foreground service, media
+session, notification and wake lock. Packaging targets API 36 in both debug and
+release modes. The API-35 AVD remains useful for backward-compatibility testing.
 
 ## Native overlay (BtBridge)
 
@@ -105,7 +108,7 @@ window (only a view in that window can float over the GL-drawn verses), and a
 hand scroll during narration suspends follow (fires `nativeReadAlongUserScrolled`,
 gated once per suspension by `raFollowing` — the iOS `gReadAlongUserLatch` twin).
 
-**Background + lock screen (Phase 2 — DONE, emulator-verified 2026-07-04).**
+**Background + lock screen (Phase 2 — DONE, emulator-verified 2026-08-24).**
 Narration keeps playing with the screen off / app backgrounded, with the full
 Now Playing card (title · "World English Bible · David Williams", the rendered
 chapter artwork, a scrubber, play/pause + ±15) on the lock screen and in the
@@ -176,12 +179,10 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 
 ## Known quirks
 
-- **Debug builds link `--target-sdk-version 29`** (fyne hardcodes 29 for
-  `package`, 35 for `release`). Practical effects on an Android 13+ device:
-  the notification-permission flow differs (auto-prompt vs our runtime request)
-  and API-34 FGS-type enforcement is relaxed. Always re-verify
-  background-audio behavior on the RELEASE universal APK, not just the debug
-  APK (both were verified 2026-07-04).
+- Debug and release packages both declare **minSdkVersion 21** and
+  **targetSdkVersion 36**. The wrapper verifies those values from each final
+  APK/AAB rather than trusting the packaging command. This keeps notification
+  permission and foreground-service behavior representative in debug builds.
 - **Debug APKs are not JDWP-debuggable**: the custom AndroidManifest.xml omits
   `android:debuggable` (fyne's template set it per build type; ours is used
   verbatim for both). Diagnosis is logcat-based anyway; if a debugger is ever
@@ -190,14 +191,19 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 - **Landscape / rotation (native overlay geometry).** The reading overlay is a
   separate window positioned to the Fyne reading pane's rect
   (`setFrameFromObject` → `BtBridge.setFrame`, offset by the decor view's
-  on-screen origin). On an orientation change the Fyne UI reflows but the overlay
-  doesn't always re-fit cleanly to the new geometry until the next layout-
-  triggering interaction (scroll / chapter nav / version switch re-pushes the
-  frame). Audio, read-along and text all survive rotation; the visual is just a
-  transiently-stale overlay rect in landscape / right after rotating back. This is
-  a general native-overlay limitation (not audio-specific); the app is portrait-
-  first. If it becomes a priority, add an explicit frame re-push on the Android
-  configuration-change hook.
+  on-screen origin). Android phones rebuild with the leading rail in landscape.
+  Before a width change the bridge captures the live fractional scroll position,
+  then reapplies it after the TextView has reflowed at the new width; an explicit
+  arrival or restore target still takes precedence. This prevents the old
+  portrait offset from clamping the short landscape pane to its blank bottom.
+- **First-run arrival gesture arbitration.** An explicit verse arrival is carried
+  across the one-time seed-to-full-Bible data replacement. A reader scroll
+  cancels that carry through the 200 ms scroll-idle callback. A gesture during
+  that narrow first-load transition can therefore be superseded by the carried
+  target and snap back to the requested verse. The state is recoverable and does
+  not affect cached launches. A future bridge revision should add immediate,
+  touch-slop-qualified cancellation plus a native placement acknowledgement and
+  an Android instrumentation test.
 
 - **Bible cache**: `os.UserCacheDir()` has no writable target on Android, so
   `defaultCachePath()` uses Fyne's per-app storage there
@@ -215,9 +221,10 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 
 - **JDK 21** (Temurin): `~/Library/Java/jdk-21.0.11+10/Contents/Home`
 - **Android SDK**: `~/Library/Android/sdk` — cmdline-tools, platform-tools,
-  `platforms;android-35` + `android-36`, `build-tools;35.0.0` + `36.1.0`,
+  `platforms;android-36`, `build-tools;36.1.0`,
   **`ndk;27.2.12479018`** (r27 LTS — do NOT use r28+, its 16 KB page alignment
-  fights gomobile), `emulator`, `system-images;android-35;google_apis;arm64-v8a`
+  fights gomobile), `emulator`, `system-images;android-36;google_apis;arm64-v8a`.
+  The API-35 image is optional backward-compatibility coverage.
 - **bundletool 1.18.3**: `~/bin/bundletool` (a JAR + wrapper; **required on PATH**
   for `fyne release` to emit the `.aab`)
 - Env is in `~/Library/Android/env.sh` and appended to `~/.zshrc`:
@@ -228,12 +235,15 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 ## Build
 
 Use **`scripts/build-android.sh`** — it compiles `android/BtBridge.java` to
-`classes2.dex`, runs the Fyne CLI (`fyne-io/tools` v1.7.2 — current; the CLI
-versions separately from the v2.7 toolkit), **builds against the patched
-Fyne** (the script runs `setup-fyne-patch.sh` and injects the temporary
-`replace`, exactly like the iOS scripts — the caret-blink fix is a real
-battery win on Android; the iOS drawloop hunk is inert here), injects the
-dex, and re-signs.
+`classes2.dex`, builds a locally patched copy of the pinned Fyne CLI
+(`fyne-io/tools` v1.7.2), and **builds against the patched Fyne library**. The
+CLI patch makes debug and release target API 36 and honors the wrapper's explicit
+API-36 platform/build-tools paths; the library patches provide the Android
+caret-blink, current emoji, warm-App-Link, and atomic-preferences fixes. The
+script injects the dex and re-signs the result. Before publishing, it checks the
+final package ID, version, compile/min/target SDKs, both dex entries and warm-link
+bridge, signature schemes, and upload-certificate fingerprint independently on
+the AAB and universal APK.
 
 It also **replaces `classes.dex`**. The Fyne CLI packages a *prebuilt*
 `classes.dex` (gendex output baked into the tool as a base64 blob), so patching
@@ -253,25 +263,27 @@ Go side does call those methods, `third_party/fyne` regenerates at the same
 version, so they stay matched automatically.
 
 ```bash
-# Debug/test APK (signed with the upload key, target 29) → cmd/mobile/BibleText.apk
+# Debug/test APK (signed with the upload key, target 36) → cmd/mobile/BibleText.apk
 scripts/build-android.sh
 
-# Signed release AAB (Play, target 35) + universal APK (sideload/Firebase)
-# → ~/Library/Android/bibletext-dist/{BibleText.aab, BibleText-universal.apk}
-BIBLETEXT_ANDROID_BUILD=<versionCode> scripts/build-android.sh --release
+# Signed release AAB (Play, target 36) + APK (GitHub/sideload/Firebase)
+# → ~/Library/Android/bibletext-dist/{BibleText.aab, BibleText-Android.apk}
+scripts/build-android.sh --release
 ```
 
-Release builds require the dedicated API.Bible environment or macOS Keychain
-source and fail closed when it is unavailable. They never read `.env.local`;
-see [API_KEY_HANDLING.md](API_KEY_HANDLING.md).
+Both commands require the dedicated API.Bible environment or macOS Keychain
+source, inject it through the linker wrapper, verify the finished package, and
+fail closed when it is unavailable. They never read `.env.local`; see
+[API_KEY_HANDLING.md](API_KEY_HANDLING.md).
 
 The release path: `fyne release -os android` emits a signed `.aab` via
 bundletool, then the script swaps in `base/dex/classes.dex`, adds
 `base/dex/classes2.dex` and re-signs
 (jarsigner for the AAB; apksigner v1+v2+v3 for the debug APK, after zipalign).
-`versionCode` MUST strictly increase per Play upload. There is no `-targetSdk`
-flag (Fyne hardcodes 35); pass `-androidapi <n>` inside the script to raise
-`minSdkVersion`.
+`versionCode` MUST strictly increase per Play upload. Fyne has no target-SDK
+flag, so `setup-fyne-tools-patch.sh` regenerates its pinned CLI with target 36.
+Do not use `-androidapi 36`: that flag controls the NDK minimum API and would
+drop support for older devices rather than changing the target SDK.
 
 **Gotcha:** the debug APK is signed with the *upload key*, not Fyne's built-in
 debug key, so `adb install` fails against a previously-installed differently-
@@ -299,7 +311,7 @@ HTML.
 
 ```bash
 avdmanager create avd -n bibletext_test \
-  -k "system-images;android-35;google_apis;arm64-v8a" -d pixel_7
+  -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_7
 emulator -avd bibletext_test -no-window -no-audio -no-boot-anim \
   -gpu swiftshader_indirect &   # headless; works with the Mac display asleep
 adb wait-for-device
@@ -321,7 +333,7 @@ online, installs, launches. "Android Logcat (BibleText)" tails the app's log
   ```bash
   npm install -g firebase-tools   # under ~ if npm prefix is user-owned
   firebase login
-  firebase appdistribution:distribute BibleText-universal.apk \
+  firebase appdistribution:distribute BibleText-Android.apk \
     --app <FIREBASE_ANDROID_APP_ID> \
     --release-notes "Beta" --testers "a@x.com,b@y.com"
   ```
@@ -355,8 +367,9 @@ path B in parallel (create the account, start the 12×14 closed test) since that
 gate takes two calendar weeks regardless.
 
 ## Watch-outs
-- Play may raise the target-API floor to **36** around Aug 2026; Fyne hardcodes
-  target 35, so we'd bump Fyne or supply a custom `AndroidManifest.xml` then.
+- The API-36 target is carried by the pinned Fyne CLI patch, not by a
+  `<uses-sdk>` entry in the source manifest. A Fyne tools upgrade must port or
+  retire that patch and must pass the final-artifact SDK checks in the wrapper.
 - The debug APK is ~120 MB (all ABIs bundled); the Play `.aab` splits per device
   so real downloads are far smaller.
 
@@ -364,10 +377,11 @@ gate takes two calendar weeks regardless.
 
 The one mobile binary serves phones and tablets: `deviceIsTablet()` on Android
 (`device_android.go`) applies the sw600dp convention to the live canvas — a
-window whose smallest dimension is ≥ 600 logical units (`isTabletDimensions`,
-`layout.go`) is tablet-class, and at ≥ 700pt width `classifyLayout` gives it
-the **regular** sidebar+split layout (the iPad layout — hideable sidebar,
-orientation-driven default, native overlay clipped to the reading pane).
-Because the canvas has no size until after the first build, `layoutMayChange()`
-is always true on Android, so the `layoutWatcher` is installed on phones too —
-they just never cross the breakpoint. Verified on the Pixel Tablet AVD.
+window whose smallest dimension is at least 600 logical units
+(`isTabletDimensions`, `layout.go`) is tablet-class. Every touch device uses the
+same Read / Books / Search composition: portrait uses the bottom bar, while
+landscape moves those destinations into a left rail on tablets and phones. The
+phone case preserves reading height on the short edge. There is no tablet-only
+sidebar/split mode. Because the canvas has no size until after the first build,
+`layoutMayChange()` is always true on Android; the watcher rebuilds whenever the
+resolved bar/rail placement changes.

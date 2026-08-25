@@ -69,7 +69,8 @@ var iconSkipFwd15 fyne.Resource = func() fyne.Resource {
 // with a filled left column — the platform sidebar.left convention). Wrapped as a
 // themed resource so it tints to the chrome foreground like the built-in header
 // icons (the gear, etc.). Falls back to the hamburger MenuIcon if the asset is
-// missing. Used only by the regular-width (tablet) header (ui.go).
+// missing. Retained only for the former regular-width tablet header (ui.go),
+// which the current classifier does not select.
 var iconSidebarLeft fyne.Resource = func() fyne.Resource {
 	if len(sidebarLeftSVG) == 0 {
 		return theme.MenuIcon()

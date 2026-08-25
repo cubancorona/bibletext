@@ -498,7 +498,7 @@ func Run() {
 	// before loadBookFonts (the font candidates are one). No-op — and not
 	// compiled in — for shipping builds (dev_mimic_off.go).
 	devApplyMimic()
-	myApp := app.NewWithID("bibletext")
+	myApp := app.NewWithID(devAppID("bibletext"))
 	// Start in loadPending: the window shows a spinner while the Bible loads on a
 	// background goroutine, then swaps to the reader.
 	state := NewLoadingState()

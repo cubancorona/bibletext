@@ -877,15 +877,25 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
 static BOOL btMacScrollToHighlight(void) {
     if (gTextView == nil || gScroll == nil) return NO;
     { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
-    if (gMacHighlightRange.location == NSNotFound ||
-        gMacHighlightRange.length == 0 ||
-        NSMaxRange(gMacHighlightRange) > gTextView.textStorage.length) return NO;
-    NSLayoutManager *lm = gTextView.layoutManager;
-    NSRange glyphs = [lm glyphRangeForCharacterRange:gMacHighlightRange
-                                actualCharacterRange:NULL];
-    NSRect rect = [lm boundingRectForGlyphRange:glyphs
-                                inTextContainer:gTextView.textContainer];
-    CGFloat y = rect.origin.y + gTextView.textContainerInset.height - 16;
+    CGFloat noteY = btMacNoteTopY();
+    CGFloat y = 0;
+    BOOL hasHighlight = gMacHighlightRange.location != NSNotFound &&
+                        gMacHighlightRange.length > 0 &&
+                        NSMaxRange(gMacHighlightRange) <= gTextView.textStorage.length;
+    if (hasHighlight) {
+        NSLayoutManager *lm = gTextView.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:gMacHighlightRange
+                                    actualCharacterRange:NULL];
+        NSRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gTextView.textContainer];
+        y = rect.origin.y + gTextView.textContainerInset.height - 16;
+    } else if (noteY >= 0) {
+        // A chapter-level note has no wash range. Its sticker is still a real
+        // placement target at the top of the chapter.
+        y = noteY - 12;
+    } else {
+        return NO;
+    }
     // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band ABOVE
     // the paragraph holding the highlighted verse, so scrolling to the verse
     // pushes the message off the top — and the message is why the link was sent.
@@ -893,7 +903,6 @@ static BOOL btMacScrollToHighlight(void) {
     // further up: nothing can put the note out of view. (The iOS twin does the
     // same in its scroll path; without it here the bubble was drawn correctly and
     // simply never seen.)
-    CGFloat noteY = btMacNoteTopY();
     if (noteY >= 0 && noteY - 12 < y) y = noteY - 12;
     if (y < 0) y = 0;
     [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
@@ -905,9 +914,9 @@ static BOOL btMacScrollToHighlight(void) {
 // — the macOS twin of bibleTextIOSScrollToHighlight, and the reason
 // state.forceReposition no longer has to mean "re-import the chapter".
 void bibleTextMacScrollToHighlight(void) {
-    dispatch_block_t block = ^{ btMacScrollToHighlight(); };
-    if ([NSThread isMainThread]) block();
-    else dispatch_async(dispatch_get_main_queue(), block);
+    // SetNote is queued on this same serial queue. Keeping placement queued
+    // guarantees the new sticker anchor is installed before its scroll runs.
+    dispatch_async(dispatch_get_main_queue(), ^{ btMacScrollToHighlight(); });
 }
 
 
@@ -1664,6 +1673,7 @@ static void btMacEnsureNoteView(void) {
             NSButton *nxt = [NSButton buttonWithTitle:@"" target:gTextView action:@selector(btNoteNext:)];
             nxt.bordered = NO;
             nxt.transparent = YES;
+            nxt.accessibilityLabel = @"Next note";
             nxt.tag = 906;
             [box addSubview:nxt];
         }

@@ -75,7 +75,7 @@ void btIOSSetNotesEnabled(int on) { gBTNotesEnabled = on; }
 // the U.S. Reports measure; see reporterMeasureEm in reading.go), or 0 on
 // phones, which keep the legacy slim insets. The side insets centre the column:
 // they are recomputed from the live frame width here and on every SetFrame, so
-// rotation / Split View / the sidebar toggle re-centre without an HTML re-render.
+// rotation and Split View re-centre without an HTML re-render.
 static CGFloat gReadingMeasure = 0;
 
 // btIOSApplyInsets / bibleTextSetReadingMeasure are defined below gReadingTV's
@@ -1209,6 +1209,7 @@ static void btIOSEnsureNoteView(void) {
             // accent with a trailing chevron (btIOSLayoutNote), the same
             // colour language the pill and the app's links use for "press me".
             UIButton *nxt = [UIButton buttonWithType:UIButtonTypeSystem];
+            nxt.accessibilityLabel = @"Next note";
             [nxt addTarget:gReadingTV action:@selector(btNoteNext:)
           forControlEvents:UIControlEventTouchUpInside];
             nxt.tag = 906;
@@ -1873,29 +1874,35 @@ static BOOL btIOSScrollToHighlight(void) {
         return NO;
     }
     NSUInteger len = gReadingTV.textStorage.length;
-    if (gReadingHighlightRange.location == NSNotFound ||
-        gReadingHighlightRange.length == 0 ||
-        NSMaxRange(gReadingHighlightRange) > len) {
+    CGFloat noteY = btIOSNoteTopY();
+    CGFloat target = 0;
+    BOOL hasHighlight = gReadingHighlightRange.location != NSNotFound &&
+                        gReadingHighlightRange.length > 0 &&
+                        NSMaxRange(gReadingHighlightRange) <= len;
+    if (hasHighlight) {
+        NSLayoutManager *lm = gReadingTV.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
+                                    actualCharacterRange:NULL];
+        CGRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gReadingTV.textContainer];
+        // A little breathing room above the verse so it doesn't kiss the top.
+        target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
+    } else if (noteY >= 0) {
+        // Chapter-level notes have no wash range but still belong at the top.
+        target = noteY - 12;
+    } else {
         if (getenv("BT_SCROLL_DEBUG"))
             fprintf(stderr, "[scroll] native: NO RANGE (loc=%lu len=%lu storage=%lu)\n",
                 (unsigned long)gReadingHighlightRange.location,
                 (unsigned long)gReadingHighlightRange.length, (unsigned long)len);
         return NO;
     }
-    NSLayoutManager *lm = gReadingTV.layoutManager;
-    NSRange glyphs = [lm glyphRangeForCharacterRange:gReadingHighlightRange
-                                actualCharacterRange:NULL];
-    CGRect rect = [lm boundingRectForGlyphRange:glyphs
-                                inTextContainer:gReadingTV.textContainer];
-    // A little breathing room above the verse so it doesn't kiss the top.
-    CGFloat target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
     // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band ABOVE
     // the paragraph holding the highlighted verse, so scrolling to the verse
     // pushed the message off the top of the screen — and the message is the
     // reason the link was sent. The passage follows directly under it. Taken as a
     // minimum rather than a substitution, so this can only ever scroll further
     // UP: nothing can put the note out of view.
-    CGFloat noteY = btIOSNoteTopY();
     if (noteY >= 0 && noteY - 12 < target) target = noteY - 12;
     CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
     if (getenv("BT_SCROLL_DEBUG"))
@@ -1973,9 +1980,9 @@ static void bibleTextScrollReadingTV(void) {
 // recomputed gReadingHighlightRange (btIOSRefreshHighlightRange), so the two can
 // be issued side by side — the fast paint AND the placement.
 void bibleTextIOSScrollToHighlight(void) {
-    void (^block)(void) = ^{ btIOSScrollToHighlight(); };
-    if ([NSThread isMainThread]) block();
-    else dispatch_async(dispatch_get_main_queue(), block);
+    // SetNote is queued on this same serial queue. Keeping placement queued
+    // guarantees the new sticker anchor is installed before its scroll runs.
+    dispatch_async(dispatch_get_main_queue(), ^{ btIOSScrollToHighlight(); });
 }
 
 // Look up the foreground UIWindow that Fyne renders into. BibleText's minimum

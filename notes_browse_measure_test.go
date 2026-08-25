@@ -5,7 +5,7 @@ package bibletext
 //
 // Everything in the notes browser was written for a phone, where "take the
 // width you are given" is right because the width you are given is about 440pt.
-// The iPad's two-pane layout hands the same view roughly 1,150pt, exposing two
+// The former iPad two-pane layout handed the same view roughly 1,150pt, exposing two
 // surfaces of the same cause:
 //
 //   - WITH notes: a one-line message became a long thin box with its words at
@@ -33,7 +33,7 @@ func TestNotesColumnCapsAWidePaneAndCentresIt(t *testing.T) {
 	child := canvas.NewRectangle(color.Transparent)
 	l := notesMeasureLayout{}
 
-	const paneW = 1150 // about what the iPad's regular layout gives the notes pane
+	const paneW = 1150 // a representative wide pane (including the former iPad split)
 	l.Layout([]fyne.CanvasObject{child}, fyne.NewSize(paneW, 800))
 
 	if got := child.Size().Width; got != notesColumnMax {

@@ -70,14 +70,14 @@ stateDiagram-v2
 | # | Handoff | What happens today |
 |---|---|---|
 | **H1** | web → App Store → install → app | **The link is lost entirely.** No pasteboard capture, no deferred deep linking anywhere in the repo. A reader sent John 3:16, who does not have the app, installs it and opens it — and lands on the default chapter with no sign a passage was ever shared. This is the *most likely* journey for a new reader, and it is the one that works worst. |
-| **H2** | app → web ("Read it in the browser") | `openLinkInBrowser` is handed the raw URL unchanged (`share_link_browser_ios.go:18`, `share_link_browser_other.go:18`, `reading_android.go:600`). For `/nkjv/` that is a live 404, so the card's own promise is false for exactly the translation whose pages do not exist. |
+| **H2** | app → web ("Read it in the browser") | **Fixed.** `openLinkInBrowser` hands the raw URL (including its fragment) to the browser (`share_link_browser_ios.go`, `share_link_browser_other.go`, `reading_android.go`). `/nkjv/` now resolves to a no-text notice page: it names the requested passage, renders the shared note client-side, offers public-domain parallels, and never publishes licensed NKJV text. |
 | **H3** | app → Settings → key entered | Nothing returns the reader to the passage. `bibleKeySection`'s `onKeyPresence` callback only re-fits the sheet (`ai_settings.go:622-627`); no parked link is retried and no offer is made. The reader must go and find the original message again. |
 | **H4** | web → app ("Open in app") | **Partly built, Batch 2.** Still cannot work as a plain link on iOS: no custom URL scheme is registered anywhere — `cmd/mobile/AndroidManifest.xml` declares only `https` app links and there is no `CFBundleURLTypes` in the repo or the packaging scripts — and a Universal Link does **not** open the app when the reader is already in Safari on the same domain. What the notice pages ship instead, with no app change (`cmd/websitegen/notice.go` → `openInApp`, `notice_assets.go` → `noticeJS`): **Android** gets an `intent://…;package=uk.co.bibletext;S.browser_fallback_url=…` link, which really does open the app — but the intent grammar has no room for the target's own fragment, so **the verse and the note do not cross** (I4 still open on that branch). **iOS** gets Apple's Smart App Banner (`<meta name="apple-itunes-app">`, `app-argument` = the canonical chapter URL) plus a button to the App Store product page, whose own button reads OPEN when the app is installed; the page says so out loud rather than pretending. **Desktop** gets the download, which is also the server-rendered default and therefore what a reader with scripting off gets everywhere. Registering a scheme later changes one branch of `noticeJS` and no markup. |
-| **H5** | app cannot parse → OS should fall back | iOS never gets the chance. `share_link_ios.go:67` returns `YES` unconditionally and the Go result is discarded before it can reach the OS (`share_link_export_apple.go:24-26`, `share_link_open.go:327-333`). Only the pasted-link path reads the bool (`state.go:621-630`). |
+| **H5** | app cannot parse → OS should fall back | **Fixed.** `deliverShareLink` returns the pure parser result synchronously and both Objective-C entry points return it, so iOS can decline an unhandled link and let the OS use the browser. |
 
-The pattern is worth stating plainly: **every handoff between web and app loses
-the passage.** Fixing them individually will keep producing this class of bug;
-the invariant below is the general form.
+The original pattern was that every handoff lost the passage. H2 and H5 are now
+fixed; H1, H3, and the fragment-losing Android branch of H4 remain evidence that
+the invariant below must be enforced across surfaces, not one button at a time.
 
 ## State variables
 
@@ -110,7 +110,10 @@ the invariant below is the general form.
 
 ## Blocked states [OBSERVED]
 
-Fifteen were found. **Ten are now fixed** — the six in Batch 1 plus the park-stealing regression, and three more on the web in Batch 2; the rest are listed with what is planned. Grouped by the journey that reaches them.
+Fifteen were found. **Eleven are now fixed** — the six in Batch 1 plus the
+park-stealing regression, three more on the web in Batch 2, and the note-offer
+browser route; the rest are listed with what is planned. Grouped by the journey
+that reaches them.
 
 **Fresh install — the flagship failure. ALL FIXED, Batch 1, 2026-08-14.**
 - `B_SEED_PARK_OFFLINE` — **fixed.** The park now shows the card, using the "Shared in …" line the code was already composing and discarding. 62 of the 66 books stopped failing silently.
@@ -133,7 +136,9 @@ Fifteen were found. **Ten are now fixed** — the six in Batch 1 plus the park-s
 - `B_JS_OFF` — **still open, and deliberately not made worse.** The note lives only in the fragment and only `reader.js` decodes it, so a note-bearing link with scripting off still shows no note. The notice pages therefore LOAD `reader.js` (unchanged bytes) and carry an empty `<article class="text">` purely so its `anchorToPassage` puts the note in the right place instead of under the footer — the note matters more here than anywhere, because the reader cannot see the verse. With scripting off a notice page still names the chapter, still offers the app, and still links the parallel chapter; only the verse-level precision and the note are lost, which is exactly the pre-existing degradation.
 
 **Notes.**
-- `B_NOTE_OFFER_404` — the card's primary button opens the 404 (H2), and drops the note on that branch.
+- `B_NOTE_OFFER_404` — **fixed.** The card's browser branch now reaches the NKJV
+  no-text notice page, whose client-side reader decodes and displays the note
+  from the unchanged URL fragment.
 - `B_NOTE_NO_COUNTERPART` — `noteFromAnotherTranslation` skips any candidate whose `MapVerse` result is absent or incommensurable, so the note is not returned at all: no separator, no explanation, no trace. It is still in the store and unreachable from the reading view.
 
 **Platform.**
@@ -145,9 +150,9 @@ These are what the accompanying test enforces. A change that breaks one is a
 regression even if every existing test stays green.
 
 - **I1 — Liveness.** Every state offers at least one action reaching a state where the reader is reading something.
-- **I2 — No claim without an answer.** If the app claims a link it must do something visible; if it cannot handle it, it must *decline* so the OS falls back to the browser. (Violated: `B_IOS_SWALLOW`.)
-- **I3 — The note is never silently dropped.** A note that cannot be shown must be stored and reachable, and the reader told where it went. (Violated: `B_NOTE_NO_COUNTERPART`, `B_NOTE_OFFER_404`.)
-- **I4 — A handoff carries the passage.** Crossing between web and app must not lose which verse was shared. (Violated by all five handoffs.)
+- **I2 — No claim without an answer.** If the app claims a link it must do something visible; if it cannot handle it, it must *decline* so the OS falls back to the browser. (`B_IOS_SWALLOW` is fixed.)
+- **I3 — The note is never silently dropped.** A note that cannot be shown must be stored and reachable, and the reader told where it went. (Still violated by `B_NOTE_NO_COUNTERPART`; `B_NOTE_OFFER_404` is fixed.)
+- **I4 — A handoff carries the passage.** Crossing between web and app must not lose which verse was shared. (Still violated by H1, H3, and the Android branch of H4.)
 - **I5 — Distinguishable failures.** Two failures a reader would act on differently must not share one message. (Violated: `B_NKJV_FETCH_FAILS`.)
 - **I6 — No branch on the unobservable.** No state may depend on a condition the code cannot determine (network reachability, app-installed).
 
@@ -167,9 +172,9 @@ from 4 to 26 and turns it red.
 Store install, Safari's same-domain rule, whether the OS offers a browser
 fallback. No host test observes those, so they are asserted here by inspection
 with `file:line`, and their Go-side halves become testable only as they are
-fixed: H5 needs `HandleShareLink`'s bool threaded back before "did the app
-decline?" is a question code can ask, and H2 needs the browser URL gated on
-`webPublishedVersionIDs` before "is this link publishable?" is one.
+fixed: H5 needed `HandleShareLink`'s bool threaded back before "did the app
+decline?" could become a question the code asks. H2 is now covered by generated-notice
+route tests instead of being gated on scripture-text publication.
 
 Two variables in the tables above are also outside it: **key state** and **NKJV
 cached**, because reaching them means a licensed fetch against a metered account.
@@ -180,7 +185,11 @@ enumeration, ideally behind a fake source.
 ## What a future change must not break
 
 - **The parked-link slot has three writers and three consumers.** `applyShareTarget` (seed), `switchToLinkVersion` (translation) and `HandleShareLink` (load phase) park; `StartBackgroundLoad`, `applyLoadedVersion` and `consumeSeedParkedLink` consume. Every consumer must check `pendingLinkVersion` before consuming. Two of the three learned that the hard way.
-- **`linkPathVersionIDs` ≠ `webPublishedVersionIDs`** (`share_link.go:68,83`). The first is what a URL may say; the second is what the site serves. Widening the first does not publish anything, and must not be assumed to.
+- **`linkPathVersionIDs` ≠ `webPublishedVersionIDs`** (`share_link.go`). The first
+  is what a URL may say; the second is whose scripture text the site publishes.
+  An NKJV path resolves to a signpost page without publishing NKJV text.
 - **The fragment never reaches a server.** Any feature that needs the verse or the note on the web is client-side, and must degrade to something honest with JS off. The notice pages' parallel links are the working example: written chapter-level, rewritten from `location.hash` by `notice.js`, and — on the ~23 chapters where `bibletext.ChapterNumberingDifference` says the numbering does not agree — deliberately NOT given the verse at all, with a sentence on the page saying which kind of difference it is. A confident link to the wrong verse is worse than a chapter link.
 - **`reader.css` and `reader.js` are content-hashed into 3,906 filenames.** Editing either — including the comments inside the template backticks — rewrites every page that carries scripture. The notice pages ship their own `notice.css`/`notice.js` for that reason, and the three published trees are byte-identical across Batch 2.
-- **`share_link_ios.go` returning `YES` unconditionally is load-bearing for nothing.** It exists because the bool was never threaded back. Threading it is the fix for I2.
+- **The synchronous iOS return path is load-bearing.** Both Objective-C entry
+  points must keep returning `deliverShareLink`'s parser result so an unhandled
+  Universal Link can fall back to the browser.

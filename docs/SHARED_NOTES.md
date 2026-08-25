@@ -1,8 +1,9 @@
-# Shared notes — design plan
+# Shared notes — historical design plan
 
-> Status: **built** on branch `shared-notes`. The web reader and iOS are done;
-> macOS, Android and the desktop styled pane still show the fallback card rather
-> than a native bubble (see "Surfaces", below).
+> **Historical and superseded.** This records the decision period before shared
+> notes shipped in 1.1.8. It is not a current implementation or release-status
+> document. See [`NOTES_SPEC.md`](NOTES_SPEC.md) for the live contract and
+> [`NOTES_STATE.md`](NOTES_STATE.md) for the legacy-to-current state history.
 
 When someone shares a verse as a link, let them attach a short note. Whoever
 opens the link sees it as a dismissable speech bubble beside the passage —
@@ -18,16 +19,14 @@ and an entirely new privacy story for an app whose current one is "your keys
 never leave your device, we have no accounts, we collect nothing." The note goes
 in the link.
 
-**2. Nothing that parses these links has shipped yet.** Share-as-link, the deep
-links and `share_link_parse.go` are all in 1.1.8, which is built but not
-submitted; the newest release in the wild, 1.1.7, contains none of that code.
-So there is **no installed base to stay compatible with** — the grammar is free
-to be whatever is best, and the first release that can open a shared link can
-also be the first that understands a note.
+**2. At design time, nothing that parsed these links had shipped.** Share-as-link,
+the deep links and `share_link_parse.go` were being prepared for 1.1.8; the then
+current public release, 1.1.7, contained none of that code. There was therefore
+**no installed base to stay compatible with** while choosing the initial
+grammar. This is historical rationale, not a statement about current releases.
 
-That second fact removes what would otherwise be this feature's one permanent
-wart. It is worth spending a little of 1.1.8's remaining pre-submission time on
-(see "The 1.1.8 question").
+That second fact removed what would otherwise have been the feature's first
+compatibility wart (see the historical 1.1.8 decision below).
 
 ## The link grammar
 
@@ -59,9 +58,9 @@ Unknown keys must be **ignored, not rejected**, in every parser from the first
 release onward. This preserves forward compatibility without another format
 rewrite.
 
-## The 1.1.8 question
+## The historical 1.1.8 question
 
-1.1.8 is built and verified but not uploaded. Three ways forward:
+Before 1.1.8 was uploaded, three paths were considered:
 
 - **(a) Submit as-is.** Notes land in 1.1.9. Measured against the parser as it
   stands, a 1.1.8 user tapping a future note link gets John 3:16 instead of
@@ -144,7 +143,7 @@ The web bubble should reuse the positioning machinery already built for the
 clear-highlight pill (`positionBubble` in `assets.go`): document-absolute, pinned
 under the last visible line of the highlight, re-pinned on resize.
 
-## What was built
+## What had been built in this snapshot
 
 - **Grammar + codec** (`share_link.go`, `share_note.go`) — done, with the
   back-compat table above pinned as assertions.
@@ -161,8 +160,8 @@ under the last visible line of the highlight, re-pinned on resize.
   Settings. A note is a message about a passage, so the only thing to do with
   one besides read it is go to the passage; the Search tab already owns "find
   something and tap through to it", and a note row is literally the same
-  `searchResultCard` as a search hit. The desktop/iPad sidebar comes free, since
-  both surfaces render through `buildSearchResultsView`.
+  `searchResultCard` as a search hit. At the time, the desktop/iPad sidebar came
+  free because both surfaces rendered through `buildSearchResultsView`.
 
   The control is an ICON beside the Search/Find pair rather than a third segment
   inside it: notes are a different corpus from the scripture those two look
@@ -187,11 +186,11 @@ under the last visible line of the highlight, re-pinned on resize.
   A build tag rather than a runtime flag so the scenarios are not compiled into
   the App Store binary at all; `TestReleaseScriptsNeverPassTheDevTag` asserts the
   release pipelines never opt in. Build with `run-ios-device.sh --dev`.
-- **macOS / Android / desktop bubbles** — NOT done. Those platforms fall back to
-  a dismissable card, which shows the note but sits over the passage rather than
-  beside it.
+- **macOS / Android / desktop bubbles (recorded snapshot)** — were not done at
+  this point in the implementation history. Those platforms then fell back to
+  a dismissable card over the passage.
 
-### The iOS sticker, and why it is not HTML
+### The iOS sticker, and why it was not HTML
 
 Measured on iOS 26.5, the NSAttributedString HTML importer drops `border`,
 `border-radius`, `padding`, `box-shadow` and every margin on a `<div>`, so the
@@ -217,7 +216,7 @@ Two things that will bite anyone repeating this on macOS or Android:
 2. `chapterRenderFingerprint` gates the whole re-render. The note had to become
    part of it, or every appear, hide, restore and delete is silently skipped.
 
-## Open decisions
+## Decisions that were open in this snapshot
 
 1. **The 1.1.8 question** — (a), (b) or (c) above. Recommended: (b).
 2. **Cap** — 280 characters unless there's a reason to go shorter.

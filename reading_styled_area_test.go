@@ -126,6 +126,59 @@ func TestStyledAreaCarryOverOnRewire(t *testing.T) {
 	}
 }
 
+func TestStyledGoToOutranksSameChapterCarry(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		initialY float32
+	}{
+		{name: "from top", initialY: 0},
+		{name: "from middle", initialY: 250},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := test.NewApp()
+			defer app.Quit()
+			defer resetStyledWiring()
+
+			st := longPsalmState()
+			area := styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
+			w := test.NewWindow(area)
+			defer w.Close()
+			w.Resize(fyne.NewSize(420, 300))
+			w.Canvas().Content().Refresh()
+			styledScroll.Offset = fyne.NewPos(0, tc.initialY)
+
+			var rebuilt fyne.Window
+			defer func() {
+				if rebuilt != nil {
+					rebuilt.Close()
+				}
+			}()
+			st.showReading = func() {
+				rebuilt = test.NewWindow(styledReadingScrollArea(
+					st, st.Bible.GetChapter("Psalms", 119), lightPalette))
+				rebuilt.Resize(fyne.NewSize(420, 300))
+				rebuilt.Canvas().Content().Refresh()
+			}
+
+			goToVerseRange(st, "Psalms", 119, 20, 20)
+
+			if st.forceReposition {
+				t.Error("styled pane did not consume the Go-to placement request")
+			}
+			if styledRestoreArmed {
+				t.Error("same-chapter carry remained armed over a deliberate Go-to")
+			}
+			wantY, ok := styledPane.yForVerse(20)
+			if !ok {
+				t.Fatal("target verse is missing from the styled pane")
+			}
+			if got := styledScroll.Offset.Y; got < wantY-30 || got > wantY {
+				t.Errorf("Go-to offset %.1f, want near verse 20 at %.1f", got, wantY)
+			}
+		})
+	}
+}
+
 func TestStyledAreaHighlightScrollsOnce(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

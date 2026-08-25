@@ -2,24 +2,11 @@
 
 package bibletext
 
-// UNREACHABLE SINCE 21 AUG 2026, AND KEPT ON PURPOSE.
-//
-// classifyLayout (layout.go) now answers layoutCompact for every touch device,
-// so nothing in the app calls buildRegularWidthUI any more: the iPad takes the
-// phone's layout, and what it needs beyond that is a readable measure on the
-// list surfaces rather than a second shape (readable_column.go).
-//
-// This file is left standing rather than deleted because the decision it
-// records is reversible and worth being able to read: it is the sidebar layout
-// the tablet used to have, with the mode row, the collapse toggle and the
-// orientation default all intact. Reviving it is a one-line change in
-// classifyLayout; reconstructing it from history would be an afternoon.
-//
-// DO NOT ADD FEATURES HERE. Nothing in this file runs, so a change made to it
-// will appear to do nothing and will drift out of step with the layout that
-// does run. The merge exists to keep this platform compatible and uniform with
-// the others, so that a change to the reading experience does not have to be
-// reworked once per platform.
+// classifyLayout currently selects the shared compact layout for every touch
+// device. buildRegularWidthUI is retained only as an inactive wide-layout
+// implementation and must not receive feature work while it is unreachable.
+// layoutWatcher remains active and moves shared navigation between bar and rail
+// when the resolved mobile policy changes.
 
 import (
 	"fyne.io/fyne/v2"
@@ -28,7 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// buildRegularWidthUI is the tablet (regular-width) layout: a navigation sidebar
+// buildRegularWidthUI is the former tablet (regular-width) layout: a navigation sidebar
 // beside the reading pane, with the app header on top — structurally the desktop
 // layout, but the reading pane is the mobile native overlay (buildReadingViewMobile
 // via rebuildMobileReadingPane) so the reader keeps native text selection, the
@@ -125,29 +112,26 @@ func buildRegularWidthUI(state *AppState) fyne.CanvasObject {
 	return container.NewStack(base, body)
 }
 
-// layoutWatcher wraps the tablet root so a size change that matters rebuilds the
-// window: (1) a width crossing the compact/regular breakpoint (a narrow
-// multitasking column), or (2) a portrait↔landscape flip while regular, so the
-// orientation-driven sidebar default re-applies and the split offset recomputes.
-// It renders its wrapped content unchanged and adds no chrome; only Resize acts.
-//
-// It is installed only on tablets (see CreateMainUI): a phone never crosses the
-// breakpoint and doesn't have the sidebar layout, so its path is unchanged.
+// layoutWatcher wraps the shared mobile root so rotation rebuilds when the
+// navigation placement changes. That covers tablets on both mobile platforms
+// and Android phones, whose landscape rail preserves reading height. The
+// retained layout-class comparison also makes any future deliberate classifier
+// change rebuild safely. It adds no chrome; only Resize acts.
 type layoutWatcher struct {
 	widget.BaseWidget
-	state          *AppState
-	content        fyne.CanvasObject
-	builtAs        layoutClass
-	builtLandscape bool // orientation at build (only meaningful when builtAs is regular)
-	pending        bool
+	state     *AppState
+	content   fyne.CanvasObject
+	builtAs   layoutClass
+	builtRail bool
+	pending   bool
 }
 
 func newLayoutWatcher(state *AppState, content fyne.CanvasObject) *layoutWatcher {
 	w := &layoutWatcher{
-		state:          state,
-		content:        content,
-		builtAs:        state.layoutClass(),
-		builtLandscape: state.canvasIsLandscape(),
+		state:     state,
+		content:   content,
+		builtAs:   state.layoutClass(),
+		builtRail: compactNavRail(state),
 	}
 	w.ExtendBaseWidget(w)
 	return w
@@ -157,43 +141,28 @@ func (w *layoutWatcher) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(w.content)
 }
 
-// Resize re-evaluates the layout against the new size. If the layout class or (in
-// the regular layout) the orientation changed, a rebuild is scheduled on the UI
+// Resize re-evaluates the layout against the new size. If the class or the
+// resolved bar/rail placement changes, a rebuild is scheduled on the UI
 // thread — not run inline, since we're mid-layout. pending coalesces the burst of
 // Resize calls during a live divider/rotation into a single rebuild; the watcher
 // is recreated by that rebuild, which resets the guard.
 //
-// CRITICAL: orientation must be derived from the WINDOW CANVAS size
-// (state.canvasIsLandscape), NEVER from this Resize's size argument. When the
-// soft keyboard rises, Fyne lays the content out at the canvas size MINUS the
-// keyboard — on an iPad in portrait that squeezed height makes width >= height,
-// which read as a landscape flip here and triggered a rebuild; the rebuild's
-// fresh watcher then sampled the UNsqueezed canvas (portrait), so the next
-// layout pass "flipped" again, rebuilding forever — a visible reading-pane
-// flicker whenever the search/Find field had the keyboard up (3,000+ rebuilds
-// in under a minute in the simulator). Canvas
-// size ignores the keyboard, and it is the SAME source newLayoutWatcher
-// samples, so the two can never disagree and oscillate. The layout-class check
-// keys off width, which the keyboard never changes.
+// Orientation comes from the window canvas rather than this content size. The
+// soft keyboard reduces content height and can otherwise make a portrait layout
+// look landscape. Using the same canvas source as newLayoutWatcher prevents
+// alternating rebuild decisions; layout-class selection still keys off width.
 func (w *layoutWatcher) Resize(size fyne.Size) {
 	w.BaseWidget.Resize(size)
 	if w.pending {
 		return
 	}
 	want := classifyLayout(size.Width, deviceIsTablet())
-	landscape := w.state.canvasIsLandscape()
-	// The orientation test is no longer conditional on the regular layout, and
-	// must not be: since 21 Aug 2026 a TABLET IN LANDSCAPE moves its navigation
-	// to a leading-edge rail (compactNavRail), so a rotation changes the compact
-	// layout too. Gated on the regular layout — which classifyLayout can no
-	// longer return — this whole clause was dead, and the rail would have
-	// appeared only on the next rebuild from some unrelated cause.
-	//
-	// Still tablets only: an Android phone installs this watcher unconditionally
-	// (layoutMayChange), and a phone's navigation does not move on rotation, so
-	// rebuilding it would be churn for no change.
-	changed := want != w.builtAs ||
-		(deviceIsTablet() && landscape != w.builtLandscape)
+	rail := compactNavRail(w.state)
+	// Compare the rendered decision itself instead of reconstructing it from
+	// orientation and device class. That keeps the watcher coupled to the policy
+	// used by buildCompactUI and avoids a rotation appearing only after some
+	// unrelated later rebuild.
+	changed := layoutWatcherNeedsRebuild(w.builtAs, want, w.builtRail, rail)
 	if changed {
 		w.pending = true
 		fyne.Do(func() { rebuildWindow(w.state) })

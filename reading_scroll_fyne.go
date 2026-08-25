@@ -94,6 +94,12 @@ func wireFyneReadingScroll(state *AppState, scroll *container.Scroll, chapter *c
 	fyneReadingFP = newFP
 
 	switch {
+	case state.forceReposition:
+		// The current highlight is the explicit target. Do not let a captured
+		// same-chapter position move the new pane back to the prior note.
+		state.forceReposition = false
+		state.restore = nil
+		armReadingRestore(0, 0, 0)
 	case state.restore != nil:
 		// An explicit target (launch restore / history tap) wins. Shared logic:
 		// matches the chapter, drops stale targets.

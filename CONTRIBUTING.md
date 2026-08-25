@@ -5,7 +5,7 @@ Thanks for your interest! BibleText is a cross-platform Bible reader in one Go +
 
 ## Getting started
 
-You need [Go](https://go.dev/dl/) 1.21 or newer.
+You need [Go](https://go.dev/dl/) 1.24 or newer.
 
 ```bash
 git clone https://github.com/cubancorona/bibletext.git
@@ -22,7 +22,7 @@ sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
 
 ## Before opening a pull request
 
-- Format and vet: `gofmt -w . && go vet ./...`
+- Format changed Go files with `gofmt -w <files>`, then run `go vet ./...`.
 - Keep the suite green: `go test ./...` (and `go test -race ./...`)
 - One logical change per commit, with a clear message. CI runs the above on every push.
 
@@ -35,8 +35,9 @@ editor that only analyses the host platform — that's expected:
 - `darwin && !ios` → native macOS code (the NSTextView reading overlay)
 - `ios || !darwin` → the Fyne reading pane (Linux/Windows, plus the mobile fallback)
 
-Validate mobile-tagged code with `fyne package -os iossimulator` rather than the host
-build. Tests that exercise the Fyne reading widget skip on macOS (which uses the native
+Validate mobile-tagged code with `scripts/run-ios-sim.sh` rather than a bare
+`fyne package` command; the wrapper applies the required Fyne patches and native
+bridge setup. Tests that exercise the Fyne reading widget skip on macOS (which uses the native
 overlay) and run on Linux/Windows.
 
 ## Scope & data
@@ -46,7 +47,9 @@ overlay) and run on Linux/Windows.
   the binary: a World English Bible Gospels seed (`assets/seed/`, so a first run
   opens instantly to readable scripture while the full canon downloads) and the
   Gospel-parallels synopsis (`assets/parallels/`). See [NOTICE](NOTICE) for licenses.
-- AI study is bring-your-own-key. **Never commit API keys.**
+- AI study is bring-your-own-key. **Never commit API keys.** Store-release
+  API.Bible credentials are supplied only through the external release-key flow
+  documented in `docs/API_KEY_HANDLING.md`; they do not belong in source files.
 
 ## License
 

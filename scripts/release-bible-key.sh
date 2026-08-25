@@ -8,6 +8,10 @@
 #   2. the macOS login Keychain item named uk.co.bibletext.apibible-release,
 #      account "release".
 #
+# GitHub's desktop builders use load_encoded_release_bible_key instead. Their
+# encrypted Actions secret contains only the same reversible encoding that is
+# written into a release executable, never the raw API.Bible credential.
+#
 # This helper never reads .env.local. That file may contain unrelated personal
 # provider keys which must not enter a release process.
 
@@ -80,8 +84,57 @@ print(base64.b64encode(bytes(b ^ mask[i % len(mask)] for i, b in enumerate(key))
   unset encoded
 }
 
+load_encoded_release_bible_key() {
+  local encoded=""
+
+  case "$-" in
+    *x*)
+      echo "ERROR: disable shell tracing before loading the encoded release credential." >&2
+      return 1
+      ;;
+  esac
+
+  encoded="${BIBLETEXT_BUNDLED_KEY_ENC:-}"
+  unset BIBLETEXT_BUNDLED_KEY_ENC
+
+  if [ -z "$encoded" ]; then
+    echo "ERROR: encoded release API.Bible key unavailable." >&2
+    return 1
+  fi
+  if [ "${#encoded}" -lt 16 ] || [ "${#encoded}" -gt 1024 ]; then
+    unset encoded
+    echo "ERROR: encoded release API.Bible key has an invalid length." >&2
+    return 1
+  fi
+  case "$encoded" in
+    *[!A-Za-z0-9+/=]*)
+      unset encoded
+      echo "ERROR: encoded release API.Bible key is malformed." >&2
+      return 1
+      ;;
+  esac
+
+  # Validate without decoding to stdout or persisting another copy. The
+  # decoded size bounds match the raw-key helper above.
+  if ! printf '%s' "$encoded" | python3 -c '
+import base64, binascii, sys
+try:
+    value = base64.b64decode(sys.stdin.buffer.read(), validate=True)
+except (binascii.Error, ValueError):
+    raise SystemExit(1)
+raise SystemExit(0 if 16 <= len(value) <= 512 else 1)
+'; then
+    unset encoded
+    echo "ERROR: encoded release API.Bible key is malformed." >&2
+    return 1
+  fi
+
+  BIBLE_KEY_LDFLAGS="-X=bibletext.bundledBibleKeyEnc=$encoded"
+  unset encoded
+}
+
 clear_release_bible_key() {
   unset BIBLE_KEY_LDFLAGS
   BIBLE_KEY_LDFLAGS=""
-  unset BIBLE_API_KEY
+  unset BIBLE_API_KEY BIBLETEXT_BUNDLED_KEY_ENC
 }

@@ -24,7 +24,6 @@ func saveMimicSeams(t *testing.T) {
 	origSticker := nativeNoteSticker
 	origReporter := reporterLayout
 	origTTS := ttsSupported
-	origWash := washIsLiveMutation
 	origFonts := serifFontCandidates
 	origTarget := devMimicTargetValue
 	t.Cleanup(func() {
@@ -33,7 +32,6 @@ func saveMimicSeams(t *testing.T) {
 		nativeNoteSticker = origSticker
 		reporterLayout = origReporter
 		ttsSupported = origTTS
-		washIsLiveMutation = origWash
 		serifFontCandidates = origFonts
 		devMimicTargetValue = origTarget
 	})
@@ -67,9 +65,6 @@ func TestMimicLinuxFlipsSeams(t *testing.T) {
 	}
 	if ttsSupported() {
 		t.Error("ttsSupported is true under mimic — the Windows/Linux audio surface hides read-aloud entirely")
-	}
-	if washIsLiveMutation {
-		t.Error("washIsLiveMutation is true under mimic — arrivals would set a forceReposition flag nothing clears on the styled pane")
 	}
 	if got := devMimicLabel(); got != "MIMIC: Linux" {
 		t.Errorf("devMimicLabel() = %q, want %q — the badge is what keeps mimic screenshots honest", got, "MIMIC: Linux")

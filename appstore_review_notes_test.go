@@ -1,31 +1,10 @@
 package bibletext
 
-// THE APP REVIEW NOTES ARE PART OF THE RELEASE, so they are guarded like one.
-//
-// WHAT WENT WRONG, 19 Aug 2026. Version 1.2.0 went to Apple carrying review
-// notes headed "VERSION 1.1.8 — HOTFIX" that described a search-results fix,
-// while the release's headline feature — shared notes, the one part of this app
-// where content arrives from another person — was never mentioned. Nobody wrote
-// those notes for 1.2.0: App Store Connect COPIES the previous version's review
-// detail forward when a new version record is created, so the field is never
-// empty and never looks wrong. The same text rode 1.1.5, 1.1.6 and 1.1.7
-// unchanged too, under the heading "NEW IN 1.1.0 — IPAD".
-//
-// THE TRAP UNDERNEATH IT. build/appstore/review_notes.txt looks exactly like
-// the release's review notes and is not: it is read only by push_betareview.py
-// and push_testflight.py, which write betaAppReviewDetail — TESTFLIGHT review,
-// a different field from the appStoreReviewDetail App Review reads. Nothing in
-// the repo ever wrote the App Store field. And build/ is gitignored, so that
-// file was not even version-controlled: no diff, no history, no CI, and absent
-// entirely from a fresh clone.
-//
-// So the notes now live HERE, tracked, and this test makes stale notes fail in
-// both the default host test suite and CI when the marketing version moves past
-// the version they describe.
-//
-// It cannot check that the notes are TRUE — only a person can — but it can
-// insist they are about this release, that they say something about the feature
-// this release is for, and that no key was pasted into a file bound for Apple.
+// App Review notes are versioned release artifacts. App Store Connect can copy
+// populated review detail into a new version, so presence alone does not show
+// that the text belongs to the current release. These tests bind the tracked
+// notes to the packaged version and enforce the field's structural and
+// credential-safety constraints.
 
 import (
 	"os"
@@ -53,44 +32,29 @@ func marketingVersion(t *testing.T) string {
 	return m[1]
 }
 
-// TestAppReviewNotesAreForThisRelease is the guard the 1.2.0 submission needed.
+// TestAppReviewNotesAreForThisRelease guards the version-specific review field.
 func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 	raw, err := os.ReadFile(reviewNotesPath)
 	if err != nil {
-		t.Fatalf("%s is missing. The App Review notes are a shipped artifact — "+
-			"if they moved, move this test with them; do not delete the guard: "+
-			"App Store Connect silently carries the PREVIOUS version's notes "+
-			"forward, so an absent file reads as a correct one. (%v)", reviewNotesPath, err)
+		t.Fatalf("%s is missing; tracked App Review notes are required for every "+
+			"release. (%v)", reviewNotesPath, err)
 	}
 	notes := string(raw)
 	want := marketingVersion(t)
 
-	// 0. THE FIELD CAN HOLD THEM. App Store Connect caps review notes at 4,000
-	// characters, and its answer to a longer value is a 409 at PATCH time —
-	// which the push tool used to swallow, so the write "succeeded", the field
-	// silently kept the PREVIOUS release's notes, and the reviewer read about a
-	// hotfix while judging a notes release. The 1.2.1 file was 7,050 characters
-	// when this fired live on 20 Aug 2026, and the 1.2.0 inheritance the
-	// preflight found was almost certainly the same 409 nobody saw. Character
-	// count, not bytes: Apple counts characters, and the em dashes and curly
-	// quotes these notes are full of are multi-byte.
+	// App Store Connect limits the field to 4,000 Unicode characters. Count
+	// runes rather than bytes so punctuation is measured as the service does.
 	if n := len([]rune(notes)); n > 4000 {
 		t.Fatalf("appstore/review-notes.txt is %d characters; App Store Connect "+
-			"caps the field at 4,000. Cut %d characters — an over-long file "+
-			"cannot be pushed, and the store then keeps the previous release's "+
-			"notes as if that were a choice.", n, n-4000)
+			"caps the field at 4,000. Remove %d characters.", n, n-4000)
 	}
 
-	// 1. THE NOTES NAME THIS RELEASE. The failure this whole file exists for.
+	// The heading must name the packaged release and no other version.
 	first := strings.TrimSpace(strings.SplitN(notes, "\n", 2)[0])
 	if !strings.Contains(first, want) {
-		t.Errorf("%s opens with %q but the app ships as %s.\n\n"+
-			"This is EXACTLY the 1.2.0 defect: App Store Connect copies the previous\n"+
-			"version's review notes onto a new version record, so App Review reads a\n"+
-			"description of the LAST release while testing this one. Rewrite the notes\n"+
-			"for %s before submitting.", reviewNotesPath, first, want, want)
+		t.Errorf("%s opens with %q but the app ships as %s; rewrite the notes for "+
+			"%s before submitting", reviewNotesPath, first, want, want)
 	}
-	// And no OTHER version may be announced in the heading position.
 	for _, stale := range regexp.MustCompile(`\b[0-9]+\.[0-9]+\.[0-9]+\b`).FindAllString(first, -1) {
 		if stale != want {
 			t.Errorf("%s's first line also names version %s; the notes must describe %s alone",
@@ -98,17 +62,14 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 		}
 	}
 
-	// 2. THEY SAY HOW TO EXERCISE THE APP. Notes with no review path are the
-	//    kind that get a release rejected for "we could not locate the feature".
+	// The notes must give App Review a path through the feature.
 	if !regexp.MustCompile(`(?i)\b(to exercise|review path|how to test|to receive|to send)\b`).MatchString(notes) {
 		t.Error("the review notes give App Review no way to exercise the app — " +
 			"no review path, no steps, nothing to tap")
 	}
 
-	// 3. NO CREDENTIAL EVER GOES IN THIS FILE. It is tracked now, and it is
-	//    pasted verbatim into App Store Connect; a review-only provider key
-	//    belongs in the ASC form at submission time and nowhere else
-	//    (docs/APP_STORE_SUBMISSION.md says so, and this enforces it).
+	// The tracked file is copied into App Store Connect, so credentials belong
+	// only in the private review form at submission time.
 	for _, pat := range []struct{ name, re string }{
 		{"an OpenAI-style key", `\bsk-[A-Za-z0-9_-]{16,}`},
 		{"a Google API key", `\bAIza[0-9A-Za-z_-]{20,}`},
@@ -124,11 +85,68 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 	}
 }
 
-// TestAppReviewNotesCoverTheHeadlineFeature is the softer half: 1.2.0's notes
-// said nothing about shared notes, the one feature in this app where content
-// arrives from ANOTHER PERSON — precisely what App Review most needs explained,
-// including how the content is transported and attributed. While the notes
-// feature ships, the notes must account for it.
+// The writer is pinned to a tracked release and keeps remote access read-only
+// unless an operator supplies both write flags. Local gates and remote
+// read-back are part of the same source-level contract.
+func TestAppReviewNotesWriterIsPinnedAndGuarded(t *testing.T) {
+	raw, err := os.ReadFile("appstore/push-review-notes.py")
+	if err != nil {
+		t.Fatalf("cannot read App Review notes writer: %v", err)
+	}
+	src := string(raw)
+	wantVersion := marketingVersion(t)
+
+	for name, needle := range map[string]string{
+		"packaged-version pin":     `TARGET_VERSION = "` + wantVersion + `"`,
+		"exact version filter":     `"filter[versionString]": TARGET_VERSION`,
+		"iOS platform filter":      `"filter[platform]": "IOS"`,
+		"write opt-in":             `"--write"`,
+		"version confirmation":     `"--confirm-version"`,
+		"exact confirmation check": `args.confirm_version != TARGET_VERSION`,
+		"editable-state guard":     `state not in EDITABLE_STATES`,
+		"support-contact gate":     `check-support-contact.py`,
+		"repository-hygiene gate":  `check-repository-hygiene.py`,
+		"post-write verification":  `read-back mismatch`,
+	} {
+		if !strings.Contains(src, needle) {
+			t.Errorf("App Review notes writer lacks %s (%q)", name, needle)
+		}
+	}
+
+	for name, needle := range map[string]string{
+		"app-ID environment override":   `os.environ.get("ASC_APP_ID"`,
+		"version environment override":  `os.environ.get("ASC_VERSION"`,
+		"app-ID command-line override":  `add_argument("--app-id"`,
+		"version command-line override": `add_argument("--version"`,
+	} {
+		if strings.Contains(src, needle) {
+			t.Errorf("App Review notes writer contains a forbidden %s", name)
+		}
+	}
+
+	mainStart := strings.Index(src, "def main(")
+	if mainStart < 0 {
+		t.Fatal("App Review notes writer has no main function")
+	}
+	mainSource := src[mainStart:]
+	gates := strings.Index(mainSource, "run_repository_gates()")
+	remoteRead := strings.Index(mainSource, "version = exact_version()")
+	editable := strings.Index(mainSource, "if state not in EDITABLE_STATES:")
+	patch := strings.Index(mainSource, `api_request("PATCH"`)
+	readBack := strings.Index(mainSource, "read_back = document_data(")
+	if gates < 0 || remoteRead < 0 || gates > remoteRead {
+		t.Error("repository gates must run before the first authenticated request")
+	}
+	if editable < 0 || patch < 0 || editable > patch {
+		t.Error("editable-state validation must run before PATCH")
+	}
+	if readBack < 0 || patch > readBack {
+		t.Error("a PATCH must be followed by read-back verification")
+	}
+}
+
+// Shared notes display content supplied by another person. While the feature
+// ships, the review notes must explain its privacy and rendering boundaries.
 func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	raw, err := os.ReadFile(reviewNotesPath)
 	if err != nil {
@@ -136,10 +154,8 @@ func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	}
 	notes := strings.ToLower(string(raw))
 
-	// The privacy and attribution claims Apple cares about for user-to-user content. Each is
-	// a property the app really has (share_link.go, notes_store.go, the note
-	// surfaces render TEXT and always attribute to a person) — so if one stops
-	// being true, the fix is the app, not this list.
+	// These claims are properties of share_link.go, notes_store.go, and the note
+	// surfaces. A code change that invalidates one must update the release text.
 	for _, must := range []struct{ what, needle string }{
 		{"that the feature exists at all", "shared notes"},
 		{"that there is no server behind it", "no server"},
@@ -148,27 +164,16 @@ func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	} {
 		if !strings.Contains(notes, must.needle) {
 			t.Errorf("the review notes do not say %s (looked for %q).\n"+
-				"Shared notes are the one place this app shows a user content written "+
-				"by someone else; leaving that unexplained is how a release gets held.",
+				"Shared notes display content written by someone else, so this property "+
+				"must be explicit for App Review.",
 				must.what, must.needle)
 		}
 	}
 }
 
-// TestDesktopAndMobileShipTheSameVersion — the desktop bundles carry their own
-// FyneApp.toml, and nothing had ever compared the two.
-//
-// WHAT THIS CATCHES, and it was live when the test was written: mobile said
-// 1.2.0 while cmd/desktop/FyneApp.toml still said 1.1.8. .github/workflows/
-// release.yml titles the GitHub Release from the TAG ("BibleText 1.2.0") but
-// passes no -appVersion to `fyne package`, so the macOS, Windows and Linux
-// bundles take their version from that file. Tagging v1.2.0 would therefore
-// have published a release whose desktop downloads report 1.1.8 in About /
-// Get Info — with nobody forgetting a step, because no step exists.
-//
-// It is a real convention, not two independent numbers: v1.1.5, v1.1.6 and
-// v1.1.7 all carried identical versions in both files. HEAD was the first
-// release where the bump happened on one side only.
+// Desktop bundles take their version from cmd/desktop/FyneApp.toml, while
+// mobile bundles use cmd/mobile/FyneApp.toml. Release artifacts must present a
+// single marketing version on every platform.
 func TestDesktopAndMobileShipTheSameVersion(t *testing.T) {
 	read := func(path string) string {
 		t.Helper()
@@ -188,24 +193,13 @@ func TestDesktopAndMobileShipTheSameVersion(t *testing.T) {
 		t.Errorf("cmd/desktop/FyneApp.toml ships %s but cmd/mobile/FyneApp.toml ships %s.\n\n"+
 			"release.yml titles the GitHub Release from the tag and passes no -appVersion,\n"+
 			"so the desktop bundles would report %s inside a release announced as %s.\n"+
-			"Bump both, or say here why they may differ.", desktop, mobile, desktop, mobile)
+			"Keep both packaging versions identical.", desktop, mobile, desktop, mobile)
 	}
 }
 
-// TestWhatsNewIsNamedForThisRelease guards the customer-facing half of the
-// carry-forward problem.
-//
-// push_metadata.py resolved the target VERSION correctly from FyneApp.toml and
-// then read the text from a constant filename, whats_new.txt. That file today
-// holds neither 1.1.8's notes nor 1.2.0's — it is an older shared-notes draft —
-// so running the documented command would have replaced the correct live 1.2.0
-// What's New with it.
-//
-// appstore/preflight.py cannot catch this: it compares the LIVE value against
-// the PREVIOUS version's, so it detects inheritance, not staleness, and a
-// wrong-but-different file sails through. Naming the file after the version is
-// what closes it, and this asserts the file that name refers to actually exists
-// and is distinct from other releases' notes.
+// A version-named What's New file prevents a generic "current" file from being
+// reused for the wrong release. The live preflight checks inheritance; this
+// test checks the local file selected for the packaged version.
 func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
 	want := marketingVersion(t)
 	dir := filepath.Join("build", "appstore", "metadata", "en-GB")
@@ -216,14 +210,13 @@ func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
 	b, err := os.ReadFile(mine)
 	if err != nil {
 		t.Fatalf("no What's New for the shipping version: %s is missing.\n"+
-			"push_metadata.py reads the file named for the version precisely so there "+
+			"the metadata helper reads the file named for the version so there "+
 			"is no \"current\" file to go stale. (%v)", mine, err)
 	}
 	if len(strings.TrimSpace(string(b))) == 0 {
 		t.Fatalf("%s is empty", mine)
 	}
-	// Same 4,000-character cap as the review notes, same silent-409 failure
-	// shape if exceeded — see TestAppReviewNotesAreForThisRelease.
+	// App Store Connect applies the same 4,000-character limit to What's New.
 	if n := len([]rune(string(b))); n > 4000 {
 		t.Fatalf("%s is %d characters; App Store Connect caps What's New at 4,000", mine, n)
 	}
@@ -244,28 +237,23 @@ func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
 	}
 }
 
-// TestAndroidVersionCodeIsNotDefaulted — the Play version code is release
-// identity, and it had a silent default.
-//
-// scripts/build-android.sh passed `-app-build "${BIBLETEXT_ANDROID_BUILD:-1}"`.
-// `set -u` does not catch a ${VAR:-default}; it just fires. And it did fire, on
-// a real release: the shipped v1.1.7 artifact reports versionCode='1'
-// versionName='1.1.7'. Nothing keyed off the version code could then tell two
-// builds apart, and a first Play upload at 1 burns the lowest number there is.
-//
-// The build number now comes from cmd/mobile/FyneApp.toml, which is already
-// monotonic across every tag and already the iOS build number — one ledger for
-// both stores. This asserts the default form has not crept back.
-func TestAndroidVersionCodeIsNotDefaulted(t *testing.T) {
+// Android release identity comes only from the tracked FyneApp ledger. An
+// environment override could produce a package that passes artifact checks but
+// does not match the tagged source.
+func TestAndroidReleaseIdentityComesFromTrackedLedger(t *testing.T) {
 	b, err := os.ReadFile("scripts/build-android.sh")
 	if err != nil {
 		t.Fatalf("cannot read scripts/build-android.sh: %v", err)
 	}
 	src := string(b)
-	if regexp.MustCompile(`BIBLETEXT_ANDROID_BUILD:-[0-9]`).MatchString(src) {
-		t.Error("build-android.sh defaults BIBLETEXT_ANDROID_BUILD to a literal again.\n" +
-			"That default already shipped once as versionCode=1 on v1.1.7. Derive it " +
-			"from FyneApp.toml's Build, and fail loudly when that cannot be read.")
+	if strings.Contains(src, "${BIBLETEXT_ANDROID_BUILD:-") ||
+		strings.Contains(src, "${BIBLETEXT_ANDROID_VERSION:-") {
+		t.Error("build-android.sh permits an environment release-identity override; " +
+			"derive both values only from cmd/mobile/FyneApp.toml")
+	}
+	if !strings.Contains(src, `APP_VERSION="$TRACKED_APP_VERSION"`) ||
+		!strings.Contains(src, `APP_BUILD="$TRACKED_APP_BUILD"`) {
+		t.Error("build-android.sh does not use the tracked Android release identity")
 	}
 	if !strings.Contains(src, "refusing to default the versionCode to 1") {
 		t.Error("the hard stop for an unreadable Build is gone — an unreadable " +

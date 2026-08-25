@@ -455,7 +455,10 @@ func seenPaneButtons(t *testing.T, p *styledReadingPane, size fyne.Size) []*widg
 	w := test.NewWindow(p)
 	t.Cleanup(w.Close)
 	w.Resize(size)
+	return visiblePaneButtons(p)
+}
 
+func visiblePaneButtons(p *styledReadingPane) []*widget.Button {
 	var out []*widget.Button
 	var walk func(o fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
@@ -606,6 +609,154 @@ func TestStyledStickerVerbsFire(t *testing.T) {
 			t.Errorf("the pill press did not bring the note back.\nseen:\n%s", seen)
 		}
 	})
+}
+
+func TestStyledCountTapScrollsToTheNextNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	now := int64(1_700_000_000)
+	noteNow = func() int64 { now++; return now }
+	defer func() { noteNow = origNow }()
+
+	older, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 119, VerseLo: 3, Text: "near the chapter start"})
+	newer, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 119, VerseLo: 25, Text: "near the chapter end"})
+	st := longPsalmState()
+	st.CurrentVersion = "web"
+	applyNoteForCurrentChapter(st)
+	if st.NoteID != newer.ID {
+		t.Fatalf("precondition: newest note %d is selected, got %d", newer.ID, st.NoteID)
+	}
+
+	size := fyne.NewSize(420, 300)
+	render := func() fyne.CanvasObject {
+		return styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
+	}
+	w := test.NewWindow(render())
+	defer w.Close()
+	w.Resize(size)
+	w.Canvas().Content().Refresh()
+	var rebuilt fyne.Window
+	defer func() {
+		if rebuilt != nil {
+			rebuilt.Close()
+		}
+	}()
+	st.showReading = func() {
+		rebuilt = test.NewWindow(render())
+		rebuilt.Resize(size)
+		rebuilt.Canvas().Content().Refresh()
+	}
+
+	var counts *widget.Button
+	for _, b := range visiblePaneButtons(styledPane) {
+		if b.Text == "" && b.Icon == nil {
+			counts = b
+			break
+		}
+	}
+	if counts == nil {
+		t.Fatal("no visible note-count control")
+	}
+	test.Tap(counts)
+
+	if st.NoteID != older.ID {
+		t.Fatalf("count tap selected note %d, want %d", st.NoteID, older.ID)
+	}
+	if st.forceReposition {
+		t.Error("styled rebuild did not consume the placement request")
+	}
+	if styledRestoreArmed {
+		t.Error("the previous note's viewport remained armed after the count tap")
+	}
+	for i := 0; i < 5 && styledScroll.Offset.Y == 0; i++ {
+		rebuilt.Resize(fyne.NewSize(size.Width, size.Height+float32(i+1)))
+		rebuilt.Canvas().Content().Refresh()
+	}
+	wantY := styledPane.highlightY() - 24
+	if wantY < 0 {
+		wantY = 0
+	}
+	if got := styledScroll.Offset.Y; got < wantY-30 || got > wantY {
+		t.Errorf("count tap offset %.1f, want near the next note at %.1f (highlight=%v first=%d user=%v ceded=%v scroll=%v content=%v)",
+			got, wantY, styledPane.highlightOwnsScroll(), styledPane.highlightFirstLine(),
+			styledUserScrolled, styledHighlightCeded, styledScroll.Size(), styledPane.MinSize())
+	}
+}
+
+func TestStyledCountTapOnTheSameAnchorPreservesTheTop(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	now := int64(1_700_000_000)
+	noteNow = func() int64 { now++; return now }
+	defer func() { noteNow = origNow }()
+
+	older, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 119, VerseLo: 25, Text: "first same-anchor note"})
+	newer, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Psalms", Chapter: 119, VerseLo: 25, VerseHi: 26, Text: "second same-anchor note"})
+	st := longPsalmState()
+	st.CurrentVersion = "web"
+	applyNoteForCurrentChapter(st)
+	if st.NoteID != newer.ID {
+		t.Fatalf("precondition: newest note %d is selected, got %d", newer.ID, st.NoteID)
+	}
+
+	size := fyne.NewSize(420, 300)
+	render := func() fyne.CanvasObject {
+		return styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
+	}
+	w := test.NewWindow(render())
+	defer w.Close()
+	w.Resize(size)
+	w.Canvas().Content().Refresh()
+	styledScroll.Offset = fyne.NewPos(0, 0)
+	var rebuilt fyne.Window
+	defer func() {
+		if rebuilt != nil {
+			rebuilt.Close()
+		}
+	}()
+	st.showReading = func() {
+		rebuilt = test.NewWindow(render())
+		rebuilt.Resize(size)
+		rebuilt.Canvas().Content().Refresh()
+	}
+
+	var counts *widget.Button
+	for _, b := range visiblePaneButtons(styledPane) {
+		if b.Text == "" && b.Icon == nil {
+			counts = b
+			break
+		}
+	}
+	if counts == nil {
+		t.Fatal("no visible note-count control")
+	}
+	test.Tap(counts)
+
+	if st.NoteID != older.ID {
+		t.Fatalf("count tap selected note %d, want %d", st.NoteID, older.ID)
+	}
+	if got := styledScroll.Offset.Y; got != 0 {
+		t.Fatalf("same-anchor count tap moved the top viewport to %.1f", got)
+	}
+	if !styledHighlightCeded {
+		t.Error("same-anchor top carry did not claim the viewport from the standing wash")
+	}
 }
 
 // --- the sticker and the selection --------------------------------------------

@@ -10,9 +10,9 @@ import (
 )
 
 // Shared UI helpers used by both the desktop and mobile entry points. The
-// platform-specific layout (HSplit + keyboard shortcuts vs. bottom tabs + drawer
-// with touch-sized rows) lives in ui_desktop.go and ui_mobile.go, selected by
-// build tag — `CreateMainUI` is defined in exactly one of them per build.
+// platform shell lives in ui_desktop.go and ui_mobile.go, selected by build tag;
+// both compose the shared Read / Books / Search layout. `CreateMainUI` is
+// defined in exactly one of them per build.
 
 func buildHeader(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
@@ -40,12 +40,8 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// TESTING badge when a version is showing placeholder text (see versions.go).
 	left := container.NewVBox(titleRow, versionSelector(state))
 
-	// On the regular (iPad) layout, a leading sidebar-toggle button (the platform
-	// sidebar.left convention) hides/shows the navigation sidebar so the reader can
-	// reclaim the full width. Only there: desktop has its own always-on sidebar,
-	// and the compact layout uses bottom tabs. Toggling flips state.sidebarCollapsed
-	// and rebuilds (buildRegularWidthUI reads it); resolveSidebarDefault preserves
-	// the choice within the current orientation.
+	// Retained hook for the former regular iPad layout. The current classifier
+	// never selects it; shared mobile navigation is built by buildCompactUI.
 	if state.layoutClass() == layoutRegular {
 		sidebarBtn := widget.NewButtonWithIcon("", iconSidebarLeft, func() {
 			state.sidebarCollapsed = !state.sidebarCollapsed

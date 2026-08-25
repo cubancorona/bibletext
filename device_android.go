@@ -8,9 +8,8 @@ import "fyne.io/fyne/v2"
 // platform's own convention — a device whose smallest window dimension is at
 // least ~600dp is a tablet (the classic sw600dp resource qualifier; Fyne's
 // logical units track dp on Android). Computed from the live window canvas on
-// every call, so it is correct after rotation and in split-screen: an app
-// squeezed to phone-ish width behaves as a phone, exactly like the iPad's
-// narrow Split View fallback.
+// every call, so it is correct after rotation and in split-screen. Tablet
+// identity controls the shared layout's landscape rail and readable measures.
 func deviceIsTablet() bool {
 	app := fyne.CurrentApp()
 	if app == nil {
@@ -24,8 +23,13 @@ func deviceIsTablet() bool {
 	return isTabletDimensions(sz.Width, sz.Height)
 }
 
+// phoneLandscapeNavRail moves phone navigation to the leading edge in
+// landscape. The fixed-height app, chapter, history and bottom-navigation
+// chrome can otherwise leave no height for the reading host on a short window.
+// Portrait keeps the usual bottom bar.
+func phoneLandscapeNavRail() bool { return true }
+
 // layoutMayChange: always watch on Android — before the first layout the
-// canvas reports 0×0 (not a tablet), so the watcher must be armed regardless
-// to catch the real size when it arrives. On phones it stays inert (the
-// layout class never changes), costing one comparison per resize.
+// canvas reports 0×0, so the watcher must catch the real size. It also owns the
+// phone bar/rail transition on rotation.
 func layoutMayChange() bool { return true }

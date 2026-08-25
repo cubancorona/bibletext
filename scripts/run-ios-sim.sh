@@ -12,20 +12,55 @@
 #      Apple ID (free). Alternatively, see scripts/install-fake-dev-cert.sh.
 #   4. The new Fyne CLI installed (the old fyne.io/fyne/v2/cmd/fyne refuses to
 #      build simulator targets):
-#        go install fyne.io/tools/cmd/fyne@latest
+#        go install fyne.io/tools/cmd/fyne@v1.7.2
 #
 # This script is idempotent: re-run it to push a new build to the simulator.
 set -euo pipefail
+umask 077
 
-# Simulator packaging must not inherit unrelated provider credentials or the
-# shared release key from a shell used for live-provider testing.
-unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY BIBLE_API_KEY
+# Simulator builds carry the project fallback but never inherit unrelated
+# provider credentials. Load and isolate the raw key before any subprocess.
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+unset BIBLE_KEY_LDFLAGS BIBLETEXT_RELEASE_LDFLAGS BIBLETEXT_REAL_GO
 export GOFLAGS="" GODEBUG=""
+case "${BASH_SOURCE[0]}" in
+  */*) script_dir_part="${BASH_SOURCE[0]%/*}" ;;
+  *) script_dir_part="." ;;
+esac
+case "$script_dir_part" in
+  /*|./*|../*) ;;
+  *) script_dir_part="./$script_dir_part" ;;
+esac
+original_dir="$PWD"
+builtin cd -P -- "$script_dir_part"
+SCRIPT_DIR="$PWD"
+builtin cd -- "$original_dir"
+unset original_dir script_dir_part
+source "${SCRIPT_DIR}/release-bible-key.sh"
+load_release_bible_key
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
 APP_ID="uk.co.bibletext"
+WORK="$(mktemp -d /tmp/bibletext-simulator.XXXXXX)"
+cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
+cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
+PREEXISTING_APP="$WORK/preexisting-$APP_NAME"
+if [[ -e "$APP_DIR/$APP_NAME" ]]; then
+    mv "$APP_DIR/$APP_NAME" "$PREEXISTING_APP"
+fi
+cleanup() {
+    clear_release_bible_key
+    cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true
+    cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true
+    rm -rf "$APP_DIR/$APP_NAME"
+    if [[ -e "$PREEXISTING_APP" ]]; then
+        mv "$PREEXISTING_APP" "$APP_DIR/$APP_NAME" 2>/dev/null || true
+    fi
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 # --dev adds the bibletextdev build tag, which compiles in the Links tab: a page
 # of shared-link scenarios that call the real HandleShareLink. It exists because
@@ -44,9 +79,8 @@ DEVICE_NAME="${BIBLETEXT_SIM_DEVICE:-iPhone 15}"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
 
-# Apply the iOS-only Fyne scroll-lag patch for this build, then restore stock
-# go.mod on exit so `go build` / desktop stay one-line. See patches/README.md.
-trap 'git -C "$REPO_ROOT" checkout -- go.mod 2>/dev/null || true' EXIT
+# Apply the iOS-only Fyne scroll-lag patch for this build. The exact original
+# go.mod and mobile package metadata are restored by the exit trap.
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
@@ -62,29 +96,32 @@ fi
 
 echo "==> fyne package -os iossimulator"
 (cd "$APP_DIR" && fyne package -os iossimulator --app-id "$APP_ID")
+APP="$WORK/$APP_NAME"
+mv "$APP_DIR/$APP_NAME" "$APP"
 # Match the device build: add UIBackgroundModes=[audio] so the audio path is exercised.
 # (No codesign on the sim path, so post-package is fine; true background behavior is
 # only reliably testable on a device via run-ios-device.sh.)
-plutil -replace UIBackgroundModes -json '["audio"]' "$APP_DIR/$APP_NAME/Info.plist"
+plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
 # Match the device build: declare add-only Photos access so the share sheet's
 # "Save Image" action appears in the simulator too.
-plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP_DIR/$APP_NAME/Info.plist"
+plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
 
 # App Store parity: the release build deletes UIRequiresFullScreen
 # (iPad multitasking) and compiles the launch storyboard — the smoke builds must
 # match, or Split View/Stage Manager resizing ships untested.
 PBX() { /usr/libexec/PlistBuddy -c "$1" "$APPPLIST" 2>/dev/null || true; }
-APPPLIST="$APP_DIR/$APP_NAME/Info.plist"
+APPPLIST="$APP/Info.plist"
 PBX "Delete :UIRequiresFullScreen"
-xcrun ibtool --compile "$APP_DIR/$APP_NAME/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" >/dev/null
+xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" >/dev/null
 
 # Ship the sim build as universal (iPhone + iPad) so it runs NATIVELY on an iPad
-# simulator — otherwise the iPad runs it in iPhone compatibility mode, where the
-# interface idiom reports iPhone and the regular-width (tablet) layout never
-# appears. The App Store device family is controlled separately by release-ios.sh
-# (BIBLETEXT_IPAD), so this only affects local simulator runs. Test the iPad
-# layout with e.g. BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)".
-plutil -replace UIDeviceFamily -json '[1, 2]' "$APP_DIR/$APP_NAME/Info.plist"
+# simulator — otherwise the iPad runs it in iPhone compatibility mode and the
+# interface idiom reports iPhone. Native iPad identity enables the shared
+# layout's landscape navigation rail, portrait bottom bar, and reporter-width
+# reading measure. The App Store device family is controlled separately by
+# release-ios.sh (BIBLETEXT_IPAD), so this only affects local simulator runs.
+# Test with e.g. BIBLETEXT_SIM_DEVICE="iPad Pro 11-inch (M5)".
+plutil -replace UIDeviceFamily -json '[1, 2]' "$APP/Info.plist"
 
 # KEYCHAIN PARITY. A simulator app gets its entitlements from a Mach-O
 # __TEXT,__entitlements SECTION — never from the code signature. Signing a
@@ -107,7 +144,7 @@ plutil -replace UIDeviceFamily -json '[1, 2]' "$APP_DIR/$APP_NAME/Info.plist"
 #
 # WARNING: this string IS the keychain partition. Changing it orphans every key
 # previously saved in a simulator — pick once, never churn.
-SIM_ENT="$(mktemp -t bt_sim_ent).plist"
+SIM_ENT="$WORK/simulator-entitlements.plist"
 cat >"$SIM_ENT" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -129,26 +166,31 @@ echo "==> relinking with the simulator entitlements section (Keychain)"
 # Build to a temp path: `go build -o` refuses to overwrite an existing file it
 # does not recognise as its own output ("already exists and is not an object
 # file"), and fyne has just written its own binary there.
-SIM_MAIN="$(mktemp -t bt_sim_main)"
+SIM_MAIN="$WORK/bibletext-simulator-main"
 if ( cd "$REPO_ROOT" && CGO_ENABLED=1 GOOS=ios GOARCH="$(go env GOARCH)" \
         CC="$SIM_CLANG" CXX="${SIM_CLANG}++" \
         CGO_CFLAGS="$SIM_CF" CGO_CXXFLAGS="$SIM_CF" \
         CGO_LDFLAGS="$SIM_CF -Wl,-sectcreate,__TEXT,__entitlements,$SIM_ENT" \
-        go build -tags "ios$DEV_TAG" -ldflags=-w -o "$SIM_MAIN" ./cmd/mobile ); then
-    mv -f "$SIM_MAIN" "$APP_DIR/$APP_NAME/main"
+        go build -trimpath -tags "ios$DEV_TAG" \
+          -ldflags "$BIBLE_KEY_LDFLAGS -w" -o "$SIM_MAIN" ./cmd/mobile ); then
+    BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+      python3 "$REPO_ROOT/scripts/verify-release-key.py" "$SIM_MAIN"
+    mv -f "$SIM_MAIN" "$APP/main"
 else
-    echo "==> entitlements relink failed; continuing with fyne's binary (Keychain falls back to Preferences)" >&2
-    rm -f "$SIM_MAIN"
+    echo "ERROR: keyed simulator relink failed." >&2
+    exit 1
 fi
-rm -f "$SIM_ENT"
 
 # Fyne builds the simulator binary for min iOS 7.0, which modern Simulator
 # runtimes reject ("This app needs to be updated by the developer"). Rewrite the
 # Mach-O build-version to a current minimum and re-sign (ad-hoc) so it installs.
 xcrun vtool -arch "$(uname -m)" -set-build-version 7 15.0 18.0 -replace \
-    -output "$APP_DIR/$APP_NAME/main" "$APP_DIR/$APP_NAME/main" 2>/dev/null \
+    -output "$APP/main" "$APP/main" 2>/dev/null \
     || echo "==> vtool min-version bump skipped (older Simulator? continuing)" >&2
-codesign --force --sign - "$APP_DIR/$APP_NAME" >/dev/null 2>&1 || true
+codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+  python3 "$REPO_ROOT/scripts/verify-release-key.py" "$APP/main"
+clear_release_bible_key
 
 # A simulator UDID is a 36-char dashed hex string. We extract it by that pattern
 # rather than by field position: device names can contain parentheses (e.g.
@@ -188,10 +230,12 @@ echo "==> opening Simulator.app"
 open -a Simulator
 
 echo "==> installing $APP_NAME on simulator $BOOTED"
-xcrun simctl install "$BOOTED" "$APP_DIR/$APP_NAME"
+xcrun simctl install "$BOOTED" "$APP"
 
 echo "==> launching $APP_ID"
-xcrun simctl launch "$BOOTED" "$APP_ID"
+SIMCTL_CHILD_BIBLETEXT_DEV_NOTES="${BIBLETEXT_DEV_NOTES:-}" \
+SIMCTL_CHILD_BT_SCROLL_DEBUG="${BT_SCROLL_DEBUG:-}" \
+  xcrun simctl launch "$BOOTED" "$APP_ID"
 
 echo
 echo "Done. To inspect logs:"

@@ -1,9 +1,8 @@
 # Vendored Fyne patches
 
-This directory holds **two surgical patches to Fyne** plus the documentation
-for them. It exists because both fixes are small changes *inside the Fyne
-library*, which can't live in our own source: the iOS scroll-lag fix (the
-drawloop patch) and the focused-Entry CPU fix (the caret-blink patch).
+This directory holds surgical patches to the pinned Fyne library and packaging
+CLI. They exist because these changes must happen inside Fyne rather than in the
+application source.
 
 | | |
 |---|---|
@@ -175,7 +174,7 @@ is a real battery win on Android; the drawloop hunk is inert off-iOS). Each:
    committed);
 2. `go mod edit -replace fyne.io/fyne/v2=./third_party/fyne` — inject the patches
    for just this build;
-3. build/package the iOS app (which now ships both fixes);
+3. build/package the mobile app with the regenerated library;
 4. restore stock `go.mod` via an `EXIT` trap (success, failure, or Ctrl-C).
 
 So your working tree's `go.mod` is always stock; the `replace` exists only
@@ -191,18 +190,47 @@ they all apply the patches automatically. `setup-fyne-patch.sh` is
 safe to run standalone too (it regenerates `third_party/fyne` from the module
 cache + these patches, fetching stock v2.7.4 if it isn't cached).
 
+Android additionally runs `scripts/setup-fyne-tools-patch.sh`. It regenerates
+`third_party/fyne-tools` from `fyne.io/tools@v1.7.2` and applies
+`fyne-tools-1.7.2-android-api-36.patch` before compiling a private CLI for that
+build. The generated CLI is ignored and never replaces the developer's global
+installation.
+
+## Android target API 36 (`fyne-tools-1.7.2-android-api-36.patch`)
+
+Fyne tools v1.7.2 chooses target SDK 29 for `fyne package` and 35 for
+`fyne release`; there is no public target-SDK flag. BibleText's wrapper already
+re-signs debug APKs with current Android signature schemes, so the old debug
+signing workaround is not needed. The patch makes both modes target API 36.
+
+The same patch lets the wrapper pin the exact API-36 platform and build-tools
+paths. Upstream selects SDK directories lexicographically rather than by
+numeric version, so neither its first-directory build-tools choice nor its
+greatest-name platform choice is a safe version selector. The regression tests
+include both 9.x and 36.x directories. `scripts/build-android.sh` then verifies
+the package/version identity, compile SDK 36, minSdkVersion 21, targetSdkVersion
+36, injected dex bridge, and configured signer from every final APK and AAB.
+These artifact checks are the release gate; the source patch alone is not
+treated as proof.
+
+This patch is Android-only. The iOS and desktop packaging paths continue to use
+the installed Fyne CLI and are unaffected.
+
 ## How to remove the patches entirely (surgical)
 
-The two patches are independent — to drop just one (e.g. upstream ships one fix),
+The patches are independent — to drop just one (e.g. upstream ships one fix),
 delete its `.patch` file and its `patch -p1` + verify-grep lines in
-`setup-fyne-patch.sh`. To remove everything when upstream ships both (or you bump
-to a version that includes them):
+`setup-fyne-patch.sh`. The Android CLI patch is removed separately by dropping
+its setup call, script, and patch file. To remove everything after upstream
+ships equivalent fixes (or the pinned versions include them):
 
 1. **Un-hook the packaging scripts:** delete the Fyne-patch block (the
    `setup-fyne-patch.sh` call + `go mod edit -replace` + the `EXIT`-trap
    restore) from `scripts/run-ios-device.sh`, `scripts/run-ios-sim.sh`,
    `scripts/release-ios.sh`, **and** `scripts/build-android.sh`.
-2. **Delete the tooling:** `rm -rf third_party/fyne patches/ scripts/setup-fyne-patch.sh`
+2. **Delete the tooling:** remove the generated `third_party/fyne` and
+   `third_party/fyne-tools` trees plus the patch files and their two setup
+   scripts
    (and the `third_party/` line in `.gitignore` if nothing else needs it).
 3. **Verify:** `go build ./...` and the iOS scripts both build against stock Fyne.
 

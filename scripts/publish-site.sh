@@ -35,8 +35,12 @@ OUT=build/site
 WORKTREE=build/gh-pages
 DOMAIN=bibletext.co.uk
 
+echo "==> checking the public support configuration"
+python3 scripts/check-support-contact.py
 echo "==> generating the reader"
 go run ./cmd/websitegen -out "$OUT"
+echo "==> rendering the project pages"
+go run ./cmd/sitepages -source docs -out "$OUT"
 
 # --- Verify the BUILD before it goes anywhere near the live branch -----------
 # A truncated or half-generated site must never reach the branch. Counts are
@@ -120,23 +124,23 @@ for asset in "$ncss" "$njs"; do
 done
 [[ -s "$OUT/404.html" ]] || fail "404.html missing"
 
-# --- Assemble the FULL tree (reader + the hand-written pages) ----------------
-# The three root pages are copied from the WORKING TREE, so publishing from a
-# dirty or unexpected checkout would push whatever happens to be sitting there
-# to the live site — including someone's half-finished privacy-policy edit.
+# --- Assemble the FULL tree (reader + the hand-written page templates) -------
+# Publishing from any dirty generator, renderer, template, or configuration
+# would make the live site differ from every known revision. Require the whole
+# tracked/untracked source tree to be clean; ignored build output is unaffected.
 echo "==> checking the repo state"
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$branch" != "main" && "${ALLOW_BRANCH:-0}" != "1" ]]; then
   fail "on branch '$branch', not main. The live site should be published from main; set ALLOW_BRANCH=1 to override deliberately."
 fi
-if [[ -n "$(git status --porcelain -- docs/)" ]]; then
-  fail "docs/ has uncommitted changes — commit them first so the live site matches a known revision"
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  fail "the repository has uncommitted changes — commit them first so the live site matches a known revision"
 fi
 
 echo "==> assembling the site tree"
 for page in index.html privacy.html support.html; do
-  [[ -s "docs/$page" ]] || fail "docs/$page is missing or empty — it is the source of truth for the live site"
-  cp "docs/$page" "$OUT/$page"
+  [[ -s "docs/$page" ]] || fail "docs/$page is missing or empty — it is the source template for the live site"
+  [[ -s "$OUT/$page" ]] || fail "$OUT/$page is missing or empty — project-page rendering failed"
 done
 printf '%s\n' "$DOMAIN" > "$OUT/CNAME"
 touch "$OUT/.nojekyll"
@@ -157,6 +161,16 @@ cp docs/assetlinks.json "$OUT/.well-known/assetlinks.json"
 for page in index.html privacy.html support.html; do
   [[ -s "$OUT/$page" ]] || fail "$page missing from the tree about to be published"
 done
+support_email=$(tr -d '\r\n' < config/support-email.txt)
+for page in privacy.html support.html; do
+  grep -Fq "$support_email" "$OUT/$page" || fail "$page does not contain the configured support address"
+  grep -Fq "href=\"mailto:$support_email\"" "$OUT/$page" || \
+    fail "$page does not contain the configured mailto recipient"
+  if grep -Fq '{{BIBLETEXT_SUPPORT_EMAIL_' "$OUT/$page"; then
+    fail "$page contains an unresolved support-address marker"
+  fi
+done
+unset support_email
 # The association files decide whether a tapped link opens the app, and a
 # malformed one fails SILENTLY and slowly (Apple caches per-domain for ~24h,
 # and a 404 is cached as a negative result). Validate before pushing.

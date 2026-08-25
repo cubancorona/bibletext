@@ -278,7 +278,7 @@ invisible; the platforms differ in richness rather than in truth.
    column asserting an EMPTY PLAN, not merely an empty bubble.
 6. **Seven of the thirty states are untouched** and must not be assumed away:
    X3 (a note evicted by its own save), WIPED, JUNK_PURGED, UNREADABLE-is-silent,
-   PARKED, the live `/nkjv/` 404, and DEADTAP's swallowed tap. **The ceiling here
+   PARKED, the then-live `/nkjv/` 404, and DEADTAP's swallowed tap. **The ceiling here
    is 23 of 30, not 30.**
 
 ## 7. Open design decisions

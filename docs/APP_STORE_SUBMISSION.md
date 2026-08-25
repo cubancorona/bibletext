@@ -1,468 +1,212 @@
 # App Store submission checklist — BibleText
 
-Prepared 1 August 2026 for 1.1.6 (build 124); refreshed 8 August for 1.1.7
-(build 127); 12 August for 1.1.8; **20 August after 1.2.0 shipped.**
+This is the current operational checklist. Historical release mistakes are
+summarised at the end so they remain useful without being mistaken for live App
+Store Connect state.
 
-## READ THIS BEFORE ANYTHING ELSE
+## Current release state — verify before acting
 
-**Nothing below is a current reading of App Store Connect.** The figures in the
-next section were true when they were written and have not been re-verified
-since; two releases have shipped over the top of them. Treat every version,
-build and state in this file as HISTORY, and get the live answer first:
+As publicly observed on 24 August 2026:
+
+- **Live App Store version:** 1.2.2, released 23 August 2026.
+- **Prepared next version:** 1.2.3, mobile build 174.
+- **Submission state:** 1.2.3 is prepared only. It has not been submitted by
+  this checklist or by the metadata helpers.
+- **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad; minimum iOS 13.
+
+Public lookup data is cached, and App Store Connect is authoritative. Start every
+release with the read-only preflight:
 
 ```bash
-ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 ASC_KEY_ID=XXXX ASC_ISSUER_ID=... python3 appstore/preflight.py
+ASC_KEY_PATH=/path/AuthKey.p8 \
+ASC_KEY_ID=... \
+ASC_ISSUER_ID=... \
+python3 appstore/preflight.py
 ```
 
-That tool is read-only (no PATCH, POST or DELETE — safe while a version is in
-review) and reports two facts this historical checklist cannot establish:
+The preflight performs GET requests only. It prints every version's live state,
+compares release-specific fields with the previous version, and identifies
+copy-forward metadata. Do not infer submission eligibility from this document.
 
-1. **Submission eligibility.** It prints every version's LIVE state first and names
-   anything Apple currently has, because App Store Connect takes one version
-   into review at a time. A release plan based on stale state may not be
-   executable.
-2. **Copy provenance.** It identifies which per-release fields of the
-   candidate version were written for it and which arrived through
-   App Store Connect's copy-forward from the release before.
+## Release identity and local build
 
-**Step 0 of every release is running it.** Not step 3, and not "if something
-looks off": the states it prints decide whether the rest of the checklist is
-even reachable today.
+Before producing the 1.2.3 binary, verify that `cmd/mobile/FyneApp.toml` reads:
 
-The live-state check prevents inherited metadata from appearing current.
-Version 1.2.0 went into review carrying **1.1.8's review notes** — headed "VERSION 1.1.8
-— HOTFIX" and describing a search-results fix, while its headline feature was
-shared notes — and **1.1.8's screenshots**, byte-identical by checksum, so the
-store page for the shared-notes release showed no shared note. Neither field was
-empty, so neither looked wrong. Both were inherited.
+```toml
+Version = "1.2.3"
+Build = 174
+```
 
-### Recorded release state
+The version/build change is a separate release step; this document does not make
+it. Never rebuild changed code under an already-uploaded build number.
 
-| Fact | Confidence |
-| --- | --- |
-| 1.2.0 was submitted, reviewed, approved and released | Recorded in this checklist; verify against the live state |
-| 1.2.0 shipped with 1.1.8's review notes and screenshots | Certain — measured by `sourceFileChecksum` before the tooling was written |
-| `cmd/mobile/FyneApp.toml` reads 1.2.0 / build 169 | Certain — read from the tree on 20 Aug |
-| Which build number 1.2.0 was actually released as | **Unknown here** — run the preflight |
-| Whether the store description has been rewritten yet | **Unknown here** — it was still naming only WEB and BSB on 19 Aug; the preflight reports on this |
+Run from the repository root:
 
-The 1.2.0 screenshot set is the **known-stale item**: it is still the 9 August
-capture, taken before shared notes existed. It is not a submission blocker, but
-retaining it must be a deliberate release decision.
-
-## Screenshots: what is stale, per set
-
-App Store Connect copies screenshots forward, so a stale set never looks wrong —
-it looks like a set. Check this before every submission.
-
-| Set | State | What is out of date |
-| --- | --- | --- |
-| iPad 13" | **Re-captured for 1.2.2** | Nothing. Seven shots, all NKJV, one landscape showing the left rail. The 1.2.1 iPad set is dead: it shows the sidebar 1.2.2 removed. |
-| iPhone 6.9" | **Still the 20 Aug (1.2.1) set** — retained for 1.2.2 | The **Books tab** shot shows the old 66-row scrolling list; it is now a centred two-column grid with testament headings. The tab bar's icon-to-label gap is 4pt, was 2pt. Everything else on iPhone is unchanged by 1.2.2. |
-
-Screenshot recapture constraints:
-
-- NKJV in the simulator needs **both** `BIBLE_API_KEY` and
-  `BIBLETEXT_LICENSE_NKJV=1` (via `SIMCTL_CHILD_*`). `licensed()` in versions.go
-  checks the STORED key or the licence env; the env key alone only satisfies the
-  fetch, so NKJV stays greyed out. The full canon then downloads in ~10 minutes.
-- `simctl io screenshot` always writes the **native portrait buffer** with the
-  content rotated inside it. A landscape shot therefore needs
-  `sips -r 90` then `sips -r 180` to become a true 2752x2064.
-- Rotate via Simulator's Device > Rotate Left **after** raising the right window
-  by name — `window 1` is usually a different simulator. Confirm the rotation by
-  the WINDOW SIZE changing; the screenshot's own dimensions never change.
-
-
-## Release identity
-
-| Field | Value |
-| --- | --- |
-| App | BibleText |
-| Apple app ID | `6784567351` |
-| Bundle ID | `uk.co.bibletext` |
-| Version | `1.2.0` |
-| Build | `161` |
-| Platform | Universal iPhone and iPad |
-| Minimum OS | iOS 13.0 |
-| Price | Free |
-| Primary category | Reference |
-| Secondary category | Education |
-| Copyright | `2026 cubancorona` (matches LICENSE and NOTICE) |
-
-The public App Store version at preparation time is 1.1.8 (build 161 of the
-1.1.8 train, released 18 Aug 2026). Version 1.2.0 is the fast-follow carrying
-the line-framed notes store, note selector, positional citations, and associated
-fixes. Do not change the
-bundle ID or remove iPad support from this update.
-
-## Locally verified release inputs
-
-- `cmd/mobile/FyneApp.toml` is the source of version 1.2.0/build 161.
-- `scripts/release-ios.sh` derives the marketing version from that file, keeps
-  exact copies of locally edited build files, builds arm64, creates an App Store
-  archive, and does not upload unless `BIBLETEXT_UPLOAD=1` is explicitly set.
-- Release builds remain keyed. The Bible API key comes from an external secret
-  source and is injected at link time; a release build must fail when it is
-  absent. Repository files and `.env.local` are not fallback sources.
-- `cmd/mobile/PrivacyInfo.xcprivacy` is copied to the root of the app bundle.
-- `cmd/mobile/LaunchScreen.storyboard` is compiled into the bundle for both
-  iPhone and iPad.
-- `UIRequiresFullScreen` is removed so iPad Split View, Stage Manager, and
-  resizable windows are not disabled.
-- AI provider keys use the Apple Keychain on iOS (preferences elsewhere) and
-  migrate from the old preferences value on first access.
-- The App Store icon is an opaque 1024×1024 RGB image. `release-ios.sh`
-  regenerates the whole icon asset catalog with `actool` from that single
-  source, because fyne emits no iPad Pro 167×167 rendition and App Store Connect
-  rejects the upload with error 90023 without it.
-- The release uses the App Store distribution profile for team `R8PC7239T2`,
-  has `get-task-allow=false`, and declares `ITSAppUsesNonExemptEncryption=false`.
-
-Run the final local checks from the repository root:
-
-```sh
+```bash
+go build ./...
 go test ./...
+go test -race ./...
 go vet ./...
 ./scripts/release-ios.sh
 ```
 
-The last command must finish with `build/BibleText.ipa is ready (version 1.2.0,
-build 161)`. Do **not** set `BIBLETEXT_UPLOAD=1` during preparation.
+`release-ios.sh` derives the version and build from `FyneApp.toml`, applies the
+required Fyne patches, produces a universal archive, and does not upload unless
+`BIBLETEXT_UPLOAD=1` is explicitly set. Leave that variable unset during
+preparation. The final output must identify version 1.2.3, build 174.
 
-Run it as `BIBLETEXT_SHORT_VERSION=1.2.0 ./scripts/release-ios.sh` — the script's
-own default is "1.0", and the marketing version must match the ASC record.
+Release builds intentionally contain the project's API.Bible fallback, supplied
+from the dedicated external release-key source and transformed/injected at link
+time. It is used only to fetch the licensed NKJV and may be overridden by a
+reader's own API.Bible key. No AI-provider key is bundled. Repository files and
+ordinary local environment files are not release-key fallbacks; see
+`docs/API_KEY_HANDLING.md`.
 
-## Store metadata prepared locally
+The public-domain full translations are fetched and cached at runtime. The
+embedded scripture content is only the small WEB Gospels first-launch seed;
+Gospel-parallel data and presentation assets are also embedded. The licensed
+NKJV text is fetched through API.Bible and is never packaged into the binary.
 
-The editable staging files are in `build/appstore/metadata/` (this directory is
-ignored by Git). The prepared English (UK) values are:
+Also verify the archive contains the privacy manifest, launch screen, complete
+icon catalog, `UIDeviceFamily=[1,2]`, `get-task-allow=false`, and
+`ITSAppUsesNonExemptEncryption=false`.
 
-- Name: `BibleText`
-- Subtitle: `Read and study Scripture`
-- Promotional text: the current private, bring-your-own-key summary
-- Description: covers WEB, WEB Catholic, BSB, search, optional AI study, audio,
-  iPad, offline use, no ads, and no accounts
-- Keywords: 94 characters (within the 100-character limit)
-- Support URL: <https://bibletext.co.uk/support.html>
-- Marketing URL: <https://bibletext.co.uk/>
-- Privacy URL: <https://bibletext.co.uk/privacy.html>
-- What's New (1.1.8 DRAFT — requires approval before publication; the
-  text itself is staged at `build/appstore/metadata/en-GB/whats-new-1.1.8.txt`):
-  Someone can now send you a verse with a note attached. Tap their link and
-  BibleText opens the passage with their message beside it, in the translation
-  they were reading. Your notes are collected on the Search tab, where you can
-  search them, sort them and see when each one arrived. The New King James
-  Version is now available, and works as soon as you install the app. Settings
-  has been rebuilt around what you actually change, and reading is tidier
-  throughout: the words of Christ keep their red when a verse is highlighted,
-  and controls that were hard to make out in dark mode are now clearly drawn.
+## Metadata — preview first, write only deliberately
 
-### Review notes — `appstore/review-notes.txt`, and nowhere else
+Editable staging files are under `build/appstore/metadata/` and are ignored by
+Git. For 1.2.3 the English (UK) set must include:
 
-**The canonical review notes are `appstore/review-notes.txt`, which is TRACKED.**
-Rewrite that file for every release, then push it with:
+- the current public description naming WEB, WEB Catholic, BSB, NKJV, shared
+  notes, narration, and optional bring-your-own-key AI study;
+- `whats-new-1.2.3.txt` describing this release;
+- current name, subtitle, keywords, promotional text, support URL, marketing
+  URL, and privacy URL.
+
+The helper is read-only by default:
 
 ```bash
-ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 ASC_KEY_ID=XXXX ASC_ISSUER_ID=... python3 appstore/push-review-notes.py
-```
-
-`build/appstore/review_notes.txt` — the path this document named until 20 August
-— is the OLD, gitignored copy. That is the whole mechanism of the 1.2.0 miss:
-the notes lived somewhere untracked, so nothing in a review of the release diff
-could show they had not been touched, and App Store Connect had already filled
-the field with the previous version's text. A tracked file makes a stale one
-visible as an unchanged file in the diff, and `appstore_review_notes_test.go`
-fails if it still names an older version than `cmd/mobile/FyneApp.toml`.
-
-The notes cover feature paths, iPad behaviour, the optional-AI test procedure,
-data flow, age-rating context, and contact details. Before submission, add a
-temporary review-only provider API key in App Review Information if Apple needs
-to exercise AI. Never commit that key.
-
-The metadata helper resolves version/localization IDs at runtime:
-
-```sh
 ASC_KEY_PATH=/path/AuthKey.p8 \
 ASC_KEY_ID=... \
 ASC_ISSUER_ID=... \
-python3 build/appstore/push_metadata.py
+python3 appstore/push-metadata.py
 ```
 
-It updates text only; it does not choose a build or submit for review. The old
-build-87 TestFlight scripts are guarded and are not part of this release.
+It validates every local input before making any request, resolves exactly one
+1.2.3 record and `en-GB` localization, and prints the proposed differences. It
+does not PATCH without both `--write` and an exact version confirmation. A
+network-free local validation is also available:
+
+```bash
+python3 appstore/push-metadata.py --local-only
+```
+
+After reviewing the remote preview, an authorized operator may repeat the
+command with `--write --confirm-version 1.2.3`. The helper reads every written
+field back and fails on a mismatch. A metadata write neither selects a build nor
+submits a version. `build/appstore/push_metadata.py` is retained only as a local
+compatibility entry point for the tracked helper.
+
+## Review notes
+
+`appstore/review-notes.txt` is the tracked source of truth and must name 1.2.3.
+Validate the local source without contacting App Store Connect:
+
+```bash
+python3 appstore/push-review-notes.py --local-only
+```
+
+Then preview the current App Store Connect value:
+
+```bash
+ASC_KEY_PATH=/path/AuthKey.p8 \
+ASC_KEY_ID=... \
+ASC_ISSUER_ID=... \
+python3 appstore/push-review-notes.py
+```
+
+Only an authorized operator should repeat the command with
+`--write --confirm-version 1.2.3`; the helper reads the field back and fails on
+a mismatch.
+If Apple needs to exercise optional AI features, place any temporary review-only
+AI-provider credential in App Review Information, never in the repository or
+review-notes file.
+
+The notes must distinguish the intentional compiled API.Bible fallback from AI
+provider credentials and accurately describe fetched versus embedded text.
 
 ## Screenshots
 
-Use the opaque JPEG exports, not the source PNGs (the PNG files have alpha).
+The live 1.2.2 listing has eight iPhone 6.9-inch images and eight iPad 13-inch
+images. A complete 1.2.3 replacement set is prepared locally at:
 
-**Replacement required before the next screenshot update:** do not reuse the
-notes-list captures under the local 1.2.1/1.2.2 or design-shot directories.
-Their fixture copy is synthetic, and OCR found no private name or identifier,
-but it reads like personal correspondence and is also present on the current
-public product page. Recapture both device sizes with neutral, explicitly
-synthetic samples, inspect the final JPEGs with OCR, and replace the live
-iPhone and iPad notes-list assets together.
+- `build/appstore/screenshots-iphone-1.2.3/`
+- `build/appstore/screenshots-1.2.3/`
 
-**Current sets: `build/appstore/screenshots-ready-1.1.8/`** (captured 9 Aug
-2026 — AI study, Matthew 1 reading view, Explain, dark mode, and the share
-card, for both slots):
+Images 01–07 retain the 1.2.2 captures. Image 08 was recaptured on the current
+iPhone and iPad interfaces with all and only Psalm 82:1 selected and the real
+Study with AI menu showing Explain, Analyze context, and Analyze translation.
+The upload-ready opaque PNG copies are under
+`build/appstore/screenshots-ready-1.2.3/en-GB/` and its `ipad13/` directory.
+These local assets are preparation only; an App Store upload remains a separate
+explicit operation.
 
-- iPhone 6.9-inch slot: `build/appstore/screenshots-ready-1.1.8/en-GB/` —
-  1320×2868 images
-- iPad 13-inch slot: `build/appstore/screenshots-ready-1.1.8/en-GB/ipad13/` —
-  2752×2064 images
+Before any future screenshot replacement, use neutral, clearly synthetic note
+text and inspect every final image with OCR. Upload iPhone and iPad sets together,
+set the source directory explicitly, verify dimensions/order in App Store
+Connect, and run `appstore/preflight.py` again. Do not use an older
+`screenshots-ready-*` directory or a helper's default path.
 
-The older `screenshots-ready/` directories are the 1.1.6-era sets, superseded.
-Upload once the current review cycle clears (screenshots are per-device-size,
-independent of app version):
+## Privacy, age rating, and declarations
 
-```sh
-ASC_SHOTS_DIR=build/appstore/screenshots-ready-1.1.8/en-GB \
-python3 build/appstore/upload_screenshots.py
+The public listing currently says **Data Not Collected**, consistent with the
+empty collected-data array in `cmd/mobile/PrivacyInfo.xcprivacy` and the fact
+that the developer operates no account, analytics, advertising, or application
+server. Before each submission, re-evaluate that answer against Apple's current
+definitions and the live terms of every supported AI provider: an optional AI
+request goes directly from the reader's device to the provider selected under
+the reader's own key, and that provider may associate or retain it.
 
-ASC_DISPLAY_TYPE=APP_IPAD_PRO_3GEN_129 \
-ASC_SHOTS_DIR=build/appstore/screenshots-ready-1.1.8/en-GB/ipad13 \
-python3 build/appstore/upload_screenshots.py
-```
+Confirm the public privacy and support pages match the submitted binary and are
+live before review. Keep the configured support mailbox consistent through the
+project's central contact mechanism rather than copying an address into this
+checklist.
 
-ALWAYS set `ASC_SHOTS_DIR` explicitly. `upload_screenshots.py` defaults to
-`screenshots-ready/en-GB`, the superseded 1.1.6 set, so the bare command uploads
-the wrong images. The 1.1.8 filenames differ entirely from the 1.1.6 names, so
-nothing is overwritten and both sets remain on the listing.
+Review rather than copy forward:
 
-The helper resolves the current version automatically and does not submit it.
-Visually inspect the resulting order and device frame in App Store Connect.
+- the current age-rating questionnaire, including scriptural content and
+  optional generated AI responses;
+- content-rights declarations and the licences in `NOTICE`;
+- export compliance (`ITSAppUsesNonExemptEncryption=false`, ordinary HTTPS);
+- no IDFA, tracking, ads, login, subscriptions, purchases, or demo account; and
+- accessibility nutrition labels. Do not claim an accessibility feature until
+  common reading, navigation, search, settings, audio, and sharing tasks are
+  verified on both iPhone and iPad.
 
-## Privacy answers to confirm in App Store Connect
+## Final read-back and submission
 
-Answer **Data Not Collected**. That matches the bundled privacy manifest
-(`cmd/mobile/PrivacyInfo.xcprivacy` declares an empty
-`NSPrivacyCollectedDataTypes`) and `docs/privacy.html`. The developer operates no
-server, no accounts and no analytics, and receives none of this data.
+Before a human submits 1.2.3:
 
-The optional AI features are not developer collection: a Find query, or a
-selected passage and study action, goes from the reader's device straight to the
-AI provider they configured, under their own API key. That provider may associate
-and retain the request under the reader's own account and terms — their
-disclosure to their own vendor, which `docs/privacy.html` states plainly. Nothing
-is routed through or retained by any BibleText server. Re-check that wording
-against the supported providers' live terms before review.
+1. Run `appstore/preflight.py` and resolve every warning.
+2. Confirm version 1.2.3/build 174 and the intended release mode.
+3. Read back description, What's New, review notes, URLs, copyright, privacy
+   answers, age rating, and screenshot order from App Store Connect.
+4. Inspect the selected build and archive evidence.
+5. Confirm no previous version is blocking review.
+6. Submit only through an explicitly authorized App Store Connect action.
 
-Leave `NSPrivacyAccessedAPITypes` as declared: file timestamp (C617.1), system
-boot time (35F9.1), and user defaults (CA92.1).
+None of the repository helpers should submit a version implicitly.
 
-Publish the updated `docs/privacy.html` and `docs/support.html` to the live URLs
-before review. This cycle they add the NKJV and API.Bible: support.html no longer
-says the NKJV is unselectable, and privacy.html now lists `rest.api.bible` among
-the services contacted.
+## Release-specific metadata invariants
 
-Publish with **`scripts/publish-site.sh`** and nothing else. Editing `main` alone
-does not update the live site, and files must not be hand-copied onto
-`gh-pages`: that script is the ONLY publisher precisely because it writes the
-whole tree (landing pages AND the generated web reader) in one go — a hand-copy
-of the three pages deletes the reader, and a reader-only publish deletes the
-pages. It also refuses to publish if `CNAME`, `.nojekyll`, any root page, or a
-plausible number of chapter pages is missing. `--dry-run` builds and verifies
-without pushing.
+App Store Connect copies populated metadata forward, so a non-empty field is not
+evidence that it belongs to the current release. Enforce these controls:
 
-## Age rating and compliance review
+- tracked, version-checked review notes;
+- a version-named What's New file;
+- a read-only comparison against the previous version;
+- metadata preview plus explicit `--write`;
+- complete local validation before the first PATCH; and
+- read-back after every write and immediately before submission.
 
-Re-open the current age-rating questionnaire even though the public version is
-shown as 4+. Suggested capability answers, subject to checking the final app:
-
-- Parental controls: No
-- Age assurance: No
-- Unrestricted web access: No
-- User-generated content shared broadly: No
-- Messaging/chat between users: No
-- Advertising: No
-
-Do not copy the old content-frequency answers blindly. Review the scriptural
-descriptions of violence/mature themes and the optional AI-generated responses,
-because Apple's current questionnaire applies content criteria to AI/chatbot
-features. The account holder must choose the truthful frequency values and
-accept any resulting rating.
-
-Also confirm in App Store Connect:
-
-- Content rights cover the bundled/public-domain and attributed data listed in
-  `NOTICE`.
-- Export compliance is answered consistently with
-  `ITSAppUsesNonExemptEncryption=false` (ordinary HTTPS only).
-- Regulated Medical Devices is answered No/not applicable; BibleText provides no
-  medical functionality or claims.
-- No IDFA, tracking, ads, login, subscriptions, in-app purchases, or demo
-  account are declared.
-
-## Accessibility Nutrition Labels
-
-These labels are voluntary as of this checklist date, but App Store product
-pages now show whether support has been indicated. Do not publish a feature
-claim until all common reading, navigation, search, settings, audio, and sharing
-tasks have been tested on both iPhone and iPad against Apple's criteria.
-
-- Dark Interface is the strongest candidate: the app follows the system light
-  and dark appearance throughout.
-- Do not claim Larger Text yet. The in-app scripture control currently tops out
-  at 130%, below Apple's 200% label criterion, and the Fyne UI does not inherit
-  iOS Dynamic Type throughout.
-- VoiceOver, Voice Control, Differentiate Without Color Alone, Sufficient
-  Contrast, and Reduced Motion remain unverified end-to-end. Leave them
-  unclaimed until a device audit proves all common tasks.
-- Captions and Audio Descriptions do not apply to the Bible narration feature.
-
-## OPEN — the App Store description has fallen behind the app
-
-**Confirmed against the live record.** The description sells an app roughly two
-releases old. Its current copy begins:
-
-> Read the World English Bible and the Berean Standard Bible — both public
-> domain — beautifully typeset…
-
-What it leaves out:
-
-- **World English Bible (Catholic)** — public domain, the 73-book canon, in the
-  picker
-- **New King James Version** — licensed and working on install since 1.2.0
-- **Shared notes** — the headline feature of 1.2.0. (The word "notes" does
-  appear, but only in the iPad line: "Split View alongside your notes".)
-- **Audio / read-along narration**
-
-The Store description is controlled release copy; this checklist does not
-rewrite it. The preflight check detects drift.
-
-**Why it needed a different kind of check.** Every other per-release field is
-guarded by "did it move?" — that is what `preflight.py` does, and it is why the
-inherited review notes and screenshots were caught. The description is the one
-field that *should* sit still for years, so that test can never apply to it, and
-sitting still is exactly how it goes wrong: the app grows and the page describing
-it does not. Nothing would ever have flagged this.
-
-`appstore/preflight.py` therefore performs a description-specific check: the
-copy must still name what the app ships. It checks the copy against the
-translations `registeredVersions` actually serves and against the features big
-enough to matter to someone deciding whether to install. It reports and never
-fails the run — the copy is a person's judgement, not a build artifact.
-
-The match is deliberately specific: checking only for "notes" also matches
-"alongside your notes" while the description says nothing about the shared-notes
-feature.
-
-## Pre-submission read-back — run this before every submission
-
-App Store Connect **copies a new version record from the previous one**. Every
-per-release field therefore arrives already populated, already plausible, and
-already wrong; there is no empty box to notice. It has now shipped twice:
-
-- **1.2.0's review notes** were 1.1.8's ("VERSION 1.1.8 — HOTFIX", a
-  search-results fix) while its headline feature was shared notes.
-- **1.2.0's screenshots** are byte-identical to 1.1.8's (compared by
-  `sourceFileChecksum`), and their filenames predate even the prepared
-  `screenshots-ready-1.1.8` set — so the store page for the shared-notes release
-  shows no shared note anywhere.
-
-Reading fields one at a time never caught either, because each looked fine
-alone. What catches them is the **comparison against the previous version**:
-
-```sh
-ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 ASC_KEY_ID=XXXX ASC_ISSUER_ID=... \
-python3 appstore/preflight.py
-```
-
-It is read-only, safe to run at any time, and exits non-zero when a field that
-must be release-specific — What's New, review notes, screenshots — is identical
-to the last release's. Fields that are *meant* to be stable (description,
-keywords, marketing and support URLs) are reported as unchanged and not flagged.
-
-Run it, fix what it flags, run it again, and only then submit.
-
-## App Review notes — the step that was missing until 1.2.0
-
-**Read this before every submission.** The notes App Review reads are
-`appStoreReviewDetail.notes`, and until 19 Aug 2026 nothing in this repo ever
-wrote them. What made that invisible is that App Store Connect **copies the
-previous version's review detail forward** onto each new version record, so the
-field is never empty and never looks wrong. The result:
-
-| version | notes it actually carried |
-|---|---|
-| 1.1.5, 1.1.6, 1.1.7 | "NEW IN 1.1.0 — IPAD" — three releases, unchanged |
-| 1.1.8 | "VERSION 1.1.8 — HOTFIX" (written by hand in the ASC UI) |
-| 1.2.0 | 1.1.8's hotfix notes — a search-results fix, while the release's headline feature was shared notes |
-
-**The trap to know about.** `build/appstore/review_notes.txt` looks like the
-release's review notes and is not. It is read only by `push_betareview.py` and
-`push_testflight.py`, which write `betaAppReviewDetail` — **TestFlight** review,
-a different field. It is also under `build/`, which is gitignored, so it has no
-history, never reaches CI, and is absent from a fresh clone.
-
-**Where the notes live now:** `appstore/review-notes.txt`, tracked.
-
-**What holds them honest:** `appstore_review_notes_test.go` fails in the default
-host test suite and CI when the notes still describe an older version than
-`cmd/mobile/FyneApp.toml` ships, when they contain no way to exercise the app,
-when they say nothing about shared notes while that feature ships, or when
-something that looks like an API key has been pasted in.
-
-**The procedure, every release:**
-
-1. Rewrite `appstore/review-notes.txt` for the release: what changed, and a
-   concrete path a reviewer can follow to exercise it. If the release touches
-   anything where content arrives from another person, explain its provenance
-   and the recipient's controls — that is what the notes field is for.
-2. Run `go test -run TestAppReviewNotes ./...` and let it agree the notes are
-   for this version.
-3. Read back what App Store Connect currently holds, BEFORE submitting:
-
-   ```sh
-   ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 ASC_KEY_ID=XXXX ASC_ISSUER_ID=... \
-   python3 appstore/push-review-notes.py
-   ```
-
-   It prints the live notes and says whether they match the file. Expect a
-   mismatch on a fresh version record — that is the carry-forward.
-4. Write them with `--write`. The tool refuses unless the version is still
-   editable (PREPARE_FOR_SUBMISSION and the rejected states), reads back what it
-   wrote, and fails if the two differ.
-5. Only then submit. After submitting, the notes are what the reviewer sees;
-   changing them is a deliberate decision in the ASC UI, not a script's to make.
-
-A review-only AI provider key, if Apple needs one, goes in the App Store Connect
-form at submission time — never in the tracked file. The guard test enforces
-that too.
-
-## Account-only fields and final submission order
-
-These cannot be proved from the repository or the public product page. The
-Account Holder/App Manager must confirm each item:
-
-1. Agreements are active; tax and banking status does not block the free app.
-2. Digital Services Act trader status and required contact display are complete.
-3. Country-specific availability declarations (including China mainland,
-   Vietnam, and South Korea if applicable to the account type) are complete.
-4. Version 1.1.8 exists for iOS and is in an editable state (it does NOT yet —
-   see "Gate" below; it must be created before a build can attach). While it is
-   editable, also set the version-level Privacy Policy URL, Marketing URL, and
-   Support URL to the bibletext.co.uk pages (standing TODO from 1.1.6).
-5. English (UK) metadata, both screenshot sets, categories, price, territories,
-   and platform availability are correct. Check Mac and Apple Vision Pro
-   availability explicitly rather than inheriting an unintended default.
-   Review optional App Tags as well, but select only tags the app genuinely
-   supports.
-6. App Privacy and the age-rating questionnaire match the sections above.
-7. App Accessibility either remains honestly unindicated or publishes only
-   claims proved by the device audit above.
-8. App Review contact name, reachable email, and phone are current. Paste the
-   prepared notes and, if supplied, the temporary AI review key.
-9. Release mode (manual, automatic, or phased) and the intended release date are
-   selected deliberately.
-10. Upload `build/BibleText.ipa`; wait for processing and any export-compliance
-   prompts; select exactly version 1.1.8/build 157.
-11. Run an installed-build smoke test on a real iPhone and iPad: first launch,
-   Books/Search/Go-to, light/dark mode, rotation and Split View, Save Image and
-   Photos permission, streaming/device audio with background controls, offline
-   relaunch, Keychain migration, AI key test, AI action, and key deletion.
-12. Resolve every warning, then use **Add for Review** / **Submit for Review**.
-
-Submission itself is intentionally left to the authorised account holder.
+An unchanged release-specific field requires explicit verification against the
+current release.

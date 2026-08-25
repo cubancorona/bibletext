@@ -150,18 +150,11 @@ undiscriminated set of fields.
 | `NoteVerseLo` | the note's anchor, kept apart from the highlight because Hide clears the highlight | the same list |
 | `NoteVersionID` | **where it is STORED** — the only handle Hide and Delete have | `notes_store.go:295`, `:314`, `:320`, `:421` **and nowhere else** |
 
-**Both partial writers were fixed on 2026-08-15** (`69d3f4ab3`):
-`share_link_open.go:319` and `clearLiveNote` (`notes_setting.go:263`) now write
-all four. That closed `X1` and `X2` — a quadruple assigned in pieces is not one
-value, and the pieces disagreeing is exactly what those two were.
-
-**It did not close the class, and a ninth writer proves it.**
-`dev_links_on.go:145` writes three of the four (`ActiveNote`, `NoteMinimized`,
-`NoteVerseLo`, leaving `NoteVersionID`) and was added the same day as the commit
-whose whole thesis is that the four are one value. It is `//go:build bibletextdev`
-so it does not ship — but a convention that leaks into the tree on the day it is
-written is not a convention, it is a hope. This is the argument for the type: one
-value cannot be assigned in pieces if there are no pieces to assign.
+`share_link_open.go:319` and `clearLiveNote` (`notes_setting.go:263`) assign all
+four fields together. `dev_links_on.go:145`, behind `//go:build bibletextdev`,
+still demonstrates the structural risk by assigning three fields without
+`NoteVersionID`. A single typed value removes the possibility of a partial
+assignment instead of relying on every writer to preserve the convention.
 
 ### The highlight — and the variable nobody has written down [OBSERVED]
 
@@ -433,10 +426,13 @@ all.
 **`OFFER`** — a link carrying a note arrives while notes are off. Measured:
 nothing mutates — no navigation, no store write, no mirror change
 (`share_link_open.go:62-65`, `:83-86`; `notes_offer.go:121-132`).
-*The reader sees:* a card with three ways out — read it in the browser (which for
-`/nkjv/` is a live 404, `B_NOTE_OFFER_404`, and drops the note), just the passage
+*In this legacy snapshot, the reader saw:* a card with three ways out — read it
+in the browser (the then-live `/nkjv/` 404, `B_NOTE_OFFER_404`, dropped the note), just the passage
 (the note is dropped, not stored), or turn notes back on and read it here (the
 only branch that keeps it).
+
+The current site serves an NKJV no-text notice route and renders the note from
+the fragment; `B_NOTE_OFFER_404` is therefore fixed.
 
 **`PARKED`** — a link is held because the data is not ready, the translation is
 loading, or the book is not in the four-book seed. The note lives ONLY in
@@ -1166,101 +1162,22 @@ Together they find **ZERO violations**. Both pinned lists are empty, and the
 set-equality assertion is what holds them there: any violation now fails as a
 NEW incoherent state, with nothing to hide behind.
 
-> **Re-measured on 2026-08-18, after the X4 and X11 fixes. Sixth pass: ZERO
-> named violations in both spaces** — notes space 1,280 states walked (764
-> skipped as not-offered), 0 violations; origin space 20 states, 0 violations.
-> The walked spaces are unchanged; what changed is the code. `X4` (55+1) died
-> of `turnNotesOff` + the off-branch's `clearMarkFromNote` — every route to
-> "off" now puts out exactly the mark the live note owns and no other. `X11`
-> (3) died of `renumberMarkForVersion` — the version switch renumbers the
-> mark through the notes' own anchor machinery or clears it on anything but a
-> clean landing, and the origin space's N7 check now asserts the surviving
-> span's own frame and its agreement with mapping the pre-switch span
-> forward. Two adjacent honesty fixes rode along: the note-mark's span is
-> stamped with the READING translation's frame (a followed note's span
-> carries renumbered numbers, not its filing's), and the derive's
-> don't-clobber guard became `notesSuppressed` — the plan's own predicate —
-> so a foreign mark carried cleanly onto another chapter is not walked over.
-> The V-invariants hold in all 1,280 cells. `X8` (bare link strips a note's
-> highlight) remains pinned as a named single-state test outside the
-> enumerations, and the store-shape states (`UNREADABLE`, `WIPED`,
-> `JUNK_PURGED`) and `OFF_STUCK`'s Apple repaint lag remain open and
-> documented — an empty violation list means the ENUMERATED spaces are
-> coherent, not that the backlog is.
+Current coverage is deliberately fixed at 1,280 notes-space cells and 20
+highlight-origin cells. The suite reports zero violations across both spaces.
+It verifies that every visible note appears in the chapter plan, at most one
+note is open, suppression opens none without deleting stored notes, note-owned
+highlights carry an explicit origin and version frame, and translation changes
+either renumber that span coherently or clear it.
 
-> **Re-measured on 2026-08-18, after S8 (the surfaces consume the plan).**
-> Fifth pass: 59, from the run output — notes space 55 (`X4`×55), origin
-> space 4 (`X4`×1, `X11`×3) — and the drop from 351 is FOUR STRUCK DEFECTS,
-> not a narrowed harness. The walked space is unchanged (1,280 + 20 cells);
-> what changed is what the reader can see, and two invariants are now judged
-> over it honestly: N4 asserts every passage note is ON the plan (bubble,
-> chip, or unplaced chip) at both moments the reader could look, and N3
-> asserts the open note may change only to a note that was already visible.
-> Under those, `X7`×224 (the invisibility), `X6`×32, `X12`×24 and `X14`×12
-> (the three substitution routes) cover zero cells and are struck from
-> `knownIncoherent` per the contract. What remains is exactly the pair the
-> set display cannot fix: `X4` (notes-off orphans the highlight — a
-> mark/verb defect, unchanged at 55+1) and `X11` (the highlight's missing
-> version frame, 3). The V-invariants hold in all 1,280 cells, zero
-> violations, Open now folded into the plan's fingerprint. The Apple panes
-> stay arity-1 by design: their sticker carries "N more notes on this
-> passage" / "N notes cannot be shown in this translation" in its own text
-> through the existing ABI, so the subset is announced, never silent —
-> platforms differ in richness, not truth.
+The empty violation set applies to these enumerations only. Single-state tests
+separately cover bare-link highlight removal and other shapes that would add
+unhelpful cross-product axes. Store states such as `UNREADABLE`, `WIPED`, and
+`JUNK_PURGED`, plus native repaint behavior, retain their dedicated coverage and
+must not be inferred from this result.
 
-> **Re-measured on 2026-08-18, after S7 (the chapter plan).** Fourth pass:
-> 351, and the growth is the AXIS, not new incoherence. The focus axis
-> quadruples the walked space (320 → 1,280 states), so every defect whose
-> cells are focus-independent scaled with it — `X7` 64→224, `X6` 8→32,
-> `X12` 8→24, `X4` (notes-space) 19→55 — while the whole pre-S7 sub-space
-> (focus=unset) reproduces the third pass EXACTLY: same 99+4 violations, same
-> attribution, which is the measured form of "S7 changed no pixel". The V
-> invariants over the plan hold in all 1,280 cells with zero violations. ONE
-> new defect is pinned: `X14`×12 — a session-focused FOLLOWED note (the reader
-> pressed Show on it) is swapped back for the exact-key default by the next
-> navigation, because navigation resets focus and the arity-1 display can draw
-> only one note. It is the display's arity debt made newly REACHABLE by focus
-> existing at all (before S7 a followed note could not be opened while an
-> exact-key note stood in front of it), not a regression of any fixed defect;
-> S8's set display retires it — a focus reset there changes which note is
-> EXPANDED, never which notes are on screen.
-
-> **Re-measured again on 2026-08-18, after S5 (the scrapbook store).** Third
-> pass: 103. `X5`×4 is struck — Hide, Show and Delete all address the live
-> note's `StoredNote.ID`, so the two verbs of one pair can no longer address
-> different objects — and `X13` and `X3` (both pinned as named single-state
-> tests rather than as enumeration cells) died of the same change: the ID rides
-> with a cross-chapter note, and the cap and its eviction are deleted. The
-> total RISES 87→103, and honestly so: deleting the passage key means an
-> arriving note no longer destroys a same-translation note already on the
-> chapter, so those placeOwn+arrival cells now hold two live notes where the
-> old store silently held one. The arity-1 display then owes them the same
-> debts as every other multi-note cell — `X7` grew 48→64 (the invisibility)
-> and `X12` 4→8 (delete the arrival, the covered note surfaces). What the old
-> totals were hiding was data loss; the new ones report the display model's
-> remaining arity problem, which is S7's work. Nothing else moved: `X4`×20,
-> `X6`×8, `X11`×3 as before.
-
-> **Re-measured twice on 2026-08-15.** Second pass, after S1 (`mark.go`): 87.
-> `X10`×31 is struck — the largest defect in the subsystem after `X7` — because
-> ownership of a highlight is RECORDED now rather than inferred from a matching
-> verse number, so Hide and Delete clear only what the note placed. `X9` went
-> with it, structurally: absence of a mark IS `hlNone`, so there are no location
-> fields left to outlive the flag. `X4` grew 12→20, not by regressing but
-> because the refined orphan check stopped excusing eight arrival cells that a
-> foreign highlight had been masking.
->
-> First pass, against `69d3f4ab3`: This document first recorded
-> 124 violations across eight defects. `X1`×8 and `X2`×10 are **fixed** and
-> struck; `X12`×4 is new. The harness enforces both halves of that — a defect
-> covering nothing fails as FIXED, so these totals cannot quietly go stale
-> again. Read §"X12" before treating the drop as pure progress: 14 of the 18
-> went away, and 4 came back wearing a different name.
-
-The second enumeration is only possible because **the harness records an origin
-the app does not**. That is not a harness convenience; it is the finding. A test
-that has to carry a variable the production model lacks indicates that the model
-lacks it.
+The origin enumeration uses the same highlight metadata as production. This
+keeps the test model and runtime ownership rules aligned rather than introducing
+test-only provenance.
 
 The assertion is **set EQUALITY**, in both directions, exactly as
 `share_link_flow_test.go` does it — a violation no pinned defect covers fails as

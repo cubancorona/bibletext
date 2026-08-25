@@ -1,23 +1,18 @@
 package bibletext
 
-// Responsive layout classification. The mobile binary (iOS/Android) runs on both
-// phones and tablets; which chrome it shows is decided at runtime from the live
-// canvas width, not a build tag. An iPad at full width (or a wide multitasking
-// split) gets the regular layout — a persistent sidebar beside the reading pane,
-// like the desktop — while a phone, or an iPad squeezed into a narrow Slide
-// Over / Split View column, gets the compact bottom-tab layout.
-//
-// classifyLayout is pure so it can be unit-tested on the host; the AppState
-// method feeds it the real canvas width and device idiom.
+// Mobile layout classification. Every touch device now uses one shared layout:
+// Read / Books / Search sits at the bottom in portrait and moves to a leading
+// rail on tablets and Android phones in landscape. The old compact/regular enum
+// and sizing helpers remain as an explicit record of the former split layout.
 
 type layoutClass int
 
 const (
-	// layoutCompact is the phone layout: full-screen tabs (Read / Books / Search)
-	// across the bottom. Used on all phones and on tablets too narrow for a split.
+	// layoutCompact is the shared touch layout. Its navigation is a bottom bar
+	// except where the platform's landscape policy selects a leading rail.
 	layoutCompact layoutClass = iota
-	// layoutRegular is the tablet layout: a persistent navigation sidebar beside
-	// the reading pane (an HSplit), with the app header on top.
+	// layoutRegular is the retained former tablet sidebar + HSplit layout. The
+	// current classifier never selects it.
 	layoutRegular
 )
 
@@ -37,50 +32,27 @@ func isTabletDimensions(w, h float32) bool {
 	return m >= androidTabletMinDim
 }
 
-// tabletLayoutMinWidth is the canvas width (in logical points) at or above which
-// a tablet switches to the regular sidebar+split layout. Below it, even on an
-// iPad (e.g. a 1/2 or 1/3 multitasking column), the sidebar would crowd the
-// reading column, so the compact layout is used instead.
+// tabletLayoutMinWidth is the former breakpoint for the retained regular
+// sidebar+split layout. It is kept for regression tests and documentation; the
+// current shared layout does not switch class at this width.
 //
 // Chosen so an iPad mini in portrait (744pt) clears the bar while a typical
 // half-width multitasking column on an 11" iPad (~397pt portrait, ~507pt
 // landscape) stays compact.
 const tabletLayoutMinWidth float32 = 700
 
-// classifyLayout decides the layout class from the current canvas width and
-// whether the device is a tablet. Phones are always compact. A tablet is regular
-// when it has the width for it; the width<=0 case (before the first layout pass,
-// when the canvas has no size yet) trusts the tablet idiom so an iPad's first
-// real frame is already the regular layout.
-// ONE LAYOUT ON EVERY TOUCH DEVICE. The tablet used to get a layout of its own —
-// a persistent sidebar beside the reading pane — and that second layout is where
-// the iPad's problems lived: a mode row that appeared to govern the sidebar while
-// governing the far pane, and results that replaced the reading pane with no way
-// back, because the tab bar the phone has was not there to return to.
-//
-// Both were symptoms of maintaining two shapes for one app. The phone's shape
-// already answers both — the tab bar is always present, so "back to reading" is
-// a tab, and no sidebar means nothing can imply it governs something it does
-// not. So the iPad takes it too, and what the iPad needs beyond it is not a
-// different layout but a READABLE MEASURE on the surfaces that would otherwise
-// stretch (readableColumn, used by the books, results and notes lists — the
-// reading pane already has the reporter measure).
-//
-// The reason that matters for the years after this is uniformity: the app
-// prioritizes compatibility with the other platforms wherever that makes sense,
-// so a feature does not have to be reworked once per platform. Every future
-// feature now lands on ONE mobile layout.
-//
-// The tablet parameters stay declared and tested: this decision is recorded as a
-// choice, not lost by deleting the concept, and a return to a wide layout is a
-// change here rather than an archaeology exercise.
+// All touch devices use the shared mobile layout. Persistent Read / Books /
+// Search navigation prevents a results surface from stranding the reading
+// surface, while readableColumn constrains list width on larger displays. The
+// retained tablet parameters keep a future wide-layout change explicit and
+// testable without affecting the current classifier.
 func classifyLayout(width float32, isTablet bool) layoutClass {
 	return layoutCompact
 }
 
-// layoutClass reports the layout to use right now, from the live canvas width and
-// the device idiom. Safe before the window/canvas exists (treated as unknown
-// width → the idiom decides).
+// layoutClass reports the shared touch layout. It still passes the live canvas
+// width and idiom through the pure classifier so a future deliberate layout
+// change has one tested decision point.
 func (s *AppState) layoutClass() layoutClass {
 	return classifyLayout(s.canvasWidth(), deviceIsTablet())
 }
@@ -94,9 +66,11 @@ func (s *AppState) canvasWidth() float32 {
 	return 0
 }
 
-// canvasIsLandscape reports whether the canvas is wider than it is tall. Before
-// the canvas is sized it reports true (landscape) so the sidebar defaults to
-// shown rather than flashing collapsed. See resolveSidebarDefault.
+// canvasIsLandscape reports whether the canvas is wider than it is tall. Mobile
+// navigation uses the same live canvas geometry to choose between bottom bar
+// and leading rail; this helper remains the orientation source for the retained
+// former sidebar. Before sizing it reports true for that sidebar's initial
+// default.
 func (s *AppState) canvasIsLandscape() bool {
 	if s == nil || s.window == nil {
 		return true
@@ -108,7 +82,25 @@ func (s *AppState) canvasIsLandscape() bool {
 	return sz.Width >= sz.Height
 }
 
-// resolveSidebarDefault applies the orientation-driven sidebar default for the
+// mobileRailWanted is the shared mobile navigation-placement rule with the
+// platform policy and live canvas geometry stated explicitly. Tablets use a
+// rail in landscape on both mobile platforms. Android phones do too because a
+// bottom bar can consume the remaining reading height on a short landscape
+// window; iPhone keeps its existing bottom-bar convention. An unsized canvas
+// keeps only the tablet's established initial default, avoiding a rail flash on
+// Android before its first real dimensions arrive.
+func mobileRailWanted(tablet, phoneLandscapeRail bool, w, h float32) bool {
+	if w <= 0 || h <= 0 {
+		return tablet
+	}
+	return w >= h && (tablet || phoneLandscapeRail)
+}
+
+func layoutWatcherNeedsRebuild(builtAs, want layoutClass, builtRail, wantRail bool) bool {
+	return want != builtAs || wantRail != builtRail
+}
+
+// resolveSidebarDefault retains the orientation-driven default for the former
 // regular layout: shown in landscape, collapsed in portrait. It is applied only
 // the first time the regular layout is built and thereafter whenever the
 // orientation flips — so a rotation re-asserts the default, while an explicit
@@ -124,7 +116,7 @@ func (s *AppState) resolveSidebarDefault() bool {
 	return s.sidebarCollapsed
 }
 
-// Sidebar sizing for the regular layout. We aim for a fixed ~logical-point width
+// Retained sidebar sizing for the former regular layout. It aims for a fixed
 // rather than a fixed fraction, so the navigation panel stays a comfortable,
 // consistent size whether it's an iPad mini or a 13" iPad in landscape — a fixed
 // fraction would make the sidebar balloon on the big canvases.
@@ -134,7 +126,7 @@ const (
 	regularSidebarMaxFrac  float64 = 0.30
 )
 
-// regularSplitOffset returns the HSplit offset (sidebar fraction of width) that
+// regularSplitOffset returns the former HSplit offset (sidebar fraction) that
 // yields ~regularSidebarTargetPt of sidebar, clamped so it is never a sliver on a
 // huge canvas nor a crushing majority on a small one. width<=0 (canvas not sized
 // yet) falls back to the max fraction, matching the small-canvas default.
@@ -169,10 +161,8 @@ func regularSplitOffset(width float32) float64 {
 // (black) rectangle.
 //
 //   - Full-screen (distraction-free) reading: always show.
-//   - Regular (tablet) layout: the reading pane is always beside the sidebar, so
-//     show whenever a search's results aren't occupying it.
-//   - Compact layout: only the Read tab hosts the reading pane, and only when no
-//     search is active.
+//   - Retained former regular layout: show unless results occupy its reading pane.
+//   - Current shared layout: only Read hosts the pane, and only with no search.
 func overlayShouldShow(state *AppState) bool {
 	if state.IsFullScreen {
 		return true

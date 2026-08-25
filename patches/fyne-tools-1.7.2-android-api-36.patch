@@ -1,0 +1,133 @@
+diff --git a/cmd/fyne/internal/mobile/binres/sdk.go b/cmd/fyne/internal/mobile/binres/sdk.go
+index 46b1d57..6a4a0c9 100644
+--- a/cmd/fyne/internal/mobile/binres/sdk.go
++++ b/cmd/fyne/internal/mobile/binres/sdk.go
+@@ -55,0 +56,5 @@ func LatestAPIResourcesPath() (string, error) {
++	// Keep resource compilation on the platform checked by the wrapper instead
++	// of relying on the upstream lexicographic directory scan.
++	if pinned := os.Getenv("BIBLETEXT_ANDROID_PLATFORM"); pinned != "" {
++		return pinned, nil
++	}
+diff --git b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go
+new file mode 100644
+index 0000000..c171f53
+--- /dev/null
++++ b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go
+@@ -0,0 +1,30 @@
++package binres
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++func TestBibleTextAndroidPlatformPin(t *testing.T) {
++	sdkRoot := t.TempDir()
++	for _, version := range []string{"android-9", "android-35", "android-36"} {
++		if err := os.MkdirAll(filepath.Join(sdkRoot, "platforms", version), 0o755); err != nil {
++			t.Fatal(err)
++		}
++	}
++	platform := filepath.Join(sdkRoot, "platforms", "android-36", "android.jar")
++	if err := os.WriteFile(platform, []byte("synthetic platform"), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("ANDROID_HOME", sdkRoot)
++	t.Setenv("BIBLETEXT_ANDROID_PLATFORM", platform)
++
++	got, err := LatestAPIResourcesPath()
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got != platform {
++		t.Fatalf("LatestAPIResourcesPath() = %q, want %q", got, platform)
++	}
++}
+diff --git a/cmd/fyne/internal/mobile/build.go b/cmd/fyne/internal/mobile/build.go
+index a07b5b0..e543e00 100644
+--- a/cmd/fyne/internal/mobile/build.go
++++ b/cmd/fyne/internal/mobile/build.go
+@@ -33 +33,2 @@ const (
+-	minAndroidAPI = 15
++	minAndroidAPI    = 15
++	androidTargetSDK = 36
+@@ -111,4 +112,4 @@ func runBuildImpl(cmd *command) (*packages.Package, error) {
+-		target := 35
+-		if !buildRelease {
+-			target = 29 // TODO once we have gomobile debug signing working for v2 android signs
+-		}
++		// BibleText re-signs debug APKs with current Android signature schemes,
++		// so the upstream target-29 workaround is unnecessary. Debug and release
++		// packages must exercise the same API-36 platform behavior.
++		target := androidTargetSDK
+diff --git b/cmd/fyne/internal/mobile/build_bibletext_test.go b/cmd/fyne/internal/mobile/build_bibletext_test.go
+new file mode 100644
+index 0000000..26cd2e5
+--- /dev/null
++++ b/cmd/fyne/internal/mobile/build_bibletext_test.go
+@@ -0,0 +1,10 @@
++package mobile
++
++import "testing"
++
++func TestBibleTextAndroidTargetSDK(t *testing.T) {
++	t.Parallel()
++	if androidTargetSDK != 36 {
++		t.Fatalf("androidTargetSDK = %d, want 36", androidTargetSDK)
++	}
++}
+diff --git a/cmd/fyne/internal/util/mobile.go b/cmd/fyne/internal/util/mobile.go
+index d438b9a..9515a57 100644
+--- a/cmd/fyne/internal/util/mobile.go
++++ b/cmd/fyne/internal/util/mobile.go
+@@ -13,0 +14,6 @@ func AndroidBuildToolsPath() string {
++	// BibleText pins the build-tools used by its Android wrapper. The upstream
++	// directory picker is not version-aware (for example, 9 sorts after 36), so
++	// an explicit path is the only deterministic selection.
++	if pinned := os.Getenv("BIBLETEXT_ANDROID_BUILD_TOOLS"); pinned != "" {
++		return pinned
++	}
+diff --git b/cmd/fyne/internal/util/mobile_bibletext_test.go b/cmd/fyne/internal/util/mobile_bibletext_test.go
+new file mode 100644
+index 0000000..3736d75
+--- /dev/null
++++ b/cmd/fyne/internal/util/mobile_bibletext_test.go
+@@ -0,0 +1,37 @@
++package util
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++func TestBibleTextAndroidBuildToolsPin(t *testing.T) {
++	sdkRoot := t.TempDir()
++	for _, version := range []string{"9.0.0", "35.0.0", "36.1.0"} {
++		if err := os.MkdirAll(filepath.Join(sdkRoot, "build-tools", version), 0o755); err != nil {
++			t.Fatal(err)
++		}
++	}
++
++	t.Setenv("ANDROID_HOME", sdkRoot)
++	pinned := filepath.Join(sdkRoot, "build-tools", "36.1.0")
++	aapt2 := filepath.Join(pinned, "aapt2")
++	if err := os.WriteFile(aapt2, []byte("synthetic tool"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("BIBLETEXT_ANDROID_BUILD_TOOLS", pinned)
++
++	if got := AndroidBuildToolsPath(); got != pinned {
++		t.Fatalf("AndroidBuildToolsPath() = %q, want %q", got, pinned)
++	}
++
++	got, err := Aapt2Path()
++	if err != nil {
++		t.Fatal(err)
++	}
++	want := aapt2
++	if got != want {
++		t.Fatalf("Aapt2Path() = %q, want %q", got, want)
++	}
++}

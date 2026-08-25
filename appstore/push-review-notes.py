@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""Write appstore/review-notes.txt into App Store Connect's APP REVIEW notes.
+"""Preview or update App Review notes for the pinned iOS release.
 
-WHY THIS EXISTS. Nothing in this repo ever wrote that field. push_metadata.py
-writes the customer-facing text (description, keywords, whatsNew, copyright);
-push_betareview.py and push_testflight.py write betaAppReviewDetail, which is
-TESTFLIGHT review and a different field entirely. So App Review's notes were
-whatever App Store Connect had copied forward from the previous version — which
-is how 1.2.0 went to review describing 1.1.8's search-results hotfix, and how
-1.1.5, 1.1.6 and 1.1.7 all shipped notes headed "NEW IN 1.1.0 — IPAD".
+The tracked review-notes file is the source of truth. Remote access is
+read-only by default. A write requires both ``--write`` and the exact pinned
+version confirmation, and is allowed only while that version remains editable.
 
-The notes themselves are tracked (appstore/review-notes.txt) and guarded by
-appstore_review_notes_test.go, which fails when they still describe an older
-version than cmd/mobile/FyneApp.toml ships.
+Examples:
 
-USAGE — read first, write only when asked:
-
-    ASC_KEY_PATH=~/.private_keys/AuthKey_XXXX.p8 \\
-    ASC_KEY_ID=XXXX ASC_ISSUER_ID=... \\
-    python3 appstore/push-review-notes.py            # SHOW what is there now
-    python3 appstore/push-review-notes.py --write    # replace it
-
-It refuses to write to a version that is not editable: once a version is
-IN_REVIEW or READY_FOR_SALE, changing what the reviewer was told is not
-something a script should do behind anyone's back.
+    python3 appstore/push-review-notes.py --local-only
+    python3 appstore/push-review-notes.py
+    python3 appstore/push-review-notes.py --write --confirm-version 1.2.3
 """
+
+import argparse
 import json
 import os
+import re
 import subprocess
 import sys
+import urllib.parse
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 NOTES = os.path.join(HERE, "review-notes.txt")
+VERSION_CONFIG = os.path.join(REPO, "cmd", "mobile", "FyneApp.toml")
 ASC = os.path.join(REPO, "build", "appstore", "asc.py")
+SUPPORT_CONTACT_CHECK = os.path.join(REPO, "scripts", "check-support-contact.py")
+REPOSITORY_HYGIENE_CHECK = os.path.join(REPO, "scripts", "check-repository-hygiene.py")
 
-# States whose review notes may still be rewritten. Anything else is either
-# already in front of a reviewer or already shipped.
-EDITABLE = {
+# This helper intentionally has no app-ID or version override. Changing either
+# target requires a tracked, reviewable source change.
+APP_ID = "6784567351"
+TARGET_VERSION = "1.2.3"
+
+# Review notes may be changed only while App Store Connect considers the
+# version editable.
+EDITABLE_STATES = {
     "PREPARE_FOR_SUBMISSION",
     "DEVELOPER_REJECTED",
     "REJECTED",
@@ -44,93 +44,242 @@ EDITABLE = {
     "INVALID_BINARY",
 }
 
-APP_ID = os.environ.get("ASC_APP_ID", "6784567351")
+
+def fail(message):
+    raise SystemExit(message)
 
 
-def asc(*args):
-    if not os.path.exists(ASC):
-        sys.exit(
-            f"cannot find {ASC}.\n"
-            "The ASC client lives under build/, which is gitignored, so a fresh\n"
-            "clone does not have it. See docs/APP_STORE_SUBMISSION.md."
+def verify_tracked_version():
+    try:
+        with open(VERSION_CONFIG, encoding="utf-8") as source:
+            config = source.read()
+    except OSError as exc:
+        fail(f"cannot read {VERSION_CONFIG}: {exc}")
+
+    match = re.search(
+        r'^\s*Version\s*=\s*"([0-9]+(?:\.[0-9]+){2})"\s*$',
+        config,
+        re.MULTILINE,
+    )
+    if not match:
+        fail(f"cannot determine the packaged version from {VERSION_CONFIG}")
+    configured = match.group(1)
+    if configured != TARGET_VERSION:
+        fail(
+            f"writer target is {TARGET_VERSION}, but {VERSION_CONFIG} packages "
+            f"{configured}; update and review the pinned target before remote access"
         )
-    out = subprocess.run([sys.executable, ASC, *args], capture_output=True, text=True)
-    body = out.stdout
-    if "{" not in body:
-        sys.exit(f"App Store Connect call failed:\n{out.stdout}\n{out.stderr}")
-    obj = json.loads(body[body.index("{"):])
-    # AN ERROR BODY IS A FAILURE, NOT A RESULT. asc.py prints the HTTP status and
-    # the JSON either way, and the first version of this tool passed both back as
-    # if the call had worked — so a PATCH that 409'd (the notes were over
-    # Apple's 4,000-character limit) sailed through to the read-back, which then
-    # reported an unexplained "mismatch". That is exactly how 1.2.1's notes
-    # nearly shipped inherited AGAIN, and very likely how 1.2.0's actually did:
-    # the write "succeeded", the field never changed, and nothing said why.
-    if isinstance(obj, dict) and obj.get("errors"):
-        e = obj["errors"][0]
-        sys.exit(f"App Store Connect refused the call: {e.get('title')}\n"
-                 f"  {e.get('detail')}\n  ({e.get('code')})")
-    return obj
 
 
-def main():
-    write = "--write" in sys.argv
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--write",
+        action="store_true",
+        help="write the tracked notes after all safety checks pass",
+    )
+    mode.add_argument(
+        "--local-only",
+        action="store_true",
+        help="validate tracked inputs and gates without authenticating",
+    )
+    parser.add_argument(
+        "--confirm-version",
+        metavar="VERSION",
+        help="required exact target confirmation for --write",
+    )
+    args = parser.parse_args(argv)
 
-    with open(NOTES, encoding="utf-8") as f:
-        notes = f.read().rstrip("\n")
+    if args.write and args.confirm_version != TARGET_VERSION:
+        parser.error(
+            f"--write requires --confirm-version {TARGET_VERSION}; "
+            "no remote request was made"
+        )
+    if args.confirm_version is not None and not args.write:
+        parser.error("--confirm-version is valid only with --write")
+    return args
+
+
+def load_notes():
+    try:
+        with open(NOTES, encoding="utf-8") as source:
+            notes = source.read().rstrip("\n")
+    except OSError as exc:
+        fail(f"cannot read {NOTES}: {exc}")
+
     if not notes.strip():
-        sys.exit(f"{NOTES} is empty — refusing to blank the review notes")
-    # Apple's hard cap. Checked here, before any network call, because the API's
-    # own answer to an over-long value is a 409 at PATCH time — after the diff
-    # has been shown and the write "attempted" — and a cap discovered that late
-    # reads as a transient failure rather than as a fact about the file.
+        fail(f"{NOTES} is empty; refusing to blank the review notes")
     if len(notes) > 4000:
-        sys.exit(f"{NOTES} is {len(notes)} characters; App Store Connect caps "
-                 f"review notes at 4,000. Cut {len(notes) - 4000} characters "
-                 "before pushing — the field simply cannot hold this file.")
+        fail(
+            f"{NOTES} is {len(notes)} characters; App Store Connect caps "
+            f"review notes at 4,000. Remove {len(notes) - 4000} characters."
+        )
+    heading = notes.splitlines()[0].strip()
+    if not re.match(rf"^VERSION {re.escape(TARGET_VERSION)}(?:\s|$)", heading):
+        fail(
+            f"{NOTES} must open with VERSION {TARGET_VERSION}; "
+            f"found {heading!r}"
+        )
+    return notes
 
-    versions = asc("get", f"/v1/apps/{APP_ID}/appStoreVersions?limit=5")["data"]
-    if not versions:
-        sys.exit("no app store versions found")
-    v = versions[0]
-    state = v["attributes"].get("appStoreState")
-    print(f"latest version: {v['attributes'].get('versionString')}  state: {state}")
 
-    detail = asc("get", f"/v1/appStoreVersions/{v['id']}/appStoreReviewDetail").get("data")
-    if not detail:
-        sys.exit("this version has no appStoreReviewDetail yet — create it in the ASC UI first")
+def run_gate(path, failure_message):
+    result = subprocess.run([sys.executable, path], cwd=REPO)
+    if result.returncode != 0:
+        fail(failure_message)
 
-    current = detail["attributes"].get("notes") or ""
+
+def run_repository_gates():
+    # These run before asc.py, so a failing local invariant cannot authenticate
+    # or reach App Store Connect.
+    run_gate(SUPPORT_CONTACT_CHECK, "public support configuration is not release-safe")
+    run_gate(REPOSITORY_HYGIENE_CHECK, "repository hygiene checks failed")
+
+
+def api_error(status, body):
+    if isinstance(body, dict) and body.get("errors"):
+        first = body["errors"][0]
+        title = first.get("title") or "request rejected"
+        detail = first.get("detail") or "no detail supplied"
+        code = first.get("code") or "unknown code"
+        fail(f"App Store Connect returned HTTP {status}: {title}: {detail} ({code})")
+    fail(f"App Store Connect returned HTTP {status}")
+
+
+def api_request(method, path, payload=None):
+    command = [sys.executable, ASC, method.lower(), path]
+    if payload is not None:
+        command.append(json.dumps(payload, separators=(",", ":")))
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        fail(f"App Store Connect client failed: {result.stderr.strip() or 'unknown error'}")
+
+    lines = result.stdout.splitlines()
+    if not lines or not re.fullmatch(r"[0-9]{3}", lines[0].strip()):
+        fail("App Store Connect client returned an unreadable response")
+    status = int(lines[0])
+    encoded = "\n".join(lines[1:]).strip()
+    try:
+        body = json.loads(encoded) if encoded else None
+    except json.JSONDecodeError:
+        fail("App Store Connect client returned a non-JSON response")
+    if not 200 <= status < 300:
+        api_error(status, body)
+    if isinstance(body, dict) and body.get("errors"):
+        api_error(status, body)
+    return body
+
+
+def document_data(body, description):
+    if not isinstance(body, dict) or not isinstance(body.get("data"), dict):
+        fail(f"App Store Connect returned no {description}")
+    return body["data"]
+
+
+def exact_version():
+    query = urllib.parse.urlencode(
+        {
+            "filter[platform]": "IOS",
+            "filter[versionString]": TARGET_VERSION,
+            "limit": "10",
+        }
+    )
+    body = api_request("GET", f"/v1/apps/{APP_ID}/appStoreVersions?{query}")
+    data = body.get("data") if isinstance(body, dict) else None
+    if not isinstance(data, list):
+        fail("App Store Connect returned no version list")
+    matches = [
+        version
+        for version in data
+        if version.get("attributes", {}).get("versionString") == TARGET_VERSION
+        and version.get("attributes", {}).get("platform") == "IOS"
+    ]
+    if len(matches) != 1:
+        fail(
+            f"expected exactly one iOS {TARGET_VERSION} version record; "
+            f"found {len(matches)}"
+        )
+    return matches[0]
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    verify_tracked_version()
+    notes = load_notes()
+    run_repository_gates()
+
+    if args.local_only:
+        print(f"local review-notes preflight: OK (version {TARGET_VERSION})")
+        print("local-only mode: no App Store Connect request made")
+        return 0
+
+    if not os.path.isfile(ASC):
+        fail(
+            f"cannot find {ASC}; the local App Store Connect client is described "
+            "in docs/APP_STORE_SUBMISSION.md"
+        )
+
+    version = exact_version()
+    attributes = version.get("attributes", {})
+    state = attributes.get("appStoreState") or "UNKNOWN"
+    print(f"target version: {TARGET_VERSION}  platform: IOS  state: {state}")
+
+    detail = document_data(
+        api_request(
+            "GET",
+            f"/v1/appStoreVersions/{version['id']}/appStoreReviewDetail",
+        ),
+        "App Review detail",
+    )
+    current = detail.get("attributes", {}).get("notes") or ""
     print("\n--- notes currently in App Store Connect ---")
     print(current if current.strip() else "(EMPTY)")
     print("--- end ---\n")
 
-    if not write:
-        same = current.rstrip("\n") == notes
-        print("in sync with appstore/review-notes.txt" if same
-              else "DIFFERENT from appstore/review-notes.txt — re-run with --write to replace")
-        return
+    same = current.rstrip("\n") == notes
+    if not args.write:
+        if same:
+            print("in sync with appstore/review-notes.txt; preview only, no PATCH made")
+        else:
+            print("DIFFERENT from appstore/review-notes.txt; preview only, no PATCH made")
+            print(
+                "To write, re-run with "
+                f"--write --confirm-version {TARGET_VERSION}."
+            )
+        return 0
 
-    if state not in EDITABLE:
-        sys.exit(
-            f"refusing to write: the version is {state}.\n"
-            "Review notes are only rewritten while a version is still editable — once it\n"
-            "is with a reviewer, any change must be made explicitly in the App Store\n"
-            "Connect UI rather than silently by this script."
+    if state not in EDITABLE_STATES:
+        fail(
+            f"refusing to write: iOS {TARGET_VERSION} is {state}, which is not "
+            "an editable App Store state"
         )
+    if same:
+        print("already in sync; no PATCH needed")
+        return 0
 
-    payload = json.dumps({"data": {
-        "type": "appStoreReviewDetails", "id": detail["id"],
-        "attributes": {"notes": notes},
-    }})
-    asc("patch", f"/v1/appStoreReviewDetails/{detail['id']}", payload)
+    detail_id = detail.get("id")
+    if not detail_id:
+        fail("App Review detail has no resource ID; refusing to write")
+    payload = {
+        "data": {
+            "type": "appStoreReviewDetails",
+            "id": detail_id,
+            "attributes": {"notes": notes},
+        }
+    }
+    api_request("PATCH", f"/v1/appStoreReviewDetails/{detail_id}", payload)
 
-    back = asc("get", f"/v1/appStoreVersions/{v['id']}/appStoreReviewDetail")
-    written = back["data"]["attributes"].get("notes") or ""
+    read_back = document_data(
+        api_request("GET", f"/v1/appStoreReviewDetails/{detail_id}"),
+        "App Review detail read-back",
+    )
+    written = read_back.get("attributes", {}).get("notes") or ""
     if written.rstrip("\n") != notes:
-        sys.exit("READ-BACK MISMATCH: what App Store Connect holds is not what was sent")
-    print("written and read back identical.")
+        fail("read-back mismatch: App Store Connect does not hold the tracked notes")
+    print("written and read back identical")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

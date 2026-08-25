@@ -139,6 +139,7 @@ func bibleTextNoteNextTapped() {
 	}
 	fyne.Do(func() {
 		advanceNoteFocus(state)
+		devTraceNotePlacement(state, "cycle")
 		refreshNoteOnly(state)
 	})
 }

@@ -706,14 +706,18 @@ func applyNoteForCurrentChapter(state *AppState) {
 		state.NoteMinimized = false // ephemeral: never the stored Minimized bit
 		state.NoteVerseLo = own.VerseLo
 		state.NoteID = own.ID
-		if !notesSuppressed(state) && own.VerseLo > 0 {
-			state.setMark(hlNote, VerseSpan{
-				VersionID: state.currentVersion().ID,
-				Book:      state.CurrentBook,
-				Chapter:   state.CurrentChapter,
-				Lo:        own.VerseLo,
-				Hi:        own.VerseHi,
-			})
+		if !notesSuppressed(state) {
+			if own.VerseLo > 0 {
+				state.setMark(hlNote, VerseSpan{
+					VersionID: state.currentVersion().ID,
+					Book:      state.CurrentBook,
+					Chapter:   state.CurrentChapter,
+					Lo:        own.VerseLo,
+					Hi:        own.VerseHi,
+				})
+			} else {
+				state.clearMarkFromNote()
+			}
 		}
 		return
 	}
@@ -778,6 +782,10 @@ func applyNoteForCurrentChapter(state *AppState) {
 		sp := n.span()
 		sp.VersionID = state.currentVersion().ID
 		state.setMark(hlNote, sp)
+	} else {
+		// A chapter-level note has no verse wash. Clear only the previous
+		// note-owned mark so a foreign arrival remains untouched.
+		state.clearMarkFromNote()
 	}
 }
 
@@ -935,6 +943,10 @@ func restoreCurrentNote(state *AppState) {
 			Lo:        state.NoteVerseLo,
 			Hi:        state.NoteVerseLo,
 		})
+	} else {
+		// A chapter-level note has no verse wash. Clear only the prior
+		// note-owned mark so a verse selected before it is not left highlighted.
+		state.clearMarkFromNote()
 	}
 }
 

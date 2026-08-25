@@ -21,6 +21,8 @@ jobs:
       - name: Repository hygiene
         shell: bash
         run: |
+          scripts/check-support-contact.py
+          scripts/check-release-identity.py
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..HEAD"
           else
@@ -48,6 +50,9 @@ jobs:
 
       - name: Release-key flow regression
         run: scripts/test-release-key-flow.sh
+
+      - name: Android target SDK regression
+        run: scripts/test-android-target-sdk.sh
 
       - name: gofmt
         run: |

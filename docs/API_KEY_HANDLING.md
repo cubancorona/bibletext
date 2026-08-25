@@ -2,8 +2,10 @@
 
 ## Current policy
 
-Store releases currently include the project's API.Bible key. Persisted copies
-must exist only in its dedicated external source and the final release binary.
+Published releases currently include the project's API.Bible key. Persisted
+copies are limited to its dedicated external source, the encoded GitHub Actions
+secret required by the cross-platform desktop builders, and final release
+binaries.
 The runtime necessarily decodes a temporary in-memory value when making a
 request, but current releases never copy the project key into Preferences or a
 platform credential store. It must never appear in tracked source, generated
@@ -25,21 +27,34 @@ The release scripts:
 8. use a per-release Go build cache and temporary directory that are removed
    with the release workspace.
 
+GitHub's desktop jobs cannot access the local Keychain. They receive only the
+reversible encoded payload through the encrypted repository secret
+`BIBLETEXT_BUNDLED_KEY_ENC`, remove it from the environment before any build
+subprocess, and reconstruct the linker assignment in memory. The raw project
+key is never supplied to GitHub Actions. Rotate this secret whenever the
+dedicated API.Bible credential changes. Every packaged desktop executable is
+checked for the expected linker payload as well as `-trimpath` before upload.
+
 Android uses a temporary Go wrapper because Fyne supplies its own linker flags.
 The wrapper requires Fyne's path-trimming flag and merges the release value only
-into native shared-library builds.
-Both platform pipelines inspect the produced native payload and fail unless the
-expected transformed value is present; local iOS exports and Android packages
-are checked again after packaging. The iOS intermediate `.app`, temporary Go
-caches, and Android packaging workspace are removed on exit; only the intended
-final release artifacts remain.
+into native shared-library builds. It is used for both the local development APK
+and release packages. The supported iOS simulator/device scripts likewise load
+the dedicated external value and replace Fyne's initial executable with a keyed,
+verified relink; they never retain a keyless fallback.
 
-Normal source, tests, simulator builds, and development-device builds contain
-no project API.Bible key. Reader-supplied keys continue to work through Settings
-and take precedence over the compiled fallback. On upgrade, the app removes an
-old raw copy written by earlier releases only when its saved fingerprint proves
-that the copy was app-seeded; a reader-owned value is left untouched. Clearing
-the project fallback remains persistent without storing the project credential.
+Every supported mobile packaging path inspects the produced native payload and
+fails unless the expected transformed value is present. Local iOS exports and
+Android packages are checked again after packaging. The iOS intermediate
+`.app`, temporary Go caches, and Android packaging workspace are removed on
+exit; only the intended final artifacts remain.
+
+Normal source and test binaries contain no project API.Bible key. App artifacts
+produced by the supported platform scripts do. Reader-supplied keys continue to
+work through Settings and take precedence over the compiled fallback. On
+upgrade, the app removes an old raw copy written by earlier releases only when
+its saved fingerprint proves that the copy was app-seeded; a reader-owned value
+is left untouched. Clearing the project fallback remains persistent without
+storing the project credential.
 
 ## Security boundary
 
@@ -76,7 +91,20 @@ For a non-publishing platform validation, direct the final artifacts to a
 temporary directory with `BIBLETEXT_IOS_OUT_DIR` or
 `BIBLETEXT_ANDROID_DIST_DIR`, inspect them, then remove that directory.
 
-## Separate release TODO
+## Public support contact
 
-- Replace the personal support mailbox with a role address, then update the app,
-  Pages, store metadata, review notes, and downloadable binaries together.
+The public support mailbox has one tracked source:
+`config/support-email.txt`. Application code reads it through `SupportEmail`,
+and the site publisher renders separate display-text and mailto-recipient
+markers into the privacy and support page templates. The shared conservative
+grammar is tracked in `config/support-email-pattern.txt`; it excludes URI
+delimiters and malformed dot or domain forms while allowing ordinary plus
+tags.
+Store and release entry points run `scripts/check-support-contact.py`, which
+rejects an invalid configuration, a literal copy elsewhere in the project, a
+missing template marker, or an unguarded publishing path.
+
+A future move to a role mailbox therefore changes the configuration file only.
+After that change, rebuild the applications, republish the site, and update any
+external store contact field before release; do not paste either address into
+source, documentation, store checklists, or release notes.

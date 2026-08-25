@@ -102,8 +102,8 @@ func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.
 }
 
 // wireStyledReadingScroll registers the freshly built pane for scroll
-// persistence — the styled twin of wireFyneReadingScroll, same precedence:
-// explicit restore > same-chapter carry-over > top.
+// persistence. An explicit placement lets the pane's highlight choose the
+// viewport; otherwise a saved restore outranks same-chapter carry-over.
 func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *styledReadingPane) {
 	if pane == nil {
 		styledScroll, styledPane, styledState, styledFP = nil, nil, nil, ""
@@ -114,10 +114,11 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	newFP := styledPaneFP(state)
 
 	carryVerse, carryDelta, carryFrac := 0, 0.0, 0.0
-	carry := false
+	carry, carryTop := false, false
 	if styledAnchorActive() && styledFP == newFP {
-		if v, d, f, ok := captureStyledAnchor(); ok && (v > 0 || f > 0) {
+		if v, d, f, ok := captureStyledAnchor(); ok {
 			carryVerse, carryDelta, carryFrac, carry = v, d, f, true
+			carryTop = v <= 0 && f <= 0
 		}
 	}
 
@@ -127,8 +128,18 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	styledHighlightCeded = false
 
 	switch {
+	case state.forceReposition:
+		state.forceReposition = false
+		state.restore = nil
+		armStyledRestore(0, 0, 0)
 	case state.restore != nil:
 		armPendingRestore(state) // shared: matches chapter, drops stale targets
+	case carryTop:
+		// Top is a meaningful viewport position even though its serialized
+		// anchor is all zeroes. Claim the placement so a standing note wash
+		// cannot auto-scroll the replacement pane away from the top.
+		armStyledRestore(0, 0, 0)
+		styledHighlightCeded = true
 	case carry:
 		armStyledRestore(carryVerse, carryDelta, carryFrac)
 	default:

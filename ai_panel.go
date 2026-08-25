@@ -146,7 +146,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			state.CurrentBook, state.CurrentChapter, strings.TrimSpace(question), current)
 		mu := &url.URL{
 			Scheme:   "mailto",
-			Opaque:   "cubancorona@gmail.com",
+			Opaque:   SupportMailtoRecipient(),
 			RawQuery: url.Values{"subject": {"BibleText: report AI content"}, "body": {mailBody}}.Encode(),
 		}
 		fyne.CurrentApp().OpenURL(mu)

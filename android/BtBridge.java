@@ -249,6 +249,11 @@ public final class BtBridge {
     // scroll. Guarded by the UI thread.
     private static float pendingFrac = -1f;
 
+    // A width change reflows every line and changes the scroll range. Capture
+    // the live fraction before the Dialog is resized, then reapply it after the
+    // TextView has laid out at the new width.
+    private static float pendingReflowFrac = -1f;
+
     // Last known scroll fraction, updated on every scroll change; read (racily,
     // but it is just a float) by the Go side when persisting reading position.
     private static volatile float lastFrac = 0f;
@@ -400,30 +405,6 @@ public final class BtBridge {
         }
     }
 
-    /** scrollToVerse pins a verse near the top of the viewport — the ARRIVAL
-     *  scroll for a shared link's highlighted passage (the Android twin of the
-     *  highlight branch of iOS's bibleTextScrollReadingTV). It arms
-     *  pendingVerse and runs the shared post-layout applier, so it composes
-     *  with setHtml instead of racing it; a delayed re-assert catches a slow
-     *  first layout. */
-    public static void scrollToVerse(final int verse) {
-        if (verse <= 0) return;
-        UI.post(new Runnable() {
-            @Override public void run() {
-                pendingVerse = verse;
-                scrollRetries = 0;
-                if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "scrollToVerse: armed v" + verse
-                        + " text=" + (text != null) + " layout=" + (text != null && text.getLayout() != null));
-                applyPendingScroll();
-            }
-        });
-        UI.postDelayed(new Runnable() {
-            @Override public void run() {
-                if (pendingVerse == verse) applyPendingScroll();
-            }
-        }, 250);
-    }
-
     private BtBridge() {}
 
     // setAIEnabled mirrors the app's Settings → Assistant choice; called from Go
@@ -562,6 +543,7 @@ public final class BtBridge {
                 verseNums = new int[0];
                 verseStarts = new int[0];
                 verseEnds = new int[0];
+                pendingReflowFrac = -1f;
                 activity = act;
                 installKeyboardWatcher(act);
                 deliverLaunchLink(act);
@@ -718,6 +700,16 @@ public final class BtBridge {
         content = new FrameLayout(activity);
         content.addView(text, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        // A cold Dialog can remain unattached until its Fyne frame arrives. Any
+        // Handler/View.post retry queued before then may run before the first
+        // measure, so the first real TextView layout is the durable liveness
+        // signal for an arrival that is still waiting for verse geometry.
+        text.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override public void onLayoutChange(View v, int l, int t, int r, int b,
+                    int ol, int ot, int orr, int ob) {
+                if (pendingVerse > 0) applyPendingScroll();
+            }
+        });
         // A real (or changed) WIDTH re-derives the sticker: the bubble wraps
         // its text at the content width, and the first refresh may have run
         // before any layout existed. Width only — the band itself changes the
@@ -725,7 +717,10 @@ public final class BtBridge {
         content.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
             @Override public void onLayoutChange(View v, int l, int t, int r, int b,
                     int ol, int ot, int orr, int ob) {
-                if ((r - l) != (orr - ol)) refreshNoteSticker();
+                if ((r - l) != (orr - ol)) {
+                    refreshNoteSticker();
+                    applyPendingReflow();
+                }
             }
         });
         scroll.addView(content, new FrameLayout.LayoutParams(
@@ -784,6 +779,15 @@ public final class BtBridge {
                     int range = Math.max(1, scrollRange());
                     int y = scroll.getScrollY();
                     lastFrac = clamp01((float) y / range);
+                    // Attaching and measuring a cold ScrollView can dispatch a
+                    // scroll-change at y=0 even though no reader gesture occurred.
+                    // An explicit arrival owns the first placement; keep it armed
+                    // until applyPendingScroll resolves and consumes it.
+                    if (pendingVerse > 0) return;
+                    // Resizing the Dialog can clamp the old absolute scrollY
+                    // before the new-width restore runs. That is reflow, not a
+                    // reader gesture; applyPendingReflow owns this traversal.
+                    if (pendingReflowFrac >= 0) return;
                     if (ownScroll) return;
                     if (lastOwnScrollY >= 0 && Math.abs(y - lastOwnScrollY) <= 2) {
                         return; // our own scrollTo arriving after the timed latch expired
@@ -1429,6 +1433,7 @@ public final class BtBridge {
         if (noteNextable) {
             View nxt = new View(activity);
             nxt.setClickable(true);
+            nxt.setContentDescription("Next note");
             nxt.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) { nativeNoteNextTapped(); }
             });
@@ -1615,11 +1620,16 @@ public final class BtBridge {
         });
     }
 
-    /** setHtml replaces the chapter text; frac>=0 arms a one-shot scroll restore, else pins to top. */
-    public static void setHtml(final String html, final float frac) {
+    /** setHtml atomically replaces a chapter and its initial placement: an
+     *  arrival verse outranks frac, frac>=0 restores, otherwise the chapter
+     *  starts at the top. */
+    public static void setHtml(final String html, final float frac, final int arrivalVerse) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
+                // A chapter import carries its own top/restore/arrival placement
+                // and supersedes any unfinished placement for the prior width.
+                pendingReflowFrac = -1f;
                 CharSequence s;
                 if (android.os.Build.VERSION.SDK_INT >= 24) {
                     s = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY);
@@ -1639,11 +1649,14 @@ public final class BtBridge {
                 noteBandSpan = null;
                 refreshNoteSticker();
                 pendingFrac = frac >= 0 ? frac : -1f;
+                if (arrivalVerse > 0) UI.removeCallbacks(scrollIdle);
                 if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "setHtml: frac=" + frac
-                        + " clearing pendingVerse (was " + pendingVerse + ")");
-                pendingVerse = 0; // a following scrollToVerse (queued next) re-arms it
+                        + " arrivalVerse=" + arrivalVerse + " replacing pendingVerse=" + pendingVerse);
+                // Content and placement are one UI message. A non-arrival import
+                // explicitly clears an obsolete target; an arrival cannot be
+                // erased by a layout between separate setHtml/scroll messages.
+                pendingVerse = arrivalVerse > 0 ? arrivalVerse : 0;
                 pendingPlace = true; // this chapter is fresh: place it once
-                scrollRetries = 0;
                 applyPendingScroll();
             }
         });
@@ -1651,48 +1664,20 @@ public final class BtBridge {
 
     // The one-shot arrival verse. Outranks pendingFrac in applyPendingScroll:
     // when both exist the reader ARRIVED somewhere specific; frac is the
-    // "coming back" scroll. Cleared by the first user scroll alongside it.
+    // "coming back" scroll. Consumed after successful placement, or disarmed
+    // once a fully indexed chapter proves the verse is absent.
     private static int pendingVerse = 0;
 
-    // Guards the arrival's re-ask, exactly as noteRetryPending guards the
-    // sticker's. The counter is the backstop: a pane that never lays out must
-    // not spin forever, and 40 traversals is far past any real first layout.
     // pendingPlace is the FRAC-OR-TOP placement, and it is one-shot. Only the
-    // apply that follows a setHtml may use it: a chapter arriving fresh starts
-    // at the top (or at the restore fraction), but a LATER apply with nothing
-    // armed must do nothing at all. Without this, clearing pendingVerse on a
-    // successful arrival made scrollToVerse's own 250 ms re-assert fall through
-    // and scroll the reader back to the top — traced, immediately after the
-    // arrival it had just landed correctly.
+    // apply that follows a setHtml may use it. A successful verse arrival
+    // consumes it so a queued fallback cannot move the reader back to the top.
     private static boolean pendingPlace;
-    private static boolean scrollRetryPending;
-    private static int scrollRetries;
-    private static final int SCROLL_MAX_RETRIES = 40;
 
     /** applyPendingScroll positions the text AFTER the layout that follows a
-     *  setText/scrollToVerse: verse first, else frac restore, else top. All
-     *  callers run on the UI thread, so the posts queue deterministically.
-     *  A free-standing scrollToVerse can race setHtml's post-layout scroll and
-     *  leave an arrival at the previous reading position.
-     *
-     *  AN ARMED ARRIVAL IS NEVER SPENT ON THE TOP. It used to be: when the
-     *  pane had no Layout yet the verse arm simply fell through to the frac
-     *  restore, or to ownScrollTo(0), and the arrival was gone. There were only
-     *  ever three shots at it — setHtml's inline apply, scrollToVerse's inline
-     *  apply, and one 250 ms re-assert — and on a cold start all three can be
-     *  spent before the first measure: the reading overlay's Dialog is not
-     *  shown until a real frame arrives, so a View.post drains at
-     *  dispatchAttachedToWindow, AHEAD of layout. The reader then sits at the
-     *  top of the right chapter with the note far below, which is what the
-     *  as reported.
-     *
-     *  Thirty lines away refreshNoteSticker already solved this class by asking
-     *  again after the layout pass (noteRetryPending) — which is why the
-     *  sticker was placed correctly at y~10300 in the very trace where the
-     *  scroll had given up. This is that same shape for the scroll: while a
-     *  verse is armed and merely UNRESOLVED, re-ask instead of falling through.
-     *  A verse that is armed and genuinely absent from the index still falls
-     *  through, because that is not a timing problem. */
+     *  setText: verse first, else frac restore, else top. All
+     *  callers run on the UI thread. An armed verse remains pending until both
+     *  the TextView layout and verse index exist; the TextView layout listener
+     *  re-enters this method after a cold Dialog's first real measure. */
     private static void applyPendingScroll() {
         if (scroll == null) return;
         scroll.post(new Runnable() {
@@ -1705,22 +1690,11 @@ public final class BtBridge {
                             + " layout=" + (layout != null) + " range=" + (r != null)
                             + " attached=" + scroll.isAttachedToWindow()
                             + " indexed=" + verseNums.length + " verses");
-                    // Not laid out yet, or indexed before the text landed: ask
-                    // again after this pass rather than spending the arrival.
-                    if ((layout == null || verseNums.length == 0)
-                            && scrollRetries < SCROLL_MAX_RETRIES && !scrollRetryPending) {
-                        scrollRetryPending = true;
-                        scrollRetries++;
-                        final int want = pendingVerse;
-                        text.post(new Runnable() {
-                            @Override public void run() {
-                                scrollRetryPending = false;
-                                // Only if the arrival is STILL the live target:
-                                // the reader's own scroll clears pendingVerse,
-                                // and re-applying then would yank them back.
-                                if (pendingVerse == want) applyPendingScroll();
-                            }
-                        });
+                    // Geometry is not ready. Keep the arrival armed; the first
+                    // real TextView layout above will try again. Do not consume
+                    // pendingPlace here, because top/restore must not outrank an
+                    // explicit verse arrival merely due to startup timing.
+                    if (layout == null || verseNums.length == 0) {
                         return;
                     }
                     if (r != null) {
@@ -1744,18 +1718,16 @@ public final class BtBridge {
                         int y = text.getTotalPaddingTop() + top - dp(16);
                         ownScrollTo(Math.max(y, 0));
                         // Consumed — BOTH of them. Clearing pendingVerse is what
-                        // makes scrollToVerse's 250 ms re-assert a LIVENESS test
-                        // ("did the arrival land?") rather than a second
-                        // unconditional scroll. Clearing pendingPlace is what
-                        // stops setHtml's own queued apply — which is still
-                        // behind us in the same queue — from then "placing" the
-                        // fresh chapter at the top, on top of the arrival that
-                        // just succeeded. An arrival IS the placement.
+                        // prevents later layout callbacks from applying it again.
+                        // Clearing pendingPlace prevents the fresh chapter's
+                        // top/restore fallback from undoing this placement.
                         pendingVerse = 0;
                         pendingPlace = false;
-                        scrollRetries = 0;
                         return;
                     }
+                    // The text is fully indexed and this verse genuinely is not
+                    // present. Disarm it and use the fresh chapter's fallback.
+                    pendingVerse = 0;
                 }
                 if (!pendingPlace) {
                     // Nothing armed and no fresh chapter to place: leave the
@@ -1796,6 +1768,12 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (dialog == null) return;
+                if (frameW > 1 && w > 1 && frameW != w && pendingReflowFrac < 0
+                        && pendingVerse <= 0 && !pendingPlace && scroll != null) {
+                    int range = scrollRange();
+                    pendingReflowFrac = range > 0
+                            ? clamp01((float) scroll.getScrollY() / range) : lastFrac;
+                }
                 frameX = x;   // RAW Fyne pixel coords (relative to the activity window).
                 frameY = y;   // The decor's on-screen origin is added in applyFrame.
                 frameW = w;
@@ -1805,6 +1783,19 @@ public final class BtBridge {
                 } else if (wantShown) {
                     applyShow(); // a show() arrived before the first real frame
                 }
+            }
+        });
+    }
+
+    private static void applyPendingReflow() {
+        if (scroll == null || pendingReflowFrac < 0 || pendingVerse > 0 || pendingPlace) return;
+        final float frac = pendingReflowFrac;
+        scroll.post(new Runnable() {
+            @Override public void run() {
+                if (scroll == null || pendingReflowFrac != frac
+                        || pendingVerse > 0 || pendingPlace) return;
+                pendingReflowFrac = -1f;
+                ownScrollTo(Math.round(frac * scrollRange()));
             }
         });
     }

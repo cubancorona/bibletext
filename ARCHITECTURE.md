@@ -12,13 +12,14 @@ The whole shared codebase is **one Go library package, `bibletext`** (every
 `*.go` file in the repo root). It is *not* a `main` package — you cannot
 `go run .` here. Two thin entry points under `cmd/` consume it:
 
-- `cmd/desktop/main.go` — desktop window (HSplit + sidebar + keyboard shortcuts).
+- `cmd/desktop/main.go` — desktop window (shared Read / Books / Search layout,
+  left navigation rail by default, plus keyboard shortcuts). The former
+  sidebar/HSplit remains an explicit diagnostic escape hatch.
 - `cmd/mobile/main.go` — iOS / Android; the OS owns the window size and the
-  Bible loads on a background goroutine behind a spinner. The mobile build picks
-  its chrome **at runtime** by canvas width: phones (and narrow iPad
-  multitasking columns) get the compact bottom-tab layout, a wide iPad gets the
-  regular sidebar+split layout (see UI architecture below and
-  [docs/IPAD.md](docs/IPAD.md)).
+  Bible loads on a background goroutine behind a spinner. Every touch device
+  uses the same Read / Books / Search layout: a bottom bar in portrait and the
+  same destinations in a left rail on tablets and Android phones in landscape
+  (see UI architecture below and [docs/IPAD.md](docs/IPAD.md)).
 
 Per-platform behaviour is selected at compile time by **Go build tags**, not at
 runtime, so each target links only the drivers and native code it needs:
@@ -35,8 +36,9 @@ runtime, so each target links only the drivers and native code it needs:
 | `!darwin && !android` | Linux/Win | `share_other.go` (no-op share stubs), `audio_other.go` (the oto desktop audio engine) |
 
 > Note: gopls analyses only the host build, so iOS/Android/cgo-tagged files look
-> greyed-out in the editor. Validate them with `fyne package -os iossimulator`
-> (iOS) or `scripts/build-android.sh` (Android).
+> greyed-out in the editor. Validate them with `scripts/run-ios-sim.sh` (iOS) or
+> `scripts/build-android.sh` (Android); the wrappers apply the required patched
+> Fyne tree and native bridge setup.
 
 ## Data pipeline
 
@@ -121,7 +123,7 @@ real files; `*_test.go` files are omitted.
 | `annotation.go` | Verse-anchored annotation store (foundation for notes/highlights) |
 | `crossrefs.go` | OpenBible.info TSK cross-references: fetch-once/cache zip, OSIS parsing, per-verse index |
 | `parallels.go` | Embedded Gospel synopsis (`assets/parallels/gospel_parallels.json`); parallel-passage lookup |
-| `red_letter.go`, `red_letter_data.go` | Words-of-Christ ranges + red-letter toggle |
+| `red_letter.go`, `red_letter_{web,bsb,nkjv}_data.go` | Per-edition publisher-marked words-of-Christ spans + red-letter toggle |
 | `verse_of_day.go` | Daily-rotating Christ-centred verse + jump-to-context |
 
 ### Cross-platform state, theme, fonts
@@ -140,17 +142,17 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
-| `ui.go` | Shared header (incl. the iPad sidebar-toggle button), loading/error views |
-| `ui_desktop.go` | `!ios && !android` — `CreateMainUI` (HSplit + sidebar) + keyboard shortcuts |
-| `ui_mobile.go` | `ios \|\| android` — `CreateMainUI` picks compact vs regular at runtime; `buildCompactUI` (bottom tabs: Read / Books / Search), 44pt touch rows |
-| `ui_regular.go` | `ios \|\| android` — `buildRegularWidthUI`, the iPad sidebar+split layout (native reading overlay in the right pane) + `layoutWatcher` (rebuild on breakpoint crossing, or orientation flip while regular) |
-| `layout.go` | Untagged: `classifyLayout` (compact vs regular by width+idiom, breakpoint 700pt), `regularSplitOffset` (~250pt sidebar), the orientation-driven sidebar default (`resolveSidebarDefault`) |
+| `ui.go` | Shared header plus loading/error views |
+| `ui_compact.go` / `tab_rail.go` | Shared Read / Books / Search composition; the same destinations render as a bottom bar or left rail |
+| `ui_desktop.go` / `ui_compact_desktop.go` | `!ios && !android` — shared layout with a left rail by default plus keyboard shortcuts; `BIBLETEXT_DESKTOP_TABS=sidebar` retains the former HSplit for diagnostics |
+| `ui_mobile.go` | `ios \|\| android` — shared touch layout with the platform-native reading pane; tablets move navigation to the left edge in landscape |
+| `ui_regular.go` / `layout.go` | Retained former regular-layout helpers and the resize watcher; `classifyLayout` deliberately resolves every touch device to the shared layout |
 | `reporter_ios.go` / `reporter_other.go` | `reporterLayoutActive()` — gates the iPad U.S. Reports reading layout (true only for iOS tablets; false elsewhere) |
-| `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Also `layoutMayChange()`, gating the `layoutWatcher` install |
+| `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Tablet identity plus live orientation chooses bar versus rail |
 | `textsize.go` | Settings → Reading → Text size: the persisted scale (1.0/1.15/1.3) the scripture body renders at on every platform |
 | `chapter_header_mobile.go` | `ios \|\| android` — the compact mobile chapter toolbar shared by both native reading views |
 | `icons_embed.go` | Bundled icon resources (e.g. the read-aloud waveform glyph) |
-| `sidebar.go` | Navigation sidebar (desktop + iPad regular layout): search box, AI Find, book filter, book list |
+| `sidebar.go` | Former desktop/iPad navigation sidebar, retained for the explicit desktop diagnostic layout |
 | `reading.go` | Reading-pane scaffolding: header (incl. the audio control on Apple platforms), chapter HTML build, `chapterRenderFingerprint`, `rebuildWindow` |
 | `audio_button.go` | The reading-header audio control: collapsed speaker → expanded mini-player (source indicator + ±15s skip + play/pause), self-refreshing host (no pane rebuild) |
 | `audio_menu.go` | Source picker popup — choose recorded narration ↔ read-aloud (sets the preference; never auto-plays) |
@@ -241,33 +243,32 @@ prose.
 | `share_other.go` | `!darwin && !android` no-op stubs for `nativeShareText` / `nativeShareImage` (Android's live in `reading_android.go`) |
 
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
-build — the Go build tag picks the *platform*. The mobile build then branches
-**at runtime** between the compact (phone) and regular (iPad sidebar+split)
-layouts by live canvas width (`classifyLayout`, `layout.go`); a `layoutWatcher`
-rebuilds the window when a resize crosses the 700pt breakpoint, or — while the
-regular layout is up — flips orientation. Desktop has no runtime branching.
+build — the Go build tag picks the *platform*. Both feed the shared composition
+in `ui_compact.go`. The platform seams choose the reading implementation and
+whether navigation is a bar or rail: tablets use a left rail in landscape and
+a bottom bar in portrait; Android phones also use the landscape rail to
+preserve reading height, while iPhone keeps its bottom bar. Desktop defaults to
+the left rail and can opt into the former sidebar or a bottom bar through
+`BIBLETEXT_DESKTOP_TABS` for comparison.
 
 ## UI architecture
 
-The window is built once by `CreateMainUI`. On desktop the split, header, and
-**sidebar are persistent**; only the reading/results pane is swapped on
-navigation. The iPad regular layout reuses the same sidebar and header beside
-the mobile **native** reading overlay, with a header toggle (and an
-orientation-driven default: shown in landscape, collapsed in portrait) that
-hides the sidebar for full-width reading — collapsing while a search is active
-ends the search, since the search field lives in the sidebar. `AppState` holds
-function hooks that the widgets install:
+The window is built by `CreateMainUI`; changing Read / Books / Search updates
+`CurrentTab` and rebuilds the shared composition while preserving application
+state. The reading implementation remains platform-specific: native overlays on
+macOS, iOS, and Android, and the styled Fyne pane elsewhere. `AppState` holds
+function hooks that the active widgets install:
 
 - `showReading()` — rebuild only the reading/results pane.
-- `syncSidebar()` — re-highlight the current book (no entry rebuilds).
+- `syncSidebar()` — re-highlight the current book in the retained sidebar path;
+  a no-op in the shared tab/rail layout.
 - `refresh()` — both of the above; the usual post-navigation call.
 - `focusSearch()` / `setSearchText()` — used by keyboard shortcuts.
 - `hideReadingOverlay()` / `showReadingOverlay()` — pull the native text overlay
   down while a Fyne modal is up (see Reading view).
 
-Typing in the book filter never loses focus because the filter only refreshes
-the list *data*, it does not rebuild the sidebar. Toggling light/dark is the one
-full rebuild (`palette`-coloured canvas objects are recreated), and
+Toggling light/dark performs a full rebuild (`palette`-coloured canvas objects
+are recreated), and
 `applyTheme` calls Fyne's `SetTheme` **only when the theme object changes** —
 re-running it per build would force a full canvas theme-walk (an iOS perf gate).
 
@@ -455,8 +456,8 @@ app stop / window-close (raw `nativeAudioStop()` from the lifecycle hooks — ne
   the same event in the other Gospels is surfaced first, tagged **Parallel**
   (`crossRef.Parallel = true`), so it works without any network.
 - **Red-letter mode** ([red_letter.go](red_letter.go),
-  `red_letter_data.go`) — words-of-Christ verse ranges; toggle persisted in
-  preferences; folded into the reading fingerprint.
+  `red_letter_{web,bsb,nkjv}_data.go`) — publisher-marked spans for each edition;
+  toggle persisted in preferences and folded into the reading fingerprint.
 - **Verse of the day** ([verse_of_day.go](verse_of_day.go)) — a deterministic
   daily-rotating Christ-centred verse with a jump-to-context.
 
@@ -567,8 +568,8 @@ to 1.3 leading and first-line-indent paragraphs (literal em+en spaces — the
 HTML importer drops `text-indent`), and the centred 27.5em column
 (`reporterMeasureEm`) is implemented NATIVELY as the `UITextView`'s
 `textContainerInset` (`bibleTextSetReadingMeasure` → `btIOSApplyInsets`,
-recomputed on every frame change) — so rotation / Split View / sidebar
-toggles re-centre without re-rendering, and the em-based measure keeps
+recomputed on every frame change) — so rotation and Split View re-centre
+without re-rendering, and the em-based measure keeps
 ~59 characters per line at every text-size setting. Phones and the other
 platforms keep the 2.0-leading, paragraph-gap styling.
 
@@ -651,19 +652,23 @@ Desktop targets compile from `./cmd/desktop` (Fyne pulls in OpenGL/GLFW). Plain
 `go` commands need no setup — `go.mod` ships **stock** Fyne:
 
 ```bash
-go run ./cmd/desktop                                  # fast desktop launch
-GOOS=linux   GOARCH=amd64 go build -o bibletext-linux ./cmd/desktop
-GOOS=windows GOARCH=amd64 go build -o bibletext.exe   ./cmd/desktop
-GOOS=darwin  GOARCH=arm64 go build -o bibletext-macos ./cmd/desktop
-go test -race ./...                                   # tests live in the root package
+go run ./cmd/desktop                    # fast desktop launch
+go build ./...                          # host-platform build
+go test -race ./...                     # tests live in the root package
 ```
 
-Mobile targets are packaged by the `fyne` CLI from `./cmd/mobile` (it sets up the
-iOS SDK / Android NDK CGO toolchain and assembles the bundle with `FyneApp.toml`
-+ `Icon.png`):
+Fyne uses cgo, so a bare `GOOS=... go build` is not a portable desktop
+cross-build. Build natively on each target, use `fyne-cross`, or let the
+release workflow build macOS, Windows, and Linux on their native runners.
+
+Mobile targets are packaged through the repository wrappers, which invoke the
+`fyne` CLI with the patched Fyne tree, native bridge, `FyneApp.toml`, and icon:
 
 ```bash
-cd cmd/mobile && fyne package -os iossimulator --app-id uk.co.bibletext
+go install fyne.io/tools/cmd/fyne@v1.7.2
+./scripts/run-ios-sim.sh                 # iOS simulator
+./scripts/run-ios-device.sh              # signed development-device build
+./scripts/release-ios.sh                 # App Store archive; no upload by default
 ./scripts/build-android.sh                # Android debug APK
 ./scripts/build-android.sh --release      # signed .aab + universal APK
 ```

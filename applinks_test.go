@@ -161,7 +161,7 @@ func TestAssetLinksMatchesTheSignedApp(t *testing.T) {
 		t.Fatal("no signing fingerprint — verification cannot succeed")
 	}
 	// Read from the APK that is actually distributed:
-	//   apksigner verify --print-certs BibleText-universal.apk
+	//   apksigner verify --print-certs BibleText-Android.apk
 	const shipped = "41:B3:DF:F3:D9:9D:5C:7E:F7:79:A7:DA:8F:85:F5:C3:84:18:C2:3C:19:FE:9D:86:D9:95:30:0B:90:59:07:55"
 	found := false
 	for _, fp := range l.Target.Fingerprints {

@@ -63,10 +63,9 @@ func refreshNoteInPlace(state *AppState) bool {
 	}
 	pushNoteToPane(state)
 	// forceReposition means "place the view", which is a SCROLL and never a
-	// re-import (reading_tint_apple.go). advanceNoteFocus deliberately sets none
-	// — the cycle changes the selection in place — but hide/restore/delete may,
-	// and honouring it here is what keeps this path a true substitute for the
-	// rebuild rather than a subset of it.
+	// re-import (reading_tint_apple.go). Note cycling sets it only when the next
+	// note has another verse anchor; honoring it here keeps the fast path a true
+	// substitute for the rebuild rather than a subset of it.
 	if state.forceReposition {
 		state.forceReposition = false
 		nativeScrollToHighlight()

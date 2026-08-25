@@ -27,13 +27,33 @@
 # After that: just run this script. A paid-team development profile is valid for
 # ~1 year (vs a free team's 7 days) — re-run any time to reinstall.
 set -euo pipefail
+umask 077
 
-# Development packaging must not inherit unrelated provider credentials or the
-# shared release key from a shell used for live-provider testing.
-unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY BIBLE_API_KEY
+# Device builds carry the same project fallback as release builds. Isolate the
+# raw credential before any build subprocess and keep unrelated provider keys
+# out of the entire toolchain.
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+unset BIBLE_KEY_LDFLAGS BIBLETEXT_RELEASE_LDFLAGS BIBLETEXT_REAL_GO
 export GOFLAGS="" GODEBUG=""
+case "${BASH_SOURCE[0]}" in
+  */*) script_dir_part="${BASH_SOURCE[0]%/*}" ;;
+  *) script_dir_part="." ;;
+esac
+case "$script_dir_part" in
+  /*|./*|../*) ;;
+  *) script_dir_part="./$script_dir_part" ;;
+esac
+original_dir="$PWD"
+builtin cd -P -- "$script_dir_part"
+SCRIPT_DIR="$PWD"
+builtin cd -- "$original_dir"
+unset original_dir script_dir_part
+source "${SCRIPT_DIR}/release-bible-key.sh"
+load_release_bible_key
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+python3 "$REPO_ROOT/scripts/check-support-contact.py"
+python3 "$REPO_ROOT/scripts/check-repository-hygiene.py"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
@@ -67,12 +87,13 @@ fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 # because fyne increments FyneApp.toml while packaging.
 cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
 cp "$APP_DIR/FyneApp.toml" "$WORK/FyneApp.toml.original"
-trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml" 2>/dev/null || true; rm -rf "$APP_DIR/$APP_NAME" "$WORK"' EXIT
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 
-# Development-device builds use the reader-supplied key path. The shared
-# release credential is injected only by Store/release pipelines.
+# The Fyne-produced bundle is keyless and supplies only resources. The final
+# executable below is linked with the externally sourced project fallback,
+# verified, signed, installed, and then removed with the private workspace.
 
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
@@ -149,10 +170,12 @@ note "provisioning profile: $PROFILE_NAME"
 # leaving nothing to reuse. Assembling unsigned keeps this step independent of the
 # provisioning state — fyne exits 0 and leaves the bundle, and step 6 signs it.
 note "fyne package -os ios (assembling the app bundle, unsigned; we re-sign in step 6)"
-( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >/tmp/fyne_bundle.log 2>&1 ) || true
+( cd "$APP_DIR" && fyne package -os ios --app-id "$APP_ID" >"$WORK/fyne_bundle.log" 2>&1 ) || true
 cp "$WORK/FyneApp.toml.original" "$APP_DIR/FyneApp.toml"
-APP="$APP_DIR/$APP_NAME"
-[ -f "$APP/Info.plist" ] || { tail -20 /tmp/fyne_bundle.log; fail "fyne did not leave an app bundle to reuse."; }
+PACKAGED_APP="$APP_DIR/$APP_NAME"
+[ -f "$PACKAGED_APP/Info.plist" ] || { tail -20 "$WORK/fyne_bundle.log"; fail "fyne did not leave an app bundle to reuse."; }
+APP="$WORK/$APP_NAME"
+mv "$PACKAGED_APP" "$APP"
 
 # ── 5. cross-compile the Go app to ios/arm64 and swap the binary in ─────────
 note "cross-compiling Go → ios/arm64"
@@ -161,9 +184,12 @@ CC="$(xcrun --sdk iphoneos -f clang)"
 CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
     CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
     CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-    go build ${DEV_TAG:+-tags "${DEV_TAG#,}"} -o /tmp/bibletext-ios-arm64 "$REPO_ROOT/cmd/mobile"
+    go build -trimpath -ldflags "$BIBLE_KEY_LDFLAGS -s -w" \
+      ${DEV_TAG:+-tags "${DEV_TAG#,}"} -o "$WORK/bibletext-ios-arm64" "$REPO_ROOT/cmd/mobile"
+BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+  python3 "$REPO_ROOT/scripts/verify-release-key.py" "$WORK/bibletext-ios-arm64"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
-cp /tmp/bibletext-ios-arm64 "$APP/$EXE"; chmod +x "$APP/$EXE"
+mv "$WORK/bibletext-ios-arm64" "$APP/$EXE"; chmod +x "$APP/$EXE"
 note "binary arch: $(lipo -archs "$APP/$EXE")"
 /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion $IOS_MIN" "$APP/Info.plist" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string $IOS_MIN" "$APP/Info.plist"
@@ -205,23 +231,23 @@ plutil -lint "$APP/Info.plist" "$APP/PrivacyInfo.xcprivacy" >/dev/null
 note "re-signing"
 rm -rf "$APP/_CodeSignature"
 cp "$PROFILE_FILE" "$APP/embedded.mobileprovision"
-security cms -D -i "$PROFILE_FILE" > /tmp/bt_prof.plist
-plutil -extract Entitlements xml1 -o /tmp/bt_ent.plist /tmp/bt_prof.plist
+security cms -D -i "$PROFILE_FILE" > "$WORK/bt_prof.plist"
+plutil -extract Entitlements xml1 -o "$WORK/bt_ent.plist" "$WORK/bt_prof.plist"
 # Universal links: the profile grants the capability as a WILDCARD ("*"), which
 # enumerates no domains — an app signed with that would install fine and never
 # open a shared link. Pin the concrete domain, matching release-ios.sh. If the
 # profile lacks the capability entirely, skip it: signing an entitlement the
 # profile doesn't authorise fails the install outright, and a build without
 # universal links is far better than no build.
-if /usr/libexec/PlistBuddy -c "Print :com.apple.developer.associated-domains" /tmp/bt_ent.plist >/dev/null 2>&1; then
-    /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" /tmp/bt_ent.plist >/dev/null 2>&1 || true
-    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" /tmp/bt_ent.plist
-    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:bibletext.co.uk" /tmp/bt_ent.plist
+if /usr/libexec/PlistBuddy -c "Print :com.apple.developer.associated-domains" "$WORK/bt_ent.plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$WORK/bt_ent.plist" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" "$WORK/bt_ent.plist"
+    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:bibletext.co.uk" "$WORK/bt_ent.plist"
     note "universal links: claiming applinks:bibletext.co.uk"
 else
     note "profile has no Associated Domains capability — universal links will NOT work in this build"
 fi
-codesign -f -s "$CERT_HASH" --entitlements /tmp/bt_ent.plist --generate-entitlement-der "$APP"
+codesign -f -s "$CERT_HASH" --entitlements "$WORK/bt_ent.plist" --generate-entitlement-der "$APP"
 
 # ── 7. install + launch ─────────────────────────────────────────────────────
 note "installing on device"

@@ -709,17 +709,8 @@ func notesSlice(m map[string]StoredNote) []StoredNote {
 	return out
 }
 
-// TAPPING YOUR OWN NOTE MUST NOT TAKE A FRIEND'S AWAY.
-//
-// The old mine branch raised an hlVerseOfDay mark, whose origin is not fromNote
-// (mark.go), so
-// notesSuppressed was true (notes_plan.go) and the Open loop stood down every
-// note on the chapter. A reader with a friend's note open on Psalm 23 who
-// tapped their OWN note in the list watched their friend's message collapse
-// into a pill — caused by the tap, explained by nothing.
-//
-// This pins the property rather than the mechanism: after tapping your own
-// note, a received note on the same passage is still openable.
+// Opening an own note must use a note-owned mark. A foreign mark would suppress
+// every note on the chapter, including received notes on the same passage.
 func TestOwnNoteTapDoesNotSuppressAFriendsNote(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -843,10 +834,8 @@ func TestOwnLinkComesHomeAsYours(t *testing.T) {
 	}
 }
 
-// A FRIEND'S IDENTICAL WORDS ARE STILL THEIR OWN NOTE. The failure mode the
-// nonce exists to prevent: short fixture strings repeat, and
-// a content-keyed collapse would fold a real message from a real person into
-// your record and show it as yours, with nothing to say it had arrived.
+// Equal text with a different nonce remains a distinct received note. Text is
+// not a safe identity key because independent notes can have equal content.
 func TestAFriendsIdenticalNoteIsNotSwallowed(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -935,16 +924,8 @@ func TestTappingYourOwnLinkDrawsYourOwnNote(t *testing.T) {
 	}
 }
 
-// NOTHING YOU WROTE CAN BE LOST FROM THE READING PAGE.
-//
-// Drawing your own note made the pane's − and ✕ reachable on it for the first
-// time. Both were wrong for a card that is on the passage only because you
-// asked and only until you navigate away: − wrote a DURABLE "minimized" bit,
-// whose only reader is a browser sentence that would then be false, and ✕
-// deleted the only record of something you wrote — unconfirmed, in one press.
-//
-// Both now mean "put it away", which is what navigating away does a moment
-// later. Deleting your own note stays an explicit act in the notes browser.
+// Reading-page controls only dismiss an own note's session projection. Durable
+// minimization and deletion remain explicit operations in the notes browser.
 func TestReadingPageVerbsCannotDestroyYourOwnNote(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -994,9 +975,7 @@ func TestReadingPageVerbsCannotDestroyYourOwnNote(t *testing.T) {
 	}
 }
 
-// And the same verbs still do their real work on a note somebody SENT you —
-// the point is not to make the pane inert, only to stop it destroying your own
-// words without asking.
+// Received-note controls retain their durable minimize/delete semantics.
 func TestReadingPageVerbsStillWorkOnAReceivedNote(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1112,24 +1091,9 @@ func TestNoteRowTrashDeletesTheNote(t *testing.T) {
 	}
 }
 
-// PUTTING A NOTE AWAY OPENS NOTHING ELSE — the rule the codebase states as N3:
-// "nothing may take the closed one's place under the reader's eyes."
-//
-// Found by a state-transition analysis, then measured. With a friend's note
-// also on the passage, putting YOUR OWN note away opened THEIRS in its place —
-// fully expanded, with the wash jumping onto their verse:
-//
-//	before: active="fixture outgoing beta" id=2
-//	after:  active="fixture received beta" id=1 markLive=true lo=17
-//
-// The plan was right throughout (openNote() reported false); the MIRROR was
-// wrong. applyNoteForCurrentChapter read the stored Minimized bit, which is
-// only one of the three things that keep a note closed — the other two, focus
-// none and suppression, it could not see. It now reads the plan's Open, which
-// folds all three.
-//
-// The fixture is the whole point: the original test had only ONE note, so the
-// display index had nowhere to fall and the defect could not appear.
+// Dismissing one note must not expand another. The mirror must use the plan's
+// Open state, which combines stored minimization, session focus, and
+// suppression. Two notes are required to exercise unintended substitution.
 func TestPuttingYourOwnNoteAwayOpensNothingElse(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -1192,13 +1156,9 @@ func TestPuttingYourOwnNoteAwayOpensNothingElse(t *testing.T) {
 	}
 }
 
-// WHAT YOU SENT IS WHAT IS STORED — the prerequisite the collapse rests on.
-//
-// A mutation analysis found this path unguarded: strip normalizeNote and the
-// single-verse spelling from saveMyNote and the whole suite stayed green. Both
-// exist so the sent record and the link carry the SAME note; without them the
-// nonce still matches but the two records describe different text, and any
-// future content comparison silently misses.
+// The stored own-note record and its shared link must contain the same
+// normalized text and verse range. A matching nonce cannot compensate for
+// divergent content.
 func TestSaveMyNoteStoresWhatActuallyTravelled(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1233,14 +1193,9 @@ func TestSaveMyNoteStoresWhatActuallyTravelled(t *testing.T) {
 	}
 }
 
-// YOUR OWN NOTE'S BYLINE SURVIVES A CHAPTER THAT CANNOT BE REACHED.
-//
-// Also found unguarded by mutation: delete the store lookup in
-// appleStickerPush's mirror-only arm and nothing failed. That arm runs when the
-// note is not in this chapter's plan — an arrival filed on a passage this canon
-// lacks, so the chapter was clamped — and it built the who line from a ZERO
-// StoredNote, which reads as received. Your own words, under "Note from
-// Friend", on the one path where nothing downstream can correct it.
+// A sent note can target a passage beyond the active canon and therefore remain
+// outside the clamped chapter plan. The mirror-only path must recover the stored
+// record before deriving its byline so a sent note retains sent-note attribution.
 func TestOwnNoteBylineSurvivesAClampedChapter(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1252,7 +1207,7 @@ func TestOwnNoteBylineSurvivesAClampedChapter(t *testing.T) {
 	mine, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
 		Book: "John", Chapter: 21, VerseLo: 25, Text: "the last verse"})
 	if !ok {
-		t.Fatal("your note was not stored")
+		t.Fatal("sent note was not stored")
 	}
 	st := planTestState(t)
 	// The mirror carries it even though the plan for this chapter does not.
@@ -1271,18 +1226,8 @@ func TestOwnNoteBylineSurvivesAClampedChapter(t *testing.T) {
 	}
 }
 
-// DELETING FROM THE LIST MUST NOT OPEN SOMEBODY ELSE'S NOTE, and must not leave
-// focus naming a record that no longer exists.
-//
-// The row bin was added with the verb-to-screen re-derive but without the focus
-// reset every other delete path has. Measured before the fix, with a friend's
-// note on the same passage and your own note on screen:
-//
-//	showing: active="fixture outgoing beta" NoteID=2 focus={true 2}
-//	after:   active="fixture received beta" NoteID=1 focus={true 2}   ← a deleted id
-//
-// So deleting your own note from a LIST made a stranger's message appear on the
-// passage, expanded, unasked for.
+// List deletion clears focus for the removed record and must not expand another
+// note on the same passage.
 func TestDeletingFromTheListOpensNothingElse(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1329,14 +1274,8 @@ func TestDeletingFromTheListOpensNothingElse(t *testing.T) {
 	}
 }
 
-// RE-SHARING THE SAME NOTE STILL COMES HOME AS YOURS.
-//
-// Every share mints a fresh nonce, but sharing the same words on the same
-// passage twice is ONE note: addNote dedups on content and keeps the FIRST
-// nonce. The second link therefore carried an identity the store did not hold,
-// so tapping your own second link stored a received duplicate and showed your
-// words as "Note from Friend" — the exact defect the nonce exists to prevent,
-// reachable again just by re-sharing. The record decides the identity now.
+// Re-sharing a deduplicated own note can mint a new link nonce. The stored
+// record's identity still determines ownership when that link returns.
 func TestResharingTheSameNoteStillComesHomeAsYours(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

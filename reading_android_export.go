@@ -50,6 +50,7 @@ func btaSelectionAction(cAction, cText *C.char, lo, hi C.int) {
 func btaScrolled(frac C.float) {
 	if state := activeAIState; state != nil {
 		fyne.Do(func() {
+			clearAndroidDataSwapArrival(state)
 			state.restore = nil
 			flushReadingStateAsync(state)
 		})
@@ -89,18 +90,9 @@ func btaReadAlongFollowTapped() {
 // passage ›"): focus advances to the next note in the plan's stable order,
 // wrapping (advanceNoteFocus, notes_plan.go).
 //
-// NO CARRY, deliberately — the in-place rule, on every platform: the advance
-// is a selection, so the sticker, band and tint swap in place and the
-// viewport stays put. This export used to declare the arrival
-// (forceReposition) so the re-render's arrival scroll carried the reader to
-// the new verse; without the flag, pushChapterHTML's same-chapter capture
-// branch records the current position as a restore and the re-render lands
-// back exactly where the reader was — which is now the wanted behaviour, by
-// the very mechanism that used to be the bug. That general capture-branch
-// guard stays (a theme flip must still not move the page); only the verb's
-// declaration is gone. Tradeoff, named: cycling to a note far down the
-// chapter can leave the sticker outside the viewport; in-place was chosen
-// over carry anyway.
+// advanceNoteFocus declares placement only when the rendered anchor changes.
+// pushChapterHTML then suppresses same-chapter carry and lands on the new note;
+// notes sharing an anchor retain the current viewport.
 //
 //export btaNoteNextTapped
 func btaNoteNextTapped() {

@@ -3,10 +3,13 @@
 package bibletext
 
 // deviceIsTablet is the desktop/wasm fallback: desktop uses its own dedicated
-// layout (ui_desktop.go), so the runtime compact/regular machinery never runs
+// shell (ui_desktop.go), so mobile tablet detection never runs
 // there. iOS answers via the UIKit idiom (device_ios.go); Android via the
 // sw600dp-style dimension heuristic (device_android.go).
 func deviceIsTablet() bool { return false }
+
+// Off Android there is no phone-specific landscape-rail policy.
+func phoneLandscapeNavRail() bool { return false }
 
 // layoutMayChange gates installing the layoutWatcher; moot off mobile.
 func layoutMayChange() bool { return false }

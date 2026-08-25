@@ -128,6 +128,43 @@ func TestFyneSameChapterRerenderKeepsPosition(t *testing.T) {
 	}
 }
 
+func TestFyneExplicitPlacementOutranksSameChapterCarry(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	state := sampleState()
+	w := buildTestPane(t, state)
+	defer w.Close()
+
+	scroll, chapter := fyneReadingScroll, fyneReadingChapter
+	maxOff := chapter.MinSize().Height - scroll.Size().Height
+	if maxOff <= 0 {
+		t.Fatal("test pane must be scrollable")
+	}
+	scroll.Offset = fyne.NewPos(0, maxOff/2)
+
+	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	target := verses[len(verses)-1].Verse
+	state.setHL(hlNote, state.CurrentBook, state.CurrentChapter, target, target)
+	state.forceReposition = true
+	w2 := buildTestPane(t, state)
+	defer w2.Close()
+
+	if state.forceReposition {
+		t.Error("legacy Fyne pane did not consume the explicit placement request")
+	}
+	if fyneRestoreArmed {
+		t.Error("same-chapter carry must not outrank an explicit placement")
+	}
+	want := fyneReadingChapter.highlightY() - 24
+	if want < 0 {
+		want = 0
+	}
+	if got := fyneReadingScroll.Offset.Y; got < want-2 || got > want+2 {
+		t.Errorf("explicit placement offset %.1f, want %.1f", got, want)
+	}
+}
+
 func TestFyneUserScrollDropsRestore(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

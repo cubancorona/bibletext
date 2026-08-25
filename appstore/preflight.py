@@ -1,23 +1,10 @@
 #!/usr/bin/env python3
-"""Pre-submission read-back: what does App Store Connect ACTUALLY hold, and how
-much of it was silently inherited from the last release?
+"""Read-only App Store Connect state and metadata-consistency preflight.
 
-WHY THIS EXISTS. App Store Connect copies a new version record from the previous
-one. Every per-release field therefore arrives already populated, already
-plausible, and already WRONG — there is no empty box to notice. Twice now that
-has shipped:
-
-  * 1.2.0 went into review with review notes headed "VERSION 1.1.8 — HOTFIX",
-    describing a search-results fix, while its headline feature was shared notes.
-    1.1.5, 1.1.6 and 1.1.7 had all carried "NEW IN 1.1.0 — IPAD" before that.
-  * 1.2.0's screenshots are byte-identical to 1.1.8's (checked by
-    sourceFileChecksum) and their filenames predate even the prepared 1.1.8 set,
-    so the store page for the shared-notes release shows no shared note.
-
-Reading the fields one at a time never caught it, because each looked fine on
-its own. What catches it is the COMPARISON: this tool diffs the version being
-submitted against the one before it and says which per-release fields did not
-move. A field that must change every release and did not is the whole bug.
+App Store Connect initializes a new version with populated fields copied from
+the previous version. A plausible value is therefore not proof that a
+release-specific field was reviewed for the current version. This tool compares
+adjacent versions and reports release-specific fields that did not change.
 
 READ-ONLY — it makes no PATCH, POST or DELETE. Safe to run at any time,
 including while a version is in review.
@@ -33,11 +20,26 @@ import json
 import os
 import subprocess
 import sys
+import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 ASC = os.path.join(REPO, "build", "appstore", "asc.py")
-APP_ID = os.environ.get("ASC_APP_ID", "6784567351")
+SUPPORT_CONTACT_CHECK = os.path.join(REPO, "scripts", "check-support-contact.py")
+APP_ID = "6784567351"
+LOCALE = "en-GB"
+
+
+def configured_version():
+    config = os.path.join(REPO, "cmd", "mobile", "FyneApp.toml")
+    with open(config, encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip().startswith("Version"):
+                return line.split("=", 1)[1].strip().strip('"')
+    raise SystemExit(f"Version is missing from {config}")
+
+
+VERSION = configured_version()
 
 # Fields that MUST be rewritten for every release. Anything here that is
 # identical to the previous version was inherited, not written.
@@ -47,21 +49,11 @@ PER_RELEASE = {"whatsNew", "review notes", "screenshots"}
 # report can say "unchanged, and that is fine" rather than staying silent.
 STABLE = {"description", "keywords", "marketingUrl", "supportUrl"}
 
-# THE DESCRIPTION NEEDS A DIFFERENT KIND OF CHECK, and this is the reasoning.
-# Every other per-release field is guarded by "did it move?". The description is
-# the one field that SHOULD sit still for years, so that test can never apply to
-# it — and sitting still is exactly how it goes wrong: the app grows and the
-# page describing it does not. On 19 Aug 2026 the live copy still offered "the
-# World English Bible and the Berean Standard Bible" while the app shipped four
-# readable translations, and mentioned neither shared notes nor audio.
-#
-# What CAN be checked is the claim against the code: every translation a reader
-# can actually open should be named on the page selling the app. These are the
-# ones registeredVersions (versions.go) serves today.
+# A stable description needs a content check rather than a change check. Every
+# translation a reader can open should be named on the store page. These are the
+# translations registeredVersions (versions.go) serves today.
 # Each entry: (name-for-the-report, tuple of phrasings that count as naming it).
-# The alternates exist because the 1.2.1 copy says "including a Catholic
-# edition" and the checker's exact-name grep called that absent — a false
-# advisory, and a checker that cries wolf trains its reader to skip the report.
+# Alternate phrasings keep the advisory focused on content, not exact wording.
 DESCRIBED_TRANSLATIONS = [
     ("World English Bible", ("world english bible",), "public domain, always available"),
     ("Berean Standard Bible", ("berean standard bible",), "public domain, always available"),
@@ -72,10 +64,8 @@ DESCRIBED_TRANSLATIONS = [
 
 # Features big enough that a reader deciding whether to install would want them
 # on the page. Kept short on purpose: this is not a changelog.
-# The needles are deliberately SPECIFIC. "notes" alone matched the iPad line's
-# "Split View alongside your notes" and passed the check while the description
-# said nothing whatever about the shared-notes feature — a false pass on the one
-# feature that most needs to be on the page.
+# The needles are deliberately specific so unrelated uses of "notes" do not
+# satisfy the shared-notes check.
 DESCRIBED_FEATURES = [
     ("shared notes", ("shared note", "note attached", "verse with a note", "send someone a verse",
                       "notes from friends", "note of your own")),
@@ -92,10 +82,24 @@ def asc(path):
     return json.loads(out.stdout[out.stdout.index("{"):])
 
 
+def verify_support_contact():
+    """Stop before store access if public contact consumers have diverged."""
+    result = subprocess.run([sys.executable, SUPPORT_CONTACT_CHECK], cwd=REPO)
+    if result.returncode != 0:
+        sys.exit("public support configuration is not release-safe")
+
+
 def version_fields(vid):
     """Every per-release field of one version, in a comparable shape."""
     f = {}
-    loc = asc(f"/v1/appStoreVersions/{vid}/appStoreVersionLocalizations")["data"][0]
+    localizations = asc(
+        f"/v1/appStoreVersions/{vid}/appStoreVersionLocalizations?limit=200"
+    )["data"]
+    matches = [item for item in localizations
+               if item.get("attributes", {}).get("locale") == LOCALE]
+    if len(matches) != 1:
+        sys.exit(f"expected exactly one {LOCALE} localization; found {len(matches)}")
+    loc = matches[0]
     a = loc["attributes"]
     for k in ("whatsNew", "description", "keywords", "promotionalText", "marketingUrl", "supportUrl"):
         f[k] = (a.get(k) or "").strip()
@@ -122,20 +126,16 @@ IN_REVIEW_STATES = {
 }
 
 
-def report_live_states():
+def report_live_states(data):
     """Print every version's live state and flag anything blocking a submission.
 
-    WHY THIS IS THE FIRST THING PRINTED. Twice in two days a release plan was
-    made against a remembered state that had already moved: 1.2.1 was recorded
-    as awaiting review when it had gone live, and 1.2.2 was assumed reviewable
-    when it was still queued and therefore blocking everything behind it. Both
-    were found by hand-querying, which is precisely the step that gets skipped.
+    App Store version states change asynchronously and can invalidate a release
+    plan between local preparation and submission. Querying the live state first
+    prevents later steps from relying on an earlier observation.
 
-    The field comparison below answers "was this version's copy written for it".
-    It cannot answer "may I submit at all", and that is the question a release
-    starts with.
+    Field comparison does not establish whether another version is already in
+    review, so the live state is reported independently.
     """
-    data = asc(f"/v1/apps/{APP_ID}/appStoreVersions?limit=10")["data"]
     print("live version states")
     blocking = []
     for v in data:
@@ -156,13 +156,44 @@ def report_live_states():
     return blocking
 
 
-def main():
-    report_live_states()
+def version_tuple(value):
+    try:
+        parts = tuple(int(part) for part in value.split("."))
+    except (AttributeError, ValueError):
+        raise SystemExit(f"invalid App Store version string: {value!r}")
+    if len(parts) != 3:
+        raise SystemExit(f"invalid App Store version string: {value!r}")
+    return parts
 
-    versions = asc(f"/v1/apps/{APP_ID}/appStoreVersions?limit=2")["data"]
-    if len(versions) < 2:
-        sys.exit("need at least two versions to compare against")
-    cur, prev = versions[0], versions[1]
+
+def resolve_versions(data):
+    """Resolve the configured iOS record and its nearest earlier version."""
+    current = [item for item in data
+               if item.get("attributes", {}).get("versionString") == VERSION]
+    if len(current) != 1:
+        raise SystemExit(
+            f"expected exactly one iOS App Store version {VERSION}; found {len(current)}"
+        )
+    target_tuple = version_tuple(VERSION)
+    earlier = [
+        item for item in data
+        if version_tuple(item.get("attributes", {}).get("versionString", "")) < target_tuple
+    ]
+    if not earlier:
+        raise SystemExit(f"no earlier iOS version exists for comparison with {VERSION}")
+    previous = max(
+        earlier,
+        key=lambda item: version_tuple(item["attributes"]["versionString"]),
+    )
+    return current[0], previous
+
+
+def main():
+    verify_support_contact()
+    query = urllib.parse.urlencode({"filter[platform]": "IOS", "limit": "200"})
+    versions = asc(f"/v1/apps/{APP_ID}/appStoreVersions?{query}")["data"]
+    blocking = report_live_states(versions)
+    cur, prev = resolve_versions(versions)
     cv = cur["attributes"].get("versionString")
     pv = prev["attributes"].get("versionString")
     print(f"comparing {cv} ({cur['attributes'].get('appStoreState')}) against {pv}\n")
@@ -215,10 +246,12 @@ def main():
         for p in problems:
             print(f"  - {p}")
         print(
-            "\nThese arrived by App Store Connect's copy-forward, not by anyone's decision.\n"
-            "That is exactly how 1.2.0 shipped 1.1.8's review notes and 1.1.8's screenshots.\n"
+            "\nThese values match the previous version and therefore require explicit review.\n"
             "Fix them before submitting (docs/APP_STORE_SUBMISSION.md)."
         )
+    if blocking:
+        return 1
+    if problems:
         return 1
     print("\nevery per-release field was written for this release.")
     return 0

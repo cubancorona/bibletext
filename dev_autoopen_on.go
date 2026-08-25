@@ -24,6 +24,7 @@ package bibletext
 // overlay underneath — which is exactly what a host-side canvas capture cannot.
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -190,6 +191,8 @@ func devAutoReadAlong(state *AppState) {
 //	           walks 1 of 3 → 2 of 3 → 3 of 3 → 1 of 3 with the bubble
 //	           swapping under it, and with BIBLETEXT_PERF set the log says
 //	           tint-mutate between the taps, never html-import
+//	s10far     two notes far apart in John 11; cycling proves the viewport
+//	           follows the newly selected note in both directions
 func devAutoNotesS8(state *AppState) {
 	scenario := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")))
 	if scenario == "" || state == nil {
@@ -282,6 +285,17 @@ func devAutoNotesS8(state *AppState) {
 		for _, d := range []time.Duration{18 * time.Second, 26 * time.Second, 34 * time.Second} {
 			time.AfterFunc(d, func() { devNoteNextTap(state) })
 		}
+	case "s10far":
+		far := func(verse int, text string) {
+			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+				"John", 11, verse, verse, text))
+			devTraceNotePlacement(state, "arrival")
+		}
+		at(1500*time.Millisecond, func() { far(6, "Fixture note near the chapter start.") })
+		at(6*time.Second, func() { far(54, "Fixture note near the chapter end.") })
+		for _, d := range []time.Duration{12 * time.Second, 20 * time.Second} {
+			time.AfterFunc(d, func() { devNoteNextTap(state) })
+		}
 	case "s9who", "s9pill":
 		at(1500*time.Millisecond, func() { link("Fixture message alpha beta gamma delta epsilon.") })
 		at(6*time.Second, func() { link("Fixture same-range message two.") })
@@ -335,6 +349,26 @@ func devAutoNotesS8(state *AppState) {
 		at(8*time.Second, func() { link("Fixture same-range message two.") })
 		at(16*time.Second, func() { link("Fixture same-range message three.") })
 	}
+}
+
+func devTraceNotePlacement(state *AppState, event string) {
+	if state == nil || os.Getenv("BT_SCROLL_DEBUG") == "" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[scroll] note %s: anchor=%d force=%v\n",
+		event, state.NoteVerseLo, state.forceReposition)
+}
+
+// devAppID isolates synthetic desktop note scenarios from the installed app's
+// preferences. Mobile simulators already run in disposable app containers.
+func devAppID(id string) string {
+	if strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")) != "" {
+		if target := devMimicTarget(); target != "" {
+			return id + ".devnotes." + target
+		}
+		return id + ".devnotes"
+	}
+	return id
 }
 
 // devNoteDebug reports the live note state for on-screen diagnosis. TEMPORARY:

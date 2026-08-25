@@ -617,23 +617,14 @@ func nextNoteFocusID(state *AppState, plan chapterPlan) uint64 {
 	return plan.Notes[0].Note.ID
 }
 
-// advanceNoteFocus is the Apple sticker's next-tap (the who-line's count
-// region, bibleTextNoteNextTapped): the NEXT note in the plan's stable order
-// opens, with the EXACT semantics of tapping that note's chip in the Fyne
-// banner (noteBannerChip) — a stored minimize is undone by the note's own ID
-// (selecting it is the Show verb), a foreign mark stands aside (the identity
-// table: "taps a note chip instead → that is the new choice"), focus names the
-// note, and the mirror is re-projected from the plan.
+// advanceNoteFocus selects the next note in the plan's stable order. Selection
+// restores a minimized target, clears a foreign mark, focuses the target by
+// identity, and re-projects the state mirror from the plan.
 //
-// THE CYCLE STAYS IN PLACE — NO CARRY, ON EVERY PLATFORM (reversing the S10
-// carry: advancing must not move the scroll position — the note changes right
-// where it is). The advance is a SELECTION, not an arrival: the bubble and the
-// wash swap where they are, and the viewport does not move — so this verb
-// deliberately does NOT set forceReposition, and the Android export sets none
-// either (btaNoteNextTapped). The named tradeoff: cycling to a note anchored
-// far down the chapter can put the sticker outside the viewport — the reader
-// scrolls to it themselves. In-place was chosen over carry deliberately, with
-// that cost on the table.
+// A note on another verse is also an explicit placement request. Without it,
+// the note and wash move while the viewport stays at the previous note, making
+// the selected note appear to vanish. Notes sharing an anchor keep the current
+// viewport so cycling between them does not cause needless motion.
 func advanceNoteFocus(state *AppState) {
 	if state == nil || state.ActiveNote == "" {
 		return
@@ -657,15 +648,15 @@ func advanceNoteFocus(state *AppState) {
 	if state.mark.live() && !state.mark.fromNote() {
 		state.clearMark()
 	}
+	previousVerse := state.NoteVerseLo
 	state.focusNote(id)
 	applyNoteForCurrentChapter(state)
-	// A pending restore is dropped, but NOT because the tap is an arrival: a
-	// standing restore forces the push down the slow re-import path (the skip
-	// gate requires restore == nil). Measured live: with the restore standing
-	// every next-tap logged html-import ~14 ms; cleared, the tap is the
-	// sticker's own compare-and-refresh. The old carry — forceReposition,
-	// washIsLiveMutation-gated — is deliberately GONE: the cycle changes the
-	// selection in place and never moves the viewport (see the doc above).
+	if state.NoteVerseLo != previousVerse {
+		state.forceReposition = true
+	}
+	// The newly selected note outranks a pending saved-position restore. The
+	// platform render path either performs the requested placement or retains
+	// the current viewport when both notes share an anchor.
 	state.restore = nil
 }
 

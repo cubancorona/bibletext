@@ -1,174 +1,182 @@
-# Google Play listing — copy & console answers
+# Google Play listing — copy, assets, and console review
 
-Everything to paste into the Play Console when creating the app record.
-Graphics are in [`docs/play-assets/`](play-assets/). Build to upload:
-`~/Library/Android/bibletext-dist/BibleText.aab` (versionCode 1 — bump
-`-app-build` for every future upload). See [ANDROID.md](ANDROID.md) for builds.
+BibleText does not yet have a public Google Play listing. This document prepares
+the record without claiming that an account, closed test, production access, or
+submission already exists.
 
----
+Prepared release identity:
+
+- package: `uk.co.bibletext`
+- version: 1.2.3
+- versionCode: 174
+- minimum SDK: Android 5.0 / API 21
+- target SDK: Android 16 / API 36
+- upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
+
+The version and versionCode come from `cmd/mobile/FyneApp.toml`; do not supply a
+different manual `-app-build`. Produce the AAB only with
+`scripts/build-android.sh --release`, then verify its manifest and signer as
+described in [ANDROID.md](ANDROID.md). The current wrapper requires platform
+`android-36` and build-tools `36.1.0`, applies the pinned Fyne tools v1.7.2
+target-SDK patch, and verifies both debug APK and release AAB manifests. Google
+requires API 36 for new apps and updates from 31 August 2026, so an API 35
+artifact is not a valid prepared upload.
 
 ## App details
 
 | Field | Value |
-|---|---|
-| App name (≤30) | `BibleText` |
-| Default language | `en-GB` (or `en-US`) |
+| --- | --- |
+| App name | `BibleText` |
+| Default language | `en-GB` |
 | App or game | App |
-| Free or paid | Free |
+| Price | Free |
 | Category | Books & Reference |
 | Tags | Bible, Reference |
-| Contact email | the address on the Play account (Apple side uses cubancorona@gmail.com) |
+| Contact email | configured project support mailbox |
 | Website | `https://bibletext.co.uk/` |
-| Privacy policy URL | `https://bibletext.co.uk/privacy.html` |
-| Support page (optional) | `https://bibletext.co.uk/support.html` |
+| Privacy policy | `https://bibletext.co.uk/privacy.html` |
+| Support page | `https://bibletext.co.uk/support.html` |
 
-> TODO: Replace the personal support mailbox with a project-owned address
-> consistently across the app, site pages, store metadata, and rebuilt release
-> binaries.
+Keep the support address synchronized through the project's central contact
+mechanism; do not copy a personal mailbox into this checklist.
 
-## Short description (80 chars max — this one is 76)
+## Short description
 
 > A quiet, fast Bible reader. Search, study, and read — no ads, no tracking.
 
-## Full description (4000 chars max)
+## Full description
 
-> BibleText is a clean, unhurried place to read Scripture. No ads, no
-> accounts, no tracking — just the text, beautifully set on a warm parchment
-> page, with the tools you actually use while reading.
+> BibleText is a clean, unhurried place to read Scripture. No ads, no accounts,
+> no tracking — just the text, carefully set, with the tools you use while
+> reading.
 >
 > READ
-> • The World English Bible (WEB), the WEB Catholic Edition with the
->   deuterocanonical books, and the Berean Standard Bible (BSB) — complete,
->   modern, public-domain translations
-> • Comfortable typography with adjustable text size, light and dark mode
-> • Poetry set as poetry — Psalms, Proverbs, Job and the prophets in their
->   authored verse lines, one line per line, as in print
-> • The words of Jesus in red (on by default; switchable in Settings)
-> • Chapter-by-chapter navigation, a recent-chapters bar, and a Go-to box
->   that jumps straight to any reference like John 3:16
-> • Works offline after the first download
+> • World English Bible, WEB Catholic with the deuterocanonical books, Berean
+> Standard Bible, and the licensed New King James Version
+> • Words of Christ follow each edition's own publisher markings
+> • Adjustable text size, light and dark appearance, poetry set as poetry
+> • Chapter navigation, recent history, and Go to for references such as John
+> 3:16
+> • Works offline after the selected translation has downloaded
+>
+> SEARCH AND STUDY
+> • Search words, phrases, and references across the active translation
+> • Follow cross-references and Gospel parallels
+> • Optional Study with AI and Find using your own Gemini, OpenAI, Anthropic, or
+> Grok provider key; leave Assistant set to None to disable them completely
+>
+> SHARE AND NOTES
+> • Share a passage as citation text, a typeset image, or a link
+> • Add a short note to a verse link; it travels inside the link, not through a
+> BibleText account or server
+> • Browse, search, dismiss, or delete notes on your device
 >
 > LISTEN
-> • Complete human-recorded narration for every chapter, or your device
->   reading the page aloud
-> • Verses highlight as they are read, and playback rolls on into the next
->   chapter
-> • Keeps playing with the screen off, with lock-screen and notification
->   controls and ±15-second skip
->
-> SEARCH
-> • Instant search across all 31,000+ verses as you type
-> • Look up a word, a phrase, or a reference
-> • Results shown in context, with your search highlighted
->
-> STUDY (optional, bring your own key)
-> • Explore a passage's context and translation notes, have it explained,
->   or describe a half-remembered verse and let Find locate it
-> • Works with your own API key from Gemini, OpenAI, Anthropic, or Grok —
->   your key stays on your device, and nothing is sent anywhere unless you
->   use a study feature
-> • Entirely optional: turn the study features off completely, or just leave
->   them unused — every reading and search feature works without them
+> • Complete public-domain recorded narration for WEB and BSB, plus on-device
+> read-aloud where supported
+> • Read-along highlighting, chapter continuation, background playback, and
+> lock-screen/notification controls on Android
 >
 > PRIVATE BY DESIGN
-> • No ads, no analytics, no account, no tracking
-> • The Bible text is fetched once from a free public source and cached on
->   your device
-> • Open source: github.com/cubancorona/bibletext
->
-> "Your word is a lamp to my feet, and a light for my path." — Psalm 119:105
+> • No ads, analytics, account, or tracking
+> • Full Bible texts and study data are fetched from their documented providers
+> and cached; the licensed NKJV is fetched through API.Bible
+> • AI requests go directly to the provider selected under the reader's own key
+> • Free and open source: github.com/cubancorona/bibletext
 
-## Graphics (in docs/play-assets/)
+## Graphics
+
+The icon and feature graphic under `docs/play-assets/` remain usable:
 
 | Asset | File | Spec |
-|---|---|---|
+| --- | --- | --- |
 | App icon | `icon-512.png` | 512×512 PNG |
 | Feature graphic | `feature-graphic.png` | 1024×500 PNG |
-| Phone screenshots | `01-reading.png`, `02-search.png`, `03-books.png` | 1080×2160 (min 2 required) |
 
-More/nicer screenshots can be captured any time from the emulator:
-`adb exec-out screencap -p > shot.png`, then crop to ≤2:1
-(`sips -c 2160 1080 --cropOffset 110 0 shot.png`).
+The existing `01-reading.png`, `02-search.png`, and `03-books.png` phone images
+show an older interface and must not be uploaded for 1.2.3. Recapture at least:
 
-## Data safety form
+1. reading with edition-correct red letters;
+2. Search/cross-references;
+3. the grouped Old Testament / New Testament Books grid;
+4. shared notes with plainly synthetic text; and
+5. the NKJV translation/settings state.
 
-Recommended answers (accurate for this app):
+Use the release build or an equivalent current emulator build, inspect every
+final image visually and with OCR, and meet Play's current aspect-ratio and pixel
+requirements. Do not overwrite the old assets in place until the new set has
+been reviewed side by side.
 
-- **Does your app collect or share any of the required user data types?** → **No**
-  - Rationale: no analytics, no ads SDKs, no accounts, no identifiers. The
-    Bible text is fetched anonymously from a public API and cached. AI keys
-    are stored only on the device. AI questions are sent directly to the
-    provider the user chose, with the user's own key, only when the user
-    explicitly asks — a user-initiated action with clear expectation, which
-    Play's data-safety guidance exempts from "sharing" disclosure.
-- **Is all of the user data collected by your app encrypted in transit?** →
-  Yes (everything is HTTPS) — only asked if you answer Yes above.
-- If you would rather over-disclose: declare *App activity → Other
-  user-generated content*, **shared** (not collected), optional, for app
-  functionality — covering AI questions. Either stance is defensible; the
-  "No" answer matches what the developer receives (nothing).
+## Data safety
 
-## Content rating questionnaire (IARC)
+Do not copy a previous “No data collected or shared” answer without reviewing
+Google's current definitions. The developer operates no analytics, advertising,
+account, or application server and does not receive reading history, notes, or
+keys. However, the app makes off-device requests:
 
-Category: **Reference, News, or Educational**. Answer **No** to every content
-question (violence, sexuality, language, controlled substances, gambling,
-user-generated content, location sharing, personal-info sharing, in-app
-purchases). Expected rating: **Everyone / PEGI 3**.
+- translation/study/audio providers receive the resource being requested;
+- API.Bible receives passage requests plus the project or reader API key; and
+- when the reader invokes an optional AI feature, the selected AI provider
+  receives the query or selected passage/action under the reader's account.
 
-Note: the AI study feature displays output generated by a service the user
-configures themselves (BYOK); the app ships no chat with strangers and no
-user-to-user content, so answer "No" to the UGC question.
+Google treats collection and sharing as separate questions, and a
+user-initiated transfer exception for sharing does not automatically answer the
+collection question. Complete the form from the final binary and current policy,
+document the reasoning, and make the privacy policy match. All network traffic
+is HTTPS.
 
-## Other declarations
+## Content rating and other declarations
 
-- **Ads**: No, the app contains no ads.
-- **In-app purchases**: none.
-- **Target audience**: 18+ or 13+ (do NOT tick under-13 — that triggers the
-  Families policy track for no benefit).
-- **News app**: No. **COVID-19 app**: No. **Data deletion**: n/a (no accounts).
-- **Government app**: No. **Financial features**: No.
-- **App access**: "All functionality is available without special access."
-  Add a note: the optional AI features require the reviewer's own API key;
-  all reading/search features work without any setup.
-- **Advertising ID**: the app does not use it (AD_ID permission is absent).
+Review the live IARC questionnaire rather than carrying forward “No” answers.
+BibleText has no chat room, stranger messaging, advertising, purchases,
+gambling, location sharing, or account system, but the Bible contains mature
+themes and optional AI services generate responses. The account holder must
+choose the truthful frequency and age answers shown by the current form.
 
-## Closed testing — release notes (paste into the release)
+Also confirm from the final AAB:
 
-> First Android build of BibleText. Read the WEB, WEB Catholic, or BSB;
-> instant search; optional bring-your-own-key AI study tools; adjustable
-> text size; offline after first load. No ads, no accounts, no tracking.
+- ads: none;
+- in-app purchases/subscriptions: none;
+- advertising ID: unused and `AD_ID` permission absent;
+- app access: core reading/search needs no login; optional AI uses the reviewer's
+  own provider key if they choose to test it;
+- data deletion: no server account exists; on-device keys and notes have in-app
+  removal controls; and
+- target audience and Families eligibility are selected from the real intended
+  audience, not to avoid or trigger a policy track.
 
-### What to test (for the tester email / instructions)
+## Closed-test release notes — 1.2.3
 
-- Reading: swipe through chapters, switch books (Books tab), tap the
-  chapter title to open the picker, use ← → arrows.
-- Go to: try "john 3 16", "ps 23", "rev 22".
-- Search: single words ("shepherd"), phrases, references; tap a result to
-  open it in context ("See in context"), then "Back to results".
-- Versions: switch WEB ↔ BSB ↔ WEB (Catholic) from the header; BSB
-  downloads once (~7 MB) then works offline.
-- Settings (gear): text size Normal/Large/XL; light + dark mode (follows
-  the system setting).
-- Kill the app and reopen: it should restore your exact reading position,
-  and load instantly (no re-download).
-- Audio: tap the speaker in the reading header — a recorded narration where one
-  exists, otherwise your device reading aloud. Check ±15s skip, the "Follow
-  narration" pill, chapter rollover, and that playback continues with the screen
-  off, with lock-screen / notification transport controls.
-- Poetry: open Psalms 23 or Job 6 — each authored poem line should begin its own
-  line, and a shared or copied passage should keep those lines.
+> BibleText 1.2.3 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
+> search, cross-references, narration/read-along, shared verse notes, and optional
+> bring-your-own-key AI study. Red-letter text now follows each translation's own
+> publisher markings. No ads, account, analytics, or tracking.
 
-## Play Console flow (the parts only a human can do)
+Suggested tester coverage:
 
-1. Create the developer account ($25 one-time, needs ID verification).
-2. Create app → fill **App details**, upload **Graphics**.
-3. Complete **App content**: privacy policy URL, ads = No, content rating
-   questionnaire, target audience, data safety (answers above).
-4. **Testing → Closed testing** → create track → upload `BibleText.aab` →
-   add tester email list → roll out to the track → share the opt-in link.
-5. **New personal accounts**: keep ≥12 testers continuously opted in for
-   14 days, then apply for production access (Dashboard shows progress).
-6. Production rollout after approval.
+- install/upgrade and confirm version 1.2.3 (174);
+- switch all four translations and test first-download/offline behaviour;
+- check NKJV Mark 5:31, Matthew 27:63, Luke 17:36, and Luke 24:7 with Words of
+  Jesus enabled;
+- use the grouped Books grid, Go to, keyword/reference search, and Back to
+  results;
+- open cross-references and Gospel parallels in differently numbered editions;
+- send/receive/delete a note using neutral synthetic text;
+- play recorded narration/read-aloud, read-along, background continuation, and
+  notification controls; and
+- rotate phones and tablets between portrait bottom tabs and the landscape left
+  rail, confirming the reading pane remains usable after a warm App Link.
 
-Steps 4's upload can later be automated (Play Developer API); everything
-else is web-UI only.
+## Play Console flow
+
+1. Create and verify the developer account.
+2. Create the app record and complete the current policy/declaration forms.
+3. Upload reviewed graphics and the verified API-36 AAB.
+4. Create a closed-testing track, add the tester list, and roll out the test.
+5. For a new personal account, keep at least 12 testers continuously opted in for
+   14 days, then apply for production access.
+6. Re-check listing copy, data safety, rating, target devices, countries, and
+   release notes before any production rollout.
+
+Console actions are deliberate human release steps. Nothing in this document
+creates the account, uploads an artifact, or publishes a listing.

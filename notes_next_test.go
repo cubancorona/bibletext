@@ -81,11 +81,8 @@ func TestNextTapRotatesThePlanWithWrap(t *testing.T) {
 	}
 }
 
-// Chip-tap parity: the advance clears a foreign mark (selecting a note is the
-// reader choosing it as the page's reason), un-minimizes the tapped-to note by
-// its own ID and no other (the tap IS the Show verb) — and CYCLES IN PLACE:
-// no forceReposition on any platform (the selection swaps where it is, the
-// viewport stays; the far-off-note tradeoff is recorded on advanceNoteFocus).
+// Chip-tap parity: the advance clears a foreign mark, restores the selected
+// note by identity, and requests placement when the rendered anchor changes.
 func TestNextTapMatchesChipTapSemantics(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -134,9 +131,77 @@ func TestNextTapMatchesChipTapSemantics(t *testing.T) {
 			t.Errorf("note %q Minimized=%v after the tap — the Show verb must reach exactly the tapped-to note", n.Text, n.Minimized)
 		}
 	}
+	if !st.forceReposition {
+		t.Error("cycling to a note on another verse must request viewport placement")
+	}
+}
+
+func TestNextTapOnTheSameVerseKeepsTheViewport(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	now := int64(1_700_000_000)
+	noteNow = func() int64 { now++; return now }
+	defer func() { noteNow = origNow }()
+
+	first, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "first"})
+	second, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, VerseHi: 17, Text: "second"})
+	st := planTestState(t)
+	addRecentChapter(st, "John", 3)
+	if st.NoteID != second.ID {
+		t.Fatalf("precondition: newest note %d is selected, got %d", second.ID, st.NoteID)
+	}
+	st.forceReposition = false
+
+	advanceNoteFocus(st)
+
+	if st.NoteID != first.ID {
+		t.Fatalf("cycle selected note %d, want %d", st.NoteID, first.ID)
+	}
 	if st.forceReposition {
-		t.Error("the cycle must stay IN PLACE: a next-tap is a selection, not an arrival — " +
-			"forceReposition must stay false on every platform")
+		t.Error("notes sharing their rendered anchor must not move the viewport")
+	}
+}
+
+func TestNextTapToAChapterNotePlacesTheTopAndClearsTheOldWash(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	origNow := noteNow
+	now := int64(1_700_000_000)
+	noteNow = func() int64 { now++; return now }
+	defer func() { noteNow = origNow }()
+
+	chapterNote, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, Text: "chapter"})
+	verseNote, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 16, Text: "verse"})
+	st := planTestState(t)
+	addRecentChapter(st, "John", 3)
+	if st.NoteID != verseNote.ID || !st.mark.fromNote() {
+		t.Fatalf("precondition: verse note %d and its wash must be selected", verseNote.ID)
+	}
+	st.forceReposition = false
+
+	advanceNoteFocus(st)
+
+	if st.NoteID != chapterNote.ID || st.NoteVerseLo != 0 {
+		t.Fatalf("cycle selected note %d at verse %d, want chapter note %d", st.NoteID, st.NoteVerseLo, chapterNote.ID)
+	}
+	if st.mark.fromNote() {
+		t.Error("chapter-level note retained the previous note's verse wash")
+	}
+	if !st.forceReposition {
+		t.Error("cycling to a chapter-level note must request placement at the top")
 	}
 }
 
@@ -253,6 +318,9 @@ func TestNextTapFromAMirrorOnlyNoteLandsOnThePlan(t *testing.T) {
 	advanceNoteFocus(st)
 	if st.NoteID != stored.ID {
 		t.Errorf("after the advance the sticker should hold the stored note %d, got %d", stored.ID, st.NoteID)
+	}
+	if !st.forceReposition {
+		t.Error("moving from the session-only anchor to another verse must request placement")
 	}
 }
 

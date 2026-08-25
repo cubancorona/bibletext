@@ -443,19 +443,13 @@ func openNote(state *AppState, n StoredNote) {
 		VersionID: n.VersionID, Book: n.Book, Chapter: n.Chapter,
 		VerseLo: n.VerseLo, VerseHi: n.VerseHi,
 	}) {
-		// THE PARK REMEMBERS THE SHOW INTENT. switchToLinkVersion parks a bare
-		// ShareTarget, and the generic consume (applyShareTarget) would treat
-		// the eventual arrival as a LINK arrival: its hlLinkSpan is foreign to
-		// the note, so the note the reader tapped arrived suppressed to the
-		// pill — mechanism 2 of the reported still-minimized pill.
-		// consumePendingLink sees this id and re-runs THIS verb instead, now
-		// that the translation is in memory (see AppState.pendingNoteOpenID).
+		// Preserve note-open intent across an asynchronous translation load.
+		// A generic pending ShareTarget is a link arrival and would create a
+		// foreign hlLinkSpan that suppresses the selected note. The stored id
+		// makes consumePendingLink resume this note-open operation instead.
 		state.pendingNoteOpenID = n.ID
-		// The navigation (and its own derive) runs in the load's apply tail,
-		// but the un-minimize above is already WRITTEN — so end on the
-		// projection and a repaint now, or the reader waits out the fetch (or
-		// its failure) looking at a list row still marked hidden, over a store
-		// that says otherwise.
+		// The un-minimize operation is already persistent, so refresh the list
+		// immediately while the navigation continues after the load.
 		applyNoteForCurrentChapter(state)
 		state.refresh()
 		return
@@ -485,23 +479,10 @@ func openNote(state *AppState, n StoredNote) {
 	// next launch's restore.
 	chapter := clampChapter(state.Bible, n.Book, n.Chapter)
 	if n.Kind == noteKindMine {
-		// YOUR OWN NOTE, and it now behaves exactly like a received one —
-		// because the plan draws it while focus names it (chapterPlan.Own).
-		//
-		// WHAT THIS REPLACES, and why it was worse than "a dead tap": this
-		// branch used to raise an hlVerseOfDay mark on the note's verses. That
-		// origin is not fromNote (mark.go), so notesSuppressed was TRUE, and
-		// the Open loop stood every note on the chapter down. Tapping your own
-		// row did not merely fail to show your words — it collapsed a FRIEND's
-		// open note on that passage into a pill. You touched your own note and
-		// hers appeared to go away.
-		//
-		// So: no hand-set mark and no suppression capture. Focus it and let the
-		// projection raise the note's own hlNote mark and wash, which is what
-		// the received branch below has always done. The two branches are one
-		// behaviour now, differing only in the byline the projection composes
-		// ("Note from you", senderByline) — and the note is drawn only until
-		// the reader navigates away, because navigation resets focus.
+		// Own and received notes use the same focus-driven projection. Do not
+		// synthesize a verse-of-day mark here: a foreign mark suppresses every
+		// note on the chapter. Focus lets the projection create the note-owned
+		// hlNote mark; navigation later clears that session focus.
 		selectBook(state, n.Book, false)
 		state.CurrentChapter = chapter
 		addRecentChapter(state, n.Book, chapter)
@@ -517,17 +498,9 @@ func openNote(state *AppState, n StoredNote) {
 		}
 		return
 	}
-	// The arrival is the NOTE'S OWN — never a search result's. This used to
-	// route through openSearchResultRange, which set an hlSearch mark on the
-	// note's very verses: a FOREIGN mark, so the plan stood the note down and
-	// the reader who had just tapped it in the list was greeted by the pill.
-	// Selecting a note — its chip, its link, the count-tap, this row — is the
-	// reader choosing it as the page's reason (the identity table), so the
-	// arrival focuses it and lets the projection raise the note's own mark
-	// and wash. The navigation plumbing mirrors openSearchResultRange minus
-	// that mark; focus is set AFTER addRecentChapter, whose own derive resets
-	// it (the navigation-reset rule), and the projection re-derives with the
-	// focus in hand.
+	// A selected note owns its arrival highlight. Navigate without creating an
+	// hlSearch mark, set focus after addRecentChapter resets navigation state,
+	// then let the projection derive the note-owned mark.
 	selectBook(state, n.Book, false)
 	state.CurrentChapter = chapter
 	addRecentChapter(state, n.Book, chapter)
@@ -950,8 +923,8 @@ func newNoteBrowseCard(state *AppState, n StoredNote, content fyne.CanvasObject,
 // its own, before this), the Done button, the sidebar/mobile mode toggles, a
 // tab switch — and coming back lands in the same neighbourhood, because every
 // build of the list restores notesScroll (buildNotesBrowseView). Three
-// callers set this flag (the desktop sidebar toggle, the mobile toggle, and
-// the mobile reset), and putting the harvest here is what makes the memory
+// callers set this flag (desktop and mobile mode controls, plus mobile reset),
+// and putting the harvest here is what makes the memory
 // complete instead of route-by-route.
 //
 // The READER func is dropped on the way out: it aliases the list being torn

@@ -33,21 +33,6 @@ package bibletext
 // that is already on screen; it does not need the rebuild, and on Psalm 119 the
 // rebuild is two orders of magnitude dearer than the mutation.
 
-// washIsLiveMutationOnPlatform is true on the panes where changing what a verse
-// is washed in is an attribute mutation rather than a re-render — the two Apple
-// panes, and only them. Read through the washIsLiveMutation var seam (tint.go).
-//
-// It is here because that is exactly where the CONSEQUENCE lives: a mutation
-// carries no scroll, so on these panes an explicit arrival has to declare
-// state.forceReposition or "Go to John 3:16" while already on John 3 lights the
-// verse without moving the view. Everywhere else the wash is still part of the
-// one render fingerprint, the rebuild still carries the scroll, and setting the
-// flag would only cost something: on Android it turns a Go-to onto the chapter
-// already open into a full re-render the gate used to skip
-// (reading_android.go reads and clears it), and on Windows/Linux nothing reads or
-// clears it at all, so it would latch true for the life of the process.
-const washIsLiveMutationOnPlatform = true
-
 // lastPushedBodyFP / lastPushedTintFP are the two halves of what the native
 // overlay currently holds, kept apart because they are repaired differently:
 // the body by a rebuild, the tint by a live mutation (chapterBodyFingerprint,

@@ -46,7 +46,4 @@ func TestMimicAbsentFromReleaseBuilds(t *testing.T) {
 	if ttsSupported() != ttsSupportedOnPlatform {
 		t.Error("ttsSupported moved off its platform constant in a release build")
 	}
-	if washIsLiveMutation != washIsLiveMutationOnPlatform {
-		t.Error("washIsLiveMutation moved off its platform constant in a release build")
-	}
 }

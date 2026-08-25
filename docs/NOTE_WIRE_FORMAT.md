@@ -10,12 +10,13 @@ A note travels **inside the URL fragment**, base64url-encoded. A fragment is
 never transmitted to a server, so the note is seen by the sender, the recipient,
 whatever messenger carried the link — and by nobody else, ever, including us.
 
-Two facts shape every decision below, and both were verified rather than assumed:
+Two facts shaped the initial decision below. The release-state fact is retained
+as dated history, not as a statement about the current installed base:
 
-1. **There is no installed base.** `git ls-tree -r v1.1.7` — the newest shipped
-   release — contains none of this code. The `'p'` and `'z'` formats have never
-   reached a user. We are choosing a format with nothing to be compatible with,
-   which is a position Bitcoin has not been in since 2009.
+1. **There was no installed base when the format was selected.**
+   `git ls-tree -r v1.1.7` showed that the then-newest release contained none of
+   this code. The `'p'` and `'z'` formats had never reached a user, so the first
+   wire grammar could be chosen without legacy compatibility constraints.
 2. **Not every decoder freezes.** The web reader is a static site republished by
    one script; its decoder can be corrected tomorrow. The frozen tier is **app
    builds only**. That maps onto Bitcoin's own consensus/policy split, and it is

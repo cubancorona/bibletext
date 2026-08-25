@@ -19,6 +19,11 @@ workspace_raw="${GITHUB_WORKSPACE:-}"
 [[ -f "$binary_path" ]] || fail "packaged executable is missing"
 [[ -e "$package_path" ]] || fail "package is missing"
 [[ -n "$workspace_raw" ]] || fail "GITHUB_WORKSPACE is missing"
+[[ -n "${BIBLETEXT_RELEASE_LDFLAGS:-}" ]] || \
+  fail "release linker value is unavailable"
+
+script_dir="${BASH_SOURCE[0]%/*}"
+python3 "$script_dir/verify-release-key.py" "$binary_path"
 
 if ! build_info="$(go version -m "$binary_path" 2>/dev/null)"; then
   fail "could not inspect the packaged executable"
