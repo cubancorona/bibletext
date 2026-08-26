@@ -156,6 +156,41 @@ set the source directory explicitly, verify dimensions/order in App Store
 Connect, and run `appstore/preflight.py` again. Do not use an older
 `screenshots-ready-*` directory or a helper's default path.
 
+### The macOS set
+
+macOS is a second platform on the same app record, so it needs its own images
+and its own description; nothing carries over from the iPhone and iPad sets.
+Eight captures matching those sets shot for shot are prepared locally at:
+
+- `build/appstore/screenshots-mac-1.2.3/` — as captured
+- `build/appstore/screenshots-ready-1.2.3/en-GB/mac/` — opaque copies to upload
+
+They were taken from a sandboxed, dev-signed build (`run-mac-sandbox-test.sh`)
+with the window pinned to 1280×800, which is 2560×1600 on a Retina display —
+one of the sizes Apple accepts. Two things about that build are worth
+recording, because a repeat capture gets them wrong by default:
+
+- **The reader's own data was not photographed.** The rehearsal container holds
+  whatever the container migration carried in, which is real notes and a real
+  AI key. Both were replaced for the session with the same neutral, clearly
+  synthetic note text already published in the iPhone and iPad listing, and put
+  back afterwards.
+- **`screencapture` always writes an alpha channel and App Store Connect
+  refuses a PNG that carries one.** The `-ready` copies are redrawn opaque;
+  check with `sips -g hasAlpha` before uploading rather than after.
+
+The dark image needs the *system* appearance switched to Dark, not just
+`FYNE_THEME=dark`: the app follows the OS, but the window's title bar follows
+it too, and a dark app under a light title bar is a combination no reader can
+actually produce.
+
+The macOS description and promotional text are drafted at
+`build/appstore/metadata/en-GB/mac/`. They are not the iOS text: the AI study
+gesture is a right-click rather than a selection popover, audio has no
+lock-screen behaviour to describe, and the description states plainly that the
+Store edition moves — not copies — an existing install's notes and settings
+into its sandbox container.
+
 ## Privacy, age rating, and declarations
 
 The public listing currently says **Data Not Collected**, consistent with the
