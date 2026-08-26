@@ -107,17 +107,37 @@ note "verifying the packaged binary before it is signed"
 GITHUB_WORKSPACE="$REPO_ROOT" BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   ./scripts/verify-release-package.sh "$APP/Contents/MacOS/desktop" "$APP"
 
+note "setting the store category"
+# The packager's Info.plist template writes public.app-category.<category>
+# from a flag only `fyne release` accepts, so `fyne package` leaves a bare
+# "public.app-category." which Apple rejects as not a valid UTI. Written here,
+# before signing, because editing Info.plist afterwards breaks the signature.
+# "reference" is the primary category the existing listing already uses.
+/usr/libexec/PlistBuddy -c "Set :LSApplicationCategoryType public.app-category.reference" \
+  "$APP/Contents/Info.plist"
+
 note "embedding the provisioning profile and the container migration"
 cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
 mkdir -p "$APP/Contents/Resources"
 cp "$MIGRATION" "$APP/Contents/Resources/Container-Migration.plist"
 
 note "signing with the real entitlements"
+# A store build must carry the application and team identifiers in its
+# signature, matching the ones inside the provisioning profile; without them
+# the upload is accepted but flagged, and the bundle is not TestFlight
+# eligible. They are per-publisher, so they are added here from the team and
+# app id rather than written into the tracked entitlements file, which stays
+# generic enough for a fork to use unchanged.
+SIGN_ENTS="$WORK/entitlements-signing.plist"
+cp "$ENTITLEMENTS" "$SIGN_ENTS"
+/usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $TEAM_ID.$APP_ID" "$SIGN_ENTS"
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $TEAM_ID" "$SIGN_ENTS"
+
 # The packager already wrote its own single-key entitlements; this replaces
 # them. --generate-entitlement-der matches what release-ios.sh does and what
 # current macOS expects.
 codesign -f -s "$APP_CERT" --timestamp --options runtime \
-  --entitlements "$ENTITLEMENTS" --generate-entitlement-der "$APP"
+  --entitlements "$SIGN_ENTS" --generate-entitlement-der "$APP"
 
 note "confirming the signature carries the entitlements we asked for"
 SIGNED=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null || true)
