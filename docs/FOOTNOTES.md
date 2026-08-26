@@ -2,8 +2,9 @@
 
 *Branch `footnotes`, 26 August 2026. Four research lanes (data, surfaces,
 licensing, presentation) over the live helloao corpus, the current codebase,
-API.Bible's terms, and print/app prior art. This is an investigation, not a
-build: the only code change on this branch is a defensive decoder guard.*
+API.Bible's terms, and print/app prior art. Sections 1–7 are the original
+investigation; §8 records what the machinery build and the live NKJV probe
+then established.*
 
 ## The question, and the standard it must meet
 
@@ -213,3 +214,62 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 2. Superscription-anchored notes: drop (recommended) or re-anchor to v1?
 3. Should note bodies ever travel with an AI Explain request? (Default: no.)
 4. Send the API.Bible email with the six footnote questions added?
+
+---
+
+## 8. Machinery status (built the same day — owner authorized; NO presentation)
+
+The capture machinery is **built, humming and tested** on this branch, under
+the strict rule that nothing renders anywhere:
+
+- `Verse` carries `Footnotes []Footnote` (`anchor` = rune offset into the
+  final text, `text`, `kind`, `caller`) — side-band, `omitempty`, riding the
+  cache envelope; old caches load unchanged; epochs bumped (web 3, bsb 4,
+  webc 3, nkjv 1) so installs refetch and gain the apparatus.
+- **helloao**: `bsbVerseTextMarked` shares the byte-identical text path
+  (same pieces, same join, same tidy) and computes each anchor by tidying the
+  piece-prefix — no sentinel ever enters that pipeline. Bodies join by
+  noteId; superscription-anchored bodies drop as decided.
+- **NKJV**: `include-notes=true` (same requests, zero extra quota); the walk
+  diverts note subtrees into the side-band store via a private-use sentinel
+  resolved to anchors after normalization, with origin spans (`xo`/`fr`)
+  stripped and `ref` text flattened. The purity guard stands: a note's words
+  can never reach a verse builder.
+- **Proven against the real world**, not fixtures alone: whole-corpus decode
+  of all three helloao translations — BSB captures **4,817/4,817** in-verse
+  notes, WEB 1,218, WEBC 1,641, zero bad anchors, zero sentinel leaks, zero
+  body text inside Scripture; and a live NKJV John 3 differential — verse
+  text **byte-identical** with notes on, 45 cross-references captured.
+
+### Live NKJV probe — a decisive correction to §5
+
+**The NKJV feed carries no translator footnotes at all.** John 3, Psalm 46
+and 1 John 5 (home of the NU/M-Text note on the Johannine comma) return only
+`style:"x"` cross-references — zero `f` notes, zero "NU-Text" anywhere.
+Thomas Nelson's textual apparatus is not in the feed. Consequences: the
+hardest §5 licensing question (displaying their *footnotes*) is moot for
+now; what is capturable — and now captured, tagged `kind:"crossref"` — is a
+cross-reference apparatus, a kind the app already offers from public-domain
+TSK. Whether NKJV crossrefs ever display is a presentation question for
+later; several §5 questions (do cached notes ride §11/§10; §12 copy limits)
+still belong in the support email.
+
+### The omitted verses — the investigation's most striking find
+
+34 notes (5 WEB protocanon + 29 WEBC) anchor in verses that have **no words
+at all**: Luke 17:36, Acts 8:37, Acts 15:34, Acts 24:7, Romans 16:25 and 24
+deuterocanon versification gaps — the critical-text omissions, where the
+footnote exists precisely to explain the verse's absence ("Some Greek copies
+add…"). The app has never rendered these empty verses, so the machinery
+drops their notes (pinned by test). Surfacing them would mean rendering
+empty verse numbers — arguably the most pastorally valuable footnotes in the
+corpus, and squarely a presentation decision. **Added to the open questions.**
+
+### Open questions (superseding §7)
+
+1. Approve Phase 1 presentation (the per-chapter sheet) when the time comes?
+2. The omitted verses: should an empty verse number one day appear with its
+   explanatory note, or stay silent as today?
+3. NKJV crossrefs: display eventually, or leave captured-but-dark?
+4. AI prompts: may note bodies travel with an Explain request? (Default no.)
+5. Send the support email (its footnote questions now narrower — §8 above).

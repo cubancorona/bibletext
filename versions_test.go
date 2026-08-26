@@ -55,7 +55,7 @@ func TestCachePathForVersion(t *testing.T) {
 	legacy := filepath.Join(dir, "bibletext-cache.json")
 	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
 
-	wantWEB := filepath.Join(dir, "bibletext-web-v2.json")
+	wantWEB := filepath.Join(dir, "bibletext-web-v3.json")
 	if got := cachePathForVersion("web"); got != wantWEB {
 		t.Errorf("web cache = %q, want %q", got, wantWEB)
 	}
@@ -66,7 +66,7 @@ func TestCachePathForVersion(t *testing.T) {
 
 	// BSB carries a cacheEpoch (its decoder has changed three times), so its
 	// cache path is versioned and stale pre-epoch caches are bypassed.
-	wantBSB := filepath.Join(dir, "bibletext-bsb-v3.json")
+	wantBSB := filepath.Join(dir, "bibletext-bsb-v4.json")
 	if got := cachePathForVersion("bsb"); got != wantBSB {
 		t.Errorf("bsb cache = %q, want %q", got, wantBSB)
 	}
@@ -82,8 +82,8 @@ func TestPurgeSupersededCaches(t *testing.T) {
 
 	stale := filepath.Join(dir, "bibletext-bsb.json")      // v0 (superseded)
 	staleV1 := filepath.Join(dir, "bibletext-bsb-v1.json") // v1 (superseded)
-	staleV2 := filepath.Join(dir, "bibletext-bsb-v2.json") // v2 (superseded)
-	current := filepath.Join(dir, "bibletext-bsb-v3.json") // v3 (active)
+	staleV2 := filepath.Join(dir, "bibletext-bsb-v3.json") // v3 (superseded)
+	current := filepath.Join(dir, "bibletext-bsb-v4.json") // v4 (active)
 	web := legacy                                          // web cache (other version)
 	for _, p := range []string{stale, staleV1, staleV2, current, web} {
 		if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
@@ -291,11 +291,11 @@ func TestVersionCacheIsCurrent(t *testing.T) {
 	if versionCacheIsCurrent(web) {
 		t.Error("the legacy (epoch-0) file must NOT count as web's current epoch")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "bibletext-web-v2.json"), []byte("{}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "bibletext-web-v3.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if !versionCacheIsCurrent(web) {
-		t.Error("the v2 file is web's current epoch")
+		t.Error("the v3 file is web's current epoch")
 	}
 }
 

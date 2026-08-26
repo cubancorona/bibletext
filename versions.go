@@ -81,17 +81,17 @@ var registeredVersions = []BibleVersion{
 	{
 		ID: "web", Name: "World English Bible", Abbrev: "WEB",
 		Publisher: "Public Domain", PublicDomain: true,
-		// epoch 2: poem-clause line breaks (epoch 1, unreleased, had inert
-		// lineBreak-only retention — folded into this bump).
-		cacheEpoch: 2,
+		// epoch 3: footnote capture (side-band, text unchanged). Epoch 2 was
+		// poem-clause line breaks (epoch 1, unreleased, folded in).
+		cacheEpoch: 3,
 		source:     webSource{},
 	},
 	{
 		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
 		Publisher: "Public Domain (CC0)", PublicDomain: true,
-		// epoch 3: poem-clause line breaks (epoch 2, unreleased, was inert).
-		// Epoch 1 fixed punctuation spacing around helloao boundaries.
-		cacheEpoch: 3,
+		// epoch 4: footnote capture (side-band, text unchanged). Epoch 3 was
+		// poem-clause line breaks; epoch 1 punctuation spacing.
+		cacheEpoch: 4,
 		source:     bsbSource{},
 	},
 	{
@@ -99,7 +99,7 @@ var registeredVersions = []BibleVersion{
 		Publisher: "Public Domain", PublicDomain: true,
 		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
 		// USFM id into traditional Catholic order — see catholic.go.
-		cacheEpoch: 2, // epoch 2: poem-clause line breaks (epoch 1 unreleased/inert)
+		cacheEpoch: 3, // epoch 3: footnote capture; epoch 2 poem-clause line breaks
 		source:     webCatholicSource{},
 	},
 	{
@@ -110,7 +110,10 @@ var registeredVersions = []BibleVersion{
 		// only while the version is licensed and serving real text.
 		LicenseNotice: "Scripture taken from the New King James Version®. Copyright © 1982 " +
 			"by Thomas Nelson. Used by permission. All rights reserved. Text provided via API.Bible (api.bible).",
-		source: newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
+		// epoch 1: cross-reference note capture (include-notes=true; the feed
+		// carries no translator footnotes — probed live 2026-08-26).
+		cacheEpoch: 1,
+		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
 }
 

@@ -18,7 +18,42 @@ type Verse struct {
 	Text     string // The actual text of the verse
 	Search   string `json:"-"` // Lowercased text for fast case-insensitive search
 	Ref      string `json:"-"` // Lowercased "book c:v" for fast reference matching
+
+	// Footnotes is the translators' apparatus for this verse — alternate
+	// renderings, manuscript variants, cross-references — captured at decode
+	// time and carried SIDE-BAND, in the red-letter-runs mould. It is data,
+	// not display: nothing here is rendered anywhere yet, and nothing here
+	// may ever enter Text, the search index, the share pipeline, spoken
+	// audio, or a link. Those pipelines all read Text, which stays
+	// byte-identical whether footnotes are captured or not — the purity the
+	// owner's Revelation 22:18-19 rule requires, enforced by construction
+	// and pinned by tests (footnotes_test.go). See docs/FOOTNOTES.md.
+	Footnotes []Footnote `json:"footnotes,omitempty"`
 }
+
+// Footnote is one note from the TRANSLATORS (never the reader — reader notes
+// are the separate shared-notes feature) anchored into a verse's text.
+type Footnote struct {
+	// Anchor is a rune offset into Verse.Text (0..len) at a word boundary —
+	// where the source placed the marker. For a note the source anchored
+	// between poem lines, Anchor sits at the end of the earlier line, before
+	// the "\n".
+	Anchor int `json:"anchor"`
+	// Text is the note body — the translators' words. Origin references the
+	// source prefixes to the body ("3:2 " in the NKJV apparatus) are
+	// stripped at decode time: the anchor already says where it belongs.
+	Text string `json:"text"`
+	// Kind distinguishes apparatus families: "" is a translator footnote
+	// (alternate rendering, manuscript variant, language note); "crossref"
+	// is a cross-reference entry (the only kind the NKJV feed carries).
+	Kind string `json:"kind,omitempty"`
+	// Caller is the source's marker glyph ("+" throughout helloao, "-" in
+	// the NKJV feed). Stored for fidelity; no surface renders it yet.
+	Caller string `json:"caller,omitempty"`
+}
+
+// footnoteKindCrossref marks cross-reference apparatus (USX note style "x").
+const footnoteKindCrossref = "crossref"
 
 // BibleData holds all Bible verses organized by book and chapter
 // This is the data model/storage for the entire Bible
