@@ -3,67 +3,57 @@
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Carries an existing reader's data into the sandbox container the first time
-  a Mac App Store build launches. Copied into BibleText.app/Contents/Resources
-  by scripts/release-mac-store.sh; macOS reads it ONLY on the launch that
-  creates the container.
+  a sandboxed build launches. Copied into BibleText.app/Contents/Resources by
+  the packaging scripts. macOS reads it ONLY on the launch that CREATES the
+  container.
 
-  WHY THIS FILE DECIDES WHETHER READERS LOSE THEIR NOTES
+  SCHEMA. The operation is the top-level key and holds an array of paths;
+  a plain string means "same relative location inside the container", and a
+  two-element array means [source, destination]. Paths use the ${Library} and
+  ${ApplicationSupport} variables — NOT ${HOME}, which under the sandbox
+  already points at the container. This is the format Safari and OneDrive
+  ship on this very machine; a manifest in any other shape is ignored in
+  silence, which is indistinguishable from a reader having no data.
 
-  A Store build is a different app from the direct download: its own bundle
-  path, its own container at
-  ~/Library/Containers/uk.co.bibletext.desktop/Data. Under the sandbox
-  launchd points HOME at that container, Go's os.UserHomeDir() follows, and
-  Fyne builds its preferences path from it — so the app writes a brand-new
-  empty preferences file and finds no notes, no reading position, no settings
-  and no saved API keys. Nothing is destroyed; the old file simply sits on the
-  wrong side of the container boundary.
+  WHY IT MATTERS. A sandboxed build is a different app to macOS: its own
+  container, and HOME redirected into it. Without this file the app writes a
+  new empty preferences file and finds no notes, no reading position, no
+  settings and no saved API keys. Nothing is destroyed — the old file is
+  still on disk, on the other side of the container boundary — but the app
+  cannot tell: it reads an empty store and takes the branch for a genuinely
+  new reader, and the deliberate-wipe sentinel cannot fire because it lived
+  in the file now out of reach.
 
-  The app cannot detect this. readNoteStoreRaw sees an empty store and takes
-  the branch its own comment calls "a new reader — genuinely empty, safe to
-  write to", and the deliberate-wipe sentinel cannot fire because it lived in
-  the file that is now out of reach. So the reader is shown a first-run app
-  and their scrapbook — including notes other people shared with them, which
-  exist nowhere else — appears to be gone.
+  Notes are the part that cannot be replaced, including notes other people
+  shared, which exist nowhere else.
 
-  THE PATH IS KEYED "bibletext", NOT THE BUNDLE ID
+  THE PATH IS KEYED "bibletext", NOT THE BUNDLE ID. app.go calls
+  NewWithID("bibletext"), and Fyne's identifier wins over the FyneApp.toml
+  metadata id when it builds Library/Preferences/fyne/<id>. A manifest
+  written against uk.co.bibletext.desktop would migrate nothing, silently,
+  and there is no second chance. scripts/check-mac-store-config.py reads the
+  identifier out of app.go and fails when this disagrees.
 
-  app.go calls app.NewWithID("bibletext"), and Fyne's uniqueID takes
-  precedence over the FyneApp.toml metadata id when building
-  $HOME/Library/Preferences/fyne/<uniqueID>. The directory on disk is
-  therefore "fyne/bibletext" while the container is keyed
-  "uk.co.bibletext.desktop". A manifest written against the bundle id
-  migrates nothing, silently, and there is no second chance.
+  MOVE, NOT COPY — and this was measured, not chosen. A Copy entry in this
+  same manifest is ignored: a sandboxed build launched with one created its
+  container and wrote a fresh empty preferences file while the source sat
+  untouched beside it. Move carried all of it across. Neither Safari's nor
+  OneDrive's manifest uses Copy either.
 
-  COPY, NOT MOVE
+  The cost is that Move takes the data rather than duplicating it, so a
+  direct-download build still installed alongside opens as a new reader
+  afterwards. That is the honest trade: Copy would have left both working,
+  and Copy does not work.
 
-  Move would pull the data out from under the direct-download build the
-  reader may still be using — two apps can sit in /Applications at once.
-  Copy leaves that install working; the two then diverge, which is a product
-  decision to communicate rather than a bug (see docs/MAC_APP_STORE.md).
-
-  Caches are deliberately NOT migrated. They are re-downloadable, the app
-  already shows progress while refetching, and the embedded Gospels seed
-  keeps the reader in scripture meanwhile — so the only cost is bandwidth,
-  and copying tens of megabytes into the container to save it is a poor
-  trade.
+  Caches are deliberately not migrated: they re-download with progress
+  already shown, and the embedded seed keeps the reader in scripture
+  meanwhile.
 -->
 <plist version="1.0">
 <dict>
-    <key>Version</key>
-    <string>1</string>
-    <key>Migrations</key>
+    <key>Move</key>
     <array>
-        <dict>
-            <!-- Preferences: notes, reading position, text size, red-letter
-                 setting, active translation, and any reader-supplied API keys
-                 (desktop stores these here, not in the Keychain). -->
-            <key>Source</key>
-            <string>${HOME}/Library/Preferences/fyne/bibletext</string>
-            <key>Destination</key>
-            <string>${CONTAINER}/Data/Library/Preferences/fyne/bibletext</string>
-            <key>Operation</key>
-            <string>Copy</string>
-        </dict>
+        <string>${Library}/Preferences/fyne/bibletext</string>
     </array>
 </dict>
 </plist>

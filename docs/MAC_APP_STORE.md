@@ -55,8 +55,11 @@ notes other people shared, which exist nowhere else. Caches are not migrated
 on purpose — they re-download with progress already shown, and the seed keeps
 the reader in scripture meanwhile.
 
-`appstore/mac/Container-Migration.plist` handles this, and two things about it
-are easy to get wrong:
+`appstore/mac/Container-Migration.plist` handles this. The schema is the
+operation as the top-level key holding an array of paths, with `${Library}`
+rather than `${HOME}` — the shape Safari and OneDrive ship. A manifest in any
+other shape is ignored **in silence**, which looks exactly like a reader
+having no data. Two things are easy to get wrong:
 
 - **The path is keyed `bibletext`, not the bundle id.** `app.go` calls
   `NewWithID("bibletext")`, and Fyne's identifier wins over the `FyneApp.toml`
@@ -64,8 +67,13 @@ are easy to get wrong:
   `$HOME/Library/Preferences/fyne/<id>`. A manifest written against
   `uk.co.bibletext.desktop` migrates **nothing, silently**. The checker reads
   the identifier out of `app.go` and fails if the manifest disagrees.
-- **Copy, never Move.** Move pulls the data out from under the direct-download
-  build the reader may still be using.
+- **Move, not Copy — measured, not chosen.** A `Copy` entry is ignored: a
+  sandboxed build launched with one created its container and wrote a fresh
+  empty preferences file while the source sat untouched beside it. `Move`
+  carried all eleven keys, including the notes store. Neither Safari's nor
+  OneDrive's manifest uses `Copy`. The cost is real: `Move` takes the data, so
+  a direct-download build still installed alongside opens as a new reader
+  afterwards.
 
 > **macOS consults the manifest only on the launch that creates the
 > container.** A reader who opens an un-migrated Store build once can never be
@@ -74,9 +82,9 @@ are easy to get wrong:
 
 ## What the migration does not solve
 
-Two installs of the same app diverge from the moment they are both used. The
-copy is a one-time snapshot; notes written in one afterwards never reach the
-other. The options are to accept it and say so plainly in the Store
+Because the migration Moves rather than copies, a direct-download build still
+installed alongside opens as a new reader once the Store build has run. If
+both are then used, they diverge with no reconciliation. The options are to accept it and say so plainly in the Store
 description and release notes, or to build an export/import path through the
 existing share machinery so a reader can move notes deliberately. Nothing in
 the app currently reconciles them.
@@ -104,8 +112,11 @@ applies, with a new platform target.
 ## Before the first submission
 
 - Test a signed sandboxed build on a Mac that **already has** the direct
-  download and real notes, and confirm they appear. This is the one thing that
-  cannot be verified after the fact.
+  download and real notes, and confirm they appear.
+  `scripts/run-mac-sandbox-test.sh` does exactly this: it builds a sandboxed,
+  development-signed copy under a throwaway bundle id, so the migration can be
+  exercised without spending the shipping id's single chance. Back up
+  `~/Library/Preferences/fyne/bibletext` first — a successful Move consumes it.
 - Click every external link in the signed build — the two "Get a key" links,
   the privacy link, the site link, the Report button. They open through
   `NSWorkspace` (`external_link_darwin.go`) rather than a subprocess precisely

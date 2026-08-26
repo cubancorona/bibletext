@@ -73,34 +73,80 @@ def entitlement_failures(data: dict) -> list[str]:
     return failures
 
 
+# The real Container-Migration.plist schema, taken from the manifests Safari
+# and OneDrive ship on macOS rather than from assumption: the OPERATION is the
+# top-level key and holds an array whose elements are either a path string
+# (same relative location inside the container) or a two-element [source,
+# destination] array. Paths use ${Library} / ${ApplicationSupport}; ${HOME} is
+# wrong, because under the sandbox HOME already points at the container.
+#
+# A manifest in any other shape is ignored in silence — which is exactly what
+# an un-migrated reader looks like — so the shape is checked, not assumed.
+MIGRATION_OPERATIONS = {"Move", "Copy", "Symlink", "Unlink"}
+# Only Move is accepted for carrying the preferences across. Copy is in the
+# schema but measured not to work: a sandboxed build whose manifest used Copy
+# created its container and wrote a fresh empty preferences file while the
+# source sat untouched. Move carried all eleven keys. Symlink and Unlink do
+# not carry data at all.
+CARRYING_OPERATIONS = {"Move"}
+
+
+def migration_paths(data: dict) -> list[tuple[str, str]]:
+    """[(operation, source path)] for every entry, whatever element shape."""
+    out = []
+    for op, entries in data.items():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if isinstance(entry, str):
+                out.append((op, entry))
+            elif isinstance(entry, list) and entry:
+                out.append((op, str(entry[0])))
+    return out
+
+
 def migration_failures(data: dict, unique_id: str | None) -> list[str]:
     failures = []
-    migrations = data.get("Migrations")
-    if not isinstance(migrations, list) or not migrations:
-        return ["migration: no Migrations entries; an updating reader would lose their notes"]
+    if not data:
+        return ["migration: empty manifest; an updating reader would lose their notes"]
+
+    unknown = set(data) - MIGRATION_OPERATIONS
+    if unknown:
+        failures.append(
+            f"migration: top-level keys {sorted(unknown)} are not migration "
+            f"operations; the schema is one of {sorted(MIGRATION_OPERATIONS)} as the "
+            "top-level key holding an array of paths, and macOS ignores any other "
+            "shape without reporting anything"
+        )
     if unique_id is None:
         failures.append("migration: could not read the app's NewWithID identifier from app.go")
-    prefs_rules = [
-        m for m in migrations
-        if isinstance(m, dict) and "Library/Preferences/fyne" in str(m.get("Source", ""))
+
+    entries = migration_paths(data)
+    want_tail = "/fyne/" + unique_id if unique_id else "/fyne/"
+    carriers = [
+        (op, p) for op, p in entries
+        if op in CARRYING_OPERATIONS and p.rstrip("/").endswith(want_tail)
     ]
-    if not prefs_rules:
+    if not carriers:
+        listed = [f"{op}:{p}" for op, p in entries] or ["(none)"]
+        ops = " or ".join(sorted(CARRYING_OPERATIONS))
         failures.append(
-            "migration: no rule copies the Fyne preferences directory, which holds "
-            "the notes scrapbook, reading position, settings and any saved keys"
+            f"migration: no {ops} entry carries "
+            f"{want_tail!r}, the preferences directory holding the notes "
+            "scrapbook, reading position, settings and any saved keys. "
+            f"Entries present: {listed}. Fyne keys that directory by the "
+            "identifier passed to NewWithID, not by the bundle id."
         )
-    for rule in prefs_rules:
-        source = str(rule.get("Source", ""))
-        if unique_id and not source.rstrip("/").endswith("/" + unique_id):
+    for op, p in carriers:
+        if "${HOME}" in p:
             failures.append(
-                f"migration: source {source!r} does not end in the app's own "
-                f"identifier {unique_id!r} — Fyne keys the preferences directory by "
-                "that identifier, not the bundle id, so this would migrate nothing"
+                f"migration: {op} source {p!r} uses ${{HOME}}, which under the "
+                "sandbox already points at the container; use ${Library}"
             )
-        if rule.get("Operation") != "Copy":
+        elif not p.startswith("${Library}"):
             failures.append(
-                f"migration: Operation is {rule.get('Operation')!r}; use Copy so the "
-                "direct-download build the reader may still run keeps its data"
+                f"migration: {op} source {p!r} should start with ${{Library}} so it "
+                "resolves against the real home directory"
             )
     return failures
 
@@ -116,13 +162,22 @@ def self_test() -> list[str]:
             {"com.apple.security.app-sandbox": True,
              "com.apple.security.network.client": True,
              "com.apple.security.network.server": True}), "network.server"),
-        ("no migrations", migration_failures({}, "bibletext"), "lose their notes"),
+        ("empty manifest", migration_failures({}, "bibletext"), "lose their notes"),
+        ("invented schema", migration_failures(
+            {"Version": "1", "Migrations": [{"Source": "x", "Operation": "Copy"}]},
+            "bibletext"), "not migration operations"),
         ("bundle-id source", migration_failures(
-            {"Migrations": [{"Source": "${HOME}/Library/Preferences/fyne/uk.co.bibletext.desktop",
-                             "Operation": "Copy"}]}, "bibletext"), "migrate nothing"),
-        ("move not copy", migration_failures(
-            {"Migrations": [{"Source": "${HOME}/Library/Preferences/fyne/bibletext",
-                             "Operation": "Move"}]}, "bibletext"), "use Copy"),
+            {"Move": ["${Library}/Preferences/fyne/uk.co.bibletext.desktop"]},
+            "bibletext"), "entry carries"),
+        ("HOME variable", migration_failures(
+            {"Move": ["${HOME}/Library/Preferences/fyne/bibletext"]},
+            "bibletext"), "already points at the container"),
+        ("symlink only", migration_failures(
+            {"Symlink": ["${Library}/Preferences/fyne/bibletext"]},
+            "bibletext"), "entry carries"),
+        ("copy does not carry", migration_failures(
+            {"Copy": ["${Library}/Preferences/fyne/bibletext"]},
+            "bibletext"), "entry carries"),
     ]
     for name, failures, fragment in checks:
         if not any(fragment in f for f in failures):
@@ -131,8 +186,7 @@ def self_test() -> list[str]:
     clean = entitlement_failures(
         {"com.apple.security.app-sandbox": True, "com.apple.security.network.client": True}
     ) + migration_failures(
-        {"Migrations": [{"Source": "${HOME}/Library/Preferences/fyne/bibletext",
-                         "Operation": "Copy"}]}, "bibletext")
+        {"Move": ["${Library}/Preferences/fyne/bibletext"]}, "bibletext")
     if clean:
         problems.append(f"self-test: a correct configuration still fails: {clean}")
     return problems
