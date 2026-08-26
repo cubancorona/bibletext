@@ -598,6 +598,15 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 					s = strings.ToUpper(s)
 				}
 				appendText(pack(ch, v), pack(currentCh, current), s)
+			case n.Name == "note":
+				// A footnote. The app requests include-notes=false, but the
+				// walk must not DEPEND on the server honouring that: a note
+				// node's children are the translators' words (fr/ft/fq
+				// spans), and the default case below would walk them straight
+				// into the verse builders — apparatus read as Scripture, the
+				// one thing this decoder must never do. Skipped entirely
+				// until a footnotes feature diverts them into their own
+				// side-band store (see docs/FOOTNOTES.md).
 			case n.Name == "verse":
 				if sidCh, _ := chapterVerseFromRef(n.Attrs.SID); saneRef(sidCh) != 0 {
 					currentCh = sidCh
