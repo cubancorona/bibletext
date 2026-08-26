@@ -134,7 +134,10 @@ applies, with a new platform target.
 
 - Test a signed sandboxed build on a Mac that **already has** the direct
   download and real notes, and confirm they appear.
-  `scripts/run-mac-sandbox-test.sh` does exactly this: it builds a sandboxed,
+  A package signed for the store **cannot be installed locally** — Apple's
+  installer reports success and writes nothing, so the `.pkg` is an upload
+  artifact only. `scripts/run-mac-sandbox-test.sh` is therefore the way to
+  rehearse, and `--ship` does it under the real bundle id: it builds a sandboxed,
   development-signed copy under a throwaway bundle id, so the migration can be
   exercised without spending the shipping id's single chance. Back up
   `~/Library/Preferences/fyne/bibletext` first — a successful Move consumes it.

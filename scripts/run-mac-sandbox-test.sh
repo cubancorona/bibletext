@@ -39,8 +39,16 @@ SHIP_ID=$(python3 -c 'import json;print(json.load(open("config/product.json"))["
 # A fresh id per run. Containers cannot be deleted (the container manager
 # protects their metadata), and the migration only runs when a container is
 # CREATED — so reusing one id would test the migration exactly once, ever.
-SUFFIX="${1:-$(date +%H%M%S)}"
-TEST_ID="${SHIP_ID}.sbx$SUFFIX"
+# "--ship" rehearses under the REAL bundle id, which is the only way to
+# exercise the container the store build will actually use. It spends that
+# container's single migration chance on this Mac, so it is opt-in and the
+# preferences it Moves should be backed up first.
+if [ "${1:-}" = "--ship" ]; then
+  TEST_ID="$SHIP_ID"
+else
+  SUFFIX="${1:-$(date +%H%M%S)}"
+  TEST_ID="${SHIP_ID}.sbx$SUFFIX"
+fi
 CONTAINER="$HOME/Library/Containers/$TEST_ID"
 
 note "checking the store configuration"
