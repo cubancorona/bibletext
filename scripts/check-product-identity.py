@@ -3,9 +3,8 @@
 
 Some files that carry the product's identity are read by external tools that
 cannot parse the identity file: the fyne CLI reads the two FyneApp.toml files,
-Apple and Google fetch the deep-link association files, the site publisher
-stamps the Pages domain, and the Objective-C keychain fallback is compiled
-before any Go runs. Those values must stay byte-equal to config/product.json, and this
+Apple and Google fetch the deep-link association files, and the Objective-C
+keychain fallback is compiled before any Go runs. Those values must stay byte-equal to config/product.json, and this
 checker is what makes that a property rather than a habit.
 
 Per-publisher records are deliberately NOT checked against the identity file:
@@ -74,14 +73,11 @@ def rule_failures(identity: dict, read) -> list[str]:
         if f'"package_name": "{identity["appID"]}"' not in body:
             failures.append("docs/assetlinks.json: package_name does not match appID")
 
-    # 4. The site publisher's DOMAIN variable. The published CNAME file is
-    # GENERATED from this value at publish time, so checking DOMAIN covers the
-    # custom domain transitively; no CNAME is tracked on this branch.
-    if (body := text("scripts/publish-site.sh")) is not None:
-        if f"DOMAIN={host}" not in body:
-            failures.append(f"scripts/publish-site.sh: DOMAIN is not {host}")
+    # The site publisher and its generated CNAME are deliberately NOT rules
+    # here: publish-site.sh derives DOMAIN from the identity file at run time,
+    # so there is no second copy to hold equal.
 
-    # 5. The native keychain fallback, which cannot read the identity file.
+    # 4. The native keychain fallback, which cannot read the identity file.
     if (body := text("ai_secure_store_darwin.go")) is not None:
         if f'bundleID = @"{identity["appID"]}"' not in body:
             failures.append(
@@ -89,7 +85,7 @@ def rule_failures(identity: dict, read) -> list[str]:
                 "does not match appID"
             )
 
-    # 6. The release workflow references the declared secret name.
+    # 5. The release workflow references the declared secret name.
     if (body := text(".github/workflows/release.yml")) is not None:
         if identity["bundledKeySecretName"] not in body:
             failures.append(
@@ -125,7 +121,6 @@ def self_test() -> list[str]:
         "cmd/desktop/FyneApp.toml": b'Website = "https://other.invalid"\nID = "wrong.id"\nName = "Other"\n',
         "docs/apple-app-site-association": b'{"applinks":{"details":[{"appIDs":["ABCDE12345.wrong.id"]}]}}',
         "docs/assetlinks.json": b'[{"target":{"package_name": "wrong.id"}}]',
-        "scripts/publish-site.sh": b"DOMAIN=other.invalid\n",
         "ai_secure_store_darwin.go": b'bundleID = @"wrong.id";\n',
         ".github/workflows/release.yml": b"env:\n  OTHER: x\n",
     }
@@ -135,7 +130,7 @@ def self_test() -> list[str]:
     expected_fragments = (
         "cmd/mobile/FyneApp.toml", "cmd/desktop/FyneApp.toml",
         "apple-app-site-association", "assetlinks.json",
-        "publish-site.sh", "ai_secure_store_darwin.go", "release.yml",
+        "ai_secure_store_darwin.go", "release.yml",
     )
     for fragment in expected_fragments:
         if not any(fragment in f for f in failures):
@@ -146,7 +141,6 @@ def self_test() -> list[str]:
         "cmd/desktop/FyneApp.toml": b'Website = "https://selftest.invalid"\nName = "SelfTest"\nID = "invalid.selftest.desktop"\n',
         "docs/apple-app-site-association": b'{"applinks":{"details":[{"appIDs":["ABCDE12345.invalid.selftest"]}]}}',
         "docs/assetlinks.json": b'[{"target":{"package_name": "invalid.selftest"}}]',
-        "scripts/publish-site.sh": b"DOMAIN=selftest.invalid\n",
         "ai_secure_store_darwin.go": b'bundleID = @"invalid.selftest";\n',
         ".github/workflows/release.yml": b"env:\n  SELFTEST_SECRET: x\n",
     }

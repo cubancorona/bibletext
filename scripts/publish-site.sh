@@ -33,7 +33,17 @@ DRY_RUN=false
 
 OUT=build/site
 WORKTREE=build/gh-pages
-DOMAIN=bibletext.co.uk
+# The custom domain derives from the identity file rather than being repeated
+# here. The extraction fails the whole publish (set -e) on a malformed file —
+# a wrong or empty CNAME detaches the domain and kills every shared link.
+DOMAIN=$(python3 -c '
+import json, sys
+base = json.load(open("config/product.json"))["siteBase"]
+if not base.startswith("https://") or len(base) <= len("https://"):
+    sys.exit("siteBase in config/product.json is not an https origin")
+print(base.removeprefix("https://"), end="")
+')
+[[ -n "$DOMAIN" ]] || { echo "could not derive DOMAIN from config/product.json" >&2; exit 1; }
 
 echo "==> checking the public support configuration"
 python3 scripts/check-support-contact.py
