@@ -130,6 +130,7 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
+| `product.go` | The product identity: embeds and validates `config/product.json`; every name/URL/id surface derives from it |
 | `app.go` | `Run()`, `loadStateData()`, `StartBackgroundLoad`, `applyTheme`, `ObserveSystemThemeChanges` |
 | `state.go` | `AppState`, navigation/search/history logic, UI hooks, `loadPhase` machine, `newSearchDebouncer` |
 | `reading_state.go` | Reading-position + history persistence (translation/book/chapter/scroll anchor) in `fyne.Preferences` |

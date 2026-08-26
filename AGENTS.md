@@ -61,6 +61,10 @@ tree.
 
 ## Repository hygiene
 
+- The product's identity — name, site origin, bundle ids, support mailbox,
+  audio host — lives in `config/product.json` and derives from there. Never
+  hardcode one of those values; `scripts/check-product-identity.py` holds the
+  few tool-owned copies (FyneApp.toml, deep-link files) equal to it in CI.
 - Keep changes scoped and preserve unrelated work already present in the tree.
 - Never commit API keys, signing material, account identifiers, local
   environment files, or generated build artifacts.
