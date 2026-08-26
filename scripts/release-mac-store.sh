@@ -72,7 +72,11 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 note "building both architectures"
 # shellcheck source=/dev/null
 source scripts/release-bible-key.sh
-load_encoded_release_bible_key
+# load_release_bible_key, not the encoded variant: this script runs on a
+# maintainer's Mac and reads the dedicated login-Keychain item, the way
+# release-ios.sh does. The encoded variant exists for GitHub's runners, which
+# cannot reach a Keychain and receive a pre-encoded value through a secret.
+load_release_bible_key
 trap clear_release_bible_key EXIT
 (
   cd cmd/desktop
@@ -95,7 +99,12 @@ note "packaging the .app"
 )
 
 note "verifying the packaged binary before it is signed"
-BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+# The verifier derives the build machine's root by stripping two components
+# from the workspace, then fails if that root appears anywhere in the binary.
+# On a runner the workspace is GITHUB_WORKSPACE; here it is the checkout, which
+# makes the derived root the home directory — exactly the path a local build
+# would leak, and the reason -trimpath is not taken on trust.
+GITHUB_WORKSPACE="$REPO_ROOT" BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   ./scripts/verify-release-package.sh "$APP/Contents/MacOS/desktop" "$APP"
 
 note "embedding the provisioning profile and the container migration"
