@@ -432,6 +432,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 			widget.NewSeparator(),
 		))
 	}
+	column.Add(buildDevHighlightLab(state))
 
 	// squeezeWidthLayout on both halves, for the reason sheet_fit.go documents: a
 	// scroll widens its content to the content's MinSize and clips the overflow
