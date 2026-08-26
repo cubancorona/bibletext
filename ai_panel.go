@@ -149,7 +149,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			Opaque:   SupportMailtoRecipient(),
 			RawQuery: url.Values{"subject": {"BibleText: report AI content"}, "body": {mailBody}}.Encode(),
 		}
-		fyne.CurrentApp().OpenURL(mu)
+		openExternalURL(mu)
 	})
 	reportBtn.Importance = widget.LowImportance
 	reportBtn.Disable()

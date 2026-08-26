@@ -21,6 +21,6 @@ func openLinkInBrowser(rawURL string) {
 		return
 	}
 	if app := fyne.CurrentApp(); app != nil {
-		_ = app.OpenURL(u)
+		openExternalURL(u)
 	}
 }

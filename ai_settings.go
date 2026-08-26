@@ -127,7 +127,7 @@ func showAISettings(state *AppState) {
 		// font styling.
 		var link fyne.CanvasObject = layout.NewSpacer()
 		if u, err := url.Parse(info.KeyURL); err == nil {
-			link = widget.NewHyperlink("Get a key ↗", u)
+			link = externalLink("Get a key ↗", u)
 		}
 
 		entry := widget.NewPasswordEntry()
@@ -674,7 +674,7 @@ func showAISettings(state *AppState) {
 	// since 2026-07 (the policy moved to privacy.html when the site gained a
 	// download page; keep this in sync with gh-pages).
 	if u, err := url.Parse(product.SiteBase + "/privacy.html"); err == nil {
-		aiDisclosure.Add(container.NewHBox(widget.NewHyperlink("Privacy Policy ↗", u), layout.NewSpacer()))
+		aiDisclosure.Add(container.NewHBox(externalLink("Privacy Policy ↗", u), layout.NewSpacer()))
 	}
 
 	var card *fyne.Container // assigned below, before the popup shows
@@ -782,7 +782,7 @@ func showAISettings(state *AppState) {
 	// support page and the web reader live, and Settings is the one place a
 	// reader goes looking for "about this app". A Hyperlink at the hint's own
 	// size, centered, no heading, no icon — chrome, not content.
-	site := widget.NewHyperlink(productSiteHost, &url.URL{Scheme: "https", Host: productSiteHost, Path: "/"})
+	site := externalLink(productSiteHost, &url.URL{Scheme: "https", Host: productSiteHost, Path: "/"})
 	siteRow := container.NewCenter(container.NewThemeOverride(site, compactTheme{Theme: state.theme, text: 11}))
 
 	// The settings body scrolls; the title bar and the closing hint do not. A sheet

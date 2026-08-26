@@ -255,7 +255,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 
 	var link fyne.CanvasObject = layout.NewSpacer()
 	if u, err := url.Parse("https://api.bible/sign-up/starter"); err == nil {
-		link = widget.NewHyperlink("Get a key ↗", u)
+		link = externalLink("Get a key ↗", u)
 	}
 
 	rows = container.NewVBox(
