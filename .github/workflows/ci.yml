@@ -23,6 +23,7 @@ jobs:
         run: |
           scripts/check-support-contact.py
           scripts/check-release-identity.py
+          scripts/check-product-identity.py
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..HEAD"
           else

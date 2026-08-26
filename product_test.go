@@ -53,7 +53,7 @@ func TestProductIdentityRejectsMalformedFiles(t *testing.T) {
 		"site with path":      strings.Replace(good, `"https://bibletext.co.uk"`, `"https://bibletext.co.uk/site"`, 1),
 		"uppercase app id":    strings.Replace(good, `"uk.co.bibletext"`, `"UK.co.bibletext"`, 1),
 		"bare app id":         strings.Replace(good, `"uk.co.bibletext"`, `"bibletext"`, 1),
-		"missing email":       strings.Replace(good, `"support@bibletext.co.uk"`, `""`, 1),
+		"missing email":       strings.Replace(good, `"`+product.SupportEmail+`"`, `""`, 1),
 		"audio not https":     strings.Replace(good, `"https://github.com/cubancorona/bibletext-audio/releases/download/"`, `"ftp://x/"`, 1),
 		"audio without slash": strings.Replace(good, `bibletext-audio/releases/download/"`, `bibletext-audio/releases/download"`, 1),
 		"repo with fragment":  strings.Replace(good, `"https://github.com/cubancorona/bibletext"`, `"https://github.com/cubancorona/bibletext#main"`, 1),

@@ -51,6 +51,30 @@ overlay) and run on Linux/Windows.
   API.Bible credentials are supplied only through the external release-key flow
   documented in `docs/API_KEY_HANDLING.md`; they do not belong in source files.
 
+## Forking and deploying your own build
+
+The product's identity lives in one tracked file, `config/product.json` —
+name, site origin, bundle identifiers, support mailbox, audio host, source
+repository, and the release-key secret's name. Everything in Go derives from
+it and refuses to build if it is malformed. To ship your own deployment:
+
+1. Edit `config/product.json` with your values.
+2. Mirror the bundle ids, name, and website into `cmd/mobile/FyneApp.toml`
+   and `cmd/desktop/FyneApp.toml`, and the fallback bundle id in
+   `ai_secure_store_darwin.go` — external tools read these, so they cannot
+   derive from JSON; `scripts/check-product-identity.py` fails CI until they
+   all agree.
+3. Regenerate `docs/apple-app-site-association` and `docs/assetlinks.json`
+   with **your** Apple team id and Android signing certificate — those are
+   publisher records, not product identity.
+4. Point your DNS at your Pages deployment; the publisher stamps the domain
+   from its `DOMAIN` variable, which the checker also holds to the identity
+   file.
+5. Supply your own `BIBLETEXT_BUNDLED_KEY_ENC`-style Actions secret, or ship
+   keyless — the NKJV then simply requires readers to bring their own
+   API.Bible key, and every public-domain translation is unaffected.
+6. Replace the store metadata under `appstore/` before submitting anywhere.
+
 ## License
 
 By contributing, you agree your contributions are licensed under the project's
