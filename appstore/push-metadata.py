@@ -25,7 +25,7 @@ ASC_DIR = os.path.join(REPO, "build", "appstore")
 MD = os.path.join(ASC_DIR, "metadata")
 SUPPORT_CONTACT_CHECK = os.path.join(REPO, "scripts", "check-support-contact.py")
 HYGIENE_CHECK = os.path.join(REPO, "scripts", "check-repository-hygiene.py")
-SUPPORT_CONFIG = os.path.join(REPO, "config", "support-email.txt")
+SUPPORT_CONFIG = os.path.join(REPO, "config", "product.json")
 APP = "6784567351"
 LOCALE = "en-GB"
 
@@ -114,7 +114,8 @@ def validate_private_inputs():
     hygiene = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(hygiene)
     secrets = hygiene.local_secrets()
-    support = Path(SUPPORT_CONFIG).read_bytes().strip().lower()
+    import json as _json
+    support = _json.loads(Path(SUPPORT_CONFIG).read_bytes())["supportEmail"].strip().lower().encode("ascii")
 
     failures = []
     for path in sorted(Path(MD).rglob("*")):

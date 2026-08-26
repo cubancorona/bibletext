@@ -161,7 +161,7 @@ cp docs/assetlinks.json "$OUT/.well-known/assetlinks.json"
 for page in index.html privacy.html support.html; do
   [[ -s "$OUT/$page" ]] || fail "$page missing from the tree about to be published"
 done
-support_email=$(tr -d '\r\n' < config/support-email.txt)
+support_email=$(python3 -c 'import json; print(json.load(open("config/product.json"))["supportEmail"], end="")')
 for page in privacy.html support.html; do
   grep -Fq "$support_email" "$OUT/$page" || fail "$page does not contain the configured support address"
   grep -Fq "href=\"mailto:$support_email\"" "$OUT/$page" || \

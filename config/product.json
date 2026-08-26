@@ -1,0 +1,10 @@
+{
+  "productName": "BibleText",
+  "siteBase": "https://bibletext.co.uk",
+  "appID": "uk.co.bibletext",
+  "desktopAppID": "uk.co.bibletext.desktop",
+  "supportEmail": "support@bibletext.co.uk",
+  "audioBase": "https://github.com/cubancorona/bibletext-audio/releases/download/",
+  "sourceRepo": "https://github.com/cubancorona/bibletext",
+  "bundledKeySecretName": "BIBLETEXT_BUNDLED_KEY_ENC"
+}

@@ -15,13 +15,14 @@ import sys
 from support_contact_config import (
     SupportContactConfigurationError,
     parse_support_email,
+    parse_support_email_from_product,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SELF = "scripts/check-repository-hygiene.py"
 PROCESS_GUIDE = "docs/COMMIT_AND_CODE_PROTOCOL.md"
-PUBLIC_SUPPORT_CONFIG = "config/support-email.txt"
+PUBLIC_SUPPORT_CONFIG = "config/product.json"
 MAX_SEMANTIC_BYTES = 4 * 1024 * 1024
 
 FORBIDDEN_BASENAMES = {
@@ -365,7 +366,7 @@ def scan_current(secrets: list[tuple[str, bytes]]) -> list[str]:
         failures.append(f"{PUBLIC_SUPPORT_CONFIG}: required configuration is missing")
         support_raw = b""
     try:
-        support_email = parse_support_email(support_raw)
+        support_email = parse_support_email_from_product(support_raw)
         support_valid = True
     except SupportContactConfigurationError:
         support_email = b""

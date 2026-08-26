@@ -52,7 +52,7 @@ import (
 	"strings"
 )
 
-const shareLinkBase = "https://bibletext.co.uk"
+var shareLinkBase = product.SiteBase
 
 // webPublishedVersionIDs are the three versions whose TEXT the web reader
 // publishes. Kept as its own set (rather than reading PublicDomain

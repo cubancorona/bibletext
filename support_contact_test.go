@@ -13,7 +13,7 @@ func TestSupportEmailConfiguration(t *testing.T) {
 	if got := SupportEmail(); got == "" {
 		t.Fatal("SupportEmail returned an empty address")
 	}
-	if got := mustSupportEmail(supportEmailSource); got != SupportEmail() {
+	if got := mustSupportEmail(product.SupportEmail); got != SupportEmail() {
 		t.Fatalf("embedded support configuration resolved inconsistently")
 	}
 	if got := mustSupportEmail("support@example.invalid\r\n"); got != "support@example.invalid" {
@@ -138,7 +138,7 @@ func TestSupportEmailHasOneTrackedSource(t *testing.T) {
 			copies = append(copies, path)
 		}
 	}
-	if len(copies) != 1 || copies[0] != "config/support-email.txt" {
-		t.Fatalf("the public support address must occur only in config/support-email.txt; found it in %v", copies)
+	if len(copies) != 1 || copies[0] != "config/product.json" {
+		t.Fatalf("the public support address must occur only in config/product.json; found it in %v", copies)
 	}
 }

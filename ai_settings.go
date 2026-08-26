@@ -673,7 +673,7 @@ func showAISettings(state *AppState) {
 	// Deep-link the policy itself — the site ROOT is the download landing page
 	// since 2026-07 (the policy moved to privacy.html when the site gained a
 	// download page; keep this in sync with gh-pages).
-	if u, err := url.Parse("https://bibletext.co.uk/privacy.html"); err == nil {
+	if u, err := url.Parse(product.SiteBase + "/privacy.html"); err == nil {
 		aiDisclosure.Add(container.NewHBox(widget.NewHyperlink("Privacy Policy ↗", u), layout.NewSpacer()))
 	}
 
@@ -782,7 +782,7 @@ func showAISettings(state *AppState) {
 	// support page and the web reader live, and Settings is the one place a
 	// reader goes looking for "about this app". A Hyperlink at the hint's own
 	// size, centered, no heading, no icon — chrome, not content.
-	site := widget.NewHyperlink("bibletext.co.uk", &url.URL{Scheme: "https", Host: "bibletext.co.uk", Path: "/"})
+	site := widget.NewHyperlink(productSiteHost, &url.URL{Scheme: "https", Host: productSiteHost, Path: "/"})
 	siteRow := container.NewCenter(container.NewThemeOverride(site, compactTheme{Theme: state.theme, text: 11}))
 
 	// The settings body scrolls; the title bar and the closing hint do not. A sheet

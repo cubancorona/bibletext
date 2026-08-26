@@ -7,20 +7,17 @@ import (
 	"strings"
 )
 
-//go:embed config/support-email.txt
-var supportEmailSource string
-
 //go:embed config/support-email-pattern.txt
 var supportEmailPatternSource string
 
 var supportEmailPattern = regexp.MustCompile("^(?:" + mustSupportEmailPattern(supportEmailPatternSource) + ")$")
 
-var supportEmail = mustSupportEmail(supportEmailSource)
+var supportEmail = mustSupportEmail(product.SupportEmail)
 
 var supportMailtoRecipient = formatMailtoRecipient(supportEmail)
 
 // SupportEmail returns the public mailbox used by product support surfaces.
-// Its only tracked value lives in config/support-email.txt.
+// Its only tracked value lives in config/product.json.
 func SupportEmail() string {
 	return supportEmail
 }
@@ -49,10 +46,10 @@ func mustSupportEmail(raw string) string {
 		(raw != value && raw != value+"\n" && raw != value+"\r\n") ||
 		strings.TrimSpace(value) != value ||
 		strings.ContainsAny(value, "\r\n") {
-		panic("config/support-email.txt must contain exactly one non-empty email address")
+		panic("config/product.json: supportEmail must be exactly one non-empty email address")
 	}
 	if !supportEmailPattern.MatchString(value) {
-		panic("config/support-email.txt must contain one conservative ASCII email address")
+		panic("config/product.json: supportEmail must be one conservative ASCII email address")
 	}
 	return value
 }

@@ -7,7 +7,7 @@ import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = ROOT / "config" / "support-email.txt"
+CONFIG_PATH = ROOT / "config" / "product.json"
 PATTERN_PATH = ROOT / "config" / "support-email-pattern.txt"
 
 VALID_EXAMPLES = (
@@ -74,6 +74,23 @@ def parse_support_email(raw: bytes) -> bytes:
     return value
 
 
+def parse_support_email_from_product(raw: bytes) -> bytes:
+    """Extract and validate supportEmail from config/product.json bytes."""
+    import json
+
+    try:
+        value = json.loads(raw).get("supportEmail", "")
+    except (ValueError, AttributeError) as error:
+        raise SupportContactConfigurationError(
+            "product identity file does not parse as JSON"
+        ) from error
+    if not isinstance(value, str) or not value:
+        raise SupportContactConfigurationError(
+            "product identity file has no supportEmail value"
+        )
+    return parse_support_email(value.encode("ascii", "strict"))
+
+
 def read_support_email() -> bytes:
     try:
         raw = CONFIG_PATH.read_bytes()
@@ -81,7 +98,7 @@ def read_support_email() -> bytes:
         raise SupportContactConfigurationError(
             "support mailbox configuration is missing or unreadable"
         ) from error
-    return parse_support_email(raw)
+    return parse_support_email_from_product(raw)
 
 
 def grammar_self_test_failures() -> list[str]:

@@ -136,14 +136,14 @@ func sanitizeSenderName(s string) string {
 func senderNameRefused(name string) bool {
 	folded := strings.ToLower(name)
 	switch folded {
-	case "bibletext", "note", "notes", "bibletext support":
+	case productNameFolded, "note", "notes", productNameFolded + " support":
 		return true
 	}
 	// "BibleText Security", "bible text", "Fixture BibleText" — anything that
 	// works the app's name into its own once spaces are gone. A blocklist can
 	// honestly catch exactly this impersonation and no other; wider claims
 	// (homoglyphs) are left to display, per the design doc.
-	if strings.Contains(strings.ReplaceAll(folded, " ", ""), "bibletext") {
+	if strings.Contains(strings.ReplaceAll(folded, " ", ""), strings.ReplaceAll(productNameFolded, " ", "")) {
 		return true
 	}
 	return senderNameURLish(folded)

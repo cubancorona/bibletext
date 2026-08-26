@@ -116,13 +116,19 @@ type noticeSpec struct {
 	Offers []noticeOffer
 }
 
-const (
-	appStoreURL   = "https://apps.apple.com/app/id6784567351"
-	appLandingURL = "https://bibletext.co.uk/"
+var (
+	appLandingURL = bibletext.SiteBase() + "/"
 	// androidPackage is the applicationId scripts/build-android.sh packages with
 	// and cmd/mobile/AndroidManifest.xml declares. notice.js builds an
 	// intent:// URL around it.
-	androidPackage = "uk.co.bibletext"
+	androidPackage = bibletext.AppID()
+)
+
+const (
+	// appStoreURL carries the numeric App Store listing id, a per-publisher
+	// store artifact like the Apple team id — deliberately not product
+	// identity, so it stays here rather than in config/product.json.
+	appStoreURL = "https://apps.apple.com/app/id6784567351"
 	// appleAppID feeds the Smart App Banner.
 	appleAppID = "6784567351"
 )
@@ -142,11 +148,11 @@ func (n noticeSpec) ref() string {
 func (n noticeSpec) canonical() string {
 	switch n.Scope {
 	case scopeChapter:
-		return fmt.Sprintf("https://bibletext.co.uk/%s/%s/%d/", n.VersionID, n.Slug, n.Chapter)
+		return fmt.Sprintf("%s/%s/%s/%d/", bibletext.SiteBase(), n.VersionID, n.Slug, n.Chapter)
 	case scopeBook:
-		return fmt.Sprintf("https://bibletext.co.uk/%s/%s/", n.VersionID, n.Slug)
+		return fmt.Sprintf("%s/%s/%s/", bibletext.SiteBase(), n.VersionID, n.Slug)
 	}
-	return "https://bibletext.co.uk/" + n.VersionID + "/"
+	return bibletext.SiteBase() + "/" + n.VersionID + "/"
 }
 
 // renderNotice builds the page. One function, four call sites (version root,

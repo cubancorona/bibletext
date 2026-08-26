@@ -202,7 +202,7 @@ func fragmentKeyPresent(frag, key string) (string, bool) {
 	return "", false
 }
 
-const shareLinkHost = "bibletext.co.uk"
+var shareLinkHost = productSiteHost
 
 // noteRunsSpelling writes a decoded run set in ShareTarget.NoteRuns' grammar:
 // runs joined by ",", each "lo" or "lo-hi" — the fragment's own verse-span

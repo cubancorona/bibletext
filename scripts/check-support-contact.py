@@ -16,7 +16,7 @@ from support_contact_config import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = "config/support-email.txt"
+CONFIG_PATH = "config/product.json"
 PATTERN_PATH = "config/support-email-pattern.txt"
 DISPLAY_MARKER = b"{{BIBLETEXT_SUPPORT_EMAIL_DISPLAY}}"
 HREF_MARKER = b"{{BIBLETEXT_SUPPORT_EMAIL_HREF}}"
@@ -134,13 +134,18 @@ def check() -> list[str]:
                 "SupportMailtoRecipient exactly once"
             )
 
+    # The identity file is embedded once, by product.go; the grammar file is
+    # embedded once, by support_contact.go, which reads the parsed identity.
+    product_source = read_required("product.go", errors)
+    if product_source is not None:
+        if product_source.count(b"//go:embed " + CONFIG_PATH.encode()) != 1:
+            errors.append(f"product.go: expected one embed of {CONFIG_PATH}")
     contact_source = read_required("support_contact.go", errors)
     if contact_source is not None:
-        for embedded_path in (CONFIG_PATH, PATTERN_PATH):
-            if contact_source.count(b"//go:embed " + embedded_path.encode()) != 1:
-                errors.append(
-                    f"support_contact.go: expected one embed of {embedded_path}"
-                )
+        if contact_source.count(b"//go:embed " + PATTERN_PATH.encode()) != 1:
+            errors.append(
+                f"support_contact.go: expected one embed of {PATTERN_PATH}"
+            )
         if contact_source.count(b"func SupportMailtoRecipient() string") != 1:
             errors.append(
                 "support_contact.go: expected one public mailto-recipient formatter"

@@ -48,7 +48,7 @@ type chapterAudio struct {
 // recording is split across TWO releases — Old Testament (929 chapters) and New
 // Testament (260) — because GitHub caps a release at 1000 assets; audioReleaseTag
 // picks the right one by canonical book number.
-const audioHostBase = "https://github.com/cubancorona/bibletext-audio/releases/download/"
+var audioHostBase = product.AudioBase
 
 // audioReleaseTag returns the release tag holding a book's recording: <corpus>-ot-v1
 // for books 1–39, <corpus>-nt-v1 for 40–66.
