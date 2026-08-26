@@ -116,6 +116,16 @@ note "setting the store category"
 /usr/libexec/PlistBuddy -c "Set :LSApplicationCategoryType public.app-category.reference" \
   "$APP/Contents/Info.plist"
 
+note "declaring export compliance"
+# Without this key the uploaded build sits in App Store Connect waiting for an
+# export-compliance answer instead of becoming selectable for a version. The
+# app speaks ordinary HTTPS and nothing else, so the answer is false — the same
+# declaration release-ios.sh makes, and for the same reason. Written before
+# signing, like the category above.
+/usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$APP/Contents/Info.plist" \
+  2>/dev/null ||
+  /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$APP/Contents/Info.plist"
+
 note "embedding the provisioning profile and the container migration"
 cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
 mkdir -p "$APP/Contents/Resources"

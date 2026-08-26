@@ -15,8 +15,12 @@ So the checks here are not style checks. They assert that:
     to NewWithID, which is NOT the bundle id — Fyne keys its preferences
     directory by that identifier, and a manifest written against the bundle id
     migrates nothing;
-  * the migration copies rather than moves, so the direct-download build the
-    reader may still be using keeps its data.
+  * the migration carries the data with an operation macOS actually honours.
+    That operation is Move, and only Move: a Copy entry is accepted by the
+    plist and then ignored, which looks exactly like a reader who had no data.
+    The cost is real and deliberate — Move takes the preferences, so a
+    direct-download build still installed alongside opens as a new reader
+    afterwards — and docs/MAC_APP_STORE.md records why that trade was taken.
 
 Self-tests first, as everywhere else here: each rule is run against a
 synthetic violation and must fail, because a checker that cannot fail proves
