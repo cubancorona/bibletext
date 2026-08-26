@@ -41,6 +41,13 @@ func externalLink(label string, u *url.URL) *widget.Hyperlink {
 	return hl
 }
 
+// externalOpener is the seam the platform implementation is reached through.
+// It is a variable rather than a direct call for one reason: a test that
+// invokes the real one on macOS launches a browser or a mail composer on the
+// machine running it. A test asserting where a tap is ROUTED has no business
+// opening anything, so it substitutes this instead.
+var externalOpener = openExternalURLPlatform
+
 // openExternalURL hands a URL to the platform. The error is reported here
 // rather than discarded, because a link that quietly fails is indistinguishable
 // from an app that has hung.
@@ -48,7 +55,7 @@ func openExternalURL(u *url.URL) {
 	if u == nil {
 		return
 	}
-	if err := openExternalURLPlatform(u); err != nil {
+	if err := externalOpener(u); err != nil {
 		fyne.LogError("could not open "+u.Scheme+" link", err)
 	}
 }

@@ -101,12 +101,90 @@ func TestExternalLinkRoutesTapsToTheOpener(t *testing.T) {
 	}
 }
 
-// openExternalURL must survive a nil URL and a missing app rather than
-// panicking inside a tap handler.
-func TestOpenExternalURLIsSafeOnNil(t *testing.T) {
-	openExternalURL(nil) // must not panic
-	app := test.NewApp()
-	defer app.Quit()
+// openExternalURL must survive a nil URL, and must route a real one to the
+// opener exactly once.
+//
+// The opener is SUBSTITUTED here on purpose. Calling the platform one would
+// open a browser or a mail composer on whatever machine runs the suite — which
+// this test did, on every run, until it was caught. A test that asserts
+// routing must not perform the thing it is describing.
+func TestOpenExternalURLRoutesWithoutOpeningAnything(t *testing.T) {
+	restore := externalOpener
+	defer func() { externalOpener = restore }()
+
+	var got []string
+	externalOpener = func(u *url.URL) error {
+		got = append(got, u.String())
+		return nil
+	}
+
+	openExternalURL(nil)
+	if len(got) != 0 {
+		t.Errorf("a nil URL reached the opener: %v", got)
+	}
+
 	u, _ := url.Parse("mailto:someone@example.invalid")
-	openExternalURL(u) // must not panic; the test app records rather than opens
+	openExternalURL(u)
+	if len(got) != 1 || got[0] != "mailto:someone@example.invalid" {
+		t.Errorf("opener saw %v, want the one mailto URL", got)
+	}
+}
+
+// A tap on an externalLink must reach the opener — the whole point of the
+// wrapper — and again without opening anything.
+func TestExternalLinkTapReachesTheOpener(t *testing.T) {
+	restore := externalOpener
+	defer func() { externalOpener = restore }()
+	var seen string
+	externalOpener = func(u *url.URL) error { seen = u.String(); return nil }
+
+	u, _ := url.Parse("https://example.invalid/page")
+	hl := externalLink("Label", u)
+	hl.OnTapped()
+	if seen != "https://example.invalid/page" {
+		t.Errorf("tap delivered %q to the opener, want the link target", seen)
+	}
+}
+
+// No test in this package may reach the real platform opener. One did — it
+// launched a mail composer on the developer's machine on every run of the
+// suite — and the cost of that mistake is entirely invisible in CI, where
+// nobody sees the window open. Any test needing the opener substitutes
+// externalOpener; this fails the build if one calls openExternalURL or
+// openExternalURLPlatform without first replacing it.
+func TestNoTestOpensSomethingForReal(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read package dir: %v", err)
+	}
+	callsOpener := regexp.MustCompile(`\bopenExternalURL(?:Platform)?\(`)
+	substitutes := regexp.MustCompile(`externalOpener\s*=`)
+	var offenders, scanned []string
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			continue
+		}
+		body := string(data)
+		scanned = append(scanned, name)
+		if callsOpener.MatchString(body) && !substitutes.MatchString(body) {
+			offenders = append(offenders, name)
+		}
+	}
+	if len(scanned) == 0 {
+		t.Fatal("scanned no test files; the sweep is not reaching the package")
+	}
+	// CONTROL: both patterns must fire on a known-offending source, or the
+	// clean result above means only that the regexes are broken.
+	if !callsOpener.MatchString("openExternalURL(u)") ||
+		!substitutes.MatchString("externalOpener = func(u *url.URL) error { return nil }") {
+		t.Fatal("the sweep patterns cannot match known sources")
+	}
+	if len(offenders) > 0 {
+		t.Errorf("these tests reach the real opener without substituting it: %v", offenders)
+	}
 }
