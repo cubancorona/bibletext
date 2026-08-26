@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the Mac App Store build. Two keys, and the short list of
+  what is deliberately absent is the more useful half.
+
+  The fyne packager writes its own single-key entitlements file and overwrites
+  anything left in the build directory, so scripts/release-mac-store.sh
+  re-codesigns with THIS file afterwards — the same move scripts/release-ios.sh
+  already makes.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Mandatory: the Mac App Store accepts sandboxed apps only. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!--
+      Every outbound connection the app makes. One key covers all hosts —
+      the sandbox does not filter by host — and without it the app still
+      launches but can only ever show the embedded Gospels seed:
+
+        bible.helloao.org   BSB, WEB and WEB Catholic downloads
+        rest.api.bible      NKJV and other API.Bible versions
+        a.openbible.info    the cross-reference data
+        the audio host      recorded chapter narration (config/product.json)
+        AI providers        Study with AI, Find, key testing
+    -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!--
+      DELIBERATELY NOT REQUESTED. Each line states the code fact that makes
+      the capability unnecessary:
+
+      network.server                  nothing listens; no net.Listen anywhere
+      files.user-selected.read-write  the app shows no file dialogs at all
+      files.downloads.read-write      the only ~/Downloads write is behind the
+                                      platform-mimic gate, which is a constant
+                                      empty string in release builds
+      keychain-access-groups          desktop uses no Keychain: the Keychain
+                                      file is iOS-only and the desktop
+                                      implementation returns nil
+      temporary-exception.*           the container migration is handled by a
+                                      Container-Migration.plist instead, which
+                                      needs no exception and invites no review
+                                      question
+      camera / microphone / location / print / address-book / calendar
+                                      none used
+
+      No ATS exception either: every URL is https, and the identity file
+      refuses to load at startup unless the audio host parses as https.
+    -->
+</dict>
+</plist>
