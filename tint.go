@@ -103,7 +103,7 @@ func (t verseTint) overridesTextColour() bool {
 // (styledPaneRenderer.tintColor), Android's inline background-color, and — via
 // nrgbaToHex — the .hl rule in the Apple dialect's stylesheet. They used to
 // reach for pal.Highlight independently, which is how a fourth surface would
-// have got a slightly different gold.
+// have got a slightly different wash.
 //
 // tintReadAlong is absent ON PURPOSE and answers false. The narration wash is
 // not a chapter tint: it lives on the pane (styledReadAlongTint), it is

@@ -139,19 +139,65 @@ func TestDisabledButtonsAreLegibleAndOnPalette(t *testing.T) {
 	}
 }
 
-// The multi-note wash (S12: HighlightMulti, light #C7DBF5 / dark #2E3E5C) is a
-// band scripture sits ON, and the hardest thing scripture puts on a band is the
-// red letters — the dark Highlight comment records that the red, not taste, is
-// what sets a band's ceiling. So the tokens are pinned where they can fail:
-// red-on-wash must clear 3:1 (WCAG's large-text/graphics minimum, the same bar
-// the shipped gold band is argued against) in BOTH themes, and body text must
-// stay clearly readable on it. Computed here, in the same units the palette
-// comments use, so the 4.2:1 / 3.6:1 the comments claim is checked, not quoted.
-//
-// The washes are also pinned to their approval rationale: separation from
-// Highlight by HUE, not brightness. Both Highlight tokens are warm (R > B) and
-// both HighlightMulti tokens must stay cool (B > R) — a second warm wash would
-// read as a stronger mark rather than as a different fact.
+// Every wash is a band scripture sits on, and the hardest thing scripture puts
+// on one is the red letters. Pin the tokens where they can fail: red-on-wash
+// must clear the palette's chosen 3:1 design floor in both themes, and body text
+// must stay clearly readable on it. That red floor is enough for the app's
+// Large and Extra large sizes; it is deliberately not a claim of WCAG AA for
+// the regular-weight 21px Normal size, which would require 4.5:1. The primary
+// band is live today; the multi-note band is wired but deliberately unreachable.
+func assertWashKeepsScriptureLegible(t *testing.T, name string, pal palette, wash color.NRGBA) {
+	t.Helper()
+	if got := contrastRatio(pal.RedLetter, wash); got < 3.0 {
+		t.Errorf("%s: red letters on wash = %.2f:1, want >= 3.0:1 — His words would sink into the band",
+			name, got)
+	}
+	if got := contrastRatio(pal.Text, wash); got < 4.5 {
+		t.Errorf("%s: body text on wash = %.2f:1, want >= 4.5:1 (AA)", name, got)
+	}
+}
+
+func TestPrimaryWashKeepsScriptureLegible(t *testing.T) {
+	for _, variant := range []struct {
+		name string
+		pal  palette
+	}{
+		{"light primary", lightPalette},
+		{"dark primary", darkPalette},
+	} {
+		assertWashKeepsScriptureLegible(t, variant.name, variant.pal, variant.pal.Highlight)
+	}
+}
+
+func TestApprovedHighlightTokensStayPinned(t *testing.T) {
+	for _, variant := range []struct {
+		name        string
+		pal         palette
+		wantPrimary color.NRGBA
+		wantMulti   color.NRGBA
+	}{
+		{"light", lightPalette, color.NRGBA{R: 255, G: 224, B: 138, A: 255}, color.NRGBA{R: 199, G: 219, B: 245, A: 255}},
+		{"dark", darkPalette, color.NRGBA{R: 58, G: 50, B: 111, A: 255}, color.NRGBA{R: 46, G: 62, B: 92, A: 255}},
+	} {
+		if variant.pal.Highlight != variant.wantPrimary {
+			t.Errorf("%s: primary highlight = rgba(%d,%d,%d,%d), want approved rgba(%d,%d,%d,%d)",
+				variant.name,
+				variant.pal.Highlight.R, variant.pal.Highlight.G, variant.pal.Highlight.B, variant.pal.Highlight.A,
+				variant.wantPrimary.R, variant.wantPrimary.G, variant.wantPrimary.B, variant.wantPrimary.A)
+		}
+		if variant.pal.HighlightMulti != variant.wantMulti {
+			t.Errorf("%s: multi highlight = rgba(%d,%d,%d,%d), want approved rgba(%d,%d,%d,%d)",
+				variant.name,
+				variant.pal.HighlightMulti.R, variant.pal.HighlightMulti.G, variant.pal.HighlightMulti.B, variant.pal.HighlightMulti.A,
+				variant.wantMulti.R, variant.wantMulti.G, variant.wantMulti.B, variant.wantMulti.A)
+		}
+	}
+}
+
+// The multi-note washes are also pinned to their approval rationale:
+// separation from Highlight by hue, not brightness. Light pairs amber with
+// blue; dark pairs violet with slate-blue. Component ordering keeps those hue
+// families distinct without assuming the primary must be warm in every theme.
 func TestMultiNoteWashKeepsScriptureLegible(t *testing.T) {
 	th := &bibleTheme{}
 	for _, variant := range []struct {
@@ -163,23 +209,22 @@ func TestMultiNoteWashKeepsScriptureLegible(t *testing.T) {
 		{"dark", theme.VariantDark, darkPalette},
 	} {
 		wash := variant.pal.HighlightMulti
-		if got := contrastRatio(variant.pal.RedLetter, wash); got < 3.0 {
-			t.Errorf("%s: red letters on the multi-note wash = %.2f:1, want >= 3.0:1 — "+
-				"His words would sink into the band", variant.name, got)
-		}
-		if got := contrastRatio(variant.pal.Text, wash); got < 4.5 {
-			t.Errorf("%s: body text on the multi-note wash = %.2f:1, want >= 4.5:1 (AA)",
-				variant.name, got)
-		}
-		if wash.B <= wash.R {
-			t.Errorf("%s: HighlightMulti rgb(%d,%d,%d) is not cool — the approved pair is "+
-				"separated from the warm Highlight by hue, not brightness",
-				variant.name, wash.R, wash.G, wash.B)
-		}
+		assertWashKeepsScriptureLegible(t, variant.name+" multi", variant.pal, wash)
 		hl := variant.pal.Highlight
-		if hl.R <= hl.B {
-			t.Errorf("%s: Highlight rgb(%d,%d,%d) is no longer warm — the hue separation "+
-				"between the two washes has collapsed", variant.name, hl.R, hl.G, hl.B)
+		if variant.v == theme.VariantLight {
+			if !(hl.R > hl.G && hl.G > hl.B) || !(wash.B > wash.G && wash.G > wash.R) {
+				t.Errorf("light: approved wash hues collapsed; primary rgb(%d,%d,%d) must be amber and multi rgb(%d,%d,%d) blue",
+					hl.R, hl.G, hl.B, wash.R, wash.G, wash.B)
+			}
+		} else {
+			if !(hl.B > hl.R && hl.R > hl.G) || !(wash.B > wash.G && wash.G > wash.R) {
+				t.Errorf("dark: approved wash hues collapsed; primary rgb(%d,%d,%d) must be violet and multi rgb(%d,%d,%d) slate-blue",
+					hl.R, hl.G, hl.B, wash.R, wash.G, wash.B)
+			}
+		}
+		if got := contrastRatio(hl, wash); got > 1.2 {
+			t.Errorf("%s: primary and multi washes differ by %.2f:1 in luminance, want <= 1.2:1 — they must separate by hue, not look like one mark at two strengths",
+				variant.name, got)
 		}
 		// And the token is reachable BY NAME, for the surface that can only ask
 		// the theme (the RichText fallback).

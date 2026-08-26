@@ -699,7 +699,7 @@ static UIColor *btIOSReadAlongColor(void) {
 // that is how the styled desktop pane draws it, on its own layer above the verse
 // wash. TextKit has no second layer here: one attribute, one colour. So the
 // layering is done in arithmetic instead, source-over, and the reader sees the
-// note's gold through the narration's amber exactly as they do on the desktop.
+// note wash through the narration's amber exactly as they do on the desktop.
 // This is what "overlaid" means in the acceptance test — not "replaced".
 static UIColor *btIOSOverlayColor(UIColor *base) {
     CGFloat br = 0, bg = 0, bb = 0, ba = 0;

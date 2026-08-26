@@ -51,12 +51,11 @@ type palette struct {
 	Highlight     color.NRGBA // faint wash behind the highlighted verse
 	HighlightText color.NRGBA // the highlighted verse's own text
 	// HighlightMulti is the wash where MORE THAN ONE note covers a verse
-	// (tintMulti, tint.go) — separated from Highlight by HUE, not brightness:
-	// a second amber would only read as a stronger mark, where a cool wash
-	// beside the warm one reads as a different FACT. The two are a deliberate
-	// pair; nothing draws it yet — one lit span at a time is the recorded
-	// invariant, held by tint_multi_guard_test.go until a multi-wash is
-	// requested.
+	// (tintMulti, tint.go) — separated from Highlight by hue, not brightness.
+	// Two nearby washes of one hue would read as different strengths of the
+	// same mark, while different hue families read as different facts. Nothing
+	// draws it yet — one lit span at a time is the recorded invariant, held by
+	// tint_multi_guard_test.go until a multi-wash is requested.
 	HighlightMulti color.NRGBA
 	VerseNumber    color.NRGBA // superscript verse numbers
 	RedLetter      color.NRGBA // words of Christ (red-letter mode)
@@ -128,32 +127,22 @@ var darkPalette = palette{
 	TextMuted:  color.NRGBA{R: 157, G: 148, B: 135, A: 255},
 	Accent:     color.NRGBA{R: 124, G: 160, B: 228, A: 255}, // luminous sapphire on near-black
 	AccentText: color.NRGBA{R: 17, G: 24, B: 40, A: 255},
-	// Gold, and deliberately more of it than the amber this replaced.
+	// A red-first violet. The brighter #544AAB direction is vivid against the
+	// night page and keeps body text at 5.6:1, but red letters fall to 2.4:1.
+	// That is not enough for Georgia's fine strokes, and a real highlighted
+	// verse can carry cream narration and red speech on one continuous band.
 	//
-	// The old #3A2B0C measured ΔE 22.9 from the page ground where the LIGHT
-	// band measures 44.7 — about half as present, so a highlighted verse was
-	// easy to lose while scanning in the dark. This is 35.2, roughly 80% of the
-	// light band, and reads as gold rather than as brown.
-	//
-	// WHAT SETS THE CEILING IS THE RED LETTERS, NOT TASTE. They sit at
-	// RedLetter below, and the brighter the band the closer the two get:
-	// contrast of red-on-band falls 4.6 → 3.4 here, 3.1 at #5C4412, and 1.7 by
-	// #8A6828, where His words visibly sink into the gold. 3.4 keeps them clearly
-	// on top of it while body text still clears AAA at 7.9. A brighter gold is
-	// available but is a TWO-colour change — the red has to move with it (#FFB3B3
-	// restores 3.0 on a #8A6828 band) — and that wants checking on the ordinary
-	// page and against the light theme, where the reds are family.
-	//
-	// Judged on rendered output from the real pane, not swatches: a band has to
-	// carry narration and words of Christ at once, and only the renderer shows
-	// what that looks like.
-	Highlight:     color.NRGBA{R: 84, G: 62, B: 16, A: 255},
+	// #3A326F keeps the violet unmistakable while restoring 3.8:1 for red and
+	// 8.8:1 for body text. Its 1.6:1 luminance separation from #191715 is modest,
+	// but the violet chroma keeps the glyph-tight band visible without making it
+	// look like an electric selection. The primary-wash contrast test pins the
+	// text side of that balance.
+	Highlight:     color.NRGBA{R: 58, G: 50, B: 111, A: 255},   // #3A326F
 	HighlightText: color.NRGBA{R: 182, G: 205, B: 240, A: 255}, // unused by the panes; see reading.go .hl
-	// The gold band's cool twin: a deep slate-blue, apart from the gold by HUE
-	// the way the light pair is, so the two facts stay two facts in the dark
-	// as well. The soft red above it measures 3.6:1 (pinned >= 3.0 in
-	// theme_contrast_test.go). Deliberately chosen as a pair with #C7DBF5;
-	// unreachable until requested (tintMulti).
+	// The violet band's cooler, lower-chroma slate-blue partner: primary leans
+	// violet (R > G), while this leans blue (G > R), so the two facts do not read
+	// as one mark at two strengths. The soft red above it measures 3.6:1 (pinned
+	// >= 3.0 in theme_contrast_test.go). Unreachable until requested (tintMulti).
 	HighlightMulti: color.NRGBA{R: 46, G: 62, B: 92, A: 255},    // #2E3E5C
 	VerseNumber:    color.NRGBA{R: 140, G: 168, B: 216, A: 255}, // light slate-blue superscripts
 	RedLetter:      color.NRGBA{R: 229, G: 115, B: 115, A: 255}, // soft red, legible on near-black

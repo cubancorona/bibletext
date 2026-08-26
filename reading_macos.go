@@ -412,7 +412,7 @@ static NSColor *btMacReadAlongColor(void) {
 // The narration tint is translucent BECAUSE it is meant to be seen through —
 // that is how the styled pane draws it, on its own layer above the verse wash.
 // TextKit has no second layer here: one attribute, one colour. So the layering
-// is done in arithmetic instead, source-over, and the note's gold shows through
+// is done in arithmetic instead, source-over, and the note wash shows through
 // the narration's amber exactly as it does on the desktop styled pane.
 //
 // The base arrives from btMacTintColor, which is sRGB, so the conversion below

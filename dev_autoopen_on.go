@@ -133,7 +133,7 @@ func devAutoReadAlong(state *AppState) {
 	// The last marked verse: over a RANGE this leaves the run's interior verses
 	// restored by the live mutation while the ones the import painted are
 	// untouched, which is the frame where a wrong repaint shows as one band in
-	// two golds (or with a full-width tail on the interior verse).
+	// two colours (or with a full-width tail on the interior verse).
 	at(26*time.Second, func() { readAlongHighlight(hi, true) })
 	// A BODY REBUILD WITH THE NARRATION LIVE — what hiding or deleting a note,
 	// flipping the theme or changing the text size does mid-playback. The import
@@ -144,7 +144,7 @@ func devAutoReadAlong(state *AppState) {
 	at(46*time.Second, func() { readAlongClear() })
 	// And the other half of the seam, on the same screen: clearing the mark is
 	// what the native "Clear highlight" tap does, and it is now a live attribute
-	// mutation — the note's gold goes, the text and the reader's scroll position
+	// mutation — the note wash goes, the text and the reader's scroll position
 	// do not move, and the log says tint-mutate rather than html-import.
 	at(56*time.Second, func() {
 		clearHighlightedVerse(state)

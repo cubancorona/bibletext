@@ -17,8 +17,8 @@ package bibletext
 // things bare: the poetic line separator (`</span><br><sup class="v hl">`), the
 // paragraph boundary (`</p><p>`), and the reporter layout's first-line indent
 // (`&#8195;&#8194;`). TextKit paints a background on a break character all the way
-// out to the right margin, so a multi-verse band grew a full-width gold tail on
-// every interior verse and a gold block on the next paragraph's indent. Only the
+// out to the right margin, so a multi-verse band grew a full-width tinted tail on
+// every interior verse and a tinted block on the next paragraph's indent. Only the
 // join SPACE between two verses under the same wash belongs inside the band, and
 // that one buildChapterHTML puts inside the span on purpose (tint.go's JoinSpace
 // — written bare it punched a notch through the band at every mid-line join).
