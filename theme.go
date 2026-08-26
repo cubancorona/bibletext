@@ -275,11 +275,11 @@ func (t *bibleTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) 
 	case theme.ColorNameScrollBar:
 		return withAlpha(p.TextMuted, 120)
 	case theme.ColorNameHover:
-		return withAlpha(p.Accent, 28)
+		return paletteHover(p)
 	case theme.ColorNamePressed:
 		return withAlpha(p.Accent, 48)
 	case theme.ColorNameSelection:
-		return withAlpha(p.Accent, 40)
+		return paletteSelection(p)
 	case theme.ColorNameShadow:
 		if variant == theme.VariantDark {
 			return color.NRGBA{A: 90}
@@ -359,6 +359,14 @@ func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 func withAlpha(c color.NRGBA, a uint8) color.NRGBA {
 	c.A = a
 	return c
+}
+
+func paletteHover(p palette) color.NRGBA {
+	return withAlpha(p.Accent, 28)
+}
+
+func paletteSelection(p palette) color.NRGBA {
+	return withAlpha(p.Accent, 40)
 }
 
 // surface draws content on a bordered, padded card in the given colours. It is

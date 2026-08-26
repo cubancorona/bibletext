@@ -1,12 +1,18 @@
 package main
 
-import "strings"
+import (
+	"fmt"
+	"image/color"
+	"strings"
+
+	bibletext "bibletext"
+)
 
 // The site's entire client-side surface: one stylesheet and one small script.
 //
-// The colours are the app's palette (theme.go) transcribed to CSS so the web
-// page and the app are recognisably the same product — warm parchment in light,
-// warm near-black with a luminous sapphire accent in dark.
+// The colours come from the app's palette (theme.go) so the web page and the
+// app remain recognisably the same product — warm parchment in light, warm
+// near-black with a luminous sapphire accent in dark.
 //
 // The TYPE follows the app's split: scripture in Georgia (a system font on the
 // phones and desktops that open a shared link, so it costs nothing) with the
@@ -18,14 +24,37 @@ import "strings"
 // readerCSS fills in the webfont URLs. They are content-hashed like the
 // stylesheet itself, and since both live in assets/ the src is a bare filename.
 func readerCSS(regularFile, boldFile string) string {
-	css := strings.Replace(readerCSSTemplate, "__FONT_REGULAR__", regularFile, 1)
-	return strings.Replace(css, "__FONT_BOLD__", boldFile, 1)
+	light, dark := bibletext.WebReaderPalettes()
+	return strings.NewReplacer(
+		"__FONT_REGULAR__", regularFile,
+		"__FONT_BOLD__", boldFile,
+		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
+		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
+	).Replace(readerCSSTemplate)
 }
 
-// readerCSSTemplate carries __FONT_REGULAR__/__FONT_BOLD__ placeholders for the
-// content-hashed webfont filenames, filled in by readerCSS once the faces have
-// been written (their URLs are relative to the stylesheet, which sits in the
-// same assets/ directory).
+func readerPaletteCSS(p bibletext.WebReaderPalette, indent string) string {
+	return fmt.Sprintf(
+		"%s--bg:%s; --surface:%s; --text:%s; --muted:%s;\n"+
+			"%s--accent:%s; --border:%s; --verse:%s; --red:%s;\n"+
+			"%s--verse-hl:%s; --control-hover:%s; --control-selected:%s;",
+		indent, cssColor(p.Background), cssColor(p.Surface), cssColor(p.Text), cssColor(p.TextMuted),
+		indent, cssColor(p.Accent), cssColor(p.Border), cssColor(p.VerseNumber), cssColor(p.RedLetter),
+		indent, cssColor(p.Highlight), cssColor(p.ControlHover), cssColor(p.ControlSelection),
+	)
+}
+
+func cssColor(c color.NRGBA) string {
+	if c.A == 255 {
+		return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
+	}
+	return fmt.Sprintf("rgba(%d,%d,%d,%.4f)", c.R, c.G, c.B, float64(c.A)/255)
+}
+
+// readerCSSTemplate carries placeholders for content-hashed webfont filenames
+// and the app-owned palettes. readerCSS fills them once the faces have been
+// written; their URLs are relative to the stylesheet in the same assets/
+// directory.
 const readerCSSTemplate = `
 /* Atkinson Hyperlegible (c) Braille Institute of America, Inc. — SIL Open Font
    License 1.1, published beside these files as assets/atkinson-OFL.txt. It is
@@ -39,9 +68,7 @@ const readerCSSTemplate = `
   font-display:swap; src:url(__FONT_BOLD__) format("woff2");
 }
 :root{
-  --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
-  --accent:#2f4c86; --border:#bdb29f; --verse:#53688f; --red:#b23a2e;
-  --hl:#ffe08a;
+__LIGHT_PALETTE__
   /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
      stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
      fall back per-glyph instead of tofu. */
@@ -50,9 +77,7 @@ const readerCSSTemplate = `
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --bg:#191715; --surface:#221f1c; --text:#e9e3d9; --muted:#9d9487;
-    --accent:#7ca0e4; --border:#39342e; --verse:#8ca8d8; --red:#e57373;
-    --hl:#3a2b0c;
+__DARK_PALETTE__
   }
 }
 *{box-sizing:border-box}
@@ -94,7 +119,7 @@ body{
   background:none; border:1px solid var(--border); border-radius:8px;
   padding:.3rem 1.1rem; white-space:nowrap; letter-spacing:.01em;
 }
-.goto:hover{border-color:var(--accent); background:var(--hl)}
+.goto:hover{border-color:var(--accent); background:var(--control-hover)}
 /* Chapter heading row: title on the left, quiet prev/next arrows on the right.
    Arrows only up here — you land mid-text from a shared link, so this bar is
    for moving, not for labels; the labelled pager at the foot of the chapter is
@@ -119,7 +144,7 @@ body{
   font-size:1.45rem; font-weight:700; line-height:1;
   color:var(--accent); text-decoration:none;
 }
-.arrow:hover{border-color:var(--accent); background:var(--hl)}
+.arrow:hover{border-color:var(--accent); background:var(--control-hover)}
 .arrow.off{color:var(--muted); opacity:.3; pointer-events:none; background:none}
 /* Go-to overlay — the APP'S picker, not a search box: a two-stage alphabet
    navigator on the left (letters → that letter's books → back), the selected
@@ -152,11 +177,11 @@ body{
   color:var(--text); font-size:.9rem; background:none;
 }
 .galpha a:hover,.gchaps a:hover{border-color:var(--accent); color:var(--accent)}
-.gchaps a.on{border-color:var(--accent); color:var(--accent); font-weight:700; background:var(--hl)}
+.gchaps a.on{border-color:var(--accent); color:var(--accent); font-weight:700; background:var(--control-selected)}
 .gbooks{display:block}
 .gbooks a{display:block; padding:.35rem .4rem; border-radius:6px; font-size:.92rem;
   color:var(--text); text-decoration:none}
-.gbooks a:hover{background:var(--hl)}
+.gbooks a:hover{background:var(--control-hover)}
 .gbooks a.on{color:var(--accent); font-weight:700}
 /* The way back to the alphabet, and the heading telling you which letter you
    are in. It was a muted ‹ and a small letter — easy to miss and easy to miss
@@ -264,8 +289,8 @@ body{
    verse's id and :target paints it. reader.js only adds ranges. */
 /* Generous scroll-margin so a deep link lands the verse with the chapter
    heading still on screen, rather than pinning it to the very top edge. */
-.v:target,.v.hl{background:var(--hl); border-radius:3px;
-  box-shadow:0 0 0 .18em var(--hl); scroll-margin-top:6.5rem}
+.v:target,.v.hl{background:var(--verse-hl); border-radius:3px;
+  box-shadow:0 0 0 .18em var(--verse-hl); scroll-margin-top:6.5rem}
 /* Browsers do NOT re-evaluate :target when history.replaceState drops the
    fragment — the URL loses #v16 but the verse stays lit, so tapping a
    single-verse highlight appeared to do nothing (a range cleared, because that
@@ -357,7 +382,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   line-height:0; border-radius:6px;
 }
 .notebtn svg{width:15px; height:15px; fill:currentColor; display:block}
-.notebtn:hover{color:var(--accent); background:var(--hl)}
+.notebtn:hover{color:var(--accent); background:var(--control-hover)}
 /* The minimized marker. Small and quiet, but unmistakably a thing to press:
    the note is still there and the reader has to be able to find it again. */
 .notechip{

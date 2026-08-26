@@ -1,5 +1,7 @@
 package bibletext
 
+import "image/color"
+
 // Exported seams for cmd/websitegen — the static web reader's generator.
 //
 // The generator lives in this module so it can render from the SAME decoders,
@@ -105,3 +107,43 @@ func FirstLetter(book string) string { return string(firstLetter(book)) }
 // and the test is what says so out loud instead of the site quietly rendering
 // the old single wash.
 func HighlightTintClass() string { return tintHighlight.htmlClass() }
+
+// WebReaderPalette is the subset of the app palette used by the static reader.
+// Its translucent control colours reuse the Fyne theme's hover and selection
+// tints, while the separate opaque highlight remains reserved for scripture.
+type WebReaderPalette struct {
+	Background       color.NRGBA
+	Surface          color.NRGBA
+	Text             color.NRGBA
+	TextMuted        color.NRGBA
+	Accent           color.NRGBA
+	Border           color.NRGBA
+	VerseNumber      color.NRGBA
+	RedLetter        color.NRGBA
+	Highlight        color.NRGBA
+	ControlHover     color.NRGBA
+	ControlSelection color.NRGBA
+}
+
+// WebReaderPalettes returns the light and dark static-reader palettes. Keeping
+// this seam beside the decoder and tint exports lets cmd/websitegen derive its
+// CSS from the app palette instead of maintaining another set of colour values.
+func WebReaderPalettes() (light, dark WebReaderPalette) {
+	return webReaderPalette(lightPalette), webReaderPalette(darkPalette)
+}
+
+func webReaderPalette(p palette) WebReaderPalette {
+	return WebReaderPalette{
+		Background:       p.Background,
+		Surface:          p.Surface,
+		Text:             p.Text,
+		TextMuted:        p.TextMuted,
+		Accent:           p.Accent,
+		Border:           p.Border,
+		VerseNumber:      p.VerseNumber,
+		RedLetter:        p.RedLetter,
+		Highlight:        p.Highlight,
+		ControlHover:     paletteHover(p),
+		ControlSelection: paletteSelection(p),
+	}
+}
