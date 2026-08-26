@@ -60,6 +60,12 @@ func mustProductIdentity(raw []byte) productIdentity {
 	if err := dec.Decode(&p); err != nil {
 		panic("config/product.json does not parse: " + err.Error())
 	}
+	// One object and nothing after it. Go's decoder stops at the first value,
+	// so without this a file carrying a second object would build a binary
+	// from the first while every Python consumer of the same bytes refuses.
+	if dec.More() {
+		panic("config/product.json: trailing content after the identity object")
+	}
 	if strings.TrimSpace(p.ProductName) != p.ProductName || p.ProductName == "" {
 		panic("config/product.json: productName must be non-empty with no surrounding whitespace")
 	}
@@ -73,8 +79,10 @@ func mustProductIdentity(raw []byte) productIdentity {
 	if p.SupportEmail == "" {
 		panic("config/product.json: supportEmail must be set")
 	}
-	if !strings.HasPrefix(p.AudioBase, "https://") || !strings.HasSuffix(p.AudioBase, "/") {
-		panic("config/product.json: audioBase must be an https:// URL ending in /")
+	if u, err := url.Parse(p.AudioBase); err != nil || u.Scheme != "https" ||
+		u.Host == "" || !strings.HasSuffix(p.AudioBase, "/") ||
+		u.RawQuery != "" || u.Fragment != "" {
+		panic("config/product.json: audioBase must be an https:// URL with a host, ending in /")
 	}
 	// sourceRepo is a repository URL, so unlike siteBase a path is expected;
 	// only the scheme, a host, and the absence of decoration are enforced.

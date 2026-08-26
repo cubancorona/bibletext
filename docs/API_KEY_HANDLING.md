@@ -94,7 +94,7 @@ temporary directory with `BIBLETEXT_IOS_OUT_DIR` or
 ## Public support contact
 
 The public support mailbox has one tracked source:
-`config/support-email.txt`. Application code reads it through `SupportEmail`,
+`config/product.json`. Application code reads it through `SupportEmail`,
 and the site publisher renders separate display-text and mailto-recipient
 markers into the privacy and support page templates. The shared conservative
 grammar is tracked in `config/support-email-pattern.txt`; it excludes URI

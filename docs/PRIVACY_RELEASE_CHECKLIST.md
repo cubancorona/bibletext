@@ -6,7 +6,7 @@ account identifiers or private fixture data.
 
 ## Public contact
 
-- Change the public mailbox only in `config/support-email.txt`.
+- Change the public mailbox only in `config/product.json`.
 - Run `scripts/check-support-contact.py`; it must pass before building an App
   Store, Play, GitHub, or Pages release.
 - Regenerate the site pages with `scripts/publish-site.sh --dry-run` and confirm
