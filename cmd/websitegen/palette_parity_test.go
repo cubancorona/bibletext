@@ -150,6 +150,15 @@ func TestWebReaderPaletteContrast(t *testing.T) {
 			if got := webContrastRatio(tc.palette.Text, tc.palette.Highlight); got < 4.5 {
 				t.Errorf("body text on the verse highlight is %.2f:1, want at least 4.5:1", got)
 			}
+			// 3.0:1 is the app's deliberate design floor, adopted here when the
+			// dark wash became the app's #3A326F for palette parity. That put
+			// dark red-on-highlight at 3.77:1 — below WCAG AA's 4.5:1 for this
+			// page's 21px scripture, where the previous stale wash happened to
+			// measure 4.59:1. Parity was chosen over the accidental AA number;
+			// the state is transient (only the shared-link target verse) and
+			// slightly exceeds the app's own dark pane. Raising it back to AA
+			// means a web-specific dark wash or a brighter dark red, not a
+			// lower bar here.
 			if got := webContrastRatio(tc.palette.RedLetter, tc.palette.Highlight); got < 3.0 {
 				t.Errorf("red-letter text on the verse highlight is %.2f:1, want at least 3.0:1", got)
 			}

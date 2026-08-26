@@ -53,8 +53,15 @@ type palette struct {
 	// HighlightMulti is the wash where MORE THAN ONE note covers a verse
 	// (tintMulti, tint.go) — separated from Highlight by hue, not brightness.
 	// Two nearby washes of one hue would read as different strengths of the
-	// same mark, while different hue families read as different facts. Nothing
-	// draws it yet — one lit span at a time is the recorded invariant, held by
+	// same mark, while separated hues read as different facts. HONEST LIMITS
+	// of that separation since the night-violet change: the LIGHT pair stays
+	// ~170 degrees apart (warm vs cool), but the DARK pair is violet vs slate
+	// — ~29 degrees, same blue family, luminance-matched to 1.05:1 — so in
+	// dark the two-facts cue rests on violet's roughly double chroma rather
+	// than on hue family. Fine while nothing draws it; if tintMulti is ever
+	// activated, re-decide the dark pairing with these numbers in hand rather
+	// than trusting the light theme's rationale. Nothing draws it yet — one
+	// lit span at a time is the recorded invariant, held by
 	// tint_multi_guard_test.go until a multi-wash is requested.
 	HighlightMulti color.NRGBA
 	VerseNumber    color.NRGBA // superscript verse numbers
