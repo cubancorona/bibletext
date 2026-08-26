@@ -58,7 +58,7 @@
       // `&& exit` closes the terminal on a clean quit (see note above).
       "type": "node-terminal",
       "request": "launch",
-      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext.desktop && './BibleText.app/Contents/MacOS/desktop' && exit",
+      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext && './BibleText.app/Contents/MacOS/desktop' && exit",
       "cwd": "${workspaceFolder}/cmd/desktop"
     },
     {

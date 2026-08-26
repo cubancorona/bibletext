@@ -73,13 +73,13 @@ jobs:
           cd cmd/desktop
           # Apple Silicon
           CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          CGO_ENABLED=1 GOARCH=arm64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext.desktop --executable desktop
+          CGO_ENABLED=1 GOARCH=arm64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-AppleSilicon.zip
           rm -rf BibleText.app
           # Intel
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          CGO_ENABLED=1 GOARCH=amd64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext.desktop --executable desktop
+          CGO_ENABLED=1 GOARCH=amd64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-Intel.zip
           rm -rf BibleText.app
@@ -120,7 +120,7 @@ jobs:
           trap clear_release_bible_key EXIT
           cd cmd/desktop
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          $(go env GOPATH)/bin/fyne package -os linux --app-id uk.co.bibletext.desktop --executable desktop
+          $(go env GOPATH)/bin/fyne package -os linux --app-id uk.co.bibletext --executable desktop
           mv BibleText.tar.xz ../../BibleText-Linux-amd64.tar.xz
           scan_dir="$(mktemp -d)"
           trap 'clear_release_bible_key; rm -rf "$scan_dir"' EXIT
@@ -167,7 +167,7 @@ jobs:
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
           # Fyne's Windows packager rebuilds the target to add icon/version
           # resources. GOFLAGS keeps that metadata pass trimmed and stripped.
-          GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext.desktop --executable BibleText.exe
+          GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext --executable BibleText.exe
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe
           cd ../..
           7z a BibleText-Windows-amd64.zip ./cmd/desktop/BibleText.exe

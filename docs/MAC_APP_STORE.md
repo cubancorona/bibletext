@@ -9,6 +9,27 @@ Nothing here is wired into CI. `scripts/release-mac-store.sh` is run by hand.
 The plain desktop release — unsigned, unsandboxed, one zip per architecture —
 is unchanged and remains the default channel.
 
+## One listing, two platforms
+
+The macOS app shares the iOS app's bundle id, `uk.co.bibletext`, so App Store
+Connect treats it as the same product on a second platform rather than a
+separate app. The existing listing, its reviews and its ratings carry the Mac
+version, the page reads "Also available on Mac", and Universal Purchase can
+apply — which is the discovery argument that justified the Store over plain
+notarization in the first place.
+
+That id is now the desktop id on every platform, not just macOS: Linux and
+Windows packaging used the `.desktop` suffix purely as a desktop marker, and
+keeping two ids would have meant the Mac build alone diverging from its
+siblings. The registered bundle id is already UNIVERSAL, which is the type
+Universal Purchase requires.
+
+The consequence worth knowing: the direct-download macOS build now carries the
+same id as the Store build, so macOS treats them as one app and the Store
+version replaces a direct download rather than sitting beside it. Preferences
+survive that either way, because Fyne keys them by the identifier passed to
+NewWithID rather than by the bundle id.
+
 ## What the Store requires that the direct download does not
 
 | | Direct download | Mac App Store |
@@ -38,7 +59,7 @@ a required key is dropped or an unaudited capability appears.
 
 **A Store build is a separate app.** It installs alongside the direct download,
 gets its own container at
-`~/Library/Containers/uk.co.bibletext.desktop/Data`, and both can sit in
+`~/Library/Containers/uk.co.bibletext/Data`, and both can sit in
 `/Applications` and run at once.
 
 Under the sandbox, `HOME` points at the container. Go's `os.UserHomeDir()`
@@ -65,7 +86,7 @@ having no data. Two things are easy to get wrong:
   `NewWithID("bibletext")`, and Fyne's identifier wins over the `FyneApp.toml`
   metadata id when it builds
   `$HOME/Library/Preferences/fyne/<id>`. A manifest written against
-  `uk.co.bibletext.desktop` migrates **nothing, silently**. The checker reads
+  `uk.co.bibletext` migrates **nothing, silently**. The checker reads
   the identifier out of `app.go` and fails if the manifest disagrees.
 - **Move, not Copy — measured, not chosen.** A `Copy` entry is ignored: a
   sandboxed build launched with one created its container and wrote a fresh

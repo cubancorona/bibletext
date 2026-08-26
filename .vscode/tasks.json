@@ -55,7 +55,7 @@
       "label": "Package Desktop (.app)",
       "detail": "fyne package -> cmd/desktop/BibleText.app",
       "type": "shell",
-      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext.desktop",
+      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext",
       "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
       "group": "build",
       "problemMatcher": ["$go"]

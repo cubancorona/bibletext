@@ -3,6 +3,6 @@ Website = "https://bibletext.co.uk"
 [Details]
 Icon = "Icon.png"
 Name = "BibleText"
-ID = "uk.co.bibletext.desktop"
+ID = "uk.co.bibletext"
 Version = "1.2.3"
 Build = 37
