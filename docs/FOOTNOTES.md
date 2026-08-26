@@ -273,3 +273,15 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
 3. NKJV crossrefs: display eventually, or leave captured-but-dark?
 4. AI prompts: may note bodies travel with an Explain request? (Default no.)
 5. Send the support email (its footnote questions now narrower — §8 above).
+
+### Decision (2026-08-26): no dev tab — presentation trials happen on the main reading pane
+
+A dev-only tab duplicating the reading view was considered as a presentation
+laboratory and declined. Two read-only code scouts established that the reading
+view is single-instance by design on every platform (native overlay singletons,
+the currentHost frame guard, the addRecentChapter funnel into audio-stop and
+reading.state, and the one-pane scroll/anchor registries), so a live duplicate
+would break the real tab; a stripped passive renderer was safe but could not
+show the production rendering. When presentation work is approved, footnote
+display will be built and tested directly on the main reading pane in this
+branch — no second surface.
