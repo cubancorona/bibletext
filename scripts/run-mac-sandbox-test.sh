@@ -60,9 +60,18 @@ CERT=$(security find-identity -v -p codesigning 2>/dev/null |
 
 note "building (arm64 only — this is a local test, not a release)"
 rm -rf "$WORK"; mkdir -p "$WORK"
+# The key is injected here for the same reason the release build injects it:
+# without it bundledBibleKeyEnc is empty, so the app reports no bundled key,
+# the API.Bible field reads "Paste your API.Bible key" rather than showing the
+# included one, and the NKJV cannot download at all. A rehearsal that omits it
+# is not rehearsing the build readers will run.
+# shellcheck source=/dev/null
+source scripts/release-bible-key.sh
+load_release_bible_key
+trap clear_release_bible_key EXIT
 (
   cd cmd/desktop
-  CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -o "$WORK/desktop" .
+  CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop" .
   cp "$WORK/desktop" ./desktop
   "$(go env GOPATH)/bin/fyne" package -os darwin --app-id "$TEST_ID" --executable desktop
   rm -f ./desktop
