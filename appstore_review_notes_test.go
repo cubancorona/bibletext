@@ -57,7 +57,12 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 				t.Fatalf("%s is missing; tracked App Review notes are required for every "+
 					"release. (%v)", file.path, err)
 			}
-			notes := string(raw)
+			// Normalise line endings before anything is measured: a Windows
+			// checkout rewrites LF to CRLF, and counting the \r bytes once put
+			// this test 31 characters over the cap on Windows CI alone — for a
+			// file the helper (which runs on macOS, reading LF) sends at 3,977.
+			// What App Store Connect receives is what must be measured.
+			notes := strings.ReplaceAll(string(raw), "\r\n", "\n")
 			want := packagedVersion(t, file.versionConfig)
 
 			// App Store Connect limits the field to 4,000 Unicode characters. Count
