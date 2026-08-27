@@ -318,10 +318,18 @@ def main():
     if app_info_values is None:
         print("\napp-info localization: skipped (app-wide fields; the iOS run owns them)")
     else:
-        app_info = one(
-            get_data(asc, f"/v1/apps/{APP}/appInfos?limit=20", "resolve app info"),
-            "appInfo record",
-        )
+        # While any version sits in preparation, App Store Connect holds TWO
+        # appInfo records: the live one and the editable one. Only the editable
+        # record accepts writes, so it is the one to resolve; with no version
+        # in preparation there is exactly one record and it is used as before.
+        app_infos = get_data(asc, f"/v1/apps/{APP}/appInfos?limit=20", "resolve app info")
+        editable = [
+            item for item in app_infos
+            if item.get("attributes", {}).get("state")
+            in ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+                "METADATA_REJECTED", "WAITING_FOR_REVIEW", "IN_REVIEW")
+        ]
+        app_info = one(editable or app_infos, "editable appInfo record")
         app_info_localizations = get_data(
             asc, f"/v1/appInfos/{app_info['id']}/appInfoLocalizations?limit=200",
             "resolve app info localization",
