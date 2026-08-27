@@ -609,7 +609,8 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// output (footnote_section.go).
 	var footnotes []footnoteEntry
 	if footnotesEnabled() {
-		footnotes = chapterFootnoteEntries(verses)
+		footnotes = chapterFootnoteEntries(verses,
+			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter))
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
 	// Nothing here decides what a wash looks like any more — it asks the tint,

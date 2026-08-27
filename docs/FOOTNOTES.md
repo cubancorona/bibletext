@@ -353,3 +353,45 @@ the feature's ONE control (a plain checkbox; no icon in the row either). The
 approved αω¹ glyph stays RESERVED in assets/icons/footnote.svg + iconFootnote
 for when a header toggle returns; the header-mount recipe (availability gate,
 stacked placement on mobile) is recorded in footnote_section.go.
+
+## 10. Omitted-verse orphans + all-platform rendering (2026-08-27)
+
+**Orphan capture.** The 34 notes anchored in critical-text-omitted verses are
+no longer dropped: a verse node that carries a marker but no text (the Luke
+17:36 shape) now yields an OrphanFootnote into BibleData.OrphanFootnotes
+(book → chapter), corpus-verified at exactly WEB 5 (Luke 17:36; Acts 8:37,
+15:34, 24:7; Rom 16:25) + WEBC 29 (those five + 24 in Sirach's versification
+gaps) + BSB 0. Superscription-anchored bodies stay dropped — capture reads
+only markers inside emitted-but-textless verse nodes, never unconsumed
+bodies by reference. The TEXT is untouched: no empty verse numbers appear on
+the page; the section carries the explanation instead, keyed by the absent
+verse number and sorted into place between its neighbours
+(chapterFootnoteEntries merge). Epochs: web 3→4, bsb 4→5 (decoder-version
+hygiene; zero BSB bytes change), webc 3→4; nkjv stays 1 (the NKJV prints
+these verses). Old caches load with a nil table; every accessor is nil-safe
+for the superseded-epoch offline fallback. Purity is structural — nothing
+but the section reads the table — and pinned in the search/speech/prose/copy
+sweep. Sim-verified live: WEB Luke 17 renders "…35 … 37…" exactly as
+printed, with "36 Some Greek manuscripts add: …" below the rule.
+
+**Android.** buildChapterHTMLAndroid appends the section in the fromHtml
+dialect: it OPENS with one sentinel `<sup>&#160;</sup>` — BtBridge's
+buildVerseIndex ends the last verse's span at any SuperscriptSpan and skips
+a non-digit one, so the sentinel bounds read-along tint, washes and scroll
+anchors while rendering as invisible raised whitespace — then the same
+underline-over-nbsp hairline (fromHtml maps <u> to a text-system-drawn
+UnderlineSpan), then <small><font><b> verse keys (NEVER <sup>: a
+digit-leading sup would index as a phantom verse). BtBridge records the
+sentinel's start as contentEnd and clamps the selection verbs to it at
+click time, the Android twin of the Apple content-end clamps.
+
+**Styled pane (Windows/Linux).** Geometry-only, in the note-sticker's mould
+(reading_styled_footnotes.go): the section never enters lay.Text, so
+select-all/copy/share/verse-attribution exclude it BY CONSTRUCTION; the four
+press handlers guard it like the sticker; MinSize carries its height so the
+scroll machinery follows; it re-wraps inside relayout with the chapter.
+Verse keys draw in the verse-number colour, bodies in TextMuted, at 0.85×
+in the scripture serif; the rule is a 1px rectangle.
+
+footnoteSectionSupported now covers darwin/ios/android/windows/linux; the
+Fyne fallback panes remain documented gaps unreachable in shipping builds.

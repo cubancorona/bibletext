@@ -27,6 +27,7 @@ package bibletext
 import (
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -44,15 +45,17 @@ const prefFootnotes = "reading.footnotes"
 var footnoteSeparator = "<u>" + strings.Repeat("\u00a0", 16) + "</u>"
 
 // footnoteSectionSupported reports whether THIS platform's reading pane
-// renders the bottom section. Prototype scope: the Apple native panes (one
-// shared HTML builder). Android's TextView pipeline and the Windows/Linux
-// styled pane have documented recipes (docs/FOOTNOTES.md) but no rendering
-// yet, so the toggle and settings row hide there rather than offering a
-// switch that visibly does nothing.
+// renders the bottom section: the Apple native panes (one shared HTML
+// builder), Android's TextView pipeline, and the Windows/Linux styled pane
+// (geometry-only, reading_styled_footnotes.go). The Fyne fallback panes are
+// documented gaps unreachable in shipping builds. The Settings card hides
+// where this is false rather than offering a switch that does nothing.
 func footnoteSectionSupported() bool {
 	switch runtime.GOOS {
-	case "darwin", "ios":
+	case "darwin", "ios", "android":
 		return true
+	case "windows", "linux":
+		return styledPaneEnabledOnPlatform
 	}
 	return false
 }
@@ -82,11 +85,14 @@ type footnoteEntry struct {
 }
 
 // chapterFootnoteEntries collects the chapter's translator footnotes in verse
-// order. Cross-references (Kind == footnoteKindCrossref — the NKJV feed's
-// entire apparatus) are excluded: whether they ever display is an open
-// decision (docs/FOOTNOTES.md §8), and a wall of "John 7:50; 19:39" rows is a
+// order — the notes riding on rendered verses PLUS the orphans whose verse
+// the translation omits (Luke 17:36 and kin), merged by verse number so an
+// omitted verse's note sorts into its natural place between its neighbours.
+// Cross-references (Kind == footnoteKindCrossref — the NKJV feed's entire
+// apparatus) are excluded: whether they ever display is an open decision
+// (docs/FOOTNOTES.md §8), and a wall of "John 7:50; 19:39" rows is a
 // different feature from wording-and-manuscript notes.
-func chapterFootnoteEntries(verses []Verse) []footnoteEntry {
+func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote) []footnoteEntry {
 	var entries []footnoteEntry
 	for _, v := range verses {
 		for _, fn := range v.Footnotes {
@@ -100,12 +106,27 @@ func chapterFootnoteEntries(verses []Verse) []footnoteEntry {
 			entries = append(entries, footnoteEntry{Verse: v.Verse, Text: text})
 		}
 	}
+	for _, o := range orphans {
+		if o.Kind != "" {
+			continue
+		}
+		text := strings.TrimSpace(o.Text)
+		if text == "" {
+			continue
+		}
+		entries = append(entries, footnoteEntry{Verse: o.Verse, Text: text})
+	}
+	// Stable: keeps a verse's own notes in marker order, and an orphan's
+	// verse number cannot collide with a rendered verse's (its verse has no
+	// text by definition).
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Verse < entries[j].Verse })
 	return entries
 }
 
 // chapterHasFootnotes reports whether the current chapter has anything the
 // section would show — the gate for the header toggle, mirroring
-// chapterAudioAvailable: no chapter gets a dead control.
+// chapterAudioAvailable: no chapter gets a dead control. Orphans count: a
+// chapter whose ONLY note explains an omitted verse still has a section.
 func chapterHasFootnotes(state *AppState) bool {
 	if state == nil || state.Bible == nil {
 		return false
@@ -115,6 +136,11 @@ func chapterHasFootnotes(state *AppState) bool {
 			if fn.Kind == "" && strings.TrimSpace(fn.Text) != "" {
 				return true
 			}
+		}
+	}
+	for _, o := range state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter) {
+		if o.Kind == "" && strings.TrimSpace(o.Text) != "" {
+			return true
 		}
 	}
 	return false

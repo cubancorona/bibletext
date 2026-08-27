@@ -55,6 +55,20 @@ type Footnote struct {
 // footnoteKindCrossref marks cross-reference apparatus (USX note style "x").
 const footnoteKindCrossref = "crossref"
 
+// OrphanFootnote is a translators' footnote whose VERSE the translation
+// omits — the critical-text omissions (Luke 17:36, Acts 8:37, 15:34, 24:7,
+// Romans 16:25, plus deuterocanon versification gaps). The verse number
+// exists in the versification but decodes to no text, so the note cannot
+// ride on a Verse; it lives in BibleData.OrphanFootnotes and surfaces ONLY
+// in the chapter-bottom footnote section, keyed by its verse number — the
+// one place a reader can learn WHY that number is absent from the page.
+type OrphanFootnote struct {
+	Verse  int    `json:"verse"`
+	Text   string `json:"text"`
+	Kind   string `json:"kind,omitempty"`
+	Caller string `json:"caller,omitempty"`
+}
+
 // BibleData holds all Bible verses organized by book and chapter
 // This is the data model/storage for the entire Bible
 // Structure:
@@ -71,6 +85,15 @@ type BibleData struct {
 	// Books is a slice containing all 66 book names in canonical order
 	// Used to display the book list in the sidebar
 	Books []string
+
+	// OrphanFootnotes carries the translators' notes anchored in verses the
+	// translation OMITS (see OrphanFootnote), keyed book → chapter. Nothing
+	// but the chapter-bottom footnote section reads it — it is invisible to
+	// search, speech, share, copy and links by construction, because those
+	// all walk Verses. omitempty: caches written before this field existed
+	// load with a nil map, and every accessor is nil-safe (the superseded-
+	// epoch fallback serves such caches to offline upgraders).
+	OrphanFootnotes map[string]map[int][]OrphanFootnote `json:"orphan_footnotes,omitempty"`
 
 	// chapterNums caches the sorted chapter numbers per book so the reading
 	// view, search, and navigation don't re-allocate + re-sort on every call.
@@ -293,6 +316,17 @@ func (bd *BibleData) GetChapter(book string, chapter int) []Verse {
 	// Chapter not found, return empty slice (not nil)
 	// Empty slice is better than nil because it's safer to iterate over
 	return []Verse{}
+}
+
+// OrphanNotesFor returns the chapter's omitted-verse footnotes, or nil.
+// Nil-safety is load-bearing at every level: the superseded-epoch fallback
+// serves pre-field caches (nil map) to offline upgraders, and placeholder
+// BibleData carries no orphans at all.
+func (bd *BibleData) OrphanNotesFor(book string, chapter int) []OrphanFootnote {
+	if bd == nil || bd.OrphanFootnotes == nil {
+		return nil
+	}
+	return bd.OrphanFootnotes[book][chapter]
 }
 
 // GetChaptersForBook returns the number of chapters in a book

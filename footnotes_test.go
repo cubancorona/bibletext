@@ -63,6 +63,12 @@ const helloAOFixtureBook = `{
 
 func decodeFixtureBook(t *testing.T) map[int][]Verse {
 	t.Helper()
+	chapters, _ := decodeFixtureBookAll(t)
+	return chapters
+}
+
+func decodeFixtureBookAll(t *testing.T) (map[int][]Verse, map[int][]OrphanFootnote) {
+	t.Helper()
 	var b helloAOBook
 	if err := json.Unmarshal([]byte(helloAOFixtureBook), &b); err != nil {
 		t.Fatal(err)
@@ -143,11 +149,11 @@ func TestFootnotesHelloAOAnchors(t *testing.T) {
 
 // A verse whose ONLY content is a footnote marker — the critical-text
 // omissions (Luke 17:36, Acts 8:37, …), where the note explains the verse's
-// absence — decodes exactly as it always has: no verse, and therefore no
-// captured note. 34 real notes across WEB/WEBC sit in such verses; surfacing
-// them would mean rendering empty verses, a presentation decision recorded as
-// an open question in docs/FOOTNOTES.md, not a machinery default.
-func TestFootnotesEmptyVerseMarkerDropsCleanly(t *testing.T) {
+// absence. The TEXT decodes exactly as it always has: no verse, no empty
+// number on the page. The NOTE, though, is captured as an orphan (34 real
+// ones across WEB/WEBC) so the chapter-bottom section can carry the
+// explanation, keyed by the very verse number the reader won't find above.
+func TestFootnotesOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	book := `{"id":"LUK","order":42,"chapters":[{"chapter":{"number":17,
 	  "content":[
 	    {"type":"verse","number":35,"content":["Two will be grinding together."]},
@@ -159,19 +165,28 @@ func TestFootnotesEmptyVerseMarkerDropsCleanly(t *testing.T) {
 	if err := json.Unmarshal([]byte(book), &b); err != nil {
 		t.Fatal(err)
 	}
-	vs := decodeHelloAOChapters("Luke", b)[17]
+	chapters, orphans := decodeHelloAOChapters("Luke", b)
+	vs := chapters[17]
 	if len(vs) != 1 || vs[0].Verse != 35 {
-		t.Fatalf("empty verse 36 must stay dropped as it always was: %+v", vs)
+		t.Fatalf("empty verse 36 must stay out of the TEXT as it always was: %+v", vs)
 	}
 	if len(vs[0].Footnotes) != 0 {
 		t.Errorf("verse 36's note must not migrate onto verse 35: %+v", vs[0].Footnotes)
+	}
+	// The note itself is no longer dropped: it is captured as an ORPHAN keyed
+	// by the omitted verse — the chapter-bottom section's row that explains
+	// why there is no verse 36 on the page.
+	want := []OrphanFootnote{{Verse: 36, Text: "Some Greek copies add verse 36.", Caller: "+"}}
+	if got := orphans[17]; len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("omitted verse 36's note must be captured as an orphan:\n got: %+v\nwant: %+v", got, want)
 	}
 }
 
 // (3) Orphans on both sides: a marker with no body captures nothing; a body
 // whose marker sits in an unrendered superscription is dropped.
 func TestFootnotesHelloAOOrphans(t *testing.T) {
-	vs := decodeFixtureBook(t)[23]
+	chapters, orphans := decodeFixtureBookAll(t)
+	vs := chapters[23]
 	if n := len(vs[4].Footnotes); n != 0 {
 		t.Errorf("bodiless marker produced %d footnotes, want 0", n)
 	}
@@ -182,6 +197,16 @@ func TestFootnotesHelloAOOrphans(t *testing.T) {
 			}
 		}
 	}
+	// The superscription body must not slip into the ORPHAN table either:
+	// omitted-verse capture reads only markers inside emitted-but-textless
+	// verse nodes, never unconsumed bodies by reference.
+	for ch, os := range orphans {
+		for _, o := range os {
+			if strings.Contains(o.Text, "superscription") {
+				t.Errorf("superscription-anchored body captured as an orphan in chapter %d: %+v", ch, o)
+			}
+		}
+	}
 }
 
 // --- purity: the pipelines that read Verse.Text stay footnote-free ------------
@@ -189,6 +214,11 @@ func TestFootnotesHelloAOOrphans(t *testing.T) {
 func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	chapters := decodeFixtureBook(t)
 	bd := &BibleData{Books: []string{"Psalms"}, Verses: map[string]map[int][]Verse{"Psalms": chapters}}
+	// An orphan with a distinctive probe word: the table is invisible to
+	// every Verse.Text pipeline by construction, and this proves it.
+	bd.OrphanFootnotes = map[string]map[int][]OrphanFootnote{
+		"Psalms": {23: {{Verse: 7, Text: "Some copies add an orphanprobe verse."}}},
+	}
 	bd.PrepareSearchIndex()
 
 	// Search: a distinctive word from a footnote body must find nothing.
@@ -208,7 +238,7 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
 	speech := chapterSpeechText(state)
 	prose, _ := chapterShareStructure(state)
-	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final"} {
+	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final", "orphanprobe"} {
 		if strings.Contains(strings.ToLower(speech), probe) {
 			t.Errorf("footnote text reached the spoken chapter: %q", probe)
 		}
@@ -228,7 +258,7 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	if copied == "" || !strings.Contains(copied, "psalms 23") {
 		t.Fatalf("copy probe produced no chapter text — the control string is missing, so the check can't prove anything: %q", copied)
 	}
-	for _, probe := range []string{"tends", "waters of rest"} {
+	for _, probe := range []string{"tends", "waters of rest", "orphanprobe"} {
 		if strings.Contains(copied, probe) {
 			t.Errorf("footnote text reached the chapter copy: %q", probe)
 		}
@@ -262,6 +292,38 @@ func TestFootnotesSurviveCacheRoundTrip(t *testing.T) {
 	}
 }
 
+// The orphan table survives its own round trip.
+func TestOrphanFootnotesSurviveCacheRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", dir+"/bibletext-cache.json")
+	bd := &BibleData{
+		Books:  []string{"Luke"},
+		Verses: map[string]map[int][]Verse{"Luke": {17: {{BookName: "Luke", Book: "Luke", Chapter: 17, Verse: 35, Text: "Two will be grinding together."}}}},
+		OrphanFootnotes: map[string]map[int][]OrphanFootnote{
+			"Luke": {17: {{Verse: 36, Text: "Some Greek copies add verse 36.", Caller: "+"}}},
+		},
+	}
+	path := cachePathForVersion("web")
+	if err := saveBibleToCache(path, bd, currentUTCTime); err != nil {
+		t.Fatal(err)
+	}
+	back, err := loadBibleFromCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := back.OrphanNotesFor("Luke", 17)
+	if len(got) != 1 || got[0] != (OrphanFootnote{Verse: 36, Text: "Some Greek copies add verse 36.", Caller: "+"}) {
+		t.Fatalf("orphans did not survive the cache round trip: %+v", got)
+	}
+	// Nil-safety of the accessor at every level.
+	if (*BibleData)(nil).OrphanNotesFor("Luke", 17) != nil {
+		t.Error("nil BibleData must yield nil orphans")
+	}
+	if back.OrphanNotesFor("Mark", 1) != nil {
+		t.Error("absent book must yield nil orphans")
+	}
+}
+
 // A pre-footnotes cache (no footnotes field anywhere) still loads — the field
 // is additive, the schema version unchanged.
 func TestFootnotesOldCacheStillLoads(t *testing.T) {
@@ -280,6 +342,9 @@ func TestFootnotesOldCacheStillLoads(t *testing.T) {
 	}
 	if v := back.Verses["Psalms"][23][0]; v.Footnotes != nil {
 		t.Errorf("verse from an old cache grew footnotes: %+v", v.Footnotes)
+	}
+	if back.OrphanFootnotes != nil {
+		t.Errorf("old cache grew an orphan table: %+v", back.OrphanFootnotes)
 	}
 }
 

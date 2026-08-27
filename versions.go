@@ -81,17 +81,21 @@ var registeredVersions = []BibleVersion{
 	{
 		ID: "web", Name: "World English Bible", Abbrev: "WEB",
 		Publisher: "Public Domain", PublicDomain: true,
-		// epoch 3: footnote capture (side-band, text unchanged). Epoch 2 was
-		// poem-clause line breaks (epoch 1, unreleased, folded in).
-		cacheEpoch: 3,
+		// epoch 4: omitted-verse orphan notes (Luke 17:36 and kin — the WEB
+		// carries 5). Epoch 3 footnote capture; epoch 2 poem-clause line
+		// breaks (epoch 1, unreleased, folded in).
+		cacheEpoch: 4,
 		source:     webSource{},
 	},
 	{
 		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
 		Publisher: "Public Domain (CC0)", PublicDomain: true,
-		// epoch 4: footnote capture (side-band, text unchanged). Epoch 3 was
-		// poem-clause line breaks; epoch 1 punctuation spacing.
-		cacheEpoch: 4,
+		// epoch 5: omitted-verse orphan capture — decoder-version hygiene:
+		// the BSB itself carries zero orphans, but a cache's epoch names the
+		// decoder that wrote it, and epoch 5 is the orphan-aware decoder.
+		// Epoch 4 footnote capture; epoch 3 poem-clause line breaks; epoch 1
+		// punctuation spacing.
+		cacheEpoch: 5,
 		source:     bsbSource{},
 	},
 	{
@@ -99,7 +103,7 @@ var registeredVersions = []BibleVersion{
 		Publisher: "Public Domain", PublicDomain: true,
 		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
 		// USFM id into traditional Catholic order — see catholic.go.
-		cacheEpoch: 3, // epoch 3: footnote capture; epoch 2 poem-clause line breaks
+		cacheEpoch: 4, // epoch 4: omitted-verse orphan notes (29, mostly deuterocanon); 3 footnote capture; 2 poem-clause breaks
 		source:     webCatholicSource{},
 	},
 	{

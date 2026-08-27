@@ -113,8 +113,9 @@ type helloAOBook struct {
 // line breaks, headings, and Hebrew subtitles (Psalm superscriptions like "A Psalm of
 // David") are editorial nodes outside verse text and remain omitted. Shared by both
 // decoders.
-func decodeHelloAOChapters(book string, b helloAOBook) map[int][]Verse {
+func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
+	var orphans map[int][]OrphanFootnote
 	for _, cj := range b.Chapters {
 		num := cj.Chapter.Number
 		// noteId → body, for joining the in-verse markers to their text.
@@ -136,6 +137,30 @@ func decodeHelloAOChapters(book string, b helloAOBook) map[int][]Verse {
 			}
 			text, marks := bsbVerseTextMarked(head.Content)
 			if text == "" {
+				// A verse node with a marker but NO text is a critical-text
+				// omission (Luke 17:36 and kin): the verse number exists in
+				// the versification, the translation omits its words, and
+				// the note explains the omission. Capture it as an orphan —
+				// keyed by the verse it belongs to — instead of dropping it
+				// with the verse. ONLY this shape is captured: bodies whose
+				// markers sit in non-verse nodes (Psalm superscriptions)
+				// are never scanned and stay dropped, deliberately.
+				if head.Number > 0 {
+					for _, m := range marks {
+						body, ok := bodies[m.noteID]
+						if !ok || strings.TrimSpace(body.text) == "" {
+							continue
+						}
+						if orphans == nil {
+							orphans = make(map[int][]OrphanFootnote)
+						}
+						orphans[num] = append(orphans[num], OrphanFootnote{
+							Verse:  head.Number,
+							Text:   strings.TrimSpace(body.text),
+							Caller: body.caller,
+						})
+					}
+				}
 				continue
 			}
 			var notes []Footnote
@@ -163,7 +188,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) map[int][]Verse {
 			chapters[num] = verses
 		}
 	}
-	return chapters
+	return chapters, orphans
 }
 
 // helloAOFootnoteBody is one chapter-level note body awaiting its in-verse marker.
@@ -198,8 +223,15 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		if chapters := decodeHelloAOChapters(book, b); len(chapters) > 0 {
+		chapters, orphans := decodeHelloAOChapters(book, b)
+		if len(chapters) > 0 {
 			bd.Verses[book] = chapters
+		}
+		if len(orphans) > 0 {
+			if bd.OrphanFootnotes == nil {
+				bd.OrphanFootnotes = make(map[string]map[int][]OrphanFootnote)
+			}
+			bd.OrphanFootnotes[book] = orphans
 		}
 	}
 	// Note: PrepareSearchIndex is left to the caller (loadBibleData), matching

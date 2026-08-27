@@ -61,7 +61,7 @@ func stripFootnotes(verses []Verse) []Verse {
 }
 
 func TestChapterFootnoteEntries(t *testing.T) {
-	entries := chapterFootnoteEntries(footnoteFixtureVerses())
+	entries := chapterFootnoteEntries(footnoteFixtureVerses(), nil)
 	if len(entries) != 2 {
 		t.Fatalf("want the 2 translator notes (crossref + blank excluded), got %d: %v", len(entries), entries)
 	}
@@ -75,6 +75,27 @@ func TestChapterFootnoteEntries(t *testing.T) {
 		if strings.Contains(e.Text, "7:50") {
 			t.Errorf("crossref leaked into the section entries: %q", e.Text)
 		}
+	}
+}
+
+// An orphan (a note on an omitted verse) sorts into its natural place
+// between its neighbours' notes, keyed by the verse number the page lacks.
+func TestChapterFootnoteEntriesInterleavesOrphans(t *testing.T) {
+	verses := footnoteFixtureVerses() // notes on 16 (x2), crossref-only 17, plain 18
+	orphans := []OrphanFootnote{
+		{Verse: 17, Text: "Some copies omit verse 17.", Caller: "+"},
+		{Verse: 17, Text: "A crossref orphan stays dark.", Kind: footnoteKindCrossref},
+		{Verse: 17, Text: "   "},
+	}
+	entries := chapterFootnoteEntries(verses, orphans)
+	if len(entries) != 3 {
+		t.Fatalf("want 2 verse notes + 1 orphan, got %d: %v", len(entries), entries)
+	}
+	if entries[0].Verse != 16 || entries[1].Verse != 16 || entries[2].Verse != 17 {
+		t.Errorf("orphan must sort between its neighbours by verse: %v", entries)
+	}
+	if entries[2].Text != "Some copies omit verse 17." {
+		t.Errorf("orphan entry wrong (crossref/blank orphans must be excluded): %q", entries[2].Text)
 	}
 }
 
@@ -156,6 +177,89 @@ func TestFootnoteSectionOnRendersAtChapterBottom(t *testing.T) {
 	if !strings.Contains(offHTML, marker) || strings.Contains(offHTML, "fnsep") {
 		t.Errorf("off rendering must carry no section CSS:\n%s", offHTML)
 	}
+}
+
+// The Android dialect: byte-identical with the toggle off; on, the section
+// opens with EXACTLY ONE sentinel <sup> (a no-break space — BtBridge's
+// buildVerseIndex ends the last verse at it and skips it), keys are plain
+// <b> text (a digit-leading sup would index as a phantom verse), and the
+// separator is the same underline-over-nbsp hairline the Apple panes draw.
+func TestFootnoteSectionAndroidDialect(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	verses := footnoteFixtureVerses()
+	st := footnoteFixtureState(verses)
+	st.Bible.OrphanFootnotes = map[string]map[int][]OrphanFootnote{
+		"John": {3: {{Verse: 17, Text: "Some copies omit verse 17.", Caller: "+"}}},
+	}
+
+	setFootnotesEnabled(false)
+	off := buildChapterHTMLAndroid(st, verses)
+	plain := footnoteFixtureState(stripFootnotes(verses))
+	if off != buildChapterHTMLAndroid(plain, stripFootnotes(verses)) {
+		t.Error("footnotes OFF must render the Android dialect byte-identically to footnote-free verses")
+	}
+
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+	on := buildChapterHTMLAndroid(st, verses)
+	if !strings.HasPrefix(on, off[:strings.LastIndex(off, "</p>")]) {
+		t.Error("scripture half of the Android dialect must be unchanged by the section")
+	}
+	section := on[len(off):]
+	if n := strings.Count(section, `<sup>&#160;</sup>`); n != 1 {
+		t.Fatalf("the section must open with exactly one sentinel sup, got %d:\n%s", n, section)
+	}
+	if n := strings.Count(section, "<sup"); n != 1 {
+		t.Errorf("no sup but the sentinel may appear in the section (phantom-verse hazard), got %d:\n%s", n, section)
+	}
+	sentinelAt := strings.Index(section, `<sup>&#160;</sup>`)
+	sepAt := strings.Index(section, footnoteSeparator)
+	if sepAt == -1 || sepAt < sentinelAt {
+		t.Errorf("the sentinel must precede the separator:\n%s", section)
+	}
+	for _, want := range []string{
+		`<b>16</b>&#160;Or God loved the world in this way.`,
+		`<b>17</b>&#160;Some copies omit verse 17.`,
+		`<b>16</b>&#160;A &lt;second&gt; &amp; &quot;quoted&quot; note.`,
+	} {
+		if !strings.Contains(section, want) {
+			t.Errorf("missing entry %q in:\n%s", want, section)
+		}
+	}
+	if idx16 := strings.Index(section, "<b>16</b>"); idx16 > strings.Index(section, "<b>17</b>") {
+		t.Errorf("entries must be in verse order (orphan 17 after 16):\n%s", section)
+	}
+	if strings.Contains(section, "7:50") {
+		t.Errorf("crossrefs must stay out of the Android section:\n%s", section)
+	}
+}
+
+// The Apple builder renders an orphan's row keyed by the verse the page
+// lacks, sorted into place between its neighbours.
+func TestFootnoteSectionRendersOrphans(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+
+	verses := footnoteFixtureVerses()
+	st := footnoteFixtureState(verses)
+	st.Bible.OrphanFootnotes = map[string]map[int][]OrphanFootnote{
+		"John": {3: {{Verse: 17, Text: "Some copies omit verse 17.", Caller: "+"}}},
+	}
+	var html string
+	withReporterLayout(false, func() { html = buildChapterHTML(st, verses) })
+	want := `<p class="fn"><span class="fnv">17</span>&nbsp;Some copies omit verse 17.</p>`
+	if !strings.Contains(html, want) {
+		t.Fatalf("orphan row missing:\n%s", html)
+	}
+	if strings.Index(html, `<span class="fnv">16</span>`) > strings.Index(html, `<span class="fnv">17</span>`) {
+		t.Errorf("orphan must sort after verse 16's notes:\n%s", html)
+	}
+	// (That the omitted verse itself never enters the TEXT is the decode
+	// contract — TestFootnotesOmittedVerseNoteBecomesOrphan.)
 }
 
 func TestFootnoteSectionReporterGap(t *testing.T) {
