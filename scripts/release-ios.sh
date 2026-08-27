@@ -302,6 +302,27 @@ cat > "$ARCH_DIR/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
+# The declared floor is verified on the ARCHIVE, before export, because the
+# upload destination produces no local .ipa to inspect afterwards — without
+# this, BIBLETEXT_UPLOAD=1 shipped the artifact unverified while the export
+# path got the full readback. The archive app is exactly what exportArchive
+# re-signs and sends, so its plist and linker minos are the truth for both
+# destinations; the post-export .ipa readback below stays as the second look
+# on the export path.
+AAPP="$(ls -d "$ARCH_DIR/Products/Applications/"*.app 2>/dev/null | head -1)"
+[ -n "$AAPP" ] || fail "archive holds no .app to verify"
+ARCHIVE_MIN="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$AAPP/Info.plist")"
+[ "$ARCHIVE_MIN" = "$IOS_MIN" ] || fail "archived MinimumOSVersion is '$ARCHIVE_MIN', not $IOS_MIN"
+# CFBundleExecutable, not a guessed name: the bundle's binary is `main`, and
+# an earlier verification bug came from assuming it matched the app name.
+AEXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$AAPP/Info.plist")"
+ARCHIVE_MINOS="$(otool -l "$AAPP/$AEXE" 2>/dev/null | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')"
+[ -n "$ARCHIVE_MINOS" ] || fail "could not read LC_BUILD_VERSION minos from the archived binary"
+for m in $ARCHIVE_MINOS; do
+    [ "$m" = "$IOS_MIN" ] || fail "archived binary is linked for iOS $m, not $IOS_MIN — the version-min flags did not reach the compile"
+done
+echo "  archive min iOS: $ARCHIVE_MIN (plist) / $ARCHIVE_MINOS (linker)"
+
 # ── 8. exportArchive → App Store .ipa or direct upload (Xcode re-signs with the
 # distribution cert; BIBLETEXT_UPLOAD=1 sends it straight to App Store Connect
 # over the Xcode-authenticated session instead of writing build/BibleText.ipa) ──
