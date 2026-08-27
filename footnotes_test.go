@@ -1,7 +1,7 @@
 package bibletext
 
-// The footnotes MACHINERY contract (docs/FOOTNOTES.md; no presentation
-// exists yet, by owner directive). Two decoders capture the translators'
+// The footnotes MACHINERY contract (docs/FOOTNOTES.md). Two decoders
+// capture the translators'
 // apparatus side-band; these tests pin the three properties everything else
 // depends on: (1) verse TEXT is byte-identical with capture on — apparatus
 // never enters Scripture; (2) anchors are exact rune offsets into the final

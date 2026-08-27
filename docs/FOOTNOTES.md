@@ -9,7 +9,7 @@ then established.*
 ## The question, and the standard it must meet
 
 Should the app show the translators' footnotes — and can it, without
-violating the rule the owner set from the closing lines of Revelation
+violating the standard this project holds from the closing lines of Revelation
 (22:18–19): nothing may be added to the words?
 
 The app has answered the underlying question once already. Shared notes put
@@ -32,7 +32,7 @@ requirement this document designs against:
 footnotes licence-gated behind the pending API.Bible questions.** The data is
 already arriving and being thrown away; the architecture that keeps the text
 pure already exists in the codebase (the red-letter side table); and the
-presentation that honours the owner's rule is the one the notes feature
+presentation that honours that standard is the one the notes feature
 already established.
 
 ## 1. What the data holds (measured, not assumed)
@@ -100,7 +100,7 @@ from the *rendered* panes rather than from `Verse.Text`:
   positional location fails and citations silently degrade.
 - **AI prompts**: the selected passage travels to the reader's AI provider —
   markers must be stripped; whether note *bodies* should optionally travel
-  with an Explain request is an owner question, not assumed.
+  with an Explain request is an open decision, not assumed.
 
 ## 3. Presentation (prior art + this app's character)
 
@@ -178,7 +178,7 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 - **Unverified** (deliberately): the live shape of NKJV notes. The key now
   lives in the login Keychain (`uk.co.bibletext.apibible-release`), not
   `.env.local`, and this session's permission layer rightly refused to
-  extract it. One owner-run call captures the ground truth:
+  extract it. One manually-run call captures the ground truth:
 
   ```
   KEY="$(security find-generic-password -a release -s uk.co.bibletext.apibible-release -w)"; curl -sS -H "api-key: $KEY" 'https://rest.api.bible/v1/bibles/63097d2a0a2f7db3-01/chapters/JHN.3?content-type=json&include-notes=true' > /tmp/jhn3-notes.json
@@ -205,9 +205,9 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    surface — web reader first, Apple panes next, styled pane, Android last
    (after the BtBridge scan fix).
 4. **NKJV notes**: only after the API.Bible answers arrive, and after the
-   owner's one-call probe confirms the feed carries them.
+   one-call probe confirms the feed carries them.
 
-## 7. Open questions for the owner
+## 7. Open decisions
 
 1. Does Phase 1 (sheet only, no markers, off by default) meet the standard —
    or is even a labelled sheet of translators' notes unwanted?
@@ -217,7 +217,7 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 
 ---
 
-## 8. Machinery status (built the same day — owner authorized; NO presentation)
+## 8. Machinery status (capture built ahead of any presentation; NO rendering)
 
 The capture machinery is **built, humming and tested** on this branch, under
 the strict rule that nothing renders anywhere:
@@ -288,7 +288,7 @@ branch — no second surface.
 
 ## 9. Prototype (2026-08-27): the chapter-bottom section, live on the Apple panes
 
-Owner-approved presentation, modelled on the Supreme Court slip opinions
+The adopted presentation is modelled on the Supreme Court slip opinions
 (measured from *Medina v. Planned Parenthood*, 606 U.S. 357: a short
 flush-left hairline rule, notes in the body serif at ~0.8× set tighter,
 justified): after the last verse, air → a short muted solid rule (an underline over a no-break-space run — drawn by the text system, so continuous on both importers where every glyph run gaps on iOS) → the
@@ -336,18 +336,17 @@ permanently reserved centre footprint (overlapping on 375pt phones with long
 book names) — the stacked-under-full-screen placement in pinned 36pt cells is
 the recorded mount recipe.
 
-Icon + settings placement (owner-directed design round, 2026-08-27): the
+Icon + settings placement (design round, 2026-08-27): the
 toggle's glyph is now **αω¹** — alpha and omega carrying a raised footnote
 numeral in the word-processor insert-footnote lockup ("I am the Alpha and the
-Omega", Rev 1:8 — the placeholder text is His letters). Owner approved the
-glyph. Chosen over three earlier families (miniature-layout, asterisk/dagger
+Omega", Rev 1:8 — the placeholder text is His letters). The glyph is adopted, chosen over three earlier families (miniature-layout, asterisk/dagger
 marks, Latin ab¹/a¹ lockups) across four rendered comparison sheets; baked
 from font outlines into a single-fill SVG (assets/icons/footnote.svg). The
 setting moved OUT of the READING card to its own TRANSLATORS' FOOTNOTES card
 at the VERY TOP of Settings (icon + checkbox + the §3 caption) — on screen
 the moment the sheet opens while the feature is under evaluation.
 
-Control simplified (owner-directed, same day): NO toggle in the reading-pane
+Control simplified (same day): NO toggle in the reading-pane
 chrome after all — the TRANSLATORS' FOOTNOTES card at the top of Settings is
 the feature's ONE control (a plain checkbox; no icon in the row either). The
 approved αω¹ glyph stays RESERVED in assets/icons/footnote.svg + iconFootnote

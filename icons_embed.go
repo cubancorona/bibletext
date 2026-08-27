@@ -113,8 +113,8 @@ var iconNoteBubble fyne.Resource = func() fyne.Resource {
 	return theme.NewThemedResource(fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG))
 }()
 
-// iconFootnote is the translators'-footnotes glyph, RESERVED (owner-approved,
-// not currently mounted — the feature's one control is the Settings checkbox,
+// iconFootnote is the translators'-footnotes glyph, RESERVED (adopted, not
+// currently mounted — the feature's one control is the Settings checkbox,
 // with no icon, by design): alpha and omega carrying a raised footnote
 // numeral, in the word-processor insert-footnote lockup — the placeholder
 // text is His letters, "I am the Alpha and the Omega" (Revelation 1:8), from
