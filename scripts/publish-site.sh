@@ -182,7 +182,9 @@ done
 # renamed — a PNG at /favicon.ico renders in browsers but not everywhere the
 # .ico contract is assumed.
 [[ -s "$OUT/favicon.ico" ]] || fail "favicon.ico missing from the tree about to be published"
-head -c4 "$OUT/favicon.ico" | od -An -tx1 | grep -q '00 00 01 00' ||
+# Whitespace-squeezed comparison: BSD od pads bytes with double spaces, which a
+# spaced grep pattern silently never matches — the gate then fails a VALID ico.
+[[ "$(head -c4 "$OUT/favicon.ico" | od -An -tx1 | tr -d ' \n')" == "00000100" ]] ||
   fail "favicon.ico is not an ICO file"
 grep -q 'rel="icon"' "$OUT/index.html" || fail "index.html does not link the favicon"
 support_email=$(python3 -c 'import json; print(json.load(open("config/product.json"))["supportEmail"], end="")')
