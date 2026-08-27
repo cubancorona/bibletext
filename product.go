@@ -39,6 +39,12 @@ type productIdentity struct {
 	AudioBase            string `json:"audioBase"`
 	SourceRepo           string `json:"sourceRepo"`
 	BundledKeySecretName string `json:"bundledKeySecretName"`
+	// The Apple minimum OS versions the release/run scripts stamp and
+	// enforce (run-ios-sim.sh, run-ios-device.sh, release-mac-store.sh read
+	// these keys straight from the JSON). Declared here so the strict
+	// parser accepts the file and Go shares the scripts' source of truth.
+	IOSMinimumOSVersion string `json:"iosMinimumOSVersion"`
+	MacMinimumOSVersion string `json:"macMinimumOSVersion"`
 }
 
 var product = mustProductIdentity(productConfigSource)
@@ -94,7 +100,20 @@ func mustProductIdentity(raw []byte) productIdentity {
 	if strings.ToUpper(p.BundledKeySecretName) != p.BundledKeySecretName || p.BundledKeySecretName == "" {
 		panic("config/product.json: bundledKeySecretName must be a non-empty UPPER_CASE name")
 	}
+	mustDottedVersion("iosMinimumOSVersion", p.IOSMinimumOSVersion)
+	mustDottedVersion("macMinimumOSVersion", p.MacMinimumOSVersion)
 	return p
+}
+
+var productDottedVersionPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
+
+// mustDottedVersion accepts only a plain dotted number ("15.0"): the value is
+// pasted into build invocations and Info.plist keys by the release scripts,
+// so anything else is a typo waiting to ship.
+func mustDottedVersion(field, value string) {
+	if !productDottedVersionPattern.MatchString(value) {
+		panic("config/product.json: " + field + " must be a dotted version number like 15.0")
+	}
 }
 
 func mustHTTPSNoTrailingSlash(field, value string) {
