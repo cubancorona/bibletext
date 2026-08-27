@@ -10,8 +10,9 @@ licensed **New King James Version (NKJV)**, in a calm, responsive reading layout
 with poetry set as poetry and the words of Christ in red. Chapters play as
 complete human-recorded narration with read-along highlighting, and any verse
 can be sent with a short note of your own riding inside an ordinary link — it
-opens beside the passage in the app, or right in the recipient's browser. No
-accounts, no server, no ads.
+opens beside the passage in the app (tapped on iPhone, iPad and Android, clicked
+on a Mac with the App Store edition, pasted into the search box on any desktop),
+or right in the recipient's browser. No accounts, no server, no ads.
 
 | Reading | Study with AI | Share as image |
 |:---:|:---:|:---:|
