@@ -31,8 +31,6 @@ package bibletext
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"time"
 )
 
 // webcCompleteURL is helloao's whole-translation endpoint for the World English Bible
@@ -99,9 +97,10 @@ type webCatholicSource struct{}
 func (webCatholicSource) available() bool { return true }
 
 func (webCatholicSource) fetch() (*BibleData, error) {
-	// 120s timeout: one ~8 MB body (73 books), so this must cover a slow connection's
-	// full download. Shares the fetch/validate path with the BSB/WEB sources.
-	return fetchHelloAOComplete("WEB Catholic", webcCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeHelloAOCatholic)
+	// One large body (73 books); the client's deadline is a stall watchdog,
+	// not a wall clock (fetch_stall.go). Shares the fetch/validate path with
+	// the BSB/WEB sources.
+	return fetchHelloAOComplete("WEB Catholic", webcCompleteURL, newCorpusClient(), decodeHelloAOCatholic)
 }
 
 // decodeHelloAOCatholic decodes eng_webc's complete.json by USFM id (not helloao's

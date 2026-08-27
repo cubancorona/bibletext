@@ -16,10 +16,8 @@ package bibletext
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -33,9 +31,10 @@ type bsbSource struct{}
 func (bsbSource) available() bool { return true }
 
 func (bsbSource) fetch() (*BibleData, error) {
-	// 120s timeout: the whole translation is one ~7 MB body, so this must cover a
-	// slow connection's full download, not a per-chapter request.
-	return fetchHelloAOComplete("BSB", bsbCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeCanonical66)
+	// The whole translation is one large body, so the client's deadline is a
+	// STALL watchdog, not a wall clock — a slow connection may take as long
+	// as it keeps moving (fetch_stall.go).
+	return fetchHelloAOComplete("BSB", bsbCompleteURL, newCorpusClient(), decodeCanonical66)
 }
 
 // webCompleteURL is helloao's whole-translation endpoint for the 66-book World English
@@ -48,7 +47,7 @@ const webCompleteURL = "https://bible.helloao.org/api/ENGWEBP/complete.json"
 // request, decoded by the same path as the BSB (decodeBSBComplete maps a 66-book helloao
 // complete.json by canonical book order). It backs webSource (versions.go).
 func fetchWEBFromHelloAO() (*BibleData, error) {
-	return fetchHelloAOComplete("WEB", webCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeCanonical66)
+	return fetchHelloAOComplete("WEB", webCompleteURL, newCorpusClient(), decodeCanonical66)
 }
 
 // decodeCanonical66 decodes a 66-book helloao complete.json (BSB, WEB) by canonical book
