@@ -109,28 +109,14 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// chapter/nav line read as one compact block, not two airy lines.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(2), titleRow, chapterRow)
 
-	// The translators'-footnotes toggle STACKS UNDER full-screen (present only
-	// when this chapter has notes and the platform renders the section —
-	// footnote_section.go), each pinned to a boxH cell so the right column's
-	// WIDTH does not change: audioControl in the Border centre permanently
-	// reserves the EXPANDED card's footprint (audio_button.go), and widening
-	// the right column by a side-by-side button provably overlaps that card
-	// on 375pt phones with long book names. Two 36pt cells fit the two-row
-	// header's height, so the stack adds no geometry in either axis.
-	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
-	if fnBtn := footnotesToggleButton(state); fnBtn != nil {
-		cell := fyne.NewSize(boxH, boxH)
-		right = container.NewVBox(
-			layout.NewSpacer(),
-			container.NewGridWrap(cell, fullScreenBtn),
-			container.NewGridWrap(cell, fnBtn),
-			layout.NewSpacer(),
-		)
-	}
-
 	// The audio control sits in the Border CENTRE — the gap between the chapter block
 	// (left) and the full-screen button (right), vertically centred. Collapsed it's a
-	// speaker; expanded it's a compact two-row card that fits the gap.
+	// speaker; expanded it's a compact two-row card that fits the gap. (The
+	// translators'-footnotes toggle is deliberately NOT in this header: the
+	// feature's one control is the Settings card, by design — and a wider
+	// right column overlaps the expanded audio card's reserved footprint on
+	// 375pt phones; see footnote_section.go.)
+	right := container.NewVBox(layout.NewSpacer(), fullScreenBtn, layout.NewSpacer())
 	var centre fyne.CanvasObject
 	if chapterAudioAvailable(state) {
 		centre = container.NewCenter(audioControl(state, boxH))

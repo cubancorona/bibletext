@@ -140,19 +140,12 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// native on iOS/macOS/Android, oto (recordings only) on Windows/Linux — so
 	// the button hides only when chapterAudioAvailable() says this chapter has
 	// nothing playable. Clustered with the focus toggle, sharing the arrows'
-	// baseline. The translators'-footnotes toggle joins the cluster the same
-	// way — present only when this chapter has notes to show
-	// (footnote_section.go).
+	// baseline. (The translators'-footnotes toggle is deliberately NOT here:
+	// the feature's one control is the Settings card, by design —
+	// footnote_section.go.)
 	var rightControls fyne.CanvasObject = focusBtn
-	var cluster []fyne.CanvasObject
-	if fnBtn := footnotesToggleButton(state); fnBtn != nil {
-		cluster = append(cluster, fnBtn, hgap(8))
-	}
 	if chapterAudioAvailable(state) {
-		cluster = append(cluster, audioControl(state, navBoxH), hgap(8))
-	}
-	if len(cluster) > 0 {
-		rightControls = container.NewHBox(append(cluster, focusBtn)...)
+		rightControls = container.NewHBox(audioControl(state, navBoxH), hgap(8), focusBtn)
 	}
 
 	left := container.NewVBox(titleRow, chapterRow)

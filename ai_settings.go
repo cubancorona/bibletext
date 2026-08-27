@@ -747,17 +747,14 @@ func showAISettings(state *AppState) {
 	if footnoteSectionSupported() {
 		// TRANSLATORS' FOOTNOTES leads the sheet: the setting is on screen
 		// the moment Settings opens, no scrolling — the feature is under
-		// active evaluation and its switch should be the easiest thing in
-		// the app to find. The row carries the feature's glyph so this card
-		// and the reading-header toggle read as one control; the caption
-		// below says plainly what the notes are and are not
-		// (docs/FOOTNOTES.md §3). Off by default.
+		// active evaluation, this checkbox is its ONE control (no toggle in
+		// the reading-pane chrome, by design), and the switch should be the
+		// easiest thing in the app to find. The caption below says plainly
+		// what the notes are and are not (docs/FOOTNOTES.md §3). Off by
+		// default.
 		fnCheck := widget.NewCheck("Show the translators' footnotes", nil)
 		fnCheck.SetChecked(footnotesEnabled())
 		fnCheck.OnChanged = func(b bool) { setFootnotesEnabled(b) }
-		fnIcon := canvas.NewImageFromResource(theme.NewColoredResource(iconFootnote, colorNameMuted))
-		fnIcon.FillMode = canvas.ImageFillContain
-		fnIcon.SetMinSize(fyne.NewSize(22, 22))
 		fnNote := widget.NewRichText(&widget.TextSegment{
 			Text: "Notes from the translators about wording and manuscripts. " +
 				"They are not part of the Scripture text.",
@@ -765,7 +762,7 @@ func showAISettings(state *AppState) {
 		})
 		fnNote.Wrapping = fyne.TextWrapWord
 		form.Add(sectionLabel("TRANSLATORS' FOOTNOTES", pal))
-		form.Add(settingsGroup(pal, container.NewHBox(fnIcon, hgap(8), fnCheck)))
+		form.Add(settingsGroup(pal, fnCheck))
 		form.Add(fnNote)
 		form.Add(sheetGap())
 	}

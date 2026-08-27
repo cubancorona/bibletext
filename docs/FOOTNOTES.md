@@ -346,3 +346,10 @@ from font outlines into a single-fill SVG (assets/icons/footnote.svg). The
 setting moved OUT of the READING card to its own TRANSLATORS' FOOTNOTES card
 at the VERY TOP of Settings (icon + checkbox + the §3 caption) — on screen
 the moment the sheet opens while the feature is under evaluation.
+
+Control simplified (owner-directed, same day): NO toggle in the reading-pane
+chrome after all — the TRANSLATORS' FOOTNOTES card at the top of Settings is
+the feature's ONE control (a plain checkbox; no icon in the row either). The
+approved αω¹ glyph stays RESERVED in assets/icons/footnote.svg + iconFootnote
+for when a header toggle returns; the header-mount recipe (availability gate,
+stacked placement on mobile) is recorded in footnote_section.go.

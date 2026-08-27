@@ -30,7 +30,6 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
 )
 
 const prefFootnotes = "reading.footnotes"
@@ -121,25 +120,15 @@ func chapterHasFootnotes(state *AppState) bool {
 	return false
 }
 
-// footnotesToggleButton is the reading-header toggle: nil when this platform
-// doesn't render the section or the chapter has no notes (the audio-control
-// convention — absent, not disabled). Importance is the on/off state, the
-// same active-fill convention as the Search tab's notes bubble; the tap's
-// refreshReadingOnly rebuilds the header, which re-reads the state.
-func footnotesToggleButton(state *AppState) fyne.CanvasObject {
-	if !footnoteSectionSupported() || !chapterHasFootnotes(state) {
-		return nil
-	}
-	btn := widget.NewButtonWithIcon("", iconFootnote, func() {
-		setFootnotesEnabled(!footnotesEnabled())
-		state.refreshReadingOnly()
-	})
-	btn.Importance = widget.LowImportance
-	if footnotesEnabled() {
-		btn.Importance = widget.HighImportance
-	}
-	return btn
-}
+// The feature's ONE control is the TRANSLATORS' FOOTNOTES card at the top of
+// Settings (ai_settings.go) — a deliberate design decision: no toggle in the
+// reading-pane chrome for now. A header toggle existed briefly and was
+// removed; if it returns, chapterHasFootnotes above is its availability gate
+// (the audio-control convention — absent, not disabled), iconFootnote
+// (icons_embed.go) is its reserved glyph, and the mobile header must not
+// widen its right column (the expanded audio card's reserved centre
+// footprint overlaps it on 375pt phones — stack under full-screen in boxH
+// cells instead).
 
 // writeFootnoteCSS emits the section's stylesheet rules — only called when
 // the section is actually rendered, so a footnotes-off chapter's HTML is
