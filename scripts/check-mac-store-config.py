@@ -38,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENTITLEMENTS = ROOT / "appstore" / "mac" / "BibleText.entitlements"
 MIGRATION = ROOT / "appstore" / "mac" / "Container-Migration.plist"
 APP_GO = ROOT / "app.go"
+RELEASE_SCRIPT = ROOT / "scripts" / "release-mac-store.sh"
 
 REQUIRED_ENTITLEMENTS = {
     "com.apple.security.app-sandbox": "the Mac App Store accepts sandboxed apps only",
@@ -155,6 +156,33 @@ def migration_failures(data: dict, unique_id: str | None) -> list[str]:
     return failures
 
 
+def release_script_failures(script: str) -> list[str]:
+    """The Universal Links claim must be injected at signing time.
+
+    com.apple.developer.associated-domains is a RESTRICTED entitlement: a
+    build may only launch with it when a provisioning profile authorises it,
+    and the dev-signed sandbox rehearsal embeds no profile. So the claim
+    lives in release-mac-store.sh's signing-time entitlements rather than the
+    tracked file — which means nothing plist-shaped guards it, and dropping
+    the two lines would ship a store build whose clicked links silently open
+    the browser again. This holds the script to it instead.
+    """
+    failures = []
+    if "com.apple.developer.associated-domains" not in script:
+        failures.append(
+            "release script: com.apple.developer.associated-domains is never "
+            "injected — the store build would carry no Universal Links claim "
+            "and clicked share links would open the browser, not the app"
+        )
+    if "applinks:$SITE_HOST" not in script:
+        failures.append(
+            "release script: the applinks value must be applinks:$SITE_HOST, "
+            "derived from config/product.json's siteBase — a hand-written "
+            "domain drifts when the identity file changes"
+        )
+    return failures
+
+
 def self_test() -> list[str]:
     problems = []
     checks = [
@@ -182,6 +210,13 @@ def self_test() -> list[str]:
         ("copy does not carry", migration_failures(
             {"Copy": ["${Library}/Preferences/fyne/bibletext"]},
             "bibletext"), "entry carries"),
+        ("missing applinks injection", release_script_failures(
+            "codesign -f -s CERT --entitlements ents.plist APP"),
+         "never injected"),
+        ("hand-written domain", release_script_failures(
+            'PlistBuddy -c "Add :com.apple.developer.associated-domains:0 '
+            'string applinks:example.com"'),
+         "applinks:$SITE_HOST"),
     ]
     for name, failures, fragment in checks:
         if not any(fragment in f for f in failures):
@@ -190,7 +225,10 @@ def self_test() -> list[str]:
     clean = entitlement_failures(
         {"com.apple.security.app-sandbox": True, "com.apple.security.network.client": True}
     ) + migration_failures(
-        {"Move": ["${Library}/Preferences/fyne/bibletext"]}, "bibletext")
+        {"Move": ["${Library}/Preferences/fyne/bibletext"]}, "bibletext"
+    ) + release_script_failures(
+        'PlistBuddy -c "Add :com.apple.developer.associated-domains array"\n'
+        'PlistBuddy -c "Add ... string applinks:$SITE_HOST"')
     if clean:
         problems.append(f"self-test: a correct configuration still fails: {clean}")
     return problems
@@ -222,6 +260,10 @@ def main() -> int:
 
     failures += entitlement_failures(ents)
     failures += migration_failures(mig, unique)
+    try:
+        failures += release_script_failures(RELEASE_SCRIPT.read_text(encoding="utf-8"))
+    except OSError:
+        failures.append("release script: scripts/release-mac-store.sh is unreadable")
 
     if failures:
         print("mac store config check failed:")

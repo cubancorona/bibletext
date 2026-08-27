@@ -8,10 +8,12 @@ package bibletext
 // //export directive may only carry C *declarations* — and share_link_ios.go's
 // preamble is full of C definitions (the delegate category). Same split as
 // ai_menu_darwin.go and audio_export_apple.go; that file declares this function
-// `extern` and calls it.
+// `extern` and calls it — and so does share_link_macos.go, its desktop twin.
 //
-// Built for `darwin` rather than `ios` so the file compiles on macOS too, where
-// it is simply never called (macOS has no Universal Links entitlement here).
+// Built for `darwin` because BOTH Apple platforms now deliver links here: iOS
+// through Fyne's mobile delegate, macOS through GLFW's (the Store build signs
+// with the applinks claim; the unsigned direct download never receives one and
+// keeps the paste-into-search route).
 
 import "C"
 

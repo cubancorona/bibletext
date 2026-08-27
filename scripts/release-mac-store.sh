@@ -142,6 +142,27 @@ SIGN_ENTS="$WORK/entitlements-signing.plist"
 cp "$ENTITLEMENTS" "$SIGN_ENTS"
 /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $TEAM_ID.$APP_ID" "$SIGN_ENTS"
 /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $TEAM_ID" "$SIGN_ENTS"
+# Universal Links: the domain claim that lets a clicked bibletext.co.uk share
+# link open the app instead of the browser (share_link_macos.go receives it).
+# This is a RESTRICTED entitlement — only a build carrying a provisioning
+# profile that authorises it may launch — which is exactly why it is injected
+# here and not written into the tracked entitlements file: the dev-signed
+# sandbox rehearsal embeds no profile, and adding the claim there would make
+# macOS refuse to launch it. The Mac App Store profile carries the
+# authorisation (Associated Domains is enabled on the App ID).
+SITE_HOST=$(python3 -c 'import json;print(json.load(open("config/product.json"))["siteBase"].removeprefix("https://"),end="")')
+[ -n "$SITE_HOST" ] || fail "could not derive the site host from config/product.json"
+# The profile must AUTHORISE the claim, not merely exist: a Mac App Store
+# profile generated before Associated Domains was enabled on the App ID signs
+# cleanly and passes every signature check, and the failure then surfaces only
+# at upload or as a launch kill of the store build. Checked here, before the
+# slow build, where the fix (regenerate the profile) is still cheap.
+security cms -D -i "$PROFILE" 2>/dev/null |
+  plutil -extract Entitlements xml1 -o - - 2>/dev/null |
+  grep -qF "com.apple.developer.associated-domains" ||
+  fail "the provisioning profile does not authorise associated-domains — regenerate it with Associated Domains enabled on the App ID"
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" "$SIGN_ENTS"
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:$SITE_HOST" "$SIGN_ENTS"
 
 # The packager already wrote its own single-key entitlements; this replaces
 # them. --generate-entitlement-der matches what release-ios.sh does and what
@@ -151,8 +172,9 @@ codesign -f -s "$APP_CERT" --timestamp --options runtime \
 
 note "confirming the signature carries the entitlements we asked for"
 SIGNED=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null || true)
-for key in com.apple.security.app-sandbox com.apple.security.network.client; do
-  printf '%s' "$SIGNED" | grep -q "$key" ||
+for key in com.apple.security.app-sandbox com.apple.security.network.client \
+           com.apple.developer.associated-domains "applinks:$SITE_HOST"; do
+  printf '%s' "$SIGNED" | grep -qF "$key" ||
     fail "the signed bundle is missing $key — the packager's template won"
 done
 codesign --verify --deep --strict --verbose=2 "$APP"

@@ -51,6 +51,22 @@
 
       No ATS exception either: every URL is https, and the identity file
       refuses to load at startup unless the audio host parses as https.
+
+      DELIBERATELY NOT IN THIS FILE, but in the shipped signature:
+
+      com.apple.developer.associated-domains  the Universal Links claim that
+                                      lets a clicked share link open the app
+                                      (share_link_macos.go). It is a
+                                      RESTRICTED entitlement — a build may
+                                      only launch with it under a
+                                      provisioning profile that authorises it
+                                      — and the dev-signed sandbox rehearsal
+                                      embeds no profile, so writing it here
+                                      would make macOS refuse to launch that
+                                      rehearsal. release-mac-store.sh injects
+                                      it at signing time instead, and
+                                      check-mac-store-config.py fails if the
+                                      script ever stops doing so.
     -->
 </dict>
 </plist>
