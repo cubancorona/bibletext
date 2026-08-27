@@ -3,6 +3,8 @@
   "siteBase": "https://bibletext.co.uk",
   "appID": "uk.co.bibletext",
   "desktopAppID": "uk.co.bibletext",
+  "iosMinimumOSVersion": "15.0",
+  "macMinimumOSVersion": "12.0",
   "supportEmail": "support@bibletext.co.uk",
   "audioBase": "https://github.com/cubancorona/bibletext-audio/releases/download/",
   "sourceRepo": "https://github.com/cubancorona/bibletext",

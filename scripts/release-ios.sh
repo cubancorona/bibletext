@@ -46,6 +46,7 @@ load_release_bible_key
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 python3 "$REPO_ROOT/scripts/check-support-contact.py"
 "$REPO_ROOT/scripts/check-repository-hygiene.py"
+python3 "$REPO_ROOT/scripts/check-min-os-versions.py"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
 # A spent version (docs/VERSIONING.md) must never be rebuilt with new code.
 IOS_VERSION="$(sed -n 's/^Version = "\(.*\)"/\1/p' "$APP_DIR/FyneApp.toml")"
@@ -54,7 +55,12 @@ IOS_VERSION="$(sed -n 's/^Version = "\(.*\)"/\1/p' "$APP_DIR/FyneApp.toml")"
 APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"
-IOS_MIN="13.0"
+# The declared floor, shown on the App Store listing and enforced by the OS.
+# One authoritative value for every build path (config/product.json) —
+# check-min-os-versions.py holds this script and CI to it, and step 9 reads it
+# back out of the exported artifact.
+IOS_MIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["iosMinimumOSVersion"],end="")' "$REPO_ROOT/config/product.json")"
+[ -n "$IOS_MIN" ] || { echo "could not read iosMinimumOSVersion from config/product.json" >&2; exit 1; }
 CONFIG_VERSION="$(awk -F ' *= *' '/^Version *=/{gsub(/"/, "", $2); print $2; exit}' "$APP_DIR/FyneApp.toml")"
 SHORT_VERSION="${BIBLETEXT_SHORT_VERSION:-$CONFIG_VERSION}"   # MUST match the App Store Connect version record
 OUT_DIR="${BIBLETEXT_IOS_OUT_DIR:-${REPO_ROOT}/build}"
@@ -161,7 +167,7 @@ plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a sha
 # Declare no non-exempt encryption (HTTPS only) so the upload skips export-compliance.
 PB "Set :ITSAppUsesNonExemptEncryption false" 2>/dev/null || PB "Add :ITSAppUsesNonExemptEncryption bool false"
 # Fyne declares LaunchScreen in Info.plist but doesn't place a compiled storyboard
-# in the app. Compile the tracked, adaptive launch screen for iOS 13+.
+# in the app. Compile the tracked, adaptive launch screen at the app's floor.
 xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" \
     --target-device iphone --target-device ipad --minimum-deployment-target "$IOS_MIN" \
     --module BibleText >/dev/null
@@ -338,13 +344,25 @@ BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
 note "verifying exported IPA before publication"
 rm -rf "$WORK/verify"; unzip -q "$IPA" -d "$WORK/verify"
 VAPP="$(ls -d "$WORK/verify/Payload"/*.app)"
-echo "  arch:      $(lipo -archs "$VAPP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$VAPP/Info.plist")")"
+VEXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$VAPP/Info.plist")"
+echo "  arch:      $(lipo -archs "$VAPP/$VEXE")"
 EXPORTED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$VAPP/Info.plist")"
 EXPORTED_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$VAPP/Info.plist")"
 echo "  version:   $EXPORTED_VERSION ($EXPORTED_BUILD)"
 [ "$EXPORTED_VERSION" = "$SHORT_VERSION" ] || fail "exported version $EXPORTED_VERSION does not match requested $SHORT_VERSION"
 [ "$EXPORTED_BUILD" = "$BUILD_NUM" ] || fail "exported build $EXPORTED_BUILD does not match archived build $BUILD_NUM"
 [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$VAPP/Info.plist")" = "$APP_ID" ] || fail "exported bundle identifier is wrong"
+# The declared floor must survive into the artifact twice over: the plist value
+# App Store Connect validates (upload warning 90068 below 15.0, an error from
+# Spring 2027) and the linker's minos, which is what the installed OS enforces.
+EXPORTED_MIN="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$VAPP/Info.plist")"
+echo "  min iOS:   $EXPORTED_MIN"
+[ "$EXPORTED_MIN" = "$IOS_MIN" ] || fail "exported MinimumOSVersion is '$EXPORTED_MIN', not $IOS_MIN"
+MINOS_SEEN="$(otool -l "$VAPP/$VEXE" | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')"
+[ -n "$MINOS_SEEN" ] || fail "could not read LC_BUILD_VERSION minos from the exported binary"
+for m in $MINOS_SEEN; do
+    [ "$m" = "$IOS_MIN" ] || fail "exported binary is linked for iOS $m, not $IOS_MIN — the version-min flags did not reach the compile"
+done
 [ -f "$VAPP/PrivacyInfo.xcprivacy" ] || fail "exported app is missing PrivacyInfo.xcprivacy"
 plutil -lint "$VAPP/PrivacyInfo.xcprivacy" >/dev/null || fail "exported privacy manifest is invalid"
 [ -d "$VAPP/LaunchScreen.storyboardc" ] || fail "exported app is missing its compiled launch screen"

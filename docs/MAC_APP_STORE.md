@@ -110,6 +110,39 @@ description and release notes, or to build an export/import path through the
 existing share machinery so a reader can move notes deliberately. Nothing in
 the app currently reconciles them.
 
+## The minimum macOS version
+
+The floor is **macOS 12 Monterey**, declared once as `macMinimumOSVersion` in
+`config/product.json`. Until August 2026 the packaged app shipped whatever it
+inherited, and the two inherited values contradicted each other:
+
+- the packager's Info.plist template hardcodes `LSMinimumSystemVersion`
+  **10.11** — a 2015 OS nobody here ever chose, tested, or could support (the
+  sandbox behaviours, the container-migration manifest, and the native
+  overlay's AppKit selectors — `application:openURLs:` needs 10.13 — all
+  postdate it);
+- the binary itself was linked with **no** `-mmacosx-version-min`, so the
+  external linker stamped the build machine's SDK version as its `minos`.
+  Measured on an Xcode 26 Mac: `minos 26.0` on both slices — an app whose
+  plist promised El Capitan and whose loader refused anything older than the
+  machine that built it.
+
+Why 12 and not 11: Go 1.24 dropped macOS 11, and its darwin binaries are
+linked for 12.0 — forcing the flag lower would advertise a floor the
+toolchain vendor does not support. Monterey still covers every Apple Silicon
+Mac and Intel models back to ~2015, so the universal build loses nothing real.
+
+The floor now reaches the artifact in two places, both asserted after the
+build: `release-mac-store.sh` compiles both architectures with
+`-mmacosx-version-min=$MAC_MIN`, rewrites `LSMinimumSystemVersion` before
+signing (next to the category, for the same signature reason), and then fails
+unless the signed app's plist and both slices' `minos` equal the declared
+value. The direct-download job in `release.yml` does the same.
+`scripts/check-min-os-versions.py` (self-testing, run by CI and by both
+release scripts) holds the declaration to its lower bounds and every build
+file to the declaration. To raise the floor, edit `config/product.json`;
+nothing else needs touching.
+
 ## Building a submission
 
 ```bash

@@ -58,7 +58,10 @@ APP_DIR="${REPO_ROOT}/cmd/mobile"
 APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"   # paid Apple Developer Program team
-IOS_MIN="13.0"
+# The app's declared floor, shared with release-ios.sh through
+# config/product.json so device builds exercise the same one the Store gets.
+IOS_MIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["iosMinimumOSVersion"],end="")' "$REPO_ROOT/config/product.json")"
+[ -n "$IOS_MIN" ] || { echo "could not read iosMinimumOSVersion from config/product.json" >&2; exit 1; }
 
 # --dev adds the bibletextdev build tag, which compiles in the Links tab: a page
 # of shared-link scenarios that call the real HandleShareLink. It exists because

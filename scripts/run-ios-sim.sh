@@ -161,7 +161,10 @@ cat >"$SIM_ENT" <<PLIST
 PLIST
 SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 SIM_CLANG="$(xcrun --sdk iphonesimulator --find clang)"
-SIM_CF="-isysroot $SIM_SDK -mios-simulator-version-min=15.0 -arch $(uname -m)"
+# Same floor as the device and Store builds (config/product.json).
+IOS_MIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["iosMinimumOSVersion"],end="")' "$REPO_ROOT/config/product.json")"
+[ -n "$IOS_MIN" ] || { echo "could not read iosMinimumOSVersion from config/product.json" >&2; exit 1; }
+SIM_CF="-isysroot $SIM_SDK -mios-simulator-version-min=$IOS_MIN -arch $(uname -m)"
 echo "==> relinking with the simulator entitlements section (Keychain)"
 # Build to a temp path: `go build -o` refuses to overwrite an existing file it
 # does not recognise as its own output ("already exists and is not an object

@@ -1986,9 +1986,10 @@ void bibleTextIOSScrollToHighlight(void) {
 }
 
 // Look up the foreground UIWindow that Fyne renders into. BibleText's minimum
-// is iOS 13, so use the scene-aware APIs throughout rather than UIApplication's
-// deprecated process-wide keyWindow. Prefer the actual key window, then a
-// visible foreground window while the scene is transitioning.
+// (config/product.json) is well past the iOS 13 scene split, so use the
+// scene-aware APIs throughout rather than UIApplication's deprecated
+// process-wide keyWindow. Prefer the actual key window, then a visible
+// foreground window while the scene is transitioning.
 static UIWindow *bibleTextFindWindow(void) {
     UIWindow *fallback = nil;
     NSSet<UIScene*> *scenes = UIApplication.sharedApplication.connectedScenes;

@@ -44,6 +44,13 @@ fail() { printf '\033[31mERROR: %s\033[0m\n' "$1" >&2; exit 1; }
 
 APP_ID=$(python3 -c 'import json;print(json.load(open("config/product.json"))["desktopAppID"],end="")')
 [ -n "$APP_ID" ] || fail "could not read desktopAppID from config/product.json"
+# The declared macOS floor (docs/MAC_APP_STORE.md records the choice). It must
+# reach BOTH the compile and the plist: without -mmacosx-version-min the
+# external linker stamps the build machine's SDK version as the binary's minos
+# — measured as 26.0 on an Xcode 26 Mac — producing an app that launches
+# nowhere older than the machine that built it, whatever the plist claims.
+MAC_MIN=$(python3 -c 'import json;print(json.load(open("config/product.json"))["macMinimumOSVersion"],end="")')
+[ -n "$MAC_MIN" ] || fail "could not read macMinimumOSVersion from config/product.json"
 
 TEAM_ID="${BIBLETEXT_TEAM_ID:-}"
 [ -n "$TEAM_ID" ] || fail "set BIBLETEXT_TEAM_ID to your Apple Developer team id"
@@ -54,6 +61,7 @@ PROFILE="${BIBLETEXT_MAC_PROFILE:-}"
 note "checking the store configuration before building anything"
 python3 scripts/check-mac-store-config.py || fail "store configuration is not shippable"
 python3 scripts/check-product-identity.py || fail "product identity is inconsistent"
+python3 scripts/check-min-os-versions.py || fail "declared OS floors are not shippable"
 # A spent version (docs/VERSIONING.md) must never be rebuilt with new code.
 DESKTOP_VERSION=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/desktop/FyneApp.toml)
 [ -n "$DESKTOP_VERSION" ] || fail "could not read Version from cmd/desktop/FyneApp.toml"
@@ -84,6 +92,7 @@ load_release_bible_key
 trap clear_release_bible_key EXIT
 (
   cd cmd/desktop
+  export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
   CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop-arm64" .
   CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop-amd64" .
 )
@@ -119,6 +128,13 @@ note "setting the store category"
 # "reference" is the primary category the existing listing already uses.
 /usr/libexec/PlistBuddy -c "Set :LSApplicationCategoryType public.app-category.reference" \
   "$APP/Contents/Info.plist"
+
+note "declaring the minimum macOS version"
+# The packager's template hardcodes LSMinimumSystemVersion 10.11, a value
+# nobody here chose and no build since Go 1.24 could honour. Replace it with
+# the declared floor — before signing, like the category above.
+/usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MAC_MIN" "$APP/Contents/Info.plist" ||
+  /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MAC_MIN" "$APP/Contents/Info.plist"
 
 note "declaring export compliance"
 # Without this key the uploaded build sits in App Store Connect waiting for an
@@ -182,6 +198,23 @@ for key in com.apple.security.app-sandbox com.apple.security.network.client \
     fail "the signed bundle is missing $key — the packager's template won"
 done
 codesign --verify --deep --strict --verbose=2 "$APP"
+
+note "confirming the app honours the declared macOS floor"
+# Two claims must agree with config/product.json: the plist value the Store
+# displays, and each slice's linked minos, which is what the loader enforces.
+# A toolchain that one day refuses to target $MAC_MIN and stamps higher fails
+# here, which is the prompt to raise the declared floor deliberately.
+PLIST_MIN=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")
+[ "$PLIST_MIN" = "$MAC_MIN" ] || fail "Info.plist declares macOS $PLIST_MIN, not $MAC_MIN"
+MINOS_SEEN=$(otool -l "$APP/Contents/MacOS/desktop" | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')
+[ -n "$MINOS_SEEN" ] || fail "could not read LC_BUILD_VERSION minos from the universal binary"
+SLICES=$(printf '%s\n' "$MINOS_SEEN" | wc -l | tr -d ' ')
+[ "$SLICES" = "2" ] || fail "expected 2 binary slices with a minos, found $SLICES"
+for m in $MINOS_SEEN; do
+  [ "$m" = "$MAC_MIN" ] ||
+    fail "a binary slice is linked for macOS $m, not $MAC_MIN — the version-min flags did not reach the compile"
+done
+echo "  floor: macOS $MAC_MIN (plist and both slices agree)"
 
 note "building the installer package"
 productbuild --component "$APP" /Applications \

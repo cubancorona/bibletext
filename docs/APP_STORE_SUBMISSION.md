@@ -17,7 +17,11 @@ As observed against App Store Connect on 26 August 2026:
   text until deliberately rewritten.
 - **Submission state:** neither platform's 1.2.3 has been submitted by this
   checklist or by the metadata helpers.
-- **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad; minimum iOS 13.
+- **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad; minimum iOS 15
+  (`iosMinimumOSVersion` in `config/product.json`, the one authoritative value —
+  raised from 13 because App Store Connect refuses floors below 15.0 from
+  Spring 2027, upload warning 90068 until then; `check-min-os-versions.py`
+  guards it and `release-ios.sh` reads it back out of the exported `.ipa`).
 
 Public lookup data is cached, and App Store Connect is authoritative. Start every
 release with the read-only preflight:

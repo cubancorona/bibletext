@@ -70,16 +70,27 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
+          # The macOS floor (config/product.json) must reach both the compile
+          # — without -mmacosx-version-min the external linker stamps the
+          # runner's SDK version as the binary's minos, and older loaders then
+          # refuse the app — and the packaged plist, whose template hardcodes
+          # 10.11. The grep after each package proves the flag arrived.
+          MAC_MIN="$(python3 -c 'import json;print(json.load(open("config/product.json"))["macMinimumOSVersion"],end="")')"
+          export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
           cd cmd/desktop
           # Apple Silicon
           CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
           CGO_ENABLED=1 GOARCH=arm64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
+          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MAC_MIN" BibleText.app/Contents/Info.plist
+          otool -l BibleText.app/Contents/MacOS/desktop | grep -q "minos $MAC_MIN" || { echo "arm64 binary is not linked for macOS $MAC_MIN" >&2; exit 1; }
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-AppleSilicon.zip
           rm -rf BibleText.app
           # Intel
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
           CGO_ENABLED=1 GOARCH=amd64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
+          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MAC_MIN" BibleText.app/Contents/Info.plist
+          otool -l BibleText.app/Contents/MacOS/desktop | grep -q "minos $MAC_MIN" || { echo "amd64 binary is not linked for macOS $MAC_MIN" >&2; exit 1; }
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-Intel.zip
           rm -rf BibleText.app
