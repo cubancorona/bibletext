@@ -113,12 +113,15 @@ var iconNoteBubble fyne.Resource = func() fyne.Resource {
 	return theme.NewThemedResource(fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG))
 }()
 
-// iconFootnote marks the translators'-footnotes toggle in the reading header:
-// a miniature of the section it shows — text lines, the short separator rule,
-// smaller lines beneath. Themed for the same reason as iconNoteBubble (it is
-// handed to widget.NewButtonWithIcon, and while active/HighImportance it must
-// recolour to read against the accent fill). Falls back to the generic list
-// glyph if the asset is somehow missing.
+// iconFootnote marks the translators'-footnotes controls (the reading-header
+// toggle and the Settings card): alpha and omega carrying a raised footnote
+// numeral, in the word-processor insert-footnote lockup — the placeholder
+// text is His letters, "I am the Alpha and the Omega" (Revelation 1:8), from
+// the very book whose closing lines set this feature's standard. Baked from
+// font outlines into a single-fill path. Themed for the same reason as
+// iconNoteBubble (it is handed to widget.NewButtonWithIcon, and while
+// active/HighImportance it must recolour to read against the accent fill).
+// Falls back to the generic list glyph if the asset is somehow missing.
 var iconFootnote fyne.Resource = func() fyne.Resource {
 	if len(footnoteIconSVG) == 0 {
 		return theme.ListIcon()

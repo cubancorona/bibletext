@@ -743,41 +743,42 @@ func showAISettings(state *AppState) {
 	// Grouped-list assembly: each section is header → inset card of rows →
 	// footnote below the card. The cards are what make the sheet legible
 	// from afar.
-	// READING card: text size, plus — where the reading pane renders them —
-	// the translators'-footnotes toggle with the house below-card caption.
-	// Off by default; the caption says plainly what the notes are and are not
-	// (docs/FOOTNOTES.md §3).
-	readingRows := []fyne.CanvasObject{textSizeRow}
-	var footnotesNote fyne.CanvasObject
+	form := container.NewVBox()
 	if footnoteSectionSupported() {
+		// TRANSLATORS' FOOTNOTES leads the sheet: the setting is on screen
+		// the moment Settings opens, no scrolling — the feature is under
+		// active evaluation and its switch should be the easiest thing in
+		// the app to find. The row carries the feature's glyph so this card
+		// and the reading-header toggle read as one control; the caption
+		// below says plainly what the notes are and are not
+		// (docs/FOOTNOTES.md §3). Off by default.
 		fnCheck := widget.NewCheck("Show the translators' footnotes", nil)
 		fnCheck.SetChecked(footnotesEnabled())
 		fnCheck.OnChanged = func(b bool) { setFootnotesEnabled(b) }
-		readingRows = append(readingRows, widget.NewSeparator(), fnCheck)
-		note := widget.NewRichText(&widget.TextSegment{
+		fnIcon := canvas.NewImageFromResource(theme.NewColoredResource(iconFootnote, colorNameMuted))
+		fnIcon.FillMode = canvas.ImageFillContain
+		fnIcon.SetMinSize(fyne.NewSize(22, 22))
+		fnNote := widget.NewRichText(&widget.TextSegment{
 			Text: "Notes from the translators about wording and manuscripts. " +
 				"They are not part of the Scripture text.",
 			Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 		})
-		note.Wrapping = fyne.TextWrapWord
-		footnotesNote = note
+		fnNote.Wrapping = fyne.TextWrapWord
+		form.Add(sectionLabel("TRANSLATORS' FOOTNOTES", pal))
+		form.Add(settingsGroup(pal, container.NewHBox(fnIcon, hgap(8), fnCheck)))
+		form.Add(fnNote)
+		form.Add(sheetGap())
 	}
-
-	form := container.NewVBox(
-		sectionLabel("ASSISTANT", pal),
-		settingsGroup(pal, active, keyArea),
-		aiDisclosure,
-		sheetGap(),
-		sectionLabel("TRANSLATIONS", pal),
-		settingsGroup(pal, bibleKeys),
-		bibleKeysFooter,
-		sheetGap(),
-		sectionLabel("READING", pal),
-		settingsGroup(pal, readingRows...),
-	)
-	if footnotesNote != nil {
-		form.Add(footnotesNote)
-	}
+	form.Add(sectionLabel("ASSISTANT", pal))
+	form.Add(settingsGroup(pal, active, keyArea))
+	form.Add(aiDisclosure)
+	form.Add(sheetGap())
+	form.Add(sectionLabel("TRANSLATIONS", pal))
+	form.Add(settingsGroup(pal, bibleKeys))
+	form.Add(bibleKeysFooter)
+	form.Add(sheetGap())
+	form.Add(sectionLabel("READING", pal))
+	form.Add(settingsGroup(pal, textSizeRow))
 	form.Add(sheetGap())
 	form.Add(sectionLabel("SHARED NOTES", pal))
 	form.Add(settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow))

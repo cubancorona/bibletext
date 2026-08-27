@@ -335,3 +335,14 @@ mobile header widened the right column into the expanded audio card's
 permanently reserved centre footprint (overlapping on 375pt phones with long
 book names) — the stacked-under-full-screen placement in pinned 36pt cells is
 the recorded mount recipe.
+
+Icon + settings placement (owner-directed design round, 2026-08-27): the
+toggle's glyph is now **αω¹** — alpha and omega carrying a raised footnote
+numeral in the word-processor insert-footnote lockup ("I am the Alpha and the
+Omega", Rev 1:8 — the placeholder text is His letters). Owner approved the
+glyph. Chosen over three earlier families (miniature-layout, asterisk/dagger
+marks, Latin ab¹/a¹ lockups) across four rendered comparison sheets; baked
+from font outlines into a single-fill SVG (assets/icons/footnote.svg). The
+setting moved OUT of the READING card to its own TRANSLATORS' FOOTNOTES card
+at the VERY TOP of Settings (icon + checkbox + the §3 caption) — on screen
+the moment the sheet opens while the feature is under evaluation.
