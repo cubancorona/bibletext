@@ -42,6 +42,10 @@ extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi);
 // Defined below with the rest of the verse-number machinery (it needs the font
 // threshold); declared here because the menu handlers above it use it.
 static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi);
+// Where scripture ends and the appended translators'-footnote section starts
+// (== length when there is none); defined beside the font threshold it shares
+// its derivation with. The selection menu and its verbs clamp to it.
+static NSUInteger btMacContentEnd(NSTextStorage *ts);
 // Posted when the reader scrolls by hand while read-along is live (audio_export_apple.go).
 extern void bibleTextReadAlongUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
@@ -82,6 +86,21 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     return [self.textStorage.string substringWithRange:sel];
 }
 
+// hbScriptureSelection is the selection clamped to the scripture half of the
+// storage: a selection wholly inside the appended translators'-footnote
+// section comes back {NSNotFound, 0}; one that straddles the boundary is cut
+// at it. The app's Share/AI/citation verbs act on THIS, never the raw
+// selection, so the translators' words can never be dispatched or attributed
+// as scripture (the system Copy still copies what the reader selected).
+- (NSRange)hbScriptureSelection {
+    NSRange sel = self.selectedRange;
+    if (sel.length == 0 || NSMaxRange(sel) > self.textStorage.length) return NSMakeRange(NSNotFound, 0);
+    NSUInteger contentEnd = btMacContentEnd(self.textStorage);
+    if (sel.location >= contentEnd) return NSMakeRange(NSNotFound, 0);
+    if (NSMaxRange(sel) > contentEnd) sel.length = contentEnd - sel.location;
+    return sel;
+}
+
 - (NSMenu *)menuForEvent:(NSEvent *)event {
     NSMenu *menu = [super menuForEvent:event];
     if (menu == nil || self.selectedRange.length == 0) return menu;
@@ -103,6 +122,13 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
         [drop addObject:it];
     }
     for (NSMenuItem *it in drop) [menu removeItem:it];
+
+    // The appended translators'-footnote section gets the SYSTEM verbs only
+    // (Copy, Look Up): the app's Share/AI/citation verbs would attribute the
+    // translators' words to scripture. A selection wholly inside the section
+    // keeps the curated menu as-is; the verbs themselves clamp a straddling
+    // selection (hbScriptureSelection), so nothing below needs to.
+    if (self.selectedRange.location >= btMacContentEnd(self.textStorage)) return menu;
 
     // Our group below — set off by a separator, but only if Copy / Look Up survived
     // the curation above. With AI on (an assistant chosen in Settings): Study with
@@ -171,14 +197,20 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 // same selectedRange, at action time — so the words dispatched and the span
 // attributing them can never come from different selections.
 - (void)hbSendAI:(const char *)action {
+    NSRange sel = [self hbScriptureSelection];
+    if (sel.location == NSNotFound || sel.length == 0) return;
     int lo = 0, hi = 0;
-    btMacVerseSpanForRange(self.textStorage, self.selectedRange, &lo, &hi);
-    bibleTextAIMenuTapped((char *)action, (char *)self.hbSelectedText.UTF8String, lo, hi);
+    btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi);
+    NSString *text = [self.textStorage.string substringWithRange:sel];
+    bibleTextAIMenuTapped((char *)action, (char *)text.UTF8String, lo, hi);
 }
 - (void)hbSendStudy:(const char *)action {
+    NSRange sel = [self hbScriptureSelection];
+    if (sel.location == NSNotFound || sel.length == 0) return;
     int lo = 0, hi = 0;
-    btMacVerseSpanForRange(self.textStorage, self.selectedRange, &lo, &hi);
-    bibleTextStudyMenuTapped((char *)action, (char *)self.hbSelectedText.UTF8String, lo, hi);
+    btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi);
+    NSString *text = [self.textStorage.string substringWithRange:sel];
+    bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi);
 }
 - (void)hbAI_explain:(id)sender     { [self hbSendAI:"explain"]; }
 - (void)hbAI_context:(id)sender     { [self hbSendAI:"context"]; }
@@ -250,6 +282,48 @@ static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {
         if (val != nil && ((NSFont *)val).pointSize > maxSize) maxSize = ((NSFont *)val).pointSize;
     }];
     return maxSize > 0 ? maxSize * 0.8 : 15.0;
+}
+
+// The scripture content's end: the character index where the appended
+// translators'-footnote section starts, or the full length when there is
+// none. buildChapterHTML renders that section at 0.85em — a size that exists
+// nowhere else in the storage (body 1.0em, verse superscripts 0.66em) — so
+// the boundary is derived from font geometry, exactly like the verse-number
+// threshold above: the FIRST run in the [0.8, 0.95) band of the largest font.
+// Recomputed on every import (bibleTextMacApplyHTML). The last verse's
+// read-along/highlight range ends here instead of at ts.length, and the
+// selection menu's app verbs clamp to it — the apparatus can never inherit a
+// wash or be attributed to the last verse (see the iOS twin gContentEnd, and
+// footnote_section.go for the Go side of the pact).
+static NSUInteger gMacContentEnd = 0;
+static void btMacFindContentEnd(NSTextStorage *ts) {
+    if (ts == nil) { gMacContentEnd = 0; return; }
+    __block CGFloat maxSize = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val != nil && ((NSFont *)val).pointSize > maxSize) maxSize = ((NSFont *)val).pointSize;
+    }];
+    __block NSUInteger end = ts.length;
+    if (maxSize > 0) {
+        [ts enumerateAttribute:NSFontAttributeName
+                       inRange:NSMakeRange(0, ts.length)
+                       options:0
+                    usingBlock:^(id val, NSRange r, BOOL *stop) {
+            if (val == nil || r.length == 0) return;
+            CGFloat p = ((NSFont *)val).pointSize;
+            if (p >= maxSize * 0.8 && p < maxSize * 0.95) { end = r.location; *stop = YES; }
+        }];
+    }
+    gMacContentEnd = end;
+}
+
+// btMacContentEnd is gMacContentEnd clamped to the given storage — the safe
+// tail for range arithmetic even if a caller races a text swap.
+static NSUInteger btMacContentEnd(NSTextStorage *ts) {
+    if (ts == nil) return 0;
+    return (gMacContentEnd > 0 && gMacContentEnd <= ts.length) ? gMacContentEnd : ts.length;
 }
 
 // btMacVerseSpanForRange maps a selected character range to its verse span:
@@ -551,7 +625,9 @@ void bibleTextMacSetFollowButtonColors(double bgR, double bgG, double bgB,
 static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     NSUInteger start = btMacLocForVerse(ts, verse);
     if (start == NSNotFound) return NSMakeRange(NSNotFound, 0);
-    __block NSUInteger nextLoc = ts.length;
+    // The LAST verse ends at the content end, not ts.length — the appended
+    // footnote section must never inherit its wash (see gMacContentEnd).
+    __block NSUInteger nextLoc = btMacContentEnd(ts);
     CGFloat thr = btMacVerseFontThreshold(ts);
     [ts enumerateAttribute:NSFontAttributeName inRange:NSMakeRange(start, ts.length - start)
                    options:0 usingBlock:^(id val, NSRange r, BOOL *stop) {
@@ -559,6 +635,7 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
             ((NSFont *)val).pointSize >= thr) return;
         if ([[ts.string substringWithRange:r] integerValue] > 0) { nextLoc = r.location; *stop = YES; }
     }];
+    if (start >= nextLoc) return NSMakeRange(NSNotFound, 0);
     return NSMakeRange(start, nextLoc - start);
 }
 
@@ -1122,6 +1199,9 @@ static BOOL bibleTextMacApplyHTML(NSData *data) {
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
     [gTextView.textStorage setAttributedString:as];
+    // Scripture/apparatus boundary for the fresh storage, before anything
+    // derives a range from it (see gMacContentEnd).
+    btMacFindContentEnd(gTextView.textStorage);
     // The storage now holds the chapter Go announced; anything refused while it
     // did not gets re-asserted. See gBodyGenPending.
     gBodyGenApplied = gBodyGenPending;
@@ -1186,7 +1266,18 @@ void bibleTextMacTVSetHTML(const char *html) {
                            dispatch_get_main_queue(), ^{
                 if (bibleTextMacApplyHTML(data)) return;
                 NSLog(@"bibletext(mac): HTML import failed after retries; showing plain text");
-                if (gTextView != nil) [gTextView setString:bibleTextMacPlainFromHTML(s)];
+                if (gTextView != nil) {
+                    // Cut the translators'-footnote section before stripping
+                    // tags: the font-geometry boundary cannot exist in untyped
+                    // text, so the section must never enter the fallback
+                    // string at all (see the iOS twin for the failure this
+                    // prevents).
+                    NSString *plainSrc = s;
+                    NSRange fnsep = [plainSrc rangeOfString:@"<p class=\"fnsep\">"];
+                    if (fnsep.location != NSNotFound) plainSrc = [plainSrc substringToIndex:fnsep.location];
+                    [gTextView setString:bibleTextMacPlainFromHTML(plainSrc)];
+                    gMacContentEnd = gTextView.textStorage.length; // apparatus stripped above — all scripture
+                }
             });
         });
     });

@@ -16,10 +16,9 @@ package bibletext
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
-	"time"
+	"unicode/utf8"
 )
 
 // bsbCompleteURL is helloao's whole-translation endpoint for the BSB: one request
@@ -32,9 +31,10 @@ type bsbSource struct{}
 func (bsbSource) available() bool { return true }
 
 func (bsbSource) fetch() (*BibleData, error) {
-	// 120s timeout: the whole translation is one ~7 MB body, so this must cover a
-	// slow connection's full download, not a per-chapter request.
-	return fetchHelloAOComplete("BSB", bsbCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeCanonical66)
+	// The whole translation is one large body, so the client's deadline is a
+	// STALL watchdog, not a wall clock — a slow connection may take as long
+	// as it keeps moving (fetch_stall.go).
+	return fetchHelloAOComplete("BSB", bsbCompleteURL, newCorpusClient(), decodeCanonical66)
 }
 
 // webCompleteURL is helloao's whole-translation endpoint for the 66-book World English
@@ -47,7 +47,7 @@ const webCompleteURL = "https://bible.helloao.org/api/ENGWEBP/complete.json"
 // request, decoded by the same path as the BSB (decodeBSBComplete maps a 66-book helloao
 // complete.json by canonical book order). It backs webSource (versions.go).
 func fetchWEBFromHelloAO() (*BibleData, error) {
-	return fetchHelloAOComplete("WEB", webCompleteURL, &http.Client{Timeout: 120 * time.Second}, decodeCanonical66)
+	return fetchHelloAOComplete("WEB", webCompleteURL, newCorpusClient(), decodeCanonical66)
 }
 
 // decodeCanonical66 decodes a 66-book helloao complete.json (BSB, WEB) by canonical book
@@ -88,6 +88,20 @@ type helloAOBook struct {
 		Chapter struct {
 			Number  int               `json:"number"`
 			Content []json.RawMessage `json:"content"`
+			// Footnotes are the chapter's note BODIES; the in-verse
+			// {"noteId":N} markers point into this list. Bodies whose marker
+			// sits in a node the decoder does not render (Psalm
+			// superscriptions) are deliberately dropped — a note with no
+			// rendered anchor has nowhere to belong. See docs/FOOTNOTES.md.
+			Footnotes []struct {
+				NoteID    int    `json:"noteId"`
+				Caller    string `json:"caller"`
+				Text      string `json:"text"`
+				Reference struct {
+					Chapter int `json:"chapter"`
+					Verse   int `json:"verse"`
+				} `json:"reference"`
+			} `json:"footnotes"`
 		} `json:"chapter"`
 	} `json:"chapters"`
 }
@@ -98,10 +112,18 @@ type helloAOBook struct {
 // line breaks, headings, and Hebrew subtitles (Psalm superscriptions like "A Psalm of
 // David") are editorial nodes outside verse text and remain omitted. Shared by both
 // decoders.
-func decodeHelloAOChapters(book string, b helloAOBook) map[int][]Verse {
+func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
+	var orphans map[int][]OrphanFootnote
 	for _, cj := range b.Chapters {
 		num := cj.Chapter.Number
+		// noteId → body, for joining the in-verse markers to their text.
+		// noteIds number continuously across a BOOK, so per-chapter lookup is
+		// simply a subset view; collisions cannot occur.
+		bodies := make(map[int]helloAOFootnoteBody, len(cj.Chapter.Footnotes))
+		for _, fn := range cj.Chapter.Footnotes {
+			bodies[fn.NoteID] = helloAOFootnoteBody{text: fn.Text, caller: fn.Caller}
+		}
 		var verses []Verse
 		for _, node := range cj.Chapter.Content {
 			var head struct {
@@ -112,23 +134,66 @@ func decodeHelloAOChapters(book string, b helloAOBook) map[int][]Verse {
 			if err := json.Unmarshal(node, &head); err != nil || head.Type != "verse" {
 				continue
 			}
-			text := bsbVerseText(head.Content)
+			text, marks := bsbVerseTextMarked(head.Content)
 			if text == "" {
+				// A verse node with a marker but NO text is a critical-text
+				// omission (Luke 17:36 and kin): the verse number exists in
+				// the versification, the translation omits its words, and
+				// the note explains the omission. Capture it as an orphan —
+				// keyed by the verse it belongs to — instead of dropping it
+				// with the verse. ONLY this shape is captured: bodies whose
+				// markers sit in non-verse nodes (Psalm superscriptions)
+				// are never scanned and stay dropped, deliberately.
+				if head.Number > 0 {
+					for _, m := range marks {
+						body, ok := bodies[m.noteID]
+						if !ok || strings.TrimSpace(body.text) == "" {
+							continue
+						}
+						if orphans == nil {
+							orphans = make(map[int][]OrphanFootnote)
+						}
+						orphans[num] = append(orphans[num], OrphanFootnote{
+							Verse:  head.Number,
+							Text:   strings.TrimSpace(body.text),
+							Caller: body.caller,
+						})
+					}
+				}
 				continue
 			}
+			var notes []Footnote
+			for _, m := range marks {
+				body, ok := bodies[m.noteID]
+				if !ok || strings.TrimSpace(body.text) == "" {
+					continue // a marker with no body is nothing to show
+				}
+				notes = append(notes, Footnote{
+					Anchor: m.anchor,
+					Text:   strings.TrimSpace(body.text),
+					Caller: body.caller,
+				})
+			}
 			verses = append(verses, Verse{
-				BookName: book,
-				Book:     book,
-				Chapter:  num,
-				Verse:    head.Number,
-				Text:     text,
+				BookName:  book,
+				Book:      book,
+				Chapter:   num,
+				Verse:     head.Number,
+				Text:      text,
+				Footnotes: notes,
 			})
 		}
 		if len(verses) > 0 {
 			chapters[num] = verses
 		}
 	}
-	return chapters
+	return chapters, orphans
+}
+
+// helloAOFootnoteBody is one chapter-level note body awaiting its in-verse marker.
+type helloAOFootnoteBody struct {
+	text   string
+	caller string
 }
 
 // decodeBSBComplete maps a 66-book bible.helloao.org complete.json into a BibleData
@@ -157,8 +222,15 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		if chapters := decodeHelloAOChapters(book, b); len(chapters) > 0 {
+		chapters, orphans := decodeHelloAOChapters(book, b)
+		if len(chapters) > 0 {
 			bd.Verses[book] = chapters
+		}
+		if len(orphans) > 0 {
+			if bd.OrphanFootnotes == nil {
+				bd.OrphanFootnotes = make(map[string]map[int][]OrphanFootnote)
+			}
+			bd.OrphanFootnotes[book] = orphans
 		}
 	}
 	// Note: PrepareSearchIndex is left to the caller (loadBibleData), matching
@@ -188,7 +260,31 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 // lands just after an opening bracket/quote — after the fact, which is always safe
 // because English never spaces before closing or after opening punctuation.
 func bsbVerseText(content []json.RawMessage) string {
+	text, _ := bsbVerseTextMarked(content)
+	return text
+}
+
+// bsbMark is one in-verse footnote marker: which body it points at, and the
+// rune offset in the FINAL verse text where the source placed it.
+type bsbMark struct {
+	noteID int
+	anchor int
+}
+
+// bsbVerseTextMarked is bsbVerseText plus the footnote-marker positions. The
+// TEXT path is byte-for-byte the historical one — the same pieces, the same
+// synthesized-space join, the same bsbTidySpacing — so capturing markers can
+// never change a verse. Each marker's anchor is computed by tidying the
+// PREFIX of pieces before it: every transformation bsbTidySpacing performs is
+// local (collapse runs, strip a space beside punctuation), so the tidied
+// prefix is exactly the final text up to the marker's word boundary — the
+// property the anchor needs, and the reason no sentinel character ever enters
+// this pipeline. Anchors are rune offsets. A marker between poem lines lands
+// at the end of the earlier line (the "\n" is only synthesized when the NEXT
+// poem clause arrives, after the marker).
+func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 	var pieces []string
+	var marks []bsbMark // anchor holds the piece INDEX until resolved below
 	for _, node := range content {
 		var s string
 		if err := json.Unmarshal(node, &s); err == nil {
@@ -201,6 +297,7 @@ func bsbVerseText(content []json.RawMessage) string {
 			Text      *string         `json:"text"`
 			LineBreak bool            `json:"lineBreak"`
 			Poem      json.RawMessage `json:"poem"`
+			NoteID    *int            `json:"noteId"`
 		}
 		if err := json.Unmarshal(node, &obj); err == nil {
 			switch {
@@ -220,14 +317,21 @@ func bsbVerseText(content []json.RawMessage) string {
 					pieces = append(pieces, "\n")
 				}
 				pieces = append(pieces, *obj.Text)
+			case obj.NoteID != nil:
+				// The marker contributes nothing to the text (historical
+				// behaviour); it records where in the piece stream it stood.
+				marks = append(marks, bsbMark{noteID: *obj.NoteID, anchor: len(pieces)})
 			case obj.LineBreak:
 				pieces = append(pieces, "\n")
 			}
 			continue
 		}
-		// noteId: contributes nothing.
 	}
-	return bsbTidySpacing(strings.Join(pieces, " "))
+	text := bsbTidySpacing(strings.Join(pieces, " "))
+	for i, m := range marks {
+		marks[i].anchor = utf8.RuneCountInString(bsbTidySpacing(strings.Join(pieces[:m.anchor], " ")))
+	}
+	return text, marks
 }
 
 // Spacing artifacts that survive the synthesized-space join: a space before

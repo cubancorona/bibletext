@@ -433,7 +433,11 @@ func TestNKJVVerseOfDayOnCanon(t *testing.T) {
 		t.Errorf("verse of the day %s %d:%d is not in the loaded translation",
 			v.BookName, v.Chapter, v.Verse)
 	}
-	if again, ok2 := verseOfTheDay(state); !ok2 || again != v {
+	// Verse carries a slice now (Footnotes), so compare identity, not the
+	// struct: same reference and same words is the stability the test means.
+	if again, ok2 := verseOfTheDay(state); !ok2 ||
+		again.BookName != v.BookName || again.Chapter != v.Chapter ||
+		again.Verse != v.Verse || again.Text != v.Text {
 		t.Error("verse of the day must be stable within a calendar day")
 	}
 }

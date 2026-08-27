@@ -48,12 +48,13 @@ func showAISettings(state *AppState) {
 	store := state.keys()
 
 	// The only sheet controls that affect the reading pane are the red-letter
-	// toggle and the text-size choice. Capture them now so closing the sheet
-	// re-renders ONLY when one actually changed — refreshing unconditionally
-	// rebuilds the reading pane (re-pinning the native text overlay) and flickers
-	// the screen for an AI-key-only change.
+	// toggle, the text-size choice and the footnotes toggle. Capture them now
+	// so closing the sheet re-renders ONLY when one actually changed —
+	// refreshing unconditionally rebuilds the reading pane (re-pinning the
+	// native text overlay) and flickers the screen for an AI-key-only change.
 	redLetterAtOpen := redLetterEnabled()
 	textSizeAtOpen := readingTextSizeID()
+	footnotesAtOpen := footnotesEnabled()
 	// Choosing "None" (or leaving it) changes which whole surfaces exist — the
 	// Search-tab Find toggle, the native selection menus — so closing the sheet
 	// after that change rebuilds the window rather than just re-rendering verses.
@@ -520,8 +521,9 @@ func showAISettings(state *AppState) {
 		if aiSurfacesChanged(aiOnAtOpen, aiKeyAtOpen, store.aiEnabled(), hasAIKey(state)) ||
 			notesFeatureOn(state) != notesOnAtOpen {
 			rebuildWindow(state)
-		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
-			state.refreshReadingOnly() // red-letter / text size changed → re-render the verses
+		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen ||
+			footnotesEnabled() != footnotesAtOpen {
+			state.refreshReadingOnly() // red-letter / text size / footnotes changed → re-render the verses
 		}
 	}
 
@@ -741,22 +743,43 @@ func showAISettings(state *AppState) {
 	// Grouped-list assembly: each section is header → inset card of rows →
 	// footnote below the card. The cards are what make the sheet legible
 	// from afar.
-	form := container.NewVBox(
-		sectionLabel("ASSISTANT", pal),
-		settingsGroup(pal, active, keyArea),
-		aiDisclosure,
-		sheetGap(),
-		sectionLabel("TRANSLATIONS", pal),
-		settingsGroup(pal, bibleKeys),
-		bibleKeysFooter,
-		sheetGap(),
-		sectionLabel("READING", pal),
-		settingsGroup(pal, textSizeRow),
-		sheetGap(),
-		sectionLabel("SHARED NOTES", pal),
-		settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow),
-		notesNote,
-	)
+	form := container.NewVBox()
+	if footnoteSectionSupported() {
+		// TRANSLATORS' FOOTNOTES leads the sheet: the setting is on screen
+		// the moment Settings opens, no scrolling — the feature is under
+		// active evaluation, this checkbox is its ONE control (no toggle in
+		// the reading-pane chrome, by design), and the switch should be the
+		// easiest thing in the app to find. The caption below says plainly
+		// what the notes are and are not (docs/FOOTNOTES.md §3). Off by
+		// default.
+		fnCheck := widget.NewCheck("Show the translators' footnotes", nil)
+		fnCheck.SetChecked(footnotesEnabled())
+		fnCheck.OnChanged = func(b bool) { setFootnotesEnabled(b) }
+		fnNote := widget.NewRichText(&widget.TextSegment{
+			Text: "Notes from the translators about wording and manuscripts. " +
+				"They are not part of the Scripture text.",
+			Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+		})
+		fnNote.Wrapping = fyne.TextWrapWord
+		form.Add(sectionLabel("TRANSLATORS' FOOTNOTES", pal))
+		form.Add(settingsGroup(pal, fnCheck))
+		form.Add(fnNote)
+		form.Add(sheetGap())
+	}
+	form.Add(sectionLabel("ASSISTANT", pal))
+	form.Add(settingsGroup(pal, active, keyArea))
+	form.Add(aiDisclosure)
+	form.Add(sheetGap())
+	form.Add(sectionLabel("TRANSLATIONS", pal))
+	form.Add(settingsGroup(pal, bibleKeys))
+	form.Add(bibleKeysFooter)
+	form.Add(sheetGap())
+	form.Add(sectionLabel("READING", pal))
+	form.Add(settingsGroup(pal, textSizeRow))
+	form.Add(sheetGap())
+	form.Add(sectionLabel("SHARED NOTES", pal))
+	form.Add(settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow))
+	form.Add(notesNote)
 	if redLetterSupported() {
 		// His words close the sheet — a standing layout choice: the
 		// last thing the reader sees before returning to the text. Under its own

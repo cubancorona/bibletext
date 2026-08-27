@@ -215,6 +215,13 @@ public final class BtBridge {
     private static int[] verseNums = new int[0];
     private static int[] verseStarts = new int[0];
     private static int[] verseEnds = new int[0];
+    // Where scripture ends and the appended translators'-footnote section
+    // starts (== the Spanned's length when there is none). The section opens
+    // with a sentinel <sup> holding a no-break space; buildVerseIndex records
+    // its start here, bounding the last verse's span (and with it read-along
+    // tint and scroll anchors) automatically, while the selection verbs clamp
+    // to it below — the Android twin of the Apple panes' content-end.
+    private static int contentEnd;
 
     // The verse currently tinted and the span painting it (kept so each tick can
     // clear the previous cheaply — and so we remove OUR span, never the search
@@ -543,6 +550,7 @@ public final class BtBridge {
                 verseNums = new int[0];
                 verseStarts = new int[0];
                 verseEnds = new int[0];
+                contentEnd = 0;
                 pendingReflowFrac = -1f;
                 activity = act;
                 installKeyboardWatcher(act);
@@ -645,6 +653,31 @@ public final class BtBridge {
                 int a = text.getSelectionStart(), b = text.getSelectionEnd();
                 if (a < 0 || b < 0) return true;
                 int s0 = Math.min(a, b), s1 = Math.max(a, b);
+                // ONLY the app's own verbs from here down. System items
+                // (Copy, Select all) and the Share submenu header must fall
+                // through to the TextView's default handling FIRST — a
+                // `return true` on any of them consumes the click and the
+                // verb silently dies. The system Copy therefore copies the
+                // RAW selection, apparatus included, exactly as the Apple
+                // panes leave the system verbs unclamped.
+                int id = item.getItemId();
+                boolean appItem = id == 200 || (id >= 105 && id <= 109);
+                if (!appItem) return false;
+                // Clamp the app's verbs to scripture (the Apple panes'
+                // content-end contract): a selection wholly inside the
+                // appended footnote section gets none of them — the
+                // translators' words must never be dispatched or attributed
+                // as scripture — and a straddling selection is cut at the
+                // boundary. Clamped HERE, at click time: onPrepareActionMode
+                // returns false, so handle drags and Select all move the
+                // offsets without rebuilding the menu.
+                int ce = contentEnd > 0 ? Math.min(contentEnd, text.getText().length()) : text.getText().length();
+                if (s0 >= ce) {
+                    mode.finish();
+                    return true;
+                }
+                s1 = Math.min(s1, ce);
+                if (s1 <= s0) { mode.finish(); return true; }
                 final String sel = text.getText().subSequence(s0, s1).toString();
                 // The verse span, resolved NOW from the same offsets the text was
                 // captured from (the popup below may collapse the selection).
@@ -893,6 +926,7 @@ public final class BtBridge {
         verseNums = new int[0];
         verseStarts = new int[0];
         verseEnds = new int[0];
+        contentEnd = cs != null ? cs.length() : 0;
         if (!(cs instanceof Spanned)) return;
         Spanned sp = (Spanned) cs;
         SuperscriptSpan[] sups = sp.getSpans(0, sp.length(), SuperscriptSpan.class);
@@ -908,7 +942,14 @@ public final class BtBridge {
             int st = starts[i];
             int en = (i + 1 < n) ? starts[i + 1] : sp.length();
             int num = parseLeadingInt(sp, st, en);
-            if (num <= 0) continue;
+            if (num <= 0) {
+                // The only non-digit sup in the dialect is the footnote
+                // section's sentinel: its start is the scripture/apparatus
+                // boundary. First one wins (there is only one; being
+                // defensive about a second costs nothing).
+                if (st < contentEnd) contentEnd = st;
+                continue;
+            }
             nums[count] = num;
             starts[count] = st;
             ends[count] = en;

@@ -51,8 +51,9 @@ func TestVerseOfTheDayResolvesAndIsStable(t *testing.T) {
 	if v.BookName != "John" || v.Chapter != 3 || v.Verse != 16 {
 		t.Errorf("unexpected verse %+v", v)
 	}
-	// Same day -> same verse.
-	if v2, _ := verseOfTheDay(state); v2 != v {
+	// Same day -> same verse. (Identity fields — Verse carries a slice now.)
+	if v2, _ := verseOfTheDay(state); v2.BookName != v.BookName ||
+		v2.Chapter != v.Chapter || v2.Verse != v.Verse || v2.Text != v.Text {
 		t.Error("verse of the day should be stable within a day")
 	}
 }

@@ -423,3 +423,32 @@ func TestFetchAPIBibleEdgeChapter500TwiceFails(t *testing.T) {
 		t.Errorf("failing chapter tried %d times, want 2 (initial + one retry)", got)
 	}
 }
+
+// A POPULATED note node must never leak the translators' words into verse
+// text — even though the app requests include-notes=false, the decoder must
+// not depend on the server honouring the flag. (The empty-note case above
+// proved nothing: an empty subtree has nothing to leak.)
+func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
+	content := `[
+	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
+	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"13","sid":"JHN 3:13"},"items":[{"type":"text","text":"13"}]},
+	    {"type":"text","text":"No one has ascended to heaven","attrs":{"verseId":"JHN.3.13"}},
+	    {"name":"note","type":"tag","attrs":{"style":"f"},"items":[
+	      {"name":"char","type":"tag","attrs":{"style":"fr"},"items":[{"type":"text","text":"3:13 "}]},
+	      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"NU-Text omits who is in heaven."}]}
+	    ]},
+	    {"type":"text","text":" but He who came down from heaven.","attrs":{"verseId":"JHN.3.13"}}
+	  ]}
+	]`
+	vs, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 {
+		t.Fatalf("got %d verses, want 1", len(vs))
+	}
+	want := "No one has ascended to heaven but He who came down from heaven."
+	if vs[0].Text != want {
+		t.Errorf("footnote leaked into Scripture:\n got  %q\n want %q", vs[0].Text, want)
+	}
+}

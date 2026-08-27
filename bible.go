@@ -18,6 +18,55 @@ type Verse struct {
 	Text     string // The actual text of the verse
 	Search   string `json:"-"` // Lowercased text for fast case-insensitive search
 	Ref      string `json:"-"` // Lowercased "book c:v" for fast reference matching
+
+	// Footnotes is the translators' apparatus for this verse — alternate
+	// renderings, manuscript variants, cross-references — captured at decode
+	// time and carried SIDE-BAND, in the red-letter-runs mould. It is data,
+	// not display: nothing here is rendered anywhere yet, and nothing here
+	// may ever enter Text, the search index, the share pipeline, spoken
+	// audio, or a link. Those pipelines all read Text, which stays
+	// byte-identical whether footnotes are captured or not — the purity the
+	// owner's Revelation 22:18-19 rule requires, enforced by construction
+	// and pinned by tests (footnotes_test.go). See docs/FOOTNOTES.md.
+	Footnotes []Footnote `json:"footnotes,omitempty"`
+}
+
+// Footnote is one note from the TRANSLATORS (never the reader — reader notes
+// are the separate shared-notes feature) anchored into a verse's text.
+type Footnote struct {
+	// Anchor is a rune offset into Verse.Text (0..len) at a word boundary —
+	// where the source placed the marker. For a note the source anchored
+	// between poem lines, Anchor sits at the end of the earlier line, before
+	// the "\n".
+	Anchor int `json:"anchor"`
+	// Text is the note body — the translators' words. Origin references the
+	// source prefixes to the body ("3:2 " in the NKJV apparatus) are
+	// stripped at decode time: the anchor already says where it belongs.
+	Text string `json:"text"`
+	// Kind distinguishes apparatus families: "" is a translator footnote
+	// (alternate rendering, manuscript variant, language note); "crossref"
+	// is a cross-reference entry (the only kind the NKJV feed carries).
+	Kind string `json:"kind,omitempty"`
+	// Caller is the source's marker glyph ("+" throughout helloao, "-" in
+	// the NKJV feed). Stored for fidelity; no surface renders it yet.
+	Caller string `json:"caller,omitempty"`
+}
+
+// footnoteKindCrossref marks cross-reference apparatus (USX note style "x").
+const footnoteKindCrossref = "crossref"
+
+// OrphanFootnote is a translators' footnote whose VERSE the translation
+// omits — the critical-text omissions (Luke 17:36, Acts 8:37, 15:34, 24:7,
+// Romans 16:25, plus deuterocanon versification gaps). The verse number
+// exists in the versification but decodes to no text, so the note cannot
+// ride on a Verse; it lives in BibleData.OrphanFootnotes and surfaces ONLY
+// in the chapter-bottom footnote section, keyed by its verse number — the
+// one place a reader can learn WHY that number is absent from the page.
+type OrphanFootnote struct {
+	Verse  int    `json:"verse"`
+	Text   string `json:"text"`
+	Kind   string `json:"kind,omitempty"`
+	Caller string `json:"caller,omitempty"`
 }
 
 // BibleData holds all Bible verses organized by book and chapter
@@ -36,6 +85,15 @@ type BibleData struct {
 	// Books is a slice containing all 66 book names in canonical order
 	// Used to display the book list in the sidebar
 	Books []string
+
+	// OrphanFootnotes carries the translators' notes anchored in verses the
+	// translation OMITS (see OrphanFootnote), keyed book → chapter. Nothing
+	// but the chapter-bottom footnote section reads it — it is invisible to
+	// search, speech, share, copy and links by construction, because those
+	// all walk Verses. omitempty: caches written before this field existed
+	// load with a nil map, and every accessor is nil-safe (the superseded-
+	// epoch fallback serves such caches to offline upgraders).
+	OrphanFootnotes map[string]map[int][]OrphanFootnote `json:"orphan_footnotes,omitempty"`
 
 	// chapterNums caches the sorted chapter numbers per book so the reading
 	// view, search, and navigation don't re-allocate + re-sort on every call.
@@ -258,6 +316,17 @@ func (bd *BibleData) GetChapter(book string, chapter int) []Verse {
 	// Chapter not found, return empty slice (not nil)
 	// Empty slice is better than nil because it's safer to iterate over
 	return []Verse{}
+}
+
+// OrphanNotesFor returns the chapter's omitted-verse footnotes, or nil.
+// Nil-safety is load-bearing at every level: the superseded-epoch fallback
+// serves pre-field caches (nil map) to offline upgraders, and placeholder
+// BibleData carries no orphans at all.
+func (bd *BibleData) OrphanNotesFor(book string, chapter int) []OrphanFootnote {
+	if bd == nil || bd.OrphanFootnotes == nil {
+		return nil
+	}
+	return bd.OrphanFootnotes[book][chapter]
 }
 
 // GetChaptersForBook returns the number of chapters in a book

@@ -100,6 +100,14 @@ func showVersionPicker(state *AppState) {
 		restore()
 	}
 
+	// Opening the picker doubles as a manual retry of a pending text update:
+	// the reader who came to check on their translation should not also have
+	// to find a button. Single-flight guarded; a no-op when nothing pends.
+	if state.fullPending && !state.fullDownloading {
+		state.fullRetryDelay = 0
+		triggerFullDownload(state)
+	}
+
 	title := canvas.NewText("Translation", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 18
@@ -118,6 +126,11 @@ func showVersionPicker(state *AppState) {
 
 	closeBtn := widget.NewButton("Close", closePicker)
 	footerItems := []fyne.CanvasObject{widget.NewSeparator()}
+	if notice := fullPendingNotice(state); notice != "" {
+		note := widget.NewLabel(notice)
+		note.Wrapping = fyne.TextWrapWord
+		footerItems = append(footerItems, note)
+	}
 	if byok := lockedVersionNames(true); len(byok) > 0 {
 		note := widget.NewLabel(joinNatural(byok) +
 			pick(len(byok), " unlocks", " unlock") +
@@ -160,6 +173,27 @@ func showVersionPicker(state *AppState) {
 		h = maxH
 	}
 	popup.Resize(fyne.NewSize(w, h))
+}
+
+// fullPendingNotice is the picker's plain answer to a state that must never
+// pass silently: the reader is looking at a previous edition (or the starter
+// portion) while the background refresh works or waits. Empty when nothing
+// is pending. The three states it distinguishes are the three a reader can
+// be in: actively downloading, waiting out the retry backoff offline, or
+// still on the first-run starter text.
+func fullPendingNotice(state *AppState) string {
+	if state == nil || !state.fullPending {
+		return ""
+	}
+	def, _ := versionByID(defaultVersionID)
+	switch {
+	case state.seedOnly:
+		return "The full " + def.Name + " is still downloading — a starter portion is shown meanwhile."
+	case !state.fullDownloading && state.fullRetryDelay > 0:
+		return def.Name + " has a text update waiting for a connection — the previous edition is shown meanwhile. It retries automatically."
+	default:
+		return def.Name + " is updating to its latest edition in the background — the previous edition is shown meanwhile."
+	}
 }
 
 // versionPickerOrder returns the registry's versions in the picker's display

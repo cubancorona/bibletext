@@ -27,6 +27,9 @@ var sidebarLeftSVG []byte
 //go:embed assets/icons/note_bubble.svg
 var noteBubbleSVG []byte
 
+//go:embed assets/icons/footnote.svg
+var footnoteIconSVG []byte
+
 // iconAudioWave is the "read aloud / text-to-speech" source glyph (a small
 // equalizer-style waveform), marking a chapter played by on-device speech as
 // distinct from a recorded human narration (which uses theme.AccountIcon, a
@@ -108,4 +111,21 @@ var iconNoteBubble fyne.Resource = func() fyne.Resource {
 		return theme.MailComposeIcon()
 	}
 	return theme.NewThemedResource(fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG))
+}()
+
+// iconFootnote is the translators'-footnotes glyph, RESERVED (owner-approved,
+// not currently mounted — the feature's one control is the Settings checkbox,
+// with no icon, by design): alpha and omega carrying a raised footnote
+// numeral, in the word-processor insert-footnote lockup — the placeholder
+// text is His letters, "I am the Alpha and the Omega" (Revelation 1:8), from
+// the very book whose closing lines set this feature's standard. Baked from
+// font outlines into a single-fill path. Themed like iconNoteBubble so that
+// whenever it mounts on a widget.NewButtonWithIcon it is visible on the dark
+// page and recolours against an active accent fill. Falls back to the
+// generic list glyph if the asset is somehow missing.
+var iconFootnote fyne.Resource = func() fyne.Resource {
+	if len(footnoteIconSVG) == 0 {
+		return theme.ListIcon()
+	}
+	return theme.NewThemedResource(fyne.NewStaticResource("footnote.svg", footnoteIconSVG))
 }()

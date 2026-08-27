@@ -126,7 +126,12 @@ const apiBiblePassageCap = 200
 
 // apiBibleContentQuery is the shared content-shaping query for chapter and
 // passage bodies.
-const apiBibleContentQuery = "content-type=json&include-titles=false&include-notes=false&include-chapter-numbers=false"
+// include-notes=true since the footnotes machinery landed: notes ride the
+// SAME requests (zero extra quota) and are captured side-band by the walk —
+// never into verse text. Live-probed 2026-08-26: the NKJV feed carries ONLY
+// cross-reference notes (USX style "x"); the print edition's NU-/M-Text
+// apparatus is not in the feed at all. See docs/FOOTNOTES.md.
+const apiBibleContentQuery = "content-type=json&include-titles=false&include-notes=true&include-chapter-numbers=false"
 
 // apiBibleStatusError reports a non-retryable HTTP status. The passage walk
 // depends on distinguishing 400/404 (range past the book's real end, or a
@@ -157,6 +162,7 @@ type apiBibleNode struct {
 		Style   string `json:"style"`
 		Number  string `json:"number"`
 		VerseID string `json:"verseId"`
+		Caller  string `json:"caller"`
 		SID     string `json:"sid"`
 	} `json:"attrs"`
 	Items []apiBibleNode `json:"items"`
@@ -544,6 +550,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	pack := func(ch, v int) int { return ch*1000 + v }
 	order := []int{}
 	texts := map[int]*strings.Builder{}
+	pendingNotes := map[int][]Footnote{} // per packed (ch,v), in sentinel order
 	currentCh := defaultChapter
 	current := 0 // current verse number; 0 = before the first verse
 
@@ -598,6 +605,37 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 					s = strings.ToUpper(s)
 				}
 				appendText(pack(ch, v), pack(currentCh, current), s)
+			case n.Name == "note":
+				// A note. Its children are the translators' words (xt/ft/fq
+				// spans) — the default case below would walk them straight
+				// into the verse builders, apparatus read as Scripture, the
+				// one thing this decoder must never do. Instead the subtree
+				// is diverted into the side-band footnote store: a sentinel
+				// rune marks the spot in the verse builder (resolved to a
+				// rune anchor after normalizeVerseSpaces, then stripped —
+				// stripFootnoteSentinels), and the flattened body rides
+				// beside it. The sentinel is written DIRECTLY, bypassing
+				// appendText, so a pending poem break or paragraph space is
+				// left for the next real text exactly as if the note were
+				// absent — which is what keeps the text byte-identical.
+				body := apiBibleNoteBody(n)
+				if body != "" {
+					key := pack(currentCh, current)
+					if key%1000 != 0 {
+						b, ok := texts[key]
+						if !ok {
+							b = &strings.Builder{}
+							texts[key] = b
+							order = append(order, key)
+						}
+						b.WriteRune(footnoteSentinel)
+						pendingNotes[key] = append(pendingNotes[key], Footnote{
+							Text:   body,
+							Kind:   apiBibleNoteKind(n.Attrs.Style),
+							Caller: strings.TrimSpace(n.Attrs.Caller),
+						})
+					}
+				}
 			case n.Name == "verse":
 				if sidCh, _ := chapterVerseFromRef(n.Attrs.SID); saneRef(sidCh) != 0 {
 					currentCh = sidCh
@@ -652,17 +690,30 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	out := map[int][]Verse{}
 	total := 0
 	for _, key := range order {
-		text := normalizeVerseSpaces(texts[key].String())
+		text, anchors := stripFootnoteSentinels(normalizeVerseSpaces(texts[key].String()))
 		if text == "" {
 			continue
 		}
+		notes := pendingNotes[key]
+		if len(anchors) != len(notes) {
+			// A sentinel went missing or multiplied — impossible by design
+			// (normalizeVerseSpaces never drops non-space runes), so treat it
+			// as corruption and ship the verse without notes rather than
+			// mis-anchored ones.
+			notes = nil
+		} else {
+			for i := range notes {
+				notes[i].Anchor = anchors[i]
+			}
+		}
 		ch, num := key/1000, key%1000
 		out[ch] = append(out[ch], Verse{
-			BookName: bookName,
-			Book:     bookName,
-			Chapter:  ch,
-			Verse:    num,
-			Text:     text,
+			BookName:  bookName,
+			Book:      bookName,
+			Chapter:   ch,
+			Verse:     num,
+			Text:      text,
+			Footnotes: notes,
 		})
 		total++
 	}
@@ -685,6 +736,78 @@ func apiBibleSkipPara(style string) bool {
 		return true
 	}
 	return false
+}
+
+// footnoteSentinel marks a footnote's in-text position while a verse is being
+// assembled. U+E000 (private use) cannot occur in scripture text; it survives
+// normalizeVerseSpaces untouched (Fields never drops non-space runes) and is
+// stripped — recording rune anchors — before the text leaves the decoder.
+const footnoteSentinel = '\uE000'
+
+// stripFootnoteSentinels removes every sentinel from s, returning the clean
+// text and the rune offset each sentinel occupied. A sentinel standing alone
+// between two spaces takes the following space with it, so the text reads as
+// if the marker had never been there.
+func stripFootnoteSentinels(s string) (string, []int) {
+	if !strings.ContainsRune(s, footnoteSentinel) {
+		return s, nil
+	}
+	runes := []rune(s)
+	var b strings.Builder
+	var anchors []int
+	emitted := 0
+	lastEmitted := rune(0)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r != footnoteSentinel {
+			b.WriteRune(r)
+			lastEmitted = r
+			emitted++
+			continue
+		}
+		anchors = append(anchors, emitted)
+		if i+1 < len(runes) && runes[i+1] == ' ' &&
+			(emitted == 0 || lastEmitted == ' ' || lastEmitted == '\n') {
+			i++ // the sentinel owned this space; dropping both avoids a double
+		}
+	}
+	return b.String(), anchors
+}
+
+// apiBibleNoteKind maps a USX note style to the app's Footnote.Kind: "x"/"ex"
+// are cross-reference apparatus, everything else ("f", "fe", …) is a
+// translator footnote.
+func apiBibleNoteKind(style string) string {
+	switch strings.ToLower(style) {
+	case "x", "ex":
+		return footnoteKindCrossref
+	}
+	return ""
+}
+
+// apiBibleNoteBody flattens a note subtree into its display text: every text
+// node in document order — including text inside ref tags — EXCEPT the origin
+// reference spans (xo for cross-references, fr for footnotes), which restate
+// the verse the note belongs to; the anchor already carries that. Fragments
+// concatenate raw (they hold their own spacing) and the result is
+// space-normalized.
+func apiBibleNoteBody(n apiBibleNode) string {
+	var b strings.Builder
+	var walk func(nodes []apiBibleNode)
+	walk = func(nodes []apiBibleNode) {
+		for _, c := range nodes {
+			style := strings.ToLower(c.Attrs.Style)
+			if c.Name == "char" && (style == "xo" || style == "fr") {
+				continue
+			}
+			if c.Text != "" {
+				b.WriteString(c.Text)
+			}
+			walk(c.Items)
+		}
+	}
+	walk(n.Items)
+	return strings.TrimSpace(strings.Join(strings.Fields(b.String()), " "))
 }
 
 // normalizeVerseSpaces trims each poem line and collapses interior space runs

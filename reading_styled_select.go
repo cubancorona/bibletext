@@ -261,6 +261,14 @@ func (p *styledReadingPane) MouseDown(e *desktop.MouseEvent) {
 		p.noteGrab = true
 		return
 	}
+	// The footnote section is not text either: without this, lineAtY would
+	// clamp a press in the apparatus onto the LAST scripture line and start
+	// a selection there — and the latch, like noteGrab, keeps the DRAG that
+	// follows such a press from doing the same (reading_styled_footnotes.go).
+	if p.fnGeom.hits(e.Position) {
+		p.fnGrab = true
+		return
+	}
 	p.focusSelf()
 	p.selAnchor = p.offsetAtPos(e.Position)
 	p.setSelection(p.selAnchor, p.selAnchor)
@@ -269,7 +277,7 @@ func (p *styledReadingPane) MouseDown(e *desktop.MouseEvent) {
 func (p *styledReadingPane) MouseUp(*desktop.MouseEvent) {}
 
 func (p *styledReadingPane) Dragged(e *fyne.DragEvent) {
-	if p.noteGrab {
+	if p.noteGrab || p.fnGrab {
 		return
 	}
 	if p.selAnchor < 0 {
@@ -278,12 +286,16 @@ func (p *styledReadingPane) Dragged(e *fyne.DragEvent) {
 	p.setSelection(p.selAnchor, p.offsetAtPos(e.Position))
 }
 
-func (p *styledReadingPane) DragEnd() { p.noteGrab = false }
+func (p *styledReadingPane) DragEnd() { p.noteGrab = false; p.fnGrab = false }
 
 func (p *styledReadingPane) Tapped(e *fyne.PointEvent) {
 	if p.noteGrab || (e != nil && p.noteGeom.hits(e.Position)) {
 		p.noteGrab = false
 		return // a click on the card must not clear what the reader selected
+	}
+	if p.fnGrab || (e != nil && p.fnGeom.hits(e.Position)) {
+		p.fnGrab = false
+		return // the apparatus is inert — no clear, no selection change
 	}
 	p.focusSelf()
 	p.clearSelection()
@@ -293,6 +305,9 @@ func (p *styledReadingPane) Tapped(e *fyne.PointEvent) {
 func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
 	if ev != nil && p.noteGeom.hits(ev.Position) {
 		return // no word-select under the bubble
+	}
+	if ev != nil && p.fnGeom.hits(ev.Position) {
+		return // no word-select in the apparatus
 	}
 	off := p.offsetAtPos(ev.Position)
 	runes := []rune(p.lay.Text)
@@ -327,6 +342,9 @@ func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
 func (p *styledReadingPane) TappedSecondary(e *fyne.PointEvent) {
 	if e != nil && p.noteGeom.hits(e.Position) {
 		return // no study menu over somebody else's words
+	}
+	if e != nil && p.fnGeom.hits(e.Position) {
+		return // no study menu over the translators' words
 	}
 	menu := p.studyMenu()
 	c := fyne.CurrentApp().Driver().CanvasForObject(p)

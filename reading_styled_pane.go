@@ -126,6 +126,17 @@ type styledReadingPane struct {
 	// card does not turn into a text selection under it.
 	noteGrab bool
 
+	// The chapter-bottom translators'-footnote section: entries read ONCE per
+	// pane (a settings flip rebuilds the reading view wholesale, the note's
+	// contract), geometry written ONLY in relayout beside the layout it hangs
+	// under (reading_styled_footnotes.go).
+	fnEntries []footnoteEntry
+	fnGeom    styledFnGeom
+	// fnGrab latches a press that began in the footnote section, so a drag
+	// off it cannot plant or extend a text selection — the noteGrab lesson,
+	// verbatim: the MouseDown guard alone does not stop Dragged.
+	fnGrab bool
+
 	clipboard fyne.Clipboard
 }
 
@@ -146,6 +157,12 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 	// the banner has), so re-deriving it per resize would only re-read the
 	// preference store to be told the same thing.
 	p.note = styledNoteFor(state)
+	// The footnote section's entries, read once for the same reason: the
+	// toggle lives in Settings, and closing that sheet rebuilds the pane.
+	if footnotesEnabled() {
+		p.fnEntries = chapterFootnoteEntries(verses,
+			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter))
+	}
 	p.ExtendBaseWidget(p)
 	p.relayout(720) // provisional; corrected when the real width arrives
 	return p
@@ -246,6 +263,16 @@ func (p *styledReadingPane) relayout(width float32) {
 	}
 	p.tintSpans = tintSpansForLayout(p.lay)
 	p.raSpans = verseSpansForLayout(p.lay, p.raVerse)
+	// The footnote section, measured against the SAME column the layout used
+	// (after the reporter clamp) and hung below the chapter with the
+	// breathing-room line as its air — geometry assigned beside the layout it
+	// belongs to, like the sticker's.
+	fnSize := p.textSize * styledFnRatio
+	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, func(s string) float32 {
+		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.font)
+		return w.Width
+	})
+	p.fnGeom.place(p.insetX(), p.lay.Height+p.styledLineHeight())
 	p.lastWidth = width
 	// Offsets shifted with the new layout — any selection is now meaningless.
 	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
@@ -307,6 +334,10 @@ func (p *styledReadingPane) MinSize() fyne.Size {
 	h := float32(0)
 	if p.lay != nil {
 		h = p.lay.Height + p.styledLineHeight() // breathing room below the last line
+		// The footnote section hangs below that breathing room; its height is
+		// zero when disabled or the chapter has no notes. Scroll capture,
+		// restore and the clamp all read MinSize, so they follow for free.
+		h += p.fnGeom.height
 	}
 	return fyne.NewSize(200, h)
 }
@@ -385,6 +416,11 @@ type styledPaneRenderer struct {
 	// already learned that lesson — 514 allocations for one whole-chapter span).
 	noteCardRes fyne.Resource
 	noteCardKey string
+
+	// The footnote section's objects — own slices, like the sticker's, and
+	// for the same reason: r.texts is index-parallel to p.drawRuns.
+	fnRule  *canvas.Rectangle
+	fnTexts []*canvas.Text
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -446,6 +482,27 @@ func (r *styledPaneRenderer) rebuild() {
 		}
 		r.texts = append(r.texts, t)
 		r.objects = append(r.objects, t)
+	}
+	// The footnote section: rule + rows in their own slices. Colours read
+	// here, not in position() — a theme flip arrives as a full rebuild. Keys
+	// take the verse-number colour, bodies the muted tone, both at the
+	// section's 0.85× size in the scripture serif.
+	r.fnRule = nil
+	r.fnTexts = r.fnTexts[:0]
+	if p.fnGeom.present {
+		r.fnRule = canvas.NewRectangle(p.pal.TextMuted)
+		r.objects = append(r.objects, r.fnRule)
+		for _, ft := range p.fnGeom.texts {
+			c := p.pal.TextMuted
+			if ft.Key {
+				c = p.pal.VerseNumber
+			}
+			t := canvas.NewText(ft.Text, c)
+			t.FontSource = p.font
+			t.TextSize = p.textSize * styledFnRatio
+			r.fnTexts = append(r.fnTexts, t)
+			r.objects = append(r.objects, t)
+		}
 	}
 	// The sticker LAST, so it paints over the glyphs it sits above.
 	r.buildNote()
@@ -547,6 +604,26 @@ func (r *styledPaneRenderer) position() {
 			y = ln.Y + (lh-bodyH)/2 - numH*0.18
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
+	}
+
+	// The footnote section, from its geometry table alone — hide, never
+	// merely skip, when the geometry is absent (the ghost-wash lesson).
+	if r.fnRule != nil {
+		if p.fnGeom.present {
+			r.fnRule.Move(p.fnGeom.rule.pos())
+			r.fnRule.Resize(p.fnGeom.rule.size())
+			r.fnRule.Show()
+		} else {
+			r.fnRule.Hide()
+		}
+	}
+	for i, t := range r.fnTexts {
+		if p.fnGeom.present && i < len(p.fnGeom.texts) {
+			t.Move(fyne.NewPos(p.fnGeom.texts[i].X, p.fnGeom.texts[i].Y))
+			t.Show()
+		} else {
+			t.Hide()
+		}
 	}
 
 	r.positionNote()

@@ -140,7 +140,9 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// native on iOS/macOS/Android, oto (recordings only) on Windows/Linux — so
 	// the button hides only when chapterAudioAvailable() says this chapter has
 	// nothing playable. Clustered with the focus toggle, sharing the arrows'
-	// baseline.
+	// baseline. (The translators'-footnotes toggle is deliberately NOT here:
+	// the feature's one control is the Settings card, by design —
+	// footnote_section.go.)
 	var rightControls fyne.CanvasObject = focusBtn
 	if chapterAudioAvailable(state) {
 		rightControls = container.NewHBox(audioControl(state, navBoxH), hgap(8), focusBtn)
@@ -526,6 +528,10 @@ func chapterFingerprint(state *AppState, hl string) string {
 	if redLetterEnabled() {
 		red = 1
 	}
+	fnotes := 0
+	if footnotesEnabled() {
+		fnotes = 1
+	}
 	// THE TINT SOURCE FOLDS ITSELF (tint.go), and it is handed IN rather than
 	// read here. This clause used to read the mark out of AppState and format it
 	// at this call site, which is fine while the tint IS the mark and wrong the
@@ -568,8 +574,8 @@ func chapterFingerprint(state *AppState, hl string) string {
 		}
 		note += fmt.Sprintf("!%d.%d.%d.%d", state.NoteID, len(state.ActiveNote), m, state.NoteVerseLo)
 	}
-	return fmt.Sprintf("%s|%s|%d|v%d|r%d|h%s|t%s|d%p|n%s",
-		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, hl, readingTextSizeID(), state.Bible, note)
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|fn%d|h%s|t%s|d%p|n%s",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, fnotes, hl, readingTextSizeID(), state.Bible, note)
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------
@@ -597,6 +603,15 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	numHex := nrgbaToHex(pal.VerseNumber)
 	redLetterHex := nrgbaToHex(pal.RedLetter)
 	redLetter := redLetterEnabled()
+	// The translators' footnotes, collected up front because the stylesheet
+	// only carries the section's rules when the section actually renders — a
+	// footnotes-off chapter's HTML stays byte-identical to the pre-feature
+	// output (footnote_section.go).
+	var footnotes []footnoteEntry
+	if footnotesEnabled() {
+		footnotes = chapterFootnoteEntries(verses,
+			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter))
+	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
 	// Nothing here decides what a wash looks like any more — it asks the tint,
 	// and writes the markup the tint's row carries.
@@ -674,6 +689,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// poem lines full-width (TextKit does not reliably exempt forced-break
 	// lines the way CSS — and Android's INTER_WORD mode — do).
 	b.WriteString(`p.pm { text-align: left; }`)
+	if len(footnotes) > 0 {
+		writeFootnoteCSS(&b, nrgbaToHex(pal.TextMuted))
+	}
 	b.WriteString("</style></head><body>")
 
 	for _, para := range groupVersesIntoParagraphs(verses) {
@@ -755,6 +773,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			writeTintedHTML(&b, mk, len(runs) == 1 && runs[0].Red, body)
 		}
 		b.WriteString("</p>")
+	}
+	if len(footnotes) > 0 {
+		writeFootnoteSection(&b, footnotes, reporter)
 	}
 	b.WriteString("</body></html>")
 	return b.String()
@@ -1449,13 +1470,14 @@ func (r *plainEntryRenderer) makePlain() {
 	}
 }
 
-func copyChapter(state *AppState) {
-	if state.window == nil {
-		return
-	}
+// chapterCopyText is the whole-chapter plain-text export the copy icon puts
+// on the clipboard — a join of Verse.Text, which is why the translators'
+// footnote section can never appear in it however it is toggled (pinned by
+// TestFootnotesNeverReachSearchSpeechOrProse).
+func chapterCopyText(state *AppState) string {
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 	if len(verses) == 0 {
-		return
+		return ""
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %d\n\n", state.CurrentBook, state.CurrentChapter)
@@ -1465,7 +1487,16 @@ func copyChapter(state *AppState) {
 		// is the same principle as the cited-text share layout.
 		fmt.Fprintf(&b, "%d %s\n", v.Verse, strings.TrimSpace(v.Text))
 	}
-	state.window.Clipboard().SetContent(b.String())
+	return b.String()
+}
+
+func copyChapter(state *AppState) {
+	if state.window == nil {
+		return
+	}
+	if text := chapterCopyText(state); text != "" {
+		state.window.Clipboard().SetContent(text)
+	}
 }
 
 // readingColumn centres its single child and caps the line length for
