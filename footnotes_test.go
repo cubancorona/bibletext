@@ -372,9 +372,9 @@ const nkjvNotedChapter = `[
     {"type":"text","text":"No one has ascended to heaven","attrs":{"verseId":"JHN.3.13"}},
     {"name":"note","type":"tag","attrs":{"style":"f","caller":"+","id":"JHN.3.13!f.1","verseId":"JHN.3.13"},"items":[
       {"name":"char","type":"tag","attrs":{"style":"fr"},"items":[{"type":"text","text":"3:13 "}]},
-      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"NU-Text omits who is in heaven."}]}
+      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"Alpha-Text omits the fixture clause."}]}
     ]},
-    {"type":"text","text":" but He who came down from heaven.","attrs":{"verseId":"JHN.3.13"}}
+    {"type":"text","text":" but the fixture clause continues here.","attrs":{"verseId":"JHN.3.13"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"14","sid":"JHN 3:14"},"items":[{"type":"text","text":"14"}]},
@@ -418,11 +418,11 @@ func TestFootnotesNKJVCaptureAndPurity(t *testing.T) {
 	}
 
 	v13 := vs[1]
-	if v13.Text != "No one has ascended to heaven but He who came down from heaven." {
+	if v13.Text != "No one has ascended to heaven but the fixture clause continues here." {
 		t.Errorf("v13 text corrupted: %q", v13.Text)
 	}
 	if len(v13.Footnotes) != 1 || v13.Footnotes[0].Kind != "" ||
-		v13.Footnotes[0].Text != "NU-Text omits who is in heaven." {
+		v13.Footnotes[0].Text != "Alpha-Text omits the fixture clause." {
 		t.Fatalf("translator footnote wrong: %+v", v13.Footnotes)
 	}
 	if want := utf8.RuneCountInString("No one has ascended to heaven"); v13.Footnotes[0].Anchor != want {

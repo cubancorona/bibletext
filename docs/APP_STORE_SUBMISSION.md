@@ -17,11 +17,13 @@ As observed against App Store Connect on 26 August 2026:
   text until deliberately rewritten.
 - **Submission state:** neither platform's 1.2.3 has been submitted by this
   checklist or by the metadata helpers.
-- **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad; minimum iOS 15
-  (`iosMinimumOSVersion` in `config/product.json`, the one authoritative value —
-  raised from 13 because App Store Connect refuses floors below 15.0 from
-  Spring 2027, upload warning 90068 until then; `check-min-os-versions.py`
-  guards it and `release-ios.sh` reads it back out of the exported `.ipa`).
+- **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad. Builds up to
+  174 (the 1.2.3 submission) declare minimum iOS 13; the repository now
+  declares iOS 15 for every FUTURE build (`iosMinimumOSVersion` in
+  `config/product.json`, the one authoritative value — App Store Connect
+  refuses floors below 15.0 from Spring 2027, upload warning 90068 until
+  then; `check-min-os-versions.py` guards it and `release-ios.sh` reads it
+  back out of the exported `.ipa`).
 
 Public lookup data is cached, and App Store Connect is authoritative. Start every
 release with the read-only preflight:
@@ -220,11 +222,11 @@ with the window pinned to 1280×800, which is 2560×1600 on a Retina display —
 one of the sizes Apple accepts. Two things about that build are worth
 recording, because a repeat capture gets them wrong by default:
 
-- **The reader's own data was not photographed.** The rehearsal container holds
-  whatever the container migration carried in, which is real notes and a real
-  AI key. Both were replaced for the session with the same neutral, clearly
-  synthetic note text already published in the iPhone and iPad listing, and put
-  back afterwards.
+- **A reader's own data must never be photographed.** The rehearsal container
+  holds whatever the container migration carried in — real notes, and any
+  saved keys. Before capturing, replace the store with the same neutral,
+  clearly synthetic note text already published in the iPhone and iPad
+  listing, and restore the original afterwards, verified byte-for-byte.
 - **`screencapture` always writes an alpha channel and App Store Connect
   refuses a PNG that carries one.** The `-ready` copies are redrawn opaque;
   `appstore/preflight.py --platform MAC_OS` now checks the `-ready` set's

@@ -16,7 +16,7 @@ The app has answered the underlying question once already. Shared notes put
 human words *beside* Scripture by making them **visibly human and ignorable**
 — chrome type instead of the scripture serif, attributed, dismissible, never
 inside the text. Translators' footnotes have, if anything, a stronger claim
-to that treatment: "NU-Text omits *who is in heaven*" is not an addition to
+to that treatment: an apparatus note ("this manuscript family omits this clause") is not an addition to
 the words but testimony *about* them — the translators showing their work,
 as the apparatus has stood in the margins of printed Bibles for centuries.
 But the separation must be **mechanical, not merely typographic**. The hard
@@ -175,10 +175,9 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   failure. The decoder now skips `note` nodes explicitly, pinned by
   `TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes`. This guard is worth
   having whether or not footnotes ever ship.
-- **Unverified** (deliberately): the live shape of NKJV notes. The key now
-  lives in the login Keychain (`uk.co.bibletext.apibible-release`), not
-  `.env.local`, and this session's permission layer rightly refused to
-  extract it. One manually-run call captures the ground truth:
+- **Unverified** (deliberately): the live shape of NKJV notes. One
+  manually-run call against the release credential captures the ground
+  truth:
 
   ```
   KEY="$(security find-generic-password -a release -s uk.co.bibletext.apibible-release -w)"; curl -sS -H "api-key: $KEY" 'https://rest.api.bible/v1/bibles/63097d2a0a2f7db3-01/chapters/JHN.3?content-type=json&include-notes=true' > /tmp/jhn3-notes.json
@@ -191,8 +190,7 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   (markers in text, bodies in a labelled panel, off by default) satisfies
   the no-alteration/format clauses, or whether §12 copy limits and the §9.1
   TTS restriction treat note text like verse text. **Six concrete questions
-  are ready to add to the still-unsent support@api.bible draft**
-  (r8986143052262947400) — sending that email is the gating action.
+  are drafted for API.Bible support** — that inquiry is the gating action.
 
 ## 6. Recommended phasing
 
@@ -213,7 +211,8 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    or is even a labelled sheet of translators' notes unwanted?
 2. Superscription-anchored notes: drop (recommended) or re-anchor to v1?
 3. Should note bodies ever travel with an AI Explain request? (Default: no.)
-4. Send the API.Bible email with the six footnote questions added?
+4. The API.Bible inquiry, with the six footnote questions added, remains
+   unsent.
 
 ---
 
@@ -267,24 +266,26 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
 
 ### Open questions (superseding §7)
 
-1. Approve Phase 1 presentation (the per-chapter sheet) when the time comes?
-2. The omitted verses: should an empty verse number one day appear with its
-   explanatory note, or stay silent as today?
-3. NKJV crossrefs: display eventually, or leave captured-but-dark?
-4. AI prompts: may note bodies travel with an Explain request? (Default no.)
-5. Send the support email (its footnote questions now narrower — §8 above).
+1. Whether Phase 1 presentation (the per-chapter sheet) ships, and when.
+2. The omitted verses: whether an empty verse number one day appears with
+   its explanatory note, or stays silent as today.
+3. NKJV crossrefs: display eventually, or leave captured-but-dark.
+4. AI prompts: whether note bodies may travel with an Explain request
+   (default no).
+5. The API.Bible support inquiry remains unsent (its footnote questions now
+   narrower — §8 above).
 
 ### Decision (2026-08-26): no dev tab — presentation trials happen on the main reading pane
 
 A dev-only tab duplicating the reading view was considered as a presentation
-laboratory and declined. Two read-only code scouts established that the reading
-view is single-instance by design on every platform (native overlay singletons,
+laboratory and declined. The reading view is single-instance by design on
+every platform (native overlay singletons,
 the currentHost frame guard, the addRecentChapter funnel into audio-stop and
 reading.state, and the one-pane scroll/anchor registries), so a live duplicate
 would break the real tab; a stripped passive renderer was safe but could not
-show the production rendering. When presentation work is approved, footnote
-display will be built and tested directly on the main reading pane in this
-branch — no second surface.
+show the production rendering. If presentation work ships, footnote
+display will be built and tested directly on the main reading pane — no
+second surface.
 
 ## 9. Prototype (2026-08-27): the chapter-bottom section, live on the Apple panes
 
@@ -349,7 +350,7 @@ the moment the sheet opens while the feature is under evaluation.
 Control simplified (same day): NO toggle in the reading-pane
 chrome after all — the TRANSLATORS' FOOTNOTES card at the top of Settings is
 the feature's ONE control (a plain checkbox; no icon in the row either). The
-approved αω¹ glyph stays RESERVED in assets/icons/footnote.svg + iconFootnote
+adopted αω¹ glyph stays reserved in assets/icons/footnote.svg + iconFootnote
 for when a header toggle returns; the header-mount recipe (availability gate,
 stacked placement on mobile) is recorded in footnote_section.go.
 

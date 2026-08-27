@@ -425,8 +425,9 @@ func TestFetchAPIBibleEdgeChapter500TwiceFails(t *testing.T) {
 }
 
 // A POPULATED note node must never leak the translators' words into verse
-// text — even though the app requests include-notes=false, the decoder must
-// not depend on the server honouring the flag. (The empty-note case above
+// text — the app requests include-notes=true and captures bodies into the
+// side-band, so the decoder must keep them out of Text regardless of what
+// the server sends. (The empty-note case above
 // proved nothing: an empty subtree has nothing to leak.)
 func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
 	content := `[
@@ -435,9 +436,9 @@ func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
 	    {"type":"text","text":"No one has ascended to heaven","attrs":{"verseId":"JHN.3.13"}},
 	    {"name":"note","type":"tag","attrs":{"style":"f"},"items":[
 	      {"name":"char","type":"tag","attrs":{"style":"fr"},"items":[{"type":"text","text":"3:13 "}]},
-	      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"NU-Text omits who is in heaven."}]}
+	      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"Alpha-Text omits the fixture clause."}]}
 	    ]},
-	    {"type":"text","text":" but He who came down from heaven.","attrs":{"verseId":"JHN.3.13"}}
+	    {"type":"text","text":" but the fixture clause continues here.","attrs":{"verseId":"JHN.3.13"}}
 	  ]}
 	]`
 	vs, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 3)
@@ -447,7 +448,7 @@ func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
 	if len(vs) != 1 {
 		t.Fatalf("got %d verses, want 1", len(vs))
 	}
-	want := "No one has ascended to heaven but He who came down from heaven."
+	want := "No one has ascended to heaven but the fixture clause continues here."
 	if vs[0].Text != want {
 		t.Errorf("footnote leaked into Scripture:\n got  %q\n want %q", vs[0].Text, want)
 	}

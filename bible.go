@@ -26,7 +26,7 @@ type Verse struct {
 	// may ever enter Text, the search index, the share pipeline, spoken
 	// audio, or a link. Those pipelines all read Text, which stays
 	// byte-identical whether footnotes are captured or not — the purity the
-	// owner's Revelation 22:18-19 rule requires, enforced by construction
+	// project's Revelation 22:18-19 standard requires, enforced by construction
 	// and pinned by tests (footnotes_test.go). See docs/FOOTNOTES.md.
 	Footnotes []Footnote `json:"footnotes,omitempty"`
 }
