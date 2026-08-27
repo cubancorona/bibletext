@@ -6,6 +6,14 @@ first, then current App Store Connect values are resolved and compared. No
 PATCH is possible without both ``--write`` and an exact ``--confirm-version``.
 Use ``--local-only`` for a validation pass that makes no network request.
 
+The app record carries two platforms. The default is IOS; ``--platform
+MAC_OS`` targets the Mac version instead, taking its version string from
+cmd/desktop/FyneApp.toml and its description, promotional text, and optional
+What's New from ``metadata/en-GB/mac/``. Keywords and the URLs fall back to
+the shared en-GB files when no Mac-specific file exists, and the app-level
+name/subtitle/privacy-URL fields are skipped — they are one per app, not one
+per platform, and belong to the default iOS run.
+
 This tool never selects a build, creates a version, uploads screenshots, or
 submits anything for review.
 """
@@ -29,19 +37,23 @@ SUPPORT_CONFIG = os.path.join(REPO, "config", "product.json")
 APP = "6784567351"
 LOCALE = "en-GB"
 
+# Each platform packages its own version string; resolving both from the
+# mobile ledger is how the Mac record went unpreflighted.
+PLATFORM_VERSION_CONFIG = {
+    "IOS": os.path.join("cmd", "mobile", "FyneApp.toml"),
+    "MAC_OS": os.path.join("cmd", "desktop", "FyneApp.toml"),
+}
 
-def configured_version():
-    config = os.path.join(REPO, "cmd", "mobile", "FyneApp.toml")
+
+# Deliberately no environment override: a forgotten ASC_VERSION must never
+# redirect a write toward a historical version record.
+def configured_version(platform):
+    config = os.path.join(REPO, PLATFORM_VERSION_CONFIG[platform])
     with open(config, encoding="utf-8") as handle:
         for line in handle:
             if line.strip().startswith("Version"):
                 return line.split("=", 1)[1].strip().strip('"')
     raise SystemExit(f"Version is missing from {config}")
-
-
-# Deliberately no environment override: a forgotten ASC_VERSION must never
-# redirect a write toward a historical version record.
-VERSION = configured_version()
 
 
 def read_file(relative, *, required=True):
@@ -57,6 +69,26 @@ def read_file(relative, *, required=True):
     return value
 
 
+def read_platform_file(platform, name, *, required=True, shared_fallback=False):
+    """A Mac-specific file when the platform is MAC_OS, else the shared one.
+
+    ``shared_fallback`` lets a genuinely platform-independent value (a URL,
+    keywords) come from the shared en-GB file when no Mac copy exists; the
+    fallback is announced so it is a choice on the record, not a silent reuse.
+    """
+    if platform != "MAC_OS":
+        return read_file(f"{LOCALE}/{name}", required=required)
+    value = read_file(f"{LOCALE}/mac/{name}", required=required and not shared_fallback)
+    if value is not None:
+        return value
+    if not shared_fallback:
+        return None
+    value = read_file(f"{LOCALE}/{name}", required=required)
+    if value is not None:
+        print(f"note: {LOCALE}/mac/{name} absent; using the shared {LOCALE}/{name}")
+    return value
+
+
 def validate_url(label, value):
     parsed = urllib.parse.urlparse(value)
     if parsed.scheme != "https" or not parsed.netloc:
@@ -68,37 +100,58 @@ def validate_length(label, value, maximum):
         raise SystemExit(f"{label} is {len(value)} characters; maximum is {maximum}")
 
 
-def load_and_validate():
+def load_and_validate(platform, version_string):
     """Load every prospective field before authentication or network access."""
+    # A platform's FIRST version has no What's New field in App Store Connect
+    # at all, so for MAC_OS the file is optional and an absent one simply
+    # omits the field rather than failing or writing a stale iOS text.
+    whats_new = read_platform_file(platform, f"whats-new-{version_string}.txt",
+                                   required=platform == "IOS")
     version = {
-        "description": read_file(f"{LOCALE}/description.txt"),
-        "keywords": read_file(f"{LOCALE}/keywords.txt"),
-        "promotionalText": read_file(f"{LOCALE}/promotional_text.txt"),
-        "supportUrl": read_file(f"{LOCALE}/support_url.txt"),
-        "marketingUrl": read_file(f"{LOCALE}/marketing_url.txt"),
-        "whatsNew": read_file(f"{LOCALE}/whats-new-{VERSION}.txt"),
+        "description": read_platform_file(platform, "description.txt"),
+        "keywords": read_platform_file(platform, "keywords.txt", shared_fallback=True),
+        "promotionalText": read_platform_file(platform, "promotional_text.txt"),
+        "supportUrl": read_platform_file(platform, "support_url.txt", shared_fallback=True),
+        "marketingUrl": read_platform_file(platform, "marketing_url.txt", shared_fallback=True),
     }
-    app_info = {
-        "name": read_file(f"{LOCALE}/name.txt"),
-        "subtitle": read_file(f"{LOCALE}/subtitle.txt"),
-        "privacyPolicyUrl": read_file(f"{LOCALE}/privacy_url.txt"),
-    }
+    if whats_new is not None:
+        version["whatsNew"] = whats_new
+    elif platform == "MAC_OS":
+        print(f"note: no {LOCALE}/mac/whats-new-{version_string}.txt; "
+              "What's New will not be compared or written (a platform's first "
+              "version has no such field)")
+
+    # name/subtitle/privacyPolicyUrl live on the app, not on a platform's
+    # version. They are validated and written by the default iOS run only, so
+    # a Mac run cannot half-own an app-wide value.
+    app_info = None
+    if platform == "IOS":
+        app_info = {
+            "name": read_file(f"{LOCALE}/name.txt"),
+            "subtitle": read_file(f"{LOCALE}/subtitle.txt"),
+            "privacyPolicyUrl": read_file(f"{LOCALE}/privacy_url.txt"),
+        }
     copyright_text = read_file("copyright.txt", required=False)
 
-    for label, value, limit in (
+    limits = [
         ("description", version["description"], 4000),
         ("keywords", version["keywords"], 100),
         ("promotional text", version["promotionalText"], 170),
-        ("What's New", version["whatsNew"], 4000),
-        ("name", app_info["name"], 30),
-        ("subtitle", app_info["subtitle"], 30),
-    ):
+    ]
+    if "whatsNew" in version:
+        limits.append(("What's New", version["whatsNew"], 4000))
+    if app_info is not None:
+        limits.append(("name", app_info["name"], 30))
+        limits.append(("subtitle", app_info["subtitle"], 30))
+    for label, value, limit in limits:
         validate_length(label, value, limit)
-    for label, value in (
+    urls = [
         ("support URL", version["supportUrl"]),
         ("marketing URL", version["marketingUrl"]),
-        ("privacy URL", app_info["privacyPolicyUrl"]),
-    ):
+    ]
+    if app_info is not None:
+        urls.append(("privacy URL", app_info["privacyPolicyUrl"]))
+    for label, value in urls:
         validate_url(label, value)
     if copyright_text is not None:
         validate_length("copyright", copyright_text, 200)
@@ -146,14 +199,20 @@ def parse_args():
         "--confirm-version", metavar="VERSION",
         help="required with --write; must exactly equal the configured version",
     )
+    parser.add_argument(
+        "--platform", choices=sorted(PLATFORM_VERSION_CONFIG), default="IOS",
+        help="App Store platform to target (default: IOS); the version string "
+             "comes from that platform's FyneApp.toml",
+    )
     args = parser.parse_args()
-    if args.write and args.confirm_version != VERSION:
+    version = configured_version(args.platform)
+    if args.write and args.confirm_version != version:
         parser.error(
-            f"--write requires --confirm-version {VERSION}; no remote request was made"
+            f"--write requires --confirm-version {version}; no remote request was made"
         )
     if args.confirm_version and not args.write:
         parser.error("--confirm-version is meaningful only with --write")
-    return args
+    return args, version
 
 
 def show_error(label, status, body):
@@ -197,13 +256,14 @@ def print_plan(label, changes, current):
 
 
 def main():
-    args = parse_args()
+    args, version = parse_args()
+    platform = args.platform
     contact = subprocess.run([sys.executable, SUPPORT_CONTACT_CHECK], cwd=REPO)
     if contact.returncode != 0:
         raise SystemExit("public support configuration is not release-safe")
-    version_values, app_info_values, copyright_text = load_and_validate()
+    version_values, app_info_values, copyright_text = load_and_validate(platform, version)
     validate_private_inputs()
-    print(f"local metadata preflight: OK ({LOCALE}, version {VERSION})")
+    print(f"local metadata preflight: OK ({LOCALE}, {platform} version {version})")
     if args.local_only:
         print("local-only mode: no App Store Connect request made")
         return 0
@@ -219,13 +279,13 @@ def main():
     import asc  # pylint: disable=import-outside-toplevel
 
     query = urllib.parse.urlencode({
-        "filter[platform]": "IOS",
-        "filter[versionString]": VERSION,
+        "filter[platform]": platform,
+        "filter[versionString]": version,
         "limit": "10",
     })
     version_record = one(
         get_data(asc, f"/v1/apps/{APP}/appStoreVersions?{query}", "resolve version"),
-        f"iOS App Store version {VERSION!r}",
+        f"{platform} App Store version {version!r}",
     )
     version_id = version_record["id"]
     version_state = version_record.get("attributes", {}).get("appStoreState", "UNKNOWN")
@@ -240,44 +300,50 @@ def main():
         f"{LOCALE} version localization",
     )
 
-    app_info = one(
-        get_data(asc, f"/v1/apps/{APP}/appInfos?limit=20", "resolve app info"),
-        "appInfo record",
-    )
-    app_info_localizations = get_data(
-        asc, f"/v1/appInfos/{app_info['id']}/appInfoLocalizations?limit=200",
-        "resolve app info localization",
-    )
-    app_info_localization = one(
-        [item for item in app_info_localizations
-         if item.get("attributes", {}).get("locale") == LOCALE],
-        f"{LOCALE} appInfo localization",
-    )
-
     version_changes = changed(version_values, localization.get("attributes", {}))
-    app_info_changes = changed(app_info_values, app_info_localization.get("attributes", {}))
     record_values = {} if copyright_text is None else {"copyright": copyright_text}
     copyright_changes = changed(record_values, version_record.get("attributes", {}))
 
-    print(f"target: app {APP}, iOS {VERSION}, {LOCALE}, state {version_state}")
+    print(f"target: app {APP}, {platform} {version}, {LOCALE}, state {version_state}")
     print_plan("version localization", version_changes, localization.get("attributes", {}))
     print_plan("version record", copyright_changes, version_record.get("attributes", {}))
-    print_plan("app-info localization", app_info_changes,
-               app_info_localization.get("attributes", {}))
 
     plans = [
         ("version localization", f"/v1/appStoreVersionLocalizations/{localization['id']}",
          "appStoreVersionLocalizations", localization["id"], version_changes),
         ("version record", f"/v1/appStoreVersions/{version_id}",
          "appStoreVersions", version_id, copyright_changes),
-        ("app-info localization", f"/v1/appInfoLocalizations/{app_info_localization['id']}",
-         "appInfoLocalizations", app_info_localization["id"], app_info_changes),
     ]
+
+    if app_info_values is None:
+        print("\napp-info localization: skipped (app-wide fields; the iOS run owns them)")
+    else:
+        app_info = one(
+            get_data(asc, f"/v1/apps/{APP}/appInfos?limit=20", "resolve app info"),
+            "appInfo record",
+        )
+        app_info_localizations = get_data(
+            asc, f"/v1/appInfos/{app_info['id']}/appInfoLocalizations?limit=200",
+            "resolve app info localization",
+        )
+        app_info_localization = one(
+            [item for item in app_info_localizations
+             if item.get("attributes", {}).get("locale") == LOCALE],
+            f"{LOCALE} appInfo localization",
+        )
+        app_info_changes = changed(app_info_values, app_info_localization.get("attributes", {}))
+        print_plan("app-info localization", app_info_changes,
+                   app_info_localization.get("attributes", {}))
+        plans.append(
+            ("app-info localization", f"/v1/appInfoLocalizations/{app_info_localization['id']}",
+             "appInfoLocalizations", app_info_localization["id"], app_info_changes),
+        )
+
     plans = [plan for plan in plans if plan[4]]
 
     if not args.write:
         print("\nDRY RUN: no PATCH made. Re-run with --write and "
-              f"--confirm-version {VERSION} only after reviewing this plan.")
+              f"--confirm-version {version} only after reviewing this plan.")
         return 0
     if version_state not in {
         "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED"

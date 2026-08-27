@@ -15,73 +15,93 @@ import (
 )
 
 const reviewNotesPath = "appstore/review-notes.txt"
+const macReviewNotesPath = "appstore/review-notes-macos.txt"
 
-// marketingVersion reads the version the app actually ships as. FyneApp.toml is
-// the packaging source of truth (docs/APP_STORE_SUBMISSION.md), so the notes are
-// held to it rather than to a number repeated somewhere else.
-func marketingVersion(t *testing.T) string {
+// The app record carries two platforms, each with its own review-notes field,
+// tracked file, and packaging ledger. The same guards apply to both.
+var reviewNotesFiles = []struct {
+	path, versionConfig string
+}{
+	{reviewNotesPath, "cmd/mobile/FyneApp.toml"},
+	{macReviewNotesPath, "cmd/desktop/FyneApp.toml"},
+}
+
+// packagedVersion reads the version a platform actually ships as. FyneApp.toml
+// is the packaging source of truth (docs/APP_STORE_SUBMISSION.md), so the notes
+// are held to it rather than to a number repeated somewhere else.
+func packagedVersion(t *testing.T, config string) string {
 	t.Helper()
-	b, err := os.ReadFile("cmd/mobile/FyneApp.toml")
+	b, err := os.ReadFile(config)
 	if err != nil {
-		t.Fatalf("cannot read cmd/mobile/FyneApp.toml: %v", err)
+		t.Fatalf("cannot read %s: %v", config, err)
 	}
 	m := regexp.MustCompile(`(?m)^\s*Version\s*=\s*"([0-9]+(?:\.[0-9]+)*)"`).FindStringSubmatch(string(b))
 	if m == nil {
-		t.Fatal("no Version in cmd/mobile/FyneApp.toml — the packaging source of truth moved")
+		t.Fatalf("no Version in %s — the packaging source of truth moved", config)
 	}
 	return m[1]
 }
 
-// TestAppReviewNotesAreForThisRelease guards the version-specific review field.
+func marketingVersion(t *testing.T) string {
+	t.Helper()
+	return packagedVersion(t, "cmd/mobile/FyneApp.toml")
+}
+
+// TestAppReviewNotesAreForThisRelease guards the version-specific review field
+// on both platforms.
 func TestAppReviewNotesAreForThisRelease(t *testing.T) {
-	raw, err := os.ReadFile(reviewNotesPath)
-	if err != nil {
-		t.Fatalf("%s is missing; tracked App Review notes are required for every "+
-			"release. (%v)", reviewNotesPath, err)
-	}
-	notes := string(raw)
-	want := marketingVersion(t)
+	for _, file := range reviewNotesFiles {
+		t.Run(filepath.Base(file.path), func(t *testing.T) {
+			raw, err := os.ReadFile(file.path)
+			if err != nil {
+				t.Fatalf("%s is missing; tracked App Review notes are required for every "+
+					"release. (%v)", file.path, err)
+			}
+			notes := string(raw)
+			want := packagedVersion(t, file.versionConfig)
 
-	// App Store Connect limits the field to 4,000 Unicode characters. Count
-	// runes rather than bytes so punctuation is measured as the service does.
-	if n := len([]rune(notes)); n > 4000 {
-		t.Fatalf("appstore/review-notes.txt is %d characters; App Store Connect "+
-			"caps the field at 4,000. Remove %d characters.", n, n-4000)
-	}
+			// App Store Connect limits the field to 4,000 Unicode characters. Count
+			// runes rather than bytes so punctuation is measured as the service does.
+			if n := len([]rune(notes)); n > 4000 {
+				t.Fatalf("%s is %d characters; App Store Connect "+
+					"caps the field at 4,000. Remove %d characters.", file.path, n, n-4000)
+			}
 
-	// The heading must name the packaged release and no other version.
-	first := strings.TrimSpace(strings.SplitN(notes, "\n", 2)[0])
-	if !strings.Contains(first, want) {
-		t.Errorf("%s opens with %q but the app ships as %s; rewrite the notes for "+
-			"%s before submitting", reviewNotesPath, first, want, want)
-	}
-	for _, stale := range regexp.MustCompile(`\b[0-9]+\.[0-9]+\.[0-9]+\b`).FindAllString(first, -1) {
-		if stale != want {
-			t.Errorf("%s's first line also names version %s; the notes must describe %s alone",
-				reviewNotesPath, stale, want)
-		}
-	}
+			// The heading must name the packaged release and no other version.
+			first := strings.TrimSpace(strings.SplitN(notes, "\n", 2)[0])
+			if !strings.Contains(first, want) {
+				t.Errorf("%s opens with %q but the app ships as %s; rewrite the notes for "+
+					"%s before submitting", file.path, first, want, want)
+			}
+			for _, stale := range regexp.MustCompile(`\b[0-9]+\.[0-9]+\.[0-9]+\b`).FindAllString(first, -1) {
+				if stale != want {
+					t.Errorf("%s's first line also names version %s; the notes must describe %s alone",
+						file.path, stale, want)
+				}
+			}
 
-	// The notes must give App Review a path through the feature.
-	if !regexp.MustCompile(`(?i)\b(to exercise|review path|how to test|to receive|to send)\b`).MatchString(notes) {
-		t.Error("the review notes give App Review no way to exercise the app — " +
-			"no review path, no steps, nothing to tap")
-	}
+			// The notes must give App Review a path through the feature.
+			if !regexp.MustCompile(`(?i)\b(to exercise|review path|how to test|to receive|to send)\b`).MatchString(notes) {
+				t.Error("the review notes give App Review no way to exercise the app — " +
+					"no review path, no steps, nothing to tap")
+			}
 
-	// The tracked file is copied into App Store Connect, so credentials belong
-	// only in the private review form at submission time.
-	for _, pat := range []struct{ name, re string }{
-		{"an OpenAI-style key", `\bsk-[A-Za-z0-9_-]{16,}`},
-		{"a Google API key", `\bAIza[0-9A-Za-z_-]{20,}`},
-		{"an Anthropic key", `\bsk-ant-[A-Za-z0-9_-]{16,}`},
-		{"an xAI key", `\bxai-[A-Za-z0-9_-]{16,}`},
-		{"a PEM private key", `-----BEGIN [A-Z ]*PRIVATE KEY-----`},
-	} {
-		if regexp.MustCompile(pat.re).MatchString(notes) {
-			t.Errorf("%s contains what looks like %s. This file is tracked and is "+
-				"pasted into App Store Connect verbatim — a review-only key goes in "+
-				"the ASC form at submission time and is never committed", reviewNotesPath, pat.name)
-		}
+			// The tracked file is copied into App Store Connect, so credentials belong
+			// only in the private review form at submission time.
+			for _, pat := range []struct{ name, re string }{
+				{"an OpenAI-style key", `\bsk-[A-Za-z0-9_-]{16,}`},
+				{"a Google API key", `\bAIza[0-9A-Za-z_-]{20,}`},
+				{"an Anthropic key", `\bsk-ant-[A-Za-z0-9_-]{16,}`},
+				{"an xAI key", `\bxai-[A-Za-z0-9_-]{16,}`},
+				{"a PEM private key", `-----BEGIN [A-Z ]*PRIVATE KEY-----`},
+			} {
+				if regexp.MustCompile(pat.re).MatchString(notes) {
+					t.Errorf("%s contains what looks like %s. This file is tracked and is "+
+						"pasted into App Store Connect verbatim — a review-only key goes in "+
+						"the ASC form at submission time and is never committed", file.path, pat.name)
+				}
+			}
+		})
 	}
 }
 
@@ -99,7 +119,11 @@ func TestAppReviewNotesWriterIsPinnedAndGuarded(t *testing.T) {
 	for name, needle := range map[string]string{
 		"packaged-version pin":     `TARGET_VERSION = "` + wantVersion + `"`,
 		"exact version filter":     `"filter[versionString]": TARGET_VERSION`,
-		"iOS platform filter":      `"filter[platform]": "IOS"`,
+		"platform-scoped filter":   `"filter[platform]": platform`,
+		"iOS default platform":     `default="IOS"`,
+		"closed platform choice":   `choices=("IOS", "MAC_OS")`,
+		"macOS notes source":       `review-notes-macos.txt`,
+		"macOS packaging ledger":   `"cmd", "desktop", "FyneApp.toml"`,
 		"write opt-in":             `"--write"`,
 		"version confirmation":     `"--confirm-version"`,
 		"exact confirmation check": `args.confirm_version != TARGET_VERSION`,
@@ -130,7 +154,7 @@ func TestAppReviewNotesWriterIsPinnedAndGuarded(t *testing.T) {
 	}
 	mainSource := src[mainStart:]
 	gates := strings.Index(mainSource, "run_repository_gates()")
-	remoteRead := strings.Index(mainSource, "version = exact_version()")
+	remoteRead := strings.Index(mainSource, "version = exact_version(")
 	editable := strings.Index(mainSource, "if state not in EDITABLE_STATES:")
 	patch := strings.Index(mainSource, `api_request("PATCH"`)
 	readBack := strings.Index(mainSource, "read_back = document_data(")
@@ -145,29 +169,34 @@ func TestAppReviewNotesWriterIsPinnedAndGuarded(t *testing.T) {
 	}
 }
 
-// Shared notes display content supplied by another person. While the feature
-// ships, the review notes must explain its privacy and rendering boundaries.
+// Shared notes display content supplied by another person, on the Mac exactly
+// as on iOS. While the feature ships, both platforms' review notes must explain
+// its privacy and rendering boundaries.
 func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
-	raw, err := os.ReadFile(reviewNotesPath)
-	if err != nil {
-		t.Skipf("%s missing; the release guard above already reports that", reviewNotesPath)
-	}
-	notes := strings.ToLower(string(raw))
+	for _, file := range reviewNotesFiles {
+		t.Run(filepath.Base(file.path), func(t *testing.T) {
+			raw, err := os.ReadFile(file.path)
+			if err != nil {
+				t.Skipf("%s missing; the release guard above already reports that", file.path)
+			}
+			notes := strings.ToLower(string(raw))
 
-	// These claims are properties of share_link.go, notes_store.go, and the note
-	// surfaces. A code change that invalidates one must update the release text.
-	for _, must := range []struct{ what, needle string }{
-		{"that the feature exists at all", "shared notes"},
-		{"that there is no server behind it", "no server"},
-		{"that a message is rendered as plain text, never markup", "plain text"},
-		{"how a recipient turns it off or deletes", "delete"},
-	} {
-		if !strings.Contains(notes, must.needle) {
-			t.Errorf("the review notes do not say %s (looked for %q).\n"+
-				"Shared notes display content written by someone else, so this property "+
-				"must be explicit for App Review.",
-				must.what, must.needle)
-		}
+			// These claims are properties of share_link.go, notes_store.go, and the note
+			// surfaces. A code change that invalidates one must update the release text.
+			for _, must := range []struct{ what, needle string }{
+				{"that the feature exists at all", "shared notes"},
+				{"that there is no server behind it", "no server"},
+				{"that a message is rendered as plain text, never markup", "plain text"},
+				{"how a recipient turns it off or deletes", "delete"},
+			} {
+				if !strings.Contains(notes, must.needle) {
+					t.Errorf("the review notes do not say %s (looked for %q).\n"+
+						"Shared notes display content written by someone else, so this property "+
+						"must be explicit for App Review.",
+						must.what, must.needle)
+				}
+			}
+		})
 	}
 }
 

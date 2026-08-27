@@ -6,12 +6,17 @@ Store Connect state.
 
 ## Current release state — verify before acting
 
-As publicly observed on 24 August 2026:
+As observed against App Store Connect on 26 August 2026:
 
-- **Live App Store version:** 1.2.2, released 23 August 2026.
+- **Live App Store version (iOS):** 1.2.2, released 23 August 2026. No iOS
+  1.2.3 record exists yet.
 - **Prepared next version:** 1.2.3, mobile build 174.
-- **Submission state:** 1.2.3 is prepared only. It has not been submitted by
-  this checklist or by the metadata helpers.
+- **macOS:** a 1.2.3 version record exists on the same app record in
+  PREPARE_FOR_SUBMISSION — the first Mac App Store version. It was seeded by
+  App Store Connect from the iOS metadata, so its inherited fields are iOS
+  text until deliberately rewritten.
+- **Submission state:** neither platform's 1.2.3 has been submitted by this
+  checklist or by the metadata helpers.
 - **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad; minimum iOS 13.
 
 Public lookup data is cached, and App Store Connect is authoritative. Start every
@@ -25,8 +30,19 @@ python3 appstore/preflight.py
 ```
 
 The preflight performs GET requests only. It prints every version's live state,
-compares release-specific fields with the previous version, and identifies
-copy-forward metadata. Do not infer submission eligibility from this document.
+compares release-specific fields with the previous version, identifies
+copy-forward metadata, verifies every uploaded screenshot reached
+`assetDeliveryState` COMPLETE, and validates the local upload-ready screenshot
+set's pixel sizes and alpha channels. Do not infer submission eligibility from
+this document.
+
+All three helpers — `preflight.py`, `push-metadata.py`, `push-review-notes.py`
+— default to the iOS platform and never touch the other one. Pass
+`--platform MAC_OS` to target the Mac version instead; each platform's version
+string comes from its own ledger (`cmd/mobile/FyneApp.toml` for iOS,
+`cmd/desktop/FyneApp.toml` for the Mac). A platform's first version has no
+earlier same-platform record, so the preflight compares it against the newest
+iOS versions — which is exactly what App Store Connect seeded it from.
 
 ## Release identity and local build
 
@@ -106,16 +122,32 @@ field back and fails on a mismatch. A metadata write neither selects a build nor
 submits a version. `build/appstore/push_metadata.py` is retained only as a local
 compatibility entry point for the tracked helper.
 
+For the Mac version, `--platform MAC_OS` reads the Mac description and
+promotional text from `build/appstore/metadata/en-GB/mac/` (deliberately not
+the iOS text), falls back to the shared en-GB files for keywords and the URLs
+when no Mac-specific file exists (each fallback is announced), and skips the
+app-level name, subtitle, and privacy URL — those are one per app, and the
+iOS run owns them. A platform's first version has no What's New field in App
+Store Connect, so an absent `mac/whats-new-1.2.3.txt` is not an error.
+
 ## Review notes
 
-`appstore/review-notes.txt` is the tracked source of truth and must name 1.2.3.
-Validate the local source without contacting App Store Connect:
+Each platform has its own review-notes field and its own tracked source of
+truth: `appstore/review-notes.txt` for iOS and `appstore/review-notes-macos.txt`
+for the Mac. Both must name 1.2.3, and each is held to its own platform's
+FyneApp.toml by `appstore_review_notes_test.go`. Validate the local sources
+without contacting App Store Connect:
 
 ```bash
 python3 appstore/push-review-notes.py --local-only
 ```
 
-Then preview the current App Store Connect value:
+```bash
+python3 appstore/push-review-notes.py --local-only --platform MAC_OS
+```
+
+Then preview the current App Store Connect value (add `--platform MAC_OS` for
+the Mac record — the default run resolves the iOS one only):
 
 ```bash
 ASC_KEY_PATH=/path/AuthKey.p8 \
@@ -127,6 +159,14 @@ python3 appstore/push-review-notes.py
 Only an authorized operator should repeat the command with
 `--write --confirm-version 1.2.3`; the helper reads the field back and fails on
 a mismatch.
+
+The macOS notes must additionally cover what is Mac-specific: the right-click
+Study with AI gesture, the App Sandbox and the one-time container migration
+(a local move performed by macOS, invisible on a machine with no prior
+install), and the same compiled-API.Bible-fallback versus AI-credential
+distinction the iOS notes make. The Mac record was seeded with the live iOS
+notes when it was created, so until the tracked macOS file is written through
+the helper, App Store Connect holds iPhone and iPad text on the Mac version.
 If Apple needs to exercise optional AI features, place any temporary review-only
 AI-provider credential in App Review Information, never in the repository or
 review-notes file.
@@ -151,9 +191,15 @@ These local assets are preparation only; an App Store upload remains a separate
 explicit operation.
 
 Before any future screenshot replacement, use neutral, clearly synthetic note
-text and inspect every final image with OCR. Upload iPhone and iPad sets together,
-set the source directory explicitly, verify dimensions/order in App Store
-Connect, and run `appstore/preflight.py` again. Do not use an older
+text and inspect every final image with OCR. Upload iPhone and iPad sets
+together, set the source directory explicitly, verify order in App Store
+Connect, and run `appstore/preflight.py` again **for the platform whose set
+changed** — the default run covers iOS only, and `--platform MAC_OS` is the
+only way it sees the Mac sets at all. The preflight validates the local
+`-ready` set's pixel sizes and alpha channels before anything goes up, and
+reads back every uploaded image's `assetDeliveryState`: a wrong-sized or
+alpha-carrying upload is accepted by the API and then sits at FAILED with no
+error at upload time, so COMPLETE is the only good answer. Do not use an older
 `screenshots-ready-*` directory or a helper's default path.
 
 ### The macOS set
@@ -177,7 +223,9 @@ recording, because a repeat capture gets them wrong by default:
   back afterwards.
 - **`screencapture` always writes an alpha channel and App Store Connect
   refuses a PNG that carries one.** The `-ready` copies are redrawn opaque;
-  check with `sips -g hasAlpha` before uploading rather than after.
+  `appstore/preflight.py --platform MAC_OS` now checks the `-ready` set's
+  dimensions and alpha channels automatically (`sips -g hasAlpha` remains a
+  fine manual cross-check).
 
 The dark image needs the *system* appearance switched to Dark, not just
 `FYNE_THEME=dark`: the app follows the OS, but the window's title bar follows
@@ -185,7 +233,9 @@ it too, and a dark app under a light title bar is a combination no reader can
 actually produce.
 
 The macOS description and promotional text are drafted at
-`build/appstore/metadata/en-GB/mac/`. They are not the iOS text: the AI study
+`build/appstore/metadata/en-GB/mac/`; `appstore/push-metadata.py --platform
+MAC_OS` previews them against the Mac record and writes them only behind
+`--write --confirm-version`. They are not the iOS text: the AI study
 gesture is a right-click rather than a selection popover, audio has no
 lock-screen behaviour to describe, and the description states plainly that the
 Store edition moves — not copies — an existing install's notes and settings
@@ -221,7 +271,9 @@ Review rather than copy forward:
 
 Before a human submits 1.2.3:
 
-1. Run `appstore/preflight.py` and resolve every warning.
+1. Run `appstore/preflight.py` for every platform being submitted (the
+   default run covers iOS only; add `--platform MAC_OS` for the Mac) and
+   resolve every warning.
 2. Confirm version 1.2.3/build 174 and the intended release mode.
 3. Read back description, What's New, review notes, URLs, copyright, privacy
    answers, age rating, and screenshot order from App Store Connect.

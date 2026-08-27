@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Preview or update App Review notes for the pinned iOS release.
+"""Preview or update App Review notes for the pinned release.
 
 The tracked review-notes file is the source of truth. Remote access is
 read-only by default. A write requires both ``--write`` and the exact pinned
 version confirmation, and is allowed only while that version remains editable.
 
+The app record carries two platforms with separate review-notes fields and
+separate tracked sources: ``review-notes.txt`` for iOS (the default) and
+``review-notes-macos.txt`` for ``--platform MAC_OS``, each held to its own
+platform's FyneApp.toml.
+
 Examples:
 
     python3 appstore/push-review-notes.py --local-only
-    python3 appstore/push-review-notes.py
+    python3 appstore/push-review-notes.py --platform MAC_OS
     python3 appstore/push-review-notes.py --write --confirm-version 1.2.3
 """
 
@@ -23,8 +28,19 @@ import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-NOTES = os.path.join(HERE, "review-notes.txt")
-VERSION_CONFIG = os.path.join(REPO, "cmd", "mobile", "FyneApp.toml")
+
+# Each platform reviews its own notes field, written from its own tracked file
+# and held to the FyneApp.toml that actually packages that platform's build.
+PLATFORM_SOURCES = {
+    "IOS": {
+        "notes": os.path.join(HERE, "review-notes.txt"),
+        "config": os.path.join(REPO, "cmd", "mobile", "FyneApp.toml"),
+    },
+    "MAC_OS": {
+        "notes": os.path.join(HERE, "review-notes-macos.txt"),
+        "config": os.path.join(REPO, "cmd", "desktop", "FyneApp.toml"),
+    },
+}
 ASC = os.path.join(REPO, "build", "appstore", "asc.py")
 SUPPORT_CONTACT_CHECK = os.path.join(REPO, "scripts", "check-support-contact.py")
 REPOSITORY_HYGIENE_CHECK = os.path.join(REPO, "scripts", "check-repository-hygiene.py")
@@ -49,12 +65,12 @@ def fail(message):
     raise SystemExit(message)
 
 
-def verify_tracked_version():
+def verify_tracked_version(version_config):
     try:
-        with open(VERSION_CONFIG, encoding="utf-8") as source:
+        with open(version_config, encoding="utf-8") as source:
             config = source.read()
     except OSError as exc:
-        fail(f"cannot read {VERSION_CONFIG}: {exc}")
+        fail(f"cannot read {version_config}: {exc}")
 
     match = re.search(
         r'^\s*Version\s*=\s*"([0-9]+(?:\.[0-9]+){2})"\s*$',
@@ -62,11 +78,11 @@ def verify_tracked_version():
         re.MULTILINE,
     )
     if not match:
-        fail(f"cannot determine the packaged version from {VERSION_CONFIG}")
+        fail(f"cannot determine the packaged version from {version_config}")
     configured = match.group(1)
     if configured != TARGET_VERSION:
         fail(
-            f"writer target is {TARGET_VERSION}, but {VERSION_CONFIG} packages "
+            f"writer target is {TARGET_VERSION}, but {version_config} packages "
             f"{configured}; update and review the pinned target before remote access"
         )
 
@@ -89,6 +105,12 @@ def parse_args(argv=None):
         metavar="VERSION",
         help="required exact target confirmation for --write",
     )
+    parser.add_argument(
+        "--platform",
+        choices=("IOS", "MAC_OS"),
+        default="IOS",
+        help="App Store platform whose notes to preview or write (default: IOS)",
+    )
     args = parser.parse_args(argv)
 
     if args.write and args.confirm_version != TARGET_VERSION:
@@ -101,24 +123,24 @@ def parse_args(argv=None):
     return args
 
 
-def load_notes():
+def load_notes(notes_path):
     try:
-        with open(NOTES, encoding="utf-8") as source:
+        with open(notes_path, encoding="utf-8") as source:
             notes = source.read().rstrip("\n")
     except OSError as exc:
-        fail(f"cannot read {NOTES}: {exc}")
+        fail(f"cannot read {notes_path}: {exc}")
 
     if not notes.strip():
-        fail(f"{NOTES} is empty; refusing to blank the review notes")
+        fail(f"{notes_path} is empty; refusing to blank the review notes")
     if len(notes) > 4000:
         fail(
-            f"{NOTES} is {len(notes)} characters; App Store Connect caps "
+            f"{notes_path} is {len(notes)} characters; App Store Connect caps "
             f"review notes at 4,000. Remove {len(notes) - 4000} characters."
         )
     heading = notes.splitlines()[0].strip()
     if not re.match(rf"^VERSION {re.escape(TARGET_VERSION)}(?:\s|$)", heading):
         fail(
-            f"{NOTES} must open with VERSION {TARGET_VERSION}; "
+            f"{notes_path} must open with VERSION {TARGET_VERSION}; "
             f"found {heading!r}"
         )
     return notes
@@ -177,10 +199,10 @@ def document_data(body, description):
     return body["data"]
 
 
-def exact_version():
+def exact_version(platform):
     query = urllib.parse.urlencode(
         {
-            "filter[platform]": "IOS",
+            "filter[platform]": platform,
             "filter[versionString]": TARGET_VERSION,
             "limit": "10",
         }
@@ -193,11 +215,11 @@ def exact_version():
         version
         for version in data
         if version.get("attributes", {}).get("versionString") == TARGET_VERSION
-        and version.get("attributes", {}).get("platform") == "IOS"
+        and version.get("attributes", {}).get("platform") == platform
     ]
     if len(matches) != 1:
         fail(
-            f"expected exactly one iOS {TARGET_VERSION} version record; "
+            f"expected exactly one {platform} {TARGET_VERSION} version record; "
             f"found {len(matches)}"
         )
     return matches[0]
@@ -205,12 +227,14 @@ def exact_version():
 
 def main(argv=None):
     args = parse_args(argv)
-    verify_tracked_version()
-    notes = load_notes()
+    platform = args.platform
+    sources = PLATFORM_SOURCES[platform]
+    verify_tracked_version(sources["config"])
+    notes = load_notes(sources["notes"])
     run_repository_gates()
 
     if args.local_only:
-        print(f"local review-notes preflight: OK (version {TARGET_VERSION})")
+        print(f"local review-notes preflight: OK (version {TARGET_VERSION}, platform {platform})")
         print("local-only mode: no App Store Connect request made")
         return 0
 
@@ -220,10 +244,10 @@ def main(argv=None):
             "in docs/APP_STORE_SUBMISSION.md"
         )
 
-    version = exact_version()
+    version = exact_version(platform)
     attributes = version.get("attributes", {})
     state = attributes.get("appStoreState") or "UNKNOWN"
-    print(f"target version: {TARGET_VERSION}  platform: IOS  state: {state}")
+    print(f"target version: {TARGET_VERSION}  platform: {platform}  state: {state}")
 
     detail = document_data(
         api_request(
@@ -237,12 +261,13 @@ def main(argv=None):
     print(current if current.strip() else "(EMPTY)")
     print("--- end ---\n")
 
+    tracked = os.path.relpath(sources["notes"], REPO)
     same = current.rstrip("\n") == notes
     if not args.write:
         if same:
-            print("in sync with appstore/review-notes.txt; preview only, no PATCH made")
+            print(f"in sync with {tracked}; preview only, no PATCH made")
         else:
-            print("DIFFERENT from appstore/review-notes.txt; preview only, no PATCH made")
+            print(f"DIFFERENT from {tracked}; preview only, no PATCH made")
             print(
                 "To write, re-run with "
                 f"--write --confirm-version {TARGET_VERSION}."
@@ -251,8 +276,8 @@ def main(argv=None):
 
     if state not in EDITABLE_STATES:
         fail(
-            f"refusing to write: iOS {TARGET_VERSION} is {state}, which is not "
-            "an editable App Store state"
+            f"refusing to write: {platform} {TARGET_VERSION} is {state}, which is "
+            "not an editable App Store state"
         )
     if same:
         print("already in sync; no PATCH needed")
