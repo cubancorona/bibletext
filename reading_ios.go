@@ -131,8 +131,10 @@ static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used 
 // range into a verse span.
 static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc);
 // Where scripture ends and the appended translators'-footnote section starts
-// (== length when there is none) — the selection menu clamps to it.
+// (== length when there is none) — the selection menu clamps to it — and
+// where it STARTS (past the Psalm superscription; 0 when there is none).
 static NSUInteger btIOSContentEnd(NSTextStorage *ts);
+static NSUInteger btIOSContentStart(void);
 
 // Character range of the highlighted verse (set when arriving from a search
 // result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
@@ -180,6 +182,17 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     }
     if (NSMaxRange(range) > contentEnd) {
         range.length = contentEnd - range.location;
+    }
+    // The same contract at the chapter's HEAD: the Psalm superscription gets
+    // the system verbs only, and a selection straddling title and verse 1 is
+    // cut to the scripture half before dispatch or attribution.
+    NSUInteger contentStart = btIOSContentStart();
+    if (NSMaxRange(range) <= contentStart) {
+        return [UIMenu menuWithChildren:suggestedActions];
+    }
+    if (range.location < contentStart) {
+        range.length -= contentStart - range.location;
+        range.location = contentStart;
     }
     NSString *captured = [[textView.text substringWithRange:range] copy];
     // The selection's verse span, resolved NOW against the same storage the
@@ -537,6 +550,15 @@ static void btIOSFindContentEnd(NSTextStorage *ts) {
 static NSUInteger btIOSContentEnd(NSTextStorage *ts) {
     if (ts == nil) return 0;
     return (gContentEnd > 0 && gContentEnd <= ts.length) ? gContentEnd : ts.length;
+}
+
+// btIOSContentStart is the scripture content's START: the first verse-number
+// run's location. Characters before it are the Psalm superscription — text,
+// but text with no verse identity, so the selection verbs clamp to
+// [start, end): title words can never be dispatched or cited under verse 1's
+// number. The mirror of the content-end clamp, at the other end of the page.
+static NSUInteger btIOSContentStart(void) {
+    return gVerseIndexCount > 0 ? gVerseIndex[0].loc : 0;
 }
 
 // btIOSBuildVerseIndex captures every verse-number run (the only sub-15pt runs) into

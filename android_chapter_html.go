@@ -22,13 +22,17 @@ import (
 func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	redLetter := redLetterEnabled()
-	// The translators' footnotes, collected up front like the Apple builder's
-	// (reading.go): footnotes-off output is byte-identical to the
-	// pre-feature dialect.
+	// The chapter's Hebrew title (Psalms) renders regardless of the
+	// footnotes toggle — it is text; only its notes ride the toggle. The
+	// translators' footnotes are collected up front like the Apple
+	// builder's (reading.go): footnotes-off output is byte-identical to
+	// the pre-feature dialect.
+	super := state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter)
 	var footnotes []footnoteEntry
 	if footnotesEnabled() {
 		footnotes = chapterFootnoteEntries(verses,
-			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter))
+			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
+			super.Footnotes)
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below,
 	// plus this dialect's markup for each tint. The markup table is built HERE,
@@ -38,6 +42,11 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	markup := androidTintHTML(pal, nrgbaToHex(pal.VerseNumber), nrgbaToHex(pal.RedLetter))
 
 	var b strings.Builder
+	if super.Text != "" {
+		// The Psalm title: italic, unnumbered — no <sup> anywhere in it, so
+		// BtBridge's verse index (SuperscriptSpans only) never sees it.
+		fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.Text))
+	}
 	for _, para := range groupVersesIntoParagraphs(verses) {
 		b.WriteString("<p>")
 		for i, v := range para {
@@ -112,7 +121,7 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 func writeFootnoteSectionAndroid(b *strings.Builder, entries []footnoteEntry, mutedHex string) {
 	fmt.Fprintf(b, `<p><sup>&#160;</sup><small><font color="%s">%s</font></small></p>`, mutedHex, footnoteSeparator)
 	for _, e := range entries {
-		fmt.Fprintf(b, `<p><small><font color="%s"><b>%d</b>&#160;%s</font></small></p>`,
-			mutedHex, e.Verse, htmlEscape(e.Text))
+		fmt.Fprintf(b, `<p><small><font color="%s"><b>%s</b>&#160;%s</font></small></p>`,
+			mutedHex, footnoteEntryKey(e), htmlEscape(e.Text))
 	}
 }

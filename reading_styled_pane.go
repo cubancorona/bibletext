@@ -132,10 +132,17 @@ type styledReadingPane struct {
 	// under (reading_styled_footnotes.go).
 	fnEntries []footnoteEntry
 	fnGeom    styledFnGeom
-	// fnGrab latches a press that began in the footnote section, so a drag
-	// off it cannot plant or extend a text selection — the noteGrab lesson,
-	// verbatim: the MouseDown guard alone does not stop Dragged.
+	// fnGrab latches a press that began in the footnote section OR on the
+	// superscription, so a drag off either cannot plant or extend a text
+	// selection — the noteGrab lesson, verbatim: the MouseDown guard alone
+	// does not stop Dragged.
 	fnGrab bool
+
+	// The Psalm superscription: text read once per pane (like the note and
+	// the entries), geometry written ONLY in relayout, whose TopPad it is
+	// (reading_styled_super.go).
+	superText string
+	superGeom styledSuperGeom
 
 	clipboard fyne.Clipboard
 }
@@ -157,11 +164,16 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 	// the banner has), so re-deriving it per resize would only re-read the
 	// preference store to be told the same thing.
 	p.note = styledNoteFor(state)
+	// The Psalm title renders regardless of the footnotes toggle — it is
+	// text; only its notes ride the toggle with the section's entries.
+	super := state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter)
+	p.superText = super.Text
 	// The footnote section's entries, read once for the same reason: the
 	// toggle lives in Settings, and closing that sheet rebuilds the pane.
 	if footnotesEnabled() {
 		p.fnEntries = chapterFootnoteEntries(verses,
-			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter))
+			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
+			super.Footnotes)
 	}
 	p.ExtendBaseWidget(p)
 	p.relayout(720) // provisional; corrected when the real width arrives
@@ -236,15 +248,25 @@ func (p *styledReadingPane) relayout(width float32) {
 	// reserved, because the band's height is this number"). One pass, no
 	// feedback loop: the card width is a function of the pane's width alone.
 	p.noteGeom = measureStyledNote(p.note, avail)
+	// The superscription is measured FIRST for the same reason the sticker
+	// is: its height IS the TopPad the layout reserves. Measured with the
+	// face it will draw in (the italic where the platform has one).
+	superFont, _ := styledSuperFont()
+	p.superGeom = measureStyledSuperscription(p.superText, avail, p.textSize, lh, func(s string) float32 {
+		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, p.textSize, fyne.TextStyle{}, superFont)
+		return w.Width
+	})
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    paraGap,
 		SpaceW:     p.measure(" ", runWord),
 		Indent:     indent,
+		TopPad:     p.superGeom.height,
 		BandVerse:  p.noteAnchorVerse(),
 		BandH:      p.noteGeom.bandH(),
 	}, p.measure)
+	p.superGeom.place(p.insetX(), 0)
 	// Absolute rects, from the pane's own ruler and the band the layout just
 	// reserved — so draw, hit-testing and the reservation cannot disagree. If
 	// nothing was reserved, nothing is drawn: a sticker parked at y=0 would sit
@@ -421,6 +443,8 @@ type styledPaneRenderer struct {
 	// for the same reason: r.texts is index-parallel to p.drawRuns.
 	fnRule  *canvas.Rectangle
 	fnTexts []*canvas.Text
+	// The superscription's lines — own slice, same reason.
+	superTexts []*canvas.Text
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -482,6 +506,24 @@ func (r *styledPaneRenderer) rebuild() {
 		}
 		r.texts = append(r.texts, t)
 		r.objects = append(r.objects, t)
+	}
+	// The superscription: italic at body size where the platform's serif
+	// has an italic; the pane's regular face in the muted tone otherwise,
+	// so the title's register survives either way.
+	r.superTexts = r.superTexts[:0]
+	if p.superGeom.present {
+		font, italic := styledSuperFont()
+		c := p.pal.Text
+		if !italic {
+			c = p.pal.TextMuted
+		}
+		for _, ln := range p.superGeom.lines {
+			t := canvas.NewText(ln.Text, c)
+			t.FontSource = font
+			t.TextSize = p.textSize
+			r.superTexts = append(r.superTexts, t)
+			r.objects = append(r.objects, t)
+		}
 	}
 	// The footnote section: rule + rows in their own slices. Colours read
 	// here, not in position() — a theme flip arrives as a full rebuild. Keys
@@ -606,6 +648,16 @@ func (r *styledPaneRenderer) position() {
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
 	}
 
+	// The superscription, from its geometry table alone — hide, never
+	// merely skip, when the geometry is absent (the ghost-wash lesson).
+	for i, t := range r.superTexts {
+		if p.superGeom.present && i < len(p.superGeom.lines) {
+			t.Move(fyne.NewPos(p.superGeom.lines[i].X, p.superGeom.lines[i].Y))
+			t.Show()
+		} else {
+			t.Hide()
+		}
+	}
 	// The footnote section, from its geometry table alone — hide, never
 	// merely skip, when the geometry is absent (the ghost-wash lesson).
 	if r.fnRule != nil {

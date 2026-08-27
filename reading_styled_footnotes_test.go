@@ -182,3 +182,70 @@ func TestStyledFnWrap(t *testing.T) {
 		t.Errorf("blank text must wrap to nothing: %q", got)
 	}
 }
+
+// --- superscription on the styled pane ----------------------------------------
+
+// The title occupies a reserved advance ABOVE the chapter: lay.Text is
+// byte-identical with and without it, lines start below its height, presses
+// on it are inert, and a drag beginning on it selects nothing.
+func TestStyledSuperscriptionIsGeometryOnly(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	verses := footnoteFixtureVerses()
+	plain := newTestPane(t, footnoteFixtureState(verses), 420)
+
+	st := footnoteFixtureState(verses)
+	st.Bible.Superscriptions = map[string]map[int]Superscription{
+		"John": {3: {Text: "A test title, according to Gittith."}},
+	}
+	p := newTestPane(t, st, 420)
+
+	if !p.superGeom.present {
+		t.Fatal("fixture must produce a title")
+	}
+	if p.lay.Text != plain.lay.Text {
+		t.Fatal("the title must never enter lay.Text")
+	}
+	if first := p.lay.Lines[0].Y; first < p.superGeom.height {
+		t.Errorf("first line (Y=%v) must clear the title advance (%v)", first, p.superGeom.height)
+	}
+	if plain.MinSize().Height >= p.MinSize().Height {
+		t.Error("MinSize must grow by the title's advance")
+	}
+
+	inTitle := fyne.NewPos(p.superGeom.rect.X+4, p.superGeom.rect.Y+p.superGeom.rect.H/3)
+	p.MouseDown(&desktop.MouseEvent{PointEvent: fyne.PointEvent{Position: inTitle}, Button: desktop.MouseButtonPrimary})
+	p.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: fyne.NewPos(p.insetX()+10, p.lay.Lines[0].Y+2)}})
+	p.DragEnd()
+	if got := p.selectedRaw(); got != "" {
+		t.Errorf("press-and-drag from the title selected text: %q", got)
+	}
+}
+
+// A superscription note keys as "Title" on this pane too — the shared key
+// helper reaches all three section renderers.
+func TestStyledFootnoteSectionKeysTitleNotes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+
+	st := styledFnState()
+	st.Bible.Superscriptions = map[string]map[int]Superscription{
+		"John": {3: {Text: "A test title.",
+			Footnotes: []Footnote{{Anchor: 0, Text: "A title gloss.", Caller: "+"}}}},
+	}
+	p := newTestPane(t, st, 420)
+	if !p.fnGeom.present || len(p.fnGeom.texts) == 0 {
+		t.Fatal("fixture must render a section")
+	}
+	if p.fnGeom.texts[0].Text != "Title" || !p.fnGeom.texts[0].Key {
+		t.Errorf("first section key = %q (key=%v), want Title", p.fnGeom.texts[0].Text, p.fnGeom.texts[0].Key)
+	}
+	for _, ft := range p.fnGeom.texts {
+		if ft.Key && ft.Text == "0" {
+			t.Error("a verse-0 key leaked — title notes must key as Title")
+		}
+	}
+}

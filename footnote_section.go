@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -82,6 +83,20 @@ func setFootnotesEnabled(v bool) {
 type footnoteEntry struct {
 	Verse int
 	Text  string
+	// Title marks a superscription note: keyed "Title" instead of a verse
+	// number, sorted first (Verse 0) — the title precedes verse 1 on the
+	// page, so its notes precede verse 1's in the section.
+	Title bool
+}
+
+// footnoteEntryKey is the rendered key for one entry — "Title" for a
+// superscription note, the verse number otherwise. Shared by all three
+// section renderers so the keys cannot drift.
+func footnoteEntryKey(e footnoteEntry) string {
+	if e.Title {
+		return "Title"
+	}
+	return strconv.Itoa(e.Verse)
 }
 
 // chapterFootnoteEntries collects the chapter's translator footnotes in verse
@@ -92,8 +107,18 @@ type footnoteEntry struct {
 // apparatus) are excluded: whether they ever display is an open decision
 // (docs/FOOTNOTES.md §8), and a wall of "John 7:50; 19:39" rows is a
 // different feature from wording-and-manuscript notes.
-func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote) []footnoteEntry {
+func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote, titleNotes []Footnote) []footnoteEntry {
 	var entries []footnoteEntry
+	for _, fn := range titleNotes {
+		if fn.Kind != "" {
+			continue
+		}
+		text := strings.TrimSpace(fn.Text)
+		if text == "" {
+			continue
+		}
+		entries = append(entries, footnoteEntry{Verse: 0, Title: true, Text: text})
+	}
 	for _, v := range verses {
 		for _, fn := range v.Footnotes {
 			if fn.Kind != "" {
@@ -140,6 +165,11 @@ func chapterHasFootnotes(state *AppState) bool {
 	}
 	for _, o := range state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter) {
 		if o.Kind == "" && strings.TrimSpace(o.Text) != "" {
+			return true
+		}
+	}
+	for _, fn := range state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter).Footnotes {
+		if fn.Kind == "" && strings.TrimSpace(fn.Text) != "" {
 			return true
 		}
 	}
@@ -195,6 +225,6 @@ func writeFootnoteSection(b *strings.Builder, entries []footnoteEntry, reporter 
 	}
 	fmt.Fprintf(b, `<p class="fnsep">%s</p>`, sep)
 	for _, e := range entries {
-		fmt.Fprintf(b, `<p class="fn"><span class="fnv">%d</span>&nbsp;%s</p>`, e.Verse, htmlEscape(e.Text))
+		fmt.Fprintf(b, `<p class="fn"><span class="fnv">%s</span>&nbsp;%s</p>`, footnoteEntryKey(e), htmlEscape(e.Text))
 	}
 }

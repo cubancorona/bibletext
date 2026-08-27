@@ -44,8 +44,11 @@ extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi);
 static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi);
 // Where scripture ends and the appended translators'-footnote section starts
 // (== length when there is none); defined beside the font threshold it shares
-// its derivation with. The selection menu and its verbs clamp to it.
+// its derivation with. The selection menu and its verbs clamp to it — and to
+// the content START (past the Psalm superscription; tentative definition,
+// initialised beside its finder below).
 static NSUInteger btMacContentEnd(NSTextStorage *ts);
+static NSUInteger gMacContentStart;
 // Posted when the reader scrolls by hand while read-along is live (audio_export_apple.go).
 extern void bibleTextReadAlongUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
@@ -98,6 +101,12 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     NSUInteger contentEnd = btMacContentEnd(self.textStorage);
     if (sel.location >= contentEnd) return NSMakeRange(NSNotFound, 0);
     if (NSMaxRange(sel) > contentEnd) sel.length = contentEnd - sel.location;
+    NSUInteger contentStart = gMacContentStart <= self.textStorage.length ? gMacContentStart : 0;
+    if (NSMaxRange(sel) <= contentStart) return NSMakeRange(NSNotFound, 0);
+    if (sel.location < contentStart) {
+        sel.length -= contentStart - sel.location;
+        sel.location = contentStart;
+    }
     return sel;
 }
 
@@ -128,7 +137,8 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     // translators' words to scripture. A selection wholly inside the section
     // keeps the curated menu as-is; the verbs themselves clamp a straddling
     // selection (hbScriptureSelection), so nothing below needs to.
-    if (self.selectedRange.location >= btMacContentEnd(self.textStorage)) return menu;
+    if (self.selectedRange.location >= btMacContentEnd(self.textStorage) ||
+        NSMaxRange(self.selectedRange) <= gMacContentStart) return menu;
 
     // Our group below — set off by a separator, but only if Copy / Look Up survived
     // the curation above. With AI on (an assistant chosen in Settings): Study with
@@ -324,6 +334,27 @@ static void btMacFindContentEnd(NSTextStorage *ts) {
 static NSUInteger btMacContentEnd(NSTextStorage *ts) {
     if (ts == nil) return 0;
     return (gMacContentEnd > 0 && gMacContentEnd <= ts.length) ? gMacContentEnd : ts.length;
+}
+
+// The scripture content's START: the first verse-number run's location.
+// Characters before it are the Psalm superscription — text with no verse
+// identity — so the selection verbs clamp to [start, end): title words can
+// never be dispatched or cited under verse 1's number. The mirror of the
+// content-end clamp, recomputed at import beside it.
+static NSUInteger gMacContentStart = 0;
+static void btMacFindContentStart(NSTextStorage *ts) {
+    gMacContentStart = 0;
+    if (ts == nil) return;
+    CGFloat thr = btMacVerseFontThreshold(ts);
+    __block NSUInteger loc = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
+        if ([[ts.string substringWithRange:r] integerValue] > 0) { loc = r.location; *stop = YES; }
+    }];
+    gMacContentStart = loc;
 }
 
 // btMacVerseSpanForRange maps a selected character range to its verse span:
@@ -1199,9 +1230,10 @@ static BOOL bibleTextMacApplyHTML(NSData *data) {
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
     [gTextView.textStorage setAttributedString:as];
-    // Scripture/apparatus boundary for the fresh storage, before anything
-    // derives a range from it (see gMacContentEnd).
+    // Scripture/apparatus boundaries for the fresh storage, before anything
+    // derives a range from them (see gMacContentEnd / gMacContentStart).
     btMacFindContentEnd(gTextView.textStorage);
+    btMacFindContentStart(gTextView.textStorage);
     // The storage now holds the chapter Go announced; anything refused while it
     // did not gets re-asserted. See gBodyGenPending.
     gBodyGenApplied = gBodyGenPending;
@@ -1277,6 +1309,7 @@ void bibleTextMacTVSetHTML(const char *html) {
                     if (fnsep.location != NSNotFound) plainSrc = [plainSrc substringToIndex:fnsep.location];
                     [gTextView setString:bibleTextMacPlainFromHTML(plainSrc)];
                     gMacContentEnd = gTextView.textStorage.length; // apparatus stripped above — all scripture
+                    gMacContentStart = 0; // plain text: no font geometry to find the title by
                 }
             });
         });

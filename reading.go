@@ -607,10 +607,14 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// only carries the section's rules when the section actually renders — a
 	// footnotes-off chapter's HTML stays byte-identical to the pre-feature
 	// output (footnote_section.go).
+	// The chapter's Hebrew title (Psalms): part of the text, so it renders
+	// regardless of the footnotes toggle; only its NOTES ride the toggle.
+	super := state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter)
 	var footnotes []footnoteEntry
 	if footnotesEnabled() {
 		footnotes = chapterFootnoteEntries(verses,
-			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter))
+			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
+			super.Footnotes)
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
 	// Nothing here decides what a wash looks like any more — it asks the tint,
@@ -689,10 +693,25 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// poem lines full-width (TextKit does not reliably exempt forced-break
 	// lines the way CSS — and Android's INTER_WORD mode — do).
 	b.WriteString(`p.pm { text-align: left; }`)
+	if super.Text != "" {
+		// The Psalm title: italic, unnumbered, ragged — the print convention
+		// exactly. At body size (1.0em) it is invisible to the verse-number
+		// scans (sub-0.8× only) and to the content-end band ([0.8, 0.95)).
+		// margin-bottom only: the importer zeroes every margin-top.
+		b.WriteString(`p.pst {
+		font-style: italic;
+		text-align: left;
+		line-height: 1.5;
+		margin: 0 0 14px 0;
+	}`)
+	}
 	if len(footnotes) > 0 {
 		writeFootnoteCSS(&b, nrgbaToHex(pal.TextMuted))
 	}
 	b.WriteString("</style></head><body>")
+	if super.Text != "" {
+		fmt.Fprintf(&b, `<p class="pst">%s</p>`, htmlEscape(super.Text))
+	}
 
 	for _, para := range groupVersesIntoParagraphs(verses) {
 		poetic := false

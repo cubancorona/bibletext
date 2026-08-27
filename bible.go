@@ -69,6 +69,26 @@ type OrphanFootnote struct {
 	Caller string `json:"caller,omitempty"`
 }
 
+// Superscription is a chapter's Hebrew title — "For the choirmaster.
+// According to Gittith. A Psalm of David." — part of the transmitted text of
+// the Psalter (the Masoretic tradition numbers these lines as verse 1; the
+// English versification leaves them unnumbered). Print sets them as an
+// italic, unnumbered line between the psalm number and verse 1, and that is
+// how the reading panes render them. RENDER-ONLY for now: the title never
+// enters Verse.Text, so search, speech, share, copy and links are untouched
+// by construction; promoting titles into those pipelines is its own
+// decision. Its notes (the "Gittith is probably a musical term" glosses)
+// join the chapter-bottom footnote section keyed "Title", ahead of the
+// verse-keyed notes, under the same toggle.
+type Superscription struct {
+	// Text is the title line, assembled by the same marked-text path verse
+	// text uses, so its spacing rules are identical.
+	Text string `json:"text"`
+	// Footnotes are the title's notes; Anchor is a rune offset into Text
+	// (stored for a future in-title marker, unrendered today).
+	Footnotes []Footnote `json:"footnotes,omitempty"`
+}
+
 // BibleData holds all Bible verses organized by book and chapter
 // This is the data model/storage for the entire Bible
 // Structure:
@@ -94,6 +114,11 @@ type BibleData struct {
 	// load with a nil map, and every accessor is nil-safe (the superseded-
 	// epoch fallback serves such caches to offline upgraders).
 	OrphanFootnotes map[string]map[int][]OrphanFootnote `json:"orphan_footnotes,omitempty"`
+
+	// Superscriptions carries the Psalm titles (see Superscription), keyed
+	// book → chapter. omitempty + nil-safe accessors, for the same
+	// pre-field-cache reasons as OrphanFootnotes.
+	Superscriptions map[string]map[int]Superscription `json:"superscriptions,omitempty"`
 
 	// chapterNums caches the sorted chapter numbers per book so the reading
 	// view, search, and navigation don't re-allocate + re-sort on every call.
@@ -327,6 +352,15 @@ func (bd *BibleData) OrphanNotesFor(book string, chapter int) []OrphanFootnote {
 		return nil
 	}
 	return bd.OrphanFootnotes[book][chapter]
+}
+
+// SuperscriptionFor returns the chapter's Hebrew title, or the zero value —
+// nil-safe at every level, like OrphanNotesFor.
+func (bd *BibleData) SuperscriptionFor(book string, chapter int) Superscription {
+	if bd == nil || bd.Superscriptions == nil {
+		return Superscription{}
+	}
+	return bd.Superscriptions[book][chapter]
 }
 
 // GetChaptersForBook returns the number of chapters in a book

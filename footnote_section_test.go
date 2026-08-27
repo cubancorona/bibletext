@@ -61,7 +61,7 @@ func stripFootnotes(verses []Verse) []Verse {
 }
 
 func TestChapterFootnoteEntries(t *testing.T) {
-	entries := chapterFootnoteEntries(footnoteFixtureVerses(), nil)
+	entries := chapterFootnoteEntries(footnoteFixtureVerses(), nil, nil)
 	if len(entries) != 2 {
 		t.Fatalf("want the 2 translator notes (crossref + blank excluded), got %d: %v", len(entries), entries)
 	}
@@ -87,7 +87,7 @@ func TestChapterFootnoteEntriesInterleavesOrphans(t *testing.T) {
 		{Verse: 17, Text: "A crossref orphan stays dark.", Kind: footnoteKindCrossref},
 		{Verse: 17, Text: "   "},
 	}
-	entries := chapterFootnoteEntries(verses, orphans)
+	entries := chapterFootnoteEntries(verses, orphans, nil)
 	if len(entries) != 3 {
 		t.Fatalf("want 2 verse notes + 1 orphan, got %d: %v", len(entries), entries)
 	}
@@ -338,6 +338,7 @@ func TestFootnoteSectionNativeContract(t *testing.T) {
 		"reading_ios.go": {
 			"btIOSFindContentEnd",
 			"btIOSContentEnd(ts)",
+			"btIOSContentStart",
 			"maxSize * 0.95",
 			// The plain-text import-failure fallback must cut the section
 			// out of the HTML before stripping tags — the geometry boundary
@@ -348,6 +349,7 @@ func TestFootnoteSectionNativeContract(t *testing.T) {
 		"reading_macos.go": {
 			"btMacFindContentEnd",
 			"btMacContentEnd(ts)",
+			"btMacFindContentStart",
 			"maxSize * 0.95",
 			"hbScriptureSelection",
 			"fnsep",
@@ -390,5 +392,85 @@ func TestBuildChapterHTMLPoetryWithFootnotes(t *testing.T) {
 	}
 	if !strings.Contains(html[sepAt:], `<span class="fnv">1</span>&nbsp;Hebrew waters of rest.`) {
 		t.Errorf("poem verse's note must key by its verse number:\n%s", html)
+	}
+}
+
+// --- superscription rendering -------------------------------------------------
+
+func superFixtureState(verses []Verse) *AppState {
+	st := footnoteFixtureState(verses)
+	st.Bible.Superscriptions = map[string]map[int]Superscription{
+		"John": {3: {Text: "A test title, according to Gittith.",
+			Footnotes: []Footnote{{Anchor: 12, Text: "Gittith is probably a musical term.", Caller: "+"}}}},
+	}
+	return st
+}
+
+// The title renders as an italic unnumbered line BEFORE the first verse,
+// regardless of the footnotes toggle; its note joins the section keyed
+// "Title", ahead of the verse-keyed notes; a chapter without a title is
+// byte-identical to the pre-title output.
+func TestSuperscriptionRendersAboveTheChapter(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	verses := footnoteFixtureVerses()
+	st := superFixtureState(verses)
+
+	setFootnotesEnabled(false)
+	var offHTML string
+	withReporterLayout(false, func() { offHTML = buildChapterHTML(st, verses) })
+	title := `<p class="pst">A test title, according to Gittith.</p>`
+	if !strings.Contains(offHTML, title) {
+		t.Fatalf("title must render with footnotes OFF:\n%s", offHTML)
+	}
+	if at := strings.Index(offHTML, title); at > strings.Index(offHTML, `<sup class="v">16</sup>`) {
+		t.Error("title must precede the first verse")
+	}
+	if strings.Contains(offHTML, `class="fn"`) {
+		t.Error("footnotes OFF must render no section even with a title note present")
+	}
+
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+	var onHTML string
+	withReporterLayout(false, func() { onHTML = buildChapterHTML(st, verses) })
+	if !strings.Contains(onHTML, `<span class="fnv">Title</span>&nbsp;Gittith is probably a musical term.`) {
+		t.Fatalf("title note must key as Title:\n%s", onHTML)
+	}
+	if strings.Index(onHTML, `<span class="fnv">Title</span>`) > strings.Index(onHTML, `<span class="fnv">16</span>`) {
+		t.Error("the Title entry must precede the verse-keyed entries")
+	}
+
+	// No title, no trace: byte-identical to a state without the table.
+	plain := footnoteFixtureState(verses)
+	setFootnotesEnabled(false)
+	var a, b string
+	withReporterLayout(false, func() {
+		a = buildChapterHTML(plain, verses)
+		b = buildChapterHTML(footnoteFixtureState(verses), verses)
+	})
+	if a != b || strings.Contains(a, "pst") {
+		t.Error("a chapter without a superscription must carry no title markup or CSS")
+	}
+}
+
+func TestSuperscriptionAndroidDialect(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+
+	verses := footnoteFixtureVerses()
+	st := superFixtureState(verses)
+	html := buildChapterHTMLAndroid(st, verses)
+	if !strings.HasPrefix(html, `<p><i>A test title, according to Gittith.</i></p>`) {
+		t.Fatalf("Android title must lead the chapter, italic and sup-free:\n%.200s", html)
+	}
+	if strings.Contains(strings.Split(html, "</i>")[0], "<sup") {
+		t.Error("the title must contain no <sup> (verse-index hazard)")
+	}
+	if !strings.Contains(html, `<b>Title</b>&#160;Gittith is probably a musical term.`) {
+		t.Errorf("Android title note must key as Title:\n%s", html)
 	}
 }

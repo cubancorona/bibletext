@@ -12,7 +12,6 @@ package bibletext
 // (never r.texts, which is index-parallel to p.drawRuns).
 
 import (
-	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -62,7 +61,7 @@ func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize float32, meas
 	y += 1 + lh*0.6
 
 	for _, e := range entries {
-		key := strconv.Itoa(e.Verse)
+		key := footnoteEntryKey(e) // "Title" for a superscription note
 		keyW := meas(key)
 		bodyX := keyW + fnSize*0.35
 		lines := styledFnWrap(e.Text, avail-bodyX, avail, meas)

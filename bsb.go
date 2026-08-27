@@ -112,9 +112,10 @@ type helloAOBook struct {
 // line breaks, headings, and Hebrew subtitles (Psalm superscriptions like "A Psalm of
 // David") are editorial nodes outside verse text and remain omitted. Shared by both
 // decoders.
-func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote) {
+func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
 	var orphans map[int][]OrphanFootnote
+	var supers map[int]Superscription
 	for _, cj := range b.Chapters {
 		num := cj.Chapter.Number
 		// noteId → body, for joining the in-verse markers to their text.
@@ -131,7 +132,40 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				Number  int               `json:"number"`
 				Content []json.RawMessage `json:"content"`
 			}
-			if err := json.Unmarshal(node, &head); err != nil || head.Type != "verse" {
+			if err := json.Unmarshal(node, &head); err != nil {
+				continue
+			}
+			if head.Type == "hebrew_subtitle" {
+				// The Psalm title, assembled by the SAME marked-text path
+				// verse text uses — identical spacing rules, and the title's
+				// note markers resolve to anchors into the title exactly as
+				// verse markers do. Titles are text (the Masoretic tradition
+				// numbers them as verse 1), rendered as an italic unnumbered
+				// line above verse 1; their notes join the chapter-bottom
+				// section keyed "Title".
+				text, marks := bsbVerseTextMarked(head.Content)
+				if text == "" {
+					continue
+				}
+				var notes []Footnote
+				for _, m := range marks {
+					body, ok := bodies[m.noteID]
+					if !ok || strings.TrimSpace(body.text) == "" {
+						continue
+					}
+					notes = append(notes, Footnote{
+						Anchor: m.anchor,
+						Text:   strings.TrimSpace(body.text),
+						Caller: body.caller,
+					})
+				}
+				if supers == nil {
+					supers = make(map[int]Superscription)
+				}
+				supers[num] = Superscription{Text: text, Footnotes: notes}
+				continue
+			}
+			if head.Type != "verse" {
 				continue
 			}
 			text, marks := bsbVerseTextMarked(head.Content)
@@ -187,7 +221,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 			chapters[num] = verses
 		}
 	}
-	return chapters, orphans
+	return chapters, orphans, supers
 }
 
 // helloAOFootnoteBody is one chapter-level note body awaiting its in-verse marker.
@@ -222,7 +256,7 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		chapters, orphans := decodeHelloAOChapters(book, b)
+		chapters, orphans, supers := decodeHelloAOChapters(book, b)
 		if len(chapters) > 0 {
 			bd.Verses[book] = chapters
 		}
@@ -231,6 +265,12 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 				bd.OrphanFootnotes = make(map[string]map[int][]OrphanFootnote)
 			}
 			bd.OrphanFootnotes[book] = orphans
+		}
+		if len(supers) > 0 {
+			if bd.Superscriptions == nil {
+				bd.Superscriptions = make(map[string]map[int]Superscription)
+			}
+			bd.Superscriptions[book] = supers
 		}
 	}
 	// Note: PrepareSearchIndex is left to the caller (loadBibleData), matching

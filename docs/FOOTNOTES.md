@@ -395,3 +395,24 @@ in the scripture serif; the rule is a 1px rectangle.
 
 footnoteSectionSupported now covers darwin/ios/android/windows/linux; the
 Fyne fallback panes remain documented gaps unreachable in shipping builds.
+
+## 11. Psalm superscriptions (2026-08-27): the titles are text, and they render
+
+The Hebrew titles — "For the choirmaster. According to Gittith. A Psalm of
+David." — are part of the transmitted text of the Psalter (the Masoretic
+tradition numbers them as verse 1); print sets them as an italic, unnumbered
+line between the psalm number and verse 1, and the reading panes now do the
+same on every rendered surface (Apple builder `p.pst`, Android leading
+`<p><i>`, styled pane TopPad advance drawn geometry-only). The title renders
+regardless of the footnotes toggle — it is text; its NOTES (the "Gittith is
+probably a musical term" glosses, the 42 previously dropped) join the
+chapter-bottom section keyed **Title**, ahead of the verse-keyed rows, under
+the toggle. Capture reuses the marked-text path verse text uses
+(hebrew_subtitle branch in decodeHelloAOChapters), so title-note anchors are
+exact rune offsets into the title. RENDER-ONLY for now: the title never
+enters Verse.Text, lay.Text, search, speech, share, copy or links — pinned in
+the purity sweep — and promoting it into those pipelines is recorded as its
+own decision. Corpus-verified exact: BSB 116 titles / 36 notes, WEB 117 / 3,
+WEBC 117 / 3; orphan counts unchanged. Epochs: web 4→5, bsb 5→6, webc 4→5.
+With this, every note body in all three helloao feeds is rendered: in-verse
++ omitted-verse orphans + title notes = the whole apparatus, nothing dropped.

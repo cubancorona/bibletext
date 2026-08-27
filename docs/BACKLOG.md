@@ -34,3 +34,13 @@ exhaustive over the enumeration) plus the standing invariants as their own
 pins — a stale-serving state is never silent (a visible notice exists);
 licensed content never serves stale; a purge never destroys the only local
 copy; every fallback path is nil-safe for pre-field caches.
+
+## NKJV Psalm superscriptions
+
+The NKJV prints the Psalm titles too, but its API.Bible feed delivers them as
+`d` (descriptive title) paragraphs, which decodeAPIBiblePassage currently
+skips via apiBibleSkipPara. Rendering them means capturing `d` content into
+BibleData.Superscriptions during the passages walk (anchoring any note
+markers the way the helloao branch does), bumping the nkjv cacheEpoch, and
+nothing else — the renderers and the section already handle titles for every
+version. Worth batching with the next NKJV decode change.

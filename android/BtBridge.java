@@ -222,6 +222,11 @@ public final class BtBridge {
     // tint and scroll anchors) automatically, while the selection verbs clamp
     // to it below — the Android twin of the Apple panes' content-end.
     private static int contentEnd;
+    // Where scripture STARTS: the first verse-number sup's offset. Characters
+    // before it are the Psalm superscription — text with no verse identity —
+    // so the app verbs clamp to [contentStart, contentEnd): title words can
+    // never be dispatched or cited under verse 1's number.
+    private static int contentStart;
 
     // The verse currently tinted and the span painting it (kept so each tick can
     // clear the previous cheaply — and so we remove OUR span, never the search
@@ -551,6 +556,7 @@ public final class BtBridge {
                 verseStarts = new int[0];
                 verseEnds = new int[0];
                 contentEnd = 0;
+                contentStart = 0;
                 pendingReflowFrac = -1f;
                 activity = act;
                 installKeyboardWatcher(act);
@@ -677,6 +683,11 @@ public final class BtBridge {
                     return true;
                 }
                 s1 = Math.min(s1, ce);
+                // The same contract at the chapter's HEAD: a selection wholly
+                // inside the Psalm superscription gets no app verbs, and one
+                // straddling title and verse 1 is cut to the scripture half.
+                if (s1 <= contentStart) { mode.finish(); return true; }
+                s0 = Math.max(s0, contentStart);
                 if (s1 <= s0) { mode.finish(); return true; }
                 final String sel = text.getText().subSequence(s0, s1).toString();
                 // The verse span, resolved NOW from the same offsets the text was
@@ -958,6 +969,7 @@ public final class BtBridge {
         verseNums = Arrays.copyOf(nums, count);
         verseStarts = Arrays.copyOf(starts, count);
         verseEnds = Arrays.copyOf(ends, count);
+        contentStart = count > 0 ? verseStarts[0] : 0;
     }
 
     // parseLeadingInt reads the run of digits starting at `from` (the verse number

@@ -22,8 +22,8 @@ import (
 
 // A realistic helloao book: prose with a mid-verse marker, the Psalm 23:1
 // marker-between-poem-lines shape (real capture), the "egg?" punctuation-glue
-// shape, a verse-final marker, and a superscription-anchored body (noteId 9)
-// whose marker the decoder never renders.
+// shape, a verse-final marker, and a superscription (hebrew_subtitle) whose
+// note (noteId 9) anchors in the TITLE, not in any verse.
 const helloAOFixtureBook = `{
   "id": "PSA", "order": 19,
   "chapters": [
@@ -55,7 +55,7 @@ const helloAOFixtureBook = `{
         {"noteId": 2, "caller": "+", "text": "Hebrew waters of rest.", "reference": {"chapter": 23, "verse": 2}},
         {"noteId": 3, "caller": "+", "text": "A note glued before punctuation.", "reference": {"chapter": 23, "verse": 3}},
         {"noteId": 4, "caller": "+", "text": "A verse-final note.", "reference": {"chapter": 23, "verse": 4}},
-        {"noteId": 9, "caller": "+", "text": "Anchored in a superscription; must be dropped.", "reference": {"chapter": 23, "verse": 1}}
+        {"noteId": 9, "caller": "+", "text": "A superscription note about authorship.", "reference": {"chapter": 23, "verse": 1}}
       ]
     }}
   ]
@@ -63,11 +63,11 @@ const helloAOFixtureBook = `{
 
 func decodeFixtureBook(t *testing.T) map[int][]Verse {
 	t.Helper()
-	chapters, _ := decodeFixtureBookAll(t)
+	chapters, _, _ := decodeFixtureBookAll(t)
 	return chapters
 }
 
-func decodeFixtureBookAll(t *testing.T) (map[int][]Verse, map[int][]OrphanFootnote) {
+func decodeFixtureBookAll(t *testing.T) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription) {
 	t.Helper()
 	var b helloAOBook
 	if err := json.Unmarshal([]byte(helloAOFixtureBook), &b); err != nil {
@@ -165,7 +165,7 @@ func TestFootnotesOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	if err := json.Unmarshal([]byte(book), &b); err != nil {
 		t.Fatal(err)
 	}
-	chapters, orphans := decodeHelloAOChapters("Luke", b)
+	chapters, orphans, _ := decodeHelloAOChapters("Luke", b)
 	vs := chapters[17]
 	if len(vs) != 1 || vs[0].Verse != 35 {
 		t.Fatalf("empty verse 36 must stay out of the TEXT as it always was: %+v", vs)
@@ -182,10 +182,11 @@ func TestFootnotesOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	}
 }
 
-// (3) Orphans on both sides: a marker with no body captures nothing; a body
-// whose marker sits in an unrendered superscription is dropped.
+// (3) Boundaries hold on both sides: a marker with no body captures nothing,
+// and a superscription's note belongs to the TITLE — never to a verse, never
+// to the orphan table.
 func TestFootnotesHelloAOOrphans(t *testing.T) {
-	chapters, orphans := decodeFixtureBookAll(t)
+	chapters, orphans, _ := decodeFixtureBookAll(t)
 	vs := chapters[23]
 	if n := len(vs[4].Footnotes); n != 0 {
 		t.Errorf("bodiless marker produced %d footnotes, want 0", n)
@@ -219,6 +220,11 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	bd.OrphanFootnotes = map[string]map[int][]OrphanFootnote{
 		"Psalms": {23: {{Verse: 7, Text: "Some copies add an orphanprobe verse."}}},
 	}
+	// The superscription is render-only: the title's words must be as absent
+	// from these pipelines as the notes are.
+	bd.Superscriptions = map[string]map[int]Superscription{
+		"Psalms": {23: {Text: "A titleprobe of David."}},
+	}
 	bd.PrepareSearchIndex()
 
 	// Search: a distinctive word from a footnote body must find nothing.
@@ -238,7 +244,7 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
 	speech := chapterSpeechText(state)
 	prose, _ := chapterShareStructure(state)
-	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final", "orphanprobe"} {
+	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final", "orphanprobe", "titleprobe"} {
 		if strings.Contains(strings.ToLower(speech), probe) {
 			t.Errorf("footnote text reached the spoken chapter: %q", probe)
 		}
@@ -258,7 +264,7 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	if copied == "" || !strings.Contains(copied, "psalms 23") {
 		t.Fatalf("copy probe produced no chapter text — the control string is missing, so the check can't prove anything: %q", copied)
 	}
-	for _, probe := range []string{"tends", "waters of rest", "orphanprobe"} {
+	for _, probe := range []string{"tends", "waters of rest", "orphanprobe", "titleprobe"} {
 		if strings.Contains(copied, probe) {
 			t.Errorf("footnote text reached the chapter copy: %q", probe)
 		}
@@ -477,5 +483,59 @@ func TestStripFootnoteSentinels(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+// --- superscriptions ----------------------------------------------------------
+
+// The Psalm title is captured whole, by the same marked-text path verse text
+// uses: exact text, and its note anchored at an exact rune offset INTO the
+// title — attached to the superscription, not to any verse.
+func TestSuperscriptionCapture(t *testing.T) {
+	_, _, supers := decodeFixtureBookAll(t)
+	s, ok := supers[23]
+	if !ok {
+		t.Fatal("Psalm 23's superscription was not captured")
+	}
+	if s.Text != "A Psalm of David." {
+		t.Errorf("title text = %q", s.Text)
+	}
+	if len(s.Footnotes) != 1 || s.Footnotes[0].Text != "A superscription note about authorship." {
+		t.Fatalf("title notes = %+v", s.Footnotes)
+	}
+	if want := utf8.RuneCountInString(s.Text); s.Footnotes[0].Anchor != want {
+		t.Errorf("title-note anchor = %d, want %d (title-final marker)", s.Footnotes[0].Anchor, want)
+	}
+}
+
+// The superscription table survives its cache round trip; old caches load
+// with none.
+func TestSuperscriptionsSurviveCacheRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", dir+"/bibletext-cache.json")
+	bd := &BibleData{
+		Books:  []string{"Psalms"},
+		Verses: map[string]map[int][]Verse{"Psalms": {23: {{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 1, Text: "The LORD is my shepherd."}}}},
+		Superscriptions: map[string]map[int]Superscription{
+			"Psalms": {23: {Text: "A Psalm of David.", Footnotes: []Footnote{{Anchor: 17, Text: "A title note.", Caller: "+"}}}},
+		},
+	}
+	path := cachePathForVersion("web")
+	if err := saveBibleToCache(path, bd, currentUTCTime); err != nil {
+		t.Fatal(err)
+	}
+	back, err := loadBibleFromCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := back.SuperscriptionFor("Psalms", 23)
+	if got.Text != "A Psalm of David." || len(got.Footnotes) != 1 || got.Footnotes[0].Text != "A title note." {
+		t.Fatalf("superscription did not survive the round trip: %+v", got)
+	}
+	if (*BibleData)(nil).SuperscriptionFor("Psalms", 23).Text != "" {
+		t.Error("nil BibleData must yield an empty superscription")
+	}
+	if back.SuperscriptionFor("Mark", 1).Text != "" {
+		t.Error("absent book must yield an empty superscription")
 	}
 }

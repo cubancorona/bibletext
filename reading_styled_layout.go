@@ -142,6 +142,13 @@ type styledLayoutParams struct {
 	// the buildChapterHTML rule.
 	Indent float32
 
+	// TopPad reserves room ABOVE the whole chapter for the Psalm
+	// superscription (reading_styled_super.go), measured by the pane before
+	// this call — the same advance discipline as BandH. GEOMETRY ONLY: the
+	// title never enters the selection text model, so lay.Text is
+	// byte-identical with and without it and copy stays clean.
+	TopPad float32
+
 	// BandVerse / BandH reserve vertical room ABOVE that verse's first line
 	// for the in-text note sticker (reading_styled_note.go). BandH is measured
 	// by the pane BEFORE this call — the band's height is that number, and
@@ -177,7 +184,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	redLetter := redLetterEnabled()
 	// ONE tint answer for the whole chapter, asked per verse below (tint.go).
 	tints := chapterTint(state)
-	y := float32(0)
+	y := p.TopPad // the superscription's reserved advance (0 = none)
 
 	for pi, para := range groupVersesIntoParagraphs(verses) {
 		if pi > 0 {
