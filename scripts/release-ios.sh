@@ -47,6 +47,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 python3 "$REPO_ROOT/scripts/check-support-contact.py"
 "$REPO_ROOT/scripts/check-repository-hygiene.py"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
+# A spent version (docs/VERSIONING.md) must never be rebuilt with new code.
+IOS_VERSION="$(sed -n 's/^Version = "\(.*\)"/\1/p' "$APP_DIR/FyneApp.toml")"
+[ -n "$IOS_VERSION" ] || { echo "could not read Version from $APP_DIR/FyneApp.toml" >&2; exit 1; }
+"$REPO_ROOT/scripts/check-version-not-spent.sh" "$IOS_VERSION"
 APP_NAME="BibleText.app"
 APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"

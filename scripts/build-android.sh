@@ -49,6 +49,10 @@ source "$REPO_ROOT/scripts/android-artifact-verification.sh"
 APP_DIR="$REPO_ROOT/cmd/mobile"
 TRACKED_APP_VERSION="$(sed -n 's/^Version = "\(.*\)"/\1/p' "$APP_DIR/FyneApp.toml")"
 TRACKED_APP_BUILD="$(sed -n 's/^Build = \([0-9]*\)/\1/p' "$APP_DIR/FyneApp.toml")"
+if [ "${1:-}" = "--release" ]; then
+  # A spent version (docs/VERSIONING.md) must never be rebuilt with new code.
+  "$REPO_ROOT/scripts/check-version-not-spent.sh" "$TRACKED_APP_VERSION"
+fi
 [ -n "$TRACKED_APP_VERSION" ] \
   || { echo "ERROR: no Version in $APP_DIR/FyneApp.toml" >&2; exit 1; }
 [ -n "$TRACKED_APP_BUILD" ] \

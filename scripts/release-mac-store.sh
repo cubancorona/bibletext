@@ -54,6 +54,10 @@ PROFILE="${BIBLETEXT_MAC_PROFILE:-}"
 note "checking the store configuration before building anything"
 python3 scripts/check-mac-store-config.py || fail "store configuration is not shippable"
 python3 scripts/check-product-identity.py || fail "product identity is inconsistent"
+# A spent version (docs/VERSIONING.md) must never be rebuilt with new code.
+DESKTOP_VERSION=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/desktop/FyneApp.toml)
+[ -n "$DESKTOP_VERSION" ] || fail "could not read Version from cmd/desktop/FyneApp.toml"
+./scripts/check-version-not-spent.sh "$DESKTOP_VERSION" || fail "version $DESKTOP_VERSION is spent"
 
 # Distribution certificates, not the Development ones the device scripts use.
 APP_CERT=$(security find-identity -v -p codesigning 2>/dev/null |
