@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"fyne.io/fyne/v2/test"
 )
 
 // --- helloao (WEB/BSB/WEBC) ---------------------------------------------------
@@ -212,6 +214,23 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 		}
 		if strings.Contains(strings.ToLower(prose), probe) {
 			t.Errorf("footnote text reached the share prose: %q", probe)
+		}
+	}
+
+	// The whole-chapter copy icon, probed with the bottom section RENDERED
+	// (the sharpest case): even while the translators' notes are on screen,
+	// the chapter copy is a join of Verse.Text and carries none of them.
+	app := test.NewApp()
+	defer app.Quit()
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+	copied := strings.ToLower(chapterCopyText(state))
+	if copied == "" || !strings.Contains(copied, "psalms 23") {
+		t.Fatalf("copy probe produced no chapter text — the control string is missing, so the check can't prove anything: %q", copied)
+	}
+	for _, probe := range []string{"tends", "waters of rest"} {
+		if strings.Contains(copied, probe) {
+			t.Errorf("footnote text reached the chapter copy: %q", probe)
 		}
 	}
 }

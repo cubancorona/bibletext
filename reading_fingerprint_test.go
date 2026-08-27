@@ -202,3 +202,22 @@ func TestFingerprintIncludesTextSize(t *testing.T) {
 		t.Fatalf("readingTextScale() = %v, want 1.3", got)
 	}
 }
+
+// The footnotes toggle must move BOTH fingerprints: the section is body
+// content on the Apple panes (chapterBodyFingerprint gates the rebuild path
+// there — miss it and toggling repaints nothing), and Android asks the
+// combined question through chapterRenderFingerprint.
+func TestFingerprintIncludesFootnotes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	s := sampleState()
+	renderA, bodyA := chapterRenderFingerprint(s), chapterBodyFingerprint(s)
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+	if renderB := chapterRenderFingerprint(s); renderA == renderB {
+		t.Fatal("render fingerprint unchanged after footnotes toggle")
+	}
+	if bodyB := chapterBodyFingerprint(s); bodyA == bodyB {
+		t.Fatal("body fingerprint unchanged after footnotes toggle — the Apple rebuild gate would skip the repaint")
+	}
+}

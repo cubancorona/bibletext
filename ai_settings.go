@@ -48,12 +48,13 @@ func showAISettings(state *AppState) {
 	store := state.keys()
 
 	// The only sheet controls that affect the reading pane are the red-letter
-	// toggle and the text-size choice. Capture them now so closing the sheet
-	// re-renders ONLY when one actually changed — refreshing unconditionally
-	// rebuilds the reading pane (re-pinning the native text overlay) and flickers
-	// the screen for an AI-key-only change.
+	// toggle, the text-size choice and the footnotes toggle. Capture them now
+	// so closing the sheet re-renders ONLY when one actually changed —
+	// refreshing unconditionally rebuilds the reading pane (re-pinning the
+	// native text overlay) and flickers the screen for an AI-key-only change.
 	redLetterAtOpen := redLetterEnabled()
 	textSizeAtOpen := readingTextSizeID()
+	footnotesAtOpen := footnotesEnabled()
 	// Choosing "None" (or leaving it) changes which whole surfaces exist — the
 	// Search-tab Find toggle, the native selection menus — so closing the sheet
 	// after that change rebuilds the window rather than just re-rendering verses.
@@ -520,8 +521,9 @@ func showAISettings(state *AppState) {
 		if aiSurfacesChanged(aiOnAtOpen, aiKeyAtOpen, store.aiEnabled(), hasAIKey(state)) ||
 			notesFeatureOn(state) != notesOnAtOpen {
 			rebuildWindow(state)
-		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen {
-			state.refreshReadingOnly() // red-letter / text size changed → re-render the verses
+		} else if redLetterEnabled() != redLetterAtOpen || readingTextSizeID() != textSizeAtOpen ||
+			footnotesEnabled() != footnotesAtOpen {
+			state.refreshReadingOnly() // red-letter / text size / footnotes changed → re-render the verses
 		}
 	}
 
@@ -741,6 +743,26 @@ func showAISettings(state *AppState) {
 	// Grouped-list assembly: each section is header → inset card of rows →
 	// footnote below the card. The cards are what make the sheet legible
 	// from afar.
+	// READING card: text size, plus — where the reading pane renders them —
+	// the translators'-footnotes toggle with the house below-card caption.
+	// Off by default; the caption says plainly what the notes are and are not
+	// (docs/FOOTNOTES.md §3).
+	readingRows := []fyne.CanvasObject{textSizeRow}
+	var footnotesNote fyne.CanvasObject
+	if footnoteSectionSupported() {
+		fnCheck := widget.NewCheck("Show the translators' footnotes", nil)
+		fnCheck.SetChecked(footnotesEnabled())
+		fnCheck.OnChanged = func(b bool) { setFootnotesEnabled(b) }
+		readingRows = append(readingRows, widget.NewSeparator(), fnCheck)
+		note := widget.NewRichText(&widget.TextSegment{
+			Text: "Notes from the translators about wording and manuscripts. " +
+				"They are not part of the Scripture text.",
+			Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+		})
+		note.Wrapping = fyne.TextWrapWord
+		footnotesNote = note
+	}
+
 	form := container.NewVBox(
 		sectionLabel("ASSISTANT", pal),
 		settingsGroup(pal, active, keyArea),
@@ -751,12 +773,15 @@ func showAISettings(state *AppState) {
 		bibleKeysFooter,
 		sheetGap(),
 		sectionLabel("READING", pal),
-		settingsGroup(pal, textSizeRow),
-		sheetGap(),
-		sectionLabel("SHARED NOTES", pal),
-		settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow),
-		notesNote,
+		settingsGroup(pal, readingRows...),
 	)
+	if footnotesNote != nil {
+		form.Add(footnotesNote)
+	}
+	form.Add(sheetGap())
+	form.Add(sectionLabel("SHARED NOTES", pal))
+	form.Add(settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow))
+	form.Add(notesNote)
 	if redLetterSupported() {
 		// His words close the sheet — a standing layout choice: the
 		// last thing the reader sees before returning to the text. Under its own

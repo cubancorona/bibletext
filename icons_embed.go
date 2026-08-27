@@ -27,6 +27,9 @@ var sidebarLeftSVG []byte
 //go:embed assets/icons/note_bubble.svg
 var noteBubbleSVG []byte
 
+//go:embed assets/icons/footnote.svg
+var footnoteIconSVG []byte
+
 // iconAudioWave is the "read aloud / text-to-speech" source glyph (a small
 // equalizer-style waveform), marking a chapter played by on-device speech as
 // distinct from a recorded human narration (which uses theme.AccountIcon, a
@@ -108,4 +111,17 @@ var iconNoteBubble fyne.Resource = func() fyne.Resource {
 		return theme.MailComposeIcon()
 	}
 	return theme.NewThemedResource(fyne.NewStaticResource("note_bubble.svg", noteBubbleSVG))
+}()
+
+// iconFootnote marks the translators'-footnotes toggle in the reading header:
+// a miniature of the section it shows — text lines, the short separator rule,
+// smaller lines beneath. Themed for the same reason as iconNoteBubble (it is
+// handed to widget.NewButtonWithIcon, and while active/HighImportance it must
+// recolour to read against the accent fill). Falls back to the generic list
+// glyph if the asset is somehow missing.
+var iconFootnote fyne.Resource = func() fyne.Resource {
+	if len(footnoteIconSVG) == 0 {
+		return theme.ListIcon()
+	}
+	return theme.NewThemedResource(fyne.NewStaticResource("footnote.svg", footnoteIconSVG))
 }()

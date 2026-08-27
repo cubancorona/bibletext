@@ -285,3 +285,53 @@ would break the real tab; a stripped passive renderer was safe but could not
 show the production rendering. When presentation work is approved, footnote
 display will be built and tested directly on the main reading pane in this
 branch — no second surface.
+
+## 9. Prototype (2026-08-27): the chapter-bottom section, live on the Apple panes
+
+Owner-approved presentation, modelled on the Supreme Court slip opinions
+(measured from *Medina v. Planned Parenthood*, 606 U.S. 357: a short
+flush-left hairline rule, notes in the body serif at ~0.8× set tighter,
+justified): after the last verse, air → a short muted solid rule (an underline over a no-break-space run — drawn by the text system, so continuous on both importers where every glyph run gaps on iOS) → the
+chapter's translator footnotes at 0.85em in `TextMuted`, each keyed by its
+semibold verse number. **No in-text markers** — Scripture above the rule is
+byte-identical with the section on or off. Crossrefs (the NKJV feed) stay
+dark. Off by default; toggled by a header icon (miniature of the section
+itself, present only when the chapter has notes) and a READING-card checkbox
+with the §3 caption.
+
+Mechanics (footnote_section.go + buildChapterHTML + the native panes):
+
+- **0.85em is a load-bearing pact.** The Apple verse scans only capture runs
+  below 0.8× the largest font, so the section's digit-leading verse keys can
+  never become phantom verses; and the native content-end detectors
+  (`btIOSFindContentEnd` / `btMacFindContentEnd`) find the scripture/apparatus
+  boundary as the first run in the [0.8, 0.95) font band — no sentinel string
+  to collide with Scripture. `TestFootnoteSectionNativeContract` alarms drift.
+- The boundary bounds the LAST verse's read-along/highlight ranges (they used
+  to end at ts.length) and clamps the selection verbs: apparatus keeps the
+  system Copy/Look Up but can never enter Share/AI/citation, and a straddling
+  selection is cut at the rule. The one chosen, stated property: a reader CAN
+  deliberately select and plain-copy the visibly-labelled section, exactly as
+  they can copy verse-number digits today.
+- The toggle rides the red-letter plumbing: pref `reading.footnotes`,
+  `fn` slot in chapterFingerprint (moves BOTH body and render fingerprints),
+  `refreshReadingOnly`, scroll preserved by the same-chapter restore capture.
+- Surfaces: Apple only (one shared builder → macOS + iOS). Android
+  (sentinel-`<sup>` recipe) and the styled pane (geometry-only, note-sticker
+  mould) are documented in the scout results but not built. Fyne fallbacks
+  stay documented gaps.
+
+Sim-verified on iPhone 17 Pro (BSB Psalm 23): section renders, toggle
+round-trips with scroll preserved, header button reflects state. The
+omitted-verses question (§8) stands: this is the first presentation that
+could carry those 34 notes, but they are dropped at decode today.
+
+Two hardenings the first cut needed: (1) the plain-text HTML-import-failure
+fallback used to carry the whole section into the untyped string with the
+boundary disarmed — both panes now cut the HTML at `<p class="fnsep">` before
+stripping tags, so the apparatus never enters the fallback at all (pinned in
+TestFootnoteSectionNativeContract); (2) a toggle beside full-screen in the
+mobile header widened the right column into the expanded audio card's
+permanently reserved centre footprint (overlapping on 375pt phones with long
+book names) — the stacked-under-full-screen placement in pinned 36pt cells is
+the recorded mount recipe.

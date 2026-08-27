@@ -130,6 +130,9 @@ static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used 
 // scroll-anchor mapping, reused by the selection menu to turn the selected
 // range into a verse span.
 static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc);
+// Where scripture ends and the appended translators'-footnote section starts
+// (== length when there is none) — the selection menu clamps to it.
+static NSUInteger btIOSContentEnd(NSTextStorage *ts);
 
 // Character range of the highlighted verse (set when arriving from a search
 // result), or {NSNotFound, 0} for a plain chapter view. bibleTextScrollReadingTV
@@ -164,6 +167,19 @@ static UITapGestureRecognizer *gHighlightTap = nil;
           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0)) {
     if (range.length == 0 || NSMaxRange(range) > textView.text.length) {
         return [UIMenu menuWithChildren:suggestedActions];
+    }
+    // The appended translators'-footnote section gets the SYSTEM verbs only
+    // (Copy, Look Up): the app's Share/AI/citation verbs would attribute the
+    // translators' words to scripture, the one leak the purity rule forbids.
+    // A selection wholly inside the section keeps the plain menu; one that
+    // straddles the boundary is clamped to the scripture half, so the words
+    // dispatched and the span attributing them stay scripture only.
+    NSUInteger contentEnd = btIOSContentEnd(textView.textStorage);
+    if (range.location >= contentEnd) {
+        return [UIMenu menuWithChildren:suggestedActions];
+    }
+    if (NSMaxRange(range) > contentEnd) {
+        range.length = contentEnd - range.location;
     }
     NSString *captured = [[textView.text substringWithRange:range] copy];
     // The selection's verse span, resolved NOW against the same storage the
@@ -481,9 +497,54 @@ typedef struct { NSInteger verse; NSUInteger loc; NSUInteger len; } BTVerseLoc;
 static BTVerseLoc *gVerseIndex = NULL;
 static NSUInteger  gVerseIndexCount = 0;
 
+// The scripture content's end: the character index where the appended
+// translators'-footnote section starts, or the full length when there is none.
+// buildChapterHTML renders that section at 0.85em — a size that exists nowhere
+// else in the storage (body 1.0em, verse superscripts 0.66em) — so the
+// boundary is derived from font geometry, exactly the way verse numbers are
+// found: the FIRST run in the [0.8, 0.95) band of the largest font. Recomputed
+// on every text assignment, before the verse index is built. Everything that
+// used to end "at ts.length" — the last verse's read-along/highlight range,
+// the verse scans, the selection verbs — ends here instead, so the apparatus
+// can never inherit a wash or be attributed to the last verse
+// (footnote_section.go documents the pact from the Go side).
+static NSUInteger gContentEnd = 0;
+static void btIOSFindContentEnd(NSTextStorage *ts) {
+    if (ts == nil) { gContentEnd = 0; return; }
+    __block CGFloat maxSize = 0;
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, ts.length)
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val != nil && ((UIFont *)val).pointSize > maxSize) maxSize = ((UIFont *)val).pointSize;
+    }];
+    __block NSUInteger end = ts.length;
+    if (maxSize > 0) {
+        [ts enumerateAttribute:NSFontAttributeName
+                       inRange:NSMakeRange(0, ts.length)
+                       options:0
+                    usingBlock:^(id val, NSRange r, BOOL *stop) {
+            if (val == nil || r.length == 0) return;
+            CGFloat p = ((UIFont *)val).pointSize;
+            if (p >= maxSize * 0.8 && p < maxSize * 0.95) { end = r.location; *stop = YES; }
+        }];
+    }
+    gContentEnd = end;
+}
+
+// btIOSContentEnd is gContentEnd clamped to the given storage — the safe tail
+// for range arithmetic even if a caller races a text swap.
+static NSUInteger btIOSContentEnd(NSTextStorage *ts) {
+    if (ts == nil) return 0;
+    return (gContentEnd > 0 && gContentEnd <= ts.length) ? gContentEnd : ts.length;
+}
+
 // btIOSBuildVerseIndex captures every verse-number run (the only sub-15pt runs) into
 // gVerseIndex. Called on every text assignment; the single buffer is reused for the
-// app's life. ts==nil (plain-text fallback) clears the table.
+// app's life. ts==nil (plain-text fallback) clears the table. The walk stops at the
+// content end: the footnote section's 0.85em runs sit above the 0.8× threshold, so
+// they could never match anyway — bounding the range makes that a structural fact
+// rather than a typographic one.
 static void btIOSBuildVerseIndex(NSTextStorage *ts) {
     const NSUInteger CAP = 512; // far above any chapter's verse count (max ~176)
     if (gVerseIndex == NULL) gVerseIndex = malloc(CAP * sizeof(BTVerseLoc));
@@ -491,7 +552,7 @@ static void btIOSBuildVerseIndex(NSTextStorage *ts) {
     CGFloat thr = btIOSVerseFontThreshold(ts);
     __block NSUInteger n = 0;
     [ts enumerateAttribute:NSFontAttributeName
-                   inRange:NSMakeRange(0, ts.length)
+                   inRange:NSMakeRange(0, btIOSContentEnd(ts))
                    options:0
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (n >= CAP) { *stop = YES; return; }
@@ -1508,7 +1569,11 @@ static NSRange btIOSReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     }
     if (lo >= gVerseIndexCount || gVerseIndex[lo].verse != verse) return NSMakeRange(NSNotFound, 0);
     NSUInteger start = gVerseIndex[lo].loc;
-    NSUInteger end = (lo + 1 < gVerseIndexCount) ? gVerseIndex[lo + 1].loc : ts.length;
+    // The LAST verse ends at the content end, not ts.length — the appended
+    // footnote section must never inherit its read-along wash, highlight band
+    // or selection attribution (see gContentEnd).
+    NSUInteger end = (lo + 1 < gVerseIndexCount) ? gVerseIndex[lo + 1].loc : btIOSContentEnd(ts);
+    if (start >= end) return NSMakeRange(NSNotFound, 0);
     return NSMakeRange(start, end - start);
 }
 
@@ -2193,6 +2258,7 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         NSLog(@"bibletext: attributedText assignment dropped opaque — re-asserting paper bg");
     }
     btIOSApplyReadingBG();
+    btIOSFindContentEnd(gReadingTV.textStorage); // scripture/apparatus boundary, before the index that stops at it
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
     // The storage now holds the chapter Go announced, so wash mutations against
     // verse numbers are meaningful again — and anything refused while it did not
@@ -2323,8 +2389,19 @@ void bibleTextTVSetHTML(const char *html) {
                 if (bibleTextApplyHTML(data)) return;
                 NSLog(@"bibletext: HTML import failed after retries; showing plain text");
                 if (gReadingTV != nil) {
-                    gReadingTV.text = bibleTextPlainFromHTML(s);
+                    // The translators'-footnote section must not ride into the
+                    // plain fallback: the font-geometry boundary cannot exist
+                    // in untyped text, so with the section present every
+                    // selection clamp would silently disarm and the app verbs
+                    // could dispatch translators' words as scripture. Cut the
+                    // HTML at the section's opening tag instead — purity by
+                    // construction on the one path the detector cannot cover.
+                    NSString *plainSrc = s;
+                    NSRange fnsep = [plainSrc rangeOfString:@"<p class=\"fnsep\">"];
+                    if (fnsep.location != NSNotFound) plainSrc = [plainSrc substringToIndex:fnsep.location];
+                    gReadingTV.text = bibleTextPlainFromHTML(plainSrc);
                     btIOSApplyReadingBG(); // keep the view opaque on the fallback path too
+                    gContentEnd = gReadingTV.textStorage.length; // apparatus stripped above — all scripture
                     btIOSBuildVerseIndex(nil); // plain text has no verse runs — clear the stale table
                 }
             });

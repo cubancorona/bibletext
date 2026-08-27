@@ -61,6 +61,7 @@ func TestButtonIconsAreThemed(t *testing.T) {
 		{"iconNoteBubble", iconNoteBubble, "search.go (mode row) + notes_banner.go (Show note)"},
 		{"iconAudioWave", iconAudioWave, "audio_menu.go (read-aloud source row)"},
 		{"iconSidebarLeft", iconSidebarLeft, "ui.go (tablet header)"},
+		{"iconFootnote", iconFootnote, "reading.go + chapter_header_mobile.go (footnotes toggle)"},
 	} {
 		if _, ok := tc.res.(fyne.ThemedResource); !ok {
 			t.Errorf("%s is not a fyne.ThemedResource, so Fyne will draw the asset's own "+
