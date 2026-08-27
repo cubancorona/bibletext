@@ -165,12 +165,26 @@ cp docs/apple-app-site-association "$OUT/.well-known/apple-app-site-association"
 cp docs/apple-app-site-association "$OUT/apple-app-site-association"
 cp docs/assetlinks.json "$OUT/.well-known/assetlinks.json"
 
+# The favicon serves the whole site from the root: browsers request
+# /favicon.ico by default, so the ~5,500 reader pages get it without carrying a
+# link tag; the three hand-written pages also link it (plus the touch icon)
+# explicitly.
+cp docs/favicon.ico "$OUT/favicon.ico"
+cp docs/apple-touch-icon.png "$OUT/apple-touch-icon.png"
+
 # --- Final gate: never push a tree that would break the domain or the pages --
 [[ "$(cat "$OUT/CNAME")" == "$DOMAIN" ]] || fail "CNAME is not $DOMAIN"
 [[ -f "$OUT/.nojekyll" ]] || fail ".nojekyll missing"
 for page in index.html privacy.html support.html; do
   [[ -s "$OUT/$page" ]] || fail "$page missing from the tree about to be published"
 done
+# The favicon must be a real ICO (it starts 00 00 01 00), not a stray PNG
+# renamed — a PNG at /favicon.ico renders in browsers but not everywhere the
+# .ico contract is assumed.
+[[ -s "$OUT/favicon.ico" ]] || fail "favicon.ico missing from the tree about to be published"
+head -c4 "$OUT/favicon.ico" | od -An -tx1 | grep -q '00 00 01 00' ||
+  fail "favicon.ico is not an ICO file"
+grep -q 'rel="icon"' "$OUT/index.html" || fail "index.html does not link the favicon"
 support_email=$(python3 -c 'import json; print(json.load(open("config/product.json"))["supportEmail"], end="")')
 for page in privacy.html support.html; do
   grep -Fq "$support_email" "$OUT/$page" || fail "$page does not contain the configured support address"
