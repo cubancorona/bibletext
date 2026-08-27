@@ -60,15 +60,19 @@ func audioReleaseTag(corpus string, bookNum int) string {
 }
 
 // webAudioURL returns the WEB recorded-narration MP3 URL for a book + chapter and
-// whether one is mapped (all 66 canonical books are — a COMPLETE public-domain
+// whether one exists (all 66 canonical books do — a COMPLETE public-domain
 // narration by David Williams, via audiotreasure.com; it replaced the partial
 // eBible.org set the app launched with, so no WEB chapter falls back to TTS
-// anymore). Registered per version in recordingsFor. File scheme:
-// WEB_{book:02d}_{chapter:03d}.mp3, e.g. WEB_43_003.mp3 (John 3) — the canonical
-// 1–66 numbering shared with the BSB set, so no per-book naming table is needed.
+// anymore). Chapter bounds come from the recording's own timing table
+// (recordingHasChapter): the WEB-Catholic renders the Greek Daniel's chapters
+// 13–14, which the narration doesn't have — those must report false and fall
+// back to TTS, not stream a URL with no file behind it. Registered per version
+// in recordingsFor. File scheme: WEB_{book:02d}_{chapter:03d}.mp3, e.g.
+// WEB_43_003.mp3 (John 3) — the canonical 1–66 numbering shared with the BSB
+// set, so no per-book naming table is needed.
 func webAudioURL(book string, chapter int) (string, bool) {
 	b, ok := bsbAudioBooks[book]
-	if !ok || chapter < 1 {
+	if !ok || !recordingHasChapter("web-williams", book, chapter) {
 		return "", false
 	}
 	return fmt.Sprintf("%s%s/WEB_%02d_%03d.mp3", audioHostBase, audioReleaseTag("web-williams", b.num), b.num, chapter), true
@@ -92,7 +96,8 @@ type recording struct {
 //   - BSB: complete CC0 narration by Barry Hays.
 //   - WEB / WEB-Catholic: complete public-domain narration by David Williams (the
 //     WEB-Catholic's 66 protocanonical books are the same WEB text; the deuterocanon
-//     isn't recorded and its chapters fall back to TTS via urlFor).
+//     — whole books like Tobit, and the Greek Daniel's chapters 13–14 within a
+//     shared book — isn't recorded and falls back to TTS via urlFor).
 //
 // Any other version has no matching recording and uses TTS.
 func recordingsFor(versionID string) []recording {

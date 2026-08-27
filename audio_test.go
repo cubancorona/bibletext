@@ -17,8 +17,12 @@ func TestWEBAudioURL(t *testing.T) {
 		{"Psalms", 119, testAudioHost + "web-williams-ot-v1/WEB_19_119.mp3", true}, // complete — no per-book bounds anymore
 		{"Jude", 1, testAudioHost + "web-williams-nt-v1/WEB_65_001.mp3", true},
 		{"Revelation", 22, testAudioHost + "web-williams-nt-v1/WEB_66_022.mp3", true},
-		{"Tobit", 1, "", false}, // deuterocanon: no WEB recording
-		{"John", 0, "", false},  // nonsense chapter
+		{"Daniel", 12, testAudioHost + "web-williams-ot-v1/WEB_27_012.mp3", true}, // last recorded chapter
+		{"Daniel", 13, "", false}, // Greek Daniel (Susanna): WEBC renders it, the narration ends at 12
+		{"Daniel", 14, "", false}, // Greek Daniel (Bel and the Dragon)
+		{"John", 22, "", false},   // past the end of the book
+		{"Tobit", 1, "", false},   // deuterocanon: no WEB recording
+		{"John", 0, "", false},    // nonsense chapter
 	}
 	for _, c := range cases {
 		got, ok := webAudioURL(c.book, c.chapter)
@@ -59,9 +63,13 @@ func TestRecordingsFor(t *testing.T) {
 
 func TestAudioForChapter(t *testing.T) {
 	bd := &BibleData{
-		Books: []string{"John", "Tobit"},
+		Books: []string{"John", "Daniel", "Tobit"},
 		Verses: map[string]map[int][]Verse{
-			"John":  {20: {{Text: "Now on the first day of the week"}, {Text: "Mary Magdalene went"}}},
+			"John": {20: {{Text: "Now on the first day of the week"}, {Text: "Mary Magdalene went"}}},
+			"Daniel": {
+				12: {{Text: "At that time Michael shall stand up"}},
+				13: {{Text: "There was a man living in Babylon whose name was Joakim"}},
+			},
 			"Tobit": {1: {{Text: "The book of the words of Tobit"}}},
 		},
 	}
@@ -82,6 +90,17 @@ func TestAudioForChapter(t *testing.T) {
 	if a.Kind != audioTTS || a.Text != "The book of the words of Tobit" {
 		t.Errorf("webc Tobit 1: got %+v, want TTS of the verse", a)
 	}
+	// WEB-Catholic Daniel 13 (Susanna) → TTS: the Greek Daniel runs to 14 chapters
+	// but the WEB narration ends at 12, so the extra chapters must not offer a
+	// stream with no file behind it.
+	a = audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "Daniel", CurrentChapter: 13, Bible: bd})
+	if a.Kind != audioTTS || a.Text != "There was a man living in Babylon whose name was Joakim" {
+		t.Errorf("webc Daniel 13: got %+v, want TTS of the verse", a)
+	}
+	// ...while WEB-Catholic Daniel 12 still streams the recording.
+	if a := audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "Daniel", CurrentChapter: 12, Bible: bd}); a.Kind != audioRecorded || a.URL != testAudioHost+"web-williams-ot-v1/WEB_27_012.mp3" {
+		t.Errorf("webc Daniel 12: got %+v, want recorded WEB_27_012.mp3", a)
+	}
 	// BSB John 20 → recorded (the BSB has its own complete narration).
 	if a := audioForChapter(&AppState{CurrentVersion: "bsb", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded || a.URL != testAudioHost+"bsb-hays-nt-v1/BSB_43_Jhn_020_H.mp3" {
 		t.Errorf("BSB John 20: got %+v, want recorded BSB_43_Jhn_020_H.mp3", a)
@@ -100,7 +119,9 @@ func TestBSBAudioURL(t *testing.T) {
 		{"Psalms", 23, testAudioHost + "bsb-hays-ot-v1/BSB_19_Psa_023_H.mp3", true},
 		{"Titus", 2, testAudioHost + "bsb-hays-nt-v1/BSB_56_Tts_002_H.mp3", true}, // non-obvious abbr
 		{"Revelation", 22, testAudioHost + "bsb-hays-nt-v1/BSB_66_Rev_022_H.mp3", true},
-		{"Tobit", 1, "", false}, // deuterocanon: no BSB recording
+		{"Daniel", 12, testAudioHost + "bsb-hays-ot-v1/BSB_27_Dan_012_H.mp3", true}, // last recorded chapter
+		{"Daniel", 13, "", false}, // past the end of the book
+		{"Tobit", 1, "", false},   // deuterocanon: no BSB recording
 	}
 	for _, c := range cases {
 		got, ok := bsbAudioURL(c.book, c.chapter)

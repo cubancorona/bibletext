@@ -96,10 +96,12 @@ var bsbAudioBooks = map[string]bsbAudioBook{
 }
 
 // bsbAudioURL returns the BSB recorded-narration MP3 URL for a book + chapter and
-// whether one is mapped (all 66 canonical books are).
+// whether one exists (all 66 canonical books are mapped; chapter bounds come
+// from the recording's own timing table via recordingHasChapter, so an
+// out-of-range chapter reports false instead of a URL with no file behind it).
 func bsbAudioURL(book string, chapter int) (string, bool) {
 	b, ok := bsbAudioBooks[book]
-	if !ok || chapter < 1 {
+	if !ok || !recordingHasChapter("bsb-hays", book, chapter) {
 		return "", false
 	}
 	return fmt.Sprintf("%s%s/BSB_%02d_%s_%03d_H.mp3", audioHostBase, audioReleaseTag("bsb-hays", b.num), b.num, b.abbr, chapter), true

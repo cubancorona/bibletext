@@ -75,6 +75,17 @@ func chapterTimings(recordingID, book string, chapter int) []verseTiming {
 	return nil
 }
 
+// recordingHasChapter reports whether a recording actually has an MP3 for a
+// chapter, by consulting its bundled timing table. The tables were force-aligned
+// against the released audio files themselves (66 books / 1189 chapters each), so
+// they are the authority on which chapters were recorded — no hand-written
+// per-book chapter count to drift. This is what keeps the urlFor builders from
+// offering chapters past a book's recorded end, e.g. the WEB-Catholic's Greek
+// Daniel 13–14 (rendered chapters the WEB narration doesn't have).
+func recordingHasChapter(recordingID, book string, chapter int) bool {
+	return len(chapterTimings(recordingID, book, chapter)) > 0
+}
+
 // verseAtTime returns the verse being narrated at time t: the last verse whose start
 // is at or before t. Returns 0 before the first verse begins (the recording's intro),
 // so nothing is highlighted until the reader actually reaches verse 1.
