@@ -21,40 +21,32 @@ Two spaces remain to enumerate, both scouted with the cells already chosen:
   backoff delay, across the apply / retry / foreground / picker-open events,
   built on an `AppState` literal.
 
-### Suspected defects in those spaces — reported, NOT yet verified
+### Reported defects — status, severity, and the order to take them
 
-Each was raised while scouting the runtime lane and is recorded here rather
-than in VERSION_STATES.md, because that document only names what the
-enumeration has actually driven. Confirm or dismiss each with a cell.
+Each was raised while scouting the runtime and cache lanes. **PROBED** means the
+scout executed it against a copy of the repo; **TRACED** means it is a code walk
+with exact paths but no execution. None is claimed in docs/VERSION_STATES.md,
+because that document only names what the enumeration has driven. Confirm each
+with a cell as its space is enumerated.
 
-1. `purgeUnavailableLicensedCaches` deletes a licensed version's caches when
-   `available()` is false, and a credential store that is temporarily
-   unreadable (before first unlock, or any store error) reads as false. Every
-   other consumer of that read deliberately distinguishes absence from
-   failure; the one that acts irreversibly may not. Needs a definitive-negative
-   predicate, not a falsy one.
-2. Clearing your own API key mid-session leaves the reader inside a licensed
-   translation they can no longer re-enter: the picker draws the row with both
-   a current-version check and an "unlock this" tag, and switching away is
-   one-directional. Nothing re-evaluates the active version on a key change.
-3. Superseded epochs of a licensed version are never age-checked and never
-   served, so nothing removes them until the licence goes away — licensed text
-   with an unbounded lifetime on disk. Relevant the moment the NKJV epoch is
-   bumped (see the entry below).
-4. `seedOnly` is not cleared when the full download lands while the reader is
-   on another translation, so the "showing the Gospels" banner can outlive the
-   seed.
-5. The picker's own manual retry may make the "waiting for a connection"
-   notice unreachable — opening the picker starts a download, so the state the
-   notice describes ends as it is read. The two offline states may collapse
-   into one.
-6. A non-default translation served from a superseded epoch is silently stale:
-   the whole `fullPending` computation is about the default version only.
-7. A successful fetch that cannot be persisted is discarded entirely rather
-   than served for the session.
-8. `cachePathForVersion` resolves through the registry while
-   `supersededCachePaths` reads the value it is handed; for an unregistered
-   version the current path can collide with a superseded one.
+| # | Defect | Evidence | Costs the reader | Fix |
+|---|---|---|---|---|
+| D1 | `purgeUnavailableLicensedCaches` deletes a licensed version's caches whenever `available()` is false — and an unreadable credential store reads as false | PROBED | Their only local copy of a licensed translation, destroyed by a transient keychain failure; offline, they have nothing | moderate |
+| D2 | Superseded epochs of a licensed version are never age-checked and never purged | TRACED | Licensed text with an unbounded lifetime on disk — a §11 recency obligation leaking through a file the §11 machinery never looks at | trivial |
+| D3 | A non-default translation served from a superseded epoch is silently stale: `fullPending` is computed for the default version only | TRACED | The previous decoder's text with no notice, no banner and no upgrade for the whole session — the V1 class, in a place V1's fix does not reach | moderate |
+| D4 | `seedOnly` is not cleared when the download lands while the reader is on another translation | TRACED, exact sequence | The "showing the Gospels" banner sits over the complete text | trivial |
+| D5 | The picker's manual retry makes the "waiting for a connection" notice unreachable — the retry sets `fullDownloading` before the notice is computed | TRACED, exact lines | An offline reader is always told the update is in progress, never that it is waiting | trivial |
+| D6 | A successful fetch that cannot be persisted is discarded entirely | PROBED | On a device with an unwritable cache directory the app can never open a version, and retries forever at 10-minute intervals with no possibility of success | moderate |
+| D7 | `cachePathForVersion` resolves through the registry while `supersededCachePaths` reads the value handed to it | PROBED | Nothing in production — every version is registered. A live trap for tests: an unregistered version's current path is item [2] of its own superseded list, so a purge would delete the live cache | trivial (guard) |
+| D8 | `loadVersionFromCacheOnly`'s four miss branches disagree about the mode they report | PROBED | Nothing today — every caller checks the error first. One reader away from being load-bearing | trivial |
+
+**Order to take them.** D2, D4, D5 are one-line fixes with real value and should
+go first — D2 in particular becomes live the moment the NKJV `cacheEpoch` is
+bumped, which the entry below schedules. D1 and D3 are the two that cost a
+reader something they cannot recover or diagnose, and both deserve a cell in
+the enumeration before and after. D6 next. D7 is already mitigated for the new
+suite by `withRegisteredVersion`; D8 is a tidy-up to pin whichever answer is
+chosen.
 
 ## NKJV Psalm superscriptions
 
