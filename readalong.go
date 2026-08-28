@@ -6,11 +6,12 @@ package bibletext
 //
 // Tables are keyed by RECORDING id (see recordingsFor in audio.go): timings are
 // aligned against a specific recording's exact audio bytes on the project's own
-// host, so they belong to the recording, not the translation. Both recordings the
-// app streams are covered — "bsb-hays" (Barry Hays) and "web-williams" (David
-// Williams; also serves the WEB-Catholic, whose 66 protocanonical books are the
-// same WEB text). chapterTimings returns nil for anything without a bundled table,
-// so those chapters simply don't highlight while recorded audio still plays.
+// host, so they belong to the recording, not the translation. All three recordings
+// the app streams are covered — "bsb-hays" (Barry Hays), "web-williams" (David
+// Williams; also serves the WEB-Catholic's protocanon, the same WEB text) and
+// "webbe-synthetic" (eBible.org's synthetic narration of the WEB-Catholic's Greek
+// books). chapterTimings returns nil for anything without a bundled table, so those
+// chapters simply don't highlight while recorded audio still plays.
 
 import (
 	_ "embed"
@@ -25,6 +26,9 @@ var bsbTimingsJSON []byte
 //go:embed assets/timings/web.json
 var webTimingsJSON []byte
 
+//go:embed assets/timings/webbe.json
+var webbeTimingsJSON []byte
+
 // verseTiming is one verse's span within its chapter's recording (seconds).
 type verseTiming struct {
 	verse      int
@@ -38,8 +42,8 @@ var (
 
 func loadTimings() {
 	timingsOnce.Do(func() {
-		allTimings = make(map[string]map[string]map[string][]verseTiming, 2)
-		for recID, blob := range map[string][]byte{"bsb-hays": bsbTimingsJSON, "web-williams": webTimingsJSON} {
+		allTimings = make(map[string]map[string]map[string][]verseTiming, 3)
+		for recID, blob := range map[string][]byte{"bsb-hays": bsbTimingsJSON, "web-williams": webTimingsJSON, webbeRecordingID: webbeTimingsJSON} {
 			var raw map[string]map[string][][]float64 // [[verse,start,end], ...]
 			if err := json.Unmarshal(blob, &raw); err != nil {
 				continue

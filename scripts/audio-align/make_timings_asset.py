@@ -26,13 +26,25 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--timings", required=True, help="dir under the data dir with <Book>_<ch>.json files")
     ap.add_argument("--out", required=True, help="output path for the compact asset")
+    ap.add_argument("--skip-suspect", action="store_true",
+                    help="drop chapters batch_align flagged not-ok (non-monotonic, or verses "
+                         "covering <85%% of the audio) instead of shipping them")
     a = ap.parse_args()
 
     src = os.path.join(DATA, a.timings)
     books = {}
     n_ch = n_v = 0
+    suspect = []
     for fp in sorted(glob.glob(os.path.join(src, "*.json"))):
         d = json.load(open(fp))
+        # batch_align records a per-chapter verdict. It matters more than it looks:
+        # the app treats a chapter's PRESENCE in this table as proof the chapter was
+        # recorded (recordingHasChapter), so a bad alignment does not merely mistime
+        # the highlight, it advertises audio. Always report; drop on request.
+        if not d.get("ok", True):
+            suspect.append(f"{d['book']} {d['chapter']}")
+            if a.skip_suspect:
+                continue
         rows = [[v["v"], round(v["start"], 1), round(v["end"], 1)] for v in d["verses"]]
         if not rows:
             continue
@@ -45,6 +57,10 @@ def main():
         json.dump(books, f, separators=(",", ":"))
     print(f"{a.out}: {len(books)} books, {n_ch} chapters, {n_v} verses, "
           f"{os.path.getsize(a.out) // 1024} KB")
+    if suspect:
+        verb = "DROPPED" if a.skip_suspect else "INCLUDED (rerun with --skip-suspect to drop)"
+        print(f"  {len(suspect)} chapter(s) flagged suspect by the aligner, {verb}: "
+              f"{', '.join(suspect[:12])}{' …' if len(suspect) > 12 else ''}")
 
 
 if __name__ == "__main__":

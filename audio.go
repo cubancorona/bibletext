@@ -6,7 +6,8 @@ package bibletext
 //     (github.com/cubancorona/bibletext-audio, GitHub release assets with HTTP
 //     range support, so the native player can seek — the ±15s skip). Each
 //     translation plays a narration made from its own text: the BSB (Barry Hays)
-//     and the WEB (David Williams) are both complete. Self-hosting pins the exact
+//     and the WEB (David Williams) are both complete human narrations, and the
+//     WEB-Catholic's Greek books add a synthetic one. Self-hosting pins the exact
 //     audio bytes the bundled read-along verse timings were aligned against, so
 //     the highlight can never drift out of sync with the recording.
 //   - TTS: on-device text-to-speech of the chapter's own verses. Always available
@@ -104,19 +105,27 @@ func webcAudioURL(book string, chapter int) (string, bool) {
 type recording struct {
 	id       string // "bsb-hays" — also the release-tag prefix on the audio host
 	narrator string // "Barry Hays"
-	urlFor   func(book string, chapter int) (string, bool)
+	// synthetic marks a computer-generated voice rather than a person reading.
+	// The reader is told which they are getting: the source menu gives a synthetic
+	// recording its own glyph instead of the person that means "a human read this"
+	// (icons_embed.go, README), and NOTICE credits it as synthetic. Never set this
+	// false for a machine voice to make the UI tidier.
+	synthetic bool
+	urlFor    func(book string, chapter int) (string, bool)
 }
 
 // recordingsFor lists the narrations whose text matches a version, in preference
-// order (the first is the default). Each version currently has exactly one; adding
-// a narrator here is all it takes for it to appear as a source-menu row:
+// order (the first is the default). Adding a narrator here is all it takes for it
+// to appear as a source-menu row:
 //   - BSB: complete CC0 narration by Barry Hays.
-//   - WEB / WEB-Catholic: complete public-domain narration by David Williams. The
-//     WEB-Catholic shares the WEB text for its protocanonical books, but reaches
-//     the recording through webcAudioURL, which also declines the chapters whose
-//     WEBC text differs from what he narrated (the Greek Esther and Daniel 3) —
-//     on top of what no urlFor maps at all (whole deuterocanon books like Tobit,
-//     the Greek Daniel's chapters 13–14). All of those fall back to TTS.
+//   - WEB: complete public-domain narration by David Williams.
+//   - WEB-Catholic: BOTH, and the order is what routes between them. Williams comes
+//     first and keeps every chapter whose WEBC text is the text he read — reached
+//     through webcAudioURL, which declines the Greek Esther and Daniel 3 on top of
+//     the deuterocanonical books and Daniel 13–14 that he never recorded. The
+//     synthetic WEBBE narration answers for exactly those 150 left-over chapters
+//     (webbe_audio.go), so the two never compete for one chapter and a chapter
+//     still offers at most one recording.
 //
 // Any other version has no matching recording and uses TTS.
 func recordingsFor(versionID string) []recording {
@@ -126,7 +135,10 @@ func recordingsFor(versionID string) []recording {
 	case "web":
 		return []recording{{id: "web-williams", narrator: "David Williams", urlFor: webAudioURL}}
 	case "webc":
-		return []recording{{id: "web-williams", narrator: "David Williams", urlFor: webcAudioURL}}
+		return []recording{
+			{id: "web-williams", narrator: "David Williams", urlFor: webcAudioURL},
+			{id: webbeRecordingID, narrator: "Synthetic voice", synthetic: true, urlFor: webbeAudioURL},
+		}
 	}
 	return nil
 }
@@ -155,6 +167,13 @@ func recordingByID(versionID, recID string) (recording, bool) {
 		}
 	}
 	return recording{}, false
+}
+
+// recordingIsSynthetic reports whether a version's recording is a machine voice,
+// so the source glyph and copy can say so rather than implying a human reader.
+func recordingIsSynthetic(versionID, recID string) bool {
+	r, ok := recordingByID(versionID, recID)
+	return ok && r.synthetic
 }
 
 // chapterHasRecording reports whether the current chapter has a recorded MP3 (vs.

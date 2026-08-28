@@ -14,9 +14,10 @@ package bibletext
 //	│   ⟲15  ▶/⏸  15⟳  │   bottom: skip · play/pause · skip
 //	└───────────────────┘
 //
-// The skips dim for read-aloud (speech can't seek); the source chip (person =
-// recording, waveform = read-aloud, labeled "Narrator ▾"/"Read aloud ▾") opens
-// the source menu.
+// The skips dim for read-aloud (speech can't seek); the source chip opens the
+// source menu, and says what is actually playing: a person + "Narrator ▾" for a
+// human recording, a computer + "Voice ▾" for a synthetic one, a waveform +
+// "Read aloud ▾" for on-device speech.
 
 import (
 	"fyne.io/fyne/v2"
@@ -54,7 +55,7 @@ func audioControl(state *AppState, boxH float32) fyne.CanvasObject {
 	// would DRAW beyond the host while its buttons are untappable (the shipped
 	// bug: the visible ▶ hit skip-back / nothing). A fixed cell sized to the
 	// card makes expansion geometry-neutral: taps land, header never reflows.
-	probe := buildAudioCard(state, audioTTS, false, false, false, audioCardCallbacks{})
+	probe := buildAudioCard(state, audioTTS, false, false, false, false, audioCardCallbacks{})
 	return container.NewGridWrap(probe.MinSize(), host)
 }
 
@@ -92,12 +93,13 @@ func audioControlContent(state *AppState, boxH float32, rebuild func()) fyne.Can
 
 	// Skip + source reflect what's loaded while playing, else the reader's chosen
 	// source for this chapter (effectiveSource: source-menu preference or default).
-	displayKind, _ := gAudio.effectiveSource(state)
+	displayKind, displayRec := gAudio.effectiveSource(state)
 	if show, k := gAudio.indicator(fp); show {
 		displayKind = k
 	}
+	synthetic := displayKind == audioRecorded && recordingIsSynthetic(state.CurrentVersion, displayRec)
 
-	return buildAudioCard(state, displayKind, playing, buffering, displayKind == audioRecorded,
+	return buildAudioCard(state, displayKind, synthetic, playing, buffering, displayKind == audioRecorded,
 		audioCardCallbacks{
 			onSrc:   func() { showAudioSourceMenu(state) },
 			onBack:  func() { gAudio.skip(-15) },
@@ -114,12 +116,13 @@ type audioCardCallbacks struct {
 	onSrc, onBack, onPlay, onFwd, onClose func()
 }
 
-// buildAudioCard assembles the expanded transport card: labeled source chip
-// centred on top, skip/play/skip below, close ✕ tucked in the upper-right corner.
+// buildAudioCard assembles the expanded transport card: labeled source chip on
+// top (centred in the width the corner ✕ leaves it), skip/play/skip below, close
+// ✕ tucked in the upper-right corner.
 // While buffering, the play slot shows a SPINNER instead of a glyph — silence
 // behind a pause glyph reads as "broken" — and the slot ignores taps until the
 // stream resolves to playing/paused/failed.
-func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, canSeek bool, cb audioCardCallbacks) fyne.CanvasObject {
+func buildAudioCard(state *AppState, displayKind audioKind, synthetic, playing, buffering, canSeek bool, cb audioCardCallbacks) fyne.CanvasObject {
 	pal := state.pal()
 	playGlyph := theme.MediaPlayIcon()
 	if playing {
@@ -136,6 +139,13 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, 
 	const (
 		srcRowH       = 26
 		transportRowH = minTapTarget // 44
+		// The close ✕ is overlaid on the corner through a Stack, so it adds nothing
+		// to the top row's width. The row reserves its footprint explicitly instead
+		// — plus a small visible gap — or the centred chip slides under it: at the
+		// card's real width the longer "Read aloud ▾" ran 8px into the ✕, and even
+		// "Narrator ▾" ended flush against it with no clearance at all.
+		closeCellSize  = 26
+		closeClearance = 4
 	)
 	// The source selector is a LABELED chip, not a bare glyph: a 16px person/waveform
 	// icon alone (the old control) signalled neither "this is a button" nor "narrators
@@ -143,9 +153,13 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, 
 	// both, and the wide chip pulls mis-taps away from the play button beneath it.
 	srcLabel := "Read aloud ▾"
 	if displayKind == audioRecorded {
+		// "Narrator" would claim a person read it; a machine voice is a "Voice".
 		srcLabel = "Narrator ▾"
+		if synthetic {
+			srcLabel = "Voice ▾"
+		}
 	}
-	src := newLabeledTapChip(state, audioSourceIconForKind(displayKind), srcLabel, srcRowH, cb.onSrc)
+	src := newLabeledTapChip(state, audioSourceIcon(displayKind, synthetic), srcLabel, srcRowH, cb.onSrc)
 	back := newIconTapButton(state, iconSkipBack15, 26, transportRowH, cb.onBack)
 	back.disabled = !canSeek
 	var play fyne.CanvasObject
@@ -162,7 +176,7 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, 
 	// The box hugs the player icons: the source centred on top (so it sits above the
 	// play button), the skip/play/skip transport below. A tight manual frame (not
 	// surface(), which adds NewPadded theme padding) keeps it short.
-	top := container.NewHBox(layout.NewSpacer(), src, layout.NewSpacer())
+	top := container.NewHBox(layout.NewSpacer(), src, layout.NewSpacer(), hgap(closeCellSize+closeClearance))
 	bottom := container.NewHBox(back, play, fwd)
 	rows := container.New(layout.NewCustomPaddedVBoxLayout(0), top, bottom)
 	frame := canvas.NewRectangle(pal.SurfaceAlt)
@@ -179,7 +193,7 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, 
 	xGlyph.FillMode = canvas.ImageFillContain
 	xGlyph.SetMinSize(fyne.NewSize(12, 12))
 	xCell := newTappableArea(
-		container.NewGridWrap(fyne.NewSize(26, 26), container.NewStack(xBg, container.NewCenter(xGlyph))),
+		container.NewGridWrap(fyne.NewSize(closeCellSize, closeCellSize), container.NewStack(xBg, container.NewCenter(xGlyph))),
 		cb.onClose,
 	)
 	corner := container.NewVBox(container.NewHBox(layout.NewSpacer(), xCell), layout.NewSpacer())
@@ -187,10 +201,15 @@ func buildAudioCard(state *AppState, displayKind audioKind, playing, buffering, 
 	return container.NewStack(box, corner)
 }
 
-// audioSourceIconForKind maps the loaded audio kind to its source glyph: a person
-// for a recorded human narration, a waveform for on-device read-aloud (TTS).
-func audioSourceIconForKind(kind audioKind) fyne.Resource {
+// audioSourceIcon maps the loaded audio source to its glyph: a person for a
+// recorded HUMAN narration, a computer for a recorded synthetic voice, a waveform
+// for on-device read-aloud (TTS). The person is the app's documented mark for a
+// human reader (icons_embed.go, README), so a machine voice must not wear it.
+func audioSourceIcon(kind audioKind, synthetic bool) fyne.Resource {
 	if kind == audioRecorded {
+		if synthetic {
+			return theme.ComputerIcon()
+		}
 		return theme.AccountIcon()
 	}
 	return iconAudioWave

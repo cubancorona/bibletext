@@ -111,10 +111,10 @@ func TestAdvanceToNextChapter(t *testing.T) {
 
 func TestAudioSourceIconForKind(t *testing.T) {
 	// Read-aloud (TTS) → the waveform glyph; recorded → something else (the person).
-	if got := audioSourceIconForKind(audioTTS); got != iconAudioWave {
+	if got := audioSourceIcon(audioTTS, false); got != iconAudioWave {
 		t.Fatalf("TTS source icon = %v, want iconAudioWave", got)
 	}
-	if got := audioSourceIconForKind(audioRecorded); got == iconAudioWave {
+	if got := audioSourceIcon(audioRecorded, false); got == iconAudioWave {
 		t.Fatal("recorded source icon should not be the waveform glyph")
 	}
 }
@@ -167,10 +167,17 @@ func TestSelectSourceNarratorStaleness(t *testing.T) {
 	if kind, recID := gAudio.effectiveSource(state); kind != audioRecorded || recID != "web-williams" {
 		t.Fatalf("default effectiveSource = (%v, %q), want (recorded, web-williams)", kind, recID)
 	}
-	// …and TTS where it doesn't (deuterocanon).
+	// …and where Williams stops, the WEB-Catholic's OTHER recording takes over
+	// rather than the chapter dropping to read-aloud: the deuterocanon now has a
+	// synthetic narration, so the default source there is that recording.
 	tobit := &AppState{CurrentVersion: "webc", CurrentBook: "Tobit", CurrentChapter: 1}
-	if kind, recID := gAudio.effectiveSource(tobit); kind != audioTTS || recID != "" {
-		t.Fatalf("deuterocanon effectiveSource = (%v, %q), want (TTS, \"\")", kind, recID)
+	if kind, recID := gAudio.effectiveSource(tobit); kind != audioRecorded || recID != webbeRecordingID {
+		t.Fatalf("deuterocanon effectiveSource = (%v, %q), want (recorded, %q)", kind, recID, webbeRecordingID)
+	}
+	// A version with no recording at all is still read-aloud.
+	nkjv := &AppState{CurrentVersion: "nkjv", CurrentBook: "John", CurrentChapter: 3}
+	if kind, recID := gAudio.effectiveSource(nkjv); kind != audioTTS || recID != "" {
+		t.Fatalf("unrecorded version effectiveSource = (%v, %q), want (TTS, \"\")", kind, recID)
 	}
 }
 

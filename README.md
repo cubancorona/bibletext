@@ -149,11 +149,15 @@ root), signing, emulator use, and distribution are covered in
   public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
   set, fetched once and cached.
 - 🎧 **Listen** (all platforms) — play the current chapter from the reading
-  header as a recorded human **narration** or on-device **read-aloud**
+  header as a recorded **narration** (human, except for the WEB-Catholic's Greek
+  books) or on-device **read-aloud**
   (text-to-speech) of the verses on screen. The **Berean Standard Bible** (Barry
   Hays) and the **World English Bible** (David Williams) both have complete
   public-domain narrations, streamed from the project's own
-  [audio mirror](https://github.com/cubancorona/bibletext-audio); everything
+  [audio mirror](https://github.com/cubancorona/bibletext-audio). The
+  **WEB-Catholic**'s Greek books — which no human public-domain narration covers —
+  use a public-domain **synthetic voice**, labelled as such rather than as a
+  narrator; everything
   else falls back to read-aloud — all fetched only when you press play. A **person**
   icon marks a recording and a **waveform** marks read-aloud; tap it to choose the
   source. **Read-along**: a floating *Follow narration* button keeps the page in
@@ -428,7 +432,9 @@ Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
 - Scripture: **World English Bible** and **Berean Standard Bible** — public domain
   (via [bible.helloao.org](https://bible.helloao.org/docs/)).
 - Audio narration: **BSB** by Barry Hays (**CC0**) and **WEB** by David Williams
-  (**public domain**), streamed from the project's
+  (**public domain**), plus a **synthetic** public-domain narration of the
+  **WEB-Catholic**'s Greek books from [eBible.org](https://ebible.org/eng-webbe/),
+  streamed from the project's
   [audio mirror](https://github.com/cubancorona/bibletext-audio).
 - Cross-references: **[OpenBible.info](https://www.openbible.info/labs/cross-references/)**
   Treasury of Scripture Knowledge — **CC BY**.

@@ -3,12 +3,17 @@
 logs failures, never lets one bad chapter abort the run. Model forward on
 BIBLETEXT_ALIGN_DEVICE (use cpu — MPS leaks unified memory and freezes the machine).
 
-Two corpora:
+Three corpora:
   BSB (openbible/Hays), streamed by the app:
     batch_align.py                       # defaults: BSB_transcript.json, bsb, timings/
   WEB (AudioTreasure/Williams), which we'd HOST (kept separate):
     batch_align.py --audio williams --transcript WEB_transcript.json \
                    --version web --out-dir timings-web-williams
+  WEBBE (eBible synthetic), the WEB-Catholic's Greek books only — fetch with
+  fetch-webbe.sh first, and build the transcript from the app's own WEBC text so
+  the timings index what the reader actually sees:
+    batch_align.py --audio webbe --transcript WEBBE_transcript.json \
+                   --version webc --out-dir timings-webbe
 
     [--shard i/N] [--limit N] [--book "John"]
 """
@@ -48,6 +53,33 @@ def williams_manifest():
     return man
 
 
+# eBible's book codes for the WEBBE deuterocanon → the app's own book names. The
+# Greek Daniel is DAG in the audio filenames (the same text eBible's verse-per-line
+# export calls DNG), and the Greek Esther is ESG — a different book from the Hebrew
+# EST, which is why the WEB-Catholic cannot use the Williams Esther recording.
+WEBBE_BOOKS = {
+    "TOB": "Tobit", "JDT": "Judith", "ESG": "Esther", "WIS": "Wisdom",
+    "SIR": "Sirach", "BAR": "Baruch", "1MA": "1 Maccabees", "2MA": "2 Maccabees",
+    "DAG": "Daniel",
+}
+
+
+def webbe_manifest():
+    """WEBBE (eBible synthetic narration) per-chapter files → {(ver,book,ch): path}.
+    Filenames keep eBible's own scheme: eng-webbe_<order>_<CODE>_<chapter>.mp3, e.g.
+    eng-webbe_046_SIR_07.mp3. Only the books in WEBBE_BOOKS are mirrored — the
+    WEB-Catholic's protocanon keeps the human Williams narration."""
+    man = {}
+    for p in __import__("glob").glob(os.path.join(DATA, "webbe", "mp3", "*.mp3")):
+        m = re.match(r"eng-webbe_\d+_([A-Z0-9]{3})_(\d+)\.mp3$", os.path.basename(p))
+        if not m:
+            continue
+        book = WEBBE_BOOKS.get(m.group(1))
+        if book:
+            man[("webc", book, int(m.group(2)))] = p
+    return man
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
@@ -56,7 +88,7 @@ def main():
     ap.add_argument("--transcript", default="BSB_transcript.json")
     ap.add_argument("--out-dir", default="timings")
     ap.add_argument("--version", default="bsb")
-    ap.add_argument("--audio", default="manifest", choices=["manifest", "williams"])
+    ap.add_argument("--audio", default="manifest", choices=["manifest", "williams", "webbe"])
     a = ap.parse_args()
 
     out = os.path.join(DATA, a.out_dir)
@@ -64,7 +96,7 @@ def main():
     outp = lambda book, ch: os.path.join(out, f"{book}_{ch}.json")  # noqa: E731
 
     transcript = json.load(open(os.path.join(DATA, a.transcript)))
-    manifest = A.load_manifest() if a.audio == "manifest" else williams_manifest()
+    manifest = {"manifest": A.load_manifest, "williams": williams_manifest, "webbe": webbe_manifest}[a.audio]()
     ver = a.version
 
     jobs = []
