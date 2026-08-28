@@ -11,9 +11,9 @@
   a plain string means "same relative location inside the container", and a
   two-element array means [source, destination]. Paths use the ${Library} and
   ${ApplicationSupport} variables — NOT ${HOME}, which under the sandbox
-  already points at the container. This is the format Safari and OneDrive
-  ship on this very machine; a manifest in any other shape is ignored in
-  silence, which is indistinguishable from a reader having no data.
+  already points at the container. This is the format Apple's own
+  applications ship; a manifest in any other shape is ignored in silence,
+  which is indistinguishable from a reader having no data.
 
   WHY IT MATTERS. A sandboxed build is a different app to macOS: its own
   container, and HOME redirected into it. Without this file the app writes a

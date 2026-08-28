@@ -109,8 +109,12 @@ PROCESS_PATTERNS = (
         rb"\s+(?i:said|wrote|reported|declined|pointed)\b"
     )),
     ("specific local-machine narration", re.compile(
+        # An adverb between the noun and the verb defeated the original form
+        # ("on this very machine"), so the qualifier is optional and the
+        # bare "this/that very <machine>" reads as narration on its own.
         rb"(?i)\bthis\s+(?:mac|machine|computer|laptop)\s+"
-        rb"(?:has|is|was|swings|runs|cannot|can't|does|did)\b"
+        rb"(?:\w+\s+){0,2}?(?:has|is|was|swings|runs|cannot|can't|does|did)\b"
+        rb"|\b(?:this|that)\s+very\s+(?:mac|machine|computer|laptop)\b"
         rb"|\bon\s+this\s+mac\s+(?:before|currently|today)\b"
         rb"|\b(?:dev|development)\s+machine\b"
     )),
@@ -182,6 +186,8 @@ PROCESS_POSITIVE_CASES = (
     ("named-person process attribution", b"Alex (maintainer) wrote that the loop differs."),
     ("specific local-machine narration", b"This machine swings between benchmark runs."),
     ("specific local-machine narration", b"The test fails on the dev machine."),
+    ("specific local-machine narration", b"Two apps ship this format on this very machine."),
+    ("specific local-machine narration", b"This machine currently runs the older toolchain."),
     ("conversational request framing", b"The card appears because you asked to see it."),
     ("conversational request framing", b"It appears on the passage you asked to see."),
     ("revision-process narration", b"// AMENDED. The previous assertion differed."),
@@ -211,6 +217,8 @@ PROCESS_NEGATIVE_CASES = (
     b"The session category is set before the player starts.",
     b"noteFocus is which note is expanded this session, never persisted.",
     b"Loaded earlier this session, or an instant placeholder.",
+    b"Run this command on the machine that produced the archive.",
+    b"The format Apple's own applications ship.",
 )
 
 CANONICAL_SCRIPTURE_PREFIXES = (
