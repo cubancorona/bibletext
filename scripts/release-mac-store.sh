@@ -137,10 +137,14 @@ note "confirming the atomic preferences writer is in both slices"
 # each slice must carry the patched writer's marker. The control proves the
 # probe can find anything at all, so a zero means absence rather than a broken
 # search.
+# grep -c, never grep -q: -q exits on the first match, strings then dies of
+# SIGPIPE, and under `set -o pipefail` that non-zero status fails the pipeline
+# even though the string was found. The first run of this guard refused a
+# perfectly good build for exactly that reason.
 for slice in "$WORK/desktop-arm64" "$WORK/desktop-amd64"; do
-  strings -a "$slice" | grep -qF "Preferences save not published" ||
+  [ "$(strings -a "$slice" | grep -cF "Preferences save not published")" -gt 0 ] ||
     fail "$(basename "$slice") lacks the atomic preferences writer — the Fyne patch did not reach this build"
-  strings -a "$slice" | grep -qF "World English Bible" ||
+  [ "$(strings -a "$slice" | grep -cF "World English Bible")" -gt 0 ] ||
     fail "$(basename "$slice") is missing a string every build has; the marker probe cannot be trusted"
 done
 echo "  both slices carry the patched writer"
