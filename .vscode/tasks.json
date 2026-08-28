@@ -100,7 +100,7 @@
       "label": "Run on Android Emulator",
       "detail": "build + boot the bibletext_test AVD (API 35 arm64) if needed + install + launch",
       "type": "shell",
-      "command": "source \"$HOME/Library/Android/env.sh\" && if ! adb devices | grep -qE 'emulator-[0-9]+[[:space:]]+device'; then (emulator -avd bibletext_test >/dev/null 2>&1 &) fi && adb wait-for-device && until [ \"$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')\" = \"1\" ]; do sleep 2; done && adb install -r cmd/mobile/BibleText.apk && adb shell am start -n uk.co.bibletext/org.golang.app.GoNativeActivity",
+      "command": "if [ ! -f \"$HOME/Library/Android/env.sh\" ]; then echo \"No Android toolchain found at $HOME/Library/Android/env.sh. The Android build needs a JDK, the SDK, the NDK and bundletool; docs/ANDROID.md has the setup.\" >&2; exit 1; fi && source \"$HOME/Library/Android/env.sh\" && if ! adb devices | grep -qE 'emulator-[0-9]+[[:space:]]+device'; then (emulator -avd bibletext_test >/dev/null 2>&1 &) fi && adb wait-for-device && until [ \"$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')\" = \"1\" ]; do sleep 2; done && adb install -r cmd/mobile/BibleText.apk && adb shell am start -n uk.co.bibletext/org.golang.app.GoNativeActivity",
       "options": { "cwd": "${workspaceFolder}" },
       "dependsOn": ["Build Android APK (debug)"],
       "group": "build",
@@ -110,7 +110,7 @@
       "label": "Android Logcat (BibleText)",
       "detail": "app log stream — Go's log.Printf arrives under the GoLog tag",
       "type": "shell",
-      "command": "source \"$HOME/Library/Android/env.sh\" && adb logcat -T 1 -s GoLog:V Fyne:V AndroidRuntime:E ActivityManager:W",
+      "command": "if [ ! -f \"$HOME/Library/Android/env.sh\" ]; then echo \"No Android toolchain found at $HOME/Library/Android/env.sh. The Android build needs a JDK, the SDK, the NDK and bundletool; docs/ANDROID.md has the setup.\" >&2; exit 1; fi && source \"$HOME/Library/Android/env.sh\" && adb logcat -T 1 -s GoLog:V Fyne:V AndroidRuntime:E ActivityManager:W",
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
       "group": "none",
@@ -170,8 +170,15 @@
     },
     {
       "label": "Format (gofmt)",
+      "detail": "gofmt over this module's own Go files (third_party is left alone)",
       "type": "shell",
-      "command": "gofmt -l -w .",
+      // NOT `gofmt -w .`, and not a directory list either: given a DIRECTORY
+      // gofmt recurses, so both forms reach third_party/fyne — the vendored,
+      // patched upstream copy — and reformatting it corrupts the patch and the
+      // diff against upstream alike. Listing FILES through git is what keeps it
+      // out, because third_party is gitignored; --others --exclude-standard
+      // still picks up Go files you have just created.
+      "command": "git ls-files --cached --others --exclude-standard '*.go' | xargs gofmt -l -w",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "none"
     },

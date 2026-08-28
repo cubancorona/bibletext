@@ -1,38 +1,20 @@
 {
-  // Multi-platform Bible reader (Go + Fyne). Open this file with
-  // "File → Open Workspace from File…" to load the project with its tasks,
-  // launch configs, and recommended extensions in one shot. The folder-level
-  // .vscode/{settings,tasks,launch,extensions}.json still apply; the blocks
-  // below add workspace-scoped settings on top.
+  // Multi-platform Bible reader (Go + Fyne).
+  //
+  // Open with "File → Open Workspace from File…" to load the project with its
+  // tasks, launch configs and recommended extensions in one shot. Opening the
+  // FOLDER instead works identically — everything real lives in .vscode/ —
+  // so nobody is disadvantaged by not knowing this file exists.
+  //
+  // Deliberately thin. Folder settings in .vscode/settings.json take
+  // precedence over a workspace "settings" block for files in that folder, so
+  // anything duplicated here would either be inert or, worse, quietly disagree
+  // with the folder copy after one of the two was edited. Settings belong in
+  // .vscode/settings.json; extension recommendations in .vscode/extensions.json.
   "folders": [
     {
       "name": "bibletext",
       "path": "."
     }
-  ],
-  "settings": {
-    // Trim the tree/search to source — packaged bundles and coverage output.
-    "files.exclude": {
-      "**/*.app": true
-    },
-    "search.exclude": {
-      "**/*.app": true,
-      "**/coverage.out": true
-    },
-    // Match the gofmt-on-save convention in AGENTS.md.
-    "[go]": {
-      "editor.defaultFormatter": "golang.go",
-      "editor.formatOnSave": true,
-      "editor.codeActionsOnSave": {
-        "source.organizeImports": "explicit"
-      }
-    },
-    "go.useLanguageServer": true,
-    "go.testFlags": ["-race", "-v"]
-  },
-  "extensions": {
-    "recommendations": [
-      "golang.go"
-    ]
-  }
+  ]
 }

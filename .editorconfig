@@ -1,0 +1,44 @@
+# Indentation and whitespace conventions for BibleText, in the one format every
+# major editor reads. The .vscode/ directory configures VS Code specifically;
+# this file is what keeps a contributor on Vim, Zed, GoLand or Sublime writing
+# the same bytes. Values below were measured from the tree, not assumed.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# gofmt owns Go formatting entirely; tabs are not a preference here.
+[*.go]
+indent_style = tab
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+# 610 indented lines in the shell scripts use two spaces, 13 use a tab.
+[*.sh]
+indent_style = space
+indent_size = 2
+
+[*.java]
+indent_style = space
+indent_size = 4
+
+[*.{json,jsonc,yml,yaml,toml}]
+indent_style = space
+indent_size = 2
+
+# Markdown: no file in the tree currently uses two trailing spaces as a line
+# break, so trimming is safe. If you ever want that break, use a backslash.
+[*.md]
+indent_style = space
+indent_size = 2
+
+# Vendored, patched upstream code — never reformat it, or the Fyne patch and
+# the diff against upstream both become unreadable.
+[third_party/**]
+trim_trailing_whitespace = false
+insert_final_newline = false

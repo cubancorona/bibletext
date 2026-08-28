@@ -20,6 +20,33 @@ On Linux, the Fyne GUI needs OpenGL/X11 headers to build:
 sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
 ```
 
+## Editor setup
+
+Nothing here is required — the repo builds and tests from the command line
+alone — but the configuration is committed so you do not have to work it out.
+
+The root `.editorconfig` carries the indentation and whitespace conventions in
+the format most editors read, so Vim, Zed, GoLand and Sublime agree with VS
+Code without further setup.
+
+For VS Code, open the folder (or `bibletext.code-workspace`, which is
+equivalent) and accept the recommended extensions. You then get:
+
+- **Run and Debug** — the desktop reader, the `bibletextdev` build, the Linux
+  and Windows mimics, and the iOS Simulator, each with and without delve.
+- **Tasks** — build, the race-detector test run, the view-test mutation gate,
+  packaging, the Android APK and emulator, and logcat. `Cmd+Shift+B` is the
+  compile check; Run Test Task is `go test -race ./...`.
+- Format and organise-imports on save via gopls, matching the `gofmt`
+  convention above.
+
+Two things worth knowing. Files behind another platform's build tag appear
+greyed out, which is expected and explained under *Platform build tags* below.
+And `build/` and `third_party/` are excluded from search and the file watcher:
+together they are the large majority of the files in a working tree, all of it
+generated or vendored, and watching them makes the editor stutter whenever a
+release script rewrites them.
+
 ## Before opening a pull request
 
 - Format changed Go files with `gofmt -w <files>`, then run `go vet ./...`.
