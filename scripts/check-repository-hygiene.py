@@ -445,8 +445,37 @@ def changed_paths(commit: str) -> list[str]:
     return [p.decode("utf-8", "surrogateescape") for p in raw.split(b"\0") if p]
 
 
+# Style and narration violations in a FILE STATE are remediable: a later
+# commit can rewrite the file, and once the range's final state is clean the
+# earlier snapshots are exactly what remediation looks like — flagging them
+# forever would make every cleanup fail the very push that performs it (the
+# force-push rescan after the Aug 2026 message rewrite did precisely that).
+# Disclosure classes — secrets, private data, key material, personal paths —
+# are deliberately NOT here: content that ever reached a pushed state is
+# disclosed regardless of later deletion. Commit MESSAGES are immutable and
+# are always enforced for every class.
+REMEDIABLE_STATE_LABELS = {
+    "conversation provenance",
+    "working-session narration",
+    "AI authorship narration",
+    "review-process narration",
+    "commit-process narration",
+    "test-discovery narration",
+    "revision-process narration",
+    "conversational request framing",
+    "internal task provenance",
+    "named-person process attribution",
+    "specific local-machine narration",
+    "removed private/process-artifact reference",
+    "signing process-record reference",
+    "AI generated-by credit",
+    "Claude Code promotion",
+}
+
+
 def scan_history(revision_range: str, secrets: list[tuple[str, bytes]]) -> list[str]:
     failures: list[str] = []
+    remediable: list[tuple[str, str, str]] = []
     commits = [c.decode() for c in git("rev-list", "--reverse", revision_range).splitlines()]
     seen_states: set[tuple[str, str]] = set()
     for commit in commits:
@@ -468,6 +497,25 @@ def scan_history(revision_range: str, secrets: list[tuple[str, bytes]]) -> list[
             if result.returncode != 0:  # deleted path or non-file tree entry
                 continue
             for problem in content_problems(path, result.stdout, secrets):
+                if problem in REMEDIABLE_STATE_LABELS:
+                    remediable.append((commit, path, problem))
+                else:
+                    failures.append(f"commit {commit[:12]} {path}: {problem}")
+
+    if remediable:
+        tip = commits[-1]
+        tip_clean: dict[str, set[str]] = {}
+        for commit, path, problem in remediable:
+            if path not in tip_clean:
+                shown = subprocess.run(
+                    ["git", "show", f"{tip}:{path}"], cwd=ROOT,
+                    check=False, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                )
+                if shown.returncode != 0:  # deleted by the tip: remediated
+                    tip_clean[path] = set()
+                else:
+                    tip_clean[path] = set(content_problems(path, shown.stdout, secrets))
+            if problem in tip_clean[path]:
                 failures.append(f"commit {commit[:12]} {path}: {problem}")
     return failures
 
