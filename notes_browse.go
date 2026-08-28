@@ -673,9 +673,8 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	// for the store: the VBox-per-note it replaces built all 2,000 rows of a
 	// 2,000-note scrapbook to show the six that fit on screen. The benchmark and
 	// ceiling are documented in docs/NOTES_SPEC.md#staging-and-validation. The
-	// ROW is unchanged: the same noteBrowseRow
-	// the column added, separator and all — the List's own separators are hidden
-	// so the row keeps drawing its own, exactly as before.
+	// ROW is the same shape the column added, separator and all — the List's own
+	// separators are hidden so the row keeps drawing its own, exactly as before.
 	//
 	// Row heights vary (a bubble wraps its message), so each row measures itself
 	// as it comes into view and tells the list via SetItemHeight: resizing to the
@@ -683,37 +682,70 @@ func buildNotesBrowseView(state *AppState) fyne.CanvasObject {
 	// Off-screen rows fall back to the template's height until first seen — the
 	// standard windowed-list trade: the scrollbar's extent is approximate until
 	// the rows near it have been visited, and no reader-visible row is ever
-	// wrong. SetItemHeight re-enters updateItem once via RefreshItem and then
-	// stops, because the re-measure of an unchanged row is byte-stable.
+	// wrong.
+	//
+	// THE ROWS ARE REFILLED, NOT REBUILT. widget.List pools its row objects, so
+	// CreateItem runs about a viewport's worth of times for the whole list
+	// while UpdateItem runs on every visible row of every layout pass. Building
+	// a fresh widget tree in UpdateItem — which this did — spent the pool and
+	// then paid a container.NewThemeOverride construction per row per pass, and
+	// that constructor clears the process-wide font cache (see browseRow). The
+	// rows are kept here and refilled instead: the expensive half happens once
+	// per pooled row, in CreateItem, where the list already expects it.
 	list := widget.NewList(
 		func() int { return len(notes) },
 		func() fyne.CanvasObject {
-			// The template row sizes the list's idea of an unvisited row. A real
-			// row from a real one-line note, so the estimate is a typical row and
-			// the first layout builds a viewport's worth of rows, not hundreds.
-			return container.NewVBox(noteBrowseRow(state, StoredNote{
-				Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "A note.",
-			}, pal))
+			// A pooled row, sized by the list from a real one-line note so its
+			// idea of an unvisited row is a typical row rather than a guess.
+			r := newBrowseRow(state, pal)
+			r.show(StoredNote{Book: "Psalms", Chapter: 23, VerseLo: 1, Text: "A note."})
+			return r.root
 		},
 		nil, // set below: UpdateItem needs the list itself for SetItemHeight
 	)
 	list.HideSeparators = true
+
+	// MEASURED HEIGHTS, REMEMBERED. Telling the list a height it did not have
+	// makes it refresh, which re-runs this update for every visible row, which
+	// measures them all again — so the first display of a viewport re-measures
+	// its rows many times over. The measurement is the expensive part (a
+	// wrapping label re-shapes its text to answer MinSize), and the answer only
+	// depends on the note and the width, so it is worth keeping. Keyed by note
+	// id: ids are unique and never reused, and a note whose content changed got
+	// here through a rebuild with a fresh cache.
+	measured := map[uint64]float32{}
+	measuredAt := float32(0)
 	list.UpdateItem = func(id widget.ListItemID, o fyne.CanvasObject) {
 		if id < 0 || id >= len(notes) {
 			return
 		}
-		slot := o.(*fyne.Container)
-		row := noteBrowseRow(state, notes[id], pal)
-		slot.Objects = []fyne.CanvasObject{row}
-		slot.Refresh()
-		if w := list.Size().Width; w > 0 {
+		row := browseRowOf(o)
+		if row == nil {
+			return // not one of ours; nothing safe to fill
+		}
+		n := notes[id]
+		row.show(n)
+		w := list.Size().Width
+		if w <= 0 {
+			return
+		}
+		if w != measuredAt {
+			clear(measured)
+			measuredAt = w
+		}
+		h, ok := measured[n.ID]
+		if !ok {
 			// Two passes: the first gives the wrapping labels their width (their
 			// MinSize height is only honest once they know it), the second reads
 			// the settled answer.
-			row.Resize(fyne.NewSize(w, row.MinSize().Height))
-			row.Resize(fyne.NewSize(w, row.MinSize().Height))
-			list.SetItemHeight(id, row.MinSize().Height)
+			row.root.Resize(fyne.NewSize(w, row.root.MinSize().Height))
+			row.root.Resize(fyne.NewSize(w, row.root.MinSize().Height))
+			h = row.root.MinSize().Height
+			measured[n.ID] = h
+		} else {
+			row.root.Resize(fyne.NewSize(w, h))
 		}
+		list.SetItemHeight(id, h)
 	}
 	// Keep the reader's place in the list. Opening a note and coming back — or
 	// any rebuild while Notes mode is up — otherwise dropped them at the top of
@@ -775,10 +807,52 @@ func noteDateLabel(ts int64, now time.Time) string {
 	}
 }
 
-func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
-	ref := canvas.NewText(noteReference(n), pal.Accent)
-	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = browseRefTextSize
+// browseRow is ONE row of the list, built once and refilled per note.
+//
+// WHY IT IS REUSABLE RATHER THAN REBUILT. widget.List recycles row objects: it
+// creates about a viewport's worth and then hands the same ones back under a
+// new index. A row that rebuilds its widget tree on every update throws that
+// away — and here it was far worse than wasteful. The row's density comes from
+// a container.NewThemeOverride, and CONSTRUCTING one walks the whole subtree
+// calling cache.ResetThemeCaches() per widget, which clears the PROCESS-WIDE
+// font measurement cache; the constructor then Refresh()es the subtree, so
+// every string in the row is re-shaped from a cache the call just emptied.
+// Rebuilding per update therefore paid that on every row on every layout pass,
+// and SetItemHeight re-enters the update once more. Measured before this
+// change, on a 500-note store: opening the browser cost 600ms and 652MB across
+// 5.6M allocations, and one scroll step cost 39ms. See
+// notes_browse_bench_test.go.
+//
+// Refilling instead puts the override back where it belongs: paid once per
+// POOLED row when the list creates it, never again. The optional pieces — the
+// translation in the heading, the minimized marker — are built once and shown
+// or hidden, because both box layouts skip hidden children, so a refilled row
+// measures exactly as a freshly built one does.
+type browseRow struct {
+	root fyne.CanvasObject
+	card *searchResultCard
+
+	ref        *canvas.Text
+	version    *canvas.Text
+	versionBox fyne.CanvasObject // the wrapper, hidden whole when there is no abbrev
+	stamp      *canvas.Text
+	body       *widget.Label
+	quiet      *canvas.Text
+
+	// note is the record the row is currently showing. The delete control and
+	// the tap-through read it through the row rather than capturing a note in
+	// a closure, because the closures outlive any one note now.
+	note StoredNote
+}
+
+// newBrowseRow builds the row's widgets once. Nothing here depends on which
+// note it will show.
+func newBrowseRow(state *AppState, pal palette) *browseRow {
+	r := &browseRow{}
+
+	r.ref = canvas.NewText("", pal.Accent)
+	r.ref.TextStyle = fyne.TextStyle{Bold: true}
+	r.ref.TextSize = browseRefTextSize
 
 	// The translation in parentheses after the reference, quiet and small.
 	// It belongs here rather than under the bubble because it is
@@ -786,12 +860,10 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	// with the reference instead of as a second line making a second claim.
 	// Abbreviated — "John 3:16 (WEB)" — because the full name at this size
 	// competes with the reference it is qualifying.
-	head0 := fyne.CanvasObject(ref)
-	if abbrev := noteVersionAbbrev(n.VersionID); abbrev != "" {
-		v := canvas.NewText("("+abbrev+")", pal.TextMuted)
-		v.TextSize = browseMetaTextSize
-		head0 = container.NewHBox(ref, container.NewCenter(v))
-	}
+	r.version = canvas.NewText("", pal.TextMuted)
+	r.version.TextSize = browseMetaTextSize
+	r.versionBox = container.NewCenter(r.version)
+	head0 := container.NewHBox(r.ref, r.versionBox)
 
 	// The byline and the date fold into ONE muted fact on the heading's far
 	// edge — "From you · Today" — instead of the byline holding a full-height
@@ -800,13 +872,9 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	// accompanies every bubble, as it must; it is chrome, so it rides with the
 	// row's other chrome. Centred vertically so the smaller text sits on the
 	// reference's optical middle.
-	meta := noteByline(n)
-	if when := noteDateLabel(n.Received, time.Now()); when != "" {
-		meta += " · " + when
-	}
-	stamp := canvas.NewText(meta, pal.TextMuted)
-	stamp.TextSize = browseMetaTextSize
-	head := container.NewBorder(nil, nil, head0, container.NewCenter(stamp))
+	r.stamp = canvas.NewText("", pal.TextMuted)
+	r.stamp.TextSize = browseMetaTextSize
+	head := container.NewBorder(nil, nil, head0, container.NewCenter(r.stamp))
 
 	// The note's words, in the SAME bubble the reading page draws: list bubbles
 	// must match reading bubbles — identity is the tailed shape, which the
@@ -814,7 +882,9 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	// PREVIEW (notePreview); the tap-through shows the whole message on the
 	// passage. A collapsed note still shows its text here; the browser is
 	// where you read them, the chapter is where you chose how much to see.
-	body := noteBubblePadded(notePreview(n.Text), pal, browseBubblePad)
+	r.body = widget.NewLabel("")
+	r.body.Wrapping = fyne.TextWrapWord
+	bubble := noteBubbleAround(r.body, pal, browseBubblePad)
 
 	// DELETE, BESIDE THE BUBBLE AND COSTING NO HEIGHT. A bin, the same
 	// mark the reading page uses where a press destroys — so the two places a
@@ -827,29 +897,117 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 	// TestNoteRowTrashCostsNoHeight measures the row with and without it and
 	// fails on a single pixel of growth. The bubble keeps the whole remaining
 	// width, so nothing about the message's wrap changes either.
-	body = container.NewBorder(nil, nil, nil, noteRowTrash(state, n, pal), body)
+	body := container.NewBorder(nil, nil, nil,
+		noteRowTrashFor(state, pal, func() StoredNote { return r.note }), bubble)
 
-	rows := container.New(layout.NewCustomPaddedVBoxLayout(browseRowGap), head, body)
-	if n.Minimized {
-		quiet := canvas.NewText("Minimized in the chapter", pal.TextMuted)
-		quiet.TextSize = browseMetaTextSize
-		rows.Add(quiet)
-	}
+	r.quiet = canvas.NewText("Minimized in the chapter", pal.TextMuted)
+	r.quiet.TextSize = browseMetaTextSize
+	r.quiet.Hide()
 
-	var base fyne.Theme = theme.DefaultTheme()
-	if state != nil && state.theme != nil {
-		base = state.theme
-	}
+	rows := container.New(layout.NewCustomPaddedVBoxLayout(browseRowGap), head, body, r.quiet)
+
 	inner := container.New(
 		layout.NewCustomPaddedLayout(browseRowPad, browseRowPad, browseRowPad, browseRowPad),
-		container.NewThemeOverride(rows, browseRowTheme{Theme: base}))
-	card := newNoteBrowseCard(state, n, inner, pal)
-	return container.New(layout.NewCustomPaddedVBoxLayout(browseSepGap), card, widget.NewSeparator())
+		container.NewThemeOverride(rows, browseRowTheme{Theme: browseRowBaseTheme(state)}))
+	r.card = newSearchResultCard(state, Verse{}, inner, pal)
+	r.card.onTap = func() { openNote(state, r.note) }
+	r.card.notesRow = r
+	r.root = container.New(layout.NewCustomPaddedVBoxLayout(browseSepGap), r.card, widget.NewSeparator())
+	return r
 }
 
-// noteRowTrash is the row's delete control: quiet, icon-only, and vertically
-// centred so it sits on the bubble's middle whatever height the message wrapped
-// to.
+// browseRowOf recovers the row that owns a pooled list object.
+func browseRowOf(o fyne.CanvasObject) *browseRow {
+	box, ok := o.(*fyne.Container)
+	if !ok || len(box.Objects) == 0 {
+		return nil
+	}
+	card, ok := box.Objects[0].(*searchResultCard)
+	if !ok {
+		return nil
+	}
+	return card.notesRow
+}
+
+// show points the row at a note. Only text and visibility move; no widget is
+// created, so the row's theme scope — applied when the list created it —
+// still covers everything on screen.
+func (r *browseRow) show(n StoredNote) {
+	r.note = n
+	// The card carries the note's passage so a row is addressable as the
+	// search hit it is built from; onTap routes to openNote regardless.
+	r.card.verse = Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}
+
+	setCanvasText(r.ref, noteReference(n))
+	if abbrev := noteVersionAbbrev(n.VersionID); abbrev != "" {
+		setCanvasText(r.version, "("+abbrev+")")
+		r.versionBox.Show()
+	} else {
+		r.versionBox.Hide()
+	}
+
+	meta := noteByline(n)
+	if when := noteDateLabel(n.Received, time.Now()); when != "" {
+		meta += " · " + when
+	}
+	setCanvasText(r.stamp, meta)
+
+	if text := notePreview(n.Text); text != r.body.Text {
+		r.body.SetText(text)
+	}
+
+	if n.Minimized {
+		r.quiet.Show()
+	} else {
+		r.quiet.Hide()
+	}
+}
+
+// setCanvasText refreshes a text only when it actually changed. A refilled row
+// commonly keeps a field (the same byline, the same translation), and
+// canvas.Text.Refresh re-shapes the string whether or not it moved.
+func setCanvasText(t *canvas.Text, s string) {
+	if t.Text == s {
+		return
+	}
+	t.Text = s
+	t.Refresh()
+}
+
+// noteBrowseRow is one note in the list: its passage, then its message. The
+// whole card is the tap target, matching the search results it sits beside.
+//
+// One row, built and filled in a single call. The list does not use this — it
+// keeps browseRow values and refills them — but a caller that wants a single
+// standalone row (and every row test) gets the identical widget tree here.
+func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
+	r := newBrowseRow(state, pal)
+	r.show(n)
+	return r.root
+}
+
+// noteRowTrash is the delete control on its own, carrying the row-scoped theme
+// itself — for a caller showing or measuring one outside a row. A browseRow
+// already wraps its whole content in that theme, so the row builds the button
+// through noteRowTrashFor and does not pay a second override for it.
+func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
+	return container.NewThemeOverride(
+		noteRowTrashFor(state, pal, func() StoredNote { return n }),
+		browseRowTheme{Theme: browseRowBaseTheme(state)})
+}
+
+// browseRowBaseTheme is the theme the row's override wraps: the app's, when it
+// has one.
+func browseRowBaseTheme(state *AppState) fyne.Theme {
+	if state != nil && state.theme != nil {
+		return state.theme
+	}
+	return theme.DefaultTheme()
+}
+
+// noteRowTrashFor builds the row's delete control: quiet, icon-only, and
+// vertically centred so it sits on the bubble's middle whatever height the
+// message wrapped to.
 //
 // It deletes without asking, which is the same contract the reading page's bin
 // has and is defensible for the same reason: this is a list of your notes, the
@@ -858,11 +1016,19 @@ func noteBrowseRow(state *AppState, n StoredNote, pal palette) fyne.CanvasObject
 // confirmation dialog on every delete — the store's charter is that it keeps
 // what it is given, and an undo keeps that promise where a dialog only slows
 // the deliberate case down.
-func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject {
+//
+// The note arrives as a FUNCTION because the row outlives any one record: a
+// pooled row is refilled as the list scrolls, so the control must ask what it
+// is showing at the moment of the press rather than close over a note it was
+// built with. It adds no theme override of its own — nested inside the row's,
+// one would only stop the row's from reaching the button and then re-apply
+// the very same sizes.
+func noteRowTrashFor(state *AppState, pal palette, note func() StoredNote) fyne.CanvasObject {
 	btn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		if state == nil {
 			return
 		}
+		n := note()
 		deleteNoteByID(appPrefs(), n.ID)
 		// FOCUS MUST NOT OUTLIVE THE RECORD IT NAMES. Deleting from here left
 		// noteFocus pointing at an id the store no longer has, and the reading
@@ -893,27 +1059,13 @@ func noteRowTrash(state *AppState, n StoredNote, pal palette) fyne.CanvasObject 
 		state.refresh()
 	})
 	btn.Importance = widget.LowImportance
-	var base fyne.Theme = theme.DefaultTheme()
-	if state != nil && state.theme != nil {
-		base = state.theme
-	}
-	sized := container.NewThemeOverride(btn, browseRowTheme{Theme: base})
 	// CENTRED ON THE BUBBLE'S BODY, NOT ON THE WHOLE SHAPE. The bubble
 	// is body + tail, and centring on the pair pushed the bin down by half the
 	// tail's depth — it sat visibly low against the words it belongs to. The
 	// bottom padding takes the tail's depth back out, so the mark lines up with
 	// the middle of the message.
 	return container.New(layout.NewCustomPaddedLayout(0, noteTailDepth, 0, 0),
-		container.NewCenter(sized))
-}
-
-// newNoteBrowseCard is a search-result card that opens a note instead of a
-// verse — same widget, so the row's hover, tap target and spacing cannot drift
-// from the search hits beside it.
-func newNoteBrowseCard(state *AppState, n StoredNote, content fyne.CanvasObject, pal palette) *searchResultCard {
-	c := newSearchResultCard(state, Verse{BookName: n.Book, Chapter: n.Chapter, Verse: n.VerseLo}, content, pal)
-	c.onTap = func() { openNote(state, n) }
-	return c
+		container.NewCenter(btn))
 }
 
 // setNotesMode is the ONE place the Notes flag moves, so leaving the mode
