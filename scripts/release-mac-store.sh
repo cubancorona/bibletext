@@ -31,7 +31,16 @@
 #
 # Output: build/mac-store/BibleText.pkg
 set -euo pipefail
-umask 077
+
+# 022, deliberately, NOT 077. Everything the Mac App Store ships must stay
+# readable by non-root users or the upload is rejected with error 90255 ("the
+# installer package includes files that are only readable by the root user"),
+# because macOS cannot verify the code signature of a bundle it cannot read.
+# A tighter umask here protects nothing: this directory holds build outputs, an
+# entitlements plist and a go.mod backup, and the provisioning profile ships
+# inside every copy of the app. The signing identity lives in the Keychain and
+# the App Store key outside the tree. A 077 here cost one rejected upload.
+umask 022
 
 # Nothing this build runs has any business seeing the operator's AI provider
 # keys, and the project's own testing workflow sources a dotenv that holds
@@ -267,6 +276,23 @@ for m in $MINOS_SEEN; do
     fail "a binary slice is linked for macOS $m, not $MAC_MIN — the version-min flags did not reach the compile"
 done
 echo "  floor: macOS $MAC_MIN (plist and both slices agree)"
+
+note "confirming the bundle is readable by non-root users"
+# Apple rejects an upload whose payload only root can read (error 90255). The
+# umask above is what keeps this true; this proves it for the tree that is
+# actually about to be packaged, whatever produced the files.
+unreadable="$(find "$APP" -type f ! -perm -004 | wc -l | tr -d ' ')"
+untraversable="$(find "$APP" -type d ! -perm -001 | wc -l | tr -d ' ')"
+[ "$unreadable" -eq 0 ] ||
+  fail "$unreadable file(s) in the bundle are not readable by other users; the upload would be rejected with error 90255"
+[ "$untraversable" -eq 0 ] ||
+  fail "$untraversable director(y/ies) in the bundle are not traversable by other users; the upload would be rejected with error 90255"
+# The probe has to be able to see a real violation, or a zero proves nothing.
+probe="$WORK/perm-probe"; : > "$probe"; chmod 600 "$probe"
+[ "$(find "$probe" -type f ! -perm -004 | wc -l | tr -d ' ')" -eq 1 ] ||
+  fail "the permission probe cannot detect an unreadable file; the check above cannot be trusted"
+rm -f "$probe"
+note "  every file in the bundle is world-readable"
 
 note "building the installer package"
 productbuild --component "$APP" /Applications \
