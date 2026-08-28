@@ -1,4 +1,4 @@
-VERSION 1.2.3 (macOS)
+VERSION 1.2.4 (macOS)
 
 BibleText is a Bible reader. No account, login, or registration is required. Reading, search, navigation, notes, and cross-references do not require an AI-provider key. Downloaded scripture remains readable and searchable offline; network-backed downloads and optional provider services require connectivity when used.
 

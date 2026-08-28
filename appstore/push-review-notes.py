@@ -48,7 +48,7 @@ REPOSITORY_HYGIENE_CHECK = os.path.join(REPO, "scripts", "check-repository-hygie
 # This helper intentionally has no app-ID or version override. Changing either
 # target requires a tracked, reviewable source change.
 APP_ID = "6784567351"
-TARGET_VERSION = "1.2.3"
+TARGET_VERSION = "1.2.4"
 
 # Review notes may be changed only while App Store Connect considers the
 # version editable.
