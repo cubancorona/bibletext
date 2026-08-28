@@ -436,14 +436,29 @@ func cachePathForVersion(id string) string {
 	return filepath.Join(filepath.Dir(base), name+".json")
 }
 
-// versionCacheIsCurrent reports whether v's CURRENT-epoch cache file exists on
-// disk. False right after a cacheEpoch bump, when startup was served by the
-// superseded-cache fallback (loadVersionFromCacheOnly) — the caller then
+// versionCacheIsCurrent reports whether v's CURRENT-epoch cache can actually
+// be SERVED. False right after a cacheEpoch bump, when startup was served by
+// the superseded-cache fallback (loadVersionFromCacheOnly) — the caller then
 // schedules the background refetch that upgrades the stored text to the
 // current decoder (triggerFullDownload). Every other load path goes through
 // loadVersionData, which is cache-current-or-fetch and self-heals.
+//
+// IT LOADS RATHER THAN STATS, and that is the whole point. This question and
+// the serve path's question must have the same answer, or the reader is
+// pinned on the previous epoch with the refresh switched off and the picker
+// silent: an existing-but-unloadable file (a write interrupted after the
+// rename, a wrong-schema file, a directory) statted true while the serve path
+// fell through to the superseded epoch, and nothing in the session or in any
+// later launch repaired it. That is V1 in docs/VERSION_STATES.md, and it
+// breaks the standing rule that a stale-serving state is never silent.
+//
+// Measured cost of the honest answer: ~50 ms for the 6.3 MB WEB cache on an
+// M3 Max, once per launch, on the background load goroutine that has just
+// done the same parse — against a defect the reader cannot see, diagnose or
+// escape. saveBibleToCache's fsync (cache.go) makes the corrupt input rare;
+// this makes it harmless.
 func versionCacheIsCurrent(v BibleVersion) bool {
-	_, err := os.Stat(cachePathForVersion(v.ID))
+	_, err := loadBibleFromCache(cachePathForVersion(v.ID))
 	return err == nil
 }
 
