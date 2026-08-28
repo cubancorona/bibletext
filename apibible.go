@@ -248,6 +248,10 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 	// support (a 400/404 on a book's FIRST range) falls back to the
 	// per-chapter path for that book. First error wins and cancels the rest.
 	verses := make(map[string]map[int][]Verse, 66)
+	// Guarded by the same mutex as verses: notes anchored in verses this
+	// translation omits, keyed book -> chapter, exactly as the helloao
+	// decoder assembles them.
+	orphans := make(map[string]map[int][]OrphanFootnote)
 	var (
 		mu       sync.Mutex
 		wg       sync.WaitGroup
@@ -271,10 +275,10 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 		go func(plan apiBibleBookPlan) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			book, err := fetchAPIBibleBookByPassages(ctx, client, apiKey, providerBibleID, plan)
+			book, bookOrphans, err := fetchAPIBibleBookByPassages(ctx, client, apiKey, providerBibleID, plan)
 			var se *apiBibleStatusError
 			if errors.As(err, &se) && (se.Status == http.StatusBadRequest || se.Status == http.StatusNotFound) {
-				book, err = fetchAPIBibleBookByChapters(ctx, client, apiKey, providerBibleID, plan)
+				book, bookOrphans, err = fetchAPIBibleBookByChapters(ctx, client, apiKey, providerBibleID, plan)
 			}
 			if err != nil {
 				fail(err)
@@ -282,6 +286,9 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 			}
 			mu.Lock()
 			verses[plan.name] = book
+			if len(bookOrphans) > 0 {
+				orphans[plan.name] = bookOrphans
+			}
 			mu.Unlock()
 		}(plan)
 	}
@@ -295,6 +302,9 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 		booksOut = append(booksOut, apiBibleBookName(usfm))
 	}
 	data := &BibleData{Verses: verses, Books: booksOut}
+	if len(orphans) > 0 {
+		data.OrphanFootnotes = orphans
+	}
 	if err := validateBibleData(data); err != nil {
 		return nil, fmt.Errorf("%s: incomplete download: %w", displayName, err)
 	}
@@ -322,8 +332,9 @@ type apiBibleBookPlan struct {
 // chapter's last verse (an exactly-cap chunk ending on a chapter boundary),
 // or past the book's end — handled by advancing a chapter once, then
 // stopping.
-func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKey, bibleID string, plan apiBibleBookPlan) (map[int][]Verse, error) {
+func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKey, bibleID string, plan apiBibleBookPlan) (map[int][]Verse, map[int][]OrphanFootnote, error) {
 	out := map[int][]Verse{}
+	var orphans map[int][]OrphanFootnote
 	startCh, startV := 1, 1
 	bumpedChapter := false
 	for {
@@ -335,7 +346,7 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 			var se *apiBibleStatusError
 			if errors.As(err, &se) && (se.Status == http.StatusBadRequest || se.Status == http.StatusNotFound) {
 				if startCh == 1 && startV == 1 {
-					return nil, err // passages unsupported here — caller falls back
+					return nil, nil, err // passages unsupported here — caller falls back
 				}
 				if !bumpedChapter && startCh < plan.lastChapter {
 					bumpedChapter = true
@@ -344,52 +355,65 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 				}
 				break // past the book's real end — done
 			}
-			return nil, err
+			return nil, nil, err
 		}
 		bumpedChapter = false
-		chunk, err := decodeAPIBiblePassage(pr.Data.Content, plan.name, startCh)
+		chunk, chunkOrphans, err := decodeAPIBiblePassage(pr.Data.Content, plan.name, startCh)
 		if err != nil {
-			return nil, fmt.Errorf("%s passage %s: %w", plan.name, rangeID, err)
+			return nil, nil, fmt.Errorf("%s passage %s: %w", plan.name, rangeID, err)
 		}
 		for ch, vs := range chunk {
 			out[ch] = append(out[ch], vs...)
+		}
+		for ch, fns := range chunkOrphans {
+			if orphans == nil {
+				orphans = make(map[int][]OrphanFootnote)
+			}
+			orphans[ch] = append(orphans[ch], fns...)
 		}
 		if pr.Data.VerseCount < apiBiblePassageCap {
 			break // the requested range is exhausted
 		}
 		endCh, endV := chapterVerseFromRef(passageEndRef(pr.Data.ID))
 		if endCh == 0 || endV == 0 {
-			return nil, fmt.Errorf("%s: unparseable passage range id %q", plan.name, pr.Data.ID)
+			return nil, nil, fmt.Errorf("%s: unparseable passage range id %q", plan.name, pr.Data.ID)
 		}
 		startCh, startV = endCh, endV+1
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("%s: passages yielded no verses", plan.name)
+		return nil, nil, fmt.Errorf("%s: passages yielded no verses", plan.name)
 	}
 	for ch := range out {
 		out[ch] = sortVersesDedupe(out[ch])
 	}
-	return out, nil
+	return out, orphans, nil
 }
 
 // fetchAPIBibleBookByChapters is the chapter-by-chapter path — one request
 // per chapter, sequential within the book (books already run in parallel).
 // It is the fallback for providers without the passages endpoint.
-func fetchAPIBibleBookByChapters(ctx context.Context, client *http.Client, apiKey, bibleID string, plan apiBibleBookPlan) (map[int][]Verse, error) {
+func fetchAPIBibleBookByChapters(ctx context.Context, client *http.Client, apiKey, bibleID string, plan apiBibleBookPlan) (map[int][]Verse, map[int][]OrphanFootnote, error) {
 	out := make(map[int][]Verse, len(plan.chapters))
+	var orphans map[int][]OrphanFootnote
 	for _, c := range plan.chapters {
 		var cr apiBibleChapterResponse
 		if err := apiBibleGet(ctx, client, apiKey,
 			"/bibles/"+bibleID+"/chapters/"+c.id+"?"+apiBibleContentQuery, &cr); err != nil {
-			return nil, fmt.Errorf("%s %d: %w", plan.name, c.number, err)
+			return nil, nil, fmt.Errorf("%s %d: %w", plan.name, c.number, err)
 		}
-		vs, err := decodeAPIBibleChapter(cr.Data.Content, plan.name, c.number)
+		vs, chOrphans, err := decodeAPIBibleChapter(cr.Data.Content, plan.name, c.number)
 		if err != nil {
-			return nil, fmt.Errorf("%s %d: %w", plan.name, c.number, err)
+			return nil, nil, fmt.Errorf("%s %d: %w", plan.name, c.number, err)
 		}
 		out[c.number] = vs
+		for ch, fns := range chOrphans {
+			if orphans == nil {
+				orphans = make(map[int][]OrphanFootnote)
+			}
+			orphans[ch] = append(orphans[ch], fns...)
+		}
 	}
-	return out, nil
+	return out, orphans, nil
 }
 
 // passageEndRef extracts the end reference of a served range id:
@@ -496,10 +520,10 @@ func apiBibleGet(ctx context.Context, client *http.Client, apiKey, path string, 
 // endpoint for exactly one chapter, so embedded references only order the
 // verses and the result is re-stamped, preserving the chapter path's
 // long-standing contract.
-func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([]Verse, error) {
-	byChapter, err := decodeAPIBiblePassage(raw, bookName, chapter)
+func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([]Verse, map[int][]OrphanFootnote, error) {
+	byChapter, orphans, err := decodeAPIBiblePassage(raw, bookName, chapter)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var vs []Verse
 	for _, chunk := range byChapter {
@@ -510,9 +534,9 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 	}
 	vs = sortVersesDedupe(vs)
 	if len(vs) == 0 {
-		return nil, fmt.Errorf("no verse text decoded")
+		return nil, nil, fmt.Errorf("no verse text decoded")
 	}
-	return vs, nil
+	return vs, orphans, nil
 }
 
 // decodeAPIBiblePassage turns content-type=json paragraph blocks — possibly
@@ -526,15 +550,23 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 // helloao decoders do it: each new POETRY paragraph (USFM q styles) that
 // continues a verse contributes a "\n" line break, so psalms render as lines
 // on every surface (see reading.go verseIsPoetic).
-func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter int) (map[int][]Verse, error) {
+// The second return is the orphan footnotes: notes anchored in verses this
+// translation omits, keyed by chapter. A verse node that decodes to no text
+// is a critical-text omission — the verse number exists in the versification,
+// the translation omits its words, and the note explains the omission. The
+// helloao decoder has captured these since the footnotes work landed; this
+// path used to discard them with the verse, so a provider translation that
+// omitted verses would silently lose exactly the notes the orphan machinery
+// exists to keep.
+func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter int) (map[int][]Verse, map[int][]OrphanFootnote, error) {
 	if len(raw) == 0 {
-		return nil, fmt.Errorf("empty chapter content")
+		return nil, nil, fmt.Errorf("empty chapter content")
 	}
 	var blocks []apiBibleNode
 	if err := json.Unmarshal(raw, &blocks); err != nil {
 		// A string here means the API answered with html/text content —
 		// somebody changed the query or the API changed shape. Fail loudly.
-		return nil, fmt.Errorf("unexpected chapter content shape (want json blocks): %w", err)
+		return nil, nil, fmt.Errorf("unexpected chapter content shape (want json blocks): %w", err)
 	}
 
 	// Verses are keyed by a packed (chapter, verse) int — real chapter and
@@ -684,14 +716,38 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	}
 
 	if len(order) == 0 {
-		return nil, fmt.Errorf("no verse text decoded")
+		return nil, nil, fmt.Errorf("no verse text decoded")
 	}
 	sort.Ints(order)
 	out := map[int][]Verse{}
+	var orphans map[int][]OrphanFootnote
 	total := 0
 	for _, key := range order {
 		text, anchors := stripFootnoteSentinels(normalizeVerseSpaces(texts[key].String()))
 		if text == "" {
+			// An omitted verse: the key exists because the provider sent the
+			// verse's markup, but it decodes to no words. Keep any note that
+			// was anchored in it as an orphan, keyed by the verse it belongs
+			// to, so the chapter-bottom section can still say why the number
+			// is absent. Anchors are meaningless without text and are not
+			// carried; bodies stay in the side-band exactly as verse notes
+			// do — never in Verse.Text, and so never in search, share or
+			// speech, which all walk Verses.
+			ch, num := key/1000, key%1000
+			for _, n := range pendingNotes[key] {
+				if strings.TrimSpace(n.Text) == "" {
+					continue
+				}
+				if orphans == nil {
+					orphans = make(map[int][]OrphanFootnote)
+				}
+				orphans[ch] = append(orphans[ch], OrphanFootnote{
+					Verse:  num,
+					Text:   strings.TrimSpace(n.Text),
+					Kind:   n.Kind,
+					Caller: n.Caller,
+				})
+			}
 			continue
 		}
 		notes := pendingNotes[key]
@@ -718,9 +774,9 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 		total++
 	}
 	if total == 0 {
-		return nil, fmt.Errorf("no verse text decoded")
+		return nil, nil, fmt.Errorf("no verse text decoded")
 	}
-	return out, nil
+	return out, orphans, nil
 }
 
 // apiBibleSkipPara reports whether a paragraph style carries headings rather

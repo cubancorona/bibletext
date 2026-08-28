@@ -45,7 +45,7 @@ const proseChapterContent = `[
 ]`
 
 func TestDecodeAPIBibleChapterPoetryLines(t *testing.T) {
-	vs, err := decodeAPIBibleChapter(json.RawMessage(psalmChapterContent), "Psalms", 46)
+	vs, _, err := decodeAPIBibleChapter(json.RawMessage(psalmChapterContent), "Psalms", 46)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestDecodeAPIBibleChapterPoetryLines(t *testing.T) {
 }
 
 func TestDecodeAPIBibleChapterNestedSpans(t *testing.T) {
-	vs, err := decodeAPIBibleChapter(json.RawMessage(proseChapterContent), "John", 3)
+	vs, _, err := decodeAPIBibleChapter(json.RawMessage(proseChapterContent), "John", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,10 +88,10 @@ func TestDecodeAPIBibleChapterNestedSpans(t *testing.T) {
 func TestDecodeAPIBibleChapterRejectsNonJSONContent(t *testing.T) {
 	// content-type=html/text answers with a string — must fail loudly, never
 	// produce an empty chapter.
-	if _, err := decodeAPIBibleChapter(json.RawMessage(`"<p>html soup</p>"`), "John", 3); err == nil {
+	if _, _, err := decodeAPIBibleChapter(json.RawMessage(`"<p>html soup</p>"`), "John", 3); err == nil {
 		t.Fatal("string content must be rejected")
 	}
-	if _, err := decodeAPIBibleChapter(json.RawMessage(`[]`), "John", 3); err == nil {
+	if _, _, err := decodeAPIBibleChapter(json.RawMessage(`[]`), "John", 3); err == nil {
 		t.Fatal("empty block list must be rejected")
 	}
 }
@@ -398,7 +398,7 @@ func TestDecodeAPIBiblePassageMultiChapter(t *testing.T) {
 	    {"type":"text","text":"First of the eighth.","attrs":{"verseId":"GEN.8.1"}}
 	  ]}
 	]`
-	m, err := decodeAPIBiblePassage(json.RawMessage(content), "Genesis", 7)
+	m, _, err := decodeAPIBiblePassage(json.RawMessage(content), "Genesis", 7)
 	if err != nil {
 		t.Fatal(err)
 	}

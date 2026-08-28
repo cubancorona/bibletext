@@ -396,7 +396,7 @@ const nkjvNotedChapter = `[
 ]`
 
 func TestFootnotesNKJVCaptureAndPurity(t *testing.T) {
-	byCh, err := decodeAPIBiblePassage(json.RawMessage(nkjvNotedChapter), "John", 3)
+	byCh, _, err := decodeAPIBiblePassage(json.RawMessage(nkjvNotedChapter), "John", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -537,5 +537,82 @@ func TestSuperscriptionsSurviveCacheRoundTrip(t *testing.T) {
 	}
 	if back.SuperscriptionFor("Mark", 1).Text != "" {
 		t.Error("absent book must yield an empty superscription")
+	}
+}
+
+// The API.Bible decoder must capture an omitted verse's note as an orphan,
+// exactly as the helloao decoder does (TestFootnotesOmittedVerseNoteBecomesOrphan
+// above is the same assertion on the other path). Before this, the empty-text
+// skip discarded the verse's pending notes with it, so a provider translation
+// that omitted verses would silently lose the notes explaining the omission —
+// the one thing the orphan table exists for.
+//
+// The fixture is synthetic: invented apparatus wording, never a printed
+// licensed edition's, so nothing licensed enters the repository.
+func TestDecodeAPIBibleOmittedVerseNoteBecomesOrphan(t *testing.T) {
+	// Verse 35 carries words; verse 36 carries a note and NO text — the
+	// critical-text omission shape.
+	const chapter = `[
+	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
+	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"35","sid":"LUK 17:35"},"items":[{"type":"text","text":"35"}]},
+	    {"type":"text","text":"Two will be grinding together.","attrs":{"verseId":"LUK.17.35"}},
+	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"36","sid":"LUK 17:36"},"items":[{"type":"text","text":"36"}]},
+	    {"name":"note","type":"tag","attrs":{"style":"f","caller":"+","id":"LUK.17.36!f.1","verseId":"LUK.17.36"},"items":[
+	      {"name":"char","type":"tag","attrs":{"style":"fr"},"items":[{"type":"text","text":"17:36 "}]},
+	      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"Alpha-Text adds a fixture verse here."}]}
+	    ]}
+	  ]}
+	]`
+
+	// CONTROL: the same walk on a fixture whose verse 36 DOES have text must
+	// produce a verse and no orphan. Without this, an empty orphans map below
+	// would prove only that the probe never fires.
+	const withText = `[
+	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
+	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"36","sid":"LUK 17:36"},"items":[{"type":"text","text":"36"}]},
+	    {"type":"text","text":"Two will be in the field.","attrs":{"verseId":"LUK.17.36"}},
+	    {"name":"note","type":"tag","attrs":{"style":"f","caller":"+","id":"LUK.17.36!f.2","verseId":"LUK.17.36"},"items":[
+	      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"Alpha-Text adds a fixture verse here."}]}
+	    ]}
+	  ]}
+	]`
+	ctrlVerses, ctrlOrphans, err := decodeAPIBiblePassage(json.RawMessage(withText), "Luke", 17)
+	if err != nil {
+		t.Fatalf("control fixture: %v", err)
+	}
+	if len(ctrlOrphans) != 0 {
+		t.Fatalf("control: a verse WITH text must produce no orphan, got %+v", ctrlOrphans)
+	}
+	if vs := ctrlVerses[17]; len(vs) != 1 || len(vs[0].Footnotes) != 1 {
+		t.Fatalf("control: the note must ride on the verse that has text, got %+v", vs)
+	}
+
+	verses, orphans, err := decodeAPIBiblePassage(json.RawMessage(chapter), "Luke", 17)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// The empty verse still stays out of the text, exactly as before.
+	vs := verses[17]
+	if len(vs) != 1 || vs[0].Verse != 35 {
+		t.Fatalf("empty verse 36 must stay out of the text: %+v", vs)
+	}
+	if len(vs[0].Footnotes) != 0 {
+		t.Errorf("verse 36's note must not migrate onto verse 35: %+v", vs[0].Footnotes)
+	}
+
+	want := OrphanFootnote{Verse: 36, Text: "Alpha-Text adds a fixture verse here.", Caller: "+"}
+	got := orphans[17]
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("omitted verse 36's note must be captured as an orphan:\n got: %+v\nwant: %+v", got, want)
+	}
+
+	// PURITY: the orphan's body must be unreachable from the verse text — the
+	// property every other footnote guard pins, restated here because orphan
+	// capture is the one path that stores note text with no verse to ride on.
+	for _, v := range vs {
+		if strings.Contains(v.Text, "Alpha-Text") {
+			t.Fatalf("orphan note text leaked into verse text: %q", v.Text)
+		}
 	}
 }
