@@ -81,6 +81,22 @@ INSTALLER_CERT=$(security find-identity -v 2>/dev/null |
 
 rm -rf "$WORK"; mkdir -p "$WORK"
 
+# go.mod ships STOCK; the local Fyne patches are applied for this build only
+# and go.mod is restored on exit, exactly as release-ios.sh and
+# build-android.sh do it. This step was MISSING here, so Mac App Store builds
+# linked stock Fyne — whose preferences writer truncates preferences.json in
+# place before rewriting it. A death inside that window (a crash, a force
+# quit, the kill a Store update performs) leaves the file empty, and an empty
+# store reads as a brand-new reader: every note gone, including notes other
+# people shared, which exist nowhere else. The patched writer publishes by
+# rename instead. The same step also brings the emoji and caret-blink fixes
+# the other platforms already ship.
+cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
+note "applying the Fyne patches (go.mod restored on exit)"
+"$REPO_ROOT/scripts/setup-fyne-patch.sh"
+( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
+
 note "building both architectures"
 # shellcheck source=/dev/null
 source scripts/release-bible-key.sh
@@ -89,13 +105,29 @@ source scripts/release-bible-key.sh
 # release-ios.sh does. The encoded variant exists for GitHub's runners, which
 # cannot reach a Keychain and receive a pre-encoded value through a secret.
 load_release_bible_key
-trap clear_release_bible_key EXIT
+# Replaces the go.mod-only trap above: both cleanups, or the key would outlive
+# the build when this trap overwrote the first one.
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
 (
   cd cmd/desktop
   export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
   CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop-arm64" .
   CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop-amd64" .
 )
+
+note "confirming the atomic preferences writer is in both slices"
+# The patch is the difference between a torn write losing a reader's notes and
+# not. Assert it in the BINARIES rather than trusting that the patch step ran:
+# each slice must carry the patched writer's marker. The control proves the
+# probe can find anything at all, so a zero means absence rather than a broken
+# search.
+for slice in "$WORK/desktop-arm64" "$WORK/desktop-amd64"; do
+  strings -a "$slice" | grep -qF "Preferences save not published" ||
+    fail "$(basename "$slice") lacks the atomic preferences writer — the Fyne patch did not reach this build"
+  strings -a "$slice" | grep -qF "World English Bible" ||
+    fail "$(basename "$slice") is missing a string every build has; the marker probe cannot be trusted"
+done
+echo "  both slices carry the patched writer"
 
 note "joining them into one universal binary"
 # The Store expects a single app, not one upload per architecture.

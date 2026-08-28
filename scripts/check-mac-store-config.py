@@ -156,6 +156,36 @@ def migration_failures(data: dict, unique_id: str | None) -> list[str]:
     return failures
 
 
+def patch_step_failures(script: str) -> list[str]:
+    """The Mac store build must link the PATCHED Fyne, like the other platforms.
+
+    go.mod ships stock, and each release script applies the local patches for
+    its own build. This script did not, so Mac App Store builds linked stock
+    Fyne — whose preferences writer truncates the file in place, meaning a
+    death mid-write leaves an empty store that reads as a brand-new reader
+    and loses every note. Nothing about the resulting build looks wrong, so
+    the step is asserted here rather than left to memory.
+    """
+    failures = []
+    if "setup-fyne-patch.sh" not in script:
+        failures.append(
+            "release script: the Fyne patches are never applied — a Mac store "
+            "build would link the stock preferences writer, which truncates in "
+            "place and can lose a reader's whole notes store on a torn write"
+        )
+    if "go mod edit -replace fyne.io/fyne/v2=./third_party/fyne" not in script:
+        failures.append(
+            "release script: go.mod is never pointed at third_party/fyne, so "
+            "regenerating the patched tree would have no effect on the build"
+        )
+    if "Preferences save not published" not in script:
+        failures.append(
+            "release script: nothing verifies the built binary carries the "
+            "atomic preferences writer; the patch step could silently no-op"
+        )
+    return failures
+
+
 def release_script_failures(script: str) -> list[str]:
     """The Universal Links claim must be injected at signing time.
 
@@ -213,6 +243,16 @@ def self_test() -> list[str]:
         ("missing applinks injection", release_script_failures(
             "codesign -f -s CERT --entitlements ents.plist APP"),
          "never injected"),
+        ("patch step absent", patch_step_failures(
+            "codesign -f -s CERT --entitlements ents.plist APP"),
+         "never applied"),
+        ("replace directive absent", patch_step_failures(
+            'scripts/setup-fyne-patch.sh\ngo build ./cmd/desktop'),
+         "never pointed at"),
+        ("patch verification absent", patch_step_failures(
+            'scripts/setup-fyne-patch.sh\n'
+            'go mod edit -replace fyne.io/fyne/v2=./third_party/fyne\n'),
+         "nothing verifies"),
         ("hand-written domain", release_script_failures(
             'PlistBuddy -c "Add :com.apple.developer.associated-domains:0 '
             'string applinks:example.com"'),
@@ -226,6 +266,10 @@ def self_test() -> list[str]:
         {"com.apple.security.app-sandbox": True, "com.apple.security.network.client": True}
     ) + migration_failures(
         {"Move": ["${Library}/Preferences/fyne/bibletext"]}, "bibletext"
+    ) + patch_step_failures(
+        'scripts/setup-fyne-patch.sh\n'
+        'go mod edit -replace fyne.io/fyne/v2=./third_party/fyne\n'
+        'grep -qF "Preferences save not published"\n'
     ) + release_script_failures(
         'PlistBuddy -c "Add :com.apple.developer.associated-domains array"\n'
         'PlistBuddy -c "Add ... string applinks:$SITE_HOST"')
@@ -261,7 +305,9 @@ def main() -> int:
     failures += entitlement_failures(ents)
     failures += migration_failures(mig, unique)
     try:
-        failures += release_script_failures(RELEASE_SCRIPT.read_text(encoding="utf-8"))
+        script_text = RELEASE_SCRIPT.read_text(encoding="utf-8")
+        failures += release_script_failures(script_text)
+        failures += patch_step_failures(script_text)
     except OSError:
         failures.append("release script: scripts/release-mac-store.sh is unreadable")
 
