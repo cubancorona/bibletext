@@ -64,7 +64,10 @@ PROCESS_PATTERNS = (
     ("camera-roll identifier", re.compile(rb"(?i)\bIMG[_-]\d{3,}\b")),
     ("conversation provenance", re.compile(
         rb"(?i)\b(?:the\s+)?(?:owner|user)\s+(?:(?:had\s+to\s+)?"
-        rb"(?:ask|say|report|write|request)|asked|said|reported|wrote|requested)\b"
+        rb"(?:ask|say|report|write|request)|asked|said|reported|wrote|requested"
+        rb"|authori[sz]ed|approved|directed|instructed|decided|confirmed)\b"
+        rb"|\b(?:owner|user)'?s\s+(?:standard|rule|instruction|decision|call|say[- ]?so)\b"
+        rb"|\bthe\s+(?:owner|user)\s+can\s+run\b"
         rb"|\b(?:as|per)\s+(?:the\s+)?(?:owner'?s|user'?s|your)\s+(?:request|instruction)\b"
         rb"|\b(?:owner|user)'?s\s+(?:central\s+)?(?:requirement|dev(?:elopment)?\s+links?)\b"
         rb"|\bowner\s+(?:approval|decision|sign[- ]?off)\b|\baudit\s+finding\b"
@@ -81,6 +84,19 @@ PROCESS_PATTERNS = (
         rb"|\breview(?:[- ]driven|\s+(?:mutation|measured))\b"
         rb"|\baudit\s+(?:offered|confirmed)\b"
         rb"|\bfootgun\s*\(\s*(?:review|audit)\s*\)"
+    )),
+    ("working-session narration", re.compile(
+        # "this session" is app vocabulary (a run of the app: session-only
+        # note focus, "loaded earlier this session") and stays legal; the
+        # narration class shows itself in the possessive-tooling forms and in
+        # sessions named as workers.
+        rb"(?i)\bsession's\s+(?:reach|permission(?:\s+layer)?|context|"
+        rb"tooling|boundar(?:y|ies))\b|\b(?:working|AI|agent)\s+session\b"
+        rb"|\banother\s+(?:agent|AI)\b"
+    )),
+    ("AI authorship narration", re.compile(
+        rb"(?i)\bClaude\s+(?:wrote|built|generated|implemented|authored|fixed)\b"
+        rb"|\bwritten\s+by\s+Claude\b|\ban?\s+(?:AI|agent)\s+(?:wrote|built|implemented)\b"
     )),
     ("commit-process narration", re.compile(
         rb"(?i)\b(?:the\s+)?(?:S\d+\s+)?commit\s+(?:said|claimed|promised)\b"
@@ -171,6 +187,13 @@ PROCESS_POSITIVE_CASES = (
     ("revision-process narration", b"// AMENDED. The previous assertion differed."),
     ("removed private/process-artifact reference", b"See SESSION_STATUS.md."),
     ("signing process-record reference", b"The fingerprint is in the session notes."),
+    ("conversation provenance", b"The owner authorized the build with one rule."),
+    ("conversation provenance", b"Designed against the owner's standard."),
+    ("conversation provenance", b"A probe the owner can run themselves."),
+    ("working-session narration", b"The key is out of this session's reach."),
+    ("working-session narration", b"An AI session captured the baseline."),
+    ("working-session narration", b"Another agent did the color work."),
+    ("AI authorship narration", b"Claude wrote the first draft of the parser."),
 )
 PROCESS_NEGATIVE_CASES = (
     b"Run this command on the macOS build host.",
@@ -181,6 +204,13 @@ PROCESS_NEGATIVE_CASES = (
     b"Anthropic Claude is a supported provider.",
     b"An own note appears only while explicitly focused.",
     b"The UI says Note from you.",
+    b"Resolve the retired Claude default model.",
+    b"The audio session activates when playback starts.",
+    b"A note's owner can delete it from the list.",
+    b"After approval the release publishes automatically.",
+    b"The session category is set before the player starts.",
+    b"noteFocus is which note is expanded this session, never persisted.",
+    b"Loaded earlier this session, or an instant placeholder.",
 )
 
 CANONICAL_SCRIPTURE_PREFIXES = (
@@ -450,6 +480,11 @@ def main() -> int:
         help="also scan every changed file state and commit message in this range",
     )
     parser.add_argument(
+        "--message-file",
+        metavar="FILE",
+        help="check one commit message (the commit-msg hook's argument) and exit",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         help="run synthetic positive and negative tests for process-provenance patterns",
@@ -457,6 +492,20 @@ def main() -> int:
     args = parser.parse_args()
 
     pattern_failures = process_pattern_test_failures()
+    if args.message_file:
+        if pattern_failures:
+            print("Repository hygiene self-test failed; refusing to trust the patterns.",
+                  file=sys.stderr)
+            return 1
+        message = Path(args.message_file).read_bytes()
+        labels = process_labels(message)
+        if labels:
+            print("commit message refused by the writing protocol "
+                  "(docs/COMMIT_AND_CODE_PROTOCOL.md):", file=sys.stderr)
+            for label in labels:
+                print(f"  - {label}", file=sys.stderr)
+            return 1
+        return 0
     if args.self_test:
         if pattern_failures:
             print("Repository hygiene self-test failed:", file=sys.stderr)

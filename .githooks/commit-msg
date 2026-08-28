@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Refuse a commit message the writing protocol bans — attribution, session
+# narration, authorship trailers — BEFORE it becomes history. The same
+# patterns run in CI over every pushed range; this hook just moves the
+# refusal to the moment the message is cheapest to fix. Activated by
+# core.hooksPath=.githooks (see docs/COMMIT_AND_CODE_PROTOCOL.md).
+exec python3 "$(git rev-parse --show-toplevel)/scripts/check-repository-hygiene.py" \
+  --message-file "$1"

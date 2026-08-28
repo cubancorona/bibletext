@@ -5,6 +5,24 @@ it are permanent, world-readable, copied by anyone who clones, and served by
 the GitHub API. Removing something later means rewriting history, and
 anything already fetched is beyond recall. Write accordingly.
 
+## Enforcement
+
+The rules above are mechanical, twice over:
+
+- `scripts/check-repository-hygiene.py` scans every pushed commit range in CI
+  — messages and changed file states — with self-tested patterns for
+  attribution, session narration, authorship trailers, and the rest. A
+  violation fails the build.
+- `.githooks/commit-msg` runs the same message patterns at commit time
+  (`git config core.hooksPath .githooks` activates it, once per clone), so a
+  banned message is refused while it is still cheapest to fix — before it is
+  history.
+
+The patterns are deny-lists and will always lag inventive new phrasings.
+When one slips through, the fix is two lines: the phrasing goes into
+PROCESS_PATTERNS, and a fixture proving the new rule can fire goes into the
+self-test — the same commit that cleans up the instance.
+
 ## The one rule everything else follows from
 
 > Describe **the change and why it is correct** — not the conversation that
