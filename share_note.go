@@ -512,6 +512,14 @@ func parseNoteRuns(val []byte) ([]NoteVerseRun, bool) {
 func normalizeNote(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
+	// U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are hard breaks to
+	// the Apple text renderers the reading pane draws notes with, so they are
+	// newlines for every purpose that matters here — including the collapse
+	// below, which exists to stop a note reserving the height of the screen and
+	// which used to see straight past them. A payload of separators passed
+	// every check and buried the passage under a band that rendered blank.
+	s = strings.ReplaceAll(s, "\u2028", "\n")
+	s = strings.ReplaceAll(s, "\u2029", "\n")
 
 	var b strings.Builder
 	b.Grow(len(s))
@@ -531,6 +539,14 @@ func normalizeNote(s string) string {
 			// its own direction.
 		case r == 0xfeff:
 			// Zero-width no-break space / BOM.
+		case r == 0x200b || r == 0x2060:
+			// Zero-width space and word joiner: no glyph, no meaning in a
+			// note, and they let text hide breaks inside a word. The zero-width
+			// JOINER and NON-JOINER (200c/200d) are deliberately NOT dropped —
+			// family emoji and Indic and Persian text need them.
+		case r >= 0xe0000 && r <= 0xe007f:
+			// Tag characters: invisible by design, and used only to smuggle
+			// data through text that looks ordinary.
 		default:
 			b.WriteRune(r)
 		}

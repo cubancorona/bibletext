@@ -234,3 +234,57 @@ func TestADeflateBombYieldsNoNoteAtAll(t *testing.T) {
 			round.Text, outcome)
 	}
 }
+
+// A note is a stranger's text, and the bubble grows to fit it. The blank-line
+// collapse existed exactly to stop a note reserving the height of the screen —
+// but it only knew "\n", while U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH
+// SEPARATOR) are hard breaks to the Apple text renderers the reading pane uses.
+// A payload of 280 separators passed every check, reported NoteOutcomeOK, and
+// reserved a band several screens tall that appeared blank, burying the passage
+// it was anchored to.
+//
+// They are line breaks, so they normalise to "\n" and then meet the collapse
+// that was always meant to catch them.
+func TestNormalizeNoteCollapsesUnicodeLineSeparators(t *testing.T) {
+	// CONTROL: the ordinary newline case must already behave, or a pass below
+	// proves only that the probe never fires.
+	if got := normalizeNote("a\n\n\n\n\n\nb"); got != "a\n\nb" {
+		t.Fatalf("control: runs of newlines must collapse to one blank line, got %q", got)
+	}
+
+	for _, sep := range []struct {
+		name string
+		r    rune
+	}{{"LINE SEPARATOR", ' '}, {"PARAGRAPH SEPARATOR", ' '}} {
+		payload := "a" + strings.Repeat(string(sep.r), 278) + "b"
+		got := normalizeNote(payload)
+		if strings.ContainsRune(got, sep.r) {
+			t.Errorf("%s survived normalisation: %q", sep.name, got)
+		}
+		if lines := strings.Count(got, "\n"); lines > 2 {
+			t.Errorf("%s: 278 separators must collapse to a paragraph break, got %d newlines",
+				sep.name, lines)
+		}
+		if !strings.HasPrefix(got, "a") || !strings.HasSuffix(got, "b") {
+			t.Errorf("%s: the note's own words must survive: %q", sep.name, got)
+		}
+	}
+}
+
+// Tag characters (U+E0000-E007F) carry no glyph and exist only to smuggle
+// invisible data through text that looks innocent. A note is untrusted, so
+// they go — while the zero-width joiners that real scripts and emoji need are
+// deliberately kept.
+func TestNormalizeNoteDropsInvisibleTagCharacters(t *testing.T) {
+	hidden := "Support" + string(rune(0xE0041)) + string(rune(0xE0042)) + ": tap here"
+	got := normalizeNote(hidden)
+	if got != "Support: tap here" {
+		t.Errorf("tag characters must be dropped, got %q", got)
+	}
+	// CONTROL: a zero-width JOINER is load-bearing (family emoji, Indic and
+	// Persian text) and must survive.
+	keep := "a‍b"
+	if out := normalizeNote(keep); out != keep {
+		t.Errorf("the zero-width joiner must survive: %q", out)
+	}
+}

@@ -50,6 +50,7 @@ type otoEngine struct {
 	gen     int // bumped by start/stop; stale goroutines compare and bail
 	ctx     *oto.Context
 	ctxRate int
+	total   int64 // playable length in context-rate bytes
 	player  *oto.Player
 	dec     *mp3.Decoder
 	src     *countingSeeker // the player's actual source; counts PCM bytes read
@@ -116,18 +117,25 @@ func (e *otoEngine) post(gen int, s audioPlayState) {
 	}
 }
 
-// ensureContext creates the process-wide oto context on first use. oto allows
-// exactly one context per process at one sample rate; the narration files all
-// come from the same pipelines, so the first file's rate is the rate.
-func (e *otoEngine) ensureContext(rate int) error {
+// otoContextRate is the one rate this process plays at. oto allows exactly one
+// context per process, fixed for the app's life, so the rate cannot follow the
+// file. It used to: the first chapter played set it and every chapter at a
+// different rate then failed permanently — and the narration is NOT single-rate
+// (the WEB recordings mix 22050 and 44100), so playing a New Testament chapter
+// first left the whole Old Testament silent, and the reverse. Fixing the rate
+// here and converting anything else to it (audio_resample.go) means no file can
+// be locked out by whatever happened to play first. 44100 is the higher of the
+// two shipped rates, so the common case converts nothing.
+const otoContextRate = 44100
+
+// ensureContext creates the process-wide oto context on first use, always at
+// otoContextRate.
+func (e *otoEngine) ensureContext() error {
 	if e.ctx != nil {
-		if e.ctxRate != rate {
-			return fmt.Errorf("audio: context is %d Hz, file is %d Hz", e.ctxRate, rate)
-		}
 		return nil
 	}
 	ctx, ready, err := oto.NewContext(&oto.NewContextOptions{
-		SampleRate:   rate,
+		SampleRate:   otoContextRate,
 		ChannelCount: 2,
 		Format:       oto.FormatSignedInt16LE,
 	})
@@ -140,7 +148,7 @@ func (e *otoEngine) ensureContext(rate int) error {
 		return errors.New("audio: device not ready")
 	}
 	e.ctx = ctx
-	e.ctxRate = rate
+	e.ctxRate = otoContextRate
 	return nil
 }
 
@@ -198,15 +206,29 @@ func nativeAudioStartURL(url, title, artist string) {
 			e.mu.Unlock()
 			return
 		}
-		if err := e.ensureContext(dec.SampleRate()); err != nil {
+		if err := e.ensureContext(); err != nil {
 			e.mu.Unlock()
 			e.post(gen, audioFailed)
 			return
 		}
-		cs := &countingSeeker{r: dec}
+		// Everything the player sees is at the context rate, so the byte count
+		// the position and read-along ride on stays consistent with e.ctxRate.
+		var stream io.ReadSeeker = dec
+		total := dec.Length()
+		if r := dec.SampleRate(); r != e.ctxRate {
+			rs, err := newResampleSeeker(dec, r, e.ctxRate, dec.Length())
+			if err != nil {
+				e.mu.Unlock()
+				e.post(gen, audioFailed)
+				return
+			}
+			stream, total = rs, rs.Length()
+		}
+		cs := &countingSeeker{r: stream}
 		p := e.ctx.NewPlayer(cs)
 		e.player = p
 		e.dec = dec
+		e.total = total
 		e.src = cs
 		e.paused = false
 		rate := e.ctxRate
@@ -312,7 +334,7 @@ func nativeAudioSkip(seconds float64) {
 	if cur < 0 {
 		cur = 0
 	}
-	total := e.dec.Length()
+	total := e.total // OUTPUT-rate bytes: e.dec.Length() is the source's
 	next := cur + int64(seconds*float64(e.ctxRate))*otoBytesPerFrame
 	next -= next % otoBytesPerFrame // frame-align, or the channels swap
 	if next < 0 {
