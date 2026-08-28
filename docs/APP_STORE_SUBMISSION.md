@@ -303,3 +303,15 @@ evidence that it belongs to the current release. Enforce these controls:
 
 An unchanged release-specific field requires explicit verification against the
 current release.
+
+### The first release on a platform takes no What's New
+
+App Store Connect refuses `whatsNew` on the first public version of a
+platform with `409 STATE_ERROR: Attribute 'whatsNew' cannot be edited at
+this time`, because there is no earlier release for the notes to describe.
+The Mac App Store hit this on 1.2.4, its first public version: the shared
+`metadata/en-GB/whats-new-<version>.txt` is right for iOS, which has
+shipped since 1.1.x, and wrong for a platform's debut.
+
+So a platform's first release simply has no `mac/whats-new-<version>.txt`.
+Add one for the release after it, when there is something to compare to.
