@@ -31,6 +31,17 @@
 #
 # Output: build/mac-store/BibleText.pkg
 set -euo pipefail
+umask 077
+
+# Nothing this build runs has any business seeing the operator's AI provider
+# keys, and the project's own testing workflow sources a dotenv that holds
+# four of them. Drop them, along with any inherited linker value, before the
+# first subprocess: go, fyne, codesign and productbuild all inherit this
+# environment. build-android.sh has scrubbed this way since it was written;
+# this script did not, and ran the whole build with whatever was exported.
+unset ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+unset BIBLE_KEY_LDFLAGS BIBLETEXT_RELEASE_LDFLAGS BIBLETEXT_REAL_GO
+export GOFLAGS="" GODEBUG=""
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
@@ -59,6 +70,11 @@ PROFILE="${BIBLETEXT_MAC_PROFILE:-}"
   fail "set BIBLETEXT_MAC_PROFILE to a Mac App Store provisioning profile for $APP_ID"
 
 note "checking the store configuration before building anything"
+# The same gates release-ios.sh and build-android.sh run. This script had
+# neither, so a Mac store build could ship from a tree whose public support
+# configuration or repository hygiene CI would have refused.
+python3 scripts/check-support-contact.py || fail "public support configuration is not release-safe"
+./scripts/check-repository-hygiene.py || fail "repository hygiene check failed"
 python3 scripts/check-mac-store-config.py || fail "store configuration is not shippable"
 python3 scripts/check-product-identity.py || fail "product identity is inconsistent"
 python3 scripts/check-min-os-versions.py || fail "declared OS floors are not shippable"

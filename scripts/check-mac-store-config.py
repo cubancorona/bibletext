@@ -186,6 +186,35 @@ def patch_step_failures(script: str) -> list[str]:
     return failures
 
 
+# The gates every release entry point runs, and the credentials none of them
+# should hand to a subprocess. release-mac-store.sh had neither: it could ship
+# from a tree CI would have refused, and it ran go, fyne, codesign and
+# productbuild with whatever the operator had exported — which, in this
+# project's own AI-testing workflow, is four provider keys.
+REQUIRED_GATES = (
+    ("check-support-contact.py", "the public support configuration"),
+    ("check-repository-hygiene.py", "repository hygiene"),
+)
+SCRUBBED_ENV = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY")
+
+
+def supply_chain_failures(script: str) -> list[str]:
+    failures = []
+    for gate, what in REQUIRED_GATES:
+        if gate not in script:
+            failures.append(
+                f"release script: {gate} is never run, so a store build could "
+                f"ship from a tree whose {what} CI would have refused"
+            )
+    for var in SCRUBBED_ENV:
+        if var not in script:
+            failures.append(
+                f"release script: {var} is never unset, so every build "
+                "subprocess inherits it"
+            )
+    return failures
+
+
 def release_script_failures(script: str) -> list[str]:
     """The Universal Links claim must be injected at signing time.
 
@@ -243,6 +272,13 @@ def self_test() -> list[str]:
         ("missing applinks injection", release_script_failures(
             "codesign -f -s CERT --entitlements ents.plist APP"),
          "never injected"),
+        ("missing hygiene gate", supply_chain_failures(
+            "python3 scripts/check-support-contact.py\n"
+            + "\n".join(SCRUBBED_ENV)),
+         "check-repository-hygiene.py is never run"),
+        ("unscrubbed provider key", supply_chain_failures(
+            "".join(g for g, _ in REQUIRED_GATES)),
+         "ANTHROPIC_API_KEY is never unset"),
         ("patch step absent", patch_step_failures(
             "codesign -f -s CERT --entitlements ents.plist APP"),
          "never applied"),
@@ -266,6 +302,8 @@ def self_test() -> list[str]:
         {"com.apple.security.app-sandbox": True, "com.apple.security.network.client": True}
     ) + migration_failures(
         {"Move": ["${Library}/Preferences/fyne/bibletext"]}, "bibletext"
+    ) + supply_chain_failures(
+        "".join(g for g, _ in REQUIRED_GATES) + "\n" + "\n".join(SCRUBBED_ENV)
     ) + patch_step_failures(
         'scripts/setup-fyne-patch.sh\n'
         'go mod edit -replace fyne.io/fyne/v2=./third_party/fyne\n'
@@ -308,6 +346,7 @@ def main() -> int:
         script_text = RELEASE_SCRIPT.read_text(encoding="utf-8")
         failures += release_script_failures(script_text)
         failures += patch_step_failures(script_text)
+        failures += supply_chain_failures(script_text)
     except OSError:
         failures.append("release script: scripts/release-mac-store.sh is unreadable")
 
