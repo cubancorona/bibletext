@@ -349,6 +349,16 @@ def parse_args():
         help="App Store platform to preflight (default: IOS); the version "
              "string comes from that platform's FyneApp.toml",
     )
+    parser.add_argument(
+        "--carried-forward", metavar="FIELD=REASON", action="append", default=[],
+        help="Record that FIELD is deliberately unchanged from the previous "
+             "release, with the reason it is still correct — e.g. "
+             "--carried-forward 'screenshots=1.2.4 changes nothing they show'. "
+             "The field still has to be one this run actually flagged, and the "
+             "reason is printed and stored in the submission log. A corrective "
+             "release that alters no visible surface is the honest case for "
+             "this; wanting the gate to go green is not.",
+    )
     return parser.parse_args()
 
 
@@ -431,17 +441,49 @@ def main():
             "  Not fatal — the copy is yours to write — but worth a look."
         )
 
-    if problems:
+    # An explicit, reasoned acknowledgement can clear a copy-forward finding —
+    # and nothing else. It cannot touch a failed asset delivery, a bad local
+    # image or any other blocking check, because those are defects rather than
+    # decisions, and a release where the visible surface genuinely did not
+    # change is the only thing this is for.
+    acknowledged = {}
+    for entry in args.carried_forward:
+        field, _, reason = entry.partition("=")
+        field, reason = field.strip(), reason.strip()
+        if not reason:
+            sys.exit(f"--carried-forward {entry!r} needs FIELD=REASON; the "
+                     "reason is the point of recording it")
+        if field not in problems:
+            sys.exit(f"--carried-forward names {field!r}, which this run did not "
+                     f"flag as carried forward. Flagged: {sorted(problems) or 'nothing'}. "
+                     "Acknowledging something that was never in question hides "
+                     "the next real finding.")
+        acknowledged[field] = reason
+
+    remaining = [p for p in problems if p not in acknowledged]
+
+    if acknowledged:
+        print("\nCARRIED FORWARD DELIBERATELY:")
+        for field, reason in sorted(acknowledged.items()):
+            print(f"  - {field}: {reason}")
+
+    if remaining:
         print("\nPER-RELEASE FIELDS THAT WERE NOT WRITTEN FOR THIS RELEASE:")
-        for p in problems:
+        for p in remaining:
             print(f"  - {p}")
         print(
             "\nThese values match a predecessor and therefore require explicit review.\n"
             "Fix them before submitting (docs/APP_STORE_SUBMISSION.md)."
         )
-    if blocking or problems or delivery or local_problems:
+    if blocking or remaining or delivery or local_problems:
         return 1
-    print("\nevery per-release field was written for this release.")
+    if acknowledged:
+        # Not "every field was written" — one was not, deliberately, and saying
+        # otherwise would make the sign-off line the least accurate in the run.
+        print("\nevery per-release field was either written for this release "
+              "or carried forward with a stated reason.")
+    else:
+        print("\nevery per-release field was written for this release.")
     return 0
 
 
