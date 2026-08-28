@@ -78,6 +78,23 @@ func webAudioURL(book string, chapter int) (string, bool) {
 	return fmt.Sprintf("%s%s/WEB_%02d_%03d.mp3", audioHostBase, audioReleaseTag("web-williams", b.num), b.num, chapter), true
 }
 
+// webcAudioURL is the WEB-Catholic's view of the Williams recording: the WEB
+// narration minus the chapters whose WEBC text is NOT the text he narrated.
+// WEBC's Esther is the GREEK Esther — a different underlying book with no
+// verse-to-verse correspondence (versification marks it incommensurable) — and
+// WEBC's Daniel 3 carries the Prayer of Azariah and the Song of the Three as
+// verses 24–90 (97 verses to the WEB's 30), so the recording would skip 67
+// on-screen verses and highlight the wrong ones from verse 24 on. Playing audio
+// of different words than the screen shows breaks the contract at the top of
+// this file, so those chapters report false and fall back to TTS, which always
+// reads the on-screen text exactly.
+func webcAudioURL(book string, chapter int) (string, bool) {
+	if book == "Esther" || (book == "Daniel" && chapter == 3) {
+		return "", false
+	}
+	return webAudioURL(book, chapter)
+}
+
 // recording is one named narration of a translation: id keys the bundled
 // read-along timing tables (timings are aligned against a specific recording's
 // exact audio bytes, so they belong to the recording, not the version), narrator
@@ -94,18 +111,22 @@ type recording struct {
 // order (the first is the default). Each version currently has exactly one; adding
 // a narrator here is all it takes for it to appear as a source-menu row:
 //   - BSB: complete CC0 narration by Barry Hays.
-//   - WEB / WEB-Catholic: complete public-domain narration by David Williams (the
-//     WEB-Catholic's 66 protocanonical books are the same WEB text; the deuterocanon
-//     — whole books like Tobit, and the Greek Daniel's chapters 13–14 within a
-//     shared book — isn't recorded and falls back to TTS via urlFor).
+//   - WEB / WEB-Catholic: complete public-domain narration by David Williams. The
+//     WEB-Catholic shares the WEB text for its protocanonical books, but reaches
+//     the recording through webcAudioURL, which also declines the chapters whose
+//     WEBC text differs from what he narrated (the Greek Esther and Daniel 3) —
+//     on top of what no urlFor maps at all (whole deuterocanon books like Tobit,
+//     the Greek Daniel's chapters 13–14). All of those fall back to TTS.
 //
 // Any other version has no matching recording and uses TTS.
 func recordingsFor(versionID string) []recording {
 	switch versionID {
 	case "bsb":
 		return []recording{{id: "bsb-hays", narrator: "Barry Hays", urlFor: bsbAudioURL}}
-	case "web", "webc":
+	case "web":
 		return []recording{{id: "web-williams", narrator: "David Williams", urlFor: webAudioURL}}
+	case "webc":
+		return []recording{{id: "web-williams", narrator: "David Williams", urlFor: webcAudioURL}}
 	}
 	return nil
 }

@@ -107,6 +107,58 @@ func TestAudioForChapter(t *testing.T) {
 	}
 }
 
+func TestWEBCTextMismatchExclusions(t *testing.T) {
+	// The WEB-Catholic displays the GREEK Esther (a different underlying book —
+	// no verse correspondence with the Hebrew Esther the Williams recording
+	// narrates) and a Greek Daniel 3 carrying the Prayer of Azariah and the Song
+	// of the Three as verses 24–90. Offering the recording there would play
+	// different words than the screen shows and highlight the wrong verses, so
+	// webc resolves those chapters to TTS while the plain WEB keeps them.
+	bd := &BibleData{
+		Books: []string{"Esther", "Daniel"},
+		Verses: map[string]map[int][]Verse{
+			"Esther": {1: {{Text: "In the second year of the reign of Ahasuerus"}}},
+			"Daniel": {3: {{Text: "Nebuchadnezzar the king made an image of gold"}}},
+		},
+	}
+	for _, c := range []struct {
+		version string
+		book    string
+		chapter int
+		want    audioKind
+	}{
+		{"webc", "Esther", 1, audioTTS},
+		{"webc", "Esther", 10, audioTTS},
+		{"webc", "Daniel", 3, audioTTS},
+		{"webc", "Daniel", 2, audioRecorded},
+		{"webc", "Daniel", 4, audioRecorded},
+		{"web", "Esther", 1, audioRecorded},
+		{"web", "Esther", 10, audioRecorded},
+		{"web", "Daniel", 3, audioRecorded},
+	} {
+		a := audioForChapter(&AppState{CurrentVersion: c.version, CurrentBook: c.book, CurrentChapter: c.chapter, Bible: bd})
+		if a.Kind != c.want {
+			t.Errorf("%s %s %d: kind = %d, want %d", c.version, c.book, c.chapter, a.Kind, c.want)
+		}
+	}
+	// The exclusion belongs to the webc registry entry, not the URL builder —
+	// the WEB set still has the files, and webc keeps every Daniel chapter
+	// Williams narrated against matching text.
+	if _, ok := webAudioURL("Esther", 5); !ok {
+		t.Error("webAudioURL(Esther 5) should still map — the exclusion is webc's")
+	}
+	if _, ok := webcAudioURL("Daniel", 12); !ok {
+		t.Error("webcAudioURL(Daniel 12) should still map — only chapter 3 diverges")
+	}
+	// A remembered source preference resolves through the same exclusion: the
+	// webc registry's web-williams entry declines Esther.
+	if rec, ok := recordingByID("webc", "web-williams"); !ok {
+		t.Fatal("webc should still register web-williams")
+	} else if _, ok := rec.urlFor("Esther", 1); ok {
+		t.Error("webc's web-williams entry must decline the Greek Esther")
+	}
+}
+
 func TestBSBAudioURL(t *testing.T) {
 	cases := []struct {
 		book    string
