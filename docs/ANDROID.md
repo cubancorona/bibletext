@@ -385,3 +385,27 @@ phone case preserves reading height on the short edge. There is no tablet-only
 sidebar/split mode. Because the canvas has no size until after the first build,
 `layoutMayChange()` is always true on Android; the watcher rebuilds whenever the
 resolved bar/rail placement changes.
+
+## Where the Bible caches live, and why it is not files/
+
+Android's Auto Backup includes the app's `files/` directory by default and
+uploads it to the reader's Google Drive backup, restoring it onto any device
+they later set up. Fyne's app-storage root IS `files/fyne`, so a cache written
+there travels off the device — and for the licensed translation that is a copy
+of the publisher's text going somewhere no licence covers. It also defeats
+`purgeUnavailableLicensedCaches`, which deletes the on-device copy when the
+licence configuration goes away and has no reach into a cloud one.
+
+The caches therefore go in `no_backup/bibletext` (`cache_path_android.go`),
+which Android provides for exactly this: persistent like `files/`, excluded
+from backup and device-to-device transfer, and — unlike `cache/` — never
+cleared under storage pressure, which matters for a whole Bible a reader
+expects to work offline.
+
+Preferences are deliberately left in `files/` and still back up: the notes
+scrapbook is irreplaceable, shared notes exist nowhere else, and it should
+keep surviving a lost phone. That split is the whole point of relocating only
+the caches rather than setting `android:allowBackup="false"`, which would have
+protected the text by throwing away the reader's notes.
+
+Existing installs re-download their translations once, into the new location.
