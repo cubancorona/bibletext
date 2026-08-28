@@ -159,9 +159,35 @@ func parseCrossRefZip(zipBytes []byte) (map[string][]crossRef, error) {
 		return nil, fmt.Errorf("cross-references zip has no .txt entry")
 	}
 	defer tsv.Close()
+	return parseCrossRefRows(tsv)
+}
 
+// crossRefDatasetVersification names the numbering the cross-reference dataset
+// is written in. OpenBible's Treasury of Scripture Knowledge follows the KJV,
+// which places the Romans doxology at 16:25-27; the app's reference numbering
+// is the WEB's, which places it at 14:24-26. The BSB profile encodes exactly
+// that relationship, so it doubles as the dataset's — and reading it through
+// the same MapVerse the rest of the feature uses keeps one description of the
+// difference rather than two.
+const crossRefDatasetVersification = "bsb"
+
+// parseCrossRefRows reads the dataset's TSV and returns the index, NORMALISED
+// into the reference numbering.
+//
+// Normalising here rather than at lookup time is what makes the rest of the
+// feature correct by construction: crossRefSourceRef maps the reader's verse
+// INTO the reference, and crossRefTargetIn maps a stored row OUT of it, so
+// both already assume the index speaks reference numbers. It did not — it
+// spoke the dataset's — and the doxology, the one passage where the two
+// disagree, lost its 92 rows in every translation while rows pointing at it
+// rendered a verse number the WEB does not have.
+//
+// A row whose source or target cannot be expressed in the reference numbering
+// at all is dropped: it names scripture this reference edition does not have,
+// so no reader could be shown it anyway.
+func parseCrossRefRows(r io.Reader) (map[string][]crossRef, error) {
 	idx := make(map[string][]crossRef, 32000)
-	sc := bufio.NewScanner(tsv)
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	first := true
 	for sc.Scan() {
@@ -183,6 +209,14 @@ func parseCrossRefZip(zipBytes []byte) (map[string][]crossRef, error) {
 			continue
 		}
 		ref.Votes, _ = strconv.Atoi(strings.TrimSpace(cols[2]))
+		fromCh, fromV, ok = crossRefToReference(fromBook, fromCh, fromV)
+		if !ok {
+			continue
+		}
+		ref, ok = crossRefTargetToReference(ref)
+		if !ok {
+			continue
+		}
 		key := crossRefKey(fromBook, fromCh, fromV)
 		idx[key] = append(idx[key], ref)
 	}
@@ -305,6 +339,44 @@ func crossRefSourceRef(versionID string, v Verse) (int, int, bool) {
 		return 0, 0, false
 	}
 	return ch, vs, true
+}
+
+// crossRefToReference moves one dataset verse number into the reference
+// numbering. ok is false when the reference edition has no such verse.
+func crossRefToReference(book string, ch, v int) (int, int, bool) {
+	rc, rv, res := MapVerse(crossRefDatasetVersification, versificationReference, book, ch, v)
+	if res == verseMapAbsent || res == verseMapIncommensurable {
+		return 0, 0, false
+	}
+	return rc, rv, true
+}
+
+// crossRefTargetToReference does the same for a target, span end included. An
+// end that cannot be mapped collapses the row to its start rather than dropping
+// it — the same trade crossRefTargetIn makes when rewriting into a translation:
+// point at scripture the reader can see rather than at nothing.
+func crossRefTargetToReference(c crossRef) (crossRef, bool) {
+	ch, v, ok := crossRefToReference(c.Book, c.Chapter, c.Verse)
+	if !ok {
+		return crossRef{}, false
+	}
+	startCh := c.Chapter
+	c.Chapter, c.Verse = ch, v
+	if c.EndV != 0 {
+		endCh := c.EndCh
+		if endCh == 0 {
+			endCh = startCh // the END's chapter in the DATASET's numbering
+		}
+		if ech, ev, ok := crossRefToReference(c.Book, endCh, c.EndV); ok {
+			c.EndCh, c.EndV = ech, ev
+			if c.EndCh == c.Chapter {
+				c.EndCh = 0
+			}
+		} else {
+			c.EndCh, c.EndV = 0, 0
+		}
+	}
+	return c, true
 }
 
 // crossRefTargetIn rewrites one dataset reference into the translation on
