@@ -231,6 +231,22 @@ func purgeUnavailableLicensedCaches() {
 		if !isLicensedSource(v) || v.source.available() {
 			continue
 		}
+		// A DEFINITIVE negative is required, not merely a falsy available().
+		// The credential store can fail to answer — before the first unlock
+		// after a reboot, or on any error other than item-not-found — and
+		// available() reports false either way. Deleting on that answer
+		// destroys the reader's only local copy of a translation whose
+		// licence is in fact perfectly intact, offline, with nothing to
+		// restore it from. The removal obligation attaches to a licence that
+		// is GONE, and a store that did not answer has not told us that.
+		//
+		// Scoped to the version whose unavailability actually turns on the
+		// key: a version unavailable because its operator opt-in or provider
+		// id is absent is deterministic, and stays purgeable.
+		if src, ok := v.source.(*licensedAPISource); ok && src.apiKey() == "" &&
+			!sharedKeys().bibleKeyKnownAbsent() {
+			continue
+		}
 		_ = os.Remove(cachePathForVersion(v.ID))
 		for _, path := range supersededCachePaths(v) {
 			_ = os.Remove(path)

@@ -1,11 +1,14 @@
 # A Bible version, as a state machine
 
-> **Status.** The model below is enumerated by `version_state_flow_test.go`,
-> which drives the real functions across the cross-product of disk states and
-> events. As of 2026-08-28 the enumeration walks 15 storage cells and records
-> **zero** incoherent states: `V1` was found by the enumeration and fixed in
-> the same change, and its root cause `V2` with it. Anything a future change
-> breaks appears there as an unpinned violation, by name.
+> **Status.** Two of the seven machines are enumerated — storage (M1) by
+> `version_state_flow_test.go`, credentials (M2) by
+> `version_credentials_flow_test.go` — both driving the real functions across
+> a cross-product rather than checking chosen cases. As of 2026-08-28 they
+> walk 25 cells and record **zero** incoherent states. Three defects were
+> found by them and fixed in the same changes: `V1` (a silent stale-serve),
+> `V2` (its root cause, an unsynced cache write) and `D1` (a destructive purge
+> on an answer the app could not verify). Anything a future change breaks
+> appears as an unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -169,6 +172,7 @@ of how much of the space the defect covers.
 |---|---|---|---|---|
 | ~~V1~~ | ~~An unusable current-epoch cache serves the previous epoch silently~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~V2~~ | ~~A cache write is renamed without being synced~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D1~~ | ~~A credential store that fails to answer is actioned as a revoked licence, and the reader's only copy is deleted~~ | **FIXED 2026-08-28** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -197,16 +201,122 @@ behind it are not. That is precisely the input to `V1`. The write now fsyncs
 the temp file before the rename, so the cache on disk is always either the
 previous whole file or the new whole file.
 
+### D1 — FIXED 2026-08-28
+
+`purgeUnavailableLicensedCaches` deleted the current epoch and every
+superseded epoch of any licensed version whose `available()` was false. But
+`available()` is false in two quite different situations: the reader has no
+key, and *the app could not find out*. `secretStore.Read` returns
+`(value, found, ok)`, and its own contract says `ok=false` means the store
+failed and "CALLERS MUST NOT treat that as 'no key'" — before the first unlock
+after a reboot, or on any store error other than item-not-found. Every
+consumer that merely reads a key honours that; the one consumer that acted
+irreversibly did not.
+
+The cost was the worst shape available: an offline reader, whose licence was
+perfectly intact, losing their only local copy of a translation, at startup,
+with nothing to restore it from.
+
+The purge now requires a definitive negative — `keyStore.bibleKeyKnownAbsent`,
+which answers `false` when the store did not answer at all. The requirement is
+scoped to versions whose availability actually turns on the key, so a version
+unavailable for a deterministic reason (no operator opt-in, no provider id)
+stays purgeable and the §10 removal obligation is unweakened.
+
+## The whole machine — what a complete model must cover
+
+This document began as the storage question and grew into the map below,
+because the question a reader actually has is not *which file serves this
+version* but:
+
+> **Which text am I looking at, is it the best this app can give me, and does
+> everything that names it tell the truth?**
+
+That is seven coupled machines and an arrivals layer, not one machine.
+Enumerating them as one cross-product is neither possible nor useful; the
+notes model already showed the alternative, running two separate enumerations
+rather than one. So each machine below is enumerated on its own, and only the
+couplings that are real get crossed.
+
+### The machines
+
+| | Machine | States |
+|---|---|---|
+| **M1** | Per-version storage *(enumerated)* | absent · current · superseded · unusable · licensed-stale — **a vector over versions, not a scalar** |
+| **M2** | Credential and licence *(enumerating now)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · recency fresh/expired |
+| **M3** | Refresh and download | settled · pending · downloading · backoff(n) · unpersistable-loop |
+| **M4** | Active selection | `CurrentVersion` + the `loadedVersions` map — **memory and disk can disagree** |
+| **M5** | App lifecycle | loadPending · loadReady · loadFailed · foreground · background · teardown |
+| **M6** | Reading position | the saved state NAMES a version that may be gone, unlicensed, or uncached |
+| **M7** | Canon shape | 66 vs 73 books, and the renumbering between any two versions |
+
+M2 is the machine with a state that is not a fact about the world but about
+**our knowledge of it**: `unreadable-transient` is "we cannot tell", and the
+whole of `D1` is one consumer treating it as "no".
+
+M7 is the machine that makes wrong answers look right: `notes_anchor.go`
+records in its own header that `MapVerse(webc->web, Tobit 1:1)` reports EXACT
+— *and that the table lies*.
+
+### The arrivals layer
+
+Events that arrive from outside and collide with whatever state the machines
+are in. Each crosses several machines at once, which is why they are the
+richest source of incoherence:
+
+- a **shared link** names a version AND a passage — which may be unavailable,
+  unlicensed, undownloaded, or absent from that canon (`linkVersionUnavailable`
+  already exists, so the state is real and only partly modelled);
+- a **shared note** is STORED under a version — `docs/NOTES_STATE.md` models
+  the note side exhaustively and the version side not at all;
+- **search results** are version-scoped verse references held across a switch;
+- a **cold-start deep link** arrives before the load phase ends (arrivals x M5);
+- **audio and read-along** recordings are per version;
+- the **footnote apparatus** is per version;
+- **cross-references** and **verse-of-the-day** are 66-book data with no
+  deuterocanonical entries.
+
+### The surfaces that must not lie
+
+Every degraded state must be visible, so every surface that names or implies a
+version is a place a state can lie: the reading pane, the picker rows (check,
+greyed, locked tag, TESTING badge), the picker footer notice, the
+incomplete-Bible banner, **share citations** (which name the translation to
+someone else), note bubbles, and audio availability.
+
+### The invariants a complete model needs
+
+V-A..V-E above are storage-only. The full set:
+
+1. **Truth** — nothing on screen names a version other than the one being shown.
+2. **Liveness** — every degraded state offers a way forward and says so.
+3. **Non-destruction** — nothing deletes the reader's only copy.
+4. **Compliance** — licensed text is never served past its window, nor retained
+   without a licence.
+5. **One ruler** — every verse number in play is in the numbering of the
+   version being read.
+6. **No one-way doors** — no state is unrecoverable within a session.
+7. **Arrival safety** — an inbound link, note or result never lands the reader
+   somewhere they cannot get back from.
+
+### Order of work
+
+Credentials (M2) first: the two destructive defects live there. Then
+launch/restore x canon (M5 x M6 x M7), which is where the history-erasure
+incident came from. Then arrivals, the least explored and the most coupled.
+
 ## What is enumerated, and what is not
 
-The suite walks the **storage space** — five disk shapes × three events, every
-cell reached, none skipped — plus the licensed recency boundary from both
-sides and the four unusable-file shapes.
+**M1, storage** — five disk shapes × three events, every cell reached, none
+skipped, plus the licensed recency boundary from both sides and the four
+unusable-file shapes.
 
-Not yet enumerated, and therefore not claimed: the **launch space** (saved
-reading × seed usability × fetch outcome, through `loadStartupBible`) and the
-**download space** (`fullPending` × `seedOnly` × `fullDownloading` × backoff ×
-the apply/retry/picker events). The scouting for both is recorded in
-`docs/BACKLOG.md`; several suspected defects in those spaces are named there
-rather than here, because this document only claims what the enumeration has
-actually driven.
+**M2, credentials** — five knowledge states (absent, held, unreadable,
+legacy-only, unreadable-with-legacy) × two events, including the irreversible
+one. The keystone is a credential store that can *fail*, which no existing
+fake could do.
+
+Not yet enumerated, and therefore not claimed: **M3–M7** and the arrivals
+layer. The remaining reported defects (`D2`–`D8`) live in those spaces and are
+recorded in `docs/BACKLOG.md` as reports to confirm with a cell — not here,
+because this document names only what an enumeration has actually driven.

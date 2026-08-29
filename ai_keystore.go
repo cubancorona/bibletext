@@ -156,6 +156,29 @@ func (k *keyStore) keyInSecureStore(id string) bool {
 	return ok && found
 }
 
+// bibleKeyKnownAbsent reports a DEFINITIVE negative: there is no effective
+// Bible key and the app was able to establish that, rather than merely
+// failing to find one.
+//
+// The distinction is the whole point. Read returns (value, found, ok), and
+// ok=false means the credential store itself failed — before the first unlock
+// after a reboot, or on any error other than item-not-found. Every consumer
+// that merely READS a key already honours that (apiKey serves the legacy copy
+// and declines to migrate or erase); this exists for the consumers that ACT
+// on the answer irreversibly, where "we could not tell" must never be
+// actioned as "there is none". See D1 in docs/VERSION_STATES.md.
+func (k *keyStore) bibleKeyKnownAbsent() bool {
+	if k == nil || k.prefs == nil {
+		return false // nothing bound yet: we cannot tell
+	}
+	if k.secrets != nil {
+		if _, _, ok := k.secrets.Read(bibleKeyID); !ok {
+			return false // the store failed — no conclusion is available
+		}
+	}
+	return k.bibleAPIKey() == ""
+}
+
 // migrateAllKeys sweeps EVERY provider's pre-1.1.6 Preferences key into the
 // credential store up front. Lazy per-provider migration would leave
 // non-selected providers' keys in plaintext Preferences indefinitely.
