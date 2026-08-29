@@ -117,9 +117,33 @@ func saveBibleToCache(path string, data *BibleData, nowFn func() time.Time) erro
 		}
 	}
 
+	// WRITE, FSYNC, THEN RENAME. os.Rename is atomic against a concurrent
+	// READER, but it is not a durability barrier: after a power loss or an
+	// iOS jetsam kill the rename can be visible while the megabytes behind it
+	// are not, leaving a zero-length or truncated file at the current-epoch
+	// path. That file is a complete cache as far as anything that only stats
+	// it is concerned — the input to V1 in docs/VERSION_STATES.md. The sync
+	// is what makes the temp file's contents durable BEFORE it becomes the
+	// name the app reads, so the cache on disk is always either the previous
+	// one or a whole new one, never a half of either.
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, content, 0o644); err != nil {
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
 		return fmt.Errorf("write cache temp file: %w", err)
+	}
+	if _, err := f.Write(content); err != nil {
+		f.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write cache temp file: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("sync cache temp file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("close cache temp file: %w", err)
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
@@ -145,8 +169,16 @@ func loadBibleData(fetchFn func() (*BibleData, error), cachePath string, nowFn f
 		return nil, "", fmt.Errorf("api fetch failed after cache load error (%v): %w", cacheErr, apiErr)
 	}
 
+	// A CACHE THAT CANNOT BE WRITTEN MUST NOT COST THE READER THEIR BIBLE.
+	// This used to discard the text it had just downloaded, which made an
+	// unwritable cache directory indistinguishable from being offline at
+	// every call site — including the retry loop, which would then retry
+	// forever at ten-minute intervals with no possibility of success, on a
+	// device where the app could never open a version at all. The download
+	// succeeded; the reader gets it for this session, and the next launch
+	// tries the cache again. See D6 in docs/VERSION_STATES.md.
 	if err := saveBibleToCache(cachePath, apiData, nowFn); err != nil {
-		return nil, "", fmt.Errorf("fetched bible data but failed to save cache: %w", err)
+		fmt.Fprintln(os.Stderr, "BibleText: fetched the Bible but could not cache it, serving it anyway:", err)
 	}
 
 	apiData.PrepareSearchIndex()

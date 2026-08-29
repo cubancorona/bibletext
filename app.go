@@ -163,6 +163,11 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 		// keep their on-device copies (the removal obligation that comes with
 		// content held under terms). Cheap no-op for everyone else.
 		purgeUnavailableLicensedCaches()
+		// And every superseded epoch of a licensed translation, licence or
+		// not: those files can never be served (the licensed branch returns
+		// before the superseded walk) and are never age-checked, so nothing
+		// else would ever remove them.
+		purgeSupersededLicensedCaches()
 		// Show per-book download progress on the loading spinner during a first-run fetch.
 		loadProgressFn = func(book string, bookNum, totalBooks, chapter int) {
 			ref := book
@@ -298,6 +303,13 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 	// may have switched translations while it downloaded); the cache is warm either way.
 	if state.CurrentVersion != version.ID {
 		state.fullPending = false
+		// seedOnly is cleared HERE too, not only on the swap path below. The
+		// seed stopped being what this version holds the moment the full text
+		// went into loadedVersions above — so a reader who switches back is
+		// served the complete text while the banner, which keys off this flag,
+		// would still have been announcing the four-book seed over it. That is
+		// D4 (docs/VERSION_STATES.md): every step legal, the composition a lie.
+		state.seedOnly = false
 		return
 	}
 	state.Bible = full

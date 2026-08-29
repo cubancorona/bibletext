@@ -231,6 +231,22 @@ func purgeUnavailableLicensedCaches() {
 		if !isLicensedSource(v) || v.source.available() {
 			continue
 		}
+		// A DEFINITIVE negative is required, not merely a falsy available().
+		// The credential store can fail to answer — before the first unlock
+		// after a reboot, or on any error other than item-not-found — and
+		// available() reports false either way. Deleting on that answer
+		// destroys the reader's only local copy of a translation whose
+		// licence is in fact perfectly intact, offline, with nothing to
+		// restore it from. The removal obligation attaches to a licence that
+		// is GONE, and a store that did not answer has not told us that.
+		//
+		// Scoped to the version whose unavailability actually turns on the
+		// key: a version unavailable because its operator opt-in or provider
+		// id is absent is deterministic, and stays purgeable.
+		if src, ok := v.source.(*licensedAPISource); ok && src.apiKey() == "" &&
+			!sharedKeys().bibleKeyKnownAbsent() {
+			continue
+		}
 		_ = os.Remove(cachePathForVersion(v.ID))
 		for _, path := range supersededCachePaths(v) {
 			_ = os.Remove(path)
@@ -316,8 +332,14 @@ const (
 // network fetch — used for the instant first paint before deciding whether to seed the
 // Gospels. It returns an error (never a fetch) on a cache miss.
 func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
+	// EVERY miss reports the same mode. The four miss branches used to
+	// disagree — this one said modeTesting and the other three modeReal —
+	// which is harmless only for as long as every caller checks the error
+	// first and ignores the mode. One of them already assigns the returned
+	// mode on its success path, so the accident is one reader away from
+	// being load-bearing. See D8 in docs/VERSION_STATES.md.
 	if v.source == nil || !v.source.available() {
-		return nil, modeTesting, errCacheNotFound
+		return nil, modeReal, errCacheNotFound
 	}
 	// A LICENSED cache past its recency window must not be served from the
 	// fast path: report a miss so startup takes the full load path, which
@@ -373,6 +395,7 @@ func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, err
 		if err != nil {
 			return nil, modeReal, err
 		}
+		// The current epoch is now on disk, so whatever was stale is not.
 		// Purge pre-epoch cache files only AFTER the current-epoch cache exists
 		// (incident-hardening): purging first destroyed the reader's only local
 		// copy of the translation and only then discovered the network was down.
@@ -436,15 +459,58 @@ func cachePathForVersion(id string) string {
 	return filepath.Join(filepath.Dir(base), name+".json")
 }
 
-// versionCacheIsCurrent reports whether v's CURRENT-epoch cache file exists on
-// disk. False right after a cacheEpoch bump, when startup was served by the
-// superseded-cache fallback (loadVersionFromCacheOnly) — the caller then
+// versionCacheIsCurrent reports whether v's CURRENT-epoch cache can actually
+// be SERVED. False right after a cacheEpoch bump, when startup was served by
+// the superseded-cache fallback (loadVersionFromCacheOnly) — the caller then
 // schedules the background refetch that upgrades the stored text to the
 // current decoder (triggerFullDownload). Every other load path goes through
 // loadVersionData, which is cache-current-or-fetch and self-heals.
+//
+// IT LOADS RATHER THAN STATS, and that is the whole point. This question and
+// the serve path's question must have the same answer, or the reader is
+// pinned on the previous epoch with the refresh switched off and the picker
+// silent: an existing-but-unloadable file (a write interrupted after the
+// rename, a wrong-schema file, a directory) statted true while the serve path
+// fell through to the superseded epoch, and nothing in the session or in any
+// later launch repaired it. That is V1 in docs/VERSION_STATES.md, and it
+// breaks the standing rule that a stale-serving state is never silent.
+//
+// Measured cost of the honest answer: ~50 ms for the 6.3 MB WEB cache on an
+// M3 Max, once per launch, on the background load goroutine that has just
+// done the same parse — against a defect the reader cannot see, diagnose or
+// escape. saveBibleToCache's fsync (cache.go) makes the corrupt input rare;
+// this makes it harmless.
 func versionCacheIsCurrent(v BibleVersion) bool {
-	_, err := os.Stat(cachePathForVersion(v.ID))
+	_, err := loadBibleFromCache(cachePathForVersion(v.ID))
 	return err == nil
+}
+
+// purgeSupersededLicensedCaches removes every SUPERSEDED epoch of every
+// licensed translation, unconditionally, at startup.
+//
+// A licensed superseded epoch can never legitimately be served:
+// loadVersionFromCacheOnly returns on the licensed branch before it reaches
+// the superseded-epoch walk, precisely because a licensed copy past its
+// recency window must be revalidated rather than served. So these files are
+// unreadable by the app AND unreachable by the §11 recency machinery, which
+// only ever age-checks the current epoch — a licensed text sitting on the
+// reader's device with an unbounded lifetime and nothing that will ever look
+// at it again. The only two things that removed them were a successful load
+// of that version (which a reader who stopped opening it never performs) and
+// the licence going away.
+//
+// Deleting them costs the reader nothing — they cannot be read — and
+// discharges the retention half of the obligation. See D2 in
+// docs/VERSION_STATES.md.
+func purgeSupersededLicensedCaches() {
+	for _, v := range registeredVersions {
+		if !isLicensedSource(v) {
+			continue
+		}
+		for _, path := range supersededCachePaths(v) {
+			_ = os.Remove(path)
+		}
+	}
 }
 
 // purgeSupersededCaches best-effort removes cache files written by older
@@ -505,6 +571,18 @@ func switchVersion(state *AppState, id string) {
 	}
 
 	data, cached := state.loadedVersions[id]
+	// A copy already in memory is normally the right answer — it is the same
+	// text, without the decode. The exception is a version RECORDED as showing
+	// a previous edition (D3): its in-memory copy is known to be the old
+	// decode, so if the current epoch has since arrived on disk, serving
+	// memory does two wrong things at once. The reader stays on the old text
+	// with no way to leave it this session, and applyLoadedVersion — which
+	// asks the DISK whether the version is current — quietly retires the very
+	// notice that says they are on it. Reloading repairs the state instead of
+	// describing it wrongly. See D11 in docs/VERSION_STATES.md.
+	if cached && state.staleVersions[id] && versionCacheIsCurrent(v) {
+		cached = false
+	}
 	mode := modeReal
 	if cached {
 		if v.isTesting() {
@@ -528,6 +606,42 @@ func switchVersion(state *AppState, id string) {
 // keeps the open book/chapter valid, persists the choice, and rebuilds the
 // window. Shared by switchVersion (synchronous) and the picker's async path
 // (switchVersionInteractive), so both apply identically once the data is in hand.
+// markVersionStale records that v is being served from a superseded epoch, so
+// the surfaces can say so. Idempotent and nil-safe.
+func markVersionStale(state *AppState, id string) {
+	if state == nil || id == "" {
+		return
+	}
+	if state.staleVersions == nil {
+		state.staleVersions = map[string]bool{}
+	}
+	state.staleVersions[id] = true
+}
+
+// clearVersionStale forgets that record — called when a version loads for
+// real, which is the only thing that repairs the condition.
+func clearVersionStale(state *AppState, id string) {
+	if state == nil || state.staleVersions == nil {
+		return
+	}
+	delete(state.staleVersions, id)
+}
+
+// staleVersionNames lists the stale translations by NAME, in registry order so
+// the wording is stable.
+func staleVersionNames(state *AppState) []string {
+	if state == nil || len(state.staleVersions) == 0 {
+		return nil
+	}
+	var out []string
+	for _, v := range registeredVersions {
+		if state.staleVersions[v.ID] {
+			out = append(out, v.Name)
+		}
+	}
+	return out
+}
+
 func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode) {
 	// A new translation's text (and recordings) no longer match what's playing, and
 	// a version switch doesn't route through addRecentChapter, so stop here.
@@ -540,10 +654,48 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	state.Bible = data
 	state.CurrentVersion = v.ID
 	state.currentMode = mode
+	// A version that just loaded from its CURRENT epoch is no longer stale.
+	// Cleared here, where the fact is known, rather than by any caller.
+	if versionCacheIsCurrent(v) {
+		clearVersionStale(state, v.ID)
+	}
 	// A translation actually loaded, so any remembered "we had to fall back"
 	// preference is spent: this is now the reader's translation, whether they
 	// picked it or the licensed one finally came back.
-	state.preferredVersion = ""
+	//
+	// THOSE TWO ARE THE ONLY WAYS TO SPEND IT, and a tapped link is neither.
+	// This used to clear unconditionally, and then persistReadingPosition at
+	// the foot of this function wrote the new id into the reading blob — the
+	// single place the reader's choice is recorded. So a reader in the
+	// fallback state, holding the picker's promise that their translation is
+	// "remembered and comes back when it can", lost that record the moment a
+	// friend sent them a link in some other translation. Not their doing, not
+	// announced, and not recoverable: the notice reads off preferredVersion,
+	// so it went silent in the same breath. The exception keeps the other
+	// half honest — a link TO the chosen translation is exactly it coming
+	// back. See D13 in docs/VERSION_STATES.md.
+	byArrival := state.versionSwitchForArrival
+	state.versionSwitchForArrival = false
+	if !byArrival || v.ID == state.preferredVersion {
+		state.preferredVersion = ""
+	}
+
+	// SEARCH RESULTS ARE THE TRANSLATION'S, NOT THE READER'S. Every row in the
+	// list is a Verse carrying the OLD translation's wording, and the list
+	// stays on screen across a switch under a header that now names the new
+	// one — so the reader reads WEB text beneath "Berean Standard Bible", and
+	// tapping a row navigates by the old numbering into a canon that need not
+	// contain the book at all (a WEBC Tobit hit tapped on the WEB lands on a
+	// blank page and writes Tobit into the durable history). The mark beside
+	// them is already renumbered through the anchor machinery below for
+	// exactly this reason; the results were the half nothing re-derived.
+	// Re-run the query against the translation now in hand: same limit as
+	// runSearch, and the answer is true of what is on screen. See D15 in
+	// docs/VERSION_STATES.md.
+	if q := strings.TrimSpace(state.ActiveSearchQuery); q != "" && len(state.SearchResults) > 0 {
+		state.SearchResults, state.SearchTruncated = data.SearchSmartLimited(q, 120)
+		state.searchScrollY = 0 // a different list starts at the top
+	}
 
 	clampToCurrentVersion(state)
 	// One ruler (N7): the highlight's span is numbered in the translation the
@@ -568,10 +720,30 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 			consumePendingLink(state)
 			consumed = true
 		} else {
+			// A TARGET WAITING ON ANOTHER TRANSLATION IS STALE, BUT THE READER
+			// IS NOT OWED SILENCE FOR IT. This park was made by a link tapped
+			// while some other load already owned the spinner; when that other
+			// load lands it takes the screen, and dropping the park here used
+			// to end the whole arrival without a word — no passage, no
+			// message, and the OS was already told the link was handled, so no
+			// browser fallback either. Two taps on shared scripture and
+			// nothing at all happens. The drop is right; the silence was the
+			// defect. See D14 in docs/VERSION_STATES.md.
+			// Guarded: the version slot and the target slot are set together
+			// by switchToLinkVersion, but they are separate fields and a
+			// dereference here would be a crash rather than a missing card.
+			var displaced ShareTarget
+			if state.pendingLink != nil {
+				displaced = *state.pendingLink
+			}
+			wanted := state.pendingLinkVersion
 			state.pendingLinkVersion = ""
 			state.pendingLink = nil
 			state.pendingLinkRaw = ""
 			state.pendingNoteOpenID = 0 // the Show intent dies with its park
+			if msg := linkDisplacedMessage(state, displaced, wanted); msg != "" {
+				defer showLinkNotice(state, "Shared with you", shareTargetReference(displaced), msg)
+			}
 		}
 	}
 	// Notes are keyed version|book|chapter, so the live mirror

@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -246,9 +247,18 @@ type AppState struct {
 	// on every background/stop flush. Without it, one unlucky launch silently
 	// overwrites the reader's choice with the default and the licensed
 	// translation is forgotten for good rather than returning when they are next
-	// online. Cleared by any successful version load, so an explicit switch
-	// always wins.
+	// online. Spent by the reader's OWN switch, or by the chosen translation
+	// finally loading — never by a switch somebody else's link performed on
+	// their behalf (D13).
 	preferredVersion string
+	// versionSwitchForArrival marks the load now in flight as one an ARRIVAL
+	// asked for, not the reader. The distinction has exactly one consumer —
+	// whether preferredVersion is spent — and no other way to be known:
+	// applyLoadedVersion sees the same call whether the picker or a tapped
+	// link produced it, and the clearing rule it was written with names two
+	// callers ("the reader picked it", "the licensed one came back") that an
+	// arrival is neither of. Set by switchToLinkVersion, and read once.
+	versionSwitchForArrival bool
 	// notesScroll is the notes browser's scroll position, kept for the WHOLE
 	// session — the browser remembers its place — so any
 	// return to the list — a rebuild while in Notes, opening a note and coming
@@ -284,6 +294,17 @@ type AppState struct {
 	// serves the reader's COMPLETE previous-epoch canon — the "showing the
 	// Gospels for now" banner must never claim otherwise there.
 	seedOnly bool
+
+	// staleVersions names the translations known to be serving a SUPERSEDED
+	// epoch — the previous decoder's output, complete but not current. The
+	// epoch-migration fallback is deliberate and right, but it was only ever
+	// announced for the DEFAULT version: fullPending is computed from that
+	// one alone and triggerFullDownload re-targets it, so a reader restored
+	// onto another translation offline, or switched onto one whose fetch
+	// failed, read the old decode with no notice, no banner and no upgrade
+	// for the whole session. Recorded per version so the picker can say so.
+	// See D3 in docs/VERSION_STATES.md.
+	staleVersions map[string]bool
 
 	// fullRetryDelay is the current auto-retry backoff for triggerFullDownload.
 	// It doubles on each consecutive failure (capped), so an offline reader who
@@ -604,7 +625,21 @@ func recentJumpTargets(state *AppState, limit int) []ChapterVisit {
 	}
 	out := make([]ChapterVisit, 0, limit)
 	for i := 1; i < len(state.RecentChapters) && len(out) < limit; i++ {
-		out = append(out, state.RecentChapters[i])
+		v := state.RecentChapters[i]
+		// A TRAIL OUTLIVES THE TRANSLATION IT WAS MADE IN, and the reader's
+		// trail is a mix: an evening in the WEBC leaves Tobit, Sirach and
+		// 1 Maccabees in it, and none of them exists in the WEB. Offering
+		// those after a switch put live buttons under a header naming a
+		// translation without the book — tapping one painted a blank chapter
+		// with both arrows dead and wrote the dead reference into the reading
+		// position. The entries are KEPT (restoreRecent no longer deletes
+		// them; they come back the moment the reader returns to a canon that
+		// has them) and simply not offered here, which is the single place
+		// every renderer of the bar reads. See D16 in docs/VERSION_STATES.md.
+		if state.Bible != nil && !chapterExists(state.Bible, v.Book, v.Chapter) {
+			continue
+		}
+		out = append(out, v)
 	}
 	return out
 }
@@ -650,6 +685,12 @@ func clearHistory(state *AppState) {
 }
 
 func navigateToVisit(state *AppState, visit ChapterVisit) {
+	// Belt-and-braces for D16: the bar no longer offers a visit this canon
+	// cannot resolve, but a stale reference reaching here would navigate to a
+	// blank chapter and then persist it as the reader's position.
+	if state.Bible != nil && !chapterExists(state.Bible, visit.Book, visit.Chapter) {
+		return
+	}
 	selectBook(state, visit.Book, false)
 	state.CurrentChapter = visit.Chapter
 	addRecentChapter(state, visit.Book, visit.Chapter) // clears state.restore
@@ -839,6 +880,22 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 		if c := state.window.Canvas(); c != nil {
 			c.Unfocus()
 		}
+	}
+
+	// ONE RULER (D15). A Verse is a reference in SOME translation's numbering,
+	// and this function is handed one by more than one producer — the keyword
+	// list, the AI list, and anything added later. The keyword list is now
+	// re-derived when the translation changes, but the guard belongs here too:
+	// navigating to a book the loaded canon does not contain paints a blank
+	// chapter with both arrows dead, and — the durable half — writes that dead
+	// reference into the reading position and the recent-chapters history,
+	// where it outlives the session. Refuse, and say so rather than appearing
+	// to ignore the tap.
+	if state.Bible != nil && state.Bible.GetChaptersForBook(verse.BookName) == 0 {
+		showLinkNotice(state, "Not in this translation",
+			verse.BookName+" "+strconv.Itoa(verse.Chapter),
+			searchResultOutsideCanonMessage(state, verse.BookName))
+		return
 	}
 
 	// BEFORE the navigation: what would this arrival's mark suppress? (The

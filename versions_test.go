@@ -276,6 +276,10 @@ func TestSwitchVersionRefusesUnselectable(t *testing.T) {
 	}
 }
 
+// The currency check asks whether the current epoch can be SERVED, not merely
+// whether a file sits at its path — so every case here writes a cache through
+// the real writer. A placeholder would pass the old stat and fail the load,
+// which is the disagreement V1 was (docs/VERSION_STATES.md).
 func TestVersionCacheIsCurrent(t *testing.T) {
 	dir := t.TempDir()
 	legacy := filepath.Join(dir, "bibletext-cache.json")
@@ -285,17 +289,27 @@ func TestVersionCacheIsCurrent(t *testing.T) {
 	if versionCacheIsCurrent(web) {
 		t.Error("no cache files at all → not current")
 	}
-	if err := os.WriteFile(legacy, []byte("{}"), 0o644); err != nil {
+	if err := saveBibleToCache(legacy, fullValidBible(), currentUTCTime); err != nil {
 		t.Fatal(err)
 	}
 	if versionCacheIsCurrent(web) {
 		t.Error("the legacy (epoch-0) file must NOT count as web's current epoch")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "bibletext-web-v5.json"), []byte("{}"), 0o644); err != nil {
+	current := filepath.Join(dir, "bibletext-web-v5.json")
+	if err := saveBibleToCache(current, fullValidBible(), currentUTCTime); err != nil {
 		t.Fatal(err)
 	}
 	if !versionCacheIsCurrent(web) {
 		t.Error("the v5 file is web's current epoch")
+	}
+	// And the property that closed V1: a file that exists at the current
+	// epoch but cannot be served does NOT count as current, or the reader
+	// would be pinned on the previous epoch with the refresh switched off.
+	if err := os.WriteFile(current, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if versionCacheIsCurrent(web) {
+		t.Error("an unloadable file at the current epoch must not count as current")
 	}
 }
 

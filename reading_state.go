@@ -336,7 +336,22 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 	// data result (version genuinely unavailable) falls through to the default
 	// canon, where the saved book may still legitimately exist.
 	if rs.Version != "" && rs.Version != state.CurrentVersion {
-		if v, ok := versionByID(rs.Version); ok && v.canSelect() {
+		v, known := versionByID(rs.Version)
+		switch {
+		case known && !v.canSelect():
+			// THE CHOICE OUTLIVES THE CONFIGURATION. canSelect() is false
+			// whenever the licence configuration cannot be READ, and "cannot
+			// be read" is not "the reader gave it up": a credential store that
+			// has not unlocked yet answers exactly like one that is empty, and
+			// on iOS an app launched before first unlock is a routine morning,
+			// not an error. The block below is skipped in that case, so
+			// without this line preferredVersion is never set, the fallback's
+			// id is what the next navigation persists, and the ONLY record of
+			// the reader's chosen translation is gone for good — from a
+			// condition that fixed itself seconds later. See D9 in
+			// docs/VERSION_STATES.md.
+			state.preferredVersion = v.ID
+		case known:
 			data, loadedMode, err := loadVersionForRestore(v, base)
 			if err != nil {
 				// OFFLINE EPOCH-BUMP UPGRADE: loadVersionData
@@ -347,6 +362,12 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 				// sitting on disk. Serve that instead of refusing to open; a
 				// later online launch re-fetches and upgrades in place.
 				old, oldMode, cerr := loadVersionFromCacheOnly(v)
+				// If that succeeded it may be the SUPERSEDED epoch — a
+				// complete canon from the previous decoder. Record it so the
+				// picker can say so; nothing else would (D3).
+				if cerr == nil && !versionCacheIsCurrent(v) {
+					markVersionStale(state, v.ID)
+				}
 				if cerr != nil {
 					// A LICENSED translation that cannot be revalidated must not
 					// abort the launch. Its cache was DELETED before the refetch
@@ -460,7 +481,27 @@ func restoreRecent(saved []ChapterVisit, bd *BibleData, book string, chapter int
 			continue
 		}
 		if bd.GetChaptersForBook(v.Book) == 0 {
-			continue // book gone from this build/translation
+			// DORMANT, NOT GONE. This used to delete the entry, and the two
+			// cases it cannot tell apart are not alike: a book dropped from
+			// the build is gone, but a book missing from the translation the
+			// reader HAPPENS to be in is still theirs. An evening in the WEBC
+			// followed by a switch to the WEB persisted the trail under "web",
+			// and this loop then deleted Tobit, Sirach and 1 Maccabees from
+			// the only copy — the reader's own history, erased for reading a
+			// different translation, with nothing said and no way back. Keep
+			// anything the app's widest canon knows; recentJumpTargets does
+			// not offer what the loaded canon cannot resolve, so nothing dead
+			// is shown, and the entries come alive again when the reader
+			// returns to a translation that has them. See D16 in
+			// docs/VERSION_STATES.md.
+			if !bookKnownToApp(v.Book) {
+				continue // genuinely not a book this app has ever had
+			}
+			out = append(out, v)
+			if len(out) == maxRecent {
+				break
+			}
+			continue
 		}
 		if !chapterExists(bd, v.Book, v.Chapter) {
 			continue
@@ -521,4 +562,18 @@ func armReadingMarkerFor(state *AppState, verse int) {
 	}
 	c := state.pal().Accent
 	armReadingMarker(verse, float64(c.R)/255, float64(c.G)/255, float64(c.B)/255)
+}
+
+// bookKnownToApp reports whether a book name belongs to any canon this build
+// ships. catholicBooks is the widest (73), and a probe over the registry
+// confirms it is a strict superset of the 66-book list, so one lookup answers
+// for every translation without loading any of them — which is the point: this
+// is asked at launch, when exactly one canon is in hand.
+func bookKnownToApp(name string) bool {
+	for _, b := range catholicBooks {
+		if b == name {
+			return true
+		}
+	}
+	return false
 }
