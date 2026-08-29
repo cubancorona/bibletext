@@ -369,6 +369,11 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 	// A reader waiting offline on a stale-epoch boot: pending, not on the
 	// seed, backoff armed, nothing in flight.
 	st := refreshFacts{pending: true, retryDelay: 20 * time.Second, current: defaultVersionID}.toState(t)
+	// The manual retry inside noticeOnPickerOpen would otherwise spawn a real
+	// download goroutine and reach the network. stopping is triggerFullDownload's
+	// own first guard, so this exercises the ORDERING under test and nothing
+	// else — the notice is captured before the retry is even attempted.
+	st.stopping.Store(true)
 
 	// The control: before the picker is involved, the wording exists.
 	if before := fullPendingNotice(st); !strings.Contains(before, "waiting for a connection") {
