@@ -104,3 +104,31 @@ BibleData.Superscriptions during the passages walk (anchoring any note
 markers the way the helloao branch does), bumping the nkjv cacheEpoch, and
 nothing else — the renderers and the section already handle titles for every
 version. Worth batching with the next NKJV decode change.
+
+## Show a note you just sent, the way opening one from the browser does
+
+Sending a note stores it and draws nothing. `share.go` says so where it saves
+the record — "never drawn in the text, and visible in the notes browser — that
+visibility is deliberate" — and `notes_plan.go` enforces it: a `noteKindMine`
+record joins the plan only while `noteFocus` names it, so the browser can show
+one and the send path cannot.
+
+The proposal is to let sending focus the note it just stored, exactly as
+`openNoteFromBrowser` does: `state.focusNote(stored.ID)` then
+`applyNoteForCurrentChapter(state)` after `saveMyNote` returns. That inherits
+the transient behaviour already in place — `resetNoteFocus` runs on every
+chapter arrival, so the note goes away on navigating away, with no new lifetime
+rule to define and nothing persisted that was not persisted before.
+
+This REVERSES a stated decision rather than fixing a defect, which is why it is
+written down instead of done. What argues for it: sending is the one moment a
+reader has no confirmation that their words were kept, and the browser is
+several taps away.
+
+The report that raised it was a misreading worth recording, because the app
+invited it. A highlight was still standing after a send with no note beside it,
+which read as a note that had lost its text; it was a search mark, from arriving
+at the passage through Results. `hlOrigin` (mark.go) records provenance but does
+not change the tint, so a note's mark and a search mark are indistinguishable to
+a reader. Whether or not the change above is made, that ambiguity is its own
+item: a reader cannot tell why a verse is lit.
