@@ -90,6 +90,13 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		setCentered(lbl)
 	}
 	setThinking := func() {
+		// Stop any spinner already running before replacing it, as both sibling
+		// transitions do. A ProgressBarInfinite left assigned-over keeps its
+		// RepeatForever animation, repainting the whole canvas at ~20fps until
+		// GC reclaims it; ui.go documents that as a real defect it once had.
+		// Only one call site reaches here today, which is not a reason for the
+		// transition to be the one that cannot be called twice.
+		stopThinking()
 		bar := widget.NewProgressBarInfinite()
 		thinkingBar = bar
 		msg := widget.NewLabel("Finding related passages…")

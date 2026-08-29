@@ -88,7 +88,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// long ones need to scroll.
 	ps := aiPanelSize(cnv.Size())
 	bodyW := ps.Width - 44
-	maxBodyH := ps.Height - 168 // headroom for header, footer and padding
+	// A floor for the states that size themselves before the popup exists. The
+	// real cap is worked out per-state in fitBody, from the chrome the panel
+	// actually has rather than a guess at it.
+	maxBodyH := ps.Height - 168
 	answer := widget.NewRichTextFromMarkdown("")
 	answer.Wrapping = fyne.TextWrapWord
 	answerScroll := container.NewVScroll(answer)
@@ -154,6 +157,36 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	reportBtn.Importance = widget.LowImportance
 	reportBtn.Disable()
 
+	// fitBody sizes a body scroll to want, then grows or shrinks the panel to
+	// exactly what that needs.
+	//
+	// The chrome — header, footer, padding, border — is MEASURED, not guessed.
+	// Two hardcoded guesses used to stand in for it, 168 when capping the body
+	// and 158 when resizing the panel. They disagreed with each other, and both
+	// under-reserved by about 54pt against a header that grows with the quote
+	// and the question. That shortfall is what clipped "Try again" out of the
+	// error state and put a scrollbar on a panel with room to spare.
+	fitBody := func(sc *container.Scroll, want float32) {
+		if want < 1 {
+			want = 1
+		}
+		sc.SetMinSize(fyne.NewSize(bodyW, want))
+		if popup == nil {
+			return
+		}
+		// Everything the panel needs that is NOT the body. Read after the
+		// SetMinSize above, so it is this panel's real chrome.
+		chrome := popup.MinSize().Height - want
+		if max := ps.Height - chrome; want > max {
+			want = max
+			if want < 1 {
+				want = 1
+			}
+			sc.SetMinSize(fyne.NewSize(bodyW, want))
+		}
+		popup.Resize(fyne.NewSize(ps.Width, want+chrome))
+	}
+
 	closeBtn := widget.NewButton("Close", func() {
 		userClosed = true
 		stopThinking()
@@ -172,8 +205,9 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		container.NewHBox(reportBtn, layout.NewSpacer(), copyBtn, closeBtn),
 	)
 
-	// --- State transitions. setThinking/setError layer their content on top of
-	// the (empty) answer scroll; setResult fills the scroll and drops the overlay.
+	// --- State transitions. Each of the three swaps the body for its own
+	// content and then sizes the panel to it; none inherits the height another
+	// left behind.
 	// Declared before setThinking so the waiting state's "faster model" offer
 	// can re-run the request; assigned below.
 	var startFetch func()
@@ -186,6 +220,11 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	var fetchGen int
 
 	setThinking := func() {
+		// Same reason as setError: a re-run (the faster-model switch, Try again)
+		// leaves the previous answer on neither the screen nor the clipboard.
+		current = ""
+		copyBtn.Disable()
+		reportBtn.Disable()
 		bar := widget.NewProgressBarInfinite()
 		thinkingBar = bar
 		msg := widget.NewLabel("Reading the passage…")
@@ -221,23 +260,32 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// the scroll has room and never engages. Spacers are gone (inside a
 		// scroll they collapse to nothing anyway); squeezeWidthLayout stops the
 		// scroll widening the column sideways (sheet_fit.go).
-		body.Objects = []fyne.CanvasObject{
-			answerScroll,
-			container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewVBox(
-				spacer(8),
-				container.NewCenter(msg), spacer(10),
-				// Bounded, not full-bleed: a panel-wide bar reads as a banner
-				// rather than a quiet progress hint, and it dwarfed the text.
-				container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
-				spacer(10), container.NewCenter(hint),
-				// inputFrame: the theme's button fill IS this panel's card
-				// colour (SurfaceAlt), so a bare Cancel here had no visible
-				// box at all. The outline restores one.
-				spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
-				fasterRow,
-			))),
-		}
+		waitCol := container.New(squeezeWidthLayout{}, container.NewVBox(
+			spacer(8),
+			container.NewCenter(msg), spacer(10),
+			// Bounded, not full-bleed: a panel-wide bar reads as a banner
+			// rather than a quiet progress hint, and it dwarfed the text.
+			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
+			spacer(10), container.NewCenter(hint),
+			// inputFrame: the theme's button fill IS this panel's card
+			// colour (SurfaceAlt), so a bare Cancel here had no visible
+			// box at all. The outline restores one.
+			spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
+			fasterRow,
+		))
+		waitScroll := container.NewVScroll(waitCol)
+		// Replace, don't layer. The answer scroll underneath is empty in this
+		// state, but it still carries the answer cap as its minimum size, and in
+		// a stack that minimum wins — so the panel was sized for an answer that
+		// is not there yet and the fit below could not shrink it. setError
+		// already replaced; this is the same swap.
+		body.Objects = []fyne.CanvasObject{waitScroll}
 		body.Refresh()
+		// Size the panel to the waiting column, as the answer and error states
+		// size it to theirs. Re-entering this state from an error — Try again,
+		// or the faster-model switch — used to leave the panel at the height the
+		// previous state chose, which is what put Cancel under the footer.
+		fitBody(waitScroll, waitCol.MinSize().Height+10)
 	}
 	setResult := func(text string) {
 		stopThinking()
@@ -249,37 +297,30 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// at a known width. Pre-wrap at the body width so the height is right, then
 		// fit the panel to the answer (capped at maxBodyH).
 		answer.Resize(fyne.NewSize(bodyW-16, answer.MinSize().Height))
-		fitH := answer.MinSize().Height + 10
-		if fitH > maxBodyH {
-			fitH = maxBodyH
-		}
-		answerScroll.SetMinSize(fyne.NewSize(bodyW, fitH))
 		answerScroll.ScrollToTop()
 		body.Objects = []fyne.CanvasObject{answerScroll}
 		body.Refresh()
-		if popup != nil {
-			popup.Resize(fyne.NewSize(ps.Width, fitH+158))
-		}
+		fitBody(answerScroll, answer.MinSize().Height+10)
 		// Re-measure once the real layout has landed so the height is exact.
 		time.AfterFunc(40*time.Millisecond, func() {
 			fyne.Do(func() {
 				answer.Refresh()
 				answerScroll.Refresh()
-				if popup != nil {
-					fit := answer.MinSize().Height + 10
-					if fit > maxBodyH {
-						fit = maxBodyH
-					}
-					answerScroll.SetMinSize(fyne.NewSize(bodyW, fit))
-					popup.Resize(fyne.NewSize(ps.Width, fit+158))
-				}
+				fitBody(answerScroll, answer.MinSize().Height+10)
 			})
 		})
 	}
 
 	setError := func(msg string, needsSettings bool) {
 		stopThinking()
+		// Drop the previous answer with its buttons. Copy was already disabled
+		// here; Report was not, and nothing disabled it anywhere, so it kept
+		// pointing at whatever `current` still held. Report mails the answer to
+		// support as the flagging surface for AI content — mailing a stale one
+		// from under an error message is the worst version of that.
+		current = ""
 		copyBtn.Disable()
+		reportBtn.Disable()
 		answer.ParseMarkdown("")
 		lbl := widget.NewLabel(msg)
 		lbl.Wrapping = fyne.TextWrapWord
@@ -287,10 +328,20 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		var actBtn *widget.Button
 		if needsSettings {
 			actBtn = widget.NewButton("Open AI settings", func() {
+				// Every dismiss path undoes what opening the panel did: mark it
+				// closed so a late reply cannot reopen it, and put the native
+				// reading overlay back. Close and Cancel already did both; this
+				// path did neither, and was correct only because the settings
+				// sheet restores the overlay itself and rebuildWindow clears the
+				// latch as a backstop. Two distant invariants is not a guarantee
+				// — the backstop exists because this latch has been left on
+				// before, and a blank verse pane is what that looks like.
+				userClosed = true
 				stopThinking()
 				if popup != nil {
 					popup.Hide()
 				}
+				restore()
 				showAISettings(state)
 			})
 			actBtn.Importance = widget.HighImportance
@@ -300,12 +351,17 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// Scrolled for the same reason as the waiting column: a long provider
 		// error on a short canvas pushed the one actionable button into the
 		// footer.
-		body.Objects = []fyne.CanvasObject{
-			container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewVBox(
-				spacer(8), lbl, container.NewCenter(actBtn),
-			))),
-		}
+		errCol := container.New(squeezeWidthLayout{}, container.NewVBox(
+			spacer(8), lbl, container.NewCenter(actBtn),
+		))
+		errScroll := container.NewVScroll(errCol)
+		body.Objects = []fyne.CanvasObject{errScroll}
 		body.Refresh()
+		// Pre-wrap the message at the body width before measuring, for the same
+		// reason the answer is pre-wrapped: a word-wrapped label reports its
+		// true height only once it has wrapped at a known width.
+		lbl.Resize(fyne.NewSize(bodyW-16, lbl.MinSize().Height))
+		fitBody(errScroll, errCol.MinSize().Height+10)
 	}
 
 	startFetch = func() {
