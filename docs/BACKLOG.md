@@ -132,3 +132,42 @@ at the passage through Results. `hlOrigin` (mark.go) records provenance but does
 not change the tint, so a note's mark and a search mark are indistinguishable to
 a reader. Whether or not the change above is made, that ambiguity is its own
 item: a reader cannot tell why a verse is lit.
+
+## One pill, several noted paragraphs: what the count says and where it points
+
+With more than one note on a chapter, the native reading pane draws ONE
+anchored sticker — `planOpenLimit` is 1 — over the focused note's verse, and
+puts the rest behind a counter that rotates focus and scrolls to the next one
+(`advanceNoteFocus`). Two things about that are worth revisiting.
+
+**The count says "passage" and means "chapter."** `placed` is
+`len(plan.Notes)` — every placed received note in the CHAPTER — so a sticker
+sitting over one paragraph can read "1 of 3 on this passage" while notes 2 and
+3 are on paragraphs elsewhere. A reader looking at a pill over one paragraph
+reads "this passage" as the paragraph under it, and the sentence then claims
+three notes on a verse range that has one. The wording is only accurate in the
+case it was written for, several notes sharing one range (the S10 scenario in
+`dev_links_on.go`).
+
+**Nothing marks the paragraphs the other notes are on.** The counter is the
+only route to them, so a reader who does not tap it has no way to learn they
+exist. Note that the platforms diverge here: the Fyne banner
+(`notes_banner.go`, Windows and Linux) draws a CHIP PER NOTE, so those readers
+do see the whole set while the native ones see one.
+
+Three ways to take it, cheapest first, not exclusive:
+
+1. **Say the true scope.** "K of N in this chapter" when the placements
+   differ, keeping "on this passage" for notes that genuinely share a range.
+   Small, and it stops the app asserting something untrue — worth doing
+   whatever else happens.
+2. **Mark the other noted passages in the text**, so the pill over one
+   paragraph no longer implies it is the only one. This is the discovery
+   problem, and it is what the banner already gives the non-native platforms.
+3. **Lift the cap.** `planOpenLimit`'s own comment invites it: "TO LIFT THE
+   CAP: raise this number (or drop the counter). Nothing else changes — not the
+   store, not drawnNote, not the fingerprint." Largest change, and worth
+   weighing against a page carrying three open bubbles at once.
+
+Read from the code, not yet watched on a device with three notes on three
+paragraphs; do that first, since it will show whether (2) alone is enough.
