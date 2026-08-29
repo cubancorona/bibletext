@@ -171,3 +171,42 @@ Three ways to take it, cheapest first, not exclusive:
 
 Read from the code, not yet watched on a device with three notes on three
 paragraphs; do that first, since it will show whether (2) alone is enough.
+
+## Candidate: a neutral graphite wash for the dark-mode highlight
+
+The dark highlight is `#3A326F`, a violet. Held against seven alternatives on a
+real screenshot, graphite `#2C343E` was the one worth keeping in mind: the
+violet carries enough chroma to read like a system text selection, where a
+neutral band reads more like a mark someone made. Light mode is not in
+question — `#FFE08A` amber stays, and it is the one hue that says "highlighted"
+while leaving red letters red.
+
+Measured, so the trade is not a matter of taste alone:
+
+| | vs the #191715 ground | red letters on it | body text on it |
+|---|---|---|---|
+| `#3A326F` violet (now) | 1.59:1 | 3.77:1 | 9.88:1 |
+| `#2C343E` graphite | **1.42:1** | **4.22:1** | **11.05:1** |
+
+So graphite is easier to read text ON and harder to spot AT A GLANCE. The
+second half is the risk: 1.42:1 against a near-black page is quiet in daylight.
+
+**What blocks a straight swap.** `TestMultiNoteWashKeepsScriptureLegible` pins a
+hue relationship, not just a contrast floor: in dark the primary wash must be
+violet (`B > R > G`) and the multi-note wash slate-blue (`B > G > R`), so
+"several notes here" cannot be misread as "one strong note". Graphite is
+`B > G > R` — it lands in the multi wash's own family and the pair collapses.
+The test is right to refuse it.
+
+**The way through, if this is ever taken up.** Give the violet the multi-note
+job: primary graphite (neutral), multi `#3A326F` (chromatic). A neutral against
+a chromatic separates more sharply than the current violet-against-slate pair,
+and it keeps a colour worth keeping. `HighlightMulti` is unreachable today
+(`tintMulti` is not wired), so that half costs nothing visually until it is.
+
+Three approvals would move with it, and each is a deliberate gate rather than a
+formality: `TestApprovedHighlightTokensStayPinned` and
+`TestMultiNoteWashKeepsScriptureLegible` in `theme_contrast_test.go`, and
+`TestWebReaderPaletteValues` in `cmd/websitegen` — the web reader's dark
+highlight is meant to match the app's, and that parity is intended, so any
+change here changes the web reader too.
