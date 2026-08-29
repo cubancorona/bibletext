@@ -571,6 +571,18 @@ func switchVersion(state *AppState, id string) {
 	}
 
 	data, cached := state.loadedVersions[id]
+	// A copy already in memory is normally the right answer — it is the same
+	// text, without the decode. The exception is a version RECORDED as showing
+	// a previous edition (D3): its in-memory copy is known to be the old
+	// decode, so if the current epoch has since arrived on disk, serving
+	// memory does two wrong things at once. The reader stays on the old text
+	// with no way to leave it this session, and applyLoadedVersion — which
+	// asks the DISK whether the version is current — quietly retires the very
+	// notice that says they are on it. Reloading repairs the state instead of
+	// describing it wrongly. See D11 in docs/VERSION_STATES.md.
+	if cached && state.staleVersions[id] && versionCacheIsCurrent(v) {
+		cached = false
+	}
 	mode := modeReal
 	if cached {
 		if v.isTesting() {

@@ -56,10 +56,22 @@ built for lives in their intersection. Two more defects, both **durable**
 The history-erasure invariant itself held in all sixteen cells, including the
 73-book-trail-meets-66-book-fallback shape of the original incident.
 
-Still to enumerate: **M4** (active selection) and the **arrivals layer**
-(links, notes, search results landing on all of the above). The trajectory
-harness in `version_refresh_flow_test.go` is the pattern for arrivals, since
-the defects there will be flow-shaped rather than cell-shaped.
+**M4 — active selection — enumerated 2026-08-29.** One more defect:
+
+| | Defect | Status |
+|---|---|---|
+| ~~D11~~ | ~~A stale version's notice is retired by the disk while its previous decode is still on screen~~ | **FIXED 2026-08-29** |
+
+Not reachable today (nothing writes a non-default version's current epoch
+while its previous decode is in memory), but one obvious feature away, and the
+fix also closes a live liveness hole: a stale non-default translation
+previously had no way to stop being stale within a session.
+
+**All seven machines are now enumerated.** What remains is the **arrivals
+layer** — links, notes, search results and cold-start deep links landing on
+all of the above. The trajectory harness in `version_refresh_flow_test.go` is
+the pattern for it, since the defects there will be flow-shaped rather than
+cell-shaped.
 
 ## NKJV Psalm superscriptions
 

@@ -5,7 +5,7 @@
 > TRAJECTORY harness, which walks journeys rather than cells. As of
 > 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
 > incoherent states. **Every defect the scouting reported has now been closed
-> — twelve in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
+> — thirteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
 > unsynced cache write), `D1` (a destructive purge on an answer the app could
 > not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
 > (a non-default translation stale in silence), `D4` (a banner outliving the
@@ -13,8 +13,9 @@
 > `D6` (a downloaded Bible discarded because it could not be cached), `D7`
 > (a path algebra that could delete a live cache), `D8` (miss branches
 > disagreeing about the mode they report), `D9` (**the reader's chosen
-> translation erased by a condition that fixes itself**) and `D10` (a silent
-> substitution of one translation for another). Anything a future change
+> translation erased by a condition that fixes itself**), `D10` (a silent
+> substitution of one translation for another) and `D11` (a notice retired
+> while the edition it describes is still on screen). Anything a future change
 > breaks appears as an unpinned violation, by name.
 
 ## Why a state machine and not a checklist
@@ -189,6 +190,7 @@ of how much of the space the defect covers.
 | ~~D8~~ | ~~The cache-only read's miss branches disagree about the mode~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D9~~ | ~~A translation that is merely unselectable this launch has the reader's choice overwritten by the fallback, permanently~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D10~~ | ~~The reader asked for one translation and is shown another, with nothing on any surface saying so~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D11~~ | ~~A stale version's notice is retired by the disk while its previous decode is still on screen~~ | **FIXED 2026-08-29** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -347,6 +349,38 @@ violated in any of the sixteen cells — including a 73-book trail meeting a
 66-book fallback, the exact shape of the original incident. The guards that
 were added by hand hold up under enumeration.
 
+### D11 — the selection machine, closed 2026-08-29
+
+`M4` is the only machine that keeps a **second copy** of a translation — the
+in-memory `loadedVersions` map — and a second copy is a second source of
+truth. The cross-product asks one question: can the map and the disk disagree
+about the same translation, and does anything notice.
+
+They can, at `mem-previous/disk-current`. A version recorded as showing a
+previous edition holds that old decode in memory. If the current epoch then
+arrives on disk, the switch serves memory — and `applyLoadedVersion` decides
+staleness by asking the **disk**, so it retires the notice while the old text
+is still on screen. The reader is told the edition is current, and it is not.
+
+**On reachability, plainly.** Nothing in the app today writes a non-default
+version's current epoch while that version's previous decode sits in memory:
+the background refresh only upgrades the default translation, and a version
+already in memory is never re-read from disk. So this is a guard in `D7`'s
+sense rather than a live defect — but a far shorter reach than `D7`'s, because
+the feature that makes it live is the obvious next one, and `D3`'s notice
+already promises it ("until the update can be downloaded"). The fix also
+closes a hole that IS live: before it, a non-default translation recorded as
+stale had **no way to stop being stale within a session**, however long the
+reader spent online — a straight violation of the liveness invariant.
+
+**A note on the enumeration itself.** Its first version passed, and proved
+nothing: it routed the generation stamp through `M1`'s `servedFrom` helper,
+which maps anything it does not recognise to `"none"`, so every
+previous-edition assertion was a tautology. The stamp is now read directly,
+and `TestTheSelectionInvariantsCanActuallyFail` hands the invariants the
+shapes they exist to catch and requires them to complain — because a green
+suite is evidence only when the checks in it can go red.
+
 ## The whole machine — what a complete model must cover
 
 This document began as the storage question and grew into the map below,
@@ -369,7 +403,7 @@ couplings that are real get crossed.
 | **M1** | Per-version storage *(enumerated)* | absent · current · superseded · unusable · licensed-stale — **a vector over versions, not a scalar** |
 | **M2** | Credential and licence *(enumerated)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · recency fresh/expired |
 | **M3** | Refresh and download | settled · pending · downloading · backoff(n) · unpersistable-loop |
-| **M4** | Active selection | `CurrentVersion` + the `loadedVersions` map — **memory and disk can disagree** |
+| **M4** | Active selection *(enumerated)* | `CurrentVersion` + the `loadedVersions` map — **memory and disk can disagree** |
 | **M5** | App lifecycle *(enumerated, with M6+M7)* | loadPending · loadReady · loadFailed · foreground · background · teardown |
 | **M6** | Reading position *(enumerated, with M5+M7)* | the saved state NAMES a version that may be gone, unlicensed, or uncached |
 | **M7** | Canon shape *(enumerated, with M5+M6)* | 66 vs 73 books, and the renumbering between any two versions |
@@ -427,9 +461,10 @@ V-A..V-E above are storage-only. The full set:
 
 Credentials (M2) first: the two destructive defects live there. Then
 launch/restore x canon (M5 x M6 x M7), which is where the history-erasure
-incident came from. **Both are done.** What remains is **M4** (active
-selection — the one machine where memory and disk can disagree) and the
-**arrivals layer**, the least explored and the most coupled.
+incident came from. **Both are done, and so is M4**
+(active selection — the one machine where memory and disk can disagree). All
+seven machines are enumerated. What remains is the **arrivals layer**, the
+least explored and the most coupled.
 
 ## What is enumerated, and what is not
 
