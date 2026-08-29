@@ -1,6 +1,35 @@
 {
-  // Go language support, formatting, testing, and debugging.
+  // What VS Code offers to install when someone opens this repo. Kept to the
+  // languages actually in the tree — 381 Go files, 20 Python, 20 shell, 4 Java,
+  // plus the CI YAML and the FyneApp.toml version ledgers.
   "recommendations": [
-    "golang.go"
-  ]
+    // Go: language server, formatting, testing, delve debugging. The launch
+    // configs and every task depend on this one.
+    "golang.go",
+
+    // Python: the App Store, release and repository-check scripts. They are
+    // stdlib-only with python3 shebangs, so no environment setup is needed.
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+
+    // Shell: the release scripts are the least forgiving code in the repo, and
+    // shellcheck catches the unquoted-expansion and exit-status mistakes that
+    // are invisible until a release fails. Worth having on.
+    "timonwong.shellcheck",
+
+    // TOML: cmd/desktop/FyneApp.toml and cmd/mobile/FyneApp.toml carry the
+    // version and build numbers that App Store submissions are cut from.
+    "tamasfe.even-better-toml",
+
+    // YAML: the six GitHub Actions workflows. A darwin host cannot run the
+    // linux/windows jobs, so schema errors are otherwise found only after a push.
+    "redhat.vscode-yaml",
+
+    // Honours the .editorconfig at the repo root.
+    "editorconfig.editorconfig"
+  ],
+  // Java support is deliberately absent: android/*.java is four small bridge
+  // files compiled by scripts/build-android.sh, and the Java extension pack
+  // starts a language server heavy enough to be a poor trade for them.
+  "unwantedRecommendations": []
 }

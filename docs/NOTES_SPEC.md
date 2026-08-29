@@ -265,6 +265,19 @@ goldens, native tint-run conversion, styled geometry, and source-parsed native
 spacing constants. Platform release wrappers remain part of validation where
 native code cannot compile on the development host.
 
+### Browser cost
+
+The browser's cost is bounded by the VIEWPORT, not by the size of the
+scrapbook: the list is windowed, and its rows are pooled objects that are
+refilled per note rather than rebuilt. Rebuilding a row per update is the
+regression to watch for, because the row carries a `container.ThemeOverride`
+and constructing one clears the process-wide font measurement cache — so a
+per-update rebuild re-shapes every string in every visible row on every layout
+pass. [`notes_browse_bench_test.go`](../notes_browse_bench_test.go) measures
+open, keystroke, scroll, and single-row cost at 100, 500 and 2,000 notes;
+opening and laying out the list should stay in the tens of milliseconds and
+should not scale with the stored count.
+
 ## Sticker spacing
 
 [`noteMetrics`](../notes_bubble.go) is the shared spacing table. Values use

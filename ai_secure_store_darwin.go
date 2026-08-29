@@ -1,12 +1,25 @@
-//go:build ios
+//go:build darwin
 
-// iOS-ONLY on purpose: macOS release builds ship AD-HOC
-// signed (release.yml runs bare `fyne package -os darwin`, no Developer ID),
-// so the login keychain ACL binds to a code hash that changes EVERY update —
-// after which reads prompt scarily or fail as errSecAuthFailed, and since
-// migration removed the Preferences copy the user's key would silently
-// vanish. Desktop therefore stays on fyne.Preferences until the app ships
-// with a stable signing identity.
+// The Apple Keychain adapter, used on iOS always and on macOS only by a build
+// that carries a stable signing identity.
+//
+// macOS used to be excluded outright, for a good reason: release.yml ships the
+// direct-download build from a bare `fyne package -os darwin` with no Developer
+// ID, and an ad-hoc signature binds the login-keychain ACL to a code hash that
+// changes with EVERY update. Reads then prompt alarmingly or fail with
+// errSecAuthFailed, and a migration that had already erased the Preferences
+// copy would take the reader's key with it.
+//
+// That reasoning is about the SIGNATURE, not about macOS, and the two macOS
+// builds no longer share one. The Mac App Store build is signed with a real
+// identity under a Team ID and sandboxed; the direct download is still ad-hoc.
+// So the decision is made at runtime from the identity the running binary
+// actually has (btAIKeychainUsable below), and an ad-hoc or unsigned build —
+// the direct download, and any `go run` during development — keeps the old
+// Preferences behaviour untouched.
+//
+// Falling back is safe in both directions: getAPIKey erases the Preferences
+// copy only after a Write that returned true, and never after a store error.
 
 package bibletext
 
@@ -14,8 +27,36 @@ package bibletext
 #cgo LDFLAGS: -framework Foundation -framework Security
 #include <stdlib.h>
 #include <string.h>
+#include <TargetConditionals.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+
+#if TARGET_OS_OSX
+// btAIKeychainUsable reports whether THIS binary should keep secrets in the
+// login keychain. An ad-hoc signature has no team identifier, and it is exactly
+// the ad-hoc case whose ACL churns on every update, so the presence of a team
+// identifier is the question being asked — not "is this a Mac".
+static int btAIKeychainUsable(void) {
+    @autoreleasepool {
+        SecCodeRef me = NULL;
+        if (SecCodeCopySelf(kSecCSDefaultFlags, &me) != errSecSuccess || me == NULL) {
+            return 0;
+        }
+        CFDictionaryRef info = NULL;
+        OSStatus st = SecCodeCopySigningInformation(
+            (SecStaticCodeRef)me, kSecCSSigningInformation, &info);
+        CFRelease(me);
+        if (st != errSecSuccess || info == NULL) return 0;
+        CFStringRef team = (CFStringRef)CFDictionaryGetValue(info, kSecCodeInfoTeamIdentifier);
+        int usable = (team != NULL && CFStringGetLength(team) > 0);
+        CFRelease(info);
+        return usable;
+    }
+}
+#else
+// Every iOS build is signed with a team identity; there is no ad-hoc case.
+static int btAIKeychainUsable(void) { return 1; }
+#endif
 
 static NSString *btAIKeychainService(void) {
     NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
@@ -100,7 +141,16 @@ import "unsafe"
 
 type appleKeychainStore struct{}
 
-func newPlatformSecretStore() secretStore { return appleKeychainStore{} }
+func newPlatformSecretStore() secretStore {
+	// nil means "this platform has no credential store", which the keystore
+	// already handles by staying on Preferences — and which keyInSecureStore
+	// reports honestly, so the Settings sheet keeps saying "Saved on this
+	// device" rather than claiming a Keychain that is not being used.
+	if C.btAIKeychainUsable() != 1 {
+		return nil
+	}
+	return appleKeychainStore{}
+}
 
 func (appleKeychainStore) Read(account string) (string, bool, bool) {
 	ca := C.CString(account)

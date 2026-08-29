@@ -85,18 +85,34 @@ func showAudioSourceMenu(state *AppState) {
 		rows.Add(btn)
 	}
 	for _, r := range recs {
-		addSource(audioRecorded, r.id, theme.AccountIcon(), "Recorded · "+r.narrator)
+		// The person glyph is the app's mark for "a human read this" — a machine
+		// voice gets the computer glyph instead, so the row cannot be mistaken for
+		// a human narration.
+		icon := theme.AccountIcon()
+		if r.synthetic {
+			icon = theme.ComputerIcon()
+		}
+		addSource(audioRecorded, r.id, icon, "Recorded · "+r.narrator)
 	}
 	if ttsSupported() {
 		addSource(audioTTS, "", iconAudioWave, "Read aloud · text to speech")
 	}
 
+	// The copy describes what is actually on offer. A synthetic recording is named
+	// as one: no human read these books in the public domain, and saying "narration"
+	// unqualified would imply otherwise.
+	alt := " You can switch to your device reading it aloud instead."
+	if !ttsSupported() {
+		alt = ""
+	}
 	explain := "Your device is reading this chapter aloud (text to speech). No recorded narration is available for it yet."
 	switch {
 	case len(recs) > 1:
-		explain = "This chapter has several public-domain recorded narrations. Pick a narrator, or have your device read it aloud instead."
+		explain = "This chapter has several public-domain recordings. Pick a voice, or have your device read it aloud instead."
+	case len(recs) == 1 && recs[0].synthetic:
+		explain = "This chapter has a public-domain recording read by a synthetic (computer) voice — no human recording of it exists in the public domain." + alt
 	case len(recs) == 1:
-		explain = "This chapter has a public-domain recorded narration. You can switch to your device reading it aloud instead."
+		explain = "This chapter has a public-domain recorded narration." + alt
 	}
 	note := widget.NewLabel(explain)
 	note.Wrapping = fyne.TextWrapWord

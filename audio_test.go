@@ -34,8 +34,10 @@ func TestWEBAudioURL(t *testing.T) {
 
 func TestRecordingsFor(t *testing.T) {
 	for v, want := range map[string][]string{
-		"web":  {"web-williams"},
-		"webc": {"web-williams"}, // same WEB text for the 66 recorded books
+		"web": {"web-williams"},
+		// The WEB-Catholic adds a second, complementary recording for its Greek
+		// books; Williams stays FIRST so he wins every chapter he actually read.
+		"webc": {"web-williams", webbeRecordingID},
 		"bsb":  {"bsb-hays"},
 		"nrsv": nil,
 	} {
@@ -85,17 +87,17 @@ func TestAudioForChapter(t *testing.T) {
 	if a := audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "John", CurrentChapter: 20, Bible: bd}); a.Kind != audioRecorded {
 		t.Errorf("webc John 20: want recorded, got kind %d", a.Kind)
 	}
-	// WEB-Catholic Tobit → TTS of the chapter text (deuterocanon, no recording).
+	// WEB-Catholic Tobit → the synthetic recording. Williams never read the
+	// deuterocanon; what must never happen is HIS recording answering here.
 	a = audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "Tobit", CurrentChapter: 1, Bible: bd})
-	if a.Kind != audioTTS || a.Text != "The book of the words of Tobit" {
-		t.Errorf("webc Tobit 1: got %+v, want TTS of the verse", a)
+	if a.Kind != audioRecorded || a.RecordingID != webbeRecordingID {
+		t.Errorf("webc Tobit 1: got kind=%d rec=%q, want the synthetic recording", a.Kind, a.RecordingID)
 	}
-	// WEB-Catholic Daniel 13 (Susanna) → TTS: the Greek Daniel runs to 14 chapters
-	// but the WEB narration ends at 12, so the extra chapters must not offer a
-	// stream with no file behind it.
+	// WEB-Catholic Daniel 13 (Susanna) → likewise. The WEB narration stops at
+	// chapter 12, so this must never stream a Williams URL with no file behind it.
 	a = audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "Daniel", CurrentChapter: 13, Bible: bd})
-	if a.Kind != audioTTS || a.Text != "There was a man living in Babylon whose name was Joakim" {
-		t.Errorf("webc Daniel 13: got %+v, want TTS of the verse", a)
+	if a.Kind != audioRecorded || a.RecordingID != webbeRecordingID {
+		t.Errorf("webc Daniel 13: got kind=%d rec=%q, want the synthetic recording", a.Kind, a.RecordingID)
 	}
 	// ...while WEB-Catholic Daniel 12 still streams the recording.
 	if a := audioForChapter(&AppState{CurrentVersion: "webc", CurrentBook: "Daniel", CurrentChapter: 12, Bible: bd}); a.Kind != audioRecorded || a.URL != testAudioHost+"web-williams-ot-v1/WEB_27_012.mp3" {
@@ -111,9 +113,11 @@ func TestWEBCTextMismatchExclusions(t *testing.T) {
 	// The WEB-Catholic displays the GREEK Esther (a different underlying book —
 	// no verse correspondence with the Hebrew Esther the Williams recording
 	// narrates) and a Greek Daniel 3 carrying the Prayer of Azariah and the Song
-	// of the Three as verses 24–90. Offering the recording there would play
-	// different words than the screen shows and highlight the wrong verses, so
-	// webc resolves those chapters to TTS while the plain WEB keeps them.
+	// of the Three as verses 24–90. Offering the Williams recording there would play
+	// different words than the screen shows and highlight the wrong verses, so webc
+	// routes those chapters away from him — to the synthetic recording of the Greek
+	// text — while the plain WEB, whose Esther and Daniel 3 ARE what he read, keeps
+	// him.
 	bd := &BibleData{
 		Books: []string{"Esther", "Daniel"},
 		Verses: map[string]map[int][]Verse{
@@ -121,24 +125,31 @@ func TestWEBCTextMismatchExclusions(t *testing.T) {
 			"Daniel": {3: {{Text: "Nebuchadnezzar the king made an image of gold"}}},
 		},
 	}
+	// The durable invariant is WHICH recording answers: Williams must never narrate
+	// the Greek Esther or Greek Daniel 3, whatever else may cover them. (Before the
+	// synthetic recording existed these chapters fell to read-aloud; now they are
+	// covered, and asserting the recording id keeps testing the actual rule.)
 	for _, c := range []struct {
 		version string
 		book    string
 		chapter int
-		want    audioKind
+		wantRec string // "" = read-aloud
 	}{
-		{"webc", "Esther", 1, audioTTS},
-		{"webc", "Esther", 10, audioTTS},
-		{"webc", "Daniel", 3, audioTTS},
-		{"webc", "Daniel", 2, audioRecorded},
-		{"webc", "Daniel", 4, audioRecorded},
-		{"web", "Esther", 1, audioRecorded},
-		{"web", "Esther", 10, audioRecorded},
-		{"web", "Daniel", 3, audioRecorded},
+		{"webc", "Esther", 1, webbeRecordingID},
+		{"webc", "Esther", 10, webbeRecordingID},
+		{"webc", "Daniel", 3, webbeRecordingID},
+		{"webc", "Daniel", 2, "web-williams"},
+		{"webc", "Daniel", 4, "web-williams"},
+		{"web", "Esther", 1, "web-williams"},
+		{"web", "Esther", 10, "web-williams"},
+		{"web", "Daniel", 3, "web-williams"},
 	} {
 		a := audioForChapter(&AppState{CurrentVersion: c.version, CurrentBook: c.book, CurrentChapter: c.chapter, Bible: bd})
-		if a.Kind != c.want {
-			t.Errorf("%s %s %d: kind = %d, want %d", c.version, c.book, c.chapter, a.Kind, c.want)
+		if a.RecordingID != c.wantRec {
+			t.Errorf("%s %s %d: recording = %q, want %q", c.version, c.book, c.chapter, a.RecordingID, c.wantRec)
+		}
+		if c.version == "webc" && a.RecordingID == "web-williams" && c.book == "Esther" {
+			t.Errorf("%s %s %d: the Greek Esther must never use the Williams recording", c.version, c.book, c.chapter)
 		}
 	}
 	// The exclusion belongs to the webc registry entry, not the URL builder —

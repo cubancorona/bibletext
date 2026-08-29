@@ -160,14 +160,23 @@ func (c *audioController) effectiveSource(state *AppState) (kind audioKind, recI
 }
 
 // resolveAudio turns a desired source (kind + recording) into the concrete
-// chapterAudio to play, falling back to read-aloud when the recording is asked
-// for but doesn't exist (or doesn't cover this chapter).
+// chapterAudio to play, falling back to read-aloud when no recording covers the
+// chapter. A version can have SEVERAL recordings covering different chapters (the
+// WEB-Catholic: David Williams for the text he read, a synthetic voice for the
+// Greek books), so a named recording that doesn't cover this chapter must hand
+// over to the version's other recordings before dropping to read-aloud —
+// audioForChapter picks the first that covers it. Continuous playback depends on
+// this: it carries the finished chapter's recording id into the next chapter, and
+// crossing a coverage boundary mid-book (Daniel 12 to 13) would otherwise fall to
+// read-aloud even though a recording of the new chapter exists.
 func resolveAudio(state *AppState, kind audioKind, recID string) chapterAudio {
 	if kind == audioRecorded && state != nil {
 		if rec, ok := recordingByID(state.CurrentVersion, recID); ok {
-			return audioForRecording(state, rec) // falls to TTS if the chapter is uncovered
+			if _, covers := rec.urlFor(state.CurrentBook, state.CurrentChapter); covers {
+				return audioForRecording(state, rec)
+			}
 		}
-		return audioForChapter(state) // unknown id — the version default
+		return audioForChapter(state) // unknown id, or this one stops here
 	}
 	return ttsAudioForChapter(state)
 }

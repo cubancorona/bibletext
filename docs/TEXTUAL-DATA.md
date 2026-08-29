@@ -343,6 +343,7 @@ re-fetched and verified 2026-08-23. SHA-256 is shown as the first 16 hex digits.
 | WEB, USFM | `https://ebible.org/Scriptures/eng-web_usfm.zip` | 3,244,742 | `fbe7006864ae34c6` |
 | WEB Catholic, USFM | `https://ebible.org/Scriptures/eng-web-c_usfm.zip` | 3,081,452 | `900ac0e7e4372d6a` |
 | BSB official third-printing USFM | `https://bereanbible.com/bsb_usfm.zip` | 1,598,046 | `a91f7b6744879814` |
+| WEBBE (British ed. with deuterocanon), verse-per-line | `https://ebible.org/Scriptures/eng-webbe_vpl.zip` | 5,350,711 | `7eea2a3362560978` |
 | eBible BSB mirror (unmarked; not used for red letters) | `https://ebible.org/Scriptures/engbsb_usfm.zip` | 3,017,011 | `c065fa11decc4160` |
 | NKJV verse markup | `https://api.scripture.api.bible/v1/bibles/{id}/verses/{ref}?content-type=html` | — | requires a key |
 
@@ -483,9 +484,66 @@ under the same discipline:
 | `red_letter_nkjv_data.go` | API.Bible NKJV `<span class="wj">` | `scripts/gen-nkjv-redletter.py` | committed offsets/fingerprints only; no licensed text |
 | `scripts/data/bsb-redletter-adjudications.json` | retired derived table | — | historical record; no longer used by generation or runtime |
 | `scripts/data/nkjv-wj-verses.json` | retired BSB derivation input | — | historical verse numbers; no longer used by BSB generation |
-| `assets/timings/*.json` | per-verse read-along alignment | `scripts/audio-align` | outside this document's scope |
+| `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment | `scripts/audio-align` | timing only; no claim about the text |
+| `assets/timings/webbe.json` | per-verse read-along alignment | `scripts/audio-align` | timing, **and** the coverage claim in §8 — a chapter's presence here is what makes the app offer its recording |
 | `assets/parallels` | cross-reference data | — | provenance not yet recorded here |
 
 All active span tables now have committed generators. Regeneration is fail-closed:
 an unlocatable publisher marker stops generation instead of being replaced by a
 different edition's red-letter judgement.
+
+---
+
+## 8. The WEB-Catholic's Greek books and their recording
+
+The app plays a recorded narration for the WEB-Catholic's Greek books — the seven
+deuterocanonical books, the Greek Esther, and Daniel 3, 13 and 14 — that is *not*
+the David Williams WEB narration and *not* a human reading. It is eBible.org's
+synthetic narration of the World English Bible British Edition with Deuterocanon
+(WEBBE), mirrored to the project's audio host. Two claims hold that arrangement up.
+
+**The recording's text is the text the app displays. [measured]** The app's WEB
+Catholic text comes from helloao (`eng_webc`); the recording was made from
+eBible's WEBBE. Those are different publications, so before adopting the audio the
+two were compared verse by verse across all 150 chapters — every verse number in
+every affected chapter, not a sample:
+
+```
+# WEBBE verse-per-line vs the app's own cached WEBC
+python3 - <<'EOF'
+import json, re, collections
+webbe = collections.defaultdict(lambda: collections.defaultdict(dict))
+for line in open("vpl/eng-webbe_vpl.txt", encoding="utf-8"):
+    m = re.match(r"^(\S+)\s+(\d+):(\d+)\s?(.*)$", line.rstrip("\n"))
+    if m: webbe[m.group(1)][int(m.group(2))][int(m.group(3))] = m.group(4)
+webc = json.load(open("~/Library/Caches/bibletext/bibletext-webc-v2.json"))["data"]["Verses"]
+MAP = {"Tobit":"TOB","Judith":"JDT","Esther":"ESG","Wisdom":"WIS","Sirach":"SIR",
+       "Baruch":"BAR","1 Maccabees":"1MA","2 Maccabees":"2MA","Daniel":"DNG"}
+EOF
+```
+
+Result: the verse numbering agrees exactly, book for book and chapter for chapter,
+including the Greek Daniel's 97-verse chapter 3 and its 64- and 42-verse chapters
+13 and 14. The only difference anywhere is 24 verse numbers in Sirach that WEBBE
+lists and the app's WEBC does not (Sirach 1:5, 1:7, 1:21, 3:19, 10:21, 11:15,
+13:14, 16:15, 17:5, 17:9, 17:16, 17:18, 17:21, 18:3, 19:18, 19:21, 20:3, 20:32,
+22:9, 23:28, 24:18, 24:24, 25:12, 26:19) — all of them **empty**: they carry
+no text in WEBBE either, so nothing is spoken that the reader cannot see. Note the
+book code trap: eBible's verse-per-line export calls the Greek Daniel `DNG` while
+its own audio filenames call it `DAG`.
+
+**Which chapters the recording covers. [measured]** `assets/timings/webbe.json` is
+generated only from chapters that were actually aligned against a downloaded MP3,
+and the app treats presence in that table as proof a recording exists
+(`recordingHasChapter`). It holds exactly the 150 chapters listed above and no
+others, which is what keeps the synthetic voice out of every chapter David Williams
+actually read. `TestWEBCRecordingsNeverOverlap` re-checks that from the shipped
+table rather than from a hand-written list.
+
+**Source. [source]** eBible.org states of the WEBBE: "The World English Bible
+British Edition is not copyrighted. It is in the Public Domain." The audio is
+published on the same site as "Free MP3 audio" with no separate recording
+copyright and no named narrator; the app therefore credits it as a synthetic voice
+rather than as a person, and NOTICE records the same. eBible also states that
+"World English Bible" is a trademark, which is why the mirrored files keep eBible's
+own names and the app does not present the recording as its own production.

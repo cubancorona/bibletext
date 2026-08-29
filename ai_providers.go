@@ -334,6 +334,28 @@ func (c *geminiClient) generate(ctx context.Context, prompt string) (string, err
 	return parseGeminiText(body)
 }
 
+// A provider can stop a model mid-answer — the output limit reached, a
+// thinking pass that consumed the budget, a refusal part-way through. The
+// reply that comes back is a real answer that simply stops, often mid-word,
+// and nothing about it says so. Presenting that as finished is the worst of
+// the options: the reader has no way to tell a complete explanation from one
+// that was cut off, and on a passage they are studying that matters.
+//
+// So an early stop is marked. The partial text is kept — it was paid for and
+// is usually still useful — with a line saying plainly that it stopped short.
+const aiTruncatedSuffix = "\n\n*(Cut short — the model stopped before finishing this answer. " +
+	"Ask again, or choose a different model in Settings.)*"
+
+// markIfTruncated appends that line when the provider signalled an early stop.
+// An empty answer is left alone: its callers turn that into a proper error,
+// which is better than a notice with nothing above it.
+func markIfTruncated(text string, complete bool) string {
+	if complete || text == "" {
+		return text
+	}
+	return text + aiTruncatedSuffix
+}
+
 func parseGeminiText(body []byte) (string, error) {
 	var gr geminiResponse
 	if err := json.Unmarshal(body, &gr); err != nil {
@@ -350,8 +372,9 @@ func parseGeminiText(body []byte) (string, error) {
 		sb.WriteString(p.Text)
 	}
 	text := strings.TrimSpace(sb.String())
+	reason := gr.Candidates[0].FinishReason
 	if text == "" {
-		if reason := gr.Candidates[0].FinishReason; reason != "" && reason != "STOP" {
+		if reason != "" && reason != "STOP" {
 			if reason == "MAX_TOKENS" {
 				return "", errBudgetExhausted
 			}
@@ -359,7 +382,7 @@ func parseGeminiText(body []byte) (string, error) {
 		}
 		return "", errors.New("the AI returned an empty answer")
 	}
-	return text, nil
+	return markIfTruncated(text, reason == "" || reason == "STOP"), nil
 }
 
 // --- OpenAI-compatible (ChatGPT + Grok share /chat/completions) -------------
@@ -457,16 +480,17 @@ func parseOpenAIText(body []byte) (string, error) {
 		return "", errors.New("the AI returned no answer")
 	}
 	text := strings.TrimSpace(r.Choices[0].Message.Content)
+	reason := r.Choices[0].FinishReason
 	if text == "" {
 		// A reasoning model can spend its whole budget thinking and emit
 		// nothing. Saying "the AI returned an empty answer" blames the model
 		// for a limit WE set, and leaves the reader with no idea what to do.
-		if r.Choices[0].FinishReason == "length" {
+		if reason == "length" {
 			return "", errBudgetExhausted
 		}
 		return "", errors.New("the AI returned an empty answer")
 	}
-	return text, nil
+	return markIfTruncated(text, reason == "" || reason == "stop"), nil
 }
 
 // --- Anthropic (Claude /v1/messages) ---------------------------------------
@@ -496,6 +520,11 @@ type anthropicResponse struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	} `json:"content"`
+	// Absent until now, which left this the one provider that could not tell a
+	// finished answer from one the model was cut off in the middle of.
+	// "end_turn" and "stop_sequence" are the model finishing; "max_tokens" and
+	// a refusal are not.
+	StopReason string `json:"stop_reason"`
 }
 
 func (c *anthropicClient) generate(ctx context.Context, prompt string) (string, error) {
@@ -538,9 +567,21 @@ func parseAnthropicText(body []byte) (string, error) {
 	}
 	text := strings.TrimSpace(sb.String())
 	if text == "" {
+		if r.StopReason == "max_tokens" {
+			return "", errBudgetExhausted
+		}
+		// A refusal is the model declining, not an empty reply, and it happens
+		// to scripture: Jeremiah 23 has been observed refused part-way through
+		// on one model and answered in full on the next attempt. Saying "empty
+		// answer" sends the reader looking for a fault that is not there.
+		if r.StopReason == "refusal" {
+			return "", errors.New("the model declined to answer this passage — try again, " +
+				"or choose a different model in Settings")
+		}
 		return "", errors.New("the AI returned an empty answer")
 	}
-	return text, nil
+	return markIfTruncated(text, r.StopReason == "" ||
+		r.StopReason == "end_turn" || r.StopReason == "stop_sequence"), nil
 }
 
 // --- Shared transport -------------------------------------------------------

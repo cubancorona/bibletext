@@ -412,7 +412,15 @@ func noteBubble(text string, pal palette) fyne.CanvasObject {
 func noteBubblePadded(text string, pal palette, pad float32) fyne.CanvasObject {
 	body := widget.NewLabel(strings.TrimSpace(text))
 	body.Wrapping = fyne.TextWrapWord
+	return noteBubbleAround(body, pal, pad)
+}
 
+// noteBubbleAround is noteBubblePadded for a caller that already owns the
+// label: the notes browser's reusable row, which refills ONE label per note
+// rather than building a bubble per note. The shape — frame, radius, stroke,
+// tail — is built here and only here, so a refilled bubble and a freshly built
+// one cannot drift apart.
+func noteBubbleAround(body fyne.CanvasObject, pal palette, pad float32) fyne.CanvasObject {
 	frame := canvas.NewRectangle(pal.SurfaceAlt)
 	frame.StrokeColor = pal.Border
 	frame.StrokeWidth = 1

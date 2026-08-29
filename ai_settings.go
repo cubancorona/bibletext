@@ -764,16 +764,16 @@ func showAISettings(state *AppState) {
 		form.Add(sectionLabel("TRANSLATORS' FOOTNOTES", pal))
 		form.Add(settingsGroup(pal, fnCheck))
 		form.Add(fnNote)
-		form.Add(sheetGap())
+		form.Add(sheetGapAfterCaption())
 	}
 	form.Add(sectionLabel("ASSISTANT", pal))
 	form.Add(settingsGroup(pal, active, keyArea))
 	form.Add(aiDisclosure)
-	form.Add(sheetGap())
+	form.Add(sheetGapAfterCaption())
 	form.Add(sectionLabel("TRANSLATIONS", pal))
 	form.Add(settingsGroup(pal, bibleKeys))
 	form.Add(bibleKeysFooter)
-	form.Add(sheetGap())
+	form.Add(sheetGapAfterCaption())
 	form.Add(sectionLabel("READING", pal))
 	form.Add(settingsGroup(pal, textSizeRow))
 	form.Add(sheetGap())
@@ -789,7 +789,7 @@ func showAISettings(state *AppState) {
 		// King. The two are deliberately not the same phrase:
 		// the header is the formal identification, the line the reader actually
 		// acts on is the confession.
-		form.Add(sheetGap())
+		form.Add(sheetGapAfterCaption())
 		form.Add(sectionLabel("WORDS OF JESUS CHRIST OF NAZARETH", pal))
 		form.Add(settingsGroup(pal, redLetter))
 	}
@@ -970,9 +970,38 @@ func aiSurfacesChanged(enabledAtOpen, keyAtOpen, enabledNow, keyNow bool) bool {
 
 // sheetGap is the fixed breathing room between settings sections — one
 // consistent rhythm, in place of separators or nested boxes.
+// Section spacing. The sheet separates sections by a constant amount of VISIBLE
+// space, which is not the same thing as a constant spacer. A caption widget
+// carries its own trailing padding; a card ends at its border with none. Giving
+// both the same 16pt spacer rendered 42pt of air after a captioned section
+// against 34pt after the one bare card, which reads as an uneven rhythm down
+// the sheet even though every spacer was identical.
+//
+// The two figures below were measured off a 3x simulator screenshot, in points:
+// sectionGapInherent is what the sheet already spends either side of the spacer
+// (the VBox padding plus the section label's own ink offset), and
+// captionTrailingPad is the caption widget's bottom padding on top of that.
+const (
+	sectionGapVisible  = 33 // rendered gap every section transition should show
+	sectionGapInherent = 18
+	captionTrailingPad = 8
+)
+
+// sheetGap separates a section that ends at a CARD from the next section label.
 func sheetGap() fyne.CanvasObject {
+	return sheetGapOf(sectionGapVisible - sectionGapInherent)
+}
+
+// sheetGapAfterCaption separates a section that ends in a CAPTION. It is
+// shorter than sheetGap by exactly the caption's own trailing padding, so the
+// two render the same sectionGapVisible.
+func sheetGapAfterCaption() fyne.CanvasObject {
+	return sheetGapOf(sectionGapVisible - sectionGapInherent - captionTrailingPad)
+}
+
+func sheetGapOf(h float32) fyne.CanvasObject {
 	r := canvas.NewRectangle(color.Transparent)
-	r.SetMinSize(fyne.NewSize(1, 16))
+	r.SetMinSize(fyne.NewSize(1, h))
 	return r
 }
 

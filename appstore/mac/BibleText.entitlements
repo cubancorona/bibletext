@@ -39,9 +39,20 @@
       files.downloads.read-write      the only ~/Downloads write is behind the
                                       platform-mimic gate, which is a constant
                                       empty string in release builds
-      keychain-access-groups          desktop uses no Keychain: the Keychain
-                                      file is iOS-only and the desktop
-                                      implementation returns nil
+      keychain-access-groups          this entitlement SHARES keychain items
+                                      between apps, which BibleText never does.
+                                      The Store build does now keep provider
+                                      keys in the Keychain — it is signed under
+                                      a Team ID, which is the condition the
+                                      adapter gates on — but an app reaching
+                                      only its OWN items uses the default access
+                                      group from the profile's
+                                      application-identifier and needs no
+                                      entitlement for it. If that is ever wrong,
+                                      the write returns false and the keystore
+                                      stays on Preferences with the Settings
+                                      sheet saying so; nothing is lost either
+                                      way
       temporary-exception.*           the container migration is handled by a
                                       Container-Migration.plist instead, which
                                       needs no exception and invites no review

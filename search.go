@@ -500,6 +500,12 @@ type searchResultCard struct {
 	// card so a note row is the same tap target, the same hover, and the same
 	// shape as the search hits it sits beside.
 	onTap func()
+	// notesRow is the notes-browser row this card belongs to, when it is one.
+	// The browser's list pools its rows and hands back the root object; this is
+	// how the update finds the row that owns it. A side map would have to be
+	// keyed by that object and would grow without bound, because widget.List
+	// calls CreateItem again on every refresh to re-measure its template.
+	notesRow *browseRow
 }
 
 func newSearchResultCard(state *AppState, verse Verse, content fyne.CanvasObject, pal palette) *searchResultCard {

@@ -22,17 +22,67 @@
 
   // gopls analyses the host build (macOS desktop). Files tagged `ios`/`android`
   // are shown greyed-out — that's expected; build them with the fyne tasks.
+  //
+  // To edit the `bibletextdev` surface (Links tab, dev scenarios, the mimic
+  // switch) with full completion instead of grey, uncomment the next line and
+  // reload the window. Leave it commented on the default build: with it set,
+  // gopls stops analysing the untagged variants of those same files.
+  //   "go.buildTags": "bibletextdev",
   "gopls": {
     "ui.semanticTokens": true,
-    "ui.completion.usePlaceholders": true
+    "ui.completion.usePlaceholders": true,
+    // Don't let gopls walk the generated build tree or the vendored, patched
+    // Fyne copy. These are nested here deliberately: the Go extension declares
+    // no top-level "gopls.*" keys, so writing one is silently ignored.
+    "build.directoryFilters": ["-build", "-third_party"]
+  },
+
+  // --- Python: the App Store, release and check scripts (stdlib only) ---
+  // Every script has a `python3` shebang and imports nothing off-stdlib, so
+  // there is no virtualenv to select — the interpreter on PATH is correct.
+  "python.analysis.extraPaths": ["build/appstore"],
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+
+  // --- Shell: 20 scripts, several of them release-critical ---
+  "shellcheck.enable": true,
+  "[shellscript]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+
+  // FyneApp.toml is the version ledger for each platform; give it TOML support.
+  "files.associations": {
+    "FyneApp.toml": "toml"
   },
 
   // Keep packaged .app bundles out of the file tree and search results.
+  // build/ and third_party/ are deliberately NOT hidden from the tree: you
+  // sometimes need to open a build artifact or read the patched Fyne. They are
+  // excluded from search and the watcher below instead.
   "files.exclude": {
     "**/*.app": true
   },
   "search.exclude": {
     "**/*.app": true,
-    "**/coverage.out": true
+    "**/coverage.out": true,
+    "build/**": true,
+    "third_party/**": true
+  },
+
+  // --- The reason this repo feels heavy in an editor ---
+  // build/ is ~500 MB across ~5,700 files and third_party/ ~29 MB across
+  // ~2,100 — together about 87% of the files in the tree, all of it generated
+  // or vendored and all of it gitignored. Search already skips gitignored
+  // paths, but the FILE WATCHER does not: without these excludes VS Code holds
+  // thousands of watches on directories that release builds rewrite wholesale,
+  // which is what turns a package run into a stuttering window.
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/third_party/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true
   }
 }

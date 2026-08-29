@@ -72,7 +72,8 @@ mechanism; do not copy a personal mailbox into this checklist.
 > • Browse, search, dismiss, or delete notes on your device
 >
 > LISTEN
-> • Complete public-domain recorded narration for WEB and BSB, plus on-device
+> • Complete public-domain recorded narration for WEB and BSB, a synthetic
+> public-domain voice for the WEB Catholic edition's Greek books, plus on-device
 > read-aloud where supported
 > • Read-along highlighting, chapter continuation, background playback, and
 > lock-screen/notification controls on Android

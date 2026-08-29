@@ -32,6 +32,74 @@ func findLabeledChip(o fyne.CanvasObject) *labeledTapChip {
 	return nil
 }
 
+// findTappableArea walks the object tree for the card's close ✕ cell.
+func findTappableArea(o fyne.CanvasObject) *tappableArea {
+	switch v := o.(type) {
+	case *tappableArea:
+		return v
+	case *fyne.Container:
+		for _, c := range v.Objects {
+			if got := findTappableArea(c); got != nil {
+				return got
+			}
+		}
+	}
+	return nil
+}
+
+// TestAudioCardSourceChipClearsCloseButton locks in that the source chip and the
+// close ✕ never overlap. The ✕ is overlaid on the card's upper-right corner
+// through a Stack, so it contributes nothing to the top row's width; the chip is
+// centred in that row. A label wide enough to reach the corner therefore slid
+// straight under the ✕ — "Read aloud ▾" (the read-aloud/TTS label) did, while the
+// shorter "Narrator ▾" happened to clear it, so the collision only showed on
+// chapters without a recording. Both labels are checked at their real laid-out
+// positions, since the whole failure was one of geometry rather than of drawing.
+func TestAudioCardSourceChipClearsCloseButton(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	state := sampleState()
+
+	for _, tc := range []struct {
+		name string
+		kind audioKind
+	}{
+		{"Read aloud (TTS)", audioTTS},
+		{"Narrator (recorded)", audioRecorded},
+	} {
+		card := buildAudioCard(state, tc.kind, false, false, false, tc.kind == audioRecorded, audioCardCallbacks{})
+		win := app.NewWindow("card")
+		// The reader reserves exactly the card's MinSize for it (reading.go's
+		// chapterHeader), so measure it at that size — the width it really gets.
+		win.SetContent(container.NewVBox(container.NewGridWrap(card.MinSize(), card)))
+		win.Resize(fyne.NewSize(1000, 700))
+
+		chip := findLabeledChip(card)
+		if chip == nil {
+			t.Fatalf("%s: no labeledTapChip in the card", tc.name)
+		}
+		closeCell := findTappableArea(card)
+		if closeCell == nil {
+			t.Fatalf("%s: no close ✕ cell in the card", tc.name)
+		}
+		chipPos := fyne.CurrentApp().Driver().AbsolutePositionForObject(chip)
+		closePos := fyne.CurrentApp().Driver().AbsolutePositionForObject(closeCell)
+		chipSz, closeSz := chip.Size(), closeCell.Size()
+		if chipSz.Width <= 0 || closeSz.Width <= 0 {
+			t.Fatalf("%s: card never got a real layout (chip %v, close %v)", tc.name, chipSz, closeSz)
+		}
+		t.Logf("%s: card width %.1f, chip x=%.1f..%.1f (w %.1f), ✕ x=%.1f..%.1f",
+			tc.name, card.MinSize().Width, chipPos.X, chipPos.X+chipSz.Width, chipSz.Width, closePos.X, closePos.X+closeSz.Width)
+		overlapX := chipPos.X+chipSz.Width > closePos.X && closePos.X+closeSz.Width > chipPos.X
+		overlapY := chipPos.Y+chipSz.Height > closePos.Y && closePos.Y+closeSz.Height > chipPos.Y
+		if overlapX && overlapY {
+			t.Errorf("%s: source chip overlaps the close ✕ — chip x=%.1f..%.1f, ✕ x=%.1f..%.1f (card width %.1f)",
+				tc.name, chipPos.X, chipPos.X+chipSz.Width, closePos.X, closePos.X+closeSz.Width, card.MinSize().Width)
+		}
+		win.Close()
+	}
+}
+
 // collectIconButtons walks the object tree gathering every *iconTapButton.
 func collectIconButtons(o fyne.CanvasObject) []*iconTapButton {
 	switch v := o.(type) {
@@ -61,7 +129,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 
 	var fired []string
 	rec := func(name string) func() { return func() { fired = append(fired, name) } }
-	card := buildAudioCard(state, audioRecorded, false, false, true, audioCardCallbacks{
+	card := buildAudioCard(state, audioRecorded, false, false, false, true, audioCardCallbacks{
 		onSrc: rec("src"), onBack: rec("back"), onPlay: rec("play"),
 		onFwd: rec("fwd"), onClose: rec("close"),
 	})
@@ -74,7 +142,7 @@ func TestAudioCardHitRegionsMatchLayout(t *testing.T) {
 	// the geometry contract under test is that the swap changes nothing.
 	speaker := newIconTapButton(state, theme.VolumeUpIcon(), 20, 34, func() {})
 	host := container.NewStack(container.NewHBox(layout.NewSpacer(), container.NewCenter(speaker)))
-	probe := buildAudioCard(state, audioTTS, false, false, false, audioCardCallbacks{})
+	probe := buildAudioCard(state, audioTTS, false, false, false, false, audioCardCallbacks{})
 	cell := container.NewGridWrap(probe.MinSize(), host)
 	focusBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {})
 	focusBtn.Importance = widget.LowImportance
