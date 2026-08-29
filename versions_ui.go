@@ -194,6 +194,25 @@ func fullPendingNotice(state *AppState) string {
 	// four-book seed needs to hear about the seed before anything else, so
 	// that case is answered below with the rest of the fullPending wording.
 	if !state.seedOnly {
+		// BEING SHOWN A DIFFERENT TRANSLATION outranks being shown a previous
+		// edition of the right one. preferredVersion is set exactly when the
+		// reader's chosen translation could not be opened this launch and the
+		// app fell back — until now a completely silent substitution: the
+		// picker put its check mark on the fallback, every citation named the
+		// fallback, and nothing anywhere said the reader had asked for
+		// something else (D10). The second sentence is the one that matters
+		// most: it is the app promising it has not forgotten, which is only
+		// true because D9 made it so.
+		if pref := state.preferredVersion; pref != "" && pref != state.CurrentVersion {
+			if v, ok := versionByID(pref); ok {
+				shown := state.CurrentVersion
+				if cur, ok := versionByID(state.CurrentVersion); ok {
+					shown = cur.Name
+				}
+				return v.Name + " could not be opened this time — " + shown +
+					" is shown instead. Your choice is remembered and comes back when it can."
+			}
+		}
 		// A translation serving a SUPERSEDED epoch is stale whether or not it
 		// is the default one — and only the default one is covered by
 		// fullPending, so without this the reader's own translation says

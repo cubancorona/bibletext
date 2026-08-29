@@ -41,13 +41,25 @@ with a cell as its space is enumerated.
 | ~~D8~~ | ~~The cache-only read's miss branches disagree about the mode~~ | **FIXED 2026-08-28** | — | done |
 
 **All eight are closed** (2026-08-28), each confirmed against real code and
-fixed with a test that fails without the fix. What remains of this item is
-enumeration, not defects: **M4** (active selection), **M5–M7** (launch,
-reading position, canon shape — the history-erasure territory, and the machine
-whose own mapping table is documented as lying), and the **arrivals layer**
+fixed with a test that fails without the fix.
+
+**M5 x M6 x M7 — launch, reading position and canon shape — enumerated
+2026-08-29**, together rather than separately, because the failure they were
+built for lives in their intersection. Two more defects, both **durable**
+(they rewrite the only record of something the reader cannot re-derive):
+
+| | Defect | Status |
+|---|---|---|
+| ~~D9~~ | ~~A translation merely unselectable this launch has the reader's choice overwritten by the fallback, permanently~~ | **FIXED 2026-08-29** |
+| ~~D10~~ | ~~The reader is shown a different translation than they chose, and nothing says so~~ | **FIXED 2026-08-29** |
+
+The history-erasure invariant itself held in all sixteen cells, including the
+73-book-trail-meets-66-book-fallback shape of the original incident.
+
+Still to enumerate: **M4** (active selection) and the **arrivals layer**
 (links, notes, search results landing on all of the above). The trajectory
-harness in `version_refresh_flow_test.go` is the pattern for those, since the
-defects there will be flow-shaped rather than cell-shaped.
+harness in `version_refresh_flow_test.go` is the pattern for arrivals, since
+the defects there will be flow-shaped rather than cell-shaped.
 
 ## NKJV Psalm superscriptions
 

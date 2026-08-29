@@ -336,7 +336,22 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 	// data result (version genuinely unavailable) falls through to the default
 	// canon, where the saved book may still legitimately exist.
 	if rs.Version != "" && rs.Version != state.CurrentVersion {
-		if v, ok := versionByID(rs.Version); ok && v.canSelect() {
+		v, known := versionByID(rs.Version)
+		switch {
+		case known && !v.canSelect():
+			// THE CHOICE OUTLIVES THE CONFIGURATION. canSelect() is false
+			// whenever the licence configuration cannot be READ, and "cannot
+			// be read" is not "the reader gave it up": a credential store that
+			// has not unlocked yet answers exactly like one that is empty, and
+			// on iOS an app launched before first unlock is a routine morning,
+			// not an error. The block below is skipped in that case, so
+			// without this line preferredVersion is never set, the fallback's
+			// id is what the next navigation persists, and the ONLY record of
+			// the reader's chosen translation is gone for good — from a
+			// condition that fixed itself seconds later. See D9 in
+			// docs/VERSION_STATES.md.
+			state.preferredVersion = v.ID
+		case known:
 			data, loadedMode, err := loadVersionForRestore(v, base)
 			if err != nil {
 				// OFFLINE EPOCH-BUMP UPGRADE: loadVersionData

@@ -5,15 +5,17 @@
 > TRAJECTORY harness, which walks journeys rather than cells. As of
 > 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
 > incoherent states. **Every defect the scouting reported has now been closed
-> — ten in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
+> — twelve in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
 > unsynced cache write), `D1` (a destructive purge on an answer the app could
 > not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
 > (a non-default translation stale in silence), `D4` (a banner outliving the
 > seed), `D5` (a notice unreachable from the only surface that shows it),
 > `D6` (a downloaded Bible discarded because it could not be cached), `D7`
-> (a path algebra that could delete a live cache) and `D8` (miss branches
-> disagreeing about the mode they report). Anything a future change breaks
-> appears as an unpinned violation, by name.
+> (a path algebra that could delete a live cache), `D8` (miss branches
+> disagreeing about the mode they report), `D9` (**the reader's chosen
+> translation erased by a condition that fixes itself**) and `D10` (a silent
+> substitution of one translation for another). Anything a future change
+> breaks appears as an unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -185,6 +187,8 @@ of how much of the space the defect covers.
 | ~~D6~~ | ~~A downloaded Bible is discarded because it could not be cached~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D7~~ | ~~An unregistered version's current cache path appears in its own superseded list~~ | **GUARDED 2026-08-28** | 0 | — |
 | ~~D8~~ | ~~The cache-only read's miss branches disagree about the mode~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D9~~ | ~~A translation that is merely unselectable this launch has the reader's choice overwritten by the fallback, permanently~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D10~~ | ~~The reader asked for one translation and is shown another, with nothing on any surface saying so~~ | **FIXED 2026-08-29** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -309,6 +313,40 @@ Harmless while every caller checks the error first — but one of them already
 assigns the returned mode on its success path, so it was one reader away from
 mattering. Every miss now reports the same mode, pinned.
 
+### D9 and D10 — the launch machine, closed 2026-08-29
+
+These are the first two found by enumerating **M5 x M6 x M7 together**, and
+neither is visible inside any one of them. They are also the first defects in
+this document that are **durable**: every earlier one cost the reader a
+session, and these rewrite the only copy of something they cannot re-derive.
+
+`D9` is `D1`'s shape in a new machine — a non-definitive answer driving an
+irreversible act — and it is the M2 x M6 coupling the map predicted. A
+licensed translation stops being selectable whenever its licence configuration
+cannot be **read**, and a credential store that has not unlocked yet answers
+exactly like one that is empty. On iOS, an app launched before first unlock is
+a routine morning. The restore's saved-translation block is skipped entirely
+for an unselectable version, so the fallback-remembering line inside it never
+ran: `preferredVersion` stayed empty, and the reader's next navigation
+persisted the fallback's id over their own. The comment on that line already
+promised this could not happen ("without this, one offline launch would
+overwrite `nkjv` with `web` permanently") — the promise was true only for the
+route it guarded. The choice is now recorded before the block, on the
+condition that the translation still exists in the build at all.
+
+`D10` is the silence around the same event. Even on the route that worked, a
+reader who asked for one translation and was handed another was told nothing:
+the picker put its check mark on the fallback, citations named the fallback,
+and the substitution was invisible. The picker footer — the surface that
+answers *which translation am I on*, and the one `D3` uses — now says it, and
+says the choice is remembered, which is only true because `D9` made it so.
+
+**What the enumeration did NOT find is worth as much.** `L-B`, the
+history-erasure invariant that this whole document descends from, is not
+violated in any of the sixteen cells — including a 73-book trail meeting a
+66-book fallback, the exact shape of the original incident. The guards that
+were added by hand hold up under enumeration.
+
 ## The whole machine — what a complete model must cover
 
 This document began as the storage question and grew into the map below,
@@ -329,12 +367,12 @@ couplings that are real get crossed.
 | | Machine | States |
 |---|---|---|
 | **M1** | Per-version storage *(enumerated)* | absent · current · superseded · unusable · licensed-stale — **a vector over versions, not a scalar** |
-| **M2** | Credential and licence *(enumerating now)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · recency fresh/expired |
+| **M2** | Credential and licence *(enumerated)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · recency fresh/expired |
 | **M3** | Refresh and download | settled · pending · downloading · backoff(n) · unpersistable-loop |
 | **M4** | Active selection | `CurrentVersion` + the `loadedVersions` map — **memory and disk can disagree** |
-| **M5** | App lifecycle | loadPending · loadReady · loadFailed · foreground · background · teardown |
-| **M6** | Reading position | the saved state NAMES a version that may be gone, unlicensed, or uncached |
-| **M7** | Canon shape | 66 vs 73 books, and the renumbering between any two versions |
+| **M5** | App lifecycle *(enumerated, with M6+M7)* | loadPending · loadReady · loadFailed · foreground · background · teardown |
+| **M6** | Reading position *(enumerated, with M5+M7)* | the saved state NAMES a version that may be gone, unlicensed, or uncached |
+| **M7** | Canon shape *(enumerated, with M5+M6)* | 66 vs 73 books, and the renumbering between any two versions |
 
 M2 is the machine with a state that is not a fact about the world but about
 **our knowledge of it**: `unreadable-transient` is "we cannot tell", and the
@@ -389,7 +427,9 @@ V-A..V-E above are storage-only. The full set:
 
 Credentials (M2) first: the two destructive defects live there. Then
 launch/restore x canon (M5 x M6 x M7), which is where the history-erasure
-incident came from. Then arrivals, the least explored and the most coupled.
+incident came from. **Both are done.** What remains is **M4** (active
+selection — the one machine where memory and disk can disagree) and the
+**arrivals layer**, the least explored and the most coupled.
 
 ## What is enumerated, and what is not
 
