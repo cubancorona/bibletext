@@ -1,14 +1,15 @@
 # A Bible version, as a state machine
 
-> **Status.** Two of the seven machines are enumerated — storage (M1) by
-> `version_state_flow_test.go`, credentials (M2) by
-> `version_credentials_flow_test.go` — both driving the real functions across
-> a cross-product rather than checking chosen cases. As of 2026-08-28 they
-> walk 25 cells and record **zero** incoherent states. Three defects were
-> found by them and fixed in the same changes: `V1` (a silent stale-serve),
-> `V2` (its root cause, an unsynced cache write) and `D1` (a destructive purge
-> on an answer the app could not verify). Anything a future change breaks
-> appears as an unpinned violation, by name.
+> **Status.** Three of the seven machines are enumerated — storage (M1),
+> credentials (M2) and refresh (M3) — and the refresh file also carries the
+> TRAJECTORY harness, which walks journeys rather than cells. As of
+> 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
+> incoherent states. Five defects were found and fixed in the same changes:
+> `V1` (a silent stale-serve), `V2` (its root cause, an unsynced cache
+> write), `D1` (a destructive purge on an answer the app could not verify),
+> `D4` (a banner outliving the seed) and `D5` (a notice unreachable from the
+> only surface that shows it). Anything a future change breaks appears as an
+> unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -173,6 +174,8 @@ of how much of the space the defect covers.
 | ~~V1~~ | ~~An unusable current-epoch cache serves the previous epoch silently~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~V2~~ | ~~A cache write is renamed without being synced~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D1~~ | ~~A credential store that fails to answer is actioned as a revoked licence, and the reader's only copy is deleted~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D4~~ | ~~The seed banner outlives the seed and draws over the complete text~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D5~~ | ~~The waiting notice is unreachable from the only surface that shows it~~ | **FIXED 2026-08-28** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -222,6 +225,29 @@ which answers `false` when the store did not answer at all. The requirement is
 scoped to versions whose availability actually turns on the key, so a version
 unavailable for a deterministic reason (no operator opt-in, no provider id)
 stays purgeable and the §10 removal obligation is unweakened.
+
+### D4 and D5 — FIXED 2026-08-28, and what found them
+
+These two are the reason the suite now has a second kind of harness.
+
+`D4` is a **flow** defect: `applyFullDownload` cleared `seedOnly` on the path
+that swaps the text in, and returned early — without clearing it — on the path
+taken when the reader has switched to another translation meanwhile. Every
+step is individually correct. Only the composition is wrong: fresh install on
+the seed, switch away, the download lands while away, switch back — and the
+complete text is on screen under a banner still announcing the four-book seed.
+The refresh cross-product walked 160 cells and found nothing; the trajectory
+walk found it in 310 journeys, because no cell is a sequence.
+
+`D5` is neither a wrong state nor a wrong journey but an **unreachable** one.
+The picker fires the manual retry and computes its notice twenty lines later —
+and the retry sets `fullDownloading` synchronously while zeroing the backoff,
+so both halves of the waiting condition are false by the time it is read. The
+wording written for a reader waiting offline could never be shown by the only
+surface that shows it. A reachability property needs its own assertion: no
+single cell is incoherent, the space is. The picker now reads the notice
+first, through `noticeOnPickerOpen`, so the footer reports the situation the
+reader came to ask about rather than the side effect of their asking.
 
 ## The whole machine — what a complete model must cover
 
@@ -316,7 +342,13 @@ legacy-only, unreadable-with-legacy) × two events, including the irreversible
 one. The keystone is a credential store that can *fail*, which no existing
 fake could do.
 
-Not yet enumerated, and therefore not claimed: **M3–M7** and the arrivals
+**M3, refresh** — 160 cells across pending × seed × downloading × backoff ×
+which version is active, and **310 journeys** to depth 4 from the two starting
+states a launch can really produce, with the invariants asserted after every
+step. The trajectory harness is the instrument for flow, and the two numbers
+are its argument: the cells found nothing, the journeys found `D4`.
+
+Not yet enumerated, and therefore not claimed: **M4–M7** and the arrivals
 layer. The remaining reported defects (`D2`–`D8`) live in those spaces and are
 recorded in `docs/BACKLOG.md` as reports to confirm with a cell — not here,
 because this document names only what an enumeration has actually driven.

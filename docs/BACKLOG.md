@@ -34,20 +34,21 @@ with a cell as its space is enumerated.
 | ~~D1~~ | ~~`purgeUnavailableLicensedCaches` deletes on an answer the app could not verify~~ | **CONFIRMED by the M2 enumeration and FIXED 2026-08-28** | — | done |
 | D2 | Superseded epochs of a licensed version are never age-checked and never purged | TRACED | Licensed text with an unbounded lifetime on disk — a §11 recency obligation leaking through a file the §11 machinery never looks at | trivial |
 | D3 | A non-default translation served from a superseded epoch is silently stale: `fullPending` is computed for the default version only | TRACED | The previous decoder's text with no notice, no banner and no upgrade for the whole session — the V1 class, in a place V1's fix does not reach | moderate |
-| D4 | `seedOnly` is not cleared when the download lands while the reader is on another translation | TRACED, exact sequence | The "showing the Gospels" banner sits over the complete text | trivial |
-| D5 | The picker's manual retry makes the "waiting for a connection" notice unreachable — the retry sets `fullDownloading` before the notice is computed | TRACED, exact lines | An offline reader is always told the update is in progress, never that it is waiting | trivial |
+| ~~D4~~ | ~~`seedOnly` is not cleared when the download lands while the reader is away~~ | **CONFIRMED by the M3 trajectory walk and FIXED 2026-08-28** | — | done |
+| ~~D5~~ | ~~The picker's manual retry makes the waiting notice unreachable~~ | **CONFIRMED by a reachability assertion and FIXED 2026-08-28** | — | done |
 | D6 | A successful fetch that cannot be persisted is discarded entirely | PROBED | On a device with an unwritable cache directory the app can never open a version, and retries forever at 10-minute intervals with no possibility of success | moderate |
 | D7 | `cachePathForVersion` resolves through the registry while `supersededCachePaths` reads the value handed to it | PROBED | Nothing in production — every version is registered. A live trap for tests: an unregistered version's current path is item [2] of its own superseded list, so a purge would delete the live cache | trivial (guard) |
 | D8 | `loadVersionFromCacheOnly`'s four miss branches disagree about the mode they report | PROBED | Nothing today — every caller checks the error first. One reader away from being load-bearing | trivial |
 
-**Order to take them.** D1 is done — the M2 enumeration confirmed it by
-driving the real startup sweep against a failing credential store, and the fix
-was made in the same change. D2, D4, D5 are one-line fixes with real value and
-should go next; D2 in particular becomes live the moment the NKJV `cacheEpoch`
-is bumped, which the entry below schedules. D3 is the remaining one that costs
-a reader something they cannot diagnose, and deserves a cell before and after.
-Then D6. D7 is already mitigated for the new suites by `withRegisteredVersion`;
-D8 is a tidy-up to pin whichever answer is chosen.
+**Order to take them.** D1, D4 and D5 are done — each confirmed by an
+enumeration driving the real code, then fixed in the same change. **D2** is
+next and is a one-liner that becomes live the moment the NKJV `cacheEpoch` is
+bumped, which the entry below schedules. **D3** is the remaining one that
+costs a reader something they cannot diagnose; it is a coupling defect
+(M1 says a version is stale, M3 only ever refreshes the default) and wants a
+trajectory, not a cell. Then **D6**. D7 is already mitigated for the new
+suites by `withRegisteredVersion`; D8 is a tidy-up to pin whichever answer is
+chosen.
 
 ## NKJV Psalm superscriptions
 

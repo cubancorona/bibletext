@@ -103,10 +103,15 @@ func showVersionPicker(state *AppState) {
 	// Opening the picker doubles as a manual retry of a pending text update:
 	// the reader who came to check on their translation should not also have
 	// to find a button. Single-flight guarded; a no-op when nothing pends.
-	if state.fullPending && !state.fullDownloading {
-		state.fullRetryDelay = 0
-		triggerFullDownload(state)
-	}
+	//
+	// THE NOTICE IS READ FIRST, and that ordering is the whole of D5
+	// (docs/VERSION_STATES.md). triggerFullDownload sets fullDownloading
+	// synchronously and the retry zeroes the backoff, so a notice computed
+	// afterwards can never describe the reader who was waiting offline — the
+	// wording written for exactly that reader was unreachable from the only
+	// surface that shows it. What the footer reports is the situation the
+	// reader came to ask about, not the side effect of their asking.
+	notice := noticeOnPickerOpen(state)
 
 	title := canvas.NewText("Translation", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -126,7 +131,7 @@ func showVersionPicker(state *AppState) {
 
 	closeBtn := widget.NewButton("Close", closePicker)
 	footerItems := []fyne.CanvasObject{widget.NewSeparator()}
-	if notice := fullPendingNotice(state); notice != "" {
+	if notice != "" {
 		note := widget.NewLabel(notice)
 		note.Wrapping = fyne.TextWrapWord
 		footerItems = append(footerItems, note)
@@ -194,6 +199,22 @@ func fullPendingNotice(state *AppState) string {
 	default:
 		return def.Name + " is updating to its latest edition in the background — the previous edition is shown meanwhile."
 	}
+}
+
+// noticeOnPickerOpen is what the picker footer says when the picker opens: the
+// notice for the state the reader arrived in, and then the manual retry. Split
+// out so the ordering is callable, and therefore provable — the same reason
+// applyFullDownload is a named function rather than a goroutine tail.
+func noticeOnPickerOpen(state *AppState) string {
+	if state == nil {
+		return ""
+	}
+	notice := fullPendingNotice(state)
+	if state.fullPending && !state.fullDownloading {
+		state.fullRetryDelay = 0
+		triggerFullDownload(state)
+	}
+	return notice
 }
 
 // versionPickerOrder returns the registry's versions in the picker's display

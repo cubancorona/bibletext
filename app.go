@@ -298,6 +298,13 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 	// may have switched translations while it downloaded); the cache is warm either way.
 	if state.CurrentVersion != version.ID {
 		state.fullPending = false
+		// seedOnly is cleared HERE too, not only on the swap path below. The
+		// seed stopped being what this version holds the moment the full text
+		// went into loadedVersions above — so a reader who switches back is
+		// served the complete text while the banner, which keys off this flag,
+		// would still have been announcing the four-book seed over it. That is
+		// D4 (docs/VERSION_STATES.md): every step legal, the composition a lie.
+		state.seedOnly = false
 		return
 	}
 	state.Bible = full
