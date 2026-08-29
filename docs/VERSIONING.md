@@ -1,8 +1,24 @@
 # Versioning
 
-One rule, learned the expensive way:
+Two rules, both learned the expensive way:
 
 > **A version number is spent the moment anything ships under it.**
+>
+> **A version number names exactly one tree, on every channel.**
+
+The second is the first applied across channels rather than across time. The
+App Store build, the iOS build, the GitHub desktop assets, the sideload APK
+and the git tag must all come from the SAME commit. A version that means
+different code in different places is unfalsifiable: a bug report naming
+"1.2.4" no longer identifies what the reporter ran, and no later fix can
+repair the ambiguity.
+
+In practice this bites when a tag is cut after work has continued. The commit
+to tag is the one the STORE BUILDS were made from, not HEAD — anything merged
+since ships under the next number. And a channel that cannot be rebuilt from
+the tagged commit does not ride along on an older artifact: rebuild it, or
+hold the release. The release workflow rebuilds desktop assets only, so the
+APK is the usual one to get wrong.
 
 "Ships" means any of: a GitHub release published, an App Store or Play
 submission sent, a tag pushed. After that, changed code takes a NEW number —
@@ -42,3 +58,8 @@ exact situation this file exists to prevent.
    tag cannot iterate at all.
 3. Every channel of a version builds from the tagged commit, so "v1.2.3" is
    one tree on the stores, the direct downloads, and the sideload APK alike.
+4. Tags are consistent in kind as well as in content. The repo is currently
+   mixed — v1.2.1 and v1.2.3 are lightweight, v1.2.2 is annotated — which is
+   worth settling on the next cut, because an annotated tag is an object
+   wrapping a commit and a peel (`ls-remote 'refs/tags/X^{}'`) is the only
+   safe way to compare one against a commit.
