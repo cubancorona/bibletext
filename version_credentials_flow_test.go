@@ -30,6 +30,11 @@ import (
 // gives before first unlock, or on any error other than item-not-found.
 type flakySecretStore struct{ reads *int }
 
+// Name satisfies the store contract added alongside this suite: an adapter
+// names itself so the Settings sheet can say where a key went, and an empty
+// name means "no store at all" — which a store that FAILED is not.
+func (flakySecretStore) Name() string { return "failing test store" }
+
 func (s flakySecretStore) Read(string) (string, bool, bool) {
 	if s.reads != nil {
 		*s.reads++
@@ -42,12 +47,14 @@ func (s flakySecretStore) Write(string, string) bool { return false }
 // no key. ok=true, found=false.
 type emptySecretStore struct{}
 
+func (emptySecretStore) Name() string                     { return "empty test store" }
 func (emptySecretStore) Read(string) (string, bool, bool) { return "", false, true }
 func (emptySecretStore) Write(string, string) bool        { return true }
 
 // holdingSecretStore has the reader's key.
 type holdingSecretStore struct{ key string }
 
+func (holdingSecretStore) Name() string                       { return "holding test store" }
 func (s holdingSecretStore) Read(string) (string, bool, bool) { return s.key, true, true }
 func (s holdingSecretStore) Write(string, string) bool        { return true }
 
