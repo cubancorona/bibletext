@@ -332,8 +332,14 @@ const (
 // network fetch — used for the instant first paint before deciding whether to seed the
 // Gospels. It returns an error (never a fetch) on a cache miss.
 func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
+	// EVERY miss reports the same mode. The four miss branches used to
+	// disagree — this one said modeTesting and the other three modeReal —
+	// which is harmless only for as long as every caller checks the error
+	// first and ignores the mode. One of them already assigns the returned
+	// mode on its success path, so the accident is one reader away from
+	// being load-bearing. See D8 in docs/VERSION_STATES.md.
 	if v.source == nil || !v.source.available() {
-		return nil, modeTesting, errCacheNotFound
+		return nil, modeReal, errCacheNotFound
 	}
 	// A LICENSED cache past its recency window must not be served from the
 	// fast path: report a miss so startup takes the full load path, which

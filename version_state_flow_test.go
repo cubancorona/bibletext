@@ -110,11 +110,11 @@ func bibleStamp(bd *BibleData) string {
 type storageShape int
 
 const (
-	stoAbsent          storageShape = iota // nothing at all
-	stoCurrentOnly                         // a valid cache at the current epoch
-	stoSupersededOnly                      // a valid cache at epoch-1, nothing current
-	stoBoth                                // valid at both
-	stoCorruptCurrent                      // UNREADABLE bytes at the current epoch, valid superseded
+	stoAbsent         storageShape = iota // nothing at all
+	stoCurrentOnly                        // a valid cache at the current epoch
+	stoSupersededOnly                     // a valid cache at epoch-1, nothing current
+	stoBoth                               // valid at both
+	stoCorruptCurrent                     // UNREADABLE bytes at the current epoch, valid superseded
 )
 
 func (s storageShape) String() string {
@@ -468,5 +468,102 @@ func TestLicensedRecencyWindowGovernsTheServe(t *testing.T) {
 				t.Errorf("licensedCacheStale(age=%v) = %v, want %v", tc.age, got, tc.wantStale)
 			}
 		})
+	}
+}
+
+// D6: a fetch that succeeds but cannot be cached must still reach the reader.
+// Discarding it made an unwritable cache directory indistinguishable from
+// being offline at every call site — including the retry loop, which would
+// then retry forever with no possibility of success, on a device where the
+// app could never open a version at all.
+func TestAnUncacheableFetchStillServesTheReader(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	// A path under a FILE cannot be created, so the save must fail.
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	unwritable := filepath.Join(blocker, "sub", "bibletext-cache.json")
+
+	fetched := stampedBible("fresh")
+	calls := 0
+	fetch := func() (*BibleData, error) { calls++; return fetched, nil }
+
+	// The control: the save really does fail for this path.
+	if err := saveBibleToCache(unwritable, fetched, currentUTCTime); err == nil {
+		t.Fatal("control: the cache write must fail here, else this proves nothing")
+	}
+
+	data, src, err := loadBibleData(fetch, unwritable, currentUTCTime)
+	if err != nil {
+		t.Fatalf("D6: a successful download was discarded because it could not be "+
+			"cached — on a device with an unwritable cache directory the app can "+
+			"never open a version, and retries forever: %v", err)
+	}
+	if data == nil || bibleStamp(data) != "fresh" {
+		t.Fatalf("the fetched text must be what is served, got %q", bibleStamp(data))
+	}
+	if src != "api" {
+		t.Errorf("source = %q, want api", src)
+	}
+	if calls != 1 {
+		t.Errorf("fetch calls = %d, want 1", calls)
+	}
+}
+
+// D8: every miss from the cache-only read reports the same mode. Harmless
+// while callers check the error first — but one of them already assigns the
+// returned mode on its success path, so a disagreement here is one reader
+// away from being load-bearing.
+func TestCacheOnlyMissesAgreeOnTheirMode(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+	withFakeSharedKeys(t)
+
+	unavailable := BibleVersion{ID: "vsmiss1", Name: "Unavailable", Abbrev: "U1",
+		source: &fakeVersionSource{avail: false}}
+	absentCache := BibleVersion{ID: "vsmiss2", Name: "No Cache", Abbrev: "U2",
+		PublicDomain: true, source: &fakeVersionSource{avail: true, data: fullValidBible()}}
+	withRegisteredVersion(t, unavailable)
+	withRegisteredVersion(t, absentCache)
+
+	_, m1, err1 := loadVersionFromCacheOnly(unavailable)
+	_, m2, err2 := loadVersionFromCacheOnly(absentCache)
+	if err1 == nil || err2 == nil {
+		t.Fatal("control: both must be misses, else this proves nothing")
+	}
+	if m1 != m2 {
+		t.Errorf("two misses reported different modes (%v vs %v) — a caller that "+
+			"trusts the mode on a miss would branch on which KIND of miss it was", m1, m2)
+	}
+}
+
+// D7: cachePathForVersion resolves through the registry while
+// supersededCachePaths reads the value it is handed. For an UNREGISTERED
+// version the two disagree and the current path appears in its own superseded
+// list — so a purge would delete the live cache. Unreachable in production
+// (every version is registered) but a live trap for any test that builds a
+// version value with an epoch, which is why the suite registers them.
+func TestSupersededPathsNeverContainTheCurrentPath(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+
+	for _, v := range registeredVersions {
+		current := cachePathForVersion(v.ID)
+		for _, p := range supersededCachePaths(v) {
+			if p == current {
+				t.Errorf("%s: the current cache path appears in its own superseded "+
+					"list — purgeSupersededCaches would delete the live cache", v.ID)
+			}
+		}
 	}
 }

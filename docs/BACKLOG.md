@@ -36,18 +36,18 @@ with a cell as its space is enumerated.
 | ~~D3~~ | ~~A non-default translation served from a superseded epoch is silently stale~~ | **FIXED 2026-08-28** | — | done |
 | ~~D4~~ | ~~`seedOnly` is not cleared when the download lands while the reader is away~~ | **CONFIRMED by the M3 trajectory walk and FIXED 2026-08-28** | — | done |
 | ~~D5~~ | ~~The picker's manual retry makes the waiting notice unreachable~~ | **CONFIRMED by a reachability assertion and FIXED 2026-08-28** | — | done |
-| D6 | A successful fetch that cannot be persisted is discarded entirely | PROBED | On a device with an unwritable cache directory the app can never open a version, and retries forever at 10-minute intervals with no possibility of success | moderate |
-| D7 | `cachePathForVersion` resolves through the registry while `supersededCachePaths` reads the value handed to it | PROBED | Nothing in production — every version is registered. A live trap for tests: an unregistered version's current path is item [2] of its own superseded list, so a purge would delete the live cache | trivial (guard) |
-| D8 | `loadVersionFromCacheOnly`'s four miss branches disagree about the mode they report | PROBED | Nothing today — every caller checks the error first. One reader away from being load-bearing | trivial |
+| ~~D6~~ | ~~A successful fetch that cannot be persisted is discarded entirely~~ | **FIXED 2026-08-28** | — | done |
+| ~~D7~~ | ~~Registry-resolved vs value-resolved cache paths can collide~~ | **GUARDED 2026-08-28** | — | done |
+| ~~D8~~ | ~~The cache-only read's miss branches disagree about the mode~~ | **FIXED 2026-08-28** | — | done |
 
-**Order to take them.** D1–D5 are done. **D6** is next: a successful fetch
-that cannot be persisted is discarded entirely, so a device with an unwritable
-cache directory can never open a version and retries forever with no
-possibility of success — serve it for the session instead. D7 is already
-mitigated for the new suites by `withRegisteredVersion`; D8 is a tidy-up to
-pin whichever answer is chosen. After those, the remaining machines: M4
-(active selection), M5–M7 (launch, reading position, canon shape — the
-history-erasure territory) and the arrivals layer.
+**All eight are closed** (2026-08-28), each confirmed against real code and
+fixed with a test that fails without the fix. What remains of this item is
+enumeration, not defects: **M4** (active selection), **M5–M7** (launch,
+reading position, canon shape — the history-erasure territory, and the machine
+whose own mapping table is documented as lying), and the **arrivals layer**
+(links, notes, search results landing on all of the above). The trajectory
+harness in `version_refresh_flow_test.go` is the pattern for those, since the
+defects there will be flow-shaped rather than cell-shaped.
 
 ## NKJV Psalm superscriptions
 

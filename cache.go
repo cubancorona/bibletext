@@ -169,8 +169,16 @@ func loadBibleData(fetchFn func() (*BibleData, error), cachePath string, nowFn f
 		return nil, "", fmt.Errorf("api fetch failed after cache load error (%v): %w", cacheErr, apiErr)
 	}
 
+	// A CACHE THAT CANNOT BE WRITTEN MUST NOT COST THE READER THEIR BIBLE.
+	// This used to discard the text it had just downloaded, which made an
+	// unwritable cache directory indistinguishable from being offline at
+	// every call site — including the retry loop, which would then retry
+	// forever at ten-minute intervals with no possibility of success, on a
+	// device where the app could never open a version at all. The download
+	// succeeded; the reader gets it for this session, and the next launch
+	// tries the cache again. See D6 in docs/VERSION_STATES.md.
 	if err := saveBibleToCache(cachePath, apiData, nowFn); err != nil {
-		return nil, "", fmt.Errorf("fetched bible data but failed to save cache: %w", err)
+		fmt.Fprintln(os.Stderr, "BibleText: fetched the Bible but could not cache it, serving it anyway:", err)
 	}
 
 	apiData.PrepareSearchIndex()

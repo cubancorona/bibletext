@@ -4,13 +4,16 @@
 > credentials (M2) and refresh (M3) — and the refresh file also carries the
 > TRAJECTORY harness, which walks journeys rather than cells. As of
 > 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
-> incoherent states. **Seven** defects have been found and fixed: `V1` (a
-> silent stale-serve), `V2` (its root cause, an unsynced cache write), `D1`
-> (a destructive purge on an answer the app could not verify), `D2`
-> (licensed text retained with an unbounded lifetime), `D3` (a non-default
-> translation stale in silence), `D4` (a banner outliving the seed) and `D5`
-> (a notice unreachable from the only surface that shows it). Anything a
-> future change breaks appears as an unpinned violation, by name.
+> incoherent states. **Every defect the scouting reported has now been closed
+> — ten in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
+> unsynced cache write), `D1` (a destructive purge on an answer the app could
+> not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
+> (a non-default translation stale in silence), `D4` (a banner outliving the
+> seed), `D5` (a notice unreachable from the only surface that shows it),
+> `D6` (a downloaded Bible discarded because it could not be cached), `D7`
+> (a path algebra that could delete a live cache) and `D8` (miss branches
+> disagreeing about the mode they report). Anything a future change breaks
+> appears as an unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -179,6 +182,9 @@ of how much of the space the defect covers.
 | ~~D5~~ | ~~The waiting notice is unreachable from the only surface that shows it~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D2~~ | ~~Superseded epochs of a licensed translation are retained forever, unreadable and never age-checked~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D3~~ | ~~A non-default translation serving a superseded epoch is stale in silence~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D6~~ | ~~A downloaded Bible is discarded because it could not be cached~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D7~~ | ~~An unregistered version's current cache path appears in its own superseded list~~ | **GUARDED 2026-08-28** | 0 | — |
+| ~~D8~~ | ~~The cache-only read's miss branches disagree about the mode~~ | **FIXED 2026-08-28** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -281,6 +287,27 @@ fallback sites, reported by the picker in the reader's own translation's name,
 and cleared by the only thing that repairs it — that version loading its
 current epoch. The seed keeps precedence when both are true, because the seed
 is what is on screen.
+
+### D6, D7 and D8 — closed 2026-08-28
+
+`D6`: a fetch that succeeded but could not be written was discarded whole.
+That made an unwritable cache directory indistinguishable from being offline
+at every call site — including the retry loop, which then retried forever at
+ten-minute intervals with no possibility of success, on a device where the app
+could never open a version at all. The download now reaches the reader for the
+session and the failure is logged; the next launch tries the cache again.
+
+`D7` is unreachable in production and a live trap for tests: the current path
+is registry-resolved and the superseded list is value-resolved, so an
+UNREGISTERED version with an epoch has its current path inside its own
+superseded list — and a purge would delete the live cache. Guarded by an
+invariant over the real registry, and avoided in the suites by registering
+every constructed version.
+
+`D8`: the cache-only read's four miss branches reported two different modes.
+Harmless while every caller checks the error first — but one of them already
+assigns the returned mode on its success path, so it was one reader away from
+mattering. Every miss now reports the same mode, pinned.
 
 ## The whole machine — what a complete model must cover
 
