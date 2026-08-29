@@ -5,7 +5,7 @@
 > TRAJECTORY harness, which walks journeys rather than cells. As of
 > 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
 > incoherent states. **Every defect the scouting reported has now been closed
-> — thirteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
+> — fourteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
 > unsynced cache write), `D1` (a destructive purge on an answer the app could
 > not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
 > (a non-default translation stale in silence), `D4` (a banner outliving the
@@ -14,9 +14,10 @@
 > (a path algebra that could delete a live cache), `D8` (miss branches
 > disagreeing about the mode they report), `D9` (**the reader's chosen
 > translation erased by a condition that fixes itself**), `D10` (a silent
-> substitution of one translation for another) and `D11` (a notice retired
-> while the edition it describes is still on screen). Anything a future change
-> breaks appears as an unpinned violation, by name.
+> substitution of one translation for another) `D11` (a notice retired
+> while the edition it describes is still on screen) and `D12` (a dead link
+> honoured behind the reader's back). Anything a future change breaks appears
+> as an unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -191,6 +192,7 @@ of how much of the space the defect covers.
 | ~~D9~~ | ~~A translation that is merely unselectable this launch has the reader's choice overwritten by the fallback, permanently~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D10~~ | ~~The reader asked for one translation and is shown another, with nothing on any surface saying so~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D11~~ | ~~A stale version's notice is retired by the disk while its previous decode is still on screen~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D12~~ | ~~A link whose translation failed to load keeps its park, and a later unrelated switch honours the dead link~~ | **FIXED 2026-08-29** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -381,6 +383,45 @@ and `TestTheSelectionInvariantsCanActuallyFail` hands the invariants the
 shapes they exist to catch and requires them to complain — because a green
 suite is evidence only when the checks in it can go red.
 
+### D12 — the arrivals layer, closed 2026-08-29
+
+The arrivals layer is walked as **journeys**, not cells, and the reason is in
+what an arrival is. The seven machines are enumerated as cells because each of
+their defects is a wrong answer to one question. An arrival is not a question,
+it is a **promise**: the reader tapped something, and the app owes them either
+the passage or a sentence. A promise is kept or broken over time, and every
+way it breaks is a sequence — a park that outlives the load it waited for, a
+park consumed by an action taken for a different reason, an arrival reported
+failed and then honoured anyway. None of those is visible in any single state.
+
+780 journeys to depth four found four distinct broken promises, all one root
+cause. A shared link naming a translation not in memory parks its target and
+lets that load own the spinner. On the arm where the load fails and the
+previous-epoch cache cannot help either, the reader is shown the error — and
+the park is left behind. It is not inert: `applyLoadedVersion`'s tail consumes
+a park whose id matches, so the reader who later picks that same translation
+from the picker, for their own reasons and long after being told the link
+failed, is **silently moved to the dead link's passage**. The park is now
+closed with the promise, and only ours — a target waiting on a different
+translation belongs to another load that still has its own consumer, and
+clearing every park would trade this defect for its mirror image. Both halves
+are pinned.
+
+The passage is deliberately **not** opened in the translation the reader
+already has. Re-applying the target would call `switchToLinkVersion` again and
+restart the very fetch that just failed; stripping the version to dodge that
+would file the sender's note against wording it was never about — the one
+thing `applyShareTarget` is written to prevent. The error card is the answer,
+and the link is still in the reader's messages.
+
+**This is the third confirmation that cross-products are blind to flow.** The
+refresh machine's 160 cells found nothing and its 310 journeys found `D4`; the
+arrivals layer's defects are invisible to every cross-product in this suite
+and its 780 journeys found `D12` by four different routes. The existing
+`share_link_flow_test.go` cross-product is not made redundant by this — it
+asks a different question over the link's own axes ("is any state a dead
+end"), and it still passes.
+
 ## The whole machine — what a complete model must cover
 
 This document began as the storage question and grew into the map below,
@@ -463,8 +504,9 @@ Credentials (M2) first: the two destructive defects live there. Then
 launch/restore x canon (M5 x M6 x M7), which is where the history-erasure
 incident came from. **Both are done, and so is M4**
 (active selection — the one machine where memory and disk can disagree). All
-seven machines are enumerated. What remains is the **arrivals layer**, the
-least explored and the most coupled.
+seven machines are enumerated, **and so is the arrivals layer** — as journeys
+rather than cells, for the reason `D12` records. The model is complete as
+mapped.
 
 ## What is enumerated, and what is not
 

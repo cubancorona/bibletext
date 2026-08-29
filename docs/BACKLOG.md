@@ -67,11 +67,18 @@ while its previous decode is in memory), but one obvious feature away, and the
 fix also closes a live liveness hole: a stale non-default translation
 previously had no way to stop being stale within a session.
 
-**All seven machines are now enumerated.** What remains is the **arrivals
-layer** — links, notes, search results and cold-start deep links landing on
-all of the above. The trajectory harness in `version_refresh_flow_test.go` is
-the pattern for it, since the defects there will be flow-shaped rather than
-cell-shaped.
+**The arrivals layer — enumerated 2026-08-29, as JOURNEYS** (780 to depth
+four), because an arrival is a promise kept or broken over time and every way
+it breaks is a sequence. One more defect:
+
+| | Defect | Status |
+|---|---|---|
+| ~~D12~~ | ~~A link whose translation failed to load keeps its park; a later unrelated switch to that translation honours the dead link and moves the reader~~ | **FIXED 2026-08-29** |
+
+**All seven machines and the arrivals layer are now enumerated**, and every
+defect found is closed. Third confirmation that cross-products are blind to
+flow: the arrivals defect is invisible to every cross-product in the suite and
+the journeys found it by four routes.
 
 ## NKJV Psalm superscriptions
 

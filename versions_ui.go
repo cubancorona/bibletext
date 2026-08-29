@@ -530,6 +530,35 @@ func switchVersionInteractive(state *AppState, id string) {
 					applyLoadedVersion(state, v, old, oldMode)
 					return
 				}
+				// CLOSE THE PROMISE WITH THE LOAD. A shared link that named
+				// this translation parked its target here and let this load
+				// own the spinner; the arm above honours it by handing the
+				// previous epoch to applyLoadedVersion, but on this arm the
+				// translation never arrives and nothing will ever consume the
+				// park. Left behind it is not inert — applyLoadedVersion's
+				// tail consumes a park whose id matches, so the reader who
+				// later picks this same translation from the picker, for
+				// their own reasons and long after being told the link
+				// failed, is silently moved to the dead link's passage. The
+				// error card below is the reader's answer; the park is closed
+				// with it. See D12 in docs/VERSION_STATES.md.
+				//
+				// Only OUR park: a target waiting on a different translation
+				// belongs to another load and has its own consumer.
+				//
+				// The passage is deliberately NOT opened in the translation
+				// the reader already has. Re-applying the target would run
+				// switchToLinkVersion again, which would start the very fetch
+				// that just failed; and stripping the version to dodge that
+				// would file the sender's note against wording it was never
+				// about. The link is still in the reader's messages, and
+				// tapping it again is the way forward.
+				if state.pendingLinkVersion == v.ID {
+					state.pendingLink = nil
+					state.pendingLinkRaw = ""
+					state.pendingLinkVersion = ""
+					state.pendingNoteOpenID = 0
+				}
 				fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)
 				showVersionLoadError(state, v.Name)
 				return
