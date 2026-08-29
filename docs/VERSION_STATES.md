@@ -4,12 +4,13 @@
 > credentials (M2) and refresh (M3) — and the refresh file also carries the
 > TRAJECTORY harness, which walks journeys rather than cells. As of
 > 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
-> incoherent states. Five defects were found and fixed in the same changes:
-> `V1` (a silent stale-serve), `V2` (its root cause, an unsynced cache
-> write), `D1` (a destructive purge on an answer the app could not verify),
-> `D4` (a banner outliving the seed) and `D5` (a notice unreachable from the
-> only surface that shows it). Anything a future change breaks appears as an
-> unpinned violation, by name.
+> incoherent states. **Seven** defects have been found and fixed: `V1` (a
+> silent stale-serve), `V2` (its root cause, an unsynced cache write), `D1`
+> (a destructive purge on an answer the app could not verify), `D2`
+> (licensed text retained with an unbounded lifetime), `D3` (a non-default
+> translation stale in silence), `D4` (a banner outliving the seed) and `D5`
+> (a notice unreachable from the only surface that shows it). Anything a
+> future change breaks appears as an unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -176,6 +177,8 @@ of how much of the space the defect covers.
 | ~~D1~~ | ~~A credential store that fails to answer is actioned as a revoked licence, and the reader's only copy is deleted~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D4~~ | ~~The seed banner outlives the seed and draws over the complete text~~ | **FIXED 2026-08-28** | 0 | — |
 | ~~D5~~ | ~~The waiting notice is unreachable from the only surface that shows it~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D2~~ | ~~Superseded epochs of a licensed translation are retained forever, unreadable and never age-checked~~ | **FIXED 2026-08-28** | 0 | — |
+| ~~D3~~ | ~~A non-default translation serving a superseded epoch is stale in silence~~ | **FIXED 2026-08-28** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -248,6 +251,36 @@ surface that shows it. A reachability property needs its own assertion: no
 single cell is incoherent, the space is. The picker now reads the notice
 first, through `noticeOnPickerOpen`, so the footer reports the situation the
 reader came to ask about rather than the side effect of their asking.
+
+### D2 and D3 — FIXED 2026-08-28
+
+`D2` is a **retention** defect rather than a reading one. A licensed
+superseded epoch can never be served — the licensed branch returns before the
+superseded walk, because stale licensed text must be revalidated rather than
+served — and the recency machinery only ever age-checks the *current* epoch.
+So the file was unreadable by the app and invisible to the obligation that
+governs it: licensed text on the reader's device with an unbounded lifetime
+and nothing that would ever look at it again. The startup sweep now removes
+superseded epochs of licensed versions unconditionally. The test carries the
+control that makes that safe — it proves the file cannot be served before
+deleting it — and its twin proves the **public-domain** lane is untouched,
+because there the superseded epoch is the offline upgrader's whole canon.
+
+`D3` is a **coupling** defect, and the reason the map matters. M1 knows a
+version is serving a superseded epoch; M3 computes `fullPending` from the
+default version alone and re-targets it deliberately. Both correct in
+isolation. Together they meant a reader restored onto another translation
+offline — or switched onto one whose fetch failed — read the previous
+decoder's output with no notice, no banner and no upgrade for the entire
+session, and it could not self-heal because the switch path short-circuits on
+the already-loaded map. This is exactly the silence `V1` was, in a place
+`V1`'s fix does not reach.
+
+Staleness is now recorded per version (`AppState.staleVersions`) at both
+fallback sites, reported by the picker in the reader's own translation's name,
+and cleared by the only thing that repairs it — that version loading its
+current epoch. The seed keeps precedence when both are true, because the seed
+is what is on screen.
 
 ## The whole machine — what a complete model must cover
 

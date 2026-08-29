@@ -347,6 +347,12 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 				// sitting on disk. Serve that instead of refusing to open; a
 				// later online launch re-fetches and upgrades in place.
 				old, oldMode, cerr := loadVersionFromCacheOnly(v)
+				// If that succeeded it may be the SUPERSEDED epoch — a
+				// complete canon from the previous decoder. Record it so the
+				// picker can say so; nothing else would (D3).
+				if cerr == nil && !versionCacheIsCurrent(v) {
+					markVersionStale(state, v.ID)
+				}
 				if cerr != nil {
 					// A LICENSED translation that cannot be revalidated must not
 					// abort the launch. Its cache was DELETED before the refetch

@@ -389,6 +389,7 @@ func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, err
 		if err != nil {
 			return nil, modeReal, err
 		}
+		// The current epoch is now on disk, so whatever was stale is not.
 		// Purge pre-epoch cache files only AFTER the current-epoch cache exists
 		// (incident-hardening): purging first destroyed the reader's only local
 		// copy of the translation and only then discovered the network was down.
@@ -478,6 +479,34 @@ func versionCacheIsCurrent(v BibleVersion) bool {
 	return err == nil
 }
 
+// purgeSupersededLicensedCaches removes every SUPERSEDED epoch of every
+// licensed translation, unconditionally, at startup.
+//
+// A licensed superseded epoch can never legitimately be served:
+// loadVersionFromCacheOnly returns on the licensed branch before it reaches
+// the superseded-epoch walk, precisely because a licensed copy past its
+// recency window must be revalidated rather than served. So these files are
+// unreadable by the app AND unreachable by the §11 recency machinery, which
+// only ever age-checks the current epoch — a licensed text sitting on the
+// reader's device with an unbounded lifetime and nothing that will ever look
+// at it again. The only two things that removed them were a successful load
+// of that version (which a reader who stopped opening it never performs) and
+// the licence going away.
+//
+// Deleting them costs the reader nothing — they cannot be read — and
+// discharges the retention half of the obligation. See D2 in
+// docs/VERSION_STATES.md.
+func purgeSupersededLicensedCaches() {
+	for _, v := range registeredVersions {
+		if !isLicensedSource(v) {
+			continue
+		}
+		for _, path := range supersededCachePaths(v) {
+			_ = os.Remove(path)
+		}
+	}
+}
+
 // purgeSupersededCaches best-effort removes cache files written by older
 // cacheEpochs of v, so a bumped decoder doesn't strand a stale (multi-MB) cache.
 // It only ever targets THIS version's own earlier epochs — never the current
@@ -559,6 +588,42 @@ func switchVersion(state *AppState, id string) {
 // keeps the open book/chapter valid, persists the choice, and rebuilds the
 // window. Shared by switchVersion (synchronous) and the picker's async path
 // (switchVersionInteractive), so both apply identically once the data is in hand.
+// markVersionStale records that v is being served from a superseded epoch, so
+// the surfaces can say so. Idempotent and nil-safe.
+func markVersionStale(state *AppState, id string) {
+	if state == nil || id == "" {
+		return
+	}
+	if state.staleVersions == nil {
+		state.staleVersions = map[string]bool{}
+	}
+	state.staleVersions[id] = true
+}
+
+// clearVersionStale forgets that record — called when a version loads for
+// real, which is the only thing that repairs the condition.
+func clearVersionStale(state *AppState, id string) {
+	if state == nil || state.staleVersions == nil {
+		return
+	}
+	delete(state.staleVersions, id)
+}
+
+// staleVersionNames lists the stale translations by NAME, in registry order so
+// the wording is stable.
+func staleVersionNames(state *AppState) []string {
+	if state == nil || len(state.staleVersions) == 0 {
+		return nil
+	}
+	var out []string
+	for _, v := range registeredVersions {
+		if state.staleVersions[v.ID] {
+			out = append(out, v.Name)
+		}
+	}
+	return out
+}
+
 func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode) {
 	// A new translation's text (and recordings) no longer match what's playing, and
 	// a version switch doesn't route through addRecentChapter, so stop here.
@@ -571,6 +636,11 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	state.Bible = data
 	state.CurrentVersion = v.ID
 	state.currentMode = mode
+	// A version that just loaded from its CURRENT epoch is no longer stale.
+	// Cleared here, where the fact is known, rather than by any caller.
+	if versionCacheIsCurrent(v) {
+		clearVersionStale(state, v.ID)
+	}
 	// A translation actually loaded, so any remembered "we had to fall back"
 	// preference is spent: this is now the reader's translation, whether they
 	// picked it or the licensed one finally came back.

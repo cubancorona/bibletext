@@ -187,7 +187,23 @@ func showVersionPicker(state *AppState) {
 // be in: actively downloading, waiting out the retry backoff offline, or
 // still on the first-run starter text.
 func fullPendingNotice(state *AppState) string {
-	if state == nil || !state.fullPending {
+	if state == nil {
+		return ""
+	}
+	// ORDER OF PRECEDENCE: what is ON SCREEN first. A reader looking at the
+	// four-book seed needs to hear about the seed before anything else, so
+	// that case is answered below with the rest of the fullPending wording.
+	if !state.seedOnly {
+		// A translation serving a SUPERSEDED epoch is stale whether or not it
+		// is the default one — and only the default one is covered by
+		// fullPending, so without this the reader's own translation says
+		// nothing at all (D3).
+		if names := staleVersionNames(state); len(names) > 0 {
+			return joinNatural(names) + pick(len(names), " is", " are") +
+				" showing a previous edition until the update can be downloaded."
+		}
+	}
+	if !state.fullPending {
 		return ""
 	}
 	def, _ := versionByID(defaultVersionID)
@@ -489,6 +505,9 @@ func switchVersionInteractive(state *AppState, id string) {
 				// rather than showing "couldn't load"; the next online load
 				// upgrades the text.
 				if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
+					if !versionCacheIsCurrent(v) {
+						markVersionStale(state, v.ID) // D3: say so, do not serve it silently
+					}
 					applyLoadedVersion(state, v, old, oldMode)
 					return
 				}

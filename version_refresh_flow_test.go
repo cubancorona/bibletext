@@ -388,3 +388,62 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 			"that shows it.", got)
 	}
 }
+
+// D3 is a COUPLING defect: M1 knows a version is serving a superseded epoch,
+// M3 only ever refreshes and announces the DEFAULT one. A reader restored
+// onto another translation offline read the previous decoder's output with no
+// notice, no banner and no upgrade for the whole session — the same silence
+// V1 was, in a place V1's fix does not reach.
+func TestANonDefaultStaleVersionIsNotSilent(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := &AppState{CurrentVersion: "bsb", loadedVersions: map[string]*BibleData{}}
+
+	// The control: with nothing stale, the picker says nothing. Otherwise a
+	// notice that always fires would pass this test without meaning anything.
+	if n := fullPendingNotice(st); n != "" {
+		t.Fatalf("control: a settled reader must be told nothing, got %q", n)
+	}
+
+	markVersionStale(st, "bsb")
+	notice := fullPendingNotice(st)
+	if notice == "" {
+		t.Fatal("D3: a translation serving a previous edition says nothing at all")
+	}
+	if !strings.Contains(notice, "Berean Standard Bible") {
+		t.Errorf("the notice must name the reader's OWN translation, got %q", notice)
+	}
+
+	// And it is repaired by the only thing that repairs it — that version
+	// actually loading its current epoch.
+	clearVersionStale(st, "bsb")
+	if n := fullPendingNotice(st); n != "" {
+		t.Errorf("a repaired version must stop being announced, got %q", n)
+	}
+}
+
+// The stale record must never displace the seed's own message: a reader on the
+// four-book seed needs to hear about the seed first.
+func TestTheSeedNoticeStillWinsForASeedReader(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := refreshFacts{pending: true, seedOnly: true, current: defaultVersionID}.toState(t)
+	if n := fullPendingNotice(st); !strings.Contains(n, "starter portion") {
+		t.Fatalf("control: a seed reader must hear about the seed, got %q", n)
+	}
+}
+
+// And the precedence holds when BOTH are true: the seed is what the reader is
+// looking at, so it is what they are told about.
+func TestSeedPrecedesAStaleOtherVersion(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	st := refreshFacts{pending: true, seedOnly: true, current: defaultVersionID}.toState(t)
+	markVersionStale(st, "bsb")
+	if n := fullPendingNotice(st); !strings.Contains(n, "starter portion") {
+		t.Errorf("a reader on the seed must hear about the seed first, got %q", n)
+	}
+}

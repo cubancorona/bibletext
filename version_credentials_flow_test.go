@@ -272,3 +272,87 @@ func TestTransientStoreFailureIsNotADeauthorization(t *testing.T) {
 			"consumer of that read honours it.")
 	}
 }
+
+// A licensed superseded epoch can never be served — the licensed branch of
+// loadVersionFromCacheOnly returns before the superseded walk — and the §11
+// recency machinery only ever age-checks the CURRENT epoch. So such a file is
+// licensed text on the reader's device with an unbounded lifetime that
+// nothing will ever read or check again. The startup sweep now removes them.
+// See D2 in docs/VERSION_STATES.md.
+func TestSupersededLicensedEpochsAreNotRetained(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+	setNKJVLicence(t) // configured, so the §10 purge is NOT what removes these
+	withFakeSharedKeys(t)
+	withNKJVEpoch(t, 2)
+
+	nk, found := versionByID("nkjv")
+	if !found {
+		t.Skip("nkjv not registered")
+	}
+	current := cachePathForVersion(nk.ID)
+	superseded := supersededCachePaths(nk)
+	if len(superseded) == 0 {
+		t.Fatal("control: the fixture must produce a superseded path")
+	}
+	for _, p := range append([]string{current}, superseded...) {
+		if err := saveBibleToCache(p, fullValidBible(), currentUTCTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// THE CONTROL that makes the deletion safe: a licensed superseded epoch is
+	// not serveable in the first place, so removing it costs the reader
+	// nothing. Prove it rather than assert it — delete the current epoch so
+	// the fallback would be the only thing left to try.
+	if err := os.Remove(current); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loadVersionFromCacheOnly(nk); err == nil {
+		t.Fatal("control: a licensed version must NOT serve a superseded epoch — " +
+			"if it can, deleting these files is not safe and this test is wrong")
+	}
+	if err := saveBibleToCache(current, fullValidBible(), currentUTCTime); err != nil {
+		t.Fatal(err)
+	}
+
+	purgeSupersededLicensedCaches()
+
+	for _, p := range superseded {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("D2: a superseded licensed epoch survived the startup sweep (%s). "+
+				"It can never be served and is never age-checked, so nothing else "+
+				"will ever remove it.", filepath.Base(p))
+		}
+	}
+	// And the current epoch — the one the reader actually reads — is untouched.
+	if _, err := loadBibleFromCache(current); err != nil {
+		t.Errorf("the CURRENT epoch must survive: %v", err)
+	}
+}
+
+// The public-domain lane is untouched by the licensed sweep: its superseded
+// epochs are the epoch-migration fallback an offline upgrader depends on.
+func TestSupersededPublicDomainEpochsAreKept(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	dir := t.TempDir()
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(dir, "bibletext-cache.json"))
+	web, _ := versionByID("web")
+	paths := supersededCachePaths(web)
+	if len(paths) == 0 {
+		t.Fatal("control: web must have superseded paths")
+	}
+	if err := saveBibleToCache(paths[0], fullValidBible(), currentUTCTime); err != nil {
+		t.Fatal(err)
+	}
+	purgeSupersededLicensedCaches()
+	if _, err := loadBibleFromCache(paths[0]); err != nil {
+		t.Error("a public-domain superseded epoch was removed — that file is the " +
+			"offline upgrader's whole canon, and the fallback that exists to serve it")
+	}
+}

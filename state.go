@@ -285,6 +285,17 @@ type AppState struct {
 	// Gospels for now" banner must never claim otherwise there.
 	seedOnly bool
 
+	// staleVersions names the translations known to be serving a SUPERSEDED
+	// epoch — the previous decoder's output, complete but not current. The
+	// epoch-migration fallback is deliberate and right, but it was only ever
+	// announced for the DEFAULT version: fullPending is computed from that
+	// one alone and triggerFullDownload re-targets it, so a reader restored
+	// onto another translation offline, or switched onto one whose fetch
+	// failed, read the old decode with no notice, no banner and no upgrade
+	// for the whole session. Recorded per version so the picker can say so.
+	// See D3 in docs/VERSION_STATES.md.
+	staleVersions map[string]bool
+
 	// fullRetryDelay is the current auto-retry backoff for triggerFullDownload.
 	// It doubles on each consecutive failure (capped), so an offline reader who
 	// already holds a complete previous-epoch Bible does not burn radio and

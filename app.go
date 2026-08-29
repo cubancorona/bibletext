@@ -163,6 +163,11 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 		// keep their on-device copies (the removal obligation that comes with
 		// content held under terms). Cheap no-op for everyone else.
 		purgeUnavailableLicensedCaches()
+		// And every superseded epoch of a licensed translation, licence or
+		// not: those files can never be served (the licensed branch returns
+		// before the superseded walk) and are never age-checked, so nothing
+		// else would ever remove them.
+		purgeSupersededLicensedCaches()
 		// Show per-book download progress on the loading spinner during a first-run fetch.
 		loadProgressFn = func(book string, bookNum, totalBooks, chapter int) {
 			ref := book
