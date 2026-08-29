@@ -312,3 +312,66 @@ func TestAStaleVersionUpgradesInPlaceWhenTheCurrentEpochArrives(t *testing.T) {
 		t.Fatalf("the notice outlived the condition it describes: %q", n)
 	}
 }
+
+// TestAnInMemorySwitchAlwaysTakes pins a coupling that D11's fix put weight
+// on, at the far end of the codebase from where the fix lives.
+//
+// switchToLinkVersion treats "already in memory" as "switches synchronously
+// and cannot fail": it calls switchVersion and returns FALSE, which tells
+// applyShareTarget to carry on and open the passage in whatever translation is
+// now current. Before D11, in-memory always meant a map read, so that was free.
+// D11 made switchVersion able to take the LOAD path for an in-memory version —
+// deliberately, to pick up an epoch that has since arrived on disk — and a load
+// that failed there would leave the reader in their old translation while the
+// link went on to open the passage as if the switch had happened. That is the
+// silent downgrade share_link_open.go was written to prevent, arriving through
+// a door D11 opened.
+//
+// It cannot happen, and the reason is worth pinning rather than remembering:
+// the reload is gated on versionCacheIsCurrent, which since V1 does not stat
+// the cache but LOADS it. The load switchVersion then performs reads the same
+// file that check just decoded. The guard is not "probably fine", it is the
+// same successful read twice.
+func TestAnInMemorySwitchAlwaysTakes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	t.Setenv("BIBLETEXT_CACHE_PATH", t.TempDir()+"/bibletext-cache.json")
+
+	sel := BibleVersion{
+		ID: "sel", Name: "Selection Fixture", Abbrev: "SEL",
+		Publisher: "Public Domain", PublicDomain: true,
+		cacheEpoch: 2,
+		source:     &fakeVersionSource{avail: true, err: fmt.Errorf("offline")},
+	}
+	withRegisteredVersion(t, sel)
+
+	base := stampedBible("base")
+	for _, stale := range []bool{false, true} {
+		for _, onDisk := range []bool{false, true} {
+			name := fmt.Sprintf("stale=%v disk-current=%v", stale, onDisk)
+			t.Run(name, func(t *testing.T) {
+				t.Setenv("BIBLETEXT_CACHE_PATH", t.TempDir()+"/bibletext-cache.json")
+				if onDisk {
+					mustCache(t, cachePathForVersion(sel.ID), stampedBible("current"))
+				}
+				state := &AppState{
+					Bible:          base,
+					CurrentVersion: defaultVersionID,
+					currentMode:    modeReal,
+					loadedVersions: map[string]*BibleData{
+						defaultVersionID: base,
+						sel.ID:           stampedBible("previous"),
+					},
+					loadPhase: loadReady,
+				}
+				if stale {
+					markVersionStale(state, sel.ID)
+				}
+				switchVersion(state, sel.ID)
+				if state.CurrentVersion != sel.ID {
+					t.Fatalf("an in-memory switch did not take — switchToLinkVersion would now open a shared link in %q with no message at all", state.CurrentVersion)
+				}
+			})
+		}
+	}
+}
