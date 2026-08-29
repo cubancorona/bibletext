@@ -26,6 +26,12 @@ type prefStore interface {
 // return nil from newPlatformSecretStore and retain the existing Preferences
 // storage until they gain an equivalent native credential-store adapter.
 type secretStore interface {
+	// Name is what this store is called where a reader can see it. The Settings
+	// sheet tells them where their key actually went, and "Keychain" is only
+	// the right word on Apple platforms — a Windows Credential Manager entry
+	// described as a Keychain is a small lie in the one place the app is
+	// explaining where a credential lives.
+	Name() string
 	// Read returns (value, found, ok). ok=false means the credential store
 	// itself failed (transient Keychain error) — CALLERS MUST NOT treat that
 	// as "no key": the legacy fallback below keeps working and the migration
@@ -148,6 +154,17 @@ var sharedKeyStore *keyStore
 // ad-hoc-signed build has no keychain entitlement, and a device store can be
 // temporarily unreadable), in which case the key is still safely in
 // Preferences and the UI must not claim otherwise.
+// secureStoreName names the credential store this build would use, for the
+// Settings sheet to say where a key went. Empty when there is none, which is
+// the platforms that have no adapter and any build whose signature does not
+// qualify for one.
+func (k *keyStore) secureStoreName() string {
+	if k == nil || k.secrets == nil {
+		return ""
+	}
+	return k.secrets.Name()
+}
+
 func (k *keyStore) keyInSecureStore(id string) bool {
 	if k == nil || k.secrets == nil {
 		return false

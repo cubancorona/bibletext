@@ -141,6 +141,8 @@ import "unsafe"
 
 type appleKeychainStore struct{}
 
+func (appleKeychainStore) Name() string { return "Keychain" }
+
 func newPlatformSecretStore() secretStore {
 	// nil means "this platform has no credential store", which the keystore
 	// already handles by staying on Preferences — and which keyInSecureStore

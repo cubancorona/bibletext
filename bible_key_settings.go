@@ -184,7 +184,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	refreshStatus := func() {
 		savedLabel := "✓ Saved on this device."
 		if store.keyInSecureStore(bibleKeyID) {
-			savedLabel = "✓ Saved in the Keychain."
+			savedLabel = "✓ Saved in the " + store.secureStoreName() + "."
 		}
 		// Say plainly when the key in use is the one that shipped with the
 		// app rather than one the reader supplied — it is a shared key with a

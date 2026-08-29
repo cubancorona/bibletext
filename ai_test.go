@@ -51,6 +51,8 @@ type fakeSecrets struct {
 	failRead  bool // simulate a transient credential-store error
 }
 
+func (f *fakeSecrets) Name() string { return "test store" }
+
 func (f *fakeSecrets) Read(account string) (string, bool, bool) {
 	if f.failRead {
 		return "", false, false
