@@ -662,7 +662,40 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	// A translation actually loaded, so any remembered "we had to fall back"
 	// preference is spent: this is now the reader's translation, whether they
 	// picked it or the licensed one finally came back.
-	state.preferredVersion = ""
+	//
+	// THOSE TWO ARE THE ONLY WAYS TO SPEND IT, and a tapped link is neither.
+	// This used to clear unconditionally, and then persistReadingPosition at
+	// the foot of this function wrote the new id into the reading blob — the
+	// single place the reader's choice is recorded. So a reader in the
+	// fallback state, holding the picker's promise that their translation is
+	// "remembered and comes back when it can", lost that record the moment a
+	// friend sent them a link in some other translation. Not their doing, not
+	// announced, and not recoverable: the notice reads off preferredVersion,
+	// so it went silent in the same breath. The exception keeps the other
+	// half honest — a link TO the chosen translation is exactly it coming
+	// back. See D13 in docs/VERSION_STATES.md.
+	byArrival := state.versionSwitchForArrival
+	state.versionSwitchForArrival = false
+	if !byArrival || v.ID == state.preferredVersion {
+		state.preferredVersion = ""
+	}
+
+	// SEARCH RESULTS ARE THE TRANSLATION'S, NOT THE READER'S. Every row in the
+	// list is a Verse carrying the OLD translation's wording, and the list
+	// stays on screen across a switch under a header that now names the new
+	// one — so the reader reads WEB text beneath "Berean Standard Bible", and
+	// tapping a row navigates by the old numbering into a canon that need not
+	// contain the book at all (a WEBC Tobit hit tapped on the WEB lands on a
+	// blank page and writes Tobit into the durable history). The mark beside
+	// them is already renumbered through the anchor machinery below for
+	// exactly this reason; the results were the half nothing re-derived.
+	// Re-run the query against the translation now in hand: same limit as
+	// runSearch, and the answer is true of what is on screen. See D15 in
+	// docs/VERSION_STATES.md.
+	if q := strings.TrimSpace(state.ActiveSearchQuery); q != "" && len(state.SearchResults) > 0 {
+		state.SearchResults, state.SearchTruncated = data.SearchSmartLimited(q, 120)
+		state.searchScrollY = 0 // a different list starts at the top
+	}
 
 	clampToCurrentVersion(state)
 	// One ruler (N7): the highlight's span is numbered in the translation the
@@ -687,10 +720,30 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 			consumePendingLink(state)
 			consumed = true
 		} else {
+			// A TARGET WAITING ON ANOTHER TRANSLATION IS STALE, BUT THE READER
+			// IS NOT OWED SILENCE FOR IT. This park was made by a link tapped
+			// while some other load already owned the spinner; when that other
+			// load lands it takes the screen, and dropping the park here used
+			// to end the whole arrival without a word — no passage, no
+			// message, and the OS was already told the link was handled, so no
+			// browser fallback either. Two taps on shared scripture and
+			// nothing at all happens. The drop is right; the silence was the
+			// defect. See D14 in docs/VERSION_STATES.md.
+			// Guarded: the version slot and the target slot are set together
+			// by switchToLinkVersion, but they are separate fields and a
+			// dereference here would be a crash rather than a missing card.
+			var displaced ShareTarget
+			if state.pendingLink != nil {
+				displaced = *state.pendingLink
+			}
+			wanted := state.pendingLinkVersion
 			state.pendingLinkVersion = ""
 			state.pendingLink = nil
 			state.pendingLinkRaw = ""
 			state.pendingNoteOpenID = 0 // the Show intent dies with its park
+			if msg := linkDisplacedMessage(state, displaced, wanted); msg != "" {
+				defer showLinkNotice(state, "Shared with you", shareTargetReference(displaced), msg)
+			}
 		}
 	}
 	// Notes are keyed version|book|chapter, so the live mirror

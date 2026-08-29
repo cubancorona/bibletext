@@ -430,3 +430,85 @@ func TestAFallbackTranslationSaysSoOnThePicker(t *testing.T) {
 		t.Fatalf("the notice outlived the substitution: %q", n)
 	}
 }
+
+// TestAWiderCanonsTrailSurvivesReadingANarrowerOne is D16, and it is the
+// original incident arriving by a door the launch enumeration above does not
+// have. L-B proves a trail survives a launch that falls back; this proves it
+// survives the reader simply CHANGING TRANSLATION, which is the ordinary thing
+// the app is for.
+//
+// An evening in the WEBC leaves Tobit, Sirach and 1 Maccabees in the trail.
+// Switching to the WEB persisted that trail under "web", and the next launch
+// validated it against 66 books and deleted all three from the only copy. The
+// reader's history, erased for reading a different translation, with nothing
+// said and no way back.
+func TestAWiderCanonsTrailSurvivesReadingANarrowerOne(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	wide := widerCanonBible()
+	narrow := fullValidBible()
+
+	// CONTROL: the narrow canon really lacks these, or nothing below is a test.
+	for _, b := range []string{"Tobit", "Judith"} {
+		if narrow.GetChaptersForBook(b) != 0 {
+			t.Fatalf("control: the narrow canon must not contain %s", b)
+		}
+		if wide.GetChaptersForBook(b) == 0 {
+			t.Fatalf("control: the wider canon must contain %s", b)
+		}
+	}
+
+	trail := []ChapterVisit{
+		{Book: "Tobit", Chapter: 1},
+		{Book: "Judith", Chapter: 1},
+		{Book: "John", Chapter: 1},
+	}
+	st := &AppState{
+		Bible: wide, CurrentVersion: "webc", currentMode: modeReal,
+		loadedVersions: map[string]*BibleData{"webc": wide},
+		loadPhase:      loadReady,
+		CurrentBook:    "Tobit", CurrentChapter: 1,
+		RecentChapters: append([]ChapterVisit(nil), trail...),
+	}
+
+	// The reader switches to the narrower translation.
+	web, _ := versionByID(defaultVersionID)
+	applyLoadedVersion(st, web, narrow, modeReal)
+
+	// The bar must not offer what this canon cannot open.
+	for _, v := range recentJumpTargets(st, maxRecent) {
+		if narrow.GetChaptersForBook(v.Book) == 0 {
+			t.Fatalf("the history bar offers %s, which this translation does not contain", v.Book)
+		}
+	}
+	// ...and a stale reference reaching the navigation anyway is refused.
+	before := st.CurrentBook
+	navigateToVisit(st, ChapterVisit{Book: "Tobit", Chapter: 1})
+	if st.CurrentBook != before {
+		t.Fatalf("navigated to %s, a book this translation does not contain", st.CurrentBook)
+	}
+
+	// THE DURABLE HALF. What the next launch keeps, out of what this session
+	// would save.
+	saved := snapshotReadingState(st, 0, 0, 0, 0, 0)
+	kept := restoreRecent(saved.Recent, narrow, "Genesis", 1)
+	have := map[string]bool{}
+	for _, v := range kept {
+		have[v.Book] = true
+	}
+	for _, b := range []string{"Tobit", "Judith"} {
+		if !have[b] {
+			t.Fatalf("%s was deleted from the reader's trail because they read a different translation", b)
+		}
+	}
+
+	// And a book this app has never shipped is still dropped — the guard is
+	// "dormant", not "keep everything forever".
+	withGhost := append([]ChapterVisit{{Book: "Book of Eli", Chapter: 1}}, saved.Recent...)
+	for _, v := range restoreRecent(withGhost, narrow, "Genesis", 1) {
+		if v.Book == "Book of Eli" {
+			t.Fatal("a book no canon in this build contains was carried forward")
+		}
+	}
+}

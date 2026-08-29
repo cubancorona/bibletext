@@ -550,6 +550,26 @@ func linkVersionUnavailable(state *AppState, t ShareTarget) string {
 	return v.Name
 }
 
+// linkDisplacedMessage is what to tell a reader whose parked link was waiting
+// on one translation while a DIFFERENT one finished loading and took the
+// screen. Answers "" when there is nothing to say, which makes it a question
+// about the state rather than a sentence generator — the shape
+// linkVersionUnavailable and linkBookUnavailableMessage both have, and for the
+// same reason: the enumerations decide whether a state is a dead end by asking
+// whether anything would be SAID, and they can only ask a function. A message
+// that exists solely inside a showLinkNotice call is invisible to the proof.
+func linkDisplacedMessage(state *AppState, t ShareTarget, wanted string) string {
+	if state == nil || wanted == "" || t.Book == "" {
+		return ""
+	}
+	v, ok := versionByID(wanted)
+	if !ok {
+		return ""
+	}
+	return "This link opens in " + v.Name + ", and another translation finished " +
+		"loading first. Tap the link again to open it there."
+}
+
 // linkBookUnavailableMessage is what to tell a reader whose link names a book
 // their translation does not contain and no download in flight will supply.
 //
@@ -700,12 +720,19 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 		parked := t
 		state.pendingLink = &parked
 		state.pendingLinkVersion = want
+		state.versionSwitchForArrival = true // as below: not the reader's choice (D13)
 		// A fresh park starts with no Show intent: openNote re-stamps its note
 		// id AFTER this returns true; any other caller's park must not inherit
 		// a browser tap's stale one.
 		state.pendingNoteOpenID = 0
 		return true
 	}
+	// THE SWITCH FROM HERE IS NOT THE READER'S CHOICE. Every route below ends
+	// in applyLoadedVersion, which spends the remembered fallback translation
+	// on the assumption that a load it sees was either asked for or awaited.
+	// A link is neither, and the record it would spend is the only copy of
+	// what the reader actually chose (D13).
+	state.versionSwitchForArrival = true
 	_, inMem := state.loadedVersions[want]
 	if inMem || v.isTesting() {
 		switchVersion(state, want) // synchronous; fall through and apply

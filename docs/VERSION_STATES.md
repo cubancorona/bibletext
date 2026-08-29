@@ -5,7 +5,7 @@
 > TRAJECTORY harness, which walks journeys rather than cells. As of
 > 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
 > incoherent states. **Every defect the scouting reported has now been closed
-> — fourteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
+> — eighteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
 > unsynced cache write), `D1` (a destructive purge on an answer the app could
 > not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
 > (a non-default translation stale in silence), `D4` (a banner outliving the
@@ -15,9 +15,13 @@
 > disagreeing about the mode they report), `D9` (**the reader's chosen
 > translation erased by a condition that fixes itself**), `D10` (a silent
 > substitution of one translation for another) `D11` (a notice retired
-> while the edition it describes is still on screen) and `D12` (a dead link
-> honoured behind the reader's back). Anything a future change breaks appears
-> as an unpinned violation, by name.
+> while the edition it describes is still on screen) `D12` (a dead link
+> honoured behind the reader's back), `D13` (**someone else's link spending
+> the reader's remembered translation**), `D14` (a displaced link discarded in
+> silence), `D15` (one translation's search results read and navigated under
+> another's name) and `D16` (**a wider canon's trail deleted for reading a
+> narrower translation**). Anything a future change breaks appears as an
+> unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -193,6 +197,10 @@ of how much of the space the defect covers.
 | ~~D10~~ | ~~The reader asked for one translation and is shown another, with nothing on any surface saying so~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D11~~ | ~~A stale version's notice is retired by the disk while its previous decode is still on screen~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D12~~ | ~~A link whose translation failed to load keeps its park, and a later unrelated switch honours the dead link~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D13~~ | ~~A link switching translations spends the reader's remembered fallback choice, durably and in silence~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D14~~ | ~~A link displaced by another translation's load is dropped with nothing said~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D15~~ | ~~Search results survive a switch: old wording under a new name, and a tap writes a dead reference~~ | **FIXED 2026-08-29** | 0 | — |
+| ~~D16~~ | ~~A wider canon's history is offered dead after a switch and deleted at the next launch~~ | **FIXED 2026-08-29** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -421,6 +429,72 @@ and its 780 journeys found `D12` by four different routes. The existing
 `share_link_flow_test.go` cross-product is not made redundant by this — it
 asks a different question over the link's own axes ("is any state a dead
 end"), and it still passes.
+
+### D13–D16 — what the model missed, found by scouting the same ground again
+
+The journeys above found `D12` and then went quiet, so the four arrival
+surfaces were read again from scratch, independently, and each candidate put
+to two adversarial verifiers on separate lenses (is it reachable, and does
+anything actually go wrong). Four survived, all confirmed here against the
+real code before anything was changed. **Two are durable.** They are recorded
+together because they share a cause the model had not named: **a reference or
+a record made in one translation, read back in another** — and every one of
+them arrives through a caller that no machine in the map owns.
+
+`D13` is the sharpest thing in this document, because it is a fix creating an
+obligation elsewhere. `D10` made the app *promise*, in writing on the picker,
+that the reader's translation is "remembered and comes back when it can".
+`applyLoadedVersion` then spent that record on any successful load — its
+comment naming two callers, "the reader picked it" and "the licensed one came
+back". **A tapped link is neither.** So a reader in the fallback state whose
+friend sends them a verse in some other translation lost the only record of
+what they had chosen, at the moment of the tap, with the notice going silent
+in the same breath. Not their doing, not announced, not recoverable. Switches
+an arrival performs are now marked as such, and the preference survives them —
+except when the link is *to* the chosen translation, which is exactly it
+coming back.
+
+`D16` is the original incident arriving by a door the launch enumeration does
+not have. `L-B` proves a trail survives a launch that falls back; nothing
+proved it survives the reader simply **changing translation**, which is the
+ordinary thing the app is for. An evening in the WEBC leaves Tobit, Sirach and
+1 Maccabees in the trail; switching to the WEB persisted that trail under
+`"web"`, and the next launch validated it against 66 books and deleted all
+three from the only copy. The two cases `restoreRecent` could not tell apart
+are not alike — a book dropped from the *build* is gone, a book missing from
+the translation the reader *happens to be in* is still theirs. Entries the
+app's widest canon knows are now kept dormant rather than deleted, and
+`recentJumpTargets` — the single place every renderer of the bar reads — does
+not offer what the loaded canon cannot resolve. They come alive again the
+moment the reader returns to a canon that has them.
+
+`D15` is the same shape one layer up. A search result list is made of Verses
+carrying the **old translation's wording**; it survived a switch, so the
+reader read one translation's text under another's name, and tapping a row
+navigated by the old numbering into a canon that need not contain the book —
+a blank chapter with both arrows dead, written into the reading position and
+the history. The mark beside those results was *already* renumbered on every
+switch for exactly this reason; the results were the half nothing re-derived.
+They are now re-run against the translation in hand, and the navigation
+carries the canon guard for every other producer of a Verse.
+
+`D14` is a dead end of precisely the kind `share_link_flow_test.go` exists to
+forbid, reached by an axis that enumeration does not have. A link tapped while
+some other translation is downloading parks behind that load; when the other
+one lands it takes the screen and the park is dropped — correctly, the target
+is stale — but until now without a word, and the platform glue has already
+told the OS the link was handled, so there is no browser fallback either. Two
+taps on shared scripture and nothing whatever happens. The drop was right; the
+silence was the defect.
+
+**What this says about the method.** The journeys were necessary and not
+sufficient. Their axes were the ones the model already knew to look at, so
+they could only find defects among those — `D12`, and nothing further. The
+four that follow all live on couplings the map had not drawn: a link reaching
+the preference machinery, a switch reaching the search list, a switch reaching
+durable history. Re-reading the same ground with no model in hand is what
+found them, and adversarial verification is what kept the count honest — a
+fifth candidate was refuted on consequence and is not in this table.
 
 ## The whole machine — what a complete model must cover
 

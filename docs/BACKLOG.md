@@ -75,10 +75,25 @@ it breaks is a sequence. One more defect:
 |---|---|---|
 | ~~D12~~ | ~~A link whose translation failed to load keeps its park; a later unrelated switch to that translation honours the dead link and moves the reader~~ | **FIXED 2026-08-29** |
 
-**All seven machines and the arrivals layer are now enumerated**, and every
-defect found is closed. Third confirmation that cross-products are blind to
-flow: the arrivals defect is invisible to every cross-product in the suite and
-the journeys found it by four routes.
+**A second, model-free scouting pass over the same four arrival surfaces**
+(each candidate refuted or confirmed by two adversarial verifiers on separate
+lenses) found four more, every one on a coupling the map had not drawn:
+
+| | Defect | Severity | Status |
+|---|---|---|---|
+| ~~D13~~ | ~~A link switching translations spends the reader's remembered fallback choice~~ | durable | **FIXED 2026-08-29** |
+| ~~D16~~ | ~~A wider canon's trail is offered dead after a switch and deleted at the next launch~~ | durable | **FIXED 2026-08-29** |
+| ~~D15~~ | ~~Search results survive a switch: old wording under a new name; a tap writes a dead reference~~ | session | **FIXED 2026-08-29** |
+| ~~D14~~ | ~~A link displaced by another translation's load is dropped with nothing said~~ | session | **FIXED 2026-08-29** |
+
+**All seven machines and the arrivals layer are enumerated, and every defect
+found is closed.** Two lessons worth keeping. Third confirmation that
+cross-products are blind to flow (the arrivals defect is invisible to every
+cross-product in the suite; the journeys found it by four routes). And: a
+harness can only look where its model points. The journeys found D12 and went
+quiet; re-reading the same ground with no model in hand found four more,
+including the original incident arriving through a version switch rather than
+a launch.
 
 ## NKJV Psalm superscriptions
 

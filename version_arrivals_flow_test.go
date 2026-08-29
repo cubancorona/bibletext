@@ -360,3 +360,123 @@ func TestAParkForAnotherTranslationSurvivesThisOnesFailure(t *testing.T) {
 		t.Fatal("a park waiting on another translation was cleared by this load's failure")
 	}
 }
+
+// TestAnArrivalDoesNotSpendTheReadersRememberedTranslation is D13.
+//
+// It is the D9/D10 record being deleted through a caller neither of them
+// modelled, and it is the sharpest case in this document of a fix creating an
+// obligation somewhere else: D10 made the app PROMISE, in writing on the
+// picker, that the reader's translation is "remembered and comes back when it
+// can". applyLoadedVersion then spent that record on any successful load — and
+// a tapped link is a successful load the reader did not ask for.
+func TestAnArrivalDoesNotSpendTheReadersRememberedTranslation(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	nk, ok := versionByID("nkjv")
+	if !ok {
+		t.Skip("nkjv not registered")
+	}
+
+	newFallbackState := func() *AppState {
+		base := fullValidBible()
+		return &AppState{
+			Bible:          base,
+			CurrentVersion: defaultVersionID,
+			currentMode:    modeReal,
+			loadedVersions: map[string]*BibleData{defaultVersionID: base},
+			loadPhase:      loadReady,
+			CurrentBook:    "Genesis",
+			CurrentChapter: 1,
+			// the state D9 records and D10 announces
+			preferredVersion: nk.ID,
+		}
+	}
+
+	// CONTROL: the promise is really being made in this state, and the record
+	// really is what the next save would write. Without this the test could
+	// pass against a build that never made the promise at all.
+	if n := fullPendingNotice(newFallbackState()); !strings.Contains(n, nk.Name) {
+		t.Fatalf("control: the picker must be promising the reader their translation; got %q", n)
+	}
+	if got := snapshotReadingState(newFallbackState(), 0, 0, 0, 0, 0).Version; got != nk.ID {
+		t.Fatalf("control: the record must name the reader's translation; got %q", got)
+	}
+
+	// A friend's link in some OTHER translation switches for them.
+	st := newFallbackState()
+	st.versionSwitchForArrival = true // what switchToLinkVersion sets
+	other, _ := versionByID(arrivalOtherVersion)
+	applyLoadedVersion(st, other, fullValidBible(), modeReal)
+
+	if st.preferredVersion != nk.ID {
+		t.Fatal("somebody else's link spent the reader's remembered translation")
+	}
+	if got := snapshotReadingState(st, 0, 0, 0, 0, 0).Version; got != nk.ID {
+		t.Fatalf("the next save would write %q over the reader's choice", got)
+	}
+	if n := fullPendingNotice(st); !strings.Contains(n, nk.Name) {
+		t.Fatalf("the promise went silent without being kept; notice = %q", n)
+	}
+
+	// The reader's OWN switch does spend it — that is the pinned behaviour the
+	// exception must not break.
+	st = newFallbackState()
+	applyLoadedVersion(st, other, fullValidBible(), modeReal)
+	if st.preferredVersion != "" {
+		t.Fatal("an explicit switch must still spend the fallback preference")
+	}
+
+	// And so does the chosen translation finally arriving, however it arrives:
+	// a link TO it is exactly the thing coming back.
+	st = newFallbackState()
+	st.versionSwitchForArrival = true
+	st.loadedVersions[nk.ID] = fullValidBible()
+	applyLoadedVersion(st, nk, fullValidBible(), modeReal)
+	if st.preferredVersion != "" {
+		t.Fatal("the chosen translation came back and the fallback record outlived it")
+	}
+	if n := fullPendingNotice(st); n != "" {
+		t.Fatalf("the notice outlived the substitution it describes: %q", n)
+	}
+}
+
+// TestADisplacedLinkIsNotDroppedInSilence is D14.
+//
+// A link tapped while some other translation is already downloading parks
+// behind that load. When the other translation lands it takes the screen and
+// the park is dropped — correctly, since the target is stale — but until now
+// without a word. The reader had tapped shared scripture and nothing whatever
+// happened: no passage, no message, and because the platform glue always
+// reports a bibletext.co.uk link as handled, no browser fallback either. It is
+// a dead end of exactly the kind share_link_flow_test.go exists to forbid,
+// reached by an axis that enumeration does not have.
+func TestADisplacedLinkIsNotDroppedInSilence(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	wanted, ok := versionByID(arrivalLinkVersion)
+	if !ok {
+		t.Skip(arrivalLinkVersion + " not registered")
+	}
+	target := ShareTarget{VersionID: wanted.ID, Book: "John", Chapter: 3, VerseLo: 16}
+
+	msg := linkDisplacedMessage(&AppState{}, target, wanted.ID)
+	if msg == "" {
+		t.Fatal("a displaced link says nothing at all — the tap looks to the reader like it missed")
+	}
+	if !strings.Contains(msg, wanted.Name) {
+		t.Fatalf("the message must name the translation the link opens in; got %q", msg)
+	}
+
+	// It is a question about the state, not a sentence generator: with nothing
+	// displaced there is nothing to say. Without this the enumerations that ask
+	// "was anything said" would read every state as answered and go vacuous —
+	// the mistake linkBookUnavailableMessage records having made.
+	if got := linkDisplacedMessage(&AppState{}, ShareTarget{}, ""); got != "" {
+		t.Fatalf("nothing was displaced and it spoke anyway: %q", got)
+	}
+	if got := linkDisplacedMessage(&AppState{}, target, "not-a-version"); got != "" {
+		t.Fatalf("an unknown translation is a link from a future BibleText; it degrades quietly: %q", got)
+	}
+}

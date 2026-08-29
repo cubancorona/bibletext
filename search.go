@@ -111,6 +111,23 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	return container.NewPadded(container.NewBorder(head, nil, nil, nil, paper))
 }
 
+// searchResultOutsideCanonMessage is what to tell a reader whose tapped result
+// names a book the translation now on screen does not contain. Pure, and
+// answering "" when the book IS present, for the reason linkVersionUnavailable
+// and linkBookUnavailableMessage are: a proof can ask a function whether
+// anything would be said, and cannot ask a showLinkNotice call.
+func searchResultOutsideCanonMessage(state *AppState, book string) string {
+	if state == nil || book == "" || state.Bible == nil {
+		return ""
+	}
+	if state.Bible.GetChaptersForBook(book) > 0 {
+		return "" // the reader has this book; nothing to explain
+	}
+	return book + " isn't in " + state.currentVersion().Name +
+		". Try another translation from the version picker — the deuterocanonical books " +
+		"are in the World English Bible (Catholic)."
+}
+
 // searchPromptView is the calm, centred empty state shown before a query is
 // entered — a muted search glyph and a one-line invitation. Clearer than echoing
 // `Results for ""` over an empty results box.

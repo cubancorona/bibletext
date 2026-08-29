@@ -375,3 +375,81 @@ func TestAnInMemorySwitchAlwaysTakes(t *testing.T) {
 		}
 	}
 }
+
+// TestASwitchDoesNotLeaveTheOldTranslationsSearchResults is D15.
+//
+// Two failures with one cause, and the second is the durable one. A search
+// result list is made of Verses carrying the OLD translation's wording; it
+// survives a switch, so the reader reads one translation's text under another
+// translation's name. And tapping a row navigated by the old numbering into a
+// canon that need not contain the book at all — a blank chapter with both
+// arrows dead, written into the reading position and the recent-chapters
+// history where it outlives the session.
+//
+// The mark beside those results was ALREADY renumbered through the anchor
+// machinery on every switch, for exactly this reason. The results were the
+// half nothing re-derived.
+func TestASwitchDoesNotLeaveTheOldTranslationsSearchResults(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	wide := widerCanonBible()
+	narrow := fullValidBible()
+	web, _ := versionByID(defaultVersionID)
+
+	newState := func() *AppState {
+		return &AppState{
+			Bible: wide, CurrentVersion: "webc", currentMode: modeReal,
+			loadedVersions:    map[string]*BibleData{"webc": wide},
+			loadPhase:         loadReady,
+			CurrentBook:       "Tobit",
+			CurrentChapter:    1,
+			ActiveSearchQuery: "sample",
+			SearchResults: []Verse{
+				{BookName: "Tobit", Book: "Tobit", Chapter: 1, Verse: 1, Text: "wide Tobit 1:1 sample."},
+			},
+		}
+	}
+
+	// CONTROL: the fixture really does hold a result the narrow canon cannot
+	// contain, and the narrow canon really lacks the book. Without both, the
+	// assertions below would pass against anything.
+	if narrow.GetChaptersForBook("Tobit") != 0 {
+		t.Fatal("control: the narrow canon must not contain Tobit")
+	}
+	if len(newState().SearchResults) == 0 {
+		t.Fatal("control: the fixture must hold a result")
+	}
+
+	st := newState()
+	applyLoadedVersion(st, web, narrow, modeReal)
+	for _, r := range st.SearchResults {
+		if st.Bible.GetChaptersForBook(r.BookName) == 0 {
+			t.Fatalf("a result for %s survived the switch into a translation without that book", r.BookName)
+		}
+	}
+
+	// And the guard on the navigation itself, which protects every other
+	// producer of a Verse — the AI list, and anything added later.
+	st = newState()
+	st.Bible, st.CurrentVersion = narrow, defaultVersionID
+	stale := Verse{BookName: "Tobit", Book: "Tobit", Chapter: 1, Verse: 1}
+	before := st.CurrentBook
+	openSearchResultRange(st, stale, 0)
+	if st.CurrentBook != before {
+		t.Fatalf("navigated to %s, a book this translation does not contain", st.CurrentBook)
+	}
+	for _, h := range st.RecentChapters {
+		if h.Book == "Tobit" {
+			t.Fatal("a dead reference was written into the durable history")
+		}
+	}
+	if msg := searchResultOutsideCanonMessage(st, "Tobit"); msg == "" {
+		t.Fatal("the tap was refused in silence, which reads as the tap having missed")
+	}
+	// The question shape: nothing to say when the book IS present, or a proof
+	// that asks whether anything was said reads every state as answered.
+	if msg := searchResultOutsideCanonMessage(st, "Genesis"); msg != "" {
+		t.Fatalf("spoke about a book the reader has: %q", msg)
+	}
+}

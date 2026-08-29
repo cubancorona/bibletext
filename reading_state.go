@@ -481,7 +481,27 @@ func restoreRecent(saved []ChapterVisit, bd *BibleData, book string, chapter int
 			continue
 		}
 		if bd.GetChaptersForBook(v.Book) == 0 {
-			continue // book gone from this build/translation
+			// DORMANT, NOT GONE. This used to delete the entry, and the two
+			// cases it cannot tell apart are not alike: a book dropped from
+			// the build is gone, but a book missing from the translation the
+			// reader HAPPENS to be in is still theirs. An evening in the WEBC
+			// followed by a switch to the WEB persisted the trail under "web",
+			// and this loop then deleted Tobit, Sirach and 1 Maccabees from
+			// the only copy — the reader's own history, erased for reading a
+			// different translation, with nothing said and no way back. Keep
+			// anything the app's widest canon knows; recentJumpTargets does
+			// not offer what the loaded canon cannot resolve, so nothing dead
+			// is shown, and the entries come alive again when the reader
+			// returns to a translation that has them. See D16 in
+			// docs/VERSION_STATES.md.
+			if !bookKnownToApp(v.Book) {
+				continue // genuinely not a book this app has ever had
+			}
+			out = append(out, v)
+			if len(out) == maxRecent {
+				break
+			}
+			continue
 		}
 		if !chapterExists(bd, v.Book, v.Chapter) {
 			continue
@@ -542,4 +562,18 @@ func armReadingMarkerFor(state *AppState, verse int) {
 	}
 	c := state.pal().Accent
 	armReadingMarker(verse, float64(c.R)/255, float64(c.G)/255, float64(c.B)/255)
+}
+
+// bookKnownToApp reports whether a book name belongs to any canon this build
+// ships. catholicBooks is the widest (73), and a probe over the registry
+// confirms it is a strict superset of the 66-book list, so one lookup answers
+// for every translation without loading any of them — which is the point: this
+// is asked at launch, when exactly one canon is in hand.
+func bookKnownToApp(name string) bool {
+	for _, b := range catholicBooks {
+		if b == name {
+			return true
+		}
+	}
+	return false
 }
