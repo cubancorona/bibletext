@@ -189,3 +189,65 @@ func TestGateOffLeavesTheSingleStickerDrawing(t *testing.T) {
 		t.Fatalf("gate off must draw no pills, got %d", len(pane.pillGeoms))
 	}
 }
+
+// The pills must be VISIBLE, not merely measured. This is the regression the
+// geometry test above could not catch: the pills were built, placed in their
+// bands, and then hidden a line later, because they had been added to the
+// SINGLE sticker's object list — and positionNote hides all of those whenever
+// the single sticker is absent, which is exactly when the pills are drawn. On
+// screen: reserved bands with nothing in them.
+func TestTheParagraphPillsAreActuallyVisible(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	prev := notesPillPerParagraph
+	notesPillPerParagraph = true
+	defer func() { notesPillPerParagraph = prev }()
+
+	st := psalm23State()
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+	for _, v := range []int{paras[0][0].Verse, paras[len(paras)-1][0].Verse} {
+		n, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: v, Text: "fixture note"})
+		if !ok {
+			t.Fatalf("could not store a note on v%d", v)
+		}
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	rend, ok := pane.CreateRenderer().(*styledPaneRenderer)
+	if !ok {
+		t.Fatalf("unexpected renderer type")
+	}
+	rend.Layout(fyne.NewSize(320, 900))
+
+	if len(rend.pillFrames) == 0 {
+		t.Fatalf("gate on, two noted paragraphs, collapsed: no pills were built")
+	}
+	for i, f := range rend.pillFrames {
+		if !f.Visible() {
+			t.Errorf("pill %d was built and placed but is hidden: the reader sees "+
+				"a reserved band with nothing in it", i)
+		}
+	}
+	// And every pill is in the object list, or it is never drawn at all.
+	inList := 0
+	for _, o := range rend.Objects() {
+		for _, f := range rend.pillFrames {
+			if o == fyne.CanvasObject(f) {
+				inList++
+			}
+		}
+	}
+	if inList != len(rend.pillFrames) {
+		t.Errorf("%d of %d pill frames reached the object list", inList, len(rend.pillFrames))
+	}
+}

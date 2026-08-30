@@ -373,6 +373,12 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// notesPillPerParagraph, so a reader always gets the shipped model.
 	pillMode := widget.NewCheck("Pill per paragraph (collapsed state)", func(b bool) {
 		notesPillPerParagraph = b
+		// Re-derive, for the same reason every other note verb does: the
+		// collapsed state is a projection of the store, and which model is in
+		// force changes what that projection should be. Without this, switching
+		// back to the single pill left it at whatever anchor the pills had
+		// implied until navigation rebuilt it.
+		applyNoteForCurrentChapter(state)
 		state.refresh()
 	})
 	pillMode.SetChecked(notesPillPerParagraph)

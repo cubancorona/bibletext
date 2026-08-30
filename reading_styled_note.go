@@ -669,17 +669,13 @@ func (r *styledPaneRenderer) positionNote() {
 }
 
 // noteObjects is every object the sticker owns, for the show/hide sweep.
+// noteObjects is the SINGLE sticker's objects and only those. The
+// per-paragraph pills are deliberately absent: positionNote hides everything
+// this returns whenever the single sticker is not present, which is exactly
+// when the pills ARE the collapsed state. Putting them here positioned them
+// and then hid them one line later — reserved bands with nothing in them.
 func (r *styledPaneRenderer) noteObjects() []fyne.CanvasObject {
 	var out []fyne.CanvasObject
-	for _, o := range r.pillFrames {
-		out = append(out, o)
-	}
-	for _, o := range r.pillLabels {
-		out = append(out, o)
-	}
-	for _, o := range r.pillBtns {
-		out = append(out, o)
-	}
 	if r.noteCard != nil {
 		out = append(out, r.noteCard)
 	}
