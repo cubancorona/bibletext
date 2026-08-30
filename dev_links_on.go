@@ -381,7 +381,14 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		for _, n := range allNotesForBrowsing(appPrefs()) {
 			setNoteMinimizedByID(appPrefs(), n.ID, true)
 		}
-		clearLiveNote(state)
+		// RE-DERIVE, do not clear. clearLiveNote is the wipe button's move and
+		// belongs to it: there the notes are gone, so the live projection must
+		// go with them. Here they still exist and have only been closed, and
+		// clearing left the chapter with no projection at all — no pill, no
+		// bubble, nothing — until navigating away and back rebuilt it. The
+		// collapsed state IS a projection of the store, so the store changing
+		// means asking for it again.
+		applyNoteForCurrentChapter(state)
 		refreshStatus()
 		state.refresh()
 	})

@@ -168,3 +168,52 @@ func longEnoughForTwoParagraphs() []Verse {
 	}
 	return out
 }
+
+// Pressing − must leave the collapsed state derived from the store, not from
+// wherever the expanded note happened to be. The verb used to set Minimized by
+// hand and leave the anchor alone, so minimizing a note in a chapter whose
+// notes span paragraphs left the pill over that note's paragraph while
+// labelling it with the chapter's whole count.
+func TestMinimizingRederivesTheCollapsedAnchor(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := planTestState(t)
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+	if len(paras) < 2 {
+		t.Fatalf("fixture must break into 2+ paragraphs, got %d", len(paras))
+	}
+	deep := paras[len(paras)-1][0].Verse
+
+	for _, v := range []int{1, deep} {
+		if _, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: v, Text: "fixture note"}); !ok {
+			t.Fatalf("could not store the note on v%d", v)
+		}
+	}
+	applyNoteForCurrentChapter(st)
+	if st.NoteMinimized {
+		t.Fatal("a fresh chapter should open its display note; nothing to minimize")
+	}
+	opened := st.NoteVerseLo
+
+	hideCurrentNote(st)
+
+	if !st.NoteMinimized {
+		t.Fatal("pressing − must collapse the note")
+	}
+	if st.NoteVerseLo == opened && opened != 0 {
+		t.Errorf("the pill kept the expanded note's anchor (v%d) after −; collapsed, it "+
+			"counts both paragraphs and must be re-derived to chapter scope", opened)
+	}
+	if st.NoteVerseLo != 0 {
+		t.Errorf("collapsed across %d paragraphs, the pill must sit at chapter scope "+
+			"(VerseLo 0), got v%d", len(paras), st.NoteVerseLo)
+	}
+}

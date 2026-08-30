@@ -929,6 +929,19 @@ func hideCurrentNote(state *AppState) {
 	// lit, so a reader who arrived on a search result and then collapsed a
 	// note on the same chapter lost the result they had come for (X10).
 	state.clearMarkFromNote()
+	// AND RE-DERIVE, as the own-note arm above already does. Everything after
+	// a store write is a projection of the store, and this arm was setting
+	// NoteMinimized by hand and leaving the rest of the projection as the
+	// EXPANDED note had left it — the anchor included. That was invisible
+	// while the collapsed pill anchored at the same verse the bubble did.
+	// It stopped being invisible once the pill's anchor depended on the whole
+	// collapsed set: minimizing a note on v14 left the pill over v14's
+	// paragraph, still claiming the chapter's whole count, which is the exact
+	// thing the anchor rule exists to prevent.
+	//
+	// Focus is already NONE, so nothing opens in the closed note's place (N3);
+	// this only recomputes what the closed state should look like.
+	applyNoteForCurrentChapter(state)
 }
 
 func restoreCurrentNote(state *AppState) {
