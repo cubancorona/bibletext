@@ -210,3 +210,29 @@ formality: `TestApprovedHighlightTokensStayPinned` and
 `TestWebReaderPaletteValues` in `cmd/websitegen` — the web reader's dark
 highlight is meant to match the app's, and that parity is intended, so any
 change here changes the web reader too.
+
+## Per-paragraph note pills: unplaced notes lose their disclosure
+
+Gated behind `notesPillPerParagraph` (off by default), so nothing ships blind.
+
+When the chapter-scope single pill is drawn it discloses notes this translation
+cannot place: `Notes · 2 · 1 not shown`. When the per-paragraph pills take over
+(gate on, two or more noted paragraphs) every pill counts only its own
+paragraph, and an unplaced note belongs to no paragraph — so the disclosure
+disappears and the note becomes unreachable from the reading view.
+
+The design question is where a paragraph-less note's disclosure goes. Options
+considered:
+
+- a chapter-top pill carrying only the unplaced sentence, reusing
+  `stickerUnplacedOnlyWho` — principled (chapter-scope things go to the top,
+  the same reasoning that puts the collapsed single pill there), but it can
+  collide with a first-paragraph pill at the same band verse, and the
+  placement loop keeps only the first match per band
+- a suffix on the first or last pill — misattributes a chapter-scope fact to
+  one paragraph
+- suppressing the pills whenever an unplaced note exists — preserves the
+  disclosure exactly but silently disables the feature
+
+`TestTheSinglePillStillDisclosesUnplacedNotes` pins the shipped gate-off
+guarantee so the ungated path cannot regress while this is open.
