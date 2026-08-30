@@ -269,9 +269,12 @@ func (p *styledReadingPane) relayout(width float32) {
 	// height to reserve, and the pane is the only thing that can measure it.
 	pillReq, pillGeoms := p.measureParagraphPills(avail)
 	p.pillGeoms = pillGeoms
-	if len(pillGeoms) > 0 {
-		// One collapsed state at a time: the single sticker stands down while
-		// the pills are drawn, or the reader sees the same notes twice.
+	if len(pillGeoms) > 0 && p.note.Pill {
+		// One representation of the received set at a time: the sticker stands
+		// down while the pills are drawn, or the reader sees the same notes
+		// twice. Only when the sticker IS that set's collapsed form, though —
+		// an own note open beside the pills duplicates nothing, and zeroing it
+		// here made the reader's own note vanish the moment the pills appeared.
 		p.noteGeom = styledNoteGeom{}
 	}
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
@@ -308,10 +311,16 @@ func (p *styledReadingPane) relayout(width float32) {
 			}
 		}
 		p.pillGeoms = placed
-	} else if p.lay.BandLine < 0 {
-		p.noteGeom = styledNoteGeom{}
-	} else {
-		p.noteGeom.place(p.insetX(), p.lay.BandY)
+	}
+	// And the single sticker, INDEPENDENTLY of the pills rather than as its
+	// alternative: with an own note open beside them both are on the page, so
+	// both need placing from their own reservation.
+	if p.noteGeom.present {
+		if p.lay.BandLine < 0 {
+			p.noteGeom = styledNoteGeom{}
+		} else {
+			p.noteGeom.place(p.insetX(), p.lay.BandY)
+		}
 	}
 	p.drawRuns = p.drawRuns[:0]
 	p.lineSegs = make([][]styledDrawRun, len(p.lay.Lines))

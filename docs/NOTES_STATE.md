@@ -32,8 +32,11 @@
 > `noteFP`), and the display-arity defects X6, X7, X12 and X14 are struck —
 > see the re-measure. The last two enumerated defects, X4 and X11, were fixed by
 > `turnNotesOff`, the off-branch clear, and `renumberMarkForVersion`; the final
-> enumeration records zero named violations. Of the incoherent-states table only
-> `X8`, pinned by its own named test outside the enumerations, remains open.
+> enumeration recorded zero named violations for five passes. The sixth added
+> the reader's OWN notes and the presentation gate as axes — 1280 states became
+> 6400 — and reopened the table: `X16` covers 18 cells. Of the older entries
+> only `X8`, pinned by its own named test outside the enumerations, remains
+> open.
 > Sections marked **[INTENDED]** describe the target behaviour at the time this
 > historical model was written, not current application behaviour.
 >
@@ -216,9 +219,33 @@ that turns this inference into an equality.
 | Fyne banner (Windows / Linux / Android) | `ActiveNote`, `NoteMinimized`, current book/chapter | `notes_banner.go:37-88` |
 | iOS sticker | `ActiveNote`, `NoteMinimized`, `NoteVerseLo` | `reading_ios.go:2107-2126`, pushed from `:2011` |
 | macOS sticker | the same three | `reading_macos.go:1559-1578`, pushed from `:1482` |
+| the styled pane's sticker | the plan, via `styledNoteFor` | `reading_styled_note.go:97-109` |
+| the styled pane's **pills** | the plan's `Notes`, grouped by paragraph | `reading_styled_note.go`, `measureParagraphPills` |
 | the render gate | `len(ActiveNote)` + `NoteMinimized` | `reading.go:487-495` |
 | the tap menu's verbs | `gHasNote`, a **chapter-level bit** | `reading_ios.go:2005-2011`, consumed at `:274-292` |
 | the browser | the whole store, unfiltered by translation | `notes_browse.go:184-190` |
+
+### How the received set is presented [OBSERVED]
+
+One axis, and it is a presentation axis rather than a stored one: **how the
+chapter's received notes are represented on the page.** It has three values,
+and which one is in force is derived, not stored.
+
+| Value | When | Drawn by |
+|---|---|---|
+| `AS_STICKER` | the sticker is that set's collapsed form (`styledNote.Pill`) | the single sticker, "Notes · N" |
+| `AS_PILLS` | `notesPillPerParagraph`, and the sticker is either closed or showing an OWN note | one pill per noted paragraph, each with that paragraph's count |
+| `AS_COUNT` | a received note is OPEN | its who line, "K of N in this chapter" |
+
+`notesPillPerParagraph` (`notes_plan.go`) gates `AS_PILLS`. It is a package
+variable, default false, flipped only by the dev build's Links panel, so the
+shipped app is always `AS_STICKER` or `AS_COUNT`. Only the styled pane
+(Windows, Linux) can draw `AS_PILLS` at all; iOS, macOS and Android have one
+sticker and no pill row.
+
+The axis matters because the three values are not interchangeable: each
+represents the set at a different granularity, and exactly one of them must be
+in force whenever the set is non-empty. That is N9 below.
 
 ## The states
 
@@ -459,6 +486,35 @@ tap leaves the reader on John 3 and the row stays in the list.
 in what it refuses to do and silent about refusing — a blocked state by
 `docs/NKJV_FLOW.md`'s own rule.
 
+### The pill presentation [OBSERVED — styled pane, gated]
+
+Reachable only with `notesPillPerParagraph` on, so today only in a dev build on
+Windows or Linux.
+
+**`PILLS_SET`** — every received note collapsed, two or more noted paragraphs.
+One pill per noted paragraph, each carrying that paragraph's own count; the
+single sticker stands down, because it would be a second, coarser spelling of
+the same set.
+*The reader sees:* "Note" over one paragraph, "Notes · 4" over another, and no
+chapter-wide chip.
+
+**`PILLS_BESIDE_OWN`** — the reader's own note is open, and the chapter also
+carries received notes. The own note's bubble is drawn from the single band AND
+the pills stay up, because an own note is not a member of the received set
+(`chapterPlan.Own` is a slot, not a member) and its who line carries no count of
+it. The two reservations are independent in `layoutChapter`, pill above sticker
+within a shared paragraph so the sticker stays nearest the text its tail points
+at.
+*The reader sees:* their own note open, with the friends' paragraphs still
+marked around it.
+
+**`PILLS_ONE_PARAGRAPH_BESIDE_OWN`** — the same, where the received notes occupy
+only ONE paragraph. Normally a single noted paragraph draws no pill, because the
+sticker already is that paragraph's collapsed form; while the sticker is showing
+an own note it is not available to say anything about the friends' one, so the
+pill is drawn after all.
+*The reader sees:* one pill beside their own open note.
+
 ### Intended
 
 **`I_ATTR`** — **[INTENDED — R2]** every note names the translation it is stored
@@ -563,6 +619,17 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   legal, and the cap writes nothing — the V-invariants in the enumeration hold
   it (at most one Open; Open never a stored-Minimized note), and
   `TestTheCapOpensOneAndLeavesZeroStoreResidue` pins the zero-residue half.
+- **N9 — The received set is represented exactly once.** Whenever a chapter
+  carries received notes, exactly one of `AS_STICKER`, `AS_PILLS` and `AS_COUNT`
+  is in force for them. Twice is duplication — the reader counts the same notes
+  in two places; zero times is worse — the notes exist and nothing on the page
+  says so. *Was violated in both directions by `X15`: the pills and the sticker
+  were alternatives keyed on "a sticker exists" rather than on what the sticker
+  was SHOWING, so an own note both suppressed the pills (zero) and, in the naive
+  repair, was itself blanked by them. Fixed: the stand-down is keyed on
+  `styledNote.Pill`, which is true only when the sticker IS the received set's
+  collapsed form.* Still violated by `X16` on the three surfaces that have no
+  pill row, which is 18 cells of the enumeration.
 
 ## Incoherent states
 
@@ -927,6 +994,71 @@ notes are on screen.
 **Evidence.** Enumeration at S7: 12 cells — placeBoth × focus=followed ×
 verb ∈ {none, hide, show} × collapsed × foreignHL (delete's cells are `X6`'s,
 same mechanism through the destructive verb).
+
+### X15 — FIXED — opening your own note blanked everyone else's
+
+**Was:** the pills and the single sticker were alternatives, and the test was
+"do any pills exist?" rather than "is the sticker showing the set the pills
+would show?". `chapterPlan.Own` is deliberately not a member of the received
+set and its who line carries no count of it, so opening one of the reader's own
+notes put the page in a state where the received set was represented ZERO
+times: the sticker was busy with the own note, and the pills had stood down for
+it. Nothing on the page said that closing the own note would bring the others
+back.
+
+Measured on a chapter with three received notes across two paragraphs plus one
+own note:
+
+    a received note open  ->  pills 0, who "Note from Friend · 3 of 3 in this chapter"
+    your own note open     ->  pills 0, who "Note from you"
+
+The naive repair — let the pills through whenever an own note is open —
+produced the mirror violation, the set represented twice over in effect and the
+own note itself blanked, because `p.noteGeom` was zeroed the moment any pill
+existed:
+
+    own note open at v2; pills drawn = 2; own sticker present = false
+
+**Now:** three keys, each on what the thing IS rather than on whether it
+exists. The pills stand up when the sticker is closed OR is showing an own note
+(`reading_styled_note.go`, `measureParagraphPills`); the sticker stands down
+only when `styledNote.Pill` says it is the received set's own collapsed form
+(`reading_styled_pane.go`); and `layoutChapter`'s two band reservations became
+independent rather than an if/else, so a paragraph can carry a pill and the
+sticker at once, pill first. Pinned by
+`TestTheFriendsPillsSurviveOpeningYourOwnNote`,
+`TestASingleNotedParagraphStillGetsAPillBesideYourOwnNote`,
+`TestPillsStandDownForAnOpenReceivedNote` and
+`TestAPillAndYourOwnNoteShareAParagraphInOrder`, each mutation-verified against
+the exact change it guards.
+
+### X16 — exists today — the same blanking, on the surfaces with no pill row
+
+iOS, macOS and Android draw one sticker and have no pill row, so the repair
+above cannot reach them: opening an own note there still represents the
+received set zero times. The fix cannot be the pills; it has to be a clause in
+the own note's who line — "Note from you · 5 from friends here" — written as
+its own clause rather than folded into N, so that "displaying an own note must
+not change N" (`notes_plan.go`, `appleStickerPush`) still holds.
+
+Not a regression and not introduced by the pills: this is what every surface
+did before, and what the three without a pill row still do.
+
+**Evidence.** 18 cells of the notes enumeration, every one of them
+`focus=own pills=false`. The same cells with `pills=true` come out clean, which
+is the X15 fix measured rather than asserted — the pills are what represents the
+set once the sticker is busy.
+
+**What the same pass cost the harness.** Adding the axis first reported 64
+further violations, `N2-delete-missed` and `N2-hide-missed`, split evenly across
+both gate settings. None was a defect. `dropCurrentNote` and `hideCurrentNote`
+both DISMISS an own note rather than deleting or minimizing it — the record is
+the reader's only copy and the reading card is transient, so the durable acts
+belong to the browser — and N2 was measuring "the verb reached it" as "the store
+changed", which is the wrong question for a dismiss. The invariant now takes a
+different and stricter measurement for an own note: the note must leave the
+page AND the store must not be touched at all. A harness only looks where its
+model points, and this model had one kind of note in it.
 
 ## REWORK — architectural conclusion
 

@@ -238,7 +238,17 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		// everything after it down by exactly BandH and touches no line's H
 		// and no run's X/W. The band therefore remains ADVANCE — disjoint
 		// from every line box, so no wash can reach it.
-		bandOpensHere := false
+		// The two reservations are INDEPENDENT, not alternatives. They used to
+		// be an if/else, which was right while the pills and the sticker were
+		// two spellings of one thing; they are not, once the sticker can be the
+		// reader's own open note while the pills speak for everyone else's. A
+		// paragraph can therefore carry both, and the one exclusive-ness left is
+		// per-KIND: at most one pill and at most one sticker band.
+		//
+		// Pill first, sticker second, so the sticker ends up nearest the text:
+		// its tail points at the passage, and a chip sitting between the two
+		// would break that line of sight.
+		singleOpensHere := false
 		bandIndex := -1
 		if len(p.Bands) > 0 {
 			// At most ONE band per paragraph: two notes in one paragraph share
@@ -255,14 +265,14 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 					Line: len(lay.Lines), LastLine: -1,
 					Y: y - br.H, H: br.H, Verse: br.Verse, Count: br.Count,
 				})
-				bandOpensHere = true
 				break
 			}
-		} else if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
+		}
+		if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
 			y += p.BandH
 			lay.BandLine = len(lay.Lines)
 			lay.BandY, lay.BandH = y-p.BandH, p.BandH
-			bandOpensHere = true
+			singleOpensHere = true
 		}
 
 		var cur []styledRun
@@ -381,12 +391,13 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			}
 		}
 		flushLine(false)
-		if bandOpensHere {
-			if bandIndex >= 0 {
-				lay.Bands[bandIndex].LastLine = len(lay.Lines) - 1
-			} else {
-				lay.BandLastLine = len(lay.Lines) - 1
-			}
+		// Both, for the same reason the reservations are both: a paragraph that
+		// opened a pill AND the sticker must close each one's line span.
+		if bandIndex >= 0 {
+			lay.Bands[bandIndex].LastLine = len(lay.Lines) - 1
+		}
+		if singleOpensHere {
+			lay.BandLastLine = len(lay.Lines) - 1
 		}
 	}
 

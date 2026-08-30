@@ -80,10 +80,11 @@ const (
 	focusNoneAx                            // the reader closed the open note
 	focusExactKey                          // the reader opened the exact-key note
 	focusFollowedNote                      // the reader opened a followed note
+	focusOwnAx                             // the reader opened one of THEIR OWN notes
 )
 
 func (f noteFocusAxis) String() string {
-	return [...]string{"unset", "none", "exact", "followed"}[f]
+	return [...]string{"unset", "none", "exact", "followed", "own"}[f]
 }
 
 // notesWorld is the slice of the world the notes subsystem branches on. Kept as
@@ -97,11 +98,24 @@ type notesWorld struct {
 	focus     noteFocusAxis // the reader's session focus, set after the derive
 	arrival   bool          // a note-bearing link landed on this chapter after the derive
 	verb      noteVerb
+
+	// ownNote — the reader has a note of THEIR OWN on this chapter. It is a
+	// separate axis from placement because an own note is not a member of the
+	// received set (chapterPlan.Own is a slot): it changes what the sticker is
+	// showing without changing N, which is exactly the combination that let the
+	// received set fall off the page (X15).
+	ownNote bool
+
+	// pills — notesPillPerParagraph, the presentation gate. Off is every
+	// shipped build and all three native surfaces; on is the styled pane's
+	// pill row. It belongs on the cross-product because it decides WHICH of the
+	// three representations is available, and N9 is about which one is in force.
+	pills bool
 }
 
 func (w notesWorld) id() string {
-	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s",
-		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb)
+	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v pills=%v",
+		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb, w.ownNote, w.pills)
 }
 
 // --- what is broken today ---------------------------------------------------
@@ -169,7 +183,22 @@ type pinnedDefect struct {
 // machinery — the first use VerseSpan.VersionID has ever had — and clears it
 // on anything but a clean landing. An empty list is still load-bearing: any
 // violation now fails as a NEW incoherent state, with nothing to hide behind.
-var knownIncoherent = []pinnedDefect{}
+var knownIncoherent = []pinnedDefect{
+	{
+		name: "X16",
+		what: "an open own note leaves the received set represented nowhere, wherever there is no pill row",
+		covers: func(w notesWorld, inv string) bool {
+			// Every surface without a pill row: the three native ones, and the
+			// styled pane with the gate off, which is every shipped build. The
+			// sticker is busy with the reader's own note, that note carries no
+			// count of the received set by design, and nothing else on the page
+			// speaks for it. With the gate ON the pills speak for it and these
+			// cells come out clean — which is the fix, measured.
+			return strings.HasPrefix(inv, "N9-set-unrepresented") &&
+				w.focus == focusOwnAx && !w.pills
+		},
+	},
+}
 
 // knownOriginIncoherent is the same pin for the highlight-origin enumeration —
 // also empty since X4 and X11 were struck. See the note above.
@@ -197,6 +226,10 @@ func TestNotesStateSpace(t *testing.T) {
 	noteNow = func() int64 { return 1_700_000_000 }
 	defer func() { noteNow = origNow }()
 
+	// The enumeration drives the presentation gate; put it back.
+	origPills := notesPillPerParagraph
+	defer func() { notesPillPerParagraph = origPills }()
+
 	unexplained := []string{}
 	hits := map[string]int{}
 	seen, skipped, total := 0, 0, 0
@@ -205,28 +238,32 @@ func TestNotesStateSpace(t *testing.T) {
 		for _, placement := range []notePlacement{placeNone, placeOwn, placeFollowed, placeBoth} {
 			for _, collapsed := range []bool{false, true} {
 				for _, foreignHL := range []bool{false, true} {
-					for _, focus := range []noteFocusAxis{focusUnset, focusNoneAx, focusExactKey, focusFollowedNote} {
+					for _, focus := range []noteFocusAxis{focusUnset, focusNoneAx, focusExactKey, focusFollowedNote, focusOwnAx} {
 						for _, arrival := range []bool{false, true} {
 							for _, verb := range []noteVerb{verbNone, verbHide, verbShow, verbDelete, verbNotesOff} {
-								w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb}
-								seen++
-								obs, offered := runNotesFlow(t, w)
-								if !offered {
-									skipped++
-									continue
-								}
-								for _, inv := range checkNotesInvariants(w, obs) {
-									total++
-									named := ""
-									for _, d := range knownIncoherent {
-										if d.covers(w, inv) {
-											named = d.name
-											hits[d.name]++
-											break
+								for _, ownNote := range []bool{false, true} {
+									for _, pills := range []bool{false, true} {
+										w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb, ownNote, pills}
+										seen++
+										obs, offered := runNotesFlow(t, w)
+										if !offered {
+											skipped++
+											continue
 										}
-									}
-									if named == "" {
-										unexplained = append(unexplained, w.id()+" | "+inv)
+										for _, inv := range checkNotesInvariants(w, obs) {
+											total++
+											named := ""
+											for _, d := range knownIncoherent {
+												if d.covers(w, inv) {
+													named = d.name
+													hits[d.name]++
+													break
+												}
+											}
+											if named == "" {
+												unexplained = append(unexplained, w.id()+" | "+inv)
+											}
+										}
 									}
 								}
 							}
@@ -265,7 +302,7 @@ func TestNotesStateSpace(t *testing.T) {
 	// the doc's combined line. EMPTY since the sixth pass — zero named
 	// violations — and the set-equality assertion above is what now holds it
 	// there.
-	expectedHits := map[string]int{}
+	expectedHits := map[string]int{"X16": 18}
 	for name, want := range expectedHits {
 		if hits[name] != want {
 			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
@@ -288,6 +325,8 @@ func TestNotesStateSpace(t *testing.T) {
 type notesObs struct {
 	shownText string // what was on screen when the reader reached for the verb
 	shownID   uint64 // the identity the mirror said the verbs would address
+
+	shownWasOwn bool // the note on screen was the reader's OWN (chapterPlan.Own)
 
 	text string // immediately after the verb
 	min  bool
@@ -318,6 +357,13 @@ type planSnap struct {
 	suppressed   bool // a live mark not owned by a note stood the notes down
 	featureOn    bool
 	passageNotes int // received notes filed on the passage, in the store, now
+
+	// shownAs is HOW the received set is represented at this moment, read from
+	// the product's own answer (receivedSetShownAs) rather than re-derived here
+	// — a second derivation would drift from the pane and the enumeration would
+	// then be checking itself. groups is what that answer was given.
+	shownAs receivedShownAs
+	groups  int
 }
 
 func takePlanSnap(st *AppState) planSnap {
@@ -331,6 +377,9 @@ func takePlanSnap(st *AppState) planSnap {
 			snap.passageNotes++
 		}
 	}
+	snap.groups = len(chapterNoteGroups(st, snap.plan,
+		st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)))
+	snap.shownAs = receivedSetShownAs(snap.plan, styledNoteFor(st), snap.groups)
 	return snap
 }
 
@@ -373,7 +422,22 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		addNote(appPrefs(), own)
 	}
 
+	// The reader's OWN note, on a DIFFERENT verse from the received ones so it
+	// lands in its own paragraph where the sample chapter allows: what matters
+	// is that it is a Kind=mine record, which the plan carries in its Own slot
+	// rather than in Notes.
+	if w.ownNote {
+		nonce := make([]byte, noteNonceLen)
+		nonce[0] = 42
+		saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John", Chapter: 3,
+			VerseLo: 1, Text: "a note of my own", Nonce: nonce})
+	}
+
 	setNotesEnabled(w.featureOn)
+
+	// The presentation gate, restored by the caller's defer. Set BEFORE the
+	// derive so every snapshot sees the same world.
+	notesPillPerParagraph = w.pills
 
 	// Derive. With a foreign highlight, use the REAL writer that puts one there —
 	// goToVerseRange is what the verse of the day, cross-references and the Go-to
@@ -409,6 +473,14 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		}
 		st.focusNote(storedIDByText(t, "note under bsb"))
 		applyNoteForCurrentChapter(st)
+	case focusOwnAx:
+		// Not a reachable state without one to open: the browser can only
+		// offer a row the store holds.
+		if !w.ownNote {
+			return obs, false
+		}
+		st.focusNote(storedIDByText(t, "a note of my own"))
+		applyNoteForCurrentChapter(st)
 	}
 
 	// A note-bearing link landing on the chapter the reader is already on. The
@@ -431,6 +503,7 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 
 	obs.shownText = st.ActiveNote
 	obs.shownID = st.NoteID
+	obs.shownWasOwn = isOwnLiveNote(st)
 	obs.snapShown = takePlanSnap(st)
 	obs.before = allNotesForBrowsing(appPrefs())
 
@@ -509,27 +582,49 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 	}
 
 	// N2 — a verb reaches what the reader aimed it at.
-	switch w.verb {
-	case verbDelete:
-		if o.shownText != "" && storeHolds(o.after, o.shownText) {
-			bad = append(bad, "N2-delete-missed")
+	//
+	// An OWN note takes a DIFFERENT MEASUREMENT, and a stricter one rather than
+	// a weaker one. ✕ and − on an own note are DISMISS, not delete and minimize
+	// (notes_store.go, dropCurrentNote and hideCurrentNote): the record is the
+	// reader's only copy of something they wrote, the reading card is transient,
+	// and a durable act on it belongs to the browser where the row identifies
+	// the record unambiguously. So "the verb reached it" means the note left the
+	// page — and, in the same breath, that the store was not touched at all.
+	//
+	// Measuring these by "did the store change?" is what the received-note arms
+	// below do, and it reported 64 cells of N2-*-missed the first time this axis
+	// was enumerated. That was the harness looking where its model pointed, not
+	// a defect: the model had one kind of note in it.
+	if o.shownWasOwn && (w.verb == verbDelete || w.verb == verbHide) {
+		if len(o.after) != len(o.before) {
+			bad = append(bad, "N2-own-dismiss-wrote-the-store")
 		}
-		if lost := lostOthers(o.before, o.after, o.shownText); lost != "" {
-			bad = append(bad, "N2-delete-collateral")
+		if o.text == o.shownText {
+			bad = append(bad, "N2-own-dismiss-missed")
 		}
-	case verbHide:
-		if o.shownText != "" && !minimizedInStore(o.after, o.shownText) {
-			bad = append(bad, "N2-hide-missed")
-		}
-		if flippedOthers(o.before, o.after, o.shownText) {
-			bad = append(bad, "N2-hide-collateral")
-		}
-	case verbShow:
-		if o.shownText != "" && minimizedInStore(o.after, o.shownText) {
-			bad = append(bad, "N2-show-missed")
-		}
-		if flippedOthers(o.before, o.after, o.shownText) {
-			bad = append(bad, "N2-show-collateral")
+	} else {
+		switch w.verb {
+		case verbDelete:
+			if o.shownText != "" && storeHolds(o.after, o.shownText) {
+				bad = append(bad, "N2-delete-missed")
+			}
+			if lost := lostOthers(o.before, o.after, o.shownText); lost != "" {
+				bad = append(bad, "N2-delete-collateral")
+			}
+		case verbHide:
+			if o.shownText != "" && !minimizedInStore(o.after, o.shownText) {
+				bad = append(bad, "N2-hide-missed")
+			}
+			if flippedOthers(o.before, o.after, o.shownText) {
+				bad = append(bad, "N2-hide-collateral")
+			}
+		case verbShow:
+			if o.shownText != "" && minimizedInStore(o.after, o.shownText) {
+				bad = append(bad, "N2-show-missed")
+			}
+			if flippedOthers(o.before, o.after, o.shownText) {
+				bad = append(bad, "N2-show-collateral")
+			}
 		}
 	}
 
@@ -575,6 +670,29 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 	}
 	if w.verb == verbShow && o.afterText == o.shownText && o.afterText != "" && o.afterMin {
 		bad = append(bad, "N5-show-not-honoured")
+	}
+
+	// N9 — the received set is represented EXACTLY ONCE. Judged at the same two
+	// moments N4 uses, and only where there is a set to represent: zero notes
+	// need no representation. shownAsNothing with notes present is the
+	// violation, and it is the one X15 produced — the sticker busy with the
+	// reader's own note and the pills stood down for it, so the friends' notes
+	// were on the page nowhere at all.
+	//
+	// There is no "twice" arm to check because the three values are exclusive by
+	// construction: receivedSetShownAs returns one. That exclusivity is the
+	// point of naming the value — the bug existed while the same question was
+	// being answered independently in two places.
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		if !s.snap.featureOn || len(s.snap.plan.Notes) == 0 {
+			continue
+		}
+		if s.snap.shownAs == shownAsNothing {
+			bad = append(bad, "N9-set-unrepresented@"+s.when)
+		}
 	}
 
 	// N6 — the mirror agrees with the store, under the key the verbs address.

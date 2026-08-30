@@ -608,3 +608,196 @@ func TestThePillsTakeTheirColoursFromTheActiveTheme(t *testing.T) {
 		})
 	}
 }
+
+// seedOwnNote writes one of the reader's own notes through the app's own path.
+func seedOwnNote(t *testing.T, verse int, text string) StoredNote {
+	t.Helper()
+	nonce := make([]byte, noteNonceLen)
+	for i := range nonce {
+		nonce[i] = byte(verse*17 + i)
+	}
+	n, ok := saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John", Chapter: 3,
+		VerseLo: verse, Text: text, Nonce: nonce})
+	if !ok {
+		t.Fatalf("could not store an own note on v%d", verse)
+	}
+	return n
+}
+
+// The received set must be represented on the page EXACTLY ONCE. Opening one of
+// the reader's own notes used to represent it zero times: the sticker showed the
+// own note, and the pills stood down because a sticker existed — so every trace
+// of the friends' notes disappeared, with nothing on the page saying to close
+// your own note to get them back.
+//
+// An own note is not a member of that set and carries no count of it, so the
+// pills stay up beside it and duplicate nothing.
+func TestTheFriendsPillsSurviveOpeningYourOwnNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, first, _, _ := twoNotedParagraphs(t, 2)
+	mine := seedOwnNote(t, first+1, "mine, beside a friend's paragraph")
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+
+	if len(pane.pillGeoms) != 2 {
+		t.Errorf("two noted paragraphs of friends' notes, so two pills must stay "+
+			"up beside the reader's own note; got %d", len(pane.pillGeoms))
+	}
+	if !pane.noteGeom.present {
+		t.Errorf("the reader's own note must still be drawn: standing the sticker " +
+			"down for the pills is what made it vanish")
+	}
+}
+
+// The single-noted-paragraph shortcut does not apply while an own note is open.
+// Normally one noted paragraph needs no pill because the sticker already IS
+// that paragraph's collapsed form — but a sticker showing the reader's own note
+// is not available to say anything about the friends' one.
+func TestASingleNotedParagraphStillGetsAPillBesideYourOwnNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st := psalm23State()
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+	first := paras[0][0].Verse
+
+	n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: first, Text: "the only friend's note"})
+	setNoteMinimizedByID(appPrefs(), n.ID, true)
+
+	// Nothing open: one group, so the sticker speaks for it and no pill is due.
+	applyNoteForCurrentChapter(st)
+	bare := newStyledReadingPane(st, verses)
+	bare.Resize(fyne.NewSize(320, 900))
+	if len(bare.pillGeoms) != 0 {
+		t.Errorf("one noted paragraph and nothing open: the sticker speaks for it, "+
+			"so no pill is due; got %d", len(bare.pillGeoms))
+	}
+
+	// Own note open: the sticker is busy, so the one paragraph needs its pill.
+	mine := seedOwnNote(t, paras[len(paras)-1][0].Verse, "mine, elsewhere")
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+	withMine := newStyledReadingPane(st, verses)
+	withMine.Resize(fyne.NewSize(320, 900))
+	if len(withMine.pillGeoms) != 1 {
+		t.Errorf("the sticker is showing the reader's own note, so the friends' "+
+			"one noted paragraph needs its own pill; got %d", len(withMine.pillGeoms))
+	}
+}
+
+// An open RECEIVED note is the one case where the pills must NOT stand up: its
+// who line already reads "K of N in this chapter", so pills would say the same
+// thing twice — which is the duplication the stand-down rule exists to prevent.
+func TestPillsStandDownForAnOpenReceivedNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, first, _, ids := twoNotedParagraphs(t, 2)
+	_ = first
+	setNoteMinimizedByID(appPrefs(), ids[0], false)
+	st.focusNote(ids[0])
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if len(pane.pillGeoms) != 0 {
+		t.Errorf("an open received note carries the count in its who line; %d pills "+
+			"say the same set a second time", len(pane.pillGeoms))
+	}
+	if !pane.noteGeom.present {
+		t.Errorf("the open received note must be drawn")
+	}
+}
+
+// With no friends' notes at all there is nothing for the pills to say, whatever
+// the reader has open of their own.
+func TestNoFriendsNotesMeansNoPillsBesideYourOwn(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st := psalm23State()
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	mine := seedOwnNote(t, groupVersesIntoParagraphs(verses)[0][0].Verse, "only mine")
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if len(pane.pillGeoms) != 0 {
+		t.Errorf("no friends' notes on the chapter, yet %d pills", len(pane.pillGeoms))
+	}
+}
+
+// When both land in ONE paragraph the layout must reserve BOTH bands, and in
+// reading order: the pill above, the sticker below it and nearest the text,
+// because the sticker's tail points at the passage and a chip between the two
+// would break that line of sight.
+func TestAPillAndYourOwnNoteShareAParagraphInOrder(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, first, _, _ := twoNotedParagraphs(t, 2)
+	// Same paragraph as the first friend's note.
+	mine := seedOwnNote(t, first+1, "mine, in the friend's own paragraph")
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if !pane.noteGeom.present || len(pane.pillGeoms) == 0 {
+		t.Fatalf("fixture must draw both: sticker=%v pills=%d",
+			pane.noteGeom.present, len(pane.pillGeoms))
+	}
+	if pane.lay.BandLine < 0 {
+		t.Fatalf("the sticker's own band was never reserved")
+	}
+	// The pill for the shared paragraph sits above the sticker.
+	var shared *styledNoteGeom
+	for i := range pane.pillGeoms {
+		if pane.pillGeoms[i].card.Y < pane.noteGeom.card.Y {
+			shared = &pane.pillGeoms[i]
+		}
+	}
+	if shared == nil {
+		t.Errorf("no pill sits above the sticker; the two bands are not in reading order")
+	}
+	// And they must not overlap: the bands are ADVANCE, disjoint by construction.
+	for i, g := range pane.pillGeoms {
+		if g.card.Y < pane.noteGeom.card.Y+pane.noteGeom.card.H &&
+			pane.noteGeom.card.Y < g.card.Y+g.card.H {
+			t.Errorf("pill %d (y=%.1f h=%.1f) overlaps the sticker (y=%.1f h=%.1f)",
+				i, g.card.Y, g.card.H, pane.noteGeom.card.Y, pane.noteGeom.card.H)
+		}
+	}
+}

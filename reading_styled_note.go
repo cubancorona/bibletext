@@ -752,6 +752,60 @@ func noteBubblePathSVG(w, h float32, fill, stroke color.Color) fyne.Resource {
 	return fyne.NewStaticResource("note-bubble.svg", []byte(svg))
 }
 
+// receivedShownAs names HOW this chapter's received notes are represented on
+// the page. It exists because the invariant needs it: the set must be
+// represented exactly once (docs/NOTES_STATE.md, N9), and "exactly once" cannot
+// be stated without a value to count. Before it was named, the rule was spelled
+// as "do any pills exist?" — a question about the pills rather than about the
+// set — and that is how opening the reader's own note came to represent the set
+// zero times.
+type receivedShownAs int
+
+const (
+	shownAsNothing receivedShownAs = iota // no received notes here to represent
+	shownAsSticker                        // the chapter-wide collapsed chip, "Notes · N"
+	shownAsPills                          // one pill per noted paragraph
+	shownAsCount                          // the open received note's "K of N in this chapter"
+)
+
+func (r receivedShownAs) String() string {
+	return [...]string{"nothing", "sticker", "pills", "count"}[r]
+}
+
+// receivedSetShownAs is the ONE answer, so the pane and the enumeration cannot
+// disagree about what the reader is looking at. groups is the number of noted
+// paragraphs chapterNoteGroups found, which is zero whenever the pill gate is
+// off — so the gate needs no separate argument here.
+func receivedSetShownAs(plan chapterPlan, note styledNote, groups int) receivedShownAs {
+	if len(plan.Notes) == 0 || !note.present() {
+		return shownAsNothing
+	}
+	switch {
+	case note.Pill:
+		// The sticker IS the set's collapsed form. The pills replace it only
+		// where they say strictly more: two or more noted paragraphs. With one,
+		// the sticker's count and its position already agree.
+		if groups >= 2 {
+			return shownAsPills
+		}
+		return shownAsSticker
+	case note.Own:
+		// The sticker is busy with a note that is NOT in this set and carries no
+		// count of it, so only the pills can speak for the set — at any group
+		// count, including one. Where there is no pill row (the three native
+		// surfaces, or the gate off) groups is zero and the set is represented
+		// nowhere: X16, and the reason this function returns a value rather
+		// than a bool.
+		if groups >= 1 {
+			return shownAsPills
+		}
+		return shownAsNothing
+	default:
+		// An open received note: its who line carries the count.
+		return shownAsCount
+	}
+}
+
 // measureParagraphPills builds the collapsed state as one pill per noted
 // paragraph: the band request the layout needs, and the geometry the pane will
 // place once the layout says where each band landed.
@@ -764,17 +818,13 @@ func (p *styledReadingPane) measureParagraphPills(width float32) ([]bandRequest,
 	if p == nil || p.state == nil || !notesPillPerParagraph {
 		return nil, nil
 	}
-	// Collapsed only. present() covers "there is something to draw at all";
-	// Pill covers "and it is closed".
-	if !p.note.present() || !p.note.Pill {
-		return nil, nil
-	}
 	plan := buildChapterPlan(p.state, appPrefs(), p.state.Bible)
 	groups := chapterNoteGroups(p.state, plan, p.verses)
-	if len(groups) < 2 {
-		// One noted paragraph is the single-sticker case already: its count and
-		// its position agree, and a second code path for it would only be
-		// another way to get it wrong.
+	// One question, asked in one place: is this the state in which the pills are
+	// how the received set is represented? Every reason to draw or not draw them
+	// lives in receivedSetShownAs, so the enumeration can ask the same question
+	// without re-deriving the answer and drifting from it.
+	if receivedSetShownAs(plan, p.note, len(groups)) != shownAsPills {
 		return nil, nil
 	}
 	req := make([]bandRequest, 0, len(groups))
