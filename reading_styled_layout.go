@@ -121,6 +121,31 @@ type chapterLayout struct {
 	BandLastLine int
 	BandY        float32
 	BandH        float32
+
+	// Bands is every band reserved by the multi-band request, in line order.
+	// Empty whenever the single-band fields above are in force, so a reader of
+	// this struct can tell which path ran by asking which is populated.
+	Bands []noteBand
+}
+
+// bandRequest asks for one paragraph's band: the verse that finds the
+// paragraph, the height the pane measured for it, and how many notes that
+// paragraph carries — the count belongs to the request because only the plan
+// knows it, and only the layout knows where it lands.
+type bandRequest struct {
+	Verse int
+	H     float32
+	Count int
+}
+
+// noteBand is one reserved band: where it sits, which paragraph it belongs to,
+// and what it is standing for.
+type noteBand struct {
+	Line     int // the line the band opens above
+	LastLine int // the last line of the paragraph it belongs to
+	Y, H     float32
+	Verse    int // the anchor verse that found this paragraph
+	Count    int // notes this paragraph carries, for the pill's own label
 }
 
 // styledMeasure measures one run's text width at its rendered size.
@@ -164,6 +189,13 @@ type styledLayoutParams struct {
 	// "\n" into the model and change what a reader copies.
 	BandVerse int
 	BandH     float32
+
+	// Bands is the MULTI-BAND request, one entry per paragraph that carries
+	// notes, and it REPLACES BandVerse/BandH when non-empty. Additive on
+	// purpose: the single-band fields above are what every surface and every
+	// existing test still drives, and this experiment must not be able to
+	// disturb them. Empty = the single-band path below, unchanged.
+	Bands []bandRequest
 }
 
 // layoutChapter lays the chapter out as styled runs. It mirrors rewrap's
@@ -207,7 +239,26 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		// and no run's X/W. The band therefore remains ADVANCE — disjoint
 		// from every line box, so no wash can reach it.
 		bandOpensHere := false
-		if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
+		bandIndex := -1
+		if len(p.Bands) > 0 {
+			// At most ONE band per paragraph: two notes in one paragraph share
+			// a pill, which is the whole point of grouping them. The first
+			// request this paragraph carries wins and the rest are its
+			// company, already counted in Count.
+			for _, br := range p.Bands {
+				if br.H <= 0 || !paraCarriesVerse(para, br.Verse) {
+					continue
+				}
+				y += br.H
+				bandIndex = len(lay.Bands)
+				lay.Bands = append(lay.Bands, noteBand{
+					Line: len(lay.Lines), LastLine: -1,
+					Y: y - br.H, H: br.H, Verse: br.Verse, Count: br.Count,
+				})
+				bandOpensHere = true
+				break
+			}
+		} else if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
 			y += p.BandH
 			lay.BandLine = len(lay.Lines)
 			lay.BandY, lay.BandH = y-p.BandH, p.BandH
@@ -331,7 +382,11 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		}
 		flushLine(false)
 		if bandOpensHere {
-			lay.BandLastLine = len(lay.Lines) - 1
+			if bandIndex >= 0 {
+				lay.Bands[bandIndex].LastLine = len(lay.Lines) - 1
+			} else {
+				lay.BandLastLine = len(lay.Lines) - 1
+			}
 		}
 	}
 

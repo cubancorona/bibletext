@@ -1,0 +1,103 @@
+package bibletext
+
+import "testing"
+
+// The geometry the multi-band path must hold, and it is the same property the
+// single band was built around: a band is ADVANCE, never line height, so no
+// line box covers it and no wash can reach into it. With several bands that
+// has to be true of each one independently, and they must not overlap.
+func TestEveryBandIsDisjointFromEveryLine(t *testing.T) {
+	verses := longEnoughForTwoParagraphs()
+	paras := groupVersesIntoParagraphs(verses)
+	if len(paras) < 2 {
+		t.Fatalf("fixture must break into 2+ paragraphs, got %d", len(paras))
+	}
+	// One band on the first paragraph, one on the last.
+	first := paras[0][0].Verse
+	last := paras[len(paras)-1][0].Verse
+
+	lay := layoutForBands(t, verses, []bandRequest{
+		{Verse: first, H: 40, Count: 2},
+		{Verse: last, H: 55, Count: 3},
+	})
+	if len(lay.Bands) != 2 {
+		t.Fatalf("want a band per noted paragraph, got %d", len(lay.Bands))
+	}
+	// Each band carries its own paragraph's count, not the chapter's total.
+	if lay.Bands[0].Count != 2 || lay.Bands[1].Count != 3 {
+		t.Errorf("bands must carry their own paragraph's count, got %d and %d",
+			lay.Bands[0].Count, lay.Bands[1].Count)
+	}
+	// Disjoint from every line box.
+	for bi, b := range lay.Bands {
+		if b.H <= 0 {
+			t.Errorf("band %d reserved no height", bi)
+		}
+		for li, ln := range lay.Lines {
+			if b.Y < ln.Y+ln.H && ln.Y < b.Y+b.H {
+				t.Errorf("band %d [%.1f,%.1f) overlaps line %d [%.1f,%.1f); a band is "+
+					"advance, so no line box may cover it or a wash will reach in",
+					bi, b.Y, b.Y+b.H, li, ln.Y, ln.Y+ln.H)
+			}
+		}
+	}
+	// And disjoint from each other.
+	for i := 1; i < len(lay.Bands); i++ {
+		a, b := lay.Bands[i-1], lay.Bands[i]
+		if a.Y+a.H > b.Y {
+			t.Errorf("bands %d and %d overlap: [%.1f,%.1f) then [%.1f,%.1f)",
+				i-1, i, a.Y, a.Y+a.H, b.Y, b.Y+b.H)
+		}
+		if a.Line >= b.Line {
+			t.Errorf("bands must come out in line order, got lines %d then %d", a.Line, b.Line)
+		}
+	}
+	// Each band knows where its paragraph ends — the scroll target needs it.
+	for bi, b := range lay.Bands {
+		if b.LastLine < b.Line {
+			t.Errorf("band %d: last line %d is before its own line %d", bi, b.LastLine, b.Line)
+		}
+	}
+}
+
+// Two notes in ONE paragraph share a pill: that is what grouping them means.
+func TestOneParagraphReservesOneBand(t *testing.T) {
+	verses := longEnoughForTwoParagraphs()
+	paras := groupVersesIntoParagraphs(verses)
+	a := paras[0][0].Verse
+	b := paras[0][len(paras[0])-1].Verse
+	if a == b {
+		t.Skip("fixture's first paragraph holds one verse")
+	}
+	lay := layoutForBands(t, verses, []bandRequest{
+		{Verse: a, H: 40, Count: 2}, {Verse: b, H: 40, Count: 2},
+	})
+	if len(lay.Bands) != 1 {
+		t.Fatalf("both requests fall in one paragraph, so one band: got %d", len(lay.Bands))
+	}
+}
+
+// An empty request leaves the single-band path exactly as it was.
+func TestNoBandRequestLeavesTheSingleBandPathAlone(t *testing.T) {
+	verses := longEnoughForTwoParagraphs()
+	lay := layoutForBands(t, verses, nil)
+	if len(lay.Bands) != 0 {
+		t.Errorf("no request, yet %d multi-bands were reserved", len(lay.Bands))
+	}
+	if lay.BandLine != -1 {
+		t.Errorf("no request and no single band, yet BandLine = %d", lay.BandLine)
+	}
+}
+
+// layoutForBands lays a chapter out with the given multi-band request, using
+// the same fixed measure and params the single-band tests use.
+func layoutForBands(t *testing.T, verses []Verse, bands []bandRequest) *chapterLayout {
+	t.Helper()
+	st := psalm23State()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	p := testLayoutParams
+	p.Width = 300
+	p.Bands = bands
+	return layoutChapter(st, verses, p, fixedMeasure)
+}
