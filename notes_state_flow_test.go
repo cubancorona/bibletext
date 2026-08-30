@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"fyne.io/fyne/v2"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -364,6 +366,20 @@ type planSnap struct {
 	// then be checking itself. groups is what that answer was given.
 	shownAs receivedShownAs
 	groups  int
+
+	// AND WHAT THE PANE ACTUALLY DREW. The three fields above are the model's
+	// account of itself; these two are the styled pane's. Both are needed,
+	// because the defect this axis was added for lives in the SEAM: the model
+	// said the reader's own note was on screen while the pane, having zeroed its
+	// geometry for the pills, drew nothing for it. An enumeration that reads
+	// only the model cannot see that — measured: breaking the pane's guard
+	// changed the model-only run not at all.
+	//
+	// 0.6ms a pane, so the whole space costs well under two seconds.
+	paneSticker bool
+	panePills   int
+	ownFocused  bool
+	activeNote  string
 }
 
 func takePlanSnap(st *AppState) planSnap {
@@ -377,9 +393,17 @@ func takePlanSnap(st *AppState) planSnap {
 			snap.passageNotes++
 		}
 	}
-	snap.groups = len(chapterNoteGroups(st, snap.plan,
-		st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)))
+	verses := st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)
+	snap.groups = len(chapterNoteGroups(st, snap.plan, verses))
 	snap.shownAs = receivedSetShownAs(snap.plan, styledNoteFor(st), snap.groups)
+	snap.ownFocused = isOwnLiveNote(st)
+	snap.activeNote = st.ActiveNote
+	if len(verses) > 0 {
+		pane := newStyledReadingPane(st, verses)
+		pane.Resize(fyne.NewSize(320, 900))
+		snap.paneSticker = pane.noteGeom.present
+		snap.panePills = len(pane.pillGeoms)
+	}
 	return snap
 }
 
@@ -692,6 +716,27 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 		}
 		if s.snap.shownAs == shownAsNothing {
 			bad = append(bad, "N9-set-unrepresented@"+s.when)
+		}
+	}
+
+	// N10 — what the mirror says is on screen is actually DRAWN. The model and
+	// the pane are two accounts of one page and they can disagree: the pane
+	// decides its own geometry, and zeroing the wrong one blanks a note the
+	// model still believes is there. The reader's own note is the sharp case,
+	// because nothing else on the page speaks for it — a received note at least
+	// has the rest of its set — so it gets its own arm.
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		if !s.snap.featureOn {
+			continue
+		}
+		if s.snap.ownFocused && !s.snap.paneSticker {
+			bad = append(bad, "N10-own-note-not-drawn@"+s.when)
+		}
+		if s.snap.activeNote != "" && !s.snap.paneSticker && s.snap.panePills == 0 {
+			bad = append(bad, "N10-nothing-drawn@"+s.when)
 		}
 	}
 

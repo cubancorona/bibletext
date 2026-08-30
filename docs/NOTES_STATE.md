@@ -630,6 +630,21 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   `styledNote.Pill`, which is true only when the sticker IS the received set's
   collapsed form.* Still violated by `X16` on the three surfaces that have no
   pill row, which is 18 cells of the enumeration.
+- **N10 — What the mirror says is on screen is actually DRAWN.** The model and
+  the pane are two accounts of one page, and they can disagree: the pane owns
+  its geometry, and zeroing the wrong one blanks a note the model still
+  believes is there. The reader's own note is the sharp case — nothing else on
+  the page speaks for it, where a received note at least has the rest of its
+  set — so it has its own arm.
+  *Added because the enumeration could not see the defect it was extended for.*
+  With the snapshot reading only the model, breaking the pane's stand-down
+  guard changed the run NOT AT ALL: still 18 violations, all X16. The model
+  went on reporting the received set as represented by the pills, which was
+  true, while the pane had blanked the own note beside them. The snapshot now
+  builds the styled pane and records what it drew — 0.6ms each, under two
+  seconds for the space — and the same mutation produces 18
+  `N10-own-note-not-drawn@verb`. Only at the post-verb moment: navigation
+  resets focus, so by the next snapshot there is no own note to draw.
 
 ## Incoherent states
 
