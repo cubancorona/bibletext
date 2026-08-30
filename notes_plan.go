@@ -728,11 +728,15 @@ type noteParagraphGroup struct {
 
 // noteAnchorVerse is the verse a drawn note hangs from: the first verse of its
 // first run that lands in this chapter. Zero when it has no home here.
-func noteAnchorVerse(d drawnNote) int {
-	for _, r := range d.Placement.Here {
-		if r.Lo > 0 {
-			return r.Lo
-		}
+// noteAnchorVerse is the verse a note's band hangs from, on the chapter being
+// read. It asks placementRunOn — the SAME predicate the plan used to decide the
+// note belongs on this chapter at all — because the two must agree: a note in
+// plan.Notes with no anchor here is counted by the single pill and drawn by no
+// pill, which is how the Romans doxology (Here empty, the whole anchor in
+// Elsewhere) went missing from the per-paragraph model.
+func noteAnchorVerse(d drawnNote, chapter int) int {
+	if r, ok := placementRunOn(d.Placement, chapter); ok && r.Lo > 0 {
+		return r.Lo
 	}
 	return 0
 }
@@ -745,10 +749,11 @@ func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGr
 	if len(paras) == 0 || len(notes) == 0 {
 		return nil
 	}
+	chapter := paras[0][0].Chapter
 	byPara := map[int]int{} // paragraph index -> position in out
 	var out []noteParagraphGroup
 	for _, d := range notes {
-		v := noteAnchorVerse(d)
+		v := noteAnchorVerse(d, chapter)
 		if v == 0 {
 			continue
 		}
@@ -820,6 +825,15 @@ func chapterNoteGroups(state *AppState, plan chapterPlan, verses []Verse) []note
 func focusNoteAtVerse(state *AppState, verse int) {
 	if state == nil || verse <= 0 || state.Bible == nil {
 		return
+	}
+	// Pressing a paragraph's pill is the reader choosing THAT note as the
+	// page's reason, exactly as pressing the single pill is — so a foreign
+	// mark stands aside and the suppression it caused releases. The same three
+	// lines guard restoreCurrentNote and advanceNoteFocus; without them the
+	// press re-derives into a still-suppressed plan, the pill stays a pill,
+	// and the reader gets no feedback at all.
+	if state.mark.live() && !state.mark.fromNote() {
+		state.clearMark()
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)

@@ -770,11 +770,15 @@ func applyNoteForCurrentChapter(state *AppState) {
 		// Only then. One paragraph carrying every note is not a chapter-wide
 		// fact — the pill's count and its position already agree, and moving
 		// it to the top would take a true anchor away for nothing.
-		if !notesPillPerParagraph {
-			verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
-			if len(groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)) > 1 {
-				state.NoteVerseLo = 0
-			}
+		// Unconditional, and deliberately not gated on the pill flag: this is
+		// SHARED state and only the styled pane draws pills. iOS, macOS and
+		// Android draw the single sticker whatever the flag says, and gating
+		// the parking put their sticker back on an arbitrary paragraph. It
+		// costs the pane nothing either — with pills in force its own sticker
+		// stands down and reserves no band, so the parked anchor goes unread.
+		verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+		if len(groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)) > 1 {
+			state.NoteVerseLo = 0
 		}
 		return
 	}

@@ -432,6 +432,16 @@ func (p *styledReadingPane) highlightY() float32 {
 		li <= p.lastLineOfBandParagraph() {
 		return p.lay.BandY
 	}
+	// The same rule for the per-paragraph pills, which the branch above cannot
+	// serve: with pills in force the single sticker stands down, so
+	// noteGeom.present is false and BandLine stays -1 by construction. Each
+	// band already knows the span of lines its paragraph occupies, so the
+	// paragraph carrying the highlight scrolls to its own pill.
+	for _, b := range p.lay.Bands {
+		if li >= b.Line && li <= b.LastLine {
+			return b.Y
+		}
+	}
 	return p.lay.Lines[li].Y
 }
 

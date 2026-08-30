@@ -337,3 +337,185 @@ func TestTheSinglePillStillDisclosesUnplacedNotes(t *testing.T) {
 			"still be disclosed to the reader, or it is silently unreachable", who)
 	}
 }
+
+// A pill press is the reader choosing that note as the page's reason, so a
+// foreign mark stands aside — exactly as it does for the single pill
+// (restoreCurrentNote) and the counts region (advanceNoteFocus). Without it the
+// press re-derives into a still-suppressed plan and NOTHING happens: the pill
+// stays a pill, no bubble, no wash, no feedback. restoreCurrentNote's own
+// comment records this failure being found once already.
+func TestTappingAPillOpensTheNoteEvenWithASearchResultLit(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, _, _, last, ids := twoNotedParagraphs(t, 1)
+	lastID := ids[1]
+
+	// A search result is lit on this chapter: a foreign mark, so notes are
+	// suppressed and every note reads as collapsed.
+	st.setMark(hlSearch, VerseSpan{VersionID: "web", Book: "John", Chapter: 3, Lo: 1, Hi: 1})
+	applyNoteForCurrentChapter(st)
+	if !notesSuppressed(st) {
+		t.Fatalf("fixture must actually suppress: the mark is not foreign")
+	}
+
+	focusNoteAtVerse(st, last)
+
+	if st.NoteMinimized {
+		t.Errorf("the pill press did nothing visible while a search result was lit — "+
+			"the note stayed collapsed (NoteID=%d)", st.NoteID)
+	}
+	if st.NoteID != lastID {
+		t.Errorf("pressed pill opened note %d, want %d", st.NoteID, lastID)
+	}
+	if st.mark.live() && !st.mark.fromNote() {
+		t.Errorf("the foreign mark survived the press; the suppression it causes " +
+			"never releases and the note can never open")
+	}
+}
+
+// A note can reach this chapter through Placement.Elsewhere rather than
+// Placement.Here — the Romans doxology is the shipping case: filed on WEB
+// Romans 14:24-26, it lives on 16:25-27 in BSB with Here EMPTY. The plan admits
+// it (placementRunOn checks BOTH lists), so the single pill counts it. A pill
+// model that reads only Here drops it: no pill, and absent from every count.
+func TestANoteReachingThisChapterViaElsewhereStillGetsAPill(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st := planTestState(t)
+	st.CurrentVersion = "bsb"
+	// A real-length Romans 16: the doxology maps onto vv25-27, so a chapter
+	// that stops short would drop the note for want of a verse rather than for
+	// the reason under test.
+	long := "This verse is deliberately long so that the paragraph splitter reaches its " +
+		"character threshold and breaks at the next sentence ending, which is here."
+	var rom []Verse
+	for i := 1; i <= 27; i++ {
+		rom = append(rom, Verse{BookName: "Romans", Book: "Romans", Chapter: 16,
+			Verse: i, Text: long})
+	}
+	st.Bible.Verses["Romans"] = map[int][]Verse{16: rom}
+	st.CurrentBook, st.CurrentChapter = "Romans", 16
+
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "Romans", Chapter: 14, VerseLo: 24, VerseHi: 26, Text: "doxology"})
+	paras := groupVersesIntoParagraphs(rom)
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb",
+		Book: "Romans", Chapter: 16, VerseLo: paras[0][0].Verse, Text: "plain"})
+	for _, n := range allNotesForBrowsing(appPrefs()) {
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	applyNoteForCurrentChapter(st)
+
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	if len(plan.Notes) != 2 {
+		t.Fatalf("fixture must put both notes on this chapter, got %d", len(plan.Notes))
+	}
+	groups := groupNotesByParagraph(paras, plan.Notes)
+	counted := 0
+	for _, g := range groups {
+		counted += len(g.Notes)
+	}
+	if counted != len(plan.Notes) {
+		t.Errorf("the pills account for %d of the chapter's %d notes; a note the "+
+			"single pill counts must not vanish from the per-paragraph model",
+			counted, len(plan.Notes))
+	}
+	if len(groups) != 2 {
+		t.Errorf("two notes in two different paragraphs is two groups, got %d", len(groups))
+	}
+}
+
+// The chapter-scope parking (NoteVerseLo = 0, which opens the band at the top)
+// is SHARED state, read by every surface. Only the styled pane draws pills;
+// iOS, macOS and Android still draw the single sticker, and for them a
+// collapsed set spanning several paragraphs is a chapter-wide fact that belongs
+// at the top whatever the pill gate says. Gating the parking on the pill flag
+// moved their sticker back onto an arbitrary paragraph.
+//
+// It costs the styled pane nothing: with pills in force its single sticker
+// stands down and reserves no band, so the parked anchor is simply unused.
+func TestChapterScopeParkingSurvivesThePillGate(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	for _, gateOn := range []bool{false, true} {
+		deleteAllNotes(appPrefs())
+		prev := notesPillPerParagraph
+		notesPillPerParagraph = gateOn
+
+		st, verses, _, _, _ := twoNotedParagraphs(t, 2)
+		if st.NoteVerseLo != 0 {
+			t.Errorf("gate=%v: collapsed notes span two paragraphs, so the single "+
+				"sticker must park at chapter scope; NoteVerseLo=%d",
+				gateOn, st.NoteVerseLo)
+		}
+		// And with the gate on the pane still draws its pills, unaffected.
+		if gateOn {
+			pane := newStyledReadingPane(st, verses)
+			pane.Resize(fyne.NewSize(320, 900))
+			if len(pane.pillGeoms) != 2 {
+				t.Errorf("parking must not cost the pane its pills: got %d, want 2",
+					len(pane.pillGeoms))
+			}
+		}
+		notesPillPerParagraph = prev
+	}
+}
+
+// Scrolling to a highlight inside a banded paragraph must land on the BAND,
+// not on the verse's line — otherwise the pill that explains why the reader is
+// here sits exactly above the fold. The single sticker has had this rule since
+// the bubble could be clipped on arrival; its guard reads noteGeom.present and
+// lay.BandLine, and BOTH are false by construction once the per-paragraph pills
+// are drawn (relayout zeroes noteGeom, and the multi-band path leaves BandLine
+// at -1), so the pill path inherited none of it.
+func TestScrollingToAHighlightLandsOnItsParagraphsPill(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, _, last, _ := twoNotedParagraphs(t, 2)
+	// A search result lit on a verse inside the SECOND noted paragraph.
+	st.setMark(hlSearch, VerseSpan{VersionID: "web", Book: "John", Chapter: 3, Lo: last, Hi: last})
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if len(pane.pillGeoms) != 2 {
+		t.Fatalf("fixture must draw two pills, got %d", len(pane.pillGeoms))
+	}
+	li := pane.highlightFirstLine()
+	if li < 0 {
+		t.Fatalf("fixture must light a highlight")
+	}
+
+	var want float32 = -1
+	for _, b := range pane.lay.Bands {
+		if li >= b.Line && li <= b.LastLine {
+			want = b.Y
+		}
+	}
+	if want < 0 {
+		t.Fatalf("the highlighted line %d is in no banded paragraph; fixture is wrong", li)
+	}
+	if got := pane.highlightY(); got != want {
+		t.Errorf("highlightY() = %.1f, want the band top %.1f — the reader is scrolled "+
+			"%.1fpt past the pill that explains why they are here", got, want, got-want)
+	}
+}

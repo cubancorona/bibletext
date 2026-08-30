@@ -211,28 +211,35 @@ formality: `TestApprovedHighlightTokensStayPinned` and
 highlight is meant to match the app's, and that parity is intended, so any
 change here changes the web reader too.
 
-## Per-paragraph note pills: unplaced notes lose their disclosure
+## Per-paragraph note pills: notes that belong to no paragraph
 
 Gated behind `notesPillPerParagraph` (off by default), so nothing ships blind.
 
-When the chapter-scope single pill is drawn it discloses notes this translation
-cannot place: `Notes · 2 · 1 not shown`. When the per-paragraph pills take over
-(gate on, two or more noted paragraphs) every pill counts only its own
-paragraph, and an unplaced note belongs to no paragraph — so the disclosure
-disappears and the note becomes unreachable from the reading view.
+The pills are per paragraph, and two kinds of note belong to no paragraph. Both
+are counted by the chapter-scope single pill and both fall out of the reading
+view once the pills take over:
 
-The design question is where a paragraph-less note's disclosure goes. Options
-considered:
+- **unplaced notes** — filed on this book, with no home in the translation
+  being read. The single pill discloses them (`Notes · 2 · 1 not shown`); no
+  pill mentions them.
+- **chapter-level notes** — anchored at `VerseLo 0`, on the whole chapter.
+  They sit in `plan.Notes` with `Here = [{c 0 0}]`, so `noteAnchorVerse`
+  returns 0 and `groupNotesByParagraph` skips them. With two ordinary notes
+  and one chapter-level note, the pills account for 2 of 3.
 
-- a chapter-top pill carrying only the unplaced sentence, reusing
-  `stickerUnplacedOnlyWho` — principled (chapter-scope things go to the top,
-  the same reasoning that puts the collapsed single pill there), but it can
-  collide with a first-paragraph pill at the same band verse, and the
-  placement loop keeps only the first match per band
+One decision covers both: where does a paragraph-less note's pill go? Options:
+
+- a chapter-top pill carrying them, reusing `stickerUnplacedOnlyWho` for the
+  unplaced sentence — principled (chapter-scope things go to the top, the same
+  reasoning that puts the collapsed single pill there), but it can collide with
+  a first-paragraph pill at the same band verse, and the placement loop keeps
+  only the first match per band
 - a suffix on the first or last pill — misattributes a chapter-scope fact to
   one paragraph
-- suppressing the pills whenever an unplaced note exists — preserves the
+- suppressing the pills whenever either kind is present — preserves today's
   disclosure exactly but silently disables the feature
 
+Until it is decided the pills' counts do not sum to the chapter's note total,
+which is the honesty property the single pill has always had.
 `TestTheSinglePillStillDisclosesUnplacedNotes` pins the shipped gate-off
-guarantee so the ungated path cannot regress while this is open.
+guarantee so the ungated path cannot regress meanwhile.
