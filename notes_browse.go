@@ -54,6 +54,27 @@ const (
 	browsePreviewMaxLines = 4
 )
 
+// browseRowTrailPad is the row's RIGHT padding, and it is not a density choice
+// like the other three: the list's scrollbar is an overlay drawn on top of the
+// rows at the scroll's right edge, not a column laid out beside them. It is
+// SizeNameScrollBarSmall (3) at rest and SizeNameScrollBar (16) while the
+// pointer is over it, so a row padded by browseRowPad (3) put its trailing
+// controls — the delete bin, and the date stamp on the row above it — exactly
+// flush at rest and 13pt UNDER the bar on hover. On a 19pt icon button that is
+// most of the target: the reader reaches for the bin and grabs the scrollbar.
+//
+// Reserving the bar's widest size means the controls never move when it
+// expands, which is worth more than the 13pt of preview width it costs.
+// Read from the theme rather than written as a number so it tracks a theme
+// that sizes its scrollbars differently. Pinned by
+// TestNoteRowControlsClearTheScrollbar.
+func browseRowTrailPad() float32 {
+	if bar := theme.Size(theme.SizeNameScrollBar); bar > browseRowPad {
+		return bar
+	}
+	return browseRowPad
+}
+
 // browseRowTheme is the row-scoped override that makes the browser dense on
 // BOTH form factors: smaller body text, tighter Label inner padding, tighter
 // wrapped-line spacing. Desktop had NO row override at all — the content
@@ -907,7 +928,7 @@ func newBrowseRow(state *AppState, pal palette) *browseRow {
 	rows := container.New(layout.NewCustomPaddedVBoxLayout(browseRowGap), head, body, r.quiet)
 
 	inner := container.New(
-		layout.NewCustomPaddedLayout(browseRowPad, browseRowPad, browseRowPad, browseRowPad),
+		layout.NewCustomPaddedLayout(browseRowPad, browseRowPad, browseRowPad, browseRowTrailPad()),
 		container.NewThemeOverride(rows, browseRowTheme{Theme: browseRowBaseTheme(state)}))
 	r.card = newSearchResultCard(state, Verse{}, inner, pal)
 	r.card.onTap = func() { openNote(state, r.note) }
