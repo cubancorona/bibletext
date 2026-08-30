@@ -558,3 +558,53 @@ func TestThePillLabelIsCentredInItsFrame(t *testing.T) {
 		}
 	}
 }
+
+// The pills take every colour from the palette, so they follow the theme the
+// same way the single sticker does. Pinned in BOTH themes: a pill that read a
+// literal, or reused a light-only colour, would be invisible or garish on the
+// other ground — and the pills are drawn on the reading page, where a wrong
+// ink is at its most obvious.
+func TestThePillsTakeTheirColoursFromTheActiveTheme(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	for _, tc := range []struct {
+		name string
+		pal  palette
+	}{{"light", lightPalette}, {"dark", darkPalette}} {
+		t.Run(tc.name, func(t *testing.T) {
+			deleteAllNotes(appPrefs())
+			st, verses, _, _, _ := twoNotedParagraphs(t, 2)
+			pane := newStyledReadingPane(st, verses)
+			pane.pal = tc.pal
+			rend, ok := pane.CreateRenderer().(*styledPaneRenderer)
+			if !ok {
+				t.Fatalf("unexpected renderer type")
+			}
+			rend.Layout(fyne.NewSize(320, 900))
+			if len(rend.pillFrames) == 0 {
+				t.Fatalf("no pills built")
+			}
+			for i, f := range rend.pillFrames {
+				if f.FillColor != tc.pal.SurfaceAlt {
+					t.Errorf("pill %d fill is %v, want the theme's SurfaceAlt %v",
+						i, f.FillColor, tc.pal.SurfaceAlt)
+				}
+				if f.StrokeColor != tc.pal.Border {
+					t.Errorf("pill %d stroke is %v, want the theme's Border %v",
+						i, f.StrokeColor, tc.pal.Border)
+				}
+			}
+			for i, l := range rend.pillLabels {
+				if l.Color != tc.pal.TextMuted {
+					t.Errorf("pill %d label ink is %v, want the theme's TextMuted %v",
+						i, l.Color, tc.pal.TextMuted)
+				}
+			}
+		})
+	}
+}
