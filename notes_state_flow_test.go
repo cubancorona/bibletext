@@ -338,7 +338,7 @@ func TestNotesStateSpace(t *testing.T) {
 	// the doc's combined line. EMPTY since the sixth pass — zero named
 	// violations — and the set-equality assertion above is what now holds it
 	// there.
-	expectedHits := map[string]int{"X16": 48}
+	expectedHits := map[string]int{"X16": 168}
 	for name, want := range expectedHits {
 		if hits[name] != want {
 			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
@@ -756,10 +756,15 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 	// construction: receivedSetShownAs returns one. That exclusivity is the
 	// point of naming the value — the bug existed while the same question was
 	// being answered independently in two places.
+	// Three moments, including the one the reader was actually looking at when
+	// they reached for the verb. N9 is a model-only question, so judging it
+	// there costs nothing — unlike N10, which needs a pane and is judged only
+	// where one was built. (The pre-verb state is not unwatched even for N10:
+	// the verb=none cells make it a post-verb state with the same axes.)
 	for _, s := range []struct {
 		when string
 		snap planSnap
-	}{{"verb", o.snapVerb}, {"nav", o.snapNav}} {
+	}{{"shown", o.snapShown}, {"verb", o.snapVerb}, {"nav", o.snapNav}} {
 		if !s.snap.featureOn || len(s.snap.plan.Notes) == 0 {
 			continue
 		}

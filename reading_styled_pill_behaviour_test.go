@@ -872,3 +872,52 @@ func TestASuppressedOwnNoteDoesNotPassAsTheReceivedSetsChip(t *testing.T) {
 			note.Who, len(plan.Notes), got)
 	}
 }
+
+// Scrolling to a highlight must land on the TOPMOST thing reserved above that
+// paragraph, not merely on the sticker's band. Once the two reservations became
+// independent a paragraph can carry a pill AND the sticker, pill above — and
+// highlightY's first branch returns the sticker's band unconditionally, which
+// puts the pill it sits under above the fold. Same failure as scrolling past a
+// pill entirely, reintroduced for the shared-paragraph case.
+func TestScrollingLandsOnTheTopmostBandOfTheParagraph(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, first, _, _ := twoNotedParagraphs(t, 2)
+	mine := seedOwnNote(t, first+1, "mine, in the friend's paragraph")
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if !pane.noteGeom.present || pane.lay.BandLine < 0 || len(pane.lay.Bands) == 0 {
+		t.Fatalf("fixture must reserve both: sticker=%v bandLine=%d bands=%d",
+			pane.noteGeom.present, pane.lay.BandLine, len(pane.lay.Bands))
+	}
+	li := pane.highlightFirstLine()
+	if li < 0 {
+		t.Skip("no highlight lit in this fixture")
+	}
+
+	// The topmost band whose paragraph carries the highlighted line.
+	top := float32(-1)
+	if li >= pane.lay.BandLine && li <= pane.lastLineOfBandParagraph() {
+		top = pane.lay.BandY
+	}
+	for _, b := range pane.lay.Bands {
+		if li >= b.Line && li <= b.LastLine && (top < 0 || b.Y < top) {
+			top = b.Y
+		}
+	}
+	if top < 0 {
+		t.Skip("the highlighted line is in no banded paragraph")
+	}
+	if got := pane.highlightY(); got != top {
+		t.Errorf("highlightY() = %.1f, want the topmost band %.1f — the reader is "+
+			"scrolled %.1fpt past what sits above the paragraph", got, top, got-top)
+	}
+}

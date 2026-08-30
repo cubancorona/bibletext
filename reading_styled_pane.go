@@ -437,19 +437,24 @@ func (p *styledReadingPane) highlightY() float32 {
 	// from the band's own line onward through that paragraph therefore
 	// scrolls to the band; the band sits above the whole paragraph now, so
 	// the anchor verse's line is at or below it rather than equal to it.
+	// The TOPMOST band reserved above this paragraph, not the first one found.
+	// A paragraph can carry both a pill and the sticker since the two
+	// reservations became independent (layoutChapter) — the reader's own note
+	// open where a friend's notes also live — with the pill above. Returning the
+	// sticker's band there scrolled the pill it sits under above the fold, which
+	// is the same failure as scrolling past a pill entirely.
+	top := float32(-1)
 	if p.noteGeom.present && p.lay.BandLine >= 0 && li >= p.lay.BandLine &&
 		li <= p.lastLineOfBandParagraph() {
-		return p.lay.BandY
+		top = p.lay.BandY
 	}
-	// The same rule for the per-paragraph pills, which the branch above cannot
-	// serve: with pills in force the single sticker stands down, so
-	// noteGeom.present is false and BandLine stays -1 by construction. Each
-	// band already knows the span of lines its paragraph occupies, so the
-	// paragraph carrying the highlight scrolls to its own pill.
 	for _, b := range p.lay.Bands {
-		if li >= b.Line && li <= b.LastLine {
-			return b.Y
+		if li >= b.Line && li <= b.LastLine && (top < 0 || b.Y < top) {
+			top = b.Y
 		}
+	}
+	if top >= 0 {
+		return top
 	}
 	return p.lay.Lines[li].Y
 }

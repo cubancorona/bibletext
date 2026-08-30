@@ -34,7 +34,7 @@
 > `turnNotesOff`, the off-branch clear, and `renumberMarkForVersion`; the final
 > enumeration recorded zero named violations for five passes. The sixth added
 > the reader's OWN notes, the presentation gate and a second noted paragraph as
-> axes — 1280 states became 12800 — and reopened the table: `X16` covers 48
+> axes — 1280 states became 12800 — and reopened the table: `X16` covers 168
 > cells. Of the older entries
 > only `X8`, pinned by its own named test outside the enumerations, remains
 > open.
@@ -637,7 +637,7 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   repair, was itself blanked by them. Fixed: the stand-down is keyed on
   `styledNote.Pill`, which is true only when the sticker IS the received set's
   collapsed form.* Still violated by `X16` on the three surfaces that have no
-  pill row, which is 48 cells of the enumeration.
+  pill row, which is 168 cells of the enumeration, judged at all three moments.
 - **N10 — What the mirror says is on screen is actually DRAWN.** The model and
   the pane are two accounts of one page, and they can disagree: the pane owns
   its geometry, and zeroing the wrong one blanks a note the model still
@@ -1096,8 +1096,10 @@ not change N" (`notes_plan.go`, `appleStickerPush`) still holds.
 Not a regression and not introduced by the pills: this is what every surface
 did before, and what the three without a pill row still do.
 
-**Evidence.** 48 cells of the notes enumeration, every one of them
-`focus=own pills=false`. The same cells with `pills=true` come out clean, which
+**Evidence.** 168 cells of the notes enumeration, every one of them
+`focus=own pills=false`. It was 48 while N9 judged only the post-verb and
+post-navigation moments; the moment the reader was actually looking at the page
+when they reached for the verb went unjudged, and carried 120 more. The same cells with `pills=true` come out clean, which
 is the X15 fix measured rather than asserted — the pills are what represents the
 set once the sticker is busy.
 
