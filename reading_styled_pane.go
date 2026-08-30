@@ -269,7 +269,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	// height to reserve, and the pane is the only thing that can measure it.
 	pillReq, pillGeoms := p.measureParagraphPills(avail)
 	p.pillGeoms = pillGeoms
-	if len(pillGeoms) > 0 && p.note.Pill {
+	if len(pillGeoms) > 0 && stickerIsTheReceivedSet(p.note) {
 		// One representation of the received set at a time: the sticker stands
 		// down while the pills are drawn, or the reader sees the same notes
 		// twice. Only when the sticker IS that set's collapsed form, though —

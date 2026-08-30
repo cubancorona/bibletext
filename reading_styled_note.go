@@ -776,19 +776,28 @@ func (r receivedShownAs) String() string {
 // disagree about what the reader is looking at. groups is the number of noted
 // paragraphs chapterNoteGroups found, which is zero whenever the pill gate is
 // off — so the gate needs no separate argument here.
+// stickerIsTheReceivedSet reports whether the single sticker IS this chapter's
+// received notes in their collapsed form — the ONE state in which the pills are
+// a second spelling of it and must replace it.
+//
+// styledNote.Pill alone is not that question. Pill means "the sticker is
+// CLOSED", and a focused own note is closed too whenever a foreign mark
+// suppresses the chapter — appleStickerPush's own-note arm returns pill=true
+// under notesSuppressed (notes_plan.go). Keying on Pill therefore treated the
+// reader's own note as the friends' chip: reachable by arriving at the chapter
+// through a search result and then opening your own note, which blanked it.
+func stickerIsTheReceivedSet(note styledNote) bool {
+	return note.Pill && !note.Own
+}
+
 func receivedSetShownAs(plan chapterPlan, note styledNote, groups int) receivedShownAs {
 	if len(plan.Notes) == 0 || !note.present() {
 		return shownAsNothing
 	}
+	// OWN FIRST, and the order is the fix rather than a preference: Own says
+	// WHAT the sticker is showing, Pill only says whether it is closed, and the
+	// two overlap under suppression. The narrower fact has to win.
 	switch {
-	case note.Pill:
-		// The sticker IS the set's collapsed form. The pills replace it only
-		// where they say strictly more: two or more noted paragraphs. With one,
-		// the sticker's count and its position already agree.
-		if groups >= 2 {
-			return shownAsPills
-		}
-		return shownAsSticker
 	case note.Own:
 		// The sticker is busy with a note that is NOT in this set and carries no
 		// count of it, so only the pills can speak for the set — at any group
@@ -800,6 +809,14 @@ func receivedSetShownAs(plan chapterPlan, note styledNote, groups int) receivedS
 			return shownAsPills
 		}
 		return shownAsNothing
+	case note.Pill:
+		// The sticker IS the set's collapsed form. The pills replace it only
+		// where they say strictly more: two or more noted paragraphs. With one,
+		// the sticker's count and its position already agree.
+		if groups >= 2 {
+			return shownAsPills
+		}
+		return shownAsSticker
 	default:
 		// An open received note: its who line carries the count.
 		return shownAsCount

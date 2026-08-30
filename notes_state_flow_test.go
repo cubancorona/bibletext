@@ -37,6 +37,33 @@ import (
 	"fyne.io/fyne/v2/test"
 )
 
+// enumerationChapter is John 3 as the ENUMERATION reads it, and it exists
+// because the sample data's John 3 is a SINGLE VERSE (v16). One verse is one
+// paragraph, so chapterNoteGroups could never return more than one group and
+// PILLS_SET — the state the per-paragraph pills exist for — was not enumerated
+// at all while the axis was being added for it. Measured: sample John 3 = 1
+// verse, 1 paragraph, and every received note the harness files lands on v16.
+func enumerationChapter() []Verse {
+	long := "This verse is deliberately long so that the paragraph splitter reaches " +
+		"its character threshold and breaks at the next sentence ending, which is here."
+	out := make([]Verse, 0, 20)
+	for i := 1; i <= 20; i++ {
+		out = append(out, Verse{BookName: "John", Book: "John", Chapter: 3, Verse: i, Text: long})
+	}
+	return out
+}
+
+// enumerationSpreadVerse is a verse in a DIFFERENT paragraph from 16, where the
+// harness files every other received note.
+func enumerationSpreadVerse() int {
+	for _, para := range groupVersesIntoParagraphs(enumerationChapter()) {
+		if !paraCarriesVerse(para, 16) {
+			return para[0].Verse
+		}
+	}
+	return 0
+}
+
 // --- the variables ----------------------------------------------------------
 
 // notePlacement is where the chapter's notes live relative to the translation
@@ -108,6 +135,11 @@ type notesWorld struct {
 	// received set fall off the page (X15).
 	ownNote bool
 
+	// spread — a second received note, in a DIFFERENT paragraph from the one at
+	// v16. Without it chapterNoteGroups tops out at one group and the pills draw
+	// only in the own-note case, so the multi-paragraph states go unvisited.
+	spread bool
+
 	// pills — notesPillPerParagraph, the presentation gate. Off is every
 	// shipped build and all three native surfaces; on is the styled pane's
 	// pill row. It belongs on the cross-product because it decides WHICH of the
@@ -116,8 +148,8 @@ type notesWorld struct {
 }
 
 func (w notesWorld) id() string {
-	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v pills=%v",
-		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb, w.ownNote, w.pills)
+	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v spread=%v pills=%v",
+		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb, w.ownNote, w.spread, w.pills)
 }
 
 // --- what is broken today ---------------------------------------------------
@@ -244,26 +276,28 @@ func TestNotesStateSpace(t *testing.T) {
 						for _, arrival := range []bool{false, true} {
 							for _, verb := range []noteVerb{verbNone, verbHide, verbShow, verbDelete, verbNotesOff} {
 								for _, ownNote := range []bool{false, true} {
-									for _, pills := range []bool{false, true} {
-										w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb, ownNote, pills}
-										seen++
-										obs, offered := runNotesFlow(t, w)
-										if !offered {
-											skipped++
-											continue
-										}
-										for _, inv := range checkNotesInvariants(w, obs) {
-											total++
-											named := ""
-											for _, d := range knownIncoherent {
-												if d.covers(w, inv) {
-													named = d.name
-													hits[d.name]++
-													break
-												}
+									for _, spread := range []bool{false, true} {
+										for _, pills := range []bool{false, true} {
+											w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb, ownNote, spread, pills}
+											seen++
+											obs, offered := runNotesFlow(t, w)
+											if !offered {
+												skipped++
+												continue
 											}
-											if named == "" {
-												unexplained = append(unexplained, w.id()+" | "+inv)
+											for _, inv := range checkNotesInvariants(w, obs) {
+												total++
+												named := ""
+												for _, d := range knownIncoherent {
+													if d.covers(w, inv) {
+														named = d.name
+														hits[d.name]++
+														break
+													}
+												}
+												if named == "" {
+													unexplained = append(unexplained, w.id()+" | "+inv)
+												}
 											}
 										}
 									}
@@ -304,7 +338,7 @@ func TestNotesStateSpace(t *testing.T) {
 	// the doc's combined line. EMPTY since the sixth pass — zero named
 	// violations — and the set-equality assertion above is what now holds it
 	// there.
-	expectedHits := map[string]int{"X16": 18}
+	expectedHits := map[string]int{"X16": 48}
 	for name, want := range expectedHits {
 		if hits[name] != want {
 			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
@@ -382,7 +416,10 @@ type planSnap struct {
 	activeNote  string
 }
 
-func takePlanSnap(st *AppState) planSnap {
+// withPane says whether to build the styled pane for this snapshot. Only the
+// two moments N10 judges need it; the pre-verb snapshot reads none of the pane
+// fields, and a pane costs 0.6ms across 12800 cells.
+func takePlanSnap(st *AppState, withPane bool) planSnap {
 	snap := planSnap{
 		plan:       buildChapterPlan(st, appPrefs(), st.Bible),
 		suppressed: notesSuppressed(st),
@@ -398,7 +435,7 @@ func takePlanSnap(st *AppState) planSnap {
 	snap.shownAs = receivedSetShownAs(snap.plan, styledNoteFor(st), snap.groups)
 	snap.ownFocused = isOwnLiveNote(st)
 	snap.activeNote = st.ActiveNote
-	if len(verses) > 0 {
+	if withPane && len(verses) > 0 {
 		pane := newStyledReadingPane(st, verses)
 		pane.Resize(fyne.NewSize(320, 900))
 		snap.paneSticker = pane.noteGeom.present
@@ -424,6 +461,7 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
+	bd.Verses["John"][3] = enumerationChapter()
 	st := &AppState{
 		Bible: bd, CurrentBook: "John", CurrentChapter: 3,
 		CurrentVersion: "web", loadPhase: loadReady,
@@ -444,6 +482,17 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	case placeBoth:
 		addNote(appPrefs(), other)
 		addNote(appPrefs(), own)
+	}
+
+	// The second received note, in another paragraph. Not offered on placeNone,
+	// whose whole meaning is that the passage carries nothing.
+	if w.spread {
+		if w.placement == placeNone {
+			return obs, false
+		}
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: enumerationSpreadVerse(),
+			Text: "a note in another paragraph"})
 	}
 
 	// The reader's OWN note, on a DIFFERENT verse from the received ones so it
@@ -528,7 +577,7 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	obs.shownText = st.ActiveNote
 	obs.shownID = st.NoteID
 	obs.shownWasOwn = isOwnLiveNote(st)
-	obs.snapShown = takePlanSnap(st)
+	obs.snapShown = takePlanSnap(st, false)
 	obs.before = allNotesForBrowsing(appPrefs())
 
 	offered := true
@@ -557,11 +606,11 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 
 	obs.text, obs.min, obs.hlOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
 	obs.after = allNotesForBrowsing(appPrefs())
-	obs.snapVerb = takePlanSnap(st)
+	obs.snapVerb = takePlanSnap(st, true)
 
 	addRecentChapter(st, "John", 3) // the next navigation
 	obs.afterText, obs.afterMin, obs.afterHLOn = st.ActiveNote, st.NoteMinimized, st.hasMark()
-	obs.snapNav = takePlanSnap(st)
+	obs.snapNav = takePlanSnap(st, true)
 	return obs, true
 }
 

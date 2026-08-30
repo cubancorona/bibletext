@@ -801,3 +801,74 @@ func TestAPillAndYourOwnNoteShareAParagraphInOrder(t *testing.T) {
 		}
 	}
 }
+
+// styledNote.Pill means "the sticker is CLOSED", which is not the same question
+// as "the sticker IS the received set's collapsed form". A focused own note is
+// closed too whenever a foreign mark suppresses the chapter (notes_plan.go,
+// appleStickerPush's own-note arm returns pill=true under notesSuppressed), so
+// a rule keyed on Pill alone treats the reader's own note as the friends' chip:
+// the pills replace it, the pane zeroes its geometry, and the own note is drawn
+// nowhere — the very failure the pills were made to prevent, reachable by
+// arriving at the chapter through a search result first.
+func TestYourOwnNoteSurvivesPillsWhileASearchResultIsLit(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, first, _, _ := twoNotedParagraphs(t, 2)
+	mine := seedOwnNote(t, first+1, "mine, opened after a search")
+	// The foreign mark first, exactly as arriving through Results does.
+	goToVerseRange(st, "John", 3, 1, 1)
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	if !notesSuppressed(st) {
+		t.Fatalf("fixture must suppress: the mark is not foreign")
+	}
+	note := styledNoteFor(st)
+	if !note.Pill || !note.Own {
+		t.Fatalf("fixture must produce the overlapping state, got Pill=%v Own=%v",
+			note.Pill, note.Own)
+	}
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if !pane.noteGeom.present {
+		t.Errorf("the reader's own note was drawn nowhere: a closed OWN note is not " +
+			"the received set's collapsed form, so the pills must not replace it")
+	}
+}
+
+// And the same confusion the other way, on every surface with no pill row: a
+// suppressed own note reported the set as represented by the sticker, when the
+// sticker was showing "Note from you" and carried no count of the set at all.
+// N9 read that as healthy and X16 undercounted its own extent.
+func TestASuppressedOwnNoteDoesNotPassAsTheReceivedSetsChip(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	prev := notesPillPerParagraph
+	notesPillPerParagraph = false // every shipped build, and all three native surfaces
+	defer func() { notesPillPerParagraph = prev }()
+
+	st, verses, first, _, _ := twoNotedParagraphs(t, 2)
+	mine := seedOwnNote(t, first+1, "mine")
+	goToVerseRange(st, "John", 3, 1, 1)
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	note := styledNoteFor(st)
+	groups := len(chapterNoteGroups(st, plan, verses))
+	if got := receivedSetShownAs(plan, note, groups); got != shownAsNothing {
+		t.Errorf("the sticker is showing %q and counts none of the %d received "+
+			"notes, so the set is represented nowhere; receivedSetShownAs says %v",
+			note.Who, len(plan.Notes), got)
+	}
+}

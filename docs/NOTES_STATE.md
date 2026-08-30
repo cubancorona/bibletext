@@ -33,8 +33,9 @@
 > see the re-measure. The last two enumerated defects, X4 and X11, were fixed by
 > `turnNotesOff`, the off-branch clear, and `renumberMarkForVersion`; the final
 > enumeration recorded zero named violations for five passes. The sixth added
-> the reader's OWN notes and the presentation gate as axes — 1280 states became
-> 6400 — and reopened the table: `X16` covers 18 cells. Of the older entries
+> the reader's OWN notes, the presentation gate and a second noted paragraph as
+> axes — 1280 states became 12800 — and reopened the table: `X16` covers 48
+> cells. Of the older entries
 > only `X8`, pinned by its own named test outside the enumerations, remains
 > open.
 > Sections marked **[INTENDED]** describe the target behaviour at the time this
@@ -233,8 +234,8 @@ and which one is in force is derived, not stored.
 
 | Value | When | Drawn by |
 |---|---|---|
-| `AS_STICKER` | the sticker is that set's collapsed form (`styledNote.Pill`) | the single sticker, "Notes · N" |
-| `AS_PILLS` | `notesPillPerParagraph`, and the sticker is either closed or showing an OWN note | one pill per noted paragraph, each with that paragraph's count |
+| `AS_STICKER` | the sticker is that set's collapsed form — `Pill && !Own` | the single sticker, "Notes · N" |
+| `AS_PILLS` | `notesPillPerParagraph`, and the sticker is either the set's own collapsed form or is showing an OWN note | one pill per noted paragraph, each with that paragraph's count |
 | `AS_COUNT` | a received note is OPEN | its who line, "K of N in this chapter" |
 
 `notesPillPerParagraph` (`notes_plan.go`) gates `AS_PILLS`. It is a package
@@ -242,6 +243,13 @@ variable, default false, flipped only by the dev build's Links panel, so the
 shipped app is always `AS_STICKER` or `AS_COUNT`. Only the styled pane
 (Windows, Linux) can draw `AS_PILLS` at all; iOS, macOS and Android have one
 sticker and no pill row.
+
+`Pill` alone does NOT mean "the sticker is the received set's collapsed form".
+It means the sticker is CLOSED, and a focused own note is closed too whenever a
+foreign mark suppresses the chapter (`appleStickerPush`'s own-note arm returns
+`pill=true` under `notesSuppressed`). The two overlap, `stickerIsTheReceivedSet`
+is the narrowed question — `Pill && !Own` — and everything that asks "are the
+pills a second spelling of the sticker?" must ask that one. See X15.
 
 The axis matters because the three values are not interchangeable: each
 represents the set at a different granularity, and exactly one of them must be
@@ -629,7 +637,7 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   repair, was itself blanked by them. Fixed: the stand-down is keyed on
   `styledNote.Pill`, which is true only when the sticker IS the received set's
   collapsed form.* Still violated by `X16` on the three surfaces that have no
-  pill row, which is 18 cells of the enumeration.
+  pill row, which is 48 cells of the enumeration.
 - **N10 — What the mirror says is on screen is actually DRAWN.** The model and
   the pane are two accounts of one page, and they can disagree: the pane owns
   its geometry, and zeroing the wrong one blanks a note the model still
@@ -1047,6 +1055,35 @@ sticker at once, pill first. Pinned by
 `TestAPillAndYourOwnNoteShareAParagraphInOrder`, each mutation-verified against
 the exact change it guards.
 
+**The first repair was incomplete, and in a way the enumeration could not see.**
+It keyed the stand-down on `styledNote.Pill`, reading it as "the sticker is the
+received set's collapsed form". It is not: `Pill` means CLOSED, and a focused
+own note is closed too whenever a foreign mark suppresses the chapter. So the
+whole failure came back by a slightly longer route — arrive at the chapter
+through a search result, then open one of your own notes — with both halves of
+the repair bypassed:
+
+    gate on,  mark lit -> Pill=true Own=true groups=2 shownAs=pills   sticker=FALSE pills=2
+    gate off, mark lit -> Pill=true Own=true groups=0 shownAs=sticker (N9 reads this as healthy)
+
+The second line is worse than a missed fix: `receivedSetShownAs` reported the
+set as represented by a sticker that was showing "Note from you" and counted
+none of it, so N9 passed those cells and X16 undercounted its own extent by six.
+`stickerIsTheReceivedSet` (`Pill && !Own`) is now the one question, asked by
+both the pane and the classifier, and the `Own` arm is tested BEFORE the `Pill`
+arm because the narrower fact has to win.
+
+**And what the enumeration was really covering.** The sample data's John 3 is a
+SINGLE VERSE. One verse is one paragraph, so `chapterNoteGroups` could never
+return more than one group: `PILLS_SET` — the state the whole feature exists for
+— was never enumerated, while the axis was being added for it. The harness now
+lays out a 20-verse John 3 of its own and carries a `spread` axis for a second
+received note in another paragraph. Measured before and after, over the cells
+that ran:
+
+    groups=2:            0 cells  ->  672
+    two pills drawn:     0 cells  ->  286
+
 ### X16 — exists today — the same blanking, on the surfaces with no pill row
 
 iOS, macOS and Android draw one sticker and have no pill row, so the repair
@@ -1059,7 +1096,7 @@ not change N" (`notes_plan.go`, `appleStickerPush`) still holds.
 Not a regression and not introduced by the pills: this is what every surface
 did before, and what the three without a pill row still do.
 
-**Evidence.** 18 cells of the notes enumeration, every one of them
+**Evidence.** 48 cells of the notes enumeration, every one of them
 `focus=own pills=false`. The same cells with `pills=true` come out clean, which
 is the X15 fix measured rather than asserted — the pills are what represents the
 set once the sticker is busy.
