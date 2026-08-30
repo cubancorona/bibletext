@@ -856,9 +856,16 @@ func (r *styledPaneRenderer) positionParagraphPills() {
 			place(r.pillBtns[i], g.card)
 		}
 		if i < len(r.pillLabels) {
+			// Centred on BOTH axes, by the same rule the single pill uses:
+			// horizontally by Alignment over the card's full width, vertically
+			// by the text's INTRINSIC height. A canvas.Text draws from its
+			// top-left at MinSize().Height, which exceeds TextSize by the
+			// ascender and descender — centring on the point size instead sat
+			// the word ~2pt low in its frame.
 			lbl := r.pillLabels[i]
-			lbl.Move(fyne.NewPos(g.card.X, g.card.Y+(g.card.H-float32(lbl.TextSize))/2))
-			lbl.Resize(fyne.NewSize(g.card.W, g.card.H))
+			h := lbl.MinSize().Height
+			lbl.Move(fyne.NewPos(g.card.X, g.card.Y+(g.card.H-h)/2))
+			lbl.Resize(fyne.NewSize(g.card.W, h))
 			lbl.Show()
 		}
 	}

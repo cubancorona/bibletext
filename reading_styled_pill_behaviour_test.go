@@ -519,3 +519,42 @@ func TestScrollingToAHighlightLandsOnItsParagraphsPill(t *testing.T) {
 			"%.1fpt past the pill that explains why they are here", got, want, got-want)
 	}
 }
+
+// The pill label centres on BOTH axes, exactly as the single pill's does.
+// Vertically that means the TEXT'S INTRINSIC HEIGHT, not its point size: a
+// canvas.Text draws from its top-left at MinSize().Height, which is taller than
+// TextSize by the ascender and descender, so centring on TextSize pushes the
+// word down by half the difference and the label sits low in its frame.
+func TestThePillLabelIsCentredInItsFrame(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, _, _, _ := twoNotedParagraphs(t, 3)
+	pane := newStyledReadingPane(st, verses)
+	rend, ok := pane.CreateRenderer().(*styledPaneRenderer)
+	if !ok {
+		t.Fatalf("unexpected renderer type")
+	}
+	rend.Layout(fyne.NewSize(320, 900))
+	if len(rend.pillLabels) == 0 {
+		t.Fatalf("no pill labels were built")
+	}
+
+	for i, lbl := range rend.pillLabels {
+		card := pane.pillGeoms[i].card
+		h := lbl.MinSize().Height
+		wantY := card.Y + (card.H-h)/2
+		if got := lbl.Position().Y; got != wantY {
+			t.Errorf("pill %d label at y=%.2f, want %.2f (off by %.2fpt): the label "+
+				"must centre on the text's intrinsic height %.2f, not its point size %.2f",
+				i, got, wantY, got-wantY, h, lbl.TextSize)
+		}
+		if got := lbl.Size().Height; got != h {
+			t.Errorf("pill %d label sized to %.2f, want its intrinsic %.2f", i, got, h)
+		}
+	}
+}
