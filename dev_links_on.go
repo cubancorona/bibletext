@@ -399,6 +399,41 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		state.refresh()
 	})
 
+	// Your OWN notes, seeded through the app's own write path (saveMyNote), so
+	// the records are indistinguishable from ones composed in the app. They go
+	// on John 11 in three deliberate positions: one sharing a paragraph with
+	// received notes, one alone on a paragraph that has none, and one on the
+	// SAME verse as a received note — the three arrangements that decide
+	// whether an own note joins a count, a pill or neither.
+	seedMine := widget.NewButton("Seed 3 of MY notes on John 11", func() {
+		for _, m := range []struct {
+			lo, hi int
+			text   string
+		}{
+			{6, 0, "My own note, sharing a paragraph with a friend's."},
+			{19, 0, "My own note, alone on a paragraph no friend has written on."},
+			{35, 0, "My own note on the same verse a friend already wrote on."},
+		} {
+			nonce := make([]byte, noteNonceLen)
+			// Deterministic per verse: re-seeding must not pile up duplicates,
+			// and the store dedupes a mine record by content anyway.
+			for i := range nonce {
+				nonce[i] = byte(m.lo*31 + i)
+			}
+			saveMyNote(appPrefs(), StoredNote{
+				VersionID: state.currentVersion().ID,
+				Book:      "John", Chapter: 11,
+				VerseLo: m.lo, VerseHi: m.hi,
+				Text:  m.text,
+				Nonce: nonce,
+			})
+		}
+		goToVerseRange(state, "John", 11, 1, 1)
+		applyNoteForCurrentChapter(state)
+		refreshStatus()
+		state.refresh()
+	})
+
 	// Wrapping must be set explicitly — widget.Label does not wrap by default, and
 	// an unwrapped one reports its whole single line as its MinSize, which is how
 	// this line ran off the side of the screen.
@@ -416,7 +451,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, pillMode, wipe, minAll, status,
+		notesSwitch, pillMode, wipe, minAll, seedMine, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,
