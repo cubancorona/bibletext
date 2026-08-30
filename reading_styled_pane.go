@@ -122,6 +122,13 @@ type styledReadingPane struct {
 	// are assigned together or not at all.
 	note     styledNote
 	noteGeom styledNoteGeom
+	// pillGeoms is the collapsed state drawn per noted paragraph: one pill
+	// each, carrying that paragraph's own count. Populated only while
+	// notesPillPerParagraph is on AND the state is collapsed; empty otherwise,
+	// and noteGeom above is then the single sticker exactly as before. The two
+	// are mutually exclusive by construction — whichever is populated is the
+	// one that draws and the one that hit-tests.
+	pillGeoms []styledNoteGeom
 	// noteGrab latches a press that began on the sticker, so a drag off the
 	// card does not turn into a text selection under it.
 	noteGrab bool
@@ -256,6 +263,17 @@ func (p *styledReadingPane) relayout(width float32) {
 		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, p.textSize, fyne.TextStyle{}, superFont)
 		return w.Width
 	})
+	// The per-paragraph collapsed state, when it is in force: a pill measured
+	// for each noted paragraph, and a band requested for each. Measured BEFORE
+	// the layout for the same reason the single band is — the layout needs the
+	// height to reserve, and the pane is the only thing that can measure it.
+	pillReq, pillGeoms := p.measureParagraphPills(avail)
+	p.pillGeoms = pillGeoms
+	if len(pillGeoms) > 0 {
+		// One collapsed state at a time: the single sticker stands down while
+		// the pills are drawn, or the reader sees the same notes twice.
+		p.noteGeom = styledNoteGeom{}
+	}
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
 		Width:      avail,
 		LineHeight: lh,
@@ -265,13 +283,32 @@ func (p *styledReadingPane) relayout(width float32) {
 		TopPad:     p.superGeom.height,
 		BandVerse:  p.noteAnchorVerse(),
 		BandH:      p.noteGeom.bandH(),
+		Bands:      pillReq,
 	}, p.measure)
 	p.superGeom.place(p.insetX(), 0)
 	// Absolute rects, from the pane's own ruler and the band the layout just
 	// reserved — so draw, hit-testing and the reservation cannot disagree. If
 	// nothing was reserved, nothing is drawn: a sticker parked at y=0 would sit
 	// ON the opening verses, which is worse than no sticker.
-	if p.lay.BandLine < 0 {
+	if len(p.pillGeoms) > 0 {
+		// Place each pill in the band the layout reserved for its paragraph,
+		// matched by anchor verse rather than by position: the layout drops a
+		// request whose paragraph it cannot find, so the two lists are not
+		// necessarily the same length.
+		placed := p.pillGeoms[:0]
+		for _, b := range p.lay.Bands {
+			for i := range p.pillGeoms {
+				if p.pillGeoms[i].anchorVerse != b.Verse {
+					continue
+				}
+				g := p.pillGeoms[i]
+				g.place(p.insetX(), b.Y)
+				placed = append(placed, g)
+				break
+			}
+		}
+		p.pillGeoms = placed
+	} else if p.lay.BandLine < 0 {
 		p.noteGeom = styledNoteGeom{}
 	} else {
 		p.noteGeom.place(p.insetX(), p.lay.BandY)
@@ -427,7 +464,14 @@ type styledPaneRenderer struct {
 	noteCard  *canvas.Image
 	notePill  *canvas.Rectangle
 	noteTexts []*canvas.Text
-	noteBtns  []*widget.Button
+	// The per-paragraph collapsed state: one frame, label and hit target per
+	// noted paragraph, index-aligned with pane.pillGeoms so positionNote can
+	// place each from the geometry that measured it. Empty whenever the single
+	// sticker above is the one drawing.
+	pillFrames []*canvas.Rectangle
+	pillLabels []*canvas.Text
+	pillBtns   []*widget.Button
+	noteBtns   []*widget.Button
 	// noteHasHide records whether the minimize control was DRAWN this build.
 	// The sticker's buttons are laid out positionally, so the layout cannot
 	// infer it: an own note omits − (it and ✕ do the same thing there), and

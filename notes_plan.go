@@ -807,3 +807,32 @@ func chapterNoteGroups(state *AppState, plan chapterPlan, verses []Verse) []note
 	}
 	return groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)
 }
+
+// focusNoteAtVerse opens the note belonging to the paragraph a pill sits on.
+// It is the per-paragraph pill's verb, and the thing the single pill could
+// never do: that one could only restore whichever note the plan had chosen,
+// wherever in the chapter it happened to be.
+//
+// The verse is a GROUP's band verse, not necessarily a note's own anchor, so
+// the group is what is matched — the paragraph is the unit the reader tapped.
+// An explicit minimize is lifted, because tapping the pill IS the Show verb
+// (the same rule advanceNoteFocus follows for a stored-minimized note).
+func focusNoteAtVerse(state *AppState, verse int) {
+	if state == nil || verse <= 0 || state.Bible == nil {
+		return
+	}
+	plan := buildChapterPlan(state, appPrefs(), state.Bible)
+	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	for _, g := range groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes) {
+		if g.BandVerse != verse || len(g.Notes) == 0 {
+			continue
+		}
+		n := g.Notes[0].Note
+		if n.Minimized {
+			setNoteMinimizedByID(appPrefs(), n.ID, false)
+		}
+		state.focusNote(n.ID)
+		applyNoteForCurrentChapter(state)
+		return
+	}
+}

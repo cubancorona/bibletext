@@ -257,7 +257,7 @@ func (p *styledReadingPane) MouseDown(e *desktop.MouseEvent) {
 	if e.Button != desktop.MouseButtonPrimary {
 		return
 	}
-	if p.noteGeom.hits(e.Position) {
+	if p.noteGeom.hits(e.Position) || p.hitsAnyPill(e.Position) {
 		p.noteGrab = true
 		return
 	}
@@ -290,7 +290,7 @@ func (p *styledReadingPane) Dragged(e *fyne.DragEvent) {
 func (p *styledReadingPane) DragEnd() { p.noteGrab = false; p.fnGrab = false }
 
 func (p *styledReadingPane) Tapped(e *fyne.PointEvent) {
-	if p.noteGrab || (e != nil && p.noteGeom.hits(e.Position)) {
+	if p.noteGrab || (e != nil && (p.noteGeom.hits(e.Position) || p.hitsAnyPill(e.Position))) {
 		p.noteGrab = false
 		return // a click on the card must not clear what the reader selected
 	}
@@ -304,7 +304,7 @@ func (p *styledReadingPane) Tapped(e *fyne.PointEvent) {
 
 // DoubleTapped selects the word under the pointer.
 func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
-	if ev != nil && p.noteGeom.hits(ev.Position) {
+	if ev != nil && (p.noteGeom.hits(ev.Position) || p.hitsAnyPill(ev.Position)) {
 		return // no word-select under the bubble
 	}
 	if ev != nil && (p.fnGeom.hits(ev.Position) || p.superGeom.hits(ev.Position)) {
@@ -341,7 +341,7 @@ func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
 }
 
 func (p *styledReadingPane) TappedSecondary(e *fyne.PointEvent) {
-	if e != nil && p.noteGeom.hits(e.Position) {
+	if e != nil && (p.noteGeom.hits(e.Position) || p.hitsAnyPill(e.Position)) {
 		return // no study menu over somebody else's words
 	}
 	if e != nil && (p.fnGeom.hits(e.Position) || p.superGeom.hits(e.Position)) {

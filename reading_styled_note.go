@@ -147,6 +147,13 @@ type styledNoteGeom struct {
 
 	hide, del, nextHit styledNoteRect
 	pillText           string
+
+	// anchorVerse is the verse whose paragraph this sticker belongs to. The
+	// single sticker never needed it — there was one, and the layout reserved
+	// one band. With a pill per paragraph the geometry and the band have to be
+	// matched by identity rather than by order, because the layout drops a
+	// request whose paragraph it cannot find.
+	anchorVerse int
 }
 
 // bandH is what the layout must reserve: a gap, the drawn shape, and the gap to
@@ -167,6 +174,18 @@ func (g styledNoteGeom) bandH() float32 {
 
 // hits reports whether a position is inside the sticker at all — the guard
 // every mouse handler asks before touching the selection.
+// hitsAnyPill reports whether a press landed on one of the per-paragraph
+// pills. The select path asks this alongside noteGeom.hits so a tap on a pill
+// is never also the start of a text selection under it.
+func (p *styledReadingPane) hitsAnyPill(pos fyne.Position) bool {
+	for i := range p.pillGeoms {
+		if p.pillGeoms[i].hits(pos) {
+			return true
+		}
+	}
+	return false
+}
+
 func (g styledNoteGeom) hits(p fyne.Position) bool {
 	return g.present && g.card.contains(p)
 }
@@ -423,6 +442,7 @@ func (r *styledPaneRenderer) buildNote() {
 	r.noteTexts = r.noteTexts[:0]
 	r.noteBtns = r.noteBtns[:0]
 	r.noteCard, r.notePill = nil, nil
+	r.buildParagraphPills()
 	g := p.noteGeom
 	if !g.present {
 		return
@@ -564,6 +584,7 @@ func noteCardKey(w, h float32, pal palette) string {
 // table alone, so nothing can be placed on a different ruler than the one
 // hit-testing reads.
 func (r *styledPaneRenderer) positionNote() {
+	r.positionParagraphPills()
 	g := r.pane.noteGeom
 	if !g.present {
 		// HIDE the surplus, never merely skip it: an object left unpositioned
@@ -650,6 +671,15 @@ func (r *styledPaneRenderer) positionNote() {
 // noteObjects is every object the sticker owns, for the show/hide sweep.
 func (r *styledPaneRenderer) noteObjects() []fyne.CanvasObject {
 	var out []fyne.CanvasObject
+	for _, o := range r.pillFrames {
+		out = append(out, o)
+	}
+	for _, o := range r.pillLabels {
+		out = append(out, o)
+	}
+	for _, o := range r.pillBtns {
+		out = append(out, o)
+	}
 	if r.noteCard != nil {
 		out = append(out, r.noteCard)
 	}
@@ -724,4 +754,116 @@ func noteBubblePathSVG(w, h float32, fill, stroke color.Color) fyne.Resource {
 			`stroke-width="1" stroke-linejoin="round"/></svg>`,
 		w, h+noteTailDepth, w, h+noteTailDepth, d, fillHex, fillA, strokeHex, strokeA)
 	return fyne.NewStaticResource("note-bubble.svg", []byte(svg))
+}
+
+// measureParagraphPills builds the collapsed state as one pill per noted
+// paragraph: the band request the layout needs, and the geometry the pane will
+// place once the layout says where each band landed.
+//
+// Empty unless notesPillPerParagraph is on AND the state is actually collapsed.
+// An open note is a bubble about ONE passage and is unaffected by this; the
+// pills are only ever the closed state, which is the state whose single pill
+// could not say where the chapter's notes were.
+func (p *styledReadingPane) measureParagraphPills(width float32) ([]bandRequest, []styledNoteGeom) {
+	if p == nil || p.state == nil || !notesPillPerParagraph {
+		return nil, nil
+	}
+	// Collapsed only. present() covers "there is something to draw at all";
+	// Pill covers "and it is closed".
+	if !p.note.present() || !p.note.Pill {
+		return nil, nil
+	}
+	plan := buildChapterPlan(p.state, appPrefs(), p.state.Bible)
+	groups := chapterNoteGroups(p.state, plan, p.verses)
+	if len(groups) < 2 {
+		// One noted paragraph is the single-sticker case already: its count and
+		// its position agree, and a second code path for it would only be
+		// another way to get it wrong.
+		return nil, nil
+	}
+	req := make([]bandRequest, 0, len(groups))
+	geoms := make([]styledNoteGeom, 0, len(groups))
+	for _, g := range groups {
+		n := styledNote{
+			Pill:   true,
+			Who:    stickerPillWho(len(g.Notes), 0),
+			Anchor: g.BandVerse,
+		}
+		geom := measureStyledNote(n, width)
+		geom.anchorVerse = g.BandVerse
+		req = append(req, bandRequest{Verse: g.BandVerse, H: geom.bandH(), Count: len(g.Notes)})
+		geoms = append(geoms, geom)
+	}
+	return req, geoms
+}
+
+// buildParagraphPills draws the collapsed state as one pill per noted
+// paragraph. Same shape as the single pill next door — a rounded frame, drawn
+// text at the muted 11pt the note chrome uses, and an empty LowImportance
+// button over it for the tap — repeated per paragraph, each labelled with its
+// own count.
+func (r *styledPaneRenderer) buildParagraphPills() {
+	p := r.pane
+	r.pillFrames, r.pillLabels, r.pillBtns = nil, nil, nil
+	if len(p.pillGeoms) == 0 {
+		return
+	}
+	pal := p.pal
+	for i := range p.pillGeoms {
+		g := p.pillGeoms[i]
+		frame := canvas.NewRectangle(pal.SurfaceAlt)
+		frame.StrokeColor = pal.Border
+		frame.StrokeWidth = 1
+		frame.CornerRadius = g.card.H / 2
+		r.pillFrames = append(r.pillFrames, frame)
+		r.objects = append(r.objects, frame)
+
+		// Tapping a paragraph's pill opens THAT paragraph's note, which is the
+		// whole reason the pills are per paragraph: the single pill could only
+		// ever open whichever note the plan had chosen.
+		verse := g.anchorVerse
+		btn := widget.NewButton("", func() {
+			focusNoteAtVerse(p.state, verse)
+			p.state.refreshReadingOnly()
+		})
+		btn.Importance = widget.LowImportance
+		r.pillBtns = append(r.pillBtns, btn)
+		r.objects = append(r.objects, btn)
+
+		label := canvas.NewText(g.pillText, pal.TextMuted)
+		label.TextSize = styledNoteWhoSz
+		label.TextStyle = fyne.TextStyle{Bold: true}
+		label.Alignment = fyne.TextAlignCenter
+		r.pillLabels = append(r.pillLabels, label)
+		r.objects = append(r.objects, label)
+	}
+}
+
+// positionParagraphPills places every pill from its own geometry, and HIDES
+// any surplus rather than leaving it unpositioned — an object left behind
+// keeps painting where it last was.
+func (r *styledPaneRenderer) positionParagraphPills() {
+	p := r.pane
+	for i := range r.pillFrames {
+		if i >= len(p.pillGeoms) {
+			r.pillFrames[i].Hide()
+			continue
+		}
+		g := p.pillGeoms[i]
+		place := func(o fyne.CanvasObject, rect styledNoteRect) {
+			o.Move(fyne.NewPos(rect.X, rect.Y))
+			o.Resize(fyne.NewSize(rect.W, rect.H))
+			o.Show()
+		}
+		place(r.pillFrames[i], g.card)
+		if i < len(r.pillBtns) {
+			place(r.pillBtns[i], g.card)
+		}
+		if i < len(r.pillLabels) {
+			lbl := r.pillLabels[i]
+			lbl.Move(fyne.NewPos(g.card.X, g.card.Y+(g.card.H-float32(lbl.TextSize))/2))
+			lbl.Resize(fyne.NewSize(g.card.W, g.card.H))
+			lbl.Show()
+		}
+	}
 }

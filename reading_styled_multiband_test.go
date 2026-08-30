@@ -1,6 +1,11 @@
 package bibletext
 
-import "testing"
+import (
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+)
 
 // The geometry the multi-band path must hold, and it is the same property the
 // single band was built around: a band is ADVANCE, never line height, so no
@@ -100,4 +105,87 @@ func layoutForBands(t *testing.T, verses []Verse, bands []bandRequest) *chapterL
 	p.Width = 300
 	p.Bands = bands
 	return layoutChapter(st, verses, p, fixedMeasure)
+}
+
+// End to end through the pane: two noted paragraphs, collapsed, gate on —
+// two pills, each labelled with its own paragraph's count, each sitting in
+// its own band.
+func TestThePaneDrawsAPillPerNotedParagraph(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	prev := notesPillPerParagraph
+	notesPillPerParagraph = true
+	defer func() { notesPillPerParagraph = prev }()
+
+	st := psalm23State()
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+	if len(paras) < 2 {
+		t.Fatalf("fixture must break into 2+ paragraphs, got %d", len(paras))
+	}
+	// Two notes in the first paragraph, one in the last.
+	for _, v := range []int{paras[0][0].Verse, paras[0][0].Verse + 1, paras[len(paras)-1][0].Verse} {
+		n, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: v, Text: "fixture note"})
+		if !ok {
+			t.Fatalf("could not store a note on v%d", v)
+		}
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+
+	if len(pane.pillGeoms) != 2 {
+		t.Fatalf("two noted paragraphs, so two pills: got %d", len(pane.pillGeoms))
+	}
+	// Each pill carries its OWN paragraph's count, which is the whole point.
+	labels := []string{pane.pillGeoms[0].pillText, pane.pillGeoms[1].pillText}
+	if labels[0] == labels[1] {
+		t.Errorf("both pills read %q; a paragraph with two notes and one with a "+
+			"single note cannot carry the same label", labels[0])
+	}
+	// And they sit in different bands, in reading order.
+	if pane.pillGeoms[0].card.Y >= pane.pillGeoms[1].card.Y {
+		t.Errorf("pills must come out in reading order, got y=%.1f then y=%.1f",
+			pane.pillGeoms[0].card.Y, pane.pillGeoms[1].card.Y)
+	}
+	// The single sticker stands down, or the reader sees the notes twice.
+	if pane.noteGeom.present {
+		t.Error("the single sticker must stand down while the pills are drawn")
+	}
+}
+
+// Gate off, nothing changes: the single sticker draws and no pill exists.
+func TestGateOffLeavesTheSingleStickerDrawing(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := psalm23State()
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+	for _, v := range []int{paras[0][0].Verse, paras[len(paras)-1][0].Verse} {
+		n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: v, Text: "fixture note"})
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if len(pane.pillGeoms) != 0 {
+		t.Fatalf("gate off must draw no pills, got %d", len(pane.pillGeoms))
+	}
 }
