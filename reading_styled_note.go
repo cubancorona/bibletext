@@ -6,7 +6,7 @@ package bibletext
 //
 // WHAT THE READER GETS. One card drawn IN THE TEXT, in a band reserved above
 // the note's own verse, with a speech TAIL pointing down at the passage: the
-// byline and the honest "K of N on this passage ›" counts on one row, the
+// byline and the honest "K of N in this chapter ›" counts on one row, the
 // sender's words below, and the − / ✕ verbs at the top right — the same shape
 // iOS (reading_ios.go btIOSInstallNote/btIOSLayoutNote), macOS (its twin) and
 // Android (BtBridge.buildNoteBubble) already draw. It replaces a Fyne BANNER
@@ -234,7 +234,7 @@ func styledNoteWrap(text string, width, size float32) []string {
 
 // styledFitWho is the Go twin of btIOSFitWho: when the who line does not fit,
 // the SENDER half is ellipsised and the counts survive whole. A reader must
-// never lose "· 2 of 105 on this passage" to an ellipsis while the constant
+// never lose "· 2 of 105 in this chapter" to an ellipsis while the constant
 // byline survives — the count is the honest part, the byline is recoverable
 // from the bubble itself.
 func styledFitWho(who string, width float32) string {

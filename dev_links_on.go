@@ -64,9 +64,9 @@ func devScenarios() []devScenario {
 		// --- the ordinary cases -------------------------------------------------
 		{"Note, mid-chapter, long paragraph", "Bubble above v34's paragraph; v35 highlighted; the note is what you land on",
 			n("John", 11, 35, 35, "Fixture paragraph alpha beta gamma.\n\nFixture paragraph delta epsilon.")},
-		{"A SECOND note on the same passage (S8/S9)", "Open the row above first. The bubble shows THIS note alone; the WHO line above it reads “Note from Friend · 1 of 2 on this passage” — the honest count in the app's own chrome",
+		{"A SECOND note on the same passage (S8/S9)", "Open the row above first. The bubble shows THIS note alone; the WHO line above it reads “Note from Friend · 1 of 2 in this chapter” — the honest count in the app's own chrome",
 			ShareLinkURLWithNote("web", "John", 11, 35, 35, "Fixture same-range message two.")},
-		{"THREE notes, SAME verse range (S10)", "Open all three rows in order. One bubble at a time; the who line counts “1 of 3 on this passage ›” and tapping the count cycles them — same range, so the wash never moves",
+		{"THREE notes, SAME verse range (S10)", "Open all three rows in order. One bubble at a time; the who line counts “1 of 3 in this chapter ›” and tapping the count cycles them — same range, so the wash never moves",
 			n("John", 3, 16, 16, "Fixture same-range message one.")},
 		{"…same range №2", "Second of the trio above — open after №1",
 			n("John", 3, 16, 16, "Fixture same-range message two.")},

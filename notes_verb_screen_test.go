@@ -162,8 +162,8 @@ func assertStickerAgreesWithStore(t *testing.T, st *AppState) {
 		return
 	}
 	if n > 1 {
-		if !strings.Contains(who, fmt.Sprintf("of %d on this passage", n)) {
-			t.Errorf("expanded who = %q, want the store's honest count \"of %d on this passage\"", who, n)
+		if !strings.Contains(who, fmt.Sprintf("of %d in this chapter", n)) {
+			t.Errorf("expanded who = %q, want the store's honest count \"of %d in this chapter\"", who, n)
 		}
 		if !next {
 			t.Errorf("expanded with %d notes on the passage must offer the next control", n)
@@ -276,7 +276,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{"delta words just arrived", "john 3:16", "john 3:17", "john 3:18", "from friend"},
 			rejectSeen: []string{alphaText, betaText, gammaText},
 			wantText:   "delta words just arrived",
-			wantWho:    []string{"Note from Friend", "1 of 4 on this passage"},
+			wantWho:    []string{"Note from Friend", "1 of 4 in this chapter"},
 			wantNext:   true,
 		},
 		{
@@ -302,7 +302,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{gammaText, "john 3:16", "john 3:17"},
 			rejectSeen: []string{"hidden", alphaText, betaText},
 			wantText:   gammaText,
-			wantWho:    []string{"1 of 3 on this passage"},
+			wantWho:    []string{"1 of 3 in this chapter"},
 			wantNext:   true,
 		},
 		{
@@ -325,7 +325,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			},
 			// AMENDED 20 Aug 2026: betaText moved from rejectSeen to wantSeen.
 			// The survivor is the OPEN note after a delete — the sticker has
-			// always said so ("1 of 2 on this passage", not a pill) — and the
+			// always said so ("1 of 2 in this chapter", not a pill) — and the
 			// banner draws the open note's text, exactly as it draws "delta
 			// words just arrived" on the arrival row above. The old expectation
 			// pinned a DISAGREEMENT between the two surfaces: the banner showed
@@ -336,7 +336,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{betaText, "john 3:17", "john 3:16"},
 			rejectSeen: []string{gammaText, "john 3:18", alphaText},
 			wantText:   betaText,
-			wantWho:    []string{"1 of 2 on this passage"},
+			wantWho:    []string{"1 of 2 in this chapter"},
 			wantNext:   true,
 		},
 		{
@@ -364,7 +364,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			},
 			// AMENDED 20 Aug 2026: betaText moved from rejectSeen to wantSeen.
 			// The survivor is the OPEN note after a delete — the sticker has
-			// always said so ("1 of 2 on this passage", not a pill) — and the
+			// always said so ("1 of 2 in this chapter", not a pill) — and the
 			// banner draws the open note's text, exactly as it draws "delta
 			// words just arrived" on the arrival row above. The old expectation
 			// pinned a DISAGREEMENT between the two surfaces: the banner showed
@@ -375,7 +375,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{betaText, "john 3:17", "john 3:16"},
 			rejectSeen: []string{gammaText, "john 3:18", alphaText},
 			wantText:   betaText,
-			wantWho:    []string{"1 of 2 on this passage"},
+			wantWho:    []string{"1 of 2 in this chapter"},
 			wantNext:   true,
 		},
 		{
@@ -387,7 +387,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{betaText, "john 3:18", "john 3:16"},
 			rejectSeen: []string{gammaText, alphaText},
 			wantText:   betaText,
-			wantWho:    []string{"2 of 3 on this passage"},
+			wantWho:    []string{"2 of 3 in this chapter"},
 			wantNext:   true,
 		},
 		{
@@ -416,7 +416,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{betaText, "john 3:18", "john 3:16"},
 			rejectSeen: []string{"hidden", gammaText, alphaText},
 			wantText:   betaText,
-			wantWho:    []string{"2 of 3 on this passage"},
+			wantWho:    []string{"2 of 3 in this chapter"},
 			wantNext:   true,
 		},
 		{
@@ -469,7 +469,7 @@ func TestEveryNotesVerbEndsOnTheScreen(t *testing.T) {
 			wantSeen:   []string{gammaText, "john 3:16", "john 3:17"},
 			rejectSeen: []string{"hidden", alphaText, betaText},
 			wantText:   gammaText,
-			wantWho:    []string{"1 of 3 on this passage"},
+			wantWho:    []string{"1 of 3 in this chapter"},
 			wantNext:   true,
 		},
 	}

@@ -443,7 +443,7 @@ func TestAppleStickerPushIsFoldedByTheBodyFingerprint(t *testing.T) {
 	if text2 == "" || strings.Contains(text2, "more note") {
 		t.Fatalf("the count must never ride in the body: %q", text2)
 	}
-	if !strings.Contains(who2, "of 2 on this passage") {
+	if !strings.Contains(who2, "of 2 in this chapter") {
 		t.Errorf("the who line should carry the honest count: %q", who2)
 	}
 	if body2 == body1 {
@@ -471,7 +471,7 @@ func TestAppleStickerPushIsFoldedByTheBodyFingerprint(t *testing.T) {
 	// Releasing the mark restores the expanded push, by derivation alone.
 	st.clearMark()
 	_, who4, pill4, _ := snap()
-	if pill4 || !strings.Contains(who4, "of 2 on this passage") {
+	if pill4 || !strings.Contains(who4, "of 2 in this chapter") {
 		t.Errorf("clearing the mark must restore the expanded sticker, got pill=%v who=%q", pill4, who4)
 	}
 }
@@ -512,9 +512,9 @@ func TestAppleStickerPushComposition(t *testing.T) {
 	}
 	wantPrefix := "Note from Friend · "
 	if !strings.HasPrefix(who, wantPrefix) ||
-		!strings.Contains(who, "of 3 on this passage") ||
+		!strings.Contains(who, "of 3 in this chapter") ||
 		!strings.Contains(who, "· 1 not shown here") {
-		t.Errorf("who = %q, want byline · K of 3 on this passage · 1 not shown here", who)
+		t.Errorf("who = %q, want byline · K of 3 in this chapter · 1 not shown here", who)
 	}
 
 	// Minimize: the pill carries the whole set, placed and unplaced — and the

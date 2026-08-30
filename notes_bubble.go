@@ -171,7 +171,7 @@ import (
 //	               text clips once the reader raises that setting (Android's
 //	               slider reaches 1.3, accessibility 2.0). Spec heights are
 //	               therefore FLOORS there (setMinHeight), never setHeight.
-//	Android text   the who line is "<byline> · K of N on this passage ›" with
+//	Android text   the who line is "<byline> · K of N in this chapter ›" with
 //	               the counts at the END, so END-ellipsis eats exactly the half
 //	               a reader must not lose. fitWho (Java) is btIOSFitWho's rule:
 //	               the sender half gives way, the counts survive whole.

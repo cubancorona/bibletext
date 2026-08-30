@@ -183,7 +183,7 @@ run_mutation M9 \
 # nothing at all and the reader cannot reach the other notes on the passage.
 run_mutation M10 \
   "the sticker's counts control is drawn but its hit target is zeroed" \
-  "an accented \"2 of 3 on this passage ›\" that never responds to a click" \
+  "an accented \"2 of 3 in this chapter ›\" that never responds to a click" \
   "$(sub_py reading_styled_note.go '		g.nextHit = styledNoteRect{X: bx, Y: 0, W: bw, H: styledNotePad + styledNoteWhoH + 2}' '		g.nextHit = styledNoteRect{} // MUTATION: drawn pressable, sized to nothing')"
 
 echo

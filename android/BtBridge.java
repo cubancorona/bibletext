@@ -1426,7 +1426,7 @@ public final class BtBridge {
         who.setMinHeight(dp(NOTE_WHO_H));
         who.setGravity(Gravity.CENTER_VERTICAL);
         who.setSingleLine(true);
-        // NO ELLIPSIS. The who line is "<byline> · K of N on this passage ›" and
+        // NO ELLIPSIS. The who line is "<byline> · K of N in this chapter ›" and
         // the counts are at the END, so END-truncation drops exactly the half a
         // reader must never lose — and would leave the next-tap overlay
         // invisible but still tappable. iOS forbids this explicitly

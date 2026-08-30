@@ -74,7 +74,7 @@ func TestNextTapRotatesThePlanWithWrap(t *testing.T) {
 		if pill || !next {
 			t.Fatalf("step %d: expanded multi-note sticker must be nextable (pill=%v next=%v)", i, pill, next)
 		}
-		if !strings.Contains(who, want.pos+" on this passage") {
+		if !strings.Contains(who, want.pos+" in this chapter") {
 			t.Fatalf("step %d: who = %q, want the count %q", i, who, want.pos)
 		}
 		advanceNoteFocus(st)
@@ -309,7 +309,7 @@ func TestNextTapFromAMirrorOnlyNoteLandsOnThePlan(t *testing.T) {
 	st.NoteMinimized = false
 
 	plan := buildChapterPlan(st, appPrefs(), st.Bible)
-	if _, who, _, next := appleStickerPush(st, plan); !next || !strings.Contains(who, "1 of 2 on this passage") {
+	if _, who, _, next := appleStickerPush(st, plan); !next || !strings.Contains(who, "1 of 2 in this chapter") {
 		t.Fatalf("mirror-only lead: want a nextable \"1 of 2\" push, got next=%v who=%q", next, who)
 	}
 	if id := nextNoteFocusID(st, plan); id != stored.ID {
@@ -374,7 +374,7 @@ func TestDeleteOfManySurfacesTheRemaining(t *testing.T) {
 	if st.NoteID != notes[1].ID {
 		t.Fatalf("the next of the set should surface (note %d), got %d", notes[1].ID, st.NoteID)
 	}
-	if _, who, _, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !strings.Contains(who, "of 2 on this passage") {
+	if _, who, _, _ := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible)); !strings.Contains(who, "of 2 in this chapter") {
 		t.Errorf("who = %q, want the honest remaining count", who)
 	}
 

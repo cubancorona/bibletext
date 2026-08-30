@@ -59,7 +59,7 @@ extern void bibleTextReadAlongFollowTapped(void);
 extern void bibleTextNoteHidden(void);
 extern void bibleTextNoteDeleted(void);
 extern void bibleTextNoteRestored(void);
-// The expanded sticker's count region ("2 of 3 on this passage ›") — advances
+// The expanded sticker's count region ("2 of 3 in this chapter ›") — advances
 // focus to the next note on the passage, wrapping.
 extern void bibleTextNoteNextTapped(void);
 
@@ -1525,7 +1525,7 @@ static NSString *btMacFitWho(NSString *who, CGFloat width, NSFont *font) {
     return [@"…" stringByAppendingString:counts];
 }
 
-// btMacWhoCountRange is the "K of N on this passage" span of a (fitted) WHO
+// btMacWhoCountRange is the "K of N in this chapter" span of a (fitted) WHO
 // line — the iOS twin is btIOSWhoCountRange; keep them matched. The first-
 // separator split is safe against a sender's name by construction:
 // sanitizeSenderName maps the middle dot away (notes_byline.go).
@@ -2529,7 +2529,7 @@ func macOwnFlag(state *AppState) C.int {
 
 // SINCE S9 THE PUSH IS THE FULL TUPLE (appleStickerPush, notes_plan.go),
 // exactly as the iOS twin: the bubble's body is the sender's words ALONE, and
-// everything the app says — the byline, "· 1 of 3 on this passage", "· 2 not
+// everything the app says — the byline, "· 1 of 3 in this chapter", "· 2 not
 // shown here", the pill's count, the unplaced-only sentence — rides in the
 // WHO parameter, the sticker's own chrome. This closes S8's recorded identity
 // gap (the count used to ride inside the sender's bubble in the sender's

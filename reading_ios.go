@@ -46,7 +46,7 @@ extern void bibleTextHighlightCleared(void);
 extern void bibleTextNoteHidden(void);
 extern void bibleTextNoteDeleted(void);
 extern void bibleTextNoteRestored(void);
-// The expanded sticker's count region ("2 of 3 on this passage ›") — advances
+// The expanded sticker's count region ("2 of 3 in this chapter ›") — advances
 // focus to the next note on the passage, wrapping.
 extern void bibleTextNoteNextTapped(void);
 
@@ -1309,7 +1309,7 @@ static void btIOSEnsureNoteView(void) {
 
 // btIOSFitWho keeps the WHO line's counts whole when the label is too narrow:
 // everything before the first " · " is the sender half, and it alone is
-// tail-truncated — a reader must never lose "· 2 of 105 on this passage" to
+// tail-truncated — a reader must never lose "· 2 of 105 in this chapter" to
 // an ellipsis while the constant byline survives (the count is the honest
 // part; the byline is recoverable from the bubble itself). With no separator
 // the label's own tail truncation stands, and in the degenerate case (counts
@@ -1335,7 +1335,7 @@ static NSString *btIOSFitWho(NSString *who, CGFloat width, UIFont *font) {
     return [@"…" stringByAppendingString:counts];
 }
 
-// btIOSWhoCountRange is the "K of N on this passage" span of a (fitted) WHO
+// btIOSWhoCountRange is the "K of N in this chapter" span of a (fitted) WHO
 // line — the characters between the first " · " separator and the next one,
 // or the end. {NSNotFound,0} when the line carries no counts. The first-
 // separator split is the same idiom btIOSFitWho truncates by, and it is safe
@@ -3161,7 +3161,7 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 //
 // SINCE S9 THE PUSH IS THE FULL TUPLE (appleStickerPush, notes_plan.go): the
 // bubble's body is the sender's words ALONE, and everything the app says —
-// the byline, "· 1 of 3 on this passage", "· 2 not shown here", the pill's
+// the byline, "· 1 of 3 in this chapter", "· 2 not shown here", the pill's
 // count, the unplaced-only sentence — rides in the WHO parameter, the
 // sticker's own chrome. This closes S8's recorded identity gap (the count
 // used to ride inside the sender's bubble in the sender's style) with the one

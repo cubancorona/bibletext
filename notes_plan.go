@@ -480,7 +480,7 @@ func (p *chapterPlan) foldFingerprint() {
 // the two panes cannot diverge:
 //
 //   - text — the sender's words, alone. "" when no note is open here.
-//   - who  — expanded: senderByline + " · K of N on this passage" when the
+//   - who  — expanded: senderByline + " · K of N in this chapter" when the
 //     plan holds more + " · U not shown here" when unplaced exist. Pill:
 //     "Note" / "Notes · N" (+" · U not shown"), so minimizing the open note
 //     preserves the rest of the set's visible count. An
@@ -530,7 +530,7 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	// total. A mirror-only session note (an arrival the store refused) is in
 	// no plan: it leads the count and every plan note counts after it.
 	// A focused own note is not a member of this passage's received-note set, so
-	// it neither joins nor leads the count. "K of N on this passage" describes
+	// it neither joins nor leads the count. "K of N in this chapter" describes
 	// received notes, and displaying an own note must not change N. It carries
 	// only its byline ("Note from you") and has no next-tap because it is not in
 	// the rotation.
@@ -578,7 +578,7 @@ func appleStickerPush(state *AppState, plan chapterPlan) (text, who string, pill
 	}
 	who = senderByline(n)
 	if placed > 1 {
-		who += fmt.Sprintf(" · %d of %d on this passage", pos, placed)
+		who += fmt.Sprintf(" · %d of %d in this chapter", pos, placed)
 	}
 	if unplaced > 0 {
 		who += fmt.Sprintf(" · %d not shown here", unplaced)

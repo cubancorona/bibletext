@@ -389,7 +389,7 @@ func TestStyledStickerIsSeen(t *testing.T) {
 	for _, want := range []string{
 		"beta words on two",      // the open note's own words
 		"note from friend",       // the byline, in the app's voice
-		"1 of 2 on this passage", // the honest count
+		"1 of 2 in this chapter", // the honest count
 		"–",                      // the minimize verb; the delete is an ICON now, not a glyph —
 		// see TestStyledClosingGlyphMatchesWhatItDoes for what it wears.
 	} {

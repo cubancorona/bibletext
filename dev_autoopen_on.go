@@ -163,7 +163,7 @@ func devAutoReadAlong(state *AppState) {
 //
 //	s8         three arrivals on one passage — the S8 count proof, kept
 //	s9who      three arrivals → the WHO line reads "Note from Friend · 1 of 3
-//	           on this passage" with the words alone in the bubble
+//	           in this chapter" with the words alone in the bubble
 //	s9pill     three arrivals, then the reader's minimize → the pill reads
 //	           "Notes · 3" instead of hiding the set
 //	s9unplaced a WEB Esther note, then a switch to WEBC (Greek Esther, the
@@ -174,7 +174,7 @@ func devAutoReadAlong(state *AppState) {
 //	           the pill; then the mark clears → the bubble restores
 //	s9trunc    105 arrivals on one verse of BSB Mark 9 plus 9 WEB notes on
 //	           Mark 9:44 (a verse the BSB does not have) → the longest
-//	           realistic WHO line ("· K of 105 on this passage · 9 not shown
+//	           realistic WHO line ("· K of 105 in this chapter · 9 not shown
 //	           here", 3-digit count) so the fit rule is visible: the FRIEND
 //	           half tail-truncates, the counts never do
 //	s10ctx     ONE note on John 11:6 (the second paragraph), so the arrival

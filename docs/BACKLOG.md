@@ -157,13 +157,27 @@ do see the whole set while the native ones see one.
 
 Three ways to take it, cheapest first, not exclusive:
 
-1. **Say the true scope.** "K of N in this chapter" when the placements
-   differ, keeping "on this passage" for notes that genuinely share a range.
-   Small, and it stops the app asserting something untrue — worth doing
-   whatever else happens.
+1. ~~**Say the true scope.**~~ DONE. The count now reads "K of N in this
+   chapter" unconditionally, rather than only where the placements differ.
+   A conditional wording would have kept "on this passage" for notes that
+   genuinely share a range, which is more precise when true; it was rejected
+   because the string would then change under the reader with no way to tell
+   which rule was in force, while the rotation it describes is chapter-wide in
+   every case. The replacement is the same 15 characters, so the iOS and macOS
+   WHO-line fitting is unaffected.
+
+   One inaccuracy survives it, and is separate: N counts RECEIVED notes only,
+   so a chapter holding five received and three of the reader's own still says
+   "of 5". "Passage" was vague enough to hide that; "chapter" is checkable.
+   What keeps it tolerable is that the byline names whose notes are counted,
+   and an own note never displays a count at all — see the next item.
 2. **Mark the other noted passages in the text**, so the pill over one
    paragraph no longer implies it is the only one. This is the discovery
    problem, and it is what the banner already gives the non-native platforms.
+   PARTLY ADDRESSED on the styled pane by the per-paragraph pills
+   (`notesPillPerParagraph`), which draw one pill per noted paragraph with that
+   paragraph's own count. Still open for iOS, macOS and Android, which draw a
+   single sticker.
 3. **Lift the cap.** `planOpenLimit`'s own comment invites it: "TO LIFT THE
    CAP: raise this number (or drop the counter). Nothing else changes — not the
    store, not drawnNote, not the fingerprint." Largest change, and worth
@@ -243,3 +257,32 @@ Until it is decided the pills' counts do not sum to the chapter's note total,
 which is the honesty property the single pill has always had.
 `TestTheSinglePillStillDisclosesUnplacedNotes` pins the shipped gate-off
 guarantee so the ungated path cannot regress meanwhile.
+
+## Opening your own note hides every trace of everyone else's
+
+Not introduced by the pills — the shipped single-sticker path does it too, on
+all five platforms.
+
+The pills and the sticker are both the collapsed state, so opening any note
+stands the pills down. For a RECEIVED note that costs nothing: the who line
+becomes "Note from Friend · K of N in this chapter", which still says the
+others exist and still offers the count control that rotates to them. For the
+reader's OWN note it costs everything: an own note is deliberately not a member
+of N and has no next-tap, so its who line reads "Note from you" alone. Measured
+on a chapter with three received notes in two paragraphs plus one own note:
+
+    a received note open  -> pills 0, who "Note from Friend · 3 of 3 in this chapter"
+    your own note open    -> pills 0, who "Note from you"
+
+So the one case where the reader loses all evidence of their friends' notes is
+the case where they opened something of their own — and nothing on the page
+tells them to close it to get that evidence back.
+
+A principled fix exists: stand the pills down only for an open RECEIVED note,
+whose who line then carries the count. An own note is not in the pills' set at
+all (they count received notes), so leaving them up alongside it double-counts
+nothing — which is the reason the one-collapsed-state-at-a-time rule exists.
+That still leaves the three native surfaces, which have no pills to leave up;
+for them the answer would have to be a count in the own note's who line, which
+contradicts "displaying an own note must not change N" unless it is written as
+a separate clause rather than folded into N.
