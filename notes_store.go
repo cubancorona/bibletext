@@ -755,6 +755,27 @@ func applyNoteForCurrentChapter(state *AppState) {
 	state.NoteVerseLo = n.VerseLo
 	state.NoteID = n.ID // the identity every verb addresses, carried whole
 	if state.NoteMinimized {
+		// PUT THE PILL WHERE ITS SCOPE IS. Collapsed, one pill stands for the
+		// chapter's whole set and is labelled with the whole count ("Notes ·
+		// 4", stickerPillWho). Anchoring that at the display note's paragraph
+		// says something the label does not: it points at one passage while
+		// counting several, so the other noted paragraphs read as carrying
+		// nothing and the one under the pill reads as carrying four.
+		//
+		// A chapter-wide fact belongs at chapter scope, and this pane already
+		// has one: VerseLo 0 is the anchorless placement a whole-chapter note
+		// uses, which opens the band at the top. So when the collapsed set
+		// spans MORE THAN ONE paragraph, the pill goes there.
+		//
+		// Only then. One paragraph carrying every note is not a chapter-wide
+		// fact — the pill's count and its position already agree, and moving
+		// it to the top would take a true anchor away for nothing.
+		if !notesPillPerParagraph {
+			verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+			if len(groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)) > 1 {
+				state.NoteVerseLo = 0
+			}
+		}
 		return
 	}
 	// Never clobber a highlight that is on the page for another reason —

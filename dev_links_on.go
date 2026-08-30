@@ -367,6 +367,16 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// it by hand means finding every note and tapping − on each. This is one
 	// tap, so the question "what does the reader see when nothing is open?" can
 	// actually be looked at.
+	// The switch the collapsed-state work is refined through: shipped model on
+	// the left of it, pill-per-paragraph on the right, same chapter, no
+	// reinstall. Dev-only by construction — nothing in a release build writes
+	// notesPillPerParagraph, so a reader always gets the shipped model.
+	pillMode := widget.NewCheck("Pill per paragraph (collapsed state)", func(b bool) {
+		notesPillPerParagraph = b
+		state.refresh()
+	})
+	pillMode.SetChecked(notesPillPerParagraph)
+
 	minAll := widget.NewButton("Minimize every stored note", func() {
 		for _, n := range allNotesForBrowsing(appPrefs()) {
 			setNoteMinimizedByID(appPrefs(), n.ID, true)
@@ -393,7 +403,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, wipe, minAll, status,
+		notesSwitch, pillMode, wipe, minAll, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,

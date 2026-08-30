@@ -1,6 +1,10 @@
 package bibletext
 
-import "testing"
+import (
+	"testing"
+
+	"fyne.io/fyne/v2/test"
+)
 
 // The case that started this: five notes on one chapter, two paragraphs.
 // One pill today, labelled with the chapter's count and standing over one of
@@ -54,4 +58,113 @@ func TestAnUnplaceableNoteJoinsNoParagraph(t *testing.T) {
 	if got := groupNotesByParagraph(paras, []drawnNote{unplaced, beyond}); len(got) != 0 {
 		t.Fatalf("neither note can be placed in this chapter; got %d group(s)", len(got))
 	}
+}
+
+// The gate must default to the shipped model, and no release surface may write
+// it. If this ever fails, readers are getting an unfinished collapsed state.
+func TestPillPerParagraphIsOffByDefault(t *testing.T) {
+	if notesPillPerParagraph {
+		t.Fatal("notesPillPerParagraph must default to false: the shipped model is " +
+			"one sticker per chapter, and a release build has no surface that turns this on")
+	}
+}
+
+// Off, the groups are withheld entirely — a surface that asks gets nil and
+// keeps drawing what it draws today, so wiring one up cannot change shipped
+// behaviour until the flag is deliberately flipped.
+func TestGroupsAreWithheldWhileTheGateIsOff(t *testing.T) {
+	verses := []Verse{{Verse: 1, Text: "a"}, {Verse: 2, Text: "b"}}
+	plan := chapterPlan{Notes: []drawnNote{{Placement: placement{
+		Kind: placedNative, Here: []anchorRun{{Lo: 1, Hi: 1}}}}}}
+	state := &AppState{}
+
+	if got := chapterNoteGroups(state, plan, verses); got != nil {
+		t.Fatalf("gate off must withhold the groups, got %d", len(got))
+	}
+	prev := notesPillPerParagraph
+	notesPillPerParagraph = true
+	defer func() { notesPillPerParagraph = prev }()
+	if got := chapterNoteGroups(state, plan, verses); len(got) != 1 {
+		t.Fatalf("gate on must yield the paragraph's group, got %d", len(got))
+	}
+}
+
+// The behaviour itself, driven through the projection rather than inferred
+// from the grouping: two notes in different paragraphs, both minimized, must
+// leave the pill at chapter scope (VerseLo 0 — the anchorless placement that
+// opens the band at the top), because the pill's label counts both.
+func TestTheAggregatePillAnchorsAtChapterScope(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := planTestState(t)
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+	if len(paras) < 2 {
+		t.Fatalf("fixture must break into 2+ paragraphs, got %d", len(paras))
+	}
+	last := paras[len(paras)-1][0].Verse
+
+	for _, v := range []int{1, last} {
+		n, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: v, Text: "fixture note"})
+		if !ok {
+			t.Fatalf("could not store the note on v%d", v)
+		}
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	applyNoteForCurrentChapter(st)
+
+	if !st.NoteMinimized {
+		t.Fatalf("both notes are minimized; the projection reports open")
+	}
+	if st.NoteVerseLo != 0 {
+		t.Errorf("the pill counts notes in %d paragraphs but anchors at v%d; a "+
+			"chapter-wide count must sit at chapter scope (VerseLo 0), or it points "+
+			"at one passage while describing several", len(paras), st.NoteVerseLo)
+	}
+}
+
+// One paragraph carrying every note is not a chapter-wide fact: count and
+// position already agree, so the true anchor is kept.
+func TestASingleNotedParagraphKeepsItsAnchor(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := planTestState(t)
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+
+	for _, v := range []int{1, 2} { // both in the first paragraph
+		n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: v, Text: "fixture note"})
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	applyNoteForCurrentChapter(st)
+
+	if st.NoteVerseLo == 0 {
+		t.Error("every note is in one paragraph, so the pill still describes that " +
+			"paragraph: moving it to chapter scope drops a true anchor for nothing")
+	}
+}
+
+// A chapter whose verses are long enough that groupVersesIntoParagraphs really
+// breaks it — the 320-character rule, at a sentence end.
+func longEnoughForTwoParagraphs() []Verse {
+	long := "This verse is deliberately long so that the paragraph splitter reaches its " +
+		"character threshold and breaks at the next sentence ending, which is here."
+	out := make([]Verse, 0, 8)
+	for i := 1; i <= 8; i++ {
+		out = append(out, Verse{BookName: "John", Chapter: 3, Verse: i, Text: long})
+	}
+	return out
 }

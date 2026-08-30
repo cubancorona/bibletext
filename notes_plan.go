@@ -776,3 +776,34 @@ func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGr
 	sort.Slice(out, func(i, j int) bool { return out[i].ParaIndex < out[j].ParaIndex })
 	return out
 }
+
+// notesPillPerParagraph switches the collapsed state between the shipped model
+// and the one being refined:
+//
+//	false — ONE sticker for the chapter, anchored at plan.display's paragraph,
+//	        labelled with the chapter's whole count (stickerPillWho). What
+//	        ships today, and what every surface draws.
+//	true  — one pill per noted PARAGRAPH, each carrying that paragraph's own
+//	        count, from groupNotesByParagraph above.
+//
+// A var, not a build constant, so the dev build can flip it while the app is
+// running and the two can be compared on the same chapter without a reinstall.
+// It defaults to the shipped behaviour and no release surface writes it, so
+// nothing changes for a reader until a surface is taught to draw the groups
+// AND this is flipped deliberately.
+//
+// It writes nothing and is not persisted: a relaunch is back to the shipped
+// model, which is the right default for a switch that exists to be experimented
+// with rather than configured.
+var notesPillPerParagraph = false
+
+// chapterNoteGroups is the collapsed state's groups for the current chapter, or
+// nil when the shipped single-sticker model is in force. Surfaces ask this one
+// question rather than reaching for the flag and the grouping separately, so
+// there is one place to change when the flag eventually goes.
+func chapterNoteGroups(state *AppState, plan chapterPlan, verses []Verse) []noteParagraphGroup {
+	if !notesPillPerParagraph || state == nil {
+		return nil
+	}
+	return groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)
+}
