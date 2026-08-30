@@ -78,6 +78,19 @@ func devScenarios() []devScenario {
 			ShareLinkURLWithNote("web", "John", 3, 16, 16, "Fixture range message 16.")},
 		{"…same paragraph, vv16-17", "Third range — overlaps the one above at v16",
 			ShareLinkURLWithNote("web", "John", 3, 16, 17, "Fixture range message 16-17.")},
+		// FOUR notes, FOUR paragraphs of one chapter. The set the collapsed
+		// state cannot describe: minimize them all and a single pill stands for
+		// the lot, anchored over ONE paragraph, so the other three noted
+		// paragraphs are indistinguishable from unnoted ones. Open all four,
+		// then use "Minimize every stored note" above.
+		{"SPREAD 1 of 4 — John 3:2 (Nicodemus comes)", "First of four, each in a different paragraph of John 3",
+			ShareLinkURLWithNote("web", "John", 3, 2, 2, "Spread note one — first paragraph.")},
+		{"SPREAD 2 of 4 — John 3:16", "Second of four — the middle of the chapter",
+			ShareLinkURLWithNote("web", "John", 3, 16, 16, "Spread note two — a paragraph in the middle.")},
+		{"SPREAD 3 of 4 — John 3:30", "Third of four — well below the second",
+			ShareLinkURLWithNote("web", "John", 3, 30, 30, "Spread note three — further down again.")},
+		{"SPREAD 4 of 4 — John 3:36", "Fourth of four — the last paragraph of the chapter",
+			ShareLinkURLWithNote("web", "John", 3, 36, 36, "Spread note four — the closing paragraph.")},
 		{"Note on the FIRST paragraph", "Bubble above v1 — the container-inset path, not paragraphSpacingBefore",
 			n("Psalms", 23, 1, 4, "Fixture message alpha beta gamma delta epsilon zeta.")},
 		{"Note deep in a long chapter", "Psalm 119 is 176 verses: check it lands on the note, not the top",
@@ -350,6 +363,19 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	})
 	wipe.Importance = widget.DangerImportance
 
+	// Minimizing is the state the collapsed pill has to answer for, and reaching
+	// it by hand means finding every note and tapping − on each. This is one
+	// tap, so the question "what does the reader see when nothing is open?" can
+	// actually be looked at.
+	minAll := widget.NewButton("Minimize every stored note", func() {
+		for _, n := range allNotesForBrowsing(appPrefs()) {
+			setNoteMinimizedByID(appPrefs(), n.ID, true)
+		}
+		clearLiveNote(state)
+		refreshStatus()
+		state.refresh()
+	})
+
 	// Wrapping must be set explicitly — widget.Label does not wrap by default, and
 	// an unwrapped one reports its whole single line as its MinSize, which is how
 	// this line ran off the side of the screen.
@@ -367,7 +393,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, wipe, status,
+		notesSwitch, wipe, minAll, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,

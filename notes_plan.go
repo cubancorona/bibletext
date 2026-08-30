@@ -693,3 +693,86 @@ func stickerUnplacedOnlyWho(u int) string {
 	}
 	return fmt.Sprintf("%d notes cannot be shown in this translation", u)
 }
+
+// --- Notes grouped by the paragraph that carries them -----------------------
+//
+// A note anchors to a VERSE, but the band that holds its sticker opens above
+// the whole PARAGRAPH carrying that verse — paraCarriesVerse
+// (reading_styled_layout.go) is the join, and iOS/macOS reach the same place
+// through paragraphSpacingBefore. That is why a bubble for a note on v2 sits
+// above v1: they share a paragraph.
+//
+// The collapsed state has no equivalent join. One pill is drawn, anchored at
+// one paragraph, labelled with a count of the WHOLE CHAPTER (stickerPillWho
+// takes len(plan.Notes)). So five notes — two in one paragraph, three in
+// another — produce a single pill reading "Notes · 5" over one of the two,
+// and the other paragraph is indistinguishable from one carrying no notes.
+// The label's scope and the pill's position disagree, and the reader can only
+// see the position.
+//
+// This groups the chapter's placed notes the way the band already places
+// them, so a surface can draw one pill per noted paragraph with that
+// paragraph's own count. Paragraphs come from groupVersesIntoParagraphs, which
+// every surface already shares: the styled pane and Android call it directly,
+// iOS and macOS receive its output inside buildChapterHTML.
+type noteParagraphGroup struct {
+	// ParaIndex is the paragraph's position in the chapter, so groups come out
+	// in reading order rather than in the plan's newest-first order.
+	ParaIndex int
+	// BandVerse is the earliest anchor verse in the group — the verse the band
+	// is found by, and the one a surface should open the band above.
+	BandVerse int
+	// Notes are every note this paragraph carries, keeping the plan's order.
+	Notes []drawnNote
+}
+
+// noteAnchorVerse is the verse a drawn note hangs from: the first verse of its
+// first run that lands in this chapter. Zero when it has no home here.
+func noteAnchorVerse(d drawnNote) int {
+	for _, r := range d.Placement.Here {
+		if r.Lo > 0 {
+			return r.Lo
+		}
+	}
+	return 0
+}
+
+// groupNotesByParagraph collects notes under the paragraph that carries each
+// one. A note whose anchor no paragraph carries is dropped rather than forced
+// into a neighbour: it has no band to open, and inventing one would put a
+// sticker over a passage the note is not about.
+func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGroup {
+	if len(paras) == 0 || len(notes) == 0 {
+		return nil
+	}
+	byPara := map[int]int{} // paragraph index -> position in out
+	var out []noteParagraphGroup
+	for _, d := range notes {
+		v := noteAnchorVerse(d)
+		if v == 0 {
+			continue
+		}
+		pi := -1
+		for i, para := range paras {
+			if paraCarriesVerse(para, v) {
+				pi = i
+				break
+			}
+		}
+		if pi < 0 {
+			continue
+		}
+		at, seen := byPara[pi]
+		if !seen {
+			byPara[pi] = len(out)
+			out = append(out, noteParagraphGroup{ParaIndex: pi, BandVerse: v})
+			at = len(out) - 1
+		}
+		if v < out[at].BandVerse {
+			out[at].BandVerse = v
+		}
+		out[at].Notes = append(out[at].Notes, d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ParaIndex < out[j].ParaIndex })
+	return out
+}
