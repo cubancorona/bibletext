@@ -3061,7 +3061,23 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// replaces the text view's content, so there is no scroll snap to pre-empt —
 	// and arming a restore for one would drag the reader back up the chapter for
 	// a change they can see happen where they are.
-	if state.restore == nil && bc == lastPushedBookChapter && body != lastPushedBodyFP {
+	// A DECLARED ARRIVAL OUTRANKS "STAY WHERE YOU WERE". The capture below exists
+	// for re-renders the reader did not ask to move on — a theme flip, a
+	// presentation change — and forceReposition says this render IS one they
+	// asked for. Without the clause, tapping a link to the chapter already on
+	// screen captured the reader's current position into state.restore, and
+	// bibleTextScrollReadingTV checks restore BEFORE the highlight: the wash
+	// landed on the shared verse and the viewport stayed where it started. That
+	// scroll order is justified by the invariant "the explicit arrivals clear the
+	// restore", which this block was quietly breaking.
+	//
+	// The body fingerprint folds the version and the note plan, so a same-chapter
+	// arrival changes it whenever the link switches translation OR changes which
+	// note is open — which is most arrivals worth making.
+	//
+	// reading_android.go has carried this clause and its reasoning all along.
+	if state.restore == nil && !state.forceReposition &&
+		bc == lastPushedBookChapter && body != lastPushedBodyFP {
 		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
 			state.restore = &restoreAnchor{
 				Book:    state.CurrentBook,

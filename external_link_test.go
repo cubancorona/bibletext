@@ -157,7 +157,12 @@ func TestNoTestOpensSomethingForReal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read package dir: %v", err)
 	}
-	callsOpener := regexp.MustCompile(`\bopenExternalURL(?:Platform)?\(`)
+	// openLinkInBrowser routes to openExternalURL on every desktop, so a test
+	// calling IT reaches the real opener just as surely — and was not covered.
+	// On desktop macOS the opener is -[NSWorkspace openURL:], which Fyne's test
+	// app cannot stub: it opens a real browser window on the machine running the
+	// suite, and nobody sees that in CI.
+	callsOpener := regexp.MustCompile(`\b(?:openExternalURL(?:Platform)?|openLinkInBrowser)\(`)
 	substitutes := regexp.MustCompile(`externalOpener\s*=`)
 	var offenders, scanned []string
 	for _, e := range entries {
@@ -181,6 +186,7 @@ func TestNoTestOpensSomethingForReal(t *testing.T) {
 	// CONTROL: both patterns must fire on a known-offending source, or the
 	// clean result above means only that the regexes are broken.
 	if !callsOpener.MatchString("openExternalURL(u)") ||
+		!callsOpener.MatchString("openLinkInBrowser(sc.url)") ||
 		!substitutes.MatchString("externalOpener = func(u *url.URL) error { return nil }") {
 		t.Fatal("the sweep patterns cannot match known sources")
 	}

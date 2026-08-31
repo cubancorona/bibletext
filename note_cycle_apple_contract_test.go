@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -103,6 +104,46 @@ func TestAppleNoteMinimumOnlyAppliesOnTheHighlightsParagraph(t *testing.T) {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: %s does not compare paragraphs (missing %q)", tc.path, fn, want)
 			}
+		}
+	}
+}
+
+// An explicit arrival must not have a scroll restore captured underneath it.
+//
+// All three reading panes capture the reader's live position into state.restore
+// when the SAME chapter re-renders with a different body — the guard against a
+// theme flip yanking a mid-chapter reader to the top. It must not fire on a
+// render the reader ASKED for: applyShareTarget sets forceReposition and clears
+// restore precisely so the placement falls through to the highlight, and
+// bibleTextScrollReadingTV checks restore FIRST. Capturing there re-created the
+// restore the arrival had just cleared, so a link tapped on the chapter already
+// open applied its wash and left the viewport where it started.
+//
+// Android carried the clause from the beginning; the two Apple panes did not.
+// Source-level for the same reason as the placement contracts above: two of the
+// three only build for their own platform.
+func TestReadingPanesDoNotCaptureARestoreOverAnArrival(t *testing.T) {
+	for _, path := range []string{"reading_ios.go", "reading_macos.go", "reading_android.go"} {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		body := string(src)
+		idx := strings.Index(body, "state.restore == nil &&")
+		if idx < 0 {
+			t.Fatalf("%s: the same-chapter restore capture is gone; this test guards nothing", path)
+		}
+		// The whole condition, up to its opening brace.
+		end := strings.Index(body[idx:], "{")
+		if end < 0 {
+			t.Fatalf("%s: could not read the capture condition", path)
+		}
+		cond := body[idx : idx+end]
+		if !strings.Contains(cond, "forceReposition") && !strings.Contains(cond, "explicitArrival") {
+			t.Errorf("%s: the restore capture does not exclude an explicit arrival:\n  %s\n"+
+				"A tapped link on the chapter already open will be dragged back to where "+
+				"the reader was, because restore is checked before the highlight.",
+				path, strings.Join(strings.Fields(cond), " "))
 		}
 	}
 }

@@ -794,15 +794,18 @@ func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGr
 // A var, not a build constant, so the dev build can flip it while the app is
 // running and the two can be compared on the same chapter without a reinstall.
 //
-// NOW ON BY DEFAULT. Only the styled pane (Windows and Linux) draws the groups;
-// iOS, macOS and Android have one sticker and no pill row, so for them this
-// changes nothing at all — see X16 in docs/NOTES_STATE.md, which is the gap
-// that leaves.
+// OFF, and deliberately so until the pills reach every surface. Only the styled
+// pane (Windows and Linux) draws the groups; iOS, macOS and Android have one
+// sticker and no pill row. Turning it on therefore split the collapsed model
+// across platforms — desktop readers got per-paragraph counts, phone readers the
+// chapter-wide chip — which is a worse state than either model applied
+// everywhere. See X16 in docs/NOTES_STATE.md, and the port plan in
+// docs/BACKLOG.md.
 //
 // It writes nothing and is not persisted, so a relaunch is back to this default
 // either way — right for a switch that exists to be experimented with rather
 // than configured.
-var notesPillPerParagraph = true
+var notesPillPerParagraph = false
 
 // chapterNoteGroups is the collapsed state's groups for the current chapter, or
 // nil when the shipped single-sticker model is in force. Surfaces ask this one

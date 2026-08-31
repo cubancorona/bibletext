@@ -167,8 +167,10 @@ func TestThePaneDrawsAPillPerNotedParagraph(t *testing.T) {
 func TestGateOffLeavesTheSingleStickerDrawing(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	// Explicit, now that the default is ON: this test is about the OTHER
-	// setting, which the three native surfaces are still effectively in.
+	// Set explicitly rather than leaning on the default. The default has moved
+	// once already and will move again when the pills reach every surface; this
+	// test is about the gate-off model, which is what the three native surfaces
+	// draw regardless of the flag.
 	prev := notesPillPerParagraph
 	notesPillPerParagraph = false
 	defer func() { notesPillPerParagraph = prev }()

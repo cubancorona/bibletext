@@ -62,19 +62,18 @@ func TestAnUnplaceableNoteJoinsNoParagraph(t *testing.T) {
 
 // The gate must default to the shipped model, and no release surface may write
 // it. If this ever fails, readers are getting an unfinished collapsed state.
-// The default is now ON. The pills are the collapsed model on the styled pane,
-// and this pins the default so a flip back is a deliberate edit rather than a
-// drift.
+// OFF until the pills reach every surface, and this pins it so the flip is a
+// deliberate edit rather than a drift.
 //
-// It reaches ONE surface. iOS, macOS and Android have a single sticker and no
-// pill row, so for them the flag changes nothing — which is exactly X16 in
-// docs/NOTES_STATE.md: with an own note open they still represent the received
-// set nowhere. Turning this on did not close that; it closed it on Windows and
-// Linux only.
-func TestPillPerParagraphDefaultsOn(t *testing.T) {
-	if !notesPillPerParagraph {
-		t.Fatal("notesPillPerParagraph must default to true: the pills are the " +
-			"collapsed model on the styled pane now")
+// The flag reaches ONE surface: iOS, macOS and Android have a single sticker and
+// no pill row. Turning it on was tried and reverted, because it split the
+// collapsed model across platforms — per-paragraph counts on desktop, the
+// chapter-wide chip on the phone — which is worse than either model applied
+// everywhere. The port is what unblocks the flip; see docs/BACKLOG.md.
+func TestPillPerParagraphIsOffByDefault(t *testing.T) {
+	if notesPillPerParagraph {
+		t.Fatal("notesPillPerParagraph must default to false until every surface " +
+			"draws the groups: on is a split collapsed model, not a shipped one")
 	}
 }
 
