@@ -817,27 +817,24 @@ func (p *styledReadingPane) measureParagraphPills(width float32) ([]bandRequest,
 	if receivedSetShownAs(plan, p.note, len(groups)) != shownAsPills {
 		return nil, nil
 	}
-	req := make([]bandRequest, 0, len(groups))
-	geoms := make([]styledNoteGeom, 0, len(groups))
-	for _, g := range groups {
-		// The chapter-top group speaks for notes that point at no paragraph, so
-		// its label carries the unplaced count in the app's own shipped phrasing
-		// and its pill gets no tail — Anchor 0 is the anchorless placement, and
-		// measureStyledNote reads exactly that to decide.
-		anchor := g.BandVerse
-		if g.ParaIndex == chapterTopGroup {
-			anchor = 0
-		}
+	// The SPECS come from the shared value (noteChrome.Bands): which groups
+	// need a reservation, where each hangs, and what its label says. This pane
+	// adds the only thing the shared value may not carry — a measured height,
+	// which is a function of these fonts at this width.
+	specs := noteBandSpecs(groups)
+	req := make([]bandRequest, 0, len(specs))
+	geoms := make([]styledNoteGeom, 0, len(specs))
+	for i, spec := range specs {
 		n := styledNote{
 			Pill:   true,
-			Who:    stickerPillWho(len(g.Notes), g.Unplaced),
-			Anchor: anchor,
+			Who:    stickerPillWho(spec.Count, spec.Unplaced),
+			Anchor: spec.Verse, // 0 = the chapter top, which is what drops the tail
 		}
 		geom := measureStyledNote(n, width)
-		geom.anchorVerse = g.BandVerse
-		geom.groupKey = g.Key
+		geom.anchorVerse = groups[i].BandVerse
+		geom.groupKey = spec.Key
 		req = append(req, bandRequest{
-			Key: g.Key, Verse: g.BandVerse, H: geom.bandH(), Count: len(g.Notes),
+			Key: spec.Key, Verse: groups[i].BandVerse, H: geom.bandH(), Count: spec.Count,
 		})
 		geoms = append(geoms, geom)
 	}

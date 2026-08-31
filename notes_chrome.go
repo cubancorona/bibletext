@@ -87,6 +87,21 @@ type noteChrome struct {
 	Arrival      noteArrival
 	ArrivalVerse int
 
+	// Bands is every reservation this chapter needs, in drawing order: WHICH
+	// group, WHERE it hangs, and HOW MANY notes it speaks for.
+	//
+	// NOT how tall. A band's height is measured by each surface against its own
+	// fonts and width, and measurement is exactly what this value may not carry
+	// — the admission rule above is "a pure function of (state, plan, verses)",
+	// and a height is a function of a pane. So the identity crosses and the
+	// geometry stays local, which is also the split that lets the natives adopt
+	// this without a measurement callback.
+	//
+	// Empty unless the per-paragraph gate is on, because chapterNoteGroups is:
+	// with one chapter pill there is one reservation and Anchor already names
+	// it. Every surface therefore runs this list at length 0 or 1 today.
+	Bands []noteBandSpec
+
 	// EVERYTHING DERIVABLE FROM THE TUPLE IS A METHOD, NOT A FIELD.
 	//
 	// The first draft made presence, collapsedness, the tail and the verb set
@@ -229,6 +244,7 @@ func chapterNoteChrome(state *AppState, plan chapterPlan, verses []Verse) noteCh
 	// are facts about the render, not about the note, so they are read here
 	// rather than threaded through every caller.
 	groups := chapterNoteGroups(state, plan, verses)
+	c.Bands = noteBandSpecs(groups)
 	c.Arrival, c.ArrivalVerse = chapterNoteArrival(state, c, verses, groups,
 		gAudio != nil && gAudio.readAlongFollowActive(),
 		state.restore != nil, state.forceReposition)
@@ -266,3 +282,44 @@ func noteCountsSpan(who string, next bool) string {
 // noteWhoSep is the who line's own separator. One literal: the split was
 // transcribed into three languages, and the fit rule reads it too.
 const noteWhoSep = " · "
+
+// noteBandSpec is one reservation: the group it belongs to, the verse whose
+// paragraph carries it, and the counts its label speaks for. Height is absent
+// on purpose (see noteChrome.Bands).
+type noteBandSpec struct {
+	// Key is the group's identity, and the ONLY thing a press or a placement
+	// may match on. The chapter-top group deliberately shares paragraph 0's
+	// verse, so a verse names no single band — a defect that reached the pills'
+	// own verb before it was keyed.
+	Key int
+	// Verse is the verse whose paragraph this band hangs above. 0 = the chapter
+	// top, the anchorless placement, which is also what suppresses the tail.
+	Verse int
+	// Count and Unplaced are what the band's label says: how many notes this
+	// paragraph carries, and how many of the chapter's notes this translation
+	// cannot place at all.
+	Count, Unplaced int
+}
+
+// noteBandSpecs is the reservation list for a chapter's note groups. One place,
+// so a surface adopting the plural model gets the same list in the same order
+// as every other, rather than deriving its own from the groups.
+func noteBandSpecs(groups []noteParagraphGroup) []noteBandSpec {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]noteBandSpec, 0, len(groups))
+	for _, g := range groups {
+		verse := g.BandVerse
+		if g.ParaIndex == chapterTopGroup {
+			// The chapter-top group speaks for notes that point at no
+			// paragraph. Zero is the anchorless placement, exactly as on the
+			// single card, and it is what takes the tail away.
+			verse = 0
+		}
+		out = append(out, noteBandSpec{
+			Key: g.Key, Verse: verse, Count: len(g.Notes), Unplaced: g.Unplaced,
+		})
+	}
+	return out
+}

@@ -158,3 +158,85 @@ func TestTheFocusedKeyIsNotARealKey(t *testing.T) {
 			noteKeyFocused, chapterTopGroup)
 	}
 }
+
+// The band list is the reservation the natives will adopt, so its properties
+// are pinned here rather than discovered on a device.
+func TestNoteBandSpecs(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer deleteAllNotes(appPrefs())
+	defer setNotesEnabled(true)
+
+	orig := notesPillPerParagraph
+	defer func() { notesPillPerParagraph = orig }()
+
+	verses := enumerationChapter()
+	paras := groupVersesIntoParagraphs(verses)
+
+	build := func(t *testing.T, pills bool, withChapterNote bool) noteChrome {
+		t.Helper()
+		notesPillPerParagraph = pills
+		deleteAllNotes(appPrefs())
+		st := planTestState(t)
+		st.Bible.Verses["John"][3] = verses
+		for i, v := range []int{paras[0][0].Verse, paras[1][0].Verse} {
+			n, _ := addNote(appPrefs(), StoredNote{
+				Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3,
+				VerseLo: v, Text: "fixture " + string(rune('a'+i))})
+			setNoteMinimizedByID(appPrefs(), n.ID, true)
+		}
+		if withChapterNote {
+			n, _ := addNote(appPrefs(), StoredNote{
+				Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3,
+				Text: "a chapter-level note"})
+			setNoteMinimizedByID(appPrefs(), n.ID, true)
+		}
+		applyNoteForCurrentChapter(st)
+		return chapterNoteChrome(st, buildChapterPlan(st, appPrefs(), st.Bible), verses)
+	}
+
+	t.Run("empty with the gate off", func(t *testing.T) {
+		if c := build(t, false, false); len(c.Bands) != 0 {
+			t.Errorf("the gate is off and %d bands were requested; with one chapter "+
+				"pill there is one reservation and Anchor already names it", len(c.Bands))
+		}
+	})
+
+	t.Run("one per noted paragraph with the gate on", func(t *testing.T) {
+		c := build(t, true, false)
+		if len(c.Bands) != 2 {
+			t.Fatalf("%d bands for two noted paragraphs", len(c.Bands))
+		}
+		seen := map[int]bool{}
+		for _, b := range c.Bands {
+			if seen[b.Key] {
+				t.Errorf("key %d appears twice; the key is what a press and a "+
+					"placement both match on, so it must be unique", b.Key)
+			}
+			seen[b.Key] = true
+			if b.Count < 1 {
+				t.Errorf("band %d speaks for %d notes", b.Key, b.Count)
+			}
+		}
+	})
+
+	t.Run("the chapter-top band is anchorless", func(t *testing.T) {
+		c := build(t, true, true)
+		var top, anchored int
+		for _, b := range c.Bands {
+			if b.Verse == 0 {
+				top++
+			} else {
+				anchored++
+			}
+		}
+		if top != 1 {
+			t.Errorf("%d anchorless bands, want exactly 1 — verse 0 is what marks "+
+				"the chapter-top reservation and what drops its tail", top)
+		}
+		if anchored < 1 {
+			t.Error("no anchored band, so the anchorless one is not distinguishable " +
+				"from the ordinary case here")
+		}
+	})
+}
