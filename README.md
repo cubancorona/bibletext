@@ -34,15 +34,16 @@ for a Gospel passage, the parallel accounts in the other Gospels.
 **[bibletext download page](https://bibletext.co.uk/)** — all
 platforms in one place, or directly:
 
-- **iPhone & iPad** — [App Store](https://apps.apple.com/app/id6784567351)
+- **iPhone, iPad & Mac** — [App Store](https://apps.apple.com/app/id6784567351)
 - **Android** — [sideload APK](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk)
   from Releases (built + signed locally by `scripts/build-android.sh --release`,
   uploaded per release; Play Store listing prepared in
   [docs/PLAY_LISTING.md](docs/PLAY_LISTING.md), pending a Play Console account)
 - **macOS / Windows / Linux** — grab the latest build from
-  [Releases](https://github.com/cubancorona/bibletext/releases/latest)
-  (the desktop apps are unsigned: on macOS, right-click → **Open** the first
-  time). Desktop artifacts are built by
+  [Releases](https://github.com/cubancorona/bibletext/releases/latest). On a Mac
+  the App Store edition above is the easier route: signed, sandboxed and updated
+  for you. These builds are unsigned, so on macOS right-click → **Open** the
+  first time. Desktop artifacts are built by
   [`release.yml`](.github/workflows/release.yml) on every `v*` tag.
 
 ## Build

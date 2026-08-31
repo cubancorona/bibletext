@@ -7,7 +7,14 @@ after the first submission.
 
 Nothing here is wired into CI. `scripts/release-mac-store.sh` is run by hand.
 The plain desktop release — unsigned, unsandboxed, one zip per architecture —
-is unchanged and remains the default channel.
+is unchanged and remains available beside the Store build.
+
+**Status: shipped.** The first Mac submission — 1.2.4, desktop build 44 — is
+approved and live, so the listing now carries both platforms and the
+"one decision that cannot be undone" below is spent: the bundle id, the minimum
+macOS version and the sandbox posture recorded here are what the Store holds.
+Everything below is therefore a record of how it was done and what constrains
+the next submission, not a plan.
 
 ## One listing, two platforms
 
