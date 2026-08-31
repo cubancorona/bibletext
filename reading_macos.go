@@ -30,6 +30,10 @@ package bibletext
 // come first.
 static void btMacRefreshNote(void);
 static CGFloat btMacNoteTopY(void);
+// Forward-declared for btMacNoteSharesHighlightPara, which the scroll path needs
+// and which therefore sits well above the sticker's own section.
+static BOOL btMacNotePresent(void);
+static NSRange btMacNoteAnchorRange(NSTextStorage *ts, NSUInteger len);
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
 // an AI study action; it copies both strings immediately. lo/hi is the
@@ -982,6 +986,33 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
 //
 // The frame-origin normalisation stays with the CALLER, because both branches
 // below need it and this one can also be reached on its own.
+// btMacNoteSharesHighlightPara reports whether the note's band sits above the
+// SAME paragraph the highlight is in. That is the only case the "land on the
+// note" minimum below is about: a link that CARRIES a note lands on the note's
+// own passage, so the band is directly above the verse being washed and
+// scrolling to the verse would push the message off the top.
+//
+// It is NOT the case when the reader has notes of their own on the chapter. The
+// displayed note is the newest one (planDisplayIndex -> noteForChapter), which
+// can sit anywhere; worse, a collapsed set spanning more than one paragraph is
+// parked at CHAPTER SCOPE, whose anchor is the first paragraph and whose band is
+// therefore reserved with the container's top inset. Without this guard the
+// minimum then resolved to the top of the chapter and every arriving link
+// scrolled there instead of to its verse — the wash was applied correctly and
+// simply never brought into view.
+static BOOL btMacNoteSharesHighlightPara(void) {
+    if (!btMacNotePresent() || gTextView == nil) return NO;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (ts == nil || ts.length == 0) return NO;
+    if (gMacHighlightRange.location == NSNotFound ||
+        gMacHighlightRange.length == 0 ||
+        NSMaxRange(gMacHighlightRange) > ts.length) return NO;
+    NSRange notePara = [ts.string paragraphRangeForRange:
+        btMacNoteAnchorRange(ts, ts.length)];
+    NSRange hlPara = [ts.string paragraphRangeForRange:gMacHighlightRange];
+    return notePara.location == hlPara.location;
+}
+
 static BOOL btMacScrollToHighlight(void) {
     if (gTextView == nil || gScroll == nil) return NO;
     { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
@@ -1011,7 +1042,7 @@ static BOOL btMacScrollToHighlight(void) {
     // further up: nothing can put the note out of view. (The iOS twin does the
     // same in its scroll path; without it here the bubble was drawn correctly and
     // simply never seen.)
-    if (noteY >= 0 && noteY - 12 < y) y = noteY - 12;
+    if (noteY >= 0 && noteY - 12 < y && btMacNoteSharesHighlightPara()) y = noteY - 12;
     if (y < 0) y = 0;
     [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
     [gScroll reflectScrolledClipView:gScroll.contentView];
