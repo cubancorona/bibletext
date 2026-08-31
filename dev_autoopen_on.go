@@ -199,6 +199,10 @@ func devAutoReadAlong(state *AppState) {
 //	           one slot is reserved. s11mixed puts an own note and a received
 //	           one on the same chapter so the two verb corners sit in one
 //	           frame, a next-tap apart
+//	s11pill    the PILL-SCROLL case: a note late in John 11, minimized to the
+//	           chapter pill, the view sent back to the top, then the pill's
+//	           own Restore. The bubble must arrive IN VIEW — it used to expand
+//	           hundreds of points below the reader, who saw nothing change
 func devAutoNotesS8(state *AppState) {
 	scenario := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")))
 	if scenario == "" || state == nil {
@@ -319,6 +323,23 @@ func devAutoNotesS8(state *AppState) {
 			at(9*time.Second, func() { link("Fixture received message beside your own.") })
 			time.AfterFunc(16*time.Second, func() { devNoteNextTap(state) })
 		}
+	case "s11pill":
+		// The reader's report: press the pill at the top of John 11 and the
+		// bubble expands, but the page does not go to it. Reproduced with the
+		// note late in the chapter, the view deliberately sent back to the top
+		// while it is collapsed, and then the pill's own verb.
+		at(1200*time.Millisecond, func() { navigateToReference(state, "John", 11) })
+		at(2500*time.Millisecond, func() {
+			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+				"John", 11, 45, 45, "A note late in the chapter, opened from the pill at the top."))
+		})
+		// Collapse it, then send the view back to the chapter's first verse —
+		// which is where a reader who scrolled up would be, and where the pill
+		// they are about to press is sitting.
+		at(7*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
+		at(10*time.Second, func() { armReadingRestore(1, 0, 0) })
+		// …and press it. This is the function the native pill posts.
+		at(15*time.Second, func() { restoreCurrentNote(state); state.refreshReadingOnly() })
 	case "s10far":
 		far := func(verse int, text string) {
 			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,

@@ -617,6 +617,31 @@ func nextNoteFocusID(state *AppState, plan chapterPlan) uint64 {
 	return plan.Notes[0].Note.ID
 }
 
+// openedNotePlacesTheView is what every verb that OPENS a note has to say
+// afterwards. "Place the view" is a declaration (AppState.forceReposition), not
+// something a pane can infer: the panes deliberately treat a presentation-only
+// change as a sticker repaint with no scroll, which is right for a Hide and
+// wrong for a Show.
+//
+// The next-tap declared it and the two pill verbs did not, so pressing the pill
+// at the top of a chapter expanded a bubble hundreds of points further down and
+// left the reader looking at the same paragraph — the note opened somewhere
+// they could not see it. One function now, so a fourth opening verb cannot
+// quietly be the one that forgets.
+//
+// It also drops any pending saved-position restore: the note the reader just
+// chose outranks where they happened to be before.
+//
+// advanceNoteFocus has the one exception, stated at its call site: a next-tap
+// between two notes that share a verse is a walk through a set already in view.
+func openedNotePlacesTheView(state *AppState) {
+	if state == nil {
+		return
+	}
+	state.forceReposition = true
+	state.restore = nil
+}
+
 // advanceNoteFocus selects the next note in the plan's stable order. Selection
 // restores a minimized target, clears a foreign mark, focuses the target by
 // identity, and re-projects the state mirror from the plan.
@@ -651,13 +676,16 @@ func advanceNoteFocus(state *AppState) {
 	previousVerse := state.NoteVerseLo
 	state.focusNote(id)
 	applyNoteForCurrentChapter(state)
-	if state.NoteVerseLo != previousVerse {
-		state.forceReposition = true
+	// THE ONE EXCEPTION to openedNotePlacesTheView, and it is about where the
+	// reader already is. A next-tap walks a set the reader is looking AT, so
+	// when the next note hangs off the same verse the card is already in view
+	// and moving would be a jump with nothing to show for it. Every other
+	// opening verb — and every next-tap that changes the anchor — places.
+	if state.NoteVerseLo == previousVerse {
+		state.restore = nil
+		return
 	}
-	// The newly selected note outranks a pending saved-position restore. The
-	// platform render path either performs the requested placement or retains
-	// the current viewport when both notes share an anchor.
-	state.restore = nil
+	openedNotePlacesTheView(state)
 }
 
 // androidStickerPush is the Android full-screen sticker's tuple —
@@ -914,6 +942,7 @@ func focusNoteAtVerse(state *AppState, verse int) {
 		}
 		state.focusNote(n.ID)
 		applyNoteForCurrentChapter(state)
+		openedNotePlacesTheView(state)
 		return
 	}
 }

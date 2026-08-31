@@ -969,6 +969,7 @@ func restoreCurrentNote(state *AppState) {
 		// note's own mark (without clobbering a foreign one).
 		state.focusNote(state.NoteID)
 		applyNoteForCurrentChapter(state)
+		openedNotePlacesTheView(state)
 		return
 	}
 	// A note that never reached the store (it arrived while the store was
@@ -986,6 +987,7 @@ func restoreCurrentNote(state *AppState) {
 		// note-owned mark so a verse selected before it is not left highlighted.
 		state.clearMarkFromNote()
 	}
+	openedNotePlacesTheView(state)
 }
 
 func dropCurrentNote(state *AppState) {
