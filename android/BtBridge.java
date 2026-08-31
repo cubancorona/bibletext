@@ -1411,7 +1411,10 @@ public final class BtBridge {
         // (iOS accents only the counts; one TextView cannot split the tap, so
         // the line is the control — recorded simplification).
         String whoLabel = noteWho != null ? noteWho : "Note from Friend";
-        whoLabel = noteNextable ? whoLabel + "  ›" : whoLabel;
+        // ONE space, as every other surface uses (noteChevron, notes_chrome.go).
+        // This was two, which made Android's counts sit a space further out than
+        // anyone else's for no reason anybody chose.
+        whoLabel = noteNextable ? whoLabel + " ›" : whoLabel;
         who.setText(whoLabel);
         who.setTag(whoLabel); // the unfitted string, for the width-aware fit below
         who.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);

@@ -149,3 +149,70 @@ func TestReadingPanesDoNotCaptureARestoreOverAnArrival(t *testing.T) {
 		}
 	}
 }
+
+// EVERY SURFACE SPELLS THE CHROME'S OWN STRINGS THE SAME WAY.
+//
+// The chevron appended after the counts is app chrome, not a renderer's
+// choice — and it was four separate literals that had already drifted: Android
+// used two spaces where everyone else used one, so its counts sat a space
+// further out than anybody had decided. Nothing could have caught that; there
+// was no place the four were compared.
+//
+// Source-level because two of the four are Objective-C in a cgo preamble and
+// one is Java: none can be linked into a Go test, but all four can be read.
+func TestEverySurfaceUsesTheSameChevron(t *testing.T) {
+	for _, tc := range []struct{ path, quoted string }{
+		{"reading_ios.go", `@"` + noteChevron + `"`},
+		{"reading_macos.go", `@"` + noteChevron + `"`},
+		{"android/BtBridge.java", `" ` + "›" + `"`},
+		{"reading_styled_note.go", `" ` + "›" + `"`},
+	} {
+		src, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.path, err)
+		}
+		body := string(src)
+		if !strings.Contains(body, tc.quoted) {
+			t.Errorf("%s does not use the shared chevron %q", tc.path, noteChevron)
+		}
+		// And it must not carry a DIFFERENT spelling of it alongside.
+		for _, wrong := range []string{`"  ›"`, `@"  ›"`, `"›"`, `@"›"`} {
+			if strings.Contains(body, wrong) {
+				t.Errorf("%s spells the chevron %s as well; one chrome string, one spelling",
+					tc.path, wrong)
+			}
+		}
+	}
+}
+
+// The four expressions of "is there a sticker" and "is it collapsed" must stay
+// the same expression. They are identical today and equivalent to the shared Go
+// wherever anything is drawn; this is what makes the next edit to one of them a
+// failure rather than a divergence nobody sees.
+func TestEverySurfaceAsksPresenceAndCollapseTheSameWay(t *testing.T) {
+	for _, tc := range []struct{ path, present, pill string }{
+		{"reading_ios.go",
+			"gNoteText != nil || gNoteWho != nil",
+			"gNoteMinimized || gNoteText == nil"},
+		{"reading_macos.go",
+			"gMacNoteText != nil || gMacNoteWho != nil",
+			"gMacNoteMinimized || gMacNoteText == nil"},
+		{"android/BtBridge.java",
+			"noteText != null || noteWho != null",
+			"notePill || noteText == null"},
+	} {
+		src, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.path, err)
+		}
+		body := string(src)
+		if !strings.Contains(body, tc.present) {
+			t.Errorf("%s: presence is not %q — it must match noteChrome.present() "+
+				"(Text or Who non-empty)", tc.path, tc.present)
+		}
+		if !strings.Contains(body, tc.pill) {
+			t.Errorf("%s: the collapsed test is not %q — it must match "+
+				"noteChrome.collapsed() wherever a sticker is drawn", tc.path, tc.pill)
+		}
+	}
+}
