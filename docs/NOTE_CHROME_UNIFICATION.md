@@ -1,6 +1,13 @@
-<!-- A design plan, not a record of what is built. Only the first step is
-     landed: c619743e4 unified the own-note predicate. Everything below is
-     proposed. -->
+<!-- A design plan. WHAT IS LANDED so far:
+       c619743e4  the own-note predicate is one function
+       0a4ffcef3  notes_chrome.go composes the value once; styledNote aliases it;
+                  receivedSetShownAs and stickerIsTheReceivedSet move onto it;
+                  two conformance sweeps over the enumeration's states
+       a4b42f249  shouldCaptureScrollRestore is one question, asked by all three
+                  panes, with the contracts tightened to require the call
+     Everything from "3. Present / Collapsed / Chevron" onward is proposed, and
+     every one of those steps changes rendering on platforms that need a device
+     or an emulator to verify. -->
 
 # Unifying note chrome: one value, four adapters, one conformance table
 

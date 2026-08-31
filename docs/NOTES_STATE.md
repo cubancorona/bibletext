@@ -654,6 +654,25 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   `N10-own-note-not-drawn@verb`. Only at the post-verb moment: navigation
   resets focus, so by the next snapshot there is no own note to draw.
 
+- **N11 — One composition.** Every surface's note chrome is the value
+  `chapterNoteChrome` composes (`notes_chrome.go`), and every decision derivable
+  from that value's tuple is a method on it rather than a copy in a renderer.
+  *Held by* `TestNoteChromeIsOneValueForEverySurface`, which checks the shared
+  value against all three Go push sites over the 416 states the enumeration
+  reaches, and `TestDerivedChromeDecisionsAgreeWithTheirTuple`.
+  *Why methods and not fields:* fields were tried first and are a trap in a
+  package that builds this value with composite literals — `present()` reading a
+  field made every existing literal report "no sticker", and the pills stopped
+  being drawn. Only `ShownAs` is a field, because it needs the plan and the
+  paragraph groups, which a literal cannot supply.
+- **N12 — One scroll-restore question.** A render captures the reader's position
+  into `state.restore` only when `shouldCaptureScrollRestore` says so
+  (`reading_state.go`). *Held by* `TestShouldCaptureScrollRestore` at the edges
+  and by the three source-level pane contracts, which assert the panes CALL it
+  rather than that their conditions mention an arrival — mentioning it was
+  satisfiable by three conditions that happened to agree, which is what two of
+  the three stopped doing.
+
 ## Incoherent states
 
 Every one below was reached by driving the real functions. `exists today` means
