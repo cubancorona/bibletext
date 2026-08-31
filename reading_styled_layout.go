@@ -133,6 +133,11 @@ type chapterLayout struct {
 // paragraph carries — the count belongs to the request because only the plan
 // knows it, and only the layout knows where it lands.
 type bandRequest struct {
+	// Key identifies the GROUP this band is for, and it is what placement
+	// matches on. The verse alone cannot: the chapter-top group (the notes that
+	// point at no paragraph) lands on the same paragraph as that paragraph's own
+	// group, and two bands sharing a verse are indistinguishable.
+	Key   int
 	Verse int
 	H     float32
 	Count int
@@ -141,6 +146,7 @@ type bandRequest struct {
 // noteBand is one reserved band: where it sits, which paragraph it belongs to,
 // and what it is standing for.
 type noteBand struct {
+	Key      int // the group this band was reserved for; placement matches on it
 	Line     int // the line the band opens above
 	LastLine int // the last line of the paragraph it belongs to
 	Y, H     float32
@@ -218,6 +224,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	tints := chapterTint(state)
 	y := p.TopPad // the superscription's reserved advance (0 = none)
 
+	var opened []int // band indices this paragraph opened; reused per paragraph
 	for pi, para := range groupVersesIntoParagraphs(verses) {
 		if pi > 0 {
 			// One half of the paragraph separator; the other "\n" is written
@@ -249,24 +256,25 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		// its tail points at the passage, and a chip sitting between the two
 		// would break that line of sight.
 		singleOpensHere := false
-		bandIndex := -1
-		if len(p.Bands) > 0 {
-			// At most ONE band per paragraph: two notes in one paragraph share
-			// a pill, which is the whole point of grouping them. The first
-			// request this paragraph carries wins and the rest are its
-			// company, already counted in Count.
-			for _, br := range p.Bands {
-				if br.H <= 0 || !paraCarriesVerse(para, br.Verse) {
-					continue
-				}
-				y += br.H
-				bandIndex = len(lay.Bands)
-				lay.Bands = append(lay.Bands, noteBand{
-					Line: len(lay.Lines), LastLine: -1,
-					Y: y - br.H, H: br.H, Verse: br.Verse, Count: br.Count,
-				})
-				break
+		opened = opened[:0]
+		// EVERY request this paragraph carries, not just the first. Two notes in
+		// one paragraph still share a pill — that is what grouping is for, and
+		// they arrive as ONE request. What can legitimately want two bands here
+		// is two different GROUPS landing on one paragraph: the chapter-top
+		// group, holding the notes that point at no paragraph at all, sits above
+		// the first paragraph beside whatever that paragraph carries of its own.
+		// Requests arrive in reading order, so stacking them in order puts the
+		// chapter-wide one on top.
+		for _, br := range p.Bands {
+			if br.H <= 0 || !paraCarriesVerse(para, br.Verse) {
+				continue
 			}
+			y += br.H
+			opened = append(opened, len(lay.Bands))
+			lay.Bands = append(lay.Bands, noteBand{
+				Key: br.Key, Line: len(lay.Lines), LastLine: -1,
+				Y: y - br.H, H: br.H, Verse: br.Verse, Count: br.Count,
+			})
 		}
 		if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
 			y += p.BandH
@@ -393,8 +401,8 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		flushLine(false)
 		// Both, for the same reason the reservations are both: a paragraph that
 		// opened a pill AND the sticker must close each one's line span.
-		if bandIndex >= 0 {
-			lay.Bands[bandIndex].LastLine = len(lay.Lines) - 1
+		for _, bi := range opened {
+			lay.Bands[bi].LastLine = len(lay.Lines) - 1
 		}
 		if singleOpensHere {
 			lay.BandLastLine = len(lay.Lines) - 1

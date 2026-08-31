@@ -889,7 +889,7 @@ func TestStyledHighlightScrollShowsTheBubble(t *testing.T) {
 // ONE path for card and tail, and never an 8-digit hex colour — the two defects
 // notes_bubble.go records, pinned this time rather than commented.
 func TestStyledNoteBubbleIsOnePath(t *testing.T) {
-	res := noteBubblePathSVG(240, 80, lightPalette.SurfaceAlt, lightPalette.Border)
+	res := noteBubblePathSVG(240, 80, lightPalette.SurfaceAlt, lightPalette.Border, true)
 	svg := string(res.Content())
 
 	if n := strings.Count(svg, "<path"); n != 1 {

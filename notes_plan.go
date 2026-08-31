@@ -724,7 +724,23 @@ type noteParagraphGroup struct {
 	BandVerse int
 	// Notes are every note this paragraph carries, keeping the plan's order.
 	Notes []drawnNote
+
+	// Unplaced is how many notes this group stands for that have no home in the
+	// translation being read. Only ever non-zero on the chapter-top group: an
+	// unplaced note is on no paragraph by definition.
+	Unplaced int
+
+	// Key is this group's identity, assigned after ordering, and what a band
+	// reservation is matched back by. The band VERSE cannot serve: the
+	// chapter-top group shares paragraph 0's verse with paragraph 0's own group.
+	Key int
 }
+
+// chapterTopGroup is the ParaIndex of the group holding notes that belong to NO
+// paragraph — chapter-level ones, and unplaced ones. Negative so ordering by
+// paragraph puts it first, which is where it is drawn: at the top of the
+// chapter, above everything, because that is the scope it speaks for.
+const chapterTopGroup = -1
 
 // noteAnchorVerse is the verse a drawn note hangs from: the first verse of its
 // first run that lands in this chapter. Zero when it has no home here.
@@ -752,9 +768,14 @@ func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGr
 	chapter := paras[0][0].Chapter
 	byPara := map[int]int{} // paragraph index -> position in out
 	var out []noteParagraphGroup
+	var topNotes []drawnNote
 	for _, d := range notes {
 		v := noteAnchorVerse(d, chapter)
 		if v == 0 {
+			// Anchored at no verse: a whole-chapter note. It belongs to the
+			// chapter-top group rather than being dropped, which is what left
+			// the pills' counts short of the chapter's total.
+			topNotes = append(topNotes, d)
 			continue
 		}
 		pi := -1
@@ -778,7 +799,21 @@ func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGr
 		}
 		out[at].Notes = append(out[at].Notes, d)
 	}
+	if len(topNotes) > 0 {
+		// The chapter's FIRST verse, so paraCarriesVerse finds paragraph 0 and
+		// the band opens above the whole chapter. It shares that verse with
+		// paragraph 0's own group where there is one, which is why bands are
+		// matched by Key rather than by verse.
+		out = append(out, noteParagraphGroup{
+			ParaIndex: chapterTopGroup,
+			BandVerse: paras[0][0].Verse,
+			Notes:     topNotes,
+		})
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ParaIndex < out[j].ParaIndex })
+	for i := range out {
+		out[i].Key = i
+	}
 	return out
 }
 
@@ -815,7 +850,34 @@ func chapterNoteGroups(state *AppState, plan chapterPlan, verses []Verse) []note
 	if !notesPillPerParagraph || state == nil {
 		return nil
 	}
-	return groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)
+	groups := groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes)
+	// Unplaced notes are on this BOOK with no home in this translation, so they
+	// are on no paragraph at all. They ride the chapter-top group, which is
+	// created for them when nothing else needs it — otherwise a chapter whose
+	// only notes are unplaced would report none.
+	if u := len(plan.Unplaced); u > 0 && len(verses) > 0 {
+		paras := groupVersesIntoParagraphs(verses)
+		if len(paras) > 0 {
+			at := -1
+			for i := range groups {
+				if groups[i].ParaIndex == chapterTopGroup {
+					at = i
+					break
+				}
+			}
+			if at < 0 {
+				groups = append([]noteParagraphGroup{{
+					ParaIndex: chapterTopGroup, BandVerse: paras[0][0].Verse,
+				}}, groups...)
+				for i := range groups {
+					groups[i].Key = i
+				}
+				at = 0
+			}
+			groups[at].Unplaced = u
+		}
+	}
+	return groups
 }
 
 // focusNoteAtVerse opens the note belonging to the paragraph a pill sits on.

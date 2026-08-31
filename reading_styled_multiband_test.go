@@ -66,7 +66,17 @@ func TestEveryBandIsDisjointFromEveryLine(t *testing.T) {
 }
 
 // Two notes in ONE paragraph share a pill: that is what grouping them means.
-func TestOneParagraphReservesOneBand(t *testing.T) {
+// One paragraph reserves one band PER GROUP, and the bands are matched back by
+// key rather than by verse.
+//
+// It used to be one band per paragraph full stop, on the reasoning that notes
+// sharing a paragraph share a pill — which is true, and is why they arrive as a
+// single request. What that rule could not express is two different GROUPS
+// landing on one paragraph, which the chapter-top group does with paragraph 0
+// by construction: it is drawn at the top, so it is found by the first verse,
+// which paragraph 0 also owns. Both bands are real and the reader sees two
+// pills; keying them is what keeps placement from confusing the two.
+func TestOneParagraphReservesOneBandPerGroup(t *testing.T) {
 	verses := longEnoughForTwoParagraphs()
 	paras := groupVersesIntoParagraphs(verses)
 	a := paras[0][0].Verse
@@ -75,10 +85,23 @@ func TestOneParagraphReservesOneBand(t *testing.T) {
 		t.Skip("fixture's first paragraph holds one verse")
 	}
 	lay := layoutForBands(t, verses, []bandRequest{
-		{Verse: a, H: 40, Count: 2}, {Verse: b, H: 40, Count: 2},
+		{Key: 0, Verse: a, H: 40, Count: 2}, {Key: 1, Verse: b, H: 40, Count: 3},
 	})
-	if len(lay.Bands) != 1 {
-		t.Fatalf("both requests fall in one paragraph, so one band: got %d", len(lay.Bands))
+	if len(lay.Bands) != 2 {
+		t.Fatalf("two groups landing on one paragraph is two bands: got %d", len(lay.Bands))
+	}
+	if lay.Bands[0].Key != 0 || lay.Bands[1].Key != 1 {
+		t.Errorf("bands carry keys %d and %d, want 0 and 1 — placement matches on them",
+			lay.Bands[0].Key, lay.Bands[1].Key)
+	}
+	// Stacked in request order, and disjoint: the bands are ADVANCE.
+	if lay.Bands[0].Y >= lay.Bands[1].Y {
+		t.Errorf("bands are not in request order: y=%.1f then y=%.1f",
+			lay.Bands[0].Y, lay.Bands[1].Y)
+	}
+	if lay.Bands[0].Y+lay.Bands[0].H > lay.Bands[1].Y {
+		t.Errorf("the two bands overlap: %.1f+%.1f runs into %.1f",
+			lay.Bands[0].Y, lay.Bands[0].H, lay.Bands[1].Y)
 	}
 }
 

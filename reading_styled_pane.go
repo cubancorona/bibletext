@@ -301,7 +301,9 @@ func (p *styledReadingPane) relayout(width float32) {
 		placed := p.pillGeoms[:0]
 		for _, b := range p.lay.Bands {
 			for i := range p.pillGeoms {
-				if p.pillGeoms[i].anchorVerse != b.Verse {
+				// By KEY, not by verse: the chapter-top group and paragraph 0's
+				// own group share a band verse by construction.
+				if p.pillGeoms[i].groupKey != b.Key {
 					continue
 				}
 				g := p.pillGeoms[i]

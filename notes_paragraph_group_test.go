@@ -50,13 +50,36 @@ func TestNotesGroupUnderTheParagraphThatCarriesThem(t *testing.T) {
 // A note the chapter cannot place has no band to open. Forcing it into a
 // neighbouring paragraph would stand a sticker over a passage the note is not
 // about, so it is dropped from the grouping instead.
-func TestAnUnplaceableNoteJoinsNoParagraph(t *testing.T) {
+// A note anchored at NO verse joins the chapter-top group; one anchored at a
+// verse this chapter does not contain joins nothing.
+//
+// The two used to be one case — both were dropped — and dropping the first is
+// what left the pills' counts short of the chapter's total. An anchorless note
+// is a whole-chapter note: it belongs to the chapter, so it belongs at the top
+// of it. A note anchored at verse 99 of a two-verse chapter belongs to a
+// paragraph that is not here, and there is nothing truthful to say about it.
+func TestAnAnchorlessNoteJoinsTheTopGroupAndAnAbsentVerseJoinsNothing(t *testing.T) {
 	paras := [][]Verse{{{Verse: 1}, {Verse: 2}}}
-	unplaced := drawnNote{Placement: placement{Kind: unplacedAbsent}}
+	anchorless := drawnNote{Placement: placement{Kind: unplacedAbsent}}
 	beyond := drawnNote{Placement: placement{Kind: placedNative,
 		Here: []anchorRun{{Lo: 99, Hi: 99}}}}
-	if got := groupNotesByParagraph(paras, []drawnNote{unplaced, beyond}); len(got) != 0 {
-		t.Fatalf("neither note can be placed in this chapter; got %d group(s)", len(got))
+
+	got := groupNotesByParagraph(paras, []drawnNote{anchorless, beyond})
+	if len(got) != 1 {
+		t.Fatalf("the anchorless note belongs to the chapter-top group and the "+
+			"absent-verse one to nothing, so one group; got %d", len(got))
+	}
+	if got[0].ParaIndex != chapterTopGroup {
+		t.Errorf("the surviving group is at paragraph %d, want the chapter-top group (%d)",
+			got[0].ParaIndex, chapterTopGroup)
+	}
+	if len(got[0].Notes) != 1 {
+		t.Errorf("the top group holds %d notes, want just the anchorless one — the "+
+			"note anchored beyond the chapter must not have joined it", len(got[0].Notes))
+	}
+	if got[0].BandVerse != 1 {
+		t.Errorf("the top group's band verse is %d, want the chapter's first (1) so "+
+			"the band opens above everything", got[0].BandVerse)
 	}
 }
 

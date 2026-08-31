@@ -139,8 +139,16 @@ type styledNoteGeom struct {
 	// press affordance (the iOS attributed-range treatment, without an
 	// attributed string).
 	sender, counts, tail, restR styledNoteRect
-	senderTx, countsTx          string
-	tailTx, restTx              string
+
+	// hasTail is false for a note that points at NO passage — a chapter-scope
+	// one, and (once they are drawn) an unplaced one. The speech tail asserts
+	// "this is about the text directly below me", which for those is simply not
+	// true: they belong to the chapter, are parked at its top, and a tail there
+	// would claim verse 1. The card is then a plain rounded rectangle and
+	// reserves no tail depth.
+	hasTail            bool
+	senderTx, countsTx string
+	tailTx, restTx     string
 
 	body      []string
 	bodyLines []styledNoteRect
@@ -154,6 +162,11 @@ type styledNoteGeom struct {
 	// matched by identity rather than by order, because the layout drops a
 	// request whose paragraph it cannot find.
 	anchorVerse int
+
+	// groupKey ties this pill back to the band reserved for its group. Matching
+	// on anchorVerse alone breaks once two groups share a paragraph, which the
+	// chapter-top group does with paragraph 0.
+	groupKey int
 }
 
 // bandH is what the layout must reserve: a gap, the drawn shape, and the gap to
@@ -378,7 +391,15 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 		}
 	}
 	g.cardH = bodyY + float32(len(g.body))*lineH + styledNotePad
-	g.card = styledNoteRect{X: 0, Y: 0, W: width, H: g.cardH + noteTailDepth}
+	// Anchor 0 is the anchorless placement a whole-chapter note uses
+	// (applyNoteForCurrentChapter parks the collapsed set there too), so it is
+	// the same question as "does this point at a passage?".
+	g.hasTail = n.Anchor > 0
+	tailH := float32(noteTailDepth)
+	if !g.hasTail {
+		tailH = 0
+	}
+	g.card = styledNoteRect{X: 0, Y: 0, W: width, H: g.cardH + tailH}
 
 	// Minimize first, delete second: the destructive one is never what a hand
 	// reaches by accident (the native stickers order them the same way).
@@ -488,8 +509,8 @@ func (r *styledPaneRenderer) buildNote() {
 		return
 	}
 
-	if key := noteCardKey(g.card.W, g.cardH, pal); r.noteCardRes == nil || r.noteCardKey != key {
-		r.noteCardRes = noteBubblePathSVG(g.card.W, g.cardH, pal.SurfaceAlt, pal.Border)
+	if key := noteCardKey(g.card.W, g.cardH, pal, g.hasTail); r.noteCardRes == nil || r.noteCardKey != key {
+		r.noteCardRes = noteBubblePathSVG(g.card.W, g.cardH, pal.SurfaceAlt, pal.Border, g.hasTail)
 		r.noteCardKey = key
 	}
 	// The SVG is generated at the EXACT card size, so the stretch is 1:1 and
@@ -576,8 +597,8 @@ func (r *styledPaneRenderer) buildNote() {
 
 // noteCardKey identifies a generated bubble resource: regenerate only when the
 // size or the colours move.
-func noteCardKey(w, h float32, pal palette) string {
-	return fmt.Sprintf("%.0fx%.0f|%v|%v", w, h, pal.SurfaceAlt, pal.Border)
+func noteCardKey(w, h float32, pal palette, tail bool) string {
+	return fmt.Sprintf("%.0fx%.0f|%v|%v|tail=%v", w, h, pal.SurfaceAlt, pal.Border, tail)
 }
 
 // positionNote places every sticker object from the geometry table — and the
@@ -706,7 +727,7 @@ func (r *styledPaneRenderer) noteObjects() []fyne.CanvasObject {
 // SIX hex digits, alpha as its own attribute — Fyne's SVG loader rejects
 // #RRGGBBAA outright, and the 8-digit spelling is what made noteTailSVG's tail
 // fail to load on every build for months behind one quiet log line.
-func noteBubblePathSVG(w, h float32, fill, stroke color.Color) fyne.Resource {
+func noteBubblePathSVG(w, h float32, fill, stroke color.Color, tail bool) fyne.Resource {
 	fillHex, fillA := noteSVGHex(fill)
 	strokeHex, strokeA := noteSVGHex(stroke)
 
@@ -744,11 +765,29 @@ func noteBubblePathSVG(w, h float32, fill, stroke color.Color) fyne.Resource {
 		in, r+in, // left edge
 		in, in, r+in, in) // top-left corner
 
+	// No tail: the bottom edge runs straight from the bottom-right corner to the
+	// bottom-left one, with no detour to an apex. Still ONE path, for the reason
+	// above — the difference is only whether the outline dips.
+	depth := float32(noteTailDepth)
+	if !tail {
+		depth = 0
+		d = fmt.Sprintf("M%.1f %.1f L%.1f %.1f Q%.1f %.1f %.1f %.1f L%.1f %.1f "+
+			"Q%.1f %.1f %.1f %.1f L%.1f %.1f Q%.1f %.1f %.1f %.1f L%.1f %.1f Q%.1f %.1f %.1f %.1f Z",
+			r+in, in, right-r, in, // top edge
+			right, in, right, r+in, // top-right corner
+			right, bottom-r, // right edge
+			right, bottom, right-r, bottom, // bottom-right corner
+			r+in, bottom, // bottom edge, unbroken
+			in, bottom, in, bottom-r, // bottom-left corner
+			in, r+in, // left edge
+			in, in, r+in, in) // top-left corner
+	}
+
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="%.0f" height="%.0f" viewBox="0 0 %.0f %.0f">`+
 			`<path d="%s" fill="%s" fill-opacity="%.3f" stroke="%s" stroke-opacity="%.3f" `+
 			`stroke-width="1" stroke-linejoin="round"/></svg>`,
-		w, h+noteTailDepth, w, h+noteTailDepth, d, fillHex, fillA, strokeHex, strokeA)
+		w, h+depth, w, h+depth, d, fillHex, fillA, strokeHex, strokeA)
 	return fyne.NewStaticResource("note-bubble.svg", []byte(svg))
 }
 
@@ -847,14 +886,25 @@ func (p *styledReadingPane) measureParagraphPills(width float32) ([]bandRequest,
 	req := make([]bandRequest, 0, len(groups))
 	geoms := make([]styledNoteGeom, 0, len(groups))
 	for _, g := range groups {
+		// The chapter-top group speaks for notes that point at no paragraph, so
+		// its label carries the unplaced count in the app's own shipped phrasing
+		// and its pill gets no tail — Anchor 0 is the anchorless placement, and
+		// measureStyledNote reads exactly that to decide.
+		anchor := g.BandVerse
+		if g.ParaIndex == chapterTopGroup {
+			anchor = 0
+		}
 		n := styledNote{
 			Pill:   true,
-			Who:    stickerPillWho(len(g.Notes), 0),
-			Anchor: g.BandVerse,
+			Who:    stickerPillWho(len(g.Notes), g.Unplaced),
+			Anchor: anchor,
 		}
 		geom := measureStyledNote(n, width)
 		geom.anchorVerse = g.BandVerse
-		req = append(req, bandRequest{Verse: g.BandVerse, H: geom.bandH(), Count: len(g.Notes)})
+		geom.groupKey = g.Key
+		req = append(req, bandRequest{
+			Key: g.Key, Verse: g.BandVerse, H: geom.bandH(), Count: len(g.Notes),
+		})
 		geoms = append(geoms, geom)
 	}
 	return req, geoms

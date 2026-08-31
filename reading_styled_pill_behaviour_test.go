@@ -921,3 +921,212 @@ func TestScrollingLandsOnTheTopmostBandOfTheParagraph(t *testing.T) {
 			"scrolled %.1fpt past what sits above the paragraph", got, top, got-top)
 	}
 }
+
+// A note that points at NO passage gets no speech tail. The tail asserts "this
+// is about the text directly below me", and a chapter-scope note is parked at
+// the top of the chapter — so a tail there claims verse 1, which is not what the
+// note is about. It also reserves no tail depth, so the card is exactly as tall
+// as its content.
+func TestAChapterScopeNoteHasNoSpeechTail(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	const w = 300
+	anchored := measureStyledNote(styledNote{Text: "a note", Who: "Note from Friend", Anchor: 7}, w)
+	chapterWide := measureStyledNote(styledNote{Text: "a note", Who: "Note from Friend", Anchor: 0}, w)
+
+	if !anchored.hasTail {
+		t.Errorf("a note anchored at a verse must keep its tail")
+	}
+	if chapterWide.hasTail {
+		t.Errorf("a chapter-scope note must have no tail: it points at no passage")
+	}
+	if got := anchored.card.H - anchored.cardH; got != noteTailDepth {
+		t.Errorf("anchored card reserves %.1f of tail depth, want %d", got, noteTailDepth)
+	}
+	if got := chapterWide.card.H - chapterWide.cardH; got != 0 {
+		t.Errorf("chapter-scope card reserves %.1f of tail depth, want 0 — the space "+
+			"is only there to hold a tail", got)
+	}
+}
+
+// And the drawn outline actually loses the detour, while staying ONE path — the
+// property notes_bubble.go records as the reason the outline is a single path at
+// all (a separate rect and triangle leave the card's bottom border running
+// across the tail's mouth).
+func TestTheTaillessBubbleIsStillOnePathAndFlatBottomed(t *testing.T) {
+	withTail := string(noteBubblePathSVG(240, 80, lightPalette.SurfaceAlt, lightPalette.Border, true).Content())
+	noTail := string(noteBubblePathSVG(240, 80, lightPalette.SurfaceAlt, lightPalette.Border, false).Content())
+
+	for name, svg := range map[string]string{"with tail": withTail, "no tail": noTail} {
+		if n := strings.Count(svg, "<path"); n != 1 {
+			t.Errorf("%s: %d paths, want exactly one", name, n)
+		}
+	}
+	if !strings.Contains(withTail, `height="89"`) {
+		t.Errorf("the tailed bubble should be 80+%d tall; got:\n%s", noteTailDepth, withTail[:120])
+	}
+	if !strings.Contains(noTail, `height="80"`) {
+		t.Errorf("the tailless bubble must be exactly its card height; got:\n%s", noTail[:120])
+	}
+	// The apex is what the detour exists for, so the tailless path must be shorter.
+	if len(noTail) >= len(withTail) {
+		t.Errorf("the tailless outline is not shorter than the tailed one, so the "+
+			"detour is probably still in it (%d vs %d bytes)", len(noTail), len(withTail))
+	}
+}
+
+// The pills now account for EVERY note on the chapter. A chapter-level note
+// belongs to no paragraph, so it used to be dropped and the pills' counts came
+// out short of the total — the gap recorded in docs/BACKLOG.md. It rides a
+// chapter-top group instead, drawn above everything, which is the scope it
+// actually has.
+func TestTheTopGroupCarriesTheNotesThatBelongToNoParagraph(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st := psalm23State()
+	verses := longEnoughForTwoParagraphs()
+	st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	paras := groupVersesIntoParagraphs(verses)
+
+	// Two on the last paragraph, one on the FIRST — which is the collision the
+	// keying exists for: the chapter-top group is found by the first verse, and
+	// so is paragraph 0's own group, so the two share a band verse and can only
+	// be told apart by key.
+	for i := 0; i < 2; i++ {
+		n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: paras[len(paras)-1][0].Verse,
+			Text: fmt.Sprintf("on a paragraph %d", i)})
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	first, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: paras[0][0].Verse, Text: "on the first paragraph"})
+	setNoteMinimizedByID(appPrefs(), first.ID, true)
+	ch, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: 0, Text: "on the whole chapter"})
+	setNoteMinimizedByID(appPrefs(), ch.ID, true)
+	applyNoteForCurrentChapter(st)
+
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	groups := chapterNoteGroups(st, plan, verses)
+
+	counted := 0
+	top := -1
+	for i, g := range groups {
+		counted += len(g.Notes)
+		if g.ParaIndex == chapterTopGroup {
+			top = i
+		}
+	}
+	if counted != len(plan.Notes) {
+		t.Errorf("the pills account for %d of the chapter's %d notes; every note "+
+			"must be in exactly one group", counted, len(plan.Notes))
+	}
+	if top < 0 {
+		t.Fatalf("no chapter-top group, so the whole-chapter note is nowhere")
+	}
+	if top != 0 {
+		t.Errorf("the chapter-top group is at position %d, want first — it is drawn "+
+			"above everything", top)
+	}
+	if len(groups[top].Notes) != 1 {
+		t.Errorf("the top group holds %d notes, want the one whole-chapter note",
+			len(groups[top].Notes))
+	}
+
+	// And it draws: a pill at the top, with no tail, above the paragraph pill.
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if len(pane.pillGeoms) != 3 {
+		t.Fatalf("want a top pill plus one per noted paragraph, got %d", len(pane.pillGeoms))
+	}
+	// Each pill must be a DIFFERENT group. Distinct positions are not enough:
+	// matching on the shared verse picks the same geometry for both bands and
+	// places that one geometry twice, which reads as two pills at two heights
+	// carrying one group's label while the other group is simply gone.
+	seenKey := map[int]bool{}
+	for i, g := range pane.pillGeoms {
+		if seenKey[g.groupKey] {
+			t.Errorf("pill %d is group %d again: two bands resolved to one group, "+
+				"so a group is drawn twice and another not at all", i, g.groupKey)
+		}
+		seenKey[g.groupKey] = true
+	}
+	// And the labels are the groups' own, in reading order: the chapter-wide one
+	// first, then each paragraph's count.
+	want := []string{"Note", "Note", "Notes · 2"}
+	for i, g := range pane.pillGeoms {
+		if i < len(want) && g.pillText != want[i] {
+			t.Errorf("pill %d reads %q, want %q", i, g.pillText, want[i])
+		}
+	}
+	// No tail assertion here: a pill never carries one at any anchor (its
+	// measure path returns before the tail is considered), so asserting it would
+	// pass whatever the anchor said. The tail rule is about the BUBBLE and is
+	// pinned by TestAChapterScopeNoteHasNoSpeechTail.
+	if pane.pillGeoms[0].card.Y >= pane.pillGeoms[1].card.Y {
+		t.Errorf("the top pill sits at y=%.1f, below the paragraph pill at %.1f",
+			pane.pillGeoms[0].card.Y, pane.pillGeoms[1].card.Y)
+	}
+}
+
+// An unplaced note has no home in this translation at all, so it belongs to no
+// paragraph either. It rides the same top group and is disclosed in that pill's
+// label using the app's own shipped phrasing — which is what the single sticker
+// always did and the pills previously dropped.
+func TestTheTopPillDisclosesUnplacedNotes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st := psalm23State()
+	var esther []Verse
+	for i, v := range longEnoughForTwoParagraphs() {
+		esther = append(esther, Verse{BookName: "Esther", Chapter: 4, Verse: i + 1, Text: v.Text})
+	}
+	st.Bible.Verses["Esther"] = map[int][]Verse{4: esther}
+	st.CurrentBook, st.CurrentChapter = "Esther", 4
+	paras := groupVersesIntoParagraphs(esther)
+
+	for i, p := range [][]Verse{paras[0], paras[len(paras)-1]} {
+		n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "Esther", Chapter: 4, VerseLo: p[0].Verse, Text: fmt.Sprintf("placed %d", i)})
+		setNoteMinimizedByID(appPrefs(), n.ID, true)
+	}
+	// Greek Esther: webc's numbering does not correspond — the unplaced arm.
+	n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
+		Book: "Esther", Chapter: 4, VerseLo: 1, Text: "greek esther"})
+	setNoteMinimizedByID(appPrefs(), n.ID, true)
+	applyNoteForCurrentChapter(st)
+
+	plan := buildChapterPlan(st, appPrefs(), st.Bible)
+	if len(plan.Unplaced) != 1 {
+		t.Fatalf("fixture must produce one unplaced note, got %d", len(plan.Unplaced))
+	}
+	groups := chapterNoteGroups(st, plan, esther)
+	if len(groups) == 0 || groups[0].ParaIndex != chapterTopGroup {
+		t.Fatalf("the unplaced note needs a chapter-top group; groups=%d", len(groups))
+	}
+	if groups[0].Unplaced != 1 {
+		t.Errorf("the top group reports %d unplaced, want 1", groups[0].Unplaced)
+	}
+
+	pane := newStyledReadingPane(st, esther)
+	pane.Resize(fyne.NewSize(320, 900))
+	if len(pane.pillGeoms) == 0 {
+		t.Fatalf("no pills drawn")
+	}
+	if !strings.Contains(pane.pillGeoms[0].pillText, "not shown") {
+		t.Errorf("the top pill reads %q; a note this translation cannot place must "+
+			"still be disclosed", pane.pillGeoms[0].pillText)
+	}
+}
