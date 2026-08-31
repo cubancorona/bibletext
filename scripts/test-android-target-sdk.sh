@@ -133,11 +133,25 @@ else
   # parameter still compiles (the body never names it) while changing the
   # descriptor, which is precisely what has to be caught. Dropping one instead
   # would fail at javac and prove nothing about the verifier.
-  sed 's/final int border, final boolean tail)/final int border, final boolean tail, final boolean spare)/' \
-    android/BtBridge.java > "$JNI_DIR/BtBridge.java"
+  #
+  # STRUCTURAL, not a literal. This used to name setNote's trailing parameter,
+  # and every appended field since made the sed match nothing — the guard below
+  # then failed the build to say so, which is the right outcome and a poor use
+  # of a CI run. The signature is parsed instead, so it survives the next four.
+  python3 - "$JNI_DIR/BtBridgeSkew.java" <<'PY_SKEW'
+import pathlib, re, sys
+src = pathlib.Path("android/BtBridge.java").read_text()
+m = re.search(r"(public static void setNote\()(.*?)(\)\s*\{)", src, re.S)
+if m is None:
+    raise SystemExit("setNote's declaration could not be parsed; the skew control is blind")
+skewed = src[:m.end(2)] + ", final boolean spare" + src[m.end(2):]
+if skewed == src:
+    raise SystemExit("the skew edited nothing")
+pathlib.Path(sys.argv[1]).write_text(skewed)
+PY_SKEW
+  mv "$JNI_DIR/BtBridgeSkew.java" "$JNI_DIR/BtBridge.java"
   if cmp -s android/BtBridge.java "$JNI_DIR/BtBridge.java"; then
-    echo "ERROR: the JNI skew control edited nothing — setNote's trailing parameter" >&2
-    echo "       has moved and this control is no longer a control" >&2
+    echo "ERROR: the JNI skew control edited nothing, so it is not a control" >&2
     exit 1
   fi
   javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
