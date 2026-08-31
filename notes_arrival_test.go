@@ -66,9 +66,17 @@ func TestChapterNoteArrival(t *testing.T) {
 			why: "a note about another passage must not drag the reader to it",
 		},
 		{
-			name: "an anchorless note", anchor: 0, markVerse: otherPara, present: true,
-			wantClass: arriveBand, wantVerse: otherPara,
-			why: "a chapter-scope note is reserved above the paragraph being arrived at",
+			name: "an anchorless note, arriving mid-chapter", anchor: 0, markVerse: otherPara, present: true,
+			wantClass: arriveVerse, wantVerse: otherPara,
+			why: "its band is drawn at the CHAPTER TOP, not above whatever paragraph " +
+				"the reader happens to arrive at — the Apple panes only appeared to " +
+				"say otherwise because their anchor range fell back to the highlight",
+		},
+		{
+			name: "an anchorless note, arriving at the first paragraph", anchor: 0,
+			markVerse: sameParaA, present: true,
+			wantClass: arriveBand, wantVerse: sameParaA,
+			why: "the chapter-top band really is above this paragraph",
 		},
 		{
 			name: "no note at all", anchor: 0, markVerse: otherPara, present: false,
@@ -157,5 +165,89 @@ func TestSameParagraphIsNotSameVerse(t *testing.T) {
 	if anchor == arriving {
 		t.Fatal("the two verses are equal, so a same-verse rule would agree here " +
 			"and this test would pass against the defect it exists to catch")
+	}
+}
+
+// THE EMULATOR'S LESSON, pinned. Three noted paragraphs collapsed into the
+// single chapter pill: an arrival inside one of them must be told "verse",
+// because only ONE band is drawn and it is not there. Turn per-paragraph pills
+// on and the same fixture answers "band", because then every noted paragraph
+// really does carry one.
+//
+// What actually went wrong on the emulator was the ANCHORLESS branch, not the
+// group list: a collapsed set parks at chapter scope with no anchor, and the
+// rule read that as "the band is above whatever paragraph you are arriving at"
+// — which is what the Apple panes appeared to do, and only because their anchor
+// range fell back to the highlight range. The reader was sent to a band drawn
+// at the top of the chapter. Nothing failed; they simply landed in the wrong
+// place, which is indistinguishable from nothing happening.
+//
+// This holds BOTH halves so the two answers cannot quietly become one.
+func TestOnlyDrawnBandsWinTheArrival(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer deleteAllNotes(appPrefs())
+	defer setNotesEnabled(true)
+
+	verses := enumerationChapter()
+	paras := groupVersesIntoParagraphs(verses)
+	if len(paras) < 4 {
+		t.Fatalf("the fixture has %d paragraphs; this needs three noted ones plus "+
+			"room to arrive away from the first", len(paras))
+	}
+	noted := []int{paras[0][0].Verse, paras[1][0].Verse, paras[2][0].Verse}
+	// Arriving inside paragraph 1: noted, not the first (so a chapter-top
+	// reservation cannot be what answers), and not the newest note's.
+	arriving := paras[1][len(paras[1])-1].Verse
+
+	orig := notesPillPerParagraph
+	defer func() { notesPillPerParagraph = orig }()
+
+	for _, tc := range []struct {
+		name  string
+		pills bool
+		want  noteArrival
+		why   string
+	}{
+		{
+			name: "one chapter pill", pills: false, want: arriveVerse,
+			why: "ONE band is reserved, above the plan's own note. This paragraph " +
+				"has a note but no reservation, and being told 'band' sends the " +
+				"reader where nothing is drawn — which is what an emulator did " +
+				"before this guard existed",
+		},
+		{
+			name: "one pill per paragraph", pills: true, want: arriveBand,
+			why: "now this paragraph really does carry a band, and scrolling to the " +
+				"verse would put its pill above the fold",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			notesPillPerParagraph = tc.pills
+			deleteAllNotes(appPrefs())
+			st := planTestState(t)
+			st.Bible.Verses["John"][3] = verses
+			for i, v := range noted {
+				n, ok := addNote(appPrefs(), StoredNote{
+					Kind: noteKindReceived, VersionID: "web", Book: "John", Chapter: 3,
+					VerseLo: v, Text: "fixture note " + string(rune('a'+i)),
+				})
+				if !ok {
+					t.Fatalf("fixture note %d refused", i)
+				}
+				setNoteMinimizedByID(appPrefs(), n.ID, true)
+			}
+			applyNoteForCurrentChapter(st)
+			st.setMark(hlSearch, VerseSpan{
+				VersionID: "web", Book: "John", Chapter: 3, Lo: arriving, Hi: arriving,
+			})
+
+			plan := buildChapterPlan(st, appPrefs(), st.Bible)
+			c := chapterNoteChrome(st, plan, verses)
+			if c.Arrival != tc.want {
+				t.Errorf("arrival = %v (anchor %d), want %v — %s",
+					c.Arrival, c.Anchor, tc.want, tc.why)
+			}
+		})
 	}
 }

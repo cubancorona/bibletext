@@ -116,24 +116,35 @@ func chapterNoteArrival(state *AppState, c noteChrome, verses []Verse, groups []
 		return arriveNothing, 0
 	}
 	// ANY RESERVED BAND on the arriving paragraph, not only the open card's.
-	// Since the set can be drawn as one pill per paragraph, the paragraph a
-	// reader arrives at may carry a PILL while the open card sits elsewhere;
-	// scrolling to the verse then puts that pill above the fold, which is the
-	// same failure one step smaller. The groups are the reservations
-	// (chapterNoteGroups), so this asks the list rather than a single anchor.
+	// With one pill per paragraph the reader can arrive at a paragraph whose
+	// pill is not the open note's, and scrolling to the verse puts that pill
+	// above the fold — the same failure one step smaller.
+	//
+	// The list is empty unless per-paragraph pills are on, because
+	// chapterNoteGroups is itself gated on that: with the single chapter pill
+	// there is exactly ONE reservation, and it is the anchor below that finds
+	// it. So this loop needs no flag of its own, and must not grow one — a
+	// second gate on the same fact is a second place for the two to disagree.
 	for _, g := range groups {
 		if noteParagraphOf(paras, g.BandVerse) == arriving {
 			return arriveBand, verse
 		}
 	}
-	// An ANCHORLESS note (chapter scope, or a set whose notes land nowhere in
-	// this chapter) has no paragraph of its own. Its band is reserved above the
-	// paragraph the reader is arriving at, which is where the Apple panes
-	// effectively put it — by accident, through the anchor-range fallback, but
-	// it is the right answer: a note explaining this passage is useless parked
-	// at the chapter top, out of view exactly when it is wanted.
+	// An ANCHORLESS card — a chapter-scope note, or a collapsed set parked at
+	// chapter scope — has no paragraph of its own. Its band is reserved at the
+	// CHAPTER TOP (chapterTopGroup, notes_plan.go), so it wins only when the
+	// reader is arriving at the first paragraph, and nowhere else.
+	//
+	// The Apple panes appeared to say otherwise, reserving it above whatever
+	// paragraph was being arrived at — but only because their anchor range fell
+	// back to the highlight range, which is the same tautology that made their
+	// same-paragraph guard vacuous. Following that would send a reader arriving
+	// mid-chapter to a band that is drawn at the top.
 	if c.Anchor <= 0 {
-		return arriveBand, verse
+		if arriving == 0 {
+			return arriveBand, verse
+		}
+		return arriveVerse, verse
 	}
 	if noteParagraphOf(paras, c.Anchor) == arriving {
 		return arriveBand, verse
