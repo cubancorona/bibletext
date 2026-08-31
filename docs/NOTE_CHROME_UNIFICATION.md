@@ -24,9 +24,24 @@
                 numbers out of each native's own enum and holds them against the
                 iota. `own` stays on the wire, unbranched-on, until an appended
                 field makes the arity change visible.
-     Everything from "6. Counts" onward is proposed, and every one of those steps
-     changes rendering on platforms that need a device or an emulator to
-     verify. -->
+     <pending>  step 6, Counts: the counts span crosses as the exact substring
+                of the who line, found by a backwards search on each surface.
+                Deletes btIOSWhoCountRange, btMacWhoCountRange and
+                styledWhoSplit; Android gains the accent it never had (it
+                painted the WHOLE line accent when nextable). The chevron moved
+                into the composed line, so the contract requiring it in four
+                renderers now requires its ABSENCE from all four. What is
+                checkable is a COUNT, not a ban: the fit rule still needs the
+                separator once per renderer, and a second occurrence is the cut
+                growing back.
+     <pending>  a reader's report, fixed alongside: pressing the chapter pill
+                expanded the bubble without moving the page. Opening a note is a
+                declared placement (openedNotePlacesTheView), and only the
+                next-tap declared it; the exception — a next-tap between two
+                notes on one verse — is stated at its own call site.
+     Everything from "7. Arrival + Lead" onward is proposed, and every one of
+     those steps changes rendering on platforms that need a device or an
+     emulator to verify. -->
 
 # Unifying note chrome: one value, four adapters, one conformance table
 
