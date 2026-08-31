@@ -101,7 +101,7 @@ func btaNoteNextTapped() {
 		return
 	}
 	fyne.Do(func() {
-		advanceNoteFocus(state)
+		performNoteAction(state, noteActionNext, noteKeyFocused)
 		state.refreshReadingOnly()
 	})
 }
@@ -116,7 +116,7 @@ func btaNoteHidden() {
 		return
 	}
 	fyne.Do(func() {
-		hideCurrentNote(state)
+		performNoteAction(state, noteActionHide, noteKeyFocused)
 		state.refreshReadingOnly()
 	})
 }
@@ -131,7 +131,7 @@ func btaNoteDeleted() {
 		return
 	}
 	fyne.Do(func() {
-		dropCurrentNote(state)
+		performNoteAction(state, noteActionDelete, noteKeyFocused)
 		state.refreshReadingOnly()
 	})
 }
@@ -146,7 +146,7 @@ func btaNoteRestored() {
 		return
 	}
 	fyne.Do(func() {
-		restoreCurrentNote(state)
+		performNoteAction(state, noteActionRestore, noteKeyFocused)
 		state.refreshReadingOnly()
 	})
 }

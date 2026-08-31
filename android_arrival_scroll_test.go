@@ -102,7 +102,12 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 		t.Fatal("Android note-cycle callback has no stable boundary")
 	}
 	next := exportSrc[nextStart : nextStart+nextEnd]
-	if !strings.Contains(next, "advanceNoteFocus(state)") ||
+	// The advance is reached through the shared verb entry point now
+	// (performNoteAction, notes_action.go) rather than called directly — the
+	// same function, named once, so a press can say WHICH note it means. What
+	// this contract is about is unchanged: Android must not grow its own
+	// advance or its own render path.
+	if !strings.Contains(next, "performNoteAction(state, noteActionNext, noteKeyFocused)") ||
 		!strings.Contains(next, "state.refreshReadingOnly()") {
 		t.Fatal("Android note-cycle callback must preserve the shared advance and render path")
 	}

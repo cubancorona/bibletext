@@ -105,7 +105,7 @@ func bibleTextNoteHidden() {
 		return
 	}
 	fyne.Do(func() {
-		hideCurrentNote(state)
+		performNoteAction(state, noteActionHide, noteKeyFocused)
 		refreshNoteOnly(state)
 	})
 }
@@ -120,7 +120,7 @@ func bibleTextNoteRestored() {
 		return
 	}
 	fyne.Do(func() {
-		restoreCurrentNote(state)
+		performNoteAction(state, noteActionRestore, noteKeyFocused)
 		refreshNoteOnly(state)
 	})
 }
@@ -138,7 +138,7 @@ func bibleTextNoteNextTapped() {
 		return
 	}
 	fyne.Do(func() {
-		advanceNoteFocus(state)
+		performNoteAction(state, noteActionNext, noteKeyFocused)
 		devTraceNotePlacement(state, "cycle")
 		refreshNoteOnly(state)
 	})
@@ -154,7 +154,7 @@ func bibleTextNoteDeleted() {
 		return
 	}
 	fyne.Do(func() {
-		dropCurrentNote(state)
+		performNoteAction(state, noteActionDelete, noteKeyFocused)
 		refreshNoteOnly(state)
 	})
 }
