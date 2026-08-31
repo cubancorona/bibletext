@@ -321,6 +321,21 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 
 // buildDevLinksTab is the page itself: the switches at the top, then one row per
 // scenario. Each row's button is the whole point — it calls HandleShareLink
+// devPillToggleLabel names the pill toggle for the surface it is drawn on.
+//
+// notesPillPerParagraph reaches ONE renderer, the styled pane. iOS, macOS and
+// Android hold a single note in their sticker ABI (bibleTextSetNote and its
+// singular globals), so there is no list for a pill row to come from and
+// flipping the flag changes nothing at all. Shipped as a bare checkbox it read
+// as a feature that was not working rather than one that was not there.
+func devPillToggleLabel() string {
+	const base = "Pill per paragraph (collapsed state)"
+	if useStyledPane() {
+		return base
+	}
+	return base + " — desktop only; this surface draws one sticker"
+}
+
 // exactly as the OS does.
 func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	pal := state.pal()
@@ -371,7 +386,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// the left of it, pill-per-paragraph on the right, same chapter, no
 	// reinstall. Dev-only by construction — nothing in a release build writes
 	// notesPillPerParagraph, so a reader always gets the shipped model.
-	pillMode := widget.NewCheck("Pill per paragraph (collapsed state)", func(b bool) {
+	pillMode := widget.NewCheck(devPillToggleLabel(), func(b bool) {
 		notesPillPerParagraph = b
 		// Re-derive, for the same reason every other note verb does: the
 		// collapsed state is a projection of the store, and which model is in
@@ -382,6 +397,11 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		state.refresh()
 	})
 	pillMode.SetChecked(notesPillPerParagraph)
+	if !useStyledPane() {
+		// Disabled, not merely relabelled: a control that can be operated and
+		// does nothing is the thing being fixed here.
+		pillMode.Disable()
+	}
 
 	minAll := widget.NewButton("Minimize every stored note", func() {
 		for _, n := range allNotesForBrowsing(appPrefs()) {
