@@ -1458,6 +1458,9 @@ static NSInteger     gMacNoteAnchorVerse = 0;
 // btMacNotePill() — "is it collapsed", which is a different question: a note
 // parked at chapter scope points at nothing, and a tail there claims verse 1.
 // The twin of gNoteVerbs (reading_ios.go): WHICH CONTROLS, decided in Go.
+// The twin of gNoteCounts (reading_ios.go): the substring of the who line
+// that is a control, composed in Go and FOUND here by a backwards search.
+static NSString *gMacNoteCounts = nil;
 static int       gMacNoteVerbs = 1;   // kMacNoteVerbsReceived
 static BOOL      gMacNoteTail = YES;
 static CGFloat   gMacNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
@@ -1570,20 +1573,6 @@ static NSString *btMacFitWho(NSString *who, CGFloat width, NSFont *font) {
         sender = [sender substringToIndex:last.location];
     }
     return [@"…" stringByAppendingString:counts];
-}
-
-// btMacWhoCountRange is the "K of N in this chapter" span of a (fitted) WHO
-// line — the iOS twin is btIOSWhoCountRange; keep them matched. The first-
-// separator split is safe against a sender's name by construction:
-// sanitizeSenderName maps the middle dot away (notes_byline.go).
-static NSRange btMacWhoCountRange(NSString *who) {
-    NSRange sep = [who rangeOfString:@" · "];
-    if (sep.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
-    NSUInteger start = NSMaxRange(sep);
-    NSRange rest = NSMakeRange(start, who.length - start);
-    NSRange next = [who rangeOfString:@" · " options:0 range:rest];
-    NSUInteger end = (next.location == NSNotFound) ? who.length : next.location;
-    return NSMakeRange(start, end - start);
 }
 
 // The bubble's whole outline — card and speech tail — as ONE continuous path,
@@ -2002,18 +1991,19 @@ static void btMacLayoutNote(void) {
     // line cannot fit, the sender half is tail-truncated and the counts
     // survive whole (btMacFitWho).
     NSString *fitted = btMacFitWho(gMacNoteWho ?: @"Note from Friend", whoW, btMacNoteWhoFont());
-    NSRange counts = (gMacNoteNextable && nxt != nil) ? btMacWhoCountRange(fitted)
-                                                      : NSMakeRange(NSNotFound, 0);
+    // FOUND, not cut — the iOS twin's reason, and its exact shape.
+    NSRange counts = (gMacNoteNextable && nxt != nil && gMacNoteCounts != nil)
+        ? [fitted rangeOfString:gMacNoteCounts options:NSBackwardsSearch]
+        : NSMakeRange(NSNotFound, 0);
     if (counts.location == NSNotFound) {
         ((NSTextField *)who).stringValue = fitted;
         nxt.hidden = YES;
     } else {
         // The counts span is the next-tap's control, so it must LOOK
-        // pressable: the accent colour plus a trailing chevron — the app's
-        // own chrome, no new words (the iOS twin paints identically).
-        NSString *shown = [fitted stringByReplacingCharactersInRange:NSMakeRange(NSMaxRange(counts), 0)
-                                                          withString:@" ›"];
-        NSRange lit = NSMakeRange(counts.location, counts.length + 2);
+        // pressable: the accent colour over the app's own chrome, no new
+        // words (the iOS twin paints identically).
+        NSString *shown = fitted;
+        NSRange lit = counts;
         NSDictionary *attrs = @{NSFontAttributeName: btMacNoteWhoFont()};
         NSMutableAttributedString *a = [[NSMutableAttributedString alloc]
             initWithString:shown
@@ -2083,9 +2073,11 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                          double fgR, double fgG, double fgB,
                          double muR, double muG, double muB,
                          double acR, double acG, double acB,
-                         double boR, double boG, double boB, int tail, int verbs) {
+                         double boR, double boG, double boB, int tail, int verbs,
+                         const char *counts) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
+    NSString *ct = (counts == NULL || *counts == 0) ? nil : [NSString stringWithUTF8String:counts];
     dispatch_async(dispatch_get_main_queue(), ^{
         BOOL changed = !btMacSameStr(t, gMacNoteText) || !btMacSameStr(w, gMacNoteWho) ||
                        gMacNoteMinimized != (minimized ? YES : NO) ||
@@ -2093,7 +2085,8 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                        gMacNoteOwn != (own ? YES : NO) ||
                        gMacNoteAnchorVerse != anchorVerse ||
                        gMacNoteTail != (tail ? YES : NO) ||
-                       gMacNoteVerbs != verbs;
+                       gMacNoteVerbs != verbs ||
+                       !btMacSameStr(ct, gMacNoteCounts);
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
@@ -2103,6 +2096,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
 
         gMacNoteTail = tail ? YES : NO;
         gMacNoteVerbs = verbs;
+        gMacNoteCounts = ct;
 
         gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
@@ -2628,6 +2622,9 @@ func pushNoteToPane(state *AppState) {
 	}
 	// WHICH CONTROLS, decided once (the iOS twin's reason).
 	macVerbSet := C.int(c.verbs())
+	// The substring of the who line that is a control (the iOS twin's reason).
+	macCounts := C.CString(c.Counts)
+	defer C.free(unsafe.Pointer(macCounts))
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2654,7 +2651,7 @@ func pushNoteToPane(state *AppState) {
 	// the only honest place for notes with no verses here).
 	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
-		macTailFlag, macVerbSet)
+		macTailFlag, macVerbSet, macCounts)
 }
 
 // setNativeTint / applyNativeTint hand the chapter's wash model

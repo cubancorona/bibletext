@@ -1,5 +1,7 @@
 package bibletext
 
+import "strings"
+
 // notes_chrome.go — the ONE value every surface reads to draw a note.
 //
 // WHY THIS FILE EXISTS. Note chrome is drawn four times: the styled pane
@@ -61,6 +63,20 @@ type noteChrome struct {
 	Next   bool   // the counts region is a CONTROL (more than one placed note)
 	Own    bool   // authored locally and explicitly focused
 	Anchor int    // the verse the band opens above; 0 = park at the chapter top
+
+	// Counts is the SUBSTRING OF Who that is a control — the counts phrase and
+	// its chevron, together, exactly as they appear in the line. "" when the
+	// counts are not a control.
+	//
+	// It is a field rather than a method because it is not derivable from the
+	// tuple ALONE: a surface can only find it by parsing Who, and four surfaces
+	// parsing the same grammar in four languages is what this whole plan is
+	// about. Three of them had transcribed the first-separator split
+	// (btIOSWhoCountRange, btMacWhoCountRange, styledWhoSplit) and the fourth
+	// had never had it, so Android drew no accent at all. Composed here, once,
+	// each surface only has to FIND a string it was handed — a backwards search,
+	// which survives a pane that has already ellipsised the sender half.
+	Counts string
 
 	// EVERYTHING DERIVABLE FROM THE TUPLE IS A METHOD, NOT A FIELD.
 	//
@@ -193,6 +209,44 @@ func chapterNoteChrome(state *AppState, plan chapterPlan, verses []Verse) noteCh
 		// would only dismiss.
 		Own: isOwnLiveNote(state),
 	}
+	// The chevron is part of the LINE, not something four natives append to it.
+	// It was four literals — Android's was two spaces wide — and the Go constant
+	// naming it was read by nobody.
+	if c.Next {
+		c.Who += noteChevron
+	}
+	c.Counts = noteCountsSpan(c.Who, c.Next)
 	c.ShownAs = receivedSetShownAs(plan, c, len(chapterNoteGroups(state, plan, verses)))
 	return c
 }
+
+// noteCountsSpan is the part of a who line that is a CONTROL: the counts phrase
+// with its chevron, returned as the exact substring so a surface can find it by
+// searching rather than by re-deriving the grammar.
+//
+// The line is "<byline> · <counts> [· <N> not shown here]" plus the chevron, so
+// the span runs from after the first separator to the next one, or to the end.
+// That is safe against a sender's name by construction: sanitizeSenderName maps
+// U+00B7 to '-' (notes_byline.go), so the chrome's own grammar is not available
+// to names — the fact TestCountsSpanCannotBeForgedByASender pins.
+//
+// Returns "" when the counts are not a control, which is the only state in
+// which a surface should draw no accent.
+func noteCountsSpan(who string, next bool) string {
+	if !next {
+		return ""
+	}
+	i := strings.Index(who, noteWhoSep)
+	if i < 0 {
+		return ""
+	}
+	span := who[i+len(noteWhoSep):]
+	if j := strings.Index(span, noteWhoSep); j >= 0 {
+		span = span[:j]
+	}
+	return span
+}
+
+// noteWhoSep is the who line's own separator. One literal: the split was
+// transcribed into three languages, and the fit rule reads it too.
+const noteWhoSep = " · "

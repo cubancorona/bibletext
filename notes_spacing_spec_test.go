@@ -246,6 +246,9 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"return kNotePad + kNoteWho + kNoteWhoGap + ceil(r.size.height) + kNotePad;": "the " +
 					"card's height must BE the spec's formula — pad, who row, who gap, message, pad " +
 					"— not merely use the spec's constants somewhere",
+				"[fitted rangeOfString:gNoteCounts options:NSBackwardsSearch]": "the counts " +
+					"control must be FOUND in the line the Go side composed, not cut out of it " +
+					"here. Backwards, because the fit above may have ellipsised the sender half",
 				"gNoteShapeExtra = gNoteTail ? kNoteTail : 0;": "the tail's contribution to the " +
 					"card's shape must be resolved ONCE, in SetNote, so every band formula reads " +
 					"one scalar and none of them can branch differently",
@@ -277,6 +280,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kMacNotePill)": "the pill's height must be the spec's",
 				"return kMacNotePad + kMacNoteWho + kMacNoteWhoGap + ceil(r.size.height) + kMacNotePad;": "the " +
 					"card's height must BE the spec's formula (the iOS twin's reason)",
+				"[fitted rangeOfString:gMacNoteCounts options:NSBackwardsSearch]": "the iOS " +
+					"twin's reason: found, not cut",
 				"gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;": "the iOS twin's reason: " +
 					"resolved once, read as a scalar everywhere",
 				"if (gMacNoteTail) {": "the outline must gate the tail detour",
@@ -285,6 +290,9 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 		{
 			path: "android/BtBridge.java",
 			banned: map[string]string{
+				"who.setTextColor(noteNextable ? noteAccent : noteMuted)": "the WHOLE who line " +
+					"painted accent because it was pressable somewhere. Only the counts span is " +
+					"the control, and only it wears the accent now",
 				"dp(12), dp(6), dp(4)": "the card's old asymmetric padding (6 top, 4 right) — a " +
 					"different internal rhythm from the other three",
 				"blp.rightMargin": "the message's compensating right margin, which existed only " +
@@ -308,6 +316,13 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"DRAWN from Fyne's own delete path, as the Apple panes draw it. The emoji this " +
 					"replaced rendered at the button's font size in the system's own colours — a " +
 					"loud mark on a quiet card, and a second bin design beside the history bar's",
+				"int i = line.lastIndexOf(noteCounts);": "the counts control must be FOUND " +
+					"in the composed line. This pane had no split at all and painted the WHOLE " +
+					"who line accent when it was nextable, so the sender's byline wore the " +
+					"app's \"you can press this\" colour",
+				"tv.setText(noteWhoSpanned(fitted))": "the fit produces a NEW string, and " +
+					"setText keeps only the spans it is given — a plain setText here drops the " +
+					"accent exactly when the line is too wide, which is when it matters",
 				"noteVerbSlots() * dp(NOTE_BTN)": "the verb corner's width must come from the " +
 					"verb SET. Reserved at a flat two slots, an own note's who line gave way a " +
 					"whole button sooner here than on the Apple panes",

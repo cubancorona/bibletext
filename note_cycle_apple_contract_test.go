@@ -152,36 +152,49 @@ func TestReadingPanesDoNotCaptureARestoreOverAnArrival(t *testing.T) {
 
 // EVERY SURFACE SPELLS THE CHROME'S OWN STRINGS THE SAME WAY.
 //
-// The chevron appended after the counts is app chrome, not a renderer's
-// choice — and it was four separate literals that had already drifted: Android
-// used two spaces where everyone else used one, so its counts sat a space
-// further out than anybody had decided. Nothing could have caught that; there
-// was no place the four were compared.
+// The chevron is app chrome, not a renderer's choice — and it was four separate
+// literals that had already drifted: Android used two spaces where everyone else
+// used one, so its counts sat a space further out than anybody had decided.
+// Nothing could have caught that; there was no place the four were compared.
 //
-// Source-level because two of the four are Objective-C in a cgo preamble and
-// one is Java: none can be linked into a Go test, but all four can be read.
-func TestEverySurfaceUsesTheSameChevron(t *testing.T) {
-	for _, tc := range []struct{ path, quoted string }{
-		{"reading_ios.go", `@"` + noteChevron + `"`},
-		{"reading_macos.go", `@"` + noteChevron + `"`},
-		{"android/BtBridge.java", `" ` + "›" + `"`},
-		{"reading_styled_note.go", `" ` + "›" + `"`},
+// So it is composed ONCE, in Go, as part of the who line (chapterNoteChrome),
+// and no surface appends it any more. This is the inverse contract: the literal
+// must not reappear in any renderer, in any spelling. A surface that spells it
+// again is a surface that can drift again.
+//
+// Source-level because two of the four are Objective-C in a cgo preamble and one
+// is Java: none can be linked into a Go test, but all four can be read.
+func TestNoSurfaceSpellsTheChevronItself(t *testing.T) {
+	// Every spelling seen in this repository's history, plus the current one.
+	spellings := []string{
+		`"` + noteChevron + `"`, `@"` + noteChevron + `"`,
+		`"  ›"`, `@"  ›"`, `"›"`, `@"›"`, `'›'`,
+	}
+	for _, path := range []string{
+		"reading_ios.go", "reading_macos.go",
+		"android/BtBridge.java", "reading_styled_note.go",
 	} {
-		src, err := os.ReadFile(tc.path)
+		src, err := os.ReadFile(path)
 		if err != nil {
-			t.Fatalf("read %s: %v", tc.path, err)
+			t.Fatalf("read %s: %v", path, err)
 		}
 		body := string(src)
-		if !strings.Contains(body, tc.quoted) {
-			t.Errorf("%s does not use the shared chevron %q", tc.path, noteChevron)
-		}
-		// And it must not carry a DIFFERENT spelling of it alongside.
-		for _, wrong := range []string{`"  ›"`, `@"  ›"`, `"›"`, `@"›"`} {
-			if strings.Contains(body, wrong) {
-				t.Errorf("%s spells the chevron %s as well; one chrome string, one spelling",
-					tc.path, wrong)
+		for _, sp := range spellings {
+			if strings.Contains(body, sp) {
+				t.Errorf("%s spells the chevron itself (%s). It is part of the who "+
+					"line the Go side composes now; a renderer that appends its own "+
+					"puts two on the card, or one that has drifted from the others.",
+					path, sp)
 			}
 		}
+	}
+
+	// The control. With the literal gone from all four renderers, a test that
+	// only looks for its ABSENCE passes just as well if the chevron has been
+	// deleted from the app entirely — so the composer must still carry it.
+	if !strings.Contains(noteCountsSpan("Amy · 1 of 2 in this chapter"+noteChevron, true), noteChevron) {
+		t.Error("the composed counts span no longer carries the chevron, so the " +
+			"absence checked above proves nothing")
 	}
 }
 

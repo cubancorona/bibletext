@@ -133,7 +133,7 @@ type styledNoteGeom struct {
 	// The who row, split so the counts half can carry the accent and the
 	// press affordance (the iOS attributed-range treatment, without an
 	// attributed string).
-	sender, counts, tail, restR styledNoteRect
+	sender, counts, restR styledNoteRect
 
 	// hasTail is false for a note that points at NO passage — a chapter-scope
 	// one, and (once they are drawn) an unplaced one. The speech tail asserts
@@ -143,7 +143,7 @@ type styledNoteGeom struct {
 	// reserves no tail depth.
 	hasTail            bool
 	senderTx, countsTx string
-	tailTx, restTx     string
+	restTx             string
 
 	body      []string
 	bodyLines []styledNoteRect
@@ -269,24 +269,6 @@ func styledFitWho(who string, width float32) string {
 	return "…" + counts
 }
 
-// styledWhoSplit cuts a fitted who line into the sender half, the counts span
-// and whatever follows it — the same first-separator idiom btIOSWhoCountRange
-// uses, and safe against a sender's name by construction: sanitizeSenderName
-// maps the middle dot away (notes_byline.go), so the chrome's grammar is not
-// available to names.
-func styledWhoSplit(who string) (sender, counts, rest string) {
-	i := strings.Index(who, " · ")
-	if i < 0 {
-		return who, "", ""
-	}
-	sender = who[:i]
-	after := who[i+len(" · "):]
-	if j := strings.Index(after, " · "); j >= 0 {
-		return sender, " · " + after[:j], " · " + after[j+len(" · "):]
-	}
-	return sender, " · " + after, ""
-}
-
 // measureStyledNote sizes the sticker for a card `width` points wide and fills
 // the geometry table in BAND-RELATIVE coordinates (origin = the band's top
 // left). place() then moves it into the pane's own coordinates.
@@ -339,18 +321,27 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 		who = "Note from Friend" // a person, never "from BibleText"
 	}
 	fitted := styledFitWho(who, whoW)
-	sender, counts, rest := "", "", ""
-	if g.next {
-		sender, counts, rest = styledWhoSplit(fitted)
-	} else {
-		sender = fitted
+	// FOUND, not cut. Go composed the line and said which substring of it is the
+	// control (noteCountsSpan); this pane only has to locate it. Backwards,
+	// because the fit above may have ellipsised the sender half — the same
+	// search the Apple panes run, for the same reason.
+	//
+	// Not found (a fit so tight the counts gave way) is the same case as no
+	// counts: draw the line plainly rather than accent something arbitrary.
+	sender, counts, rest := fitted, "", ""
+	if n.Counts != "" {
+		if i := strings.LastIndex(fitted, n.Counts); i >= 0 {
+			sender, counts, rest = fitted[:i], n.Counts, fitted[i+len(n.Counts):]
+		}
 	}
 	// The counts span is the only pressable part of the who line; the trailing
 	// "· N not shown here" is chrome too and rides on the sender's own colour.
+	//
+	// The separator BEFORE the counts now rides on the sender's colour too. It
+	// used to be accented here and muted on both Apple panes — this pane's own
+	// split kept the " · " inside the counts run, so the same line was painted
+	// two ways depending on which app you were holding.
 	g.senderTx, g.countsTx, g.restTx = sender, counts, rest
-	if counts != "" {
-		g.tailTx = " ›"
-	}
 
 	x := styledNotePad
 	// The who row's box starts at the card's own padding, FULL STOP. It used to
@@ -370,7 +361,6 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 	}
 	g.sender = put(g.senderTx)
 	g.counts = put(g.countsTx)
-	g.tail = put(g.tailTx)
 	g.restR = put(g.restTx)
 
 	g.body = styledNoteWrap(n.Text, inner, bodySz)
@@ -403,7 +393,10 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 	if g.next && g.counts.W > 0 {
 		// The press target is the counts span itself, widened a little.
 		bx := g.counts.X - 6
-		bw := g.counts.W + g.tail.W + 12
+		// The counts run carries the chevron now, so its own width is the
+		// whole target; the chevron used to be a fourth text run measured
+		// separately and added back here.
+		bw := g.counts.W + 12
 		if bx < 0 {
 			bx = 0
 		}
@@ -431,7 +424,6 @@ func (g *styledNoteGeom) place(x, y float32) {
 	shift(&g.card)
 	shift(&g.sender)
 	shift(&g.counts)
-	shift(&g.tail)
 	shift(&g.restR)
 	for i := range g.bodyLines {
 		shift(&g.bodyLines[i])
@@ -541,7 +533,6 @@ func (r *styledPaneRenderer) buildNote() {
 	// muted throughout except the counts span, which is the press target.
 	addText(g.senderTx, pal.TextMuted, styledNoteWhoSz, true)
 	addText(g.countsTx, pal.Accent, styledNoteWhoSz, true)
-	addText(g.tailTx, pal.Accent, styledNoteWhoSz, true)
 	addText(g.restTx, pal.TextMuted, styledNoteWhoSz, true)
 	// The message: TEXT, never markup, in the reader's own body colour.
 	bodySz := styledUISize()
@@ -657,7 +648,6 @@ func (r *styledPaneRenderer) positionNote() {
 	}
 	place(g.sender, g.senderTx)
 	place(g.counts, g.countsTx)
-	place(g.tail, g.tailTx)
 	place(g.restR, g.restTx)
 	for li := range g.body {
 		place(g.bodyLines[li], g.body[li])

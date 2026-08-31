@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -27,7 +28,7 @@ func TestNoteChromeIsOneValueForEverySurface(t *testing.T) {
 	origPills := notesPillPerParagraph
 	defer func() { notesPillPerParagraph = origPills }()
 
-	checked, mismatches := 0, 0
+	checked, mismatches, withCounts := 0, 0, 0
 	for _, featureOn := range []bool{true, false} {
 		for _, placement := range []notePlacement{placeNone, placeOwn, placeFollowed, placeBoth} {
 			for _, collapsed := range []bool{false, true} {
@@ -50,6 +51,30 @@ func TestNoteChromeIsOneValueForEverySurface(t *testing.T) {
 								verses := st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)
 								c := chapterNoteChrome(st, plan, verses)
 
+								// THE ENABLING FACT, in every reachable state: the
+								// counts span is a substring of the line, it occurs
+								// EXACTLY once, and it exists exactly when the
+								// counts are a control. Each native finds it by
+								// searching; a second occurrence would let a
+								// backwards search accent the wrong one, and a
+								// missing one would silently drop the affordance.
+								if (c.Counts != "") != c.Next {
+									t.Errorf("%s: Counts=%q but Next=%v", w.id(), c.Counts, c.Next)
+								}
+								if c.Counts != "" {
+									withCounts++
+									if n := strings.Count(c.Who, c.Counts); n != 1 {
+										t.Errorf("%s: the counts span %q occurs %d times in %q",
+											w.id(), c.Counts, n, c.Who)
+									}
+									if !strings.HasSuffix(c.Counts, noteChevron) &&
+										!strings.Contains(c.Who, c.Counts+noteWhoSep) {
+										t.Errorf("%s: the counts span %q is neither the line's "+
+											"tail nor followed by a separator in %q — the grammar "+
+											"the span was cut by has changed", w.id(), c.Counts, c.Who)
+									}
+								}
+
 								// Every Go-side push site, byte for byte.
 								for name, push := range map[string]func(*AppState, chapterPlan) (string, string, bool, bool){
 									"apple":   appleStickerPush,
@@ -59,6 +84,16 @@ func TestNoteChromeIsOneValueForEverySurface(t *testing.T) {
 									text, who, pill, next := push(st, plan)
 									if !notesFeatureOn(st) {
 										text, who, pill, next = "", "", false, false
+									}
+									// The ONE documented addition: the chevron is
+									// part of the line now, not something four
+									// natives append to it afterwards (it was four
+									// literals, and Android's was two spaces wide).
+									// Stated as an exact transformation of the push
+									// tuple, so the shared value still cannot become
+									// a fourth composition without this failing.
+									if next {
+										who += noteChevron
 									}
 									if c.Text != text || c.Who != who || c.Pill != pill || c.Next != next {
 										mismatches++
@@ -78,7 +113,12 @@ func TestNoteChromeIsOneValueForEverySurface(t *testing.T) {
 	if checked == 0 {
 		t.Fatal("no states were reached; the sweep is testing nothing")
 	}
-	t.Logf("checked %d reachable states against three push sites", checked)
+	if withCounts == 0 {
+		t.Error("no state produced a counts control, so the substring every native " +
+			"now searches for was never exercised by this sweep")
+	}
+	t.Logf("checked %d reachable states against three push sites (%d with counts)",
+		checked, withCounts)
 }
 
 // The derived decisions must agree with the tuple they came from, in every

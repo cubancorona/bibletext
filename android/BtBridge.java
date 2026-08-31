@@ -110,6 +110,13 @@ public final class BtBridge {
     // decide it again from noteOwn, which is the same decision made twice.
     static final int VERBS_NONE = 0, VERBS_RECEIVED = 1, VERBS_OWN = 2;
     private static int noteVerbs = VERBS_RECEIVED;
+    // noteCounts is the SUBSTRING of noteWho that is a control — the counts
+    // phrase and its chevron, exactly as they appear in the line. This pane had
+    // no split at all: the whole who line was painted accent when it was
+    // nextable, so the sender's byline was coloured as though it too were
+    // pressable. Composed in Go now (noteCountsSpan) and found here by
+    // lastIndexOf, which still works after fitWho has ellipsised the sender.
+    private static String noteCounts;
     private static boolean noteTail = true;
     private static boolean notePill = false;
     private static boolean noteNextable = false;
@@ -1148,16 +1155,19 @@ public final class BtBridge {
                                final boolean nextable, final boolean own, final int anchorVerse,
                                final int bg, final int fg, final int muted,
                                final int accent, final int border, final boolean tail,
-                               final int verbs) {
+                               final int verbs, final byte[] counts_) {
         UI.post(new Runnable() {
             @Override public void run() {
                 String t = (noteText_ == null || noteText_.length == 0)
                         ? null : new String(noteText_, java.nio.charset.StandardCharsets.UTF_8);
                 String w = (who_ == null || who_.length == 0)
                         ? null : new String(who_, java.nio.charset.StandardCharsets.UTF_8);
+                String counts = (counts_ == null || counts_.length == 0)
+                        ? null : new String(counts_, java.nio.charset.StandardCharsets.UTF_8);
                 boolean changed = !sameStr(t, noteText) || !sameStr(w, noteWho)
                         || notePill != pill || noteNextable != nextable
                         || noteTail != tail || noteVerbs != verbs
+                        || !java.util.Objects.equals(noteCounts, counts)
                         || noteOwn != own
                         || noteAnchorVerse != anchorVerse;
                 noteText = t;
@@ -1166,6 +1176,7 @@ public final class BtBridge {
                 noteNextable = nextable;
                 noteTail = tail;
                 noteVerbs = verbs;
+                noteCounts = counts;
                 noteOwn = own;
                 noteAnchorVerse = anchorVerse;
                 noteBg = bg;
@@ -1385,6 +1396,27 @@ public final class BtBridge {
 
 
     /**
+     * The who line with the counts span in the accent colour and everything
+     * else muted — the app's chrome, painted the way the other three paint it.
+     *
+     * The span is FOUND, not cut: Go composed the line and said which substring
+     * of it is the control. lastIndexOf, because fitWho may have ellipsised the
+     * sender half and the span sits at the end. Not found (a fit so tight the
+     * counts gave way) leaves the line plain, with nothing accented promising a
+     * tap — the same fallback as the Apple panes.
+     */
+    private static CharSequence noteWhoSpanned(String line) {
+        if (line == null) return "";
+        if (!noteNextable || noteCounts == null || noteCounts.isEmpty()) return line;
+        int i = line.lastIndexOf(noteCounts);
+        if (i < 0) return line;
+        android.text.SpannableString sp = new android.text.SpannableString(line);
+        sp.setSpan(new android.text.style.ForegroundColorSpan(noteAccent),
+                i, i + noteCounts.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sp;
+    }
+
+    /**
      * fitWho is btIOSFitWho in Java: when the who line will not fit, the SENDER
      * half tail-truncates and the counts survive whole. Split at the first
      * " \u00b7 " — the same idiom iOS uses, and safe against a sender's name
@@ -1434,16 +1466,18 @@ public final class BtBridge {
         // say "press me", the same colour language the iOS counts span uses
         // (iOS accents only the counts; one TextView cannot split the tap, so
         // the line is the control — recorded simplification).
+        // The chevron is already in this string: the Go side composes the whole
+        // line (chapterNoteChrome), so no renderer appends its own any more.
         String whoLabel = noteWho != null ? noteWho : "Note from Friend";
-        // ONE space, as every other surface uses (noteChevron, notes_chrome.go).
-        // This was two, which made Android's counts sit a space further out than
-        // anyone else's for no reason anybody chose.
-        whoLabel = noteNextable ? whoLabel + " ›" : whoLabel;
-        who.setText(whoLabel);
+        who.setText(noteWhoSpanned(whoLabel));
         who.setTag(whoLabel); // the unfitted string, for the width-aware fit below
         who.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
         who.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        who.setTextColor(noteNextable ? noteAccent : noteMuted);
+        // MUTED, with the counts span alone in the accent — the same painting as
+        // the other three. This pane used to colour the ENTIRE line accent when
+        // it was nextable, which put the sender's byline in the app's "you can
+        // press this" colour.
+        who.setTextColor(noteMuted);
         // The spec's who height is a MINIMUM, not a fixed box: dp() scales with
         // display density and sp with the reader's font-size choice, so an
         // 11sp line inside a 14dp box clips from about fontScale 1.08 — and
@@ -1485,7 +1519,11 @@ public final class BtBridge {
                 int avail = (r - l) - tv.getPaddingLeft() - tv.getPaddingRight();
                 if (avail <= 0) return;
                 String fitted = fitWho(tv, (String) v.getTag(), avail);
-                if (!fitted.contentEquals(tv.getText())) tv.setText(fitted);
+                // Re-span after the fit: setText keeps only the spans it is
+                // given, and the fitted string is a NEW one — a plain setText
+                // here would silently drop the accent the moment the who line
+                // was too wide to fit, which is exactly when it matters.
+                if (!fitted.contentEquals(tv.getText())) tv.setText(noteWhoSpanned(fitted));
             }
         });
 

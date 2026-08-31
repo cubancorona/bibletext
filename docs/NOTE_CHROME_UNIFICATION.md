@@ -16,7 +16,15 @@
                 Android build now runs over the shipped dex
                 (verify_android_jni_descriptors) — a JNI descriptor is only a
                 string, and a stale one fails nowhere but on a device.
-     Everything from "5. Verbs" onward is proposed, and every one of those steps
+     <pending>  step 5, Verbs: the verb set crosses all three native ABIs as one
+                appended int and the panes branch on it. Two Android divergences
+                fell out — the bin was an emoji (drawn now, from the same Fyne
+                path the Apple panes transcribe) and the verb corner reserved two
+                slots whichever verbs were drawn. A contract reads the three
+                numbers out of each native's own enum and holds them against the
+                iota. `own` stays on the wire, unbranched-on, until an appended
+                field makes the arity change visible.
+     Everything from "6. Counts" onward is proposed, and every one of those steps
      changes rendering on platforms that need a device or an emulator to
      verify. -->
 

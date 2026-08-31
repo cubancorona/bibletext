@@ -854,6 +854,13 @@ static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
 // and pushed. It is not "is it own": the glyph is a promise about what the press
 // does, and choosing the glyph and choosing the verb in two places is how a bin
 // came to sit on a card whose press only put the note away.
+// gNoteCounts is the SUBSTRING of gNoteWho that is a control — the counts
+// phrase and its chevron, together, exactly as they appear in the line. This
+// pane used to cut it out itself, at the first " · ", which is the same grammar
+// transcribed into a third language; the styled pane had a fourth copy and
+// Android had none, so Android drew no accent at all. Found by a BACKWARDS
+// search, which still works after btIOSFitWho has ellipsised the sender half.
+static NSString *gNoteCounts = nil;
 static int       gNoteVerbs = 1;        // kNoteVerbsReceived
 static BOOL      gNoteTail = YES;
 static CGFloat   gNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
@@ -914,9 +921,11 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
                       double acR, double acG, double acB,
-                      double boR, double boG, double boB, int tail, int verbs) {
+                      double boR, double boG, double boB, int tail, int verbs,
+                      const char *counts) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
+    NSString *ct = (counts == NULL || *counts == 0) ? nil : [NSString stringWithUTF8String:counts];
     dispatch_async(dispatch_get_main_queue(), ^{
         BOOL changed = !btIOSSameStr(t, gNoteText) || !btIOSSameStr(w, gNoteWho) ||
                        gNoteMinimized != (minimized ? YES : NO) ||
@@ -924,7 +933,8 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                        gNoteOwn != (own ? YES : NO) ||
                        gNoteAnchorVerse != anchorVerse ||
                        gNoteTail != (tail ? YES : NO) ||
-                       gNoteVerbs != verbs;
+                       gNoteVerbs != verbs ||
+                       !btIOSSameStr(ct, gNoteCounts);
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
@@ -933,6 +943,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
         gNoteAnchorVerse = anchorVerse;
         gNoteTail = tail ? YES : NO;
         gNoteVerbs = verbs;
+        gNoteCounts = ct;
         gNoteShapeExtra = gNoteTail ? kNoteTail : 0;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
@@ -1372,23 +1383,6 @@ static NSString *btIOSFitWho(NSString *who, CGFloat width, UIFont *font) {
     return [@"…" stringByAppendingString:counts];
 }
 
-// btIOSWhoCountRange is the "K of N in this chapter" span of a (fitted) WHO
-// line — the characters between the first " · " separator and the next one,
-// or the end. {NSNotFound,0} when the line carries no counts. The first-
-// separator split is the same idiom btIOSFitWho truncates by, and it is safe
-// against a sender's name by construction: sanitizeSenderName maps the middle
-// dot away (notes_byline.go), so the chrome's grammar is not available to
-// names.
-static NSRange btIOSWhoCountRange(NSString *who) {
-    NSRange sep = [who rangeOfString:@" · "];
-    if (sep.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
-    NSUInteger start = NSMaxRange(sep);
-    NSRange rest = NSMakeRange(start, who.length - start);
-    NSRange next = [who rangeOfString:@" · " options:0 range:rest];
-    NSUInteger end = (next.location == NSNotFound) ? who.length : next.location;
-    return NSMakeRange(start, end - start);
-}
-
 // Put the sticker in the band the text reserved. Runs after every layout.
 static void btIOSLayoutNote(void) {
     if (gNoteView == nil || gReadingTV == nil || !btIOSNotePresent()) return;
@@ -1469,18 +1463,24 @@ static void btIOSLayoutNote(void) {
     // line cannot fit, the sender half is tail-truncated and the counts
     // survive whole (btIOSFitWho).
     NSString *fitted = btIOSFitWho(gNoteWho ?: @"Note from Friend", whoW, btNoteWhoFont());
-    NSRange counts = (gNoteNextable && nxt != nil) ? btIOSWhoCountRange(fitted)
-                                                   : NSMakeRange(NSNotFound, 0);
+    // The control's span is FOUND, not cut: Go composed the line, chevron and
+    // all, and said which substring of it is the control. Backwards, because
+    // the fit above may have ellipsised the sender half and the span is at the
+    // end. Not found — a fit so tight the counts themselves gave way — is the
+    // same case as no counts: the line is drawn plainly, with nothing accented
+    // to promise a tap.
+    NSRange counts = (gNoteNextable && nxt != nil && gNoteCounts != nil)
+        ? [fitted rangeOfString:gNoteCounts options:NSBackwardsSearch]
+        : NSMakeRange(NSNotFound, 0);
     if (counts.location == NSNotFound) {
         who.text = fitted;
         nxt.hidden = YES;
     } else {
         // The counts span is the next-tap's control, so it must LOOK pressable:
-        // the accent colour plus a trailing chevron, both the app's own chrome —
-        // no new words, and nothing in the sender's style.
-        NSString *shown = [fitted stringByReplacingCharactersInRange:NSMakeRange(NSMaxRange(counts), 0)
-                                                          withString:@" ›"];
-        NSRange lit = NSMakeRange(counts.location, counts.length + 2);
+        // the accent colour, over the app's own chrome — no new words, and
+        // nothing in the sender's style.
+        NSString *shown = fitted;
+        NSRange lit = counts;
         NSDictionary *attrs = @{NSFontAttributeName: btNoteWhoFont()};
         NSMutableAttributedString *a = [[NSMutableAttributedString alloc]
             initWithString:shown
@@ -3284,6 +3284,10 @@ func pushNoteToPane(state *AppState) {
 	// WHICH CONTROLS, decided once. The native used to ask "is it own" and pick
 	// the glyph itself, which is the same decision made twice.
 	verbSet := C.int(c.verbs())
+	// The SUBSTRING of the who line that is a control, so the native finds it
+	// rather than re-deriving the grammar (notes_chrome.go noteCountsSpan).
+	cCounts := C.CString(c.Counts)
+	defer C.free(unsafe.Pointer(cCounts))
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
 	}
@@ -3298,7 +3302,7 @@ func pushNoteToPane(state *AppState) {
 	// which is the only honest place for notes with no verses here.)
 	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
-		tailFlag, verbSet)
+		tailFlag, verbSet, cCounts)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {
