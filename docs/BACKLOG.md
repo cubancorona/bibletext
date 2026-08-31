@@ -289,6 +289,15 @@ a separate clause rather than folded into N.
 
 ## TOP PRIORITY — carry the per-paragraph pills to the other surfaces
 
+The port and the unification are one job now: see
+[docs/NOTE_CHROME_UNIFICATION.md](NOTE_CHROME_UNIFICATION.md) for the plan.
+Porting the pills surface by surface would add a fifth transcription of every
+decision; the plan makes each decision singular first, so the port lands as
+adoption rather than as four more copies. Step one is done — the own-note
+predicate is one function (`c619743e4`).
+
+
+
 `notesPillPerParagraph` is OFF, and stays off until this is done. It was turned
 on once and reverted within the hour: only the styled pane (Windows, Linux)
 draws the groups, so turning it on split the collapsed model across platforms —
