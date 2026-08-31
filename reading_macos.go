@@ -1443,6 +1443,9 @@ static NSString     *gMacNoteWho = nil;       // the app's chrome: byline + coun
 static BOOL          gMacNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
 static BOOL          gMacNoteNextable = NO;   // the count region is a control (S10 next-tap)
 // gMacNoteOwn: the live note is one the READER WROTE, shown because they asked.
+// NOTHING BRANCHES ON IT ANY MORE (the iOS twin says why it is still on the
+// wire): gMacNoteVerbs carries the decision, and `own` goes when the next
+// appended field makes the arity change visible.
 // It decides the closing control's mark — a bin deletes, ✕ only dismisses — and
 // it joins bibleTextMacSetNote's compare so moving between your note and a
 // friend's repaints rather than leaving the wrong mark on the card.
@@ -1454,6 +1457,8 @@ static NSInteger     gMacNoteAnchorVerse = 0;
 // formula carries a branch. The formulae used to gate the tail on
 // btMacNotePill() — "is it collapsed", which is a different question: a note
 // parked at chapter scope points at nothing, and a tail there claims verse 1.
+// The twin of gNoteVerbs (reading_ios.go): WHICH CONTROLS, decided in Go.
+static int       gMacNoteVerbs = 1;   // kMacNoteVerbsReceived
 static BOOL      gMacNoteTail = YES;
 static CGFloat   gMacNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
 static CGFloat       gMacNoteBandH = 0;
@@ -1488,6 +1493,9 @@ static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kM
 // pointer target. The pill used to borrow it (24), which is how a pointer-target
 // decision came to set the height of a piece of content.
 static const CGFloat kMacNoteBtn = 24;
+// The verb sets, in noteChrome.verbs()'s own order (notes_chrome.go).
+enum { kMacNoteVerbsNone = 0, kMacNoteVerbsReceived = 1, kMacNoteVerbsOwn = 2 };
+
 static const CGFloat kMacNoteTail = 9, kMacNoteTailW = 18, kMacNoteTailX = 24;
 // THE ONE DELIBERATE RESIDUAL IN THE SPEC, and it lives here.
 //
@@ -1796,7 +1804,7 @@ static void btMacEnsureNoteView(void) {
         // NOT ON YOUR OWN NOTE — see the iOS twin for the whole reason: − and ✕
         // run the identical three lines there (hideCurrentNote /
         // dropCurrentNote), and − promises a pill an own note can never have.
-        if (!gMacNoteOwn) {
+        if (gMacNoteVerbs != kMacNoteVerbsOwn) {
             NSButton *hide = [NSButton buttonWithTitle:@"–" target:gTextView action:@selector(btNoteHide:)];
             hide.bordered = NO;
             hide.font = [NSFont systemFontOfSize:17 weight:NSFontWeightMedium];
@@ -1814,7 +1822,7 @@ static void btMacEnsureNoteView(void) {
         // the Material bin the Fyne surfaces use, and as a template image it
         // takes the muted tint like everything else here.
         NSButton *del;
-        if (gMacNoteOwn) {
+        if (gMacNoteVerbs == kMacNoteVerbsOwn) {
             del = [NSButton buttonWithTitle:@"✕" target:gTextView action:@selector(btNoteDelete:)];
         } else {
             NSImage *bin = btMacTrashImage(kMacNoteTrashPt);
@@ -1985,7 +1993,7 @@ static void btMacLayoutNote(void) {
     NSView *hide = [gMacNoteView viewWithTag:904];
     NSView *del  = [gMacNoteView viewWithTag:905];
     NSButton *nxt = (NSButton *)[gMacNoteView viewWithTag:906];
-    CGFloat whoW = w - 2 * kMacNotePad - (gMacNoteOwn ? 1 : 2) * kMacNoteBtn;
+    CGFloat whoW = w - 2 * kMacNotePad - (gMacNoteVerbs == kMacNoteVerbsOwn ? 1 : 2) * kMacNoteBtn;
     // The who row's box starts at the card's own padding — no "- 2" shim, which is
     // what used to make the stated 12 + 13 + 4 rhythm describe a card whose real top
     // padding was 10 and whose real who→body gap was 6.
@@ -2075,7 +2083,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                          double fgR, double fgG, double fgB,
                          double muR, double muG, double muB,
                          double acR, double acG, double acB,
-                         double boR, double boG, double boB, int tail) {
+                         double boR, double boG, double boB, int tail, int verbs) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -2084,7 +2092,8 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                        gMacNoteNextable != (nextable ? YES : NO) ||
                        gMacNoteOwn != (own ? YES : NO) ||
                        gMacNoteAnchorVerse != anchorVerse ||
-                       gMacNoteTail != (tail ? YES : NO);
+                       gMacNoteTail != (tail ? YES : NO) ||
+                       gMacNoteVerbs != verbs;
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
@@ -2093,6 +2102,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
         gMacNoteAnchorVerse = anchorVerse;
 
         gMacNoteTail = tail ? YES : NO;
+        gMacNoteVerbs = verbs;
 
         gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
@@ -2616,6 +2626,8 @@ func pushNoteToPane(state *AppState) {
 	if c.hasTail() {
 		macTailFlag = 1
 	}
+	// WHICH CONTROLS, decided once (the iOS twin's reason).
+	macVerbSet := C.int(c.verbs())
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2641,7 +2653,8 @@ func pushNoteToPane(state *AppState) {
 	// chapter (an unplaced-only chapter pushes verse 0 on purpose: the top is
 	// the only honest place for notes with no verses here).
 	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
-		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB, macTailFlag)
+		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
+		macTailFlag, macVerbSet)
 }
 
 // setNativeTint / applyNativeTint hand the chapter's wash model

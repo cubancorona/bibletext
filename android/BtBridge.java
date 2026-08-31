@@ -105,6 +105,11 @@ public final class BtBridge {
     // noteTail is the PUSHED decision "does this card point at a passage". It is
     // not "is it collapsed": a note parked at chapter scope points at nothing,
     // and a tail there claims verse 1.
+    // The verb sets, in noteChrome.verbs()'s own order (notes_chrome.go). WHICH
+    // CONTROLS the card carries is decided in Go and pushed; this pane used to
+    // decide it again from noteOwn, which is the same decision made twice.
+    static final int VERBS_NONE = 0, VERBS_RECEIVED = 1, VERBS_OWN = 2;
+    private static int noteVerbs = VERBS_RECEIVED;
     private static boolean noteTail = true;
     private static boolean notePill = false;
     private static boolean noteNextable = false;
@@ -126,6 +131,10 @@ public final class BtBridge {
     // which of the three branches ran.
     static final boolean SCROLL_DEBUG = false;
     // noteOwn: the live note is one the READER WROTE, shown because they asked
+    // NOTHING BRANCHES ON IT ANY MORE — noteVerbs carries that decision. It
+    // stays on the wire, and in the changed-test, only so this bridge grows by
+    // one appended parameter at a time (reading_ios.go says why).
+    //
     // for it. It picks the closing control's mark and joins setNote's compare.
     private static boolean noteOwn;
     private static boolean noteRetryPending;
@@ -891,6 +900,11 @@ public final class BtBridge {
     // about 8dp lower than on every other surface. They float over the card now,
     // exactly as they do on iOS, macOS and the styled pane.
     private static final int NOTE_BTN = 30;
+    // NOT spec either: how big the DRAWN bin is inside that 30dp target. iOS
+    // sets 12.5 inside its own 30pt button and macOS 12 inside its 24; this
+    // pane shares iOS's 30, so it takes iOS's 12.5 rounded to a whole dp — the
+    // mark is the same drawing on all three, sized to each one's own thumb.
+    private static final int NOTE_TRASH = 13;
 
     private static int dp(int v) {
         float d = activity != null ? activity.getResources().getDisplayMetrics().density : 2f;
@@ -1133,7 +1147,8 @@ public final class BtBridge {
     public static void setNote(final byte[] noteText_, final byte[] who_, final boolean pill,
                                final boolean nextable, final boolean own, final int anchorVerse,
                                final int bg, final int fg, final int muted,
-                               final int accent, final int border, final boolean tail) {
+                               final int accent, final int border, final boolean tail,
+                               final int verbs) {
         UI.post(new Runnable() {
             @Override public void run() {
                 String t = (noteText_ == null || noteText_.length == 0)
@@ -1142,7 +1157,7 @@ public final class BtBridge {
                         ? null : new String(who_, java.nio.charset.StandardCharsets.UTF_8);
                 boolean changed = !sameStr(t, noteText) || !sameStr(w, noteWho)
                         || notePill != pill || noteNextable != nextable
-                        || noteTail != tail
+                        || noteTail != tail || noteVerbs != verbs
                         || noteOwn != own
                         || noteAnchorVerse != anchorVerse;
                 noteText = t;
@@ -1150,6 +1165,7 @@ public final class BtBridge {
                 notePill = pill;
                 noteNextable = nextable;
                 noteTail = tail;
+                noteVerbs = verbs;
                 noteOwn = own;
                 noteAnchorVerse = anchorVerse;
                 noteBg = bg;
@@ -1450,7 +1466,11 @@ public final class BtBridge {
         android.widget.LinearLayout.LayoutParams wlp = new android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
-        wlp.rightMargin = 2 * dp(NOTE_BTN);
+        // ONE slot for an own note, two for everyone else's — the count comes
+        // from the verb set, not from a constant. This row reserved two either
+        // way, so an own note's who line gave way a whole button sooner here
+        // than on the Apple panes, which have always asked (own ? 1 : 2).
+        wlp.rightMargin = noteVerbSlots() * dp(NOTE_BTN);
         box.addView(who, wlp);
         // Fit at LAYOUT time, where the row's real width is known — the same
         // moment iOS runs btIOSFitWho (btIOSLayoutNote). The unfitted string
@@ -1504,7 +1524,7 @@ public final class BtBridge {
             FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     dp(NOTE_PAD + NOTE_WHO_H + 2), Gravity.TOP | Gravity.START);
-            np.rightMargin = 2 * dp(NOTE_BTN);
+            np.rightMargin = noteVerbSlots() * dp(NOTE_BTN);
             wrap.addView(nxt, np);
         }
         // Minimize first, delete second: the destructive one is never what a
@@ -1515,18 +1535,42 @@ public final class BtBridge {
         // dropCurrentNote) — and − promises a pill an own note can never have,
         // since it enters the plan only while focus names it and is built Open.
         // Slot 1 is the rightmost, so omitting slot 2 leaves ✕ where it was.
-        if (!noteOwn) {
+        if (noteVerbs != VERBS_OWN) {
             wrap.addView(noteVerb("–", 18f, new View.OnClickListener() { // en dash: Hide
                 @Override public void onClick(View v) { nativeNoteHidden(); }
             }), noteVerbParams(2));
         }
-        // THE MARK SAYS WHAT THE PRESS DOES: a bin where it deletes someone else's
-        // message, ✕ where it only puts your own note away (see the Apple twins).
-        wrap.addView(noteVerb(noteOwn ? "✕" : "\uD83D\uDDD1", 14f, new View.OnClickListener() {
-            @Override public void onClick(View v) { nativeNoteDeleted(); }
-        }), noteVerbParams(1));
+        // THE MARK SAYS WHAT THE PRESS DOES: a bin where it deletes someone
+        // else's message, ✕ where it only puts your own note away. The bin is
+        // DRAWN (noteTrashDrawable), like the Apple panes' and the history
+        // bar's; ✕ stays a glyph, as it is on every surface.
+        View del;
+        if (noteVerbs == VERBS_OWN) {
+            del = noteVerb("✕", 14f, new View.OnClickListener() {
+                @Override public void onClick(View v) { nativeNoteDeleted(); }
+            });
+        } else {
+            android.widget.ImageView bin = new android.widget.ImageView(activity);
+            bin.setImageDrawable(noteTrashDrawable(dp(NOTE_TRASH), noteMuted));
+            bin.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+            bin.setClickable(true);
+            bin.setContentDescription("Delete note");
+            bin.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { nativeNoteDeleted(); }
+            });
+            del = bin;
+        }
+        wrap.addView(del, noteVerbParams(1));
         noteView = wrap;
         return wrap;
+    }
+
+    // How many verb slots the card reserves. An own note carries ✕ alone, so it
+    // keeps one; every other card carries minimize beside delete and keeps two.
+    // One function, because the who row, the next-tap overlay and the verbs
+    // themselves must never disagree about how wide the verb corner is.
+    private static int noteVerbSlots() {
+        return noteVerbs == VERBS_OWN ? 1 : 2;
     }
 
     // noteVerbParams places one floated verb from the card's top-right corner:
@@ -1542,6 +1586,50 @@ public final class BtBridge {
     // noteVerb is one small sticker control (Hide "–" / Delete "✕"): muted, in a
     // fixed touch box (its size is the LayoutParams' now, so the glyph is
     // centred rather than padded out to a height of its own).
+    /**
+     * The SAME bin the other surfaces draw, so the app has one delete mark
+     * rather than two designs. Fyne's theme.DeleteIcon() is Material's
+     * "delete": a straight-sided can with a flat lid bar and a small trapezoid
+     * handle. This is its SVG transcribed onto a 24x24 box and scaled, exactly
+     * as btIOSTrashImage does it (reading_ios.go) — the emoji this replaced
+     * rendered at the button's font size in the system's own colours, which is
+     * a loud mark on a quiet card and a different bin from the history bar's.
+     *
+     *   body: M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z
+     *   lid:  M19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z
+     */
+    private static android.graphics.drawable.Drawable noteTrashDrawable(int px, int tint) {
+        final float u = px / 24f;
+        android.graphics.Path path = new android.graphics.Path();
+        // The can.
+        path.moveTo(6 * u, 19 * u);
+        path.cubicTo(6 * u, 20.1f * u, 6.9f * u, 21 * u, 8 * u, 21 * u);
+        path.lineTo(16 * u, 21 * u);
+        path.cubicTo(17.1f * u, 21 * u, 18 * u, 20.1f * u, 18 * u, 19 * u);
+        path.lineTo(18 * u, 7 * u);
+        path.lineTo(6 * u, 7 * u);
+        path.close();
+        // The lid, with its handle.
+        path.moveTo(19 * u, 4 * u);
+        path.lineTo(15.5f * u, 4 * u);
+        path.lineTo(14.5f * u, 3 * u);
+        path.lineTo(9.5f * u, 3 * u);
+        path.lineTo(8.5f * u, 4 * u);
+        path.lineTo(5 * u, 4 * u);
+        path.lineTo(5 * u, 6 * u);
+        path.lineTo(19 * u, 6 * u);
+        path.close();
+
+        android.graphics.Bitmap bmp =
+                android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas c = new android.graphics.Canvas(bmp);
+        android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setStyle(android.graphics.Paint.Style.FILL);
+        paint.setColor(tint);
+        c.drawPath(path, paint);
+        return new android.graphics.drawable.BitmapDrawable(activity.getResources(), bmp);
+    }
+
     private static TextView noteVerb(String glyph, float sp, View.OnClickListener tap) {
         TextView b = new TextView(activity);
         b.setText(glyph);

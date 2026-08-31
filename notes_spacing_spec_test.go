@@ -220,8 +220,9 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"btIOSTrashImage(kNoteTrashPt": "the closing control's bin must be DRAWN " +
 					"(SF Symbols, template-tinted) rather than typed as an emoji, which renders " +
 					"at the button's font size in its own colours — a loud mark on a quiet card",
-				"if (gNoteOwn) {": "the mark must still say what the press does: a bin deletes " +
-					"someone else's message, ✕ only puts your own away",
+				"if (gNoteVerbs == kNoteVerbsOwn) {": "the mark must still say what the press " +
+					"does: a bin deletes someone else's message, ✕ only puts your own away — and " +
+					"it must read the PUSHED verb set, not an own flag this pane re-reads",
 				"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z": "the card's bin must be the " +
 					"SAME drawing as theme.DeleteIcon() — this is Fyne's own path, quoted so the " +
 					"two cannot drift. SF Symbols' trash is a different, tapered bin, and using " +
@@ -263,8 +264,7 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 			required: map[string]string{
 				"btMacTrashImage(kMacNoteTrashPt)": "the closing control's bin must be DRAWN, " +
 					"and drawn from FYNE's path so the app has one bin rather than two designs",
-				"if (gMacNoteOwn) {": "the mark must still say what the press does: a bin deletes " +
-					"someone else's message, ✕ only puts your own away",
+				"if (gMacNoteVerbs == kMacNoteVerbsOwn) {":              "the iOS twin's reason",
 				"chip.font = btMacNoteWhoFont();":                       "the pill's label must be the WHO font",
 				"chip.contentTintColor = btMacNoteColor(gMacNoteMuted)": "the pill's label is muted chrome",
 				"tw + 2 * kMacNotePillPadX": "the pill's side padding must be the spec's; this pane had " +
@@ -294,14 +294,23 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"now the spec's 14dp",
 				"chip.setHeight(": "a FIXED pill height — clips sp text at raised font scales",
 				"who.setHeight(":  "a FIXED who height — same clipping",
+				"\\uD83D\\uDDD1": "the bin as an EMOJI. It is drawn now (noteTrashDrawable), " +
+					"from the same path every other surface uses",
 				"who.setEllipsize(": "END-truncation on the WHO line, which eats the counts a " +
 					"reader must never lose; fitWho gives way on the sender half instead. " +
 					"(fitWho's own TextUtils.ellipsize call is the mechanism, not the defect, " +
 					"and the pill's short label may still truncate.)",
 			},
 			required: map[string]string{
-				"noteOwn ? \"✕\" : \"\\uD83D\\uDDD1\"": "the closing control's mark must say what " +
-					"the press does (the surrogate pair is the bin, U+1F5D1)",
+				"noteVerbs == VERBS_OWN": "the closing control's mark must say what the press " +
+					"does, off the PUSHED verb set",
+				"path.cubicTo(6 * u, 20.1f * u, 6.9f * u, 21 * u, 8 * u, 21 * u)": "the bin must be " +
+					"DRAWN from Fyne's own delete path, as the Apple panes draw it. The emoji this " +
+					"replaced rendered at the button's font size in the system's own colours — a " +
+					"loud mark on a quiet card, and a second bin design beside the history bar's",
+				"noteVerbSlots() * dp(NOTE_BTN)": "the verb corner's width must come from the " +
+					"verb SET. Reserved at a flat two slots, an own note's who line gave way a " +
+					"whole button sooner here than on the Apple panes",
 				"chip.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)": "the pill's label " +
 					"must be the WHO size in SP, so it scales with the reader's own text setting",
 				"chip.setTypeface(android.graphics.Typeface.DEFAULT_BOLD)": "the pill's label is " +

@@ -825,9 +825,12 @@ static NSString *gNoteWho = nil;       // the app's chrome: byline + counts, com
 static BOOL      gNoteMinimized = NO;  // pushed pill presentation (minimize OR suppression)
 static BOOL      gNoteNextable = NO;   // the count region is a control (S10 next-tap)
 // gNoteOwn: the live note is one the READER WROTE, shown because they asked for
-// it. It decides the closing control's mark — a bin deletes, ✕ only dismisses —
-// and it joins bibleTextSetNote's compare, so moving between your note and a
-// friend's repaints the sticker rather than leaving the wrong mark on it.
+// it. NOTHING BRANCHES ON IT ANY MORE — gNoteVerbs carries that decision, made
+// once in Go. It stays on the wire, and in the compare, only so this ABI grows
+// by one appended field at a time: dropping `own` while appending `verbs` would
+// slide anchorVerse and tail one position left, and two transposed ints of the
+// same C type compile clean and fail on a device. It goes when the next
+// appended field makes the arity change visible.
 static BOOL      gNoteOwn = NO;
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 
@@ -840,9 +843,18 @@ static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 // note parked at chapter scope has no passage to point at, and a tail there
 // claims verse 1. Resolving the term once turns the transcriptions into a sum
 // of named terms with no local decision left in them to get wrong.
+// The verb sets, in noteChrome.verbs()'s own order (notes_chrome.go). A
+// contract test holds these three names against that iota.
+enum { kNoteVerbsNone = 0, kNoteVerbsReceived = 1, kNoteVerbsOwn = 2 };
+
 // The speech tail: what makes it read as somebody talking rather than a panel.
 // Matches the web bubble, which hangs a small triangle under the left shoulder.
 static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
+// gNoteVerbs is WHICH CONTROLS the card carries, decided in Go (noteChrome.verbs)
+// and pushed. It is not "is it own": the glyph is a promise about what the press
+// does, and choosing the glyph and choosing the verb in two places is how a bin
+// came to sit on a card whose press only put the note away.
+static int       gNoteVerbs = 1;        // kNoteVerbsReceived
 static BOOL      gNoteTail = YES;
 static CGFloat   gNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
@@ -911,7 +923,8 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                        gNoteNextable != (nextable ? YES : NO) ||
                        gNoteOwn != (own ? YES : NO) ||
                        gNoteAnchorVerse != anchorVerse ||
-                       gNoteTail != (tail ? YES : NO);
+                       gNoteTail != (tail ? YES : NO) ||
+                       gNoteVerbs != verbs;
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
@@ -919,6 +932,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
         gNoteOwn = own ? YES : NO;
         gNoteAnchorVerse = anchorVerse;
         gNoteTail = tail ? YES : NO;
+        gNoteVerbs = verbs;
         gNoteShapeExtra = gNoteTail ? kNoteTail : 0;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
@@ -1266,7 +1280,7 @@ static void btIOSEnsureNoteView(void) {
         // ✕ is the mark that survives, because "put this away" is what the
         // press actually does. On a RECEIVED note both stay and differ: − leaves
         // a pill you can press to bring it back, ✕ deletes.
-        if (!gNoteOwn) {
+        if (gNoteVerbs != kNoteVerbsOwn) {
             UIButton *hide = [UIButton buttonWithType:UIButtonTypeSystem];
             [hide setTitle:@"–" forState:UIControlStateNormal];   // en dash
             [hide setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
@@ -1293,7 +1307,7 @@ static void btIOSEnsureNoteView(void) {
         // kNoteTrashPt is the drawn size, deliberately small: the BUTTON is the
         // tap target (kNoteBtn), not the drawing.
         [del setTitle:@"" forState:UIControlStateNormal];
-        if (gNoteOwn) {
+        if (gNoteVerbs == kNoteVerbsOwn) {
             // Dismiss, never destroy — a mark, not a bin.
             [del setTitle:@"✕" forState:UIControlStateNormal];
             [del setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
@@ -1446,7 +1460,7 @@ static void btIOSLayoutNote(void) {
     UIButton *hide = (UIButton *)[gNoteView viewWithTag:904];
     UIButton *del  = (UIButton *)[gNoteView viewWithTag:905];
     UIButton *nxt  = (UIButton *)[gNoteView viewWithTag:906];
-    CGFloat whoW = w - 2 * kNotePad - (gNoteOwn ? 1 : 2) * kNoteBtn;
+    CGFloat whoW = w - 2 * kNotePad - (gNoteVerbs == kNoteVerbsOwn ? 1 : 2) * kNoteBtn;
     // The who row's box starts at the card's own padding — no "- 2" shim, which
     // is what used to make the stated 12 + 14 + 4 rhythm describe a card whose
     // real top padding was 10 and whose real who→body gap was 6.
@@ -3267,6 +3281,9 @@ func pushNoteToPane(state *AppState) {
 	if c.hasTail() {
 		tailFlag = 1
 	}
+	// WHICH CONTROLS, decided once. The native used to ask "is it own" and pick
+	// the glyph itself, which is the same decision made twice.
+	verbSet := C.int(c.verbs())
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
 	}
@@ -3280,7 +3297,8 @@ func pushNoteToPane(state *AppState) {
 	// (An unplaced-only chapter pushes verse 0: its pill parks at the top,
 	// which is the only honest place for notes with no verses here.)
 	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
-		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB, tailFlag)
+		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
+		tailFlag, verbSet)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {

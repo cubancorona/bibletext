@@ -80,7 +80,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// pill/next presentation, anchor verse, then the five palette colors
 	// (surface, text, muted, accent, border) as ARGB ints.
 	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
-	                                        "([B[BZZZIIIIIIZ)V");
+	                                        "([B[BZZZIIIIIIZI)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -235,7 +235,8 @@ static jbyteArray btaBytes(JNIEnv *env, const char *s) {
 
 static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
                        int pill, int next, int own, int anchorVerse,
-                       int bg, int fg, int muted, int accent, int border, int tail) {
+                       int bg, int fg, int muted, int accent, int border, int tail,
+                       int verbs) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	jbyteArray t = btaBytes(env, text);
@@ -244,7 +245,7 @@ static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
 	                             pill ? JNI_TRUE : JNI_FALSE, next ? JNI_TRUE : JNI_FALSE,
 	                             own ? JNI_TRUE : JNI_FALSE,
 	                             anchorVerse, bg, fg, muted, accent, border,
-	                             tail ? JNI_TRUE : JNI_FALSE);
+	                             tail ? JNI_TRUE : JNI_FALSE, verbs);
 	if (t != NULL) (*env)->DeleteLocalRef(env, t);
 	if (w != NULL) (*env)->DeleteLocalRef(env, w);
 }
@@ -619,6 +620,8 @@ func pushNoteToOverlay(state *AppState) {
 	if c.hasTail() {
 		tailFlag = 1
 	}
+	// WHICH CONTROLS, decided once (the Apple twins' reason).
+	verbSet := C.int(c.verbs())
 	if os.Getenv("BT_NOTE_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[note] push text=%dch who=%q pill=%v next=%v anchor=%d fullscreen=%v\n",
 			len(text), who, pill, next, anchor, state.IsFullScreen)
@@ -627,7 +630,7 @@ func pushNoteToOverlay(state *AppState) {
 		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, ownFlag, C.int(anchor),
 			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
 			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),
-			C.int(argbInt(pal.Border)), tailFlag)
+			C.int(argbInt(pal.Border)), tailFlag, verbSet)
 	})
 }
 

@@ -193,6 +193,12 @@ func devAutoReadAlong(state *AppState) {
 //	           tint-mutate between the taps, never html-import
 //	s10far     two notes far apart in John 11; cycling proves the viewport
 //	           follows the newly selected note in both directions
+//	s11own     ONE note the READER WROTE, opened — the verb set that had no
+//	           picture. ✕ alone where a received note carries − beside the
+//	           bin, and the who line runs a whole button wider because only
+//	           one slot is reserved. s11mixed puts an own note and a received
+//	           one on the same chapter so the two verb corners sit in one
+//	           frame, a next-tap apart
 func devAutoNotesS8(state *AppState) {
 	scenario := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_NOTES")))
 	if scenario == "" || state == nil {
@@ -284,6 +290,34 @@ func devAutoNotesS8(state *AppState) {
 		// itself, exactly as it does when the native button posts it.
 		for _, d := range []time.Duration{18 * time.Second, 26 * time.Second, 34 * time.Second} {
 			time.AfterFunc(d, func() { devNoteNextTap(state) })
+		}
+	case "s11own", "s11mixed":
+		// The reader's OWN note, through the store's own writer, then focused
+		// the way pressing its pill focuses it. Written on John 11:35 so it
+		// shares the fixture passage with the received notes above.
+		mine := func(verse int, text string) uint64 {
+			n, _ := saveMyNote(appPrefs(), StoredNote{
+				VersionID: state.currentVersion().ID,
+				Book:      "John", Chapter: 11, VerseLo: verse, Text: text,
+			})
+			return n.ID
+		}
+		// Navigate FIRST. The simulator's container keeps whatever chapter the
+		// last run left it on, so a note written on John 11 while the app sits
+		// on John 3 is a note nobody can see — which is how this scenario's
+		// first picture came back showing the previous fixture.
+		at(1200*time.Millisecond, func() { navigateToReference(state, "John", 11) })
+		at(2500*time.Millisecond, func() {
+			id := mine(35, "A note I wrote myself, which I can only put away.")
+			state.focusNote(id)
+			applyNoteForCurrentChapter(state)
+			state.refreshReadingOnly()
+		})
+		if scenario == "s11mixed" {
+			// …and somebody else's, so a next-tap walks from the ✕ corner to
+			// the − and bin corner without the chapter changing under it.
+			at(9*time.Second, func() { link("Fixture received message beside your own.") })
+			time.AfterFunc(16*time.Second, func() { devNoteNextTap(state) })
 		}
 	case "s10far":
 		far := func(verse int, text string) {

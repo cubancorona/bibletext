@@ -76,11 +76,16 @@ func TestOwnNoteHideAndDropAreTheSameVerb(t *testing.T) {
 // because none of them can be exercised from a Go test on this host.
 func TestEverySurfaceHidesMinimizeOnAnOwnNote(t *testing.T) {
 	for _, s := range []struct{ file, gate, why string }{
-		{"reading_ios.go", "if (!gNoteOwn) {",
+		// The gate reads the pushed VERB SET, not an own flag each surface
+		// re-interprets. Which controls a card carries is one decision
+		// (noteChrome.verbs), and choosing the glyph and choosing the verb in
+		// two places is how a bin came to sit on a card whose press only put
+		// the note away.
+		{"reading_ios.go", "if (gNoteVerbs != kNoteVerbsOwn) {",
 			"the iOS sticker builds its buttons in btIOSEnsureNoteView"},
-		{"reading_macos.go", "if (!gMacNoteOwn) {",
+		{"reading_macos.go", "if (gMacNoteVerbs != kMacNoteVerbsOwn) {",
 			"the macOS twin builds them the same way"},
-		{"android/BtBridge.java", "if (!noteOwn) {",
+		{"android/BtBridge.java", "if (noteVerbs != VERBS_OWN) {",
 			"the Android sticker floats its verbs by slot-from-right"},
 		{"reading_styled_note.go", "r.noteHasHide = !p.note.Own",
 			"the styled pane lays its buttons out positionally, so it must also RECORD the omission"},
