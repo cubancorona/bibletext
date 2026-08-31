@@ -39,7 +39,18 @@
                 declared placement (openedNotePlacesTheView), and only the
                 next-tap declared it; the exception — a next-tap between two
                 notes on one verse — is stated at its own call site.
-     Everything from "7. Arrival + Lead" onward is proposed, and every one of
+     <pending>  step 7, Arrival + Lead: one rule for all five surfaces
+                (notes_arrival.go), three classes crossing as one appended int,
+                Lead joining the spacing table. Deletes
+                btIOSNoteSharesHighlightPara, btMacNoteSharesHighlightPara,
+                Android's same-VERSE test and the web's absent one. Two
+                precedences that were accidents of ordering — narration owns the
+                viewport, a reopen's saved position beats both targets — are
+                declarations now. Rests on a new invariant: every surface's
+                paragraphs ARE the model's
+                (TestEverySurfaceBreaksParagraphsWhereTheModelDoes), which four
+                call sites had only by convention.
+     Everything from "8. Bands + noteAction" onward is proposed, and every one of
      those steps changes rendering on platforms that need a device or an
      emulator to verify. -->
 
