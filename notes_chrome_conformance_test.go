@@ -149,3 +149,31 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 	}
 	t.Logf("checked %d states", checked)
 }
+
+// The predicate itself, at its edges. It is the whole of defect 2 now, so it is
+// worth stating rather than only asserting that three call sites reach it.
+func TestShouldCaptureScrollRestore(t *testing.T) {
+	for _, tc := range []struct {
+		name                              string
+		hasRestore, same, changed, arrive bool
+		want                              bool
+	}{
+		{"a re-render the reader did not ask for", false, true, true, false, true},
+		{"an explicit arrival never captures", false, true, true, true, false},
+		{"a restore already armed is not replaced", true, true, true, false, false},
+		{"a different chapter is a navigation", false, false, true, false, false},
+		{"an unchanged body has no snap to pre-empt", false, true, false, false, false},
+		{"arrival wins over every other yes", false, true, true, true, false},
+	} {
+		st := &AppState{}
+		if tc.hasRestore {
+			st.restore = &restoreAnchor{}
+		}
+		if got := shouldCaptureScrollRestore(st, tc.same, tc.changed, tc.arrive); got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if shouldCaptureScrollRestore(nil, true, true, false) {
+		t.Errorf("a nil state must not capture")
+	}
+}

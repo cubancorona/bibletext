@@ -3076,8 +3076,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// note is open — which is most arrivals worth making.
 	//
 	// reading_android.go has carried this clause and its reasoning all along.
-	if state.restore == nil && !state.forceReposition &&
-		bc == lastPushedBookChapter && body != lastPushedBodyFP {
+	if shouldCaptureScrollRestore(state, bc == lastPushedBookChapter, body != lastPushedBodyFP, state.forceReposition) {
 		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
 			state.restore = &restoreAnchor{
 				Book:    state.CurrentBook,

@@ -74,6 +74,31 @@ type readingState struct {
 // restoreAnchor is a pending one-shot scroll target carried on AppState from
 // launch until the reading overlay first lays out the restored chapter. It is
 // gated to a specific book+chapter so it never applies to a different chapter.
+// shouldCaptureScrollRestore reports whether THIS render may capture the
+// reader's live scroll position into state.restore.
+//
+// The capture exists for re-renders the reader did not ask to move on — a theme
+// flip, a presentation change — so that one does not yank a mid-chapter reader
+// to the top. It must NOT fire on a render the reader asked for: applyShareTarget
+// sets forceReposition and clears restore precisely so placement falls through
+// to the highlight, and the native scroll cadences check restore FIRST, on the
+// stated invariant that "the explicit arrivals clear the restore".
+//
+// All three panes ask this question. Android asked it correctly from the start;
+// the two Apple panes omitted the arrival clause and so re-created the restore
+// an arrival had just cleared, which left a tapped link's wash on the right verse
+// and the viewport where it started. One predicate, so the next surface cannot
+// be the one that forgets.
+func shouldCaptureScrollRestore(state *AppState, sameBookChapter, bodyChanged, explicitArrival bool) bool {
+	if state == nil || state.restore != nil {
+		return false
+	}
+	if explicitArrival {
+		return false
+	}
+	return sameBookChapter && bodyChanged
+}
+
 type restoreAnchor struct {
 	Book    string
 	Chapter int

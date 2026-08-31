@@ -642,7 +642,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// capture below exists for re-renders the reader did not ask to move on (a
 	// theme flip or a presentation change). Cycling to another note anchor is
 	// an arrival; cycling between notes on the same anchor is not.
-	if state.restore == nil && !explicitArrival && bc == lastPushedBookChapter && fp != lastPushedChapterFP {
+	if shouldCaptureScrollRestore(state, bc == lastPushedBookChapter, fp != lastPushedChapterFP, explicitArrival) {
 		if v, d, f, ok := captureReadingAnchor(); ok {
 			if v > 0 || f > 0 {
 				state.restore = &restoreAnchor{

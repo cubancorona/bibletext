@@ -129,21 +129,23 @@ func TestReadingPanesDoNotCaptureARestoreOverAnArrival(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		body := string(src)
-		idx := strings.Index(body, "state.restore == nil &&")
+		// The capture is recognised by the ANCHOR it writes, which every pane
+		// must do however its condition is spelled — so the test cannot be
+		// satisfied by deleting the capture, and cannot be broken by rewording
+		// the condition.
+		idx := strings.Index(body, "state.restore = &restoreAnchor{")
 		if idx < 0 {
 			t.Fatalf("%s: the same-chapter restore capture is gone; this test guards nothing", path)
 		}
-		// The whole condition, up to its opening brace.
-		end := strings.Index(body[idx:], "{")
-		if end < 0 {
-			t.Fatalf("%s: could not read the capture condition", path)
-		}
-		cond := body[idx : idx+end]
-		if !strings.Contains(cond, "forceReposition") && !strings.Contains(cond, "explicitArrival") {
-			t.Errorf("%s: the restore capture does not exclude an explicit arrival:\n  %s\n"+
-				"A tapped link on the chapter already open will be dragged back to where "+
-				"the reader was, because restore is checked before the highlight.",
-				path, strings.Join(strings.Fields(cond), " "))
+		// STRICTLY STRONGER than "the condition mentions the arrival": the pane
+		// must ask the SHARED predicate. Mentioning it was satisfiable by three
+		// separate conditions that happened to agree, which is the shape that
+		// let two of these three panes drift apart in the first place.
+		if !strings.Contains(body, "shouldCaptureScrollRestore(") {
+			t.Errorf("%s: it captures a scroll restore without asking "+
+				"shouldCaptureScrollRestore. Each pane deciding this for itself is how "+
+				"two of the three came to omit the arrival clause, so a tapped link on "+
+				"the chapter already open was dragged back to where the reader was.", path)
 		}
 	}
 }
