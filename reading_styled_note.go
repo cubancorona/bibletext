@@ -868,9 +868,9 @@ func (r *styledPaneRenderer) buildParagraphPills() {
 		// Tapping a paragraph's pill opens THAT paragraph's note, which is the
 		// whole reason the pills are per paragraph: the single pill could only
 		// ever open whichever note the plan had chosen.
-		verse := g.anchorVerse
+		key := g.groupKey
 		btn := widget.NewButton("", func() {
-			focusNoteAtVerse(p.state, verse)
+			focusNoteAtGroup(p.state, key)
 			p.state.refreshReadingOnly()
 		})
 		btn.Importance = widget.LowImportance

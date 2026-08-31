@@ -75,7 +75,7 @@ func TestTappingAParagraphPillOpensThatParagraphsNote(t *testing.T) {
 	}
 
 	// Tap the LAST paragraph's pill.
-	focusNoteAtVerse(st, last)
+	pressPillOnParagraphOf(t, st, last)
 	if st.NoteID != lastID {
 		t.Errorf("tapping the last paragraph's pill opened note %d, want %d — a "+
 			"reader tapping one paragraph must not be shown another's note", st.NoteID, lastID)
@@ -85,14 +85,14 @@ func TestTappingAParagraphPillOpensThatParagraphsNote(t *testing.T) {
 	}
 
 	// And back the other way, or the pills only work in one direction.
-	focusNoteAtVerse(st, first)
+	pressPillOnParagraphOf(t, st, first)
 	if st.NoteID != firstID {
 		t.Errorf("tapping the first paragraph's pill opened note %d, want %d", st.NoteID, firstID)
 	}
 }
 
 // A pill that opens a note must be reachable in the paragraph it names: the
-// band verse the pill is drawn at is the verse focusNoteAtVerse is called with,
+// band verse the pill is drawn at is the group focusNoteAtGroup is called with,
 // so the two must agree exactly.
 func TestEveryPillsBandVerseOpensANote(t *testing.T) {
 	app := test.NewApp()
@@ -111,7 +111,7 @@ func TestEveryPillsBandVerseOpensANote(t *testing.T) {
 	}
 	for i, g := range pane.pillGeoms {
 		st.NoteID = 0
-		focusNoteAtVerse(st, g.anchorVerse)
+		focusNoteAtGroup(st, g.groupKey)
 		if st.NoteID == 0 {
 			t.Errorf("pill %d is drawn at v%d but tapping it opens nothing — a "+
 				"dead pill is worse than no pill", i, g.anchorVerse)
@@ -363,7 +363,7 @@ func TestTappingAPillOpensTheNoteEvenWithASearchResultLit(t *testing.T) {
 		t.Fatalf("fixture must actually suppress: the mark is not foreign")
 	}
 
-	focusNoteAtVerse(st, last)
+	pressPillOnParagraphOf(t, st, last)
 
 	if st.NoteMinimized {
 		t.Errorf("the pill press did nothing visible while a search result was lit — "+

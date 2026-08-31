@@ -908,17 +908,23 @@ func chapterNoteGroups(state *AppState, plan chapterPlan, verses []Verse) []note
 	return groups
 }
 
-// focusNoteAtVerse opens the note belonging to the paragraph a pill sits on.
-// It is the per-paragraph pill's verb, and the thing the single pill could
-// never do: that one could only restore whichever note the plan had chosen,
-// wherever in the chapter it happened to be.
+// focusNoteAtGroup opens the note belonging to the group a pill sits on. It is
+// the per-paragraph pill's verb, and the thing the single pill could never do:
+// that one could only restore whichever note the plan had chosen, wherever in
+// the chapter it happened to be.
 //
-// The verse is a GROUP's band verse, not necessarily a note's own anchor, so
-// the group is what is matched — the paragraph is the unit the reader tapped.
+// KEYED, not versed. The chapter-top group is deliberately given paragraph 0's
+// first verse so its band opens above the whole chapter — groupNotesByParagraph
+// says so, and ends "which is why bands are matched by Key rather than by
+// verse". Placement obeyed that; this verb did not, and took the first group
+// with a matching verse. Since the sort puts chapterTopGroup first, a chapter
+// carrying both a chapter-level note and a note on paragraph 0 had TWO pills
+// that opened the same note, and paragraph 0's note could not be reached by
+// pressing the pill drawn for it.
 // An explicit minimize is lifted, because tapping the pill IS the Show verb
 // (the same rule advanceNoteFocus follows for a stored-minimized note).
-func focusNoteAtVerse(state *AppState, verse int) {
-	if state == nil || verse <= 0 || state.Bible == nil {
+func focusNoteAtGroup(state *AppState, key int) {
+	if state == nil || state.Bible == nil {
 		return
 	}
 	// Pressing a paragraph's pill is the reader choosing THAT note as the
@@ -933,7 +939,7 @@ func focusNoteAtVerse(state *AppState, verse int) {
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 	for _, g := range groupNotesByParagraph(groupVersesIntoParagraphs(verses), plan.Notes) {
-		if g.BandVerse != verse || len(g.Notes) == 0 {
+		if g.Key != key || len(g.Notes) == 0 {
 			continue
 		}
 		n := g.Notes[0].Note

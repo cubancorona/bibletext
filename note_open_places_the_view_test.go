@@ -31,10 +31,16 @@ func TestEveryVerbThatOpensANotePlacesTheView(t *testing.T) {
 			st.forceReposition = false
 			restoreCurrentNote(st)
 		}},
+		// A paragraph pill only EXISTS with the per-paragraph gate on, so this
+		// cell turns it on for itself. Before, it silently exercised the chapter
+		// pill's code path and reported the paragraph pill as covered.
 		{"a paragraph pill's focus", func(st *AppState, ids []uint64) {
+			prev := notesPillPerParagraph
+			notesPillPerParagraph = true
+			defer func() { notesPillPerParagraph = prev }()
 			hideCurrentNote(st)
 			st.forceReposition = false
-			focusNoteAtVerse(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)[0].Verse)
+			pressPillOnParagraphOf(t, st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)[0].Verse)
 		}},
 		// The next-tap's own cell here is the anchor-CHANGING one; the
 		// same-anchor exception has its own test
