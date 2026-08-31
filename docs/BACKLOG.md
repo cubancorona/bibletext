@@ -286,3 +286,33 @@ That still leaves the three native surfaces, which have no pills to leave up;
 for them the answer would have to be a count in the own note's who line, which
 contradicts "displaying an own note must not change N" unless it is written as
 a separate clause rather than folded into N.
+
+## TOP PRIORITY — carry the per-paragraph pills to the other surfaces
+
+`notesPillPerParagraph` is OFF, and stays off until this is done. It was turned
+on once and reverted within the hour: only the styled pane (Windows, Linux)
+draws the groups, so turning it on split the collapsed model across platforms —
+per-paragraph counts on desktop, the chapter-wide chip on the phone — which is
+worse than either model applied everywhere.
+
+What each surface needs:
+
+- **iOS and macOS** draw the sticker from `buildChapterHTML` plus a native
+  overlay laid out by `btIOSRefreshNote` / `btMacRefreshNote`, one band reserved
+  above the anchor paragraph. Several pills means several bands and several
+  overlays, and `btIOSNoteTopY` / `btMacNoteTopY` become "which pill", not "the
+  note". The placement guard added alongside this
+  (`btIOSNoteSharesHighlightPara`) already asks the right question and should
+  generalise to "any pill on the highlight's paragraph".
+- **Android** has its own `android_chapter_html.go`; the band is drawn in HTML
+  there, so it is the closest to the styled pane's model.
+
+Doing it also closes **X16** (docs/NOTES_STATE.md): with an own note open, the
+three native surfaces represent the received set nowhere, and the pills are what
+represents it once the sticker is busy. That is the reason to do it, beyond
+consistency.
+
+Still open underneath it, and cheaper to decide first because it changes what a
+pill must be able to say: notes that belong to no paragraph — unplaced and
+chapter-level — are absent from the pills, so the counts do not sum to the
+chapter total.
