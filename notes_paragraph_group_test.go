@@ -62,10 +62,19 @@ func TestAnUnplaceableNoteJoinsNoParagraph(t *testing.T) {
 
 // The gate must default to the shipped model, and no release surface may write
 // it. If this ever fails, readers are getting an unfinished collapsed state.
-func TestPillPerParagraphIsOffByDefault(t *testing.T) {
-	if notesPillPerParagraph {
-		t.Fatal("notesPillPerParagraph must default to false: the shipped model is " +
-			"one sticker per chapter, and a release build has no surface that turns this on")
+// The default is now ON. The pills are the collapsed model on the styled pane,
+// and this pins the default so a flip back is a deliberate edit rather than a
+// drift.
+//
+// It reaches ONE surface. iOS, macOS and Android have a single sticker and no
+// pill row, so for them the flag changes nothing — which is exactly X16 in
+// docs/NOTES_STATE.md: with an own note open they still represent the received
+// set nowhere. Turning this on did not close that; it closed it on Windows and
+// Linux only.
+func TestPillPerParagraphDefaultsOn(t *testing.T) {
+	if !notesPillPerParagraph {
+		t.Fatal("notesPillPerParagraph must default to true: the pills are the " +
+			"collapsed model on the styled pane now")
 	}
 }
 
@@ -78,12 +87,17 @@ func TestGroupsAreWithheldWhileTheGateIsOff(t *testing.T) {
 		Kind: placedNative, Here: []anchorRun{{Lo: 1, Hi: 1}}}}}}
 	state := &AppState{}
 
+	prev := notesPillPerParagraph
+	defer func() { notesPillPerParagraph = prev }()
+
+	// Set explicitly in BOTH directions rather than leaning on the default: the
+	// default has changed once and the behaviour under each setting is what this
+	// test is about.
+	notesPillPerParagraph = false
 	if got := chapterNoteGroups(state, plan, verses); got != nil {
 		t.Fatalf("gate off must withhold the groups, got %d", len(got))
 	}
-	prev := notesPillPerParagraph
 	notesPillPerParagraph = true
-	defer func() { notesPillPerParagraph = prev }()
 	if got := chapterNoteGroups(state, plan, verses); len(got) != 1 {
 		t.Fatalf("gate on must yield the paragraph's group, got %d", len(got))
 	}

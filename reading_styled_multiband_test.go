@@ -167,6 +167,11 @@ func TestThePaneDrawsAPillPerNotedParagraph(t *testing.T) {
 func TestGateOffLeavesTheSingleStickerDrawing(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
+	// Explicit, now that the default is ON: this test is about the OTHER
+	// setting, which the three native surfaces are still effectively in.
+	prev := notesPillPerParagraph
+	notesPillPerParagraph = false
+	defer func() { notesPillPerParagraph = prev }()
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
