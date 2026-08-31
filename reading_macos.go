@@ -1448,6 +1448,14 @@ static BOOL          gMacNoteNextable = NO;   // the count region is a control (
 // friend's repaints rather than leaving the wrong mark on the card.
 static BOOL          gMacNoteOwn = NO;
 static NSInteger     gMacNoteAnchorVerse = 0;
+
+// gMacNoteTail is the PUSHED decision "does this card point at a passage", and
+// gMacNoteShapeExtra is that decision resolved to a height ONCE so no band
+// formula carries a branch. The formulae used to gate the tail on
+// btMacNotePill() — "is it collapsed", which is a different question: a note
+// parked at chapter scope points at nothing, and a tail there claims verse 1.
+static BOOL      gMacNoteTail = YES;
+static CGFloat   gMacNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
 static CGFloat       gMacNoteBandH = 0;
 static CGFloat       gMacNoteTopInset = 0;
 static CGFloat gMacNoteBg[3]     = {0.99, 0.98, 0.97};
@@ -1596,9 +1604,14 @@ static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
     [p lineToPoint:NSMakePoint(right, bottom - r)];
     [p appendBezierPathWithArcWithCenter:NSMakePoint(right - r, bottom - r) radius:r
                              startAngle:0 endAngle:90 clockwise:NO];
-    [p lineToPoint:NSMakePoint(tx1, bottom)];
-    [p lineToPoint:NSMakePoint(apexX, apexY)];   // the tail's point, aimed at the passage
-    [p lineToPoint:NSMakePoint(tx0, bottom)];
+    // The detour is what makes this a speech bubble; with no passage to point
+    // at, the bottom edge runs straight on. Still ONE path — a separate triangle
+    // leaves the card's bottom stroke across its mouth, whatever the shape.
+    if (gMacNoteTail) {
+        [p lineToPoint:NSMakePoint(tx1, bottom)];
+        [p lineToPoint:NSMakePoint(apexX, apexY)];   // the tail's point, aimed at the passage
+        [p lineToPoint:NSMakePoint(tx0, bottom)];
+    }
     [p lineToPoint:NSMakePoint(left + r, bottom)];
     [p appendBezierPathWithArcWithCenter:NSMakePoint(left + r, bottom - r) radius:r
                              startAngle:90 endAngle:180 clockwise:NO];
@@ -1696,7 +1709,7 @@ static void btMacInstallNote(void) {
         btMacApplyNoteInset();
         return;
     }
-    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGapBelow;
+    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + gMacNoteShapeExtra + kMacNoteGapBelow;
     if (getenv("BT_NOTE_GEOM")) fprintf(stderr, "[geom] install: w=%.1f h=%.1f topGap=%.1f bandH=%.1f para={%lu,%lu}\n",
         w, h, btMacNoteTopGap(ts, para), gMacNoteBandH, (unsigned long)para.location, (unsigned long)para.length);
     if (para.location == 0) {
@@ -1900,7 +1913,7 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
     }
     CGFloat textTop = textTopRaw + inset;
     CGFloat stickerH = btMacNoteHeightForWidth(tc.size.width - 2 * tc.lineFragmentPadding)
-                     + (btMacNotePill() ? 0 : kMacNoteTail);
+                     + gMacNoteShapeExtra;
     if (getenv("BT_NOTE_GEOM")) {
         fprintf(stderr, "[geom] layout: used.y=%.1f frag.y=%.1f frag.h=%.1f inset=%.1f stickerH=%.1f "
                         "bandH=%.1f spacingBefore=%.1f y=%.1f\n",
@@ -1936,7 +1949,7 @@ static void btMacLayoutNote(void) {
     // reserved no longer matches what we need, reserve again and let the layout
     // settle; the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = btMacNoteTopGap(ts, para) + h + (btMacNotePill() ? 0 : kMacNoteTail) + kMacNoteGapBelow;
+    CGFloat want = btMacNoteTopGap(ts, para) + h + gMacNoteShapeExtra + kMacNoteGapBelow;
     if (!reconciling && fabs(want - gMacNoteBandH) > 1.0) {
         reconciling = YES;
         btMacInstallNote();
@@ -1963,7 +1976,7 @@ static void btMacLayoutNote(void) {
         return;
     }
 
-    gMacNoteView.frame = NSMakeRect(x, y, w, h + kMacNoteTail);
+    gMacNoteView.frame = NSMakeRect(x, y, w, h + gMacNoteShapeExtra);
     gMacNoteCard.frame = gMacNoteView.bounds;
     gMacNoteCard.path = btMacNoteBubblePath(w, h).CGPath;
 
@@ -2062,7 +2075,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                          double fgR, double fgG, double fgB,
                          double muR, double muG, double muB,
                          double acR, double acG, double acB,
-                         double boR, double boG, double boB) {
+                         double boR, double boG, double boB, int tail) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -2070,13 +2083,18 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                        gMacNoteMinimized != (minimized ? YES : NO) ||
                        gMacNoteNextable != (nextable ? YES : NO) ||
                        gMacNoteOwn != (own ? YES : NO) ||
-                       gMacNoteAnchorVerse != anchorVerse;
+                       gMacNoteAnchorVerse != anchorVerse ||
+                       gMacNoteTail != (tail ? YES : NO);
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
         gMacNoteNextable = nextable ? YES : NO;
         gMacNoteOwn = own ? YES : NO;
         gMacNoteAnchorVerse = anchorVerse;
+
+        gMacNoteTail = tail ? YES : NO;
+
+        gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
         gMacNoteFg[0]=fgR; gMacNoteFg[1]=fgG; gMacNoteFg[2]=fgB;
         gMacNoteMuted[0]=muR; gMacNoteMuted[1]=muG; gMacNoteMuted[2]=muB;
@@ -2586,7 +2604,18 @@ func macOwnFlag(state *AppState) C.int {
 // re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	text, who, pill, next := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	// THE SHARED VALUE, not a second composition beside iOS's.
+	var verses []Verse
+	if state.Bible != nil {
+		verses = state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	}
+	c := chapterNoteChrome(state, buildChapterPlan(state, appPrefs(), state.Bible), verses)
+	text, who, pill, next := c.Text, c.Who, c.Pill, c.Next
+	// "Does this card point at a passage" — decided once, in Go, and pushed.
+	macTailFlag := C.int(0)
+	if c.hasTail() {
+		macTailFlag = 1
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2612,7 +2641,7 @@ func pushNoteToPane(state *AppState) {
 	// chapter (an unplaced-only chapter pushes verse 0 on purpose: the top is
 	// the only honest place for notes with no verses here).
 	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
-		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
+		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB, macTailFlag)
 }
 
 // setNativeTint / applyNativeTint hand the chapter's wash model

@@ -102,6 +102,10 @@ public final class BtBridge {
     private static TextView notePillView;                // the collapsed pill
     private static String noteText = null;   // sender's words; null = none
     private static String noteWho = null;    // the app's chrome line; null = none
+    // noteTail is the PUSHED decision "does this card point at a passage". It is
+    // not "is it collapsed": a note parked at chapter scope points at nothing,
+    // and a tail there claims verse 1.
+    private static boolean noteTail = true;
     private static boolean notePill = false;
     private static boolean noteNextable = false;
     private static int noteAnchorVerse = 0;
@@ -1129,7 +1133,7 @@ public final class BtBridge {
     public static void setNote(final byte[] noteText_, final byte[] who_, final boolean pill,
                                final boolean nextable, final boolean own, final int anchorVerse,
                                final int bg, final int fg, final int muted,
-                               final int accent, final int border) {
+                               final int accent, final int border, final boolean tail) {
         UI.post(new Runnable() {
             @Override public void run() {
                 String t = (noteText_ == null || noteText_.length == 0)
@@ -1138,12 +1142,14 @@ public final class BtBridge {
                         ? null : new String(who_, java.nio.charset.StandardCharsets.UTF_8);
                 boolean changed = !sameStr(t, noteText) || !sameStr(w, noteWho)
                         || notePill != pill || noteNextable != nextable
+                        || noteTail != tail
                         || noteOwn != own
                         || noteAnchorVerse != anchorVerse;
                 noteText = t;
                 noteWho = w;
                 notePill = pill;
                 noteNextable = nextable;
+                noteTail = tail;
                 noteOwn = own;
                 noteAnchorVerse = anchorVerse;
                 noteBg = bg;
@@ -1400,8 +1406,10 @@ public final class BtBridge {
         android.widget.LinearLayout box = new android.widget.LinearLayout(activity);
         box.setOrientation(android.widget.LinearLayout.VERTICAL);
         box.setBackground(new NoteBubbleDrawable(noteBg, noteBorder,
-                dp(NOTE_TAIL), dp(NOTE_TAIL_W), dp(NOTE_TAIL_X), dp(NOTE_RADIUS)));
-        box.setPadding(dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD) + dp(NOTE_TAIL));
+                noteTail ? dp(NOTE_TAIL) : 0, dp(NOTE_TAIL_W), dp(NOTE_TAIL_X), dp(NOTE_RADIUS)));
+        // The bottom pad reserves the tail; with no tail there is nothing to reserve.
+        box.setPadding(dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD),
+                dp(NOTE_PAD) + (noteTail ? dp(NOTE_TAIL) : 0));
 
         TextView who = new TextView(activity);
         // The WHO line is the app's chrome — byline + honest counts, composed

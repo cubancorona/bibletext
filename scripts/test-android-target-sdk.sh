@@ -93,6 +93,65 @@ if verify_android_dex_bridge aab "$SYNTHETIC_DIR/dex-renamed.aab" \
   exit 1
 fi
 
+# The JNI descriptor verifier needs REAL bytecode, so this compiles the repo's
+# own BtBridge.java and dexes it. Two runs: the tree as it stands must pass, and
+# the same tree with one parameter dropped from setNote must be rejected — the
+# exact skew that otherwise reaches a device as a silently dead bridge.
+#
+# The portable half of this contract is TestJNIDescriptorsMatchBtBridge, which
+# compares the two SOURCES and runs on every platform with no SDK. This block is
+# the stronger check against real bytecode, and needs an Android SDK; where
+# there is none it says so on stderr rather than passing quietly.
+JNI_DIR="$TEST_WORK/jni-descriptors"
+mkdir -p "$JNI_DIR"
+ANDROID_JAR=""
+for candidate in "${ANDROID_HOME:-}/platforms"/android-*/android.jar; do
+  [ -f "$candidate" ] && ANDROID_JAR="$candidate"
+done
+D8=""
+for candidate in "${ANDROID_HOME:-}/build-tools"/*/d8; do
+  [ -x "$candidate" ] && D8="$candidate"
+done
+if [ -z "$ANDROID_JAR" ] || [ -z "$D8" ] || ! command -v javac >/dev/null 2>&1; then
+  echo "NOTE: no Android SDK/javac here — the JNI descriptor BYTECODE control did" >&2
+  echo "      NOT run. TestJNIDescriptorsMatchBtBridge still compared the sources," >&2
+  echo "      and every Android build runs the bytecode check (build-android.sh)." >&2
+else
+  export BIBLETEXT_ANDROID_BUILD_TOOLS="$(dirname "$D8")"
+  mkdir -p "$JNI_DIR/classes-good" "$JNI_DIR/classes-skew"
+  javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
+    -d "$JNI_DIR/classes-good" android/BtBridge.java >/dev/null 2>&1
+  "$D8" --min-api 21 --output "$JNI_DIR" \
+    $(find "$JNI_DIR/classes-good" -name '*.class') >/dev/null 2>&1
+  mv "$JNI_DIR/classes.dex" "$JNI_DIR/good.dex"
+  verify_android_jni_descriptors "$JNI_DIR/good.dex" reading_android.go
+
+  # The control. Without it a verifier that silently matched nothing would pass
+  # the line above and prove exactly as much as no test at all.
+  #
+  # The skew APPENDS an unused parameter rather than removing one: an extra
+  # parameter still compiles (the body never names it) while changing the
+  # descriptor, which is precisely what has to be caught. Dropping one instead
+  # would fail at javac and prove nothing about the verifier.
+  sed 's/final int border, final boolean tail)/final int border, final boolean tail, final boolean spare)/' \
+    android/BtBridge.java > "$JNI_DIR/BtBridge.java"
+  if cmp -s android/BtBridge.java "$JNI_DIR/BtBridge.java"; then
+    echo "ERROR: the JNI skew control edited nothing — setNote's trailing parameter" >&2
+    echo "       has moved and this control is no longer a control" >&2
+    exit 1
+  fi
+  javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
+    -d "$JNI_DIR/classes-skew" "$JNI_DIR/BtBridge.java" >/dev/null 2>&1
+  "$D8" --min-api 21 --output "$JNI_DIR" \
+    $(find "$JNI_DIR/classes-skew" -name '*.class') >/dev/null 2>&1
+  mv "$JNI_DIR/classes.dex" "$JNI_DIR/skew.dex"
+  if verify_android_jni_descriptors "$JNI_DIR/skew.dex" reading_android.go \
+    >/dev/null 2>&1; then
+    echo "ERROR: JNI descriptor verifier accepted a dex whose setNote lost a parameter" >&2
+    exit 1
+  fi
+fi
+
 python3 - scripts/build-android.sh <<'PY'
 from pathlib import Path
 import sys

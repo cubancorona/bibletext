@@ -212,6 +212,9 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"kNoteTail - 1": "the tail's -1: a survival of the two-shape era that drew " +
 					"the tail a point shorter than the constant naming it",
 				"cw, kNoteBtn)": "the pill borrowing the VERB BUTTON's size (30) for its height",
+				"gNoteMinimized ? 0 : kNoteTail": "the shape asking \"is it collapsed\" when it " +
+					"means \"does it point at a passage\" — two different questions that agreed " +
+					"until a note could be parked at the chapter top",
 			},
 			required: map[string]string{
 				"btIOSTrashImage(kNoteTrashPt": "the closing control's bin must be DRAWN " +
@@ -242,14 +245,20 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"return kNotePad + kNoteWho + kNoteWhoGap + ceil(r.size.height) + kNotePad;": "the " +
 					"card's height must BE the spec's formula — pad, who row, who gap, message, pad " +
 					"— not merely use the spec's constants somewhere",
+				"gNoteShapeExtra = gNoteTail ? kNoteTail : 0;": "the tail's contribution to the " +
+					"card's shape must be resolved ONCE, in SetNote, so every band formula reads " +
+					"one scalar and none of them can branch differently",
+				"if (gNoteTail) {": "the outline must gate the tail detour — a card that points " +
+					"at nothing must not draw a point",
 			},
 		},
 		{
 			path: "reading_macos.go",
 			banned: map[string]string{
-				"kMacNotePad - 2, whoW": "the who row's -2 shim",
-				"kMacNoteTail - 1":      "the tail's -1",
-				"cw, kMacNoteBtn)":      "the pill borrowing the VERB BUTTON's size (24) for its height",
+				"kMacNotePad - 2, whoW":                "the who row's -2 shim",
+				"kMacNoteTail - 1":                     "the tail's -1",
+				"cw, kMacNoteBtn)":                     "the pill borrowing the VERB BUTTON's size (24) for its height",
+				"gMacNoteMinimized ? 0 : kMacNoteTail": "the iOS twin's wrong question",
 			},
 			required: map[string]string{
 				"btMacTrashImage(kMacNoteTrashPt)": "the closing control's bin must be DRAWN, " +
@@ -268,6 +277,9 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"cw, kMacNotePill)": "the pill's height must be the spec's",
 				"return kMacNotePad + kMacNoteWho + kMacNoteWhoGap + ceil(r.size.height) + kMacNotePad;": "the " +
 					"card's height must BE the spec's formula (the iOS twin's reason)",
+				"gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;": "the iOS twin's reason: " +
+					"resolved once, read as a scalar everywhere",
+				"if (gMacNoteTail) {": "the outline must gate the tail detour",
 			},
 		},
 		{
@@ -304,9 +316,14 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"applyNoteBand(r[0], gapAbove + noteH + gapBelow);": "the band must reserve the " +
 					"spec's gap on both sides",
 				"+ gapTop + gapAbove;": "the sticker must hang the reserved gap below the band's top",
-				"dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD) + dp(NOTE_TAIL)": "the " +
+				"dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD),\n                dp(NOTE_PAD) + (noteTail ? dp(NOTE_TAIL) : 0)": "the " +
 					"card's padding must be the spec's on all four sides, with the tail's depth " +
-					"carried in the bottom",
+					"carried in the bottom — and ONLY when there is a tail to carry",
+				"noteTail ? dp(NOTE_TAIL) : 0, dp(NOTE_TAIL_W)": "the bubble's tail depth must " +
+					"follow the PUSHED decision; drawn unconditionally, a note parked at chapter " +
+					"scope grows a tail that points at verse 1",
+				"noteTail = tail;": "the pushed tail must actually be stored, or the field keeps " +
+					"its initial value and the gate above is decorative",
 				"chip.setMinHeight(dp(NOTE_PILL_H));": "the pill's height must be the spec's, not " +
 					"whatever its label wrapped to",
 				"Gravity.TOP | Gravity.END": "the verbs must float over the card, out of its " +

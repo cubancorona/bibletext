@@ -65,6 +65,82 @@ verify_android_dex_bridge() {
   done
 }
 
+# A JNI method descriptor is a STRING. GetStaticMethodID compares it against the
+# shipped dex at runtime, on the device, and a mismatch returns NULL with a
+# pending NoSuchMethodError that the C wrappers never look at — so widening a
+# BtBridge signature without updating the descriptor in reading_android.go
+# compiles, links, packages and signs, then silently does nothing in the user's
+# hand. A host test can compare the two sources; only this can compare the
+# descriptor against the bytecode that actually ships.
+#
+# Reads the lookups straight out of reading_android.go so a NEW bridge method is
+# covered the day it is added, with nothing to remember.
+verify_android_jni_descriptors() {
+  local dex="$1"
+  local go_src="$2"
+  local dexdump listing name type_ found lookups
+
+  dexdump="${BIBLETEXT_ANDROID_BUILD_TOOLS:-}/dexdump"
+  if [ ! -x "$dexdump" ]; then
+    echo "ERROR: dexdump not found in build-tools; cannot verify JNI descriptors" >&2
+    return 1
+  fi
+  if [ ! -f "$go_src" ]; then
+    echo "ERROR: $go_src not found; cannot read the JNI lookups" >&2
+    return 1
+  fi
+
+  # name<TAB>descriptor, one per GetStaticMethodID. The descriptor may sit on
+  # the following line (gofmt wraps these), so the pair is collected over a
+  # two-line window.
+  lookups="$(awk '
+    match($0, /GetStaticMethodID\(env, btaClass, "[A-Za-z0-9_]+"/) {
+      s = substr($0, RSTART, RLENGTH); gsub(/.*"/, "", s); gsub(/"$/, "", s)
+      split($0, q, "\""); pending = q[2]
+      rest = $0
+      if (match(rest, /"\([^"]*\)[A-Za-z\[;\/]+"\)/)) {
+        d = substr(rest, RSTART + 1, RLENGTH - 3)
+        print pending "\t" d; pending = ""
+        next
+      }
+      next
+    }
+    pending != "" && match($0, /"\([^"]*\)[A-Za-z\[;\/]+"\)/) {
+      d = substr($0, RSTART + 1, RLENGTH - 3)
+      print pending "\t" d; pending = ""
+    }
+  ' "$go_src")"
+
+  if [ "$(printf '%s\n' "$lookups" | grep -c .)" -lt 10 ]; then
+    echo "ERROR: parsed fewer than 10 JNI lookups from $go_src — the parser has" >&2
+    echo "       drifted and this check is proving nothing" >&2
+    return 1
+  fi
+
+  listing="$(dirname "$dex")/jni-dexdump.txt"
+  if ! "$dexdump" -d "$dex" > "$listing" 2>/dev/null; then
+    echo "ERROR: dexdump could not read $dex" >&2
+    return 1
+  fi
+
+  while IFS="$(printf '\t')" read -r name type_; do
+    [ -z "$name" ] && continue
+    found="$(awk -v n="'$name'" -v t="'$type_'" '
+      /name  *: / { cur = $NF }
+      /type  *: / { if (cur == n && $NF == t) hit = 1 }
+      END { print hit + 0 }
+    ' "$listing")"
+    if [ "$found" != "1" ]; then
+      echo "ERROR: shipped dex has no BtBridge.$name with descriptor $type_" >&2
+      echo "       reading_android.go looks this up; on a device it returns NULL" >&2
+      echo "       and the call silently does nothing." >&2
+      return 1
+    fi
+  done <<EOF_LOOKUPS
+$lookups
+EOF_LOOKUPS
+}
+
 verify_android_aab_signature() {
   local artifact="$1"
   local expected_digest="$2"

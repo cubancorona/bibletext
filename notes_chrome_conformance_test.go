@@ -99,6 +99,18 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 	defer func() { notesPillPerParagraph = origPills }()
 
 	checked := 0
+	// A CENSUS, not only a per-cell assertion. hasTail() reads Anchor, so the
+	// per-cell line below is true by construction and proves nothing on its own.
+	// The census says something the assertion cannot: on the APPLE/Android push
+	// today, an expanded card ALWAYS has an anchor, because an unplaced note has
+	// nothing to open and stands down to the pill. So the tail gate those three
+	// natives gained changes no pixel yet — it is the styled pane's chapter-top
+	// card (Anchor 0, drawn per paragraph) that needs it, and the natives get
+	// that state when the bands step pushes per-paragraph placement to them.
+	// Stated as a tripwire in BOTH directions: if the anchorless count ever goes
+	// above zero here, this comment is stale and the natives are drawing the
+	// state for real.
+	var expandedAnchorless, expandedAnchored int
 	for _, placement := range []notePlacement{placeNone, placeOwn, placeFollowed, placeBoth} {
 		for _, collapsed := range []bool{false, true} {
 			for _, foreignHL := range []bool{false, true} {
@@ -122,6 +134,13 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 						}
 						if got, want := c.hasTail(), c.Anchor > 0; got != want {
 							t.Errorf("%s: hasTail()=%v, anchor %d", w.id(), got, c.Anchor)
+						}
+						if c.present() && !c.collapsed() {
+							if c.hasTail() {
+								expandedAnchored++
+							} else {
+								expandedAnchorless++
+							}
 						}
 						if got, want := c.chevron() != "", c.Next; got != want {
 							t.Errorf("%s: chevron present=%v, Next=%v", w.id(), got, want)
@@ -147,7 +166,18 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 	if checked == 0 {
 		t.Fatal("no states reached")
 	}
-	t.Logf("checked %d states", checked)
+	if expandedAnchored == 0 {
+		t.Error("no expanded card with an anchor was reached — the ordinary case " +
+			"is missing from this sweep and the census below proves nothing")
+	}
+	if expandedAnchorless != 0 {
+		t.Errorf("%d expanded cards with NO anchor: the single-card push can now "+
+			"reach the anchorless state, so the natives' tail gate is live and the "+
+			"note above it needs rewriting — and this cell needs a rendering proof "+
+			"on a device, not only a census", expandedAnchorless)
+	}
+	t.Logf("checked %d states; expanded cards: %d anchored, %d anchorless",
+		checked, expandedAnchored, expandedAnchorless)
 }
 
 // The predicate itself, at its edges. It is the whole of defect 2 now, so it is

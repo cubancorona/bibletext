@@ -80,7 +80,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// pill/next presentation, anchor verse, then the five palette colors
 	// (surface, text, muted, accent, border) as ARGB ints.
 	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
-	                                        "([B[BZZZIIIIII)V");
+	                                        "([B[BZZZIIIIIIZ)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -235,7 +235,7 @@ static jbyteArray btaBytes(JNIEnv *env, const char *s) {
 
 static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
                        int pill, int next, int own, int anchorVerse,
-                       int bg, int fg, int muted, int accent, int border) {
+                       int bg, int fg, int muted, int accent, int border, int tail) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	jbyteArray t = btaBytes(env, text);
@@ -243,7 +243,8 @@ static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNoteM, t, w,
 	                             pill ? JNI_TRUE : JNI_FALSE, next ? JNI_TRUE : JNI_FALSE,
 	                             own ? JNI_TRUE : JNI_FALSE,
-	                             anchorVerse, bg, fg, muted, accent, border);
+	                             anchorVerse, bg, fg, muted, accent, border,
+	                             tail ? JNI_TRUE : JNI_FALSE);
 	if (t != NULL) (*env)->DeleteLocalRef(env, t);
 	if (w != NULL) (*env)->DeleteLocalRef(env, w);
 }
@@ -585,7 +586,13 @@ func pushNoteToOverlay(state *AppState) {
 	// — while Android stacked a citation row, a bubble and a byline above the
 	// whole chapter, unanchored and three times the height. Same sticker, both
 	// modes, and the Fyne banner stands down (nativeNoteSticker).
-	text, who, pill, next := androidStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	// THE SHARED VALUE, not a fourth composition (reading_ios.go pushNoteToPane).
+	var verses []Verse
+	if state.Bible != nil {
+		verses = state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	}
+	c := chapterNoteChrome(state, buildChapterPlan(state, appPrefs(), state.Bible), verses)
+	text, who, pill, next := c.Text, c.Who, c.Pill, c.Next
 	// The note's OWN verse, not the highlight's — minimizing clears the
 	// highlight, and a marker without an anchor jumps to the top of the
 	// chapter (the iOS lesson). Verse 0 (unplaced-only) parks at the top.
@@ -603,8 +610,14 @@ func pushNoteToOverlay(state *AppState) {
 	defer C.free(unsafe.Pointer(ct))
 	defer C.free(unsafe.Pointer(cw))
 	ownFlag := C.int(0)
-	if isOwnLiveNote(state) {
+	if c.Own {
 		ownFlag = 1
+	}
+	// "Does this card point at a passage" — decided once, in Go, and pushed.
+	// A note parked at the chapter top points at nothing and gets no tail.
+	tailFlag := C.int(0)
+	if c.hasTail() {
+		tailFlag = 1
 	}
 	if os.Getenv("BT_NOTE_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[note] push text=%dch who=%q pill=%v next=%v anchor=%d fullscreen=%v\n",
@@ -614,7 +627,7 @@ func pushNoteToOverlay(state *AppState) {
 		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, ownFlag, C.int(anchor),
 			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
 			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),
-			C.int(argbInt(pal.Border)))
+			C.int(argbInt(pal.Border)), tailFlag)
 	})
 }
 

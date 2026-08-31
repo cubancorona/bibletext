@@ -1129,6 +1129,29 @@ func TestTheTopPillDisclosesUnplacedNotes(t *testing.T) {
 		t.Errorf("the top pill reads %q; a note this translation cannot place must "+
 			"still be disclosed", pane.pillGeoms[0].pillText)
 	}
+
+	// And the ANCHORLESS CARD must not point anywhere. Measured directly rather
+	// than through the pane, and the reason is worth stating: no live push
+	// reaches this state yet. A pill is tail-free already (measureStyledNote
+	// returns before the tail term), and an EXPANDED card always has an anchor,
+	// because a note with no passage here has nothing to open and stands down to
+	// the pill. So this is the geometry unit under test, held to the rule ahead
+	// of the state that will exercise it — the natives get anchorless expanded
+	// cards when per-paragraph placement reaches them.
+	top := measureStyledNote(styledNote{Who: "x", Text: "body", Anchor: 0}, 320)
+	pointed := measureStyledNote(styledNote{Who: "x", Text: "body", Anchor: 1}, 320)
+	if top.hasTail {
+		t.Error("the chapter-top card claims a tail; it points at no passage")
+	}
+	if !pointed.hasTail {
+		t.Fatal("the anchored control has no tail either — this comparison is " +
+			"measuring nothing")
+	}
+	if got, want := pointed.bandH()-top.bandH(), float32(noteTailDepth); got != want {
+		t.Errorf("the anchorless band is %g shorter than the anchored one, want %g "+
+			"(the tail's whole depth); a gate that changes the DRAWING without "+
+			"changing the RESERVATION leaves the same phantom gap behind", got, want)
+	}
 }
 
 // Own-ness is ONE question, and every surface must get the same answer — above

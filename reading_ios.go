@@ -830,6 +830,21 @@ static BOOL      gNoteNextable = NO;   // the count region is a control (S10 nex
 // friend's repaints the sticker rather than leaving the wrong mark on it.
 static BOOL      gNoteOwn = NO;
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
+
+// gNoteTail is the PUSHED decision "does this card point at a passage", and
+// gNoteShapeExtra is that decision resolved to a height ONCE, here, so that no
+// band formula carries a branch.
+//
+// The formulae used to gate the tail's depth on "is it a pill" — the wrong
+// question, transcribed. "Is it collapsed" is not "does it point somewhere": a
+// note parked at chapter scope has no passage to point at, and a tail there
+// claims verse 1. Resolving the term once turns the transcriptions into a sum
+// of named terms with no local decision left in them to get wrong.
+// The speech tail: what makes it read as somebody talking rather than a panel.
+// Matches the web bubble, which hangs a small triangle under the left shoulder.
+static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
+static BOOL      gNoteTail = YES;
+static CGFloat   gNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
 static CAShapeLayer *gNoteCard = nil;    // the whole bubble: card + speech tail
 static CGFloat   gNoteBandH = 0;       // what we reserved, in points
@@ -887,7 +902,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
                       double acR, double acG, double acB,
-                      double boR, double boG, double boB) {
+                      double boR, double boG, double boB, int tail) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -895,13 +910,16 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                        gNoteMinimized != (minimized ? YES : NO) ||
                        gNoteNextable != (nextable ? YES : NO) ||
                        gNoteOwn != (own ? YES : NO) ||
-                       gNoteAnchorVerse != anchorVerse;
+                       gNoteAnchorVerse != anchorVerse ||
+                       gNoteTail != (tail ? YES : NO);
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
         gNoteNextable = nextable ? YES : NO;
         gNoteOwn = own ? YES : NO;
         gNoteAnchorVerse = anchorVerse;
+        gNoteTail = tail ? YES : NO;
+        gNoteShapeExtra = gNoteTail ? kNoteTail : 0;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
         gNoteMuted[0]=muR; gNoteMuted[1]=muG; gNoteMuted[2]=muB;
@@ -984,9 +1002,8 @@ static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 
 // target. The pill used to borrow it, which is how a touch-target decision came
 // to set the height of a piece of content.
 static const CGFloat kNoteBtn = 30;
-// The speech tail: what makes it read as somebody talking rather than a panel.
-// Matches the web bubble, which hangs a small triangle under the left shoulder.
-static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
+// kNoteTail/kNoteTailW/kNoteTailX are declared above, beside gNoteTail, because
+// SetNote resolves gNoteShapeExtra from them and SetNote comes first in this file.
 
 // btIOSNoteBubblePath is the bubble's whole outline — rounded card AND speech
 // tail — as ONE continuous path, for a card w wide and h tall (the view itself
@@ -1024,9 +1041,15 @@ static UIBezierPath *btIOSNoteBubblePath(CGFloat w, CGFloat h) {
     [p addLineToPoint:CGPointMake(right, bottom - r)];
     [p addArcWithCenter:CGPointMake(right - r, bottom - r) radius:r
              startAngle:0 endAngle:M_PI_2 clockwise:YES];
-    [p addLineToPoint:CGPointMake(tx1, bottom)];
-    [p addLineToPoint:CGPointMake(apexX, apexY)];
-    [p addLineToPoint:CGPointMake(tx0, bottom)];
+    // The detour is what makes this a speech bubble. With no passage to point
+    // at, the bottom edge simply runs on — still ONE path, because the reason
+    // for one path is that a separate triangle leaves the card's bottom stroke
+    // across its mouth, and that reason does not change with the shape.
+    if (gNoteTail) {
+        [p addLineToPoint:CGPointMake(tx1, bottom)];
+        [p addLineToPoint:CGPointMake(apexX, apexY)];
+        [p addLineToPoint:CGPointMake(tx0, bottom)];
+    }
     [p addLineToPoint:CGPointMake(left + r, bottom)];
     [p addArcWithCenter:CGPointMake(left + r, bottom - r) radius:r
              startAngle:M_PI_2 endAngle:M_PI clockwise:YES];
@@ -1124,7 +1147,7 @@ static void btIOSInstallNote(void) {
     // above it while a full gap sat underneath. macOS had already been repaired
     // for exactly this. The reservation is the note's; the paragraph separator
     // is the reading page's and is left alone (noteMetrics records why).
-    gNoteBandH = kNoteGapAbove + h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGapBelow;
+    gNoteBandH = kNoteGapAbove + h + gNoteShapeExtra + kNoteGapBelow;
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
@@ -1376,7 +1399,7 @@ static void btIOSLayoutNote(void) {
     // no longer matches what we need, reserve again and let the layout settle;
     // the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = kNoteGapAbove + h + (btIOSNotePill() ? 0 : kNoteTail) + kNoteGapBelow;
+    CGFloat want = kNoteGapAbove + h + gNoteShapeExtra + kNoteGapBelow;
     if (!reconciling && fabs(want - gNoteBandH) > 1.0) {
         reconciling = YES;
         btIOSInstallNote();
@@ -1411,7 +1434,7 @@ static void btIOSLayoutNote(void) {
         return;
     }
 
-    gNoteView.frame = CGRectMake(x, y, w, h + kNoteTail);
+    gNoteView.frame = CGRectMake(x, y, w, h + gNoteShapeExtra);
 
     // The card fills the top; the tail hangs under its left shoulder, pointing
     // down at the passage the note is about. One path for both.
@@ -3213,7 +3236,14 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 // (bibleTextSetNote), never by a chapter re-import.
 func pushNoteToPane(state *AppState) {
 	pal := state.pal()
-	text, who, pill, next := appleStickerPush(state, buildChapterPlan(state, appPrefs(), state.Bible))
+	// THE SHARED VALUE, not a fourth composition. Everything the native side
+	// used to work out for itself about this note now arrives decided.
+	var verses []Verse
+	if state.Bible != nil {
+		verses = state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	}
+	c := chapterNoteChrome(state, buildChapterPlan(state, appPrefs(), state.Bible), verses)
+	text, who, pill, next := c.Text, c.Who, c.Pill, c.Next
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -3227,8 +3257,15 @@ func pushNoteToPane(state *AppState) {
 		nx = 1
 	}
 	ownFlag := C.int(0)
-	if isOwnLiveNote(state) {
+	if c.Own {
 		ownFlag = 1
+	}
+	// "Does this card point at a passage" — decided once, in Go, and pushed. The
+	// native band formulae used to ask "is it a pill", which is a different
+	// question and gave a tail to a note parked at the chapter top.
+	tailFlag := C.int(0)
+	if c.hasTail() {
+		tailFlag = 1
 	}
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
@@ -3243,7 +3280,7 @@ func pushNoteToPane(state *AppState) {
 	// (An unplaced-only chapter pushes verse 0: its pill parks at the top,
 	// which is the only honest place for notes with no verses here.)
 	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
-		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB)
+		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB, tailFlag)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {

@@ -248,6 +248,7 @@ if [ "${1:-}" = "--release" ]; then
   EXPECTED_SIGNER_SHA256="$(configured_android_signer_digest)"
   verify_aab_identity_sdk "$AAB_STAGE"
   verify_android_dex_bridge aab "$AAB_STAGE" "$WORK"
+  verify_android_jni_descriptors "$WORK/aab-classes2.dex" "$REPO_ROOT/reading_android.go"
   verify_android_aab_signature "$AAB_STAGE" "$EXPECTED_SIGNER_SHA256" \
     "$WORK/aab-signature-verify.log" "$WORK/aab-signer-certificate.log"
 
@@ -265,6 +266,7 @@ if [ "${1:-}" = "--release" ]; then
     || { echo "ERROR: adaptive-icon resources missing from release APK"; exit 1; }
   verify_apk_identity_sdk "$APK_STAGE"
   verify_android_dex_bridge apk "$APK_STAGE" "$WORK"
+  verify_android_jni_descriptors "$WORK/apk-classes2.dex" "$REPO_ROOT/reading_android.go"
   verify_android_apk_signature "$APK_STAGE" "$EXPECTED_SIGNER_SHA256" \
     "$BT/apksigner" "$WORK/apk-signature-verify.log"
   BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
@@ -326,6 +328,7 @@ else
     "$BT/apksigner" "$WORK/debug-apk-signature-verify.log"
   verify_apk_identity_sdk BibleText.apk
   verify_android_dex_bridge apk BibleText.apk "$WORK"
+  verify_android_jni_descriptors "$WORK/apk-classes2.dex" "$REPO_ROOT/reading_android.go"
   BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
     python3 "$REPO_ROOT/scripts/verify-release-key.py" BibleText.apk
   note "done: $APP_DIR/BibleText.apk (signed with the upload key — uninstall any"

@@ -5,9 +5,20 @@
                   two conformance sweeps over the enumeration's states
        a4b42f249  shouldCaptureScrollRestore is one question, asked by all three
                   panes, with the contracts tightened to require the call
-     Everything from "3. Present / Collapsed / Chevron" onward is proposed, and
-     every one of those steps changes rendering on platforms that need a device
-     or an emulator to verify. -->
+     (step 3, Present / Collapsed / Chevron, landed with the pills work)
+     <pending>  step 4, Tail: one appended flag on all three native ABIs. iOS and
+                macOS gained gNoteTail + gNoteShapeExtra (resolved once in
+                SetNote, read as a scalar by every band formula, the outline's
+                detour gated); Android gained a trailing boolean on
+                BtBridge.setNote and gates both the tail drawable and the bottom
+                pad. Two guards came with it: the Go source contract
+                (TestJNIDescriptorsMatchBtBridge) and a BYTECODE check the
+                Android build now runs over the shipped dex
+                (verify_android_jni_descriptors) — a JNI descriptor is only a
+                string, and a stale one fails nowhere but on a device.
+     Everything from "5. Verbs" onward is proposed, and every one of those steps
+     changes rendering on platforms that need a device or an emulator to
+     verify. -->
 
 # Unifying note chrome: one value, four adapters, one conformance table
 
@@ -270,7 +281,7 @@ Each lands alone. Each ABI commit follows two hard rules: **exactly one new fiel
 
 **3. `Present` / `Collapsed` / `Chevron`.** Natives touched, no ABI: they read pushed values instead of re-deriving. Deletes `btIOSNotePresent`/`btIOSNotePill` (reading_ios.go:852-853), `btMacNotePresent`/`btMacNotePill` (:1527-1528), `notePresent`/`notePillNow` (BtBridge.java:1168-1169). Normalises Android's `"  ›"` two-space chevron. Nothing user-visible should move; if it does, one of the four expressions was already wrong, which is the point.
 
-**4. `Tail` — defect 3.** First ABI widening, one appended `int`, deliberately the smallest possible field so the wire mechanism is proved on something nobody can argue about. Each native sets `gNoteShapeExtra = gNoteTail ? kNoteTail : 0` **once**, in its `SetNote`, and every band formula reads that scalar. `banned` fragments forbid `btIOSNotePill() ?` / `btMacNotePill() ?` inside the install and layout functions. Ships the fix on iOS, macOS and Android, and reclaims nine points of phantom band reservation at the chapter top where it is most visible. The twin diff lands here.
+**4. `Tail` — defect 3.** First ABI widening, one appended `int`, deliberately the smallest possible field so the wire mechanism is proved on something nobody can argue about. Each native sets `gNoteShapeExtra = gNoteTail ? kNoteTail : 0` **once**, in its `SetNote`, and every band formula reads that scalar. `banned` fragments forbid `btIOSNotePill() ?` / `btMacNotePill() ?` inside the install and layout functions. Lands on iOS, macOS and Android. **It changes no pixel on those three surfaces yet, and the plan was wrong to claim it would.** A census over the enumeration (TestDerivedChromeDecisionsAgreeWithTheirTuple) found 13 expanded cards and *none* of them anchorless: a note with no passage on this chapter has nothing to open and stands down to the pill, and a pill was already tail-free on every surface. What the step actually buys is that the three natives now ask the right question — resolved once, read as a scalar — so the anchorless card the bands step puts in front of them renders correctly the first time instead of growing a tail that points at verse 1. The tripwire in that census fails if the anchorless state ever becomes reachable through the single-card push, which is the signal to get a device picture of it. The twin diff lands here.
 
 **5. `Verbs`.** One appended enum. Android's 🗑 emoji (BtBridge.java:1514) and its non-own-aware who-row width (`wlp.rightMargin = 2*dp(NOTE_BTN)`, :1451 — two verb slots reserved even for an own note, so its who line fits one button sooner than everyone's) fall out as adoption failures rather than as someone noticing.
 
