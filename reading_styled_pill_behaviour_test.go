@@ -1130,3 +1130,48 @@ func TestTheTopPillDisclosesUnplacedNotes(t *testing.T) {
 			"still be disclosed", pane.pillGeoms[0].pillText)
 	}
 }
+
+// Own-ness is ONE question, and every surface must get the same answer — above
+// all the surface DRAWING the glyph, because the glyph is a promise about what
+// the press will do.
+//
+// The three native panes push isOwnLiveNote (notes_store.go), which asks the
+// store by NoteID; dropCurrentNote and hideCurrentNote branch on the same
+// predicate. The styled pane asked the PLAN instead — HasOwn and the slot's id —
+// and the two disagree wherever the mirror still names an own note the plan is
+// no longer offering. There the styled pane drew a bin, which says destroy, on
+// a note the press would only dismiss.
+func TestOwnNessComesFromTheSamePredicateAsTheVerbs(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+
+	st := planTestState(t)
+	nonce := make([]byte, noteNonceLen)
+	nonce[0] = 5
+	mine, ok := saveMyNote(appPrefs(), StoredNote{VersionID: "web", Book: "John",
+		Chapter: 3, VerseLo: 16, Text: "mine on this chapter", Nonce: nonce})
+	if !ok {
+		t.Fatal("could not store an own note")
+	}
+	st.focusNote(mine.ID)
+	applyNoteForCurrentChapter(st)
+
+	// The state where the two used to part company: the mirror still names the
+	// note, the plan no longer offers it.
+	st.resetNoteFocus()
+	if !isOwnLiveNote(st) {
+		t.Fatalf("fixture broken: the store no longer calls the live note the reader's own")
+	}
+	if plan := buildChapterPlan(st, appPrefs(), st.Bible); plan.HasOwn {
+		t.Fatalf("fixture broken: the plan still offers the own slot, so the two cannot part")
+	}
+
+	if got := styledNoteFor(st); got.present() && !got.Own {
+		t.Errorf("the styled sticker says the live note is not the reader's own while " +
+			"the verbs say it is: it would draw a bin — destroy — on a note that " +
+			"dropCurrentNote only dismisses")
+	}
+}

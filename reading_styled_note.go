@@ -101,8 +101,20 @@ func styledNoteFor(state *AppState) styledNote {
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
 	text, who, pill, next := styledStickerPush(state, plan)
+	// OWN-NESS COMES FROM ONE PLACE, and it is the one the VERBS use.
+	//
+	// This asked the plan — HasOwn and the slot's id — while dropCurrentNote and
+	// hideCurrentNote both branch on isOwnLiveNote, which asks the store by
+	// NoteID. Two answers to one question, and they disagree wherever the mirror
+	// still names an own note the plan is no longer offering (focus reset without
+	// a re-derive reproduces it). The glyph would then read as a bin — destroy —
+	// on a note the press would only dismiss, under a comment three lines down
+	// promising that the glyph says what the press does.
+	//
+	// The verb is the thing that must be told the truth about, so the verb's
+	// predicate wins.
 	n := styledNote{Text: text, Who: who, Pill: pill, Next: next, Anchor: state.NoteVerseLo,
-		Own: plan.HasOwn && state.NoteID != 0 && state.NoteID == plan.Own.Note.ID}
+		Own: isOwnLiveNote(state)}
 	if !n.present() {
 		return styledNote{}
 	}
