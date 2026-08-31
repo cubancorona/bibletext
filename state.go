@@ -755,7 +755,12 @@ func executeSearch(state *AppState, rawQuery string) {
 	// gate, offer dialog and all. Mobile gets the same trick for free.
 	if _, isLink := ParseShareLink(trimmed); isLink {
 		if HandleShareLink(state, trimmed) {
-			clearSearchState(state)
+			// The UI half ONLY. The link has just set its own mark on the verse
+			// it names, and clearSearchState would put that out on its way past
+			// — the passage opened with nothing lit, which reads as the link
+			// half-working. What wants clearing here is the box and the results
+			// the reader typed into, not the wash the link arrived to draw.
+			clearSearchUI(state)
 			if state.setSearchText != nil {
 				state.setSearchText("")
 			}
@@ -1025,7 +1030,15 @@ func clearHighlightAndRederive(state *AppState) {
 	}
 }
 
+// clearSearchState empties the search UI AND puts out the wash that search put
+// on the page. clearSearchUI is the first half on its own, for the one caller
+// that must not take the second.
 func clearSearchState(state *AppState) {
+	clearSearchUI(state)
+	clearHighlightedVerse(state)
+}
+
+func clearSearchUI(state *AppState) {
 	abandonAISearch(state) // never leave a Find running behind a torn-down view
 	state.SearchQuery = ""
 	state.ActiveSearchQuery = ""
@@ -1039,7 +1052,6 @@ func clearSearchState(state *AppState) {
 	state.aiSearchErr = nil
 	state.aiSearchLoading = false
 	state.aiSearchCancelled = false
-	clearHighlightedVerse(state)
 }
 
 // isVerseHighlighted USED TO LIVE HERE. It is deleted, not shimmed.
