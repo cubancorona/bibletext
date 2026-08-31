@@ -50,9 +50,34 @@
                 paragraphs ARE the model's
                 (TestEverySurfaceBreaksParagraphsWhereTheModelDoes), which four
                 call sites had only by convention.
-     Everything from "8. Bands + noteAction" onward is proposed, and every one of
-     those steps changes rendering on platforms that need a device or an
-     emulator to verify. -->
+     <pending>  step 8 is SPLIT, because notesPillPerParagraph is a runtime var
+                and chapterNoteGroups is gated on it: the plural path runs at
+                N<=1 until the flag flips, so the mechanism can land as
+                no-render commits. Done so far:
+                  8a  the pill's verb is KEYED, not versed. The chapter-top
+                      group shares paragraph 0's verse by design, so two pills
+                      opened one note and paragraph 0's was unreachable.
+                  8b  performNoteAction: one verb entry point that can name
+                      which note. Every existing export becomes that call with
+                      noteKeyFocused. Focus happens BEFORE the verb.
+                  8c  noteChrome.Bands — every reservation the chapter needs,
+                      WITHOUT heights (a height is a function of a pane, and
+                      this value admits only functions of state/plan/verses).
+                Also landed alongside: the Java-to-native JNI seam is checked
+                (TestEveryJavaNativeHasAMatchingThunk). Short-name mangling
+                omits the signature, so widening a callback to carry a band key
+                would have linked clean and read garbage on a device.
+                Remaining: 8d one native at a time (Apple first, Android last),
+                8e identity on the wire, and 8f, which flips the flag and is
+                the only one of the nine that changes what a reader sees.
+     TWO HAZARDS, unaddressed and live today:
+       - macOS saved reading positions are expressed against
+         textContainerInset.height, the exact number the first-paragraph band
+         mutates. One band already redefines that datum; N would sum into it.
+       - Android's noteBandSpan is BOTH the removal handle and the placement
+         input, so the first moment a second band exists the first span is
+         orphaned on the live text with no reference — a permanent gap, and no
+         host test can see it because that file does not compile here. -->
 
 # Unifying note chrome: one value, four adapters, one conformance table
 
