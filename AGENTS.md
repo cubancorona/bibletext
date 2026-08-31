@@ -41,8 +41,17 @@ go run ./cmd/desktop
 Mobile packages must use the repository scripts because they apply the required
 Fyne patches and platform bridge code:
 
+`go build ./...` does NOT compile `reading_ios.go` — it is behind `//go:build
+ios`, so the host build and every ordinary test run are blind to its
+Objective-C. After touching it, run the nine-second cross-compile before
+anything slower; it is the same check the macOS CI job runs.
+
 ```bash
-scripts/run-ios-sim.sh
+scripts/check-ios-pane.sh
+```
+
+```bash
+scripts/run-ios-sim.sh          # add --dev for the BIBLETEXT_DEV_NOTES scenarios
 scripts/run-ios-device.sh
 scripts/release-ios.sh
 scripts/build-android.sh

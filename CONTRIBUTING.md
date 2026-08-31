@@ -64,7 +64,10 @@ editor that only analyses the host platform — that's expected:
 
 Validate mobile-tagged code with `scripts/run-ios-sim.sh` rather than a bare
 `fyne package` command; the wrapper applies the required Fyne patches and native
-bridge setup. Tests that exercise the Fyne reading widget skip on macOS (which uses the native
+bridge setup. Before that, `scripts/check-ios-pane.sh` compiles the iOS pane in
+about nine seconds without packaging or signing anything — `go build ./...`
+never sees that file, so a typo in its Objective-C otherwise survives a full
+green test run and is not found until a three-minute package fails. Tests that exercise the Fyne reading widget skip on macOS (which uses the native
 overlay) and run on Linux/Windows.
 
 ## Scope & data

@@ -914,7 +914,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                       double fgR, double fgG, double fgB,
                       double muR, double muG, double muB,
                       double acR, double acG, double acB,
-                      double boR, double boG, double boB, int tail) {
+                      double boR, double boG, double boB, int tail, int verbs) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     dispatch_async(dispatch_get_main_queue(), ^{

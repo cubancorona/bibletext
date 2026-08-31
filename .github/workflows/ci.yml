@@ -106,15 +106,10 @@ jobs:
       - name: go test
         run: go test -race ./...
 
+      # The same script a developer runs locally after touching reading_ios.go
+      # (nine seconds), so the check here and the check there cannot drift.
       - name: iOS cross-compile (ios/arm64, no signing)
-        run: |
-          IOS_MIN="$(python3 -c 'import json;print(json.load(open("config/product.json"))["iosMinimumOSVersion"],end="")')"
-          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          CC="$(xcrun --sdk iphoneos -f clang)"
-          CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
-            CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-            CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-            go build -o /tmp/bibletext-ios ./cmd/mobile
+        run: scripts/check-ios-pane.sh
 
   # Windows is a supported desktop target (the Fyne fallback reading pane, not the
   # native overlay). This job builds + runs the full suite on real Windows; the
