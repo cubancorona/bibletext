@@ -58,52 +58,77 @@ func TestAppleNextNoteControlsHaveAnAccessibleName(t *testing.T) {
 	}
 }
 
-// The "land on the note" minimum must apply ONLY when the note's band is above
-// the same paragraph the highlight is in.
+// EVERY SURFACE MUST READ THE PUSHED ARRIVAL CLASS, and none may re-derive it.
 //
-// It exists for a link that CARRIES a note: the band sits directly above the
-// washed verse, so scrolling to the verse would push the sender's message off
-// the top. Taken unconditionally it does something else entirely. The DISPLAYED
-// note is the newest one on the chapter (planDisplayIndex -> noteForChapter),
-// which can sit anywhere — and a collapsed set spanning more than one paragraph
-// is parked at CHAPTER SCOPE, whose anchor is the first paragraph, whose band is
-// reserved with the container's top inset, and whose Y is therefore the top of
-// the chapter. A reader with their own notes who then tapped a plain verse link
-// got the wash applied correctly and the view left at the top, every time.
+// This replaces a contract that required each Apple pane to guard its "land on
+// the note" minimum with its OWN same-paragraph predicate. That predicate was
+// the right question asked in a dialect only those two panes spoke: Android
+// asked whether the note shared the arriving VERSE (so a link to any other
+// verse of the note's paragraph put the card above the fold), the web asked
+// nothing at all, and the Apple version was a tautology whenever the note was
+// anchorless, because its anchor range fell back to the highlight range and it
+// compared a paragraph with itself.
 //
-// Source-level because the placement is Objective-C inside a cgo preamble that
-// only builds for its own platform: this is the same shape the contract tests
-// above use, and it is what stops the guard being dropped from one surface.
-func TestAppleNoteMinimumOnlyAppliesOnTheHighlightsParagraph(t *testing.T) {
+// So the shape of the contract inverts with the change: what must be present is
+// the READ of the pushed class, and what must be absent is any surface working
+// it out again. Source-level because two of the four are Objective-C in a cgo
+// preamble and one is Java.
+func TestEverySurfaceReadsThePushedArrivalClass(t *testing.T) {
 	for _, tc := range []struct {
-		path      string
-		privateFn string
-		guard     string
+		path, fn, required string
+		banned             []string
 	}{
-		{"reading_macos.go", "static BOOL btMacScrollToHighlight(void)", "btMacNoteSharesHighlightPara()"},
-		{"reading_ios.go", "static BOOL btIOSScrollToHighlight(void)", "btIOSNoteSharesHighlightPara()"},
+		{
+			path: "reading_macos.go", fn: "static BOOL btMacScrollToHighlight(void)",
+			required: "gMacNoteArrival == kMacArriveBand",
+			banned: []string{
+				"btMacNoteSharesHighlightPara", "paragraphRangeForRange",
+				"noteY - 12", // the unexplained per-class lead
+			},
+		},
+		{
+			path: "reading_ios.go", fn: "static BOOL btIOSScrollToHighlight(void)",
+			required: "gNoteArrival == kArriveBand",
+			banned: []string{
+				"btIOSNoteSharesHighlightPara", "paragraphRangeForRange",
+				"noteY - 12",
+			},
+		},
 	} {
-		placement := nativeFunctionSource(t, tc.path, tc.privateFn)
-		if !strings.Contains(placement, "noteY - 12") {
-			t.Fatalf("%s: the note minimum is gone; this test no longer guards anything", tc.path)
+		placement := nativeFunctionSource(t, tc.path, tc.fn)
+		if !strings.Contains(placement, tc.required) {
+			t.Errorf("%s: the placement does not read the pushed arrival class "+
+				"(%q). Deciding it here is how four surfaces came to answer four "+
+				"different questions.", tc.path, tc.required)
 		}
-		for _, line := range strings.Split(placement, "\n") {
-			if !strings.Contains(line, "noteY - 12 <") {
-				continue // the else-if arm, where a note with no wash IS the target
-			}
-			if !strings.Contains(line, tc.guard) {
-				t.Errorf("%s: the note minimum is unguarded:\n  %s\nIt must apply only when %s, "+
-					"or a chapter-scope note drags every arriving link to the top of the chapter.",
-					tc.path, strings.TrimSpace(line), tc.guard)
+		for _, b := range tc.banned {
+			if strings.Contains(placement, b) {
+				t.Errorf("%s: the placement still contains %q — the decision is "+
+					"pushed now, and a surface that re-derives it can drift again.",
+					tc.path, b)
 			}
 		}
-		// And the guard must actually compare the two paragraphs, not merely exist.
-		fn := strings.TrimSuffix(tc.guard, "()")
-		body := nativeFunctionSource(t, tc.path, "static BOOL "+fn+"(void)")
-		for _, want := range []string{"paragraphRangeForRange", "notePara.location == hlPara.location"} {
-			if !strings.Contains(body, want) {
-				t.Errorf("%s: %s does not compare paragraphs (missing %q)", tc.path, fn, want)
-			}
+		// The control: a test that only checks for ABSENCE passes just as well
+		// on an empty function.
+		if !strings.Contains(placement, "kNoteLead") && !strings.Contains(placement, "kMacNoteLead") {
+			t.Errorf("%s: the placement no longer uses the shared arrival lead, so "+
+				"the absences above may simply be an empty function", tc.path)
+		}
+	}
+
+	// Android had the worst of the four and gets the same treatment.
+	java := readNativeSource(t, "android/BtBridge.java")
+	if !strings.Contains(java, "noteArrival == ARRIVE_BAND") {
+		t.Error("android/BtBridge.java does not read the pushed arrival class")
+	}
+	for _, b := range []struct{ frag, why string }{
+		{"noteAnchorVerse == pendingVerse", "it decided the arrival by comparing VERSES, " +
+			"which answered the right question only when the link pointed at the note's own verse"},
+		{"dp(16)", "the arrival lead is spec (NOTE_LEAD) now; a local literal is how " +
+			"four surfaces came to place the same arrival at four different heights"},
+	} {
+		if strings.Contains(stripLineComments(java), b.frag) {
+			t.Errorf("android/BtBridge.java still contains %q in code — %s.", b.frag, b.why)
 		}
 	}
 }

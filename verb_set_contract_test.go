@@ -68,3 +68,47 @@ func upper(s string) string {
 	}
 	return string(out)
 }
+
+// The arrival classes cross the ABI as a bare int too, and the same hazard
+// applies: swap two names on the far side and every build is clean, every
+// source test still passes, and the only symptom is a reader landing in the
+// wrong place — which looks exactly like "nothing happened".
+func TestPushedArrivalClassesAgreeWithTheIota(t *testing.T) {
+	want := map[string]int{
+		"Nothing": int(arriveNothing),
+		"Verse":   int(arriveVerse),
+		"Band":    int(arriveBand),
+	}
+	if want["Nothing"] == want["Verse"] || want["Verse"] == want["Band"] {
+		t.Fatalf("the Go arrival classes are not distinct: %v", want)
+	}
+	for _, c := range []struct{ path, prefix string }{
+		{"reading_ios.go", "kArrive"},
+		{"reading_macos.go", "kMacArrive"},
+		{"android/BtBridge.java", ""},
+	} {
+		t.Run(c.path, func(t *testing.T) {
+			src := readNativeSource(t, c.path)
+			for name, n := range want {
+				var re *regexp.Regexp
+				if c.prefix == "" {
+					re = regexp.MustCompile(`ARRIVE_` + upper(name) + `\s*=\s*(\d+)`)
+				} else {
+					re = regexp.MustCompile(c.prefix + name + `\s*=\s*(\d+)`)
+				}
+				m := re.FindStringSubmatch(src)
+				if m == nil {
+					t.Errorf("%s never names the %q arrival class", c.path, name)
+					continue
+				}
+				var got int
+				fmt.Sscanf(m[1], "%d", &got)
+				if got != n {
+					t.Errorf("%s says %s = %d, the Go iota says %d. Off by one, the "+
+						"renderer places the view somewhere nobody chose and nothing "+
+						"fails but the app.", c.path, name, got, n)
+				}
+			}
+		})
+	}
+}

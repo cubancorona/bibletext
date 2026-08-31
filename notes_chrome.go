@@ -78,6 +78,15 @@ type noteChrome struct {
 	// which survives a pane that has already ellipsised the sender half.
 	Counts string
 
+	// Arrival is WHERE this render places the view, and ArrivalVerse is the
+	// verse it is expressed against — the target for arriveVerse, and the
+	// fallback for arriveBand when a renderer cannot resolve its reservation
+	// yet. Decided by chapterNoteArrival (notes_arrival.go); five surfaces
+	// used to decide it themselves, in five dialects, and they were never the
+	// same rule.
+	Arrival      noteArrival
+	ArrivalVerse int
+
 	// EVERYTHING DERIVABLE FROM THE TUPLE IS A METHOD, NOT A FIELD.
 	//
 	// The first draft made presence, collapsedness, the tail and the verb set
@@ -216,7 +225,14 @@ func chapterNoteChrome(state *AppState, plan chapterPlan, verses []Verse) noteCh
 		c.Who += noteChevron
 	}
 	c.Counts = noteCountsSpan(c.Who, c.Next)
-	c.ShownAs = receivedSetShownAs(plan, c, len(chapterNoteGroups(state, plan, verses)))
+	// WHERE THE VIEW GOES, from the same tuple. following/restoreArmed/explicit
+	// are facts about the render, not about the note, so they are read here
+	// rather than threaded through every caller.
+	groups := chapterNoteGroups(state, plan, verses)
+	c.Arrival, c.ArrivalVerse = chapterNoteArrival(state, c, verses, groups,
+		gAudio != nil && gAudio.readAlongFollowActive(),
+		state.restore != nil, state.forceReposition)
+	c.ShownAs = receivedSetShownAs(plan, c, len(groups))
 	return c
 }
 

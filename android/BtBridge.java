@@ -117,6 +117,16 @@ public final class BtBridge {
     // pressable. Composed in Go now (noteCountsSpan) and found here by
     // lastIndexOf, which still works after fitWho has ellipsised the sender.
     private static String noteCounts;
+    // The arrival classes, in noteArrival's own order (notes_arrival.go), and
+    // the class this render was pushed. WHERE the view goes is decided in Go;
+    // this pane used to decide it with `noteAnchorVerse == pendingVerse` — same
+    // VERSE — under a comment that said "when the band belongs to this verse's
+    // paragraph". Bible paragraphs run to many verses, so a link to any other
+    // verse of the note's own paragraph scrolled to the verse's line while the
+    // band pushed the card above the fold: exactly the failure the comment
+    // claimed to prevent.
+    static final int ARRIVE_NOTHING = 0, ARRIVE_VERSE = 1, ARRIVE_BAND = 2;
+    private static int noteArrival = ARRIVE_NOTHING;
     private static boolean noteTail = true;
     private static boolean notePill = false;
     private static boolean noteNextable = false;
@@ -912,6 +922,10 @@ public final class BtBridge {
     // pane shares iOS's 30, so it takes iOS's 12.5 rounded to a whole dp — the
     // mark is the same drawing on all three, sized to each one's own thumb.
     private static final int NOTE_TRASH = 13;
+    // How far below the top of the viewport an arrival lands. SPEC (Lead): four
+    // surfaces each had their own — 12 and 16 on the Apple panes, 24 on the
+    // styled pane, 16 here — so the same arrival sat at four different heights.
+    private static final int NOTE_LEAD = 16;
 
     private static int dp(int v) {
         float d = activity != null ? activity.getResources().getDisplayMetrics().density : 2f;
@@ -1155,7 +1169,7 @@ public final class BtBridge {
                                final boolean nextable, final boolean own, final int anchorVerse,
                                final int bg, final int fg, final int muted,
                                final int accent, final int border, final boolean tail,
-                               final int verbs, final byte[] counts_) {
+                               final int verbs, final byte[] counts_, final int arrival) {
         UI.post(new Runnable() {
             @Override public void run() {
                 String t = (noteText_ == null || noteText_.length == 0)
@@ -1168,6 +1182,7 @@ public final class BtBridge {
                         || notePill != pill || noteNextable != nextable
                         || noteTail != tail || noteVerbs != verbs
                         || !java.util.Objects.equals(noteCounts, counts)
+                        || noteArrival != arrival
                         || noteOwn != own
                         || noteAnchorVerse != anchorVerse;
                 noteText = t;
@@ -1177,6 +1192,7 @@ public final class BtBridge {
                 noteTail = tail;
                 noteVerbs = verbs;
                 noteCounts = counts;
+                noteArrival = arrival;
                 noteOwn = own;
                 noteAnchorVerse = anchorVerse;
                 noteBg = bg;
@@ -1894,18 +1910,28 @@ public final class BtBridge {
                         // verse's paragraph, so scrolling to the verse's own
                         // line puts the bubble explaining it above the fold —
                         // clipped, on the one arrival where it matters most
-                        // (a shared link's whole point). The styled pane has
-                        // the same rule in highlightY; this is its Android
-                        // twin: when the band belongs to this verse's
-                        // paragraph, scroll to the BAND's top instead.
-                        if (noteBandSpan != null && noteAnchorVerse == pendingVerse) {
+                        // (a shared link's whole point).
+                        //
+                        // WHICH of those applies is decided in Go and pushed
+                        // (notes_arrival.go). It used to be decided here, by
+                        // comparing VERSES, which answered the question this
+                        // comment describes only when the link happened to
+                        // point at the note's own verse.
+                        //
+                        // A band that is not reserved yet (noteBandSpan null —
+                        // refreshNoteSticker defers its measure below 60dp, and
+                        // that runnable can land after this one) falls through
+                        // to the verse's own line, never to nothing: silence
+                        // here is indistinguishable from "already there" and
+                        // leaves the reader wherever they were.
+                        if (noteArrival == ARRIVE_BAND && noteBandSpan != null) {
                             int paraOff = r[0];
                             CharSequence cs = text.getText();
                             while (paraOff > 0 && cs.charAt(paraOff - 1) != '\n') paraOff--;
                             int paraLine = layout.getLineForOffset(paraOff);
                             top = layout.getLineTop(paraLine) - noteBandSpan.band;
                         }
-                        int y = text.getTotalPaddingTop() + top - dp(16);
+                        int y = text.getTotalPaddingTop() + top - dp(NOTE_LEAD);
                         ownScrollTo(Math.max(y, 0));
                         // Consumed — BOTH of them. Clearing pendingVerse is what
                         // prevents later layout callbacks from applying it again.

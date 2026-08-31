@@ -445,13 +445,24 @@ func (p *styledReadingPane) highlightY() float32 {
 	// open where a friend's notes also live — with the pill above. Returning the
 	// sticker's band there scrolled the pill it sits under above the fold, which
 	// is the same failure as scrolling past a pill entirely.
+	//
+	// WHICH of the two applies is DECIDED IN GO now and pushed on the chrome
+	// (notes_arrival.go): this pane's line-span test was the closest of the
+	// four dialects to the right question, but it was still a fourth dialect,
+	// and the natives asked two different questions from it. The geometry below
+	// stays — resolving a band to a Y is this pane's own job — and only the
+	// DECISION moved.
+	// The class comes off p.note — the CHROME — and not off noteGeom, which the
+	// multi-band relayout zeroes (:278, :322). Reading it from the geometry
+	// worked for the single card and silently disabled every pill's band.
 	top := float32(-1)
-	if p.noteGeom.present && p.lay.BandLine >= 0 && li >= p.lay.BandLine &&
+	band := p.note.Arrival == arriveBand
+	if band && p.noteGeom.present && p.lay.BandLine >= 0 && li >= p.lay.BandLine &&
 		li <= p.lastLineOfBandParagraph() {
 		top = p.lay.BandY
 	}
 	for _, b := range p.lay.Bands {
-		if li >= b.Line && li <= b.LastLine && (top < 0 || b.Y < top) {
+		if band && li >= b.Line && li <= b.LastLine && (top < 0 || b.Y < top) {
 			top = b.Y
 		}
 	}

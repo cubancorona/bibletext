@@ -30,7 +30,19 @@ package bibletext
 // come first.
 static void btMacRefreshNote(void);
 static CGFloat btMacNoteTopY(void);
-// Forward-declared for btMacNoteSharesHighlightPara, which the scroll path needs
+// The arrival classes, in noteArrival's own order (notes_arrival.go), and the
+// class this render was pushed. Declared here, ahead of the other note state,
+// because the scroll path is earlier in this file than any of it.
+enum { kMacArriveNothing = 0, kMacArriveVerse = 1, kMacArriveBand = 2 };
+// The twin of gNoteArrival (reading_ios.go): WHERE the view goes, decided in Go.
+static int       gMacNoteArrival = 0;   // kMacArriveNothing
+
+// How far below the top of the viewport an arrival lands (spec: Lead). Declared
+// here rather than with the other spec constants because the scroll path is
+// earlier in this file than they are.
+static const CGFloat kMacNoteLead = 16;
+
+// Forward-declared for the scroll path, which needs
 // and which therefore sits well above the sticker's own section.
 static BOOL btMacNotePresent(void);
 static NSRange btMacNoteAnchorRange(NSTextStorage *ts, NSUInteger len);
@@ -986,32 +998,6 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
 //
 // The frame-origin normalisation stays with the CALLER, because both branches
 // below need it and this one can also be reached on its own.
-// btMacNoteSharesHighlightPara reports whether the note's band sits above the
-// SAME paragraph the highlight is in. That is the only case the "land on the
-// note" minimum below is about: a link that CARRIES a note lands on the note's
-// own passage, so the band is directly above the verse being washed and
-// scrolling to the verse would push the message off the top.
-//
-// It is NOT the case when the reader has notes of their own on the chapter. The
-// displayed note is the newest one (planDisplayIndex -> noteForChapter), which
-// can sit anywhere; worse, a collapsed set spanning more than one paragraph is
-// parked at CHAPTER SCOPE, whose anchor is the first paragraph and whose band is
-// therefore reserved with the container's top inset. Without this guard the
-// minimum then resolved to the top of the chapter and every arriving link
-// scrolled there instead of to its verse — the wash was applied correctly and
-// simply never brought into view.
-static BOOL btMacNoteSharesHighlightPara(void) {
-    if (!btMacNotePresent() || gTextView == nil) return NO;
-    NSTextStorage *ts = gTextView.textStorage;
-    if (ts == nil || ts.length == 0) return NO;
-    if (gMacHighlightRange.location == NSNotFound ||
-        gMacHighlightRange.length == 0 ||
-        NSMaxRange(gMacHighlightRange) > ts.length) return NO;
-    NSRange notePara = [ts.string paragraphRangeForRange:
-        btMacNoteAnchorRange(ts, ts.length)];
-    NSRange hlPara = [ts.string paragraphRangeForRange:gMacHighlightRange];
-    return notePara.location == hlPara.location;
-}
 
 static BOOL btMacScrollToHighlight(void) {
     if (gTextView == nil || gScroll == nil) return NO;
@@ -1027,22 +1013,19 @@ static BOOL btMacScrollToHighlight(void) {
                                     actualCharacterRange:NULL];
         NSRect rect = [lm boundingRectForGlyphRange:glyphs
                                     inTextContainer:gTextView.textContainer];
-        y = rect.origin.y + gTextView.textContainerInset.height - 16;
+        y = rect.origin.y + gTextView.textContainerInset.height - kMacNoteLead;
     } else if (noteY >= 0) {
         // A chapter-level note has no wash range. Its sticker is still a real
         // placement target at the top of the chapter.
-        y = noteY - 12;
+        y = noteY - kMacNoteLead;
     } else {
         return NO;
     }
-    // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band ABOVE
-    // the paragraph holding the highlighted verse, so scrolling to the verse
-    // pushes the message off the top — and the message is why the link was sent.
-    // Taken as a MINIMUM rather than a substitution, so it can only ever scroll
-    // further up: nothing can put the note out of view. (The iOS twin does the
-    // same in its scroll path; without it here the bubble was drawn correctly and
-    // simply never seen.)
-    if (noteY >= 0 && noteY - 12 < y && btMacNoteSharesHighlightPara()) y = noteY - 12;
+    // WHEN THE ARRIVAL SAYS BAND, LAND ON THE BAND — decided in Go and pushed
+    // (notes_arrival.go); the iOS twin carries the full reasoning. A band that
+    // cannot be measured yet falls back to the verse target already computed,
+    // never to nothing.
+    if (gMacNoteArrival == kMacArriveBand && noteY >= 0) y = noteY - kMacNoteLead;
     if (y < 0) y = 0;
     [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
     [gScroll reflectScrolledClipView:gScroll.contentView];
@@ -1498,6 +1481,7 @@ static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kM
 static const CGFloat kMacNoteBtn = 24;
 // The verb sets, in noteChrome.verbs()'s own order (notes_chrome.go).
 enum { kMacNoteVerbsNone = 0, kMacNoteVerbsReceived = 1, kMacNoteVerbsOwn = 2 };
+
 
 static const CGFloat kMacNoteTail = 9, kMacNoteTailW = 18, kMacNoteTailX = 24;
 // THE ONE DELIBERATE RESIDUAL IN THE SPEC, and it lives here.
@@ -2074,7 +2058,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                          double muR, double muG, double muB,
                          double acR, double acG, double acB,
                          double boR, double boG, double boB, int tail, int verbs,
-                         const char *counts) {
+                         const char *counts, int arrival) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     NSString *ct = (counts == NULL || *counts == 0) ? nil : [NSString stringWithUTF8String:counts];
@@ -2086,7 +2070,8 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                        gMacNoteAnchorVerse != anchorVerse ||
                        gMacNoteTail != (tail ? YES : NO) ||
                        gMacNoteVerbs != verbs ||
-                       !btMacSameStr(ct, gMacNoteCounts);
+                       !btMacSameStr(ct, gMacNoteCounts) ||
+                       gMacNoteArrival != arrival;
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
@@ -2097,6 +2082,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
         gMacNoteTail = tail ? YES : NO;
         gMacNoteVerbs = verbs;
         gMacNoteCounts = ct;
+        gMacNoteArrival = arrival;
 
         gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
@@ -2625,6 +2611,8 @@ func pushNoteToPane(state *AppState) {
 	// The substring of the who line that is a control (the iOS twin's reason).
 	macCounts := C.CString(c.Counts)
 	defer C.free(unsafe.Pointer(macCounts))
+	// WHERE THE VIEW GOES (the iOS twin's reason).
+	macArrival := C.int(c.Arrival)
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2651,7 +2639,7 @@ func pushNoteToPane(state *AppState) {
 	// the only honest place for notes with no verses here).
 	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
-		macTailFlag, macVerbSet, macCounts)
+		macTailFlag, macVerbSet, macCounts, macArrival)
 }
 
 // setNativeTint / applyNativeTint hand the chapter's wash model

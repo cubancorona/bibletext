@@ -1340,11 +1340,28 @@ const readerJSTemplate = `
   // follows immediately under it.
   function rescrollToHighlight() {
     var go = function () {
-      if (noteBox || noteChip) {
-        (noteBox || noteChip).scrollIntoView({ block: 'start' });
-        return;
-      }
       var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+      var card = noteBox || noteChip;
+      // THE SAME QUESTION THE OTHER FOUR SURFACES ASK, and this one used to ask
+      // nothing at all: its only gate was a null-check on an element
+      // assigned two statements before the call, so the note always won. That is
+      // right on a fresh arrival — anchorToPassage inserts the card immediately
+      // before the paragraph holding the lit verse — and wrong the moment the
+      // anchor is STALE, which is exactly what the noteAnchorPara fallback
+      // there produces: a hashchange to another passage then scrolled the reader
+      // back to a note about the one they had left.
+      //
+      // So: the card wins when it belongs to the paragraph being arrived at.
+      // Asking the DOM for that paragraph is not re-deriving the rule — these <p>
+      // elements ARE the model's paragraphs, which is now enforced rather than
+      // assumed (TestEverySurfaceBreaksParagraphsWhereTheModelDoes).
+      if (card) {
+        var para = lit && lit.closest ? lit.closest('p') : null;
+        if (!para || card.nextElementSibling === para) {
+          card.scrollIntoView({ block: 'start' });
+          return;
+        }
+      }
       if (lit) lit.scrollIntoView({ block: 'center' });
     };
     // AFTER LAYOUT, not merely after insertion. Scrolling in the same turn as

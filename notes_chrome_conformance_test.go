@@ -139,6 +139,7 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 	defer func() { notesPillPerParagraph = origPills }()
 
 	checked := 0
+	arrivals := map[noteArrival]int{}
 	// A CENSUS, not only a per-cell assertion. hasTail() reads Anchor, so the
 	// per-cell line below is true by construction and proves nothing on its own.
 	// The census says something the assertion cannot: on the APPLE/Android push
@@ -175,6 +176,22 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 						if got, want := c.hasTail(), c.Anchor > 0; got != want {
 							t.Errorf("%s: hasTail()=%v, anchor %d", w.id(), got, c.Anchor)
 						}
+						// The arrival class must be self-consistent with the tuple it
+						// came from: a band can only be arrived at when there IS a note,
+						// and a verse target is always a real verse.
+						switch c.Arrival {
+						case arriveBand:
+							if !c.present() {
+								t.Errorf("%s: arriveBand with no note on screen", w.id())
+							}
+							fallthrough
+						case arriveVerse:
+							if c.ArrivalVerse <= 0 {
+								t.Errorf("%s: %v with verse %d", w.id(), c.Arrival, c.ArrivalVerse)
+							}
+						case arriveNothing:
+						}
+						arrivals[c.Arrival]++
 						if c.present() && !c.collapsed() {
 							if c.hasTail() {
 								expandedAnchored++
@@ -216,8 +233,15 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 			"note above it needs rewriting — and this cell needs a rendering proof "+
 			"on a device, not only a census", expandedAnchorless)
 	}
-	t.Logf("checked %d states; expanded cards: %d anchored, %d anchorless",
-		checked, expandedAnchored, expandedAnchorless)
+	// Every class must be REACHED, or the natives are handed a case this sweep
+	// has never seen and the per-surface renderers are untested for it.
+	for _, want := range []noteArrival{arriveNothing, arriveVerse, arriveBand} {
+		if arrivals[want] == 0 {
+			t.Errorf("no state produced %v; that case crosses the ABI untested", want)
+		}
+	}
+	t.Logf("checked %d states; expanded cards: %d anchored, %d anchorless; arrivals %v",
+		checked, expandedAnchored, expandedAnchorless, arrivals)
 }
 
 // The predicate itself, at its edges. It is the whole of defect 2 now, so it is

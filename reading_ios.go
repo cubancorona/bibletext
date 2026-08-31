@@ -847,9 +847,14 @@ static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 // contract test holds these three names against that iota.
 enum { kNoteVerbsNone = 0, kNoteVerbsReceived = 1, kNoteVerbsOwn = 2 };
 
+// The arrival classes, in noteArrival's own order (notes_arrival.go).
+enum { kArriveNothing = 0, kArriveVerse = 1, kArriveBand = 2 };
+
 // The speech tail: what makes it read as somebody talking rather than a panel.
 // Matches the web bubble, which hangs a small triangle under the left shoulder.
 static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
+// How far below the top of the viewport an arrival lands (spec: Lead).
+static const CGFloat kNoteLead = 16;
 // gNoteVerbs is WHICH CONTROLS the card carries, decided in Go (noteChrome.verbs)
 // and pushed. It is not "is it own": the glyph is a promise about what the press
 // does, and choosing the glyph and choosing the verb in two places is how a bin
@@ -860,6 +865,13 @@ static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
 // transcribed into a third language; the styled pane had a fourth copy and
 // Android had none, so Android drew no accent at all. Found by a BACKWARDS
 // search, which still works after btIOSFitWho has ellipsised the sender half.
+// gNoteArrival is WHERE this render places the view, decided in Go
+// (notes_arrival.go). This pane used to decide it with
+// btIOSNoteSharesHighlightPara — widening the note's anchor and the highlight
+// to their enclosing paragraphs and comparing — which was right, and was also a
+// TAUTOLOGY whenever the note was anchorless: btIOSNoteAnchorRange falls back
+// to the highlight range, so the test compared a paragraph with itself.
+static int       gNoteArrival = 0;   // kArriveNothing
 static NSString *gNoteCounts = nil;
 static int       gNoteVerbs = 1;        // kNoteVerbsReceived
 static BOOL      gNoteTail = YES;
@@ -922,7 +934,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                       double muR, double muG, double muB,
                       double acR, double acG, double acB,
                       double boR, double boG, double boB, int tail, int verbs,
-                      const char *counts) {
+                      const char *counts, int arrival) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     NSString *ct = (counts == NULL || *counts == 0) ? nil : [NSString stringWithUTF8String:counts];
@@ -934,7 +946,8 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                        gNoteAnchorVerse != anchorVerse ||
                        gNoteTail != (tail ? YES : NO) ||
                        gNoteVerbs != verbs ||
-                       !btIOSSameStr(ct, gNoteCounts);
+                       !btIOSSameStr(ct, gNoteCounts) ||
+                       gNoteArrival != arrival;
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
@@ -944,6 +957,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
         gNoteTail = tail ? YES : NO;
         gNoteVerbs = verbs;
         gNoteCounts = ct;
+        gNoteArrival = arrival;
         gNoteShapeExtra = gNoteTail ? kNoteTail : 0;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
@@ -1989,33 +2003,6 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
     else dispatch_async(dispatch_get_main_queue(), block);
 }
 
-// btIOSNoteSharesHighlightPara reports whether the note's band sits above the
-// SAME paragraph the highlight is in. That is the only case the "land on the
-// note" minimum below is about: a link that CARRIES a note lands on the note's
-// own passage, so the band is directly above the verse being washed and
-// scrolling to the verse would push the message off the top.
-//
-// It is NOT the case when the reader has notes of their own on the chapter. The
-// displayed note is the newest one (planDisplayIndex -> noteForChapter), which
-// can sit anywhere; worse, a collapsed set spanning more than one paragraph is
-// parked at CHAPTER SCOPE, whose anchor is the first paragraph and whose band is
-// therefore reserved with the container's top inset. Without this guard the
-// minimum then resolved to the top of the chapter and every arriving link
-// scrolled there instead of to its verse — the wash was applied correctly and
-// simply never brought into view.
-static BOOL btIOSNoteSharesHighlightPara(void) {
-    if (!btIOSNotePresent() || gReadingTV == nil) return NO;
-    NSTextStorage *ts = gReadingTV.textStorage;
-    if (ts == nil || ts.length == 0) return NO;
-    if (gReadingHighlightRange.location == NSNotFound ||
-        gReadingHighlightRange.length == 0 ||
-        NSMaxRange(gReadingHighlightRange) > ts.length) return NO;
-    NSRange notePara = [ts.string paragraphRangeForRange:
-        btIOSNoteAnchorRange(ts, ts.string, ts.length)];
-    NSRange hlPara = [ts.string paragraphRangeForRange:gReadingHighlightRange];
-    return notePara.location == hlPara.location;
-}
-
 // btIOSScrollToHighlight lands the view on the chapter's wash, returning NO when
 // there is none to land on. Factored out of bibleTextScrollReadingTV so the
 // reposition can be issued WITHOUT a re-import (bibleTextIOSScrollToHighlight).
@@ -2036,11 +2023,12 @@ static BOOL btIOSScrollToHighlight(void) {
                                     actualCharacterRange:NULL];
         CGRect rect = [lm boundingRectForGlyphRange:glyphs
                                     inTextContainer:gReadingTV.textContainer];
-        // A little breathing room above the verse so it doesn't kiss the top.
-        target = rect.origin.y + gReadingTV.textContainerInset.top - 16;
+        // The shared arrival lead, so the same arrival sits at the same height
+        // on every surface (noteMetrics().Lead).
+        target = rect.origin.y + gReadingTV.textContainerInset.top - kNoteLead;
     } else if (noteY >= 0) {
         // Chapter-level notes have no wash range but still belong at the top.
-        target = noteY - 12;
+        target = noteY - kNoteLead;
     } else {
         if (getenv("BT_SCROLL_DEBUG"))
             fprintf(stderr, "[scroll] native: NO RANGE (loc=%lu len=%lu storage=%lu)\n",
@@ -2048,13 +2036,22 @@ static BOOL btIOSScrollToHighlight(void) {
                 (unsigned long)gReadingHighlightRange.length, (unsigned long)len);
         return NO;
     }
-    // WHEN THERE IS A NOTE, LAND ON THE NOTE. The sticker sits in a band ABOVE
-    // the paragraph holding the highlighted verse, so scrolling to the verse
-    // pushed the message off the top of the screen — and the message is the
-    // reason the link was sent. The passage follows directly under it. Taken as a
-    // minimum rather than a substitution, so this can only ever scroll further
-    // UP: nothing can put the note out of view.
-    if (noteY >= 0 && noteY - 12 < target && btIOSNoteSharesHighlightPara()) target = noteY - 12;
+    // WHEN THE ARRIVAL SAYS BAND, LAND ON THE BAND. The sticker sits above the
+    // paragraph holding the arriving verse, so scrolling to the verse pushed
+    // the message off the top of the screen — and the message is the reason the
+    // link was sent.
+    //
+    // The class is DECIDED IN GO (notes_arrival.go) and pushed. This pane used
+    // to work this out itself by widening both ranges to their enclosing
+    // paragraphs and comparing — the right question, asked in a dialect only
+    // this pane spoke, and a tautology whenever the note was anchorless.
+    // Android asked a different question entirely (same VERSE), and the web
+    // asked none.
+    //
+    // A band we cannot measure (noteY < 0: no card laid out yet) falls back to
+    // the verse target already computed — never to nothing, because silence
+    // here is indistinguishable from "the reader is already there".
+    if (gNoteArrival == kArriveBand && noteY >= 0) target = noteY - kNoteLead;
     CGFloat maxY = gReadingTV.contentSize.height - gReadingTV.bounds.size.height;
     if (getenv("BT_SCROLL_DEBUG"))
         fprintf(stderr, "[scroll] native: target=%.0f maxY=%.0f content=%.0f bounds=%.0f hidden=%d suppressed=%d\n",
@@ -3288,6 +3285,8 @@ func pushNoteToPane(state *AppState) {
 	// rather than re-deriving the grammar (notes_chrome.go noteCountsSpan).
 	cCounts := C.CString(c.Counts)
 	defer C.free(unsafe.Pointer(cCounts))
+	// WHERE THE VIEW GOES, decided once (notes_arrival.go).
+	arrivalClass := C.int(c.Arrival)
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
 	}
@@ -3302,7 +3301,7 @@ func pushNoteToPane(state *AppState) {
 	// which is the only honest place for notes with no verses here.)
 	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
-		tailFlag, verbSet, cCounts)
+		tailFlag, verbSet, cCounts, arrivalClass)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {

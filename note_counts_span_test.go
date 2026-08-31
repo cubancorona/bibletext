@@ -144,3 +144,34 @@ func stripLineComments(src string) string {
 	}
 	return b.String()
 }
+
+// The web reader's arrival, held to the same question as the other four. It is
+// JavaScript inside a Go raw string, so this reads the source — the same shape
+// every other cross-surface contract here uses.
+func TestTheWebReaderAsksWhichParagraph(t *testing.T) {
+	src := readNativeSource(t, "cmd/websitegen/assets.go")
+	i := strings.Index(src, "function rescrollToHighlight()")
+	if i < 0 {
+		t.Fatal("rescrollToHighlight is gone; this contract guards nothing")
+	}
+	body := src[i:]
+	if j := strings.Index(body, "\n  }"); j > 0 {
+		body = body[:j]
+	}
+	if !strings.Contains(body, "card.nextElementSibling === para") {
+		t.Error("the web reader does not ask whether the card belongs to the " +
+			"paragraph being arrived at. Its only gate was a null-check on an " +
+			"element assigned two statements earlier, so the note always won — " +
+			"right on a fresh arrival, and wrong on a hashchange to another " +
+			"passage, where it scrolled the reader back to the note they left.")
+	}
+	if strings.Contains(body, "if (noteBox || noteChip) {") {
+		t.Error("the unconditional note-wins gate is back in rescrollToHighlight")
+	}
+	// The control: with both checks phrased as absences, a deleted function
+	// would pass. The verse fallback must still be there.
+	if !strings.Contains(body, "block: 'center'") {
+		t.Error("the verse fallback is gone, so the assertions above may be " +
+			"describing an empty function")
+	}
+}

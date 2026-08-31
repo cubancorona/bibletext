@@ -246,6 +246,18 @@ const (
 	// before it, same fix: one number, four readers.
 	notePillPadX = 14
 	notePillMinW = 86
+	// THE ARRIVAL LEAD: how far below the top of the viewport the thing being
+	// arrived at is placed, so it does not kiss the edge. Five surfaces each
+	// picked their own — 12 and 16 on the Apple panes (the split had no stated
+	// reason), 24 on the styled pane, dp(16) on Android, and 1.2rem/6.5rem in
+	// the web reader's scroll-margin — so the same arrival sat at four
+	// different heights depending on which app you were holding.
+	//
+	// ONE number, and deliberately not one per class: two numbers put a
+	// per-class decision back inside the renderer, which is the thing being
+	// removed. If the classes ever must differ, that is a change to the
+	// classifier, not to five files.
+	noteArrivalLead = 16
 )
 
 // noteSpacing is the spec above as one value, so a consumer reads a NAMED
@@ -262,6 +274,7 @@ type noteSpacing struct {
 	PillH     float32
 	PillPadX  float32
 	PillMinW  float32
+	Lead      float32
 }
 
 // noteMetrics is THE table. Every surface reads this or is held to it by
@@ -284,6 +297,7 @@ var noteSpacingTable = noteSpacing{
 	PillH:     notePillH,
 	PillPadX:  notePillPadX,
 	PillMinW:  notePillMinW,
+	Lead:      noteArrivalLead,
 }
 
 // WhoH is the who row's box height for a given who-line font size — derived,
