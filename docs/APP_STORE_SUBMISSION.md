@@ -25,13 +25,18 @@ As observed against App Store Connect on 26 August 2026:
   then; `check-min-os-versions.py` guards it and `release-ios.sh` reads it
   back out of the exported `.ipa`).
 
+`scripts/asc-env.sh` resolves the issuer id, the key id and the path to the
+signing key from the login Keychain and exports what these tools read. The three
+values are deliberately absent from this repository, and so is the key's
+filename — it contains the key id, and `check-repository-hygiene.py` fails the
+build if it appears in a tracked file. Before the helper existed each release
+began by hunting for all three, which is the whole reason it exists.
+
 Public lookup data is cached, and App Store Connect is authoritative. Start every
 release with the read-only preflight:
 
 ```bash
-ASC_KEY_PATH=/path/AuthKey.p8 \
-ASC_KEY_ID=... \
-ASC_ISSUER_ID=... \
+. scripts/asc-env.sh
 python3 appstore/preflight.py
 ```
 
@@ -107,9 +112,7 @@ Git. For 1.2.3 the English (UK) set must include:
 The helper is read-only by default:
 
 ```bash
-ASC_KEY_PATH=/path/AuthKey.p8 \
-ASC_KEY_ID=... \
-ASC_ISSUER_ID=... \
+. scripts/asc-env.sh
 python3 appstore/push-metadata.py
 ```
 
@@ -156,9 +159,7 @@ Then preview the current App Store Connect value (add `--platform MAC_OS` for
 the Mac record — the default run resolves the iOS one only):
 
 ```bash
-ASC_KEY_PATH=/path/AuthKey.p8 \
-ASC_KEY_ID=... \
-ASC_ISSUER_ID=... \
+. scripts/asc-env.sh
 python3 appstore/push-review-notes.py
 ```
 

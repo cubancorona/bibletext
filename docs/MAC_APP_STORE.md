@@ -9,12 +9,38 @@ Nothing here is wired into CI. `scripts/release-mac-store.sh` is run by hand.
 The plain desktop release — unsigned, unsandboxed, one zip per architecture —
 is unchanged and remains available beside the Store build.
 
-**Status: shipped.** The first Mac submission — 1.2.4, desktop build 44 — is
-approved and live, so the listing now carries both platforms and the
+**Status: shipped.** The first Mac submission — 1.2.4, desktop build 44,
+uploaded 28 August 2026 — is `READY_FOR_SALE`, so the listing now carries both
+platforms and the
 "one decision that cannot be undone" below is spent: the bundle id, the minimum
 macOS version and the sandbox posture recorded here are what the Store holds.
 Everything below is therefore a record of how it was done and what constrains
 the next submission, not a plan.
+
+## Checking which platforms are live
+
+The public `itunes.apple.com/lookup` CANNOT answer this. Universal Purchase puts
+both platforms behind one product id and the lookup returns a single shared
+entity — the same `version` and `minimumOsVersion` for `entity=software` and
+`entity=macSoftware` alike — so it reads as an iOS-only answer whatever the Mac
+state is. Ask App Store Connect, which reports the platforms separately:
+
+```bash
+. scripts/asc-env.sh
+python3 -c 'import sys; sys.path.insert(0,"build/appstore"); import asc
+print(asc.request("GET","/v1/apps/6784567351/appStoreVersions"
+      "?limit=20&fields[appStoreVersions]=versionString,platform,appStoreState")[1])'
+```
+
+`scripts/asc-env.sh` resolves the issuer id, the key id and the path to the
+signing key from the login Keychain (service `uk.co.bibletext.appstoreconnect`,
+accounts `issuer-id`, `key-id`, `key-path`) and exports the three variables the
+tools read. It refuses if any is missing, if the key is unreadable, or if the
+key is not mode 600 or 400.
+
+None of those three values is in this repository, and the key filename is not
+either — it contains the key id, which is why `check-repository-hygiene.py`
+fails the build on it. That check caught the first draft of this very section.
 
 ## One listing, two platforms
 
