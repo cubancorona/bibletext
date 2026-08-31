@@ -69,19 +69,10 @@ var (
 
 // styledNote is the pushed presentation, exactly as the three native stickers
 // receive it, plus the verse the band opens above.
-type styledNote struct {
-	Text   string // the sender's words, alone. "" = nothing open here
-	Who    string // the app's own chrome: byline + counts + "N not shown here"
-	Pill   bool   // minimized, suppressed, or unplaced-only
-	Next   bool   // the counts region is a CONTROL (more than one placed note)
-	Anchor int    // the verse the band opens above; 0 = park at the top
-	// Own marks an explicitly focused note authored locally. It determines the
-	// closing control: a received note is deleted and uses a bin, while an own
-	// note is dismissed and uses ✕. Distinct glyphs keep deletion unambiguous.
-	Own bool
-}
-
-func (n styledNote) present() bool { return n.Text != "" || n.Who != "" }
+// styledNote is an ALIAS for the shared value, kept while the styled pane is
+// migrated onto it. It was the fourth spelling of a tuple three other surfaces
+// already received; noteChrome (notes_chrome.go) is the one spelling.
+type styledNote = noteChrome
 
 // styledStickerPush is the styled pane's alias of the shared composition — the
 // same seam androidStickerPush is, and for the same reason: the who-line
@@ -96,29 +87,21 @@ func styledStickerPush(state *AppState, plan chapterPlan) (text, who string, pil
 // ONCE per pane (in the constructor), never per relayout: a note change goes
 // through a full reading-view rebuild, exactly as the banner does.
 func styledNoteFor(state *AppState) styledNote {
-	if state == nil || !notesFeatureOn(state) {
-		return styledNote{}
+	// The shared composition, not a fourth one. Everything this used to derive
+	// for itself — presence, the collapsed test, own-ness, the tail — is a field
+	// on the value now, so the styled pane is a CONSUMER of the decisions rather
+	// than a place they are made. verses is what receivedSetShownAs needs to
+	// count the noted paragraphs.
+	if state == nil || state.Bible == nil {
+		return chapterNoteChrome(state, chapterPlan{}, nil)
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
-	text, who, pill, next := styledStickerPush(state, plan)
-	// OWN-NESS COMES FROM ONE PLACE, and it is the one the VERBS use.
-	//
-	// This asked the plan — HasOwn and the slot's id — while dropCurrentNote and
-	// hideCurrentNote both branch on isOwnLiveNote, which asks the store by
-	// NoteID. Two answers to one question, and they disagree wherever the mirror
-	// still names an own note the plan is no longer offering (focus reset without
-	// a re-derive reproduces it). The glyph would then read as a bin — destroy —
-	// on a note the press would only dismiss, under a comment three lines down
-	// promising that the glyph says what the press does.
-	//
-	// The verb is the thing that must be told the truth about, so the verb's
-	// predicate wins.
-	n := styledNote{Text: text, Who: who, Pill: pill, Next: next, Anchor: state.NoteVerseLo,
-		Own: isOwnLiveNote(state)}
-	if !n.present() {
-		return styledNote{}
+	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	c := chapterNoteChrome(state, plan, verses)
+	if !c.present() {
+		return noteChrome{}
 	}
-	return n
+	return c
 }
 
 // --- geometry ---------------------------------------------------------------
@@ -821,57 +804,6 @@ const (
 
 func (r receivedShownAs) String() string {
 	return [...]string{"nothing", "sticker", "pills", "count"}[r]
-}
-
-// receivedSetShownAs is the ONE answer, so the pane and the enumeration cannot
-// disagree about what the reader is looking at. groups is the number of noted
-// paragraphs chapterNoteGroups found, which is zero whenever the pill gate is
-// off — so the gate needs no separate argument here.
-// stickerIsTheReceivedSet reports whether the single sticker IS this chapter's
-// received notes in their collapsed form — the ONE state in which the pills are
-// a second spelling of it and must replace it.
-//
-// styledNote.Pill alone is not that question. Pill means "the sticker is
-// CLOSED", and a focused own note is closed too whenever a foreign mark
-// suppresses the chapter — appleStickerPush's own-note arm returns pill=true
-// under notesSuppressed (notes_plan.go). Keying on Pill therefore treated the
-// reader's own note as the friends' chip: reachable by arriving at the chapter
-// through a search result and then opening your own note, which blanked it.
-func stickerIsTheReceivedSet(note styledNote) bool {
-	return note.Pill && !note.Own
-}
-
-func receivedSetShownAs(plan chapterPlan, note styledNote, groups int) receivedShownAs {
-	if len(plan.Notes) == 0 || !note.present() {
-		return shownAsNothing
-	}
-	// OWN FIRST, and the order is the fix rather than a preference: Own says
-	// WHAT the sticker is showing, Pill only says whether it is closed, and the
-	// two overlap under suppression. The narrower fact has to win.
-	switch {
-	case note.Own:
-		// The sticker is busy with a note that is NOT in this set and carries no
-		// count of it, so only the pills can speak for the set — at any group
-		// count, including one. Where there is no pill row (the three native
-		// surfaces, or the gate off) groups is zero and the set is represented
-		// nowhere: X16, and the reason this function returns a value rather
-		// than a bool.
-		if groups >= 1 {
-			return shownAsPills
-		}
-		return shownAsNothing
-	case note.Pill:
-		// The sticker IS the set's collapsed form. The pills replace it only
-		// where they say strictly more: two or more noted paragraphs. With one,
-		// the sticker's count and its position already agree.
-		if groups >= 2 {
-			return shownAsPills
-		}
-		return shownAsSticker
-	default:
-		// An open received note: its who line carries the count.
-		return shownAsCount
-	}
 }
 
 // measureParagraphPills builds the collapsed state as one pill per noted

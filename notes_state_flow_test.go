@@ -359,6 +359,11 @@ func TestNotesStateSpace(t *testing.T) {
 // moments that matter: right after the verb, and after the next navigation —
 // which is when a store that disagrees with the mirror finally shows.
 type notesObs struct {
+	// st is the world runNotesFlow built, so a second sweep can judge the same
+	// states without a second copy of the seeding. The conformance sweep
+	// (notes_chrome_conformance_test.go) reads it; nothing else should.
+	st *AppState
+
 	shownText string // what was on screen when the reader reached for the verb
 	shownID   uint64 // the identity the mirror said the verbs would address
 
@@ -574,6 +579,7 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		})
 	}
 
+	obs.st = st
 	obs.shownText = st.ActiveNote
 	obs.shownID = st.NoteID
 	obs.shownWasOwn = isOwnLiveNote(st)
