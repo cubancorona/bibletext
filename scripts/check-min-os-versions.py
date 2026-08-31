@@ -68,6 +68,7 @@ CONSUMERS = {
     "scripts/release-ios.sh": (IOS_KEY, ":MinimumOSVersion $IOS_MIN"),
     "scripts/run-ios-device.sh": (IOS_KEY, ":MinimumOSVersion $IOS_MIN"),
     "scripts/run-ios-sim.sh": (IOS_KEY, None),
+    "scripts/check-ios-pane.sh": (IOS_KEY, None),
     ".github/workflows/ci.yml": (IOS_KEY, None),
     "scripts/release-mac-store.sh": (MAC_KEY, ":LSMinimumSystemVersion $MAC_MIN"),
     ".github/workflows/release.yml": (MAC_KEY, ":LSMinimumSystemVersion $MAC_MIN"),
@@ -101,13 +102,43 @@ def declaration_failures(config: dict) -> list[str]:
     return failures
 
 
+def delegates_to_consumer(body: str, key: str) -> bool:
+    """A consumer may INVOKE another consumer instead of reading the key itself.
+
+    The invariant is that the floor comes from config/product.json and never
+    from a private constant — not that every file parses the JSON. A workflow
+    that calls a script which does is exactly as safe, and factoring the two
+    apart is how the check and the developer loop stop drifting.
+
+    The delegation is only accepted to a file this table ALSO checks for the
+    same key. Anything looser turns "delegates" into a hole: a call to an
+    unchecked script would satisfy the rule while reading a literal.
+
+    COMMENTS DO NOT COUNT. These files explain themselves by naming their
+    siblings — check-ios-pane.sh's own header names run-ios-sim.sh — so a
+    mention in prose would let a script satisfy the rule by talking about
+    another one while hardcoding its own floor. Only a line that actually runs
+    it counts.
+    """
+    code = "\n".join(
+        line.split("#", 1)[0] for line in body.splitlines()
+    )
+    for other, (other_key, _) in CONSUMERS.items():
+        if other_key != key or not other.startswith("scripts/"):
+            continue
+        if other in code:
+            return True
+    return False
+
+
 def consumer_failures(rel: str, body: str, key: str, stamp: str | None) -> list[str]:
     var = VAR_FOR[key]
     failures = []
-    if key not in body:
+    if key not in body and not delegates_to_consumer(body, key):
         failures.append(
-            f"{rel}: never reads {key} from config/product.json — its floor is "
-            "a private constant that will drift from the declared one"
+            f"{rel}: never reads {key} from config/product.json, and invokes no "
+            "script that does — its floor is a private constant that will drift "
+            "from the declared one"
         )
     for match in FLAG_RE.finditer(body):
         value = match.group(1)
