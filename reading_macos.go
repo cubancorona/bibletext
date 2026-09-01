@@ -29,6 +29,8 @@ package bibletext
 // sets the text, and bibleTextMacScrollTV has to keep the sticker in view; both
 // come first.
 static void btMacRefreshNote(void);
+void bibleTextNoteAction(int verb, int key);
+enum { kMacNotePillTagBase = 2000 };
 static CGFloat btMacNoteTopY(void);
 // The arrival classes, in noteArrival's own order (notes_arrival.go), and the
 // class this render was pushed. Declared here, ahead of the other note state,
@@ -259,6 +261,13 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 - (void)btNoteHide:(id)sender    { bibleTextNoteHidden(); }
 - (void)btNoteDelete:(id)sender  { bibleTextNoteDeleted(); }
 - (void)btNoteRestore:(id)sender { bibleTextNoteRestored(); }
+// A per-paragraph pill's press — the iOS twin's shape: the tag carries the
+// group key (offset past kMacNotePillTagBase so a default zero tag can never
+// read as group 0), and the keyed verb opens the note the reader aimed at.
+- (void)btNotePillTap:(id)sender {
+    // 1 == noteActionRestore (notes_action.go's iota).
+    bibleTextNoteAction(1, (int)((NSView *)sender).tag - kMacNotePillTagBase);
+}
 - (void)btNoteNext:(id)sender    { bibleTextNoteNextTapped(); }
 
 @end
@@ -1671,49 +1680,83 @@ static void btMacApplyNoteInset(void) {
 // on screen, and no re-import wipes the old reservation, so the install must
 // take it back itself. On a fresh import the zeroing pass has already cleared
 // every paragraphSpacingBefore, so the guarded clear is a no-op there.
-static NSRange gMacNoteReservedPara = {NSNotFound, 0};
-// What THIS band added to that paragraph's spacingBefore — the iOS twin's
-// take-back record (gNoteReservedContribution carries the full reasoning:
-// subtract, don't zero, or a co-tenant's band goes with yours).
-static CGFloat gMacNoteReservedContribution = 0;
+// THE RESERVATION LIST — the iOS twin's shape, for the iOS twin's reasons
+// (its declaration carries them: a swept list is the discipline a scalar
+// handle cannot keep once a paragraph can hold two reservations).
+typedef struct {
+    int     key;
+    NSRange para;         // {NSNotFound,0} = the container-inset tenancy
+    CGFloat contribution;
+} BTMacNoteBandRes;
+enum { kMacNoteMaxBands = 24 };
+static BTMacNoteBandRes gMacNoteBands[kMacNoteMaxBands];
+static int              gMacNoteBandCount = 0;
 
-static void btMacClearReservedPara(NSTextStorage *ts) {
-    NSRange old = gMacNoteReservedPara;
-    CGFloat mine = gMacNoteReservedContribution;
-    gMacNoteReservedPara = NSMakeRange(NSNotFound, 0);
-    gMacNoteReservedContribution = 0;
-    if (old.location == NSNotFound || ts == nil || NSMaxRange(old) > ts.length) return;
-    NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
-                            effectiveRange:NULL];
-    if (base == nil || base.paragraphSpacingBefore == 0) return;
-    NSMutableParagraphStyle *ps = [base mutableCopy];
-    // Subtract this band's contribution; a residue within a point of zero IS
-    // zero (the iOS twin says why a ghost point matters).
-    CGFloat left = ps.paragraphSpacingBefore - mine;
-    if (left < 1.0) left = 0;
-    ps.paragraphSpacingBefore = left;
-    [ts beginEditing];
-    [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
-    [ts endEditing];
+// THE PUSHED SPECS — the iOS twin's, verbatim in meaning.
+typedef struct {
+    int       key;
+    int       verse;
+    NSString *label;
+} BTMacNoteBandSpec;
+static BTMacNoteBandSpec gMacNoteBandSpecs[kMacNoteMaxBands];
+static int               gMacNoteBandSpecCount = 0;
+static NSMutableArray<NSButton *> *gMacNotePillViews = nil;
+
+static void btMacClearReservedBands(NSTextStorage *ts) {
+    int count = gMacNoteBandCount;
+    gMacNoteBandCount = 0;
+    if (ts == nil) return;
+    for (int i = 0; i < count; i++) {
+        BTMacNoteBandRes *b = &gMacNoteBands[i];
+        CGFloat mine = b->contribution;
+        NSRange old = b->para;
+        if (old.location == NSNotFound || NSMaxRange(old) > ts.length) continue;
+        NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
+                                effectiveRange:NULL];
+        if (base == nil || base.paragraphSpacingBefore == 0) continue;
+        NSMutableParagraphStyle *ps = [base mutableCopy];
+        // Subtract this band's contribution; a residue within a point of zero
+        // IS zero (the iOS twin says why a ghost point matters).
+        CGFloat left = ps.paragraphSpacingBefore - mine;
+        if (left < 1.0) left = 0;
+        ps.paragraphSpacingBefore = left;
+        [ts beginEditing];
+        [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
+        [ts endEditing];
+    }
 }
 
+// btMacInstallNote reserves EVERYTHING under one sweep — the iOS twin's shape
+// and reasons (btIOSInstallNote): every old band back, the sticker's, one per
+// pushed spec, then the container inset applied once for both halves' sum.
+static void btMacInstallStickerBand(void);
+static void btMacInstallPillBands(void);
 static void btMacInstallNote(void) {
     gMacNoteBandH = 0;
     gMacNoteTopInset = 0;
     if (gTextView == nil) return;
+    btMacClearReservedBands(gTextView.textStorage); // bands may have MOVED (next-tap): take every old one back
+    btMacInstallStickerBand();
+    btMacInstallPillBands();
+    btMacApplyNoteInset();
+}
+
+static void btMacInstallStickerBand(void) {
     NSTextStorage *ts = gTextView.textStorage;
-    btMacClearReservedPara(ts);   // the sticker may have MOVED (next-tap): take the old band back
-    if (!btMacNotePresent() || ts.length == 0) { btMacApplyNoteInset(); return; }
+    if (!btMacNotePresent() || ts.length == 0) { return; }
+    // THE PILLS REPLACE THE COLLAPSED STICKER (the iOS twin's rule; decided by
+    // receivedSetShownAs in Go — this conjunction mirrors it over pushed
+    // facts). An OPEN card keeps its band beside the pills: X16's fix.
+    if (gMacNoteBandSpecCount > 0 && btMacNotePill()) { return; }
 
     CGFloat w = gTextView.textContainer.size.width - 2 * gTextView.textContainer.lineFragmentPadding;
     CGFloat h = btMacNoteHeightForWidth(w);
-    if (h <= 0) { btMacApplyNoteInset(); return; }
+    if (h <= 0) { return; }
     // The paragraph first: the top gap is read off ITS font, so the band cannot
     // be sized before we know which paragraph it belongs to.
     NSRange anchor = btMacNoteAnchorRange(ts, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
     if (para.location == NSNotFound || NSMaxRange(para) > ts.length) {
-        btMacApplyNoteInset();
         return;
     }
     gMacNoteBandH = btMacNoteTopGap(ts, para) + h + gMacNoteShapeExtra + kMacNoteGapBelow;
@@ -1721,10 +1764,13 @@ static void btMacInstallNote(void) {
         w, h, btMacNoteTopGap(ts, para), gMacNoteBandH, (unsigned long)para.location, (unsigned long)para.length);
     if (para.location == 0) {
         gMacNoteTopInset = gMacNoteBandH;
-        btMacApplyNoteInset();
+        // The inset tenancy, recorded like any other band (the iOS twin).
+        if (gMacNoteBandCount < kMacNoteMaxBands) {
+            gMacNoteBands[gMacNoteBandCount++] =
+                (BTMacNoteBandRes){0, NSMakeRange(NSNotFound, 0), gMacNoteBandH};
+        }
         return;
     }
-    btMacApplyNoteInset();   // clears any inset left by a previous chapter
 
     NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
                             effectiveRange:NULL];
@@ -1735,14 +1781,144 @@ static void btMacInstallNote(void) {
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
     [ts endEditing];
-    gMacNoteReservedPara = para;   // so a moved sticker can take this band back
-    gMacNoteReservedContribution = gMacNoteBandH;
+    // Record it in the LIST, so a second reservation cannot orphan this one.
+    if (gMacNoteBandCount < kMacNoteMaxBands) {
+        gMacNoteBands[gMacNoteBandCount++] = (BTMacNoteBandRes){0, para, gMacNoteBandH};
+    }
+}
+
+// btMacInstallPillBands — the iOS twin's plural half: one reservation per
+// pushed spec, added and recorded, with the chapter-top spec (or a spec whose
+// paragraph is the first) summing into the container inset.
+static CGFloat btMacPillBandH(void) {
+    return kMacNoteGapAbove + kMacNotePill + kMacNoteGapBelow;
+}
+
+static void btMacInstallPillBands(void) {
+    if (gMacNoteBandSpecCount == 0 || gTextView == nil) return;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (ts.length == 0) return;
+    CGFloat bandH = btMacPillBandH();
+    for (int i = 0; i < gMacNoteBandSpecCount; i++) {
+        BTMacNoteBandSpec *spec = &gMacNoteBandSpecs[i];
+        if (spec->verse <= 0) {
+            gMacNoteTopInset += bandH;
+            if (gMacNoteBandCount < kMacNoteMaxBands) {
+                gMacNoteBands[gMacNoteBandCount++] =
+                    (BTMacNoteBandRes){spec->key, NSMakeRange(NSNotFound, 0), bandH};
+            }
+            continue;
+        }
+        NSUInteger loc = btMacLocForVerse(ts, spec->verse);
+        if (loc == NSNotFound || loc >= ts.length) continue;
+        NSRange para = [ts.string paragraphRangeForRange:NSMakeRange(loc, 0)];
+        if (para.location == NSNotFound || NSMaxRange(para) > ts.length) continue;
+        if (para.location == 0) {
+            gMacNoteTopInset += bandH;
+            if (gMacNoteBandCount < kMacNoteMaxBands) {
+                gMacNoteBands[gMacNoteBandCount++] =
+                    (BTMacNoteBandRes){spec->key, NSMakeRange(NSNotFound, 0), bandH};
+            }
+            continue;
+        }
+        NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
+                                effectiveRange:NULL];
+        NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
+        ps.paragraphSpacingBefore += bandH;
+        [ts beginEditing];
+        [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
+        [ts endEditing];
+        if (gMacNoteBandCount < kMacNoteMaxBands) {
+            gMacNoteBands[gMacNoteBandCount++] = (BTMacNoteBandRes){spec->key, para, bandH};
+        }
+    }
+}
+
+// btMacEnsurePillViews / btMacLayoutPillViews — the iOS twins, with NSButton.
+// The pill hangs ABOVE its paragraph's text top by the spec's gap — the
+// bottom-up arithmetic this pane uses for the sticker, for the documented
+// reason the fragment-origin approach failed here twice.
+static void btMacEnsurePillViews(void) {
+    if (gMacNotePillViews == nil) gMacNotePillViews = [NSMutableArray array];
+    for (NSButton *b in gMacNotePillViews) [b removeFromSuperview];
+    [gMacNotePillViews removeAllObjects];
+    if (gMacNoteBandSpecCount == 0 || gTextView == nil) return;
+    for (int i = 0; i < gMacNoteBandSpecCount; i++) {
+        BTMacNoteBandSpec *spec = &gMacNoteBandSpecs[i];
+        NSButton *chip = [NSButton buttonWithTitle:(spec->label ?: @"Note")
+                                            target:gTextView action:@selector(btNotePillTap:)];
+        chip.bezelStyle = NSBezelStyleInline;
+        chip.bordered = NO;
+        chip.font = btMacNoteWhoFont();
+        chip.contentTintColor = btMacNoteColor(gMacNoteMuted);
+        chip.wantsLayer = YES;
+        chip.layer.backgroundColor = btMacNoteColor(gMacNoteBg).CGColor;
+        chip.layer.borderColor = btMacNoteColor(gMacNoteBorder).CGColor;
+        chip.layer.borderWidth = 1;
+        chip.layer.cornerRadius = kMacNotePill / 2;
+        chip.tag = kMacNotePillTagBase + spec->key;
+        [gTextView addSubview:chip];
+        [gMacNotePillViews addObject:chip];
+    }
+}
+
+static void btMacLayoutPillViews(void) {
+    if (gMacNotePillViews.count == 0 || gTextView == nil) return;
+    NSLayoutManager *lm = gTextView.layoutManager;
+    NSTextContainer *tc = gTextView.textContainer;
+    NSTextStorage *ts = gTextView.textStorage;
+    if (lm == nil || tc == nil || ts == nil || ts.length == 0) return;
+    CGFloat inset = gTextView.textContainerInset.height;
+    CGFloat w = tc.size.width - 2 * tc.lineFragmentPadding;
+    for (NSUInteger i = 0; i < gMacNotePillViews.count && (int)i < gMacNoteBandSpecCount; i++) {
+        NSButton *chip = gMacNotePillViews[i];
+        BTMacNoteBandSpec *spec = &gMacNoteBandSpecs[i];
+        NSRange para = NSMakeRange(NSNotFound, 0);
+        for (int b = 0; b < gMacNoteBandCount; b++) {
+            if (gMacNoteBands[b].key == spec->key) { para = gMacNoteBands[b].para; break; }
+        }
+        CGFloat y;
+        if (para.location == NSNotFound) {
+            // The inset tenancy: the pill sits in the container inset above the
+            // chapter's first line, a flat gap down from the window edge.
+            y = 14 + kMacNoteGapAbove;
+        } else if (NSMaxRange(para) <= ts.length) {
+            NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+            if (g.length == 0) { chip.hidden = YES; continue; }
+            [lm ensureLayoutForCharacterRange:para];
+            NSRect used = [lm lineFragmentUsedRectForGlyphAtIndex:g.location effectiveRange:NULL];
+            NSRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
+            NSParagraphStyle *eff = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
+                                   effectiveRange:NULL];
+            CGFloat textTopRaw = used.origin.y;
+            if (eff != nil && eff.paragraphSpacingBefore > 0) {
+                CGFloat floorY = frag.origin.y + eff.paragraphSpacingBefore;
+                if (textTopRaw < floorY) textTopRaw = floorY;
+            }
+            // Hang the pill a gap above where the reader sees the passage
+            // start — the sticker's own bottom-up rule (btMacNoteStickerY).
+            y = textTopRaw + inset - kMacNoteGapBelow - kMacNotePill;
+        } else {
+            chip.hidden = YES;
+            continue;
+        }
+        NSString *title = spec->label ?: @"Note";
+        CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btMacNoteWhoFont()}].width);
+        CGFloat cw = tw + 2 * kMacNotePillPadX;
+        if (cw < kMacNotePillMinW) cw = kMacNotePillMinW;
+        if (cw > w) cw = w;
+        chip.hidden = NO;
+        chip.frame = NSMakeRect(kMacNotePad, y, cw, kMacNotePill);
+    }
 }
 
 // Build (or rebuild) the sticker's subviews for the current note and palette.
 static void btMacEnsureNoteView(void) {
     if (gMacNoteView) { [gMacNoteView removeFromSuperview]; gMacNoteView = nil; }
     gMacNoteCard = nil;
+    // The pills replace the collapsed sticker (btMacInstallStickerBand's rule);
+    // no band was reserved, so no view may be built.
+    if (gMacNoteBandSpecCount > 0 && btMacNotePill()) { return; }
     if (!btMacNotePresent() || gTextView == nil) return;
 
     NSView *box = [[BTFlippedView alloc] initWithFrame:NSZeroRect];
@@ -2067,8 +2243,10 @@ static void btMacRefreshNote(void) {
     if (gTextView == nil) return;
     btMacInstallNote();
     btMacEnsureNoteView();
+    btMacEnsurePillViews();
     [gTextView.layoutManager ensureLayoutForTextContainer:gTextView.textContainer];
     btMacLayoutNote();
+    btMacLayoutPillViews();
 }
 
 // The note the pane should draw, pushed from Go on every chapter render — so a
@@ -2081,6 +2259,35 @@ static void btMacRefreshNote(void) {
 // theme variant is folded there), so they do not join the compare; the apply
 // path's own btMacRefreshNote (bibleTextMacApplyHTML) restyles after every
 // import exactly as before.
+// The band-spec push — the iOS twin (bibleTextSetNoteBands) with Mac names.
+typedef struct { int key; int verse; const char *label; } BTMacNoteBandSpecC;
+
+void bibleTextMacSetNoteBands(const BTMacNoteBandSpecC *specs, int n) {
+    if (n > kMacNoteMaxBands) n = kMacNoteMaxBands;
+    NSMutableArray<NSDictionary *> *pack = [NSMutableArray arrayWithCapacity:(n > 0 ? n : 0)];
+    for (int i = 0; i < n && specs != NULL; i++) {
+        NSString *l = specs[i].label != NULL
+            ? [NSString stringWithUTF8String:specs[i].label] : @"Note";
+        [pack addObject:@{@"k": @(specs[i].key), @"v": @(specs[i].verse), @"l": l}];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL changed = (int)pack.count != gMacNoteBandSpecCount;
+        for (int i = 0; !changed && i < gMacNoteBandSpecCount; i++) {
+            NSDictionary *d = pack[i];
+            changed = [d[@"k"] intValue] != gMacNoteBandSpecs[i].key ||
+                      [d[@"v"] intValue] != gMacNoteBandSpecs[i].verse ||
+                      ![d[@"l"] isEqualToString:gMacNoteBandSpecs[i].label];
+        }
+        gMacNoteBandSpecCount = (int)pack.count;
+        for (int i = 0; i < gMacNoteBandSpecCount; i++) {
+            gMacNoteBandSpecs[i].key = [pack[i][@"k"] intValue];
+            gMacNoteBandSpecs[i].verse = [pack[i][@"v"] intValue];
+            gMacNoteBandSpecs[i].label = pack[i][@"l"];
+        }
+        if (changed) btMacRefreshNote();
+    });
+}
+
 void bibleTextMacSetNote(const char *text, const char *who, int minimized, int nextable, int own, int anchorVerse,
                          double bgR, double bgG, double bgB,
                          double fgR, double fgG, double fgB,
@@ -2642,6 +2849,27 @@ func pushNoteToPane(state *AppState) {
 	// The substring of the who line that is a control (the iOS twin's reason).
 	macCounts := C.CString(c.Counts)
 	defer C.free(unsafe.Pointer(macCounts))
+
+	// The band specs (the iOS twin's push, with Mac names): labels composed
+	// here, empty in production until the gate flips, pushed unconditionally so
+	// an empty push clears stale pills.
+	macSpecs := make([]C.BTMacNoteBandSpecC, 0, len(c.Bands))
+	var macSpecFrees []*C.char
+	for _, b := range c.Bands {
+		l := C.CString(stickerPillWho(b.Count, b.Unplaced))
+		macSpecFrees = append(macSpecFrees, l)
+		macSpecs = append(macSpecs, C.BTMacNoteBandSpecC{
+			key: C.int(b.Key), verse: C.int(b.Verse), label: l,
+		})
+	}
+	if len(macSpecs) > 0 {
+		C.bibleTextMacSetNoteBands(&macSpecs[0], C.int(len(macSpecs)))
+	} else {
+		C.bibleTextMacSetNoteBands(nil, 0)
+	}
+	for _, f := range macSpecFrees {
+		C.free(unsafe.Pointer(f))
+	}
 	// WHERE THE VIEW GOES (the iOS twin's reason).
 	macArrival := C.int(c.Arrival)
 	macArrivalVerse := C.int(c.ArrivalVerse)

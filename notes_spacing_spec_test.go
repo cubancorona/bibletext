@@ -308,6 +308,10 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"twin's reason: found, not cut",
 				"ps.paragraphSpacingBefore += gMacNoteBandH;": "the iOS twin's rule: the " +
 					"reservation ADDS, never assigns",
+				"btMacClearReservedBands(gTextView.textStorage);": "the take-back must be " +
+					"a SWEEP over the reservation list (the iOS twin's rule and reasons)",
+				"gMacNoteBands[gMacNoteBandCount++]": "every reservation must be RECORDED " +
+					"in the list the sweep walks",
 				"CGFloat left = ps.paragraphSpacingBefore - mine;": "and the take-back " +
 					"SUBTRACTS this band's own contribution",
 				"gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;": "the iOS twin's reason: " +
@@ -446,18 +450,39 @@ func TestNoteSpecIsSelfConsistent(t *testing.T) {
 // push an entry the sweep can find, or the band it reserved is unreachable by
 // the take-back and survives as a phantom gap.
 func TestEveryIOSReservationIsRecorded(t *testing.T) {
-	src := readNativeSource(t, "reading_ios.go")
-	applies := strings.Count(src, "ps.paragraphSpacingBefore += gNoteBandH;") +
-		strings.Count(src, "gNoteTopInset = gNoteBandH;") +
-		strings.Count(src, "ps.paragraphSpacingBefore += bandH;") +
-		strings.Count(src, "gNoteTopInset += bandH;")
-	records := strings.Count(src, "gNoteBands[gNoteBandCount++]")
-	if applies < 2 {
-		t.Fatalf("only %d reservation applies found — the spellings have moved and "+
-			"this count is checking nothing", applies)
-	}
-	if records != applies {
-		t.Errorf("%d reservation applies but %d records: an unrecorded band cannot "+
-			"be taken back by the sweep", applies, records)
+	for _, tc := range []struct {
+		path    string
+		applies []string
+		record  string
+	}{
+		{"reading_ios.go", []string{
+			"ps.paragraphSpacingBefore += gNoteBandH;",
+			"gNoteTopInset = gNoteBandH;",
+			"ps.paragraphSpacingBefore += bandH;",
+			"gNoteTopInset += bandH;",
+		}, "gNoteBands[gNoteBandCount++]"},
+		{"reading_macos.go", []string{
+			"ps.paragraphSpacingBefore += gMacNoteBandH;",
+			"gMacNoteTopInset = gMacNoteBandH;",
+			"ps.paragraphSpacingBefore += bandH;",
+			"gMacNoteTopInset += bandH;",
+		}, "gMacNoteBands[gMacNoteBandCount++]"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			src := readNativeSource(t, tc.path)
+			applies := 0
+			for _, a := range tc.applies {
+				applies += strings.Count(src, a)
+			}
+			records := strings.Count(src, tc.record)
+			if applies < 2 {
+				t.Fatalf("only %d reservation applies found — the spellings have "+
+					"moved and this count is checking nothing", applies)
+			}
+			if records != applies {
+				t.Errorf("%d reservation applies but %d records: an unrecorded band "+
+					"cannot be taken back by the sweep", applies, records)
+			}
+		})
 	}
 }
