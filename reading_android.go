@@ -26,7 +26,7 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaSetNoteM;
+                 btaSetNoteM, btaSetNoteBandsM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -81,6 +81,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// (surface, text, muted, accent, border) as ARGB ints.
 	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
 	                                        "([B[BZZZIIIIIIZI[BI)V");
+	// The per-paragraph band specs (the Apple panes' bibleTextSetNoteBands):
+	// parallel key/verse arrays plus the pill labels '\n'-joined as UTF-8.
+	btaSetNoteBandsM = (*env)->GetStaticMethodID(env, btaClass, "setNoteBands", "([I[I[B)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -94,7 +97,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
-	    btaRAColorsM == NULL || btaSetNoteM == NULL) {
+	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -251,6 +254,26 @@ static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
 	if (w != NULL) (*env)->DeleteLocalRef(env, w);
 	if (cs != NULL) (*env)->DeleteLocalRef(env, cs);
 }
+
+// The band-spec push. n may be zero — the empty push CLEARS stale pills, so
+// it always crosses.
+static void btaSetNoteBands(uintptr_t jni_env, const int *keys, const int *verses,
+                            int n, const char *labels) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jintArray jk = (*env)->NewIntArray(env, n);
+	jintArray jv = (*env)->NewIntArray(env, n);
+	if (jk == NULL || jv == NULL) return;
+	if (n > 0) {
+		(*env)->SetIntArrayRegion(env, jk, 0, n, (const jint*)keys);
+		(*env)->SetIntArrayRegion(env, jv, 0, n, (const jint*)verses);
+	}
+	jbyteArray jl = btaBytes(env, labels);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNoteBandsM, jk, jv, jl);
+	(*env)->DeleteLocalRef(env, jk);
+	(*env)->DeleteLocalRef(env, jv);
+	if (jl != NULL) (*env)->DeleteLocalRef(env, jl);
+}
 */
 import "C"
 
@@ -260,6 +283,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -629,11 +653,31 @@ func pushNoteToOverlay(state *AppState) {
 	defer C.free(unsafe.Pointer(cCounts))
 	// WHERE THE VIEW GOES (the Apple twins' reason).
 	arrivalClass := C.int(c.Arrival)
+	// THE BAND SPECS — one per paragraph that carries notes, labels composed
+	// here because composition never crosses to a renderer. Pushed
+	// unconditionally so the native list is authoritative either way (an
+	// empty push CLEARS stale pills). Labels join on '\n', which
+	// sanitizeSenderName never lets into a name.
+	bandKeys := make([]C.int, 0, len(c.Bands))
+	bandVerses := make([]C.int, 0, len(c.Bands))
+	bandLabels := make([]string, 0, len(c.Bands))
+	for _, b := range c.Bands {
+		bandKeys = append(bandKeys, C.int(b.Key))
+		bandVerses = append(bandVerses, C.int(b.Verse))
+		bandLabels = append(bandLabels, stickerPillWho(b.Count, b.Unplaced))
+	}
+	cBandLabels := C.CString(strings.Join(bandLabels, "\n"))
+	defer C.free(unsafe.Pointer(cBandLabels))
 	if os.Getenv("BT_NOTE_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[note] push text=%dch who=%q pill=%v next=%v anchor=%d fullscreen=%v\n",
 			len(text), who, pill, next, anchor, state.IsFullScreen)
 	}
 	runBta(func(env uintptr) {
+		var kp, vp *C.int
+		if len(bandKeys) > 0 {
+			kp, vp = &bandKeys[0], &bandVerses[0]
+		}
+		C.btaSetNoteBands(C.uintptr_t(env), kp, vp, C.int(len(bandKeys)), cBandLabels)
 		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, ownFlag, C.int(anchor),
 			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
 			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),

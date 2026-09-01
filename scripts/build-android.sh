@@ -41,6 +41,10 @@ load_release_bible_key
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ "${1:-}" = "--release" ]; then
+  if [ -n "${BT_ANDROID_TAGS:-}" ]; then
+    echo "ERROR: BT_ANDROID_TAGS is set — extra build tags are debug-APK only and must never reach a release build." >&2
+    exit 1
+  fi
   python3 "$REPO_ROOT/scripts/check-support-contact.py"
 fi
 "$REPO_ROOT/scripts/check-repository-hygiene.py"
@@ -297,7 +301,12 @@ else
   BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   GOCACHE="$WORK/go-cache" GOTMPDIR="$WORK/go-tmp" \
   PATH="$WORK/bin:$PATH" \
-  fyne package -os android -app-id "$APP_ID" -icon Icon.png
+  # BT_ANDROID_TAGS: extra build tags for the DEBUG APK only (the dev Links
+  # page's tag, for emulator work). The release path above refuses it outright
+  # -- see the check near the top -- and the release guard test additionally
+  # asserts this script never names that tag.
+  fyne package -os android -app-id "$APP_ID" -icon Icon.png \
+      ${BT_ANDROID_TAGS:+--tags "$BT_ANDROID_TAGS"}
 
   note "verifying the aapt2 resource path was taken (adaptive icon present)"
   # The custom AndroidManifest.xml (background-audio <service>) only compiles on

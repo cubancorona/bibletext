@@ -74,11 +74,31 @@
                           keyed verb export (bibleTextNoteAction). Verified on
                           the simulator both ways — flag off byte-identical,
                           flag on drew the first native per-paragraph pill.
-                Remaining: 8d-macOS (the twin), 8d-Android (the span design
-                decision: one span per PARAGRAPH carrying the summed height),
-                8e's Android half (nativeNoteAction), and 8f, which flips the
-                flag and is the only one of the nine that changes what a
-                reader sees.
+                  8d-mac DONE: the full twin (swept BTMacNoteBandRes list,
+                          bibleTextMacSetNoteBands, NSButton registry with the
+                          keyed tag press). Window-captured: "Notes · 2" aligned
+                          over its paragraph after a full navigation cycle.
+                  8d-And  DONE: NoteBandSpan reservations coalesce ONE SPAN PER
+                          PARAGRAPH with the heights summed (chooseHeight runs
+                          per paragraph over one shared FontMetricsInt, so two
+                          live spans there walk into the documented traps); the
+                          take-back sweeps BY CLASS so no span is orphaned by an
+                          overwritten handle; pills stack above the sticker's
+                          share when a paragraph carries both. setNoteBands
+                          crosses as ([I[I[B)V with '\n'-joined Go-composed
+                          labels (sanitizeSenderName keeps names newline-free);
+                          nativeNoteAction carries the keyed verb back. Emulator-
+                          verified with four received notes on four John 3
+                          paragraphs: four chips in their own bands, single
+                          sticker stood down, keyed restore opened the pressed
+                          paragraph's own group, co-tenant chip stacked above the
+                          open bubble, and the flag-off push (n=0) cleared every
+                          chip back to the shipped model. The release guard now
+                          also asserts build-android.sh REFUSES extra build tags
+                          on the release path (the debug APK accepts them, which
+                          is how the dev page reaches an emulator).
+                Remaining: 8f, which flips the flag and is the only one of the
+                nine that changes what a reader sees.
      TWO HAZARDS, unaddressed and live today:
        - macOS saved reading positions and the first-paragraph band share
          textContainerInset.height. REFINED after doing the algebra: the

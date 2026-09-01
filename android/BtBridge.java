@@ -155,7 +155,24 @@ public final class BtBridge {
     // for it. It picks the closing control's mark and joins setNote's compare.
     private static boolean noteOwn;
     private static boolean noteRetryPending;
-    private static NoteBandSpan noteBandSpan; // the live band, so a refresh can take it back
+    private static NoteBandSpan noteBandSpan; // the STICKER's band, so placement can read it
+    // EVERY applied band span, the sticker's included. The take-back sweeps BY
+    // CLASS over the whole Spannable rather than through this list, because a
+    // span whose handle is overwritten is orphaned on the live text with no
+    // reference left to take it back by — a permanent phantom gap no host test
+    // can see (this file does not compile on the dev host). The list exists for
+    // PLACEMENT lookups: which paragraph carries which reservation.
+    private static final java.util.ArrayList<NoteBandSpan> noteBandSpans =
+            new java.util.ArrayList<NoteBandSpan>();
+
+    // THE PUSHED BAND SPECS — the Apple twins' shape: which groups need a
+    // reservation, where each hangs, and the pill's whole label, composed in
+    // Go. Empty until the per-paragraph gate flips.
+    private static int[] noteSpecKeys = new int[0];
+    private static int[] noteSpecVerses = new int[0];
+    private static String[] noteSpecLabels = new String[0];
+    private static final java.util.ArrayList<TextView> notePillChips =
+            new java.util.ArrayList<TextView>();
 
     /**
      * NoteBandSpan reserves the sticker's band: applied to ONE character (the
@@ -189,12 +206,21 @@ public final class BtBridge {
         // sticker. Reserving in the
         // previous line's descent puts the gap outside every washed character.
         final boolean below;
+        // Which reservations this span carries: a span is ONE PER PARAGRAPH
+        // with the heights SUMMED, because chooseHeight runs per paragraph over
+        // one shared FontMetricsInt and two live spans there walk straight into
+        // the traps documented above. pillPart is how much of `band` belongs to
+        // pill reservations stacked ABOVE the sticker's own share (the styled
+        // pane's ordering when a paragraph carries both).
+        final int paraStart;
+        final int pillPart;
         // The end offset of the line we adjusted, this layout pass. The next
         // call in the pass is the line that starts exactly there — the one
         // carrying our leftover metrics.
         private int inflatedTo = -1;
-        NoteBandSpan(int band, int at, boolean below) {
+        NoteBandSpan(int band, int at, boolean below, int paraStart, int pillPart) {
             this.band = band; this.at = at; this.below = below;
+            this.paraStart = paraStart; this.pillPart = pillPart;
         }
         @Override public void chooseHeight(CharSequence t, int start, int end,
                 int spanstartv, int lineHeight, android.graphics.Paint.FontMetricsInt fm) {
@@ -359,6 +385,10 @@ public final class BtBridge {
     private static native void nativeNoteHidden();
     private static native void nativeNoteDeleted();
     private static native void nativeNoteRestored();
+    // The KEYED verb (notes_action.go): verb 1 = Restore; key = the group the
+    // pressed band pill belongs to. The un-keyed natives above stay for the
+    // sticker's own controls.
+    private static native void nativeNoteAction(int verb, int key);
     // Called on the UI thread with the full URL of a shared bibletext.co.uk
     // link the user tapped (App Links). Go decides whether it is a passage
     // link and ignores anything else.
@@ -1209,6 +1239,31 @@ public final class BtBridge {
 
     private static boolean sameStr(String a, String b) { return a == null ? b == null : a.equals(b); }
 
+    // setNoteBands pushes the per-paragraph band specs (the Apple panes'
+    // bibleTextSetNoteBands): parallel key/verse arrays plus the pill labels
+    // '\n'-joined — safe because sender names are sanitized newline-free
+    // before they reach any label. Empty arrays turn the machinery off.
+    // UI-thread hop and changed-compare mirror setNote.
+    public static void setNoteBands(final int[] keys, final int[] verses, final byte[] labelsJoined) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                int[] k = keys == null ? new int[0] : keys;
+                int[] v = verses == null ? new int[0] : verses;
+                String joined = (labelsJoined == null || labelsJoined.length == 0)
+                        ? "" : new String(labelsJoined, java.nio.charset.StandardCharsets.UTF_8);
+                String[] l = joined.isEmpty() ? new String[0] : joined.split("\n", -1);
+                boolean changed = !java.util.Arrays.equals(k, noteSpecKeys)
+                        || !java.util.Arrays.equals(v, noteSpecVerses)
+                        || !java.util.Arrays.equals(l, noteSpecLabels);
+                noteSpecKeys = k;
+                noteSpecVerses = v;
+                noteSpecLabels = l;
+                if (NOTE_DEBUG) android.util.Log.i("BtNote", "setNoteBands: n=" + k.length + " changed=" + changed);
+                if (changed) refreshNoteSticker();
+            }
+        });
+    }
+
     // notePresent / notePillNow are the iOS btIOSNotePresent / btIOSNotePill
     // questions verbatim: the sticker exists whenever text OR who does, and
     // "who without text" (an unplaced-only chapter) collapses to the pill by
@@ -1230,6 +1285,8 @@ public final class BtBridge {
         }
         if (noteView != null) { content.removeView(noteView); noteView = null; }
         if (notePillView != null) { content.removeView(notePillView); notePillView = null; }
+        for (TextView c : notePillChips) content.removeView(c);
+        notePillChips.clear();
         clearNoteBand();
         if (!notePresent()) {
             if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: notePresent=false — nothing to draw");
@@ -1258,96 +1315,166 @@ public final class BtBridge {
         }
 
         boolean pillNow = notePillNow();
-        View v = pillNow ? buildNotePill() : buildNoteBubble();
-        v.setElevation(6f);
-        FrameLayout.LayoutParams lp;
-        if (pillNow) {
-            // The pill sizes to its label (capped at the content width).
-            v.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.AT_MOST),
-                      View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-            lp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
-                                              FrameLayout.LayoutParams.WRAP_CONTENT);
-        } else {
-            // The bubble is a full-width card, wrapped at the content measure.
-            v.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.EXACTLY),
-                      View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-            lp = new FrameLayout.LayoutParams(wpx, FrameLayout.LayoutParams.WRAP_CONTENT);
-        }
-        lp.leftMargin = side;
-        // BOTH gaps are SPEC (noteMetrics.GapAbove / GapBelow). They were dp(8)
-        // here and 10 on the other three, chosen locally and never reconciled.
+        // THE STAND-DOWN (the Apple panes' rule): when per-paragraph specs
+        // exist, the single sticker-as-pill retires — the specs carry every
+        // count between them, so drawing both would say the same thing twice.
+        // The expanded bubble still draws; the specs mark the paragraphs it
+        // does not.
+        boolean standDown = pillNow && noteSpecKeys.length > 0;
+
         final int gapAbove = dp(NOTE_GAP_ABOVE), gapBelow = dp(NOTE_GAP_BELOW);
-        final int noteH = v.getMeasuredHeight();
+        View sticker = null;
+        FrameLayout.LayoutParams lp = null;
+        int noteH = 0;
+        if (!standDown) {
+            sticker = pillNow ? buildNotePill() : buildNoteBubble();
+            sticker.setElevation(6f);
+            if (pillNow) {
+                // The pill sizes to its label (capped at the content width).
+                sticker.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.AT_MOST),
+                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                lp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                                                  FrameLayout.LayoutParams.WRAP_CONTENT);
+            } else {
+                // The bubble is a full-width card, wrapped at the content measure.
+                sticker.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.EXACTLY),
+                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                lp = new FrameLayout.LayoutParams(wpx, FrameLayout.LayoutParams.WRAP_CONTENT);
+            }
+            lp.leftMargin = side;
+            noteH = sticker.getMeasuredHeight();
+        }
 
         if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: building, wpx=" + wpx + " pill=" + pillNow
+                + " standDown=" + standDown + " specs=" + noteSpecKeys.length
                 + " anchor=" + noteAnchorVerse + " verseIdx=" + verseNums.length);
-        int[] r = noteAnchorVerse > 0 ? verseRange(noteAnchorVerse) : null;
-        if (r == null) {
+        int[] r = (sticker != null && noteAnchorVerse > 0) ? verseRange(noteAnchorVerse) : null;
+        if (sticker != null && r == null) {
             // Nothing to anchor to (verse 0 = unplaced-only, or a verse this
             // translation's index does not carry): park at the top of the
             // text with no band — the only honest place for notes with no
             // verses here (the iOS top-inset case, minus the reservation).
             lp.topMargin = dp(6);
-            content.addView(v, lp);
-            return;
+            content.addView(sticker, lp);
+            sticker = null; // parked; only the spec chips still need placing
         }
         // A gap on BOTH sides of the card — the styled pane's symmetry rule.
         // Reserving only below left the card butting against the line above
         // (0 against gap+tail), unlike the symmetric spacing on the other
-        // platforms.
-        applyNoteBand(r[0], gapAbove + noteH + gapBelow);
-        // Place the sticker into the reserved gap AFTER the reflow the band
-        // just caused: its top is the anchor line's (raised) top.
-        final View vv = v;
-        final int off = r[0];
-        content.addView(vv, lp);
-        vv.setVisibility(View.INVISIBLE); // never flash at 0,0 before placement
+        // platforms. Sticker offset -1 = "no sticker band" (stood down, parked,
+        // or absent); the pushed specs still reserve theirs.
+        applyNoteBand(sticker != null ? r[0] : -1,
+                      sticker != null ? gapAbove + noteH + gapBelow : 0);
+
+        // One chip per pushed spec, styled as the pill, pressed as the KEYED
+        // Restore. Added hidden; the placement runnable reveals each in its
+        // paragraph's reservation.
+        for (int i = 0; i < noteSpecKeys.length; i++) {
+            String label = i < noteSpecLabels.length ? noteSpecLabels[i] : null;
+            TextView chip = buildNoteBandChip(noteSpecKeys[i], label);
+            chip.setElevation(6f);
+            chip.measure(View.MeasureSpec.makeMeasureSpec(wpx, View.MeasureSpec.AT_MOST),
+                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+            clp.leftMargin = side;
+            content.addView(chip, clp);
+            chip.setVisibility(View.INVISIBLE); // never flash at 0,0 before placement
+            notePillChips.add(chip);
+        }
+
+        // Place everything into the reserved gaps AFTER the reflow the bands
+        // just caused, in ONE posted pass.
+        final View vv = sticker;
+        final int off = r != null ? r[0] : -1;
+        if (vv != null) {
+            content.addView(vv, lp);
+            vv.setVisibility(View.INVISIBLE); // never flash at 0,0 before placement
+        }
+        if (vv == null && notePillChips.isEmpty()) return;
         text.post(new Runnable() {
             @Override public void run() {
-                if (vv.getParent() == null || text == null) return;
+                if (text == null) return;
                 Layout lay = text.getLayout();
                 if (lay == null) return; // hidden overlay: the next refresh places it
-                // The band belongs to the paragraph, so the sticker hangs from
-                // the paragraph's first line — not the anchor verse's line.
-                int paraOff = off;
+                int textTop = text.getTop() + text.getTotalPaddingTop();
                 CharSequence cs3 = text.getText();
-                while (paraOff > 0 && cs3.charAt(paraOff - 1) != '\n') paraOff--;
-                int line = lay.getLineForOffset(paraOff);
-                // The reserved gap is [lineTop - band, lineTop): it lives at the
-                // bottom of the PREVIOUS line's box now (applyNoteBand), so the
-                // sticker hangs from there rather than from the anchor line's
-                // own top. The first-character case has no previous line and
-                // keeps the old ascent reservation, where lineTop IS the gap's
-                // top.
-                int lineTop = lay.getLineTop(line);
-                int gapTop = (noteBandSpan != null && noteBandSpan.below)
-                        ? lineTop - noteBandSpan.band : lineTop;
-                // The card hangs gapAbove below the band's own top edge — the
-                // same arithmetic the styled pane's place() and iOS's
-                // btIOSLayoutNote use. (It was a bare dp(8) written out again
-                // here, so the reservation and the placement each had their own
-                // copy of the number.)
-                if (NOTE_DEBUG) {
-                    int pl = line > 0 ? line - 1 : 0;
-                    android.util.Log.i("BtNote", "geom: paraLine=" + line
-                            + " top=" + lay.getLineTop(line)
-                            + " bottom=" + lay.getLineBottom(line)
-                            + " base=" + lay.getLineBaseline(line)
-                            + " asc=" + lay.getLineAscent(line)
-                            + " desc=" + lay.getLineDescent(line)
-                            + " | prev top=" + lay.getLineTop(pl)
-                            + " bottom=" + lay.getLineBottom(pl)
-                            + " asc=" + lay.getLineAscent(pl)
-                            + " desc=" + lay.getLineDescent(pl)
-                            + " | band=" + (noteBandSpan != null ? noteBandSpan.band : -1)
-                            + " below=" + (noteBandSpan != null && noteBandSpan.below)
-                            + " paraOff=" + paraOff + " off=" + off);
+
+                if (vv != null && vv.getParent() != null && off >= 0) {
+                    // The band belongs to the paragraph, so the sticker hangs from
+                    // the paragraph's first line — not the anchor verse's line.
+                    int paraOff = paraStartAt(cs3, off);
+                    int line = lay.getLineForOffset(paraOff);
+                    // The reserved gap is [lineTop - band, lineTop): it lives at the
+                    // bottom of the PREVIOUS line's box now (applyNoteBand), so the
+                    // sticker hangs from there rather than from the anchor line's
+                    // own top. The first-character case has no previous line and
+                    // keeps the old ascent reservation, where lineTop IS the gap's
+                    // top.
+                    int lineTop = lay.getLineTop(line);
+                    int gapTop = (noteBandSpan != null && noteBandSpan.below)
+                            ? lineTop - noteBandSpan.band : lineTop;
+                    // Below any pill share first: pills stack ABOVE the sticker
+                    // when a paragraph carries both (the styled pane's ordering).
+                    int pillPart = noteBandSpan != null ? noteBandSpan.pillPart : 0;
+                    if (NOTE_DEBUG) {
+                        int pl = line > 0 ? line - 1 : 0;
+                        android.util.Log.i("BtNote", "geom: paraLine=" + line
+                                + " top=" + lay.getLineTop(line)
+                                + " bottom=" + lay.getLineBottom(line)
+                                + " base=" + lay.getLineBaseline(line)
+                                + " asc=" + lay.getLineAscent(line)
+                                + " desc=" + lay.getLineDescent(line)
+                                + " | prev top=" + lay.getLineTop(pl)
+                                + " bottom=" + lay.getLineBottom(pl)
+                                + " asc=" + lay.getLineAscent(pl)
+                                + " desc=" + lay.getLineDescent(pl)
+                                + " | band=" + (noteBandSpan != null ? noteBandSpan.band : -1)
+                                + " below=" + (noteBandSpan != null && noteBandSpan.below)
+                                + " pillPart=" + pillPart
+                                + " paraOff=" + paraOff + " off=" + off);
+                    }
+                    // The card hangs gapAbove below its share's top edge — the
+                    // same arithmetic the styled pane's place() and iOS's
+                    // btIOSLayoutNote use.
+                    int top = textTop + gapTop + pillPart + gapAbove;
+                    FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
+                    p.topMargin = Math.max(0, top);
+                    vv.setLayoutParams(p);
+                    vv.setVisibility(View.VISIBLE);
                 }
-                int top = text.getTop() + text.getTotalPaddingTop() + gapTop + gapAbove;
-                FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
-                p.topMargin = Math.max(0, top);
-                vv.setLayoutParams(p);
-                vv.setVisibility(View.VISIBLE);
+
+                // Each chip hangs in ITS paragraph's reservation, stacked in
+                // spec order when two specs share one (verse-0 "unplaced" lands
+                // on paragraph 0 beside a verse-1 group's).
+                int pillBand = gapAbove + dp(NOTE_PILL_H) + gapBelow;
+                java.util.HashMap<Integer, Integer> stacked = new java.util.HashMap<Integer, Integer>();
+                for (int i = 0; i < notePillChips.size() && i < noteSpecVerses.length; i++) {
+                    TextView chip = notePillChips.get(i);
+                    if (chip.getParent() == null) continue;
+                    int soff = 0;
+                    if (noteSpecVerses[i] > 0) {
+                        int[] sr = verseRange(noteSpecVerses[i]);
+                        if (sr == null) continue; // never reserved; stays hidden
+                        soff = sr[0];
+                    }
+                    int ps = paraStartAt(cs3, soff);
+                    NoteBandSpan span = null;
+                    for (NoteBandSpan b : noteBandSpans) {
+                        if (b.paraStart == ps) { span = b; break; }
+                    }
+                    if (span == null) continue;
+                    int lineTop = lay.getLineTop(lay.getLineForOffset(ps));
+                    int bandTop = span.below ? lineTop - span.band : lineTop;
+                    Integer prev = stacked.get(ps);
+                    int slot = prev == null ? 0 : prev;
+                    stacked.put(ps, slot + 1);
+                    int ctop = textTop + bandTop + slot * pillBand + gapAbove;
+                    FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) chip.getLayoutParams();
+                    cp.topMargin = Math.max(0, ctop);
+                    chip.setLayoutParams(cp);
+                    chip.setVisibility(View.VISIBLE);
+                }
             }
         });
     }
@@ -1704,8 +1831,29 @@ public final class BtBridge {
      * inert exactly when there is nothing to restore (iOS parity).
      */
     private static View buildNotePill() {
+        TextView chip = styleNotePillChip(noteWho != null ? noteWho : "Note");
+        chip.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { nativeNoteRestored(); }
+        });
+        notePillView = chip;
+        return chip;
+    }
+
+    // buildNoteBandChip is the pill's shape carrying a pushed spec's label; the
+    // press is the KEYED Restore (verb 1), landing the browser on that
+    // paragraph's own group rather than whatever the sticker anchors.
+    private static TextView buildNoteBandChip(final int key, String label) {
+        TextView chip = styleNotePillChip(label != null && !label.isEmpty() ? label : "Notes");
+        chip.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { nativeNoteAction(1, key); }
+        });
+        return chip;
+    }
+
+    // The ONE pill styling, whoever the label belongs to.
+    private static TextView styleNotePillChip(String label) {
         TextView chip = new TextView(activity);
-        chip.setText(noteWho != null ? noteWho : "Note");
+        chip.setText(label);
         chip.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
         chip.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         chip.setTextColor(noteMuted);
@@ -1729,20 +1877,22 @@ public final class BtBridge {
         chip.setGravity(Gravity.CENTER);
         chip.setMinHeight(dp(NOTE_PILL_H)); // a minimum, not a box — see the who row
         chip.setMinWidth(dp(NOTE_PILL_MIN_W));
-        chip.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { nativeNoteRestored(); }
-        });
-        notePillView = chip;
         return chip;
     }
 
     private static void clearNoteBand() {
-        if (noteBandSpan == null) return;
-        CharSequence cs = text != null ? text.getText() : null;
-        if (cs instanceof Spannable) {
-            try { ((Spannable) cs).removeSpan(noteBandSpan); } catch (Throwable ignored) {}
-        }
         noteBandSpan = null;
+        noteBandSpans.clear();
+        CharSequence cs = text != null ? text.getText() : null;
+        if (!(cs instanceof Spannable)) return;
+        Spannable sp = (Spannable) cs;
+        // BY CLASS, never by field: whatever this pane ever applied, this sweep
+        // can find, so no reservation can be orphaned by its handle being
+        // overwritten.
+        try {
+            NoteBandSpan[] all = sp.getSpans(0, sp.length(), NoteBandSpan.class);
+            for (NoteBandSpan b : all) sp.removeSpan(b);
+        } catch (Throwable ignored) {}
     }
 
     // applyNoteBand reserves the band above the anchor verse's PARAGRAPH: a
@@ -1755,29 +1905,71 @@ public final class BtBridge {
     // into the gap and slid it under the card. A paragraph that opens the text
     // has no preceding line and keeps the ascent reservation — nothing is above
     // it to wash.
+    // applyNoteBand reserves the STICKER's band plus one band per pushed spec,
+    // coalesced ONE SPAN PER PARAGRAPH with the heights summed — chooseHeight
+    // runs per paragraph over one shared FontMetricsInt, and two live spans on
+    // one paragraph walk straight into the traps NoteBandSpan documents. Pills
+    // stack ABOVE the sticker's share when a paragraph carries both (the styled
+    // pane's ordering), which is what pillPart records for the placement.
+    //
+    // off < 0 means "no sticker band" (the sticker is absent, stood down, or
+    // its verse is not on this string); spec bands still apply.
     private static void applyNoteBand(int off, int band) {
         CharSequence cs = text.getText();
         if (!(cs instanceof Spannable)) return;
         Spannable sp = (Spannable) cs;
-        if (off < 0 || off + 1 > sp.length()) return;
-        // THE PARAGRAPH RULE. The band opens above the whole paragraph carrying
-        // the verse, never between two of its lines. This matches the iOS and
-        // styled-pane layouts. Html.fromHtml separates paragraphs with newlines,
-        // so the paragraph starts after the last '\n' at or before the verse.
-        int paraStart = off;
-        while (paraStart > 0 && sp.charAt(paraStart - 1) != '\n') paraStart--;
-        // Attach to the character BEFORE the paragraph and grow THAT line's
-        // descent: the reserved gap then belongs to a line the paragraph's own
-        // wash does not cover. A paragraph opening the chapter has no preceding
-        // line and keeps the ascent reservation (nothing above it to wash).
-        boolean below = paraStart > 0;
-        int at = below ? paraStart - 1 : paraStart;
-        noteBandSpan = new NoteBandSpan(band, at, below);
-        sp.setSpan(noteBandSpan, at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        // paraStart -> {sticker share, pill share}
+        java.util.TreeMap<Integer, int[]> shares = new java.util.TreeMap<Integer, int[]>();
+        if (off >= 0 && off + 1 <= sp.length() && band > 0) {
+            int ps = paraStartAt(sp, off);
+            shares.put(ps, new int[]{band, 0});
+        }
+        int pillBand = dp(NOTE_GAP_ABOVE) + dp(NOTE_PILL_H) + dp(NOTE_GAP_BELOW);
+        for (int i = 0; i < noteSpecKeys.length && i < noteSpecVerses.length; i++) {
+            int v = noteSpecVerses[i];
+            // Verse 0 = the chapter top: paragraph 0's start.
+            int soff = 0;
+            if (v > 0) {
+                int[] r = verseRange(v);
+                if (r == null) continue; // not on this string; the browser's business
+                soff = r[0];
+            }
+            if (soff < 0 || soff + 1 > sp.length()) continue;
+            int ps = paraStartAt(sp, soff);
+            int[] cur = shares.get(ps);
+            if (cur == null) { cur = new int[]{0, 0}; shares.put(ps, cur); }
+            cur[1] += pillBand;
+        }
+
+        for (java.util.Map.Entry<Integer, int[]> e : shares.entrySet()) {
+            int ps = e.getKey();
+            int stickerShare = e.getValue()[0], pillShare = e.getValue()[1];
+            // Attach to the character BEFORE the paragraph and grow THAT line's
+            // descent: the reserved gap then belongs to a line the paragraph's
+            // own wash does not cover. A paragraph opening the chapter has no
+            // preceding line and keeps the ascent reservation.
+            boolean below = ps > 0;
+            int at = below ? ps - 1 : ps;
+            NoteBandSpan span = new NoteBandSpan(stickerShare + pillShare, at, below, ps, pillShare);
+            if (stickerShare > 0) noteBandSpan = span; // the sticker's placement handle
+            noteBandSpans.add(span);
+            sp.setSpan(span, at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
         // UpdateLayout makes DynamicLayout reflow; the explicit pair is
         // belt-and-braces for the TextView's own wrap_content height.
         text.requestLayout();
         text.invalidate();
+    }
+
+    // THE PARAGRAPH RULE, in one place. The band opens above the whole
+    // paragraph carrying the verse, never between two of its lines —
+    // Html.fromHtml separates paragraphs with newlines, so the paragraph starts
+    // after the last '\n' at or before the offset.
+    private static int paraStartAt(CharSequence sp, int off) {
+        int ps = off;
+        while (ps > 0 && sp.charAt(ps - 1) != '\n') ps--;
+        return ps;
     }
 
     /**

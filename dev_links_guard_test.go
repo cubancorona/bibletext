@@ -39,6 +39,18 @@ func TestReleaseScriptsNeverPassTheDevTag(t *testing.T) {
 			t.Errorf("%s mentions the bibletextdev tag — a release build must never compile the dev page", path)
 		}
 	}
+
+	// build-android.sh's debug path accepts extra build tags (BT_ANDROID_TAGS,
+	// how the dev page reaches an emulator). That is tolerable ONLY while the
+	// release path refuses the variable outright — assert the refusal, not the
+	// good intentions of whoever edits the script next.
+	b, err := os.ReadFile("scripts/build-android.sh")
+	if err != nil {
+		t.Fatalf("scripts/build-android.sh: %v", err)
+	}
+	if !strings.Contains(string(b), `BT_ANDROID_TAGS is set — extra build tags are debug-APK only`) {
+		t.Errorf("scripts/build-android.sh no longer refuses BT_ANDROID_TAGS on the release path")
+	}
 }
 
 // The dev-only scripts must still OFFER it, or the flag silently stops working

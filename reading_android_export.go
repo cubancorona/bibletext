@@ -151,6 +151,21 @@ func btaNoteRestored() {
 	})
 }
 
+// btaNoteAction is a band pill being pressed: the KEYED verb entry
+// (notes_action.go), where the key names which paragraph's group to act on.
+//
+//export btaNoteAction
+func btaNoteAction(verb, key int) {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		performNoteAction(state, noteAction(verb), key)
+		state.refreshReadingOnly()
+	})
+}
+
 // btaKeyboardChanged is the Android twin of iOS's bibleTextKeyboardChanged:
 // the soft keyboard's live on-screen overlap, observed on the activity window by
 // BtBridge.installKeyboardWatcher. It feeds the goto picker's verse-row lift

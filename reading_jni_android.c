@@ -23,6 +23,7 @@ extern void btaNoteNextTapped(void);
 extern void btaNoteHidden(void);
 extern void btaNoteDeleted(void);
 extern void btaNoteRestored(void);
+extern void btaNoteAction(int verb, int key);
 
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi) {
@@ -74,4 +75,10 @@ Java_org_bibletext_BtBridge_nativeNoteDeleted(JNIEnv *env, jclass clazz) {
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeNoteRestored(JNIEnv *env, jclass clazz) {
 	btaNoteRestored();
+}
+
+// The KEYED verb (notes_action.go): a band pill names WHICH group it acts on.
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteAction(JNIEnv *env, jclass clazz, jint verb, jint key) {
+	btaNoteAction((int)verb, (int)key);
 }

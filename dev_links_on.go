@@ -321,19 +321,12 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 
 // buildDevLinksTab is the page itself: the switches at the top, then one row per
 // scenario. Each row's button is the whole point — it calls HandleShareLink
-// devPillToggleLabel names the pill toggle for the surface it is drawn on.
-//
-// notesPillPerParagraph reaches ONE renderer, the styled pane. iOS, macOS and
-// Android hold a single note in their sticker ABI (bibleTextSetNote and its
-// singular globals), so there is no list for a pill row to come from and
-// flipping the flag changes nothing at all. Shipped as a bare checkbox it read
-// as a feature that was not working rather than one that was not there.
+// devPillToggleLabel names the pill toggle. Every renderer answers it now:
+// the styled pane draws the pill row itself, and iOS, macOS and Android draw
+// it through their band-spec pushes (bibleTextSetNoteBands and its twins), so
+// the toggle means the same thing on every surface.
 func devPillToggleLabel() string {
-	const base = "Pill per paragraph (collapsed state)"
-	if useStyledPane() {
-		return base
-	}
-	return base + " — desktop only; this surface draws one sticker"
+	return "Pill per paragraph (collapsed state)"
 }
 
 // exactly as the OS does.
@@ -397,11 +390,6 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		state.refresh()
 	})
 	pillMode.SetChecked(notesPillPerParagraph)
-	if !useStyledPane() {
-		// Disabled, not merely relabelled: a control that can be operated and
-		// does nothing is the thing being fixed here.
-		pillMode.Disable()
-	}
 
 	minAll := widget.NewButton("Minimize every stored note", func() {
 		for _, n := range allNotesForBrowsing(appPrefs()) {

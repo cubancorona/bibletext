@@ -369,9 +369,10 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"it a short label made a visibly smaller pill here than on iOS",
 				"chip.setGravity(Gravity.CENTER)": "with a width floor the box is wider than a short " +
 					"label, and iOS centres its title in the same box — left-aligned reads as a mistake",
-				"applyNoteBand(r[0], gapAbove + noteH + gapBelow);": "the band must reserve the " +
+				"sticker != null ? gapAbove + noteH + gapBelow : 0": "the band must reserve the " +
 					"spec's gap on both sides",
-				"+ gapTop + gapAbove;": "the sticker must hang the reserved gap below the band's top",
+				"+ gapTop + pillPart + gapAbove;": "the sticker must hang the reserved gap " +
+					"below the band's top, past any pill share stacked above it",
 				"dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD),\n                dp(NOTE_PAD) + (noteTail ? dp(NOTE_TAIL) : 0)": "the " +
 					"card's padding must be the spec's on all four sides, with the tail's depth " +
 					"carried in the bottom — and ONLY when there is a tail to carry",
