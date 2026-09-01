@@ -1145,42 +1145,61 @@ static NSRange btIOSNoteAnchorRange(NSTextStorage *ts, NSString *str, NSUInteger
     return NSMakeRange(0, 0);
 }
 
-// gNoteReservedPara is the paragraph currently carrying the band via
-// paragraphSpacingBefore, or NSNotFound. It exists because the next-tap
-// (S10) can move the sticker to ANOTHER VERSE of the string already on
-// screen — no re-import wipes the old reservation, so the install must take
-// it back itself or a phantom band lingers at the previous note's verse. On
-// a fresh import the range is stale, but the importer's zeroing pass has
-// already cleared every paragraphSpacingBefore, so the guarded clear below
-// is a no-op there.
-static NSRange gNoteReservedPara = {NSNotFound, 0};
-// What THIS band added to that paragraph's spacingBefore. The take-back
-// SUBTRACTS it rather than zeroing: identical while the note is the spacing's
-// only tenant (subtracting your whole contribution from your own total is
-// zero), and the only correct shape once a paragraph can carry more than one
-// reservation — zeroing would take back every co-tenant's band with it.
-static CGFloat gNoteReservedContribution = 0;
+// THE RESERVATION LIST exists because the next-tap (S10) can move the sticker
+// to ANOTHER VERSE of the string already on screen — no re-import wipes the old
+// reservation, so the install must take it back itself or a phantom band
+// lingers at the previous note's verse. On a fresh import the recorded ranges
+// are stale, but the importer's zeroing pass has already cleared every
+// paragraphSpacingBefore, so the guarded sweep is a no-op there.
+//
+// One entry per band this pane has reserved: which
+// paragraph, and what this band added there. Today the list holds at most ONE
+// entry — the singular push fills it — and every function below already loops,
+// because the loop at N=1 is byte-identical to the scalar and the sweep
+// discipline is the part that cannot be retrofitted: Android's one-span field
+// shows what happens without it (a second reservation orphans the first on the
+// live text, with no reference left to take it back by).
+//
+// para.location == NSNotFound marks the container-inset reservation (paragraph
+// 0, where paragraphSpacingBefore collapses); its contribution lives in
+// gNoteTopInset instead of a paragraph style.
+typedef struct {
+    int     key;          // the group identity (noteBandSpec.Key); 0 today
+    NSRange para;         // the paragraph reserved, or {NSNotFound,0} for the inset
+    CGFloat contribution; // what THIS band added to spacingBefore (or the inset)
+} BTNoteBandRes;
+enum { kNoteMaxBands = 24 };
+static BTNoteBandRes gNoteBands[kNoteMaxBands];
+static int           gNoteBandCount = 0;
 
-static void btIOSClearReservedPara(NSTextStorage *ts) {
-    NSRange old = gNoteReservedPara;
-    CGFloat mine = gNoteReservedContribution;
-    gNoteReservedPara = NSMakeRange(NSNotFound, 0);
-    gNoteReservedContribution = 0;
-    if (old.location == NSNotFound || ts == nil || NSMaxRange(old) > ts.length) return;
-    NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
-                            effectiveRange:NULL];
-    if (base == nil || base.paragraphSpacingBefore == 0) return;
-    NSMutableParagraphStyle *ps = [base mutableCopy];
-    // Subtract what this band contributed. A residue within a point of zero IS
-    // zero — floating error must land at exactly 0, or a one-point ghost gap
-    // accumulates across next-taps, which is the precise defect
-    // gNoteReservedPara was added to prevent.
-    CGFloat left = ps.paragraphSpacingBefore - mine;
-    if (left < 1.0) left = 0;
-    ps.paragraphSpacingBefore = left;
-    [ts beginEditing];
-    [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
-    [ts endEditing];
+// Take EVERY reservation back — a SWEEP over the list, never a single tracked
+// field. The sweep is the whole point of the list: whatever this pane reserved,
+// this function can find, so a reservation can never be orphaned by its handle
+// being overwritten.
+static void btIOSClearReservedBands(NSTextStorage *ts) {
+    int count = gNoteBandCount;
+    gNoteBandCount = 0;
+    if (ts == nil) return;
+    for (int i = 0; i < count; i++) {
+        BTNoteBandRes *b = &gNoteBands[i];
+        CGFloat mine = b->contribution;
+        NSRange old = b->para;
+        if (old.location == NSNotFound || NSMaxRange(old) > ts.length) continue;
+        NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
+                                effectiveRange:NULL];
+        if (base == nil || base.paragraphSpacingBefore == 0) continue;
+        NSMutableParagraphStyle *ps = [base mutableCopy];
+        // Subtract what this band contributed. A residue within a point of zero
+        // IS zero — floating error must land at exactly 0, or a one-point ghost
+        // gap accumulates across next-taps, which is the precise defect the
+        // reservation record was added to prevent.
+        CGFloat left = ps.paragraphSpacingBefore - mine;
+        if (left < 1.0) left = 0;
+        ps.paragraphSpacingBefore = left;
+        [ts beginEditing];
+        [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
+        [ts endEditing];
+    }
 }
 
 // Install the band and the sticker. Runs AFTER the text is in the view and the
@@ -1197,7 +1216,7 @@ static void btIOSInstallNote(void) {
     gNoteTopInset = 0;
     if (gReadingTV == nil) return;
     NSTextStorage *ts = gReadingTV.textStorage;
-    btIOSClearReservedPara(ts);   // the sticker may have MOVED (next-tap): take the old band back
+    btIOSClearReservedBands(ts);   // the sticker may have MOVED (next-tap): take every old band back
     if (!btIOSNotePresent() || ts.length == 0) { btIOSApplyNoteInset(); return; }
 
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
@@ -1223,6 +1242,12 @@ static void btIOSInstallNote(void) {
     if (para.location == 0) {
         gNoteTopInset = gNoteBandH;
         btIOSApplyNoteInset();
+        // Recorded like any other band; the NSNotFound paragraph marks it as
+        // the inset tenancy, whose take-back is gNoteTopInset = 0 rather than
+        // a style subtract (btIOSInstallNote zeroes it on entry).
+        if (gNoteBandCount < kNoteMaxBands) {
+            gNoteBands[gNoteBandCount++] = (BTNoteBandRes){0, NSMakeRange(NSNotFound, 0), gNoteBandH};
+        }
         return;
     }
     btIOSApplyNoteInset();   // clears any inset left from a previous chapter
@@ -1238,8 +1263,11 @@ static void btIOSInstallNote(void) {
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
     [ts endEditing];
-    gNoteReservedPara = para;   // so a moved sticker can take this band back
-    gNoteReservedContribution = gNoteBandH;
+    // Record it, so a moved sticker can take this band back — and record it in
+    // the LIST, so a second reservation cannot orphan this one.
+    if (gNoteBandCount < kNoteMaxBands) {
+        gNoteBands[gNoteBandCount++] = (BTNoteBandRes){0, para, gNoteBandH};
+    }
 }
 
 // Apply (or clear) the top-inset reservation.

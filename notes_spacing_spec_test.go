@@ -264,6 +264,13 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"SUBTRACT what this band contributed, not zero the total, for the same " +
 					"co-tenancy reason — with one tenant the two are identical, which is why " +
 					"this landed before any second band exists",
+				"btIOSClearReservedBands(ts);": "the take-back must be a SWEEP over the " +
+					"reservation list, never a single tracked field: a second reservation " +
+					"through a scalar handle orphans the first with no reference left to " +
+					"take it back by — Android's one-span field is the cautionary case",
+				"gNoteBands[gNoteBandCount++]": "every reservation must be RECORDED in " +
+					"the list the sweep walks; an unrecorded band is unreachable by the " +
+					"take-back and survives as a phantom gap",
 				"gNoteShapeExtra = gNoteTail ? kNoteTail : 0;": "the tail's contribution to the " +
 					"card's shape must be resolved ONCE, in SetNote, so every band formula reads " +
 					"one scalar and none of them can branch differently",
@@ -427,5 +434,28 @@ func TestNoteSpecIsSelfConsistent(t *testing.T) {
 	// noteBubblePathSVG's clamp silently moves it.
 	if min := noteMetrics().TailInset + noteMetrics().TailWidth + noteMetrics().Radius; min > 60 {
 		t.Errorf("the tail needs %v of card width; the panes refuse to draw below 60", min)
+	}
+}
+
+// EVERY RESERVATION APPLY HAS A RECORD — counted, because the two record sites
+// share one substring and a Contains-style fragment cannot see one of them
+// vanish (a mutation proved it: dropping the paragraph-style record left the
+// inset record satisfying the fragment).
+//
+// An apply is either the paragraph-style add or the inset assignment; each must
+// push an entry the sweep can find, or the band it reserved is unreachable by
+// the take-back and survives as a phantom gap.
+func TestEveryIOSReservationIsRecorded(t *testing.T) {
+	src := readNativeSource(t, "reading_ios.go")
+	applies := strings.Count(src, "ps.paragraphSpacingBefore += gNoteBandH;") +
+		strings.Count(src, "gNoteTopInset = gNoteBandH;")
+	records := strings.Count(src, "gNoteBands[gNoteBandCount++]")
+	if applies < 2 {
+		t.Fatalf("only %d reservation applies found — the spellings have moved and "+
+			"this count is checking nothing", applies)
+	}
+	if records != applies {
+		t.Errorf("%d reservation applies but %d records: an unrecorded band cannot "+
+			"be taken back by the sweep", applies, records)
 	}
 }
