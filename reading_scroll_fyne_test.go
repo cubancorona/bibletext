@@ -156,7 +156,7 @@ func TestFyneExplicitPlacementOutranksSameChapterCarry(t *testing.T) {
 	if fyneRestoreArmed {
 		t.Error("same-chapter carry must not outrank an explicit placement")
 	}
-	want := fyneReadingChapter.highlightY() - 24
+	want := fyneReadingChapter.highlightY() - noteMetrics().Lead
 	if want < 0 {
 		want = 0
 	}

@@ -221,7 +221,7 @@ func TestStyledReadAlongFollowBeatsSearchHighlight(t *testing.T) {
 	defer w.Close()
 	w.Canvas().Content().Refresh()
 
-	hlY := styledPane.highlightY() - 24
+	hlY := styledPane.highlightY() - noteMetrics().Lead
 	if got := styledScroll.Offset.Y; got < hlY-2 || got > hlY+2 {
 		t.Fatalf("search jump must position the view first (offset %v, want ~%v)", got, hlY)
 	}

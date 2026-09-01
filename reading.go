@@ -1576,7 +1576,7 @@ func (l *readingColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 		// resize triggers a settled pass, where Fyne can retain the requested
 		// offset instead of clamping it back to zero.
 		if viewH > 0 && contentH > 0 && l.scroll.Content.Size().Height >= contentH {
-			y := l.chapter.highlightY() - 24
+			y := l.chapter.highlightY() - noteMetrics().Lead // the shared arrival lead
 			if y < 0 {
 				y = 0
 			}

@@ -397,7 +397,11 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 	if l.scroll != nil && l.pane != nil && l.pane.highlightOwnsScroll() &&
 		!styledUserScrolled && !styledHighlightCeded && !styledRestoreArmed {
-		y := l.pane.highlightY() - 24
+		// The SHARED arrival lead (noteMetrics().Lead), not a local literal:
+		// five surfaces each had their own and the same arrival sat at four
+		// different heights. This pane's 24 outlived the step that was
+		// supposed to remove it, which a live trace exposed.
+		y := l.pane.highlightY() - noteMetrics().Lead
 		if y < 0 {
 			y = 0
 		}
