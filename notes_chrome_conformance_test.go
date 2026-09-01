@@ -157,63 +157,71 @@ func TestDerivedChromeDecisionsAgreeWithTheirTuple(t *testing.T) {
 			for _, foreignHL := range []bool{false, true} {
 				for _, focus := range []noteFocusAxis{focusUnset, focusExactKey, focusOwnAx} {
 					for _, ownNote := range []bool{false, true} {
-						w := notesWorld{
-							featureOn: true, placement: placement, collapsed: collapsed,
-							foreignHL: foreignHL, focus: focus, ownNote: ownNote,
-						}
-						obs, offered := runNotesFlow(t, w)
-						if !offered || obs.st == nil {
-							continue
-						}
-						checked++
-						st := obs.st
-						plan := buildChapterPlan(st, appPrefs(), st.Bible)
-						c := chapterNoteChrome(st, plan, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
+						// The ARRIVAL axis rides along because it is what makes a
+						// state explicit (applyShareTarget sets forceReposition):
+						// a plain entry arrives nowhere by rule now, so without
+						// it every cell here reports arriveNothing and the
+						// verse/band classes cross the ABI untested.
+						for _, arrival := range []bool{false, true} {
+							w := notesWorld{
+								featureOn: true, placement: placement, collapsed: collapsed,
+								foreignHL: foreignHL, focus: focus, ownNote: ownNote,
+								arrival: arrival,
+							}
+							obs, offered := runNotesFlow(t, w)
+							if !offered || obs.st == nil {
+								continue
+							}
+							checked++
+							st := obs.st
+							plan := buildChapterPlan(st, appPrefs(), st.Bible)
+							c := chapterNoteChrome(st, plan, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
 
-						if got, want := c.present(), c.Text != "" || c.Who != ""; got != want {
-							t.Errorf("%s: present()=%v, tuple says %v", w.id(), got, want)
-						}
-						if got, want := c.hasTail(), c.Anchor > 0; got != want {
-							t.Errorf("%s: hasTail()=%v, anchor %d", w.id(), got, c.Anchor)
-						}
-						// The arrival class must be self-consistent with the tuple it
-						// came from: a band can only be arrived at when there IS a note,
-						// and a verse target is always a real verse.
-						switch c.Arrival {
-						case arriveBand:
-							if !c.present() {
-								t.Errorf("%s: arriveBand with no note on screen", w.id())
+							if got, want := c.present(), c.Text != "" || c.Who != ""; got != want {
+								t.Errorf("%s: present()=%v, tuple says %v", w.id(), got, want)
 							}
-							fallthrough
-						case arriveVerse:
-							if c.ArrivalVerse <= 0 {
-								t.Errorf("%s: %v with verse %d", w.id(), c.Arrival, c.ArrivalVerse)
+							if got, want := c.hasTail(), c.Anchor > 0; got != want {
+								t.Errorf("%s: hasTail()=%v, anchor %d", w.id(), got, c.Anchor)
 							}
-						case arriveNothing:
-						}
-						arrivals[c.Arrival]++
-						if c.present() && !c.collapsed() {
-							if c.hasTail() {
-								expandedAnchored++
-							} else {
-								expandedAnchorless++
+							// The arrival class must be self-consistent with the tuple it
+							// came from: a band can only be arrived at when there IS a note,
+							// and a verse target is always a real verse.
+							switch c.Arrival {
+							case arriveBand:
+								if !c.present() {
+									t.Errorf("%s: arriveBand with no note on screen", w.id())
+								}
+								fallthrough
+							case arriveVerse:
+								if c.ArrivalVerse <= 0 {
+									t.Errorf("%s: %v with verse %d", w.id(), c.Arrival, c.ArrivalVerse)
+								}
+							case arriveNothing:
 							}
-						}
-						if got, want := c.chevron() != "", c.Next; got != want {
-							t.Errorf("%s: chevron present=%v, Next=%v", w.id(), got, want)
-						}
-						// The verb set and the verbs must never disagree: the
-						// glyph is a promise about what the press does.
-						wantVerbs := noteVerbsReceived
-						switch {
-						case !c.present():
-							wantVerbs = noteVerbsNone
-						case isOwnLiveNote(st):
-							wantVerbs = noteVerbsOwn
-						}
-						if c.verbs() != wantVerbs {
-							t.Errorf("%s: verbs()=%v, the verbs branch on %v",
-								w.id(), c.verbs(), wantVerbs)
+							arrivals[c.Arrival]++
+							if c.present() && !c.collapsed() {
+								if c.hasTail() {
+									expandedAnchored++
+								} else {
+									expandedAnchorless++
+								}
+							}
+							if got, want := c.chevron() != "", c.Next; got != want {
+								t.Errorf("%s: chevron present=%v, Next=%v", w.id(), got, want)
+							}
+							// The verb set and the verbs must never disagree: the
+							// glyph is a promise about what the press does.
+							wantVerbs := noteVerbsReceived
+							switch {
+							case !c.present():
+								wantVerbs = noteVerbsNone
+							case isOwnLiveNote(st):
+								wantVerbs = noteVerbsOwn
+							}
+							if c.verbs() != wantVerbs {
+								t.Errorf("%s: verbs()=%v, the verbs branch on %v",
+									w.id(), c.verbs(), wantVerbs)
+							}
 						}
 					}
 				}

@@ -52,22 +52,22 @@ func TestChapterNoteArrival(t *testing.T) {
 	}{
 		{
 			name: "the note's own verse", anchor: sameParaA, markVerse: sameParaA, present: true,
-			wantClass: arriveBand, wantVerse: sameParaA,
+			explicit: true, wantClass: arriveBand, wantVerse: sameParaA,
 			why: "the band is above this verse's paragraph",
 		},
 		{
 			name: "ANOTHER verse of the note's paragraph", anchor: sameParaA, markVerse: sameParaB, present: true,
-			wantClass: arriveBand, wantVerse: sameParaB,
+			explicit: true, wantClass: arriveBand, wantVerse: sameParaB,
 			why: "the case Android decided by comparing verses, so the card went above the fold",
 		},
 		{
 			name: "a verse in a different paragraph", anchor: sameParaA, markVerse: otherPara, present: true,
-			wantClass: arriveVerse, wantVerse: otherPara,
+			explicit: true, wantClass: arriveVerse, wantVerse: otherPara,
 			why: "a note about another passage must not drag the reader to it",
 		},
 		{
 			name: "an anchorless note, arriving mid-chapter", anchor: 0, markVerse: otherPara, present: true,
-			wantClass: arriveVerse, wantVerse: otherPara,
+			explicit: true, wantClass: arriveVerse, wantVerse: otherPara,
 			why: "its band is drawn at the CHAPTER TOP, not above whatever paragraph " +
 				"the reader happens to arrive at — the Apple panes only appeared to " +
 				"say otherwise because their anchor range fell back to the highlight",
@@ -75,18 +75,30 @@ func TestChapterNoteArrival(t *testing.T) {
 		{
 			name: "an anchorless note, arriving at the first paragraph", anchor: 0,
 			markVerse: sameParaA, present: true,
-			wantClass: arriveBand, wantVerse: sameParaA,
+			explicit: true, wantClass: arriveBand, wantVerse: sameParaA,
 			why: "the chapter-top band really is above this paragraph",
 		},
 		{
 			name: "no note at all", anchor: 0, markVerse: otherPara, present: false,
-			wantClass: arriveVerse, wantVerse: otherPara,
+			explicit: true, wantClass: arriveVerse, wantVerse: otherPara,
 			why: "the wash is the only target",
 		},
 		{
 			name: "no mark, but a note", anchor: sameParaA, present: true,
-			wantClass: arriveBand, wantVerse: sameParaA,
-			why: "the note's own verse stands in for the mark",
+			explicit: true, wantClass: arriveBand, wantVerse: sameParaA,
+			why: "on an EXPLICIT arrival the note's own verse stands in for the mark",
+		},
+		{
+			name: "a PLAIN entry, with a mark", anchor: sameParaA, markVerse: sameParaA, present: true,
+			wantClass: arriveNothing,
+			why: "arrows are browsing, not a request to be taken anywhere — the chapter " +
+				"opens like any other and the wash still says where the note is",
+		},
+		{
+			name: "a PLAIN entry, collapsed note only", anchor: sameParaA, present: true,
+			wantClass: arriveNothing,
+			why: "merely entering a chapter that carries a note must not drag the " +
+				"reader to its pill — the report that renamed this rule",
 		},
 		{
 			name: "nothing to place", anchor: 0, present: false,
@@ -241,6 +253,10 @@ func TestOnlyDrawnBandsWinTheArrival(t *testing.T) {
 			st.setMark(hlSearch, VerseSpan{
 				VersionID: "web", Book: "John", Chapter: 3, Lo: arriving, Hi: arriving,
 			})
+			// The route being modelled — a tapped search result — is explicit
+			// (goToVerseRange sets forceReposition); a PLAIN entry arrives
+			// nowhere at all now, which its own table case pins.
+			st.forceReposition = true
 
 			plan := buildChapterPlan(st, appPrefs(), st.Bible)
 			c := chapterNoteChrome(st, plan, verses)

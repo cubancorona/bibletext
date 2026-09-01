@@ -330,25 +330,34 @@ func devAutoNotesS8(state *AppState) {
 	case "s12pills":
 		notesPillPerParagraph = true
 		at(1200*time.Millisecond, func() { navigateToReference(state, "John", 11) })
-		at(2500*time.Millisecond, func() {
+		pillsNote := func(lo int, text string) func() {
+			return func() {
+				HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+					"John", 11, lo, lo, text))
+			}
+		}
+		// FOUR paragraphs, plus a chapter-scope note whose band parks at the
+		// chapter top — the paragraph verse 1's own group also occupies, so
+		// the top carries the co-tenant STACK the plural model must draw.
+		at(2500*time.Millisecond, pillsNote(1, "Fixture pills note on the first paragraph."))
+		at(4500*time.Millisecond, pillsNote(6, "Fixture pills note in the second paragraph."))
+		at(6500*time.Millisecond, pillsNote(19, "Fixture pills note midway."))
+		at(8500*time.Millisecond, pillsNote(35, "Fixture pills note far below."))
+		at(10500*time.Millisecond, func() {
 			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
-				"John", 11, 6, 6, "Fixture pills note in the second paragraph."))
-		})
-		at(6*time.Second, func() {
-			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
-				"John", 11, 35, 35, "Fixture pills note far below."))
+				"John", 11, 0, 0, "Fixture chapter-scope note."))
 		})
 		// Collapse the open note: the set has nothing open, so the specs cover
 		// every noted paragraph and the natives draw one pill per band.
-		at(10*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
+		at(13*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
 		// …and surface the chapter top, so the picture carries the first
 		// paragraphs and their pills rather than wherever the arrival left off.
 		// A PLAIN RE-NAVIGATION lands at the top on every pane, but only when
 		// the chapter actually CHANGES — so bounce through the neighbour.
 		// (armReadingRestore is the fyne/iOS channel; the macOS native pane
 		// never reads it.)
-		at(13*time.Second, func() { navigateToReference(state, "John", 10) })
-		at(15*time.Second, func() { navigateToReference(state, "John", 11) })
+		at(16*time.Second, func() { navigateToReference(state, "John", 10) })
+		at(18*time.Second, func() { navigateToReference(state, "John", 11) })
 	case "s11pill":
 		// The reader's report: press the pill at the top of John 11 and the
 		// bubble expands, but the page does not go to it. Reproduced with the

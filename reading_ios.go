@@ -51,6 +51,10 @@ void bibleTextNoteAction(int verb, int key);
 // Per-paragraph pill buttons carry their group key on the TAG, offset by this
 // base: tag 0 is every plain UIView's default and must never read as group 0.
 enum { kNotePillTagBase = 2000 };
+// The sticker's band record in gNoteBands. NEVER 0: zero is a real group key
+// (the first paragraph group), and recording the sticker under it let a
+// key-0 pill find the sticker's band instead of its own.
+enum { kNoteStickerBandKey = -1 };
 // The expanded sticker's count region ("2 of 3 in this chapter ›") — advances
 // focus to the next note on the passage, wrapping.
 extern void bibleTextNoteNextTapped(void);
@@ -925,6 +929,9 @@ static void btIOSLayoutNote(void);
 static void btIOSEnsurePillViews(void);
 static void btIOSLayoutPillViews(void);
 static CGFloat btIOSBandTopY(NSUInteger paraGlyph);
+static CGFloat btIOSInsetBandTop(void);
+static CGFloat btIOSBandStackAbove(int bi);
+static CGFloat btIOSStickerBandY(NSUInteger paraGlyph);
 
 // btIOSRefreshNote re-derives the whole sticker — band, subviews, placement —
 // against the text already in the view. It is what lets a pushed change
@@ -1302,7 +1309,7 @@ static void btIOSInstallStickerBand(void) {
         // the inset tenancy, whose take-back is gNoteTopInset = 0 rather than
         // a style subtract (btIOSInstallNote zeroes it on entry).
         if (gNoteBandCount < kNoteMaxBands) {
-            gNoteBands[gNoteBandCount++] = (BTNoteBandRes){0, NSMakeRange(NSNotFound, 0), gNoteBandH};
+            gNoteBands[gNoteBandCount++] = (BTNoteBandRes){kNoteStickerBandKey, NSMakeRange(NSNotFound, 0), gNoteBandH};
         }
         return;
     }
@@ -1321,7 +1328,7 @@ static void btIOSInstallStickerBand(void) {
     // Record it, so a moved sticker can take this band back — and record it in
     // the LIST, so a second reservation cannot orphan this one.
     if (gNoteBandCount < kNoteMaxBands) {
-        gNoteBands[gNoteBandCount++] = (BTNoteBandRes){0, para, gNoteBandH};
+        gNoteBands[gNoteBandCount++] = (BTNoteBandRes){kNoteStickerBandKey, para, gNoteBandH};
     }
 }
 
@@ -1430,19 +1437,25 @@ static void btIOSLayoutPillViews(void) {
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSTextStorage *ts = gReadingTV.textStorage;
     if (lm == nil || ts == nil || ts.length == 0) return;
-    CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
+    CGFloat pad = gReadingTV.textContainer.lineFragmentPadding;
+    CGFloat w = gReadingTV.textContainer.size.width - 2 * pad;
+    // The COLUMN's x, exactly the sticker's: the reporter measure centres the
+    // text on iPad, and a fixed pad drew every pill in the left margin there.
+    CGFloat x = gReadingTV.textContainerInset.left + pad;
     for (NSUInteger i = 0; i < gNotePillViews.count && (int)i < gNoteBandSpecCount; i++) {
         UIButton *chip = gNotePillViews[i];
         BTNoteBandSpec *spec = &gNoteBandSpecs[i];
-        // The band, by key.
-        NSRange para = NSMakeRange(NSNotFound, 0);
+        // The band, by key — with its INDEX, which the co-tenant stack needs.
+        int bi = -1;
         for (int b = 0; b < gNoteBandCount; b++) {
-            if (gNoteBands[b].key == spec->key) { para = gNoteBands[b].para; break; }
+            if (gNoteBands[b].key == spec->key) { bi = b; break; }
         }
+        if (bi < 0) { chip.hidden = YES; continue; }
+        NSRange para = gNoteBands[bi].para;
         CGFloat y;
         if (para.location == NSNotFound) {
             // The inset tenancy (chapter top / paragraph 0).
-            y = btIOSBandTopY(0);
+            y = btIOSInsetBandTop();
         } else if (NSMaxRange(para) <= ts.length) {
             NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
             if (g.length == 0) { chip.hidden = YES; continue; }
@@ -1451,13 +1464,16 @@ static void btIOSLayoutPillViews(void) {
             chip.hidden = YES;
             continue;
         }
+        // The co-tenants stacked above this band: a second pill on the same
+        // paragraph, or the whole pill stack when the sticker shares it.
+        y += btIOSBandStackAbove(bi);
         NSString *title = spec->label ?: @"Note";
         CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btNoteWhoFont()}].width);
         CGFloat cw = tw + 2 * kNotePillPadX;
         if (cw < kNotePillMinW) cw = kNotePillMinW;
         if (cw > w) cw = w;
         chip.hidden = NO;
-        chip.frame = CGRectMake(kNotePad, y, cw, kNotePill);
+        chip.frame = CGRectMake(x, y, cw, kNotePill);
     }
 }
 
@@ -1666,7 +1682,7 @@ static void btIOSLayoutNote(void) {
         reconciling = NO;
     }
 
-    CGFloat y = btIOSBandTopY(g.location);
+    CGFloat y = btIOSStickerBandY(g.location);
 
     if (btIOSNotePill()) {
         // The pill sizes to its label (it carries the count now), never
@@ -1756,14 +1772,62 @@ static void btIOSLayoutNote(void) {
 // container-inset case (paragraph 0), where the sticker sits in the inset
 // above the chapter's first line.
 static CGFloat btIOSBandTopY(NSUInteger paraGlyph) {
-    if (gNoteTopInset > 0) return 14 + kNoteGapAbove;
     NSLayoutManager *lm = gReadingTV.layoutManager;
     // The FRAGMENT rect includes the spacing reserved for the band; the USED
     // rect is where the text starts. The difference is the parking spot, and
     // the card hangs kNoteGapAbove below the band's own top edge — the styled
     // pane's place() does the identical thing.
+    //
+    // PARAGRAPH bands only. This used to answer the INSET case for every
+    // caller the moment gNoteTopInset was nonzero — one band's tenancy
+    // deciding every band's Y, which was invisible while there was one band
+    // and stacked every mid-chapter pill onto the chapter top the moment a
+    // top band coexisted with them. Inset tenants ask btIOSInsetBandTop.
     CGRect frag = [lm lineFragmentRectForGlyphAtIndex:paraGlyph effectiveRange:NULL];
     return frag.origin.y + gReadingTV.textContainerInset.top + kNoteGapAbove;
+}
+
+// btIOSInsetBandTop is where the TOP-INSET tenancy's first band begins: the
+// reserved region spans [14, 14 + gNoteTopInset) in content coordinates (14
+// is btIOSApplyInsets' base), and a shape hangs kNoteGapAbove into its band.
+static CGFloat btIOSInsetBandTop(void) { return 14 + kNoteGapAbove; }
+
+// btIOSBandStackAbove is the height of the co-tenants stacked ABOVE band bi
+// within its tenancy — the records sharing its spot (the inset, or one
+// paragraph). Pills stack above the sticker when they share a spot (the
+// styled pane's ordering), so the sticker counts every pill share while a
+// pill counts only the pills recorded before it.
+static CGFloat btIOSBandStackAbove(int bi) {
+    if (bi < 0 || bi >= gNoteBandCount) return 0;
+    BTNoteBandRes *me = &gNoteBands[bi];
+    BOOL meSticker = (me->key == kNoteStickerBandKey);
+    CGFloat above = 0;
+    for (int b = 0; b < gNoteBandCount; b++) {
+        if (b == bi) continue;
+        BTNoteBandRes *o = &gNoteBands[b];
+        BOOL sameSpot = (me->para.location == NSNotFound)
+            ? (o->para.location == NSNotFound)
+            : (o->para.location == me->para.location);
+        if (!sameSpot) continue;
+        if (o->key == kNoteStickerBandKey) continue; // the sticker is always the bottom tenant
+        if (meSticker || b < bi) above += o->contribution;
+    }
+    return above;
+}
+
+// btIOSStickerBandY is the sticker's own Y: its recorded tenancy (never
+// "does any inset exist" — a chapter-top pill's inset must not relocate a
+// mid-chapter card), plus the pill shares stacked above it.
+static CGFloat btIOSStickerBandY(NSUInteger paraGlyph) {
+    for (int b = 0; b < gNoteBandCount; b++) {
+        if (gNoteBands[b].key != kNoteStickerBandKey) continue;
+        CGFloat y = (gNoteBands[b].para.location == NSNotFound)
+            ? btIOSInsetBandTop()
+            : btIOSBandTopY(paraGlyph);
+        return y + btIOSBandStackAbove(b);
+    }
+    // No recorded band (height 0, or the stand-down): the old answer.
+    return btIOSBandTopY(paraGlyph);
 }
 
 // btIOSNoteTopY is where the top of the sticker sits in the text view's CONTENT
@@ -1774,7 +1838,6 @@ static CGFloat btIOSBandTopY(NSUInteger paraGlyph) {
 // note is.
 static CGFloat btIOSNoteTopY(void) {
     if (!btIOSNotePresent() || gReadingTV == nil) return -1;
-    if (gNoteTopInset > 0) return btIOSBandTopY(0); // paraGlyph unread in the inset case
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSTextContainer *tc = gReadingTV.textContainer;
     NSTextStorage   *ts = gReadingTV.textStorage;
@@ -1784,7 +1847,7 @@ static CGFloat btIOSNoteTopY(void) {
     if (para.location == NSNotFound || NSMaxRange(para) > ts.length) return -1;
     NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
     if (g.length == 0) return -1;
-    return btIOSBandTopY(g.location);
+    return btIOSStickerBandY(g.location);
 }
 
 // --- Floating "Follow narration" button -------------------------------------
@@ -2809,6 +2872,7 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         btIOSApplyInsets(r.size.width); // reporter column re-centres on width change
         btIOSLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
         btIOSLayoutNote();      // and the sticker to the band the text reserved
+        btIOSLayoutPillViews(); // the pills re-place with it — a frame change reflows every band
         // Only re-resolve the scroll position when a highlight (search jump) or a
         // pending restore is armed: those were computed at the old width and must be
         // re-placed after the rewrap. Without a target, bibleTextScrollReadingTV

@@ -358,6 +358,9 @@ func TestTappingAPillOpensTheNoteEvenWithASearchResultLit(t *testing.T) {
 	// A search result is lit on this chapter: a foreign mark, so notes are
 	// suppressed and every note reads as collapsed.
 	st.setMark(hlSearch, VerseSpan{VersionID: "web", Book: "John", Chapter: 3, Lo: 1, Hi: 1})
+	// The modelled route (a tapped search result) is explicit; plain entries
+	// arrive nowhere now.
+	st.forceReposition = true
 	applyNoteForCurrentChapter(st)
 	if !notesSuppressed(st) {
 		t.Fatalf("fixture must actually suppress: the mark is not foreign")
@@ -493,6 +496,9 @@ func TestScrollingToAHighlightLandsOnItsParagraphsPill(t *testing.T) {
 	st, verses, _, last, _ := twoNotedParagraphs(t, 2)
 	// A search result lit on a verse inside the SECOND noted paragraph.
 	st.setMark(hlSearch, VerseSpan{VersionID: "web", Book: "John", Chapter: 3, Lo: last, Hi: last})
+	// The modelled route (a tapped search result) is explicit; plain entries
+	// arrive nowhere now.
+	st.forceReposition = true
 	applyNoteForCurrentChapter(st)
 
 	pane := newStyledReadingPane(st, verses)
@@ -891,6 +897,9 @@ func TestScrollingLandsOnTheTopmostBandOfTheParagraph(t *testing.T) {
 	mine := seedOwnNote(t, first+1, "mine, in the friend's paragraph")
 	st.focusNote(mine.ID)
 	applyNoteForCurrentChapter(st)
+	// Opening a note from the browser is explicit (openedNotePlacesTheView);
+	// a plain entry arrives nowhere now.
+	st.forceReposition = true
 
 	pane := newStyledReadingPane(st, verses)
 	pane.Resize(fyne.NewSize(320, 900))

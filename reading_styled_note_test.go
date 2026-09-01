@@ -873,6 +873,9 @@ func TestStyledHighlightScrollShowsTheBubble(t *testing.T) {
 	if !st.mark.fromNote() {
 		t.Fatal("precondition: the note must own the mark")
 	}
+	// The route that lands a reader here with the note's mark lit — a link, or
+	// the browser's open — is explicit; a plain entry arrives nowhere now.
+	st.forceReposition = true
 	p := newStyledReadingPane(st, st.Bible.GetChapter("Ruth", 1))
 	p.Resize(fyne.NewSize(560, 700))
 	if !p.highlightOwnsScroll() {

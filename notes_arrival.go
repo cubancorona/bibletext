@@ -96,6 +96,17 @@ func chapterNoteArrival(state *AppState, c noteChrome, verses []Verse, groups []
 	if restoreArmed && !explicit {
 		return arriveNothing, 0
 	}
+	// A PLAIN entry — the chapter arrows, the strip, a reopen with nothing
+	// armed — is browsing, not a request to be taken to the note. Every
+	// explicit route sets forceReposition (a tapped link, a note row, a
+	// search result, the verse of the day); without it this classifier used
+	// to fall through to "the note's own verse", so merely entering a
+	// chapter that carried a collapsed note dragged the reader to its pill.
+	// The chapter opens at the top like any other; the bands and the wash
+	// still say where the notes are.
+	if !explicit {
+		return arriveNothing, 0
+	}
 
 	verse := 0
 	if span, ok := state.markHere(); ok && span.Lo > 0 {

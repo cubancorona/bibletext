@@ -251,11 +251,11 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"[fitted rangeOfString:gNoteCounts options:NSBackwardsSearch]": "the counts " +
 					"control must be FOUND in the line the Go side composed, not cut out of it " +
 					"here. Backwards, because the fit above may have ellipsised the sender half",
-				"CGFloat y = btIOSBandTopY(g.location);": "the placement must take the band " +
+				"CGFloat y = btIOSStickerBandY(g.location);": "the placement must take the band " +
 					"top from THE ONE ANSWER (btIOSBandTopY); it and the scroll target held " +
 					"two hand-maintained copies of the formula, with a comment asking them " +
 					"to stay identical",
-				"return btIOSBandTopY(g.location);": "the scroll target's half of the same rule",
+				"return btIOSStickerBandY(g.location);": "the scroll target's half of the same rule",
 				"ps.paragraphSpacingBefore += gNoteBandH;": "the reservation must ADD to the " +
 					"paragraph's spacing, never assign over it — assignment is the " +
 					"single-tenant assumption in write form, and it silently swallows a " +
