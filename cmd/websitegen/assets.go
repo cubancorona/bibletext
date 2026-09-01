@@ -355,9 +355,10 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .note{
   position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
   /* The shared arrival lead (noteMetrics().Lead), not this file's own offset.
-     The VERSE keeps its larger margin because its target ducks under the
-     sticky chapter header; the card is inserted before its paragraph and
-     arrives clear of it. */
+     The VERSE target keeps its larger 6.5rem margin — a bare #vN jump is the
+     browser's own scroll, held well clear of the page top for legibility.
+     That larger number is this surface's stated divergence from the single
+     Lead, pinned by note_chrome_shared_test.go. */
   scroll-margin-top:__NOTE_LEAD__px;
   background:var(--surface); border:1px solid var(--border);
   border-left:3px solid var(--accent); border-radius:10px;
