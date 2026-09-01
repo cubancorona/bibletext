@@ -341,6 +341,14 @@ func devAutoNotesS8(state *AppState) {
 		// Collapse the open note: the set has nothing open, so the specs cover
 		// every noted paragraph and the natives draw one pill per band.
 		at(10*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
+		// …and surface the chapter top, so the picture carries the first
+		// paragraphs and their pills rather than wherever the arrival left off.
+		// A PLAIN RE-NAVIGATION lands at the top on every pane, but only when
+		// the chapter actually CHANGES — so bounce through the neighbour.
+		// (armReadingRestore is the fyne/iOS channel; the macOS native pane
+		// never reads it.)
+		at(13*time.Second, func() { navigateToReference(state, "John", 10) })
+		at(15*time.Second, func() { navigateToReference(state, "John", 11) })
 	case "s11pill":
 		// The reader's report: press the pill at the top of John 11 and the
 		// bubble expands, but the page does not go to it. Reproduced with the

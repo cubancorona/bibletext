@@ -1908,7 +1908,12 @@ static void btMacLayoutPillViews(void) {
         if (cw < kMacNotePillMinW) cw = kMacNotePillMinW;
         if (cw > w) cw = w;
         chip.hidden = NO;
-        chip.frame = NSMakeRect(kMacNotePad, y, cw, kMacNotePill);
+        // The COLUMN's left edge, not the view's: this pane centres a measured
+        // column inside wide margins (textContainerInset.width), and the
+        // sticker's own x is derived the same way. Parked at the view edge, the
+        // first live pill floated in the left gutter.
+        CGFloat px = gTextView.textContainerInset.width + tc.lineFragmentPadding;
+        chip.frame = NSMakeRect(px, y, cw, kMacNotePill);
     }
 }
 
