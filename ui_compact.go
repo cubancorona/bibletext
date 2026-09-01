@@ -34,6 +34,16 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	// tab change (reliable repaint — Fyne's in-place host-swap doesn't always
 	// repaint a UITextView-overlaid tree) so this just sets the tab + rebuilds.
 	gotoReadTab := func() {
+		// ALREADY THERE IS DONE. HandleShareLink surfaces the reading tab
+		// itself (state.surfaceReading), so a tap handler that opens a link and
+		// then calls this ran TWO rebuilds back to back. The second one
+		// re-derived a just-placed arrival into a position carry, and the carry
+		// then replayed through the new pane's still-reflowing geometry —
+		// landing the reader roughly where they started instead of on the note
+		// they tapped (the styled scroll trace has the whole story).
+		if state.CurrentTab == 0 {
+			return
+		}
 		state.CurrentTab = 0
 		leaveSearchForRead(state, 0)
 		rebuildWindow(state)

@@ -15,6 +15,7 @@ package bibletext
 
 import (
 	"fmt"
+	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -74,6 +75,18 @@ func styledAnchorActive() bool { return styledScroll != nil && styledPane != nil
 // (carryTop) and CEDED the highlight — so the note the reader tapped never
 // scrolled into view. A pane that has not settled has no position to carry.
 var styledViewportSettled bool
+var styledLastGateTrace string
+
+// styledScrollTrace prints the styled scroll machinery's decisions when
+// BT_SCROLL_DEBUG is set — the same switch the native panes honour. The
+// placement chain has failed live while every host probe passed, twice; the
+// only cure for diagnosing from a harness is the app narrating itself.
+func styledScrollTrace(format string, args ...any) {
+	if os.Getenv("BT_SCROLL_DEBUG") == "" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[styled] "+format+"\n", args...)
+}
 
 func styledPaneFP(state *AppState) string {
 	return fmt.Sprintf("%s\x00%d\x00%s", state.CurrentBook, state.CurrentChapter, state.CurrentVersion)
@@ -140,24 +153,30 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	styledHighlightCeded = false
 	styledViewportSettled = false
 
+	branch := "default"
 	switch {
 	case state.forceReposition:
+		branch = "forceReposition"
 		state.forceReposition = false
 		state.restore = nil
 		armStyledRestore(0, 0, 0)
 	case state.restore != nil:
+		branch = "pendingRestore"
 		armPendingRestore(state) // shared: matches chapter, drops stale targets
 	case carryTop:
+		branch = "carryTop"
 		// Top is a meaningful viewport position even though its serialized
 		// anchor is all zeroes. Claim the placement so a standing note wash
 		// cannot auto-scroll the replacement pane away from the top.
 		armStyledRestore(0, 0, 0)
 		styledHighlightCeded = true
 	case carry:
+		branch = "carry"
 		armStyledRestore(carryVerse, carryDelta, carryFrac)
 	default:
 		armStyledRestore(0, 0, 0)
 	}
+	styledScrollTrace("wire: branch=%s carry=%v(v%d f%.2f) top=%v armed=%v", branch, carry, carryVerse, carryFrac, carryTop, styledRestoreArmed)
 
 	lastView := scroll.Size()
 	lastContentH := float32(0)
@@ -199,6 +218,7 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 			}
 		}
 		styledRestoreArmed = false
+		styledScrollTrace("user scrolled (offset %.0f)", scroll.Offset.Y)
 		styledUserScrolled = true
 		state.restore = nil
 		flushReadingStateAsync(state)
@@ -238,7 +258,17 @@ func captureStyledAnchor() (verse int, delta, frac float64, ok bool) {
 func armStyledRestore(verse int, delta, frac float64) {
 	styledRestoreVerse, styledRestoreDelta, styledRestoreFrac = verse, delta, frac
 	styledRestoreArmed = verse > 0 || frac > 0
+	styledRestoreLastContentH = -1
 }
+
+// styledRestoreLastContentH is the content height the previous layout pass
+// reported while a restore was armed. The restore applies only once the
+// height REPEATS — i.e. against geometry that has stopped reflowing. Applied
+// on the first pass, it spent itself against the pre-wrap layout (every Y
+// roughly doubled), ceded the highlight, and the reflow then left the reader
+// at a position that meant nothing; the launch restore only ever survived
+// that because a bottom-of-chapter fraction clamps to the bottom either way.
+var styledRestoreLastContentH float32 = -1
 
 // applyStyledReadingRestore applies the armed target once sizes are real;
 // called from styledColumn.Layout each pass. Stays armed across resizes until
@@ -265,6 +295,14 @@ func applyStyledReadingRestore(col *styledColumn) {
 	if col.scroll.Content.Size().Height < contentH {
 		return // content box not re-laid-out yet; next pass applies
 	}
+	// GEOMETRY MUST HAVE STOPPED MOVING. A fresh pane's first pass lays out
+	// before the wrap settles, and a Y computed there is wrong by the whole
+	// reflow (see styledRestoreLastContentH).
+	if contentH != styledRestoreLastContentH {
+		styledScrollTrace("restore DEFER: contentH %.0f (was %.0f)", contentH, styledRestoreLastContentH)
+		styledRestoreLastContentH = contentH
+		return
+	}
 	maxOff := contentH - viewH
 	if maxOff <= 0 {
 		styledRestoreArmed = false
@@ -283,6 +321,7 @@ func applyStyledReadingRestore(col *styledColumn) {
 	if y < 0 {
 		y = 0
 	}
+	styledScrollTrace("restore APPLY y=%.0f (v%d f%.2f)", y, styledRestoreVerse, styledRestoreFrac)
 	if y > maxOff {
 		y = maxOff
 	}
@@ -347,6 +386,15 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	// the page. The restore applies a few lines below, in the same pass or a
 	// later one once the sizes settle; until then the highlight must not take
 	// the position, or the reader is placed twice and sees the second.
+	if os.Getenv("BT_SCROLL_DEBUG") != "" && l.scroll == styledScroll && l.pane != nil {
+		gate := fmt.Sprintf("hlOwns=%v user=%v ceded=%v restoreArmed=%v hlY=%.0f off=%.0f",
+			l.pane.highlightOwnsScroll(), styledUserScrolled, styledHighlightCeded,
+			styledRestoreArmed, l.pane.highlightY(), l.scroll.Offset.Y)
+		if gate != styledLastGateTrace {
+			styledLastGateTrace = gate
+			styledScrollTrace("layout gate: %s", gate)
+		}
+	}
 	if l.scroll != nil && l.pane != nil && l.pane.highlightOwnsScroll() &&
 		!styledUserScrolled && !styledHighlightCeded && !styledRestoreArmed {
 		y := l.pane.highlightY() - 24
@@ -367,6 +415,7 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 			}
 		}
 		if y != l.scroll.Offset.Y {
+			styledScrollTrace("layout PLACE y=%.0f (was %.0f)", y, l.scroll.Offset.Y)
 			styledApplyingScroll = true
 			l.scroll.Offset = fyne.NewPos(0, y)
 			l.scroll.Refresh()

@@ -211,6 +211,18 @@ func TestStyledAreaHighlightScrollsOnce(t *testing.T) {
 		t.Fatal("verse 3 missing from the layout")
 	}
 	armStyledRestore(3, 0, 0.1)
+	// TWO passes: a restore now waits for the content height to REPEAT before
+	// applying, because a fresh pane's first pass lays out before the wrap
+	// settles and a Y computed there is wrong by the whole reflow (the styled
+	// scroll trace caught a carry restoring to twice the intended offset). In
+	// the app the passes are consecutive Layout frames; here they are two
+	// calls over a pane whose geometry is already stable.
+	applyStyledReadingRestore(&styledColumn{scroll: styledScroll, pane: styledPane})
+	if !styledRestoreArmed {
+		t.Fatal("the restore applied on the FIRST pass — it must wait for the " +
+			"content height to repeat, or it spends itself against a layout " +
+			"that is still reflowing")
+	}
 	applyStyledReadingRestore(&styledColumn{scroll: styledScroll, pane: styledPane})
 	if styledRestoreArmed {
 		t.Error("the restore stayed armed after it should have been applied")

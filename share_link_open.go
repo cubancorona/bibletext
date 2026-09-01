@@ -22,6 +22,9 @@ package bibletext
 //     applyShareTarget.
 
 import (
+	"fmt"
+	"os"
+
 	"fyne.io/fyne/v2"
 )
 
@@ -288,6 +291,10 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 	// the note after scrolling away (see AppState.forceReposition).
 	state.forceReposition = true
 	state.restore = nil // an arrival outranks "where you left off"; see openSearchResultRange
+	if os.Getenv("BT_SCROLL_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[styled] arrival: %s %d v%d-%d tab=%d\n",
+			t.Book, chapter, t.VerseLo, t.VerseHi, state.CurrentTab)
+	}
 
 	// Highlight the shared verses. A range uses the same inclusive model the
 	// app's own search highlight uses, so the web page and the app light up the
