@@ -36,8 +36,9 @@
 > the reader's OWN notes, the presentation gate and a second noted paragraph as
 > axes — 1280 states became 12800 — and reopened the table: `X16` covered 168
 > cells. The seventh pass added the UNPLACED axis (an R4 note and a
-> beyond-the-chapter run, 12800 states became 38400), which multiplied X16's
-> cells to 504, gave the who-without-text tuple its first reachable cells, and
+> beyond-the-chapter run seeded together, 12800 states became 25600), which
+> multiplied X16's cells to 336, gave the who-without-text tuple its first
+> reachable cells, and
 > found the anchor machinery trusting a run past the chapter's end — a placed
 > note anchored on a verse with no line, fixed in `resolveNoteAnchor` by
 > checking every run against the loaded text itself (N11's 3,404 violations,
@@ -1116,7 +1117,7 @@ that ran:
 > `notesPillPerParagraph` now defaults to true, so every reader's build
 > represents the received set while an own note is open. The enumeration's pin
 > remains: the gate's off value still exists (the dev toggle's comparison
-> state, and the one-line reversion), and its 504 cells are the debt that
+> state, and the one-line reversion), and its 336 cells are the debt that
 > reversion would reincur — named, so it cannot be paid silently.
 
 iOS, macOS and Android draw one sticker and have no pill row, so the repair
@@ -1129,8 +1130,8 @@ not change N" (`notes_plan.go`, `appleStickerPush`) still holds.
 Not a regression and not introduced by the pills: this is what every surface
 did before, and what the three without a pill row still do.
 
-**Evidence.** 504 cells of the notes enumeration, every one of them
-`focus=own pills=false` (168 before the unplaced axis tripled the space along
+**Evidence.** 336 cells of the notes enumeration, every one of them
+`focus=own pills=false` (168 before the unplaced axis doubled the space along
 an orthogonal variable). It was 48 while N9 judged only the post-verb and
 post-navigation moments; the moment the reader was actually looking at the page
 when they reached for the verb went unjudged, and carried 120 more. The same cells with `pills=true` come out clean, which

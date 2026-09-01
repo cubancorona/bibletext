@@ -119,20 +119,6 @@ func (f noteFocusAxis) String() string {
 // notesWorld is the slice of the world the notes subsystem branches on. Kept as
 // its own type so the enumeration is readable, and so adding a variable to the
 // subsystem means adding it HERE, where the cross-product picks it up.
-// unplacedAxis is the unplaced-note axis: no such note, the R4 kind the delta
-// tables produce, or a run beyond the chapter's own end.
-type unplacedAxis int
-
-const (
-	unplacedNo unplacedAxis = iota
-	unplacedR4
-	unplacedBeyond
-)
-
-func (u unplacedAxis) String() string {
-	return [...]string{"no", "r4", "beyond"}[u]
-}
-
 type notesWorld struct {
 	featureOn bool
 	placement notePlacement
@@ -161,14 +147,18 @@ type notesWorld struct {
 	// passed the whole walk. It also reaches the chapter-top band (Verse 0)
 	// and the anchorless arrival arm, which no placed-note cell can.
 	//
-	// Two flavours, because they exercise two different absences: R4 is the
-	// delta tables saying a verse has no home here (NKJV John 5:4 read under
-	// WEB), and BEYOND is a run naming a verse the chapter's own data does
-	// not carry (an inflated link). The first walk with BEYOND found the
-	// anchor machinery trusting such runs verbatim — a placed note anchored
-	// on a verse with no line, N11 at 3,404 cells — which is why the flavour
-	// stays enumerated after the fix: it is the tripwire against re-trusting.
-	unplaced unplacedAxis
+	// The state seeds BOTH absences at once, because they exercise two
+	// different refusals with one downstream shape: an R4 note the mapped arm
+	// refuses (NKJV John 5:4 read under WEB, whose John 5 carries no v4), and
+	// a same-version run past the chapter's end that only the text itself can
+	// refuse (an inflated link). The first walk with the second flavour found
+	// the anchor machinery trusting such runs verbatim — a placed note
+	// anchored on a verse with no line, N11 at 3,404 cells — so both stay
+	// enumerated as the tripwire against re-trusting. One axis value, not
+	// two: crossed separately they tripled the space and timed the race
+	// suite out on CI, and their downstream shape (notes in plan.Unplaced)
+	// is identical, so the full crossing of one covers the interactions.
+	unplaced bool
 
 	// pills — notesPillPerParagraph, the presentation gate. Off is every
 	// shipped build and all three native surfaces; on is the styled pane's
@@ -178,7 +168,7 @@ type notesWorld struct {
 }
 
 func (w notesWorld) id() string {
-	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v spread=%v unplaced=%s pills=%v",
+	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v spread=%v unplaced=%v pills=%v",
 		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb, w.ownNote, w.spread, w.unplaced, w.pills)
 }
 
@@ -308,7 +298,7 @@ func TestNotesStateSpace(t *testing.T) {
 							for _, verb := range []noteVerb{verbNone, verbHide, verbShow, verbDelete, verbNotesOff} {
 								for _, ownNote := range []bool{false, true} {
 									for _, spread := range []bool{false, true} {
-										for _, unplaced := range []unplacedAxis{unplacedNo, unplacedR4, unplacedBeyond} {
+										for _, unplaced := range []bool{false, true} {
 											for _, pills := range []bool{false, true} {
 												w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb, ownNote, spread, unplaced, pills}
 												seen++
@@ -371,7 +361,7 @@ func TestNotesStateSpace(t *testing.T) {
 	// the doc's combined line. EMPTY since the sixth pass — zero named
 	// violations — and the set-equality assertion above is what now holds it
 	// there.
-	expectedHits := map[string]int{"X16": 504}
+	expectedHits := map[string]int{"X16": 336}
 	for name, want := range expectedHits {
 		if hits[name] != want {
 			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
@@ -582,17 +572,17 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	// arm, and on a chapter with nothing else the whole sticker is the
 	// who-without-text pill. Orthogonal to placement: an unplaced note rides
 	// every chapter of its book, including an otherwise empty one.
-	switch w.unplaced {
-	case unplacedR4:
+	if w.unplaced {
 		// NKJV John 5:4 read under WEB — a real versification hole: the NKJV
 		// carries the verse, the WEB's own John 5 (loaded above, without a
 		// v4) does not, so the mapped arm's existence test answers R4.
 		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "nkjv",
 			Book: "John", Chapter: 5, VerseLo: 4,
 			Text: "a note this translation cannot place"})
-	case unplacedBeyond:
-		// A same-version run naming a verse past the chapter's end — only the
-		// text itself can refuse this one, which it now does.
+		// And a same-version run naming a verse past the chapter's end — only
+		// the text itself can refuse this one, which it now does (the native
+		// arm's existence test). Both seeds ride every unplaced cell so both
+		// refusals stay under the walk.
 		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
 			Book: "John", Chapter: 3, VerseLo: 999,
 			Text: "a note beyond the chapter's end"})
