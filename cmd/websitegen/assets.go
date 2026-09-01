@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 
 	bibletext "bibletext"
@@ -30,6 +31,7 @@ func readerCSS(regularFile, boldFile string) string {
 		"__FONT_BOLD__", boldFile,
 		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
+		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
 	).Replace(readerCSSTemplate)
 }
 
@@ -352,7 +354,11 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    words in front of them are the Bible or a stranger's message. */
 .note{
   position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
-  scroll-margin-top:1.2rem;
+  /* The shared arrival lead (noteMetrics().Lead), not this file's own offset.
+     The VERSE keeps its larger margin because its target ducks under the
+     sticky chapter header; the card is inserted before its paragraph and
+     arrives clear of it. */
+  scroll-margin-top:__NOTE_LEAD__px;
   background:var(--surface); border:1px solid var(--border);
   border-left:3px solid var(--accent); border-radius:10px;
   font-family:var(--ui); font-size:1rem; line-height:1.5;
@@ -367,6 +373,9 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   border-right:1px solid var(--border); border-bottom:1px solid var(--border);
   transform:rotate(45deg);
 }
+/* No passage to point at, no tail — the shared rule (noteChrome.hasTail);
+   anchorToPassage sets the class on the chapter-top parking. */
+.note.notail::after{display:none}
 .notewho{
   margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
   letter-spacing:.01em;
@@ -387,7 +396,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    the note is still there and the reader has to be able to find it again. */
 .notechip{
   display:inline-flex; align-items:center; gap:.35rem; margin:1.1rem 0;
-  scroll-margin-top:1.2rem;
+  scroll-margin-top:__NOTE_LEAD__px;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
   padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
@@ -579,7 +588,10 @@ const readerJSTemplate = `
 
     var noteText = currentNoteText();
     if (noteText) {
-      bar.appendChild(barButton('Hide note', function () {
+      // The same verb the card offers, under the same name — it was
+      // 'Hide note' here and 'Minimize note' there, two vocabularies for one
+      // action on one page.
+      bar.appendChild(barButton('Minimize note', function () {
         hideBubble(); minimizeNote(noteText);
       }));
       bar.appendChild(barButton('Delete note', function () {
@@ -1218,7 +1230,10 @@ const readerJSTemplate = `
 
     var who = document.createElement('p');
     who.className = 'notewho';
-    who.textContent = 'Note from Friend';   // a person, never "from BibleText"
+    // Composed in Go (senderByline) and emitted at generate time — the same
+    // attribution every app pane draws, not this file's own literal. Still a
+    // person, never "from BibleText".
+    who.textContent = __NOTE_BYLINE__;
 
     var body = document.createElement('p');
     body.className = 'notetext';
@@ -1227,7 +1242,10 @@ const readerJSTemplate = `
     // Two controls, and the difference between them is the whole point:
     // MINIMIZE is reversible and takes the highlight down with the note, so the
     // reader can see the passage plainly and bring the message back. TRASH is
-    // the one that throws it away.
+    // the one that throws it away. This is the RECEIVED arm of the shared verb
+    // table (noteChrome.verbs) — the OWN arm does not exist here on purpose,
+    // because a link's note is always somebody else's; that absence is this
+    // surface's reasoned divergence from the four-pane verb set.
     var tools = document.createElement('div');
     tools.className = 'notetools';
     tools.appendChild(noteButton('Minimize note', ICON_MINIMIZE, function () {
@@ -1261,12 +1279,23 @@ const readerJSTemplate = `
   // marker puts everything back.
   function minimizeNote(text) {
     hideNote();
+    // suppressHighlight(true) is UNCONDITIONAL where the app's hide clears
+    // only the mark the note itself owns. Reasoned: this page has no other
+    // highlight source — no search, no cross-references, no go-to — so the
+    // only wash a note page can carry is the note's own, and the global
+    // suppress is the same act with less machinery. If this page ever grows a
+    // second highlight source, this is the line that must learn ownership.
     suppressHighlight(true);
     var chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'notechip';
     chip.setAttribute('aria-label', 'Show note');
-    chip.innerHTML = ICON_NOTE + '<span>Note</span>';
+    // The label is the shared collapsed-pill wording (stickerPillWho), for
+    // this page's structural case of one placed note, emitted at generate
+    // time. textContent, so the wording can change in Go without this file
+    // growing markup.
+    chip.innerHTML = ICON_NOTE + '<span></span>';
+    chip.querySelector('span').textContent = __NOTE_PILL_LABEL__;
     chip.addEventListener('click', function (e) {
       e.preventDefault();
       suppressHighlight(false);
@@ -1321,8 +1350,14 @@ const readerJSTemplate = `
     if (para && para.parentNode) {
       noteAnchorPara = para;
       para.parentNode.insertBefore(el, para);
+      el.classList.remove('notail');
       return;
     }
+    // The chapter-top parking: nothing on this page to point at. The shared
+    // rule (noteChrome.hasTail) says a tail exists iff the anchor names a
+    // passage — an unconditional tail here claimed whatever paragraph came
+    // first, and was reachable through any note link without a verse.
+    el.classList.add('notail');
     var text = document.querySelector('.text');
     if (text && text.parentNode) text.parentNode.insertBefore(el, text);
     else document.querySelector('.wrap').appendChild(el);

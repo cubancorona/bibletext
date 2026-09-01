@@ -412,7 +412,19 @@ func readerJS(versions []loadedVersion) string {
 	if err != nil { // unreachable: plain structs
 		table = []byte("[]")
 	}
-	return strings.Replace(readerJSTemplate, "__BOOKS__", string(table), 1)
+	byline, err := json.Marshal(bibletext.WebNoteByline())
+	if err != nil { // unreachable: a plain string
+		byline = []byte(`"Note from Friend"`)
+	}
+	pill, err := json.Marshal(bibletext.WebNotePillLabel())
+	if err != nil { // unreachable: a plain string
+		pill = []byte(`"Note"`)
+	}
+	return strings.NewReplacer(
+		"__BOOKS__", string(table),
+		"__NOTE_BYLINE__", string(byline),
+		"__NOTE_PILL_LABEL__", string(pill),
+	).Replace(readerJSTemplate)
 }
 
 // writeVersion emits one published translation: its book list, a chapter list

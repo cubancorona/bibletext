@@ -147,3 +147,19 @@ func webReaderPalette(p palette) WebReaderPalette {
 		ControlSelection: paletteSelection(p),
 	}
 }
+
+// WebNoteByline is the shared byline for a received note, exactly as the app
+// panes attribute one (senderByline). Sender names do not ship, so this is a
+// generate-time constant for the static reader; the day names ship,
+// TestWebReaderNoteChromeComesFromTheSharedFunctions holds the seam and the
+// template learns names rather than silently keeping the constant.
+func WebNoteByline() string { return senderByline(StoredNote{Kind: noteKindReceived}) }
+
+// WebNotePillLabel is the shared collapsed-pill label for the web reader's
+// structural case — one placed note, nothing unplaced — from the same
+// function every pane's pill reads (stickerPillWho).
+func WebNotePillLabel() string { return stickerPillWho(1, 0) }
+
+// WebNoteArrivalLeadPx is the shared arrival lead (noteMetrics().Lead): how
+// far below the top of the viewport an arrival places its target.
+func WebNoteArrivalLeadPx() int { return int(noteMetrics().Lead) }

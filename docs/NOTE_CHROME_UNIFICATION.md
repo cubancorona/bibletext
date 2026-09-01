@@ -97,8 +97,33 @@
                           also asserts build-android.sh REFUSES extra build tags
                           on the release path (the debug APK accepts them, which
                           is how the dev page reaches an emulator).
-                Remaining: 8f, which flips the flag and is the only one of the
-                nine that changes what a reader sees.
+                  8f     DONE: notesPillPerParagraph defaults TRUE — the
+                         collapsed state ships as one pill per noted paragraph
+                         on every surface. X16 struck as the shipped
+                         experience; the enumeration's pin stays on the gate's
+                         off value (the dev toggle's comparison state and the
+                         one-line reversion), naming the debt a reversion
+                         would reincur.
+                  9      DONE: cmd/websitegen emits the byline, the pill
+                         label and the arrival lead from the shared functions
+                         at generate time (web_api.go seams, __NOTE_*__
+                         placeholders beside __BOOKS__); the tail obeys
+                         hasTail through a notail class on the chapter-top
+                         parking; the bubble and the card speak one verb
+                         vocabulary. The divergences that remain are stated
+                         beside the code they excuse — the verse target's
+                         header-inclusive margin, the own arm's absence, and
+                         minimize's global highlight suppress on a page with
+                         one highlight source — and the seams are pinned by
+                         cmd/websitegen/note_chrome_shared_test.go, each pin
+                         verified able to fail. The live site takes all of it
+                         on the next publish-site.sh run.
+                The nine steps are COMPLETE. Also landed beside them: the
+                enumeration hardening (N11-N16 chrome tripwires with an
+                unplaced axis and a stub measurer; every assertion
+                mutation-verified) and the anchor fix it forced — placement
+                no longer trusts a run naming a verse the loaded text
+                demonstrably lacks.
      TWO HAZARDS, unaddressed and live today:
        - macOS saved reading positions and the first-paragraph band share
          textContainerInset.height. REFINED after doing the algebra: the
