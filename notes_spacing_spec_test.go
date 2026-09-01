@@ -212,6 +212,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"kNoteTail - 1": "the tail's -1: a survival of the two-shape era that drew " +
 					"the tail a point shorter than the constant naming it",
 				"cw, kNoteBtn)": "the pill borrowing the VERB BUTTON's size (30) for its height",
+				"ps.paragraphSpacingBefore = gNoteBandH": "the assignment form of the " +
+					"reservation — see the required += twin",
 				"gNoteMinimized ? 0 : kNoteTail": "the shape asking \"is it collapsed\" when it " +
 					"means \"does it point at a passage\" — two different questions that agreed " +
 					"until a note could be parked at the chapter top",
@@ -249,6 +251,19 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"[fitted rangeOfString:gNoteCounts options:NSBackwardsSearch]": "the counts " +
 					"control must be FOUND in the line the Go side composed, not cut out of it " +
 					"here. Backwards, because the fit above may have ellipsised the sender half",
+				"CGFloat y = btIOSBandTopY(g.location);": "the placement must take the band " +
+					"top from THE ONE ANSWER (btIOSBandTopY); it and the scroll target held " +
+					"two hand-maintained copies of the formula, with a comment asking them " +
+					"to stay identical",
+				"return btIOSBandTopY(g.location);": "the scroll target's half of the same rule",
+				"ps.paragraphSpacingBefore += gNoteBandH;": "the reservation must ADD to the " +
+					"paragraph's spacing, never assign over it — assignment is the " +
+					"single-tenant assumption in write form, and it silently swallows a " +
+					"co-tenant's band",
+				"CGFloat left = ps.paragraphSpacingBefore - mine;": "the take-back must " +
+					"SUBTRACT what this band contributed, not zero the total, for the same " +
+					"co-tenancy reason — with one tenant the two are identical, which is why " +
+					"this landed before any second band exists",
 				"gNoteShapeExtra = gNoteTail ? kNoteTail : 0;": "the tail's contribution to the " +
 					"card's shape must be resolved ONCE, in SetNote, so every band formula reads " +
 					"one scalar and none of them can branch differently",
@@ -263,6 +278,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"kMacNoteTail - 1":                     "the tail's -1",
 				"cw, kMacNoteBtn)":                     "the pill borrowing the VERB BUTTON's size (24) for its height",
 				"gMacNoteMinimized ? 0 : kMacNoteTail": "the iOS twin's wrong question",
+				"ps.paragraphSpacingBefore = gMacNoteBandH": "the assignment form of the " +
+					"reservation — see the required += twin",
 			},
 			required: map[string]string{
 				"btMacTrashImage(kMacNoteTrashPt)": "the closing control's bin must be DRAWN, " +
@@ -282,6 +299,10 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"card's height must BE the spec's formula (the iOS twin's reason)",
 				"[fitted rangeOfString:gMacNoteCounts options:NSBackwardsSearch]": "the iOS " +
 					"twin's reason: found, not cut",
+				"ps.paragraphSpacingBefore += gMacNoteBandH;": "the iOS twin's rule: the " +
+					"reservation ADDS, never assigns",
+				"CGFloat left = ps.paragraphSpacingBefore - mine;": "and the take-back " +
+					"SUBTRACTS this band's own contribution",
 				"gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;": "the iOS twin's reason: " +
 					"resolved once, read as a scalar everywhere",
 				"if (gMacNoteTail) {": "the outline must gate the tail detour",

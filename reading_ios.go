@@ -908,6 +908,7 @@ static BOOL btIOSNotePill(void)    { return gNoteMinimized || gNoteText == nil; 
 static void btIOSInstallNote(void);
 static void btIOSEnsureNoteView(void);
 static void btIOSLayoutNote(void);
+static CGFloat btIOSBandTopY(NSUInteger paraGlyph);
 
 // btIOSRefreshNote re-derives the whole sticker — band, subviews, placement —
 // against the text already in the view. It is what lets a pushed change
@@ -1153,16 +1154,30 @@ static NSRange btIOSNoteAnchorRange(NSTextStorage *ts, NSString *str, NSUInteger
 // already cleared every paragraphSpacingBefore, so the guarded clear below
 // is a no-op there.
 static NSRange gNoteReservedPara = {NSNotFound, 0};
+// What THIS band added to that paragraph's spacingBefore. The take-back
+// SUBTRACTS it rather than zeroing: identical while the note is the spacing's
+// only tenant (subtracting your whole contribution from your own total is
+// zero), and the only correct shape once a paragraph can carry more than one
+// reservation — zeroing would take back every co-tenant's band with it.
+static CGFloat gNoteReservedContribution = 0;
 
 static void btIOSClearReservedPara(NSTextStorage *ts) {
     NSRange old = gNoteReservedPara;
+    CGFloat mine = gNoteReservedContribution;
     gNoteReservedPara = NSMakeRange(NSNotFound, 0);
+    gNoteReservedContribution = 0;
     if (old.location == NSNotFound || ts == nil || NSMaxRange(old) > ts.length) return;
     NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
                             effectiveRange:NULL];
     if (base == nil || base.paragraphSpacingBefore == 0) return;
     NSMutableParagraphStyle *ps = [base mutableCopy];
-    ps.paragraphSpacingBefore = 0;
+    // Subtract what this band contributed. A residue within a point of zero IS
+    // zero — floating error must land at exactly 0, or a one-point ghost gap
+    // accumulates across next-taps, which is the precise defect
+    // gNoteReservedPara was added to prevent.
+    CGFloat left = ps.paragraphSpacingBefore - mine;
+    if (left < 1.0) left = 0;
+    ps.paragraphSpacingBefore = left;
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
     [ts endEditing];
@@ -1215,11 +1230,16 @@ static void btIOSInstallNote(void) {
     NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
                             effectiveRange:NULL];
     NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
-    ps.paragraphSpacingBefore = gNoteBandH;
+    // ADD to whatever spacing the paragraph already carries, never assign over
+    // it: assignment is the single-tenant assumption in write form, and it is
+    // what would silently swallow a co-tenant's reservation. With one tenant
+    // (today) the existing spacing is 0 and add == assign.
+    ps.paragraphSpacingBefore += gNoteBandH;
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
     [ts endEditing];
     gNoteReservedPara = para;   // so a moved sticker can take this band back
+    gNoteReservedContribution = gNoteBandH;
 }
 
 // Apply (or clear) the top-inset reservation.
@@ -1437,19 +1457,7 @@ static void btIOSLayoutNote(void) {
         reconciling = NO;
     }
 
-    // The band opens with kNoteGapAbove, so the card hangs that far below the
-    // band's own top edge — the styled pane's place() does the identical thing.
-    CGFloat y;
-    if (gNoteTopInset > 0) {
-        // Reserved with the container inset: the sticker sits in that inset,
-        // above the first line of the chapter.
-        y = 14 + kNoteGapAbove;
-    } else {
-        // The FRAGMENT rect includes the spacing we reserved; the USED rect is
-        // where the text actually starts. The difference is the parking spot.
-        CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
-        y = frag.origin.y + gReadingTV.textContainerInset.top + kNoteGapAbove;
-    }
+    CGFloat y = btIOSBandTopY(g.location);
 
     if (btIOSNotePill()) {
         // The pill sizes to its label (it carries the count now), never
@@ -1528,6 +1536,27 @@ static void btIOSLayoutNote(void) {
     del.frame  = CGRectMake(w - kNoteBtn - 2, 2, kNoteBtn, kNoteBtn);
 }
 
+// btIOSBandTopY is THE ONE ANSWER to "where does the sticker's top sit", in
+// content coordinates. The placement (btIOSLayoutNote) and the scroll target
+// (btIOSNoteTopY) both call it, which is what makes "the two must not be able
+// to disagree" a property of the code rather than a comment asking two
+// hand-maintained copies of a formula to stay identical — they had already
+// drifted once (a 12/16 lead split nobody chose).
+//
+// paraGlyph is the first glyph of the banded paragraph; it is unread in the
+// container-inset case (paragraph 0), where the sticker sits in the inset
+// above the chapter's first line.
+static CGFloat btIOSBandTopY(NSUInteger paraGlyph) {
+    if (gNoteTopInset > 0) return 14 + kNoteGapAbove;
+    NSLayoutManager *lm = gReadingTV.layoutManager;
+    // The FRAGMENT rect includes the spacing reserved for the band; the USED
+    // rect is where the text starts. The difference is the parking spot, and
+    // the card hangs kNoteGapAbove below the band's own top edge — the styled
+    // pane's place() does the identical thing.
+    CGRect frag = [lm lineFragmentRectForGlyphAtIndex:paraGlyph effectiveRange:NULL];
+    return frag.origin.y + gReadingTV.textContainerInset.top + kNoteGapAbove;
+}
+
 // btIOSNoteTopY is where the top of the sticker sits in the text view's CONTENT
 // coordinates, or -1 when there is no note to worry about.
 //
@@ -1536,7 +1565,7 @@ static void btIOSLayoutNote(void) {
 // note is.
 static CGFloat btIOSNoteTopY(void) {
     if (!btIOSNotePresent() || gReadingTV == nil) return -1;
-    if (gNoteTopInset > 0) return 14 + kNoteGapAbove;   // reserved with the container inset
+    if (gNoteTopInset > 0) return btIOSBandTopY(0); // paraGlyph unread in the inset case
     NSLayoutManager *lm = gReadingTV.layoutManager;
     NSTextContainer *tc = gReadingTV.textContainer;
     NSTextStorage   *ts = gReadingTV.textStorage;
@@ -1546,11 +1575,7 @@ static CGFloat btIOSNoteTopY(void) {
     if (para.location == NSNotFound || NSMaxRange(para) > ts.length) return -1;
     NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
     if (g.length == 0) return -1;
-    // The FRAGMENT rect includes the spacing reserved for the band; the sticker
-    // hangs kNoteGapAbove below its top — the same arithmetic btIOSLayoutNote
-    // uses, and it must stay the same one.
-    CGRect frag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
-    return frag.origin.y + gReadingTV.textContainerInset.top + kNoteGapAbove;
+    return btIOSBandTopY(g.location);
 }
 
 // --- Floating "Follow narration" button -------------------------------------

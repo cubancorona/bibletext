@@ -1672,16 +1672,26 @@ static void btMacApplyNoteInset(void) {
 // take it back itself. On a fresh import the zeroing pass has already cleared
 // every paragraphSpacingBefore, so the guarded clear is a no-op there.
 static NSRange gMacNoteReservedPara = {NSNotFound, 0};
+// What THIS band added to that paragraph's spacingBefore — the iOS twin's
+// take-back record (gNoteReservedContribution carries the full reasoning:
+// subtract, don't zero, or a co-tenant's band goes with yours).
+static CGFloat gMacNoteReservedContribution = 0;
 
 static void btMacClearReservedPara(NSTextStorage *ts) {
     NSRange old = gMacNoteReservedPara;
+    CGFloat mine = gMacNoteReservedContribution;
     gMacNoteReservedPara = NSMakeRange(NSNotFound, 0);
+    gMacNoteReservedContribution = 0;
     if (old.location == NSNotFound || ts == nil || NSMaxRange(old) > ts.length) return;
     NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:old.location
                             effectiveRange:NULL];
     if (base == nil || base.paragraphSpacingBefore == 0) return;
     NSMutableParagraphStyle *ps = [base mutableCopy];
-    ps.paragraphSpacingBefore = 0;
+    // Subtract this band's contribution; a residue within a point of zero IS
+    // zero (the iOS twin says why a ghost point matters).
+    CGFloat left = ps.paragraphSpacingBefore - mine;
+    if (left < 1.0) left = 0;
+    ps.paragraphSpacingBefore = left;
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:old];
     [ts endEditing];
@@ -1719,11 +1729,14 @@ static void btMacInstallNote(void) {
     NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
                             effectiveRange:NULL];
     NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
-    ps.paragraphSpacingBefore = gMacNoteBandH;
+    // ADD, never assign — the iOS twin says why (assignment is the
+    // single-tenant assumption in write form).
+    ps.paragraphSpacingBefore += gMacNoteBandH;
     [ts beginEditing];
     [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
     [ts endEditing];
     gMacNoteReservedPara = para;   // so a moved sticker can take this band back
+    gMacNoteReservedContribution = gMacNoteBandH;
 }
 
 // Build (or rebuild) the sticker's subviews for the current note and palette.
