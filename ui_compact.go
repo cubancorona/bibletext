@@ -52,6 +52,19 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 
 	// Build only the active tab's content — the others are constructed on
 	// demand when the user switches (rebuildWindow re-runs CreateMainUI).
+	//
+	// showReading is NEUTRALIZED first and reassigned only by the Read case
+	// below. Left standing, it points at the PREVIOUS build's detached host,
+	// and a refresh from another tab then rebuilds the reading pane into that
+	// dead tree — the mobile layout documents the same hazard. The sharpest
+	// consequence here: a share-link arrival while the Links tab is front ran
+	// wireStyledReadingScroll against a zero-sized, off-screen pane, which
+	// CONSUMED forceReposition — so the real pane, built a moment later by
+	// switchToRead, never learned an arrival had happened and left the reader
+	// wherever they were. With no reading view on screen there is nothing to
+	// show; the state is simply newer than the view, and the Read tab's own
+	// rebuild renders it.
+	state.showReading = nil
 	var content fyne.CanvasObject
 	switch state.CurrentTab {
 	case 1:

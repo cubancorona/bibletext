@@ -63,6 +63,18 @@ var (
 // styledAnchorActive reports whether the styled pane owns scroll persistence.
 func styledAnchorActive() bool { return styledScroll != nil && styledPane != nil }
 
+// styledViewportSettled records that the CURRENT pane's viewport is a real
+// position: its Layout has run with real sizes at least once. captureStyledAnchor
+// cannot tell "the reader is at the top" from "this pane never laid out" — both
+// read as offset 0 — and carrying the second as the first is how an arrival got
+// swallowed: the share-link handler surfaces the Read tab (one rebuild, which
+// consumes forceReposition and arms the placement), the dev row's own
+// switch-to-read rebuilds AGAIN in the same event, and the second wire captured
+// the first pane's never-laid-out zero as "top", claimed the placement for it
+// (carryTop) and CEDED the highlight — so the note the reader tapped never
+// scrolled into view. A pane that has not settled has no position to carry.
+var styledViewportSettled bool
+
 func styledPaneFP(state *AppState) string {
 	return fmt.Sprintf("%s\x00%d\x00%s", state.CurrentBook, state.CurrentChapter, state.CurrentVersion)
 }
@@ -115,7 +127,7 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 
 	carryVerse, carryDelta, carryFrac := 0, 0.0, 0.0
 	carry, carryTop := false, false
-	if styledAnchorActive() && styledFP == newFP {
+	if styledAnchorActive() && styledFP == newFP && styledViewportSettled {
 		if v, d, f, ok := captureStyledAnchor(); ok {
 			carryVerse, carryDelta, carryFrac, carry = v, d, f, true
 			carryTop = v <= 0 && f <= 0
@@ -126,6 +138,7 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	styledFP = newFP
 	styledUserScrolled = false
 	styledHighlightCeded = false
+	styledViewportSettled = false
 
 	switch {
 	case state.forceReposition:
@@ -370,6 +383,14 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	// logic: the narration's comfort-band scroll wins over a stale anchor.
 	if styledRAFollowPending && l.scroll == styledScroll {
 		styledReadAlongFollowScroll()
+	}
+
+	// The viewport is a real position now — this pane laid out with real sizes,
+	// so whatever its offset is, it is a fact about the reader and may be
+	// carried into a same-chapter rebuild (see styledViewportSettled).
+	if l.scroll == styledScroll && l.scroll != nil && l.pane != nil &&
+		l.scroll.Size().Height > 0 && l.pane.MinSize().Height > 0 {
+		styledViewportSettled = true
 	}
 }
 
