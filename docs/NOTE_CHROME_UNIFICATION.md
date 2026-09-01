@@ -71,9 +71,16 @@
                 8e identity on the wire, and 8f, which flips the flag and is
                 the only one of the nine that changes what a reader sees.
      TWO HAZARDS, unaddressed and live today:
-       - macOS saved reading positions are expressed against
-         textContainerInset.height, the exact number the first-paragraph band
-         mutates. One band already redefines that datum; N would sum into it.
+       - macOS saved reading positions and the first-paragraph band share
+         textContainerInset.height. REFINED after doing the algebra: the
+         verse-anchored path is inset-INVARIANT — delta is captured relative to
+         the verse's own line (offY - (rr + inset)) and restored as
+         rr + insetNow + delta, so an inset change cancels. The residual
+         exposure is only (a) the whole-chapter FRACTION fallback, whose
+         scrollable length includes insetH*2, and (b) the ordering of
+         btMacInstallNote against the restore apply: a restore that resolves
+         before the band installs uses the pre-band inset and lands bandH off.
+         Neither is N-specific; both predate this work.
        - Android's noteBandSpan is BOTH the removal handle and the placement
          input, so the first moment a second band exists the first span is
          orphaned on the live text with no reference — a permanent gap, and no
