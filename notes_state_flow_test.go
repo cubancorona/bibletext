@@ -1030,6 +1030,56 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 		}
 	}
 
+	// N16 — the shared geometry DECISIONS (notes_bubble.go), judged with a
+	// stub measurer so a host with no fonts still enumerates them: the pill
+	// respects its floor and its cap in that order, the fit NEVER loses the
+	// counts — including the degenerate width where only "…" plus the tail
+	// survives — and a fitted line is one the width can actually hold (or
+	// exactly that degenerate answer). Band height was never enumerable at
+	// all before these functions existed; the styled pane now consumes them,
+	// so these cells hold what it draws.
+	stub := noteMeasure{BodyH: 40, WhoSz: 11, Btn: 28,
+		TextW: func(t string) float32 { return float32(len([]rune(t))) * 6 }}
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"shown", o.snapShown}, {"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		c := s.snap.chrome
+		if c.Who == "" {
+			continue
+		}
+		for _, maxW := range []float32{40, 86, 120, 300} {
+			w := notePillW(stub, c.Who, maxW)
+			if w > maxW {
+				bad = append(bad, "N16-pill-over-cap@"+s.when)
+			}
+			if maxW >= noteMetrics().PillMinW && w < noteMetrics().PillMinW {
+				bad = append(bad, "N16-pill-under-floor@"+s.when)
+			}
+		}
+		for _, width := range []float32{40, 86, 150, 400} {
+			fitted := noteFitWho(stub, c.Who, width)
+			if c.Counts != "" && !strings.Contains(fitted, c.Counts) {
+				bad = append(bad, "N16-fit-lost-the-counts@"+s.when)
+			}
+			if stub.TextW(fitted) > width {
+				degenerate := c.Who
+				if i := strings.Index(c.Who, " · "); i >= 0 {
+					degenerate = "…" + c.Who[i:]
+				}
+				if fitted != degenerate {
+					bad = append(bad, "N16-fit-does-not-fit@"+s.when)
+				}
+			}
+		}
+		if noteCardH(stub, 2) <= noteCardH(stub, 1) {
+			bad = append(bad, "N16-card-does-not-stack@"+s.when)
+		}
+		if noteBandH(10, true)-noteBandH(10, false) != noteMetrics().TailDepth {
+			bad = append(bad, "N16-tail-not-a-band-matter@"+s.when)
+		}
+	}
+
 	// N10, extended — the styled pane's pill row is EXACTLY the model's
 	// answer: groups pills where ShownAs says pills, none anywhere else.
 	// Judged only at the two moments a pane was built.

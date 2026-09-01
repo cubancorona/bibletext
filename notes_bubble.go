@@ -277,6 +277,83 @@ type noteSpacing struct {
 	Lead      float32
 }
 
+// --- the shared geometry decisions ------------------------------------------
+
+// noteMeasure is the PLATFORM half of the sticker's geometry: the numbers only
+// a renderer can know — its fonts, its verb button. Handed to the functions
+// below so the DECISIONS (what a band reserves, what a card stacks, how a pill
+// sizes, where a who line gives way) are made here, once, and are enumerable
+// on a host with a stub measurer instead of a device.
+type noteMeasure struct {
+	BodyH float32              // one body line's height in this renderer's body font
+	WhoSz float32              // the who row's (and the pill label's) font size
+	Btn   float32              // one verb button's edge
+	TextW func(string) float32 // width of a run at WhoSz, bold — the who row's own measure
+}
+
+// notePillW is the collapsed pill's width: the label plus the spec's side
+// padding, floored at the spec's minimum, then capped at the space available —
+// in that order, so a narrow pane still narrows the pill.
+func notePillW(m noteMeasure, label string, maxW float32) float32 {
+	w := m.TextW(label) + 2*noteMetrics().PillPadX
+	if w < noteMetrics().PillMinW {
+		w = noteMetrics().PillMinW
+	}
+	if w > maxW {
+		w = maxW
+	}
+	return w
+}
+
+// noteCardH is the expanded card's height WITHOUT its tail: padding, the who
+// row, the gap to the body, the body's lines, padding.
+func noteCardH(m noteMeasure, bodyLines int) float32 {
+	return noteMetrics().Pad + noteMetrics().WhoH(m.WhoSz) + noteMetrics().WhoGap +
+		float32(bodyLines)*m.BodyH + noteMetrics().Pad
+}
+
+// noteBandH is what a layout reserves for a drawn shape: the spec's gap on
+// BOTH sides (the symmetry rule every pane relearned separately), the shape,
+// and the tail's depth when the card points at a passage.
+func noteBandH(shapeH float32, hasTail bool) float32 {
+	h := noteMetrics().GapAbove + shapeH + noteMetrics().GapBelow
+	if hasTail {
+		h += noteMetrics().TailDepth
+	}
+	return h
+}
+
+// noteFitWho fits a who line into a width. The SENDER half gives way to an
+// ellipsis and everything from the first separator on survives whole: the
+// counts are the honest part, and the byline is recoverable from the bubble
+// itself. In the degenerate case — no width even for one sender rune — the
+// answer is the ellipsis plus that surviving tail, never a line that lost its
+// counts. A line that already fits, or has no separator to split at, returns
+// unchanged.
+func noteFitWho(m noteMeasure, who string, width float32) string {
+	if who == "" || width <= 0 {
+		return who
+	}
+	if m.TextW(who) <= width {
+		return who
+	}
+	i := strings.Index(who, " · ")
+	if i < 0 {
+		return who
+	}
+	sender, counts := who[:i], who[i:]
+	avail := width - m.TextW(counts)
+	r := []rune(sender)
+	for len(r) > 0 {
+		cand := string(r) + "…"
+		if m.TextW(cand) <= avail {
+			return cand + counts
+		}
+		r = r[:len(r)-1]
+	}
+	return "…" + counts
+}
+
 // noteMetrics is THE table. Every surface reads this or is held to it by
 // notes_spacing_spec_test.go.
 //

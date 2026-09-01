@@ -177,7 +177,9 @@ func (g styledNoteGeom) bandH() float32 {
 	if !g.present {
 		return 0
 	}
-	return styledNoteGapAbv + g.card.H + styledNoteGapBlw
+	// card.H already carries the tail's depth (measureStyledNote), so the
+	// shared reservation is asked about the bare shape.
+	return noteBandH(g.cardH, g.hasTail)
 }
 
 // hits reports whether a position is inside the sticker at all — the guard
@@ -246,27 +248,20 @@ func styledNoteWrap(text string, width, size float32) []string {
 // byline survives — the count is the honest part, the byline is recoverable
 // from the bubble itself.
 func styledFitWho(who string, width float32) string {
-	if who == "" || width <= 0 {
-		return who
+	return noteFitWho(styledNoteMeasure(0), who, width)
+}
+
+// styledNoteMeasure is this pane's numbers for the shared geometry decisions:
+// its fonts through Fyne's own measurement, its verb button. lineH is the
+// body line height where the caller has measured one (noteCardH needs it);
+// zero where the decision at hand never reads it.
+func styledNoteMeasure(lineH float32) noteMeasure {
+	return noteMeasure{
+		BodyH: lineH,
+		WhoSz: styledNoteWhoSz,
+		Btn:   styledNoteBtn,
+		TextW: func(t string) float32 { return styledUIMeasure(t, styledNoteWhoSz, true).Width },
 	}
-	if styledUIMeasure(who, styledNoteWhoSz, true).Width <= width {
-		return who
-	}
-	i := strings.Index(who, " · ")
-	if i < 0 {
-		return who
-	}
-	sender, counts := who[:i], who[i:]
-	avail := width - styledUIMeasure(counts, styledNoteWhoSz, true).Width
-	r := []rune(sender)
-	for len(r) > 0 {
-		cand := string(r) + "…"
-		if styledUIMeasure(cand, styledNoteWhoSz, true).Width <= avail {
-			return cand + counts
-		}
-		r = r[:len(r)-1]
-	}
-	return "…" + counts
 }
 
 // measureStyledNote sizes the sticker for a card `width` points wide and fills
@@ -292,15 +287,10 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 		if g.pillText == "" {
 			g.pillText = "Note"
 		}
-		w := styledUIMeasure(g.pillText, styledNoteWhoSz, true).Width + 2*noteMetrics().PillPadX
-		if w < noteMetrics().PillMinW {
-			w = noteMetrics().PillMinW
-		}
-		if w > width {
-			w = width
-		}
-		// The pill's height is SPEC, not the verb button's size (noteMetrics
+		// The width is the SHARED decision (notePillW) fed this pane's own
+		// measure; the height is SPEC, not the verb button's size (noteMetrics
 		// records why the two were ever the same number).
+		w := notePillW(styledNoteMeasure(0), g.pillText, width)
 		g.card = styledNoteRect{X: 0, Y: 0, W: w, H: noteMetrics().PillH}
 		g.cardH = noteMetrics().PillH
 		return g
@@ -375,7 +365,9 @@ func measureStyledNote(n styledNote, width float32) styledNoteGeom {
 			X: styledNotePad, Y: bodyY + float32(i)*lineH, W: inner, H: lineH,
 		}
 	}
-	g.cardH = bodyY + float32(len(g.body))*lineH + styledNotePad
+	// The SHARED stack (noteCardH), fed this pane's measured line height —
+	// the same sum bodyY built the body's own placement from.
+	g.cardH = noteCardH(styledNoteMeasure(lineH), len(g.body))
 	// Anchor 0 is the anchorless placement a whole-chapter note uses
 	// (applyNoteForCurrentChapter parks the collapsed set there too), so it is
 	// the same question as "does this point at a passage?".

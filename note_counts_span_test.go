@@ -104,7 +104,12 @@ func TestNoRendererParsesTheSeparatorTwice(t *testing.T) {
 		{"reading_macos.go", `@"` + noteWhoSep + `"`, 1, "btMacFitWho, the same question"},
 		// Java spells the middle dot as an escape, which is the same literal.
 		{"android/BtBridge.java", `" \u00b7 "`, 1, "fitWho, the same question"},
-		{"reading_styled_note.go", `"` + noteWhoSep + `"`, 1, "styledFitWho, the same question"},
+		// The styled pane's fit is the SHARED function now (noteFitWho,
+		// notes_bubble.go) — the one place the question is answered in Go, and
+		// the place the enumeration holds to it (N16-fit-lost-the-counts,
+		// mutation-verified). The pane spells no separator of its own.
+		{"notes_bubble.go", `"` + noteWhoSep + `"`, 1, "noteFitWho, the ONE Go answer the styled pane consumes"},
+		{"reading_styled_note.go", `"` + noteWhoSep + `"`, 0, "delegation: a separator here would be the cut growing back beside the shared fit"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			// Count CODE, not prose: these files explain the grammar in their
