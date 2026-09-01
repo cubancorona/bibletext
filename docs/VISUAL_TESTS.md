@@ -58,7 +58,12 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] A chapter-scope note (no verse): card parks at the CHAPTER TOP with
       NO tail — a tail there claims verse 1 (the web shipped this until
       step 9).
-- [ ] A pill sharing the open card's paragraph stacks ABOVE the card.
+- [ ] An open RECEIVED card shows NO pills anywhere — its who line ("· 2 of
+      5 in this chapter ›") is the set's one representation, and pills
+      beside it would say it twice.
+- [ ] An open OWN card keeps the pills (your card carries no count of the
+      friends' set — without them it is represented nowhere); one sharing
+      the card's paragraph stacks ABOVE it.
 - [ ] The who line: byline, counts, chevron when the counts are a control;
       tapping the counts cycles the set, wash moving with it.
 - [ ] Verbs by ownership: a received note carries − and the bin; your own
@@ -135,5 +140,8 @@ Each line was a real screen defect this list would have caught:
 8. Every surface: plain entry dragged the reader to a collapsed note's
    pill (`chapterNoteArrival` targeting the note's own verse without an
    explicit arrival).
+10. The natives: pills drawn beside an OPEN received bubble — the band push
+    was not gated on the representation (`ShownAs`), so the set was said
+    twice everywhere but the styled pane.
 9. Harness lesson, not a pixel: wipe the store before counting anything —
    stale fixtures made a correct "Notes · 3" label look like a wire bug.

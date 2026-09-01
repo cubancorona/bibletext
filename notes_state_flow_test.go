@@ -994,12 +994,19 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 			}
 		}
 
-		// N15 — the bands mirror the groups: one per group, keyed by index
-		// (the sort contract placement and the verb both lean on), never
-		// empty-handed, and none at all while the gate is off. This is the
-		// gate the flag's flip was decided over.
-		if len(c.Bands) != len(s.snap.groupList) {
-			bad = append(bad, "N15-bands-groups-diverge@"+s.when)
+		// N15 — the bands FOLLOW THE REPRESENTATION: one per group, keyed by
+		// index (the sort contract placement and the verb both lean on),
+		// never empty-handed — and only where ShownAs says the pills are how
+		// the set is drawn. An open received note's who line carries the
+		// count, and bands beside it would say the set twice on every native
+		// (the report that added this arm). None at all while the gate is
+		// off. This is the gate the flag's flip was decided over.
+		wantBands := 0
+		if c.ShownAs == shownAsPills {
+			wantBands = len(s.snap.groupList)
+		}
+		if len(c.Bands) != wantBands {
+			bad = append(bad, "N15-bands-follow-shownas@"+s.when)
 		}
 		if !w.pills && len(c.Bands) != 0 {
 			bad = append(bad, "N15-bands-with-gate-off@"+s.when)

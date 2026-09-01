@@ -244,11 +244,23 @@ func chapterNoteChrome(state *AppState, plan chapterPlan, verses []Verse) noteCh
 	// are facts about the render, not about the note, so they are read here
 	// rather than threaded through every caller.
 	groups := chapterNoteGroups(state, plan, verses)
-	c.Bands = noteBandSpecs(groups)
-	c.Arrival, c.ArrivalVerse = chapterNoteArrival(state, c, verses, groups,
+	c.ShownAs = receivedSetShownAs(plan, c, len(groups))
+	// THE BANDS FOLLOW THE REPRESENTATION. Pills are drawn only when they are
+	// HOW the received set is shown (receivedSetShownAs): beside a collapsed
+	// multi-paragraph set, and beside an open OWN note, whose card carries no
+	// count of the set (X16's fix). An open RECEIVED note's who line carries
+	// the count itself, and pills beside it say the same set twice — the
+	// styled pane's rule, which the natives drew past because this list was
+	// pushed ungated. The arrival classifier reads the same gated list, so a
+	// band can win an arrival only where one is actually reserved.
+	drawn := groups
+	if c.ShownAs != shownAsPills {
+		drawn = nil
+	}
+	c.Bands = noteBandSpecs(drawn)
+	c.Arrival, c.ArrivalVerse = chapterNoteArrival(state, c, verses, drawn,
 		gAudio != nil && gAudio.readAlongFollowActive(),
 		state.restore != nil, state.forceReposition)
-	c.ShownAs = receivedSetShownAs(plan, c, len(groups))
 	return c
 }
 
