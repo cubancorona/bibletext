@@ -89,14 +89,16 @@ func TestAnAnchorlessNoteJoinsTheTopGroupAndAnAbsentVerseJoinsNothing(t *testing
 // deliberate edit rather than a drift.
 //
 // The flag reaches ONE surface: iOS, macOS and Android have a single sticker and
-// no pill row. Turning it on was tried and reverted, because it split the
-// collapsed model across platforms — per-paragraph counts on desktop, the
-// chapter-wide chip on the phone — which is worse than either model applied
-// everywhere. The port is what unblocks the flip; see docs/BACKLOG.md.
-func TestPillPerParagraphIsOffByDefault(t *testing.T) {
-	if notesPillPerParagraph {
-		t.Fatal("notesPillPerParagraph must default to false until every surface " +
-			"draws the groups: on is a split collapsed model, not a shipped one")
+// The flip was gated on every surface drawing the groups — flipping earlier
+// split the collapsed model across platforms (per-paragraph counts on desktop,
+// the chapter-wide chip on the phone). The band-spec pushes took the pills to
+// iOS, macOS and Android, so the shipped default is the plural model
+// everywhere; off remains the dev toggle's comparison state.
+func TestPillPerParagraphIsOnByDefault(t *testing.T) {
+	if !notesPillPerParagraph {
+		t.Fatal("notesPillPerParagraph must default to true: every surface draws " +
+			"the groups now, and off is a collapsed state that cannot say where " +
+			"the chapter's notes are")
 	}
 }
 

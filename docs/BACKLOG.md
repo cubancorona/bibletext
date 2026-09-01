@@ -174,10 +174,12 @@ Three ways to take it, cheapest first, not exclusive:
 2. **Mark the other noted passages in the text**, so the pill over one
    paragraph no longer implies it is the only one. This is the discovery
    problem, and it is what the banner already gives the non-native platforms.
-   PARTLY ADDRESSED on the styled pane by the per-paragraph pills
-   (`notesPillPerParagraph`), which draw one pill per noted paragraph with that
-   paragraph's own count. Still open for iOS, macOS and Android, which draw a
-   single sticker.
+   ADDRESSED EVERYWHERE: the per-paragraph pills
+   (`notesPillPerParagraph`) draw one pill per noted paragraph with that
+   paragraph's own count on the styled pane, and iOS, macOS and Android draw
+   the same groups through their band-spec pushes (`bibleTextSetNoteBands`
+   and its twins). The gate defaults ON now — the shipped collapsed state
+   says where the chapter's notes are on every surface.
 3. **Lift the cap.** `planOpenLimit`'s own comment invites it: "TO LIFT THE
    CAP: raise this number (or drop the counter). Nothing else changes — not the
    store, not drawnNote, not the fingerprint." Largest change, and worth

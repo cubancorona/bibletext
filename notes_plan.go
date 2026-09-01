@@ -857,18 +857,21 @@ func groupNotesByParagraph(paras [][]Verse, notes []drawnNote) []noteParagraphGr
 // A var, not a build constant, so the dev build can flip it while the app is
 // running and the two can be compared on the same chapter without a reinstall.
 //
-// OFF, and deliberately so until the pills reach every surface. Only the styled
-// pane (Windows and Linux) draws the groups; iOS, macOS and Android have one
-// sticker and no pill row. Turning it on therefore split the collapsed model
-// across platforms — desktop readers got per-paragraph counts, phone readers the
-// chapter-wide chip — which is a worse state than either model applied
-// everywhere. See X16 in docs/NOTES_STATE.md, and the port plan in
-// docs/BACKLOG.md.
+// ON. It stayed off until the pills reached every surface, because flipping it
+// with only the styled pane drawing the groups split the collapsed model
+// across platforms — per-paragraph counts on desktop, the chapter-wide chip on
+// the phone, worse than either model applied everywhere (X16 in
+// docs/NOTES_STATE.md). The band-spec pushes closed that: iOS, macOS and
+// Android draw the groups through bibleTextSetNoteBands and its twins now, so
+// the collapsed state says WHERE the chapter's notes are on every surface, and
+// an open own note no longer leaves the received set represented nowhere. The
+// off value remains the dev toggle's comparison state and the one-line
+// reversion if the plural model misbehaves in the field.
 //
 // It writes nothing and is not persisted, so a relaunch is back to this default
 // either way — right for a switch that exists to be experimented with rather
 // than configured.
-var notesPillPerParagraph = false
+var notesPillPerParagraph = true
 
 // chapterNoteGroups is the collapsed state's groups for the current chapter, or
 // nil when the shipped single-sticker model is in force. Surfaces ask this one

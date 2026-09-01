@@ -1109,7 +1109,15 @@ that ran:
     groups=2:            0 cells  ->  672
     two pills drawn:     0 cells  ->  286
 
-### X16 — exists today — the same blanking, on the surfaces with no pill row
+### X16 — struck for the shipped default 2026-09-01 — the same blanking, wherever the pill gate is off
+
+> Struck as the SHIPPED experience: the band-spec pushes took the per-paragraph
+> pills to iOS, macOS and Android (`bibleTextSetNoteBands` and its twins), and
+> `notesPillPerParagraph` now defaults to true, so every reader's build
+> represents the received set while an own note is open. The enumeration's pin
+> remains: the gate's off value still exists (the dev toggle's comparison
+> state, and the one-line reversion), and its 504 cells are the debt that
+> reversion would reincur — named, so it cannot be paid silently.
 
 iOS, macOS and Android draw one sticker and have no pill row, so the repair
 above could not reach them while the pills were desktop-only: opening an own

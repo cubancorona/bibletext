@@ -250,14 +250,15 @@ type pinnedDefect struct {
 var knownIncoherent = []pinnedDefect{
 	{
 		name: "X16",
-		what: "an open own note leaves the received set represented nowhere, wherever there is no pill row",
+		what: "an open own note leaves the received set represented nowhere, under the gate's OFF value",
 		covers: func(w notesWorld, inv string) bool {
-			// Every surface without a pill row: the three native ones, and the
-			// styled pane with the gate off, which is every shipped build. The
-			// sticker is busy with the reader's own note, that note carries no
-			// count of the received set by design, and nothing else on the page
-			// speaks for it. With the gate ON the pills speak for it and these
-			// cells come out clean — which is the fix, measured.
+			// STRUCK AS THE SHIPPED EXPERIENCE on 2026-09-01: the band-spec
+			// pushes took the pills to iOS, macOS and Android and the gate's
+			// default flipped true, so no reader's build represents the set
+			// nowhere. The pin STAYS because the off value still exists — the
+			// dev toggle's comparison state, and the one-line reversion — and
+			// these are the cells that debt would cost. Striking the pin
+			// outright would require removing the off value itself.
 			return strings.HasPrefix(inv, "N9-set-unrepresented") &&
 				w.focus == focusOwnAx && !w.pills
 		},
