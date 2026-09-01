@@ -189,10 +189,43 @@ func resolveNoteAnchor(n StoredNote, readingVersionID string, bible *BibleData) 
 	runs := storedAnchorRuns(n)
 
 	// 1. The reading translation IS the note's own: home, byte-exact, even if
-	// the delta tables are wrong about it. No mapping runs, no existence test —
-	// the note was written against this very text.
+	// the delta tables are wrong about it. No MAPPING runs — but existence is
+	// still the TEXT's to answer: a run can name a verse this data does not
+	// carry (an inflated link, a revision drift, an omitted verse), and
+	// trusting it verbatim produced a PLACED note anchored on a verse with no
+	// line — a tail pointing at nothing, a mirror verse no surface can find
+	// (the enumeration's N11). The check is against the loaded text, never
+	// the delta tables, so the tables-are-wrong concern stays answered.
+	// Verses the data lacks fall out of the runs; a note none of whose verses
+	// survive has no home here at all and says so as R4.
 	if strings.EqualFold(n.VersionID, readingVersionID) {
-		return placement{Kind: placedNative, Here: runs}
+		var hereHits []verseHit
+		var hereChapters []int
+		for _, r := range runs {
+			if r.Lo <= 0 {
+				if bibleHasChapter(bible, n.Book, r.Chapter) {
+					hereChapters = append(hereChapters, r.Chapter)
+				}
+				continue
+			}
+			hi := r.Hi
+			if hi < r.Lo {
+				hi = r.Lo
+			}
+			if hi-r.Lo+1 > anchorWalkCap {
+				hi = r.Lo + anchorWalkCap - 1
+			}
+			for v := r.Lo; v <= hi; v++ {
+				if bibleHasVerse(bible, n.Book, r.Chapter, v) {
+					hereHits = append(hereHits, verseHit{r.Chapter, v})
+				}
+			}
+		}
+		here := append(coalesceChapterRuns(hereChapters), coalesceVerseHits(hereHits)...)
+		if len(here) == 0 {
+			return placement{Kind: unplacedAbsent}
+		}
+		return placement{Kind: placedNative, Here: here}
 	}
 
 	// 2. Book existence, BEFORE MapVerse is consulted — the table lies about
@@ -259,7 +292,11 @@ func resolveNoteAnchor(n StoredNote, readingVersionID string, bible *BibleData) 
 			// placedExact — MapVerse's identity default trusted past the point
 			// the canon supports. Unreachable with the shipping tables, but
 			// "unreachable" is a property of today's data, not of this code.
-			if !bibleHasChapter(bible, n.Book, ch) {
+			// The destination VERSE too, not just its chapter: MapVerse's
+			// identity default carries any number through for a version pair
+			// (or an unknown id) the tables treat as exact, and only the text
+			// can say whether a line is actually there.
+			if !bibleHasVerse(bible, n.Book, ch, mv) {
 				sawAbsent = true
 				continue
 			}
@@ -308,6 +345,29 @@ func placementRunOn(pl placement, chapter int) (anchorRun, bool) {
 		}
 	}
 	return anchorRun{}, false
+}
+
+// bibleHasVerse reports whether the loaded reading data carries a verse — the
+// question bibleHasChapter answers, one level down. The text refuses a verse
+// only on POSITIVE contrary knowledge: a chapter with verses loaded that does
+// not include this one. A nil bible or an empty chapter has no opinion and
+// answers yes, so the tables' verdict stands alone — the same stance
+// bibleHasChapter documents, extended to data that has not (or cannot have)
+// been loaded.
+func bibleHasVerse(bible *BibleData, book string, chapter, verse int) bool {
+	if bible == nil {
+		return true
+	}
+	verses := bible.GetChapter(book, chapter)
+	if len(verses) == 0 {
+		return true
+	}
+	for _, v := range verses {
+		if v.Verse == verse {
+			return true
+		}
+	}
+	return false
 }
 
 // bibleHasChapter reports whether the loaded reading data contains a chapter.

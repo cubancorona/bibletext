@@ -19,6 +19,12 @@ func planTestState(t *testing.T) *AppState {
 	t.Helper()
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
+	// The sample data's John 3 is a SINGLE VERSE, and half these fixtures seed
+	// notes on 3:17, 3:18 — verses that text does not carry. That only ever
+	// worked because placement trusted a run without consulting the text;
+	// resolveNoteAnchor checks now, so the fixture carries the verses the
+	// notes claim (the enumeration's own chapter, for the same reason).
+	bd.Verses["John"][3] = enumerationChapter()
 	return &AppState{
 		Bible: bd, CurrentBook: "John", CurrentChapter: 3,
 		CurrentVersion: "web", loadPhase: loadReady,

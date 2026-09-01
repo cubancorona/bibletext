@@ -25,7 +25,15 @@ func anchorTestBible() *BibleData {
 	add := func(book string, chapters ...int) {
 		bd.Verses[book] = map[int][]Verse{}
 		for _, c := range chapters {
-			bd.Verses[book][c] = []Verse{{BookName: book, Chapter: c, Verse: 1, Text: "text"}}
+			// Thirty verses, not one: placement now refuses a verse a LOADED
+			// chapter demonstrably lacks, and the mapped destinations these
+			// cases measure (the doxology's 16:25-27 among them) must exist in
+			// the stand-in text just as they do in the real translations.
+			vv := make([]Verse, 0, 120)
+			for v := 1; v <= 120; v++ {
+				vv = append(vv, Verse{BookName: book, Chapter: c, Verse: v, Text: "text"})
+			}
+			bd.Verses[book][c] = vv
 		}
 	}
 	add("Romans", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
@@ -101,11 +109,13 @@ func TestResolveNoteAnchorMeasuredCases(t *testing.T) {
 		},
 		{
 			// The reading translation IS the note's own: home, byte-exact, no
-			// mapping, no existence test — even where the tables would call the
-			// book incommensurable from anywhere else.
+			// mapping — even where the tables would call the book
+			// incommensurable from anywhere else. Existence against the TEXT
+			// is still honoured (the verse is on it here), and the walk
+			// normalises the open-ended Hi:0 run to the verse it lands on.
 			name: "same version is native",
 			note: note("web", "Esther", 4, 1, 0), reading: "web",
-			want: placement{Kind: placedNative, Here: []anchorRun{{Chapter: 4, Lo: 1}}},
+			want: placement{Kind: placedNative, Here: []anchorRun{{Chapter: 4, Lo: 1, Hi: 1}}},
 		},
 		{
 			name: "chapter-level note follows",

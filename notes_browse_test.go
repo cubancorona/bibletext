@@ -719,7 +719,7 @@ func TestOwnNoteTapDoesNotSuppressAFriendsNote(t *testing.T) {
 	defer deleteAllNotes(appPrefs())
 
 	friend, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
-		Book: "Psalms", Chapter: 23, VerseLo: 4, Text: "fixture received alpha"})
+		Book: "Psalms", Chapter: 23, VerseLo: 3, Text: "fixture received alpha"})
 	if !ok {
 		t.Fatal("the friend's note was not stored")
 	}

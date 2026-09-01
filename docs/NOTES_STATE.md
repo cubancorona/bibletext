@@ -34,8 +34,14 @@
 > `turnNotesOff`, the off-branch clear, and `renumberMarkForVersion`; the final
 > enumeration recorded zero named violations for five passes. The sixth added
 > the reader's OWN notes, the presentation gate and a second noted paragraph as
-> axes — 1280 states became 12800 — and reopened the table: `X16` covers 168
-> cells. Of the older entries
+> axes — 1280 states became 12800 — and reopened the table: `X16` covered 168
+> cells. The seventh pass added the UNPLACED axis (an R4 note and a
+> beyond-the-chapter run, 12800 states became 38400), which multiplied X16's
+> cells to 504, gave the who-without-text tuple its first reachable cells, and
+> found the anchor machinery trusting a run past the chapter's end — a placed
+> note anchored on a verse with no line, fixed in `resolveNoteAnchor` by
+> checking every run against the loaded text itself (N11's 3,404 violations,
+> zero after). Of the older entries
 > only `X8`, pinned by its own named test outside the enumerations, remains
 > open.
 > Sections marked **[INTENDED]** describe the target behaviour at the time this
@@ -1106,8 +1112,8 @@ that ran:
 ### X16 — exists today — the same blanking, on the surfaces with no pill row
 
 iOS, macOS and Android draw one sticker and have no pill row, so the repair
-above cannot reach them: opening an own note there still represents the
-received set zero times. The fix cannot be the pills; it has to be a clause in
+above could not reach them while the pills were desktop-only: opening an own
+note there represented the received set zero times. The fix cannot be the pills; it has to be a clause in
 the own note's who line — "Note from you · 5 from friends here" — written as
 its own clause rather than folded into N, so that "displaying an own note must
 not change N" (`notes_plan.go`, `appleStickerPush`) still holds.
@@ -1115,8 +1121,9 @@ not change N" (`notes_plan.go`, `appleStickerPush`) still holds.
 Not a regression and not introduced by the pills: this is what every surface
 did before, and what the three without a pill row still do.
 
-**Evidence.** 168 cells of the notes enumeration, every one of them
-`focus=own pills=false`. It was 48 while N9 judged only the post-verb and
+**Evidence.** 504 cells of the notes enumeration, every one of them
+`focus=own pills=false` (168 before the unplaced axis tripled the space along
+an orthogonal variable). It was 48 while N9 judged only the post-verb and
 post-navigation moments; the moment the reader was actually looking at the page
 when they reached for the verb went unjudged, and carried 120 more. The same cells with `pills=true` come out clean, which
 is the X15 fix measured rather than asserted — the pills are what represents the

@@ -119,6 +119,20 @@ func (f noteFocusAxis) String() string {
 // notesWorld is the slice of the world the notes subsystem branches on. Kept as
 // its own type so the enumeration is readable, and so adding a variable to the
 // subsystem means adding it HERE, where the cross-product picks it up.
+// unplacedAxis is the unplaced-note axis: no such note, the R4 kind the delta
+// tables produce, or a run beyond the chapter's own end.
+type unplacedAxis int
+
+const (
+	unplacedNo unplacedAxis = iota
+	unplacedR4
+	unplacedBeyond
+)
+
+func (u unplacedAxis) String() string {
+	return [...]string{"no", "r4", "beyond"}[u]
+}
+
 type notesWorld struct {
 	featureOn bool
 	placement notePlacement
@@ -140,6 +154,22 @@ type notesWorld struct {
 	// only in the own-note case, so the multi-paragraph states go unvisited.
 	spread bool
 
+	// unplaced — a received note on this BOOK that this translation cannot
+	// place. Without this axis the who-without-text tuple — the state whose
+	// mis-draw is an empty sender bubble — was UNREACHABLE, so N13's guard on
+	// it was dead: measured, a mutation forcing Pill=false on that tuple
+	// passed the whole walk. It also reaches the chapter-top band (Verse 0)
+	// and the anchorless arrival arm, which no placed-note cell can.
+	//
+	// Two flavours, because they exercise two different absences: R4 is the
+	// delta tables saying a verse has no home here (NKJV John 5:4 read under
+	// WEB), and BEYOND is a run naming a verse the chapter's own data does
+	// not carry (an inflated link). The first walk with BEYOND found the
+	// anchor machinery trusting such runs verbatim — a placed note anchored
+	// on a verse with no line, N11 at 3,404 cells — which is why the flavour
+	// stays enumerated after the fix: it is the tripwire against re-trusting.
+	unplaced unplacedAxis
+
 	// pills — notesPillPerParagraph, the presentation gate. Off is every
 	// shipped build and all three native surfaces; on is the styled pane's
 	// pill row. It belongs on the cross-product because it decides WHICH of the
@@ -148,8 +178,8 @@ type notesWorld struct {
 }
 
 func (w notesWorld) id() string {
-	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v spread=%v pills=%v",
-		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb, w.ownNote, w.spread, w.pills)
+	return fmt.Sprintf("on=%v place=%s collapsed=%v foreignHL=%v focus=%s arrival=%v verb=%s own=%v spread=%v unplaced=%s pills=%v",
+		w.featureOn, w.placement, w.collapsed, w.foreignHL, w.focus, w.arrival, w.verb, w.ownNote, w.spread, w.unplaced, w.pills)
 }
 
 // --- what is broken today ---------------------------------------------------
@@ -277,26 +307,28 @@ func TestNotesStateSpace(t *testing.T) {
 							for _, verb := range []noteVerb{verbNone, verbHide, verbShow, verbDelete, verbNotesOff} {
 								for _, ownNote := range []bool{false, true} {
 									for _, spread := range []bool{false, true} {
-										for _, pills := range []bool{false, true} {
-											w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb, ownNote, spread, pills}
-											seen++
-											obs, offered := runNotesFlow(t, w)
-											if !offered {
-												skipped++
-												continue
-											}
-											for _, inv := range checkNotesInvariants(w, obs) {
-												total++
-												named := ""
-												for _, d := range knownIncoherent {
-													if d.covers(w, inv) {
-														named = d.name
-														hits[d.name]++
-														break
-													}
+										for _, unplaced := range []unplacedAxis{unplacedNo, unplacedR4, unplacedBeyond} {
+											for _, pills := range []bool{false, true} {
+												w := notesWorld{featureOn, placement, collapsed, foreignHL, focus, arrival, verb, ownNote, spread, unplaced, pills}
+												seen++
+												obs, offered := runNotesFlow(t, w)
+												if !offered {
+													skipped++
+													continue
 												}
-												if named == "" {
-													unexplained = append(unexplained, w.id()+" | "+inv)
+												for _, inv := range checkNotesInvariants(w, obs) {
+													total++
+													named := ""
+													for _, d := range knownIncoherent {
+														if d.covers(w, inv) {
+															named = d.name
+															hits[d.name]++
+															break
+														}
+													}
+													if named == "" {
+														unexplained = append(unexplained, w.id()+" | "+inv)
+													}
 												}
 											}
 										}
@@ -338,7 +370,7 @@ func TestNotesStateSpace(t *testing.T) {
 	// the doc's combined line. EMPTY since the sixth pass — zero named
 	// violations — and the set-equality assertion above is what now holds it
 	// there.
-	expectedHits := map[string]int{"X16": 168}
+	expectedHits := map[string]int{"X16": 504}
 	for name, want := range expectedHits {
 		if hits[name] != want {
 			t.Errorf("%s covers %d cells, docs/NOTES_STATE.md records %d — re-measure "+
@@ -406,6 +438,21 @@ type planSnap struct {
 	shownAs receivedShownAs
 	groups  int
 
+	// chrome is THE ONE COMPOSED VALUE every surface consumes
+	// (chapterNoteChrome), snapshotted at the same instant as the plan so the
+	// N11-N15 tripwires can hold its self-consistency in every cell. groupList
+	// is the slice the count above summarises, kept because the band
+	// assertions need the entries, not just how many there were.
+	chrome    noteChrome
+	groupList []noteParagraphGroup
+
+	// liveKindMine is what the STORE says about the note the mirror names:
+	// st.NoteID resolves to a Kind=mine record right now. Read through the
+	// browsing list rather than findNoteByID, so the two accessors answering
+	// differently — or the mirror naming a purged record — trips N12 instead
+	// of hiding inside one shared lookup.
+	liveKindMine bool
+
 	// AND WHAT THE PANE ACTUALLY DREW. The three fields above are the model's
 	// account of itself; these two are the styled pane's. Both are needed,
 	// because the defect this axis was added for lives in the SEAM: the model
@@ -430,16 +477,32 @@ func takePlanSnap(st *AppState, withPane bool) planSnap {
 		suppressed: notesSuppressed(st),
 		featureOn:  notesFeatureOn(st),
 	}
+	// BOOK-scoped, not chapter-scoped: the plan lists placed notes for the
+	// chapter and unplaced ones for the whole book, and in this harness every
+	// John note is one or the other — so the book count is exactly "what the
+	// plan must account for". The old chapter filter left the R4 seed
+	// (John 5:4) invisible to N4 and let V3 miscount an unplaced chapter-3
+	// note as "emptied".
 	for _, n := range allNotesForBrowsing(appPrefs()) {
-		if n.Kind == noteKindReceived && n.Book == "John" && n.Chapter == 3 {
+		if n.Kind == noteKindReceived && n.Book == "John" {
 			snap.passageNotes++
 		}
 	}
 	verses := st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)
-	snap.groups = len(chapterNoteGroups(st, snap.plan, verses))
+	snap.groupList = chapterNoteGroups(st, snap.plan, verses)
+	snap.groups = len(snap.groupList)
 	snap.shownAs = receivedSetShownAs(snap.plan, styledNoteFor(st), snap.groups)
+	snap.chrome = chapterNoteChrome(st, snap.plan, verses)
 	snap.ownFocused = isOwnLiveNote(st)
 	snap.activeNote = st.ActiveNote
+	if st.NoteID != 0 {
+		for _, n := range allNotesForBrowsing(appPrefs()) {
+			if n.ID == st.NoteID {
+				snap.liveKindMine = n.Kind == noteKindMine
+				break
+			}
+		}
+	}
 	if withPane && len(verses) > 0 {
 		pane := newStyledReadingPane(st, verses)
 		pane.Resize(fyne.NewSize(320, 900))
@@ -467,6 +530,19 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
 	bd.Verses["John"][3] = enumerationChapter()
+	// John 5 with its REAL shape: the WEB omits verse 4, and placement now
+	// refuses a verse a loaded chapter demonstrably lacks — which is exactly
+	// what makes the R4 seed below unplaceable HERE while staying a perfectly
+	// ordinary note in the translation it was written under.
+	john5 := make([]Verse, 0, 20)
+	for i := 1; i <= 20; i++ {
+		if i == 4 {
+			continue
+		}
+		john5 = append(john5, Verse{BookName: "John", Book: "John", Chapter: 5, Verse: i,
+			Text: "A verse of the fifth chapter, present in this translation."})
+	}
+	bd.Verses["John"][5] = john5
 	st := &AppState{
 		Bible: bd, CurrentBook: "John", CurrentChapter: 3,
 		CurrentVersion: "web", loadPhase: loadReady,
@@ -498,6 +574,27 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
 			Book: "John", Chapter: 3, VerseLo: enumerationSpreadVerse(),
 			Text: "a note in another paragraph"})
+	}
+
+	// The unplaced note: on this book, with no home in this translation. The
+	// plan carries it in Unplaced, the who line grows its "not shown here"
+	// arm, and on a chapter with nothing else the whole sticker is the
+	// who-without-text pill. Orthogonal to placement: an unplaced note rides
+	// every chapter of its book, including an otherwise empty one.
+	switch w.unplaced {
+	case unplacedR4:
+		// NKJV John 5:4 read under WEB — a real versification hole: the NKJV
+		// carries the verse, the WEB's own John 5 (loaded above, without a
+		// v4) does not, so the mapped arm's existence test answers R4.
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "nkjv",
+			Book: "John", Chapter: 5, VerseLo: 4,
+			Text: "a note this translation cannot place"})
+	case unplacedBeyond:
+		// A same-version run naming a verse past the chapter's end — only the
+		// text itself can refuse this one, which it now does.
+		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+			Book: "John", Chapter: 3, VerseLo: 999,
+			Text: "a note beyond the chapter's end"})
 	}
 
 	// The reader's OWN note, on a DIFFERENT verse from the received ones so it
@@ -805,6 +902,153 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 		bad = append(bad, "N6-mirror-only")
 	}
 
+	// N11-N15 — the CHROME's self-consistency (notes_chrome.go), asserted at
+	// all three moments. These are tripwires over the composed value the four
+	// surfaces consume: each states a property that is true by construction
+	// TODAY, so that the derivation growing an input, a filter, or a second
+	// opinion trips a cell here instead of a reader's screen. The paragraphs
+	// come from the same grouping every surface renders — that identity is
+	// enforced elsewhere (TestEverySurfaceBreaksParagraphsWhereTheModelDoes),
+	// so leaning on it here is the convention, not a blind spot.
+	paras := groupVersesIntoParagraphs(enumerationChapter())
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"shown", o.snapShown}, {"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		c := s.snap.chrome
+
+		// N11 — a card has a tail iff it points at a passage, and only at a
+		// passage this chapter carries; every band likewise names verse 0 (the
+		// chapter top) or a verse with a paragraph here. Defect 3's axis: a
+		// tail on an anchorless card claims verse 1.
+		if c.hasTail() != (c.Anchor > 0) {
+			bad = append(bad, "N11-tail-diverged-from-anchor@"+s.when)
+		}
+		if c.Anchor > 0 && noteParagraphOf(paras, c.Anchor) < 0 {
+			bad = append(bad, "N11-anchor-points-nowhere@"+s.when)
+		}
+		for _, b := range c.Bands {
+			if b.Verse != 0 && noteParagraphOf(paras, b.Verse) < 0 {
+				bad = append(bad, "N11-band-points-nowhere@"+s.when)
+			}
+		}
+
+		// N12 — the verb set is a function of (present, Own) alone, by the
+		// stated rule; and Own agrees with what the store says about the note
+		// the mirror names. The second arm is the assertion that would have
+		// caught the clamped-chapter divergence by measurement.
+		wantVerbs := noteVerbsReceived
+		switch {
+		case !c.present():
+			wantVerbs = noteVerbsNone
+		case c.Own:
+			wantVerbs = noteVerbsOwn
+		}
+		if c.verbs() != wantVerbs {
+			bad = append(bad, "N12-verbs-not-own-function@"+s.when)
+		}
+		if c.Own != s.snap.liveKindMine {
+			bad = append(bad, "N12-own-disagrees-with-store@"+s.when)
+		}
+
+		// N13 — the tuple never reaches the states the surfaces cannot draw:
+		// sender words always carry a byline, and "who without text" is always
+		// marked collapsed — an empty sender bubble must never render, and the
+		// styled pane's shorter collapsed test was harmless ONLY while
+		// appleStickerPush kept this promise.
+		if c.Text != "" && c.Who == "" {
+			bad = append(bad, "N13-words-without-byline@"+s.when)
+		}
+		if c.Text == "" && c.Who != "" && !c.Pill {
+			bad = append(bad, "N13-empty-bubble-reachable@"+s.when)
+		}
+
+		// N14 — an arrival names a verse this chapter carries, and targets a
+		// band only when a reservation actually exists on the arriving verse's
+		// paragraph: a group's band, the anchored card's own, or the
+		// chapter-top parking of an anchorless card. Defect 1 as a value.
+		switch c.Arrival {
+		case arriveNothing:
+			if c.ArrivalVerse != 0 {
+				bad = append(bad, "N14-nothing-with-a-target@"+s.when)
+			}
+		case arriveVerse, arriveBand:
+			if c.ArrivalVerse <= 0 || noteParagraphOf(paras, c.ArrivalVerse) < 0 {
+				bad = append(bad, "N14-target-not-on-chapter@"+s.when)
+			}
+		}
+		if c.Arrival == arriveBand {
+			arriving := noteParagraphOf(paras, c.ArrivalVerse)
+			reserved := false
+			for _, b := range c.Bands {
+				bandPara := 0
+				if b.Verse != 0 {
+					bandPara = noteParagraphOf(paras, b.Verse)
+				}
+				if bandPara == arriving {
+					reserved = true
+					break
+				}
+			}
+			if !reserved && c.present() {
+				if c.Anchor > 0 && noteParagraphOf(paras, c.Anchor) == arriving {
+					reserved = true // the single card's own reservation
+				}
+				if c.Anchor <= 0 && arriving == 0 {
+					reserved = true // the anchorless card parks at the chapter top
+				}
+			}
+			if !reserved {
+				bad = append(bad, "N14-band-without-reservation@"+s.when)
+			}
+		}
+
+		// N15 — the bands mirror the groups: one per group, keyed by index
+		// (the sort contract placement and the verb both lean on), never
+		// empty-handed, and none at all while the gate is off. This is the
+		// gate the flag's flip was decided over.
+		if len(c.Bands) != len(s.snap.groupList) {
+			bad = append(bad, "N15-bands-groups-diverge@"+s.when)
+		}
+		if !w.pills && len(c.Bands) != 0 {
+			bad = append(bad, "N15-bands-with-gate-off@"+s.when)
+		}
+		for i, b := range c.Bands {
+			if b.Key != i {
+				bad = append(bad, "N15-band-key-not-index@"+s.when)
+			}
+			if b.Count == 0 && b.Unplaced == 0 {
+				bad = append(bad, "N15-empty-band@"+s.when)
+			}
+		}
+
+		// N9 again, as a seam: the chrome's own ShownAs and the answer the
+		// harness read through the styled path (a second plan, a second
+		// composition, same instant) must agree.
+		if c.ShownAs != s.snap.shownAs {
+			bad = append(bad, "N9-shownas-routes-disagree@"+s.when)
+		}
+	}
+
+	// N10, extended — the styled pane's pill row is EXACTLY the model's
+	// answer: groups pills where ShownAs says pills, none anywhere else.
+	// Judged only at the two moments a pane was built.
+	for _, s := range []struct {
+		when string
+		snap planSnap
+	}{{"verb", o.snapVerb}, {"nav", o.snapNav}} {
+		if !s.snap.featureOn {
+			continue
+		}
+		wantPills := 0
+		if s.snap.shownAs == shownAsPills {
+			wantPills = s.snap.groups
+		}
+		if s.snap.panePills != wantPills {
+			bad = append(bad, "N10-pane-pills-diverge@"+s.when)
+		}
+	}
+
 	// V — the plan's own invariants (S7, notes_plan.go), asserted over both
 	// snapshots. These are properties of the new model, expected to hold in
 	// EVERY cell: any V violation is a new incoherent state, and no pinned
@@ -830,7 +1074,7 @@ func checkNotesInvariants(w notesWorld, o notesObs) []string {
 			if open > 0 {
 				bad = append(bad, "V3-suppressed-but-open@"+s.when)
 			}
-			if s.snap.passageNotes > 0 && len(s.snap.plan.Notes) == 0 {
+			if s.snap.passageNotes > 0 && len(s.snap.plan.Notes)+len(s.snap.plan.Unplaced) == 0 {
 				bad = append(bad, "V3-suppression-emptied-the-plan@"+s.when)
 			}
 		}
