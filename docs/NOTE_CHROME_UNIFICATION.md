@@ -67,9 +67,18 @@
                 (TestEveryJavaNativeHasAMatchingThunk). Short-name mangling
                 omits the signature, so widening a callback to carry a band key
                 would have linked clean and read garbage on a device.
-                Remaining: 8d one native at a time (Apple first, Android last),
-                8e identity on the wire, and 8f, which flips the flag and is
-                the only one of the nine that changes what a reader sees.
+                  8d-iOS  DONE: reservations are a swept list; the install is
+                          two halves under one sweep; the specs cross as an
+                          array with Go-composed labels; pills are a keyed view
+                          registry whose press carries the group key into the
+                          keyed verb export (bibleTextNoteAction). Verified on
+                          the simulator both ways — flag off byte-identical,
+                          flag on drew the first native per-paragraph pill.
+                Remaining: 8d-macOS (the twin), 8d-Android (the span design
+                decision: one span per PARAGRAPH carrying the summed height),
+                8e's Android half (nativeNoteAction), and 8f, which flips the
+                flag and is the only one of the nine that changes what a
+                reader sees.
      TWO HAZARDS, unaddressed and live today:
        - macOS saved reading positions and the first-paragraph band share
          textContainerInset.height. REFINED after doing the algebra: the
