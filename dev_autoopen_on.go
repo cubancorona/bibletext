@@ -199,6 +199,10 @@ func devAutoReadAlong(state *AppState) {
 //	           one slot is reserved. s11mixed puts an own note and a received
 //	           one on the same chapter so the two verb corners sit in one
 //	           frame, a next-tap apart
+//	s12pills   per-paragraph pills ON A NATIVE: flips the gate, files notes in
+//	           two paragraphs of John 11 plus one at chapter scope, and
+//	           collapses the set — the styled pane's pill row, drawn by the
+//	           native band machinery for the first time
 //	s11pill    the PILL-SCROLL case: a note late in John 11, minimized to the
 //	           chapter pill, the view sent back to the top, then the pill's
 //	           own Restore. The bubble must arrive IN VIEW — it used to expand
@@ -323,6 +327,20 @@ func devAutoNotesS8(state *AppState) {
 			at(9*time.Second, func() { link("Fixture received message beside your own.") })
 			time.AfterFunc(16*time.Second, func() { devNoteNextTap(state) })
 		}
+	case "s12pills":
+		notesPillPerParagraph = true
+		at(1200*time.Millisecond, func() { navigateToReference(state, "John", 11) })
+		at(2500*time.Millisecond, func() {
+			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+				"John", 11, 6, 6, "Fixture pills note in the second paragraph."))
+		})
+		at(6*time.Second, func() {
+			HandleShareLink(state, ShareLinkURLWithNote(state.currentVersion().ID,
+				"John", 11, 35, 35, "Fixture pills note far below."))
+		})
+		// Collapse the open note: the set has nothing open, so the specs cover
+		// every noted paragraph and the natives draw one pill per band.
+		at(10*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
 	case "s11pill":
 		// The reader's report: press the pill at the top of John 11 and the
 		// bubble expands, but the page does not go to it. Reproduced with the

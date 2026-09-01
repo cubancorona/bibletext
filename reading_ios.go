@@ -46,6 +46,11 @@ extern void bibleTextHighlightCleared(void);
 extern void bibleTextNoteHidden(void);
 extern void bibleTextNoteDeleted(void);
 extern void bibleTextNoteRestored(void);
+void bibleTextNoteAction(int verb, int key);
+
+// Per-paragraph pill buttons carry their group key on the TAG, offset by this
+// base: tag 0 is every plain UIView's default and must never read as group 0.
+enum { kNotePillTagBase = 2000 };
 // The expanded sticker's count region ("2 of 3 in this chapter ›") — advances
 // focus to the next note on the passage, wrapping.
 extern void bibleTextNoteNextTapped(void);
@@ -387,6 +392,14 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other 
 - (void)btNoteDelete:(id)sender  { bibleTextNoteDeleted(); }
 - (void)btNoteRestore:(id)sender { bibleTextNoteRestored(); }
 - (void)btNoteNext:(id)sender    { bibleTextNoteNextTapped(); }
+// A per-paragraph pill's press: the button's tag IS the group key (offset so a
+// zero tag — UIView's default — can never read as group 0), and the verb is the
+// keyed entry point, so the press opens the note the reader aimed at rather
+// than whichever the plan had chosen (bibleTextNoteAction, notes_action.go).
+- (void)btNotePillTap:(id)sender {
+    // 1 == noteActionRestore (notes_action.go's iota).
+    bibleTextNoteAction(1, (int)((UIView *)sender).tag - kNotePillTagBase);
+}
 
 - (void)btHighlightTap:(UITapGestureRecognizer *)g {
     if (g.state != UIGestureRecognizerStateEnded) return;
@@ -850,6 +863,7 @@ enum { kNoteVerbsNone = 0, kNoteVerbsReceived = 1, kNoteVerbsOwn = 2 };
 // The arrival classes, in noteArrival's own order (notes_arrival.go).
 enum { kArriveNothing = 0, kArriveVerse = 1, kArriveBand = 2 };
 
+
 // The speech tail: what makes it read as somebody talking rather than a panel.
 // Matches the web bubble, which hangs a small triangle under the left shoulder.
 static const CGFloat kNoteTail = 9, kNoteTailW = 18, kNoteTailX = 24;
@@ -908,6 +922,8 @@ static BOOL btIOSNotePill(void)    { return gNoteMinimized || gNoteText == nil; 
 static void btIOSInstallNote(void);
 static void btIOSEnsureNoteView(void);
 static void btIOSLayoutNote(void);
+static void btIOSEnsurePillViews(void);
+static void btIOSLayoutPillViews(void);
 static CGFloat btIOSBandTopY(NSUInteger paraGlyph);
 
 // btIOSRefreshNote re-derives the whole sticker — band, subviews, placement —
@@ -920,7 +936,9 @@ static void btIOSRefreshNote(void) {
     if (gReadingTV == nil || gReadingTV.textStorage.length == 0) return;
     btIOSInstallNote();
     btIOSEnsureNoteView();
+    btIOSEnsurePillViews();
     btIOSLayoutNote();
+    btIOSLayoutPillViews();
 }
 
 static BOOL btIOSSameStr(NSString *a, NSString *b) {
@@ -1172,6 +1190,24 @@ enum { kNoteMaxBands = 24 };
 static BTNoteBandRes gNoteBands[kNoteMaxBands];
 static int           gNoteBandCount = 0;
 
+// THE PUSHED SPECS — which groups need a reservation, where each hangs, and
+// what its pill says. Composed in Go (noteBandSpecs); this pane only resolves
+// verses to paragraphs and draws. Empty unless the per-paragraph gate is on,
+// so every path below runs at count 0 in production until the flag flips.
+typedef struct {
+    int       key;    // the group identity; what a press and a placement match on
+    int       verse;  // 0 = the chapter top (the anchorless reservation)
+    NSString *label;  // the pill's whole label, composed in Go
+} BTNoteBandSpec;
+static BTNoteBandSpec gNoteBandSpecs[kNoteMaxBands];
+static int            gNoteBandSpecCount = 0;
+
+// The per-band PILL views, keyed by position in gNoteBandSpecs. Views are
+// rebuilt when the specs change (btIOSEnsurePillViews) and placed by
+// btIOSLayoutNote's loop; a registry, never a single tracked field, for the
+// same reason the reservations are a list.
+static NSMutableArray<UIButton *> *gNotePillViews = nil;
+
 // Take EVERY reservation back — a SWEEP over the list, never a single tracked
 // field. The sweep is the whole point of the list: whatever this pane reserved,
 // this function can find, so a reservation can never be orphaned by its handle
@@ -1211,17 +1247,38 @@ static void btIOSClearReservedBands(NSTextStorage *ts) {
 // It must also run after the pass that zeroes paragraphSpacingBefore across the
 // whole string (that pass exists to kill a phantom band the importer injects
 // before verse 1), or the reservation would be wiped on every render.
+// btIOSInstallNote reserves EVERYTHING this chapter needs, under one sweep:
+// take every old band back, then the sticker's own band, then one per pushed
+// spec, then apply the container inset once for whatever the two halves summed
+// into it. One function, because a reservation pass that can run half of
+// itself leaves the swept-but-not-reapplied half as a phantom gap.
+static void btIOSInstallStickerBand(void);
+static void btIOSInstallPillBands(void);
 static void btIOSInstallNote(void) {
     gNoteBandH = 0;
     gNoteTopInset = 0;
     if (gReadingTV == nil) return;
+    btIOSClearReservedBands(gReadingTV.textStorage); // bands may have MOVED (next-tap): take every old one back
+    btIOSInstallStickerBand();
+    btIOSInstallPillBands();
+    btIOSApplyNoteInset();
+}
+
+static void btIOSInstallStickerBand(void) {
     NSTextStorage *ts = gReadingTV.textStorage;
-    btIOSClearReservedBands(ts);   // the sticker may have MOVED (next-tap): take every old band back
-    if (!btIOSNotePresent() || ts.length == 0) { btIOSApplyNoteInset(); return; }
+    if (!btIOSNotePresent() || ts.length == 0) { return; }
+    // THE PILLS REPLACE THE COLLAPSED STICKER. When per-paragraph specs are
+    // pushed and the sticker is the received set's collapsed form (a pill), the
+    // per-paragraph pills say strictly more, and drawing both counts the same
+    // notes twice — the styled pane's rule, decided by receivedSetShownAs in
+    // Go; this conjunction only mirrors it over facts already pushed. An OPEN
+    // card (the reader's own note among them) keeps its band beside the pills:
+    // that is X16's whole fix.
+    if (gNoteBandSpecCount > 0 && btIOSNotePill()) { return; }
 
     CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
     CGFloat h = btIOSNoteHeightForWidth(w);
-    if (h <= 0) { btIOSApplyNoteInset(); return; }
+    if (h <= 0) { return; }
     // AIR ON BOTH SIDES. Until 19 Aug this band had no top term at all: the card
     // was parked at the band's own top edge and whatever air a reader saw above
     // it came from the previous paragraph's CSS margin — 24px on a phone, and
@@ -1233,7 +1290,7 @@ static void btIOSInstallNote(void) {
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
-    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) { gNoteBandH = 0; btIOSApplyNoteInset(); return; }
+    if (para.location == NSNotFound || NSMaxRange(para) > ts.length) { gNoteBandH = 0; return; }
 
     // THE FIRST PARAGRAPH IS A SPECIAL CASE. paragraphSpacingBefore collapses at
     // the top of a text container, so a note on verse 1 reserved nothing and the
@@ -1241,7 +1298,6 @@ static void btIOSInstallNote(void) {
     // container's top inset instead, which cannot collapse.
     if (para.location == 0) {
         gNoteTopInset = gNoteBandH;
-        btIOSApplyNoteInset();
         // Recorded like any other band; the NSNotFound paragraph marks it as
         // the inset tenancy, whose take-back is gNoteTopInset = 0 rather than
         // a style subtract (btIOSInstallNote zeroes it on entry).
@@ -1250,7 +1306,6 @@ static void btIOSInstallNote(void) {
         }
         return;
     }
-    btIOSApplyNoteInset();   // clears any inset left from a previous chapter
 
     NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
                             effectiveRange:NULL];
@@ -1270,6 +1325,59 @@ static void btIOSInstallNote(void) {
     }
 }
 
+// btIOSPillBandH is a per-paragraph pill's whole reservation: the spec's gaps
+// around the spec's pill height (the styled pane's bandH for a pill geom).
+static CGFloat btIOSPillBandH(void) {
+    return kNoteGapAbove + kNotePill + kNoteGapBelow;
+}
+
+// btIOSInstallPillBands reserves one band per pushed spec — the PLURAL half of
+// the install, running after (and independent of) the single sticker's. Each
+// reservation is ADDED and RECORDED exactly like the sticker's, so the sweep
+// can take every one back; a spec whose verse resolves nowhere on this string
+// reserves nothing (its notes are the browser's business, not this page's).
+// The chapter-top spec (verse 0) reserves with the container inset, summed
+// with whatever the sticker's own inset case already put there.
+static void btIOSInstallPillBands(void) {
+    if (gNoteBandSpecCount == 0 || gReadingTV == nil) return;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    if (ts.length == 0) return;
+    CGFloat bandH = btIOSPillBandH();
+    for (int i = 0; i < gNoteBandSpecCount; i++) {
+        BTNoteBandSpec *spec = &gNoteBandSpecs[i];
+        if (spec->verse <= 0) {
+            gNoteTopInset += bandH;
+            if (gNoteBandCount < kNoteMaxBands) {
+                gNoteBands[gNoteBandCount++] =
+                    (BTNoteBandRes){spec->key, NSMakeRange(NSNotFound, 0), bandH};
+            }
+            continue;
+        }
+        NSUInteger loc = btIOSLocForVerse(ts, spec->verse);
+        if (loc == NSNotFound || loc >= ts.length) continue;
+        NSRange para = [ts.string paragraphRangeForRange:NSMakeRange(loc, 0)];
+        if (para.location == NSNotFound || NSMaxRange(para) > ts.length) continue;
+        if (para.location == 0) {
+            gNoteTopInset += bandH;
+            if (gNoteBandCount < kNoteMaxBands) {
+                gNoteBands[gNoteBandCount++] =
+                    (BTNoteBandRes){spec->key, NSMakeRange(NSNotFound, 0), bandH};
+            }
+            continue;
+        }
+        NSParagraphStyle *base = [ts attribute:NSParagraphStyleAttributeName atIndex:para.location
+                                effectiveRange:NULL];
+        NSMutableParagraphStyle *ps = base ? [base mutableCopy] : [[NSMutableParagraphStyle alloc] init];
+        ps.paragraphSpacingBefore += bandH;
+        [ts beginEditing];
+        [ts addAttribute:NSParagraphStyleAttributeName value:ps range:para];
+        [ts endEditing];
+        if (gNoteBandCount < kNoteMaxBands) {
+            gNoteBands[gNoteBandCount++] = (BTNoteBandRes){spec->key, para, bandH};
+        }
+    }
+}
+
 // Apply (or clear) the top-inset reservation.
 //
 // It DELEGATES rather than writing the inset itself, and that is the point: the
@@ -1283,9 +1391,82 @@ static void btIOSApplyNoteInset(void) {
     btIOSApplyInsets(gReadingTV.frame.size.width);
 }
 
+// btIOSEnsurePillViews rebuilds the per-paragraph pill buttons from the pushed
+// specs — the registry the reservation list's discipline demands: every view
+// this pane adds, this function can find and remove. Styling is the single
+// pill's, verbatim (same font, colours, radius and floor), because a pill is a
+// pill wherever it is drawn. Empty specs = no views, which is production today.
+static void btIOSEnsurePillViews(void) {
+    if (gNotePillViews == nil) gNotePillViews = [NSMutableArray array];
+    for (UIButton *b in gNotePillViews) [b removeFromSuperview];
+    [gNotePillViews removeAllObjects];
+    if (gNoteBandSpecCount == 0 || gReadingTV == nil) return;
+    for (int i = 0; i < gNoteBandSpecCount; i++) {
+        BTNoteBandSpec *spec = &gNoteBandSpecs[i];
+        UIButton *chip = [UIButton buttonWithType:UIButtonTypeSystem];
+        [chip setTitle:spec->label forState:UIControlStateNormal];
+        [chip setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
+        chip.titleLabel.font = btNoteWhoFont();
+        chip.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        chip.backgroundColor = btNoteColor(gNoteBg);
+        chip.layer.borderColor = btNoteColor(gNoteBorder).CGColor;
+        chip.layer.borderWidth = 1;
+        chip.layer.cornerRadius = kNotePill / 2;
+        chip.clipsToBounds = YES;
+        chip.tag = kNotePillTagBase + spec->key;
+        [chip addTarget:gReadingTV action:@selector(btNotePillTap:)
+       forControlEvents:UIControlEventTouchUpInside];
+        [gReadingTV addSubview:chip];
+        [gNotePillViews addObject:chip];
+    }
+}
+
+// btIOSLayoutPillViews places each pill into its band. The band is found by
+// KEY over the reservation list — never by verse, which two bands can share
+// (the chapter-top group takes paragraph 0's) — and the Y is btIOSBandTopY's,
+// the same one answer the sticker and the scroll target use.
+static void btIOSLayoutPillViews(void) {
+    if (gNotePillViews.count == 0 || gReadingTV == nil) return;
+    NSLayoutManager *lm = gReadingTV.layoutManager;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    if (lm == nil || ts == nil || ts.length == 0) return;
+    CGFloat w = gReadingTV.textContainer.size.width - 2 * gReadingTV.textContainer.lineFragmentPadding;
+    for (NSUInteger i = 0; i < gNotePillViews.count && (int)i < gNoteBandSpecCount; i++) {
+        UIButton *chip = gNotePillViews[i];
+        BTNoteBandSpec *spec = &gNoteBandSpecs[i];
+        // The band, by key.
+        NSRange para = NSMakeRange(NSNotFound, 0);
+        for (int b = 0; b < gNoteBandCount; b++) {
+            if (gNoteBands[b].key == spec->key) { para = gNoteBands[b].para; break; }
+        }
+        CGFloat y;
+        if (para.location == NSNotFound) {
+            // The inset tenancy (chapter top / paragraph 0).
+            y = btIOSBandTopY(0);
+        } else if (NSMaxRange(para) <= ts.length) {
+            NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+            if (g.length == 0) { chip.hidden = YES; continue; }
+            y = btIOSBandTopY(g.location);
+        } else {
+            chip.hidden = YES;
+            continue;
+        }
+        NSString *title = spec->label ?: @"Note";
+        CGFloat tw = ceil([title sizeWithAttributes:@{NSFontAttributeName: btNoteWhoFont()}].width);
+        CGFloat cw = tw + 2 * kNotePillPadX;
+        if (cw < kNotePillMinW) cw = kNotePillMinW;
+        if (cw > w) cw = w;
+        chip.hidden = NO;
+        chip.frame = CGRectMake(kNotePad, y, cw, kNotePill);
+    }
+}
+
 // Build (or rebuild) the sticker's subviews for the current note and palette.
 static void btIOSEnsureNoteView(void) {
     if (gNoteView) { [gNoteView removeFromSuperview]; gNoteView = nil; }
+    // The pills replace the collapsed sticker (btIOSInstallStickerBand's rule);
+    // no band was reserved, so no view may be built.
+    if (gNoteBandSpecCount > 0 && btIOSNotePill()) { return; }
     if (!btIOSNotePresent() || gReadingTV == nil) return;
 
     UIView *box = [[UIView alloc] initWithFrame:CGRectZero];
@@ -1906,6 +2087,45 @@ static BOOL btIOSPointInChapterWash(CGPoint inContainer) {
 // screen is already right and only the wash changed, so the change is an
 // attribute over a known range instead of buildChapterHTML plus a complete
 // NSAttributedString re-import.
+// The band-spec push: which paragraphs carry a pill, keyed. The C-side struct
+// carries the label as UTF-8 bytes because a note count is chrome the reader
+// must read exactly (the [B lesson from Android applies to any wire).
+typedef struct { int key; int verse; const char *label; } BTNoteBandSpecC;
+
+void bibleTextSetNoteBands(const BTNoteBandSpecC *specs, int n) {
+    if (n > kNoteMaxBands) n = kNoteMaxBands;
+    // Copy OFF the caller's stack before hopping threads.
+    BTNoteBandSpec staged[kNoteMaxBands];
+    int count = 0;
+    for (int i = 0; i < n && specs != NULL; i++) {
+        staged[count].key = specs[i].key;
+        staged[count].verse = specs[i].verse;
+        staged[count].label = specs[i].label != NULL
+            ? [NSString stringWithUTF8String:specs[i].label] : @"Note";
+        count++;
+    }
+    NSMutableArray<NSDictionary *> *pack = [NSMutableArray arrayWithCapacity:count];
+    for (int i = 0; i < count; i++) {
+        [pack addObject:@{@"k": @(staged[i].key), @"v": @(staged[i].verse), @"l": staged[i].label}];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL changed = (int)pack.count != gNoteBandSpecCount;
+        for (int i = 0; !changed && i < gNoteBandSpecCount; i++) {
+            NSDictionary *d = pack[i];
+            changed = [d[@"k"] intValue] != gNoteBandSpecs[i].key ||
+                      [d[@"v"] intValue] != gNoteBandSpecs[i].verse ||
+                      ![d[@"l"] isEqualToString:gNoteBandSpecs[i].label];
+        }
+        gNoteBandSpecCount = (int)pack.count;
+        for (int i = 0; i < gNoteBandSpecCount; i++) {
+            gNoteBandSpecs[i].key = [pack[i][@"k"] intValue];
+            gNoteBandSpecs[i].verse = [pack[i][@"v"] intValue];
+            gNoteBandSpecs[i].label = pack[i][@"l"];
+        }
+        if (changed) btIOSRefreshNote();
+    });
+}
+
 void bibleTextIOSSetTintRuns(const BTTintRun *runs, int n, int repaint) {
     BTTintModel m; m.n = 0;
     if (n > BT_MAX_TINT_RUNS) n = BT_MAX_TINT_RUNS;
@@ -2453,7 +2673,9 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // arrive from Go) and then placed into the band the layout just produced.
     btIOSInstallNote();
     btIOSEnsureNoteView();
+    btIOSEnsurePillViews();
     btIOSLayoutNote();
+    btIOSLayoutPillViews();
     // New text: the prior chapter's initial-touch is no longer valid, and the fresh
     // attributed string carries the original verse-number colours (the marker is not
     // applied to it yet). Reset both, then (re-)apply the marker if one is intended —
@@ -3359,6 +3581,28 @@ func pushNoteToPane(state *AppState) {
 	// rather than re-deriving the grammar (notes_chrome.go noteCountsSpan).
 	cCounts := C.CString(c.Counts)
 	defer C.free(unsafe.Pointer(cCounts))
+
+	// THE BAND SPECS — one per paragraph that carries notes, labels composed
+	// here because composition never crosses to a renderer. Empty in production
+	// until the per-paragraph gate flips; pushed unconditionally so the native
+	// list is authoritative either way (an empty push CLEARS stale pills).
+	specs := make([]C.BTNoteBandSpecC, 0, len(c.Bands))
+	var specFrees []*C.char
+	for _, b := range c.Bands {
+		l := C.CString(stickerPillWho(b.Count, b.Unplaced))
+		specFrees = append(specFrees, l)
+		specs = append(specs, C.BTNoteBandSpecC{
+			key: C.int(b.Key), verse: C.int(b.Verse), label: l,
+		})
+	}
+	if len(specs) > 0 {
+		C.bibleTextSetNoteBands(&specs[0], C.int(len(specs)))
+	} else {
+		C.bibleTextSetNoteBands(nil, 0)
+	}
+	for _, f := range specFrees {
+		C.free(unsafe.Pointer(f))
+	}
 	// WHERE THE VIEW GOES, decided once (notes_arrival.go).
 	arrivalClass := C.int(c.Arrival)
 	arrivalVerse := C.int(c.ArrivalVerse)

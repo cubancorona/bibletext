@@ -144,6 +144,27 @@ func bibleTextNoteNextTapped() {
 	})
 }
 
+// bibleTextNoteAction is the KEYED verb: one entry point that says which verb
+// AND which note, for surfaces drawing more than one card. The four
+// parameterless exports above stay — they mean "the focused note", which is
+// the only thing a single-card surface can mean — and this one exists so a
+// per-paragraph pill's press can reach the note the reader aimed at
+// (performNoteAction, notes_action.go). verb is noteAction's own iota; key is
+// the group key, never a verse (the chapter-top group shares paragraph 0's
+// verse by design).
+//
+//export bibleTextNoteAction
+func bibleTextNoteAction(verb int, key int) {
+	state := activeAIState
+	if state == nil {
+		return
+	}
+	fyne.Do(func() {
+		performNoteAction(state, noteAction(verb), int(key))
+		refreshNoteOnly(state)
+	})
+}
+
 // bibleTextNoteDeleted is the tap menu's "Delete note": the note goes for good,
 // and the highlight goes with it.
 //

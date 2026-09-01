@@ -264,7 +264,7 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"SUBTRACT what this band contributed, not zero the total, for the same " +
 					"co-tenancy reason — with one tenant the two are identical, which is why " +
 					"this landed before any second band exists",
-				"btIOSClearReservedBands(ts);": "the take-back must be a SWEEP over the " +
+				"btIOSClearReservedBands(gReadingTV.textStorage);": "the take-back must be a SWEEP over the " +
 					"reservation list, never a single tracked field: a second reservation " +
 					"through a scalar handle orphans the first with no reference left to " +
 					"take it back by — Android's one-span field is the cautionary case",
@@ -448,7 +448,9 @@ func TestNoteSpecIsSelfConsistent(t *testing.T) {
 func TestEveryIOSReservationIsRecorded(t *testing.T) {
 	src := readNativeSource(t, "reading_ios.go")
 	applies := strings.Count(src, "ps.paragraphSpacingBefore += gNoteBandH;") +
-		strings.Count(src, "gNoteTopInset = gNoteBandH;")
+		strings.Count(src, "gNoteTopInset = gNoteBandH;") +
+		strings.Count(src, "ps.paragraphSpacingBefore += bandH;") +
+		strings.Count(src, "gNoteTopInset += bandH;")
 	records := strings.Count(src, "gNoteBands[gNoteBandCount++]")
 	if applies < 2 {
 		t.Fatalf("only %d reservation applies found — the spellings have moved and "+
