@@ -872,6 +872,13 @@ static const CGFloat kNoteLead = 16;
 // TAUTOLOGY whenever the note was anchorless: btIOSNoteAnchorRange falls back
 // to the highlight range, so the test compared a paragraph with itself.
 static int       gNoteArrival = 0;   // kArriveNothing
+// gNoteArrivalVerse is the verse the arrival is expressed against — the target
+// for kArriveVerse, and the FALLBACK for kArriveBand when the band cannot be
+// resolved yet. Without it, an arrival with no wash range and no measured card
+// returned NO and the caller pinned the view to the top: silence, which reads
+// as "nothing happened" and is the exact failure the pushed class exists to
+// remove.
+static int       gNoteArrivalVerse = 0;
 static NSString *gNoteCounts = nil;
 static int       gNoteVerbs = 1;        // kNoteVerbsReceived
 static BOOL      gNoteTail = YES;
@@ -934,7 +941,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                       double muR, double muG, double muB,
                       double acR, double acG, double acB,
                       double boR, double boG, double boB, int tail, int verbs,
-                      const char *counts, int arrival) {
+                      const char *counts, int arrival, int arrivalVerse) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     NSString *ct = (counts == NULL || *counts == 0) ? nil : [NSString stringWithUTF8String:counts];
@@ -947,7 +954,8 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
                        gNoteTail != (tail ? YES : NO) ||
                        gNoteVerbs != verbs ||
                        !btIOSSameStr(ct, gNoteCounts) ||
-                       gNoteArrival != arrival;
+                       gNoteArrival != arrival ||
+                       gNoteArrivalVerse != arrivalVerse;
         gNoteText = t;
         gNoteWho = w;
         gNoteMinimized = minimized ? YES : NO;
@@ -958,6 +966,7 @@ void bibleTextSetNote(const char *text, const char *who, int minimized, int next
         gNoteVerbs = verbs;
         gNoteCounts = ct;
         gNoteArrival = arrival;
+        gNoteArrivalVerse = arrivalVerse;
         gNoteShapeExtra = gNoteTail ? kNoteTail : 0;
         gNoteBg[0]=bgR; gNoteBg[1]=bgG; gNoteBg[2]=bgB;
         gNoteFg[0]=fgR; gNoteFg[1]=fgG; gNoteFg[2]=fgB;
@@ -2025,6 +2034,18 @@ static BOOL btIOSScrollToHighlight(void) {
                                     inTextContainer:gReadingTV.textContainer];
         // The shared arrival lead, so the same arrival sits at the same height
         // on every surface (noteMetrics().Lead).
+        target = rect.origin.y + gReadingTV.textContainerInset.top - kNoteLead;
+    } else if (gNoteArrival != kArriveNothing && gNoteArrivalVerse > 0 &&
+               btIOSLocForVerse(gReadingTV.textStorage, gNoteArrivalVerse) != NSNotFound) {
+        // NO WASH RANGE, but Go said where this arrival is going. Resolve the
+        // verse's own line — the fallback that makes an unresolvable band a
+        // verse target rather than a silent return NO (the pinned-to-top case).
+        NSUInteger loc = btIOSLocForVerse(gReadingTV.textStorage, gNoteArrivalVerse);
+        NSLayoutManager *lm = gReadingTV.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:NSMakeRange(loc, loc < len ? 1 : 0)
+                                    actualCharacterRange:NULL];
+        CGRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gReadingTV.textContainer];
         target = rect.origin.y + gReadingTV.textContainerInset.top - kNoteLead;
     } else if (noteY >= 0) {
         // Chapter-level notes have no wash range but still belong at the top.
@@ -3287,6 +3308,7 @@ func pushNoteToPane(state *AppState) {
 	defer C.free(unsafe.Pointer(cCounts))
 	// WHERE THE VIEW GOES, decided once (notes_arrival.go).
 	arrivalClass := C.int(c.Arrival)
+	arrivalVerse := C.int(c.ArrivalVerse)
 	f := func(c color.NRGBA) (C.double, C.double, C.double) {
 		return C.double(float64(c.R) / 255), C.double(float64(c.G) / 255), C.double(float64(c.B) / 255)
 	}
@@ -3301,7 +3323,7 @@ func pushNoteToPane(state *AppState) {
 	// which is the only honest place for notes with no verses here.)
 	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
-		tailFlag, verbSet, cCounts, arrivalClass)
+		tailFlag, verbSet, cCounts, arrivalClass, arrivalVerse)
 }
 
 func armReadingMarker(verse int, r, g, b float64) {

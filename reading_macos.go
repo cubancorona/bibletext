@@ -36,6 +36,9 @@ static CGFloat btMacNoteTopY(void);
 enum { kMacArriveNothing = 0, kMacArriveVerse = 1, kMacArriveBand = 2 };
 // The twin of gNoteArrival (reading_ios.go): WHERE the view goes, decided in Go.
 static int       gMacNoteArrival = 0;   // kMacArriveNothing
+// The iOS twin's reason (gNoteArrivalVerse): the verse the arrival is expressed
+// against, so an unresolvable band falls back to a verse rather than silence.
+static int       gMacNoteArrivalVerse = 0;
 
 // How far below the top of the viewport an arrival lands (spec: Lead). Declared
 // here rather than with the other spec constants because the scroll path is
@@ -1010,6 +1013,19 @@ static BOOL btMacScrollToHighlight(void) {
     if (hasHighlight) {
         NSLayoutManager *lm = gTextView.layoutManager;
         NSRange glyphs = [lm glyphRangeForCharacterRange:gMacHighlightRange
+                                    actualCharacterRange:NULL];
+        NSRect rect = [lm boundingRectForGlyphRange:glyphs
+                                    inTextContainer:gTextView.textContainer];
+        y = rect.origin.y + gTextView.textContainerInset.height - kMacNoteLead;
+    } else if (gMacNoteArrival != kMacArriveNothing && gMacNoteArrivalVerse > 0 &&
+               btMacLocForVerse(gTextView.textStorage, gMacNoteArrivalVerse) != NSNotFound) {
+        // The iOS twin's fallback: no wash range, but Go said where this
+        // arrival is going, so the verse's own line is the target rather than
+        // a silent return NO.
+        NSUInteger len2 = gTextView.textStorage.length;
+        NSUInteger loc = btMacLocForVerse(gTextView.textStorage, gMacNoteArrivalVerse);
+        NSLayoutManager *lm = gTextView.layoutManager;
+        NSRange glyphs = [lm glyphRangeForCharacterRange:NSMakeRange(loc, loc < len2 ? 1 : 0)
                                     actualCharacterRange:NULL];
         NSRect rect = [lm boundingRectForGlyphRange:glyphs
                                     inTextContainer:gTextView.textContainer];
@@ -2058,7 +2074,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                          double muR, double muG, double muB,
                          double acR, double acG, double acB,
                          double boR, double boG, double boB, int tail, int verbs,
-                         const char *counts, int arrival) {
+                         const char *counts, int arrival, int arrivalVerse) {
     NSString *t = (text == NULL || *text == 0) ? nil : [NSString stringWithUTF8String:text];
     NSString *w = (who == NULL || *who == 0) ? nil : [NSString stringWithUTF8String:who];
     NSString *ct = (counts == NULL || *counts == 0) ? nil : [NSString stringWithUTF8String:counts];
@@ -2071,7 +2087,8 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
                        gMacNoteTail != (tail ? YES : NO) ||
                        gMacNoteVerbs != verbs ||
                        !btMacSameStr(ct, gMacNoteCounts) ||
-                       gMacNoteArrival != arrival;
+                       gMacNoteArrival != arrival ||
+                       gMacNoteArrivalVerse != arrivalVerse;
         gMacNoteText = t;
         gMacNoteWho = w;
         gMacNoteMinimized = minimized ? YES : NO;
@@ -2083,6 +2100,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
         gMacNoteVerbs = verbs;
         gMacNoteCounts = ct;
         gMacNoteArrival = arrival;
+        gMacNoteArrivalVerse = arrivalVerse;
 
         gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
@@ -2613,6 +2631,7 @@ func pushNoteToPane(state *AppState) {
 	defer C.free(unsafe.Pointer(macCounts))
 	// WHERE THE VIEW GOES (the iOS twin's reason).
 	macArrival := C.int(c.Arrival)
+	macArrivalVerse := C.int(c.ArrivalVerse)
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	cWho := C.CString(who)
@@ -2639,7 +2658,7 @@ func pushNoteToPane(state *AppState) {
 	// the only honest place for notes with no verses here).
 	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
-		macTailFlag, macVerbSet, macCounts, macArrival)
+		macTailFlag, macVerbSet, macCounts, macArrival, macArrivalVerse)
 }
 
 // setNativeTint / applyNativeTint hand the chapter's wash model

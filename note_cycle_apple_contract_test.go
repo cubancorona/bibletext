@@ -116,6 +116,25 @@ func TestEverySurfaceReadsThePushedArrivalClass(t *testing.T) {
 		}
 	}
 
+	// THE VERSE FALLBACK. With no wash range and no measured card, the scroll
+	// used to return NO and the caller pinned the view to the top — silence,
+	// which reads as "nothing happened". Go pushes ArrivalVerse so that case
+	// resolves to the verse's own line instead. Required on both Apple panes;
+	// Android is DELIBERATELY absent from this list because its scroll path
+	// receives the arrival verse through setHtml's arming channel and already
+	// falls through to the verse's line when its band is unresolvable.
+	for _, tc := range []struct{ path, fn, fallback string }{
+		{"reading_ios.go", "static BOOL btIOSScrollToHighlight(void)", "gNoteArrivalVerse > 0"},
+		{"reading_macos.go", "static BOOL btMacScrollToHighlight(void)", "gMacNoteArrivalVerse > 0"},
+	} {
+		placement := nativeFunctionSource(t, tc.path, tc.fn)
+		if !strings.Contains(placement, tc.fallback) {
+			t.Errorf("%s: the scroll path has no pushed-verse fallback (%q). An "+
+				"arrival with no wash and no measured band returns NO and the view "+
+				"pins to the top with nothing in the log.", tc.path, tc.fallback)
+		}
+	}
+
 	// Android had the worst of the four and gets the same treatment.
 	java := readNativeSource(t, "android/BtBridge.java")
 	if !strings.Contains(java, "noteArrival == ARRIVE_BAND") {
