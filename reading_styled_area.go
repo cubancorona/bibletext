@@ -157,7 +157,15 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	switch {
 	case state.forceReposition:
 		branch = "forceReposition"
-		state.forceReposition = false
+		// CONSUMED AT PLACEMENT, not here. The double rebuild builds a second
+		// pane before the first ever lays out; a flag consumed on wiring left
+		// that second pane's chrome non-explicit — arriveNothing — and the
+		// arrival died between the rebuilds. The layout hook consumes when it
+		// actually places, and a reader's own scroll consumes on cede; with
+		// nothing to place there is nothing to wait for, so consume now.
+		if pane == nil || !pane.highlightOwnsScroll() {
+			state.forceReposition = false
+		}
 		state.restore = nil
 		armStyledRestore(0, 0, 0)
 	case state.restore != nil:
@@ -221,6 +229,10 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 		styledScrollTrace("user scrolled (offset %.0f)", scroll.Offset.Y)
 		styledUserScrolled = true
 		state.restore = nil
+		// The reader's own scroll consumes a pending explicit arrival too —
+		// left armed, a later rebuild would re-place the view the reader just
+		// took charge of.
+		state.forceReposition = false
 		flushReadingStateAsync(state)
 		// A reader's own scroll during read-along stops the follow (the tint
 		// keeps tracking; the pill offers the way back).
@@ -424,6 +436,12 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 			l.scroll.Offset = fyne.NewPos(0, y)
 			l.scroll.Refresh()
 			styledApplyingScroll = false
+		}
+		// This placement is the explicit arrival being HONOURED, so the flag
+		// is consumed here (see the wire's forceReposition branch): later
+		// rebuilds re-derive as plain and leave the reader alone.
+		if styledState != nil {
+			styledState.forceReposition = false
 		}
 	}
 

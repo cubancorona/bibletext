@@ -75,6 +75,11 @@ func TestArrivalSurvivesTheDoubleRebuild(t *testing.T) {
 	}
 	styledScroll.Offset.Y = 0
 	styledViewportSettled = false
+	// Live, nothing has PLACED yet either — and the explicit flag is consumed
+	// at placement now, not on wiring — so between the two rebuilds it is
+	// still armed. The test canvas's synchronous layout placed-and-consumed
+	// during rebuild #1 (the same artifact the offset imposition corrects).
+	st.forceReposition = true
 	st.CurrentTab = 0
 	leaveSearchForRead(st, 0)
 	rebuildWindow(st)
