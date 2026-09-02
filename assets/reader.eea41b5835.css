@@ -207,7 +207,8 @@ body{
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text p{margin:0 0 1.3175em; text-align:justify; hyphens:auto; -webkit-hyphens:auto}
+.text{--pgap:calc(1.3175 * 1.3125rem)}
+.text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line
@@ -218,6 +219,7 @@ body{
   /* The reporter set: no gap between paragraphs, a first-line indent instead
      (the app's em+en spaces). Leading stays natural — the importer drops the
      app's 1.3 exactly as it drops the phone's 2.0. */
+  .text{--pgap:0rem}
   .text p{margin:0; text-indent:1.5em}
   .text p:first-child{text-indent:0}
   .text p.pm{margin:.55rem 0; text-indent:0}
@@ -299,7 +301,12 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    words in front of them are the Bible or a stranger's message. */
 .note{
   position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
-  scroll-margin-top:1.2rem;
+  /* The shared arrival lead (noteMetrics().Lead), not this file's own offset.
+     The VERSE target keeps its larger 6.5rem margin — a bare #vN jump is the
+     browser's own scroll, held well clear of the page top for legibility.
+     That larger number is this surface's stated divergence from the single
+     Lead, pinned by note_chrome_shared_test.go. */
+  scroll-margin-top:16px;
   background:var(--surface); border:1px solid var(--border);
   border-left:3px solid var(--accent); border-radius:10px;
   font-family:var(--ui); font-size:1rem; line-height:1.5;
@@ -314,6 +321,9 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   border-right:1px solid var(--border); border-bottom:1px solid var(--border);
   transform:rotate(45deg);
 }
+/* No passage to point at, no tail — the shared rule (noteChrome.hasTail);
+   anchorToPassage sets the class on the chapter-top parking. */
+.note.notail::after{display:none}
 .notewho{
   margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
   letter-spacing:.01em;
@@ -331,15 +341,32 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .notebtn svg{width:15px; height:15px; fill:currentColor; display:block}
 .notebtn:hover{color:var(--accent); background:var(--control-hover)}
 /* The minimized marker. Small and quiet, but unmistakably a thing to press:
-   the note is still there and the reader has to be able to find it again. */
+   the note is still there and the reader has to be able to find it again.
+   Its vertical margins carry the centering rule (notePillSeparatorLift in
+   the app): the paragraph separator above it (--pgap, the preceding p's
+   bottom margin) splits evenly around the chip, so the air reads the same on
+   both sides — margin-top gives up pgap/2, margin-bottom takes it. On the
+   reporter page --pgap is 0 and both margins are the plain 1.1rem again.
+   The chip stays inline-flex (an atomic inline box: no margin collapsing
+   with the neighbouring paragraphs) and vertical-align:top keeps the
+   anonymous line box's strut from eating the shrunken top margin. The
+   chapter-top parking (.notail, after the header instead of a paragraph)
+   has no separator above it and keeps the plain margins. */
 .notechip{
-  display:inline-flex; align-items:center; gap:.35rem; margin:1.1rem 0;
-  scroll-margin-top:1.2rem;
+  display:inline-flex; align-items:center; gap:.35rem;
+  margin:calc(1.1rem - var(--pgap, 0rem)/2) 0 calc(1.1rem + var(--pgap, 0rem)/2);
+  vertical-align:top;
+  scroll-margin-top:16px;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
   padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
   color:var(--muted); cursor:pointer; line-height:1.2;
 }
+/* No separator above, no split: a chip before the FIRST paragraph (it becomes
+   .text's first child) and the chapter-top parking (outside .text, where
+   --pgap never reaches it anyway) keep the plain margins — the app's rule
+   that the chapter top never lifts. */
+.text .notechip:first-child, .notechip.notail{margin:1.1rem 0}
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
 /* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's

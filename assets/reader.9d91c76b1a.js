@@ -136,7 +136,10 @@
 
     var noteText = currentNoteText();
     if (noteText) {
-      bar.appendChild(barButton('Hide note', function () {
+      // The same verb the card offers, under the same name — it was
+      // 'Hide note' here and 'Minimize note' there, two vocabularies for one
+      // action on one page.
+      bar.appendChild(barButton('Minimize note', function () {
         hideBubble(); minimizeNote(noteText);
       }));
       bar.appendChild(barButton('Delete note', function () {
@@ -775,7 +778,10 @@
 
     var who = document.createElement('p');
     who.className = 'notewho';
-    who.textContent = 'Note from Friend';   // a person, never "from BibleText"
+    // Composed in Go (senderByline) and emitted at generate time — the same
+    // attribution every app pane draws, not this file's own literal. Still a
+    // person, never "from BibleText".
+    who.textContent = "Note from Friend";
 
     var body = document.createElement('p');
     body.className = 'notetext';
@@ -784,7 +790,10 @@
     // Two controls, and the difference between them is the whole point:
     // MINIMIZE is reversible and takes the highlight down with the note, so the
     // reader can see the passage plainly and bring the message back. TRASH is
-    // the one that throws it away.
+    // the one that throws it away. This is the RECEIVED arm of the shared verb
+    // table (noteChrome.verbs) — the OWN arm does not exist here on purpose,
+    // because a link's note is always somebody else's; that absence is this
+    // surface's reasoned divergence from the four-pane verb set.
     var tools = document.createElement('div');
     tools.className = 'notetools';
     tools.appendChild(noteButton('Minimize note', ICON_MINIMIZE, function () {
@@ -818,12 +827,23 @@
   // marker puts everything back.
   function minimizeNote(text) {
     hideNote();
+    // suppressHighlight(true) is UNCONDITIONAL where the app's hide clears
+    // only the mark the note itself owns. Reasoned: this page has no other
+    // highlight source — no search, no cross-references, no go-to — so the
+    // only wash a note page can carry is the note's own, and the global
+    // suppress is the same act with less machinery. If this page ever grows a
+    // second highlight source, this is the line that must learn ownership.
     suppressHighlight(true);
     var chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'notechip';
     chip.setAttribute('aria-label', 'Show note');
-    chip.innerHTML = ICON_NOTE + '<span>Note</span>';
+    // The label is the shared collapsed-pill wording (stickerPillWho), for
+    // this page's structural case of one placed note, emitted at generate
+    // time. textContent, so the wording can change in Go without this file
+    // growing markup.
+    chip.innerHTML = ICON_NOTE + '<span></span>';
+    chip.querySelector('span').textContent = "Note";
     chip.addEventListener('click', function (e) {
       e.preventDefault();
       suppressHighlight(false);
@@ -878,8 +898,14 @@
     if (para && para.parentNode) {
       noteAnchorPara = para;
       para.parentNode.insertBefore(el, para);
+      el.classList.remove('notail');
       return;
     }
+    // The chapter-top parking: nothing on this page to point at. The shared
+    // rule (noteChrome.hasTail) says a tail exists iff the anchor names a
+    // passage — an unconditional tail here claimed whatever paragraph came
+    // first, and was reachable through any note link without a verse.
+    el.classList.add('notail');
     var text = document.querySelector('.text');
     if (text && text.parentNode) text.parentNode.insertBefore(el, text);
     else document.querySelector('.wrap').appendChild(el);
@@ -897,11 +923,28 @@
   // follows immediately under it.
   function rescrollToHighlight() {
     var go = function () {
-      if (noteBox || noteChip) {
-        (noteBox || noteChip).scrollIntoView({ block: 'start' });
-        return;
-      }
       var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
+      var card = noteBox || noteChip;
+      // THE SAME QUESTION THE OTHER FOUR SURFACES ASK, and this one used to ask
+      // nothing at all: its only gate was a null-check on an element
+      // assigned two statements before the call, so the note always won. That is
+      // right on a fresh arrival — anchorToPassage inserts the card immediately
+      // before the paragraph holding the lit verse — and wrong the moment the
+      // anchor is STALE, which is exactly what the noteAnchorPara fallback
+      // there produces: a hashchange to another passage then scrolled the reader
+      // back to a note about the one they had left.
+      //
+      // So: the card wins when it belongs to the paragraph being arrived at.
+      // Asking the DOM for that paragraph is not re-deriving the rule — these <p>
+      // elements ARE the model's paragraphs, which is now enforced rather than
+      // assumed (TestEverySurfaceBreaksParagraphsWhereTheModelDoes).
+      if (card) {
+        var para = lit && lit.closest ? lit.closest('p') : null;
+        if (!para || card.nextElementSibling === para) {
+          card.scrollIntoView({ block: 'start' });
+          return;
+        }
+      }
       if (lit) lit.scrollIntoView({ block: 'center' });
     };
     // AFTER LAYOUT, not merely after insertion. Scrolling in the same turn as
