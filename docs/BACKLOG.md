@@ -327,3 +327,44 @@ Still open underneath it, and cheaper to decide first because it changes what a
 pill must be able to say: notes that belong to no paragraph — unplaced and
 chapter-level — are absent from the pills, so the counts do not sum to the
 chapter total.
+
+## Deferred-UI timers under the test driver (audited 2026-09-02, no live races)
+
+`verse_of_day.go`'s re-measure timer is the precedent: under Fyne's TEST
+driver `fyne.Do` runs its closure on the timer's own goroutine — there is no
+UI thread to marshal to — so a pending `time.AfterFunc` races the test
+goroutine (including a `t.Cleanup` `Hide`), and even a `Visible()` read is a
+data race. The shipped fix stands the timer down under `testing.Testing()`
+because the tests drive that re-measure synchronously.
+
+Every other `AfterFunc`+`fyne.Do` site was audited against the same hazard.
+None races today — a full `-race` pass of the suite is clean — but each is
+safe for a DIFFERENT reason, and the first test that changes that reason
+must bring the fix with it:
+
+- `goto.go` (60ms inset scroll; 200ms self-rearming `watchDismiss`) and
+  `share_note_ui.go` (50ms slot push; 150ms self-rearming watch): the arms
+  live on the `IsMobile()` / native-entry branches, which no host test
+  compiles into. If a mobile-tagged test target ever opens these, gate the
+  arms with `testing.Testing()` AND add a direct synchronous call for the
+  watch's close-out work — both watches are functional (tap-outside close,
+  overlay restore), not cosmetic, so a bare gate would orphan real behavior.
+- `audio_menu.go` (150ms self-rearming watch): no test constructs the
+  source menu (the card tests stub `onSrc` deliberately). Same rule as the
+  two above: gate plus a synchronous driver, never a bare gate.
+- `search.go:~25` (60ms scroll restore) and `notes_browse.go:~783` (16ms
+  scroll restore): armed only when a remembered scroll offset is positive,
+  which no test produces. The natural regression test for either restore
+  (build, scroll, rebuild, assert offset) arms the timer and reproduces the
+  verse-of-day race verbatim — write the `testing.Testing()` stand-down in
+  the same change and drive the restore synchronously in the test.
+- `ai_panel.go:~305` (40ms re-fit): armed only by a delivered answer, which
+  every current test's stub avoids. A test that lets `setResult` run needs
+  the stand-down (the closure measures fonts with no `Visible()` guard).
+- `reading.go:~209` (`flashIcon`): the one arming test passes `time.Hour`
+  and drives the restore synchronously — a deliberate crutch. A test that
+  taps a real copy button (1200ms flash) needs the arm gated.
+
+The audit's rule, kept: a gate lands only with a demonstrated race (a
+`-race -count=30` loop that fails before and is clean after) — no
+prophylactic gates over dead code.
