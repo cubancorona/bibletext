@@ -807,9 +807,13 @@ func (p *styledReadingPane) yForVerse(verse int) (float32, bool) {
 }
 
 // highlightOwnsScroll reports whether a search/cross-ref highlight should own
-// the scroll position (mirrors chapterText.highlightLine >= 0).
+// the scroll position (mirrors chapterText.highlightLine >= 0) — and only when
+// the pushed arrival class says this render places anything at all. A PLAIN
+// entry (the arrows, the picker) into a chapter whose wash is still lit is
+// arriveNothing, and the chapter opens at the top like any other; asking only
+// "is a line lit" was the classifier's question answered a second time.
 func (p *styledReadingPane) highlightOwnsScroll() bool {
-	return p.lay != nil && p.highlightFirstLine() >= 0
+	return p.lay != nil && p.note.Arrival != arriveNothing && p.highlightFirstLine() >= 0
 }
 
 // setReadAlongVerse moves the narration wash, keeping raVerse and raSpans in

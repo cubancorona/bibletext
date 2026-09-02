@@ -111,6 +111,12 @@ func TestChapterNoteArrival(t *testing.T) {
 			why: "the read-along owns the viewport, by declaration rather than by running last",
 		},
 		{
+			name: "an EXPLICIT jump while narration follows", anchor: sameParaA, markVerse: sameParaA, present: true,
+			following: true, explicit: true, wantClass: arriveBand, wantVerse: sameParaA,
+			why: "the reader asked to look somewhere; the jump places once and the " +
+				"follow's own channel re-takes the view on its next tick",
+		},
+		{
 			name: "reopening, with a restore armed", anchor: sameParaA, markVerse: sameParaA, present: true,
 			restore: true, wantClass: arriveNothing,
 			why: "a note restored on reopen must not drag the reader back every launch",

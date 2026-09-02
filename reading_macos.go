@@ -1013,6 +1013,10 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
 
 static BOOL btMacScrollToHighlight(void) {
     if (gTextView == nil || gScroll == nil) return NO;
+    // The class is decided in Go (notes_arrival.go) and pushed — see the iOS
+    // twin: arriveNothing means this render places NOTHING, so a plain entry
+    // into a chapter whose wash is still lit opens at the top like any other.
+    if (gMacNoteArrival == kMacArriveNothing) return NO;
     { NSRect tf = gTextView.frame; if (tf.origin.y != 0) { tf.origin.y = 0; [gTextView setFrame:tf]; } }
     CGFloat noteY = btMacNoteTopY();
     CGFloat y = 0;

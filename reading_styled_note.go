@@ -97,11 +97,11 @@ func styledNoteFor(state *AppState) styledNote {
 	}
 	plan := buildChapterPlan(state, appPrefs(), state.Bible)
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
-	c := chapterNoteChrome(state, plan, verses)
-	if !c.present() {
-		return noteChrome{}
-	}
-	return c
+	// The WHOLE chrome, present or not: a chapter with no note still carries
+	// the ARRIVAL class (a search jump on a noteless chapter is arriveVerse),
+	// and zeroing the value here starved the pane's scroll of the one answer
+	// it now obeys. present() is false on exactly the same states either way.
+	return chapterNoteChrome(state, plan, verses)
 }
 
 // --- geometry ---------------------------------------------------------------

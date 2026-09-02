@@ -756,7 +756,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	textPx := float32(21) * float32(readingTextScale()) * scale
 	padL, padT := int(10*scale), int(14*scale)
 	arrivalVerse := 0
-	if state.restore == nil && !preserveTop && here {
+	// EXPLICIT arrivals only (the classifier's rule, notes_arrival.go): a
+	// plain entry — the arrows, the picker — must open at the top even when
+	// the chapter's wash is still lit. The chrome consumed the same
+	// forceReposition a few lines up (pushNoteToOverlay runs first), so the
+	// pushed arrival class and this verse stay one answer.
+	if state.restore == nil && !preserveTop && here && forcedThisPush {
 		arrivalVerse = sp.Lo
 	}
 	if carryDataSwapArrival {

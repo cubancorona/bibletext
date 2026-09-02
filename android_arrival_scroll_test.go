@@ -171,9 +171,11 @@ func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
 	if !strings.Contains(carry, "preserveTop = true") {
 		t.Fatal("test contract lost the top-of-chapter carry branch")
 	}
-	if !strings.Contains(push, "if state.restore == nil && !preserveTop && here {") ||
+	if !strings.Contains(push, "if state.restore == nil && !preserveTop && here && forcedThisPush {") ||
 		!strings.Contains(push, "arrivalVerse = sp.Lo") {
-		t.Fatal("Android explicit placement is not handed to the requested verse")
+		t.Fatal("Android explicit placement is not handed to the requested verse — " +
+			"and it must be EXPLICIT placement: a plain entry with a lit wash " +
+			"opens at the top, not at the mark")
 	}
 }
 

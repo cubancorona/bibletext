@@ -214,6 +214,9 @@ func TestStyledReadAlongFollowBeatsSearchHighlight(t *testing.T) {
 
 	st := longPsalmState()
 	st.setHL(hlSearch, st.CurrentBook, st.CurrentChapter, 25, 0)
+	// A tapped search result is explicit; plain entries with a lit wash open
+	// at the top now.
+	st.forceReposition = true
 	defer func() { st.clearMark() }()
 	armControllerReadAlong(t, st)
 

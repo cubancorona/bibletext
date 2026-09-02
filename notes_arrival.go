@@ -90,7 +90,12 @@ func chapterNoteArrival(state *AppState, c noteChrome, verses []Verse, groups []
 	if state == nil || len(verses) == 0 {
 		return arriveNothing, 0
 	}
-	if following {
+	if following && !explicit {
+		// Narration owns the viewport while it is following — for every
+		// render the reader did not ask for. An EXPLICIT arrival (a search
+		// jump, a link) still places its one target; the follow's own channel
+		// re-takes the view on its next tick, which is the shipped behaviour
+		// the styled read-along tests pin.
 		return arriveNothing, 0
 	}
 	if restoreArmed && !explicit {

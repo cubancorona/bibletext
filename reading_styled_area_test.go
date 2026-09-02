@@ -186,6 +186,10 @@ func TestStyledAreaHighlightScrollsOnce(t *testing.T) {
 
 	st := longPsalmState()
 	st.setHL(hlSearch, "Psalms", 119, 20, 0)
+	// The modelled route — a tapped search result — is explicit
+	// (goToVerseRange sets this); a plain entry with a lit wash opens at the
+	// top now.
+	st.forceReposition = true
 	area := styledReadingScrollArea(st, st.Bible.GetChapter("Psalms", 119), lightPalette)
 	w := test.NewWindow(area)
 	defer w.Close()

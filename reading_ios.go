@@ -2356,6 +2356,18 @@ static BOOL btIOSScrollToHighlight(void) {
         if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] native: no TV\n");
         return NO;
     }
+    // THE CLASS IS DECIDED IN GO (notes_arrival.go) and pushed. arriveNothing
+    // means this render contributes NO placement: a PLAIN entry — the chapter
+    // arrows, the picker — into a chapter whose wash or note is still lit
+    // must open at the top like any other chapter, not at the mark. This
+    // cadence used to land on any wash on its own authority, which was the
+    // classifier's question answered a second time in a dialect only this
+    // pane spoke. (Same-chapter re-renders are safe: they arm a restore, and
+    // the restore branch runs before this one.)
+    if (gNoteArrival == kArriveNothing) {
+        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] native: arrival=nothing — no placement\n");
+        return NO;
+    }
     NSUInteger len = gReadingTV.textStorage.length;
     CGFloat noteY = btIOSNoteTopY();
     CGFloat target = 0;
