@@ -69,6 +69,12 @@ func (m *marshalRecorder) firedNow() []string {
 	return append([]string(nil), m.fired...)
 }
 
+func (m *marshalRecorder) queuedNow() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.queued)
+}
+
 func (m *marshalRecorder) releaseQueued() int {
 	m.mu.Lock()
 	q := m.queued
@@ -80,6 +86,21 @@ func (m *marshalRecorder) releaseQueued() int {
 	return len(q)
 }
 
+// waitUntil polls for a condition instead of racing a wall clock: the timers
+// under test are single-digit milliseconds, and fixed 30-40ms grace windows
+// blew twice on loaded -race CI runners, each time on a different platform.
+// The deadline is generous because it is only ever reached on failure.
+func waitUntil(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
 func TestTrailingDebouncerStaleFire(t *testing.T) {
 	// Ordinary debounce: rapid keystrokes collapse to the last value.
 	rec := &marshalRecorder{}
@@ -87,7 +108,10 @@ func TestTrailingDebouncerStaleFire(t *testing.T) {
 	onChanged("g")
 	onChanged("gr")
 	onChanged("grace")
-	time.Sleep(40 * time.Millisecond)
+	waitUntil(t, "the debounced fire", func() bool { return len(rec.firedNow()) > 0 })
+	// A short settle so a double-fire would have time to land before the
+	// exactly-once assertion.
+	time.Sleep(20 * time.Millisecond)
 	if got := rec.firedNow(); len(got) != 1 || got[0] != "grace" {
 		t.Fatalf("debounce should fire once with the final text; got %v", got)
 	}
@@ -98,8 +122,8 @@ func TestTrailingDebouncerStaleFire(t *testing.T) {
 	rec2 := &marshalRecorder{hold: true}
 	onChanged2, stop2 := newTrailingDebouncer(1*time.Millisecond, rec2.marshal, rec2.record)
 	onChanged2("grac")
-	time.Sleep(30 * time.Millisecond) // timer fired; run is queued in the marshal
-	stop2()                           // Enter: submit searches immediately, debounce must die
+	waitUntil(t, "the timer's queued run", func() bool { return rec2.queuedNow() > 0 })
+	stop2() // Enter: submit searches immediately, debounce must die
 	if n := rec2.releaseQueued(); n != 1 {
 		t.Fatalf("expected exactly one queued run, got %d", n)
 	}
@@ -111,9 +135,9 @@ func TestTrailingDebouncerStaleFire(t *testing.T) {
 	rec3 := &marshalRecorder{hold: true}
 	onChanged3, _ := newTrailingDebouncer(1*time.Millisecond, rec3.marshal, rec3.record)
 	onChanged3("gra")
-	time.Sleep(30 * time.Millisecond) // fires; queued
-	onChanged3("grace")               // newer keystroke supersedes the queued one
-	rec3.releaseQueued()              // stale run lands — must drop itself
+	waitUntil(t, "the timer's queued run", func() bool { return rec3.queuedNow() > 0 })
+	onChanged3("grace")  // newer keystroke supersedes the queued one
+	rec3.releaseQueued() // stale run lands — must drop itself
 	if got := rec3.firedNow(); len(got) != 0 {
 		t.Errorf("a superseded debounced run fired: %v", got)
 	}
