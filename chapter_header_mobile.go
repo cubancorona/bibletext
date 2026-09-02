@@ -63,12 +63,6 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 	// Quiet chapter context below the heading — also a picker target, so the
 	// whole "Chapter N of M" line opens the picker too.
 	chapText := fmt.Sprintf("Chapter %d of %d", state.CurrentChapter, total)
-	// TEMPORARY, dev builds only: what the note state actually is, on screen, so a
-	// switch that loses the note can be diagnosed from a screenshot instead of
-	// guessed at. Empty in release builds (dev_autoopen_off.go).
-	if d := devNoteDebug(state); d != "" {
-		chapText += "   " + d
-	}
 	if total <= 1 {
 		chapText = fmt.Sprintf("Chapter %d", state.CurrentChapter)
 	}
@@ -122,6 +116,18 @@ func chapterHeaderMobile(state *AppState, chapterNumbers []int) fyne.CanvasObjec
 		centre = container.NewCenter(audioControl(state, boxH))
 	}
 	row := container.NewBorder(nil, nil, left, right, centre)
+
+	// TEMPORARY, dev builds only: what the note state actually is, on screen, so
+	// a switch that loses the note can be diagnosed from a screenshot instead of
+	// guessed at. Its OWN row under the toolbar — appended to the chapter line it
+	// widened that line, shoved the nav arrows into the audio control and
+	// jumbled the header; here it costs one short line of reading height and
+	// every control keeps its release-build position. Empty in release builds
+	// (dev_autoopen_off.go).
+	if d := devNoteDebug(state); d != "" {
+		debugLine := newTapTextStyled(d, pal.TextMuted, subheadingTextSize-2, 20, false, nil)
+		return container.New(layout.NewCustomPaddedVBoxLayout(0), row, debugLine)
+	}
 
 	// No divider under the header — the flat reading surface separates the chapter
 	// toolbar from the verses with whitespace (the text view's top inset) instead
