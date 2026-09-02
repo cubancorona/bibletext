@@ -8,6 +8,7 @@ package bibletext
 import (
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -421,6 +422,14 @@ func showVerseOfDay(state *AppState) {
 	// is mere waste, but under `go test -race` a stale timer's font measurement
 	// runs concurrently with the next test's and trips go-text's single-threaded
 	// glyph cache (the real app measures only on its one UI thread).
+	//
+	// Under the suite the timer must not run AT ALL: the test driver has no UI
+	// thread to marshal to, so fyne.Do executes this closure on the timer's own
+	// goroutine, and even the Visible() read races the test's teardown Hide.
+	// The tests drive fitVOTD synchronously through Layout, so nothing is lost.
+	if testing.Testing() {
+		return
+	}
 	time.AfterFunc(40*time.Millisecond, func() {
 		fyne.Do(func() {
 			if popup != nil && popup.Visible() {
