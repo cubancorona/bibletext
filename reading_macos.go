@@ -1693,6 +1693,10 @@ typedef struct {
     CGFloat contribution;
 } BTMacNoteBandRes;
 enum { kMacNoteMaxBands = 24 };
+// Group keys are >= 0 (Go's group list), so the sticker's record needs a key
+// no group can hold — recorded as 0 it collided with group 0's pill, and the
+// pill's lookup found the sticker's tenancy (the iOS twin's sentinel).
+enum { kMacNoteStickerBandKey = -1 };
 static BTMacNoteBandRes gMacNoteBands[kMacNoteMaxBands];
 static int              gMacNoteBandCount = 0;
 
@@ -1771,7 +1775,7 @@ static void btMacInstallStickerBand(void) {
         // The inset tenancy, recorded like any other band (the iOS twin).
         if (gMacNoteBandCount < kMacNoteMaxBands) {
             gMacNoteBands[gMacNoteBandCount++] =
-                (BTMacNoteBandRes){0, NSMakeRange(NSNotFound, 0), gMacNoteBandH};
+                (BTMacNoteBandRes){kMacNoteStickerBandKey, NSMakeRange(NSNotFound, 0), gMacNoteBandH};
         }
         return;
     }
@@ -1787,7 +1791,7 @@ static void btMacInstallStickerBand(void) {
     [ts endEditing];
     // Record it in the LIST, so a second reservation cannot orphan this one.
     if (gMacNoteBandCount < kMacNoteMaxBands) {
-        gMacNoteBands[gMacNoteBandCount++] = (BTMacNoteBandRes){0, para, gMacNoteBandH};
+        gMacNoteBands[gMacNoteBandCount++] = (BTMacNoteBandRes){kMacNoteStickerBandKey, para, gMacNoteBandH};
     }
 }
 
@@ -1796,6 +1800,50 @@ static void btMacInstallStickerBand(void) {
 // paragraph is the first) summing into the container inset.
 static CGFloat btMacPillBandH(void) {
     return kMacNoteGapAbove + kMacNotePill + kMacNoteGapBelow;
+}
+
+// btMacBandStackAbove is the height of the co-tenants stacked ABOVE band bi
+// within its tenancy — the records sharing its spot (the inset, or one
+// paragraph). Pills stack above the sticker when they share a spot (the
+// styled pane's ordering), so the sticker counts every pill share while a
+// pill counts only the pills recorded before it. The iOS twin, verbatim.
+static CGFloat btMacBandStackAbove(int bi) {
+    if (bi < 0 || bi >= gMacNoteBandCount) return 0;
+    BTMacNoteBandRes *me = &gMacNoteBands[bi];
+    BOOL meSticker = (me->key == kMacNoteStickerBandKey);
+    CGFloat above = 0;
+    for (int b = 0; b < gMacNoteBandCount; b++) {
+        if (b == bi) continue;
+        BTMacNoteBandRes *o = &gMacNoteBands[b];
+        BOOL sameSpot = (me->para.location == NSNotFound)
+            ? (o->para.location == NSNotFound)
+            : (o->para.location == me->para.location);
+        if (!sameSpot) continue;
+        if (o->key == kMacNoteStickerBandKey) continue; // the sticker is always the bottom tenant
+        if (meSticker || b < bi) above += o->contribution;
+    }
+    return above;
+}
+
+// btMacBandStackBelow is the bottom-up complement: the height of the
+// co-tenants stacked BELOW pill band bi. This pane places paragraph tenants
+// off the passage's text top (btMacNoteStickerY says why fragment-origin
+// top-down failed here), so a paragraph pill subtracts what sits between it
+// and the text — the sticker's share, and every pill recorded after it.
+static CGFloat btMacBandStackBelow(int bi) {
+    if (bi < 0 || bi >= gMacNoteBandCount) return 0;
+    BTMacNoteBandRes *me = &gMacNoteBands[bi];
+    CGFloat below = 0;
+    for (int b = 0; b < gMacNoteBandCount; b++) {
+        if (b == bi) continue;
+        BTMacNoteBandRes *o = &gMacNoteBands[b];
+        BOOL sameSpot = (me->para.location == NSNotFound)
+            ? (o->para.location == NSNotFound)
+            : (o->para.location == me->para.location);
+        if (!sameSpot) continue;
+        if (o->key == kMacNoteStickerBandKey || b > bi) below += o->contribution;
+    }
+    return below;
 }
 
 static void btMacInstallPillBands(void) {
@@ -1877,15 +1925,22 @@ static void btMacLayoutPillViews(void) {
     for (NSUInteger i = 0; i < gMacNotePillViews.count && (int)i < gMacNoteBandSpecCount; i++) {
         NSButton *chip = gMacNotePillViews[i];
         BTMacNoteBandSpec *spec = &gMacNoteBandSpecs[i];
-        NSRange para = NSMakeRange(NSNotFound, 0);
+        int bandIdx = -1;
         for (int b = 0; b < gMacNoteBandCount; b++) {
-            if (gMacNoteBands[b].key == spec->key) { para = gMacNoteBands[b].para; break; }
+            if (gMacNoteBands[b].key == spec->key) { bandIdx = b; break; }
         }
+        // No reservation, no drawing: a spec whose install found no verse made
+        // no room, and the old NSNotFound fallthrough parked its pill in the
+        // inset over whoever actually reserved it.
+        if (bandIdx < 0) { chip.hidden = YES; continue; }
+        NSRange para = gMacNoteBands[bandIdx].para;
         CGFloat y;
         if (para.location == NSNotFound) {
             // The inset tenancy: the pill sits in the container inset above the
-            // chapter's first line, a flat gap down from the window edge.
-            y = 14 + kMacNoteGapAbove;
+            // chapter's first line, a flat gap down from the window edge —
+            // below whatever co-tenants stack above it (the iOS twin's rule;
+            // one flat y drew every top pill over the same spot).
+            y = 14 + btMacBandStackAbove(bandIdx) + kMacNoteGapAbove;
         } else if (NSMaxRange(para) <= ts.length) {
             NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
             if (g.length == 0) { chip.hidden = YES; continue; }
@@ -1900,8 +1955,10 @@ static void btMacLayoutPillViews(void) {
                 if (textTopRaw < floorY) textTopRaw = floorY;
             }
             // Hang the pill a gap above where the reader sees the passage
-            // start — the sticker's own bottom-up rule (btMacNoteStickerY).
-            y = textTopRaw + inset - kMacNoteGapBelow - kMacNotePill;
+            // start — the sticker's own bottom-up rule (btMacNoteStickerY) —
+            // less whatever co-tenants sit between it and the text: the
+            // sticker's share and any later pill's (btMacBandStackBelow).
+            y = textTopRaw + inset - btMacBandStackBelow(bandIdx) - kMacNoteGapBelow - kMacNotePill;
         } else {
             chip.hidden = YES;
             continue;
@@ -2063,7 +2120,17 @@ static void btMacEnsureNoteView(void) {
 static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
                                  NSTextStorage *ts, NSRange para, NSRange g) {
     CGFloat inset = gTextView.textContainerInset.height;
-    if (gMacNoteTopInset > 0) return 14 + btMacNoteTopGap(ts, para);   // the container-inset reservation
+    // The sticker's own recorded tenancy decides the inset case — never
+    // "does any inset exist": a chapter-top pill's inset must not relocate a
+    // mid-chapter card (the iOS twin's rule, btIOSStickerBandY). An inset
+    // tenant sits below the pill shares stacked above it.
+    for (int b = 0; b < gMacNoteBandCount; b++) {
+        if (gMacNoteBands[b].key != kMacNoteStickerBandKey) continue;
+        if (gMacNoteBands[b].para.location == NSNotFound) {
+            return 14 + btMacBandStackAbove(b) + btMacNoteTopGap(ts, para);
+        }
+        break;   // a paragraph tenancy: the bottom-up arithmetic below
+    }
 
     // HANG THE CARD OFF THE PASSAGE, not off the band's top edge.
     //
