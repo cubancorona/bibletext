@@ -3604,16 +3604,10 @@ var lastPushedBookChapter string
 // inline styling — superscript verse numbers, accent color, serif font) and
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
-	// Tell the native tap menu what this chapter's highlight means, so it offers
-	// the note's verbs rather than "Clear highlight" when a note owns it. While
-	// the plan is SUPPRESSED (a foreign mark owns the page) the wash on screen
-	// is the search's or the link's, not the note's, so the menu must say
-	// "Clear highlight" — the note is standing down as the pill.
-	hasNote := 0
-	if state.ActiveNote != "" && !state.NoteMinimized && !notesSuppressed(state) {
-		hasNote = 1
-	}
-	C.bibleTextSetHasNote(C.int(hasNote))
+	// The tap-menu gate (noteOwnsHighlightMenu) rides pushNoteToPane now, so
+	// every note push — including a pill-tap restore that never rebuilds the
+	// chapter — refreshes it. Setting it only here left it stale on exactly
+	// that path.
 	pushNoteToPane(state)
 
 	// Keep the native reporter column in sync with the text-size setting (the
@@ -3800,6 +3794,15 @@ func captureLastTouch() (verse int, delta float64, ok bool) {
 // and releases it — rendered by the native side's own compare-and-refresh
 // (bibleTextSetNote), never by a chapter re-import.
 func pushNoteToPane(state *AppState) {
+	// The tap-menu gate travels with the note, not with the chapter: a pill
+	// restore updates only this push, and the gate must follow it or the
+	// reader taps an open note's wash and is offered "Clear highlight".
+	hasNote := C.int(0)
+	if noteOwnsHighlightMenu(state) {
+		hasNote = 1
+	}
+	C.bibleTextSetHasNote(hasNote)
+
 	pal := state.pal()
 	// THE SHARED VALUE, not a fourth composition. Everything the native side
 	// used to work out for itself about this note now arrives decided.

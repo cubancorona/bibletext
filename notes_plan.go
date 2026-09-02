@@ -201,6 +201,20 @@ func notesSuppressed(state *AppState) bool {
 	return state != nil && state.mark.live() && !state.mark.fromNote()
 }
 
+// noteOwnsHighlightMenu reports whether the wash on screen is the OPEN note's
+// own, so a tap on it must offer the note's verbs (Hide/Delete) rather than
+// "Clear highlight". Minimized and suppressed states stand down: any wash then
+// is a search's or a link's, and clearing is the right offer. This must be
+// re-pushed on EVERY note push, not only on chapter pushes — opening a note
+// from its pill updates the overlay without rebuilding the chapter, and a
+// gate set only at chapter-push time went stale there: the reader tapped an
+// open note's wash and was offered "Clear highlight", which then had nothing
+// to clear.
+func noteOwnsHighlightMenu(state *AppState) bool {
+	return state != nil && state.ActiveNote != "" && !state.NoteMinimized &&
+		!notesSuppressed(state)
+}
+
 // buildChapterPlan derives the plan for the chapter the reader is on. p is the
 // preference store the notes live in; bible is the READING translation's
 // loaded data (the authority on which books exist — nil skips that test,

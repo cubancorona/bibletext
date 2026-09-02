@@ -577,3 +577,49 @@ func planOpenCount(p chapterPlan) int {
 	}
 	return n
 }
+
+// The tap-menu gate must follow the NOTE pushes, and its truth table is the
+// regression that shipped: opening a note from its per-paragraph pill left the
+// old chapter-push-time gate stale, and a tap on the open note's own wash
+// offered "Clear highlight" — with nothing to clear.
+func TestNoteOwnsHighlightMenuFollowsTheRestore(t *testing.T) {
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	prev := notesPillPerParagraph
+	notesPillPerParagraph = true
+	defer func() { notesPillPerParagraph = prev }()
+
+	st, _, _, last, ids := twoNotedParagraphs(t, 1)
+	if noteOwnsHighlightMenu(st) {
+		t.Fatal("minimized notes must NOT own the highlight menu — any wash is not theirs")
+	}
+
+	// The pill path, exactly: the keyed restore the native chip posts.
+	groups := chapterNoteGroups(st, buildChapterPlan(st, appPrefs(), st.Bible),
+		st.Bible.GetChapter("John", 3))
+	var key = -1
+	for _, g := range groups {
+		for _, n := range g.Notes {
+			if n.Note.ID == ids[len(ids)-1] {
+				key = g.Key
+			}
+		}
+	}
+	if key < 0 {
+		t.Fatalf("fixture: no group for the note on v%d", last)
+	}
+	performNoteAction(st, noteActionRestore, key)
+	if !noteOwnsHighlightMenu(st) {
+		t.Errorf("after the pill restore the OPEN note owns its wash: the menu "+
+			"must offer the note's verbs, not \"Clear highlight\" "+
+			"(active=%q min=%v suppressed=%v)",
+			st.ActiveNote, st.NoteMinimized, notesSuppressed(st))
+	}
+
+	// A foreign mark stands the note down to its pill: the wash is the mark's.
+	goToVerseRange(st, "John", 3, 1, 1)
+	if noteOwnsHighlightMenu(st) {
+		t.Error("a foreign mark owns the page — the menu must offer \"Clear highlight\"")
+	}
+}
