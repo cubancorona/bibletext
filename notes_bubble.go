@@ -112,11 +112,18 @@ import (
 //     the words, and lifting the card away from them breaks the one distance
 //     a reader consciously reads.
 //   - A COLLAPSED pill stack whose bottom neighbour is the PASSAGE centres in
-//     the whole inter-paragraph air instead: the stack lifts
-//     notePillSeparatorLift (separator/2) above its band top, so the air on
-//     each side reads separator/2 + GapAbove. Where the separator is 0 (the
-//     reporter layouts, the chapter-top inset) the lift is 0 and the pill
-//     sits GapAbove into its band exactly as before — one rule, no branch.
+//     the inter-paragraph air a reader SEES — the previous paragraph's ink
+//     bottom to the noted paragraph's first ink top. Engines that split
+//     their leading evenly around the glyphs (the styled pane centres them
+//     in the line box; CSS half-leading is symmetric by spec) implement
+//     that as box arithmetic — notePillSeparatorLift (separator/2) above
+//     the band top, air = separator/2 + GapAbove each side. The natives
+//     measure the ink instead (btIOSPillStackInkTop, btPillStackInkTop):
+//     their imports pile the leading ABOVE each line's glyphs, so the box
+//     answer sat visibly low, worse at larger text sizes. Where the
+//     separator is 0 (the reporter layouts, the chapter-top inset) every
+//     form stands down and the pill sits GapAbove into its band exactly as
+//     before — one rule, no layout branch.
 //   - A pill stack whose bottom neighbour is an OPEN card (the own-note-open
 //     co-tenancy) does NOT lift: the symmetry argument is about the air
 //     between two paragraphs, and there the card owns the bottom air.

@@ -1332,3 +1332,60 @@ func TestNarrowSinglePillCentresAndTheCardDoesNot(t *testing.T) {
 		})
 	}
 }
+
+// A single collapsed pill SHARING its paragraph with a per-paragraph stack
+// keeps its band placement: the separator is adjacent to the stack above it,
+// not to this pill, so lifting it would seat the reader's own marker closer
+// to the neighbouring stack than to its own passage — inverting the ownership
+// the gap encodes. The reachable state is the reader's own note collapsed to
+// its pill (a foreign mark suppresses the chapter) beside a received note in
+// the same paragraph.
+func TestSharedSpotSinglePillKeepsItsBandPlacement(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	st, verses, _, last, _ := twoNotedParagraphs(t, 1)
+	own, ok := addNote(appPrefs(), StoredNote{Kind: noteKindMine, VersionID: "web",
+		Book: "John", Chapter: 3, VerseLo: last,
+		Text: "The reader's own note beside the received one."})
+	if !ok {
+		t.Fatal("could not store the own note")
+	}
+	// A foreign mark elsewhere first, then the reader opens their own note
+	// from the browser: the mark stays standing (the open path leaves it),
+	// so the own note presents as its collapsed pill beside the received
+	// set's per-paragraph pills.
+	goToVerseRange(st, "John", 3, 1, 1)
+	st.focusNote(own.ID)
+	applyNoteForCurrentChapter(st)
+
+	pane := newStyledReadingPane(st, verses)
+	pane.Resize(fyne.NewSize(320, 900))
+	if !pane.noteGeom.present || !pane.noteGeom.pill {
+		t.Fatalf("precondition: the own note must be a present PILL beside the "+
+			"stack (present=%v pill=%v)", pane.noteGeom.present, pane.noteGeom.pill)
+	}
+	if pane.lay.BandLine <= 0 {
+		t.Fatalf("precondition: a mid-chapter band, got line %d", pane.lay.BandLine)
+	}
+	shared := false
+	for i := range pane.lay.Bands {
+		if pane.lay.Bands[i].Line == pane.lay.BandLine {
+			shared = true
+			break
+		}
+	}
+	if !shared {
+		t.Fatal("precondition: a per-paragraph band must share the own pill's line")
+	}
+	want := pane.lay.BandY + styledNoteGapAbv
+	if got := pane.noteGeom.card.Y; got < want-0.6 || got > want+0.6 {
+		t.Errorf("the shared-spot own pill sits at %.1f, want %.1f (band top %.1f) — "+
+			"it must keep its band placement, not lift toward the stack above",
+			got, want, pane.lay.BandY)
+	}
+}

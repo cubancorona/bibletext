@@ -1278,23 +1278,35 @@ public final class BtBridge {
      * Runs from setNote (tuple changed), setHtml (fresh Spanned + verse
      * index), and the content width listener (first layout, rotation).
      */
-    // btPillSeparatorLift is notePillSeparatorLift's mirror (notes_bubble.go
-    // owns the rule): a collapsed stack whose bottom neighbour is the passage
-    // centres in the whole inter-paragraph air, lifting half the separator
-    // above its band top. The separator here is the blank line Html.fromHtml
-    // puts between paragraphs, and its NATURAL height is that line's box minus
-    // the band the span grew into it — never a recomputed 1.35*size, which
-    // would drift from the applied pitch on the pre-28 style path. A band
-    // hanging off an INK line (a poem line's '\n', which paraStartAt also
-    // stops at) has no separator above it and must not lift: the blank line is
-    // the one whose text is only the newline, i.e. the line STARTS at the
-    // span's own character.
-    private static int btPillSeparatorLift(Layout lay, NoteBandSpan span, int ps) {
-        if (lay == null || span == null || !span.below || ps <= 0) return 0;
+    // btPillStackInkTop is notePillSeparatorLift's mirror (notes_bubble.go owns
+    // the rule): a collapsed stack whose bottom neighbour is the passage
+    // centres in the VISIBLE inter-paragraph air — the previous paragraph's
+    // ink bottom (its last baseline plus the paint's descent) to the noted
+    // paragraph's first ink top (its first baseline minus the cap height).
+    // Centring in BOX space read wrong: the layout's leading is not split
+    // evenly around the glyphs, so a box-centred pill carried the slack under
+    // it and visibly hugged the wrong side, worse at larger text sizes. The
+    // separator here is the blank line Html.fromHtml puts between paragraphs;
+    // a band hanging off an INK line (a poem line's '\n', which paraStartAt
+    // also stops at) has no separator above it and stands down: the blank
+    // line is the one whose text is only the newline, i.e. the line STARTS at
+    // the span's own character. Returns -1 to stand down; the caller keeps
+    // the band-top arithmetic.
+    private static int btPillStackInkTop(Layout lay, NoteBandSpan span, int ps,
+                                         int stackH, int capH) {
+        if (lay == null || span == null || !span.below || ps <= 0) return -1;
         int sl = lay.getLineForOffset(ps - 1);
-        if (lay.getLineStart(sl) != ps - 1) return 0; // an ink line: mid-poem, no separator
-        int natural = lay.getLineBottom(sl) - lay.getLineTop(sl) - span.band;
-        return natural > 0 ? natural / 2 : 0;
+        if (lay.getLineStart(sl) != ps - 1) return -1; // an ink line: mid-poem, no separator
+        if (sl < 1) return -1;                          // nothing above the blank line
+        // OPTICAL edges, not metric extremes: a text block's bottom edge is
+        // its BASELINE (descenders are sparse; centring to baseline+descent
+        // sat the pill low by half the descent), and its top edge is the cap
+        // line.
+        float inkBottom = lay.getLineBaseline(sl - 1);
+        float inkTop = lay.getLineBaseline(lay.getLineForOffset(ps)) - capH;
+        float gap = inkTop - inkBottom;
+        if (gap <= stackH) return -1;
+        return Math.round(inkBottom + (gap - stackH) / 2f);
     }
 
     private static void refreshNoteSticker() {
@@ -1419,6 +1431,11 @@ public final class BtBridge {
                 if (lay == null) return; // hidden overlay: the next refresh places it
                 int textTop = text.getTop() + text.getTotalPaddingTop();
                 CharSequence cs3 = text.getText();
+                // The body cap height, for the ink-centering rule: measured
+                // off the live paint, so every text-size setting is honest.
+                android.graphics.Rect capB = new android.graphics.Rect();
+                text.getPaint().getTextBounds("N", 0, 1, capB);
+                final int capH = capB.height();
 
                 if (vv != null && vv.getParent() != null && off >= 0) {
                     // The band belongs to the paragraph, so the sticker hangs from
@@ -1458,10 +1475,15 @@ public final class BtBridge {
                     // same arithmetic the styled pane's place() and iOS's
                     // btIOSLayoutNote use.
                     int top = textTop + gapTop + pillPart + gapAbove;
-                    // The single collapsed pill takes the centering lift too
-                    // (btPillSeparatorLift); the OPEN card never does — its
-                    // tail's distance to the passage is the pinned invariant.
-                    if (pillForm) top -= btPillSeparatorLift(lay, noteBandSpan, paraOff);
+                    // The single collapsed pill centres in the visible air
+                    // (btPillStackInkTop, its stack being itself alone); the
+                    // OPEN card never does — its tail's distance to the
+                    // passage is the pinned invariant.
+                    if (pillForm) {
+                        int ink = btPillStackInkTop(lay, noteBandSpan, paraOff,
+                                vv.getMeasuredHeight(), capH);
+                        if (ink >= 0) top = textTop + ink;
+                    }
                     FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
                     p.topMargin = Math.max(0, top);
                     vv.setLayoutParams(p);
@@ -1493,15 +1515,16 @@ public final class BtBridge {
                     Integer prev = stacked.get(ps);
                     int slot = prev == null ? 0 : prev;
                     stacked.put(ps, slot + 1);
-                    // The centering rule: the stack rises half the separator
-                    // (btPillSeparatorLift) — except beside a live OPEN card
-                    // sharing this paragraph, which owns the bottom air (a
-                    // live sticker with chips present is always the card:
-                    // the pill form stands down when specs exist).
-                    int lift = btPillSeparatorLift(lay, span, ps);
+                    // The centering rule: the chip centres in the visible
+                    // inter-paragraph air (btPillStackInkTop) — except beside
+                    // a live OPEN card sharing this paragraph, which owns the
+                    // bottom air (a live sticker with chips present is always
+                    // the card: the pill form stands down when specs exist).
+                    int ink = btPillStackInkTop(lay, span, ps, chip.getMeasuredHeight(), capH);
                     if (vv != null && vv.getParent() != null && off >= 0
-                            && paraStartAt(cs3, off) == ps) lift = 0;
-                    int ctop = textTop + bandTop + slot * pillBand + gapAbove - lift;
+                            && paraStartAt(cs3, off) == ps) ink = -1;
+                    int ctop = ink >= 0 ? textTop + ink + slot * pillBand
+                            : textTop + bandTop + slot * pillBand + gapAbove;
                     FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) chip.getLayoutParams();
                     cp.topMargin = Math.max(0, ctop);
                     chip.setLayoutParams(cp);
@@ -2154,6 +2177,17 @@ public final class BtBridge {
                             while (paraOff > 0 && cs.charAt(paraOff - 1) != '\n') paraOff--;
                             int paraLine = layout.getLineForOffset(paraOff);
                             top = layout.getLineTop(paraLine) - noteBandSpan.band;
+                            // The drawn stack takes the centering lift and can
+                            // sit ABOVE the band top; a target that ignored it
+                            // ate the lead — nearly all of it at the largest
+                            // text size — and the reader arrived with the pill
+                            // against the screen edge. Land on whichever is
+                            // higher: the band top or the lifted stack's top.
+                            android.graphics.Rect ab = new android.graphics.Rect();
+                            text.getPaint().getTextBounds("N", 0, 1, ab);
+                            int ink = btPillStackInkTop(layout, noteBandSpan, paraOff,
+                                    dp(NOTE_PILL_H), ab.height());
+                            if (ink >= 0 && ink < top) top = ink;
                         }
                         int y = text.getTotalPaddingTop() + top - dp(NOTE_LEAD);
                         ownScrollTo(Math.max(y, 0));

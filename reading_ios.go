@@ -931,6 +931,9 @@ static void btIOSLayoutPillViews(void);
 static CGFloat btIOSBandTopY(NSUInteger paraGlyph);
 static CGFloat btIOSInsetBandTop(void);
 static CGFloat btIOSPillSeparatorLift(NSTextStorage *ts, NSRange para);
+static CGFloat btIOSPillStackInkTop(NSLayoutManager *lm, NSTextStorage *ts,
+                                    NSRange para, NSUInteger paraGlyph, CGFloat stackH);
+static CGFloat btIOSPillStackH(int bi);
 static CGFloat btIOSBandStackAbove(int bi);
 static CGFloat btIOSStickerBandY(NSUInteger paraGlyph);
 
@@ -1464,11 +1467,34 @@ static void btIOSLayoutPillViews(void) {
             NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
             if (g.length == 0) { chip.hidden = YES; continue; }
             y = btIOSBandTopY(g.location);
-            // The centering rule (notePillSeparatorLift): the collapsed stack
-            // rises half the paragraph separator, so the air reads the same on
-            // both sides. Zero on the reporter layout and beside an open card
-            // — the helper decides, not this branch.
-            y -= btIOSPillSeparatorLift(ts, para);
+            // The centering rule (notePillSeparatorLift's doctrine): the
+            // collapsed stack centres in the VISIBLE inter-paragraph air —
+            // ink to ink, because this import piles its leading above the
+            // glyphs and box-centring read low. Stand-downs (reporter,
+            // chapter top, an open card sharing the spot, degenerate
+            // geometry) return -1 and the band-top arithmetic above holds.
+            CGFloat inkY = btIOSPillStackInkTop(lm, ts, para, g.location, btIOSPillStackH(bi));
+            if (inkY >= 0) { y = inkY; }
+            if (getenv("BT_NOTE_GEOM") && para.location > 0) {
+                NSRange pg = [lm glyphRangeForCharacterRange:NSMakeRange(para.location - 1, 1) actualCharacterRange:NULL];
+                CGRect pFrag = [lm lineFragmentRectForGlyphAtIndex:pg.location effectiveRange:NULL];
+                CGRect pUsed = [lm lineFragmentUsedRectForGlyphAtIndex:pg.location effectiveRange:NULL];
+                CGPoint pLoc = [lm locationForGlyphAtIndex:pg.location];
+                UIFont *pf = [ts attribute:NSFontAttributeName atIndex:para.location - 1 effectiveRange:NULL];
+                CGRect nFrag = [lm lineFragmentRectForGlyphAtIndex:g.location effectiveRange:NULL];
+                CGRect nUsed = [lm lineFragmentUsedRectForGlyphAtIndex:g.location effectiveRange:NULL];
+                CGPoint nLoc = [lm locationForGlyphAtIndex:g.location];
+                UIFont *nf = [ts attribute:NSFontAttributeName atIndex:para.location effectiveRange:NULL];
+                fprintf(stderr,
+                    "[pillgeom] key=%d prev: frag=%.1f..%.1f used=%.1f..%.1f base=%.1f asc=%.2f desc=%.2f cap=%.2f | "
+                    "next: frag=%.1f..%.1f used=%.1f..%.1f base=%.1f asc=%.2f desc=%.2f cap=%.2f | y=%.1f pill=%d\n",
+                    spec->key,
+                    CGRectGetMinY(pFrag), CGRectGetMaxY(pFrag), CGRectGetMinY(pUsed), CGRectGetMaxY(pUsed),
+                    CGRectGetMinY(pFrag) + pLoc.y, pf.ascender, pf.descender, pf.capHeight,
+                    CGRectGetMinY(nFrag), CGRectGetMaxY(nFrag), CGRectGetMinY(nUsed), CGRectGetMaxY(nUsed),
+                    CGRectGetMinY(nFrag) + nLoc.y, nf.ascender, nf.descender, nf.capHeight,
+                    y, (int)kNotePill);
+            }
         } else {
             chip.hidden = YES;
             continue;
@@ -1846,7 +1872,96 @@ static CGFloat btIOSPillSeparatorLift(NSTextStorage *ts, NSRange para) {
     }
     NSParagraphStyle *pv = [ts attribute:NSParagraphStyleAttributeName
                                  atIndex:para.location - 1 effectiveRange:NULL];
-    return (pv ? pv.paragraphSpacing : 0) / 2;
+    NSParagraphStyle *ownStyle = [ts attribute:NSParagraphStyleAttributeName
+                                      atIndex:para.location effectiveRange:NULL];
+    CGFloat sep = pv ? pv.paragraphSpacing : 0;
+    // The PAGE'S rhythm only: lift when the gap above is the same separator
+    // every scripture paragraph carries — read off the noted paragraph's OWN
+    // after-spacing, never a constant. A Psalm superscription's smaller title
+    // margin is a one-off, not the rhythm, and centring across it broke the
+    // reporter layout's pixel-identity (the title margin is emitted on every
+    // layout); the mismatch stands the lift down there on all of them.
+    CGFloat own = ownStyle ? ownStyle.paragraphSpacing : 0;
+    if (own <= 0 || fabs(sep - own) > 0.5) return 0;
+    return sep / 2;
+}
+
+// btIOSPillStackInkTop is where a pill stack's FIRST pill goes, in content
+// coordinates, centred in the VISIBLE inter-paragraph air — the previous
+// paragraph's ink bottom to the noted paragraph's first ink top. Centring in
+// BOX space read wrong: this import runs its extra leading ABOVE each line's
+// glyphs (measured: the previous line's ink sits flush against its used-rect
+// bottom, while the next line's first ink hangs lineAscent-minus-capHeight
+// below its box top), so a box-centred pill carried all that slack UNDER it
+// and visibly hugged the wrong side — worse at larger text sizes, where the
+// slack grows with the font. Ink bottom is the previous line's used-rect
+// bottom (measured equal to baseline+descender exactly); ink top is the
+// first glyph's baseline minus its capHeight, which for scripture is the
+// raised verse number — genuinely the first ink a reader sees.
+//
+// Returns -1 to stand down — no separator above (reporter, chapter top), an
+// open card sharing the spot (btIOSPillSeparatorLift's gates), or degenerate
+// geometry — and the caller keeps the band-top arithmetic.
+static CGFloat btIOSPillStackInkTop(NSLayoutManager *lm, NSTextStorage *ts,
+                                    NSRange para, NSUInteger paraGlyph, CGFloat stackH) {
+    if (btIOSPillSeparatorLift(ts, para) <= 0) return -1;
+    NSRange pg = [lm glyphRangeForCharacterRange:NSMakeRange(para.location - 1, 1)
+                             actualCharacterRange:NULL];
+    if (pg.length == 0) return -1;
+    CGRect pUsed = [lm lineFragmentUsedRectForGlyphAtIndex:pg.location effectiveRange:NULL];
+    UIFont *pf = [ts attribute:NSFontAttributeName atIndex:para.location - 1 effectiveRange:NULL];
+    // The BODY run's cap line, not the raised verse number's top: the number
+    // is real ink, but the eye reads the passage's own cap height as the
+    // line's edge (anchoring to the number sat the pill a few points high,
+    // by exactly the number's rise). The body run is the line's largest font.
+    NSRange lineGlyphs;
+    CGRect nFrag = [lm lineFragmentRectForGlyphAtIndex:paraGlyph effectiveRange:&lineGlyphs];
+    NSRange lineChars = [lm characterRangeForGlyphRange:lineGlyphs actualGlyphRange:NULL];
+    __block UIFont *body = nil;
+    __block NSUInteger bodyChar = lineChars.location;
+    [ts enumerateAttribute:NSFontAttributeName inRange:lineChars options:0
+                usingBlock:^(id v, NSRange r, BOOL *stop) {
+        UIFont *f = v;
+        if (f != nil && (body == nil || f.pointSize > body.pointSize)) {
+            body = f;
+            bodyChar = r.location;
+        }
+    }];
+    if (body == nil) return -1;
+    NSRange bg = [lm glyphRangeForCharacterRange:NSMakeRange(bodyChar, 1)
+                             actualCharacterRange:NULL];
+    if (bg.length == 0) return -1;
+    CGPoint bLoc = [lm locationForGlyphAtIndex:bg.location];
+    // OPTICAL edges, not metric extremes: a text block's bottom edge is its
+    // BASELINE (descenders are sparse — a line without them ends at the
+    // baseline, and centring to baseline+descent sat the pill low by half
+    // the descent), and its top edge is the cap line. The used rect's bottom
+    // is baseline+descender (measured exactly), so the baseline is that plus
+    // the font's (negative) descender.
+    CGFloat inkBottom = CGRectGetMaxY(pUsed) + (pf ? pf.descender : 0);
+    CGFloat inkTop = CGRectGetMinY(nFrag) + bLoc.y - body.capHeight;
+    CGFloat gap = inkTop - inkBottom;
+    if (gap <= stackH) return -1;
+    return inkBottom + (gap - stackH) / 2 + gReadingTV.textContainerInset.top;
+}
+
+// btIOSPillStackH is the drawn height of the pill stack sharing a spot: n
+// pills and the gaps between them (each band's own GapBelow+GapAbove pair).
+// The sticker never counts — a card-sharing spot stands down before this.
+static CGFloat btIOSPillStackH(int bi) {
+    if (bi < 0 || bi >= gNoteBandCount) return kNotePill;
+    BTNoteBandRes *me = &gNoteBands[bi];
+    int n = 0;
+    for (int b = 0; b < gNoteBandCount; b++) {
+        BTNoteBandRes *o = &gNoteBands[b];
+        if (o->key == kNoteStickerBandKey) continue;
+        BOOL sameSpot = (me->para.location == NSNotFound)
+            ? (o->para.location == NSNotFound)
+            : (o->para.location == me->para.location);
+        if (sameSpot) n++;
+    }
+    if (n < 1) n = 1;
+    return n * kNotePill + (n - 1) * (kNoteGapBelow + kNoteGapAbove);
 }
 
 // btIOSStickerBandY is the sticker's own Y: its recorded tenancy (never
@@ -1858,13 +1973,42 @@ static CGFloat btIOSPillSeparatorLift(NSTextStorage *ts, NSRange para) {
 static CGFloat btIOSStickerBandY(NSUInteger paraGlyph) {
     for (int b = 0; b < gNoteBandCount; b++) {
         if (gNoteBands[b].key != kNoteStickerBandKey) continue;
-        CGFloat y = (gNoteBands[b].para.location == NSNotFound)
-            ? btIOSInsetBandTop()
-            : btIOSBandTopY(paraGlyph)
-              - btIOSPillSeparatorLift(gReadingTV.textStorage, gNoteBands[b].para);
+        CGFloat y;
+        if (gNoteBands[b].para.location == NSNotFound) {
+            y = btIOSInsetBandTop();
+        } else {
+            y = btIOSBandTopY(paraGlyph);
+            // The single collapsed pill centres in the visible air like any
+            // stack (its stack is itself alone); the helper's -1 keeps the
+            // open card, the reporter and the chapter top exactly here.
+            CGFloat inkY = btIOSPillStackInkTop(gReadingTV.layoutManager,
+                gReadingTV.textStorage, gNoteBands[b].para, paraGlyph, kNotePill);
+            if (inkY >= 0) { y = inkY; }
+        }
         return y + btIOSBandStackAbove(b);
     }
-    // No recorded band (height 0, or the stand-down): the old answer.
+    // No recorded band (height 0, or the stand-down): the drawn chips carry
+    // the presentation, and they took the centering lift — an unlifted
+    // target here eroded the arrival lead by the whole lift, and the reader
+    // arrived with the stack nearly against the screen edge. Land where the
+    // topmost chip actually is; the old band-top answer only when the ink
+    // rule stands down.
+    NSTextStorage *sts = gReadingTV.textStorage;
+    NSLayoutManager *slm = gReadingTV.layoutManager;
+    if (sts != nil && slm != nil && sts.length > 0) {
+        NSUInteger ci = [slm characterIndexForGlyphAtIndex:paraGlyph];
+        NSRange spara = [sts.string paragraphRangeForRange:NSMakeRange(ci, 0)];
+        int n = 0;
+        for (int b = 0; b < gNoteBandCount; b++) {
+            if (gNoteBands[b].key == kNoteStickerBandKey) continue;
+            if (gNoteBands[b].para.location == spara.location) n++;
+        }
+        if (n > 0) {
+            CGFloat stackH = n * kNotePill + (n - 1) * (kNoteGapBelow + kNoteGapAbove);
+            CGFloat inkY = btIOSPillStackInkTop(slm, sts, spara, paraGlyph, stackH);
+            if (inkY >= 0) return inkY;
+        }
+    }
     return btIOSBandTopY(paraGlyph);
 }
 

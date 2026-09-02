@@ -335,10 +335,23 @@ func (p *styledReadingPane) relayout(width float32) {
 			// The single collapsed pill takes the same centering lift as the
 			// per-paragraph stacks; the OPEN card never does — its tail's
 			// distance to the passage is the pinned invariant. Line 0 is
-			// paragraph 0: no separator above, no lift.
+			// paragraph 0: no separator above, no lift. And a pill SHARING
+			// its paragraph with a per-paragraph band keeps its band
+			// placement — the co-tenant stack's bottom neighbour is not the
+			// passage alone, so the whole stack stands down together (the
+			// band side's gate is the noteGeom.present check above).
 			lift := float32(0)
 			if p.noteGeom.pill && p.lay.BandLine > 0 {
-				lift = notePillSeparatorLift(paraGap)
+				shared := false
+				for i := range p.lay.Bands {
+					if p.lay.Bands[i].Line == p.lay.BandLine {
+						shared = true
+						break
+					}
+				}
+				if !shared {
+					lift = notePillSeparatorLift(paraGap)
+				}
 			}
 			p.noteGeom.place(p.insetX(), p.lay.BandY-lift)
 		}
