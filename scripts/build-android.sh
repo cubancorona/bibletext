@@ -297,14 +297,18 @@ else
   note "fyne package -os android (debug APK)"
   cd "$APP_DIR"
   rm -f BibleText.apk
+  # BT_ANDROID_TAGS: extra build tags for the DEBUG APK only (the dev Links
+  # page's tag, for emulator work). The release path above refuses it outright
+  # -- see the check near the top -- and the release guard test additionally
+  # asserts this script never names that tag. NOTE: this comment must sit
+  # ABOVE the invocation, never between its continuation lines — a comment
+  # after a trailing backslash silently ends the command, the env prefix
+  # applies to nothing, and fyne then runs against the exported wrapper-go
+  # with BIBLETEXT_REAL_GO unset (the goEnv panic that cost a morning).
   BIBLETEXT_REAL_GO="$REAL_GO" \
   BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   GOCACHE="$WORK/go-cache" GOTMPDIR="$WORK/go-tmp" \
   PATH="$WORK/bin:$PATH" \
-  # BT_ANDROID_TAGS: extra build tags for the DEBUG APK only (the dev Links
-  # page's tag, for emulator work). The release path above refuses it outright
-  # -- see the check near the top -- and the release guard test additionally
-  # asserts this script never names that tag.
   fyne package -os android -app-id "$APP_ID" -icon Icon.png \
       ${BT_ANDROID_TAGS:+--tags "$BT_ANDROID_TAGS"}
 
