@@ -262,7 +262,8 @@ body{
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text p{margin:0 0 1.3175em; text-align:justify; hyphens:auto; -webkit-hyphens:auto}
+.text{--pgap:calc(1.3175 * 1.3125rem)}
+.text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line
@@ -273,6 +274,7 @@ body{
   /* The reporter set: no gap between paragraphs, a first-line indent instead
      (the app's em+en spaces). Leading stays natural — the importer drops the
      app's 1.3 exactly as it drops the phone's 2.0. */
+  .text{--pgap:0rem}
   .text p{margin:0; text-indent:1.5em}
   .text p:first-child{text-indent:0}
   .text p.pm{margin:.55rem 0; text-indent:0}
@@ -394,15 +396,32 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .notebtn svg{width:15px; height:15px; fill:currentColor; display:block}
 .notebtn:hover{color:var(--accent); background:var(--control-hover)}
 /* The minimized marker. Small and quiet, but unmistakably a thing to press:
-   the note is still there and the reader has to be able to find it again. */
+   the note is still there and the reader has to be able to find it again.
+   Its vertical margins carry the centering rule (notePillSeparatorLift in
+   the app): the paragraph separator above it (--pgap, the preceding p's
+   bottom margin) splits evenly around the chip, so the air reads the same on
+   both sides — margin-top gives up pgap/2, margin-bottom takes it. On the
+   reporter page --pgap is 0 and both margins are the plain 1.1rem again.
+   The chip stays inline-flex (an atomic inline box: no margin collapsing
+   with the neighbouring paragraphs) and vertical-align:top keeps the
+   anonymous line box's strut from eating the shrunken top margin. The
+   chapter-top parking (.notail, after the header instead of a paragraph)
+   has no separator above it and keeps the plain margins. */
 .notechip{
-  display:inline-flex; align-items:center; gap:.35rem; margin:1.1rem 0;
+  display:inline-flex; align-items:center; gap:.35rem;
+  margin:calc(1.1rem - var(--pgap, 0rem)/2) 0 calc(1.1rem + var(--pgap, 0rem)/2);
+  vertical-align:top;
   scroll-margin-top:__NOTE_LEAD__px;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
   padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
   color:var(--muted); cursor:pointer; line-height:1.2;
 }
+/* No separator above, no split: a chip before the FIRST paragraph (it becomes
+   .text's first child) and the chapter-top parking (outside .text, where
+   --pgap never reaches it anyway) keep the plain margins — the app's rule
+   that the chapter top never lifts. */
+.text .notechip:first-child, .notechip.notail{margin:1.1rem 0}
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
 /* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's

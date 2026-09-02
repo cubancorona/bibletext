@@ -930,6 +930,7 @@ static void btIOSEnsurePillViews(void);
 static void btIOSLayoutPillViews(void);
 static CGFloat btIOSBandTopY(NSUInteger paraGlyph);
 static CGFloat btIOSInsetBandTop(void);
+static CGFloat btIOSPillSeparatorLift(NSTextStorage *ts, NSRange para);
 static CGFloat btIOSBandStackAbove(int bi);
 static CGFloat btIOSStickerBandY(NSUInteger paraGlyph);
 
@@ -1292,7 +1293,10 @@ static void btIOSInstallStickerBand(void) {
     // ZERO in the reporter layout, so on iPad the card's edge touched the line
     // above it while a full gap sat underneath. macOS had already been repaired
     // for exactly this. The reservation is the note's; the paragraph separator
-    // is the reading page's and is left alone (noteMetrics records why).
+    // is the reading page's and the reservation leaves it alone. The collapsed
+    // pill STACK centres across it at placement (btIOSPillSeparatorLift, the
+    // notePillSeparatorLift mirror); the card never does (noteMetrics records
+    // why).
     gNoteBandH = kNoteGapAbove + h + gNoteShapeExtra + kNoteGapBelow;
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
@@ -1460,6 +1464,11 @@ static void btIOSLayoutPillViews(void) {
             NSRange g = [lm glyphRangeForCharacterRange:para actualCharacterRange:NULL];
             if (g.length == 0) { chip.hidden = YES; continue; }
             y = btIOSBandTopY(g.location);
+            // The centering rule (notePillSeparatorLift): the collapsed stack
+            // rises half the paragraph separator, so the air reads the same on
+            // both sides. Zero on the reporter layout and beside an open card
+            // — the helper decides, not this branch.
+            y -= btIOSPillSeparatorLift(ts, para);
         } else {
             chip.hidden = YES;
             continue;
@@ -1815,15 +1824,44 @@ static CGFloat btIOSBandStackAbove(int bi) {
     return above;
 }
 
+// btIOSPillSeparatorLift is notePillSeparatorLift's mirror (notes_bubble.go
+// owns the rule): a collapsed stack whose bottom neighbour is the PASSAGE
+// centres in the whole inter-paragraph air, lifting half the separator above
+// its band top. The separator is the PREVIOUS paragraph's after-spacing —
+// buildChapterHTML's margin-bottom lands in paragraphSpacing and survives the
+// import (the zeroing pass touches only paragraphSpacingBefore) — so the
+// reporter layout's 0 falls out with no branch. Zero when an OPEN card shares
+// the spot: the card is the stack's bottom neighbour there, and the card
+// never centres — its tail's distance to the passage is the pinned invariant.
+// (The card asking for its own paragraph passes that same test, which is what
+// keeps this ONE helper honest at btIOSStickerBandY's two forms: the pill
+// form lifts, the open card gets 0.)
+static CGFloat btIOSPillSeparatorLift(NSTextStorage *ts, NSRange para) {
+    if (ts == nil || para.location == NSNotFound || para.location == 0 ||
+        para.location > ts.length) return 0;
+    for (int b = 0; b < gNoteBandCount; b++) {
+        if (gNoteBands[b].key != kNoteStickerBandKey) continue;
+        if (gNoteBands[b].para.location == para.location && !btIOSNotePill()) return 0;
+        break;
+    }
+    NSParagraphStyle *pv = [ts attribute:NSParagraphStyleAttributeName
+                                 atIndex:para.location - 1 effectiveRange:NULL];
+    return (pv ? pv.paragraphSpacing : 0) / 2;
+}
+
 // btIOSStickerBandY is the sticker's own Y: its recorded tenancy (never
 // "does any inset exist" — a chapter-top pill's inset must not relocate a
-// mid-chapter card), plus the pill shares stacked above it.
+// mid-chapter card), plus the pill shares stacked above it. A paragraph
+// tenancy takes the centering lift, which is a real number only for the pill
+// form (btIOSPillSeparatorLift stands down for the open card), and the scroll
+// target moves with it for free — btIOSNoteTopY calls this same body.
 static CGFloat btIOSStickerBandY(NSUInteger paraGlyph) {
     for (int b = 0; b < gNoteBandCount; b++) {
         if (gNoteBands[b].key != kNoteStickerBandKey) continue;
         CGFloat y = (gNoteBands[b].para.location == NSNotFound)
             ? btIOSInsetBandTop()
-            : btIOSBandTopY(paraGlyph);
+            : btIOSBandTopY(paraGlyph)
+              - btIOSPillSeparatorLift(gReadingTV.textStorage, gNoteBands[b].para);
         return y + btIOSBandStackAbove(b);
     }
     // No recorded band (height 0, or the stand-down): the old answer.

@@ -256,6 +256,15 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"two hand-maintained copies of the formula, with a comment asking them " +
 					"to stay identical",
 				"return btIOSStickerBandY(g.location);": "the scroll target's half of the same rule",
+				"y -= btIOSPillSeparatorLift(ts, para);": "the collapsed stack's centering " +
+					"lift (notePillSeparatorLift's mirror) — the pill stack rises half the " +
+					"paragraph separator so the air reads the same on both sides",
+				"- btIOSPillSeparatorLift(gReadingTV.textStorage, gNoteBands[b].para);": "the " +
+					"single collapsed pill takes the same lift INSIDE btIOSStickerBandY, so " +
+					"placement and scroll target move together by construction",
+				"return (pv ? pv.paragraphSpacing : 0) / 2;": "the lift IS half the separator " +
+					"— notePillSeparatorLift's /2, read from the previous paragraph's " +
+					"after-spacing, never a private constant",
 				"ps.paragraphSpacingBefore += gNoteBandH;": "the reservation must ADD to the " +
 					"paragraph's spacing, never assign over it — assignment is the " +
 					"single-tenant assumption in write form, and it silently swallows a " +
@@ -371,6 +380,14 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"label, and iOS centres its title in the same box — left-aligned reads as a mistake",
 				"sticker != null ? gapAbove + noteH + gapBelow : 0": "the band must reserve the " +
 					"spec's gap on both sides",
+				"int ctop = textTop + bandTop + slot * pillBand + gapAbove - lift;": "the " +
+					"collapsed stack's centering lift (notePillSeparatorLift's mirror) — " +
+					"the chips rise half the separator so the air reads the same on both sides",
+				"top -= btPillSeparatorLift(lay, noteBandSpan, paraOff);": "the single " +
+					"collapsed pill takes the same lift; the open card never does",
+				"return natural > 0 ? natural / 2 : 0;": "the lift IS half the separator — " +
+					"the blank line's NATURAL height read from the layout, never a " +
+					"recomputed size that could drift from the applied pitch",
 				"+ gapTop + pillPart + gapAbove;": "the sticker must hang the reserved gap " +
 					"below the band's top, past any pill share stacked above it",
 				"dp(NOTE_PAD), dp(NOTE_PAD), dp(NOTE_PAD),\n                dp(NOTE_PAD) + (noteTail ? dp(NOTE_TAIL) : 0)": "the " +

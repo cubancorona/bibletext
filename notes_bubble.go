@@ -95,15 +95,35 @@ import (
 //	             the styled pane sets TextAlignCenter.
 //
 // WHAT THIS TABLE DOES NOT OWN — the residual, stated rather than pretended.
-// GapAbove is a RESERVATION. The air a reader SEES above the card is
-// GapAbove + whatever paragraph separator the reading layout already puts
-// between paragraphs, and that separator belongs to the reading page, not to
-// the note: it is the same for every paragraph in the chapter, note or no note,
-// and cancelling it under a note would give the note's paragraph LESS
-// separation than its neighbours. It is 24px on iOS phones, 0 in the reporter
-// layout (iPad/macOS/wide styled pane), one blank line on Android, and ParaGap
-// on the narrow styled pane. The boundary is recorded in
+// GapAbove is a RESERVATION. The paragraph separator the reading layout puts
+// between paragraphs belongs to the reading page, not to the note: it is the
+// same for every paragraph in the chapter, note or no note, and the
+// RESERVATION never cancels it — a noted paragraph keeps at least its
+// neighbours' separation. It is 24px on iOS phones, 0 in the reporter layout
+// (iPad/macOS/wide styled pane), one blank line on Android, and ParaGap on
+// the narrow styled pane. The boundary is recorded in
 // docs/NOTES_SPEC.md#sticker-spacing.
+//
+// What a reader SEES above the shape depends on WHICH shape:
+//
+//   - An OPEN card hangs GapAbove below its band's top, so its air above is
+//     GapAbove + the separator, and the tail's distance to the passage stays
+//     the pinned GapBelow. The card never centres: the tail must point at
+//     the words, and lifting the card away from them breaks the one distance
+//     a reader consciously reads.
+//   - A COLLAPSED pill stack whose bottom neighbour is the PASSAGE centres in
+//     the whole inter-paragraph air instead: the stack lifts
+//     notePillSeparatorLift (separator/2) above its band top, so the air on
+//     each side reads separator/2 + GapAbove. Where the separator is 0 (the
+//     reporter layouts, the chapter-top inset) the lift is 0 and the pill
+//     sits GapAbove into its band exactly as before — one rule, no branch.
+//   - A pill stack whose bottom neighbour is an OPEN card (the own-note-open
+//     co-tenancy) does NOT lift: the symmetry argument is about the air
+//     between two paragraphs, and there the card owns the bottom air.
+//
+// The lift is a PLACEMENT term only. The reservation amounts above never
+// change with it, so the text never moves and the take-back arithmetic
+// never sees it.
 //
 // ── THE FOUR RULES (they hold on every surface; break one and the tests bite) ─
 //
@@ -321,6 +341,19 @@ func noteBandH(shapeH float32, hasTail bool) float32 {
 		h += noteMetrics().TailDepth
 	}
 	return h
+}
+
+// notePillSeparatorLift is the collapsed stack's centering rule (the doctrine
+// above says which shapes it applies to and why the card is exempt): a pill
+// stack lifts half the paragraph separator above its band top, so the air on
+// each side of the stack reads separator/2 + GapAbove. At separator 0 — the
+// reporter layouts, the chapter-top inset — the lift is 0 and placement is
+// unchanged, which is why no caller needs a layout branch. The styled pane
+// calls this directly; the natives mirror the /2 with their own separator
+// reads (each platform's separator lives in its own text engine), and
+// notes_spacing_spec_test.go pins those mirrors to this spelling.
+func notePillSeparatorLift(separator float32) float32 {
+	return separator / 2
 }
 
 // noteFitWho fits a who line into a width. The SENDER half gives way to an

@@ -1207,3 +1207,128 @@ func TestOwnNessComesFromTheSamePredicateAsTheVerbs(t *testing.T) {
 			"dropCurrentNote only dismisses")
 	}
 }
+
+// The centering rule (notePillSeparatorLift): on the narrow layout a collapsed
+// stack whose bottom neighbour is the passage rises half the paragraph
+// separator above its band top, so the air reads the same on both sides. The
+// chapter-top band (Line 0) has no separator above it and stays put, and the
+// reporter layout's paraGap is 0, so nothing moves there — the same absence of
+// a width branch the rule promises in notes_bubble.go.
+func TestNarrowPillsCentreAcrossTheParagraphSeparator(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setNotesEnabled(true)
+	deleteAllNotes(appPrefs())
+	defer deleteAllNotes(appPrefs())
+	withPillsOn(t)
+
+	if notePillSeparatorLift(0) != 0 {
+		t.Fatal("a zero separator must mean a zero lift — the reporter layouts ride on this")
+	}
+	if got := notePillSeparatorLift(24); got != 12 {
+		t.Fatalf("the lift must be HALF the separator, got %v for 24", got)
+	}
+
+	st, verses, _, _, _ := twoNotedParagraphs(t, 1)
+
+	check := func(t *testing.T, width float32, wantLifted bool) {
+		pane := newStyledReadingPane(st, verses)
+		pane.Resize(fyne.NewSize(width, 900))
+		if len(pane.pillGeoms) != 2 {
+			t.Fatalf("want 2 pills, got %d", len(pane.pillGeoms))
+		}
+		paraGap := pane.styledLineHeight() * 0.65
+		if !wantLifted {
+			paraGap = 0
+		}
+		for _, g := range pane.pillGeoms {
+			var band *noteBand
+			for i := range pane.lay.Bands {
+				if pane.lay.Bands[i].Key == g.groupKey {
+					band = &pane.lay.Bands[i]
+					break
+				}
+			}
+			if band == nil {
+				t.Fatalf("pill for group %d has no band", g.groupKey)
+			}
+			want := band.Y + styledNoteGapAbv
+			if band.Line > 0 {
+				want -= notePillSeparatorLift(paraGap)
+			}
+			if got := g.card.Y; got < want-0.6 || got > want+0.6 {
+				t.Errorf("pill on band line %d sits at %.1f, want %.1f "+
+					"(band top %.1f, lift %.1f)", band.Line, got, want,
+					band.Y, notePillSeparatorLift(paraGap))
+			}
+		}
+	}
+
+	t.Run("narrow lifts, chapter top does not", func(t *testing.T) {
+		check(t, 320, true)
+	})
+	t.Run("reporter is untouched", func(t *testing.T) {
+		check(t, 900, false)
+	})
+}
+
+// The single collapsed pill (no per-paragraph specs) takes the same lift
+// through the noteGeom path — and the OPEN card at the same width does not:
+// its tail's distance to the passage is the pinned invariant, and centering
+// the card would float the tail away from the words it points at.
+func TestNarrowSinglePillCentresAndTheCardDoesNot(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	for _, tc := range []struct {
+		name string
+		pill bool
+	}{{"pill lifts", true}, {"card stays", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			setNotesEnabled(true)
+			deleteAllNotes(appPrefs())
+			defer deleteAllNotes(appPrefs())
+
+			st := psalm23State()
+			verses := longEnoughForTwoParagraphs()
+			st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+			st.CurrentBook, st.CurrentChapter = "John", 3
+			paras := groupVersesIntoParagraphs(verses)
+			last := paras[len(paras)-1][0].Verse
+			if _, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+				Book: "John", Chapter: 3, VerseLo: last,
+				Text: "A note measured for the centering rule."}); !ok {
+				t.Fatal("could not store the fixture note")
+			}
+			applyNoteForCurrentChapter(st)
+			if tc.pill {
+				hideCurrentNote(st)
+			}
+			p := newStyledReadingPane(st, verses)
+			w := test.NewWindow(p)
+			defer w.Close()
+			w.Resize(fyne.NewSize(300, 900))
+			p.Refresh()
+
+			g := p.noteGeom
+			if !g.present {
+				t.Fatal("precondition: a sticker")
+			}
+			if g.pill != tc.pill {
+				t.Fatalf("precondition: pill=%v, got %v", tc.pill, g.pill)
+			}
+			if p.lay.BandLine <= 0 {
+				t.Fatalf("precondition: a mid-chapter band (line %d) — line 0 "+
+					"would not exercise the separator", p.lay.BandLine)
+			}
+			want := p.lay.BandY + styledNoteGapAbv
+			if tc.pill {
+				want -= notePillSeparatorLift(p.styledLineHeight() * 0.65)
+			}
+			if got := g.card.Y; got < want-0.6 || got > want+0.6 {
+				t.Errorf("shape sits at %.1f, want %.1f (band top %.1f)",
+					got, want, p.lay.BandY)
+			}
+		})
+	}
+}

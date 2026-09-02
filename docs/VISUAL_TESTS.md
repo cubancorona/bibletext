@@ -41,9 +41,16 @@ exactly that.
 
 Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 
-- [ ] Every noted paragraph carries a pill, in its own reserved band, and
+- [ ] Every noted paragraph carries a pill at its own reservation, and
       NO reserved band is empty (an empty band = a placement bug, the iOS
       inset-hijack shape).
+- [ ] Mid-chapter pills read CENTERED between the paragraphs on layouts with
+      a paragraph separator (phones, narrow styled, narrow web): the air
+      above ≈ the air below (the centering rule, notePillSeparatorLift —
+      the pill rises half the separator above its band top). On reporter
+      layouts (iPad/macOS/wide) nothing moved: GapAbove into the band as
+      always. The OPEN card never centres — its tail stays the pinned 10
+      above the passage.
 - [ ] The chapter top carries the co-tenant STACK: the chapter-scope band
       and the first paragraph's own, two pills, fully visible, not
       overlapping, not clipped.

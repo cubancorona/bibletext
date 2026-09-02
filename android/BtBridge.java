@@ -1278,6 +1278,25 @@ public final class BtBridge {
      * Runs from setNote (tuple changed), setHtml (fresh Spanned + verse
      * index), and the content width listener (first layout, rotation).
      */
+    // btPillSeparatorLift is notePillSeparatorLift's mirror (notes_bubble.go
+    // owns the rule): a collapsed stack whose bottom neighbour is the passage
+    // centres in the whole inter-paragraph air, lifting half the separator
+    // above its band top. The separator here is the blank line Html.fromHtml
+    // puts between paragraphs, and its NATURAL height is that line's box minus
+    // the band the span grew into it — never a recomputed 1.35*size, which
+    // would drift from the applied pitch on the pre-28 style path. A band
+    // hanging off an INK line (a poem line's '\n', which paraStartAt also
+    // stops at) has no separator above it and must not lift: the blank line is
+    // the one whose text is only the newline, i.e. the line STARTS at the
+    // span's own character.
+    private static int btPillSeparatorLift(Layout lay, NoteBandSpan span, int ps) {
+        if (lay == null || span == null || !span.below || ps <= 0) return 0;
+        int sl = lay.getLineForOffset(ps - 1);
+        if (lay.getLineStart(sl) != ps - 1) return 0; // an ink line: mid-poem, no separator
+        int natural = lay.getLineBottom(sl) - lay.getLineTop(sl) - span.band;
+        return natural > 0 ? natural / 2 : 0;
+    }
+
     private static void refreshNoteSticker() {
         if (content == null || text == null) {
             if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: no content/text yet");
@@ -1386,6 +1405,7 @@ public final class BtBridge {
         // Place everything into the reserved gaps AFTER the reflow the bands
         // just caused, in ONE posted pass.
         final View vv = sticker;
+        final boolean pillForm = pillNow;
         final int off = r != null ? r[0] : -1;
         if (vv != null) {
             content.addView(vv, lp);
@@ -1438,6 +1458,10 @@ public final class BtBridge {
                     // same arithmetic the styled pane's place() and iOS's
                     // btIOSLayoutNote use.
                     int top = textTop + gapTop + pillPart + gapAbove;
+                    // The single collapsed pill takes the centering lift too
+                    // (btPillSeparatorLift); the OPEN card never does — its
+                    // tail's distance to the passage is the pinned invariant.
+                    if (pillForm) top -= btPillSeparatorLift(lay, noteBandSpan, paraOff);
                     FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) vv.getLayoutParams();
                     p.topMargin = Math.max(0, top);
                     vv.setLayoutParams(p);
@@ -1469,7 +1493,15 @@ public final class BtBridge {
                     Integer prev = stacked.get(ps);
                     int slot = prev == null ? 0 : prev;
                     stacked.put(ps, slot + 1);
-                    int ctop = textTop + bandTop + slot * pillBand + gapAbove;
+                    // The centering rule: the stack rises half the separator
+                    // (btPillSeparatorLift) — except beside a live OPEN card
+                    // sharing this paragraph, which owns the bottom air (a
+                    // live sticker with chips present is always the card:
+                    // the pill form stands down when specs exist).
+                    int lift = btPillSeparatorLift(lay, span, ps);
+                    if (vv != null && vv.getParent() != null && off >= 0
+                            && paraStartAt(cs3, off) == ps) lift = 0;
+                    int ctop = textTop + bandTop + slot * pillBand + gapAbove - lift;
                     FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) chip.getLayoutParams();
                     cp.topMargin = Math.max(0, ctop);
                     chip.setLayoutParams(cp);

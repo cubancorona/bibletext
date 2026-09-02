@@ -307,7 +307,18 @@ func (p *styledReadingPane) relayout(width float32) {
 					continue
 				}
 				g := p.pillGeoms[i]
-				g.place(p.insetX(), b.Y)
+				// The centering rule (notePillSeparatorLift): a collapsed
+				// stack whose bottom neighbour is the passage rises half the
+				// paragraph separator, so the air reads the same on both
+				// sides. paraGap is already 0 on the reporter page; band
+				// Line 0 is paragraph 0, which has no separator above it;
+				// and a band sharing its line with an OPEN card keeps its
+				// band placement — the card owns the bottom air there.
+				lift := notePillSeparatorLift(paraGap)
+				if b.Line == 0 || (p.noteGeom.present && p.lay.BandLine == b.Line) {
+					lift = 0
+				}
+				g.place(p.insetX(), b.Y-lift)
 				placed = append(placed, g)
 				break
 			}
@@ -321,7 +332,15 @@ func (p *styledReadingPane) relayout(width float32) {
 		if p.lay.BandLine < 0 {
 			p.noteGeom = styledNoteGeom{}
 		} else {
-			p.noteGeom.place(p.insetX(), p.lay.BandY)
+			// The single collapsed pill takes the same centering lift as the
+			// per-paragraph stacks; the OPEN card never does — its tail's
+			// distance to the passage is the pinned invariant. Line 0 is
+			// paragraph 0: no separator above, no lift.
+			lift := float32(0)
+			if p.noteGeom.pill && p.lay.BandLine > 0 {
+				lift = notePillSeparatorLift(paraGap)
+			}
+			p.noteGeom.place(p.insetX(), p.lay.BandY-lift)
 		}
 	}
 	p.drawRuns = p.drawRuns[:0]

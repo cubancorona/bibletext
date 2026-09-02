@@ -302,8 +302,18 @@ The drawn shape owns the gap below; for an expanded card that means the tail
 apex, and for a pill it means the pill bottom. macOS may reserve more than ten
 points above through `max(GapAbove, lineHeight)` to accommodate TextKit line
 geometry. Paragraph spacing outside the reserved band belongs to the reading
-layout and is not part of sticker spacing. Body font size and platform control
-hit areas are also outside this table.
+layout, and the RESERVATION never touches it. Body font size and platform
+control hit areas are also outside this table.
+
+At PLACEMENT the collapsed pill stack centres across that paragraph
+separator: it rises `notePillSeparatorLift` (separator/2) above its band top,
+so the air on each side of the stack reads separator/2 + `GapAbove`
+(`notes_bubble.go` states the rule and its exemptions). The expanded card
+never centres — its tail's distance to the passage is the pinned `GapBelow` —
+and neither does a stack whose bottom neighbour is an open card, nor any
+chapter-top tenancy (no separator there). Where the separator is zero (the
+reporter layouts) the lift is zero and the pill sits `GapAbove` into its band
+exactly as the table reads.
 
 `notes_spacing_spec_test.go` parses the native source constants and checks them
 against the table. Styled-layout tests additionally validate computed geometry.
