@@ -1,23 +1,22 @@
-VERSION 1.2.4
+VERSION 1.2.5
 
 BibleText is a Bible reader. No account, login, or registration is required. Reading, search, navigation, notes, and cross-references do not require an AI-provider key. Downloaded scripture remains readable and searchable offline; network-backed downloads and optional provider services require connectivity when used.
 
-WHAT IS NEW IN 1.2.4
-This release is corrective. Three of its fixes are visible on this platform; two others affect Android, Windows, and Linux only.
-• Cross-references now resolve on the closing doxology of Romans (16:25-27). They were absent there in every translation, and a reference pointing at the passage previewed as blank.
-• A shared note no longer reserves a screen-height empty band around the passage it belongs to.
-• A translator's footnote anchored in a verse its translation omits is kept, so the note explaining the omission can still be read.
+WHAT IS NEW IN 1.2.5
+• Shared notes: a chapter that holds notes now shows one small "Note" pill above each paragraph that carries one, sitting evenly between the paragraphs. Tapping a pill opens that paragraph's note; the note's heading counts "1 of N in this chapter" and steps through them.
+• Arriving from a shared link or a search result lands on the verse itself; the chapter arrows and the chapter picker open each chapter at the top.
+• Switching translations no longer serves stale text from an earlier download, and a reference made in one translation is read back in that translation.
+• Narration: the World English Bible Catholic edition's Greek-origin books (Tobit through 2 Maccabees, with the additions to Esther and Daniel) now have a recording of their own text — a synthetic-voice reading published by eBible.org — instead of on-device speech.
+• Study with AI: when a model stops mid-answer the panel says so and offers to ask again.
 
-HOW TO EXERCISE 1.2.4
-Open Romans 16 and select verses 25-27; the cross-reference list is populated rather than empty, and the same holds after switching translation. Open a shared note (see SHARED NOTES below) and confirm the passage and message sit together without a tall blank gap. In a translation that omits a verse — Matthew 17:21, 18:11, or 23:14 — the note explaining the omission is still reachable.
-
-Red-letter behaviour, which shipped in 1.2.3, is unchanged.
+HOW TO EXERCISE 1.2.5
+Receive a shared note (see SHARED NOTES below), then close it with the − button: a pill appears above its paragraph, evenly spaced from the text on both sides. Tap the pill to reopen the note. Use the chapter arrows: each chapter opens at its top. In the World English Bible Catholic edition, open Tobit 1 and tap the audio button: a recorded reading plays.
 
 CURRENT NAVIGATION
-Read, Books, and Search sit at the bottom on iPhone and iPad portrait. On iPad landscape, the same three destinations move to a rail on the left. Books is a grouped Old Testament / New Testament grid.
+Read, Books, and Search sit at the bottom on iPhone and iPad portrait. On iPad landscape the same three destinations move to a rail on the left. Books is a grouped Old Testament / New Testament grid.
 
 SHARED NOTES — HOW TO TEST
-Shared notes are described because they are the one place the app displays text written by another person.
+Shared notes are the one place the app displays text written by another person.
 
 To send: open any chapter, press and hold to select a verse, choose Share with note, type a short message, and share it through any app. The result is an ordinary https://bibletext.co.uk link.
 
@@ -28,6 +27,6 @@ PRIVACY: the message is encoded in the URL fragment and travels only through the
 KEYS AND TRANSLATIONS
 The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version. A reader can replace it with their own API.Bible key. The NKJV text itself is fetched from API.Bible and is not packaged in the app or published on the website.
 
-No AI-provider key is bundled. Optional Study with AI and Find features remain off until the reader enters their own provider key in Settings → Assistant. That key is stored on the device and requests go directly to the selected provider. No AI setup is required for review.
+No AI-provider key is bundled. Optional Study with AI and Find features remain off until the reader enters their own provider key in Settings → Assistant. That key is stored in the device Keychain and requests go directly to the selected provider. No AI setup is required for review.
 
 The full WEB, WEB Catholic, and BSB texts are fetched and cached at runtime. The only embedded scripture is a small WEB Gospels seed used to show readable text immediately on first launch; the embedded Gospel-parallels dataset contains references rather than another full translation.

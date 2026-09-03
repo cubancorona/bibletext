@@ -7,8 +7,8 @@ submission already exists.
 Prepared release identity:
 
 - package: `uk.co.bibletext`
-- version: 1.2.3
-- versionCode: 174
+- version: 1.2.5
+- versionCode: 176
 - minimum SDK: Android 5.0 / API 21
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`

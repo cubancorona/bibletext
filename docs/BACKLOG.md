@@ -229,7 +229,8 @@ change here changes the web reader too.
 
 ## Per-paragraph note pills: notes that belong to no paragraph
 
-Gated behind `notesPillPerParagraph` (off by default), so nothing ships blind.
+The per-paragraph pills ship on by default (`notesPillPerParagraph`, flipped on
+in 8f); this gap is the part still open underneath them.
 
 The pills are per paragraph, and two kinds of note belong to no paragraph. Both
 are counted by the chapter-scope single pill and both fall out of the reading
@@ -300,8 +301,8 @@ predicate is one function (`c619743e4`).
 
 
 
-`notesPillPerParagraph` is OFF, and stays off until this is done. It was turned
-on once and reverted within the hour: only the styled pane (Windows, Linux)
+`notesPillPerParagraph` was OFF until every surface drew the groups, and is ON
+now that they do (8f). Its first flip had been reverted within the hour: only the styled pane (Windows, Linux)
 draws the groups, so turning it on split the collapsed model across platforms —
 per-paragraph counts on desktop, the chapter-wide chip on the phone — which is
 worse than either model applied everywhere.

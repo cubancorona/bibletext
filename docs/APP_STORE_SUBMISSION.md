@@ -6,16 +6,16 @@ Store Connect state.
 
 ## Current release state — verify before acting
 
-As observed against App Store Connect on 26 August 2026:
+As observed against App Store Connect on 3 September 2026:
 
-- **Live App Store version (iOS):** 1.2.2, released 23 August 2026. No iOS
-  1.2.3 record exists yet.
-- **Prepared next version:** 1.2.3, mobile build 174.
-- **macOS:** a 1.2.3 version record exists on the same app record in
-  PREPARE_FOR_SUBMISSION — the first Mac App Store version. It was seeded by
-  App Store Connect from the iOS metadata, so its inherited fields are iOS
-  text until deliberately rewritten.
-- **Submission state:** neither platform's 1.2.3 has been submitted by this
+- **Live App Store version (iOS):** 1.2.4, build 175, READY_FOR_SALE.
+- **Live Mac App Store version:** 1.2.4, desktop build 44, READY_FOR_SALE — the
+  platform's first release, so it took no What's New; 1.2.5 is its second and
+  does.
+- **Prepared next version:** 1.2.5 — mobile build 176 (iOS build and Android
+  versionCode; 175 is spent), desktop build 46 (the ledger moved 44→46 inside
+  two intermediate commits; both numbers are valid for the Store's next upload).
+- **Submission state:** neither platform's 1.2.5 has been submitted by this
   checklist or by the metadata helpers.
 - **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad. Builds up to
   174 (the 1.2.3 submission) declare minimum iOS 13; the repository now
@@ -57,11 +57,11 @@ iOS versions — which is exactly what App Store Connect seeded it from.
 
 ## Release identity and local build
 
-Before producing the 1.2.3 binary, verify that `cmd/mobile/FyneApp.toml` reads:
+Before producing the 1.2.5 binary, verify that `cmd/mobile/FyneApp.toml` reads:
 
 ```toml
-Version = "1.2.3"
-Build = 174
+Version = "1.2.5"
+Build = 176
 ```
 
 The version/build change is a separate release step; this document does not make
@@ -80,7 +80,7 @@ go vet ./...
 `release-ios.sh` derives the version and build from `FyneApp.toml`, applies the
 required Fyne patches, produces a universal archive, and does not upload unless
 `BIBLETEXT_UPLOAD=1` is explicitly set. Leave that variable unset during
-preparation. The final output must identify version 1.2.3, build 174.
+preparation. The final output must identify version 1.2.5, build 176.
 
 Release builds intentionally contain the project's API.Bible fallback, supplied
 from the dedicated external release-key source and transformed/injected at link
@@ -101,11 +101,11 @@ icon catalog, `UIDeviceFamily=[1,2]`, `get-task-allow=false`, and
 ## Metadata — preview first, write only deliberately
 
 Editable staging files are under `build/appstore/metadata/` and are ignored by
-Git. For 1.2.3 the English (UK) set must include:
+Git. For 1.2.5 the English (UK) set must include:
 
 - the current public description naming WEB, WEB Catholic, BSB, NKJV, shared
   notes, narration, and optional bring-your-own-key AI study;
-- `whats-new-1.2.3.txt` describing this release;
+- `whats-new-1.2.5.txt` describing this release;
 - current name, subtitle, keywords, promotional text, support URL, marketing
   URL, and privacy URL.
 
@@ -117,7 +117,7 @@ python3 appstore/push-metadata.py
 ```
 
 It validates every local input before making any request, resolves exactly one
-1.2.3 record and `en-GB` localization, and prints the proposed differences. It
+1.2.5 record and `en-GB` localization, and prints the proposed differences. It
 does not PATCH without both `--write` and an exact version confirmation. A
 network-free local validation is also available:
 
@@ -126,7 +126,7 @@ python3 appstore/push-metadata.py --local-only
 ```
 
 After reviewing the remote preview, an authorized operator may repeat the
-command with `--write --confirm-version 1.2.3`. The helper reads every written
+command with `--write --confirm-version 1.2.5`. The helper reads every written
 field back and fails on a mismatch. A metadata write neither selects a build nor
 submits a version. `build/appstore/push_metadata.py` is retained only as a local
 compatibility entry point for the tracked helper.
@@ -137,13 +137,14 @@ the iOS text), falls back to the shared en-GB files for keywords and the URLs
 when no Mac-specific file exists (each fallback is announced), and skips the
 app-level name, subtitle, and privacy URL — those are one per app, and the
 iOS run owns them. A platform's first version has no What's New field in App
-Store Connect, so an absent `mac/whats-new-1.2.3.txt` is not an error.
+Store Connect, so an absent `mac/whats-new-<version>.txt` is not an error
+for that debut alone.
 
 ## Review notes
 
 Each platform has its own review-notes field and its own tracked source of
 truth: `appstore/review-notes.txt` for iOS and `appstore/review-notes-macos.txt`
-for the Mac. Both must name 1.2.3, and each is held to its own platform's
+for the Mac. Both must name 1.2.5, and each is held to its own platform's
 FyneApp.toml by `appstore_review_notes_test.go`. Validate the local sources
 without contacting App Store Connect:
 
@@ -164,7 +165,7 @@ python3 appstore/push-review-notes.py
 ```
 
 Only an authorized operator should repeat the command with
-`--write --confirm-version 1.2.3`; the helper reads the field back and fails on
+`--write --confirm-version 1.2.5`; the helper reads the field back and fails on
 a mismatch.
 
 The macOS notes must additionally cover what is Mac-specific: the right-click
@@ -276,12 +277,13 @@ Review rather than copy forward:
 
 ## Final read-back and submission
 
-Before a human submits 1.2.3:
+Before a human submits 1.2.5:
 
 1. Run `appstore/preflight.py` for every platform being submitted (the
    default run covers iOS only; add `--platform MAC_OS` for the Mac) and
    resolve every warning.
-2. Confirm version 1.2.3/build 174 and the intended release mode.
+2. Confirm version 1.2.5/build 176 (iOS) or desktop build 46 (Mac) and the
+   intended release mode.
 3. Read back description, What's New, review notes, URLs, copyright, privacy
    answers, age rating, and screenshot order from App Store Connect.
 4. Inspect the selected build and archive evidence.
