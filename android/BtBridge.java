@@ -2032,12 +2032,21 @@ public final class BtBridge {
      * side multiplies Fyne units by the canvas scale). Re-sent on every render,
      * so light/dark flips restyle the view.
      */
-    public static void setStyle(final int textColor, final int paperColor, final float textSizePx,
-                                final float lineMult, final int padL, final int padT,
-                                final int padR, final int padB) {
+    public static void setStyle(final int textColor, final int paperColor, final float textSizeDp,
+                                final float lineMult, final int padLDp, final int padTDp,
+                                final int padRDp, final int padBDp) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
+                // The pushed sizes are dp; THIS side owns the display density.
+                // The Go side used to pre-multiply by the Fyne canvas scale,
+                // which is bucketed by dpi, so the same "Normal" drew a
+                // different size on every phone (reading_android.go says).
+                float density = activity != null
+                        ? activity.getResources().getDisplayMetrics().density : 2f;
+                float textSizePx = textSizeDp * density;
+                int padL = Math.round(padLDp * density), padT = Math.round(padTDp * density);
+                int padR = Math.round(padRDp * density), padB = Math.round(padBDp * density);
                 text.setTextColor(textColor);
                 text.setBackgroundColor(paperColor);
                 scroll.setBackgroundColor(paperColor);

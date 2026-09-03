@@ -749,12 +749,17 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	html := buildChapterHTMLAndroid(state, verses)
 	pal := state.pal()
-	scale := float32(1)
-	if state.window != nil {
-		scale = state.window.Canvas().Scale()
-	}
-	textPx := float32(21) * float32(readingTextScale()) * scale
-	padL, padT := int(10*scale), int(14*scale)
+	// DENSITY-INDEPENDENT PIXELS, converted on the Java side with the display's
+	// real density. This used to multiply by the Fyne canvas scale, which the
+	// mobile driver BUCKETS by dpi (2 from 270, 3 from 405, 4 from 600) while a
+	// device's dp density is continuous: a 270-dpi phone (density 1.69) drew
+	// "Normal" at 25dp, a 420-dpi one at 24dp, a 560-dpi one at 18dp — the same
+	// setting a different size on every phone, and none of them the 21 the
+	// iOS pane draws as 21pt. The overlay's FRAME still uses the canvas scale
+	// (setFrameFromObject): that converts Fyne coordinates, which really are in
+	// the bucketed unit.
+	textDp := float32(21) * float32(readingTextScale())
+	padL, padT := 10, 14
 	arrivalVerse := 0
 	// EXPLICIT arrivals only (the classifier's rule, notes_arrival.go): a
 	// plain entry — the arrows, the picker — must open at the top even when
@@ -792,7 +797,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			// It used to be 1.7 applied to the font's NATURAL line height, a
 			// larger quantity again, which is where the original looseness came
 			// from.
-			C.float(textPx), C.float(1.35),
+			C.float(textDp), C.float(1.35),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT))
 		ch := C.CString(html)
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse))
