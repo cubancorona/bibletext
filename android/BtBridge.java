@@ -29,7 +29,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.util.Arrays;
@@ -484,49 +483,92 @@ public final class BtBridge {
     // makes the write visible to the UI thread's onCreateActionMode read).
     public static void setAIEnabled(boolean on) { aiEnabled = on; }
 
+    // The reading palette, as last pushed by setStyle — the study popup below
+    // draws itself in it, so it belongs to the page it floats over.
+    private static int lastTextColor = 0xFF000000, lastPaperColor = 0xFFFFFFFF;
+    // Material list-item metrics for the study popup, in dp.
+    private static final int STUDY_ROW_H = 48, STUDY_ROW_PAD_X = 16, STUDY_ROW_MIN_W = 196,
+                             STUDY_CARD_PAD_Y = 8, STUDY_EDGE = 8, STUDY_GAP = 4;
+
     // showStudyPopup presents Explain / Analyze context / Analyze translation as
-    // a popup anchored at the selection — the inline "Study with AI" bar item's
-    // second level (a floating toolbar cannot nest a real SubMenu inline). The
-    // anchor is a zero-size view placed at the selection end's coordinates in
-    // root, removed when the popup dismisses. sel was captured at tap time.
+    // a popup at the selection — the inline "Study with AI" bar item's second
+    // level (a floating toolbar cannot nest a real SubMenu inline). It used to
+    // be a PopupMenu on a 1px anchor, which went wrong twice: PopupMenu shrinks
+    // to the space BELOW its anchor and scrolls rather than flipping above, and
+    // measures that space against the overlay window — which ends at the tab
+    // bar — so a selection in the lower half clipped the last item; and it
+    // took the overlay Dialog's theme, a white card over the dark reading
+    // page. This popup is a Material-shaped list drawn in the reading palette,
+    // placed below the selection's line when it fits and above it when it
+    // does not, and kept inside the overlay either way.
     private static void showStudyPopup(final ActionMode mode, final String sel, int selEnd,
                                        final int selLo, final int selHi) {
         if (activity == null || root == null || text == null) return;
-        float ax = 0; int ay = 0;
+        float ax = 0; int lineTop = 0, lineBottom = 0;
         Layout lay = text.getLayout();
         if (lay != null && selEnd >= 0) {
             int line = lay.getLineForOffset(selEnd);
             ax = lay.getPrimaryHorizontal(selEnd) + text.getLeft() - scroll.getScrollX();
-            ay = lay.getLineBottom(line) + text.getTop() - scroll.getScrollY();
+            lineTop = lay.getLineTop(line) + text.getTop() - scroll.getScrollY();
+            lineBottom = lay.getLineBottom(line) + text.getTop() - scroll.getScrollY();
         }
-        final View anchor = new View(activity);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1, 1);
-        lp.leftMargin = Math.max(0, (int) ax);
-        lp.topMargin = Math.max(0, ay);
-        root.addView(anchor, lp);
 
-        PopupMenu pm = new PopupMenu(activity, anchor);
-        pm.getMenu().add(0, 102, 0, "Explain");
-        pm.getMenu().add(0, 103, 1, "Analyze context");
-        pm.getMenu().add(0, 104, 2, "Analyze translation");
-        pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override public boolean onMenuItemClick(MenuItem mi) {
-                String action;
-                switch (mi.getItemId()) {
-                    case 102: action = "explain"; break;
-                    case 103: action = "context"; break;
-                    case 104: action = "translation"; break;
-                    default: return false;
+        final android.widget.LinearLayout list = new android.widget.LinearLayout(activity);
+        list.setOrientation(android.widget.LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable();
+        card.setColor(lastPaperColor);
+        card.setCornerRadius(dp(4));
+        list.setBackground(card);
+        list.setElevation(dp(8));
+        list.setPadding(0, dp(STUDY_CARD_PAD_Y), 0, dp(STUDY_CARD_PAD_Y));
+
+        final android.widget.PopupWindow pw = new android.widget.PopupWindow(list,
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, true);
+        pw.setOutsideTouchable(true);
+        // A transparent window background so outside taps dismiss; the card
+        // itself carries the paper colour and the shadow.
+        pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
+        pw.setElevation(dp(8));
+
+        android.util.TypedValue ripple = new android.util.TypedValue();
+        activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
+        String[][] items = {{"Explain", "explain"}, {"Analyze context", "context"},
+                            {"Analyze translation", "translation"}};
+        for (String[] it : items) {
+            final String action = it[1];
+            TextView row = new TextView(activity);
+            row.setText(it[0]);
+            row.setTextColor(lastTextColor);
+            row.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+            row.setPadding(dp(STUDY_ROW_PAD_X), 0, dp(STUDY_ROW_PAD_X), 0);
+            row.setMinHeight(dp(STUDY_ROW_H));
+            row.setMinWidth(dp(STUDY_ROW_MIN_W));
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            if (ripple.resourceId != 0) row.setBackgroundResource(ripple.resourceId);
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    pw.dismiss();
+                    try { mode.finish(); } catch (Throwable ignored) {}
+                    nativeSelectionAction(action, sel, selLo, selHi);
                 }
-                try { mode.finish(); } catch (Throwable ignored) {}
-                nativeSelectionAction(action, sel, selLo, selHi);
-                return true;
-            }
-        });
-        pm.setOnDismissListener(new PopupMenu.OnDismissListener() {
-            @Override public void onDismiss(PopupMenu m) { root.removeView(anchor); }
-        });
-        pm.show();
+            });
+            list.addView(row, new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+
+        list.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                     View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int w = list.getMeasuredWidth(), h = list.getMeasuredHeight();
+        int rootW = root.getWidth(), rootH = root.getHeight();
+        int edge = dp(STUDY_EDGE), gap = dp(STUDY_GAP);
+        int x = Math.max(edge, Math.min((int) ax, rootW - w - edge));
+        int y = lineBottom + gap;
+        if (y + h > rootH - edge) {
+            y = lineTop - gap - h;                       // above the selection's line
+            if (y < edge) y = Math.max(edge, rootH - h - edge); // nowhere fits: pin inside
+        }
+        pw.showAtLocation(root, android.view.Gravity.NO_GRAVITY, x, y);
     }
 
     /**
@@ -2045,6 +2087,8 @@ public final class BtBridge {
                 float density = activity != null
                         ? activity.getResources().getDisplayMetrics().density : 2f;
                 float textSizePx = textSizeDp * density;
+                lastTextColor = textColor;
+                lastPaperColor = paperColor;
                 int padL = Math.round(padLDp * density), padT = Math.round(padTDp * density);
                 int padR = Math.round(padRDp * density), padB = Math.round(padBDp * density);
                 text.setTextColor(textColor);
@@ -2074,9 +2118,30 @@ public final class BtBridge {
                 }
                 text.setTypeface(android.graphics.Typeface.SERIF);
                 text.setPadding(padL, padT, padR, padB);
+                // Say the break strategy and hyphenation out loud rather than
+                // inheriting a release's default: Android 13 changed the
+                // defaults.
+                if (android.os.Build.VERSION.SDK_INT >= 23) {
+                    text.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+                    text.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NORMAL);
+                }
                 text.setHighlightColor((textColor & 0x00FFFFFF) | 0x33000000);
+                // Justify only on Android 15+. A SELECTABLE TextView lays its
+                // text out with a DynamicLayout, and before Android 15 that
+                // layout never handed the justification mode to the Layout
+                // that DRAWS: the line breaker still broke lines in justified
+                // mode — which lets a line run past the width by the amount
+                // its spaces could shrink — but nothing shrank them, so on 13
+                // and 14 every such line spilled past the right edge and the
+                // rest stayed ragged (stock API 33 emulator, measured: layout
+                // width == view width, line width > both). Android 15's
+                // DynamicLayout passes the mode through, and justified text
+                // draws exactly as it breaks. Unjustified breaks never
+                // overflow, so older releases read ragged but whole.
                 if (android.os.Build.VERSION.SDK_INT >= 26) {
-                    text.setJustificationMode(android.text.Layout.JUSTIFICATION_MODE_INTER_WORD);
+                    text.setJustificationMode(android.os.Build.VERSION.SDK_INT >= 35
+                            ? android.text.Layout.JUSTIFICATION_MODE_INTER_WORD
+                            : android.text.Layout.JUSTIFICATION_MODE_NONE);
                 }
             }
         });

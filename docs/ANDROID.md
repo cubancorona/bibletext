@@ -34,6 +34,21 @@ NKJV fetch; and background narration retains its foreground service, media
 session, notification and wake lock. Packaging targets API 36 in both debug and
 release modes. The API-35 AVD remains useful for backward-compatibility testing.
 
+**Text metrics and justification (2026-09-03).** The reading text is pushed in
+**dp** and converted with the display density in Java, not pre-multiplied by
+the Fyne canvas scale (which is bucketed by dpi, so the same "Normal" size drew
+differently on every phone): 21 dp em on a 28 dp pitch, the twin of the iOS
+21 pt / 27.7 pt. Inter-word **justification is Android 15+ only**. A selectable
+`TextView` uses a `DynamicLayout`, and before Android 15 that layout breaks
+lines in justified mode without ever drawing them justified — the breaker lets
+a line exceed the width by what its spaces could shrink, nothing shrinks them,
+and on API 33 every such line ran past the right edge while the rest stayed
+ragged (stock emulator; see `docs/BACKLOG.md`). Android 13/14 therefore read
+ragged but whole; Android 15 justifies. The Study with AI popup is a
+palette-coloured Material list placed below the selection's line, or above it
+when the tab bar leaves no room (a `PopupMenu` on an anchor view shrank and
+scrolled against the bottom instead).
+
 ## Native overlay (BtBridge)
 
 The overlay MUST be a **Dialog** at **TYPE_APPLICATION**, not a

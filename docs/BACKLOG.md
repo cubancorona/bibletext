@@ -384,3 +384,25 @@ two `fyne package` runs in `release.yml` (or pass the build explicitly), and
 have `release-mac-store.sh` restore `FyneApp.toml` on exit as
 `build-android.sh` already does. Until then the next desktop Store build is
 48, not 47.
+
+
+## Android 13/14: the reading text cannot be justified while it stays selectable
+
+The native reading pane is a selectable `TextView`, which Android lays out
+with a `DynamicLayout`. Before Android 15 that layout never hands the
+justification mode to the `Layout` that draws: the line breaker still breaks
+in justified mode — which lets a line exceed the width by the amount its
+spaces could shrink — but nothing shrinks them, so on API 33 every such line
+spilled past the right edge and the rest read ragged (stock emulator, measured:
+layout width == view width, line width > both; the android13/14-release
+`DynamicLayout` constructors omit the hand-off that android15-release makes).
+The app now justifies only on API 35+, and older releases read ragged but
+whole. Non-selectable text (`StaticLayout`) justifies on every release, but
+selection is the native feature the pane exists for.
+
+Ways back, if ragged text on Android 13/14 ever matters enough: a custom
+`TextView` that draws its own justified lines from a `StaticLayout` while
+keeping a selectable `DynamicLayout` for hit-testing (two layouts, one text);
+or reflection on the protected `Layout.setJustificationMode`, which the
+hidden-API policy may refuse. Neither is worth it for a rendering that
+Android 15 already gets right.
