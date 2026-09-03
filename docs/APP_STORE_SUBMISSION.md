@@ -15,8 +15,18 @@ As observed against App Store Connect on 3 September 2026:
 - **Prepared next version:** 1.2.5 — mobile build 176 (iOS build and Android
   versionCode; 175 is spent), desktop build 46 (the ledger moved 44→46 inside
   two intermediate commits; both numbers are valid for the Store's next upload).
-- **Submission state:** neither platform's 1.2.5 has been submitted by this
-  checklist or by the metadata helpers.
+- **Submission state:** both platforms' 1.2.5 were submitted on 3 September
+  2026 (iOS build 176, Mac desktop build 46) and are WAITING_FOR_REVIEW; the
+  annotated tag v1.2.5 sits at the release commit every channel built from.
+  Note that `fyne package` bumps the desktop ledger's Build AFTER packaging
+  (46 became 47 in the working tree once the Mac package existed); the
+  shipped build is the committed number, so discard that bump rather than
+  commit it. The same bump runs INSIDE `release.yml`, which packages the two
+  direct-download architectures in sequence: the 1.2.5 Apple Silicon zip
+  carries CFBundleVersion 46 and the Intel zip 47 — identical code, one tree,
+  but 47 is now in the wild — so the next desktop Store upload starts at 48,
+  and the workflow should reset the ledger between its two packages (see
+  BACKLOG).
 - **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad. Builds up to
   174 (the 1.2.3 submission) declare minimum iOS 13; the repository now
   declares iOS 15 for every FUTURE build (`iosMinimumOSVersion` in

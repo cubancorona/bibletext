@@ -369,3 +369,18 @@ must bring the fix with it:
 The audit's rule, kept: a gate lands only with a demonstrated race (a
 `-race -count=30` loop that fails before and is clean after) — no
 prophylactic gates over dead code.
+
+
+## `fyne package` bumps the desktop Build ledger after every package
+
+`fyne package` rewrites `cmd/desktop/FyneApp.toml`'s `Build` after a
+successful package. Two consequences, both seen on the 1.2.5 cut:
+`release-mac-store.sh` leaves an uncommitted 46→47 in the working tree (harmless
+if discarded; it produced the earlier 44→46 drift when it was committed
+by accident), and `release.yml` packages Apple Silicon then Intel in one
+checkout, so the second zip stamps CFBundleVersion one higher than the first
+(1.2.5: 46 and 47 for the same commit). Fix: restore the ledger between the
+two `fyne package` runs in `release.yml` (or pass the build explicitly), and
+have `release-mac-store.sh` restore `FyneApp.toml` on exit as
+`build-android.sh` already does. Until then the next desktop Store build is
+48, not 47.
