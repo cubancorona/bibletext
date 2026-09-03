@@ -1441,7 +1441,47 @@ func (c *chapterText) TappedSecondary(ev *fyne.PointEvent) {
 	if cnv == nil {
 		return
 	}
-	widget.ShowPopUpMenuAtPosition(c.selectionMenu(), cnv, ev.AbsolutePosition)
+	showSelectionMenuFitting(c.selectionMenu(), cnv, ev.AbsolutePosition)
+}
+
+// selectionMenuFitY is where a selection menu's top must sit so that every
+// submenu it carries can open with room. Fyne places a child menu at its
+// item's Y and, when that would run past the canvas bottom, shifts it up until
+// it sits FLUSH against the edge (less one theme padding, so it even overhangs
+// a little) — which is how "Study with AI" near the bottom of the window
+// arrived butting against the screen edge and slightly cut off. The fix is to
+// open the menu itself high enough: for each item with a child, its top plus
+// the child's height plus a margin must fit; the row height is the menu's
+// height shared over its items.
+func selectionMenuFitY(wantY, menuH, canvasH float32, items []*fyne.MenuItem, childH func(*fyne.Menu) float32) float32 {
+	if len(items) == 0 || menuH <= 0 {
+		return wantY
+	}
+	rowH := menuH / float32(len(items))
+	margin := float32(16)
+	y := wantY
+	for i, it := range items {
+		if it.ChildMenu == nil {
+			continue
+		}
+		limit := canvasH - margin - childH(it.ChildMenu) - float32(i)*rowH
+		if y > limit {
+			y = limit
+		}
+	}
+	if y < 0 {
+		y = 0
+	}
+	return y
+}
+
+// showSelectionMenuFitting shows the selection menu at the press, moved up
+// only as far as its submenus need (selectionMenuFitY).
+func showSelectionMenuFitting(menu *fyne.Menu, cnv fyne.Canvas, pos fyne.Position) {
+	pm := widget.NewPopUpMenu(menu, cnv)
+	childH := func(m *fyne.Menu) float32 { return widget.NewMenu(m).MinSize().Height }
+	y := selectionMenuFitY(pos.Y, pm.MinSize().Height, cnv.Size().Height, menu.Items, childH)
+	pm.ShowAtPosition(fyne.NewPos(pos.X, y))
 }
 
 // Scrolled forwards the wheel to the page so the whole chapter scrolls.

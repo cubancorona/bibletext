@@ -22,7 +22,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/widget"
 )
 
 // --- Geometry: position ⇄ model offset --------------------------------------
@@ -352,7 +351,7 @@ func (p *styledReadingPane) TappedSecondary(e *fyne.PointEvent) {
 	if c == nil {
 		return
 	}
-	widget.ShowPopUpMenuAtPosition(menu, c, e.AbsolutePosition)
+	showSelectionMenuFitting(menu, c, e.AbsolutePosition)
 }
 
 func (p *styledReadingPane) Cursor() desktop.Cursor { return desktop.TextCursor }
