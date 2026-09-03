@@ -6,6 +6,12 @@
 # root, which the /cmd/mobile/mobile rule above does not cover.
 /mobile
 
+# Files the Fyne CLI writes into the checkout while it builds (`fyne install`,
+# `fyne package`, `fyne build --pprof`); untracked, they would mark every such
+# build +dirty in its version stamp.
+fyne_metadata_init.go
+fyne_pprof.go
+
 # Fyne mobile packaging output (.app, .ipa, .apk, .aab and bundle dirs)
 *.app
 *.ipa

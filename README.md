@@ -50,10 +50,10 @@ platforms in one place, or directly:
 
 You need [Go](https://go.dev/dl/) 1.24 or newer, plus a C compiler (Fyne uses cgo):
 on macOS the Xcode Command Line Tools (`xcode-select --install` — Intel and Apple
-Silicon both work); on Linux also the GL/X11 headers:
+Silicon both work); on Linux also the GL/X11 and ALSA headers:
 
 ```bash
-sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev   # Debian/Ubuntu
+sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libasound2-dev   # Debian/Ubuntu
 ```
 
 Then, from the repo root:
@@ -65,6 +65,21 @@ go run ./cmd/desktop
 That's the whole thing. A first run opens immediately on an embedded Gospels seed
 and downloads the complete Bible in the background (~30 seconds), caching it
 locally — so every launch after that is instant and works offline.
+
+**Install by module path** — the route the [Fyne apps directory](https://apps.fyne.io/apps/uk.co.bibletext/)
+prints. With git and the C toolchain above, plus the Fyne CLI
+(`go install fyne.io/tools/cmd/fyne@v1.7.2`), this clones the newest tag,
+builds it, and installs a packaged BibleText where your OS keeps applications:
+
+```bash
+fyne install github.com/cubancorona/bibletext/cmd/desktop@latest
+```
+
+The plain Go route, `go run github.com/cubancorona/bibletext/cmd/desktop@latest`,
+works from release 1.2.6 (earlier tags declare the module by a bare name that
+Go's module resolution rejects); `…@main` builds today. A build from source by
+either route carries no bundled NKJV key — add your own free API.Bible key in
+Settings for that translation; the other translations need nothing.
 
 **iOS simulator** (needs macOS with full Xcode, an iOS simulator runtime, and the
 Fyne CLI — the script checks and tells you what's missing): `./scripts/run-ios-sim.sh`
@@ -410,16 +425,21 @@ bibletext/
 ├── scripts/                # build wrappers: build-android.sh, run-ios-*.sh, release-ios.sh
 ├── docs/ANDROID.md         # Android toolchain, build, signing, distribution
 ├── docs/IPAD.md            # unified iPad navigation, typography, testing, shipping
-└── cmd/
-    ├── desktop/main.go     # `go build ./cmd/desktop`
-    └── mobile/                # iOS: scripts/run-ios-*.sh · Android: scripts/build-android.sh
-        ├── main.go
-        ├── FyneApp.toml         # bundle ID, version/build (read by `fyne package`)
-        ├── AndroidManifest.xml  # custom manifest — media service + session permissions
-        └── Icon*.png            # app icon + Android adaptive-icon layers
+└── cmd/                    # four programs, all importing the shared package
+    ├── desktop/            # `go build ./cmd/desktop` · `fyne install …/cmd/desktop@latest`
+    │   ├── main.go
+    │   ├── FyneApp.toml    # name, app ID, version/build (read by `fyne package` / `fyne install`)
+    │   └── Icon.png        # app icon
+    ├── mobile/             # iOS: scripts/run-ios-*.sh · Android: scripts/build-android.sh
+    │   ├── main.go
+    │   ├── FyneApp.toml         # bundle ID, version/build (read by `fyne package`)
+    │   ├── AndroidManifest.xml  # custom manifest — media service + session permissions
+    │   └── Icon*.png            # app icon + Android adaptive-icon layers
+    ├── websitegen/         # the static web reader at bibletext.co.uk (scripts/publish-site.sh)
+    └── sitepages/          # the site's hand-written root pages (scripts/publish-site.sh)
 ```
 
-The same `bibletext` package is consumed by both `cmd/` entry points; build tags
+The same `bibletext` package is consumed by every `cmd/` program; build tags
 on `ui_desktop.go` / `ui_mobile.go` make the linker pick the platform-appropriate
 `CreateMainUI` implementation. Pure data files (`bible.go`, `cache.go`,
 `fetch_bible_data.go`, `annotation.go`) have no UI deps and compile everywhere.

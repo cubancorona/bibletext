@@ -214,7 +214,7 @@ prose.
 | `audio_macos.go` | `darwin && !ios` | cgo engine twin (same, minus AVAudioSession; AppKit/NSImage artwork) |
 | `audio_android.go` | `android` | cgo/JNI engine: drives `android/BtAudio.java` — MediaPlayer (recordings) + TextToSpeech (read-aloud) + audio-focus + a 200 ms read-along position poll |
 | `audio_export_android.go` + `audio_jni_android.c` | `android` | Java → JNI thunk → Go `//export` state callbacks (twin of `audio_export_apple.go`) |
-| `audio_other.go` | `!darwin && !android` | The desktop audio engine (Windows/Linux): recorded narration via oto (WASAPI / ALSA-through-purego) + go-mp3 — same `nativeAudio*` shim and state transitions as the native engines; no TTS |
+| `audio_other.go` | `!darwin && !android` | The desktop audio engine (Windows/Linux): recorded narration via oto (WASAPI on Windows, ALSA via cgo on Linux) + go-mp3 — same `nativeAudio*` shim and state transitions as the native engines; no TTS |
 | `audio_export_apple.go` | `darwin` | The `bibleTextAudioStateChanged` `//export` (serves both Apple engines) |
 | `audio_supported_apple.go` / `audio_supported_android.go` / `audio_supported_other.go` | `darwin` / `android` / rest | Capability gates: `audioSupported()` (true everywhere but wasm) + `ttsSupported()` (true only where a native speech engine exists: Apple + Android). `chapterAudioAvailable()` in `audio.go` combines them per chapter |
 | `audio_artwork.go` | (untagged) | Renders the lock-screen "Book Chapter" art card (share-image style) |
@@ -427,7 +427,7 @@ foreground service + framework `MediaSession` + MediaStyle notification (play/pa
 aapt2 resource path — build details in [docs/ANDROID.md](docs/ANDROID.md).
 **Windows/Linux** play recorded narration through their own engine,
 [audio_other.go](audio_other.go) (`//go:build !darwin && !android`): oto
-(WASAPI on Windows; ALSA loaded at runtime through purego on Linux — building
+(WASAPI on Windows; ALSA through cgo on Linux — building
 on Linux needs `libasound2-dev`) decoding the narration MP3s with go-mp3. It
 speaks the same `nativeAudio*` shim and posts the same `applyNativeState`
 transitions — play/pause, ±15s seek, natural-end detection feeding continuous

@@ -32,9 +32,13 @@ published tag moves, the name stops meaning one thing, permanently, in ways no
 later fix can reach. Package ecosystems harden the same rule into law (the Go
 module sum database records the first checksum forever; npm and crates.io
 refuse republished versions). This repository moved a published tag three
-times in August 2026 — each deliberate, recorded, and survivable only because
-nothing `go get`s this module and the release assets are the real product —
-and the third time was declared the last.
+times in August 2026 — each deliberate, recorded, and survivable only because,
+at the time, nothing could fetch this module by its path (it declared the bare
+name `bibletext`) and the release assets were the real product — and the third
+time was declared the last. That cover is gone: the module now declares its
+repository path, the Fyne apps directory points people at
+`github.com/cubancorona/bibletext/cmd/desktop@latest`, and the module proxy and
+sum database record every tag from here on. A published tag is immutable.
 
 ## What enforces it
 

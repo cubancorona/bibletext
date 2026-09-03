@@ -3,9 +3,9 @@
 package bibletext
 
 // Desktop audio engine for Windows and Linux (and any other plain-Fyne host):
-// recorded narration playback via oto (WASAPI on Windows, ALSA loaded at runtime
-// through purego on Linux — no cgo at build time), decoding the narration MP3s
-// with go-mp3. The native engines remain audio_ios.go / audio_macos.go /
+// recorded narration playback via oto (WASAPI on Windows; ALSA through cgo on
+// Linux, which is why a Linux build needs libasound2-dev), decoding the
+// narration MP3s with go-mp3. The native engines remain audio_ios.go / audio_macos.go /
 // audio_android.go; this one speaks the same nativeAudio* shim + posts the same
 // applyNativeState transitions, so audio_controller.go and the whole audio UI
 // (button, source menu, continuous chapter advance) work unchanged.
