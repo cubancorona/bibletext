@@ -29,9 +29,19 @@ package bibletext
 //
 // AND IT IS THE FAST PATH. A wash change used to go through
 // chapterRenderFingerprint → buildChapterHTML → a whole NSAttributedString
-// re-import. The wash is one attribute over a range of an attributed string
-// that is already on screen; it does not need the rebuild, and on Psalm 119 the
-// rebuild is two orders of magnitude dearer than the mutation.
+// re-import. The wash is a repaint over an attributed string that is already
+// on screen — a view rebuilt from the runs on iOS, one attribute over a range
+// on macOS; it does not need the rebuild, and on Psalm 119 the rebuild is two
+// orders of magnitude dearer than the repaint.
+//
+// WHERE EACH PANE PAINTS IT is the one thing that is per pane. macOS writes the
+// run as the background attribute. iOS cannot: UIKit (17+) draws the selection
+// highlight in a view BELOW the text content, and an opaque attribute painted
+// above it hid the selection inside every washed verse. So iOS lifts the
+// imported .hl fill off the string and draws the same runs as a view beneath
+// the text (BTWashView, reading_ios.go), with only the narration left in the
+// attribute. Same model, same colours, same character shape — the run table
+// below is still the whole contract.
 
 // lastPushedBodyFP / lastPushedTintFP are the two halves of what the native
 // overlay currently holds, kept apart because they are repaired differently:

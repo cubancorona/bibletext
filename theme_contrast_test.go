@@ -169,6 +169,50 @@ func TestPrimaryWashKeepsScriptureLegible(t *testing.T) {
 	}
 }
 
+// selectionOverWash is what the reader sees on iOS when they select words
+// inside a washed verse: UIKit's highlight tint source-over the wash. The wash
+// is drawn beneath the highlight view (BTWashView, reading_ios.go), so this is
+// the compositor's own arithmetic, and the tint is the one MEASURED on the
+// running text view in each appearance — rgba(0, 84, 166) at 0.20 in light,
+// the same colour at 0.35 in dark — not an assumed systemBlue. The device
+// colour is an input recorded here so that a future wash token is checked
+// against the composite a selection actually produces, not the bare band; the
+// same source-over predicts the unwashed light control word on paper
+// (#EDE9E0 → #BECBD4) to the pixel, which is what grounds the constants.
+func selectionOverWash(wash color.NRGBA, dark bool) color.NRGBA {
+	const tr, tg, tb = 0, 84, 166
+	ta := 0.20
+	if dark {
+		ta = 0.35
+	}
+	mix := func(tint, base uint8) uint8 {
+		return uint8(math.Round(float64(tint)*ta + float64(base)*(1-ta)))
+	}
+	return color.NRGBA{R: mix(tr, wash.R), G: mix(tg, wash.G), B: mix(tb, wash.B), A: 255}
+}
+
+// A selected, washed verse is still scripture, and the red letters are still
+// the hardest thing on it. The composites are pinned to the values the
+// simulator recipe samples (docs/VISUAL_TESTS.md), then held to the same floors
+// as the bare wash.
+func TestSelectedWashKeepsScriptureLegible(t *testing.T) {
+	for _, variant := range []struct {
+		name string
+		pal  palette
+		want color.NRGBA
+	}{
+		{"light", lightPalette, color.NRGBA{R: 0xCC, G: 0xC4, B: 0x90, A: 255}},
+		{"dark", darkPalette, color.NRGBA{R: 0x26, G: 0x3E, B: 0x82, A: 255}},
+	} {
+		got := selectionOverWash(variant.pal.Highlight, variant.name == "dark")
+		if got != variant.want {
+			t.Errorf("%s: selection over wash = #%02X%02X%02X, want #%02X%02X%02X (the value the sim recipe samples)",
+				variant.name, got.R, got.G, got.B, variant.want.R, variant.want.G, variant.want.B)
+		}
+		assertWashKeepsScriptureLegible(t, variant.name+" selected", variant.pal, got)
+	}
+}
+
 func TestApprovedHighlightTokensStayPinned(t *testing.T) {
 	for _, variant := range []struct {
 		name        string

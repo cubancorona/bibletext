@@ -53,6 +53,13 @@ func TestNativeTintRunsCoalescesTheMarkedSpan(t *testing.T) {
 	if runs[0].Wash != want {
 		t.Fatalf("wash = %v, want the shared table's %v", runs[0].Wash, want)
 	}
+	// And it is OPAQUE, by name. The iOS wash view draws this alpha exactly as
+	// the attribute did, and the narration composites over it assuming an
+	// opaque base; a translucent token is a design decision that must revisit
+	// both (and the import route, which drops alpha) — not a value that drifts.
+	if runs[0].Wash.A != 255 {
+		t.Fatalf("wash alpha = %d, want 255 — see BTWashView in reading_ios.go before changing this", runs[0].Wash.A)
+	}
 }
 
 // A mark can name verses this chapter does not have (it is numbered in another

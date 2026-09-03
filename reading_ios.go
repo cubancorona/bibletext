@@ -163,6 +163,54 @@ static BOOL btIOSPointInChapterWash(CGPoint inContainer);
 // scrolling. bibleTextApplyHTML toggles it to match gReadingHighlightRange.
 static UITapGestureRecognizer *gHighlightTap = nil;
 
+// --- Where the chapter wash is PAINTED on this pane ---------------------------
+//
+// Not as a text attribute. UIKit (17+) draws the selection highlight in a
+// sibling view BELOW the text content — UITextSelectionDisplayInteraction's
+// highlightView, "drawn behind the rendered text" — while TextKit fills every
+// NSBackgroundColorAttributeName inside the content view, above it. An opaque
+// wash written as an attribute therefore covered the selection tint
+// completely: the handles and the edit menu came up (they are separate views
+// above the content) over a band that stayed flat amber, and a reader could
+// not see what they had selected. Measured on the simulator with a selection
+// live, bottom to top: _UITextLayoutView, a plain UIView holding
+// _UITextSelectionHighlightView, _UITextContainerView (the glyphs AND every
+// attribute fill), then the cursor and handle views; the paper is the text
+// view's own layer beneath all of them.
+//
+// So the chapter wash is a view of its own, inserted at subview index 0 —
+// beneath UIKit's selection container — carrying one CAShapeLayer per model
+// run whose path is the union of TextKit's enclosing rects for exactly the
+// characters the attribute used to cover (btIOSPaintedPieces). The colour is
+// the run's own r,g,b,a as Go pushed it. Nothing about WHAT is washed moved
+// out of Go — which verses, what colour — only the paint mechanism, which was
+// already per pane. The macOS preamble keeps the attribute route on purpose:
+// AppKit paints the selection in the same pass as the attribute backgrounds
+// and above them, so it has no defect to fix.
+//
+// The narration wash stays an attribute in the content view, translucent, and
+// composites over this view in the compositor exactly as it used to
+// composite in arithmetic (0.32 amber over an opaque base gives the same
+// channels either way).
+//
+// A pure sublayer host: no drawRect, no backgroundColor, opaque NO, no
+// touches. It is sized to the whole content like UIKit's own selection
+// container, and a UIView that draws nothing allocates no backing store at
+// that size — give it any of those three and it becomes a multi-megabyte
+// bitmap that scrolls. The shape layers are kept to their own run's box for
+// the same reason.
+@interface BTWashView : UIView
+@end
+@implementation BTWashView
+@end
+static BTWashView *gWashView = nil;
+// The layout the rects were built against. layoutSubviews compares these per
+// frame (two scalars) and rebuilds only when the container rewrapped or the
+// storage changed under a path that did not rebuild itself.
+static CGFloat    gWashBuiltWidth = 0;
+static NSUInteger gWashBuiltLen   = 0;
+static void btIOSRebuildWash(void);
+
 // HBReadingTextView adds a "Study with AI" submenu (Explain /
 // Analyze context / Analyze translation) to the standard selection menu and hands
 // the selected text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
@@ -326,6 +374,33 @@ static UITapGestureRecognizer *gHighlightTap = nil;
     }
 }
 
+// The wash view's two invariants, defended where UIKit lays the text view's
+// own subviews out.
+//
+// Z-ORDER. UIKit installs its selection container lazily, and today between
+// _UITextLayoutView and _UITextContainerView; nothing public promises where.
+// If a later iOS inserted a sibling at index 0 the wash would climb back above
+// the highlight — the defect the view exists to fix — so it is sent to the
+// back whenever it is not already there. One pointer compare per frame
+// otherwise.
+//
+// INVALIDATION. The rects are only right for the layout they were measured
+// in. Every path that can move a line rebuilds where it moves it (the import,
+// btIOSApplyInsets, btIOSRefreshNote, the wash mutation); this is the safety
+// net for anything that does not — a width the frame push changed with the
+// insets unchanged, a storage the plain-text fallback replaced. Two scalar
+// compares per frame, and a rebuild records the key it built against, so the
+// pass after it finds the key equal and cannot loop.
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (gWashView == nil) return;
+    if (self.subviews.firstObject != gWashView) [self sendSubviewToBack:gWashView];
+    if (!gWashView.hidden &&
+        (self.textContainer.size.width != gWashBuiltWidth ||
+         self.textStorage.length != gWashBuiltLen))
+        btIOSRebuildWash();
+}
+
 // Persist the reading position whenever the user finishes scrolling, so the
 // saved spot is always current (the iOS background lifecycle hook is unreliable).
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
@@ -472,6 +547,10 @@ static void btIOSApplyInsets(CGFloat w) {
     if (fabs(cur.left - side) < 0.5 && fabs(cur.right - side) < 0.5 &&
         fabs(cur.top - top) < 0.5) return;
     gReadingTV.textContainerInset = UIEdgeInsetsMake(top, side, 14, side);
+    // Every inset change moves every line — the reporter measure, a note's
+    // top-band reservation, the width path from the frame push — and the wash
+    // rects were measured against the old ones.
+    btIOSRebuildWash();
 }
 
 void bibleTextSetReadingMeasure(double m) {
@@ -481,7 +560,8 @@ void bibleTextSetReadingMeasure(double m) {
     });
 }
 
-// Cached reading "paper" colour (pal.Surface as 0..1 components), so the OPAQUE
+// Cached reading "paper" colour (pal.Background as 0..1 components — the ground
+// the wash view and the selection tint composite over), so the OPAQUE
 // background can be re-asserted right after EVERY attributedText assignment.
 // Setting attributedText (and especially the WebKit HTML importer's retry path)
 // can land after bibleTextTVSetReadingBG and revert the view toward a transparent,
@@ -697,9 +777,11 @@ static UIColor *gReadAlongColor = nil;
 //
 // What each verse's background SHOULD BE, pushed from Go (reading_tint_apple.go)
 // out of the one function that answers that for every surface. See that file for
-// why this is a model rather than a remembered bool; the short version is that a
-// character has exactly ONE NSBackgroundColorAttributeName and two things want
-// it, so the narration cannot be allowed to "clear" what it did not put there.
+// why this is a model rather than a remembered bool. On this pane the model is
+// drawn as a view beneath the text (BTWashView, btIOSRebuildWash) and only the
+// narration writes NSBackgroundColorAttributeName, so the two washes no longer
+// share an attribute; the model is still what says which verses the chapter's
+// wash covers, and the narration still asks it rather than the storage.
 //
 // A fixed C array, not an NSArray: it is read on the AVPlayer time observer's
 // hop to the main queue, several times a second while audio plays, and the
@@ -726,11 +808,10 @@ static void btIOSSetHighlightUIEnabled(BOOL on);
 // and the IMPORT is what confirms it. While the two disagree the storage is not
 // the string the model was computed for, and a repaint is refused rather than
 // guessed — a missing wash, the documented failure mode for this seam, instead of
-// a wash on the wrong verse. gTintUnpainted remembers that a refusal happened so
-// the next successful import can put the model back.
+// a wash on the wrong verse. Nothing remembers the refusal: every successful
+// import rebuilds the wash view from the model unconditionally.
 static int  gBodyGenPending = 0;
 static int  gBodyGenApplied = 0;
-static BOOL gTintUnpainted  = NO;
 
 // The verse the narration is on, for the import to put BACK.
 //
@@ -782,8 +863,11 @@ static UIColor *btIOSTintColor(int i) {
                             blue:gTint.r[i].b alpha:gTint.r[i].a];
 }
 
-// The narration wash, ONCE: the colour that is painted and the arithmetic that
-// layers it over a chapter wash must not be able to disagree about it.
+// The narration wash, ONCE. Translucent BECAUSE it is meant to be seen through
+// — that is how the styled desktop pane draws it, on its own layer above the
+// verse wash — and here too the chapter wash sits beneath it (BTWashView), so
+// the compositor does the layering and the reader sees the note wash through
+// the narration's amber exactly as they do on the desktop.
 static const CGFloat kBTReadAlong[4] = {1.0, 0.80, 0.30, 0.32};
 
 static UIColor *btIOSReadAlongColor(void) {
@@ -791,28 +875,6 @@ static UIColor *btIOSReadAlongColor(void) {
         gReadAlongColor = [UIColor colorWithRed:kBTReadAlong[0] green:kBTReadAlong[1]
                                            blue:kBTReadAlong[2] alpha:kBTReadAlong[3]];
     return gReadAlongColor;
-}
-
-// btIOSOverlayColor composites the narration wash OVER a chapter wash.
-//
-// The narration tint is translucent BECAUSE it is meant to be seen through —
-// that is how the styled desktop pane draws it, on its own layer above the verse
-// wash. TextKit has no second layer here: one attribute, one colour. So the
-// layering is done in arithmetic instead, source-over, and the reader sees the
-// note wash through the narration's amber exactly as they do on the desktop.
-// This is what "overlaid" means in the acceptance test — not "replaced".
-static UIColor *btIOSOverlayColor(UIColor *base) {
-    CGFloat br = 0, bg = 0, bb = 0, ba = 0;
-    if (base == nil || ![base getRed:&br green:&bg blue:&bb alpha:&ba])
-        return btIOSReadAlongColor();
-    const CGFloat ar = kBTReadAlong[0], ag = kBTReadAlong[1],
-                  ab = kBTReadAlong[2], aa = kBTReadAlong[3];
-    CGFloat oa = aa + ba * (1 - aa);
-    if (oa <= 0) return btIOSReadAlongColor();
-    return [UIColor colorWithRed:(ar * aa + br * ba * (1 - aa)) / oa
-                           green:(ag * aa + bg * ba * (1 - aa)) / oa
-                            blue:(ab * aa + bb * ba * (1 - aa)) / oa
-                           alpha:oa];
 }
 
 // --- The shared-note sticker ------------------------------------------------
@@ -950,6 +1012,8 @@ static void btIOSRefreshNote(void) {
     btIOSEnsurePillViews();
     btIOSLayoutNote();
     btIOSLayoutPillViews();
+    // The re-reserved paragraph spacing shifts every line below the band.
+    btIOSRebuildWash();
 }
 
 static BOOL btIOSSameStr(NSString *a, NSString *b) {
@@ -2161,9 +2225,9 @@ static NSRange btIOSRunSpanRange(NSTextStorage *ts, int lo, int hi) {
 // painting that one leaves a pale tag hanging off the end of the passage and,
 // at a paragraph end, a washed empty line.
 //
-// It is only the outer bound: what is painted INSIDE it is btIOSPaintRunWash's
+// It is only the outer bound: what is painted INSIDE it is btIOSPaintedPieces'
 // business, because a run's interior also contains characters the HTML leaves
-// bare (btIOSUnwashBreaks).
+// bare (btIOSBareRanges).
 static NSRange btIOSRunWashRange(NSTextStorage *ts, int i) {
     if (i < 0 || i >= gTint.n) return NSMakeRange(NSNotFound, 0);
     NSRange r = btIOSRunSpanRange(ts, gTint.r[i].lo, gTint.r[i].hi);
@@ -2175,9 +2239,14 @@ static NSRange btIOSRunWashRange(NSTextStorage *ts, int i) {
     return r.length > 0 ? r : NSMakeRange(NSNotFound, 0);
 }
 
-// btIOSUnwashBreaks removes the background from every BREAK CHARACTER in a
-// range, which is the one rule that makes a painted band the same shape as an
-// imported one.
+// btIOSBareRanges yields the whitespace run around every BREAK CHARACTER in a
+// range — the characters a band leaves bare however it is painted. ONE
+// enumerator, two consumers: the narration attribute takes these ranges back
+// out (btIOSUnwashBreaks) and the wash view's rect builder never covers them
+// (btIOSPaintedPieces). Were they two loops, a narrated poetic verse and its
+// underlay would disagree at the breaks exactly the way two attribute routes
+// once did. The Go model of the rule is unwashBreaks in
+// reading_tint_wash_shape_test.go, which pins it against the imported markup.
 //
 // MEASURED, not assumed. Feeding the importer
 //     <span class="hl">washed one<br>washed two</span>
@@ -2196,7 +2265,7 @@ static NSRange btIOSRunWashRange(NSTextStorage *ts, int i) {
 // the importer PAINTS are different questions, and only the second one decides
 // pixels. The narrow rule left every poetic verse the wrong shape, on a
 // single-verse mark, on both panes.
-static void btIOSUnwashBreaks(NSTextStorage *ts, NSRange r) {
+static void btIOSBareRanges(NSTextStorage *ts, NSRange r, void (^yield)(NSRange bare)) {
     if (r.location == NSNotFound || r.length == 0) return;
     NSString *s = ts.string;
     NSUInteger end = NSMaxRange(r);
@@ -2212,44 +2281,150 @@ static void btIOSUnwashBreaks(NSTextStorage *ts, NSRange r) {
         NSUInteger lo = i, hi = i;
         while (lo > r.location && [ws characterIsMember:[s characterAtIndex:lo - 1]]) lo--;
         while (hi < end && [ws characterIsMember:[s characterAtIndex:hi]]) hi++;
-        [ts removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(lo, hi - lo)];
+        yield(NSMakeRange(lo, hi - lo));
         i = hi;
     }
 }
 
-// btIOSChapterWashRange is the part of `verse` the CHAPTER wash covers, or a
-// NSNotFound range when the verse carries none: its own span inside the run,
-// minus the break the HTML leaves bare between it and the verse after it.
-static NSRange btIOSChapterWashRange(NSTextStorage *ts, NSInteger verse) {
-    NSRange run = btIOSRunWashRange(ts, btIOSTintRunForVerse(verse));
-    NSRange v = btIOSReadAlongRange(ts, verse);
-    if (run.location == NSNotFound || v.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
-    NSRange x = NSIntersectionRange(run, v);
-    if (x.length == 0) return NSMakeRange(NSNotFound, 0);
-    return x.length > 0 ? x : NSMakeRange(NSNotFound, 0);
+// btIOSUnwashBreaks removes the background attribute from every bare range —
+// the narration's half of the rule.
+static void btIOSUnwashBreaks(NSTextStorage *ts, NSRange r) {
+    btIOSBareRanges(ts, r, ^(NSRange b) {
+        [ts removeAttribute:NSBackgroundColorAttributeName range:b];
+    });
 }
 
-// btIOSPaintRunWash paints run i's chapter wash the shape buildChapterHTML gives
-// it: the whole span, then every BREAK CHARACTER inside it taken back out
-// (btIOSUnwashBreaks). One attribute call for the run plus one sweep, so a marked
-// psalm costs a pass over the run rather than a pass over the chapter.
-static void btIOSPaintRunWash(NSTextStorage *ts, int i, UIColor *c) {
-    if (i < 0 || i >= gTint.n || c == nil) return;
-    NSRange r = btIOSRunWashRange(ts, i);
-    if (r.location == NSNotFound) return;
-    [ts addAttribute:NSBackgroundColorAttributeName value:c range:r];
-    btIOSUnwashBreaks(ts, r);
+// btIOSPaintedPieces yields the pieces of a run the band COVERS — the range
+// minus its bare ranges, in order — the wash view's half of the same rule.
+static void btIOSPaintedPieces(NSTextStorage *ts, NSRange r, void (^yield)(NSRange piece)) {
+    if (r.location == NSNotFound || r.length == 0) return;
+    __block NSUInteger cursor = r.location;
+    btIOSBareRanges(ts, r, ^(NSRange bare) {
+        if (bare.location > cursor) yield(NSMakeRange(cursor, bare.location - cursor));
+        cursor = NSMaxRange(bare);
+    });
+    NSUInteger end = NSMaxRange(r);
+    if (cursor < end) yield(NSMakeRange(cursor, end - cursor));
+}
+
+// btIOSRebuildWash re-derives the wash view from the model against the text and
+// layout on screen now. Unconditional and idempotent: every path that can move
+// a line calls it — the import, an inset change, a note band re-reservation,
+// a wash-only mutation, the layoutSubviews safety net — and it builds from
+// scratch rather than patching, because the rects are only right for the
+// layout they were measured in.
+//
+// The rects are TextKit's own enclosing rects for the painted pieces, the
+// primitive the attribute fill used (a background-attributed break painted to
+// the right margin for the same reason a selected one does), so the band keeps
+// the pixels the attribute gave it. Offset by the container inset into content
+// coordinates, as the sticker is.
+//
+// Called before the view has laid out it forces layout of the whole chapter
+// (allowsNonContiguousLayout is NO) — the cost the import path's layoutIfNeeded
+// already pays; from the frame push it pays it once here and the layout pass
+// then finds the key equal.
+static void btIOSRebuildWash(void) {
+    if (gReadingTV == nil) return;
+    uint64_t t0 = btIOSPerfNow();
+    if (gWashView == nil) {
+        gWashView = [[BTWashView alloc] initWithFrame:CGRectZero];
+        gWashView.backgroundColor = nil;
+        gWashView.opaque = NO;
+        gWashView.userInteractionEnabled = NO;
+        [gReadingTV insertSubview:gWashView atIndex:0];
+    }
+    // A path or fill change on a CAShapeLayer implicitly animates over 0.25s.
+    // A wash arriving or clearing must not cross-fade, and "Clear highlight"
+    // must not fade out: this pane never animated a wash and does not start.
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    gWashView.layer.sublayers = nil;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    // The refusal bibleTextIOSSetTintRuns makes, kept here: verse numbers
+    // resolved against storage the model was not computed for light the wrong
+    // verse, so until the import confirms the pushed chapter the view shows
+    // nothing — and a stale underlay from the previous chapter can never sit
+    // beneath a new import, because the import rebuilds unconditionally.
+    if (gTint.n == 0 || ts.length == 0 || gBodyGenApplied != gBodyGenPending) {
+        gWashView.hidden = YES;
+        [CATransaction commit];
+        return;
+    }
+    NSLayoutManager *lm = gReadingTV.layoutManager;
+    NSTextContainer *tc = gReadingTV.textContainer;
+    UIEdgeInsets inset = gReadingTV.textContainerInset;
+    for (int i = 0; i < gTint.n; i++) {
+        NSRange r = btIOSRunWashRange(ts, i);
+        if (r.location == NSNotFound || NSMaxRange(r) > ts.length) continue;
+        UIColor *c = btIOSTintColor(i);
+        if (c == nil) continue;
+        // One layer per run, framed to the union of its rects with the path
+        // translated into it — non-zero fill, so adjacent line rects that
+        // touch fill once, never twice. A shape layer rasterises to a bitmap
+        // of its frame, and a run has no length cap (a shared link can mark
+        // Psalm 119 whole), so a run's rects are cut into layers no taller
+        // than kBTWashLayerMaxH: the rects arrive in layout order, top to
+        // bottom, so each cut is a contiguous band and a chapter-tall mark
+        // becomes a stack of screen-sized ones instead of one bitmap the
+        // compositor may tile, or drop.
+        const CGFloat kBTWashLayerMaxH = 2048;
+        __block CGMutablePathRef path = CGPathCreateMutable();
+        __block CGRect box = CGRectNull;
+        CGColorRef fill = c.CGColor;
+        void (^flush)(void) = ^{
+            if (!CGRectIsNull(box)) {
+                CAShapeLayer *layer = [CAShapeLayer layer];
+                layer.frame = box;
+                CGAffineTransform t = CGAffineTransformMakeTranslation(-box.origin.x, -box.origin.y);
+                CGPathRef local = CGPathCreateCopyByTransformingPath(path, &t);
+                layer.path = local;
+                layer.fillColor = fill;
+                layer.fillRule = kCAFillRuleNonZero;
+                [gWashView.layer addSublayer:layer];
+                CGPathRelease(local);
+            }
+            CGPathRelease(path);
+            path = CGPathCreateMutable();
+            box = CGRectNull;
+        };
+        btIOSPaintedPieces(ts, r, ^(NSRange piece) {
+            NSRange g = [lm glyphRangeForCharacterRange:piece actualCharacterRange:NULL];
+            if (g.length == 0) return;
+            [lm enumerateEnclosingRectsForGlyphRange:g withinSelectedGlyphRange:g
+                                     inTextContainer:tc
+                                          usingBlock:^(CGRect rect, BOOL *stop) {
+                CGRect cr = CGRectOffset(rect, inset.left, inset.top);
+                if (!CGRectIsNull(box) &&
+                    CGRectGetMaxY(CGRectUnion(box, cr)) - CGRectGetMinY(box) > kBTWashLayerMaxH)
+                    flush();
+                CGPathAddRect(path, NULL, cr);
+                box = CGRectUnion(box, cr);
+            }];
+        });
+        flush();
+        CGPathRelease(path);
+    }
+    gWashView.frame = (CGRect){CGPointZero, gReadingTV.contentSize};
+    gWashView.hidden = NO;
+    gWashBuiltWidth = tc.size.width;
+    gWashBuiltLen = ts.length;
+    [CATransaction commit];
+    btIOSPerfLog("wash-rebuild", t0);
 }
 
 // btIOSPaintVerseWash sets the one background attribute each character of
-// `verse` may carry, FROM THE MODEL — the chapter wash underneath, the
-// narration over it, or their composite where both apply.
+// `verse` may carry: the narration wash while the verse is narrated, nothing
+// otherwise. It is the ONLY writer of NSBackgroundColorAttributeName on this
+// pane and it writes exactly one colour — the chapter wash is the view beneath
+// the text (BTWashView), so moving off a verse is a plain remove that cannot
+// erase a mark it did not paint, and the narration composites over the wash in
+// the compositor rather than in arithmetic.
 //
-// This is the restoreTint / applyTint pair, and deliberately one function:
-// narrated==NO is "put back what should be here now", narrated==YES is "and lay
-// the narration over it". Written as two functions they would be two lists of
-// what a verse's background can be, and the erasing bug this replaces was
-// exactly one of those lists being shorter than the other.
+// Still one function for both directions: narrated==NO is "put back what
+// should be here now", narrated==YES is "and lay the narration over it". Two
+// functions would be two lists of what a verse's background can be, and the
+// erasing bug this seam replaced was one list being shorter than the other.
 //
 // The caller owns beginEditing/endEditing so a move (restore one verse, paint
 // another) is a single layout transaction.
@@ -2258,34 +2433,19 @@ static void btIOSPaintVerseWash(NSTextStorage *ts, NSInteger verse, BOOL narrate
     NSRange whole = btIOSReadAlongRange(ts, verse);
     if (whole.location == NSNotFound || NSMaxRange(whole) > ts.length) return;
     [ts removeAttribute:NSBackgroundColorAttributeName range:whole];
-    NSRange wash = btIOSChapterWashRange(ts, verse);
-    UIColor *base = btIOSTintColor(btIOSTintRunForVerse(verse));
-    if (wash.location != NSNotFound && base != nil)
-        [ts addAttribute:NSBackgroundColorAttributeName
-                   value:(narrated ? btIOSOverlayColor(base) : base) range:wash];
-    if (!narrated) {
-        // A break is bare however it came to be painted — see btIOSUnwashBreaks.
-        btIOSUnwashBreaks(ts, whole);
-        return;
-    }
-    // Whatever of the narrated verse the chapter wash does not reach — the
-    // trailing space at the end of a marked passage, or the whole verse when
-    // nothing is marked — takes the narration wash on bare paper.
-    NSUInteger from = (wash.location != NSNotFound) ? NSMaxRange(wash) : whole.location;
-    if (from < NSMaxRange(whole))
-        [ts addAttribute:NSBackgroundColorAttributeName value:btIOSReadAlongColor()
-                   range:NSMakeRange(from, NSMaxRange(whole) - from)];
+    if (!narrated) return;
+    [ts addAttribute:NSBackgroundColorAttributeName value:btIOSReadAlongColor() range:whole];
+    // A break is bare however it came to be painted — see btIOSBareRanges.
     btIOSUnwashBreaks(ts, whole);
 }
 
 // btIOSRefreshHighlightRange re-derives the tappable highlight range from the
-// model, for the live-mutation path.
+// model — after an import and after a wash-only mutation alike.
 //
-// bibleTextApplyHTML derives the same thing by enumerating the freshly imported
-// background runs, which is right there and stays. Here there is no import to
-// enumerate — the storage is the one already on screen and the narration may be
-// sitting on top of part of it — so the range comes from the model, which is the
-// only side that knows which washes are the CHAPTER's.
+// The storage no longer carries the chapter wash (the import lifts the .hl
+// fill off the string, and the view beneath the text draws it), so there is
+// nothing to enumerate: the range comes from the model, which is the only side
+// that knows which verses are the CHAPTER's, whatever the narration is doing.
 static void btIOSRefreshHighlightRange(NSTextStorage *ts) {
     NSRange u = (NSRange){NSNotFound, 0};
     for (int i = 0; i < gTint.n; i++) {
@@ -2326,12 +2486,13 @@ static BOOL btIOSPointInChapterWash(CGPoint inContainer) {
 
 // bibleTextIOSSetTintRuns replaces the chapter's wash model.
 //
-// repaint==0 means "the HTML about to arrive already carries this wash" — the
+// repaint==0 means "the HTML about to arrive carries this wash" — the
 // full-rebuild path, where painting now would wash the OUTGOING chapter's verse
-// numbers for a frame. repaint==1 is the whole point of the seam: the text on
-// screen is already right and only the wash changed, so the change is an
-// attribute over a known range instead of buildChapterHTML plus a complete
-// NSAttributedString re-import.
+// numbers for a frame (the import rebuilds the view once the new storage is
+// in). repaint==1 is the whole point of the seam: the text on screen is
+// already right and only the wash changed, so the change is a rebuild of the
+// wash view against the string already on screen instead of buildChapterHTML
+// plus a complete NSAttributedString re-import.
 // The band-spec push: which paragraphs carry a pill, keyed. The C-side struct
 // carries the label as UTF-8 bytes because a note count is chrome the reader
 // must read exactly (the [B lesson from Android applies to any wire).
@@ -2377,7 +2538,6 @@ void bibleTextIOSSetTintRuns(const BTTintRun *runs, int n, int repaint) {
     for (int i = 0; i < n && runs != NULL; i++) m.r[m.n++] = runs[i];
     BOOL paint = repaint != 0;
     void (^block)(void) = ^{
-        BTTintModel old = gTint;
         gTint = m;
         if (!paint || gReadingTV == nil) return;
         // The storage has to be the string this model was computed for — see
@@ -2385,29 +2545,18 @@ void bibleTextIOSSetTintRuns(const BTTintRun *runs, int n, int repaint) {
         // the PREVIOUS chapter there, and verse 3 of that one is not verse 3 of
         // this one.
         if (gBodyGenApplied != gBodyGenPending) {
-            gTintUnpainted = YES;
             NSLog(@"bibletext: wash mutation deferred — storage is not the pushed chapter");
             return;
         }
         NSTextStorage *ts = gReadingTV.textStorage;
         if (ts.length == 0) return;
         uint64_t t0 = btIOSPerfNow();
-        [ts beginEditing];
-        // Clear the OLD wash first: the model is the only writer of these
-        // ranges, so what it painted last time is exactly what has to come off,
-        // and a verse that has just LOST its wash is otherwise left lit. Whole
-        // spans, one attribute call each — a run is bounded by two index lookups
-        // whatever its length, so a marked psalm costs the same as a marked verse.
-        for (int i = 0; i < old.n; i++) {
-            NSRange r = btIOSRunSpanRange(ts, old.r[i].lo, old.r[i].hi);
-            if (r.location != NSNotFound)
-                [ts removeAttribute:NSBackgroundColorAttributeName range:r];
-        }
-        for (int i = 0; i < gTint.n; i++) btIOSPaintRunWash(ts, i, btIOSTintColor(i));
-        // The narration keeps its place whatever the chapter wash just did —
-        // including when the wash it was sitting on has just gone away.
-        if (gReadAlongVerse > 0) btIOSPaintVerseWash(ts, gReadAlongVerse, YES);
-        [ts endEditing];
+        // NO STORAGE EDIT. The chapter wash is a view (BTWashView), rebuilt from
+        // the model whole — so a verse that has just LOST its wash simply is
+        // not drawn, the narration attribute is untouched (including when the
+        // wash it sat on has just gone away), nothing relayouts, and a live
+        // selection's edit menu survives the change.
+        btIOSRebuildWash();
         btIOSRefreshHighlightRange(ts);
         btIOSPerfLog("tint-mutate", t0);
     };
@@ -2435,23 +2584,9 @@ void bibleTextIOSBeginChapterPush(int sameChapter) {
     else dispatch_async(dispatch_get_main_queue(), block);
 }
 
-// btIOSRepaintChapterWashFromModel re-asserts the whole model over a freshly
-// imported string — the recovery for a mutation that had to be refused while the
-// storage was not the model's (gTintUnpainted). Every background attribute goes
-// first because the wash the HTML carried is not the model's any more, and its
-// ranges are the importer's rather than something this side recorded.
-static void btIOSRepaintChapterWashFromModel(void) {
-    if (gReadingTV == nil) return;
-    NSTextStorage *ts = gReadingTV.textStorage;
-    if (ts.length == 0) return;
-    [ts beginEditing];
-    [ts removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(0, ts.length)];
-    for (int i = 0; i < gTint.n; i++) btIOSPaintRunWash(ts, i, btIOSTintColor(i));
-    [ts endEditing];
-}
-
-// bibleTextIOSReadAlongClear takes the narration wash off, PUTTING BACK whatever
-// the chapter says belongs on that verse rather than removing the attribute.
+// bibleTextIOSReadAlongClear takes the narration wash off. The attribute is
+// simply removed: the chapter wash lives in the view beneath the text, not in
+// the storage, so nothing of the reader's is erased with it.
 // Reachable from the Fyne goroutine (clearReadAlong on stop/nav) as well as the
 // main-queue time observer, hence the dispatch guard.
 void bibleTextIOSReadAlongClear(void) {
@@ -2479,11 +2614,13 @@ void bibleTextIOSReadAlongClear(void) {
 // those flags, so the scroll-restore/marker machinery in scrollViewDidScroll is
 // untouched. verse<=0 just clears (the recording's intro).
 //
-// MOVING OFF A VERSE IS A REPAINT, NOT AN ERASE. This used to removeAttribute
-// over the range it had tinted, which is only correct when nothing was
-// underneath — over a verse carrying a note or a search hit it deleted the
-// reader's own mark as the audio walked past, and nothing put it back until the
-// next full re-render. btIOSPaintVerseWash asks the model instead.
+// MOVING OFF A VERSE removes the narration attribute and nothing else. That
+// was once an erasing bug — over a verse carrying a note or a search hit the
+// chapter wash was the same attribute, and the audio walking past deleted the
+// reader's own mark — and the model repaint that fixed it is gone with the
+// reason for it: the chapter wash is drawn by the view beneath the text
+// (btIOSRebuildWash), so the storage holds only the narration and removing
+// that cannot touch a mark.
 void bibleTextIOSHighlightVerse(int verse, int follow) {
     void (^block)(void) = ^{
         if (gReadingTV == nil) return;
@@ -2875,6 +3012,14 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         ps.paragraphSpacingBefore = 0;
         [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
     }];
+    // The dialect's .hl rule arrives as an OPAQUE background attribute, which on
+    // this pane would sit above UIKit's selection highlight and hide it (see
+    // BTWashView). Lift it off while the string is still free to edit — no
+    // layout invalidation — and draw the wash beneath the text instead, from
+    // the model, after the layout below is final. The HTML stays identical for
+    // both Apple panes; .hl/.hlm are the only backgrounds the dialect emits,
+    // and a host test holds that premise (reading_ios_wash_guard_test.go).
+    [mas removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(0, mas.length)];
     as = mas;
     // New chapter text: a read-along tint from the previous chapter must not be
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
@@ -2897,9 +3042,8 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
     // The storage now holds the chapter Go announced, so wash mutations against
     // verse numbers are meaningful again — and anything refused while it did not
-    // gets re-asserted here.
+    // is covered by the unconditional rebuild below.
     gBodyGenApplied = gBodyGenPending;
-    if (gTintUnpainted) { btIOSRepaintChapterWashFromModel(); gTintUnpainted = NO; }
     // WHERE THE HIGHLIGHT RANGE COMES FROM: the MODEL, on this path as well as on
     // the mutation path (btIOSRefreshHighlightRange), so the two can never give
     // different answers for the same chapter. It used to be derived here by
@@ -2933,6 +3077,10 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     btIOSEnsurePillViews();
     btIOSLayoutNote();
     btIOSLayoutPillViews();
+    // The wash, after the note band has reserved its paragraph spacing, so the
+    // rects are the final lines' — and unconditionally, so nothing from the
+    // previous chapter can survive beneath this one.
+    btIOSRebuildWash();
     // New text: the prior chapter's initial-touch is no longer valid, and the fresh
     // attributed string carries the original verse-number colours (the marker is not
     // applied to it yet). Reset both, then (re-)apply the marker if one is intended —
@@ -3067,6 +3215,11 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         btIOSLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
         btIOSLayoutNote();      // and the sticker to the band the text reserved
         btIOSLayoutPillViews(); // the pills re-place with it — a frame change reflows every band
+        // btIOSApplyInsets rebuilt the wash BEFORE btIOSLayoutNote could
+        // re-reserve a note's band, and a band whose height changed with the
+        // width moves every line below it; the rects were measured against
+        // the old lines. Once more, after the band settles.
+        if (changed) btIOSRebuildWash();
         // Only re-resolve the scroll position when a highlight (search jump) or a
         // pending restore is armed: those were computed at the old width and must be
         // re-placed after the rewrap. Without a target, bibleTextScrollReadingTV
@@ -3622,8 +3775,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	// TWO fingerprints, because the two changes cost different things to apply.
 	// The BODY can only be repaired by rebuilding the HTML and re-importing the
-	// whole NSAttributedString; the WASH is one attribute over a known range of
-	// the string already on screen (chapterBodyFingerprint, reading.go).
+	// whole NSAttributedString; the WASH is a repaint over the string already
+	// on screen — a view rebuilt from the run model on iOS, one attribute over a
+	// known range on macOS (chapterBodyFingerprint, reading.go).
 	body := chapterBodyFingerprint(state)
 	tintFP := chapterTint(state).fingerprint()
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)

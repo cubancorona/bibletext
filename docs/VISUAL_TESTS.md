@@ -155,6 +155,21 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       paragraph must not reflow (bold-Georgia rewrap was a live defect);
       no pale notch at verse joins mid-line; a washed verse's NUMBER is
       washed too.
+- [ ] iOS: long-press a word inside a washed verse — the selection tint
+      shows OVER the wash (sampled on the simulator: light #CCC490, dark
+      #263E82; no #FFE08A-family pixel inside the selected word), the
+      unselected washed lines stay exactly #FFE08A (dark #3A326F), an
+      unwashed control word selects to #BECBD4 on light paper, the band's
+      per-line extents are unchanged, no seam at verse-number joins or line
+      ends, and Copy / Study with AI / Share stay up. Clear the wash while
+      the selection is live — the menu must NOT dismiss and the band must
+      vanish with no cross-fade. Flip the appearance with the chapter open:
+      the band re-renders in the other theme's colour with no stale band.
+- [ ] Android: the same long-press inside a washed verse — the selection
+      lightens the word over the wash (dark wash #3A326F reads ≈ #5D5584
+      under the selection; an unwashed word lightens by about the same);
+      the wash itself is unchanged in colour and shape, with no hairline at
+      the joins between a verse number, its body and the join space.
 - [ ] Reporter layout (iPad, macOS, wide styled pane, web ≥46rem): centred
       ~59-char column, 1.3 leading, first-line indents, no paragraph gaps —
       and a poetry-opening paragraph takes no indent. Phones keep the airy

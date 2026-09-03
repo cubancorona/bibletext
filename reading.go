@@ -680,6 +680,14 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// markup references yet (tintMulti is unreachable; tint.go), so the rule
 	// rides unused. Emitting it with the class rather than with the first use
 	// is the table's own guarantee: a named class always has its rule.
+	//
+	// These are the ONLY backgrounds this stylesheet emits, and iOS relies on
+	// that: it strips every background attribute from the imported string
+	// and draws the wash as a view beneath the text, because UIKit (17+)
+	// paints the selection highlight below the text content and an opaque
+	// attribute hid it (BTWashView, reading_ios.go). macOS keeps the imported
+	// attribute. A background added to any other rule here would vanish on
+	// iOS — reading_ios_wash_guard_test.go holds the premise.
 	for tint := verseTint(0); tint < tintCount; tint++ {
 		rule := appleTintHTML[tint].CSS
 		c, ok := tint.wash(pal)

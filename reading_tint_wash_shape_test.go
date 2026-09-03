@@ -6,10 +6,12 @@ package bibletext
 // The Apple panes paint a wash twice by two different routes. On a rebuild the
 // HTML importer reads `background-color` off the `.hl` spans; on a wash-only
 // change the live mutation computes a CHARACTER RANGE from verse numbers and
-// paints that (btIOSChapterWashRange / btMacChapterWashRange). Those two have to
-// cover exactly the same characters, or a verse the mutation repainted comes back
-// a different SHAPE from its neighbours — permanently, because nothing rebuilds
-// after a repaint.
+// paints that (btMacPaintRunWash on macOS; on iOS the wash view's rect builder,
+// btIOSPaintedPieces, which subtracts the same bare ranges — btIOSBareRanges —
+// that the narration attribute takes back out). Those two have to cover exactly
+// the same characters, or a verse the mutation repainted comes back a different
+// SHAPE from its neighbours — permanently, because nothing rebuilds after a
+// repaint.
 //
 // They did not. A verse's character range runs from its own number to the NEXT
 // verse's number, so for every verse but a run's last it swallowed whatever sits
@@ -228,7 +230,18 @@ func isBreakRune(r rune) bool { return r == '\n' || r == '\r' || r == ' ' || r
 // single-verse mark, and this model agreed with it — so the test certified the
 // defect instead of catching it.
 func unwashBreaks(text []rune, mask []bool, start, end int) {
-	for i := start; i < end && i < len(mask); i++ {
+	bareRanges(text, start, end, func(lo, hi int) {
+		for j := lo; j < hi && j < len(mask); j++ {
+			mask[j] = false
+		}
+	})
+}
+
+// bareRanges is btIOSBareRanges: the whitespace run around every break, in
+// order — ONE enumerator with two consumers on the native side (the narration
+// attribute's unwash and the wash view's rects), and two here to match.
+func bareRanges(text []rune, start, end int, yield func(lo, hi int)) {
+	for i := start; i < end && i < len(text); i++ {
 		if !isLineBreakRune(text[i]) {
 			continue
 		}
@@ -243,11 +256,52 @@ func unwashBreaks(text []rune, mask []bool, start, end int) {
 		for hi < end && hi < len(text) && unicode.IsSpace(text[hi]) {
 			hi++
 		}
-		for j := lo; j < hi; j++ {
-			mask[j] = false
-		}
+		yield(lo, hi)
 		i = hi
 	}
+}
+
+// paintedPieces is btIOSPaintedPieces: the run's outer range minus its bare
+// ranges, as the ordered pieces the iOS wash view builds a rect per line for.
+// trimBreaks=false is the one-piece rule (the whole outer range), kept so the
+// test can show the subtraction is doing something.
+func paintedPieces(text []rune, start, end int, trimBreaks bool) [][2]int {
+	if !trimBreaks {
+		return [][2]int{{start, end}}
+	}
+	var pieces [][2]int
+	cursor := start
+	bareRanges(text, start, end, func(lo, hi int) {
+		if lo > cursor {
+			pieces = append(pieces, [2]int{cursor, lo})
+		}
+		cursor = hi
+	})
+	if cursor < end {
+		pieces = append(pieces, [2]int{cursor, end})
+	}
+	return pieces
+}
+
+// piecesMask runs the iOS rect builder's rule for a run of verses lo..hi and
+// returns the characters its pieces cover — the outer bound is
+// btIOSRunWashRange's (the span trimmed of trailing whitespace), the same one
+// washMask uses.
+func (d importedChapter) piecesMask(lo, hi int, trimBreaks bool) []bool {
+	mask := make([]bool, len(d.text))
+	start, end := d.locOf(lo), d.endOf(hi)
+	if start < 0 || end < 0 {
+		return mask
+	}
+	for end > start && unicode.IsSpace(d.text[end-1]) {
+		end--
+	}
+	for _, p := range paintedPieces(d.text, start, end, trimBreaks) {
+		for i := p[0]; i < p[1] && i < len(mask); i++ {
+			mask[i] = true
+		}
+	}
+	return mask
 }
 
 func isLineBreakRune(r rune) bool {
@@ -401,6 +455,28 @@ func TestChapterWashCoversExactlyTheMarkedUpCharacters(t *testing.T) {
 			}
 			if (extra > 0) != tc.bare {
 				t.Errorf("untrimmed rule painted %d characters the HTML leaves bare; want bare interior = %v",
+					extra, tc.bare)
+			}
+
+			// THE iOS RECT BUILDER, which draws the wash as a view beneath the
+			// text rather than as the attribute, must cover the same characters
+			// — it subtracts the same bare ranges the narration attribute takes
+			// out, and this is what holds the two to one rule.
+			if d := maskDiff(doc, doc.piecesMask(tc.lo, tc.hi, true), doc.hl); d != "" {
+				t.Errorf("the wash view's pieces and the .hl markup disagree:%s", d)
+			}
+			if pieces := paintedPieces(doc.text, 0, 0, true); len(pieces) != 0 {
+				t.Errorf("an empty run yielded pieces: %v", pieces)
+			}
+			onePiece := doc.piecesMask(tc.lo, tc.hi, false)
+			extra = 0
+			for i := range onePiece {
+				if onePiece[i] && !doc.hl[i] {
+					extra++
+				}
+			}
+			if (extra > 0) != tc.bare {
+				t.Errorf("one-piece rule covered %d characters the HTML leaves bare; want bare interior = %v",
 					extra, tc.bare)
 			}
 		})
