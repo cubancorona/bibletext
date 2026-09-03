@@ -14,7 +14,7 @@ package main
 import (
 	"fyne.io/fyne/v2/app"
 
-	"bibletext"
+	"github.com/cubancorona/bibletext"
 )
 
 func main() {

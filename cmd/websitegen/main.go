@@ -63,7 +63,7 @@ import (
 	"strings"
 	"time"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // webVersion is one published translation.

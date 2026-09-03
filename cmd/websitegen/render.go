@@ -10,7 +10,7 @@ import (
 	"html/template"
 	"strings"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // pageHead carries the OPTIONAL parts of the document head. Its zero value

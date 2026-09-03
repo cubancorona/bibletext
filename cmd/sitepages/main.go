@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 const (

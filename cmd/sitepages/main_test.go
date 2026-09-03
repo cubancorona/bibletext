@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 func TestRenderSitePages(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // The site's entire client-side surface: one stylesheet and one small script.

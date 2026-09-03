@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // noticeFixture builds the real site from a canon with several books, chapter

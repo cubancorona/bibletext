@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 func TestWebReaderPaletteValues(t *testing.T) {

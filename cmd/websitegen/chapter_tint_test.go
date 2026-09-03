@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // TestChapterBodyIsByteIdenticalAcrossTheTintRefactor is the web arm of the S3

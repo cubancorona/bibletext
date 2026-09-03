@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 func testVersion(books []string, verses map[string]map[int][]bibletext.Verse) loadedVersion {

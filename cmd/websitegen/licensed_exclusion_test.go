@@ -41,7 +41,7 @@ import (
 	"strings"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // licensedVersionIDs are the registry ids whose TEXT requires a distribution

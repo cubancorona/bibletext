@@ -390,7 +390,7 @@ the specific verse number. The separate **Test key** button in settings sends ju
 
 ```
 bibletext/
-├── go.mod                  # module bibletext
+├── go.mod                  # module github.com/cubancorona/bibletext
 ├── *.go                    # shared package: bibletext
 │   ├── bible.go cache.go fetch_bible_data.go annotation.go   (pure data layer)
 │   ├── state.go theme.go font.go                              (cross-platform UI scaffolding)

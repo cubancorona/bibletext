@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 func TestWebReaderNoteChromeComesFromTheSharedFunctions(t *testing.T) {

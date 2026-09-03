@@ -42,7 +42,7 @@ import (
 	"strconv"
 	"strings"
 
-	bibletext "bibletext"
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 // noticeReason is why the words are missing. It selects the copy and whether

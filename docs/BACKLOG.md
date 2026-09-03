@@ -406,3 +406,16 @@ keeping a selectable `DynamicLayout` for hit-testing (two layouts, one text);
 or reflection on the protected `Layout.setJustificationMode`, which the
 hidden-API policy may refuse. Neither is worth it for a rendering that
 Android 15 already gets right.
+
+## Tag 1.2.6 before pointing anyone at the Fyne apps directory's install command
+
+The directory entry (apps.fyne.io/apps/uk.co.bibletext) prints
+`fyne install github.com/cubancorona/bibletext/cmd/desktop@latest`. That
+command, and `go run …@latest`, resolve `@latest` to the newest tag, and every
+tag up to v1.2.5 carries the old bare `module bibletext` line, so they fail
+with "module declares its path as: bibletext". main now declares the
+repository path (`module_path_test.go` holds it); the fix reaches the
+directory's command only when v1.2.6 is tagged. Until then the README's
+clone-and-`go run ./cmd/desktop` route is the one that works. A source build
+either way carries no release ldflags, so it has no bundled NKJV key — the
+reader adds their own API.Bible key in Settings for that translation.

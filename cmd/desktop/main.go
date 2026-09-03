@@ -6,7 +6,7 @@
 //	go build -o bibletext ./cmd/desktop && ./bibletext
 package main
 
-import "bibletext"
+import "github.com/cubancorona/bibletext"
 
 func main() {
 	bibletext.Run()

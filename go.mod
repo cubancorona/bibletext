@@ -1,4 +1,4 @@
-module bibletext
+module github.com/cubancorona/bibletext
 
 go 1.24.0
 
