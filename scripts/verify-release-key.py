@@ -8,7 +8,7 @@ import sys
 import zipfile
 
 
-PREFIX = "-X=bibletext.bundledBibleKeyEnc="
+PREFIX = "-X=github.com/cubancorona/bibletext.bundledBibleKeyEnc="
 
 
 def fail(message: str) -> None:

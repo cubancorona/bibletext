@@ -21,6 +21,7 @@ func TestModulePathIsTheRepositoryImportPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	first, _, _ := strings.Cut(string(b), "\n")
+	first = strings.TrimRight(first, "\r") // a Windows checkout may carry CRLF
 	if want := "module github.com/cubancorona/bibletext"; first != want {
 		t.Fatalf("go.mod begins %q, want %q — a bare module name breaks `go run …@latest` and `fyne install …@latest` for everyone outside a checkout", first, want)
 	}

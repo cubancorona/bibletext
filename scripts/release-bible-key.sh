@@ -80,7 +80,7 @@ print(base64.b64encode(bytes(b ^ mask[i % len(mask)] for i, b in enumerate(key))
     return 1
   fi
 
-  BIBLE_KEY_LDFLAGS="-X=bibletext.bundledBibleKeyEnc=$encoded"
+  BIBLE_KEY_LDFLAGS="-X=github.com/cubancorona/bibletext.bundledBibleKeyEnc=$encoded"
   unset encoded
 }
 
@@ -129,7 +129,7 @@ raise SystemExit(0 if 16 <= len(value) <= 512 else 1)
     return 1
   fi
 
-  BIBLE_KEY_LDFLAGS="-X=bibletext.bundledBibleKeyEnc=$encoded"
+  BIBLE_KEY_LDFLAGS="-X=github.com/cubancorona/bibletext.bundledBibleKeyEnc=$encoded"
   unset encoded
 }
 

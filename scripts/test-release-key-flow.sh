@@ -222,11 +222,11 @@ load_release_bible_key
 
 [ "${BIBLE_API_KEY+x}" != "x" ] || fail "helper retained BIBLE_API_KEY"
 case "$BIBLE_KEY_LDFLAGS" in
-  -X=bibletext.bundledBibleKeyEnc=*) ;;
+  -X=github.com/cubancorona/bibletext.bundledBibleKeyEnc=*) ;;
   *) fail "helper did not produce the expected linker assignment" ;;
 esac
 release_flags="$BIBLE_KEY_LDFLAGS"
-marker="${release_flags#-X=bibletext.bundledBibleKeyEnc=}"
+marker="${release_flags#-X=github.com/cubancorona/bibletext.bundledBibleKeyEnc=}"
 [ "${#marker}" -ge 16 ] || fail "helper produced a malformed linker value"
 case "$release_flags" in
   *"$fixture_key"*) fail "helper retained the raw synthetic key in linker flags" ;;
@@ -414,7 +414,7 @@ fi
 assert_contains "$TEST_TMP/verifier-partial.log" "absent from 1 of 2 native payloads"
 assert_absent "$TEST_TMP/verifier-partial.log" "$marker"
 
-if BIBLETEXT_RELEASE_LDFLAGS="-X=bibletext.bundledBibleKeyEnc=short" \
+if BIBLETEXT_RELEASE_LDFLAGS="-X=github.com/cubancorona/bibletext.bundledBibleKeyEnc=short" \
   python3 "$VERIFIER" "$TEST_TMP/positive.apk" \
   >"$TEST_TMP/verifier-malformed.log" 2>&1; then
   fail "verifier accepted a malformed release linker value"
