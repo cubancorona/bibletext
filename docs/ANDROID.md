@@ -49,6 +49,19 @@ palette-coloured Material list placed below the selection's line, or above it
 when the tab bar leaves no room (a `PopupMenu` on an anchor view shrank and
 scrolled against the bottom instead).
 
+**The chapter wash is a line background (2026-09-03).** `Html.fromHtml` turns
+the tint table's `background-color` into an opaque `BackgroundColorSpan`, which
+`TextLine` fills in the text pass — above the selection path `Layout.draw`
+painted just before. Inside a washed verse the reader's selection was
+therefore invisible (only the handles showed; measured on API 33 and 35
+against an unwashed control). `BtBridge.setHtml` now lifts every imported
+background span into a `WashSpan` (`LineBackgroundSpan`), drawn in the
+line-background pass BENEATH the selection, glyph-tight per line and merged
+across a verse's number/body/join-space pieces so no hairline seams appear.
+The narration span stays a translucent `BackgroundColorSpan` and composites
+over it. iOS has the twin fix for the twin reason (UIKit 17+ draws the
+selection below the text content): `BTWashView` in `reading_ios.go`.
+
 ## Native overlay (BtBridge)
 
 The overlay MUST be a **Dialog** at **TYPE_APPLICATION**, not a

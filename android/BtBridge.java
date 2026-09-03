@@ -290,6 +290,78 @@ public final class BtBridge {
     // reader has taken the scroll over).
     private static int raVerse = 0;
     private static BackgroundColorSpan raSpan;
+
+    // The chapter wash, drawn in the LINE-BACKGROUND pass rather than as the
+    // BackgroundColorSpan Html.fromHtml makes from the tint table's
+    // background-color. Layout.draw paints line backgrounds first, then the
+    // selection path, then the text pass — where TextLine fills a
+    // BackgroundColorSpan's rect ABOVE the selection. An opaque wash written
+    // as that span therefore buried the reader's selection: inside a washed
+    // verse only the handles showed (measured on API 33 and 35 against an
+    // unwashed control; the same defect UIKit had, for the same order). Here
+    // the wash goes under the selection and the 0x33 text-colour highlight
+    // shows through it, as it does on bare paper. The narration span stays a
+    // BackgroundColorSpan, translucent, and composites over this — the same
+    // "narration over the chapter wash" the other panes draw.
+    //
+    // Glyph-tight per line, like the fill it replaces: a line's painted run
+    // starts at the first washed character and ends at the last, clamped to
+    // the line's own extent so a wrapped line's trailing space and the break
+    // between paragraphs stay bare (the shape every other pane paints).
+    private static final class WashSpan implements android.text.style.LineBackgroundSpan {
+        private final android.graphics.Paint fill = new android.graphics.Paint();
+        WashSpan(int color) {
+            fill.setColor(color);
+            fill.setStyle(android.graphics.Paint.Style.FILL);
+        }
+        @Override public void drawBackground(android.graphics.Canvas c, android.graphics.Paint p,
+                                             int left, int right, int top, int baseline, int bottom,
+                                             CharSequence cs, int start, int end, int lnum) {
+            if (text == null || !(cs instanceof Spanned)) return;
+            Layout lay = text.getLayout();
+            if (lay == null || lnum < 0 || lnum >= lay.getLineCount()) return;
+            Spanned sp = (Spanned) cs;
+            int lo = Math.max(start, sp.getSpanStart(this)), hi = Math.min(end, sp.getSpanEnd(this));
+            if (lo >= hi) return;
+            int lineStart = lay.getLineStart(lnum), lineEnd = lay.getLineEnd(lnum);
+            float x0 = lo <= lineStart ? lay.getLineLeft(lnum) : lay.getPrimaryHorizontal(lo);
+            // An offset AT the line end already belongs to the next line for
+            // getPrimaryHorizontal; the line's own right extent is the
+            // glyph-tight edge (it excludes trailing whitespace).
+            float x1 = hi >= lineEnd ? lay.getLineRight(lnum) : lay.getPrimaryHorizontal(hi);
+            if (x1 <= x0) return;
+            c.drawRect(x0, top, x1, bottom, fill);
+        }
+    }
+
+    // The import's BackgroundColorSpans become WashSpans: every background the
+    // Apple/Android stylesheet emits is a chapter wash (the tint table is the
+    // only emitter; a contract test on the Go side holds that), and the
+    // narration span is not in a freshly imported Spanned. Adjacent pieces of
+    // one colour merge first — the table paints a verse as several spans
+    // (number, body, join space) whose rects would meet at fractional x and
+    // draw a hairline seam if filled one by one.
+    private static void liftWashToLineBackground(Spannable sp) {
+        BackgroundColorSpan[] spans = sp.getSpans(0, sp.length(), BackgroundColorSpan.class);
+        if (spans.length == 0) return;
+        java.util.Arrays.sort(spans, new java.util.Comparator<BackgroundColorSpan>() {
+            @Override public int compare(BackgroundColorSpan a, BackgroundColorSpan b) {
+                return sp.getSpanStart(a) - sp.getSpanStart(b);
+            }
+        });
+        int runLo = -1, runHi = -1, runColor = 0;
+        for (BackgroundColorSpan b : spans) {
+            int lo = sp.getSpanStart(b), hi = sp.getSpanEnd(b), color = b.getBackgroundColor();
+            sp.removeSpan(b);
+            if (runLo >= 0 && color == runColor && lo <= runHi) {
+                runHi = Math.max(runHi, hi);
+                continue;
+            }
+            if (runLo >= 0) sp.setSpan(new WashSpan(runColor), runLo, runHi, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            runLo = lo; runHi = hi; runColor = color;
+        }
+        if (runLo >= 0) sp.setSpan(new WashSpan(runColor), runLo, runHi, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
     private static boolean raActive = false;
     private static boolean raFollowing = true;
 
@@ -2163,6 +2235,11 @@ public final class BtBridge {
                 } else {
                     s = Html.fromHtml(html);
                 }
+                // The wash moves off the importer's spans BEFORE the text is
+                // set, so the view receives its final spans in one assignment
+                // and no span mutation lands on a layout the arrival placement
+                // is about to measure.
+                if (s instanceof Spannable) liftWashToLineBackground((Spannable) s);
                 text.setText(s, TextView.BufferType.SPANNABLE);
                 // The prior chapter's highlight span belonged to the old text; drop
                 // the reference (the span itself went with the replaced Spanned) and
