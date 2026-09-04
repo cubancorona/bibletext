@@ -50,6 +50,13 @@ the reporter flag now folds into the body fingerprint; the layout watcher
 carries the presentation as its own term and captures the reading anchor
 before the rotation's frame lands). Next: the phone verdict, the Android
 twin (`phoneLandscapeReadingSupported`), then a release default.
+Simulator-verified 2026-09-04 (iPhone 16 Pro, both gates on): landscape is the
+reading pane alone with the chapter label and no restore button, the centred
+reporter column with indents and no paragraph gaps, clear of the Dynamic
+Island; the verse under the top edge survives rotation in both directions at
+the chapter top and mid-chapter; full-screen chosen in portrait gives the same
+landscape page and comes back with its restore button; a live selection drops
+cleanly on rotation with no menu stranded.
 
 
 ## Bible version states: transition diagram + comprehensive tests
