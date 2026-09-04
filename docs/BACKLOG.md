@@ -3,6 +3,31 @@
 Deferred work, one entry per item. An entry carries enough scope to be picked
 up cold; delete it when the work lands.
 
+## TOP PRIORITY — rework landscape on phones, iOS first
+
+Landscape on a phone is the layout nothing was designed for. What ships today
+(`compactNavRail` in ui_mobile.go, `mobileRailWanted` in layout.go,
+docs/IPAD.md): iPhone keeps the bottom tab bar in every orientation; Android
+phones move the destinations to the left rail in landscape because the
+fixed-height header, history strip, chapter toolbar and bottom bar can consume
+the whole short edge; iPad and the desktop use the rail in landscape. So an
+iPhone turned sideways gives the reading pane the least height of any surface,
+and the chrome that costs it — header, history, chapter toolbar, bar — is the
+portrait design carried over unchanged.
+
+Rework, phone-first and iOS-first: decide what a phone in landscape is FOR
+(reading, mostly) and shape the chrome to that. Candidates, none decided:
+take the rail on iPhone too (`phoneLandscapeNavRail`); collapse or hide the
+history strip and chapter toolbar in landscape; make distraction-free reading
+the landscape default with the exit affordance kept; treat the native overlay's
+frame and the notch-side safe area explicitly. Whatever lands must keep one
+navigation model across rotations (docs/IPAD.md) and rebuild through
+`layoutWatcher` on the canvas orientation, never the laid-out height (the soft
+keyboard trap). Verify on the iPhone 16 Pro simulator and both Android
+emulators in landscape, before and after rotation with a selection live and
+with narration playing, and add the row to docs/VISUAL_TESTS.md.
+
+
 ## Bible version states: transition diagram + comprehensive tests
 
 **Storage space DONE 2026-08-28** — `docs/VERSION_STATES.md` models the machine
