@@ -148,14 +148,20 @@ func renderAllSurfaces(t *testing.T) string {
 	t.Helper()
 	var b strings.Builder
 	for _, c := range tintCases() {
+		// BOTH dialects under BOTH page grammars, and both PINNED. The
+		// Android dialect took the reporter page too (reporter_android.go), so
+		// rendering it under the ambient seam would have made this golden
+		// depend on the HOST: darwin answers true (macOS reads as the reporter
+		// page) and Linux answers false, so a golden regenerated here would
+		// fail on CI and nowhere else.
 		for _, reporter := range []bool{false, true} {
 			withReporterLayout(reporter, func() {
 				fmt.Fprintf(&b, "### %s | apple-html reporter=%v\n%s\n\n",
 					c.name, reporter, buildChapterHTML(c.state, c.verses))
+				fmt.Fprintf(&b, "### %s | android-html reporter=%v\n%s\n\n",
+					c.name, reporter, buildChapterHTMLAndroid(c.state, c.verses))
 			})
 		}
-		fmt.Fprintf(&b, "### %s | android-html\n%s\n\n",
-			c.name, buildChapterHTMLAndroid(c.state, c.verses))
 		fmt.Fprintf(&b, "### %s | styled-layout\n%s\n\n",
 			c.name, dumpStyledLayout(c.state, c.verses))
 		fmt.Fprintf(&b, "### %s | legacy-fyne-pane\n%s\n\n",

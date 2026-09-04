@@ -151,7 +151,7 @@ real files; `*_test.go` files are omitted.
 | `ui_desktop.go` / `ui_compact_desktop.go` | `!ios && !android` — shared layout with a left rail by default plus keyboard shortcuts; `BIBLETEXT_DESKTOP_TABS=sidebar` retains the former HSplit for diagnostics |
 | `ui_mobile.go` | `ios \|\| android` — shared touch layout with the platform-native reading pane; tablets move navigation to the left edge in landscape; phones present the Read tab full-screen in landscape (`phone_landscape.go`, on by default) |
 | `ui_regular.go` / `layout.go` | Retained former regular-layout helpers and the resize watcher; `classifyLayout` deliberately resolves every touch device to the shared layout |
-| `reporter_ios.go` / `reporter_other.go` | `reporterLayoutActive()` — gates the U.S. Reports reading layout (iOS tablets, and an iPhone in landscape reading mode with its typography half on; false elsewhere) |
+| `reporter_ios.go` / `reporter_android.go` / `reporter_other.go` | `reporterLayoutActive()` — gates the U.S. Reports reading layout (iOS tablets, and either phone in landscape reading mode with its typography half on; false on Windows and Linux, whose styled pane decides for itself) |
 | `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Tablet identity plus live orientation chooses bar versus rail. The same files state which halves of the phone-landscape mode a pane carries (`phoneLandscapeReadingSupported`, `phoneLandscapeTypographySupported`, `rotationRestoreNeeded`) |
 | `textsize.go` | Settings → Reading → Text size: the persisted scale (1.0/1.15/1.3) the scripture body renders at on every platform |
 | `chapter_header_mobile.go` | `ios \|\| android` — the compact mobile chapter toolbar shared by both native reading views |
@@ -587,6 +587,19 @@ recomputed on every frame change) — so rotation and Split View re-centre
 without re-rendering, and the em-based measure keeps
 ~59 characters per line at every text-size setting. Phones in portrait and the
 other platforms keep the 2.0-leading, paragraph-gap styling.
+
+Android draws the same page by three different routes, because `Html.fromHtml`
+ignores `<style>`: the first-line indent is markup (`android_chapter_html.go`,
+the same em+en characters), the paragraph gap is the importer's blank line
+between blocks and is closed by importing in `FROM_HTML_MODE_COMPACT`
+(`BtBridge.setHtml`), and the measure is pushed as a dp width that
+`BtBridge.applyReadingPadding` centres against the live view width — so a
+rotation re-centres without re-importing. The markup keeps its `<p>` blocks
+either way, because a note's band is reserved above a paragraph and every
+surface must break paragraphs where the model does
+(`paragraph_identity_test.go`). The LEADING is not changed on either platform:
+the Apple dialect's 2.0 and 1.3 are nominal, since the UIKit importer honours
+neither, and the drawn pitch measures within one percent across the two pages.
 
 ## Reading-position + history persistence
 

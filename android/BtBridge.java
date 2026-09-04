@@ -330,7 +330,27 @@ public final class BtBridge {
             // glyph-tight edge (it excludes trailing whitespace).
             float x1 = hi >= lineEnd ? lay.getLineRight(lnum) : lay.getPrimaryHorizontal(hi);
             if (x1 <= x0) return;
-            c.drawRect(x0, top, x1, bottom, fill);
+            // A NOTE'S RESERVED AIR IS NOT PART OF THE LINE. applyNoteBand
+            // reserves a note's band by growing a line's descent (or, for a
+            // chapter's first paragraph, its ascent), and this rect is drawn to
+            // the line's FULL box — so a washed line carrying a band would fill
+            // the gap the note is about to be drawn in.
+            //
+            // It never showed on the phone page because the band is reserved on
+            // the BLANK line between paragraphs, which has no wash to fill it.
+            // The reporter page has no blank line (imported COMPACT), so the
+            // band lands on the previous paragraph's last INK line — and that
+            // line is washed whenever its verse is.
+            int t = top, b = bottom;
+            for (NoteBandSpan ns : noteBandSpans) {
+                if (ns.below && ns.at == lineEnd - 1) {
+                    b -= ns.band;
+                } else if (!ns.below && ns.at == lineStart) {
+                    t += ns.band;
+                }
+            }
+            if (b <= t) return;
+            c.drawRect(x0, t, x1, b, fill);
         }
     }
 
@@ -580,9 +600,17 @@ public final class BtBridge {
         Layout lay = text.getLayout();
         if (lay != null && selEnd >= 0) {
             int line = lay.getLineForOffset(selEnd);
-            ax = lay.getPrimaryHorizontal(selEnd) + text.getLeft() - scroll.getScrollX();
-            lineTop = lay.getLineTop(line) + text.getTop() - scroll.getScrollY();
-            lineBottom = lay.getLineBottom(line) + text.getTop() - scroll.getScrollY();
+            // Layout coordinates exclude the view's padding; the view draws the
+            // layout shifted by it. With the phone page's 10dp that error was
+            // invisible, but the reporter page's centred column insets the text
+            // by a large fraction of the width (applyReadingPadding) and the
+            // popup would open that far to the left of the selection.
+            ax = lay.getPrimaryHorizontal(selEnd) + text.getTotalPaddingLeft()
+                    + text.getLeft() - scroll.getScrollX();
+            lineTop = lay.getLineTop(line) + text.getTotalPaddingTop()
+                    + text.getTop() - scroll.getScrollY();
+            lineBottom = lay.getLineBottom(line) + text.getTotalPaddingTop()
+                    + text.getTop() - scroll.getScrollY();
         }
 
         final android.widget.LinearLayout list = new android.widget.LinearLayout(activity);
@@ -936,6 +964,10 @@ public final class BtBridge {
             @Override public void onLayoutChange(View v, int l, int t, int r, int b,
                     int ol, int ot, int orr, int ob) {
                 if ((r - l) != (orr - ol)) {
+                    // The reporter column is centred against this width, so it
+                    // is re-derived here too — the same first-layout and
+                    // rotation cases the sticker needs.
+                    applyReadingPadding();
                     refreshNoteSticker();
                     applyPendingReflow();
                 }
@@ -1184,6 +1216,29 @@ public final class BtBridge {
         return v;
     }
 
+    /**
+     * trimTrailingBlank pulls a verse range back off the whitespace that
+     * follows its last word — the Apple panes' rule (btIOSRunWashRange), which
+     * this side had never needed.
+     *
+     * A verse's span runs to the NEXT verse number, so it swallows the break
+     * between two paragraphs. Painting that leaves a tag hanging off the end of
+     * the passage, and on the reporter page the break is followed by the next
+     * paragraph's em+en indent — two wide spaces that took the narration colour
+     * as a block sitting alone at the head of a paragraph that is not being
+     * read.
+     */
+    private static int[] trimTrailingBlank(CharSequence sp, int[] r) {
+        if (r == null || r.length != 2) return r;
+        int end = Math.min(r[1], sp.length());
+        while (end > r[0]) {
+            char c = sp.charAt(end - 1);
+            if (Character.isWhitespace(c) || c == '\u00a0' || c == '\u2002' || c == '\u2003') end--;
+            else break;
+        }
+        return new int[]{r[0], end};
+    }
+
     // verseRange returns {start,end} for a verse number, or null if not indexed.
     private static int[] verseRange(int verse) {
         for (int i = 0; i < verseNums.length; i++) {
@@ -1208,6 +1263,7 @@ public final class BtBridge {
                 raVerse = 0;
                 if (verse > 0) {
                     int[] r = verseRange(verse);
+                    if (r != null) r = trimTrailingBlank(sp, r);
                     if (r != null && r[0] >= 0 && r[1] <= sp.length() && r[0] < r[1]) {
                         raSpan = new BackgroundColorSpan(raHighlightColor);
                         sp.setSpan(raSpan, r[0], r[1], Spannable.SPAN_INCLUSIVE_EXCLUSIVE);
@@ -1437,7 +1493,12 @@ public final class BtBridge {
             if (NOTE_DEBUG) android.util.Log.i("BtNote", "refresh: notePresent=false — nothing to draw");
             return;
         }
-        int side = dp(10);
+        // The card sits over the COLUMN, not the view. On the phone page the
+        // text's own side padding is that same dp(10), so this is unchanged
+        // there; on the reporter page the column is inset far more
+        // (applyReadingPadding), and a full-width card over a narrow column
+        // reads as a different surface's furniture.
+        int side = Math.max(dp(10), text != null ? text.getPaddingLeft() : dp(10));
         int wpx = content.getWidth() - 2 * side;
         if (wpx < dp(60)) {
             // No real layout yet. The width LISTENER only fires when the width
@@ -2141,6 +2202,39 @@ public final class BtBridge {
         return ps;
     }
 
+    // The last style push's padding and reporter measure, in dp. Kept because
+    // the measure is centred against a LIVE view width, so the answer changes
+    // without a new push (a rotation, a split-window resize) and the width
+    // listener re-asks with these.
+    private static int lastPadLDp = 10, lastPadTDp = 14, lastPadRDp = 10, lastPadBDp = 14;
+    private static float lastMeasureDp = 0f;
+
+    /**
+     * applyReadingPadding centres the reporter column, the way iOS centres it
+     * in textContainerInset (btIOSApplyInsets): Go pushes the WIDTH the column
+     * should occupy and this side owns both the density and the live view
+     * width, so a width change re-centres without re-importing the chapter.
+     *
+     * measureDp <= 0 is the phone page — the pushed padding stands. A measure
+     * wider than the view (a large text size on a narrow window) would compute
+     * a negative inset, so the pushed padding is also the floor. UI thread only.
+     */
+    private static void applyReadingPadding() {
+        if (text == null) return;
+        float density = activity != null
+                ? activity.getResources().getDisplayMetrics().density : 2f;
+        int padL = Math.round(lastPadLDp * density), padT = Math.round(lastPadTDp * density);
+        int padR = Math.round(lastPadRDp * density), padB = Math.round(lastPadBDp * density);
+        if (lastMeasureDp > 0f) {
+            int w = text.getWidth();
+            if (w > 0) {
+                int side = (w - Math.round(lastMeasureDp * density)) / 2;
+                if (side > padL) { padL = side; padR = side; }
+            }
+        }
+        text.setPadding(padL, padT, padR, padB);
+    }
+
     /**
      * setStyle pushes the palette + typography (all sizes in PIXELS — the Go
      * side multiplies Fyne units by the canvas scale). Re-sent on every render,
@@ -2148,7 +2242,7 @@ public final class BtBridge {
      */
     public static void setStyle(final int textColor, final int paperColor, final float textSizeDp,
                                 final float lineMult, final int padLDp, final int padTDp,
-                                final int padRDp, final int padBDp) {
+                                final int padRDp, final int padBDp, final float measureDp) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
@@ -2161,8 +2255,9 @@ public final class BtBridge {
                 float textSizePx = textSizeDp * density;
                 lastTextColor = textColor;
                 lastPaperColor = paperColor;
-                int padL = Math.round(padLDp * density), padT = Math.round(padTDp * density);
-                int padR = Math.round(padRDp * density), padB = Math.round(padBDp * density);
+                lastPadLDp = padLDp; lastPadTDp = padTDp;
+                lastPadRDp = padRDp; lastPadBDp = padBDp;
+                lastMeasureDp = measureDp;
                 text.setTextColor(textColor);
                 text.setBackgroundColor(paperColor);
                 scroll.setBackgroundColor(paperColor);
@@ -2189,7 +2284,7 @@ public final class BtBridge {
                     text.setLineSpacing(0f, mult);
                 }
                 text.setTypeface(android.graphics.Typeface.SERIF);
-                text.setPadding(padL, padT, padR, padB);
+                applyReadingPadding();
                 // Say the break strategy and hyphenation out loud rather than
                 // inheriting a release's default: Android 13 changed the
                 // defaults.
@@ -2229,11 +2324,38 @@ public final class BtBridge {
                 // A chapter import carries its own top/restore/arrival placement
                 // and supersedes any unfinished placement for the prior width.
                 pendingReflowFrac = -1f;
+                // THE PARAGRAPH GAP IS THE IMPORTER'S. LEGACY mode separates two
+                // blocks with a blank line, COMPACT with a single newline — so
+                // the reporter page (a first-line indent and NO gap, the octavo
+                // page's grammar) is imported COMPACT, and the phone page keeps
+                // the blank line it has always had. The two are pushed together
+                // and setStyle runs first, so lastMeasureDp is this chapter's
+                // answer: a centred column and a gapless page are the same page.
+                //
+                // Downstream this only tightens the separator: paraStartAt scans
+                // back to the last '\n' either way, and the verse index is built
+                // from <sup> spans. The one thing it costs is the note pill's
+                // stack-centring refinement, which centres IN the blank line and
+                // stands down without one (btPillStackInkTop) — the pill still
+                // places, one line higher.
                 CharSequence s;
                 if (android.os.Build.VERSION.SDK_INT >= 24) {
-                    s = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY);
+                    s = Html.fromHtml(html, lastMeasureDp > 0f
+                            ? Html.FROM_HTML_MODE_COMPACT : Html.FROM_HTML_MODE_LEGACY);
                 } else {
+                    // The two-argument fromHtml is API 24. Below that the import
+                    // is always LEGACY, so the reporter page would arrive with
+                    // the indent AND the blank line it replaces — both paragraph
+                    // markers at once, which is the one thing the grammar
+                    // forbids. Collapse the blank lines instead; a
+                    // SpannableStringBuilder moves its spans with the deletion.
                     s = Html.fromHtml(html);
+                    if (lastMeasureDp > 0f && s instanceof android.text.SpannableStringBuilder) {
+                        android.text.SpannableStringBuilder ssb = (android.text.SpannableStringBuilder) s;
+                        for (int i = ssb.length() - 1; i > 0; i--) {
+                            if (ssb.charAt(i) == '\n' && ssb.charAt(i - 1) == '\n') ssb.delete(i, i + 1);
+                        }
+                    }
                 }
                 // The wash moves off the importer's spans BEFORE the text is
                 // set, so the view receives its final spans in one assignment

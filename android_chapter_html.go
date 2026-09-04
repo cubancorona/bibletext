@@ -41,14 +41,48 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	tints := chapterTint(state)
 	markup := androidTintHTML(pal, nrgbaToHex(pal.VerseNumber), nrgbaToHex(pal.RedLetter))
 
+	// The reporter page's paragraph grammar (reporter_android.go): a first-line
+	// indent instead of a blank line between paragraphs.
+	//
+	// Only the INDENT is markup here. The Apple dialect closes the gap with CSS
+	// (p { margin: 0 }); this dialect has no stylesheet — Html.fromHtml ignores
+	// <style> — and the gap is the importer's own: LEGACY mode puts a blank
+	// line between two blocks, COMPACT mode a single newline. So the gap is
+	// closed on the Java side by importing in COMPACT mode (BtBridge.setHtml),
+	// and the paragraphs stay <p> BLOCKS in the markup.
+	//
+	// That division is deliberate. A note's band is reserved above a paragraph,
+	// so every surface must break paragraphs exactly where the model does
+	// (paragraph_identity_test.go) — which only stays checkable while the
+	// markup says where a paragraph begins. Joining them with <br> instead
+	// would have made a paragraph boundary and a poem line the same character
+	// downstream, and unreadable to that test.
+	reporter := reporterLayout()
+
 	var b strings.Builder
 	if super.Text != "" {
 		// The Psalm title: italic, unnumbered — no <sup> anywhere in it, so
-		// BtBridge's verse index (SuperscriptSpans only) never sees it.
-		fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.Text))
+		// BtBridge's verse index (SuperscriptSpans only) never sees it. The
+		// Apple page keeps 14px under it even in reporter mode (p.pst), and
+		// this page's blank lines are all gone (COMPACT), so the air is put
+		// back as an empty line inside the title's own block.
+		if reporter {
+			fmt.Fprintf(&b, `<p><i>%s</i><br></p>`, htmlEscape(super.Text))
+		} else {
+			fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.Text))
+		}
 	}
 	for _, para := range groupVersesIntoParagraphs(verses) {
 		b.WriteString("<p>")
+		if reporter && !verseIsPoetic(para[0].Text) {
+			// The same rule and the same em+en characters as the Apple dialect
+			// (reading.go): every paragraph is indented except one that OPENS
+			// on a poem line, because poetry is never first-line indented in
+			// print. A mixed paragraph opening with prose keeps it — with the
+			// gap gone, the indent is what tells the reader a new paragraph
+			// started.
+			b.WriteString("&#8195;&#8194;")
+		}
 		for i, v := range para {
 			mk := markupFor(markup[:], tints.of(v))
 			if i > 0 {
@@ -93,7 +127,7 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 		b.WriteString("</p>")
 	}
 	if len(footnotes) > 0 {
-		writeFootnoteSectionAndroid(&b, footnotes, nrgbaToHex(pal.TextMuted))
+		writeFootnoteSectionAndroid(&b, footnotes, nrgbaToHex(pal.TextMuted), reporter)
 	}
 	return b.String()
 }
@@ -118,8 +152,15 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 // step; the Apple panes' 0.85em pact is a native-scan concern that does not
 // apply to this pipeline). BtBridge clamps selection verbs at the sentinel
 // (contentEnd), mirroring the Apple content-end clamps.
-func writeFootnoteSectionAndroid(b *strings.Builder, entries []footnoteEntry, mutedHex string) {
-	fmt.Fprintf(b, `<p><sup>&#160;</sup><small><font color="%s">%s</font></small></p>`, mutedHex, footnoteSeparator)
+func writeFootnoteSectionAndroid(b *strings.Builder, entries []footnoteEntry, mutedHex string, reporter bool) {
+	sep := footnoteSeparator
+	if reporter {
+		// The Apple page opens the same air with the same <br> (writeFootnoteSection):
+		// in reporter mode the blank line between blocks is gone, so the rule
+		// would sit directly under the last verse.
+		sep = "<br>" + sep
+	}
+	fmt.Fprintf(b, `<p><sup>&#160;</sup><small><font color="%s">%s</font></small></p>`, mutedHex, sep)
 	for _, e := range entries {
 		fmt.Fprintf(b, `<p><small><font color="%s"><b>%s</b>&#160;%s</font></small></p>`,
 			mutedHex, footnoteEntryKey(e), htmlEscape(e.Text))

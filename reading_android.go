@@ -50,7 +50,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaClass = (jclass)(*env)->NewGlobalRef(env, cls);
 
 	btaInitM       = (*env)->GetStaticMethodID(env, btaClass, "init", "(Landroid/app/Activity;)V");
-	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIII)V");
+	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIIIF)V");
 	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FI)V");
 	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(F)V");
 	btaGetFracM    = (*env)->GetStaticMethodID(env, btaClass, "getScrollFrac", "()F");
@@ -118,11 +118,12 @@ static int btaInit(uintptr_t jni_env, uintptr_t ctx) {
 static int btaReady() { return btaClass != NULL; }
 
 static void btaSetStyle(uintptr_t jni_env, int textColor, int paperColor, float sizePx,
-                        float lineMult, int padL, int padT, int padR, int padB) {
+                        float lineMult, int padL, int padT, int padR, int padB,
+                        float measureDp) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetStyleM, textColor, paperColor,
-	                             sizePx, lineMult, padL, padT, padR, padB);
+	                             sizePx, lineMult, padL, padT, padR, padB, measureDp);
 }
 
 static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse) {
@@ -760,6 +761,13 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// the bucketed unit.
 	textDp := float32(21) * float32(readingTextScale())
 	padL, padT := 10, 14
+	// The reporter column, as a WIDTH in dp for the bridge to centre — the
+	// same shape as the iOS push (bibleTextSetReadingMeasure): the measure is
+	// em-based, so a larger text size widens the column and the line keeps the
+	// reporter's ~59 characters. 0 keeps the legacy side padding. The bridge
+	// owns the centring because it owns both the display density and the live
+	// view width (BtBridge.applyReadingPadding).
+	measureDp := androidReadingMeasureDp(reporterLayout(), textDp)
 	arrivalVerse := 0
 	// EXPLICIT arrivals only (the classifier's rule, notes_arrival.go): a
 	// plain entry — the arrows, the picker — must open at the top even when
@@ -797,8 +805,17 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			// It used to be 1.7 applied to the font's NATURAL line height, a
 			// larger quantity again, which is where the original looseness came
 			// from.
+			// 1.35 in BOTH page grammars, and that is measured, not an
+			// oversight. The Apple dialect writes line-height 2.0 for the
+			// phone page and 1.3 for the reporter page, but the UIKit HTML
+			// importer honours neither unitless value: screenshots of the same
+			// chapter on the iPhone 16 Pro simulator, portrait against
+			// landscape, put the drawn line pitch at 83px and 82px — one
+			// percent apart. Following the CSS numbers here would open a 54%
+			// gap between two panes that are meant to match.
 			C.float(textDp), C.float(1.35),
-			C.int(padL), C.int(padT), C.int(padL), C.int(padT))
+			C.int(padL), C.int(padT), C.int(padL), C.int(padT),
+			C.float(measureDp))
 		ch := C.CString(html)
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse))
 		C.free(unsafe.Pointer(ch))
@@ -970,25 +987,8 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	paper := canvas.NewRectangle(pal.Background)
 
 	if state.readingFullScreen() {
-		// The restore button is the way out of the reader's OWN full-screen.
-		// While the phone-landscape presentation forces the mode it would
-		// write IsFullScreen=false and rebuild straight back into the same
-		// tree — so rotation is the way out there, and the button is not
-		// offered rather than offered and inert.
-		var exit fyne.CanvasObject
-		if !phoneLandscapeReading() {
-			btn := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
-				state.IsFullScreen = false
-				rebuildWindow(state)
-			})
-			btn.Importance = widget.LowImportance
-			exit = btn
-		}
-		ref := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.TextMuted)
-		ref.TextSize = 16
-		refBox := container.NewVBox(layout.NewSpacer(), ref, layout.NewSpacer())
-		exitRow := container.NewBorder(nil, nil, refBox, exit, nil)
-		body := container.NewBorder(exitRow, nil, nil, nil, container.NewStack(paper, host))
+		// Shared with the iOS pane — see reading_fullscreen_row.go.
+		body := container.NewBorder(fullScreenExitRow(state), nil, nil, nil, container.NewStack(paper, host))
 		return container.NewPadded(body)
 	}
 

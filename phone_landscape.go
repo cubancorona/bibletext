@@ -8,8 +8,9 @@ package bibletext
 // full-screen choice the reader had made, because the landscape half never
 // writes IsFullScreen. The typography half: that presentation also takes the
 // iPad's reporter page (reporterLayoutActive — the centred measure, 1.3
-// leading, indents, no paragraph gaps) on the panes that can set it — iOS
-// today; the Android dialect has no reporter page yet. Tablets are excluded
+// leading, indents, no paragraph gaps) on the panes that can set it, which is
+// now both phone platforms — the Android page arrives by three routes rather
+// than one stylesheet (reporter_android.go). Tablets are excluded
 // by deviceIsTablet — the UIKit idiom on iOS, and on Android the live
 // window's short side (600dp), so a tablet pane split or floated narrower
 // than that reads as a phone and takes the presentation, which is the height

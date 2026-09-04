@@ -463,14 +463,32 @@ func TestSuperscriptionAndroidDialect(t *testing.T) {
 
 	verses := footnoteFixtureVerses()
 	st := superFixtureState(verses)
-	html := buildChapterHTMLAndroid(st, verses)
-	if !strings.HasPrefix(html, `<p><i>A test title, according to Gittith.</i></p>`) {
-		t.Fatalf("Android title must lead the chapter, italic and sup-free:\n%.200s", html)
-	}
-	if strings.Contains(strings.Split(html, "</i>")[0], "<sup") {
-		t.Error("the title must contain no <sup> (verse-index hazard)")
-	}
-	if !strings.Contains(html, `<b>Title</b>&#160;Gittith is probably a musical term.`) {
-		t.Errorf("Android title note must key as Title:\n%s", html)
+
+	// PIN the page. The Android dialect took the reporter page too
+	// (reporter_android.go), and the seam's host default answers for the HOST —
+	// true on darwin, false on Linux — so an unpinned assertion about this
+	// dialect's structure would pass here and fail on CI.
+	for _, page := range []struct {
+		name     string
+		reporter bool
+		want     string
+	}{
+		// The reporter page has no blank line between blocks (imported
+		// COMPACT), so the air under the title is an empty line inside the
+		// title's own block — the Apple page's p.pst margin, in this dialect.
+		{"phone page", false, `<p><i>A test title, according to Gittith.</i></p>`},
+		{"reporter page", true, `<p><i>A test title, according to Gittith.</i><br></p>`},
+	} {
+		var html string
+		withReporterLayout(page.reporter, func() { html = buildChapterHTMLAndroid(st, verses) })
+		if !strings.HasPrefix(html, page.want) {
+			t.Fatalf("%s: Android title must lead the chapter, italic and sup-free:\n%.200s", page.name, html)
+		}
+		if strings.Contains(strings.Split(html, "</i>")[0], "<sup") {
+			t.Errorf("%s: the title must contain no <sup> (verse-index hazard)", page.name)
+		}
+		if !strings.Contains(html, `<b>Title</b>&#160;Gittith is probably a musical term.`) {
+			t.Errorf("%s: Android title note must key as Title:\n%s", page.name, html)
+		}
 	}
 }

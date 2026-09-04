@@ -31,17 +31,18 @@ func deviceIsTablet() bool {
 // keeps the usual bottom bar.
 func phoneLandscapeNavRail() bool { return true }
 
-// Android phones read distraction-free in landscape too (phone_landscape.go).
-// The typography half waits for the Android HTML dialect to grow the reporter
-// page (reporter_other.go keeps the phone layout), and no Go-side anchor is
-// captured on rotation: a rotation recreates the activity, the bridge's own
+// Android phones read distraction-free in landscape too, with the reporter
+// page under it (phone_landscape.go, reporter_android.go): the dialect's
+// paragraph grammar in android_chapter_html.go, the measure centred by the
+// bridge. No Go-side anchor is captured on rotation: a rotation recreates the
+// activity, the bridge's own
 // recovery restores the place from its surviving scroll fraction and forces
 // the re-import (foregroundOverlayRecovery, reading_android.go), and a
 // same-activity width change re-places by fraction too (BtBridge
 // pendingReflowFrac); a Go restore would only duplicate that.
 func phoneLandscapeReadingSupported() bool { return true }
 
-var phoneLandscapeTypographySupported = func() bool { return false }
+var phoneLandscapeTypographySupported = func() bool { return true }
 
 func rotationRestoreNeeded() bool { return false }
 

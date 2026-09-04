@@ -396,13 +396,15 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// gate. Checked state is set before the handlers are attached, so wiring
 	// them up does not fire a rebuild.
 	landscapeMode := widget.NewCheck("Landscape reading mode (phones)", nil)
-	landscapeTypo := widget.NewCheck("Landscape reporter typography (iPhone)", nil)
+	landscapeTypo := widget.NewCheck("Landscape reporter typography (phones)", nil)
 	landscapeMode.SetChecked(phoneLandscapeReadingEnabled())
 	landscapeTypo.SetChecked(phoneLandscapeTypographyEnabled())
 	if !phoneLandscapeTypographySupported() {
-		// The box reads the EFFECTIVE gate, which ANDs the pane's support,
-		// so on a pane that cannot set the reporter page it shows off; a tap
-		// would write the preference and rebuild to no visible effect.
+		// The box reads the EFFECTIVE gate, which ANDs the pane's support, so
+		// on a pane that cannot set the reporter page it shows off; a tap would
+		// write the preference and rebuild to no visible effect. Both phone
+		// panes support it today (reporter_ios.go, reporter_android.go); this
+		// is what the desktop dev build sees.
 		landscapeTypo.Disable()
 	}
 	landscapeTypo.OnChanged = func(b bool) {

@@ -420,9 +420,12 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       and `BIBLETEXT_DEV_PHONE_LANDSCAPE=on|typo|off scripts/run-ios-sim.sh
       --dev` seeds a scripted run): on the Read tab, rotate mid-chapter → the reading pane
       alone, no header, toolbar or bar, the muted "Book Chapter" label with
-      NO restore button; the text starts clear of the Dynamic Island in both
+      the chapter arrows and NO restore button — an arrow turns the page in
+      place, opens the new chapter at the top, and greys out at the ends of
+      the book; the text starts clear of the Dynamic Island in both
       landscapes and ends clear of the far edge; with typography on, the
-      centred column with 1.3 leading, indents and no paragraph gaps. The
+      centred column with indents and no paragraph gaps (the LEADING is
+      unchanged on purpose — it is measured to match, not nominal). The
       verse under the top edge is the same verse after the rotation, both
       directions, with a selection live (the selection drops — the
       re-import replaces the string; it must not strand a menu) and with
@@ -432,10 +435,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       open during a rotation closes (rebuildWindow drains overlays). Books
       and Search keep their ordinary layout in landscape — the presentation
       is a reading mode. Portrait, Go-to open with the keyboard up → no
-      rebuild storm. Android phones: the presentation only (the typography
-      half waits for the Android reporter page); the TextView keeps its
-      place through the rotation by scroll fraction. Tablets: unchanged
-      (rail in landscape).
+      rebuild storm. Android phones get both halves too: the centred column,
+      the indent on every prose paragraph and no blank line between them
+      (justified on Android 15+, ragged below — the same SDK rule as
+      portrait), the TextView keeping its place through the rotation by
+      scroll fraction, and a note pill still placed though it loses its
+      stack-centring (there is no blank line to centre in). Tablets:
+      unchanged (rail in landscape).
 - [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
       app header and the rail (or bottom bar), the "‹ Results" trail stays
       out, and the reading pane takes the whole window; its restore button

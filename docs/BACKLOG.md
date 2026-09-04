@@ -3,7 +3,7 @@
 Deferred work, one entry per item. An entry carries enough scope to be picked
 up cold; delete it when the work lands.
 
-## Phone landscape reading — on by default; the Android typography half is open
+## Phone landscape reading — shipped on both phone platforms
 
 Landscape on a phone was the layout nothing was designed for. What shipped
 before this work (`compactNavRail` in ui_mobile.go, `mobileRailWanted` in
@@ -29,20 +29,31 @@ Android — because the mode applies to the Read tab only.
 What the reader gives up in landscape, by design: every control — chapter
 arrows, the picker, Go-to, search, narration, the "‹ Results" trail — is
 reached by rotating back to portrait, the way out the mode is built around.
-The label row keeps the reference and the selection menu still works. A
-chapter arrow pair in that row is the natural follow-on if readers ask for it.
+The label row keeps the reference and the selection menu still works, and it
+carries the chapter arrows (fullScreenExitRow, shared
+by both native panes): running out of chapter is the one thing that happens
+while READING, and rotating out and back is a poor way to turn a page. The
+reader's own full-screen keeps its restore button and only that.
 On Android, tablet identity follows the live window, so a tablet pane split or
 floated narrower than 600dp reads as a phone and takes the presentation, which
 is the height problem the mode exists for.
 
 Status (2026-09-04): ON BY DEFAULT for phones on iOS and Android
 (phone_landscape.go), as two preferences a switch can turn off — the dev
-Links tab carries both; a user-facing Settings row is a small follow-on if
-wanted. The typography half ships on iOS only: the Android HTML dialect has
-no reporter page yet (reporter_other.go keeps the phone layout), so Android
-gets the presentation and waits for that work — the measure as side padding,
-1.3 leading, first-line indents and no paragraph gaps in BtBridge.setStyle
-and the Android dialect, gated by the same preference. The reporter flag
+Links tab carries both; a user-facing Settings row was considered and
+declined. BOTH halves now ship on both platforms. The Android reporter page
+(reporter_android.go) reaches the reader by three routes, because this dialect
+has no stylesheet: the first-line indent is markup (android_chapter_html.go),
+the paragraph gap is closed by importing in COMPACT rather than LEGACY mode
+(BtBridge.setHtml — the gap is the importer's blank line between blocks, and
+the markup keeps its <p> blocks so a note band still knows where a paragraph
+begins), and the measure is pushed as a width the bridge centres against the
+live view (androidReadingMeasureDp, BtBridge.applyReadingPadding, the shape of
+the iOS textContainerInset). The leading is deliberately NOT changed: the
+Apple dialect writes 2.0 and 1.3, but the UIKit importer honours neither, and
+the drawn pitch measured 83px portrait against 82px landscape on the iPhone 16
+Pro simulator — so following the CSS would have opened a 54% gap between panes
+meant to match. The reporter flag
 folds into the body fingerprint so a rotation re-imports under the new
 grammar; the layout watcher carries the presentation as its own term and, on
 iOS, captures the reading anchor before the rotation's frame lands (Android's

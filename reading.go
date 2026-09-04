@@ -2060,3 +2060,15 @@ func chapterPickerColumns(total int) int {
 	}
 	return columns
 }
+
+// androidReadingMeasureDp is the reporter column's width for the Android
+// bridge, in dp: the em-based measure at the reader's text size, or 0 for the
+// phone page's legacy side padding. Untagged and pure so the host can test the
+// arithmetic the bridge is handed (reading_android.go pushes it,
+// BtBridge.applyReadingPadding centres it).
+func androidReadingMeasureDp(reporter bool, textDp float32) float32 {
+	if !reporter || textDp <= 0 {
+		return 0
+	}
+	return reporterMeasureEm * textDp
+}
