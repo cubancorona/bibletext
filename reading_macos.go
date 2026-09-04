@@ -6,8 +6,8 @@ package bibletext
 // selectable=YES) inside an NSScrollView, attached to the Fyne window's
 // content view as an overlay. The user gets the full native macOS reading
 // experience — character-level drag selection, and the system context menu
-// (Copy / Look Up / Translate / Search With… / Share / Speech) automatically
-// on selection — none of which Fyne's widget.Entry can provide.
+// on selection (curated below to Copy and Look Up, with the app's own study
+// and share verbs appended) — none of which Fyne's widget.Entry can provide.
 //
 // This is the desktop twin of the iOS UITextView overlay (reading_ios.go); the
 // two share buildChapterHTML so the typography and verse-number styling are

@@ -2875,8 +2875,9 @@ static void bibleTextEnsureTV(void) {
             // allowsNonContiguousLayout = NO lays the whole chapter out up front so
             // scrolling stays smooth (a small one-time cost when the chapter loads).
             tv.layoutManager.allowsNonContiguousLayout = NO;
-            // Start visible — the Read tab is selected at app launch and
-            // AppTabs.OnSelected doesn't fire for the initial selection.
+            // Start visible — the Read tab is selected at app launch, and the
+            // overlay's visibility is pure state re-asserted after every window
+            // rebuild (afterRebuild), so no first-selection callback is needed.
             tv.hidden = NO;
             // Single-tap -> "Clear highlight" when the tap lands on the wash. The
             // recognizer never swallows a touch the text view / selection wants, and
