@@ -166,7 +166,9 @@ Suggested tester coverage:
 - play recorded narration/read-aloud, read-along, background continuation, and
   notification controls; and
 - rotate phones and tablets between portrait bottom tabs and the landscape left
-  rail, confirming the reading pane remains usable after a warm App Link.
+  rail on Books and Search, and a phone's Read tab into its full-screen
+  landscape reading, confirming the reading pane remains usable after a warm
+  App Link.
 
 ## Play Console flow
 

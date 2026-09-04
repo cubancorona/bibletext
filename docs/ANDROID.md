@@ -29,7 +29,9 @@ silently falls back to the old Fyne-widget reading pane (no native selection).
 **Verified 2026-08-24** on an Android 16 / API-36 arm64 emulator: wiped-data
 and warm App Links preserve their verse target; portrait → landscape → portrait
 keeps the native reading pane visible and anchored; the landscape rail switches
-between Read, Books and Search; the compiled release fallback performs a keyed
+between Read, Books and Search (since 2026-09-04 the Read tab reads full-screen
+in landscape instead, `phone_landscape.go`, and the rail carries Books and
+Search); the compiled release fallback performs a keyed
 NKJV fetch; and background narration retains its foreground service, media
 session, notification and wake lock. Packaging targets API 36 in both debug and
 release modes. The API-35 AVD remains useful for backward-compatibility testing.
@@ -219,7 +221,8 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 - **Landscape / rotation (native overlay geometry).** The reading overlay is a
   separate window positioned to the Fyne reading pane's rect
   (`setFrameFromObject` → `BtBridge.setFrame`, offset by the decor view's
-  on-screen origin). Android phones rebuild with the leading rail in landscape.
+  on-screen origin). Android phones rebuild with the leading rail in landscape
+  on Books and Search, and full-screen on the Read tab (`phone_landscape.go`).
   Before a width change the bridge captures the live fractional scroll position,
   then reapplies it after the TextView has reflowed at the new width; an explicit
   arrival or restore target still takes precedence. This prevents the old
@@ -408,7 +411,9 @@ The one mobile binary serves phones and tablets: `deviceIsTablet()` on Android
 window whose smallest dimension is at least 600 logical units
 (`isTabletDimensions`, `layout.go`) is tablet-class. Every touch device uses the
 same Read / Books / Search composition: portrait uses the bottom bar, while
-landscape moves those destinations into a left rail on tablets and phones. The
+landscape moves those destinations into a left rail on tablets and phones; a
+phone's Read tab reads full-screen in landscape instead (`phone_landscape.go`,
+on by default, so the rail is what Books and Search get there). The
 phone case preserves reading height on the short edge. There is no tablet-only
 sidebar/split mode. Because the canvas has no size until after the first build,
 `layoutMayChange()` is always true on Android; the watcher rebuilds whenever the

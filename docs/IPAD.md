@@ -10,7 +10,8 @@ The destinations, state, and behaviour are shared in `ui_compact.go`:
 
 | Device state | Navigation placement |
 | --- | --- |
-| iPhone, any orientation | bottom tab bar |
+| iPhone, portrait | bottom tab bar |
+| iPhone, landscape | bottom tab bar on Books and Search; the Read tab reads full-screen (`phone_landscape.go`, on by default) |
 | iPad, portrait | bottom tab bar |
 | iPad, landscape | left navigation rail |
 
@@ -28,7 +29,10 @@ child.
 Android tablets use the same rule. Their tablet identity follows the sw600dp
 smallest-dimension convention in `device_android.go`. Android phones also use
 the rail in landscape so fixed-height chrome cannot consume the short reading
-edge; this Android-specific policy does not change iPhone navigation.
+edge; this Android-specific policy does not change iPhone navigation. On the
+Read tab both phone platforms go further and drop the navigation altogether in
+landscape, reading full-screen (iPhone with the reporter typography below);
+the entry in [BACKLOG.md](BACKLOG.md) records the mode's state.
 
 The former `buildRegularWidthUI`, sidebar toggle, 700pt split threshold, and
 HSplit sizing helpers remain in the tree as recorded/diagnostic machinery, but
@@ -38,8 +42,8 @@ They do not describe the shipped UI.
 ## The reading page: the U.S. Reports layout
 
 The navigation is unified, but iPad reading typography remains device-specific.
-(The dev build can also give an iPhone this page in landscape, behind the
-gated landscape reading mode — phone_landscape.go and docs/BACKLOG.md.)
+(An iPhone in landscape takes this page too, as its default reading
+presentation — phone_landscape.go and docs/BACKLOG.md.)
 `reporterLayoutActive()` enables a centred **27.5em text column**, approximately
 58–60 characters per line at the Normal 21px base, with **1.3 leading** and
 first-line paragraph indents without blank paragraph gaps.
@@ -72,7 +76,8 @@ Verify at least:
 - native reading overlay frame after rotation and Split View resizing;
 - selection menus, notes, audio, and scroll restoration;
 - reporter measure at every text-size setting; and
-- the iPhone bottom bar remains unchanged.
+- the iPhone bottom bar remains unchanged on Books and Search (the Read tab
+  reads full-screen in landscape).
 
 `simctl io <udid> screenshot out.png` captures the simulator framebuffer. A
 landscape capture may be stored in the native portrait buffer and need lossless

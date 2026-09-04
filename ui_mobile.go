@@ -46,8 +46,8 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
-	// Distraction-free reading — the reader's own choice, or the gated
-	// phone-landscape presentation (readingFullScreen, phone_landscape.go) — is
+	// Distraction-free reading — the reader's own choice, or the phone-landscape
+	// presentation on the Read tab (readingFullScreen, phone_landscape.go) — is
 	// the shared layout's tree (buildCompactUI): the reading pane alone, no
 	// top header, no bottom tabs, so on iOS the native UITextView overlay fills
 	// nearly the whole screen. The shared branch rewires the state hooks to
@@ -68,8 +68,9 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	// Tablets need the watcher so rotation moves navigation between bottom bar
 	// and rail; Android is always watched because its live dimensions arrive
 	// after the first build and its phone landscape policy also moves
-	// navigation; an iPhone with the landscape reading gate on needs the
-	// rotation BACK observed. The watcher wraps the full-screen tree too: an
+	// navigation; every iPhone needs the rotation BACK observed for the
+	// landscape presentation (unless its preference turned the mode off). The
+	// watcher wraps the full-screen tree too: an
 	// iPad in chosen full-screen still never rebuilds on rotation, because
 	// renderedLayout zeroes its rail term while full-screen and its landscape
 	// term is constant off phones — so its reading position is untouched.
@@ -95,7 +96,10 @@ func compactReadingView(state *AppState) fyne.CanvasObject {
 
 // compactNavRail puts navigation on the leading edge when vertical room is the
 // scarcer resource: tablets in landscape on both platforms, and Android phones
-// in landscape. iPhone keeps its existing bottom bar.
+// in landscape. iPhone keeps its existing bottom bar. This decides the
+// placement where navigation is drawn — Books, Search, the dev Links tab; a
+// phone's Read tab reads full-screen in landscape by default
+// (readingFullScreen, phone_landscape.go).
 //
 // The same reasoning as the desktop's (tab_rail.go): in landscape the scarce
 // axis is vertical, and a bottom bar spends a full strip of it on three icons

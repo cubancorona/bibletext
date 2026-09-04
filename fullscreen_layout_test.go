@@ -108,8 +108,9 @@ func TestFullScreenReadingDropsTheHeaderAndNavigation(t *testing.T) {
 
 // The phone-landscape presentation is the same tree with the reader's own
 // choice untouched: the seam pinned on, IsFullScreen off, and the shared
-// builder returns the full-screen tree; the overlay rule follows it on every
-// tab.
+// builder returns the full-screen tree on the Read tab — and only there: a
+// rotation while browsing Books or Search keeps their ordinary layout, and
+// the overlay rule follows the same answer.
 func TestPhoneLandscapePresentationIsTheFullScreenTree(t *testing.T) {
 	t.Setenv("BIBLETEXT_DESKTOP_TABS", "")
 	app := test.NewApp()
@@ -118,7 +119,11 @@ func TestPhoneLandscapePresentationIsTheFullScreenTree(t *testing.T) {
 	st.loadPhase = loadReady
 	w := app.NewWindow("landscape")
 	defer w.Close()
+	st.window = w
 	w.Resize(fyne.NewSize(874, 402))
+	// Through the entry point once, as the app does: it installs the theme
+	// and the hooks the tab builders read.
+	_ = CreateMainUI(app, st, w)
 
 	orig := phoneLandscapeReading
 	phoneLandscapeReading = func() bool { return true }
@@ -135,8 +140,14 @@ func TestPhoneLandscapePresentationIsTheFullScreenTree(t *testing.T) {
 	if st.IsFullScreen {
 		t.Error("the presentation wrote the reader's own full-screen choice")
 	}
-	st.CurrentTab = 1
 	if !overlayShouldShow(st) {
-		t.Error("the overlay rule does not follow the presentation")
+		t.Error("the overlay rule does not follow the presentation on the Read tab")
+	}
+	st.CurrentTab = 1
+	if got := countTabCells(buildCompactUI(st)); got < 3 {
+		t.Errorf("Books tab in landscape lost its navigation (%d tab cells) — the presentation is a reading mode", got)
+	}
+	if overlayShouldShow(st) {
+		t.Error("the overlay would show over the Books tab in landscape")
 	}
 }

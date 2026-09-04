@@ -86,9 +86,11 @@ func (s *AppState) canvasIsLandscape() bool {
 // platform policy and live canvas geometry stated explicitly. Tablets use a
 // rail in landscape on both mobile platforms. Android phones do too because a
 // bottom bar can consume the remaining reading height on a short landscape
-// window; iPhone keeps its existing bottom-bar convention. An unsized canvas
-// keeps only the tablet's established initial default, avoiding a rail flash on
-// Android before its first real dimensions arrive.
+// window; iPhone keeps its existing bottom-bar convention. That is where
+// navigation is drawn at all: a phone's Read tab reads full-screen in
+// landscape by default (readingFullScreen, phone_landscape.go). An unsized
+// canvas keeps only the tablet's established initial default, avoiding a rail
+// flash on Android before its first real dimensions arrive.
 func mobileRailWanted(tablet, phoneLandscapeRail bool, w, h float32) bool {
 	if w <= 0 || h <= 0 {
 		return tablet

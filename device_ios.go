@@ -24,14 +24,23 @@ func deviceIsTablet() bool {
 	return C.bibleTextIsPad() != 0
 }
 
-// iPhone keeps its bottom navigation in landscape; only iPad uses the rail.
+// iPhone keeps its bottom navigation in landscape where navigation is drawn
+// (Books and Search; the Read tab reads full-screen there by default,
+// phone_landscape.go); only iPad uses the rail.
 func phoneLandscapeNavRail() bool { return false }
 
-// The iPhone is where the gated landscape reading mode lives
-// (phone_landscape.go).
+// The iPhone reads like the iPad in landscape (phone_landscape.go), with the
+// reporter typography — the Apple HTML dialect sets it — and a Go-side anchor
+// captured before the rotation's frame lands, because the re-import under the
+// new grammar would otherwise land the reader elsewhere.
 func phoneLandscapeReadingSupported() bool { return true }
 
+var phoneLandscapeTypographySupported = func() bool { return true }
+
+func rotationRestoreNeeded() bool { return true }
+
 // layoutMayChange gates the orientation watcher. On iOS the idiom is static and
-// known at launch, so iPads need watching for bar/rail rotation — and an
-// iPhone with the landscape reading gate on, for the presentation's flip.
+// known at launch, so iPads need watching for bar/rail rotation — and every
+// iPhone for the landscape presentation's flip, unless the landscape reading
+// preference (phone_landscape.go) has turned the mode off.
 func layoutMayChange() bool { return deviceIsTablet() || phoneLandscapeReadingEnabled() }

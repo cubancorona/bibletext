@@ -3,11 +3,11 @@
 Deferred work, one entry per item. An entry carries enough scope to be picked
 up cold; delete it when the work lands.
 
-## TOP PRIORITY — rework landscape on phones, iOS first
+## Phone landscape reading — on by default; the Android typography half is open
 
-Landscape on a phone is the layout nothing was designed for. What ships today
-(`compactNavRail` in ui_mobile.go, `mobileRailWanted` in layout.go,
-docs/IPAD.md): iPhone keeps the bottom tab bar in every orientation; Android
+Landscape on a phone was the layout nothing was designed for. What shipped
+before this work (`compactNavRail` in ui_mobile.go, `mobileRailWanted` in
+layout.go, docs/IPAD.md): iPhone keeps the bottom tab bar in every orientation; Android
 phones move the destinations to the left rail in landscape because the
 fixed-height header, history strip, chapter toolbar and bottom bar can consume
 the whole short edge; iPad and the desktop use the rail in landscape. So an
@@ -16,47 +16,56 @@ and the chrome that costs it — header, history, chapter toolbar, bar — is th
 portrait design carried over unchanged.
 
 Direction (2026-09-04), iOS first: a phone turned to landscape reads like the
-iPad. Rotating to landscape enters the distraction-free presentation — the
-reading pane alone, the chapter toolbar's focus button as the way out — and
-the text takes the iPad typography (the centred reporter measure, 1.3 leading,
-first-line indents, no paragraph gaps: docs/IPAD.md); rotating back restores
-the portrait layout and the reader's own full-screen choice. Gated, so it is
-reversible: a preference the dev build exposes and the release build leaves
-off until it has been read on the phone, with the typography half gated on its
-own so the paragraph formatting can be backed out without losing the
-presentation. What that needs in the code: `reporterLayoutActive` on iOS is
-`deviceIsTablet()` today (reporter_ios.go), so the phone-landscape case joins
-it; iPhone installs no `layoutWatcher` (device_ios.go `layoutMayChange`), so
-the rotation has to be observed there for this mode; the chapter HTML's
-typography reads `reporterLayout()` (buildChapterHTML, reading.go) but the
-body fingerprint (`chapterFingerprint`, reading.go) does not fold that flag,
-and the Apple push gate (`pushChapterHTML`) skips the HTML re-import when the
-body fingerprint is unchanged — so the fingerprint must gain the reporter flag
-before a rotation re-imports the chapter at all (the column measure already
-resyncs outside the gate), and that new re-import must keep the reading
-position (the same-chapter restore capture already keys off a body-fingerprint
-change); and the native overlay's frame and the notch-side safe area need
-explicit handling. Whatever lands must keep one navigation model across
-rotations (docs/IPAD.md) and read orientation from the canvas, never the
-laid-out height (the soft keyboard trap). Verify on the iPhone 16 Pro
-simulator, both orientations and both directions of rotation, with a selection
-live and with narration playing, then on the phone; Android follows once iOS
-is right. Add the row to docs/VISUAL_TESTS.md.
+iPad. Rotating to landscape on the Read tab enters the distraction-free
+presentation — the reading pane alone, no restore button because rotation is
+the way out — and the text takes the iPad typography (the centred reporter
+measure, 1.3 leading, first-line indents, no paragraph gaps: docs/IPAD.md);
+rotating back restores the portrait layout and the reader's own full-screen
+choice. Tablets are distinguished by construction (deviceIsTablet: the UIKit
+idiom on iOS, the small-side-600dp rule on Android) and keep their rail. Books
+and Search keep their landscape layout too — the bar on iPhone, the rail on
+Android — because the mode applies to the Read tab only.
 
-Status (2026-09-04): the first cut is on main behind the dev gates
-(phone_landscape.go: two preferences a release build cannot read, the Links
-tab's switches, `BIBLETEXT_DEV_PHONE_LANDSCAPE` for scripted simulator runs;
-the reporter flag now folds into the body fingerprint; the layout watcher
-carries the presentation as its own term and captures the reading anchor
-before the rotation's frame lands). Next: the phone verdict, the Android
-twin (`phoneLandscapeReadingSupported`), then a release default.
-Simulator-verified 2026-09-04 (iPhone 16 Pro, both gates on): landscape is the
-reading pane alone with the chapter label and no restore button, the centred
-reporter column with indents and no paragraph gaps, clear of the Dynamic
-Island; the verse under the top edge survives rotation in both directions at
-the chapter top and mid-chapter; full-screen chosen in portrait gives the same
-landscape page and comes back with its restore button; a live selection drops
-cleanly on rotation with no menu stranded.
+What the reader gives up in landscape, by design: every control — chapter
+arrows, the picker, Go-to, search, narration, the "‹ Results" trail — is
+reached by rotating back to portrait, the way out the mode is built around.
+The label row keeps the reference and the selection menu still works. A
+chapter arrow pair in that row is the natural follow-on if readers ask for it.
+On Android, tablet identity follows the live window, so a tablet pane split or
+floated narrower than 600dp reads as a phone and takes the presentation, which
+is the height problem the mode exists for.
+
+Status (2026-09-04): ON BY DEFAULT for phones on iOS and Android
+(phone_landscape.go), as two preferences a switch can turn off — the dev
+Links tab carries both; a user-facing Settings row is a small follow-on if
+wanted. The typography half ships on iOS only: the Android HTML dialect has
+no reporter page yet (reporter_other.go keeps the phone layout), so Android
+gets the presentation and waits for that work — the measure as side padding,
+1.3 leading, first-line indents and no paragraph gaps in BtBridge.setStyle
+and the Android dialect, gated by the same preference. The reporter flag
+folds into the body fingerprint so a rotation re-imports under the new
+grammar; the layout watcher carries the presentation as its own term and, on
+iOS, captures the reading anchor before the rotation's frame lands (Android's
+bridge re-places its own view by scroll fraction). Simulator-verified on the
+iPhone 16 Pro: presentation, typography, the reading position across
+rotation in both directions at the chapter top and mid-chapter, chosen
+full-screen round-tripping with its restore button, a live selection
+dropping cleanly, Books and Search keeping their layout in landscape.
+Emulator-verified on Android 13 (API 33) and Android 15 (API 35): the Read
+tab's landscape presentation with the position kept across both rotations, a
+link's verse wash surviving them, and the Books tab keeping its rail.
+`BIBLETEXT_DEV_PHONE_LANDSCAPE=on|typo|off` seeds a scripted simulator run.
+
+## Android landscape: the status-bar strip is black in the light theme
+
+On the API 33 emulator (720×1600) in landscape, the strip the status bar
+occupies on the short edge is painted black behind the light paper: the
+Fyne canvas is inset from the system bars and nothing paints the window
+behind it. Invisible in the dark theme and in portrait (the bar sits over the
+paper there), so it predates the landscape reading mode but the mode makes
+it the first thing seen. Fix: set the activity window's background to the
+paper colour when the palette changes (BtBridge, the same push setStyle
+takes), so the inset area matches the page; check API 35 and the tablet AVD.
 
 
 ## Bible version states: transition diagram + comprehensive tests

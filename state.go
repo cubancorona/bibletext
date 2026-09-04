@@ -131,8 +131,8 @@ type AppState struct {
 	// reference (buildReadingViewMobile). The mobile toolbar's full-screen
 	// button (chapter_header_mobile.go) and the desktop toolbar's focus button
 	// are the ways in. The PRESENTED mode is readingFullScreen
-	// (phone_landscape.go): this choice, or the gated phone-landscape
-	// presentation, which never writes this flag.
+	// (phone_landscape.go): this choice, or the phone-landscape presentation
+	// (on by default on phones, Read tab only), which never writes this flag.
 	IsFullScreen bool
 
 	// CurrentTab is the selected mobile bottom-bar tab: 0 Read, 1 Books,

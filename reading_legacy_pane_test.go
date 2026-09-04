@@ -1,4 +1,4 @@
-//go:build !darwin && !race
+//go:build (ios || !darwin) && !race
 
 package bibletext
 

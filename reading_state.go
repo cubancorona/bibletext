@@ -108,14 +108,23 @@ type restoreAnchor struct {
 	Marker  int // verse to softly mark on reopen ("you left off here"); 0 = none
 }
 
+// rotationAnchorWanted is captureRotationAnchor's decision with every input
+// stated: the pane must need a Go-side anchor at all, no restore may already
+// be captured, and no arrival may be in flight.
+func rotationAnchorWanted(needed bool, restore *restoreAnchor, forceReposition bool) bool {
+	return needed && restore == nil && !forceReposition
+}
+
 // captureRotationAnchor records the reader's place before a rotation flips the
 // phone-landscape presentation (layoutWatcher.Resize), so the rebuild's
-// re-import lands on it. It yields to a restore already captured and to an
+// re-import lands on it. Only the panes that re-import under a new grammar
+// need it (rotationRestoreNeeded: iOS; Android's bridge re-places its own view
+// by scroll fraction). It yields to a restore already captured and to an
 // arrival in flight: the resolver runs restore before highlight, and a
 // rotation between a link arrival and its rebuild must not park the reader at
 // the pre-arrival place over the tapped verse.
 func captureRotationAnchor(state *AppState) {
-	if state == nil || state.restore != nil || state.forceReposition {
+	if state == nil || !rotationAnchorWanted(rotationRestoreNeeded(), state.restore, state.forceReposition) {
 		return
 	}
 	if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {

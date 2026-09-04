@@ -275,9 +275,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       theme during the load and confirm scrolling stays smooth afterwards
       (the orphaned-bar 20fps repaint was a live defect); the first-run
       progress line actually advances per book.
-- [ ] Landscape: Android phones and all tablets move the bar to a left
-      rail; the iPhone keeps its bottom bar; raising the soft keyboard
-      must NOT flip the layout (the 3,000-rebuilds/min trap).
+- [ ] Landscape, on Books and Search: Android phones and all tablets move
+      the bar to a left rail; the iPhone keeps its bottom bar. On the Read
+      tab a phone reads full-screen instead (the V16 row); raising the soft
+      keyboard must NOT flip the layout (the 3,000-rebuilds/min trap).
 
 ## V12 — sharing and links
 
@@ -414,9 +415,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       to see it, on desktop, announced on stderr).
 - [ ] The bottom bar is a centred pill on wide surfaces; dev builds' 4th
       tab still fits; full-screen reading looks like a phone everywhere.
-- [ ] iPhone landscape reading (dev build only: the Links tab's two
-      "Landscape …" switches, or `BIBLETEXT_DEV_PHONE_LANDSCAPE=typo
-      scripts/run-ios-sim.sh --dev`): rotate mid-chapter → the reading pane
+- [ ] Phone landscape reading (on by default on iPhone and Android phones;
+      the dev Links tab's two "Landscape …" switches turn either half off,
+      and `BIBLETEXT_DEV_PHONE_LANDSCAPE=on|typo|off scripts/run-ios-sim.sh
+      --dev` seeds a scripted run): on the Read tab, rotate mid-chapter → the reading pane
       alone, no header, toolbar or bar, the muted "Book Chapter" label with
       NO restore button; the text starts clear of the Dynamic Island in both
       landscapes and ends clear of the far edge; with typography on, the
@@ -427,9 +429,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       narration playing (the wash survives). Rotate back → the portrait
       chrome returns with the tab that was selected; full-screen chosen in
       portrait before rotating comes back with its restore button; a sheet
-      open during a rotation closes (rebuildWindow drains overlays). Gate
-      on, portrait, Go-to open with the keyboard up → no rebuild storm. Gate
-      off (release build): landscape is unchanged.
+      open during a rotation closes (rebuildWindow drains overlays). Books
+      and Search keep their ordinary layout in landscape — the presentation
+      is a reading mode. Portrait, Go-to open with the keyboard up → no
+      rebuild storm. Android phones: the presentation only (the typography
+      half waits for the Android reporter page); the TextView keeps its
+      place through the rotation by scroll fraction. Tablets: unchanged
+      (rail in landscape).
 - [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
       app header and the rail (or bottom bar), the "‹ Results" trail stays
       out, and the reading pane takes the whole window; its restore button

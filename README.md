@@ -149,7 +149,9 @@ root), signing, emulator use, and distribution are covered in
   `TextView` reading pane). Navigation sits along the bottom in portrait; a
   tablet or Android phone in landscape moves the same three destinations to a
   rail on the left so the short edge remains available for reading. iPhone
-  keeps its bottom bar. The reading page on iPad keeps a centred, book-like
+  keeps its bottom bar. On the Read tab a phone in landscape reads full-screen
+  instead — no bar or rail, and on iPhone the page takes the iPad typography;
+  rotate back for the navigation. The reading page on iPad keeps a centred, book-like
   measure with comfortable leading and indented paragraphs, modelled on the
   U.S. Reports. See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI

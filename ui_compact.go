@@ -88,7 +88,7 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	// The plain reading view, not compactReadingPane: overlayShouldShow answers
 	// true for full-screen, so a results list here would sit under a native
 	// overlay that covers it. The presented mode is the reader's own choice or
-	// the gated phone-landscape presentation (readingFullScreen,
+	// the phone-landscape presentation on the Read tab (readingFullScreen,
 	// phone_landscape.go).
 	if state.readingFullScreen() {
 		readingHost := container.NewStack(compactReadingView(state))

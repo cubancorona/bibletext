@@ -395,22 +395,26 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	// the window, which is what re-reads layoutMayChange and the reporter
 	// gate. Checked state is set before the handlers are attached, so wiring
 	// them up does not fire a rebuild.
-	landscapeMode := widget.NewCheck("Landscape reading mode (iPhone)", nil)
+	landscapeMode := widget.NewCheck("Landscape reading mode (phones)", nil)
 	landscapeTypo := widget.NewCheck("Landscape reporter typography (iPhone)", nil)
 	landscapeMode.SetChecked(phoneLandscapeReadingEnabled())
 	landscapeTypo.SetChecked(phoneLandscapeTypographyEnabled())
+	if !phoneLandscapeTypographySupported() {
+		// The box reads the EFFECTIVE gate, which ANDs the pane's support,
+		// so on a pane that cannot set the reporter page it shows off; a tap
+		// would write the preference and rebuild to no visible effect.
+		landscapeTypo.Disable()
+	}
 	landscapeTypo.OnChanged = func(b bool) {
 		setPhoneLandscapeTypographyEnabled(b)
 		rebuildWindow(state)
 	}
 	landscapeMode.OnChanged = func(b bool) {
+		// The typography half is read as AND, so no cascade is written: the
+		// rebuild recreates this tab and both boxes read the getters again —
+		// off while the mode is off, the stored typography preference (on by
+		// default) when it returns.
 		setPhoneLandscapeReadingEnabled(b)
-		if !b && landscapeTypo.Checked {
-			// The typography half is read as AND; keep the box honest. Its
-			// own handler rebuilds.
-			landscapeTypo.SetChecked(false)
-			return
-		}
 		rebuildWindow(state)
 	}
 

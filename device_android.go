@@ -24,14 +24,26 @@ func deviceIsTablet() bool {
 }
 
 // phoneLandscapeNavRail moves phone navigation to the leading edge in
-// landscape. The fixed-height app, chapter, history and bottom-navigation
-// chrome can otherwise leave no height for the reading host on a short window.
-// Portrait keeps the usual bottom bar.
+// landscape, where navigation is drawn — Books, Search and the dev Links tab;
+// the Read tab reads full-screen in landscape by default (phone_landscape.go).
+// The fixed-height app, chapter, history and bottom-navigation chrome can
+// otherwise leave no height for the reading host on a short window. Portrait
+// keeps the usual bottom bar.
 func phoneLandscapeNavRail() bool { return true }
 
-// The landscape reading mode (phone_landscape.go) is iOS-first; Android takes
-// its rail in landscape and waits for its own twin.
-func phoneLandscapeReadingSupported() bool { return false }
+// Android phones read distraction-free in landscape too (phone_landscape.go).
+// The typography half waits for the Android HTML dialect to grow the reporter
+// page (reporter_other.go keeps the phone layout), and no Go-side anchor is
+// captured on rotation: a rotation recreates the activity, the bridge's own
+// recovery restores the place from its surviving scroll fraction and forces
+// the re-import (foregroundOverlayRecovery, reading_android.go), and a
+// same-activity width change re-places by fraction too (BtBridge
+// pendingReflowFrac); a Go restore would only duplicate that.
+func phoneLandscapeReadingSupported() bool { return true }
+
+var phoneLandscapeTypographySupported = func() bool { return false }
+
+func rotationRestoreNeeded() bool { return false }
 
 // layoutMayChange: always watch on Android — before the first layout the
 // canvas reports 0×0, so the watcher must catch the real size. It also owns the

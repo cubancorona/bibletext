@@ -1,22 +1,27 @@
 package bibletext
 
-// AN iPHONE TURNED TO LANDSCAPE READS LIKE THE iPAD — behind two gates.
+// A PHONE TURNED TO LANDSCAPE READS LIKE THE iPAD.
 //
-// The presentation half: rotating a phone to landscape enters the
-// distraction-free tree (the reading pane alone, buildCompactUI) and rotating
-// back restores the portrait layout together with whatever full-screen choice
-// the reader had made, because the landscape half never writes IsFullScreen.
-// The typography half: that presentation also takes the iPad's reporter page
-// (reporterLayoutActive — the centred measure, 1.3 leading, indents, no
-// paragraph gaps). It is meaningless without the presentation, so its getter
-// ANDs the two, and the paragraph grammar can be backed out on its own.
+// The presentation half: rotating a phone to landscape on the Read tab enters
+// the distraction-free tree (the reading pane alone, buildCompactUI) and
+// rotating back restores the portrait layout together with whatever
+// full-screen choice the reader had made, because the landscape half never
+// writes IsFullScreen. The typography half: that presentation also takes the
+// iPad's reporter page (reporterLayoutActive — the centred measure, 1.3
+// leading, indents, no paragraph gaps) on the panes that can set it — iOS
+// today; the Android dialect has no reporter page yet. Tablets are excluded
+// by deviceIsTablet — the UIKit idiom on iOS, and on Android the live
+// window's short side (600dp), so a tablet pane split or floated narrower
+// than that reads as a phone and takes the presentation, which is the height
+// problem the mode exists for — and keep their rail in landscape.
 //
-// Both gates are preferences the dev build exposes (dev_links_on.go) and a
-// release build cannot read: devPhoneLandscapeAvailable is a compile-time
-// constant (dev_phone_landscape_on.go / _off.go), so a key left behind by a
-// dev install can never switch a release build on. The decision itself is one
-// untagged rule over platform facts, the shape mobileRailWanted (layout.go)
-// already has.
+// The presentation is on by default on phones, and the typography half where
+// its pane supports it; both read from preferences, so a switch can turn
+// either off (the dev Links tab carries two today); the
+// typography half is meaningless without the presentation, so its getter ANDs
+// the two, and the paragraph grammar can be backed out on its own. The
+// decision itself is one untagged rule over platform facts, the shape
+// mobileRailWanted (layout.go) already has.
 
 import "fyne.io/fyne/v2"
 
@@ -25,19 +30,20 @@ const (
 	prefPhoneLandscapeTypography = "reading.phoneLandscape.typography"
 )
 
-// phoneLandscapeReadingEnabled reports the presentation gate: the dev build's
-// preference (or its launch seed), never anything in a release build.
+// phoneLandscapeReadingEnabled reports the presentation gate: on unless the
+// preference turns it off. A dev build's launch seed outranks the preference
+// in both directions.
 func phoneLandscapeReadingEnabled() bool {
-	if !devPhoneLandscapeAvailable {
+	if devPhoneLandscapeSeedOff() {
 		return false
 	}
 	if devPhoneLandscapeSeedOn() {
 		return true
 	}
 	if app := fyne.CurrentApp(); app != nil {
-		return app.Preferences().BoolWithFallback(prefPhoneLandscapeReading, false)
+		return app.Preferences().BoolWithFallback(prefPhoneLandscapeReading, true)
 	}
-	return false
+	return true
 }
 
 func setPhoneLandscapeReadingEnabled(v bool) {
@@ -47,18 +53,19 @@ func setPhoneLandscapeReadingEnabled(v bool) {
 }
 
 // phoneLandscapeTypographyEnabled reports the typography gate, which only
-// means anything with the presentation on.
+// means anything with the presentation on and on a pane that can set the
+// reporter page (phoneLandscapeTypographySupported).
 func phoneLandscapeTypographyEnabled() bool {
-	if !phoneLandscapeReadingEnabled() {
+	if !phoneLandscapeReadingEnabled() || !phoneLandscapeTypographySupported() {
 		return false
 	}
 	if devPhoneLandscapeSeedTypography() {
 		return true
 	}
 	if app := fyne.CurrentApp(); app != nil {
-		return app.Preferences().BoolWithFallback(prefPhoneLandscapeTypography, false)
+		return app.Preferences().BoolWithFallback(prefPhoneLandscapeTypography, true)
 	}
-	return false
+	return true
 }
 
 func setPhoneLandscapeTypographyEnabled(v bool) {
@@ -100,10 +107,12 @@ var phoneLandscapeReading = phoneLandscapeReadingActive
 
 // readingFullScreen is the PRESENTED distraction-free mode: the reader's own
 // choice (IsFullScreen — the focus and exit buttons' bool, never persisted) or
-// the gated phone-landscape presentation. The landscape half never writes
-// IsFullScreen, which is what lets rotating back land on whatever the reader
-// had chosen. Every reader of the mode asks this; only the buttons write the
-// flag.
+// the phone-landscape presentation on the Read tab. It is a READING mode:
+// Books and Search keep their ordinary landscape layout, so a rotation while
+// browsing does not throw the reader into the text. The landscape half never
+// writes IsFullScreen, which is what lets rotating back land on whatever the
+// reader had chosen. Every reader of the mode asks this; only the buttons
+// write the flag.
 func (s *AppState) readingFullScreen() bool {
-	return s != nil && (s.IsFullScreen || phoneLandscapeReading())
+	return s != nil && (s.IsFullScreen || (s.CurrentTab == 0 && phoneLandscapeReading()))
 }

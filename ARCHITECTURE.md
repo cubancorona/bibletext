@@ -19,7 +19,9 @@ The whole shared codebase is **one Go library package, `bibletext`** (every
   Bible loads on a background goroutine behind a spinner. Every touch device
   uses the same Read / Books / Search layout: a bottom bar in portrait and the
   same destinations in a left rail on tablets and Android phones in landscape
-  (see UI architecture below and [docs/IPAD.md](docs/IPAD.md)).
+  (see UI architecture below and [docs/IPAD.md](docs/IPAD.md)). On the Read
+  tab a phone in landscape drops that navigation and reads full-screen by
+  default (`phone_landscape.go`); Books and Search keep their bar or rail.
 
 Per-platform behaviour is selected at compile time by **Go build tags**, not at
 runtime, so each target links only the drivers and native code it needs:
@@ -147,10 +149,10 @@ real files; `*_test.go` files are omitted.
 | `ui.go` | Shared header plus loading/error views |
 | `ui_compact.go` / `tab_rail.go` | Shared Read / Books / Search composition; the same destinations render as a bottom bar or left rail |
 | `ui_desktop.go` / `ui_compact_desktop.go` | `!ios && !android` — shared layout with a left rail by default plus keyboard shortcuts; `BIBLETEXT_DESKTOP_TABS=sidebar` retains the former HSplit for diagnostics |
-| `ui_mobile.go` | `ios \|\| android` — shared touch layout with the platform-native reading pane; tablets move navigation to the left edge in landscape |
+| `ui_mobile.go` | `ios \|\| android` — shared touch layout with the platform-native reading pane; tablets move navigation to the left edge in landscape; phones present the Read tab full-screen in landscape (`phone_landscape.go`, on by default) |
 | `ui_regular.go` / `layout.go` | Retained former regular-layout helpers and the resize watcher; `classifyLayout` deliberately resolves every touch device to the shared layout |
-| `reporter_ios.go` / `reporter_other.go` | `reporterLayoutActive()` — gates the iPad U.S. Reports reading layout (true only for iOS tablets; false elsewhere) |
-| `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Tablet identity plus live orientation chooses bar versus rail |
+| `reporter_ios.go` / `reporter_other.go` | `reporterLayoutActive()` — gates the U.S. Reports reading layout (iOS tablets, and an iPhone in landscape reading mode with its typography half on; false elsewhere) |
+| `device_ios.go` / `device_android.go` / `device_other.go` | `deviceIsTablet()` — UIKit interface idiom on iOS; sw600dp-style smallest-dimension test on Android (`isTabletDimensions`, live canvas); false on desktop. Tablet identity plus live orientation chooses bar versus rail. The same files state which halves of the phone-landscape mode a pane carries (`phoneLandscapeReadingSupported`, `phoneLandscapeTypographySupported`, `rotationRestoreNeeded`) |
 | `textsize.go` | Settings → Reading → Text size: the persisted scale (1.0/1.15/1.3) the scripture body renders at on every platform |
 | `chapter_header_mobile.go` | `ios \|\| android` — the compact mobile chapter toolbar shared by both native reading views |
 | `icons_embed.go` | Bundled icon resources (e.g. the read-aloud waveform glyph) |
@@ -574,7 +576,8 @@ Android share `Intent` goes through the bridge — `nativeShareText` /
 
 ### iPad typography: the U.S. Reports layout
 
-On iPads (`reporterLayoutActive()`) the chapter renders to the measured
+On iPads, and on an iPhone in landscape reading mode (`reporterLayoutActive()`,
+`phone_landscape.go`), the chapter renders to the measured
 geometry of the Supreme Court's official reporter: `buildChapterHTML` switches
 to 1.3 leading and first-line-indent paragraphs (literal em+en spaces — the
 HTML importer drops `text-indent`), and the centred 27.5em column
@@ -582,8 +585,8 @@ HTML importer drops `text-indent`), and the centred 27.5em column
 `textContainerInset` (`bibleTextSetReadingMeasure` → `btIOSApplyInsets`,
 recomputed on every frame change) — so rotation and Split View re-centre
 without re-rendering, and the em-based measure keeps
-~59 characters per line at every text-size setting. Phones and the other
-platforms keep the 2.0-leading, paragraph-gap styling.
+~59 characters per line at every text-size setting. Phones in portrait and the
+other platforms keep the 2.0-leading, paragraph-gap styling.
 
 ## Reading-position + history persistence
 
