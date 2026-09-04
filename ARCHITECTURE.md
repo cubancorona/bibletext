@@ -297,11 +297,13 @@ a Fyne widget, on macOS, iOS, and Android:
   `fyne package -os android` omits it, and the app then degrades to the Fyne
   fallback below. The selection action-mode menu carries the same Study with
   AI / Share / Cross-references actions as iOS.
-- **Linux / Windows** ([reading_fyne.go](reading_fyne.go),
-  `ios || !darwin`): a Fyne `RichText` fallback in a vertical scroll. Verse
-  numbers are superscript segments coloured via custom theme colour names so they
-  track the active palette. (This is also Android's no-dex fallback, via
-  `reading_mobile.go`.)
+- **Linux / Windows** ([reading_styled_pane.go](reading_styled_pane.go),
+  `!ios && !darwin && !android`): the pure-Go styled pane — positioned
+  `canvas.Text` with its own drag and keyboard selection, red letters, raised
+  verse numbers and the verse wash. The older `widget.Entry` chapter pane in
+  [reading_fyne.go](reading_fyne.go) remains as the last-resort fallback, and
+  Android's no-dex fallback is a per-paragraph `RichText` pane in
+  [reading_mobile.go](reading_mobile.go).
 
 Chapter content is produced as **HTML** (`buildChapterHTML` in
 [reading.go](reading.go)) and imported as an attributed string on the native

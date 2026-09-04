@@ -24,8 +24,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// buildCompactUI is the phone (and narrow-tablet) layout: the app header on top,
-// a full-screen tab body (Read / Books / Search), and the compact bottom tab bar.
+// buildCompactUI is the shared layout on every platform: the app header on top,
+// a full-screen tab body (Read / Books / Search), and the destinations drawn as
+// a bottom bar or a leading rail (compactNavRail decides which).
 func buildCompactUI(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 
@@ -113,11 +114,11 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 
 	header := buildHeader(state)
 
-	// THE NAVIGATION'S PLACE. Bottom bar everywhere by default; the left rail is
-	// a preview (compactNavRail) while it is undecided whether a desktop
-	// window should inherit the phone's bar or take the rail convention that
-	// pointer-driven windows use. Same destinations either way — only the edge
-	// they sit on differs.
+	// THE NAVIGATION'S PLACE. The same destinations on one of two edges,
+	// decided by compactNavRail: the bottom bar on phones and on tablets in
+	// portrait; the leading rail on tablets and Android phones in landscape and
+	// on desktop windows (BIBLETEXT_DESKTOP_TABS overrides, ui_compact_desktop.go).
+	// Only the edge they sit on differs.
 	var body fyne.CanvasObject
 	if compactNavRail(state) {
 		body = container.NewBorder(header, nil, buildTabRail(state), nil, content)

@@ -15,14 +15,14 @@ package bibletext
 // the slot's doing, exactly as it is in the bar; nothing here picks a spacing.
 //
 // The one thing that cannot rotate is the cell's cross-axis. In the bar that is
-// ~35pt of icon-over-label, and a 35pt-wide rail could not print "Search". The
-// rail therefore takes the slot number for its width too — the same 104 — which
-// keeps it inside the bar's system while giving the label room.
+// the icon-over-label stack, narrower than the widest label the cell draws, so
+// the rail's width is measured from the labels instead (tabRailWidth below)
+// rather than taken from the slot.
 //
 // It exists because a bottom bar is a phone convention a desktop window
 // inherits rather than chooses, and because on a landscape window the scarce
-// axis is vertical: a rail trades ~72pt of height, which is dear, for 96–104pt
-// of width, which is not.
+// axis is vertical: a rail trades the bar's full strip of height, which is
+// dear, for a column of width, which is not.
 
 import (
 	"fyne.io/fyne/v2"

@@ -23,8 +23,9 @@ func dismissKeyboard(state *AppState) {
 // Android phones in landscape. Tapping a book or search hit selects it and
 // returns to Read automatically.
 //
-// Like the desktop layout, navigation swaps the Read tab's content rather than
-// rebuilding the chrome, so the search field never loses focus mid-keystroke.
+// Switching tabs rebuilds the window (ui_compact.go); within the Read tab,
+// chapter navigation swaps the reading pane's content in place, so the chrome
+// around it stays put.
 func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.CanvasObject {
 	state.app = app
 	state.window = window

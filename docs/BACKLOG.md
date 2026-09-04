@@ -28,6 +28,20 @@ emulators in landscape, before and after rotation with a selection live and
 with narration playing, and add the row to docs/VISUAL_TESTS.md.
 
 
+## Desktop full-screen reading leaves the header and rail in place
+
+The chapter toolbar's focus button flips `state.IsFullScreen` and rebuilds
+(reading.go), and the mobile build honours it by returning the reading pane
+alone (ui_mobile.go). The desktop `CreateMainUI` (ui_desktop.go) returns
+`buildCompactUI` for every navigation setting except the opt-out sidebar
+before it reaches its own full-screen branch, and `buildCompactUI` never reads
+the flag — so on the shipped desktop layout the button only swaps its icon and
+the header and rail stay. Fix: give the shared compact layout the same
+full-screen branch the mobile build has (reading pane plus the exit
+affordance), then verify on the macOS mimic and on the Windows/Linux mimic.
+Found while checking the rail's behaviour for the phone-landscape rework.
+
+
 ## Bible version states: transition diagram + comprehensive tests
 
 **Storage space DONE 2026-08-28** — `docs/VERSION_STATES.md` models the machine
