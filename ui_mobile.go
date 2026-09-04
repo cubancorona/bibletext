@@ -46,31 +46,33 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
-	// Distraction-free reading mode: the shared layout returns the reading pane
-	// alone — no top header, no bottom tabs — so on iOS the native UITextView
-	// overlay fills nearly the whole screen. It is handed over here, before the
-	// layout watcher below: a tablet in full-screen reading looks the same as a
-	// phone, so there is no navigation for a rotation to move, and a rebuild on
-	// rotation would only disturb the reading position. The shared branch
-	// rewires the state hooks to the newly built tree, for the reason the Read
-	// case documents (a stale showReading builds the pane into a dead tree).
-	if state.IsFullScreen {
-		return buildCompactUI(state)
-	}
-
-	// classifyLayout currently always selects the shared layout. Keep the former
-	// regular branch explicit so restoring it would require a deliberate change
-	// at the classifier rather than resurrecting hidden platform logic.
+	// Distraction-free reading — the reader's own choice, or the gated
+	// phone-landscape presentation (readingFullScreen, phone_landscape.go) — is
+	// the shared layout's tree (buildCompactUI): the reading pane alone, no
+	// top header, no bottom tabs, so on iOS the native UITextView overlay fills
+	// nearly the whole screen. The shared branch rewires the state hooks to
+	// the newly built tree, for the reason the Read case documents (a stale
+	// showReading builds the pane into a dead tree).
+	//
+	// classifyLayout currently always selects the shared layout. Keep the
+	// former regular branch explicit so restoring it would require a
+	// deliberate change at the classifier rather than resurrecting hidden
+	// platform logic.
 	var root fyne.CanvasObject
-	if state.layoutClass() == layoutRegular {
-		root = buildRegularWidthUI(state)
-	} else {
+	if state.readingFullScreen() || state.layoutClass() != layoutRegular {
 		root = buildCompactUI(state)
+	} else {
+		root = buildRegularWidthUI(state)
 	}
 
 	// Tablets need the watcher so rotation moves navigation between bottom bar
-	// and rail. Android is always watched because its live dimensions arrive after
-	// the first build and its phone landscape policy also moves navigation.
+	// and rail; Android is always watched because its live dimensions arrive
+	// after the first build and its phone landscape policy also moves
+	// navigation; an iPhone with the landscape reading gate on needs the
+	// rotation BACK observed. The watcher wraps the full-screen tree too: an
+	// iPad in chosen full-screen still never rebuilds on rotation, because
+	// renderedLayout zeroes its rail term while full-screen and its landscape
+	// term is constant off phones — so its reading position is untouched.
 	if layoutMayChange() {
 		return newLayoutWatcher(state, root)
 	}

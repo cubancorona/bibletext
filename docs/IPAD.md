@@ -38,6 +38,8 @@ They do not describe the shipped UI.
 ## The reading page: the U.S. Reports layout
 
 The navigation is unified, but iPad reading typography remains device-specific.
+(The dev build can also give an iPhone this page in landscape, behind the
+gated landscape reading mode — phone_landscape.go and docs/BACKLOG.md.)
 `reporterLayoutActive()` enables a centred **27.5em text column**, approximately
 58–60 characters per line at the Normal 21px base, with **1.3 leading** and
 first-line paragraph indents without blank paragraph gaps.

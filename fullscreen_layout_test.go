@@ -105,3 +105,38 @@ func TestFullScreenReadingDropsTheHeaderAndNavigation(t *testing.T) {
 		}
 	}
 }
+
+// The phone-landscape presentation is the same tree with the reader's own
+// choice untouched: the seam pinned on, IsFullScreen off, and the shared
+// builder returns the full-screen tree; the overlay rule follows it on every
+// tab.
+func TestPhoneLandscapePresentationIsTheFullScreenTree(t *testing.T) {
+	t.Setenv("BIBLETEXT_DESKTOP_TABS", "")
+	app := test.NewApp()
+	defer app.Quit()
+	st := sampleState()
+	st.loadPhase = loadReady
+	w := app.NewWindow("landscape")
+	defer w.Close()
+	w.Resize(fyne.NewSize(874, 402))
+
+	orig := phoneLandscapeReading
+	phoneLandscapeReading = func() bool { return true }
+	defer func() { phoneLandscapeReading = orig }()
+
+	st.IsFullScreen = false
+	root := buildCompactUI(st)
+	if got := countTabCells(root); got != 0 {
+		t.Errorf("presentation tree carries %d tab cells", got)
+	}
+	if treeHasText(root, "BibleText") {
+		t.Error("presentation tree carries the app header")
+	}
+	if st.IsFullScreen {
+		t.Error("the presentation wrote the reader's own full-screen choice")
+	}
+	st.CurrentTab = 1
+	if !overlayShouldShow(st) {
+		t.Error("the overlay rule does not follow the presentation")
+	}
+}

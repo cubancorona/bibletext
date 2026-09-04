@@ -108,6 +108,27 @@ type restoreAnchor struct {
 	Marker  int // verse to softly mark on reopen ("you left off here"); 0 = none
 }
 
+// captureRotationAnchor records the reader's place before a rotation flips the
+// phone-landscape presentation (layoutWatcher.Resize), so the rebuild's
+// re-import lands on it. It yields to a restore already captured and to an
+// arrival in flight: the resolver runs restore before highlight, and a
+// rotation between a link arrival and its rebuild must not park the reader at
+// the pre-arrival place over the tapped verse.
+func captureRotationAnchor(state *AppState) {
+	if state == nil || state.restore != nil || state.forceReposition {
+		return
+	}
+	if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
+		state.restore = &restoreAnchor{
+			Book:    state.CurrentBook,
+			Chapter: state.CurrentChapter,
+			Verse:   v,
+			Delta:   d,
+			Frac:    f,
+		}
+	}
+}
+
 // snapshotReadingState captures the live position + history. anchorVerse/Delta/
 // frac come from the platform scroll capture (0 / false ⇒ top of chapter);
 // touchVerse/Delta come from the last scroll's initial-touch capture (0 ⇒ none).

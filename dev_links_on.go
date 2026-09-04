@@ -391,6 +391,29 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	})
 	pillMode.SetChecked(notesPillPerParagraph)
 
+	// The two phone-landscape gates (phone_landscape.go). Each flip rebuilds
+	// the window, which is what re-reads layoutMayChange and the reporter
+	// gate. Checked state is set before the handlers are attached, so wiring
+	// them up does not fire a rebuild.
+	landscapeMode := widget.NewCheck("Landscape reading mode (iPhone)", nil)
+	landscapeTypo := widget.NewCheck("Landscape reporter typography (iPhone)", nil)
+	landscapeMode.SetChecked(phoneLandscapeReadingEnabled())
+	landscapeTypo.SetChecked(phoneLandscapeTypographyEnabled())
+	landscapeTypo.OnChanged = func(b bool) {
+		setPhoneLandscapeTypographyEnabled(b)
+		rebuildWindow(state)
+	}
+	landscapeMode.OnChanged = func(b bool) {
+		setPhoneLandscapeReadingEnabled(b)
+		if !b && landscapeTypo.Checked {
+			// The typography half is read as AND; keep the box honest. Its
+			// own handler rebuilds.
+			landscapeTypo.SetChecked(false)
+			return
+		}
+		rebuildWindow(state)
+	}
+
 	minAll := widget.NewButton("Minimize every stored note", func() {
 		for _, n := range allNotesForBrowsing(appPrefs()) {
 			setNoteMinimizedByID(appPrefs(), n.ID, true)
@@ -459,7 +482,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, pillMode, wipe, minAll, seedMine, status,
+		notesSwitch, pillMode, landscapeMode, landscapeTypo, wipe, minAll, seedMine, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,

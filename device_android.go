@@ -29,6 +29,10 @@ func deviceIsTablet() bool {
 // Portrait keeps the usual bottom bar.
 func phoneLandscapeNavRail() bool { return true }
 
+// The landscape reading mode (phone_landscape.go) is iOS-first; Android takes
+// its rail in landscape and waits for its own twin.
+func phoneLandscapeReadingSupported() bool { return false }
+
 // layoutMayChange: always watch on Android — before the first layout the
 // canvas reports 0×0, so the watcher must catch the real size. It also owns the
 // phone bar/rail transition on rotation.

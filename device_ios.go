@@ -27,6 +27,11 @@ func deviceIsTablet() bool {
 // iPhone keeps its bottom navigation in landscape; only iPad uses the rail.
 func phoneLandscapeNavRail() bool { return false }
 
+// The iPhone is where the gated landscape reading mode lives
+// (phone_landscape.go).
+func phoneLandscapeReadingSupported() bool { return true }
+
 // layoutMayChange gates the orientation watcher. On iOS the idiom is static and
-// known at launch, so only iPads need watching for bar/rail rotation.
-func layoutMayChange() bool { return deviceIsTablet() }
+// known at launch, so iPads need watching for bar/rail rotation — and an
+// iPhone with the landscape reading gate on, for the presentation's flip.
+func layoutMayChange() bool { return deviceIsTablet() || phoneLandscapeReadingEnabled() }

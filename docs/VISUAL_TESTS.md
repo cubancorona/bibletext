@@ -414,6 +414,22 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       to see it, on desktop, announced on stderr).
 - [ ] The bottom bar is a centred pill on wide surfaces; dev builds' 4th
       tab still fits; full-screen reading looks like a phone everywhere.
+- [ ] iPhone landscape reading (dev build only: the Links tab's two
+      "Landscape …" switches, or `BIBLETEXT_DEV_PHONE_LANDSCAPE=typo
+      scripts/run-ios-sim.sh --dev`): rotate mid-chapter → the reading pane
+      alone, no header, toolbar or bar, the muted "Book Chapter" label with
+      NO restore button; the text starts clear of the Dynamic Island in both
+      landscapes and ends clear of the far edge; with typography on, the
+      centred column with 1.3 leading, indents and no paragraph gaps. The
+      verse under the top edge is the same verse after the rotation, both
+      directions, with a selection live (the selection drops — the
+      re-import replaces the string; it must not strand a menu) and with
+      narration playing (the wash survives). Rotate back → the portrait
+      chrome returns with the tab that was selected; full-screen chosen in
+      portrait before rotating comes back with its restore button; a sheet
+      open during a rotation closes (rebuildWindow drains overlays). Gate
+      on, portrait, Go-to open with the keyboard up → no rebuild storm. Gate
+      off (release build): landscape is unchanged.
 - [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
       app header and the rail (or bottom bar), the "‹ Results" trail stays
       out, and the reading pane takes the whole window; its restore button

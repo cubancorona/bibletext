@@ -96,8 +96,31 @@ func mobileRailWanted(tablet, phoneLandscapeRail bool, w, h float32) bool {
 	return w >= h && (tablet || phoneLandscapeRail)
 }
 
-func layoutWatcherNeedsRebuild(builtAs, want layoutClass, builtRail, wantRail bool) bool {
-	return want != builtAs || wantRail != builtRail
+// renderedLayout is the layout as the watcher compares it: the class, whether
+// the navigation is drawn as a rail, and whether the phone-landscape
+// presentation is in force. rail is false whenever the presented mode is
+// full-screen — that tree draws no navigation, so a rotation must not rebuild
+// it for a rail it would not show (an iPad in chosen full-screen keeps its
+// reading position exactly because nothing rebuilds on rotation). landscape is
+// its own term so a phone that had chosen full-screen still rebuilds when the
+// presentation flips: that rebuild is what re-reads the typography gate and
+// pushes the measure.
+type renderedLayout struct {
+	class     layoutClass
+	rail      bool
+	landscape bool
+}
+
+func (s *AppState) renderedLayout(width float32) renderedLayout {
+	return renderedLayout{
+		class:     classifyLayout(width, deviceIsTablet()),
+		rail:      !s.readingFullScreen() && compactNavRail(s),
+		landscape: phoneLandscapeReading(),
+	}
+}
+
+func layoutWatcherNeedsRebuild(built, want renderedLayout) bool {
+	return built != want
 }
 
 // resolveSidebarDefault retains the orientation-driven default for the former
@@ -164,7 +187,7 @@ func regularSplitOffset(width float32) float64 {
 //   - Retained former regular layout: show unless results occupy its reading pane.
 //   - Current shared layout: only Read hosts the pane, and only with no search.
 func overlayShouldShow(state *AppState) bool {
-	if state.IsFullScreen {
+	if state.readingFullScreen() {
 		return true
 	}
 	if state.layoutClass() == layoutRegular {

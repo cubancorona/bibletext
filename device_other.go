@@ -11,5 +11,8 @@ func deviceIsTablet() bool { return false }
 // Off Android there is no phone-specific landscape-rail policy.
 func phoneLandscapeNavRail() bool { return false }
 
+// No phone, no landscape reading mode (phone_landscape.go).
+func phoneLandscapeReadingSupported() bool { return false }
+
 // layoutMayChange gates installing the layoutWatcher; moot off mobile.
 func layoutMayChange() bool { return false }

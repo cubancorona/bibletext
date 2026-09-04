@@ -3530,12 +3530,21 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	// Full-screen reading: no chrome at all except a small exit affordance.
 	// Tabs and the top "BibleText" header are skipped in ui_mobile.go for this
 	// case, so the UITextView fills almost the whole device screen.
-	if state.IsFullScreen {
-		exit := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
-			state.IsFullScreen = false
-			rebuildWindow(state)
-		})
-		exit.Importance = widget.LowImportance
+	if state.readingFullScreen() {
+		// The restore button is the way out of the reader's OWN full-screen.
+		// While the phone-landscape presentation forces the mode it would
+		// write IsFullScreen=false and rebuild straight back into the same
+		// tree — so rotation is the way out there, and the button is not
+		// offered rather than offered and inert.
+		var exit fyne.CanvasObject
+		if !phoneLandscapeReading() {
+			btn := widget.NewButtonWithIcon("", theme.ViewRestoreIcon(), func() {
+				state.IsFullScreen = false
+				rebuildWindow(state)
+			})
+			btn.Importance = widget.LowImportance
+			exit = btn
+		}
 		// A quiet "Book Chapter" marker on the LEFT of the exit row so the reader keeps
 		// their place in distraction-free mode. Muted so it never competes with the
 		// verse text, and vertically centred against the minimize button on the right.

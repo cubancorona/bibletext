@@ -203,6 +203,25 @@ func TestFingerprintIncludesTextSize(t *testing.T) {
 	}
 }
 
+// The reporter page is body content (leading, indents, paragraph gaps), so it
+// must move both fingerprints: the phone-landscape mode flips it on rotation,
+// and the Apple push gate would otherwise keep the portrait grammar under the
+// landscape measure.
+func TestFingerprintIncludesReporterLayout(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	s := sampleState()
+	var onBody, offBody, onRender, offRender string
+	withReporterLayout(true, func() { onBody, onRender = chapterBodyFingerprint(s), chapterRenderFingerprint(s) })
+	withReporterLayout(false, func() { offBody, offRender = chapterBodyFingerprint(s), chapterRenderFingerprint(s) })
+	if onBody == offBody {
+		t.Fatal("body fingerprint unchanged by the reporter layout")
+	}
+	if onRender == offRender {
+		t.Fatal("render fingerprint unchanged by the reporter layout")
+	}
+}
+
 // The footnotes toggle must move BOTH fingerprints: the section is body
 // content on the Apple panes (chapterBodyFingerprint gates the rebuild path
 // there — miss it and toggling repaints nothing), and Android asks the

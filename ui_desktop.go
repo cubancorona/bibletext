@@ -67,7 +67,7 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	// can still navigate chapters and toggle back out via its focus button).
 	// The shipped layouts take the twin of this branch in buildCompactUI
 	// (ui_compact.go); keep the two in step.
-	if state.IsFullScreen {
+	if state.readingFullScreen() {
 		// No sidebar means no search field; keep the hooks safe no-ops.
 		state.syncSidebar = func() {}
 		state.focusSearch = func() {}

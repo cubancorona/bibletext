@@ -130,7 +130,9 @@ type AppState struct {
 	// chapter toolbar and draws its own small exit row with the chapter
 	// reference (buildReadingViewMobile). The mobile toolbar's full-screen
 	// button (chapter_header_mobile.go) and the desktop toolbar's focus button
-	// are the ways in.
+	// are the ways in. The PRESENTED mode is readingFullScreen
+	// (phone_landscape.go): this choice, or the gated phone-landscape
+	// presentation, which never writes this flag.
 	IsFullScreen bool
 
 	// CurrentTab is the selected mobile bottom-bar tab: 0 Read, 1 Books,

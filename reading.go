@@ -48,7 +48,7 @@ func buildReadingView(state *AppState) fyne.CanvasObject {
 	// Full-screen is the reading pane alone, on every platform: the mobile
 	// reading views omit the trail there too, and it comes back on restore
 	// because CanReturnToSearchResults is untouched.
-	if state.CanReturnToSearchResults && !state.IsFullScreen {
+	if state.CanReturnToSearchResults && !state.readingFullScreen() {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeader(state, chapterNumbers))
@@ -129,7 +129,7 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// Focus toggle on the right: enter distraction-free reading (hide the
 	// sidebar + app header) or, when already in it, restore the full layout.
 	focusIcon := theme.ViewFullScreenIcon()
-	if state.IsFullScreen {
+	if state.readingFullScreen() {
 		focusIcon = theme.ViewRestoreIcon()
 	}
 	focusBtn := widget.NewButtonWithIcon("", focusIcon, func() {
@@ -535,6 +535,15 @@ func chapterFingerprint(state *AppState, hl string) string {
 	if footnotesEnabled() {
 		fnotes = 1
 	}
+	// The reporter page (reporterLayout) is body content: 1.3 leading, no
+	// paragraph margin, the literal indent. It was constant per device until
+	// the phone-landscape mode (phone_landscape.go) made it follow the
+	// orientation; unfolded, the Apple push gate would keep the portrait
+	// grammar under the landscape measure.
+	rep := 0
+	if reporterLayout() {
+		rep = 1
+	}
 	// THE TINT SOURCE FOLDS ITSELF (tint.go), and it is handed IN rather than
 	// read here. This clause used to read the mark out of AppState and format it
 	// at this call site, which is fine while the tint IS the mark and wrong the
@@ -577,8 +586,8 @@ func chapterFingerprint(state *AppState, hl string) string {
 		}
 		note += fmt.Sprintf("!%d.%d.%d.%d", state.NoteID, len(state.ActiveNote), m, state.NoteVerseLo)
 	}
-	return fmt.Sprintf("%s|%s|%d|v%d|r%d|fn%d|h%s|t%s|d%p|n%s",
-		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, fnotes, hl, readingTextSizeID(), state.Bible, note)
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|fn%d|h%s|t%s|d%p|n%s|p%d",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, fnotes, hl, readingTextSizeID(), state.Bible, note, rep)
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------

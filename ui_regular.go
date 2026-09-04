@@ -119,19 +119,17 @@ func buildRegularWidthUI(state *AppState) fyne.CanvasObject {
 // change rebuild safely. It adds no chrome; only Resize acts.
 type layoutWatcher struct {
 	widget.BaseWidget
-	state     *AppState
-	content   fyne.CanvasObject
-	builtAs   layoutClass
-	builtRail bool
-	pending   bool
+	state   *AppState
+	content fyne.CanvasObject
+	built   renderedLayout
+	pending bool
 }
 
 func newLayoutWatcher(state *AppState, content fyne.CanvasObject) *layoutWatcher {
 	w := &layoutWatcher{
-		state:     state,
-		content:   content,
-		builtAs:   state.layoutClass(),
-		builtRail: compactNavRail(state),
+		state:   state,
+		content: content,
+		built:   state.renderedLayout(state.canvasWidth()),
 	}
 	w.ExtendBaseWidget(w)
 	return w
@@ -152,17 +150,22 @@ func (w *layoutWatcher) CreateRenderer() fyne.WidgetRenderer {
 // look landscape. Using the same canvas source as newLayoutWatcher prevents
 // alternating rebuild decisions; layout-class selection still keys off width.
 func (w *layoutWatcher) Resize(size fyne.Size) {
-	w.BaseWidget.Resize(size)
-	if w.pending {
-		return
-	}
-	want := classifyLayout(size.Width, deviceIsTablet())
-	rail := compactNavRail(w.state)
 	// Compare the rendered decision itself instead of reconstructing it from
 	// orientation and device class. That keeps the watcher coupled to the policy
 	// used by buildCompactUI and avoids a rotation appearing only after some
 	// unrelated later rebuild.
-	changed := layoutWatcherNeedsRebuild(w.builtAs, want, w.builtRail, rail)
+	want := w.state.renderedLayout(size.Width)
+	changed := !w.pending && layoutWatcherNeedsRebuild(w.built, want)
+	if changed && want.landscape != w.built.landscape {
+		// The phone-landscape presentation is about to flip on this rotation:
+		// read the reader's place NOW, before BaseWidget.Resize lets the old
+		// host push the new-width frame. The capture is synchronous on the
+		// main queue and the frame push is asynchronous, so ordering here is
+		// ordering there; captured after the rewrap, the anchor would name the
+		// verse the rewrap scrolled to, not the one the reader was on.
+		captureRotationAnchor(w.state)
+	}
+	w.BaseWidget.Resize(size)
 	if changed {
 		w.pending = true
 		fyne.Do(func() { rebuildWindow(w.state) })

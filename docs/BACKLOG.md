@@ -43,6 +43,14 @@ simulator, both orientations and both directions of rotation, with a selection
 live and with narration playing, then on the phone; Android follows once iOS
 is right. Add the row to docs/VISUAL_TESTS.md.
 
+Status (2026-09-04): the first cut is on main behind the dev gates
+(phone_landscape.go: two preferences a release build cannot read, the Links
+tab's switches, `BIBLETEXT_DEV_PHONE_LANDSCAPE` for scripted simulator runs;
+the reporter flag now folds into the body fingerprint; the layout watcher
+carries the presentation as its own term and captures the reading anchor
+before the rotation's frame lands). Next: the phone verdict, the Android
+twin (`phoneLandscapeReadingSupported`), then a release default.
+
 
 ## Bible version states: transition diagram + comprehensive tests
 
