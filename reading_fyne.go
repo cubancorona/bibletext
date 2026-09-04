@@ -39,28 +39,32 @@ func (t readingPaneTheme) Size(name fyne.ThemeSizeName) float32 {
 }
 
 // readingScrollArea (Fyne) is the scrollable chapter text used on every desktop
-// platform except macOS, plus the compiled-but-unused fallback on the mobile
-// builds. It wraps the whole chapter in one chapterText (a read-only,
-// drag-selectable widget.Entry) inside a centred, width-capped column.
+// platform except macOS. It also compiles into the iOS and Android builds,
+// where nothing calls it: every mobile layout reaches buildReadingViewMobile
+// (ui_mobile.go), and Android's bridge-absent fallback is reading_mobile.go's
+// RichText pane, not this one. It wraps the whole chapter in one chapterText
+// (a read-only, drag-selectable widget.Entry) inside a centred, width-capped
+// column.
 //
 // macOS uses a native NSTextView overlay instead — see reading_macos.go — to
 // get the system selection menu (Copy / Look Up / Translate / Share). This file
 // and reading_macos.go are mutually exclusive by build tag.
 func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
 	// Windows/Linux dispatch the styled, selectable pane (reading_styled_*.go);
-	// the constant is FALSE on iOS (where this file is dead code) and on the
-	// Android bridge-absent fallback, so those paths remain byte-identical.
+	// the constant is FALSE on iOS and Android, where this function is dead
+	// code (the mobile layouts never call it), so nothing there changes.
 	if useStyledPane() {
 		return styledReadingScrollArea(state, verses, pal)
 	}
 	return chapterTextScrollArea(state, verses, pal)
 }
 
-// chapterTextScrollArea is the legacy chapterText pane — the shipping path on
-// the Android bridge-absent fallback and the burn-in fallback behind the styled
-// pane on Windows/Linux. Kept callable directly so its scroll-wiring tests keep
-// exercising THIS pane on the platforms whose readingScrollArea now dispatches
-// to the styled one.
+// chapterTextScrollArea is the legacy chapterText pane — the burn-in fallback
+// behind the styled pane on Windows/Linux (flip styledPaneEnabledOnPlatform and
+// it ships again). It is not reachable on the mobile builds: Android's
+// bridge-absent fallback is buildReadingViewMobileFyne (reading_mobile.go).
+// Kept callable directly so its scroll-wiring tests keep exercising THIS pane
+// on the platforms whose readingScrollArea now dispatches to the styled one.
 func chapterTextScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
 	col := &readingColumn{maxWidth: 760}
 	var child fyne.CanvasObject

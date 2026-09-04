@@ -23,8 +23,9 @@ import (
 )
 
 // useStyledPane reports whether THIS platform's desktop reading pane is the
-// styled one. Constant per build: true on Windows/Linux, false on the
-// native-overlay platforms and the Android Fyne fallback — their paths stay
+// styled one. Constant per build: true on Windows/Linux, false on macOS, iOS
+// and Android — macOS has its own readingScrollArea (the NSTextView overlay)
+// and the mobile builds never call the Fyne one, so their paths stay
 // byte-identical.
 // useStyledPane is a var, not a call to the constant, for the same reason
 // nativeNoteSticker is (notes_banner.go:32): the platform answer is a build-tag

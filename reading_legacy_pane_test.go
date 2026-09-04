@@ -3,12 +3,17 @@
 package bibletext
 
 // legacyPaneForTest builds the LEGACY chapterText pane directly for the
-// reading_layout_test.go assertions. On these platforms readingScrollArea
+// reading_layout_test.go assertions. On Windows and Linux readingScrollArea
 // dispatches to the styled pane (styledPaneEnabledOnPlatform), so going through
 // buildReadingView would find no chapterText in the tree — but the legacy pane
-// is still shipping code (the Android fallback and the desktop burn-in
-// fallback), so its layout tests target it directly. Styled wiring residue is
-// cleared first so the scroll-anchor delegation stays on the legacy path.
+// is still the desktop burn-in fallback (flip that constant and it ships
+// again), so its layout tests target it directly. The mobile builds compile the
+// pane without ever reaching it. The ios half of the tag is there because
+// reading_layout_test.go is `!race` and so compiles under GOOS=ios, while the
+// darwin twin of this helper (reading_legacy_pane_darwin_test.go) is
+// `darwin && !ios` — without it, vet under GOOS=ios would find the call and no
+// definition. Styled wiring residue is cleared first so the scroll-anchor
+// delegation stays on the legacy path.
 
 import "fyne.io/fyne/v2"
 

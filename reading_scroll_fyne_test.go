@@ -22,9 +22,10 @@ import (
 //
 // Built via chapterTextScrollArea, NOT readingScrollArea: on this file's
 // platforms the dispatcher returns the styled pane, and these tests lock the
-// LEGACY pane's wiring (still shipping as the Android fallback and the desktop
-// burn-in fallback). The styled globals are cleared first so the capture/arm
-// delegation in reading_scroll_fyne.go stays on the legacy path.
+// LEGACY pane's wiring (still the desktop burn-in fallback behind
+// styledPaneEnabledOnPlatform; the mobile builds compile it without reaching
+// it). The styled globals are cleared first so the capture/arm delegation in
+// reading_scroll_fyne.go stays on the legacy path.
 func buildTestPane(t *testing.T, state *AppState) fyne.Window {
 	t.Helper()
 	resetStyledWiring()
