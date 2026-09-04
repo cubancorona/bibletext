@@ -5,7 +5,7 @@ package bibletext
 // This was ui_mobile.go until 21 Aug 2026, tagged `ios || android`, and the tag
 // was the only thing mobile about it. The tab bar, the books grid, the search
 // tab and the composition are plain Fyne over plain AppState; the only genuinely
-// per-platform pieces are the reading pane itself (compactReadingPane), the
+// per-platform pieces are the reading view itself (compactReadingView), the
 // native overlay notifier, and dropping the soft keyboard — three small seams,
 // declared per platform, rather than a whole second layout.
 //
@@ -76,6 +76,33 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	// show; the state is simply newer than the view, and the Read tab's own
 	// rebuild renders it.
 	state.showReading = nil
+
+	// DISTRACTION-FREE READING: the reading view alone — no app header, no bar
+	// or rail — with the chapter toolbar's own focus button as the way back.
+	// The same tree on every platform: the mobile entry point hands over to
+	// this before its layout watcher (ui_mobile.go), and the desktop reaches it
+	// through its ordinary path. The desktop's focus button used to flip the
+	// flag and rebuild into a layout that never read it, so the header and rail
+	// stayed put and only the button's icon changed.
+	//
+	// The plain reading view, not compactReadingPane: overlayShouldShow answers
+	// true for full-screen, so a results list here would sit under a native
+	// overlay that covers it.
+	if state.IsFullScreen {
+		readingHost := container.NewStack(compactReadingView(state))
+		state.showReading = func() {
+			readingHost.Objects = []fyne.CanvasObject{compactReadingView(state)}
+			readingHost.Refresh()
+			notifyReadingOverlay(overlayShouldShow(state))
+		}
+		// No search field on screen: keep the shortcut hooks safe no-ops.
+		state.focusSearch = func() {}
+		state.setSearchText = func(string) {}
+		notifyReadingOverlay(overlayShouldShow(state))
+		base := canvas.NewRectangle(pal.Background)
+		return container.NewStack(base, readingHost)
+	}
+
 	var content fyne.CanvasObject
 	switch state.CurrentTab {
 	case 1:
@@ -128,6 +155,17 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 
 	base := canvas.NewRectangle(pal.Background)
 	return container.NewStack(base, body)
+}
+
+// compactReadingPane is the reading slot of the shared layout: the search
+// results while a search is live, otherwise this platform's reading view
+// (compactReadingView — a native overlay pane on iOS and Android, the desktop
+// pane on macOS, the styled pane on Windows and Linux).
+func compactReadingPane(state *AppState) fyne.CanvasObject {
+	if state.IsSearching {
+		return buildSearchResultsView(state)
+	}
+	return compactReadingView(state)
 }
 
 // buildMobileTabBar renders the compact bottom tab strip. Selecting a tab sets

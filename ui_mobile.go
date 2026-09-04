@@ -4,8 +4,6 @@ package bibletext
 
 import (
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
 )
 
 // dismissKeyboard drops focus from whatever field owns the soft keyboard, which makes
@@ -34,7 +32,6 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		state.theme = &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
 	}
 	applyTheme(app, state)
-	pal := state.pal()
 
 	// Startup: the Bible loads on a background goroutine, so until it's ready we
 	// render only the loading/error screen and keep the native UITextView overlay
@@ -49,29 +46,16 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
-	// Distraction-free reading mode: the entire window becomes the reading
-	// pane plus a small exit affordance — no top header, no bottom tabs.
-	// On iOS the native UITextView overlay therefore fills nearly the whole
-	// screen. (Layout-agnostic: a tablet in full-screen reading looks the same
-	// as a phone, so there is no sidebar to add here.)
+	// Distraction-free reading mode: the shared layout returns the reading pane
+	// alone — no top header, no bottom tabs — so on iOS the native UITextView
+	// overlay fills nearly the whole screen. It is handed over here, before the
+	// layout watcher below: a tablet in full-screen reading looks the same as a
+	// phone, so there is no navigation for a rotation to move, and a rebuild on
+	// rotation would only disturb the reading position. The shared branch
+	// rewires the state hooks to the newly built tree, for the reason the Read
+	// case documents (a stale showReading builds the pane into a dead tree).
 	if state.IsFullScreen {
-		// Rewire the state hooks to this newly built tree. With
-		// narration playing, a chapter's natural end calls state.refresh() from
-		// advanceAndContinue — if showReading still pointed at the previous
-		// build's detached host, the fresh nativeReadingHost would be built into
-		// that dead tree, steal the currentHost singleton, and leave the visible
-		// overlay unframeable (pushFrame bails on currentHost != h) with a stale
-		// corner label. Desktop installs its hooks before its full-screen branch
-		// for the same reason.
-		readingHost := container.NewStack(buildReadingViewMobile(state))
-		state.showReading = func() {
-			readingHost.Objects = []fyne.CanvasObject{buildReadingViewMobile(state)}
-			readingHost.Refresh()
-			notifyReadingOverlay(overlayShouldShow(state))
-		}
-		state.syncSidebar = func() {}
-		base := canvas.NewRectangle(pal.Background)
-		return container.NewStack(base, readingHost)
+		return buildCompactUI(state)
 	}
 
 	// classifyLayout currently always selects the shared layout. Keep the former
@@ -93,19 +77,17 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	return root
 }
 
-// compactReadingPane is the per-platform half of the shared compact layout: the
-// search-results view when a search is active, otherwise this platform's reading
-// view. iOS and Android have a native overlay pane; the desktop twin in
-// ui_compact_desktop.go returns the ordinary Fyne/native desktop pane.
+// compactReadingView is the per-platform half of the shared compact layout:
+// this platform's reading view, which compactReadingPane (ui_compact.go)
+// replaces with the search results while a search is active. iOS and Android
+// have a native overlay pane; the desktop twin in ui_compact_desktop.go returns
+// the ordinary Fyne/native desktop pane.
 //
 // This seam is the whole reason the compact layout could leave the mobile build
 // tag. Everything else in it — the tab bar, the books grid, the search tab — is
 // plain Fyne that never needed to be mobile-only, and keeping it there is what
 // forced a second layout to exist for the desktop to have tabs at all.
-func compactReadingPane(state *AppState) fyne.CanvasObject {
-	if state.IsSearching {
-		return buildSearchResultsView(state)
-	}
+func compactReadingView(state *AppState) fyne.CanvasObject {
 	return buildReadingViewMobile(state)
 }
 

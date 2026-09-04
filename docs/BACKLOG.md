@@ -15,31 +15,33 @@ iPhone turned sideways gives the reading pane the least height of any surface,
 and the chrome that costs it — header, history, chapter toolbar, bar — is the
 portrait design carried over unchanged.
 
-Rework, phone-first and iOS-first: decide what a phone in landscape is FOR
-(reading, mostly) and shape the chrome to that. Candidates, none decided:
-take the rail on iPhone too (`phoneLandscapeNavRail`); collapse or hide the
-history strip and chapter toolbar in landscape; make distraction-free reading
-the landscape default with the exit affordance kept; treat the native overlay's
-frame and the notch-side safe area explicitly. Whatever lands must keep one
-navigation model across rotations (docs/IPAD.md) and rebuild through
-`layoutWatcher` on the canvas orientation, never the laid-out height (the soft
-keyboard trap). Verify on the iPhone 16 Pro simulator and both Android
-emulators in landscape, before and after rotation with a selection live and
-with narration playing, and add the row to docs/VISUAL_TESTS.md.
-
-
-## Desktop full-screen reading leaves the header and rail in place
-
-The chapter toolbar's focus button flips `state.IsFullScreen` and rebuilds
-(reading.go), and the mobile build honours it by returning the reading pane
-alone (ui_mobile.go). The desktop `CreateMainUI` (ui_desktop.go) returns
-`buildCompactUI` for every navigation setting except the opt-out sidebar
-before it reaches its own full-screen branch, and `buildCompactUI` never reads
-the flag — so on the shipped desktop layout the button only swaps its icon and
-the header and rail stay. Fix: give the shared compact layout the same
-full-screen branch the mobile build has (reading pane plus the exit
-affordance), then verify on the macOS mimic and on the Windows/Linux mimic.
-Found while checking the rail's behaviour for the phone-landscape rework.
+Direction (2026-09-04), iOS first: a phone turned to landscape reads like the
+iPad. Rotating to landscape enters the distraction-free presentation — the
+reading pane alone, the chapter toolbar's focus button as the way out — and
+the text takes the iPad typography (the centred reporter measure, 1.3 leading,
+first-line indents, no paragraph gaps: docs/IPAD.md); rotating back restores
+the portrait layout and the reader's own full-screen choice. Gated, so it is
+reversible: a preference the dev build exposes and the release build leaves
+off until it has been read on the phone, with the typography half gated on its
+own so the paragraph formatting can be backed out without losing the
+presentation. What that needs in the code: `reporterLayoutActive` on iOS is
+`deviceIsTablet()` today (reporter_ios.go), so the phone-landscape case joins
+it; iPhone installs no `layoutWatcher` (device_ios.go `layoutMayChange`), so
+the rotation has to be observed there for this mode; the chapter HTML's
+typography reads `reporterLayout()` (buildChapterHTML, reading.go) but the
+body fingerprint (`chapterFingerprint`, reading.go) does not fold that flag,
+and the Apple push gate (`pushChapterHTML`) skips the HTML re-import when the
+body fingerprint is unchanged — so the fingerprint must gain the reporter flag
+before a rotation re-imports the chapter at all (the column measure already
+resyncs outside the gate), and that new re-import must keep the reading
+position (the same-chapter restore capture already keys off a body-fingerprint
+change); and the native overlay's frame and the notch-side safe area need
+explicit handling. Whatever lands must keep one navigation model across
+rotations (docs/IPAD.md) and read orientation from the canvas, never the
+laid-out height (the soft keyboard trap). Verify on the iPhone 16 Pro
+simulator, both orientations and both directions of rotation, with a selection
+live and with narration playing, then on the phone; Android follows once iOS
+is right. Add the row to docs/VISUAL_TESTS.md.
 
 
 ## Bible version states: transition diagram + comprehensive tests

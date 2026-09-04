@@ -414,6 +414,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       to see it, on desktop, announced on stderr).
 - [ ] The bottom bar is a centred pill on wide surfaces; dev builds' 4th
       tab still fits; full-screen reading looks like a phone everywhere.
+- [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
+      app header and the rail (or bottom bar), the "‹ Results" trail stays
+      out, and the reading pane takes the whole window; its restore button
+      brings the chrome back with the same tab selected. Check the macOS
+      build and the Windows/Linux mimic.
 - [ ] Web: resize across 46rem flips gaps ↔ reporter indents; poetry never
       takes the indent; print CSS hides the chrome.
 - [ ] Procedure trap: `simctl io screenshot` can store landscape captures
@@ -460,5 +465,9 @@ Each line was a real screen defect this list would have caught:
     and landscape left the verse row under the keyboard.
 18. Tablets: reading orientation from a laid-out child instead of the
     canvas turned the soft keyboard into "rotation" — 3,000 rebuilds/min.
+19. Desktop (shipped rail layout): the focus button swapped its icon while
+    the header and rail stayed — CreateMainUI returned the shared layout
+    before its own full-screen branch, and the shared layout never read
+    IsFullScreen. The full-screen tree now lives in the shared layout.
 9. Harness lesson, not a pixel: wipe the store before counting anything —
    stale fixtures made a correct "Notes · 3" label look like a wire bug.

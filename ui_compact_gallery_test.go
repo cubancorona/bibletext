@@ -103,14 +103,13 @@ func TestCompactLayoutGallery(t *testing.T) {
 func compactGalleryState(t *testing.T) *AppState {
 	t.Helper()
 
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		t.Skip("no user cache dir")
-	}
-	path := filepath.Join(cache, "bibletext", "bibletext-web-v2.json")
+	// Read exactly the file the build under test would read: cachePathForVersion
+	// carries the compiled cache epoch, so a sibling epoch left behind by another
+	// branch is never picked up and no lexical ordering is involved.
+	path := cachePathForVersion(defaultVersionID)
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		t.Skipf("no cached translation at %s — run the app once to populate it", path)
+		t.Skipf("no cached WEB translation at %s — run the app once to populate it: %v", path, err)
 	}
 	var wrapper struct {
 		Data *BibleData `json:"data"`

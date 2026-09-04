@@ -65,6 +65,8 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	// Distraction-free reading: drop the sidebar and the app header so the
 	// reading column gets the whole window. The chapter toolbar stays (so you
 	// can still navigate chapters and toggle back out via its focus button).
+	// The shipped layouts take the twin of this branch in buildCompactUI
+	// (ui_compact.go); keep the two in step.
 	if state.IsFullScreen {
 		// No sidebar means no search field; keep the hooks safe no-ops.
 		state.syncSidebar = func() {}

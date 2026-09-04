@@ -17,15 +17,16 @@ import (
 // search tab, same readable measures — rather than a fourth thing to keep in
 // step by hand.
 
-// compactReadingPane is the desktop's reading view for the compact layout: the
-// ordinary desktop pane (NSTextView on macOS, the styled pane on
-// Windows/Linux), with search results taking its place while a search is live —
-// exactly as the mobile twin does.
-func compactReadingPane(state *AppState) fyne.CanvasObject {
-	if state.IsSearching {
-		return buildSearchResultsView(state)
-	}
-	return buildReadingPane(state)
+// compactReadingView is the desktop's reading view for the compact layout: the
+// plain chapter view (NSTextView on macOS, the styled pane on Windows/Linux),
+// never the search results. compactReadingPane (ui_compact.go) puts the
+// results in its place while a search is live, and the full-screen branch
+// relies on this being the plain view — exactly as the mobile twin is.
+// buildReadingPane, which substitutes on its own and toggles the overlay,
+// stays with the former sidebar layout (ui_desktop.go); here the shared
+// layout's own notifyReadingOverlay calls decide the overlay.
+func compactReadingView(state *AppState) fyne.CanvasObject {
+	return buildReadingView(state)
 }
 
 // notifyReadingOverlay keeps a native reading overlay in step with the tab

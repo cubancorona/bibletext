@@ -120,9 +120,17 @@ type AppState struct {
 
 	RecentChapters []ChapterVisit
 
-	// IsFullScreen is the mobile "distraction-free reading" toggle. When true,
-	// CreateMainUI on iOS/Android renders only the reading area and a tiny exit
-	// button — no app header, no chapter toolbar, no bottom tabs.
+	// IsFullScreen is the "distraction-free reading" toggle, honoured on every
+	// platform: the shared compact layout (buildCompactUI, ui_compact.go)
+	// returns the reading view alone — no app header, no bottom bar or rail —
+	// and the desktop's opt-out sidebar layout has the same branch
+	// (ui_desktop.go). The way out differs per reading view: on the desktop the
+	// chapter toolbar stays and its focus button restores the layout
+	// (chapterHeader, reading.go); on iOS/Android the reading view drops the
+	// chapter toolbar and draws its own small exit row with the chapter
+	// reference (buildReadingViewMobile). The mobile toolbar's full-screen
+	// button (chapter_header_mobile.go) and the desktop toolbar's focus button
+	// are the ways in.
 	IsFullScreen bool
 
 	// CurrentTab is the selected mobile bottom-bar tab: 0 Read, 1 Books,

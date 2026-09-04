@@ -45,7 +45,10 @@ func buildReadingView(state *AppState) fyne.CanvasObject {
 	if bar := buildHistoryBar(state); bar != nil {
 		top.Add(bar)
 	}
-	if state.CanReturnToSearchResults {
+	// Full-screen is the reading pane alone, on every platform: the mobile
+	// reading views omit the trail there too, and it comes back on restore
+	// because CanReturnToSearchResults is untouched.
+	if state.CanReturnToSearchResults && !state.IsFullScreen {
 		top.Add(backToResultsBar(state))
 	}
 	top.Add(chapterHeader(state, chapterNumbers))
