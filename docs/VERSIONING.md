@@ -62,8 +62,19 @@ exact situation this file exists to prevent.
    tag cannot iterate at all.
 3. Every channel of a version builds from the tagged commit, so "v1.2.3" is
    one tree on the stores, the direct downloads, and the sideload APK alike.
-4. Tags are consistent in kind as well as in content. The repo is currently
-   mixed — v1.2.1 and v1.2.3 are lightweight, v1.2.2 is annotated — which is
-   worth settling on the next cut, because an annotated tag is an object
-   wrapping a commit and a peel (`ls-remote 'refs/tags/X^{}'`) is the only
-   safe way to compare one against a commit.
+4. Tags are consistent in kind as well as in content. SETTLED at v1.2.6:
+   every tag from here is ANNOTATED. The repo below that is mixed — v1.2.1 and
+   v1.2.3 are lightweight, v1.2.2 and v1.2.5 annotated — so a comparison
+   against a commit must peel (`ls-remote 'refs/tags/X^{}'`), which is the
+   only safe form either way.
+5. A version may name a tree on FEWER channels than the last one did. v1.2.6
+   is a tag alone, cut so `go install …@latest` resolves the module path that
+   every tag up to v1.2.5 predates; no assets and no submission carry that
+   number, and the store release after it is 1.2.7. What the rule forbids is
+   one number naming two trees, not a number reaching only one channel.
+   The ledgers stayed at 1.2.5 for it, because here the ledger version is the
+   PREPARED SUBMISSION — the release-identity check and the review-notes tests
+   bind it to the App Store notes, their writer's pin and a What's New file —
+   so a binary built from the v1.2.6 tag reports 1.2.5. That is the trade a
+   tag-only version makes, and it is only safe while no artifact carries the
+   tag's number.

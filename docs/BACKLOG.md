@@ -483,7 +483,23 @@ or reflection on the protected `Layout.setJustificationMode`, which the
 hidden-API policy may refuse. Neither is worth it for a rendering that
 Android 15 already gets right.
 
-## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module
+## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module — DONE
+
+Cut as an ANNOTATED tag (the kind docs/VERSIONING.md asked the next cut to
+settle on). Deliberately a tag and NOTHING else: no release assets, no store
+submission, and the two FyneApp.toml ledgers deliberately left at 1.2.5.
+
+The ledgers stay because in this repository the ledger version IS the prepared
+store submission — check-release-identity.py holds it against
+appstore/review-notes.txt, and the review-notes tests hold that against the
+writer's version pin and a What's New file named for it. Moving the ledgers to
+1.2.6 would have prepared a submission nobody is sending.
+
+The cost, stated so a bug report stays readable: a binary built from the
+v1.2.6 tag reports 1.2.5 in Settings, because no binary channel carries 1.2.6.
+A source build is already distinguishable — it carries no bundled NKJV key
+(the entry below) — and the next store release takes 1.2.7 with both ledgers
+and both review-notes files moving together.
 
 Every tag up to v1.2.5 carries the old bare `module bibletext` line, which Go's
 module resolution rejects: `go install github.com/cubancorona/bibletext/cmd/desktop@latest`
