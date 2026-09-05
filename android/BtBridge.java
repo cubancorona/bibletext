@@ -2686,9 +2686,21 @@ public final class BtBridge {
     // Resolved at apply time (not cached in setFrame) + re-asserted from applyShow,
     // because on a COLD START both terms read 0 until the window settles — caching
     // then would freeze the overlay 136px too high (over the header / audio transport).
+    //
+    // MINUS THE TASK'S OWN ORIGIN. The overlay is a Dialog, and the window
+    // manager resolves a dialog's x/y against its TASK bounds, not the display
+    // — FLAG_LAYOUT_IN_SCREEN does not change that. The decor's on-screen
+    // location includes the task origin, so in a task that does not start at
+    // the display origin (the bottom or right pane of split-screen, a freeform
+    // window) the origin was counted twice and the overlay landed a whole pane
+    // away, pinned to the far edge. The window metrics' bounds ARE the task
+    // origin on API 30+, and (0,0) for a full-screen task, so the subtraction
+    // is a no-op in the case that always worked. Below API 30 there is no
+    // cheap way to read the task origin; a split pane there keeps the old
+    // placement.
     private static int[] windowContentOrigin() {
         int[] loc = new int[2];
-        int addTop = 0, addLeft = 0;
+        int addTop = 0, addLeft = 0, taskLeft = 0, taskTop = 0;
         try {
             View decor = activity.getWindow().getDecorView();
             decor.getLocationOnScreen(loc);
@@ -2697,8 +2709,13 @@ public final class BtBridge {
                 addTop = wi.getSystemWindowInsetTop();
                 addLeft = wi.getSystemWindowInsetLeft();
             }
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Rect b = activity.getWindowManager().getCurrentWindowMetrics().getBounds();
+                taskLeft = b.left;
+                taskTop = b.top;
+            }
         } catch (Throwable ignored) {}
-        return new int[]{ loc[0] + addLeft, loc[1] + addTop };
+        return new int[]{ loc[0] - taskLeft + addLeft, loc[1] - taskTop + addTop };
     }
 
     // Re-assert the frame after the decor settles (see applyFrame's cold-start note).
