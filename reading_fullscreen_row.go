@@ -64,9 +64,13 @@ func chapterArrowPair(state *AppState) fyne.CanvasObject {
 	}
 	numbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
 	idx := indexOf(numbers, state.CurrentChapter)
-	// The portrait chapter header's box height (chapter_header_mobile.go), so a
-	// page turned in landscape has the same target as one turned in portrait.
-	const boxH = 36
+	// 28, not the portrait header's 36 (chapter_header_mobile.go): the row is
+	// exactly as tall as its tallest object, and at 36 the arrows pushed the
+	// chapter text down by 8pt on the iPhone, in the one orientation whose whole
+	// point is height. At 28 the row is the height the label alone gave it, so
+	// the arrows cost the reader nothing; the icons keep their size and the
+	// tap box is the row.
+	const boxH = 28
 	prev := newIconTapButton(state, theme.NavigateBackIcon(), 22, boxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
