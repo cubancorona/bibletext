@@ -440,8 +440,14 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       (justified on Android 15+, ragged below — the same SDK rule as
       portrait), the TextView keeping its place through the rotation by
       scroll fraction, and a note pill still placed though it loses its
-      stack-centring (there is no blank line to centre in). Tablets:
-      unchanged (rail in landscape).
+      stack-centring (there is no blank line to centre in). In the LIGHT
+      theme the short edge on the cutout side is paper, not black
+      (BtBridge.extendIntoTheCutout), and the column is centred on the screen,
+      not on the cutout-inset overlay — measure the left and right margins.
+      Rotate the emulator with its toolbar button (`adb emu rotate`); if
+      nothing happens, check auto-rotate is on and try the next click (the
+      180° posture is refused on some images). Tablets: unchanged (rail in
+      landscape).
 - [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
       app header and the rail (or bottom bar), the "‹ Results" trail stays
       out, and the reading pane takes the whole window; its restore button

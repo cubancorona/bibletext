@@ -223,6 +223,14 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   (`setFrameFromObject` → `BtBridge.setFrame`, offset by the decor view's
   on-screen origin). Android phones rebuild with the leading rail in landscape
   on Books and Search, and full-screen on the Read tab (`phone_landscape.go`).
+  One window setting rides with that: `BtBridge.extendIntoTheCutout` asks for
+  `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` on API 28 to 34, so the window
+  manager stops letterboxing the window away from the cutout in landscape
+  and painting that strip black (from Android 15 the platform forces "always"
+  for apps targeting 35 or later; this app targets 36). Painting the window
+  or the system bars does nothing here — a NativeActivity window's view
+  hierarchy never draws. The reporter column is centred on the window from
+  the overlay's frame, not on the cutout-inset overlay itself.
   Before a width change the bridge captures the live fractional scroll position,
   then reapplies it after the TextView has reflowed at the new width; an explicit
   arrival or restore target still takes precedence. This prevents the old

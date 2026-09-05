@@ -67,17 +67,56 @@ tab's landscape presentation with the position kept across both rotations, a
 link's verse wash surviving them, and the Books tab keeping its rail.
 `BIBLETEXT_DEV_PHONE_LANDSCAPE=on|typo|off` seeds a scripted simulator run.
 
-## Android landscape: the status-bar strip is black in the light theme
+## Android landscape: the status-bar strip is black in the light theme — DONE
 
-On the API 33 emulator (720×1600) in landscape, the strip the status bar
-occupies on the short edge is painted black behind the light paper: the
-Fyne canvas is inset from the system bars and nothing paints the window
-behind it. Invisible in the dark theme and in portrait (the bar sits over the
-paper there), so it predates the landscape reading mode but the mode makes
-it the first thing seen. Fix: set the activity window's background to the
-paper colour when the palette changes (BtBridge, the same push setStyle
-takes), so the inset area matches the page; check API 35 and the tablet AVD.
+On the API 33 emulator (720×1600) in landscape, the strip down the short edge
+was black behind the light paper. It was not the status bar and not the
+window: it was the WINDOW MANAGER'S CUTOUT LETTERBOX. In the default cutout
+mode a window may sit under a display cutout only when that edge is at the
+top (portrait); in landscape the system letterboxes the window away from the
+cutout's whole short edge and paints the letterbox itself, in black. Dark
+paper hid it; light paper showed it, and the landscape reading mode made it
+the first thing seen.
 
+The first attempt painted the activity window's background and system bars
+in the paper colour from the style push, and changed nothing — this is a
+NativeActivity window (takeSurface), so the view hierarchy never draws and a
+window background or bar colour set on it is never rendered. The fix is
+BtBridge.extendIntoTheCutout, from init: LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+on API 28 to 34, so the cutout arrives as an inset the canvas already honours
+and the strip becomes paper (from Android 15 the platform forces "always" on
+every window of an app targeting 35 or later — this app targets 36 — which is
+why the API 35 emulator never showed it). The same pass found the reporter
+column centred in the overlay rather than on the screen — the canvas keeps
+the reading object out of the display cutout, so the overlay sits 42px from
+one edge and 178px from the other and its centre is 67px off — and
+applyReadingPadding now centres the column on the window, as the iPhone does. It centres against the overlay's FRAME
+(frameX plus the canvas inset, the sum applyFrame positions the window by),
+not the view's on-screen location: on a rotation the first layout runs before
+the overlay window has moved, a location read then said x=0, and the column
+landed ~130px off once the window moved — and only with the cutout on the
+left, which is what made it look intermittent. applyFrame re-centres after
+every move.
+
+Emulator note: the rotation helper used to write `accelerometer_rotation 0` + `user_rotation`, which
+switches auto-rotate OFF and leaves the emulator ignoring its own toolbar
+rotate button afterwards. Rotate emulators with `adb emu rotate` (what the
+button does) and never write those settings. Separately, the API 33 image
+has mAllowAllRotations=false, so the 180° posture in the button's four-step
+cycle is refused and that one click looks dead; the next click works.
+
+
+## Android split-screen: the reading overlay doubles the task origin
+
+Pre-existing and unrelated to the cutout-mode change. applyFrame places the
+overlay Dialog at frame + windowContentOrigin, and
+windowContentOrigin adds the decor's ON-SCREEN location — but a Dialog in a
+non-fullscreen task (split-screen, freeform) is positioned relative to the
+TASK bounds, so the origin is counted twice: BibleText as the bottom app in
+split-screen shows the reading overlay pushed down by the task's own offset.
+Fix: subtract the task's on-screen origin (the decor's window-relative
+location, or WindowMetrics bounds) when the window is not at the display
+origin; verify on the API 35 emulator with the app in both halves of a split.
 
 ## Bible version states: transition diagram + comprehensive tests
 

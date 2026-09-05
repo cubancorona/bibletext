@@ -723,6 +723,8 @@ public final class BtBridge {
                 if (dialog != null) {
                     try { dialog.dismiss(); } catch (Throwable ignored) {}
                 }
+                // A recreated activity is a fresh window; ask again.
+                extendIntoTheCutout(act);
                 dialog = null;
                 root = null;
                 scroll = null;
@@ -1499,7 +1501,12 @@ public final class BtBridge {
         // (applyReadingPadding), and a full-width card over a narrow column
         // reads as a different surface's furniture.
         int side = Math.max(dp(10), text != null ? text.getPaddingLeft() : dp(10));
-        int wpx = content.getWidth() - 2 * side;
+        int sideR = Math.max(dp(10), text != null ? text.getPaddingRight() : dp(10));
+        // Both paddings, not twice the left: the reporter column is centred on
+        // the WINDOW (applyReadingPadding), so on the cutout side of a landscape
+        // phone the two differ, and a card sized from the left alone would run
+        // past the column on the right.
+        int wpx = content.getWidth() - side - sideR;
         if (wpx < dp(60)) {
             // No real layout yet. The width LISTENER only fires when the width
             // CHANGES, so on an arrival into an already-sized pane it never
@@ -2210,6 +2217,41 @@ public final class BtBridge {
     private static float lastMeasureDp = 0f;
 
     /**
+     * extendIntoTheCutout lets the activity window reach under the display
+     * cutout on the short edges, which is what the black strip down the short
+     * edge in landscape was. In the default cutout mode a window may sit under
+     * a cutout only when that edge is at the TOP, so in landscape the window
+     * manager letterboxes the window away from the cutout's whole short edge
+     * and paints the letterbox itself, in black. Nothing the app draws reaches
+     * it: this is a NativeActivity window (takeSurface), so the view hierarchy
+     * never renders, and a window background or a system-bar colour set on it
+     * is never drawn — measured on the API 33 emulator, where painting the
+     * window changed nothing and this did. With the window extended, the
+     * cutout arrives as an INSET instead: the canvas already keeps its content
+     * out of insets and paints its paper over the whole surface, and the
+     * overlay's frame follows the reading object (windowContentOrigin adds the
+     * same inset back), so the strip becomes paper and nothing moves.
+     *
+     * API 28 to 34. The attribute is API 28, and from Android 15 the platform
+     * forces the "always" mode on every window of an app targeting 35 or later
+     * (this app targets 36), which is why the API 35 emulator never showed the
+     * strip and why writing the attribute there would be ignored.
+     */
+    private static void extendIntoTheCutout(Activity act) {
+        if (act == null || android.os.Build.VERSION.SDK_INT < 28 || android.os.Build.VERSION.SDK_INT >= 35) return;
+        try {
+            android.view.Window aw = act.getWindow();
+            android.view.WindowManager.LayoutParams lp = aw.getAttributes();
+            if (lp.layoutInDisplayCutoutMode
+                    != android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
+                lp.layoutInDisplayCutoutMode =
+                        android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                aw.setAttributes(lp);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /**
      * applyReadingPadding centres the reporter column, the way iOS centres it
      * in textContainerInset (btIOSApplyInsets): Go pushes the WIDTH the column
      * should occupy and this side owns both the density and the live view
@@ -2219,20 +2261,86 @@ public final class BtBridge {
      * wider than the view (a large text size on a narrow window) would compute
      * a negative inset, so the pushed padding is also the floor. UI thread only.
      */
-    private static void applyReadingPadding() {
-        if (text == null) return;
+    private static boolean applyReadingPadding() {
+        if (text == null) return false;
         float density = activity != null
                 ? activity.getResources().getDisplayMetrics().density : 2f;
         int padL = Math.round(lastPadLDp * density), padT = Math.round(lastPadTDp * density);
         int padR = Math.round(lastPadRDp * density), padB = Math.round(lastPadBDp * density);
         if (lastMeasureDp > 0f) {
             int w = text.getWidth();
+            int measurePx = Math.round(lastMeasureDp * density);
             if (w > 0) {
-                int side = (w - Math.round(lastMeasureDp * density)) / 2;
-                if (side > padL) { padL = side; padR = side; }
+                // CENTRED ON THE WINDOW, NOT ON THIS VIEW. The overlay takes
+                // its frame from the Fyne reading object, and in landscape the
+                // canvas keeps that object out of the display cutout — so the
+                // frame sits 42px from one edge and 178px from the other on the
+                // API 35 emulator, and a column centred in it lands 67px off
+                // the screen's centre, to the side the cutout is not on. The
+                // iPhone centres its column on the screen (its text view spans
+                // the width; the measure keeps the words clear of the island),
+                // and this matches it: the column's left edge is placed at the
+                // window's centre minus half the measure, in window
+                // coordinates, and the view's own offset is subtracted.
+                //
+                // The view's place in the window is taken from the FRAME the
+                // overlay was given (frameX, plus the inset the canvas sits
+                // behind — the same sum applyFrame positions the window by),
+                // not from the view's on-screen location: on a rotation the
+                // first layout, and so this listener, runs before the overlay
+                // window has moved to that frame, and a location read then
+                // said x=0 — the column was centred for a window that was
+                // still at the edge and landed ~130px off once it moved. Being
+                // frame-driven also means applyFrame re-centres after every
+                // move, which the width listener alone never would (the width
+                // does not change when the window moves).
+                int base = padL;
+                boolean placed = false;
+                try {
+                    android.view.View decor = activity != null ? activity.getWindow().getDecorView() : null;
+                    if (decor != null && decor.getWidth() > 0) {
+                        int addLeft = 0;
+                        android.view.WindowInsets wi = decor.getRootWindowInsets();
+                        if (wi != null) addLeft = wi.getSystemWindowInsetLeft();
+                        int viewLeft = frameX + addLeft;
+                        int wantLeft = (decor.getWidth() - measurePx) / 2 - viewLeft;
+                        int wantRight = w - wantLeft - measurePx;
+                        // Only when the column fits with at least the phone
+                        // page's margin on both sides; otherwise the view's own
+                        // centre below, and failing that the legacy padding.
+                        if (wantLeft >= base && wantRight >= base) {
+                            padL = wantLeft; padR = wantRight; placed = true;
+                        }
+                    }
+                } catch (Throwable ignored) {}
+                if (!placed) {
+                    int side = (w - measurePx) / 2;
+                    if (side > base) { padL = side; padR = side; }
+                }
             }
         }
-        text.setPadding(padL, padT, padR, padB);
+        boolean changed = text.getPaddingLeft() != padL || text.getPaddingRight() != padR
+                || text.getPaddingTop() != padT || text.getPaddingBottom() != padB;
+        if (changed) {
+            text.setPadding(padL, padT, padR, padB);
+            // The "Follow narration" pill is centred in the overlay by its
+            // gravity, and the overlay is where the canvas put the reading
+            // object — clear of the cutout, so off the window's centre by half
+            // the inset. The column is centred on the window now, and the pill
+            // should sit under the COLUMN, whose centre is half the padding
+            // difference from the overlay's. FrameLayout moves a centred child
+            // by the WHOLE of leftMargin - rightMargin (its onLayout adds the
+            // difference outright, not half of it), so the margin is half the
+            // padding difference — measured: the full difference put the pill
+            // 68px past the column on the API 35 emulator, on the far side.
+            if (followBtn != null && followBtn.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+                FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) followBtn.getLayoutParams();
+                fp.leftMargin = Math.max(0, (padL - padR) / 2);
+                fp.rightMargin = Math.max(0, (padR - padL) / 2);
+                followBtn.setLayoutParams(fp);
+            }
+        }
+        return changed;
     }
 
     /**
@@ -2558,6 +2666,11 @@ public final class BtBridge {
             lp.width = frameW;
             lp.height = frameH;
             w.setAttributes(lp);
+            // The reporter column is centred on the WINDOW, against this frame
+            // (applyReadingPadding), so a frame that moves re-centres it — and
+            // the note card is laid out against the column, so a move that
+            // changed the padding re-derives the card as a width change would.
+            if (applyReadingPadding()) refreshNoteSticker();
         } catch (Throwable ignored) {
             // Window torn down mid-update (activity recreation) — harmless.
         }
