@@ -135,10 +135,12 @@
          btMacInstallNote against the restore apply: a restore that resolves
          before the band installs uses the pre-band inset and lands bandH off.
          Neither is N-specific; both predate this work.
-       - Android's noteBandSpan is BOTH the removal handle and the placement
-         input, so the first moment a second band exists the first span is
-         orphaned on the live text with no reference — a permanent gap, and no
-         host test can see it because that file does not compile here. -->
+       - Android's noteBandSpan WAS both the removal handle and the placement
+         input, so a second band would have orphaned the first span. CLOSED by
+         8d-And: clearNoteBand sweeps NoteBandSpan BY CLASS over the whole
+         text, so no reservation can be orphaned by an overwritten handle, and
+         the reservations coalesce to one span per paragraph. Still true that
+         no host test can see that file; the emulator is the check. -->
 
 # Unifying note chrome: one value, four adapters, one conformance table
 

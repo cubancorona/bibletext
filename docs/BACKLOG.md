@@ -300,8 +300,10 @@ Three ways to take it, cheapest first, not exclusive:
    store, not drawnNote, not the fingerprint." Largest change, and worth
    weighing against a page carrying three open bubbles at once.
 
-Read from the code, not yet watched on a device with three notes on three
-paragraphs; do that first, since it will show whether (2) alone is enough.
+(2) was watched on the API 35 emulator with four received notes on four
+John 3 paragraphs (8d-And): four chips in their own bands, the single sticker
+stood down, and a pressed pill opened its own paragraph's group. What remains
+open here is (3) alone, and it is a choice rather than a defect.
 
 ## Candidate: a neutral graphite wash for the dark-mode highlight
 
@@ -342,10 +344,19 @@ formality: `TestApprovedHighlightTokensStayPinned` and
 highlight is meant to match the app's, and that parity is intended, so any
 change here changes the web reader too.
 
-## Per-paragraph note pills: notes that belong to no paragraph
+## Per-paragraph note pills: notes that belong to no paragraph — DONE
 
-The per-paragraph pills ship on by default (`notesPillPerParagraph`, flipped on
-in 8f); this gap is the part still open underneath them.
+Decided and built as the first option below: a chapter-top group carries
+them. `groupNotesByParagraph` sends a whole-chapter note (anchored at verse 0)
+to the chapter-top group, and `chapterNoteGroups` puts the book's unplaced
+notes on that same group — creating it when nothing else needs it — with the
+"· N not shown" suffix the single pill always carried. The collision with a
+first-paragraph pill at the same band verse is resolved by matching bands by
+KEY rather than by verse (8a). Pinned by
+`TestTheTopGroupCarriesTheNotesThatBelongToNoParagraph` and
+`TestTheTopPillDisclosesUnplacedNotes`, so the counts sum to the chapter's
+total again. The original statement of the gap follows for the record.
+
 
 The pills are per paragraph, and two kinds of note belong to no paragraph. Both
 are counted by the chapter-scope single pill and both fall out of the reading
@@ -405,44 +416,17 @@ for them the answer would have to be a count in the own note's who line, which
 contradicts "displaying an own note must not change N" unless it is written as
 a separate clause rather than folded into N.
 
-## TOP PRIORITY — carry the per-paragraph pills to the other surfaces
+## Per-paragraph pills on every surface — DONE
 
-The port and the unification are one job now: see
-[docs/NOTE_CHROME_UNIFICATION.md](NOTE_CHROME_UNIFICATION.md) for the plan.
-Porting the pills surface by surface would add a fifth transcription of every
-decision; the plan makes each decision singular first, so the port lands as
-adoption rather than as four more copies. Step one is done — the own-note
-predicate is one function (`c619743e4`).
-
-
-
-`notesPillPerParagraph` was OFF until every surface drew the groups, and is ON
-now that they do (8f). Its first flip had been reverted within the hour: only the styled pane (Windows, Linux)
-draws the groups, so turning it on split the collapsed model across platforms —
-per-paragraph counts on desktop, the chapter-wide chip on the phone — which is
-worse than either model applied everywhere.
-
-What each surface needs:
-
-- **iOS and macOS** draw the sticker from `buildChapterHTML` plus a native
-  overlay laid out by `btIOSRefreshNote` / `btMacRefreshNote`, one band reserved
-  above the anchor paragraph. Several pills means several bands and several
-  overlays, and `btIOSNoteTopY` / `btMacNoteTopY` become "which pill", not "the
-  note". The placement guard added alongside this
-  (`btIOSNoteSharesHighlightPara`) already asks the right question and should
-  generalise to "any pill on the highlight's paragraph".
-- **Android** has its own `android_chapter_html.go`; the band is drawn in HTML
-  there, so it is the closest to the styled pane's model.
-
-Doing it also closes **X16** (docs/NOTES_STATE.md): with an own note open, the
-three native surfaces represent the received set nowhere, and the pills are what
-represents it once the sticker is busy. That is the reason to do it, beyond
-consistency.
-
-Still open underneath it, and cheaper to decide first because it changes what a
-pill must be able to say: notes that belong to no paragraph — unplaced and
-chapter-level — are absent from the pills, so the counts do not sum to the
-chapter total.
+The port and the unification were one job, and both are complete: see the
+status block at the top of
+[docs/NOTE_CHROME_UNIFICATION.md](NOTE_CHROME_UNIFICATION.md), which records
+all nine steps landed. iOS, macOS and Android draw the paragraph groups
+through their band-spec pushes (`bibleTextSetNoteBands` and its twins, 8d),
+`notesPillPerParagraph` defaults on (8f), and the web reader takes its chrome
+from the same functions (step 9). X16 in docs/NOTES_STATE.md — an open own
+note leaving the received set represented nowhere on the native surfaces — is
+closed by it. The dev toggle's off value remains the one-line reversion.
 
 ## Deferred-UI timers under the test driver (audited 2026-09-02, no live races)
 
