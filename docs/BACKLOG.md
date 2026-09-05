@@ -106,17 +106,21 @@ has mAllowAllRotations=false, so the 180° posture in the button's four-step
 cycle is refused and that one click looks dead; the next click works.
 
 
-## Android split-screen: the reading overlay doubles the task origin
+## Android split-screen: the reading overlay doubled the task origin — DONE
 
-Pre-existing and unrelated to the cutout-mode change. applyFrame places the
-overlay Dialog at frame + windowContentOrigin, and
-windowContentOrigin adds the decor's ON-SCREEN location — but a Dialog in a
-non-fullscreen task (split-screen, freeform) is positioned relative to the
-TASK bounds, so the origin is counted twice: BibleText as the bottom app in
-split-screen shows the reading overlay pushed down by the task's own offset.
-Fix: subtract the task's on-screen origin (the decor's window-relative
-location, or WindowMetrics bounds) when the window is not at the display
-origin; verify on the API 35 emulator with the app in both halves of a split.
+applyFrame places the overlay Dialog at frame + windowContentOrigin, and
+windowContentOrigin added the decor's ON-SCREEN location — but the window
+manager resolves a dialog's x/y against the TASK bounds, so in a task that
+does not start at the display origin (the bottom or right pane of
+split-screen, a freeform window) the origin was counted twice and the overlay
+was pinned below the tab bar with the reading area empty. windowContentOrigin
+now subtracts the window metrics' bounds origin on API 30+, a no-op for a
+full-screen task. Reproduced and verified on the API 35 emulator in a
+freeform window (`settings put global enable_freeform_support 1` and
+`force_resizable_activities 1`, then `am start … --windowingMode 5`): the
+overlay moved from (297,1426) to (21,730) against a task at (276,696), and
+sat over the reading rect. Below API 30 the task origin is not cheaply
+readable, so a split pane there keeps the old placement.
 
 ## Bible version states: transition diagram + comprehensive tests
 
