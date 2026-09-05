@@ -259,6 +259,31 @@ quiet; re-reading the same ground with no model in hand found four more,
 including the original incident arriving through a version switch rather than
 a launch.
 
+## Source fields: three defects and a decision list
+
+docs/SOURCE_FIELDS_DECISIONS.md analyses every field the decoders skip or
+half-keep, with costs and a recommendation for each. Three of its findings
+are defects rather than decisions, in the order they should be fixed:
+
+1. The paragraph rule tests only straight quotation marks, so a verse ending
+   in curly-quoted speech never starts a new paragraph. About 2,100 eligible
+   breaks per edition are suppressed. One line, no cache epoch.
+2. Psalm 119's acrostic letters are in WEB and WEB Catholic verse text: ALEPH
+   is stored as the psalm's title, and 21 verses end with a stray letter, so
+   they reach search, sharing, copying, the website and speech. The NKJV
+   decoder already drops exactly this. Needs epochs for web and webc.
+3. The NKJV reads "call His name JESUS" in Matthew 1:21, Matthew 1:25, Luke
+   1:31 and Luke 2:21, because the feed marks the name with the small-caps
+   style the app uppercases for the divine name. Check a printed copy before
+   changing anything; every other capitalised phrase in the canon is a
+   genuine inscription.
+
+The same document recommends a set of decode-time checks that cost no epoch
+(the feed's own verse counts, the note reference field, a census of unknown
+node and style shapes, and the words-of-Jesus cross-check), and sequences the
+larger questions: source paragraph boundaries, section headings, and the
+NKJV's italics for supplied words.
+
 ## NKJV Psalm superscriptions
 
 DONE. decodeAPIBiblePassage reads the `d` (descriptive title) paragraph into

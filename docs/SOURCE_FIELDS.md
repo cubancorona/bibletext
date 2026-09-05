@@ -12,6 +12,10 @@ of three verdicts:
 The rule this document enforces: a skip that is not explained here is a
 defect. When a decoder changes, this file changes with it.
 
+Each skip and each OPEN row is analysed, costed and given a recommendation in
+docs/SOURCE_FIELDS_DECISIONS.md, which also records three defects the
+measuring turned up.
+
 How to re-census the sources:
 
 - helloao editions (WEB, WEB Catholic, BSB): the raw `complete.json`
@@ -79,7 +83,10 @@ USX `d` paragraph) as a title, and with titles off it is simply absent from
 the feed. Titles on also brings the publisher's section headings (`s`) and
 the acrostic letters of Psalm 119 (`qa`), which `apiBibleSkipPara` drops.
 The whole canon was downloaded both ways with the same decoder: the flag
-changes nothing but the titles.
+changes nothing but the titles. That comparison bounds only the styles the
+flag strips; a style the feed sends either way would appear in both decodes
+alike, which is what the style census in docs/SOURCE_FIELDS_DECISIONS.md is
+for.
 
 The canon as decoded (verified 5 Sep 2026 against the app's own decode of
 23 Aug 2026, byte for byte on every verse):
@@ -148,6 +155,7 @@ The OPEN rows above, gathered:
 8. Poem breaks in cross-reference snippets and the Android long-press menu.
 9. Red letter on the secondary surfaces.
 
-Until a decision is written here, the current behaviour stands and is
-treated as deliberate; a change to any of them is a change to this file
-first.
+Every one of these is analysed and answered in
+docs/SOURCE_FIELDS_DECISIONS.md; the answers are folded back into this file
+as they are taken. Until then the current behaviour stands and is treated as
+deliberate; a change to any of them is a change to this file first.
