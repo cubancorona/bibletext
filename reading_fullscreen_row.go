@@ -64,20 +64,21 @@ func chapterArrowPair(state *AppState) fyne.CanvasObject {
 	}
 	numbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
 	idx := indexOf(numbers, state.CurrentChapter)
-	// 28, not the portrait header's 36 (chapter_header_mobile.go): the row is
-	// exactly as tall as its tallest object, and at 36 the arrows pushed the
-	// chapter text down by 8pt on the iPhone, in the one orientation whose whole
-	// point is height. At 28 the row is the height the label alone gave it, so
-	// the arrows cost the reader nothing; the icons keep their size and the
-	// tap box is the row.
-	const boxH = 28
-	prev := newIconTapButton(state, theme.NavigateBackIcon(), 22, boxH, func() {
+	// The row is exactly as tall as its tallest object, and the label alone
+	// makes it 22pt: a 16pt canvas.Text. Any taller box pushes the chapter text
+	// down by the difference, in the one orientation whose whole point is
+	// height — measured on the iPhone 16 Pro simulator, a 28pt box cost 8pt, so
+	// the portrait header's 36 (chapter_header_mobile.go) would cost 16. At the
+	// label's own height the arrows cost the reader nothing; the tap box is the
+	// row, 38pt wide, which is landscape's compromise.
+	const boxH = 22
+	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, boxH, func() {
 		if moveChapter(state, -1) {
 			state.refresh()
 		}
 	})
 	prev.disabled = idx <= 0
-	next := newIconTapButton(state, theme.NavigateNextIcon(), 22, boxH, func() {
+	next := newIconTapButton(state, theme.NavigateNextIcon(), 20, boxH, func() {
 		if moveChapter(state, 1) {
 			state.refresh()
 		}
