@@ -91,6 +91,57 @@ already examined — and for the whole life of the code that probe was
 `os.Stat`, while the serve path was a full load. Two questions, two answers,
 one reader.
 
+The diagram above is the storage half — M1 to M3. The other four machines and
+the arrivals layer, drawn as the enumerations drive them:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "M4 — ACTIVE SELECTION (memory vs disk)" as M4 {
+        [*] --> Agree
+        Agree --> Disagree: disk moves under a live decode (epoch bump, purge, licence gone)
+        Disagree --> Agree: switch re-reads the disk, or the stale decode is retired (D11)
+    }
+
+    state "M5 × M6 × M7 — LAUNCH × SAVED POSITION × CANON" as L {
+        [*] --> Named: the saved state names a translation and a book
+        Named --> Loads: it loads
+        Named --> LoadFails: offline, no usable cache
+        Named --> SupersededOnly: current epoch gone, previous on disk
+        Named --> Unselectable: canSelect is false this launch
+        LoadFails --> Fallback: the default serves INSTEAD, choice kept (D9)
+        SupersededOnly --> Fallback
+        Unselectable --> Fallback
+        Fallback --> Said: the screen says which text this is (D10)
+        Loads --> Trail: history validated in the canon IN HAND, never the fallback's (D16)
+        Fallback --> Trail
+    }
+
+    state "ARRIVALS — a promise kept over time" as A {
+        [*] --> Parked: a link names another translation
+        Parked --> Honoured: the fetch lands, the passage opens
+        Parked --> Dead: the fetch fails, with a sentence
+        Dead --> Dead: a later switch to that translation must NOT move the reader (D12)
+        Parked --> Displaced: another translation loads first — said, not dropped (D14)
+        Parked --> Kept: the reader picks a different translation — the park survives (D13)
+    }
+
+    M4 --> L: what the launch decodes is what M4 then holds
+    L --> A: an arrival lands on whatever the launch left in hand
+    A --> M4: a link's translation becomes the active one
+
+    note right of Disagree
+        the one place the app keeps
+        a SECOND copy of a translation
+    end note
+```
+
+Two of these have no cross-product at all. The launch space is three
+machines enumerated together because the erasure lived in their
+intersection; the arrivals layer is walked as journeys because a promise is
+kept or broken over time and every way it breaks is a sequence.
+
 ## State variables
 
 | Variable | Where | What it means |
@@ -584,22 +635,25 @@ mapped.
 
 ## What is enumerated, and what is not
 
-**M1, storage** — five disk shapes × three events, every cell reached, none
-skipped, plus the licensed recency boundary from both sides and the four
-unusable-file shapes.
+Every machine below is driven by a test that fails on any incoherent state
+not named in its register, and each test logs its own count when run with
+`-v`. The numbers are the tests' numbers, not this document's.
 
-**M2, credentials** — five knowledge states (absent, held, unreadable,
-legacy-only, unreadable-with-legacy) × two events, including the irreversible
-one. The keystone is a credential store that can *fail*, which no existing
-fake could do.
+| Space | Test | Cells / journeys |
+|---|---|---|
+| **M1** storage | `version_state_flow_test.go` | 15 cells — five disk shapes × three events, plus the licensed recency boundary from both sides and the four unusable-file shapes |
+| **M2** credentials | `version_credentials_flow_test.go` | 10 cells — five knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy) × two events, including the irreversible one |
+| **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce |
+| **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
+| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) |
+| **Arrivals** | `version_arrivals_flow_test.go` | **780 journeys / 2930 steps** to depth 4 over five events — a link naming another translation, its fetch failing or landing, the reader picking that translation or a different one — with the invariants asserted after every step |
 
-**M3, refresh** — 160 cells across pending × seed × downloading × backoff ×
-which version is active, and **310 journeys** to depth 4 from the two starting
-states a launch can really produce, with the invariants asserted after every
-step. The trajectory harness is the instrument for flow, and the two numbers
-are its argument: the cells found nothing, the journeys found `D4`.
+The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`
+and `D12`; the model-free second pass found `D13`–`D16`. All are closed.
 
-Not yet enumerated, and therefore not claimed: **M4–M7** and the arrivals
-layer. The remaining reported defects (`D2`–`D8`) live in those spaces and are
-recorded in `docs/BACKLOG.md` as reports to confirm with a cell — not here,
-because this document names only what an enumeration has actually driven.
+Nothing in the map above is unenumerated. What the enumerations do not
+claim: the surfaces listed under *The surfaces that must not lie* are checked
+where a test can read them (the picker rows, the notices, the citation
+string) and not where only a screenshot can (the reading pane's rendering),
+and the per-version data listed under *The arrivals layer* — audio,
+footnotes, cross-references — is modelled as availability, not as content.

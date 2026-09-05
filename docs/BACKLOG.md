@@ -122,7 +122,16 @@ overlay moved from (297,1426) to (21,730) against a task at (276,696), and
 sat over the reading rect. Below API 30 the task origin is not cheaply
 readable, so a split pane there keeps the old placement.
 
-## Bible version states: transition diagram + comprehensive tests
+## Bible version states: transition diagram + comprehensive tests — DONE
+
+Both halves are in docs/VERSION_STATES.md: the storage diagram (M1–M3) and,
+since 2026-09-05, a second diagram for M4, the launch space and the arrivals
+layer drawn as the enumerations drive them, with a table of every space's
+own count as its test logs it (15, 10, 160 + 310 journeys, 8, 16, and 780
+journeys over 2930 steps). The document's closing section had still said
+M4–M7 were unenumerated; it now says what is, and what the enumerations do
+not claim. The record of the work follows.
+
 
 **Storage space DONE 2026-08-28** — `docs/VERSION_STATES.md` models the machine
 and `version_state_flow_test.go` enumerates it (15 cells, every one reached,
