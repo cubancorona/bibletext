@@ -261,13 +261,24 @@ a launch.
 
 ## NKJV Psalm superscriptions
 
-The NKJV prints the Psalm titles too, but its API.Bible feed delivers them as
-`d` (descriptive title) paragraphs, which decodeAPIBiblePassage currently
-skips via apiBibleSkipPara. Rendering them means capturing `d` content into
-BibleData.Superscriptions during the passages walk (anchoring any note
-markers the way the helloao branch does), bumping the nkjv cacheEpoch, and
-nothing else — the renderers and the section already handle titles for every
-version. Worth batching with the next NKJV decode change.
+DONE. decodeAPIBiblePassage reads the `d` (descriptive title) paragraph into
+BibleData.Superscriptions instead of skipping it: text and notes go through
+the same walk as a verse's, the title is attached at the next verse marker
+(on the passages endpoint it is read while the decoder is still in the
+previous chapter), and a title left over at a chunk's tail is attached only
+when its own verseId says which chapter. nkjv cacheEpoch 1 → 2. The
+renderers and the footnote section already handled titles for every version,
+so nothing else moved there. The feed only carries `d` with
+include-titles=true, so the query now asks for titles and apiBibleSkipPara
+drops the section headings and acrostic letters that come with them. The
+same epoch fixes a join defect the note capture had introduced: a verse
+opening with a cross-reference took the paragraph boundary's poem break in
+front of its first word (1,995 poetry verses began with a blank line).
+Pinned by apibible_superscription_test.go and apibible_note_join_test.go;
+TestLiveAPIBibleProbe checks Psalm 3 and the 3→4 passage boundary, and
+TestLiveAPIBibleFullCanon (opt-in, ~200 requests) downloads the whole
+canon and reproduces the 2026-08-23 text byte for byte with 116 titles
+added. What every source carries and what is kept: docs/SOURCE_FIELDS.md.
 
 ## Show a note you just sent, the way opening one from the browser does
 

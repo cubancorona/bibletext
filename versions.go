@@ -115,9 +115,12 @@ var registeredVersions = []BibleVersion{
 		// only while the version is licensed and serving real text.
 		LicenseNotice: "Scripture taken from the New King James Version®. Copyright © 1982 " +
 			"by Thomas Nelson. Used by permission. All rights reserved. Text provided via API.Bible (api.bible).",
+		// epoch 2: Psalm superscriptions (the "d" paragraph, which the feed
+		// only carries with include-titles=true), and no stray line break in
+		// front of a verse that opens with a cross-reference;
 		// epoch 1: cross-reference note capture (include-notes=true; the feed
 		// carries no translator footnotes — probed live 2026-08-26).
-		cacheEpoch: 1,
+		cacheEpoch: 2,
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
 }

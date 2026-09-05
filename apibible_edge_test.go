@@ -28,7 +28,7 @@ func TestDecodeAPIBibleEdgeRangedMarker(t *testing.T) {
 	    {"type":"text","text":"Do not think that I came to destroy the Law."}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 5)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestDecodeAPIBibleEdgeVerseGap(t *testing.T) {
 	    {"type":"text","text":"Verse thirty-eight text."}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Acts", 8)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Acts", 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestDecodeAPIBibleEdgeOutOfOrder(t *testing.T) {
 	    {"type":"text","text":"Second verse text."}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestDecodeAPIBibleEdgeSuperscriptionNoLeak(t *testing.T) {
 	    {"type":"text","text":"The LORD is my shepherd;","attrs":{"verseId":"PSA.23.1"}}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Psalms", 23)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Psalms", 23)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestDecodeAPIBibleEdgeTitleOnlyChapter(t *testing.T) {
 	    {"type":"text","text":"A Psalm of David."}
 	  ]}
 	]`
-	_, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Psalms", 23)
+	_, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Psalms", 23)
 	if err == nil {
 		t.Fatal("title-only chapter must be an error, not success")
 	}
@@ -174,7 +174,7 @@ func TestDecodeAPIBibleEdgeDeepNestedChars(t *testing.T) {
 	    ]}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 5)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestDecodeAPIBibleEdgeIgnoresEmptyAndUnknown(t *testing.T) {
 	  ]},
 	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestDecodeAPIBibleEdgeMarkerWithoutNumber(t *testing.T) {
 	    {"type":"text","text":"Seek, and you will find."}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 7)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestDecodeAPIBibleEdgeHugeVerseNumber(t *testing.T) {
 	// packed chapter/verse keys): its text cannot key a verse, and since no
 	// sane verse precedes it here the chapter correctly fails loudly rather
 	// than keying garbage or wrapping negative.
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 1)
 	if err == nil {
 		t.Fatalf("overflowed marker must not key a verse, got %+v", vs)
 	}
@@ -441,7 +441,7 @@ func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
 	    {"type":"text","text":" but the fixture clause continues here.","attrs":{"verseId":"JHN.3.13"}}
 	  ]}
 	]`
-	vs, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 3)
+	vs, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "John", 3)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -416,3 +416,8 @@ own decision. Corpus-verified exact: BSB 116 titles / 36 notes, WEB 117 / 3,
 WEBC 117 / 3; orphan counts unchanged. Epochs: web 4→5, bsb 5→6, webc 4→5.
 With this, every note body in all three helloao feeds is rendered: in-verse
 + omitted-verse orphans + title notes = the whole apparatus, nothing dropped.
+
+NKJV (2026-09-05, cache epoch 2): the API.Bible `d` paragraph is captured the
+same way once the feed is asked for titles (include-titles=true; with titles
+off the paragraph is absent). 116 titles; their notes are cross references
+and so stay dark like every NKJV note. See docs/SOURCE_FIELDS.md.

@@ -396,7 +396,7 @@ const nkjvNotedChapter = `[
 ]`
 
 func TestFootnotesNKJVCaptureAndPurity(t *testing.T) {
-	byCh, _, err := decodeAPIBiblePassage(json.RawMessage(nkjvNotedChapter), "John", 3)
+	byCh, _, _, err := decodeAPIBiblePassage(json.RawMessage(nkjvNotedChapter), "John", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -576,7 +576,7 @@ func TestDecodeAPIBibleOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	    ]}
 	  ]}
 	]`
-	ctrlVerses, ctrlOrphans, err := decodeAPIBiblePassage(json.RawMessage(withText), "Luke", 17)
+	ctrlVerses, ctrlOrphans, _, err := decodeAPIBiblePassage(json.RawMessage(withText), "Luke", 17)
 	if err != nil {
 		t.Fatalf("control fixture: %v", err)
 	}
@@ -587,7 +587,7 @@ func TestDecodeAPIBibleOmittedVerseNoteBecomesOrphan(t *testing.T) {
 		t.Fatalf("control: the note must ride on the verse that has text, got %+v", vs)
 	}
 
-	verses, orphans, err := decodeAPIBiblePassage(json.RawMessage(chapter), "Luke", 17)
+	verses, orphans, _, err := decodeAPIBiblePassage(json.RawMessage(chapter), "Luke", 17)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

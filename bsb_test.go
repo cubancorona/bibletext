@@ -86,9 +86,10 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 
 // bsbSampleComplete mirrors bible.helloao.org's complete.json shape with two
 // books at non-adjacent canonical orders (Genesis=1, John=43) and every node
-// kind the decoder must handle: headings / line_break / hebrew_subtitle (skipped),
-// plain-string verses, poetry ({text,poem}) split across {lineBreak}, and inline
-// footnote markers ({noteId}).
+// kind the decoder must handle: headings / line_break (skipped), hebrew_subtitle
+// (captured as the chapter's Superscription, never as verse text), plain-string
+// verses, poetry ({text,poem}) split across {lineBreak}, and inline footnote
+// markers ({noteId}).
 const bsbSampleComplete = `{
   "translation": {"id":"BSB","shortName":"BSB"},
   "books": [
@@ -163,8 +164,9 @@ func TestDecodeBSBComplete(t *testing.T) {
 		t.Errorf("Genesis 1:27 = %q\n           want %q", got, want27)
 	}
 
-	// Non-verse nodes (hebrew_subtitle) are skipped, and an inline {noteId}
-	// between two text runs collapses cleanly to a single space.
+	// Non-verse nodes never enter verse text (the hebrew_subtitle becomes the
+	// chapter's Superscription), and an inline {noteId} between two text runs
+	// collapses cleanly to a single space.
 	want := "In the beginning was the Word, and the Word was with God."
 	if got, ok := verseText(bd.Verses["John"][1], 1); !ok || got != want {
 		t.Errorf("John 1:1 = %q\n      want %q", got, want)

@@ -20,11 +20,11 @@ import (
 // one prose chapter (John 3).
 func nkjvShapedBible(t *testing.T) *BibleData {
 	t.Helper()
-	psalm, _, err := decodeAPIBibleChapter(json.RawMessage(psalmChapterContent), "Psalms", 46)
+	psalm, _, _, err := decodeAPIBibleChapter(json.RawMessage(psalmChapterContent), "Psalms", 46)
 	if err != nil {
 		t.Fatal(err)
 	}
-	john, _, err := decodeAPIBibleChapter(json.RawMessage(proseChapterContent), "John", 3)
+	john, _, _, err := decodeAPIBibleChapter(json.RawMessage(proseChapterContent), "John", 3)
 	if err != nil {
 		t.Fatal(err)
 	}

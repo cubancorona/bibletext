@@ -92,7 +92,7 @@ type Superscription struct {
 // BibleData holds all Bible verses organized by book and chapter
 // This is the data model/storage for the entire Bible
 // Structure:
-//   - Books: list of all 66 book names in order
+//   - Books: the edition's book names in canonical order (66, or 73 for the Catholic canon)
 //   - Verses: map[book][chapter] = list of verses
 //     Example: Verses["John"][1] = [Verse1, Verse2, ...]
 type BibleData struct {
@@ -102,7 +102,7 @@ type BibleData struct {
 	// Value: slice of all Verse objects in that chapter
 	Verses map[string]map[int][]Verse
 
-	// Books is a slice containing all 66 book names in canonical order
+	// Books is the edition's book names in canonical order (66, or 73 for the Catholic canon)
 	// Used to display the book list in the sidebar
 	Books []string
 

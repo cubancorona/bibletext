@@ -5,9 +5,9 @@ package bibletext
 // The BSB is a modern translation dedicated to the PUBLIC DOMAIN (CC0) by BSB
 // Publishing on 2023-04-30, so no license is required to ship its text — it is a
 // real, selectable version like the WEB, not one of the licensed/evaluation
-// entries. bible-api.com (the WEB's source) does not carry the BSB, so it has its
-// own source here: the free, key-less "Free Use Bible API" at bible.helloao.org,
-// which serves the whole translation as a single JSON document. That one ~7 MB
+// entries. Like the WEB today, it comes from the free, key-less "Free Use Bible
+// API" at bible.helloao.org (the retired bible-api.com path never carried the
+// BSB), which serves the whole translation as a single JSON document. That one ~7 MB
 // fetch is decoded into BibleData and cached like any other version (see
 // loadVersionData / cachePathForVersion). The cache filename carries the version's
 // cacheEpoch so decoder fixes re-decode existing installs instead of being masked
@@ -89,10 +89,11 @@ type helloAOBook struct {
 			Number  int               `json:"number"`
 			Content []json.RawMessage `json:"content"`
 			// Footnotes are the chapter's note BODIES; the in-verse
-			// {"noteId":N} markers point into this list. Bodies whose marker
-			// sits in a node the decoder does not render (Psalm
-			// superscriptions) are deliberately dropped — a note with no
-			// rendered anchor has nowhere to belong. See docs/FOOTNOTES.md.
+			// {"noteId":N} markers point into this list. A marker inside a
+			// Psalm superscription is captured with the title
+			// (Superscription.Footnotes); a marker in any other non-verse
+			// node has nowhere to belong and its body is dropped. See
+			// docs/FOOTNOTES.md and docs/SOURCE_FIELDS.md.
 			Footnotes []struct {
 				NoteID    int    `json:"noteId"`
 				Caller    string `json:"caller"`
@@ -109,9 +110,9 @@ type helloAOBook struct {
 // decodeHelloAOChapters turns one helloao book's chapters into the app's chapter→[]Verse
 // map under book. Each chapter's `content` is a flat array of typed nodes; only `verse`
 // nodes carry reader text (bsbVerseText retains their internal line breaks). Chapter-level
-// line breaks, headings, and Hebrew subtitles (Psalm superscriptions like "A Psalm of
-// David") are editorial nodes outside verse text and remain omitted. Shared by both
-// decoders.
+// line breaks and headings are editorial nodes outside verse text and are skipped on
+// purpose (docs/SOURCE_FIELDS.md); Hebrew subtitles (Psalm superscriptions like "A Psalm
+// of David") become the chapter's Superscription. Shared by both decoders.
 func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
 	var orphans map[int][]OrphanFootnote
@@ -175,9 +176,10 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				// the versification, the translation omits its words, and
 				// the note explains the omission. Capture it as an orphan —
 				// keyed by the verse it belongs to — instead of dropping it
-				// with the verse. ONLY this shape is captured: bodies whose
-				// markers sit in non-verse nodes (Psalm superscriptions)
-				// are never scanned and stay dropped, deliberately.
+				// with the verse. Bodies whose markers sit in a Psalm
+				// superscription are captured with the title (the
+				// hebrew_subtitle branch above); a marker in any other
+				// non-verse node is never scanned and its body is dropped.
 				if head.Number > 0 {
 					for _, m := range marks {
 						body, ok := bodies[m.noteID]

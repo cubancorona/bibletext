@@ -28,8 +28,11 @@ by repeating a plausible thing nobody checked. So each claim carries its status.
 
 The *derived tables* in this repository are built from the publishers' own
 files (§6), not from the runtime supplier, because a publisher's USFM carries
-editorial markup — verse boundaries, words-of-Jesus spans, footnotes — that the
-runtime JSON has already flattened away.
+editorial markup — verse boundaries, words-of-Jesus spans, footnotes — in one
+form for every edition, where the runtime feeds do not: the BSB feed has no
+words-of-Jesus markup at all, the WEB feeds flag runs, and the NKJV feed nests
+char spans. What each runtime feed carries, and what the app keeps of it, is
+listed in docs/SOURCE_FIELDS.md.
 
 ---
 
