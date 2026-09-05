@@ -448,6 +448,14 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       nothing happens, check auto-rotate is on and try the next click (the
       180° posture is refused on some images). Tablets: unchanged (rail in
       landscape).
+- [ ] macOS reading position and note card: launch into a saved position on
+      a chapter with an open note (John 11 with a note on verse 35 is the
+      fixture) → the saved verse is at the top and the card sits 10pt above
+      its paragraph with the band's air ABOVE it, not under its tail. Scroll
+      with the wheel to another verse, flip the system appearance (or change
+      the text size) → the pane stays where the reader left it; drag the
+      window corner → stays. Before 2026-09-05 the flip returned the reader
+      to the launch anchor and the card sat a line high.
 - [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
       app header and the rail (or bottom bar), the "‹ Results" trail stays
       out, and the reading pane takes the whole window; its restore button

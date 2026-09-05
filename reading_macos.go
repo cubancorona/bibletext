@@ -29,9 +29,35 @@ package bibletext
 // sets the text, and bibleTextMacScrollTV has to keep the sticker in view; both
 // come first.
 static void btMacRefreshNote(void);
+static void btMacPlaceNoteAfterLayout(void);
 void bibleTextNoteAction(int verb, int key);
 enum { kMacNotePillTagBase = 2000 };
 static CGFloat btMacNoteTopY(void);
+
+// HBLayoutWatcher hears every completed layout pass of the reading text and
+// re-places the note chrome against it. The card and the pills are subviews
+// placed FROM the layout — nothing moves them when the text moves — and the
+// text moves after they are placed more often than a refresh runs: the band
+// query answers for the layout of the moment, and a later pass (a re-wrap, an
+// attribute edit, the storage settling after an import) can put the passage
+// a line lower with no refresh following. Measured: the card a line above its
+// paragraph with the band's air under its tail, on the launch of a chapter
+// with a saved position and an open note. It places; it does not refresh. The
+// card's own reconcile may still install a band once when the band's height
+// no longer matches the card's, which completes one more pass, after which
+// the two agree and the pass places again without editing — bounded, and the
+// same convergence the frame path relies on.
+@interface HBLayoutWatcher : NSObject <NSLayoutManagerDelegate>
+@end
+@implementation HBLayoutWatcher
+- (void)layoutManager:(NSLayoutManager *)lm didCompleteLayoutForTextContainer:(NSTextContainer *)tc atEnd:(BOOL)atEnd {
+    if (!atEnd) return;
+    // Off the layout pass itself: placing a view inside the pass is where the
+    // reconcile's own re-entrancy trouble lives.
+    dispatch_async(dispatch_get_main_queue(), ^{ btMacPlaceNoteAfterLayout(); });
+}
+@end
+static HBLayoutWatcher *gMacLayoutWatcher = nil;
 // The arrival classes, in noteArrival's own order (notes_arrival.go), and the
 // class this render was pushed. Declared here, ahead of the other note state,
 // because the scroll path is earlier in this file than any of it.
@@ -72,6 +98,13 @@ static NSUInteger btMacContentEnd(NSTextStorage *ts);
 static NSUInteger gMacContentStart;
 // Posted when the reader scrolls by hand while read-along is live (audio_export_apple.go).
 extern void bibleTextReadAlongUserScrolled(void);
+// The reader scrolled by hand (wheel, trackpad, scroller drag). The Go side
+// drops any pending restore target — a saved position the reader has just
+// scrolled away from must not be re-applied by a later same-chapter rebuild —
+// and saves the live position. Declared here because HBReadingTextView is
+// defined above the restore globals; defined beside them.
+extern void bibleTextReadingScrolled(void);
+static void btMacUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
 extern void bibleTextReadAlongFollowTapped(void);
 // The note sticker's three verbs (ai_menu_darwin.go, //go:build darwin — so the
@@ -303,6 +336,34 @@ static NSInteger gMacRestoreVerse = 0;
 static CGFloat   gMacRestoreDelta = 0;
 static CGFloat   gMacRestoreFrac  = 0;
 static BOOL      gMacHasRestore   = NO;
+
+// gMacOwnScroll counts the programmatic scrolls in flight — the restore, a
+// highlight, an import (whose clamp moves the clip), a frame change — so the
+// bounds observer can tell them from the reader's. A counter rather than a
+// flag because they nest (a frame change re-applies the restore).
+static int gMacOwnScroll = 0;
+
+// btMacUserScrolled ends a pending restore the moment the view moves for a
+// reason that is not the restore itself: the reader scrolling by any means,
+// or narration carrying them. On both sides of the bridge: natively at once,
+// and on the Go side once the movement settles — bibleTextReadingScrolled
+// clears state.restore and saves the position, and a bounds change arrives per
+// tick, so the call is debounced to the end of the motion rather than made on
+// every one (iOS calls it at drag/decelerate end for the same reason). This
+// pane had no such hook at all, and the consequence was a launch restore that
+// never died: state.restore stayed set, so every same-chapter rebuild — an
+// appearance flip, a text-size change, a note verb on the slow path — re-armed
+// the launch anchor and moved the reader back to it, however far they had
+// read; and the native arm, disarmed only by a changed frame, re-applied it on
+// the next window resize.
+static unsigned gMacScrollSettleGen = 0;
+static void btMacUserScrolled(void) {
+    gMacHasRestore = NO;
+    unsigned gen = ++gMacScrollSettleGen;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (gen == gMacScrollSettleGen) bibleTextReadingScrolled();
+    });
+}
 
 // Verse numbers are the only small-font runs: buildChapterHTML renders them as
 // <sup class="v"> at font-size 0.66em of the body size (which the reader can scale).
@@ -995,6 +1056,10 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
             gReadAlongOwnScroll = YES;   // our scroll — not the reader taking over
             [gTextView scrollPoint:NSMakePoint(0, y)];
             gReadAlongOwnScroll = NO;
+            // Not the reader's scroll, but the reader has been carried: a
+            // restore re-applied after this would drag them back from where
+            // narration is. It ends here as it would under their own hand.
+            btMacUserScrolled();
         }
     }
 }
@@ -1106,7 +1171,13 @@ static NSImage *btMacTrashImage(CGFloat pt) {
     }];
 }
 
+static void btMacScrollTVLatched(void);
 static void bibleTextMacScrollTV(void) {
+    gMacOwnScroll++;
+    btMacScrollTVLatched();
+    gMacOwnScroll--;
+}
+static void btMacScrollTVLatched(void) {
     if (gTextView == nil || gScroll == nil) return;
     // Programmatic scrolling (e.g. read-along follow-scroll) can leave the
     // verticallyResizable text view's frame origin non-zero inside the clip view.
@@ -1153,14 +1224,25 @@ static void bibleTextMacScrollTV(void) {
         if (y >= 0) {
             CGFloat maxY = gTextView.frame.size.height - gScroll.contentView.bounds.size.height;
             if (maxY < 0) maxY = 0;
+            CGFloat want = y;
             if (y > maxY) y = maxY;
             if (y < 0) y = 0;
+            // The iOS pane's BT_SCROLL_DEBUG trace, in this pane's terms.
+            if (getenv("BT_SCROLL_DEBUG"))
+                fprintf(stderr, "[scroll] mac restore: verse=%ld delta=%.1f frac=%.3f insetH=%.1f "
+                                "want=%.1f maxY=%.1f -> y=%.1f (frame.h=%.1f clip.h=%.1f)\n",
+                    (long)gMacRestoreVerse, gMacRestoreDelta, gMacRestoreFrac, insetH, want, maxY, y,
+                    gTextView.frame.size.height, gScroll.contentView.bounds.size.height);
             [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
             [gScroll reflectScrolledClipView:gScroll.contentView];
             return;
         }
+        if (getenv("BT_SCROLL_DEBUG"))
+            fprintf(stderr, "[scroll] mac restore: verse=%ld unresolved, frac=%.3f -> falling through\n",
+                (long)gMacRestoreVerse, gMacRestoreFrac);
     }
-    if (btMacScrollToHighlight()) return;
+    if (btMacScrollToHighlight()) { if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] mac: landed on highlight\n"); return; }
+    if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] mac: pinned to TOP\n");
     [gTextView scrollRangeToVisible:NSMakeRange(0, 0)];
     [[gScroll contentView] scrollToPoint:NSZeroPoint];
     [gScroll reflectScrolledClipView:gScroll.contentView];
@@ -1192,6 +1274,8 @@ static void bibleTextMacEnsureTV(void) {
 
             NSSize contentSize = [sv contentSize];
             HBReadingTextView *tv = [[HBReadingTextView alloc] initWithFrame:NSMakeRect(0, 0, contentSize.width, contentSize.height)];
+            if (gMacLayoutWatcher == nil) gMacLayoutWatcher = [HBLayoutWatcher new];
+            tv.layoutManager.delegate = gMacLayoutWatcher;
             tv.editable = NO;
             tv.selectable = YES;
             tv.richText = YES;
@@ -1217,10 +1301,24 @@ static void bibleTextMacEnsureTV(void) {
             [[NSNotificationCenter defaultCenter]
                 addObserverForName:NSViewBoundsDidChangeNotification
                             object:sv.contentView queue:nil usingBlock:^(NSNotification *n) {
-                if (gReadAlongActive && !gReadAlongOwnScroll && !gReadAlongUserLatch) {
+                // The pane's own scrolls — a restore or highlight re-applied
+                // on a frame change, an import's clamp — are not the reader
+                // taking narration over either; only their hand or a real
+                // user scroll ends follow.
+                if (gReadAlongActive && !gReadAlongOwnScroll && gMacOwnScroll == 0 && !gReadAlongUserLatch) {
                     gReadAlongUserLatch = YES;
                     bibleTextReadAlongUserScrolled();
                 }
+                // THE READER SCROLLED, by whatever means — wheel, trackpad,
+                // scroller drag or track click, keyboard paging, a drag-select
+                // autoscroll, an accessibility scrollbar write. A bounds change
+                // that is not one of OUR scrolls is the reader's, which is the
+                // iOS rule (scrollViewDidScroll under dragging/decelerating)
+                // in the only form AppKit offers it. Every programmatic scroll
+                // this pane makes runs under gMacOwnScroll or the read-along
+                // latch, so this never fires for a restore, a highlight, an
+                // import's clamp or a frame change.
+                if (gMacOwnScroll == 0 && !gReadAlongOwnScroll) btMacUserScrolled();
             }];
 
             gScroll = sv;
@@ -1240,7 +1338,17 @@ static void bibleTextMacEnsureTV(void) {
 // bibleTextMacApplyHTML parses `data` as HTML and applies it to the text view,
 // returning YES on success (NO without touching the view on failure, so the
 // caller can retry). Main-thread only.
+static BOOL btMacApplyHTMLLatched(NSData *data);
 static BOOL bibleTextMacApplyHTML(NSData *data) {
+    // The import replaces the storage, and a shorter chapter clamps the clip
+    // view's bounds before the restore below can place it — our scroll, not
+    // the reader's.
+    gMacOwnScroll++;
+    BOOL ok = btMacApplyHTMLLatched(data);
+    gMacOwnScroll--;
+    return ok;
+}
+static BOOL btMacApplyHTMLLatched(NSData *data) {
     if (gTextView == nil || data == nil) return NO;
     NSDictionary *opts = @{
         NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
@@ -1368,23 +1476,30 @@ void bibleTextMacTVSetHTML(const char *html) {
 // sides and the container tracks the view width, so one number does the whole
 // job. Floors at the legacy 16pt so a narrow window degrades to today's look.
 static CGFloat gMacReadingMeasure = 0;
-static void btMacApplyInsets(CGFloat w) {
-    if (gTextView == nil || w <= 0) return;
+// Reports whether the inset changed: a new side inset is a new container
+// width, the text re-wraps to it, and the note chrome — subviews placed from
+// the layout — must be placed again. The caller refreshes, once, so a frame
+// change that also moves the inset does not refresh twice.
+static BOOL btMacApplyInsets(CGFloat w) {
+    if (gTextView == nil || w <= 0) return NO;
     CGFloat side = 16;
     if (gMacReadingMeasure > 0) {
         side = floor((w - gMacReadingMeasure) / 2.0);
         if (side < 16) side = 16;
     }
     NSSize cur = gTextView.textContainerInset;
-    if (fabs(cur.width - side) < 0.5) return;
+    if (fabs(cur.width - side) < 0.5) return NO;
+    if (getenv("BT_NOTE_GEOM"))
+        fprintf(stderr, "[geom] side inset: %.1f -> %.1f (w=%.1f, measure=%.1f)\n", cur.width, side, w, gMacReadingMeasure);
     gTextView.textContainerInset = NSMakeSize(side, cur.height);
     [gTextView.layoutManager ensureLayoutForTextContainer:gTextView.textContainer];
+    return YES;
 }
 
 void bibleTextMacSetReadingMeasure(double m) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gMacReadingMeasure = (CGFloat)m;
-        if (gScroll != nil) btMacApplyInsets(gScroll.contentSize.width);
+        if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) btMacRefreshNote();
     });
 }
 
@@ -1669,6 +1784,8 @@ static void btMacApplyNoteInset(void) {
     NSSize ins = gTextView.textContainerInset;
     CGFloat wanted = 14 + gMacNoteTopInset;   // 14 is the pane's own top inset
     if (fabs(ins.height - wanted) > 0.5) {
+        if (getenv("BT_NOTE_GEOM"))
+            fprintf(stderr, "[geom] inset: %.1f -> %.1f (topInset=%.1f)\n", ins.height, wanted, gMacNoteTopInset);
         gTextView.textContainerInset = NSMakeSize(ins.width, wanted);
     }
 }
@@ -2182,6 +2299,24 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
             used.origin.y, frag.origin.y, frag.size.height, inset, stickerH,
             gMacNoteBandH, eff ? eff.paragraphSpacingBefore : -1,
             textTop - kMacNoteGapBelow - stickerH);
+        // GROUND TRUTH, a second later: where the passage's first glyph and the
+        // card actually are in the window, and what the layout says of the
+        // paragraph once it has settled. A disagreement with the arithmetic
+        // above is drift AFTER layout, which is what HBLayoutWatcher exists
+        // to catch — this is how it was found.
+        NSUInteger paraLoc = para.location;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (gTextView == nil || gMacNoteView == nil) return;
+            if (paraLoc + 1 > gTextView.textStorage.length) return; // the storage moved on
+            NSRect glyphWin = [gTextView firstRectForCharacterRange:NSMakeRange(paraLoc, 1) actualRange:NULL];
+            NSRect glyphInWin = [gTextView.window convertRectFromScreen:glyphWin];
+            NSRect cardInWin = [gMacNoteView convertRect:gMacNoteView.bounds toView:nil];
+            NSLayoutManager *lm2 = gTextView.layoutManager;
+            NSRange g2 = [lm2 glyphRangeForCharacterRange:NSMakeRange(paraLoc, 1) actualCharacterRange:NULL];
+            NSRect fragNow = [lm2 lineFragmentRectForGlyphAtIndex:g2.location effectiveRange:NULL];
+            fprintf(stderr, "[geom] settled: frag.y=%.1f | glyph(win) y=%.1f h=%.1f | card(win) y=%.1f h=%.1f\n",
+                fragNow.origin.y, glyphInWin.origin.y, glyphInWin.size.height, cardInWin.origin.y, cardInWin.size.height);
+        });
     }
     return textTop - kMacNoteGapBelow - stickerH;
 }
@@ -2312,6 +2447,28 @@ static CGFloat btMacNoteTopY(void) {
     return btMacNoteStickerY(lm, tc, ts, para, g);
 }
 
+// btMacPlaceNoteAfterLayout re-places the sticker and the pills against a
+// layout that has just completed (HBLayoutWatcher). Both, every time: the
+// pills exist without a card (a minimized note drawn as its paragraph's pill),
+// and a pill's paragraph can move while the card's does not, so no single
+// view's frame can stand for the whole. Placing is cheap — frames on a
+// handful of views — and re-entrancy is refused rather than reasoned about.
+static void btMacPlaceNoteAfterLayout(void) {
+    static BOOL placing = NO;
+    if (placing || gTextView == nil || !btMacNotePresent()) return;
+    placing = YES;
+    if (gMacNoteView != nil) {
+        if (getenv("BT_NOTE_GEOM")) {
+            CGFloat want = btMacNoteTopY();
+            if (want >= 0 && fabs(gMacNoteView.frame.origin.y - want) >= 0.5)
+                fprintf(stderr, "[geom] after-layout: card y %.1f -> %.1f\n", gMacNoteView.frame.origin.y, want);
+        }
+        btMacLayoutNote();
+    }
+    btMacLayoutPillViews();
+    placing = NO;
+}
+
 // btMacRefreshNote is the one entry point: reserve the band, build the sticker,
 // place it. Every caller that changes the text, the note or the geometry ends
 // here, so the three can never disagree about where the note is.
@@ -2408,37 +2565,49 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
     });
 }
 
+static void btMacApplyFrame(double x, double y, double w, double h) {
+    bibleTextMacEnsureTV();
+    if (gScroll == nil) return;
+    NSView *parent = gScroll.superview;
+    if (parent == nil) return;
+    CGFloat ph = parent.bounds.size.height;
+    NSRect r = NSMakeRect(x, ph - y - h, w, h);
+    BOOL changed = !NSEqualRects(r, gScroll.frame);
+    if (getenv("BT_SCROLL_DEBUG"))
+        fprintf(stderr, "[scroll] mac frame: %s (%.0f,%.0f %.0fx%.0f) armed=%d\n",
+            changed ? "CHANGED" : "same", r.origin.x, r.origin.y, r.size.width, r.size.height, (int)gMacHasRestore);
+    gScroll.frame = r;
+    BOOL insetChanged = btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
+    btMacLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
+    // The sticker's width and its reserved band both come from the container
+    // width, so a resize has to redo both — not just move the view. Without
+    // this a window drag left the bubble at its old width with the band still
+    // sized for it, which is the gap the reconcile in btMacLayoutNote exists
+    // to close.
+    if (changed || insetChanged) btMacRefreshNote();
+    // SetHTML may have scrolled to the highlighted verse / restore target
+    // while the overlay was still at its initial width; once the real frame
+    // lands the text rewraps, so re-assert that position. Only when a
+    // highlight or a pending restore is active — otherwise leave the reader's
+    // scroll position untouched.
+    if (changed && (gMacHighlightRange.location != NSNotFound || gMacHasRestore)) {
+        // The restore stays armed across frame changes, as it does on iOS
+        // and the Fyne pane: a resize burst can carry a superseded width,
+        // and a restore disarmed on the first changed frame was re-applied
+        // against a wrap the next frame then undid. What ends a restore is
+        // the reader scrolling (btMacUserScrolled), which is also the only
+        // event after which a resize should NOT return to the saved place.
+        bibleTextMacScrollTV();
+    }
+}
+
 void bibleTextMacTVSetFrame(double x, double y, double w, double h) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        bibleTextMacEnsureTV();
-        if (gScroll == nil) return;
-        NSView *parent = gScroll.superview;
-        if (parent == nil) return;
-        CGFloat ph = parent.bounds.size.height;
-        NSRect r = NSMakeRect(x, ph - y - h, w, h);
-        BOOL changed = !NSEqualRects(r, gScroll.frame);
-        gScroll.frame = r;
-        btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
-        btMacLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
-        // The sticker's width and its reserved band both come from the container
-        // width, so a resize has to redo both — not just move the view. Without
-        // this a window drag left the bubble at its old width with the band still
-        // sized for it, which is the gap the reconcile in btMacLayoutNote exists
-        // to close.
-        if (changed) btMacRefreshNote();
-        // SetHTML may have scrolled to the highlighted verse / restore target
-        // while the overlay was still at its initial width; once the real frame
-        // lands the text rewraps, so re-assert that position. Only when a
-        // highlight or a pending restore is active — otherwise leave the reader's
-        // scroll position untouched.
-        if (changed && (gMacHighlightRange.location != NSNotFound || gMacHasRestore)) {
-            BOOL wasRestore = gMacHasRestore;
-            bibleTextMacScrollTV();
-            // One-shot: once the real frame has landed and the restore scroll has
-            // been re-applied at the correct width, disarm — so later user resizes
-            // don't snap the reader back to the restored position.
-            if (wasRestore) gMacHasRestore = NO;
-        }
+        // A frame change moves the clip (a clamp, a re-wrap, the restore
+        // re-applied) — our scroll, not the reader's.
+        gMacOwnScroll++;
+        btMacApplyFrame(x, y, w, h);
+        gMacOwnScroll--;
     });
 }
 

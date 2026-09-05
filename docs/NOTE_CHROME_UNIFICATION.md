@@ -124,17 +124,41 @@
                 mutation-verified) and the anchor fix it forced — placement
                 no longer trusts a run naming a verse the loaded text
                 demonstrably lacks.
-     TWO HAZARDS, unaddressed and live today:
+     TWO HAZARDS, both CLOSED on 2026-09-05:
        - macOS saved reading positions and the first-paragraph band share
-         textContainerInset.height. REFINED after doing the algebra: the
-         verse-anchored path is inset-INVARIANT — delta is captured relative to
-         the verse's own line (offY - (rr + inset)) and restored as
-         rr + insetNow + delta, so an inset change cancels. The residual
-         exposure is only (a) the whole-chapter FRACTION fallback, whose
-         scrollable length includes insetH*2, and (b) the ordering of
-         btMacInstallNote against the restore apply: a restore that resolves
-         before the band installs uses the pre-band inset and lands bandH off.
-         Neither is N-specific; both predate this work.
+         textContainerInset.height. The verse-anchored path is
+         inset-INVARIANT (delta is captured against the verse's own line and
+         restored as rr + insetNow + delta), and the band-before-restore
+         ordering was already right on both apply paths (btMacRefreshNote
+         runs before bibleTextMacScrollTV at the import and at a changed
+         frame). What was actually wrong on macOS, measured on the desktop
+         app: the pane had NO user-scroll hook, so a launch restore was never
+         consumed on the Go side and every same-chapter rebuild re-applied
+         the launch anchor (an appearance flip moved the reader from verse 37
+         to verse 1), and the native arm's one-shot disarm on the first
+         changed frame re-applied a superseded width. Fixed by
+         btMacUserScrolled, called from the clip view's bounds observer for
+         any movement that is not one of the pane's own (every programmatic
+         scroll runs under a latch) — the wheel, the trackpad, the scroller,
+         keyboard paging, autoscroll and an accessibility scrollbar write
+         alike — and by narration's follow-scroll; it disarms natively at
+         once and calls bibleTextReadingScrolled once the motion settles.
+         The arm survives frame changes. Pinned by
+         reading_native_scroll_contract_test.go. The
+         fraction fallback's insetH*2 remains as described, bounded by one
+         band height and reachable only when the verse cannot resolve.
+       - macOS note placement drifted after layout: the card is a subview
+         placed FROM the layout, and the paragraph carrying the note ended
+         up 31pt lower than the layout manager had reported at placement
+         time (the passage's fragment answered at the previous line's y),
+         leaving the card a line above its passage with the band's air
+         under its tail — visible on any launch into a saved position with
+         an open note. HBLayoutWatcher, the layout manager's delegate,
+         re-places the card and the pills after every completed layout
+         pass — placement, not a refresh; the card's own reconcile may
+         install a band once, which completes one more pass and then
+         agrees. BT_NOTE_GEOM prints the arithmetic and the settled truth a
+         second later.
        - Android's noteBandSpan WAS both the removal handle and the placement
          input, so a second band would have orphaned the first span. CLOSED by
          8d-And: clearNoteBand sweeps NoteBandSpan BY CLASS over the whole

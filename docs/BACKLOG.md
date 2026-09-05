@@ -122,6 +122,42 @@ overlay moved from (297,1426) to (21,730) against a task at (276,696), and
 sat over the reading rect. Below API 30 the task origin is not cheaply
 readable, so a split pane there keeps the old placement.
 
+## macOS: a launch restore that never died, and a note card placed before the text settled — DONE
+
+Two defects in the NSTextView pane, both measured on the desktop app on
+2026-09-05 and fixed in reading_macos.go.
+
+The pane had no user-scroll hook, where iOS has scrollViewDidScroll. So the
+Go side's `state.restore` was never consumed on macOS: after a launch (or a
+history tap) every same-chapter rebuild — an appearance flip, a text-size
+change, a note verb on the slow path — re-armed the launch anchor and moved
+the reader back to it, however far they had read (measured: verse 37 back to
+verse 1 on an appearance flip). Natively, the arm was disarmed only by the
+first changed frame, which re-applied a superseded width and then let a later
+resize re-apply the stale anchor. Now the clip view's bounds observer calls
+`btMacUserScrolled` for any movement that is not one of the pane's own — the
+wheel, the trackpad, the scroller, keyboard paging, a drag-select autoscroll,
+an accessibility scrollbar write — and narration's follow-scroll calls it
+too; every programmatic scroll (the restore, a highlight, an import's clamp,
+a frame change) runs under a latch. It disarms natively at once and calls
+`bibleTextReadingScrolled` once the motion settles, the iOS decision in
+AppKit's vocabulary, and the arm survives frame changes as it does on iOS and
+the Fyne pane. A `scrollWheel:` override was tried first and rejected: it saw
+only the wheel and the trackpad, and on the document view it switches off
+AppKit's responsive scrolling.
+
+The note card sat a line above its passage with the band's air under its
+tail on any launch into a saved position with an open note. `BT_NOTE_GEOM`
+showed the card placed exactly where the arithmetic put it and the passage
+31pt lower a second later: the paragraph's fragment had answered at the
+previous line's y at placement time. The card is a subview placed FROM the
+layout and nothing moved it when the text moved. `HBLayoutWatcher`, the
+layout manager's delegate, re-places the card and the pills after every
+completed layout pass — placement, not a refresh, so it converges — and the
+card now sits 10pt above its passage. Pinned by
+`reading_native_scroll_contract_test.go`; the pane itself cannot run on the
+host, so the measurements are the evidence.
+
 ## Bible version states: transition diagram + comprehensive tests — DONE
 
 Both halves are in docs/VERSION_STATES.md: the storage diagram (M1–M3) and,
