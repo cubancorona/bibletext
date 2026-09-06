@@ -29,6 +29,21 @@ type Verse struct {
 	// project's Revelation 22:18-19 standard requires, enforced by construction
 	// and pinned by tests (footnotes_test.go). See docs/FOOTNOTES.md.
 	Footnotes []Footnote `json:"footnotes,omitempty"`
+	// ParaStart marks a verse that OPENS A PARAGRAPH in the publisher's own
+	// setting of the text. Paragraphing is the translators' work, not
+	// typesetting: it says where a speaker changes, a scene turns, or an
+	// argument moves on, and committees decide it verse by verse. All three
+	// editions carry it — the helloao feeds as chapter-level break nodes, the
+	// API.Bible feed as paragraph blocks — and the app used to discard every
+	// one of them and manufacture its own paragraphs from a character count,
+	// which produced the same shape for three different translations and cut
+	// the Nicodemus dialogue in the middle of a reply.
+	//
+	// It is structure, never text: Text stays byte-identical whether this is
+	// set or not, so search, share, speech and links are untouched. The one
+	// consumer is groupVersesIntoParagraphs, which every surface funnels
+	// through, so setting this here reaches all of them at once.
+	ParaStart bool `json:"para_start,omitempty"`
 }
 
 // Footnote is one note from the TRANSLATORS (never the reader — reader notes

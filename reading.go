@@ -1709,6 +1709,12 @@ func poeticJoin(prevText, curText string) bool {
 	return verseIsPoetic(prevText) || verseIsPoetic(curText)
 }
 
+// groupVersesIntoParagraphs is the one place a chapter becomes paragraphs, and
+// every surface reads it: the Apple builder, the Android dialect, the styled
+// pane, the website, the share text, and the note chrome that reserves a band
+// above a paragraph. A verse the publisher marked as opening a paragraph
+// (Verse.ParaStart) always opens one here; where an edition marks nothing, the
+// app's own length-and-punctuation rule fills the gap.
 func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	if len(verses) == 0 {
 		return nil
@@ -1721,7 +1727,10 @@ func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	for i, verse := range verses {
 		if len(current) > 0 {
 			prev := current[len(current)-1]
-			if shouldBreakParagraph(prev.Text, charCount) {
+			// The publisher's own break wins wherever the edition marks
+			// one (Verse.ParaStart); shouldBreakParagraph is the fallback
+			// for an edition, or a stretch, that marks none.
+			if verse.ParaStart || shouldBreakParagraph(prev.Text, charCount) {
 				paragraphs = append(paragraphs, current)
 				current = make([]Verse, 0, 6)
 				charCount = 0
