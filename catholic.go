@@ -148,6 +148,9 @@ func decodeHelloAOCatholic(body []byte) (*BibleData, error) {
 			bd.Books = append(bd.Books, name)
 		}
 	}
+	// The edition's own paragraphing, which its runtime feed drops
+	// (paragraph_web.go).
+	applyPublisherParagraphs(bd, webcParagraphStarts)
 	// PrepareSearchIndex is left to the caller (loadBibleData), matching the 66-book path.
 	return bd, nil
 }

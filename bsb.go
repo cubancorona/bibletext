@@ -47,7 +47,19 @@ const webCompleteURL = "https://bible.helloao.org/api/ENGWEBP/complete.json"
 // request, decoded by the same path as the BSB (decodeBSBComplete maps a 66-book helloao
 // complete.json by canonical book order). It backs webSource (versions.go).
 func fetchWEBFromHelloAO() (*BibleData, error) {
-	return fetchHelloAOComplete("WEB", webCompleteURL, newCorpusClient(), decodeCanonical66)
+	return fetchHelloAOComplete("WEB", webCompleteURL, newCorpusClient(), decodeWEB)
+}
+
+// decodeWEB is decodeCanonical66 plus the edition's own paragraphing, which
+// its runtime feed drops (paragraph_web.go). The BSB keeps decodeCanonical66
+// unchanged: its feed carries the breaks itself.
+func decodeWEB(body []byte) (*BibleData, error) {
+	bd, err := decodeCanonical66(body)
+	if err != nil {
+		return nil, err
+	}
+	applyPublisherParagraphs(bd, webParagraphStarts)
+	return bd, nil
 }
 
 // decodeCanonical66 decodes a 66-book helloao complete.json (BSB, WEB) by canonical book

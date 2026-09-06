@@ -37,9 +37,14 @@ place: they are what would make a bad decode visible instead of silent.
 
 Found while measuring for the analysis. These are not product decisions.
 
+S1 is done: the rule now ends a paragraph on a typographic closing quotation
+mark as well as a typewriter one. S14 is done with it, and supersedes most of
+S1's effect: every edition now paragraphs where its publisher does, and the
+rule runs only in a chapter that carries no marks at all.
+
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
-| S1 | paragraph rule ignores curly quotation marks | all | XS | none | todo |
+| S1 | paragraph rule ignores curly quotation marks | all | XS | none | done |
 | S2 | Psalm 119 acrostic letters in verse text | WEB, WEBC | S | web, webc | todo |
 | S3 | "JESUS" set in capitals in four verses | NKJV | XS | none | blocked |
 
@@ -160,7 +165,7 @@ stated reason. Make them agree.
 
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
-| S14 | honour the publishers' paragraph breaks | all | M–L | three helloao | todo |
+| S14 | honour the publishers' paragraph breaks | all | M–L | all four | done |
 | S15 | section headings behind a setting | BSB, WEBC | M–L | bsb, webc | todo |
 | S16 | section headings, NKJV half | NKJV | M | nkjv | blocked on S9 |
 | S17 | NKJV italics for supplied words | NKJV | M–L | none | todo |

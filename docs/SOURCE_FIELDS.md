@@ -36,6 +36,15 @@ chapter `number`, chapter `content`, and the chapter's `footnotes` with
 `noteId`, `caller`, `text` and `reference`. Anything else in the file is
 never unmarshalled.
 
+The WEB's feed is the one that arrives impoverished: it sends 742 break
+nodes for a whole Bible and none at all in Genesis 1, John 3 or Romans 8,
+while the edition's published USFM carries thousands and breaks Genesis 1 at
+the days of creation. About 92% of its paragraphing is lost in the supply,
+so it is recovered from the publisher's files into a generated table of verse
+references (`paragraph_web_data.go`, `scripts/gen-web-paragraphs.py`), the
+same answer the red-letter span tables give to the same problem. The BSB's
+feed carries its own paragraphing in full and needs no table.
+
 Census of the captures (chapter-level nodes / verse items):
 
 | edition | verse | heading | line_break | hebrew_subtitle | footnote bodies | wordsOfJesus runs |
@@ -58,7 +67,7 @@ Census of the captures (chapter-level nodes / verse items):
 | a marker with no body, or an empty body | skipped | nothing to show |
 | a verse node with a marker and no text (Luke 17:36, Acts 8:37, 15:34, 24:7, Romans 16:25; 24 versification gaps in Sirach) | kept | `BibleData.OrphanFootnotes`, so the chapter-bottom section can say why the number is absent; no verse number is drawn |
 | `hebrew_subtitle` (the Psalm titles: 117 WEB, 116 BSB; 3 and 36 with notes) | kept | `BibleData.Superscriptions`, drawn as an italic unnumbered line above verse 1 on every reading pane; its notes are keyed "Title" in the section. Render-only: never in `Verse.Text`, so never in search, speech, share, copy or links |
-| chapter-level `line_break` (the source's paragraph boundaries) | skipped | the app paragraphs every edition with its own rule (about 320 characters ending at terminal punctuation, `reading.go`) so that all editions paragraph alike. The source boundaries are not honoured on any surface. OPEN only in the sense that honouring them is a possible future choice; today's rule is deliberate |
+| chapter-level `line_break` (the source's paragraph boundaries) | kept | the verse that follows one is marked `Verse.ParaStart`, and `groupVersesIntoParagraphs` opens a paragraph there, so every surface paragraphs where the translators did. Where a chapter carries any such mark the app's own length rule does not run at all: supplementing the publisher put breaks inside paragraphs they had kept whole |
 | chapter-level `heading` (BSB 3,091 — "The Creation"; WEB Catholic 5; WEB 0) | OPEN | skipped whole. The BSB is the edition where this carries real editorial content. Showing headings is a product decision about what the page is |
 | any other chapter-level node type | skipped | the decoder names the three kinds it knows and drops the rest; none other was observed in the captures |
 | any object inside verse content that is not text, a marker or a line break | skipped | dropped without a count; none observed. A count in the decode log would make a new shape visible |
@@ -105,7 +114,7 @@ The canon as decoded (verified 5 Sep 2026 against the app's own decode of
 | verse marker `number` and `sid` | kept | set the running verse and chapter; a verse range keys under its first number; the `sid` is how one passage chunk splits into chapters |
 | the verse marker's own children (the printed "10") | skipped | the app draws its own verse numbers; the subtree is presentation |
 | `q*` paragraphs other than `qa` | kept | poetry: a `"\n"` at each paragraph boundary inside a verse |
-| `p` and every other non-skipped, non-`q` paragraph style (`m`, `pi`, `nb`, `pc`, …) | kept | prose: a single space where a verse flows across the boundary |
+| `p` and every other non-skipped, non-`q` paragraph style (`m`, `pi`, `nb`, `pc`, …) | kept | two things: a single space where a verse flows across the boundary, and the block's first verse marked `Verse.ParaStart`, so the app paragraphs where the publisher does. Poetry blocks are excluded from the second, since a `q` block is a line inside a paragraph and marking those would make every line of a psalm its own paragraph |
 | char `sc` and `nd` | kept, uppercased | small caps and the divine name read as UPPERCASE in plain text, which is what keeps LORD and Lord apart and reassembles "G" + "OD" |
 | char `wj` | kept as plain text | the tag is discarded; red letter comes from the generated offsets table (`red_letter_nkjv_data.go`), guarded by rune count and hash, with whole-verse red when the text no longer matches |
 | char `it` (the NKJV's italicised supplied words) and `bd` | kept as plain text | italics and bold are not carried on any surface. `it` nested inside `wj` counts as red in the offsets table |
