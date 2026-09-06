@@ -6,8 +6,11 @@ Built; see [ARCHITECTURE.md](../ARCHITECTURE.md) for the shipped shape.
 > repo and no subdomain, all three public-domain versions, audio deferred, and the
 > reader lives at the site ROOT (`/web/john/3/`) rather than under `/read/`.
 
-2026-08-08, branch `web-reader`, worktree `~/Dev/bibletext-web`. Status: PLAN —
-Implementation status and unresolved design choices are recorded below.
+Drafted 2026-08-08 on the `web-reader` branch. Status: SHIPPED — the reader is
+merged, live at the site root, and published by `scripts/publish-site.sh`,
+which is the only publisher. The branch and its worktree are gone. What
+follows is the plan as written, kept because it records why the architecture
+is what it is; where it speaks in the future tense, read it as history.
 
 ## Target architecture
 

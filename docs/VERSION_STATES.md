@@ -1,11 +1,10 @@
 # A Bible version, as a state machine
 
-> **Status.** Three of the seven machines are enumerated — storage (M1),
-> credentials (M2) and refresh (M3) — and the refresh file also carries the
-> TRAJECTORY harness, which walks journeys rather than cells. As of
-> 2026-08-28 they cover 185 cells and 310 journeys and record **zero**
-> incoherent states. **Every defect the scouting reported has now been closed
-> — eighteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
+> **Status.** All seven machines are enumerated, and the refresh and arrivals
+> layers also carry the TRAJECTORY harness, which walks journeys rather than
+> cells, because a promise is broken by a sequence and no single cell is one.
+> Together they record **zero** incoherent states. **Every defect the scouting
+> reported has now been closed — eighteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
 > unsynced cache write), `D1` (a destructive purge on an answer the app could
 > not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
 > (a non-default translation stale in silence), `D4` (a banner outliving the

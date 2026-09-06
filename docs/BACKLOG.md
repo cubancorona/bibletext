@@ -3,7 +3,11 @@
 Deferred work, one entry per item. An entry carries enough scope to be picked
 up cold; delete it when the work lands.
 
-## Phone landscape reading — shipped on both phone platforms
+## Phone landscape reading — shipped on both phone platforms — DONE
+
+Shipped and on by default on both phone platforms, verified on an iPhone
+simulator and now on a physical Pixel. Nothing outstanding; the entry below is
+the record of what was built and why.
 
 Landscape on a phone was the layout nothing was designed for. What shipped
 before this work (`compactNavRail` in ui_mobile.go, `mobileRailWanted` in
@@ -491,7 +495,10 @@ which is the honesty property the single pill has always had.
 `TestTheSinglePillStillDisclosesUnplacedNotes` pins the shipped gate-off
 guarantee so the ungated path cannot regress meanwhile.
 
-## Opening your own note hides every trace of everyone else's
+## Opening your own note hides every trace of everyone else's — DONE
+
+DONE by side effect: per-paragraph note pills default on, which is what made
+the other notes visible again. The description below predates that.
 
 Not introduced by the pills — the shipped single-sticker path does it too, on
 all five platforms.
