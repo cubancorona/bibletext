@@ -176,12 +176,21 @@ is why neither pure answer works.
 What the app merges away in the BSB is mostly dialogue: the Beatitudes as
 eight separate lines, each exchange with Nicodemus, each crowd reaction in
 Acts 2. Those are the translators' own decisions and they read better than a
-length rule. But the WEB has 742 breaks in the whole Bible and none at all in
-Genesis 1, so honouring the source alone would turn a WEB chapter into one
-unbroken block.
+length rule.
 
-**Honour the source's breaks as additional forced breaks and keep the current
-rule as the fallback where the source is silent.** A paragraph-start flag on
+The WEB's feed looks unparagraphed: 742 breaks in the whole Bible and none at
+all in Genesis 1, John 3 or Romans 8. Its published markup says otherwise.
+That carries 9,254 paragraph markers and 23,331 poetry line markers, and its
+Genesis 1 breaks at the days of creation exactly as the BSB's does. About 92%
+of the edition's paragraphing is lost in the supply, not absent from the
+translation. So honouring the source means the publisher rather than the
+feed, and for this edition the structure has to be recovered offline from the
+published markup, which is the pattern the red-letter tables already use for
+the same reason.
+
+**Honour the publishers' breaks as additional forced breaks and keep the
+current rule as the fallback only where neither the feed nor a generated
+table has one.** A paragraph-start flag on
 the verse, set where the decoder currently skips a break node, plus one
 branch in the shared grouping function; every surface inherits it without its
 own change, which is what that shared function is for. Fix defect 2 in the

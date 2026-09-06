@@ -160,7 +160,7 @@ stated reason. Make them agree.
 
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
-| S14 | honour the source's paragraph breaks | all | M | three helloao | todo |
+| S14 | honour the publishers' paragraph breaks | all | M–L | three helloao | todo |
 | S15 | section headings behind a setting | BSB, WEBC | M–L | bsb, webc | todo |
 | S16 | section headings, NKJV half | NKJV | M | nkjv | blocked on S9 |
 | S17 | NKJV italics for supplied words | NKJV | M–L | none | todo |
@@ -170,15 +170,37 @@ stated reason. Make them agree.
 | S21 | website renders the footnote section | website | M | none | todo |
 | S22 | in-text footnote markers | all | L | none | blocked |
 
-**S14.** The BSB paragraphs finely (13,894 breaks) and the app merges much of
-it away; the WEB barely paragraphs at all (742 breaks, none in Genesis 1), so
-honouring the source alone would turn a WEB chapter into one block. Carry a
-paragraph-start flag on the verse, set where the decoder currently skips a
-break node, and treat it as an additional forced break with the existing rule
-as the fallback. Every surface inherits it through the one shared grouping
-function. Fix S1 first or in the same pass, since the fallback keeps running
-inside long unmarked stretches. One design question is open: whether a source
-break also resets the length counter.
+**S14.** The app makes its own paragraphs from a length-and-punctuation
+rule, and both source editions are paragraphed by their publishers, so what
+we draw is not what either translation committee set.
+
+The BSB's feed carries that paragraphing in full: Genesis 1 breaks at the
+days of creation, John 3 breaks at each turn of the exchange with Nicodemus,
+Romans 8 breaks at its argument's joints. Honouring it there is reading a
+field the decoder already receives and currently skips.
+
+The WEB is a different problem, and the earlier reading of it was wrong. Its
+feed carries 742 break nodes in the whole Bible and none at all in Genesis 1,
+John 3 or Romans 8, which looked like an edition that simply does not
+paragraph. It is not: the WEB's own published markup carries 9,254 paragraph
+markers, plus 23,331 poetry line markers, and its Genesis 1 breaks at the
+days exactly as the BSB's does. The supplier is dropping about 92% of the
+edition's paragraphing, not the translators.
+
+That changes the fix for the WEB. The app already has the pattern for
+recovering structure a runtime feed has flattened: the red-letter tables are
+generated offline from the publishers' own markup for exactly this reason,
+and guarded at runtime by a rune count and a hash. Paragraph starts can be
+carried the same way, as a generated table of verse references per edition,
+with no dependence on the supplier ever fixing the feed.
+
+So the shape is: a paragraph-start flag on the verse, fed from the feed where
+the feed has it (BSB) and from a generated table where it does not (WEB, WEB
+Catholic); the app's rule stays only as the fallback for an edition with
+neither. Every surface inherits it through the one shared grouping function.
+Fix S1 first or in the same pass. The open design question is unchanged:
+whether a source break also resets the length counter. The NKJV needs its own
+decoder work to detect a verse that opens a paragraph block, so it follows.
 
 **S15.** 3,091 headings in the BSB, at least one per chapter, and five in the
 WEB Catholic of which four are the names by which those passages are known.
