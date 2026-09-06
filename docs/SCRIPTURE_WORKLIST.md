@@ -198,9 +198,21 @@ So the shape is: a paragraph-start flag on the verse, fed from the feed where
 the feed has it (BSB) and from a generated table where it does not (WEB, WEB
 Catholic); the app's rule stays only as the fallback for an edition with
 neither. Every surface inherits it through the one shared grouping function.
+The NKJV is the BSB's case again, not the WEB's. Its feed sends the
+publisher's paragraph blocks and the decoder already walks every one of them;
+it uses a block boundary only to decide whether a verse that straddles it
+takes a space or a line break, and never records that the block opened a
+paragraph. Marking the first verse of each block is a small addition to a
+loop that already exists, so the NKJV needs no table and no new traversal.
+
 Fix S1 first or in the same pass. The open design question is unchanged:
-whether a source break also resets the length counter. The NKJV needs its own
-decoder work to detect a verse that opens a paragraph block, so it follows.
+whether a source break also resets the length counter.
+
+For scale, John 3 in all three editions. The publishers agree exactly on the
+opening of the Nicodemus dialogue, breaking after 2, 3, 4, 8 and 9 — question
+and answer, turn by turn. The app draws 1-5, 6-10, 11-13 in all three
+editions alike, because a character counter is what is deciding, so the
+dialogue's shape is lost and the first break falls inside Jesus's reply.
 
 **S15.** 3,091 headings in the BSB, at least one per chapter, and five in the
 WEB Catholic of which four are the names by which those passages are known.
