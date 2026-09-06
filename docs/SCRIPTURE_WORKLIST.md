@@ -184,6 +184,7 @@ stated reason. Make them agree.
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |
 | S21 | website renders the footnote section | website | M | none | todo |
 | S22 | in-text footnote markers | all | L | none | blocked |
+| S23 | draw small caps as small caps | NKJV | M | nkjv | todo |
 
 **S14.** The app makes its own paragraphs from a length-and-punctuation
 rule, and both source editions are paragraphed by their publishers, so what
@@ -281,6 +282,35 @@ apparatus, which is unsent. All 32,473 NKJV notes are cross references and
 the section hides cross references, so they are captured and dark, including
 43 attached to Psalm titles. Keep those 43 with the general decision rather
 than carving them out.
+
+**S23.** Today a small-caps span is folded to uppercase in the stored text,
+so LORD, GOD and the four names of Jesus are literally capitals. Drawing them
+as small capitals is possible, and cheaper than it first looks.
+
+The mechanism exists. Red letter already carries per-rune-range styling to
+every surface: the Apple builder and the Android dialect wrap a run in
+markup, and the styled canvas pane carries a flag on each run and measures it
+itself. Small caps ride the same path.
+
+It also needs no change to the text, which is what makes it safe. Because the
+text is ALREADY uppercase, a renderer synthesises small caps by drawing the
+first letter at full size and the rest smaller — no case change, so the rune
+count is identical and every selection offset, share, copy, link, search and
+spoken word is untouched. The earlier claim that this would cost four
+pipelines was wrong.
+
+Two things it does cost. The decoder discards which spans were marked, so
+recovering them is an NKJV cache epoch. And the reading face has no
+small-capital glyphs — Georgia has none, nor does the embedded Gelasio
+fallback, nor Times New Roman — so they would be synthesised by shrinking
+capitals, which reads thinner than the text around it. Two faces already in
+the repository do carry real ones, Cardo and Spectral, but they are share-card
+faces, not the reading face.
+
+So it is the same structural work as S17: the run type carries one flag today
+and would need to carry independent style dimensions. Do them together, and
+decide first whether synthesised small capitals are worth having, or whether
+this waits on a reading face that has them.
 
 ## Decided against
 
