@@ -400,7 +400,15 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 		if endCh == 0 || endV == 0 {
 			return nil, nil, nil, fmt.Errorf("%s: unparseable passage range id %q", plan.name, pr.Data.ID)
 		}
-		startCh, startV = endCh, endV+1
+		// Continue from the served end itself, one verse of OVERLAP, not one
+		// past it. A chunk's first verse is by definition the first verse of
+		// its first paragraph block, so decoded alone it always looks like a
+		// paragraph opener — Romans 8:15 is verse 201 of its book, and the
+		// chunk boundary landed on it and invented a paragraph the publisher
+		// never set. Re-serving that verse inside the NEXT chunk is harmless
+		// because sortVersesDedupe keeps the FIRST decode, which is the one
+		// that saw the verse in its real context.
+		startCh, startV = endCh, endV
 	}
 	if len(out) == 0 {
 		return nil, nil, nil, fmt.Errorf("%s: passages yielded no verses", plan.name)
@@ -632,6 +640,17 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	// held and attached at the next verse marker, whose sid names the
 	// chapter it opens. Notes inside a title ride the same sentinel scheme
 	// as verse notes.
+	// paraStarts holds the packed (chapter, verse) keys of verses that OPEN a
+	// paragraph in the publisher's setting. A prose block (p, m, pi, pc, nb …)
+	// is a paragraph; a q block is a LINE inside one, so only a non-poetry
+	// block opens one — marking q blocks would make every line of a psalm its
+	// own paragraph. The block's first verse marker is the opener; a block
+	// that begins mid-verse has its boundary inside that verse, which this
+	// model cannot express, so the break lands at the following verse instead
+	// of a few words earlier, and a block carrying no marker at all adds none.
+	paraStarts := map[int]bool{}
+	blockOpens := false
+
 	supers := map[int]Superscription{}
 	var titleBuf *strings.Builder // non-nil while a title is pending
 	var titleNotes []Footnote
@@ -769,6 +788,12 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 					current = num
 				}
 				sawVerse = true
+				if blockOpens {
+					if key := pack(currentCh, current); key%1000 != 0 {
+						paraStarts[key] = true
+					}
+					blockOpens = false
+				}
 				// A title read before this marker belongs to the chapter
 				// the marker opens.
 				finishTitle(currentCh)
@@ -815,6 +840,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			continue
 		}
 		isPoetry := strings.HasPrefix(style, "q")
+		blockOpens = !isPoetry
 		// A paragraph boundary continues the current verse. For poetry that
 		// boundary is an authored line; for prose it is just flow.
 		if current != 0 {
@@ -897,6 +923,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			Verse:     num,
 			Text:      text,
 			Footnotes: notes,
+			ParaStart: paraStarts[key],
 		})
 		total++
 	}

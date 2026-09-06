@@ -1712,12 +1712,26 @@ func poeticJoin(prevText, curText string) bool {
 // groupVersesIntoParagraphs is the one place a chapter becomes paragraphs, and
 // every surface reads it: the Apple builder, the Android dialect, the styled
 // pane, the website, the share text, and the note chrome that reserves a band
-// above a paragraph. A verse the publisher marked as opening a paragraph
-// (Verse.ParaStart) always opens one here; where an edition marks nothing, the
-// app's own length-and-punctuation rule fills the gap.
+// above a paragraph.
+//
+// Where the publisher paragraphed the chapter, the app uses THAT and nothing
+// else. Paragraphing is the translators' reading of the passage, so a chapter
+// they set is already complete, and adding the app's own breaks inside their
+// paragraphs would put a boundary where they deliberately kept none — which
+// is what the app did to the whole Bible before. The length rule survives for
+// a chapter carrying no marks at all, so an edition that ships none still
+// reads as paragraphs rather than one block.
 func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	if len(verses) == 0 {
 		return nil
+	}
+
+	publisherSet := false
+	for _, v := range verses {
+		if v.ParaStart {
+			publisherSet = true
+			break
+		}
 	}
 
 	paragraphs := make([][]Verse, 0, len(verses)/4+1)
@@ -1727,10 +1741,11 @@ func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	for i, verse := range verses {
 		if len(current) > 0 {
 			prev := current[len(current)-1]
-			// The publisher's own break wins wherever the edition marks
-			// one (Verse.ParaStart); shouldBreakParagraph is the fallback
-			// for an edition, or a stretch, that marks none.
-			if verse.ParaStart || shouldBreakParagraph(prev.Text, charCount) {
+			brk := verse.ParaStart
+			if !publisherSet {
+				brk = shouldBreakParagraph(prev.Text, charCount)
+			}
+			if brk {
 				paragraphs = append(paragraphs, current)
 				current = make([]Verse, 0, 6)
 				charCount = 0

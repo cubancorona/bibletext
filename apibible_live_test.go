@@ -351,6 +351,28 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 	}
 	t.Logf("Psalm 3 title: %q (%d notes)", supers[3].Text, len(supers[3].Footnotes))
 
+	// The publisher's paragraphing, which the decoder reads from the feed's
+	// paragraph blocks. These three chapters were read off the raw feed by
+	// hand; if the decoder ever stops marking a block's first verse, or
+	// starts marking poetry lines, the shapes move.
+	for _, tc := range []struct {
+		book string
+		ch   int
+		want []int
+	}{
+		{"Genesis", 1, []int{1, 3, 6, 9, 11, 14, 20, 24, 26, 29}},
+		{"John", 3, []int{1, 3, 4, 5, 9, 10, 18, 22, 25, 27}},
+		{"Romans", 8, []int{1, 9, 12, 18, 26, 28, 31, 37}},
+	} {
+		var got []int
+		for _, p := range groupVersesIntoParagraphs(data.Verses[tc.book][tc.ch]) {
+			got = append(got, p[0].Verse)
+		}
+		if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("%s %d paragraphs open at %v, want %v", tc.book, tc.ch, got, tc.want)
+		}
+	}
+
 	// Heading text never reaches a verse.
 	first := func(book string, ch int) string {
 		for _, v := range data.Verses[book][ch] {

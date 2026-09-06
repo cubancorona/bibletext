@@ -164,3 +164,24 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 		t.Errorf("paragraphs open at %v, want [1 3 4]", shape)
 	}
 }
+
+// A chapter the publisher paragraphed is theirs entirely: the app's length
+// rule adds nothing inside their paragraphs. Before this, the New King James
+// Genesis 1 gained five breaks the publisher did not set, in the middle of
+// paragraphs they had deliberately kept whole.
+func TestThePublishersParagraphingIsNotSupplemented(t *testing.T) {
+	long := "This verse is long enough on its own to carry the running paragraph well past the threshold the fallback rule would otherwise use to break it."
+	verses := paraVerses(9, long)
+	verses[4].ParaStart = true // one publisher break, at verse 5
+
+	got := paraShape(groupVersesIntoParagraphs(verses))
+	if !sameShape(got, []int{1, 5}) {
+		t.Errorf("paragraphs open at %v, want [1 5]: the publisher set one break and the rule must not add more", got)
+	}
+
+	// The same verses with no mark at all still break, on the rule.
+	plain := paraShape(groupVersesIntoParagraphs(paraVerses(9, long)))
+	if len(plain) < 3 {
+		t.Errorf("an unmarked chapter of long verses must still break: %v", plain)
+	}
+}
