@@ -78,6 +78,15 @@ jobs:
           MAC_MIN="$(python3 -c 'import json;print(json.load(open("config/product.json"))["macMinimumOSVersion"],end="")')"
           export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
           cd cmd/desktop
+          # `fyne package` REWRITES FyneApp.toml's Build after each successful
+          # package, and both architectures are packaged from this one
+          # checkout — so without restoring it between them the Intel zip
+          # stamps a CFBundleVersion one higher than the Apple Silicon zip, and
+          # one release ships two downloads claiming different builds (1.2.5
+          # shipped 46 and 47 for the same commit).
+          cp FyneApp.toml "$RUNNER_TEMP/FyneApp.toml.original"
+          restore_ledger() { cp "$RUNNER_TEMP/FyneApp.toml.original" FyneApp.toml; }
+          trap 'clear_release_bible_key; cp "$RUNNER_TEMP/FyneApp.toml.original" "$GITHUB_WORKSPACE/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
           # Apple Silicon
           CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
           CGO_ENABLED=1 GOARCH=arm64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
@@ -86,6 +95,7 @@ jobs:
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-AppleSilicon.zip
           rm -rf BibleText.app
+          restore_ledger
           # Intel
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
           CGO_ENABLED=1 GOARCH=amd64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
@@ -94,6 +104,19 @@ jobs:
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-Intel.zip
           rm -rf BibleText.app
+          restore_ledger
+          # Both zips now carry the committed Build. Prove it rather than
+          # trusting it: the two Info.plists must agree, and agree with the
+          # ledger, or the release is stamped with a number nobody chose.
+          LEDGER_BUILD="$(sed -n 's/^Build = \([0-9]*\)/\1/p' FyneApp.toml)"
+          cd ../..
+          for z in BibleText-macOS-AppleSilicon.zip BibleText-macOS-Intel.zip; do
+            rm -rf /tmp/verify-zip && mkdir -p /tmp/verify-zip
+            ditto -x -k "$z" /tmp/verify-zip
+            got="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/verify-zip/BibleText.app/Contents/Info.plist)"
+            [ "$got" = "$LEDGER_BUILD" ] || { echo "$z carries build $got, ledger says $LEDGER_BUILD" >&2; exit 1; }
+            echo "$z: build $got"
+          done
       - name: upload assets
         env:
           GH_TOKEN: ${{ github.token }}

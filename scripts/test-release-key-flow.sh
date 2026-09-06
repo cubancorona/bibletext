@@ -174,6 +174,12 @@ import sys
 workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
 verifier = Path(sys.argv[2]).read_text(encoding="utf-8")
 
+store = Path(sys.argv[1]).parent.joinpath("release-mac-store.sh")
+if store.exists():
+    store_text = store.read_text(encoding="utf-8")
+    if "FyneApp.toml.original" not in store_text:
+        raise SystemExit("release-mac-store.sh: the desktop ledger must be restored on exit")
+
 encoded_secret = "BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}"
 if workflow.count(encoded_secret) != 3:
     raise SystemExit("release.yml: every desktop job must receive the encoded secret")
@@ -193,6 +199,17 @@ if '-ldflags=$BIBLE_KEY_LDFLAGS' not in workflow:
     raise SystemExit("release.yml: Windows resource rebuild must preserve the linker value")
 if 'verify-release-key.py" "$binary_path"' not in verifier:
     raise SystemExit("verify-release-package.sh: packaged key verification is missing")
+
+# `fyne package` rewrites FyneApp.toml's Build after each successful package.
+# Both macOS architectures are packaged from ONE checkout, so without a restore
+# between them the second zip stamps a CFBundleVersion one higher than the
+# first, and a single release ships two downloads claiming different builds.
+if workflow.count("restore_ledger") < 3:
+    raise SystemExit("release.yml: the desktop ledger must be restored between and after packages")
+if "FyneApp.toml.original" not in workflow:
+    raise SystemExit("release.yml: the desktop ledger must be saved before packaging")
+if "carries build $got, ledger says" not in workflow:
+    raise SystemExit("release.yml: both desktop zips must be checked against the ledger")
 PY
 
 # shellcheck source=release-bible-key.sh

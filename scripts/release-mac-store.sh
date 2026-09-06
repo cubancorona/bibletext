@@ -117,7 +117,13 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 # rename instead. The same step also brings the emoji and caret-blink fixes
 # the other platforms already ship.
 cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
-trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
+# `fyne package` REWRITES cmd/desktop/FyneApp.toml's Build after a successful
+# package, so a build leaves the ledger one ahead of the number it shipped.
+# Restored on exit, exactly as build-android.sh does, so the tree is never left
+# carrying a bump nobody chose — committing one by accident is how the ledger
+# drifted 44→46 during an earlier release.
+cp "$REPO_ROOT/cmd/desktop/FyneApp.toml" "$WORK/FyneApp.toml.original"
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$REPO_ROOT/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
 note "applying the Fyne patches (go.mod restored on exit)"
 "$REPO_ROOT/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
@@ -132,7 +138,7 @@ source scripts/release-bible-key.sh
 load_release_bible_key
 # Replaces the go.mod-only trap above: both cleanups, or the key would outlive
 # the build when this trap overwrote the first one.
-trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$REPO_ROOT/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
 (
   cd cmd/desktop
   export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
