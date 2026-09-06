@@ -6,8 +6,9 @@ stated reason, or leaves the question open. This file takes each skip and
 each open row in turn, says what is actually lost, what it would cost to
 keep, and what to do.
 
-Three of the items below are not decisions at all. They are defects found
-while measuring, and they are listed first.
+Three of the items below were raised as defects found while measuring, and
+they are listed first. Two were real and are fixed; the third turned out to
+be the publisher's own intent.
 
 Figures come from the raw whole-translation captures under
 `build/biblecache/`, from the app's own decoded caches, and from a full NKJV
@@ -84,10 +85,18 @@ Matthew 1:25, Luke 1:31 and Luke 2:21 each now read "call His name JESUS".
 The feed marks the name with the same small-caps style it uses for the divine
 name, and the app has no small caps, so it uppercases.
 
-Whether a printed NKJV sets small caps there cannot be checked from anything
-on this machine. **Look at a printed copy before changing anything.** If print
-does not, the fix is a narrow exception for that word; if it does, the
-current output is as close as flat text gets.
+This is not a defect. The publisher marks those four names with the
+small-caps style deliberately, and its own web edition sets them in small
+caps. The app has no small caps: it folds a small-caps span to uppercase in
+the stored text, which is the standard plain-text rendering of small caps and
+the same treatment that yields LORD for the divine name. The output is a
+faithful flattening of what the publisher set.
+
+The residue is typographic, not textual. Drawing true small caps would mean
+keeping the text in mixed case and applying the style at render time, and
+today the uppercase IS the text — which is what makes a search for LORD
+behave, and what keeps sharing, speech and links agreeing with the page. No
+change is recommended.
 
 ## Decision table
 
@@ -99,7 +108,7 @@ edition to download the text again.
 |---|---|---|---|---|---|---|---|
 | 1 | acrostic letters in verse text | WEB, WEBC | 21 verses plus one false title | fix | S | web, webc | high |
 | 2 | curly quotes in the paragraph rule | all | ~2,100 breaks per edition | fix | XS | none | high |
-| 3 | "JESUS" in capitals | NKJV | 4 verses | check print first | XS | none | medium |
+| 3 | "JESUS" in capitals | NKJV | nothing; the publisher marks it | no change | — | none | high |
 | 4 | section headings | BSB, WEBC, NKJV | 3,091 / 5 / about 3,300 | capture and render behind a toggle | M–L | bsb, webc, later nkjv | medium |
 | 5 | source paragraph boundaries | all | 13,894 BSB breaks, 742 WEB | honour as extra breaks, keep the rule as fallback | M | three helloao | medium-high |
 | 6 | italics for supplied words | NKJV | about 3,000 in the New Testament | generate the table, then design the run type | M–L | none | medium |

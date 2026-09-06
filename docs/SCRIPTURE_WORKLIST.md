@@ -40,13 +40,14 @@ Found while measuring for the analysis. These are not product decisions.
 S1 is done: the rule now ends a paragraph on a typographic closing quotation
 mark as well as a typewriter one. S14 is done with it, and supersedes most of
 S1's effect: every edition now paragraphs where its publisher does, and the
-rule runs only in a chapter that carries no marks at all.
+rule runs only in a chapter that carries no marks at all. S3 turned out not
+to be a defect. S2 is the one still open.
 
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
 | S1 | paragraph rule ignores curly quotation marks | all | XS | none | done |
 | S2 | Psalm 119 acrostic letters in verse text | WEB, WEBC | S | web, webc | todo |
-| S3 | "JESUS" set in capitals in four verses | NKJV | XS | none | blocked |
+| S3 | "JESUS" set in capitals in four verses | NKJV | — | none | closed, not a defect |
 
 **S1.** `shouldBreakParagraph` in `reading.go` allows a paragraph break only
 when the previous verse ends in a full stop, exclamation mark, question mark,
@@ -72,12 +73,21 @@ code: Zechariah 12:1 is an oracle title, so decide whether it stays inside
 the verse as today or becomes a title line. Batch the epochs with S14 if that
 item is close behind.
 
-**S3.** Blocked on one look at a printed NKJV. The decoder uppercases
-small-caps spans, which is right for the divine name and for the genuine
-inscriptions in the canon, but it also produces "call His name JESUS" at
-Matthew 1:21, Matthew 1:25, Luke 1:31 and Luke 2:21, because the feed marks
-that name with the same style. If print does not set small caps there, add a
-narrow exception; if it does, close this as correct.
+**S3.** CLOSED, not a defect. The publisher marks the name with the
+small-caps style at those four verses and means to: its own web edition sets
+them in small caps. The app has no small caps anywhere, and folds a
+small-caps span to uppercase in the stored text, which is the standard
+plain-text rendering of small caps and the same treatment that produces LORD
+for the divine name. So "call His name JESUS" is a faithful flattening of
+what the publisher set, not a decoder fault.
+
+What remains is a display question rather than a correctness one, and it is
+not on this list because it is not about the text. True small caps could be
+drawn on the panes that render markup, but only by keeping the text in mixed
+case and applying the style at render time; today the uppercase IS the text,
+which is what lets a search for LORD behave, and what keeps sharing, speech
+and links agreeing with the page. Changing that trades a typographic gain for
+a change to four pipelines, and nothing suggests the trade is wanted.
 
 ## Stage 2 — the decode-time checks
 
