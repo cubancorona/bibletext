@@ -4,7 +4,10 @@ package bibletext
 // paragraph, the app opens one there — before its own length rule is even
 // consulted — and where the edition says nothing, the rule still applies.
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func paraVerses(n int, text string) []Verse {
 	out := make([]Verse, 0, n)
@@ -98,5 +101,66 @@ func TestParagraphSourcesNeverLoseAVerse(t *testing.T) {
 	}
 	if seen != len(verses) {
 		t.Errorf("kept %d verses of %d", seen, len(verses))
+	}
+}
+
+// THE FEED'S OWN BREAKS. A chapter-level line_break in the helloao feeds is
+// the publisher's paragraph boundary; the decoder must put it on the verse
+// that follows, and a break with no verse after it must not strand a flag.
+func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
+	book := helloAOBook{ID: "JHN", Order: 43}
+	book.Chapters = []struct {
+		Chapter struct {
+			Number    int               `json:"number"`
+			Content   []json.RawMessage `json:"content"`
+			Footnotes []struct {
+				NoteID    int    `json:"noteId"`
+				Caller    string `json:"caller"`
+				Text      string `json:"text"`
+				Reference struct {
+					Chapter int `json:"chapter"`
+					Verse   int `json:"verse"`
+				} `json:"reference"`
+			} `json:"footnotes"`
+		} `json:"chapter"`
+	}{{}}
+	book.Chapters[0].Chapter.Number = 3
+	for _, raw := range []string{
+		`{"type":"heading","content":["A heading, which is not a break"]}`,
+		`{"type":"verse","number":1,"content":["There was a man of the Pharisees."]}`,
+		`{"type":"verse","number":2,"content":["This man came to Jesus by night."]}`,
+		`{"type":"line_break"}`,
+		`{"type":"verse","number":3,"content":["Jesus answered him."]}`,
+		`{"type":"line_break"}`,
+		`{"type":"line_break"}`,
+		`{"type":"verse","number":4,"content":["Nicodemus said to him."]}`,
+		`{"type":"line_break"}`,
+	} {
+		book.Chapters[0].Chapter.Content = append(book.Chapters[0].Chapter.Content, json.RawMessage(raw))
+	}
+
+	chapters, _, _ := decodeHelloAOChapters("John", book)
+	verses := chapters[3]
+	if len(verses) != 4 {
+		t.Fatalf("decoded %d verses, want 4", len(verses))
+	}
+	for _, tc := range []struct {
+		verse int
+		want  bool
+		why   string
+	}{
+		{1, false, "the first verse carries no mark; the chapter opens a paragraph anyway"},
+		{2, false, "no break precedes it"},
+		{3, true, "a break precedes it"},
+		{4, true, "two breaks in a row still open one paragraph"},
+	} {
+		if got := verses[tc.verse-1].ParaStart; got != tc.want {
+			t.Errorf("verse %d ParaStart = %v, want %v (%s)", tc.verse, got, tc.want, tc.why)
+		}
+	}
+	// The trailing break has no verse to open and must simply be dropped.
+	shape := paraShape(groupVersesIntoParagraphs(verses))
+	if !sameShape(shape, []int{1, 3, 4}) {
+		t.Errorf("paragraphs open at %v, want [1 3 4]", shape)
 	}
 }

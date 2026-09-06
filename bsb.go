@@ -127,6 +127,12 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 			bodies[fn.NoteID] = helloAOFootnoteBody{text: fn.Text, caller: fn.Caller}
 		}
 		var verses []Verse
+		// A chapter-level line_break is the publisher's paragraph boundary:
+		// the NEXT verse opens a paragraph. Carried on the verse
+		// (Verse.ParaStart) rather than dropped, so every surface paragraphs
+		// where the translators did. A break with no verse after it, and a
+		// run of them, both collapse to the one flag.
+		paraStart := false
 		for _, node := range cj.Chapter.Content {
 			var head struct {
 				Type    string            `json:"type"`
@@ -166,6 +172,10 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				supers[num] = Superscription{Text: text, Footnotes: notes}
 				continue
 			}
+			if head.Type == "line_break" {
+				paraStart = true
+				continue
+			}
 			if head.Type != "verse" {
 				continue
 			}
@@ -196,6 +206,9 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 						})
 					}
 				}
+				// The pending paragraph start is NOT consumed: an omitted
+				// verse prints nothing, so the paragraph opens at the next
+				// verse that does.
 				continue
 			}
 			var notes []Footnote
@@ -217,7 +230,9 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				Verse:     head.Number,
 				Text:      text,
 				Footnotes: notes,
+				ParaStart: paraStart,
 			})
+			paraStart = false
 		}
 		if len(verses) > 0 {
 			chapters[num] = verses

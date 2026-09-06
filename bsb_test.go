@@ -86,7 +86,8 @@ func TestBSBVerseTextSpacing(t *testing.T) {
 
 // bsbSampleComplete mirrors bible.helloao.org's complete.json shape with two
 // books at non-adjacent canonical orders (Genesis=1, John=43) and every node
-// kind the decoder must handle: headings / line_break (skipped), hebrew_subtitle
+// kind the decoder must handle: headings (skipped), line_break (the
+// publisher's paragraph boundary, carried on the next verse), hebrew_subtitle
 // (captured as the chapter's Superscription, never as verse text), plain-string
 // verses, poetry ({text,poem}) split across {lineBreak}, and inline footnote
 // markers ({noteId}).
