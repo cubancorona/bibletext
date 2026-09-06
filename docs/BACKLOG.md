@@ -259,6 +259,28 @@ quiet; re-reading the same ground with no model in hand found four more,
 including the original incident arriving through a version switch rather than
 a launch.
 
+## CI runs with the race detector, so 14 tests never run there
+
+Every one of the three CI jobs runs `go test -race`, and eight first-party
+test files are tagged `//go:build !race` because the race detector cannot see
+past the UI framework's own test driver. The two facts together mean those
+files are absent from every CI run on every platform: 14 tests covering focus
+order, render output, wrap layout, the download-status row, the audio card,
+the search mode row and the legacy pane. They pass under a plain `go test`,
+which is how they are exercised locally, so nothing is broken today — but CI
+goes green whether or not they still compile, and a change that breaks one is
+invisible until somebody runs the suite without `-race`.
+
+The cheap fix is a fourth step in the Linux job that runs `go test ./...`
+without `-race`, which costs one more compile of the same package set and
+turns 14 invisible tests into visible ones. The alternative, retiring the
+`!race` tag by teaching the tests to stand up under the detector, is the real
+fix but a much larger one and should not block the cheap step.
+
+Also worth recording alongside it: no CI job builds or tests the Android app.
+The only Android-named step checks the target SDK regression; the app itself
+is proven on emulators by hand.
+
 ## Source fields: three defects and a decision list
 
 Tracked in `docs/SCRIPTURE_WORKLIST.md`, not here. That file is the worklist

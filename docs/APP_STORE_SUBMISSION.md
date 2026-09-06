@@ -6,18 +6,22 @@ Store Connect state.
 
 ## Current release state — verify before acting
 
-As observed against App Store Connect on 3 September 2026:
+As observed against App Store Connect on 6 September 2026:
 
-- **Live App Store version (iOS):** 1.2.4, build 175, READY_FOR_SALE.
-- **Live Mac App Store version:** 1.2.4, desktop build 44, READY_FOR_SALE — the
-  platform's first release, so it took no What's New; 1.2.5 is its second and
-  does.
-- **Prepared next version:** 1.2.5 — mobile build 176 (iOS build and Android
-  versionCode; 175 is spent), desktop build 46 (the ledger moved 44→46 inside
-  two intermediate commits; both numbers are valid for the Store's next upload).
-- **Submission state:** both platforms' 1.2.5 were submitted on 3 September
-  2026 (iOS build 176, Mac desktop build 46) and are WAITING_FOR_REVIEW; the
-  annotated tag v1.2.5 sits at the release commit every channel built from.
+- **Live App Store version (iOS):** 1.2.5, READY_FOR_SALE since its 2 September
+  version record; 1.2.4 before it.
+- **Live Mac App Store version:** 1.2.5, READY_FOR_SALE; 1.2.4 was the
+  platform's first release and took no What's New, 1.2.5 is its second and does.
+- **Prepared next version:** none. The ledgers still read 1.2.5, which is now
+  spent on both stores, so the next store release moves everything to 1.2.7 at
+  once (v1.2.6 is a source-only tag with no ledger of its own — see
+  docs/VERSIONING.md).
+- **Submission state:** nothing is in review. 1.2.5 was submitted on 3
+  September 2026 (iOS build 176, Mac desktop build 46) and both platforms
+  cleared; the annotated tag v1.2.5 sits at the release commit every channel
+  built from. Work merged since then is unreleased: phone landscape reading on
+  both phone platforms, the desktop full-screen row, the selection-under-wash
+  fix, the macOS restore and note-placement fixes, and the NKJV Psalm titles.
   Note that `fyne package` bumps the desktop ledger's Build AFTER packaging
   (46 became 47 in the working tree once the Mac package existed); the
   shipped build is the committed number, so discard that bump rather than
