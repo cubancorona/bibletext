@@ -261,6 +261,12 @@ a launch.
 
 ## Source fields: three defects and a decision list
 
+Tracked in `docs/SCRIPTURE_WORKLIST.md`, not here. That file is the worklist
+for work on the TEXT — what the decoders read from each source and what
+reaches the reader; this backlog stays with the app around the text. The
+analysis behind each item is in `docs/SOURCE_FIELDS_DECISIONS.md`, and the
+inventory of every field is in `docs/SOURCE_FIELDS.md`.
+
 docs/SOURCE_FIELDS_DECISIONS.md analyses every field the decoders skip or
 half-keep, with costs and a recommendation for each. Three of its findings
 are defects rather than decisions, in the order they should be fixed:

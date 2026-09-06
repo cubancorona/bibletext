@@ -455,6 +455,9 @@ off.
 
 ## Recommended order of work
 
+The worklist that tracks this, item by item with a status, is
+`docs/SCRIPTURE_WORKLIST.md`. The order below is its stages.
+
 1. **Defect 2**, the curly quotation mark. One line, no epoch, improves every
    edition on every surface immediately.
 2. **Defect 1**, the acrostic leak, with descriptive-run capture. Removes
