@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"strings"
 )
 
 func TestSuperscriptNumber(t *testing.T) {
@@ -99,5 +100,37 @@ func TestReadingColumnMinSizeWidthIsZero(t *testing.T) {
 	}
 	if ms.Height != 400 {
 		t.Errorf("expected height passed through (400), got %v", ms.Height)
+	}
+}
+
+// A verse that closes reported speech ends on a typographic quotation mark,
+// not a typewriter one. The rule already meant to break there — it lists both
+// straight quote characters — so the curly forms belong in the same list.
+// Without them a fifth of the rule's break points were refused, and always in
+// dialogue: Deuteronomy 27's curses ran eleven verses into one paragraph
+// because "…let all the people say, 'Amen!'" ends on a curly mark.
+func TestParagraphBreaksAfterClosedSpeech(t *testing.T) {
+	long := strings.Repeat("a reasonably long clause to carry the paragraph past its threshold, ", 6)
+	for _, tc := range []struct {
+		name, ending string
+		want         bool
+	}{
+		{"full stop", "the end.", true},
+		{"question mark", "who can say?", true},
+		{"straight double quote", `he said, "come."`, true},
+		{"straight single quote", "they said, 'amen!'", true},
+		{"curly double quote", "he said, “come.”", true},
+		{"curly single quote", "they said, ‘amen!’", true},
+		{"mid-sentence", "and then they", false},
+		{"a dash", "and then —", false},
+	} {
+		if got := shouldBreakParagraph(long+tc.ending, 400); got != tc.want {
+			t.Errorf("%s: break after %q = %v, want %v", tc.name, tc.ending, got, tc.want)
+		}
+	}
+	// The length floor still governs: the same ending under the threshold
+	// never breaks.
+	if shouldBreakParagraph("he said, “come.”", 100) {
+		t.Error("a short paragraph must not break, whatever it ends on")
 	}
 }

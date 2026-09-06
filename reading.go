@@ -1737,16 +1737,28 @@ func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	return paragraphs
 }
 
+// paragraphEnders are the characters a verse may end on for the fallback rule
+// to close a paragraph after it. Sentence punctuation, and the marks that
+// close reported speech — in BOTH forms, because the editions set speech with
+// typographic quotation marks and a rule that knew only the typewriter forms
+// refused every one of them. That refusal was worth about a fifth of the
+// rule's own break points (roughly 2,100 in each of the two public-domain
+// editions), and it fell hardest on dialogue, which is exactly where a
+// paragraph most wants to end: "…let all the people say, 'Amen!'" would not
+// close a paragraph, so the next curse joined it, and the one after that.
+var paragraphEnders = []string{".", "!", "?", "\"", "'", "\u201d", "\u2019"}
+
 func shouldBreakParagraph(prevVerseText string, currentParagraphChars int) bool {
 	if currentParagraphChars < 320 {
 		return false
 	}
 	trimmed := strings.TrimSpace(prevVerseText)
-	return strings.HasSuffix(trimmed, ".") ||
-		strings.HasSuffix(trimmed, "!") ||
-		strings.HasSuffix(trimmed, "?") ||
-		strings.HasSuffix(trimmed, "\"") ||
-		strings.HasSuffix(trimmed, "'")
+	for _, end := range paragraphEnders {
+		if strings.HasSuffix(trimmed, end) {
+			return true
+		}
+	}
+	return false
 }
 
 func superscriptNumber(n int) string {
