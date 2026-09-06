@@ -29,6 +29,10 @@ own terms:
   assets/parallels/.
 - UI typeface: Atkinson Hyperlegible by the Braille Institute of America, Inc.,
   used under the SIL Open Font License 1.1 (see assets/fonts/atkinson/OFL.txt).
+- Share-card typefaces: Cardo, Crimson Text, DM Serif Display, Gelasio, Libre
+  Baskerville, Prata and Spectral, each used under the SIL Open Font License
+  1.1 (see assets/fonts/share/OFL-LICENSES.txt). Gelasio also stands in for
+  Georgia as the reading face where the operating system provides no serif.
 - Built with the Fyne toolkit (https://fyne.io), BSD 3-Clause License.
 
 The Apache 2.0 license applies to the application's own source code. The bundled

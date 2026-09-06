@@ -73,6 +73,14 @@ jobs:
       # Compile tag-gated evaluation translations and development-link panels
       # explicitly. Plain tagged tests are sufficient because the default race
       # run already covers the shared concurrency paths.
+      - name: go test (no race detector)
+        # The suite above runs under -race, and eight first-party test files
+        # are tagged `!race` because the detector cannot see past the UI
+        # toolkit's own test driver. Without this step those 14 tests never
+        # compile or run in CI on any platform, and a change that broke one
+        # would stay invisible until somebody ran the suite locally.
+        run: go test -timeout 20m ./...
+
       - name: go vet (build tags)
         run: |
           go vet -tags nrsv ./...
