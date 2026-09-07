@@ -290,6 +290,17 @@ body{
 }
 .text{--pgap:calc(1.3175 * 1.3125rem)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
+/* The publisher's section headings. Set in the scripture face, because they are
+   the publisher's words and not the app's chrome, but never justified and never
+   indented: a heading is a label, and the reporter indent below would push it
+   off its own left edge. The space above is the reader's cue that a new section
+   opens; a heading that opened the chapter needs none. */
+.text .sec{
+  font-size:1rem; font-weight:700; letter-spacing:.01em; line-height:1.3;
+  text-align:left; text-indent:0; hyphens:none;
+  margin:calc(var(--pgap) + .4rem) 0 calc(var(--pgap) * .5);
+}
+.text .sec:first-child{margin-top:0}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line

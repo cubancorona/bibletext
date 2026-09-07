@@ -33,7 +33,7 @@ func TestChapterBodyKeepsPoemLines(t *testing.T) {
 		v("Psalms", 23, 1, "The LORD is my shepherd;\nI shall not want."),
 		v("Psalms", 23, 2, "He makes me lie down in green pastures;\nHe leads me beside quiet waters."),
 	}
-	got := chapterBody("web", "Psalms", verses)
+	got := chapterBody(nil, "web", "Psalms", 1, verses)
 	if strings.Contains(got, "\n") {
 		t.Error("a literal newline survived into the HTML — it renders as a space, flattening the poem")
 	}
@@ -49,7 +49,7 @@ func TestChapterBodyProseDoesNotBreak(t *testing.T) {
 		v("John", 3, 16, "For God so loved the world."),
 		v("John", 3, 17, "For God didn't send his Son to judge the world."),
 	}
-	got := chapterBody("web", "John", verses)
+	got := chapterBody(nil, "web", "John", 1, verses)
 	if strings.Contains(got, "<br>") {
 		t.Errorf("prose verses must join with a space, not a break:\n%s", got)
 	}
@@ -58,7 +58,7 @@ func TestChapterBodyProseDoesNotBreak(t *testing.T) {
 // TestChapterBodyVerseAnchors: the id is the deep-link contract. #v16 works with
 // no JavaScript only because this element exists and is named exactly "v16".
 func TestChapterBodyVerseAnchors(t *testing.T) {
-	got := chapterBody("web", "John", []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
+	got := chapterBody(nil, "web", "John", 1, []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
 	if !strings.Contains(got, `id="v16"`) {
 		t.Errorf(`missing id="v16" — every shared link to this verse would fail to highlight:\n%s`, got)
 	}
@@ -67,11 +67,11 @@ func TestChapterBodyVerseAnchors(t *testing.T) {
 // TestChapterBodyRedLetters: words of Christ carry the class the stylesheet
 // colours. John 3:16 is inside a red-letter range; John 3:1 is not.
 func TestChapterBodyRedLetters(t *testing.T) {
-	got := chapterBody("web", "John", []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
+	got := chapterBody(nil, "web", "John", 1, []bibletext.Verse{v("John", 3, 16, "For God so loved the world.")})
 	if !strings.Contains(got, `class="wj"`) {
 		t.Errorf("John 3:16 should be red-letter:\n%s", got)
 	}
-	plain := chapterBody("web", "John", []bibletext.Verse{v("John", 3, 1, "Now there was a man of the Pharisees.")})
+	plain := chapterBody(nil, "web", "John", 1, []bibletext.Verse{v("John", 3, 1, "Now there was a man of the Pharisees.")})
 	if strings.Contains(plain, `class="wj"`) {
 		t.Errorf("John 3:1 is narration, not words of Christ:\n%s", plain)
 	}
@@ -80,7 +80,7 @@ func TestChapterBodyRedLetters(t *testing.T) {
 // TestChapterBodyEscapes: verse text is data, never markup. (Scripture contains
 // no angle brackets today; a future decoder change must not be able to inject.)
 func TestChapterBodyEscapes(t *testing.T) {
-	got := chapterBody("web", "John", []bibletext.Verse{v("John", 1, 1, `a <script>x</script> & "quote"`)})
+	got := chapterBody(nil, "web", "John", 1, []bibletext.Verse{v("John", 1, 1, `a <script>x</script> & "quote"`)})
 	if strings.Contains(got, "<script>") {
 		t.Errorf("verse text escaped out of its span:\n%s", got)
 	}
@@ -150,7 +150,7 @@ func TestChapterBodyRedensOnlyChristsWordsInTheBSB(t *testing.T) {
 		v("John", 4, 7, `When a Samaritan woman came to draw water, Jesus said to her, “Give Me a drink.”`),
 		v("John", 4, 9, `“You are a Jew,” said the woman. “How can you ask for a drink from me, a Samaritan woman?” (For Jews do not associate with Samaritans.)`),
 	}
-	got := chapterBody("bsb", "John", verses)
+	got := chapterBody(nil, "bsb", "John", 1, verses)
 
 	if !strings.Contains(got, `<span class="wj">“Give Me a drink.”</span>`) {
 		t.Errorf("Christ's words in v7 were not reddened on their own:\n%s", got)
@@ -171,8 +171,8 @@ func TestChapterBodyRedLettersFollowTheTranslation(t *testing.T) {
 	verse := []bibletext.Verse{
 		v("Mark", 5, 31, `But His disciples said to Him, “You see the multitude thronging You, and You say, ‘Who touched Me?’ ”`),
 	}
-	web := chapterBody("web", "Mark", verse)
-	nkjv := chapterBody("nkjv", "Mark", verse)
+	web := chapterBody(nil, "web", "Mark", 1, verse)
+	nkjv := chapterBody(nil, "nkjv", "Mark", 1, verse)
 	if web == nkjv {
 		t.Error("the WEB and the NKJV rendered Mark 5:31 identically; the page is still version-blind")
 	}
@@ -183,7 +183,7 @@ func TestChapterBodyRedLettersFollowTheTranslation(t *testing.T) {
 // invisible in a red/not-red assertion.
 func TestChapterBodyLosesNoTextToTheRuns(t *testing.T) {
 	text := `And looking up to heaven, He sighed deeply and said to him, “Ephphatha!” (which means, “Be opened!”).`
-	got := chapterBody("bsb", "Mark", []bibletext.Verse{v("Mark", 7, 34, text)})
+	got := chapterBody(nil, "bsb", "Mark", 1, []bibletext.Verse{v("Mark", 7, 34, text)})
 	stripped := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(got, "")
 	stripped = strings.ReplaceAll(stripped, "\u00a0", " ")
 	for _, word := range []string{"Ephphatha", "which means", "Be opened", "sighed deeply"} {

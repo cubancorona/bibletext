@@ -78,7 +78,18 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.Text))
 		}
 	}
-	for _, para := range groupVersesIntoParagraphs(verses) {
+	// Blocks, not paragraphs — see the note in reading.go. Bold in its own
+	// paragraph is the whole of what this dialect can say, and it is enough:
+	// fromHtml maps <b> to a StyleSpan the text system draws.
+	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+		if blk.IsHeading() {
+			fmt.Fprintf(&b, "<p><b>%s</b></p>", htmlEscape(blk.Heading.Text))
+			continue
+		}
+		para := blk.Verses
+		if len(para) == 0 {
+			continue
+		}
 		b.WriteString("<p>")
 		if reporter && !verseIsPoetic(para[0].Text) {
 			// A MARKER, not an indent. The same rule as the Apple dialect

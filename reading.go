@@ -678,6 +678,17 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}`, bodyPx, textHex, lineHeight)
 	b.WriteString(paraCSS)
+	// The publisher's section headings. BODY SIZE, deliberately: the panes read
+	// meaning from point size — a numeral is 0.66 of the body and the footnote
+	// section 0.85, and thresholds tell them apart — so a heading at a new size
+	// would be a new thing for those thresholds to misread. Bold and left is
+	// enough to say heading, and it says it without inventing a size.
+	b.WriteString(`p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
+	}`)
 	fmt.Fprintf(&b, `sup.v {
 		color: %s;
 		font-weight: 600;
@@ -733,7 +744,19 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		fmt.Fprintf(&b, `<p class="pst">%s</p>`, htmlEscape(super.Text))
 	}
 
-	for _, para := range groupVersesIntoParagraphs(verses) {
+	// Blocks, not paragraphs: the publisher's section headings stand among them
+	// where the publisher put them. The heading is its own paragraph and never
+	// justified — a heading is a label, and the reporter indent would push it
+	// off its own left edge.
+	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+		if blk.IsHeading() {
+			fmt.Fprintf(&b, `<p class="sec">%s</p>`, htmlEscape(blk.Heading.Text))
+			continue
+		}
+		para := blk.Verses
+		if len(para) == 0 {
+			continue
+		}
 		poetic := false
 		for _, v := range para {
 			if verseIsPoetic(v.Text) {

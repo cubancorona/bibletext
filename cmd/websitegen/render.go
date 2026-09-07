@@ -120,7 +120,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	b.WriteString(`</div></div>`)
 	fmt.Fprintf(&b, `<p class="ver">%s</p>`, template.HTMLEscapeString(v.Name))
 	b.WriteString(`<article class="text">`)
-	b.WriteString(chapterBody(v.ID, book, verses))
+	b.WriteString(chapterBody(v.bible, v.ID, book, chapter, verses))
 	b.WriteString(`</article>`)
 
 	// Prev/next keep the reader moving without going back to an index.
@@ -151,7 +151,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 // versionID is threaded all the way down because red letters are PER
 // TRANSLATION: each edition has its own span table, and rendering one
 // translation with another's marks is exactly the bug this argument fixed.
-func chapterBody(versionID, book string, verses []bibletext.Verse) string {
+func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, verses []bibletext.Verse) string {
 	if len(verses) == 0 {
 		// THE SENTENCE THAT USED TO BE HERE — "This chapter is not available in
 		// this translation." — IS RETIRED, not moved. It was unreachable dead
@@ -170,7 +170,16 @@ func chapterBody(versionID, book string, verses []bibletext.Verse) string {
 	// breaks where the reading pane breaks. A paragraph that OPENS with a poetic
 	// verse is marked .pm: the app skips its reporter indent and sets it ragged
 	// rather than justified, because a psalm is lines, not prose.
-	for _, para := range bibletext.GroupVersesIntoParagraphs(verses) {
+	// Blocks, not paragraphs: the publisher's section headings stand among
+	// them, in the places the publisher put them and the reading pane sets
+	// them. A page that dropped them would be a different page from the app's.
+	for _, blk := range bibletext.ChapterBlocks(bd, book, chapter, verses) {
+		if blk.HeadingText != "" {
+			fmt.Fprintf(&b, `<h2 class="sec">%s</h2>`,
+				template.HTMLEscapeString(blk.HeadingText))
+			continue
+		}
+		para := blk.Verses
 		if len(para) == 0 {
 			continue
 		}
