@@ -203,7 +203,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 			if head.Type != "verse" {
 				continue
 			}
-			text, marks := bsbVerseTextMarked(head.Content)
+			text, marks, levels := bsbVerseTextMarkedLevels(head.Content)
 			if text == "" {
 				// A verse node with a marker but NO text is a critical-text
 				// omission (Luke 17:36 and kin): the verse number exists in
@@ -253,13 +253,14 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				}
 			}
 			verses = append(verses, Verse{
-				BookName:  book,
-				Book:      book,
-				Chapter:   num,
-				Verse:     head.Number,
-				Text:      text,
-				Footnotes: notes,
-				ParaStart: paraStart,
+				BookName:   book,
+				Book:       book,
+				Chapter:    num,
+				Verse:      head.Number,
+				Text:       text,
+				Footnotes:  notes,
+				ParaStart:  paraStart,
+				PoemLevels: levels,
 			})
 			// An acrostic letter or an oracle's title heads what comes NEXT.
 			paraStart = bsbVerseHasDescriptive(head.Content)
@@ -368,6 +369,20 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 //
 // Only the position is read here. The run's TEXT is still part of the verse,
 // which for the acrostic letters is a defect of its own, tracked separately.
+// poemLevel reads the indent depth out of a clause's `poem` value, which the
+// feeds send as a bare number. A level the app cannot read is reported as 1,
+// the shallowest real depth, rather than as no poetry at all.
+func poemLevel(raw json.RawMessage) int {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var n int
+	if err := json.Unmarshal(raw, &n); err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
 func bsbVerseHasDescriptive(content []json.RawMessage) bool {
 	for _, node := range content {
 		var obj struct {
@@ -404,8 +419,21 @@ type bsbMark struct {
 // at the end of the earlier line (the "\n" is only synthesized when the NEXT
 // poem clause arrives, after the marker).
 func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
+	text, marks, _ := bsbVerseTextMarkedLevels(content)
+	return text, marks
+}
+
+// bsbVerseTextMarkedLevels is bsbVerseTextMarked plus the INDENT DEPTH of each
+// line. The feeds give every poetry clause a level — 1 for the opening half of
+// a Hebrew couplet, 2 for the answering half, and a third exists in the
+// Catholic edition — and the app read only whether a level was present at all,
+// so every line drew flush left and the pairing print shows was invisible.
+//
+// One entry per line of the finished text, zero where a line is not poetry.
+func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []int) {
 	var pieces []string
 	var marks []bsbMark // anchor holds the piece INDEX until resolved below
+	levels := []int{0}  // the depth of each line, the first line included
 	for _, node := range content {
 		var s string
 		if err := json.Unmarshal(node, &s); err == nil {
@@ -436,6 +464,15 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 				prevBreak := len(pieces) > 0 && pieces[len(pieces)-1] == "\n"
 				if isPoem && len(pieces) > 0 && !prevBreak && !startsWithClosingPunct(*obj.Text) {
 					pieces = append(pieces, "\n")
+					levels = append(levels, 0)
+				}
+				if isPoem {
+					// The clause's own depth, which belongs to the line it
+					// opens. A line built from more than one clause keeps the
+					// first depth it was given.
+					if n := poemLevel(obj.Poem); n > 0 && levels[len(levels)-1] == 0 {
+						levels[len(levels)-1] = n
+					}
 				}
 				pieces = append(pieces, *obj.Text)
 			case obj.NoteID != nil:
@@ -444,6 +481,7 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 				marks = append(marks, bsbMark{noteID: *obj.NoteID, anchor: len(pieces)})
 			case obj.LineBreak:
 				pieces = append(pieces, "\n")
+				levels = append(levels, 0)
 			}
 			continue
 		}
@@ -452,7 +490,18 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 	for i, m := range marks {
 		marks[i].anchor = utf8.RuneCountInString(bsbTidySpacing(strings.Join(pieces[:m.anchor], " ")))
 	}
-	return text, marks
+	// Only report depths that describe the text as it actually came out. The
+	// tidier never adds or removes a line, but saying so is cheaper than
+	// trusting it, and a verse with no poetry reports nothing at all.
+	if lines := strings.Count(text, "\n") + 1; lines != len(levels) {
+		return text, marks, nil
+	}
+	for _, n := range levels {
+		if n > 0 {
+			return text, marks, levels
+		}
+	}
+	return text, marks, nil
 }
 
 // Spacing artifacts that survive the synthesized-space join: a space before

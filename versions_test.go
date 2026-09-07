@@ -55,7 +55,7 @@ func TestCachePathForVersion(t *testing.T) {
 	legacy := filepath.Join(dir, "bibletext-cache.json")
 	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
 
-	wantWEB := filepath.Join(dir, "bibletext-web-v7.json")
+	wantWEB := filepath.Join(dir, "bibletext-web-v8.json")
 	if got := cachePathForVersion("web"); got != wantWEB {
 		t.Errorf("web cache = %q, want %q", got, wantWEB)
 	}
@@ -64,9 +64,9 @@ func TestCachePathForVersion(t *testing.T) {
 		t.Errorf("lsb cache = %q, want %q", got, wantLSB)
 	}
 
-	// BSB carries a cacheEpoch (its decoder has changed seven times), so its
+	// BSB carries a cacheEpoch (its decoder has changed eight times), so its
 	// cache path is versioned and stale pre-epoch caches are bypassed.
-	wantBSB := filepath.Join(dir, "bibletext-bsb-v8.json")
+	wantBSB := filepath.Join(dir, "bibletext-bsb-v9.json")
 	if got := cachePathForVersion("bsb"); got != wantBSB {
 		t.Errorf("bsb cache = %q, want %q", got, wantBSB)
 	}
@@ -82,8 +82,8 @@ func TestPurgeSupersededCaches(t *testing.T) {
 
 	stale := filepath.Join(dir, "bibletext-bsb.json")      // v0 (superseded)
 	staleV1 := filepath.Join(dir, "bibletext-bsb-v1.json") // v1 (superseded)
-	staleV2 := filepath.Join(dir, "bibletext-bsb-v7.json") // v6 (superseded)
-	current := filepath.Join(dir, "bibletext-bsb-v8.json") // v7 (active)
+	staleV2 := filepath.Join(dir, "bibletext-bsb-v8.json") // v6 (superseded)
+	current := filepath.Join(dir, "bibletext-bsb-v9.json") // v7 (active)
 	web := legacy                                          // web cache (other version)
 	for _, p := range []string{stale, staleV1, staleV2, current, web} {
 		if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
@@ -295,12 +295,12 @@ func TestVersionCacheIsCurrent(t *testing.T) {
 	if versionCacheIsCurrent(web) {
 		t.Error("the legacy (epoch-0) file must NOT count as web's current epoch")
 	}
-	current := filepath.Join(dir, "bibletext-web-v7.json")
+	current := filepath.Join(dir, "bibletext-web-v8.json")
 	if err := saveBibleToCache(current, fullValidBible(), currentUTCTime); err != nil {
 		t.Fatal(err)
 	}
 	if !versionCacheIsCurrent(web) {
-		t.Error("the v7 file is web's current epoch")
+		t.Error("the v8 file is web's current epoch")
 	}
 	// And the property that closed V1: a file that exists at the current
 	// epoch but cannot be served does NOT count as current, or the reader

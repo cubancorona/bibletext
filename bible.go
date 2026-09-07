@@ -55,6 +55,16 @@ type Verse struct {
 	// searches, shares, copies, hears and links to is unchanged whether this
 	// is set or not.
 	Supplied []TextSpan `json:"supplied,omitempty"`
+
+	// PoemLevels is the indent depth of each LINE of this verse, in order:
+	// one entry per line of Text, zero where a line is not poetry. Hebrew
+	// poetry is built of paired lines, and print sets the second half of a
+	// pair indented under the first so the pairing can be seen; every edition
+	// marks the depth and the app used to keep only the fact that a line was
+	// poetry at all, so every line drew flush left.
+	//
+	// Lines, not characters: Text is unchanged whether this is set or not.
+	PoemLevels []int `json:"poem_levels,omitempty"`
 }
 
 // Footnote is one note from the TRANSLATORS (never the reader — reader notes

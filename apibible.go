@@ -681,6 +681,14 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	paraStarts := map[int]bool{}
 	blockOpens := false
 
+	// The indent depth of each line, per verse. A q block carries its own
+	// depth in its style name — q1 opens a Hebrew couplet, q2 answers it — and
+	// the app read only that the block was poetry at all, so every line drew
+	// flush left. One entry per line of the finished verse, zero for a line
+	// that is not poetry.
+	poemLevels := map[int][]int{}
+	curPoemLevel := 0
+
 	// The publisher's headings. Their text is not Scripture and never enters a
 	// verse, but it is the translators' own map of the chapter and it is kept
 	// (BibleData.Headings). Read through the same walk as a title so char
@@ -735,6 +743,21 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			b = &strings.Builder{}
 			texts[key] = b
 			order = append(order, key)
+		}
+		// The first text of a verse opens its first line; a poem break opens
+		// another. Recorded here rather than after the fact, because only this
+		// loop knows which block a line came from.
+		if _, seen := poemLevels[key]; !seen {
+			poemLevels[key] = []int{curPoemLevel}
+		} else if key == from && pendingBreak {
+			built := strings.NewReplacer(
+				string(footnoteSentinel), "",
+				string(suppliedOpen), "",
+				string(suppliedClose), "",
+			).Replace(b.String())
+			if built != "" && !strings.HasSuffix(built, "\n") {
+				poemLevels[key] = append(poemLevels[key], curPoemLevel)
+			}
 		}
 		if key == from {
 			// The join is decided on what the reader will see. NO sentinel is
@@ -943,6 +966,14 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			continue
 		}
 		isPoetry := strings.HasPrefix(style, "q")
+		curPoemLevel = 0
+		if isPoetry {
+			// "q1" → 1, "q2" → 2; a bare "q" is the shallowest depth.
+			curPoemLevel = 1
+			if n := leadingInt(style[1:]); n > 0 {
+				curPoemLevel = n
+			}
+		}
 		// A prose block opens a paragraph. A q block is a LINE inside one, so
 		// it opens nothing of its own — but it must not CLEAR a break a
 		// skipped heading just set, or an acrostic letter followed by its
@@ -1032,6 +1063,10 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			Footnotes: notes,
 			ParaStart: paraStarts[key],
 			Supplied:  supplied,
+			// Only when the depths describe THIS text: a verse whose lines
+			// were rebuilt by normalisation says nothing rather than
+			// something that no longer fits.
+			PoemLevels: describedLevels(poemLevels[key], text),
 		})
 		total++
 	}
@@ -1135,6 +1170,20 @@ func stripSentinels(s string) (string, []int, []TextSpan) {
 	}
 	sort.Slice(supplied, func(i, j int) bool { return supplied[i].Start < supplied[j].Start })
 	return b.String(), anchors, supplied
+}
+
+// describedLevels returns the per-line indent depths only when they describe
+// the text they are meant for, and only when at least one line is poetry.
+func describedLevels(levels []int, text string) []int {
+	if len(levels) != strings.Count(text, "\n")+1 {
+		return nil
+	}
+	for _, n := range levels {
+		if n > 0 {
+			return levels
+		}
+	}
+	return nil
 }
 
 // apiBibleNoteKind maps a USX note style to the app's Footnote.Kind: "x"/"ex"
