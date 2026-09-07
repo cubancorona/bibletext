@@ -536,18 +536,34 @@ one that sounds plausible and will be arrived at again.
 
 ### Must not ship
 
-**The divine name draws as ordinary text.** The decoder keeps the publisher's
-characters and records the small-capital spans; nothing reads them yet, so the
-NKJV shows `Lord` where it showed `LORD` and the distinction the edition
-carries in its letterforms is invisible.
+**The divine name draws as ordinary text, in 5,891 verses.** The decoder keeps
+the publisher's characters and records the small-capital spans; nothing reads
+them yet, on any surface.
 
-**Fifteen verses paint the narrator's words red.** The red-letter table refuses
+Larger than it first appeared, in two ways. The feed sends the WHOLE word inside
+the span in ordinary case far more often than it sends a capital outside it —
+286 of 288 spans in a live sweep — so almost every span changes letters, not the
+handful assumed. And it is not only the divine name: `call His name JESUS`
+becomes `call His name Jesus` in Matthew 1:21 and 1:25, Luke 1:31 and 2:21.
+Psalm 110:1 is the sharpest, now reading `The Lord said to my Lord,` with
+nothing left to tell the two apart, and Genesis 15:2 loses `Lord GOD` the same
+way.
+
+The inscriptions are untouched, contrary to what was assumed when this was
+planned: `MENE, MENE, TEKEL, UPHARSIN`, `THIS IS JESUS THE KING OF THE JEWS`,
+`TO THE UNKNOWN GOD` and `MYSTERY, BABYLON` carry no span at all — they are
+literal capitals in the feed and stay as they are.
+
+**Sixteen verses lose their red-letter spans, seven of them visibly.** The red-letter table refuses
 a verse unless a hash of its text matches, and a refusal paints the whole verse
 red. The case change keeps the rune count, so only the fingerprint trips —
 silently, since the licensed text is not in this repository. Where Christ quotes
 the Old Testament and the quotation carries the divine name, the narration is
-printed as his. Guarded now by an epoch assertion that fails the build; the
-table must be regenerated against the new decoder.
+printed as his. Seven read wrongly — Matthew 4:7, 4:10, 21:42, 22:37, Mark
+12:29, Luke 4:8 and 4:12 — seven differ only in whitespace already black, and
+two improve. The website is not affected, since it never publishes this edition.
+Guarded now by an epoch assertion that fails the build; the table must be
+regenerated against the new decoder.
 
 **macOS has no paragraph separation at all.** No blank line and no indent: the
 reporter stylesheet emits `margin: 0`, and the first-line indent was moved out
@@ -567,12 +583,20 @@ same side of the reporter gate, so only one leading is otherwise reached.
 
 ### Visible, still open
 
-**Greek words are split between two faces mid-word.** The shipped face carries
-exactly three codepoints of the Greek block — Δ, μ and π, kept for mathematics
-— so `ἐπίσκοπον` draws two letters in the reading face and seven in a system
-fallback, differing in weight, colour and fit inside one word. This is the
-corrected form of an earlier claim that Greek would be LOST: it is not, the
-toolkit falls back per rune, and that is exactly what makes the split.
+**Greek footnote words fall out of the reading face.** The shipped face carries
+three codepoints of the Greek block — Δ, μ and π, kept for mathematics — so a
+Greek word keeps its leading μ or π in the reading face and draws the rest in a
+system fallback.
+
+Twice corrected, and smaller than it first looked. Greek is not LOST: the
+toolkit falls back per rune, which is what produces the split. And the borrowed
+serif was not whole either — it carries 74 basic-Greek codepoints and NO Greek
+Extended, so the headline example, `ἐπίσκοπον`, was already split before any of
+this. The real regression is 14 words in 10 chapters, `μονογενη` in John 3:16
+among them, which used to be set entirely in the reading face and now sit almost
+entirely in a fallback that does not match the English beside them. It reaches
+only Windows and Linux, and only with the footnote section turned on, which it
+is not by default.
 
 **A share card can silently drop a letter.** Prata has no `Ē`, and its .notdef
 is an invisible blank, so a card of Genesis 4:18 reads `“ ´noch`. The seven
@@ -580,13 +604,13 @@ faces are cycled deliberately, so a reader who taps Regenerate reaches it. An
 earlier check called every face complete; it was made against the
 public-domain editions, which contain no `Ē`.
 
-**Verse numbers change shape on Windows and Linux only.** The borrowed serif's
-figures are oldstyle by default and the shipped face's are lining. Three
-surfaces can ask for `onum`; the canvas pane cannot, because the toolkit exposes
-no OpenType feature control — the same gap that blocks small capitals there.
-
-**One chapter, four faces.** Only the canvas surfaces took the shipped face. The
-Apple panes, Android and the website still ask for the borrowed one.
+**Windows regressed.** It drew real Georgia before and matched macOS, iOS and
+the website exactly; it now matches only Linux, because the shipped face reaches
+the canvas pane alone. So "Share as link" hands a Windows reader the same
+chapter in a different face one tap away. Three faces are in the wild, not four:
+the shipped one on Windows and Linux, the borrowed serif on macOS, iOS and any
+web visitor who has it, and the platform's generic serif on Android and
+everywhere else.
 
 **Android's line pitch is wrong, and was already.** `setLineHeightPx` reads the
 CURRENT paint's metrics and stores the difference; the pane sets the typeface
