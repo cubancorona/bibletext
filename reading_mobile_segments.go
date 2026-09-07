@@ -66,7 +66,8 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 		if len(runs) < 2 {
 			red := len(runs) == 1 && runs[0].Red
 			segs = append(segs, &widget.TextSegment{
-				Text: strings.TrimSpace(v.Text),
+				// smallCapsText, not v.Text — see the note in reading.go.
+				Text: strings.TrimSpace(smallCapsText(v)),
 				Style: widget.RichTextStyle{
 					Inline:    true,
 					ColorName: mobileRunColorName(red, tint),

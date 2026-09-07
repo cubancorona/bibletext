@@ -133,7 +133,8 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 				}
 				continue
 			}
-			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
+			// smallCapsText, not v.Text — see the note in reading.go.
+			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(smallCapsText(v))), "\n", "<br>")
 			// From the runs — see the note in reading.go.
 			writeTintedHTML(&b, mk, len(runs) == 1 && runs[0].Red, body)
 		}

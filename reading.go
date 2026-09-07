@@ -805,7 +805,11 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 				}
 				continue
 			}
-			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
+			// smallCapsText, not v.Text: the ONE-run path still has to carry the
+			// divine name's small capitals, and most verses take it. The
+			// substitution preserves whitespace and rune counts exactly, so the
+			// trim below behaves as it always did.
+			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(smallCapsText(v))), "\n", "<br>")
 			// From the runs, NOT from isWordsOfChrist again: the edition's own
 			// table has already had the final word, and asking the WEB's gate a
 			// second time here would overrule it.
