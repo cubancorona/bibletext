@@ -206,12 +206,20 @@ var appleTintHTML = func() [tintCount]tintHTML {
 			// No wash: the number carries no span, the body is bare, and red
 			// letters get the colour class alone.
 			t[tint] = tintHTML{
-				Number: `<sup class="v">%d</sup>&nbsp;`,
+				// An ORDINARY space after the number. It was a no-break space,
+				// which is better typography — it stops a superscript being
+				// orphaned at a line end — but it is a character this app
+				// inserted, and on these panes the system's own Copy reads the
+				// text storage directly, so it left the app inside every
+				// quotation a reader pasted anywhere. The app's own verbs can
+				// strip what they emit (outbound_text.go); the system's cannot
+				// be reached, so the character must not be there to take.
+				Number: `<sup class="v">%d</sup> `,
 				BodyWJ: `<span class="wj">%s</span>`,
 			}
 			continue // and no CSS rule: there is no wash to define
 		}
-		// The verse NUMBER and the &nbsp; after it join the wash: leaving them
+		// The verse NUMBER and the space after it join the wash: leaving them
 		// out punched a pale hole through the middle of the band. And BodyWJ
 		// carries BOTH classes — .hl is only a background and .wj only a
 		// colour, so together they paint red letters ON the wash. That pairing
@@ -220,7 +228,7 @@ var appleTintHTML = func() [tintCount]tintHTML {
 		// 11:25 under the band while v26 beside it stayed red).
 		t[tint] = tintHTML{
 			JoinSpace: fmt.Sprintf(`<span class="%s"> </span>`, cls),
-			Number:    fmt.Sprintf(`<sup class="v %s">%%d</sup><span class="%s">&nbsp;</span>`, cls, cls),
+			Number:    fmt.Sprintf(`<sup class="v %s">%%d</sup><span class="%s"> </span>`, cls, cls),
 			Body:      fmt.Sprintf(`<span class="%s">%%s</span>`, cls),
 			BodyWJ:    fmt.Sprintf(`<span class="%s wj">%%s</span>`, cls),
 			// NO font-weight, and NO colour override. Bold Georgia sets ~17%%
@@ -257,7 +265,7 @@ func androidTintHTML(pal palette, numHex, redHex string) [tintCount]tintHTML {
 		c, ok := tint.wash(pal)
 		if !ok {
 			t[tint] = tintHTML{
-				Number: fmt.Sprintf(`<sup><small><font color="%s"><b>%%d</b></font></small></sup>&nbsp;`, numHex),
+				Number: fmt.Sprintf(`<sup><small><font color="%s"><b>%%d</b></font></small></sup> `, numHex),
 				BodyWJ: fmt.Sprintf(`<font color="%s">%%s</font>`, redHex),
 			}
 			continue
@@ -271,7 +279,7 @@ func androidTintHTML(pal palette, numHex, redHex string) [tintCount]tintHTML {
 		t[tint] = tintHTML{
 			JoinSpace: fmt.Sprintf(`<span style="background-color:%s"> </span>`, bg),
 			Number: fmt.Sprintf(
-				`<span style="background-color:%s"><sup><small><font color="%s"><b>%%d</b></font></small></sup>&nbsp;</span>`,
+				`<span style="background-color:%s"><sup><small><font color="%s"><b>%%d</b></font></small></sup> </span>`,
 				bg, numHex),
 			Body: fmt.Sprintf(`<span style="background-color:%s">%%s</span>`, bg),
 			BodyWJ: fmt.Sprintf(
