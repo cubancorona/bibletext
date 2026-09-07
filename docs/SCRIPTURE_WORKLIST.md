@@ -648,6 +648,73 @@ route works there.
 Section headings, the translators' supplied words, poetry indent depths, and now
 the small capitals.
 
+## The universal reading face
+
+The face question was posed as a Latin one and that was the wrong question. The
+app draws three scripts, and a face covering only Latin hands the other two to
+whatever the platform supplies — which differs on every platform, and which is
+what split a Greek word between two typefaces mid-word.
+
+### What the app must be able to draw
+
+Counted over the four editions, 145 distinct characters. The count is not the
+hard part:
+
+| requirement | detail |
+|---|---|
+| polytonic Greek | 25 codepoints of the Greek block, 8 of Greek Extended |
+| Hebrew | 9 letters and SEVEN COMBINING MARKS — cantillation and niqqud, which need real GPOS mark attachment, not merely glyphs |
+| small capitals | `smcp` suffices: the feed sends the whole word in ordinary case in 286 of 288 spans, so a full-size L and a small-capital ord is what `smcp` alone produces |
+| superior figures | the verse numbers are ¹²³, not digits, so the face's superior figures ARE the numerals a reader sees |
+| four cuts | the toolkit synthesises neither bold nor italic |
+| licence | redistributable inside a shipped app on six platforms and from a website |
+
+Hebrew volume: 447 footnote runs. Greek: 67. Etnahta occurs 80 times, holam 80,
+tevir twice — so a face missing a mark is missing it in real text, not in theory.
+
+### Measured
+
+| face | Greek | Greek Ext | Hebrew | marks | small caps | cuts | line vs Georgia |
+|---|---|---|---|---|---|---|---|
+| **Cardo** | 100% | 100% | 100% | 6 of 7 | smcp | R I B | −3.4% |
+| Libertinus Serif | 100% | 100% | 87% | 5 of 7 | OTF only | R I B BI | −6.4% |
+| Gentium Plus / Book Plus | 100% | 100% | none | none | smcp + c2sc | many | −6.6% / −4.9% |
+| EB Garamond | 100% | 100% | none | none | smcp + c2sc | many | −13.7% |
+| Noto Serif | 100% | 100% | none | none | smcp + c2sc | many | +8.5% |
+| Spectral | 12% | none | none | none | smcp + c2sc | R I B BI | +0.3% |
+| Georgia | 100% | none | none | none | none | R I B BI | — |
+
+**Cardo is the only face with nothing missing**, and it is already in the
+repository, embedded for the share cards, under the SIL Open Font License. It
+was drawn for classical and biblical scholarship, which is this problem exactly.
+
+Two candidates fail in ways their coverage figures hide. Libertinus keeps its
+OpenType features only in the OTF build — the static TTF has four features and
+no small capitals — and rendered through the app's own engine it returns Hebrew
+with the letters out of order and the cantillation gone, so 87% overstates what
+it can set. Noto covers Hebrew only in a SEPARATE family, which is a pairing,
+not one face.
+
+### What Cardo costs
+
+- No bold italic exists. Regular, italic and bold only.
+- The features live in the regular: the italic carries seven and the bold one.
+  Small capitals and oldstyle figures work where the divine name and the
+  footnotes are set, and nowhere else.
+- Holam is present but not attached by the font's mark positioning, so in 80
+  footnotes it may sit slightly off. The other six marks attach properly.
+- It sets 3.4% narrower than Georgia against Spectral's 0.3%, so line breaks
+  move further. Its superior figures, however, sit at +0.252..+0.683 em against
+  Georgia's +0.222..+0.709 — near enough that the verse numbers would barely
+  move, which is the opposite of the trouble Spectral's caused.
+
+### The alternative if Cardo's cuts are judged too thin
+
+A chosen primary face plus a chosen, EMBEDDED secondary for Greek and Hebrew, so
+the fallback is the app's own rather than the platform's. That is what the
+mid-word split argues for: the problem was never that a fallback happened, but
+that nobody chose it.
+
 ## Decided against
 
 Recorded here so they are not rediscovered as open questions. The reasoning
