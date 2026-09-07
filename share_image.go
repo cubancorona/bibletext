@@ -26,6 +26,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -162,17 +163,67 @@ func loadShareTypefaces() []shareTypeface {
 // independent hash (the "|face" salt) so verses don't pair the same typeface
 // with the same scheme across the whole Bible.
 func typefaceForRef(ref string, variant int) (shareTypeface, bool) {
+	return typefaceForText(ref, variant, "")
+}
+
+// typefaceForText picks a card face for a reference, SKIPPING any face that
+// cannot draw the verse it is about to set.
+//
+// A card is rasterised here, in Go, with no system fallback of any kind: a
+// glyph the chosen face lacks is not substituted, it is a blank. One of the
+// seven display faces has no macron vowels, so a card of Genesis 4:18 came out
+// reading "  ´noch begot Irad" — a letter simply gone from a shared verse, with
+// nothing to say so. Rotation makes it worse than rare: a reader who taps
+// Regenerate walks through the faces and will reach it.
+func typefaceForText(ref string, variant int, text string) (shareTypeface, bool) {
 	faces := loadShareTypefaces()
 	if len(faces) == 0 {
 		return shareTypeface{}, false
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(ref + "|face"))
-	idx := (int(h.Sum32()) + variant) % len(faces)
+	base := int(h.Sum32()) + variant
+	for i := 0; i < len(faces); i++ {
+		idx := (base + i) % len(faces)
+		if idx < 0 {
+			idx += len(faces)
+		}
+		if faceCanDraw(faces[idx], text) {
+			return faces[idx], true
+		}
+	}
+	// Nothing covers it. The first face still beats no card at all, and the
+	// caller has no better answer than this one either.
+	idx := base % len(faces)
 	if idx < 0 {
 		idx += len(faces)
 	}
 	return faces[idx], true
+}
+
+// faceCanDraw reports whether a card face has a glyph for every rune of text.
+// Empty text is drawable by anything, which keeps the reference-only callers
+// on their existing face.
+func faceCanDraw(f shareTypeface, text string) bool {
+	if text == "" {
+		return true
+	}
+	var buf sfnt.Buffer
+	for _, r := range text {
+		if r == '\n' || r == '\r' {
+			continue
+		}
+		for _, fnt := range []*opentype.Font{f.regular, f.bold} {
+			if fnt == nil {
+				continue
+			}
+			idx, err := fnt.GlyphIndex(&buf, r)
+			if err != nil || idx == 0 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // renderVerseImage writes a square share card to a temp PNG and returns its path.
@@ -194,7 +245,7 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 	// the colour scheme by Regenerate. The reading-serif path survives only as a
 	// fallback for the never-expected case that every embedded face fails to parse.
 	var regular, bold *opentype.Font
-	if tf, ok := typefaceForRef(citation+"|"+version, variant); ok {
+	if tf, ok := typefaceForText(citation+"|"+version, variant, verseText); ok {
 		regular, bold = tf.regular, tf.bold
 	} else {
 		var err error
