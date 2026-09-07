@@ -95,7 +95,9 @@ The icon and feature graphic under `docs/play-assets/` remain usable:
 | Feature graphic | `feature-graphic.png` | 1024×500 PNG |
 
 The existing `01-reading.png`, `02-search.png`, and `03-books.png` phone images
-show an older interface and must not be uploaded for 1.2.3. Recapture at least:
+show an older interface and must not be uploaded for 1.2.5. They date from 4
+July 2026 and predate the note chrome, the current typography, and the grouped
+Books grid. Recapture at least:
 
 1. reading with edition-correct red letters;
 2. Search/cross-references;
@@ -146,16 +148,16 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
-## Closed-test release notes — 1.2.3
+## Closed-test release notes — 1.2.5
 
-> BibleText 1.2.3 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
+> BibleText 1.2.5 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
 > search, cross-references, narration/read-along, shared verse notes, and optional
 > bring-your-own-key AI study. Red-letter text now follows each translation's own
 > publisher markings. No ads, account, analytics, or tracking.
 
 Suggested tester coverage:
 
-- install/upgrade and confirm version 1.2.3 (174);
+- install/upgrade and confirm version 1.2.5 (176);
 - switch all four translations and test first-download/offline behaviour;
 - check NKJV Mark 5:31, Matthew 27:63, Luke 17:36, and Luke 24:7 with Words of
   Jesus enabled;
@@ -168,7 +170,11 @@ Suggested tester coverage:
 - rotate phones and tablets between portrait bottom tabs and the landscape left
   rail on Books and Search, and a phone's Read tab into its full-screen
   landscape reading, confirming the reading pane remains usable after a warm
-  App Link.
+  App Link; and
+- exercise the note chrome reworked across 1.2.4-1.2.5: open a received note and
+  confirm no pills are drawn beside it, collapse it and confirm the pill stack
+  centres on the visible inter-paragraph gap, and check both in light and dark
+  appearance at more than one text size.
 
 ## Play Console flow
 
