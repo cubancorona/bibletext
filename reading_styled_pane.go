@@ -418,11 +418,25 @@ func (p *styledReadingPane) measure(text string, kind runKind) float32 {
 
 const styledNumRatio = float32(0.66)
 
-// styledNumRaise lifts the verse number above the body's top, as a fraction of
-// the body text size. Calibrated so the number's INK sits where it sat when the
-// pane borrowed the system serif, which is what a reader recognises as a
-// superscript.
-const styledNumRaise = float32(0.086)
+// styledNumRaise moves the verse number relative to the body's top, as a
+// fraction of the body text size. It is NEGATIVE: the number is dropped, not
+// lifted.
+//
+// That reads backwards until you notice that the number is already a
+// superscript before the pane touches it. The runs carry Unicode superscript
+// figures (superscriptNumber), so the face has drawn them raised, and how far
+// raised is the face's decision. The reading face draws them 0.232 em higher
+// than the system serif the pane used to borrow, measured from both faces'
+// outlines. Lifting them again put a third of the numeral above the top of its
+// own line and outside the wash a marked verse is painted with, so a search hit
+// or a selection coloured the words and left the number hanging over them.
+//
+// The value matches the numeral's ink CENTRE to where the borrowed serif put
+// it. Both the line height and the body box fall out of that equation, so one
+// constant is right for the cozy column and the reporter page alike — which is
+// what the first attempt at this got wrong, having been checked against the
+// cozy leading only.
+const styledNumRaise = float32(-0.117)
 
 func (p *styledReadingPane) CreateRenderer() fyne.WidgetRenderer {
 	r := &styledPaneRenderer{pane: p}
@@ -761,15 +775,11 @@ func (r *styledPaneRenderer) position() {
 		ln := p.lay.Lines[dr.Line]
 		y := ln.Y + (lh-bodyH)/2
 		if dr.Kind == runVerseNum {
-			// Raised superscript, lifted by a fraction of the TEXT SIZE and
-			// never by a fraction of the measured box.
-			//
-			// RenderedTextSize reports the face's DECLARED line box, not the
-			// height of its ink, and faces declare wildly different ones: the
-			// reading face's box is a third larger than the system serif the
-			// pane used to borrow. A raise taken from that box grew with it and
-			// pushed the number out of the top of its own line, close enough to
-			// the line above to read as a misprint.
+			// The number is placed from the TEXT SIZE, never from a
+			// measured box. RenderedTextSize reports the face's DECLARED line
+			// box rather than the height of its ink, and faces declare wildly
+			// different ones, so anything derived from it moves when the face
+			// does. See styledNumRaise for why the offset is a drop.
 			y = ln.Y + (lh-bodyH)/2 - p.textSize*styledNumRaise
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
