@@ -2416,7 +2416,8 @@ public final class BtBridge {
      */
     public static void setStyle(final int textColor, final int paperColor, final float textSizeDp,
                                 final float lineMult, final int padLDp, final int padTDp,
-                                final int padRDp, final int padBDp, final float measureDp) {
+                                final int padRDp, final int padBDp, final float measureDp,
+                                final float opticalScale) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
@@ -2426,7 +2427,19 @@ public final class BtBridge {
                 // different size on every phone (reading_android.go says).
                 float density = activity != null
                         ? activity.getResources().getDisplayMetrics().density : 2f;
-                float textSizePx = textSizeDp * density;
+                // THE OPTICAL SCALE, AND WHY IT IS DECIDED HERE. The pushed dp
+                // is the reference size; the shipped face spends less of its em
+                // on the lowercase than the platform serif and needs opening up
+                // by ~15% to read the same size (reading_face_scale.go). But
+                // that correction belongs to THAT face: readingTypeface()
+                // returns null below API 29 and the overlay draws in the
+                // platform serif, which would simply come out 15% too large.
+                // Only this side knows which face it got, so only this side can
+                // decide. Resolved before the size because the size depends on
+                // the answer; the typeface is still SET below, where its
+                // ordering against setLineHeight matters.
+                android.graphics.Typeface face = readingTypeface();
+                float textSizePx = textSizeDp * density * (face != null ? opticalScale : 1f);
                 lastTextColor = textColor;
                 lastPaperColor = paperColor;
                 lastPadLDp = padLDp; lastPadTDp = padTDp;
@@ -2456,7 +2469,6 @@ public final class BtBridge {
                 // against a font that is not the one drawing, and the pitch
                 // comes out wrong by the gap between the two. It was set after
                 // for as long as this code has existed.
-                android.graphics.Typeface face = readingTypeface();
                 text.setTypeface(face != null ? face : android.graphics.Typeface.SERIF);
                 if (android.os.Build.VERSION.SDK_INT >= 28) {
                     text.setLineHeight(Math.round(lineMult * textSizePx));

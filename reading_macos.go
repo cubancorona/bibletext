@@ -399,6 +399,15 @@ static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (val != nil && ((NSFont *)val).pointSize > maxSize) maxSize = ((NSFont *)val).pointSize;
     }];
+    // A DEAD ARM, and deliberately left as a literal. It is reached only when the
+    // storage carries no font attribute anywhere — in which case the walks that
+    // use this threshold find nothing to classify either, because they skip runs
+    // with no font. The number no longer means what it once did: it was chosen to
+    // sit above a numeral of 0.66 x 21pt = 13.86, and the optically corrected body
+    // puts a numeral at 0.66 x 24 = 15.84 (reading_face_scale.go). Were the arm
+    // ever live it would now under-classify — miss verse numbers rather than
+    // invent them, which is the harmless direction — but do not read it as a
+    // statement about what a verse number measures.
     return maxSize > 0 ? maxSize * 0.8 : 15.0;
 }
 
@@ -2811,7 +2820,6 @@ import "C"
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"sync"
 	"time"
 	"unsafe"
@@ -2974,13 +2982,16 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// keep its character count at the reporter's ~59 (the iOS twin does the
 	// same in pushChapterHTML).
 	if reporterLayoutActive() {
-		bodyPx := math.Round(21 * readingTextScale())
-		C.bibleTextMacSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+		// The REFERENCE size, not the size the face is set at — see the iOS
+		// twin in pushChapterHTML and reading_face_scale.go. The measure is
+		// geometry: it must not move when the face does.
+		C.bibleTextMacSetReadingMeasure(C.double(reporterMeasureEm * readingReferencePx()))
 		// The same ~1.5em the em+en pair used to draw, as a paragraph
 		// attribute so it cannot be copied out as text. Without it this pane
 		// shows no paragraph boundary at all, because the reporter stylesheet
-		// separates paragraphs by indent alone.
-		C.bibleTextMacSetReporterIndent(C.double(reporterIndentEm * bodyPx))
+		// separates paragraphs by indent alone. An em of the type as it is SET,
+		// unlike the measure above — see the iOS twin.
+		C.bibleTextMacSetReporterIndent(C.double(reporterIndentEm * readingGlyphPx()))
 	} else {
 		C.bibleTextMacSetReadingMeasure(0)
 		C.bibleTextMacSetReporterIndent(0)

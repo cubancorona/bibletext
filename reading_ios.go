@@ -612,6 +612,15 @@ static CGFloat btIOSVerseFontThreshold(NSTextStorage *ts) {
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (val != nil && ((UIFont *)val).pointSize > maxSize) maxSize = ((UIFont *)val).pointSize;
     }];
+    // A DEAD ARM, and deliberately left as a literal. It is reached only when the
+    // storage carries no font attribute anywhere — in which case the walks that
+    // use this threshold find nothing to classify either, because they skip runs
+    // with no font. The number no longer means what it once did: it was chosen to
+    // sit above a numeral of 0.66 x 21pt = 13.86, and the optically corrected body
+    // puts a numeral at 0.66 x 24 = 15.84 (reading_face_scale.go). Were the arm
+    // ever live it would now under-classify — miss verse numbers rather than
+    // invent them, which is the harmless direction — but do not read it as a
+    // statement about what a verse number measures.
     return maxSize > 0 ? maxSize * 0.8 : 15.0;
 }
 
@@ -675,7 +684,8 @@ static NSUInteger btIOSContentStart(void) {
     return gVerseIndexCount > 0 ? gVerseIndex[0].loc : 0;
 }
 
-// btIOSBuildVerseIndex captures every verse-number run (the only sub-15pt runs) into
+// btIOSBuildVerseIndex captures every verse-number run (those below the 0.8x
+// threshold, which is derived per render and not an absolute size) into
 // gVerseIndex. Called on every text assignment; the single buffer is reused for the
 // app's life. ts==nil (plain-text fallback) clears the table. The walk stops at the
 // content end: the footnote section's 0.85em runs sit above the 0.8× threshold, so
@@ -3517,7 +3527,6 @@ import "C"
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"os"
 	"time"
 	"unsafe"
@@ -3805,11 +3814,17 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// sweep that has already run.
 	registerAppleReadingFonts()
 	if reporterLayoutActive() {
-		bodyPx := math.Round(21 * readingTextScale())
-		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+		// The REFERENCE size, deliberately, not the size the face is set at.
+		// The column is measured in ems and its width is what decides how many
+		// characters land on a line; figuring it from the optically scaled size
+		// would widen it 15% and hand the line back the extra characters the
+		// narrower face already gave it (reading_face_scale.go).
+		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * readingReferencePx()))
 		// The same ~1.5em the em+en pair used to draw, now as a paragraph
-		// attribute so it cannot be copied out as text.
-		C.bibleTextSetReporterIndent(C.double(reporterIndentEm * bodyPx))
+		// attribute so it cannot be copied out as text. An em of the type as it
+		// is SET, unlike the measure above — an indent is a mark made in the
+		// type's own units and grows with it.
+		C.bibleTextSetReporterIndent(C.double(reporterIndentEm * readingGlyphPx()))
 	} else {
 		C.bibleTextSetReadingMeasure(0)
 		C.bibleTextSetReporterIndent(0)

@@ -635,7 +635,12 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 
 	// The reader's chosen text size scales the whole page: body px here, and the
 	// verse-number superscripts via their em sizing. 21px is the "Normal" base.
-	bodyPx := int(math.Round(21 * readingTextScale()))
+	// A GLYPH size, so it carries the optical scale: the shipped face spends
+	// less of its em on the lowercase than the one the panes used to resolve,
+	// and without the correction the same nominal size reads 13% smaller
+	// (reading_face_scale.go). Every em-based measure and indent on these panes
+	// is figured from readingReferencePx instead, and does not move.
+	bodyPx := int(math.Round(readingGlyphPx()))
 	reporter := reporterLayout()
 
 	// Line spacing + paragraph treatment: phones keep the airy 2.0 leading with
@@ -1009,7 +1014,13 @@ func newChapterText(state *AppState, verses []Verse) *chapterText {
 		tints:         chapterTint(state),
 		highlightLine: -1,
 		state:         state,
-		textSize:      theme.TextSize() * float32(readingTextScale()),
+		// NO optical scale here, deliberately. This pane draws in the CHROME
+		// face, not the shipped scripture face — bibleTheme.Font returns the UI
+		// family for every non-monospace style, and readingPaneTheme overrides
+		// the size only. The scale corrects for the scripture face's small
+		// x-height and would simply make this pane 15% too large
+		// (reading_face_scale.go).
+		textSize: theme.TextSize() * float32(readingTextScale()),
 	}
 	if state.window != nil {
 		c.clipboard = state.window.Clipboard()
@@ -2101,9 +2112,14 @@ func chapterPickerColumns(total int) int {
 // phone page's legacy side padding. Untagged and pure so the host can test the
 // arithmetic the bridge is handed (reading_android.go pushes it,
 // BtBridge.applyReadingPadding centres it).
-func androidReadingMeasureDp(reporter bool, textDp float32) float32 {
-	if !reporter || textDp <= 0 {
+// It takes the REFERENCE size, not the size the type is set at: a measure fixes
+// the column's physical width and is the one quantity the optical scale must not
+// reach (reading_face_scale.go). The parameter is named for that, because passing
+// the set size here would widen the Android column 15% and the arithmetic would
+// look perfectly reasonable.
+func androidReadingMeasureDp(reporter bool, referenceDp float32) float32 {
+	if !reporter || referenceDp <= 0 {
 		return 0
 	}
-	return reporterMeasureEm * textDp
+	return reporterMeasureEm * referenceDp
 }

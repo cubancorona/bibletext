@@ -108,9 +108,14 @@ type styledReadingPane struct {
 	state  *AppState
 	verses []Verse
 
+	// textSize is the size the type is SET at — the optical scale is already in
+	// it, so every leading, indent and gap reckoned from it rides along and the
+	// page keeps its proportions. refSize is the same size WITHOUT the scale,
+	// and it has exactly one job: the measure below. See reading_face_scale.go.
 	textSize float32
+	refSize  float32
 	pal      palette
-	font     fyne.Resource // the scripture serif (Georgia, or embedded Gelasio)
+	font     fyne.Resource // the shipped scripture face
 
 	lay       *chapterLayout
 	drawRuns  []styledDrawRun
@@ -171,6 +176,7 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 		state:     state,
 		verses:    verses,
 		textSize:  styledPaneTextSize(),
+		refSize:   styledPaneReferenceSize(),
 		pal:       state.pal(),
 		font:      styledPaneFont(),
 		selAnchor: -1, selStart: -1, selEnd: -1,
@@ -202,7 +208,10 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 // styledPaneTextSize matches chapterText's sizing: the theme body size scaled
 // by the reader's Settings → Text size choice, with a sane default for bare
 // test constructions (no running app).
-func styledPaneTextSize() float32 {
+// styledPaneReferenceSize is the pane's body size before the optical scale: what
+// the toolkit's text size and the reader's own setting ask for between them. Only
+// the measure is figured from it.
+func styledPaneReferenceSize() float32 {
 	size := float32(15)
 	if app := fyne.CurrentApp(); app != nil {
 		size = fyneTheme.TextSize()
@@ -210,8 +219,29 @@ func styledPaneTextSize() float32 {
 	return size * float32(readingTextScale())
 }
 
+// styledPaneTextSize is the size the shipped face is actually set at. The scale
+// belongs here rather than on the theme size it starts from: the theme's text
+// size dresses the whole interface, and Scripture is the only thing set in this
+// face (reading_face_scale.go).
+func styledPaneTextSize() float32 {
+	return readingGlyphSize(styledPaneReferenceSize())
+}
+
+// referenceSize backs the measure out of the set size for a pane built bare —
+// the tests construct one directly, and a zero here would read as an infinitely
+// narrow column and put every pane into the reporter layout.
+func (p *styledReadingPane) referenceSize() float32 {
+	if p.refSize > 0 {
+		return p.refSize
+	}
+	if p.textSize > 0 {
+		return p.textSize / float32(readingOpticalScale())
+	}
+	return styledPaneReferenceSize()
+}
+
 // styledPaneFont resolves the scripture face ONCE per process. It is the
-// SHIPPED face now (see reading_fonts_embed.go), the same Spectral every other
+// SHIPPED face now (see reading_fonts_embed.go), the same face every other
 // surface sets scripture in, rather than whichever serif the operating system
 // happened to offer. Resolved once because relayout runs continuously during a
 // window drag-resize; never nil, so drawing and measuring always use the same
@@ -255,7 +285,10 @@ func (p *styledReadingPane) relayout(width float32) {
 	// today's cozy narrow-pane layout and a resize glides between the two.
 	// The em is the pane's own body size, exactly as the iPad's measure is
 	// 27.5 × ITS body px.
-	if m := reporterMeasureEm * p.textSize; avail > m {
+	// The REFERENCE size, not the size the type is set at: a measure fixes the
+	// column's physical width, and holding it still while the glyphs inside it
+	// grow is what puts the line back to its old character count.
+	if m := reporterMeasureEm * p.referenceSize(); avail > m {
 		p.extraInset = float32(int((avail - m) / 2)) // whole px: keep glyphs crisp
 		avail = m
 		lh = p.textSize * 1.3

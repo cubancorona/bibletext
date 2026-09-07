@@ -709,6 +709,25 @@ measurement. It reads 6.4% smaller at the same point size, so the match holds
 only where the text is smaller. At equal apparent size Spectral is the FURTHEST
 from Georgia's measure of the three, and Junicode the closest.
 
+**This table was written and then not acted on, and the reader saw it.** The face
+was swapped at the unchanged 21px and shipped that way, so Scripture drew 13.2%
+smaller on every surface at once — confirmed on an iPhone before anything was
+changed, where the drawn x-height fell from 30 device pixels to 26. The
+correction now lives in `reading_face_scale.go` as a per-face optical scale of
+1.15178, applied to glyph sizes and to every length reckoned in ems of the set
+type, and deliberately NOT to a measure. Measured after the change, on the same
+device and chapter: x-height back to 30 device px, and the line breaking in the
+same places it broke under Georgia — the "+2.6%" above is the residue, and the
+advance ratio cancels it to within a tenth of a percent when the column is held
+still. Android went 23 → 27 device px on a Pixel by the same route, behind the
+API-29 gate that decides whether the shipped face was got at all.
+
+Two things this did NOT change, both checked rather than assumed. The Hebrew face
+is only ever reached for Hebrew glyphs, so a uniform scale leaves its size
+relative to the Latin around it exactly where it was. And the desktop canvas
+pane's fallback text widget draws in the CHROME face, not this one, so it takes
+no correction — scaling it would simply make it 15% too large.
+
 ### Why the face that covers everything still fails
 
 Cardo covers all three scripts, and coverage was never the whole requirement.

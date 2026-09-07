@@ -1,7 +1,7 @@
 ### prose/no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -41,7 +41,7 @@
 ### prose/no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -157,7 +157,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/range-1-4 | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -197,7 +197,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/range-1-4 | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -319,7 +319,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/single-3 | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -359,7 +359,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/single-3 | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -477,7 +477,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-on-another-chapter | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -517,7 +517,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-on-another-chapter | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -633,7 +633,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-on-another-book | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -673,7 +673,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-on-another-book | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -789,7 +789,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-past-the-last-verse | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -829,7 +829,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-past-the-last-verse | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -945,7 +945,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/chapter-level-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -985,7 +985,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/chapter-level-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1101,7 +1101,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### poetry/no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1141,7 +1141,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### poetry/no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1266,7 +1266,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 ### poetry/range-2-3 | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1306,7 +1306,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 ### poetry/range-2-3 | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1437,7 +1437,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 ### red/whole-verse-under-the-band | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1477,7 +1477,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 ### red/whole-verse-under-the-band | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1587,7 +1587,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 ### red/whole-verse-no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1627,7 +1627,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 ### red/whole-verse-no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1733,7 +1733,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 ### red/bsb-spans-under-the-band | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1773,7 +1773,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 ### red/bsb-spans-under-the-band | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1872,7 +1872,7 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 ### red/bsb-spans-no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1912,7 +1912,7 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 ### red/bsb-spans-no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;

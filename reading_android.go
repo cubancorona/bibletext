@@ -50,7 +50,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaClass = (jclass)(*env)->NewGlobalRef(env, cls);
 
 	btaInitM       = (*env)->GetStaticMethodID(env, btaClass, "init", "(Landroid/app/Activity;)V");
-	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIIIF)V");
+	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIIIFF)V");
 	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FI)V");
 	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(F)V");
 	btaGetFracM    = (*env)->GetStaticMethodID(env, btaClass, "getScrollFrac", "()F");
@@ -119,11 +119,12 @@ static int btaReady() { return btaClass != NULL; }
 
 static void btaSetStyle(uintptr_t jni_env, int textColor, int paperColor, float sizePx,
                         float lineMult, int padL, int padT, int padR, int padB,
-                        float measureDp) {
+                        float measureDp, float opticalScale) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetStyleM, textColor, paperColor,
-	                             sizePx, lineMult, padL, padT, padR, padB, measureDp);
+	                             sizePx, lineMult, padL, padT, padR, padB, measureDp,
+	                             opticalScale);
 }
 
 static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse) {
@@ -763,7 +764,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// iOS pane draws as 21pt. The overlay's FRAME still uses the canvas scale
 	// (setFrameFromObject): that converts Fyne coordinates, which really are in
 	// the bucketed unit.
-	textDp := float32(21) * float32(readingTextScale())
+	// The REFERENCE size — the optical scale is applied on the Java side, not
+	// here, because only that side knows whether it got the shipped face. The
+	// scale corrects for that face's small x-height, and below API 29 the
+	// overlay still draws in the platform serif, which needs no correction and
+	// would simply come out 15% too large (reading_face_scale.go).
+	referenceDp := float32(readingReferencePx())
 	padL, padT := 10, 14
 	// The reporter column, as a WIDTH in dp for the bridge to centre — the
 	// same shape as the iOS push (bibleTextSetReadingMeasure): the measure is
@@ -771,7 +777,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// reporter's ~59 characters. 0 keeps the legacy side padding. The bridge
 	// owns the centring because it owns both the display density and the live
 	// view width (BtBridge.applyReadingPadding).
-	measureDp := androidReadingMeasureDp(reporterLayout(), textDp)
+	measureDp := androidReadingMeasureDp(reporterLayout(), referenceDp)
 	arrivalVerse := 0
 	// EXPLICIT arrivals only (the classifier's rule, notes_arrival.go): a
 	// plain entry — the arrows, the picker — must open at the top even when
@@ -817,9 +823,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			// landscape, put the drawn line pitch at 83px and 82px — one
 			// percent apart. Following the CSS numbers here would open a 54%
 			// gap between two panes that are meant to match.
-			C.float(textDp), C.float(1.35),
+			C.float(referenceDp), C.float(1.35),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT),
-			C.float(measureDp))
+			C.float(measureDp), C.float(readingOpticalScale()))
 		ch := C.CString(html)
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse))
 		C.free(unsafe.Pointer(ch))

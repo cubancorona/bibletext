@@ -44,7 +44,26 @@ func readerCSS(f webFonts) string {
 		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
+		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
+		"__HEADING_REM__", remSize(webHeadingBaseRem),
 	).Replace(readerCSSTemplate)
+}
+
+// The reading sizes BEFORE the optical scale, at a 16px root: 1.3125rem is the
+// app's own 21px body, and the heading has always been set a step under it.
+const (
+	webScriptureBaseRem = 1.3125
+	webHeadingBaseRem   = 1.0
+)
+
+// remSize opens a reading size up by the shipped face's optical scale — the same
+// correction the app applies, for the same reason. Setting the raw number here
+// would put the web page 13% smaller than the app showing the same chapter
+// (bibletext.ReadingOpticalScale, reading_face_scale.go). A MEASURE takes no such
+// correction: .wrap's max-width is in root rem and deliberately does not move,
+// which is what returns the line to its old character count as the glyphs grow.
+func remSize(base float64) string {
+	return strconv.FormatFloat(base*bibletext.ReadingOpticalScale(), 'f', 4, 64) + "rem"
 }
 
 func readerPaletteCSS(p bibletext.WebReaderPalette, indent string) string {
@@ -281,14 +300,22 @@ body{
 
    Both numbers are unitless/em so they still scale with a reader's own font
    size. If the app's reading pane is ever re-typeset, re-measure — do not read
-   these off buildChapterHTML. */
+   these off buildChapterHTML.
+
+   RE-MEASURED after the reading face was given its optical scale
+   (reading_face_scale.go). The body size here moved with it; 1.3175 did NOT
+   need to. The iOS pitch turns out to be 2.0 x 0.66 x body — TextKit takes a
+   paragraph's line height from its FIRST run, which is always the 0.66em verse
+   numeral — so it is linear in the body size and the ratio survives the change.
+   Confirmed on the iPhone 17 Pro simulator: 83 device px at the old 21px body,
+   95 at the corrected 24px, i.e. 1.3196 against the 1.3175 written here. */
 .text{
   font-family:var(--scripture);
-  font-size:1.3125rem; line-height:1.3175; letter-spacing:.004em;
+  font-size:__SCRIPTURE_REM__; line-height:1.3175; letter-spacing:.004em;
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text{--pgap:calc(1.3175 * 1.3125rem)}
+.text{--pgap:calc(1.3175 * __SCRIPTURE_REM__)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* The publisher's section headings. Set in the scripture face, because they are
    the publisher's words and not the app's chrome, but never justified and never
@@ -296,7 +323,7 @@ body{
    off its own left edge. The space above is the reader's cue that a new section
    opens; a heading that opened the chapter needs none. */
 .text .sec{
-  font-size:1rem; font-weight:700; letter-spacing:.01em; line-height:1.3;
+  font-size:__HEADING_REM__; font-weight:700; letter-spacing:.01em; line-height:1.3;
   text-align:left; text-indent:0; hyphens:none;
   margin:calc(var(--pgap) + .4rem) 0 calc(var(--pgap) * .5);
 }

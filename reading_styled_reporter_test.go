@@ -85,7 +85,11 @@ func TestStyledPaneReporterGate(t *testing.T) {
 
 	st := reporterTestState()
 	p := newStyledReadingPane(st, st.Bible.GetChapter("Romans", 8))
-	m := reporterMeasureEm * p.textSize
+	// The measure is figured from the REFERENCE size, not the size the type is
+	// set at — it is the one quantity the optical scale deliberately does not
+	// reach, so that the column holds still while the glyphs in it grow
+	// (reading_face_scale.go).
+	m := reporterMeasureEm * p.referenceSize()
 
 	// WIDE: the reporter page.
 	wide := m + 2*styledPaneInset + 200

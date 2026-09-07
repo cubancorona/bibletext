@@ -104,12 +104,14 @@ func newDevHighlightPreview(c devHighlightCase, wash color.NRGBA) *devHighlightP
 	return p
 }
 
-// The native Apple reading pane uses a 21px body at the active reading scale.
 // The Dev tab itself is Fyne, but its specimen should judge the wash against
 // the same glyph size the iOS/macOS reading view imports, not the smaller UI
-// theme size. The deliberately short phrase still fits a phone at Extra large.
+// theme size — so it takes the optical scale the reading panes take
+// (reading_face_scale.go), or the wash would be judged against type a size
+// smaller than the type it has to sit behind. The deliberately short phrase
+// still fits a phone at Extra large.
 func devHighlightPreviewTextSize() float32 {
-	return 21 * float32(readingTextScale())
+	return float32(readingGlyphPx())
 }
 
 func (p *devHighlightPreview) setWash(c color.NRGBA) {
