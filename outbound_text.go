@@ -16,9 +16,15 @@ package bibletext
 // no-break space pasted into a document is a character nobody typed; a
 // superscript "¹⁶" pasted into a search box finds nothing.
 //
+// The small capitals are the same kind of thing. The edition marks the divine
+// name and the app draws it with the Unicode small-capital letters, which are
+// its own characters and not the publisher's; a reader who pasted them would
+// have a word no edition prints and no search box matches. They go back to the
+// letters the publisher actually sent.
+//
 // So every outbound path goes through here first. What the reader keeps is the
-// verse number as an ordinary number, the publisher's own spacing, and nothing
-// this app invented for its own page.
+// verse number as an ordinary number, the publisher's own letters and spacing,
+// and nothing this app invented for its own page.
 
 import "strings"
 
@@ -51,6 +57,10 @@ func outboundText(s string) string {
 		case r == emSpace || r == enSpace:
 			// The indent is the page's alone. Dropped rather than turned into
 			// spaces, which would leave the paragraph looking hand-indented.
+		case smallCapitalToLetter[r] != 0:
+			// Back to the publisher's own letter. The small capital was the
+			// app's way of SETTING the word, never the word itself.
+			b.WriteRune(smallCapitalToLetter[r])
 		default:
 			b.WriteRune(r)
 		}

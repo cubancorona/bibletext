@@ -25,18 +25,18 @@ type verseRun struct {
 //     red run. This fallback stays inside the same edition's judgement.
 func redLetterRuns(versionID string, v Verse, redLetter bool) []verseRun {
 	if !redLetter {
-		return []verseRun{{Text: v.Text}}
+		return applySmallCaps(v, []verseRun{{Text: v.Text}})
 	}
 	if spans, ok := redLetterSpansFor(versionID, v.BookName, v.Chapter, v.Verse, v.Text); ok {
-		return runsFromSpans(v.Text, spans)
+		return applySmallCaps(v, runsFromSpans(v.Text, spans))
 	}
 	// A missing entry means black for that edition. A present entry with stale
 	// offsets remains red at verse granularity; it never consults WEB unless the
 	// selected edition itself is WEB/WEBC.
 	if !redLetterVerseMarked(versionID, v.BookName, v.Chapter, v.Verse) {
-		return []verseRun{{Text: v.Text}}
+		return applySmallCaps(v, []verseRun{{Text: v.Text}})
 	}
-	return []verseRun{{Text: v.Text, Red: true}}
+	return applySmallCaps(v, []verseRun{{Text: v.Text, Red: true}})
 }
 
 // runsFromSpans turns rune offsets into alternating runs. The spans are sorted
