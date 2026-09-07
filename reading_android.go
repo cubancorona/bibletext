@@ -333,6 +333,10 @@ func runBta(fn func(env uintptr)) {
 			recreated := btaInitTried // a CHANGED Ctx = activity recreation, not first init
 			btaInitTried = true
 			btaCtx = ac.Ctx
+			// BEFORE the bridge initialises: it looks for the reading faces
+			// when it comes up, and a face written afterwards would not be
+			// found until the next launch.
+			androidReadingFontDir()
 			btaAvailable = C.btaInit(C.uintptr_t(ac.Env), C.uintptr_t(ac.Ctx)) == 1
 			if !btaAvailable {
 				// Bridge dex missing (plain `fyne package` build) — the reading

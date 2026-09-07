@@ -716,6 +716,68 @@ public final class BtBridge {
         });
     }
 
+    // ─── The reading faces ───────────────────────────────────────────────────
+    //
+    // Scripture is set in the face the app ships, not in the platform's serif,
+    // so a reader sees the same page here as on every other surface. Go writes
+    // the files into <package>/no_backup/bibletext/fonts before the bridge
+    // comes up (reading_fonts_android.go); getNoBackupFilesDir() is the same
+    // root from this side.
+    //
+    // A FAMILY, not one face. The chapter markup uses <b> for verse numbers and
+    // footnote keys and <i> for the Psalm title, and a Typeface built from a
+    // single file leaves the platform to fake both — a smeared bold and a
+    // mechanical slant. Building the family needs API 29, so below that the
+    // platform serif is kept: today's look, rather than a worse one.
+    //
+    // The Hebrew rides as a FALLBACK inside the family. The reading face has no
+    // Hebrew at all, and without this a footnote quoting it would fall to
+    // whatever the system supplies, which is the borrowing this replaces.
+    private static android.graphics.Typeface readingFace;
+    private static boolean readingFaceTried;
+
+    private static android.graphics.Typeface readingTypeface() {
+        if (readingFaceTried) return readingFace;
+        readingFaceTried = true;
+        if (activity == null || android.os.Build.VERSION.SDK_INT < 29) return null;
+        try {
+            java.io.File dir = new java.io.File(activity.getNoBackupFilesDir(), "bibletext/fonts");
+            java.io.File reg = new java.io.File(dir, "Junicode-Regular.ttf");
+            if (!reg.isFile()) return null;
+            android.graphics.fonts.FontFamily.Builder fam =
+                new android.graphics.fonts.FontFamily.Builder(
+                    new android.graphics.fonts.Font.Builder(reg).build());
+            String[][] cuts = {
+                {"Junicode-Italic.ttf", "400", "1"},
+                {"Junicode-Bold.ttf", "700", "0"},
+                {"Junicode-BoldItalic.ttf", "700", "1"},
+            };
+            for (String[] c : cuts) {
+                java.io.File f = new java.io.File(dir, c[0]);
+                if (!f.isFile()) continue;
+                fam.addFont(new android.graphics.fonts.Font.Builder(f)
+                    .setWeight(Integer.parseInt(c[1]))
+                    .setSlant(c[2].equals("1")
+                        ? android.graphics.fonts.FontStyle.FONT_SLANT_ITALIC
+                        : android.graphics.fonts.FontStyle.FONT_SLANT_UPRIGHT)
+                    .build());
+            }
+            android.graphics.Typeface.CustomFallbackBuilder b =
+                new android.graphics.Typeface.CustomFallbackBuilder(fam.build());
+            java.io.File heb = new java.io.File(dir, "EzraSIL-Regular.ttf");
+            if (heb.isFile()) {
+                b.addCustomFallback(new android.graphics.fonts.FontFamily.Builder(
+                    new android.graphics.fonts.Font.Builder(heb).build()).build());
+            }
+            readingFace = b.build();
+        } catch (Throwable t) {
+            // Any failure keeps the platform serif. A reading pane that draws
+            // in the wrong face is a blemish; one that throws is a blank page.
+            readingFace = null;
+        }
+        return readingFace;
+    }
+
     public static void init(final Activity act) {
         UI.post(new Runnable() {
             @Override public void run() {
@@ -2388,6 +2450,14 @@ public final class BtBridge {
                 // multiplier, deriving it from the font's own metrics rather
                 // than guessing, so the two paths agree as closely as the older
                 // API allows.
+                // THE TYPEFACE FIRST. setLineHeight reads the CURRENT paint's
+                // font metrics and stores the difference as extra spacing, so a
+                // typeface set afterwards leaves the stored extra measured
+                // against a font that is not the one drawing, and the pitch
+                // comes out wrong by the gap between the two. It was set after
+                // for as long as this code has existed.
+                android.graphics.Typeface face = readingTypeface();
+                text.setTypeface(face != null ? face : android.graphics.Typeface.SERIF);
                 if (android.os.Build.VERSION.SDK_INT >= 28) {
                     text.setLineHeight(Math.round(lineMult * textSizePx));
                 } else {
@@ -2396,7 +2466,6 @@ public final class BtBridge {
                     float mult = natural > 0f ? (lineMult * textSizePx) / natural : lineMult;
                     text.setLineSpacing(0f, mult);
                 }
-                text.setTypeface(android.graphics.Typeface.SERIF);
                 applyReadingPadding();
                 // Say the break strategy and hyphenation out loud rather than
                 // inheriting a release's default: Android 13 changed the
