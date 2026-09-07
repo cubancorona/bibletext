@@ -24,11 +24,23 @@ import (
 
 // readerCSS fills in the webfont URLs. They are content-hashed like the
 // stylesheet itself, and since both live in assets/ the src is a bare filename.
-func readerCSS(regularFile, boldFile string) string {
+// webFonts names the four hashed font files the stylesheet references. A struct
+// rather than four positional strings, because four filenames in a row are four
+// chances to swap two of them and get a page that loads and looks wrong.
+type webFonts struct {
+	uiRegular        string
+	uiBold           string
+	scriptureRegular string
+	scriptureBold    string
+}
+
+func readerCSS(f webFonts) string {
 	light, dark := bibletext.WebReaderPalettes()
 	return strings.NewReplacer(
-		"__FONT_REGULAR__", regularFile,
-		"__FONT_BOLD__", boldFile,
+		"__FONT_REGULAR__", f.uiRegular,
+		"__FONT_BOLD__", f.uiBold,
+		"__SCRIPTURE_REGULAR__", f.scriptureRegular,
+		"__SCRIPTURE_BOLD__", f.scriptureBold,
 		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
@@ -69,13 +81,27 @@ const readerCSSTemplate = `
   font-family:"Atkinson Hyperlegible"; font-style:normal; font-weight:700;
   font-display:swap; src:url(__FONT_BOLD__) format("woff2");
 }
+/* Junicode (c) Peter S. Baker — SIL Open Font License 1.1, published beside
+   these files as assets/junicode-OFL.txt. Scripture is set in it here exactly
+   as it is in the app, so a shared link shows a reader the page they know.
+   Built from the same file the app embeds and subsetted more tightly: no small
+   capitals, since the site publishes no edition that marks a divine name, and
+   no Greek or Hebrew, since the note chrome below is set in the UI face. */
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(__SCRIPTURE_REGULAR__) format("woff2");
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(__SCRIPTURE_BOLD__) format("woff2");
+}
 :root{
 __LIGHT_PALETTE__
-  /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
-     stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
-     fall back per-glyph instead of tofu. */
+  /* The app's two faces: chrome in Atkinson, scripture in Junicode. Each stack
+     trails a system fallback so glyphs the face lacks — the ← → of the chapter
+     nav, an unexpected accent — fall back per-glyph instead of tofu. */
   --ui:"Atkinson Hyperlegible",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  --scripture:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --scripture:"Junicode",Georgia,"Iowan Old Style","Times New Roman",serif;
 }
 @media (prefers-color-scheme:dark){
   :root{

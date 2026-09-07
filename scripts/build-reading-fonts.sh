@@ -49,6 +49,26 @@ for cut in Regular Italic Bold BoldItalic; do
     "$(( $(wc -c < "assets/fonts/reading/Junicode-$cut.ttf") / 1024 ))"
 done
 
+# THE WEB FACES ARE A NARROWER SUBSET, and deliberately so. The generated site
+# publishes only the three public-domain editions, and its note chrome is set
+# in the UI face — so the scripture face there never draws Greek or Hebrew, and
+# carrying them would put 130 KB on a page whose entire type budget is one
+# 15 KB webfont. Regular and bold only: the sole bold inside the reading column
+# is the verse number, and the site sets no scripture in italic.
+# Tighter than the app's: no small capitals, because the site publishes no
+# edition that marks a divine name, and no Greek or Hebrew, because its notes
+# are set in the UI face. 26 KB against 87 for the app's range.
+WEB_RANGES='U+0020-007E,U+00A0-00FF,U+0100-017F,U+2013-2014,U+2018-201D,U+2026,U+00B2,U+00B3,U+00B9,U+2070,U+2074-2079'
+WEB_FEATURES='kern,liga,calt,onum,ccmp,locl'
+mkdir -p assets/fonts/reading/web
+for cut in Regular Bold; do
+  "$PYFTSUBSET" "$SRC/Junicode-$cut.ttf" --flavor=woff2 \
+    --output-file="assets/fonts/reading/web/Junicode-$cut.woff2" \
+    --unicodes="$WEB_RANGES" --layout-features+="$WEB_FEATURES" --no-hinting --desubroutinize
+  printf '  %-46s %5s KB\n' "assets/fonts/reading/web/Junicode-$cut.woff2" \
+    "$(( $(wc -c < "assets/fonts/reading/web/Junicode-$cut.woff2") / 1024 ))"
+done
+
 cp "$SRC/EzraSIL-Regular.ttf" assets/fonts/reading/EzraSIL-Regular.ttf
 printf '  %-46s %5s KB   (unmodified: Reserved Font Name)\n' \
   "assets/fonts/reading/EzraSIL-Regular.ttf" \

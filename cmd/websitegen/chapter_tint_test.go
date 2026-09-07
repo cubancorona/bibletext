@@ -75,7 +75,7 @@ func TestSiteUsesTheAppsTintClass(t *testing.T) {
 		t.Fatal("the highlight tint must name a class — the static reader has no other way to paint it")
 	}
 
-	css := readerCSS("x.woff2", "y.woff2")
+	css := readerCSS(webFonts{uiRegular: "x.woff2", uiBold: "y.woff2", scriptureRegular: "s.woff2", scriptureBold: "sb.woff2"})
 	if !strings.Contains(css, ".v:target,.v."+cls+"{") {
 		t.Errorf("reader.css does not style the app's tint class %q — a highlighted range would render unlit", cls)
 	}

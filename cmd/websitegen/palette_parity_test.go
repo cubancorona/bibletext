@@ -51,7 +51,7 @@ func TestWebReaderPaletteValues(t *testing.T) {
 
 func TestReaderCSSUsesExportedWebPalettes(t *testing.T) {
 	light, dark := bibletext.WebReaderPalettes()
-	blocks := cssRootBlocks(t, readerCSS("regular.woff2", "bold.woff2"))
+	blocks := cssRootBlocks(t, readerCSS(webFonts{uiRegular: "regular.woff2", uiBold: "bold.woff2", scriptureRegular: "s.woff2", scriptureBold: "sb.woff2"}))
 	if len(blocks) != 2 {
 		t.Fatalf("reader CSS has %d :root blocks, want the light root and one dark override", len(blocks))
 	}
@@ -98,7 +98,7 @@ func TestReaderCSSUsesExportedWebPalettes(t *testing.T) {
 }
 
 func TestReaderCSSTintTokensHaveOneRole(t *testing.T) {
-	css := stripCSSComments(readerCSS("regular.woff2", "bold.woff2"))
+	css := stripCSSComments(readerCSS(webFonts{uiRegular: "regular.woff2", uiBold: "bold.woff2", scriptureRegular: "s.woff2", scriptureBold: "sb.woff2"}))
 	if regexp.MustCompile(`--hl[[:space:]]*:`).MatchString(css) ||
 		regexp.MustCompile(`var\([[:space:]]*--hl[[:space:]]*\)`).MatchString(css) {
 		t.Fatal("the ambiguous --hl token remains; scripture and control feedback need separate roles")

@@ -269,8 +269,29 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 		return err
 	}
 
+	// The reading face, the same way and for the same reasons. Scripture is set
+	// in it here exactly as it is in the app, so a shared link shows a reader
+	// the page they already know.
+	scrip := bibletext.WebScriptureFontRegular()
+	scripBold := bibletext.WebScriptureFontBold()
+	fonts := webFonts{
+		uiRegular:        regularFile,
+		uiBold:           boldFile,
+		scriptureRegular: "Junicode-Regular." + contentHash(string(scrip)) + ".woff2",
+		scriptureBold:    "Junicode-Bold." + contentHash(string(scripBold)) + ".woff2",
+	}
+	if err := site.write("assets/"+fonts.scriptureRegular, string(scrip)); err != nil {
+		return err
+	}
+	if err := site.write("assets/"+fonts.scriptureBold, string(scripBold)); err != nil {
+		return err
+	}
+	if err := site.write("assets/junicode-OFL.txt", string(bibletext.WebScriptureFontLicense())); err != nil {
+		return err
+	}
+
 	js := readerJS(versions)
-	css := readerCSS(regularFile, boldFile)
+	css := readerCSS(fonts)
 	cssName = "assets/reader." + contentHash(css) + ".css"
 	jsName = "assets/reader." + contentHash(js) + ".js"
 	if err := site.write(cssName, css); err != nil {
