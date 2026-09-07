@@ -645,8 +645,22 @@ route works there.
 
 ### Captured and still not drawn
 
-Section headings, the translators' supplied words, poetry indent depths, and now
-the small capitals.
+Only the poetry indent depths remain. The small capitals, the translators'
+supplied words and the publishers' section headings are all drawn now, on every
+surface.
+
+The three that landed followed one rule, and it is the rule worth keeping: a
+decision the edition made about the text is taken ONCE, in a place all the
+surfaces already pass through, and expressed as something every surface can
+already draw. The small capitals became CHARACTERS, which needed no feature
+control anywhere. The supplied words became a FLAG on a run, and every surface
+could already set italic. The headings needed a bigger shape, because a heading
+sits between verses rather than inside one, so the chapter's own order became
+the shared thing instead.
+
+The indent depths are the awkward one left, for the same reason headings were:
+an indent belongs to a LINE, and a line is the one thing each surface still
+works out for itself.
 
 ## The universal reading face
 
