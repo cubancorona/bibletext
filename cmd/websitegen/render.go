@@ -199,7 +199,13 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
 			}
 		}
 		fmt.Fprintf(&b, `<span class="v" id="v%d">`, v.Verse)
-		fmt.Fprintf(&b, `<sup class="n"><a href="#v%d">%d</a></sup>&nbsp;`, v.Verse, v.Verse)
+		// An ORDINARY space after the number, not a no-break one. The page can
+		// afford to let a superscript sit at a line end; a reader copying a
+		// verse out of the page cannot afford a character nobody typed, and a
+		// no-break space pasted into a document is exactly that. The app's own
+		// surfaces strip it on the way out (outbound_text.go); the page has no
+		// such moment, so it must not put one there in the first place.
+		fmt.Fprintf(&b, `<sup class="n"><a href="#v%d">%d</a></sup> `, v.Verse, v.Verse)
 		// RUNS, not a whole-verse yes/no. This asked IsWordsOfChrist until the
 		// app grew per-edition span tables and the page did not: a verse where
 		// Christ answers somebody came out entirely red, the other speaker

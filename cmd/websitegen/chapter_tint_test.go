@@ -42,9 +42,9 @@ func TestChapterBodyIsByteIdenticalAcrossTheTintRefactor(t *testing.T) {
 		v("Romans", 8, 3, "For what the law was powerless to do."),
 	}
 	const want = `<p>` +
-		`<span class="v" id="v1"><sup class="n"><a href="#v1">1</a></sup>&nbsp;Therefore, there is now no condemnation.</span>` +
-		` <span class="v" id="v2"><sup class="n"><a href="#v2">2</a></sup>&nbsp;For the law of the Spirit set you free.</span>` +
-		` <span class="v" id="v3"><sup class="n"><a href="#v3">3</a></sup>&nbsp;For what the law was powerless to do.</span>` +
+		`<span class="v" id="v1"><sup class="n"><a href="#v1">1</a></sup> Therefore, there is now no condemnation.</span>` +
+		` <span class="v" id="v2"><sup class="n"><a href="#v2">2</a></sup> For the law of the Spirit set you free.</span>` +
+		` <span class="v" id="v3"><sup class="n"><a href="#v3">3</a></sup> For what the law was powerless to do.</span>` +
 		`</p>`
 	if got := chapterBody("web", "Romans", verses); got != want {
 		t.Errorf("chapter markup moved.\n got: %s\nwant: %s", got, want)

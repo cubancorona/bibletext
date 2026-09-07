@@ -384,7 +384,10 @@ func (p *styledReadingPane) copyToClipboard() {
 	if p.clipboard == nil || p.selStart < 0 || p.selEnd <= p.selStart {
 		return
 	}
-	p.clipboard.SetContent(p.copySelected())
+	// What reaches the clipboard is the publisher's text, not the pane's
+	// typography: this pane draws its verse numbers as superscript CHARACTERS
+	// (superscriptNumber), so without this a paste carries "¹⁶" (outbound_text.go).
+	p.clipboard.SetContent(outboundText(p.copySelected()))
 }
 
 // --- The study menu ----------------------------------------------------------
