@@ -7,6 +7,7 @@ package bibletext
 // chapter that keeps 500ing through the retry).
 
 import (
+	"reflect"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -155,9 +156,11 @@ func TestDecodeAPIBibleEdgeTitleOnlyChapter(t *testing.T) {
 
 func TestDecodeAPIBibleEdgeDeepNestedChars(t *testing.T) {
 	// nd (divine name) and it (italic) char spans nested INSIDE a wj span:
-	// all inner text is kept in document order; nd renders UPPERCASE (the
-	// plain-text realization of the small-caps divine name, preserving the
-	// LORD/Lord distinction), while it (supplied words) stays as-is.
+	// all inner text is kept in document order, with the PUBLISHER'S OWN
+	// CHARACTERS. Neither span changes a letter: the divine name is recorded
+	// as a SmallCaps range and the supplied words as a Supplied range, so a
+	// renderer can set them and a reader who copies the verse receives what
+	// the publisher actually sent.
 	content := `[
 	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
 	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"5"},"items":[{"type":"text","text":"5"}]},
@@ -181,9 +184,24 @@ func TestDecodeAPIBibleEdgeDeepNestedChars(t *testing.T) {
 	if len(vs) != 1 {
 		t.Fatalf("got %d verses, want 1: %+v", len(vs), vs)
 	}
-	want := "Truly I tell you, THE LORD honors the meek today."
+	want := "Truly I tell you, the Lord honors the meek today."
 	if vs[0].Text != want {
 		t.Errorf("nested char spans:\n got  %q\n want %q", vs[0].Text, want)
+	}
+	// "the Lord" begins at rune 18 and runs 8 runes.
+	wantCaps := []TextSpan{{Start: 18, End: 26}}
+	if !reflect.DeepEqual(vs[0].SmallCaps, wantCaps) {
+		t.Errorf("small-caps spans:\n got  %+v\n want %+v", vs[0].SmallCaps, wantCaps)
+	}
+	if got := string([]rune(vs[0].Text)[18:26]); got != "the Lord" {
+		t.Errorf("small-caps span covers %q, want %q", got, "the Lord")
+	}
+	// The supplied words are still marked independently of it.
+	if len(vs[0].Supplied) != 1 {
+		t.Fatalf("supplied spans = %+v, want exactly one", vs[0].Supplied)
+	}
+	if got := string([]rune(vs[0].Text)[vs[0].Supplied[0].Start:vs[0].Supplied[0].End]); got != "the meek" {
+		t.Errorf("supplied span covers %q, want %q", got, "the meek")
 	}
 }
 

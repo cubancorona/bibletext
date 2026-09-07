@@ -56,6 +56,22 @@ type Verse struct {
 	// is set or not.
 	Supplied []TextSpan `json:"supplied,omitempty"`
 
+	// SmallCaps marks the words the edition sets in SMALL CAPITALS — above all
+	// the divine name, where "Lord" in small capitals renders the Tetragrammaton
+	// and "Lord" in ordinary case renders Adonai. The distinction is the
+	// edition's, it is carried entirely by the letterforms, and the app used to
+	// realise it by uppercasing the letters into the stored text, so a reader
+	// who copied a verse received a spelling no edition prints.
+	//
+	// The publisher's own characters are kept instead, and this says where the
+	// feature applies. The feed sends the span two ways — "Lord" with the
+	// remainder in lower case, and a capital outside the span with the
+	// remainder inside it as in "G" + "OD" — so a renderer asks for smcp and
+	// c2sc together and the face resolves both correctly.
+	//
+	// Offsets into Text, never characters inside it.
+	SmallCaps []TextSpan `json:"small_caps,omitempty"`
+
 	// PoemLevels is the indent depth of each LINE of this verse, in order:
 	// one entry per line of Text, zero where a line is not poetry. Hebrew
 	// poetry is built of paired lines, and print sets the second half of a

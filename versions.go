@@ -133,6 +133,10 @@ var registeredVersions = []BibleVersion{
 		// front of a verse that opens with a cross-reference;
 		// epoch 1: cross-reference note capture (include-notes=true; the feed
 		// carries no translator footnotes — probed live 2026-08-26).
+		// epoch 7: the small capitals the edition sets the divine name in,
+		// kept as offsets instead of being uppercased into the letters — the
+		// stored text is the publisher's own characters again, so a reader who
+		// copies a verse no longer receives a spelling no edition prints;
 		// epoch 6: the indent depth of each poetry line; epoch 5 the
 		// translators' supplied words — the italics of the King
 		// James tradition — kept as offsets, and a note inside a heading kept
@@ -141,7 +145,7 @@ var registeredVersions = []BibleVersion{
 		// skipped; epoch 3 the publisher's paragraphing, read from
 		// the feed's own paragraph blocks, with the passage walk overlapping one
 		// verse so a chunk boundary cannot invent one.
-		cacheEpoch: 6,
+		cacheEpoch: 7,
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
 }

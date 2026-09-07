@@ -750,11 +750,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 		if _, seen := poemLevels[key]; !seen {
 			poemLevels[key] = []int{curPoemLevel}
 		} else if key == from && pendingBreak {
-			built := strings.NewReplacer(
-				string(footnoteSentinel), "",
-				string(suppliedOpen), "",
-				string(suppliedClose), "",
-			).Replace(b.String())
+			built := withoutSentinels(b.String())
 			if built != "" && !strings.HasSuffix(built, "\n") {
 				poemLevels[key] = append(poemLevels[key], curPoemLevel)
 			}
@@ -767,11 +763,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			// canon once gained a blank first line on every verse whose
 			// cross-reference sits at its start, and the supplied-word
 			// brackets would have done the same to another forty-one.
-			cur := strings.NewReplacer(
-				string(footnoteSentinel), "",
-				string(suppliedOpen), "",
-				string(suppliedClose), "",
-			).Replace(b.String())
+			cur := withoutSentinels(b.String())
 			if pendingBreak {
 				if cur != "" && !strings.HasSuffix(cur, "\n") {
 					b.WriteByte('\n')
@@ -786,15 +778,12 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 		b.WriteString(s)
 	}
 
-	var walk func(nodes []apiBibleNode, upcase bool)
-	walk = func(nodes []apiBibleNode, upcase bool) {
+	var walk func(nodes []apiBibleNode)
+	walk = func(nodes []apiBibleNode) {
 		for _, n := range nodes {
 			switch {
 			case n.Type == "text" || (n.Text != "" && len(n.Items) == 0):
 				s := n.Text
-				if upcase {
-					s = strings.ToUpper(s)
-				}
 				if inHeading {
 					headBuf.WriteString(s)
 					continue
@@ -896,29 +885,34 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 				// marker subtree is presentation only: never walk it.
 			default:
 				// Char spans (sc, nd, wj, it, …) and anything else that
-				// nests. Small-caps and divine-name spans read as UPPERCASE
-				// in plain text — that is what preserves the NKJV's
-				// LORD/Lord (YHWH/Adonai) distinction and reassembles
-				// "G"+sc"OD" into "GOD".
+				// nests. Two of them are the edition's own typography, and
+				// they are kept AS SPANS rather than folded into the letters:
+				// the words it sets in italic because the translators
+				// supplied them, and the small capitals it sets the divine
+				// name in. Both are bracketed in place and resolved to rune
+				// offsets once the text has settled (stripSentinels), so
+				// nothing is added to the verse and nothing taken from it.
 				style := strings.ToLower(n.Attrs.Style)
-				if style == "it" && !inTitle && !inHeading {
-					// The translators' supplied words. Bracketed in place and
-					// resolved to rune offsets once the text has settled
-					// (stripSentinels), so nothing is added to the verse.
-					if key := pack(currentCh, current); key%1000 != 0 {
-						if b, ok := texts[key]; ok {
-							b.WriteRune(suppliedOpen)
+				if openRune, closeRune, marked := spanSentinels(style); marked && !inTitle && !inHeading {
+					bracket := func(r rune) {
+						key := pack(currentCh, current)
+						if key%1000 == 0 {
+							return
 						}
-					}
-					walk(n.Items, upcase)
-					if key := pack(currentCh, current); key%1000 != 0 {
-						if b, ok := texts[key]; ok {
-							b.WriteRune(suppliedClose)
+						b, ok := texts[key]
+						if !ok {
+							b = &strings.Builder{}
+							texts[key] = b
+							order = append(order, key)
 						}
+						b.WriteRune(r)
 					}
+					bracket(openRune)
+					walk(n.Items)
+					bracket(closeRune)
 					continue
 				}
-				walk(n.Items, upcase || style == "sc" || style == "nd")
+				walk(n.Items)
 			}
 		}
 	}
@@ -938,7 +932,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 				titleBuf.WriteByte(' ')
 			}
 			inTitle = true
-			walk(block.Items, false)
+			walk(block.Items)
 			inTitle = false
 			continue
 		}
@@ -957,7 +951,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			blockOpens = true
 			headBuf = &strings.Builder{}
 			inHeading = true
-			walk(block.Items, false)
+			walk(block.Items)
 			inHeading = false
 			if text := strings.TrimSpace(normalizeVerseSpaces(headBuf.String())); text != "" {
 				pendingHeads = append(pendingHeads, Heading{Text: text, Style: style, Footnotes: headNotes})
@@ -988,7 +982,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 				pendingSpace = true
 			}
 		}
-		walk(block.Items, false)
+		walk(block.Items)
 		pendingBreak, pendingSpace = false, false
 	}
 	// A title still pending when the blocks run out had no verse after it,
@@ -1014,7 +1008,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	var orphans map[int][]OrphanFootnote
 	total := 0
 	for _, key := range order {
-		text, anchors, supplied := stripSentinels(normalizeVerseSpaces(texts[key].String()))
+		text, anchors, supplied, smallCaps := stripSentinels(normalizeVerseSpaces(texts[key].String()))
 		if text == "" {
 			// An omitted verse: the key exists because the provider sent the
 			// verse's markup, but it decodes to no words. Keep any note that
@@ -1063,6 +1057,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			Footnotes: notes,
 			ParaStart: paraStarts[key],
 			Supplied:  supplied,
+			SmallCaps: smallCaps,
 			// Only when the depths describe THIS text: a verse whose lines
 			// were rebuilt by normalisation says nothing rather than
 			// something that no longer fits.
@@ -1111,12 +1106,57 @@ const (
 	suppliedClose = '\uE002'
 )
 
+// smallCapsOpen and smallCapsClose bracket a span the edition sets in SMALL
+// CAPITALS — the divine name above all. They are bracketed rather than applied,
+// for the same reason the supplied words are: the text is still being assembled
+// and normalised, so a rune offset taken now would not survive.
+//
+// The app used to uppercase these spans into the text instead. That put
+// characters in the reader's hands that the publisher never sent, and it threw
+// away the position, so nothing downstream could set the words properly.
+const (
+	smallCapsOpen  = '\uE003'
+	smallCapsClose = '\uE004'
+)
+
+// withoutSentinels removes every marker from a part-assembled verse so the
+// JOIN can be decided on what the reader will actually see. It exists as one
+// function because the decision has been got wrong twice by adding a sentinel
+// and forgetting one of the places that has to ignore it: a whole poetry canon
+// once gained a blank first line on every verse whose cross-reference sits at
+// its start.
+func withoutSentinels(s string) string {
+	return sentinelStripper.Replace(s)
+}
+
+var sentinelStripper = strings.NewReplacer(
+	string(footnoteSentinel), "",
+	string(suppliedOpen), "",
+	string(suppliedClose), "",
+	string(smallCapsOpen), "",
+	string(smallCapsClose), "",
+)
+
+// spanSentinels reports the brackets for a char span the app keeps as a SPAN
+// rather than as characters: "it" is the words the translators supplied, and
+// "sc"/"nd" are the small capitals an edition sets the divine name in. Every
+// other style nests through unmarked.
+func spanSentinels(style string) (openRune, closeRune rune, marked bool) {
+	switch style {
+	case "it":
+		return suppliedOpen, suppliedClose, true
+	case "sc", "nd":
+		return smallCapsOpen, smallCapsClose, true
+	}
+	return 0, 0, false
+}
+
 // stripFootnoteSentinels removes every sentinel from s, returning the clean
 // text and the rune offset each sentinel occupied. A sentinel standing alone
 // between two spaces takes the following space with it, so the text reads as
 // if the marker had never been there.
 func stripFootnoteSentinels(s string) (string, []int) {
-	text, anchors, _ := stripSentinels(s)
+	text, anchors, _, _ := stripSentinels(s)
 	return text, anchors
 }
 
@@ -1130,15 +1170,16 @@ func stripFootnoteSentinels(s string) (string, []int) {
 // space with it, so the text reads as if the marker had never been there. A
 // supplied-word bracket never owns a space: it sits tight against the words it
 // marks.
-func stripSentinels(s string) (string, []int, []TextSpan) {
-	if !strings.ContainsAny(s, string([]rune{footnoteSentinel, suppliedOpen, suppliedClose})) {
-		return s, nil, nil
+func stripSentinels(s string) (string, []int, []TextSpan, []TextSpan) {
+	if !strings.ContainsAny(s, string([]rune{footnoteSentinel,
+		suppliedOpen, suppliedClose, smallCapsOpen, smallCapsClose})) {
+		return s, nil, nil, nil
 	}
 	runes := []rune(s)
 	var b strings.Builder
 	var anchors []int
-	var supplied []TextSpan
-	var open []int
+	var supplied, smallCaps []TextSpan
+	var open, capsOpen []int
 	emitted := 0
 	lastEmitted := rune(0)
 	for i := 0; i < len(runes); i++ {
@@ -1162,6 +1203,17 @@ func stripSentinels(s string) (string, []int, []TextSpan) {
 					supplied = append(supplied, TextSpan{Start: start, End: emitted})
 				}
 			}
+		case smallCapsOpen:
+			capsOpen = append(capsOpen, emitted)
+		case smallCapsClose:
+			// Unmatched closes are dropped for the same reason.
+			if n := len(capsOpen); n > 0 {
+				start := capsOpen[n-1]
+				capsOpen = capsOpen[:n-1]
+				if emitted > start {
+					smallCaps = append(smallCaps, TextSpan{Start: start, End: emitted})
+				}
+			}
 		default:
 			b.WriteRune(r)
 			lastEmitted = r
@@ -1169,7 +1221,8 @@ func stripSentinels(s string) (string, []int, []TextSpan) {
 		}
 	}
 	sort.Slice(supplied, func(i, j int) bool { return supplied[i].Start < supplied[j].Start })
-	return b.String(), anchors, supplied
+	sort.Slice(smallCaps, func(i, j int) bool { return smallCaps[i].Start < smallCaps[j].Start })
+	return b.String(), anchors, supplied, smallCaps
 }
 
 // describedLevels returns the per-line indent depths only when they describe

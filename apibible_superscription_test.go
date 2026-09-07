@@ -87,12 +87,17 @@ func TestDecodeAPIBibleChapterKeepsThePsalmTitleBesideTheChapter(t *testing.T) {
 	if len(vs) != 1 {
 		t.Fatalf("got %d verses, want 1: %+v", len(vs), vs)
 	}
-	want := "LORD, how they have increased who trouble me!\nMany are they who rise up against me."
+	want := "Lord, how they have increased who trouble me!\nMany are they who rise up against me."
 	if vs[0].Text != want {
 		t.Errorf("verse 1:\n got  %q\n want %q", vs[0].Text, want)
 	}
 	if len(vs[0].Footnotes) != 0 {
 		t.Errorf("verse 1 took the title's note: %+v", vs[0].Footnotes)
+	}
+	// The divine name keeps the publisher's characters and is recorded as a
+	// span instead: the first four runes, "Lord".
+	if len(vs[0].SmallCaps) != 1 || vs[0].SmallCaps[0] != (TextSpan{Start: 0, End: 4}) {
+		t.Errorf("small-caps spans = %+v, want one covering \"Lord\"", vs[0].SmallCaps)
 	}
 }
 
