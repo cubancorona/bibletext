@@ -95,6 +95,34 @@ type OrphanFootnote struct {
 // decision. Its notes (the "Gittith is probably a musical term" glosses)
 // join the chapter-bottom footnote section keyed "Title", ahead of the
 // verse-keyed notes, under the same toggle.
+// Heading is one of the publisher's section headings — "The Beatitudes", "The
+// LORD Is My Shepherd", the speaker labels in the Song of Songs — or one of
+// the other non-Scripture blocks an edition sets between verses: a major
+// section head, a parallel-passage reference line, an acrostic letter.
+//
+// It is editorial matter, added by the translators rather than translated, and
+// it is kept apart from the text for that reason. Style is the publisher's own
+// name for what this block is, so a surface can tell a section heading from an
+// acrostic letter without guessing from the words.
+type Heading struct {
+	// Text is the heading as the publisher set it.
+	Text string `json:"text"`
+
+	// Style is the publisher's classification: "heading" for the helloao
+	// feeds, which name only the one kind, and the USX paragraph style for
+	// API.Bible — "s" and "s1".."s4" for section heads, "ms" for a major
+	// section, "r"/"mr"/"sr" for a reference line, "qa" for an acrostic
+	// letter, and so on.
+	Style string `json:"style,omitempty"`
+
+	// BeforeVerse is the verse this heading stands above. A heading at the
+	// head of a chapter names its first verse; one between verses names the
+	// verse that follows it. Zero means the heading closed a chapter with no
+	// verse after it, which the sources do not do but the decoders do not
+	// assume.
+	BeforeVerse int `json:"before_verse,omitempty"`
+}
+
 type Superscription struct {
 	// Text is the title line, assembled by the same marked-text path verse
 	// text uses, so its spacing rules are identical.
@@ -134,6 +162,17 @@ type BibleData struct {
 	// book → chapter. omitempty + nil-safe accessors, for the same
 	// pre-field-cache reasons as OrphanFootnotes.
 	Superscriptions map[string]map[int]Superscription `json:"superscriptions,omitempty"`
+
+	// Headings carries the publisher's own section headings, keyed by book and
+	// chapter (see Heading). Every edition sets them and the app used to drop
+	// every one: 3,091 in the Berean alone, which is its translators' map of
+	// what each chapter is about. They are captured here whether or not any
+	// surface draws them, because a thing a publisher sent is kept.
+	//
+	// Like a superscription, a heading is NOT Scripture. It never enters
+	// Verse.Text, so it cannot reach search, speech, sharing, copying or a
+	// link by accident; a surface that wants to draw one asks for it.
+	Headings map[string]map[int][]Heading `json:"headings,omitempty"`
 
 	// chapterNums caches the sorted chapter numbers per book so the reading
 	// view, search, and navigation don't re-allocate + re-sort on every call.

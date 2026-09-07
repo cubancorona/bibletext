@@ -63,11 +63,11 @@ const helloAOFixtureBook = `{
 
 func decodeFixtureBook(t *testing.T) map[int][]Verse {
 	t.Helper()
-	chapters, _, _ := decodeFixtureBookAll(t)
+	chapters, _, _, _ := decodeFixtureBookAll(t)
 	return chapters
 }
 
-func decodeFixtureBookAll(t *testing.T) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription) {
+func decodeFixtureBookAll(t *testing.T) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading) {
 	t.Helper()
 	var b helloAOBook
 	if err := json.Unmarshal([]byte(helloAOFixtureBook), &b); err != nil {
@@ -165,7 +165,7 @@ func TestFootnotesOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	if err := json.Unmarshal([]byte(book), &b); err != nil {
 		t.Fatal(err)
 	}
-	chapters, orphans, _ := decodeHelloAOChapters("Luke", b)
+	chapters, orphans, _, _ := decodeHelloAOChapters("Luke", b)
 	vs := chapters[17]
 	if len(vs) != 1 || vs[0].Verse != 35 {
 		t.Fatalf("empty verse 36 must stay out of the TEXT as it always was: %+v", vs)
@@ -186,7 +186,7 @@ func TestFootnotesOmittedVerseNoteBecomesOrphan(t *testing.T) {
 // and a superscription's note belongs to the TITLE — never to a verse, never
 // to the orphan table.
 func TestFootnotesHelloAOOrphans(t *testing.T) {
-	chapters, orphans, _ := decodeFixtureBookAll(t)
+	chapters, orphans, _, _ := decodeFixtureBookAll(t)
 	vs := chapters[23]
 	if n := len(vs[4].Footnotes); n != 0 {
 		t.Errorf("bodiless marker produced %d footnotes, want 0", n)
@@ -396,7 +396,7 @@ const nkjvNotedChapter = `[
 ]`
 
 func TestFootnotesNKJVCaptureAndPurity(t *testing.T) {
-	byCh, _, _, err := decodeAPIBiblePassage(json.RawMessage(nkjvNotedChapter), "John", 3)
+	byCh, _, _, _, err := decodeAPIBiblePassage(json.RawMessage(nkjvNotedChapter), "John", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +492,7 @@ func TestStripFootnoteSentinels(t *testing.T) {
 // uses: exact text, and its note anchored at an exact rune offset INTO the
 // title — attached to the superscription, not to any verse.
 func TestSuperscriptionCapture(t *testing.T) {
-	_, _, supers := decodeFixtureBookAll(t)
+	_, _, supers, _ := decodeFixtureBookAll(t)
 	s, ok := supers[23]
 	if !ok {
 		t.Fatal("Psalm 23's superscription was not captured")
@@ -576,7 +576,7 @@ func TestDecodeAPIBibleOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	    ]}
 	  ]}
 	]`
-	ctrlVerses, ctrlOrphans, _, err := decodeAPIBiblePassage(json.RawMessage(withText), "Luke", 17)
+	ctrlVerses, ctrlOrphans, _, _, err := decodeAPIBiblePassage(json.RawMessage(withText), "Luke", 17)
 	if err != nil {
 		t.Fatalf("control fixture: %v", err)
 	}
@@ -587,7 +587,7 @@ func TestDecodeAPIBibleOmittedVerseNoteBecomesOrphan(t *testing.T) {
 		t.Fatalf("control: the note must ride on the verse that has text, got %+v", vs)
 	}
 
-	verses, orphans, _, err := decodeAPIBiblePassage(json.RawMessage(chapter), "Luke", 17)
+	verses, orphans, _, _, err := decodeAPIBiblePassage(json.RawMessage(chapter), "Luke", 17)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

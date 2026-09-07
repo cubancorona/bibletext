@@ -125,10 +125,11 @@ type helloAOBook struct {
 // line breaks and headings are editorial nodes outside verse text and are skipped on
 // purpose (docs/SOURCE_FIELDS.md); Hebrew subtitles (Psalm superscriptions like "A Psalm
 // of David") become the chapter's Superscription. Shared by both decoders.
-func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription) {
+func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
 	var orphans map[int][]OrphanFootnote
 	var supers map[int]Superscription
+	var headings map[int][]Heading
 	for _, cj := range b.Chapters {
 		num := cj.Chapter.Number
 		// noteId → body, for joining the in-verse markers to their text.
@@ -139,6 +140,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 			bodies[fn.NoteID] = helloAOFootnoteBody{text: fn.Text, caller: fn.Caller}
 		}
 		var verses []Verse
+		var heads []Heading
 		// A chapter-level line_break is the publisher's paragraph boundary:
 		// the NEXT verse opens a paragraph. Carried on the verse
 		// (Verse.ParaStart) rather than dropped, so every surface paragraphs
@@ -188,6 +190,16 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				paraStart = true
 				continue
 			}
+			if head.Type == "heading" {
+				// The publisher's section heading. Captured with the verse it
+				// stands above, filled in when that verse arrives; a heading
+				// also opens a paragraph, because in print it always does.
+				if text := strings.TrimSpace(bsbVerseText(head.Content)); text != "" {
+					heads = append(heads, Heading{Text: text, Style: "heading"})
+					paraStart = true
+				}
+				continue
+			}
 			if head.Type != "verse" {
 				continue
 			}
@@ -235,6 +247,11 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 					Caller: body.caller,
 				})
 			}
+			for i := range heads {
+				if heads[i].BeforeVerse == 0 {
+					heads[i].BeforeVerse = head.Number
+				}
+			}
 			verses = append(verses, Verse{
 				BookName:  book,
 				Book:      book,
@@ -250,8 +267,14 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 		if len(verses) > 0 {
 			chapters[num] = verses
 		}
+		if len(heads) > 0 {
+			if headings == nil {
+				headings = make(map[int][]Heading)
+			}
+			headings[num] = heads
+		}
 	}
-	return chapters, orphans, supers
+	return chapters, orphans, supers, headings
 }
 
 // helloAOFootnoteBody is one chapter-level note body awaiting its in-verse marker.
@@ -286,7 +309,7 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		chapters, orphans, supers := decodeHelloAOChapters(book, b)
+		chapters, orphans, supers, heads := decodeHelloAOChapters(book, b)
 		if len(chapters) > 0 {
 			bd.Verses[book] = chapters
 		}
@@ -301,6 +324,12 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 				bd.Superscriptions = make(map[string]map[int]Superscription)
 			}
 			bd.Superscriptions[book] = supers
+		}
+		if len(heads) > 0 {
+			if bd.Headings == nil {
+				bd.Headings = make(map[string]map[int][]Heading)
+			}
+			bd.Headings[book] = heads
 		}
 	}
 	// Note: PrepareSearchIndex is left to the caller (loadBibleData), matching

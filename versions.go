@@ -85,9 +85,10 @@ var registeredVersions = []BibleVersion{
 		// orphan notes (Luke 17:36 and kin — the WEB carries 5); epoch 3
 		// footnote capture; epoch 2 poem-clause line breaks (epoch 1,
 		// unreleased, folded in).
-		// epoch 6: the publisher's paragraphing, recovered from the edition's
+		// epoch 7: the publisher's section headings, kept instead of skipped;
+		// epoch 6 the publisher's paragraphing, recovered from the edition's
 		// own USFM because the feed drops about 92% of it (paragraph_web.go).
-		cacheEpoch: 6,
+		cacheEpoch: 7,
 		source:     webSource{},
 	},
 	{
@@ -98,9 +99,10 @@ var registeredVersions = []BibleVersion{
 		// (decoder-version hygiene; zero BSB orphans); epoch 4 footnote
 		// capture; epoch 3 poem-clause line breaks; epoch 1 punctuation
 		// spacing.
-		// epoch 7: the publisher's paragraphing, read from the feed's own
-		// chapter-level break nodes instead of being skipped.
-		cacheEpoch: 7,
+		// epoch 8: the publisher's section headings, all 3,091 of them, kept
+		// instead of skipped; epoch 7 the publisher's paragraphing, read from
+		// the feed's own chapter-level break nodes instead of being skipped.
+		cacheEpoch: 8,
 		source:     bsbSource{},
 	},
 	{
@@ -108,10 +110,11 @@ var registeredVersions = []BibleVersion{
 		Publisher: "Public Domain", PublicDomain: true,
 		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
 		// USFM id into traditional Catholic order — see catholic.go.
-		// epoch 6: the publisher's paragraphing, from the edition's own USFM;
+		// epoch 7: the publisher's section headings, kept instead of skipped;
+		// epoch 6 the publisher's paragraphing, from the edition's own USFM;
 		// epoch 5 Psalm superscriptions + notes; 4 omitted-verse orphans (29);
 		// 3 footnote capture; 2 poem-clause breaks.
-		cacheEpoch: 6,
+		cacheEpoch: 7,
 		source:     webCatholicSource{},
 	},
 	{
@@ -127,10 +130,11 @@ var registeredVersions = []BibleVersion{
 		// front of a verse that opens with a cross-reference;
 		// epoch 1: cross-reference note capture (include-notes=true; the feed
 		// carries no translator footnotes — probed live 2026-08-26).
-		// epoch 3: the publisher's paragraphing, read from the feed's own
-		// paragraph blocks; the passage walk now overlaps one verse so a
-		// chunk boundary cannot invent one.
-		cacheEpoch: 3,
+		// epoch 4: the publisher's section headings and acrostic letters, kept
+		// instead of skipped; epoch 3 the publisher's paragraphing, read from
+		// the feed's own paragraph blocks, with the passage walk overlapping one
+		// verse so a chunk boundary cannot invent one.
+		cacheEpoch: 4,
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
 }

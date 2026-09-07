@@ -140,7 +140,7 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 		book.Chapters[0].Chapter.Content = append(book.Chapters[0].Chapter.Content, json.RawMessage(raw))
 	}
 
-	chapters, _, _ := decodeHelloAOChapters("John", book)
+	chapters, _, _, headings := decodeHelloAOChapters("John", book)
 	verses := chapters[3]
 	if len(verses) != 4 {
 		t.Fatalf("decoded %d verses, want 4", len(verses))
@@ -150,7 +150,7 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 		want  bool
 		why   string
 	}{
-		{1, false, "the first verse carries no mark; the chapter opens a paragraph anyway"},
+		{1, true, "a heading precedes it, and in print a heading always opens a paragraph"},
 		{2, false, "no break precedes it"},
 		{3, true, "a break precedes it"},
 		{4, true, "two breaks in a row still open one paragraph"},
@@ -163,6 +163,10 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 	shape := paraShape(groupVersesIntoParagraphs(verses))
 	if !sameShape(shape, []int{1, 3, 4}) {
 		t.Errorf("paragraphs open at %v, want [1 3 4]", shape)
+	}
+	// And the heading itself is kept, named against the verse it stands above.
+	if len(headings[3]) != 1 || headings[3][0].BeforeVerse != 1 {
+		t.Errorf("the heading was not captured against verse 1: %+v", headings[3])
 	}
 }
 

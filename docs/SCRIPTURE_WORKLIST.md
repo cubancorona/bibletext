@@ -275,8 +275,8 @@ stated reason. Make them agree.
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
 | S14 | honour the publishers' paragraph breaks | all | M–L | all four | done |
-| S15 | section headings behind a setting | BSB, WEBC | M–L | bsb, webc | todo |
-| S16 | section headings, NKJV half | NKJV | M | nkjv | blocked on S9 |
+| S15 | section headings: captured | all | M | all four | done (capture) |
+| S16 | section headings: drawing them | all | M–L | none | todo |
 | S17 | NKJV italics for supplied words | NKJV | M–L | none | todo |
 | S18 | speech reads the Psalm title | all | M | none | todo |
 | S19 | mark an omitted verse's gap in the text | all | M | none | todo |
