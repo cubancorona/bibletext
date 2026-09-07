@@ -783,6 +783,42 @@ Also settled, and it constrains the choice: the toolkit never sets variation
 coordinates, so a variable font renders at its default instance. Four STATIC
 cuts have to ship.
 
+## Getting the shipped faces into the Apple panes
+
+Probed directly on macOS rather than reasoned about. The short answer is that
+it works, but not through the stylesheet.
+
+    register before any import          OK
+    [NSFont fontWithName:@"Junicode"]   Junicode-Regular
+    CSS asks for Junicode, Georgia      Georgia@13.9, Georgia@21.0
+    CSS asks for Georgia                Georgia@13.9, Georgia@21.0
+    after a post-import sweep           Junicode-Regular@13.9, Junicode-Regular@21.0
+
+Registering the face succeeds and AppKit can find it by name, but the HTML
+importer resolves families from a pool that app-registered fonts are not in:
+asking for the shipped face gives exactly what asking for the system one gives.
+It fails silently, which is why this has to be probed rather than assumed.
+
+The route that does work is a POST-IMPORT SWEEP over the attributed string,
+replacing each run's family at the run's OWN point size. The last line above is
+the whole argument: the em-derived sizes survive exactly — 13.9 is 0.66 × 21,
+the verse-number size — so the point-size thresholds the panes use to tell a
+verse number from body text and to find the end of the content keep working
+untouched.
+
+Both panes already run a mutating sweep over that string for other reasons
+(reading_ios.go:3019, reading_macos.go:1366, where the reporter indent is
+applied), so this is a second pass beside an existing one rather than new
+machinery.
+
+Worth noting what this does NOT need any more. The small capitals are drawn as
+characters, so nothing here depends on the importer honouring a font feature —
+which was the other reason this pane was going to need special handling.
+
+Still to check before doing it: whether the Hebrew face needs registering too,
+and how a run carrying Hebrew is to be recognised once the text is an
+attributed string rather than tokens.
+
 ## Decided against
 
 Recorded here so they are not rediscovered as open questions. The reasoning
