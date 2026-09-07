@@ -33,6 +33,79 @@ How to re-census the sources:
   `BIBLETEXT_FULL_CANON_COMPARE` reproduces an earlier decoded canon byte
   for byte. `TestLiveAPIBibleProbe` is the cheap five-call check.
 
+
+## A defect in the licensed source: spaces lost at cross references
+
+Ecclesiastes 12:8 reads `“Vanityof vanities,” says the Preacher,` in the app.
+The space is missing, and it is missing because the source never sends it.
+
+The chapter arrives as a sequence of text fragments. Between `“Vanity` and
+`of vanities,” says the Preacher,` sits a cross-reference note, `style="x"`
+with `caller="-"`, which is the marker-less form. The decoder concatenates
+fragments raw, deliberately, because inserting a space corrupts the
+constructions where a span abuts punctuation or splits a word. So the two
+fragments meet with nothing between them.
+
+This is not the decoder dropping a field. The space is absent from the
+provider's data in all three of its serializations: the JSON the app reads,
+the HTML, and the provider's own plain text, which renders the verse as
+`“Vanityof vanities,”`.
+
+### The shape of it
+
+Measured across the whole canon through the passages endpoint, 359 sites in
+39 books have two word characters meeting across a note boundary. Every one of
+them is a cross reference; no footnote or other note style is involved.
+
+| book | sites |
+|---|---|
+| Isaiah | 62 |
+| Jeremiah | 39 |
+| Job | 38 |
+| Psalms | 19 |
+| Acts | 18 |
+| Hosea | 16 |
+| the other 33 books | 167 |
+
+The cause is a left-trim in the provider's content pipeline. Sampled over ten
+chapters, 355 note boundaries were examined: not one text fragment following a
+note begins with whitespace, while 266 of the fragments preceding a note end
+with it. Whitespace on one side of a note survives and whitespace on the other
+side never does.
+
+### Why it cannot be repaired locally
+
+The same left-trim erases the distinction that a repair would need. A note
+anchored between two words and a note anchored inside a word arrive in exactly
+the same shape.
+
+| site | fragments | correct reading |
+|---|---|---|
+| Ecclesiastes 12:8 | `“Vanity` + note + `of vanities,”` | a space belongs here |
+| Genesis 42:20 | `And bring your young` + note + `est brother to me` | `youngest`, no space |
+| Exodus 12:25 | `will give you, j` + note + `ust as He promised` | `just`, no space |
+
+Inserting a space wherever two word characters meet across a note would repair
+Ecclesiastes and corrupt Genesis and Exodus. A dictionary test on the joined
+form was tried and is not sound enough to ship: the joined text of Job 22:2 is
+`Cana`, a place in the canon, and the word lists available disagree about
+common inflections.
+
+So there is no local signal, and manufacturing one would be an editorial act on
+someone else's edition. The verses stand as the provider sends them.
+
+### What to do about it
+
+Report it upstream — it is the provider's defect and only the provider can fix
+it at the source, for every application reading this edition. The scan that
+produced the 359 sites is reproducible and can accompany the report.
+
+Add the check to the decode-time checks so the count is tracked rather than
+rediscovered: a note boundary joining two word characters is worth counting on
+every download, and a change in the count is the signal that the provider has
+acted.
+
+
 ## The helloao editions — WEB, WEB Catholic, BSB
 
 All three come from `bible.helloao.org` as one `complete.json` per
