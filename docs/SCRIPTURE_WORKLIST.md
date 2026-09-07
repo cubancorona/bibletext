@@ -528,6 +528,104 @@ offsets and not a case change. It is an NKJV cache epoch either way, so it
 should be done in the same epoch as S17's supplied words rather than a second
 one.
 
+## Display issues found while unifying the reading face
+
+Each of these was checked by rendering or by measurement, not by reading the
+code alone. Where a first guess turned out to be wrong it is recorded as wrong,
+because the wrong version is the one that sounds plausible and will be guessed
+again.
+
+### 1. The divine name is currently drawn as ordinary text
+
+The decoder stopped uppercasing the small-capital spans into the stored text
+and records their positions instead. Nothing reads those positions yet, so the
+NKJV now shows `Lord` where it used to show `LORD`, and the distinction between
+the Tetragrammaton and Adonai — which is the whole reason the edition sets the
+name in small capitals — is not visible at all.
+
+This is the one item on this list that must not ship. Either a renderer draws
+the span, or the text is uppercased again until one does.
+
+### 2. The verse number climbed out of its line — FIXED
+
+The pane lifted the number by a fraction of its MEASURED height, and what
+`RenderedTextSize` measures is the face's declared line box rather than its
+ink. At an 18pt body in a 27.9pt line the number's top sat at +1.27 with the
+borrowed system serif and at -3.03 with the shipped face: above the top of its
+own line, near enough to the line above to read as a misprint. The lift is now
+a fraction of the text size.
+
+Nothing else in the pane takes a HEIGHT from a measurement. Every other
+`RenderedTextSize` call uses the width alone, which is what kept this to one
+site.
+
+### 3. Verse numbers change shape, and one surface cannot change them back
+
+The borrowed serif's figures are oldstyle by default — varying heights, some
+descending below the baseline — and the shipped face's are lining, uniform and
+sitting on the baseline. Measured from both fonts' own outlines.
+
+The shipped face carries an `onum` feature that restores oldstyle figures, and
+three of the four surfaces can ask for it. The canvas pane on Windows and Linux
+cannot: the toolkit exposes no OpenType feature control at all. That is the
+same gap that blocks small capitals there, so one fork change buys both.
+
+### 4. Greek and Hebrew are NOT a coverage problem — the first reading was wrong
+
+The shipped face has no Greek and no Hebrew, and the first conclusion drawn from
+that was that 67 footnote runs would lose their Greek and 445 would show empty
+boxes. That was wrong, and it was wrong because it assumed no fallback.
+
+The toolkit resolves a face PER RUNE and queries the system font map for
+anything the given face lacks. Verified by rendering: Greek and Hebrew draw real
+glyphs, and two different letters of each script draw different ink, which a
+row of identical empty boxes could not.
+
+What is left is a style mismatch, not missing text: roughly 67 footnote runs
+have Greek that the borrowed serif drew in the reading face and a fallback face
+now draws instead. Hebrew already fell back, because the borrowed serif had none
+either.
+
+### 5. The leading does NOT need re-tuning — the second wrong reading
+
+The faces' declared line boxes are 1.522 em against 1.136 em, a third apart,
+which looks alarming and was reported as meaning every leading constant was
+stale. Measured against what is actually drawn, the INK extent over the letters,
+digits and punctuation scripture uses is 0.990 em against 0.973 em — 1.7% apart.
+
+Rendered at the pane's own leading the two are indistinguishable: the same 18px
+line pitch, and where the borrowed serif leaves clean empty rows between lines
+the shipped face leaves one to three stray pixels of descender. A declared line
+box is not a claim about ink.
+
+Where the number DOES matter is any surface that derives its leading from the
+font's own metrics rather than setting it outright. That is the Android case
+below.
+
+### 6. Android sets its line height against the wrong font
+
+`TextView.setLineHeight` is not a stored instruction. Read from the platform's
+own source, it takes the CURRENT paint's font metrics and stores the difference
+as extra spacing:
+
+    final int fontHeight = getPaint().getFontMetricsInt(null);
+    if (lineHeight != fontHeight) {
+        setLineSpacing(lineHeight - fontHeight, 1f);
+    }
+
+The reading pane calls it and THEN sets the typeface, so the difference was
+computed against a font that is not the one drawing. The line pitch has
+therefore been wrong by the gap between the default sans and the serif for as
+long as that code has existed, and the shipped face — whose declared height is
+larger still — widens the error. The typeface must be set first.
+
+### 7. Everything captured and still not drawn
+
+Section headings, the translators' supplied words, poetry indent depths and now
+the small capitals are all captured and none of them reaches a reader. The
+small capitals are urgent for the reason in item 1; the others are the existing
+worklist.
+
 ## Decided against
 
 Recorded here so they are not rediscovered as open questions. The reasoning
