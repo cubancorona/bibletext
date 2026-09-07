@@ -19,6 +19,38 @@ Status values are `todo`, `in progress`, `blocked`, `done`, or `decided
 against`. When an item is finished, mark it here and fold the outcome back
 into `docs/SOURCE_FIELDS.md` so the inventory never lags the code.
 
+## The standard this work is held to
+
+It governs every item below, and it is stricter than the one the earlier
+entries were written to.
+
+**Nothing is dropped without an explicit decision, and nothing is added at
+all.** Everything a publisher sends is captured and kept. Where something is
+currently dropped or currently invented, that is a defect to address rather
+than a position to defend.
+
+Three consequences.
+
+**Capture is not a product decision.** A thing is decoded and kept because the
+publisher sent it. Whether it is then SHOWN is a separate question, taken
+afterwards and on its own merits. "We skip it because we would not know where
+to draw it" is no longer a reason to skip it.
+
+**Anything the app adds is a defect until it is agreed.** Not only invented
+structure, but inserted characters, synthesised whitespace, recased letters,
+and emphasis painted onto words a publisher did not mark. The practical test
+is whether it can leave the page: if it can be copied, shared, spoken,
+searched or put in a link, it is text, and text must be the publisher's.
+
+**A stated reason is not a decision.** Several rows in
+docs/SOURCE_FIELDS.md read "skipped, on purpose". Each of those now needs an
+explicit decision or a change, and is listed for that rather than treated as
+closed.
+
+The drawn page is outside this. The verse numbers the app prints, the note
+chrome, the highlight wash and the footnote section's own furniture are the
+app's and always were. The line is whether the thing can escape into text.
+
 ## Two rules that shape the order
 
 **Cache epochs are expensive, so batch them.** Bumping an edition's

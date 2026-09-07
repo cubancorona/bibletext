@@ -12,6 +12,13 @@ of three verdicts:
 The rule this document enforces: a skip that is not explained here is a
 defect. When a decoder changes, this file changes with it.
 
+That rule is now stricter. Under the standard at the top of
+docs/SCRIPTURE_WORKLIST.md, an explanation is not enough: everything a
+publisher sends is captured unless there is an explicit decision to drop it,
+and anything the app adds of its own is a defect until decided. Every
+"skipped" row below is therefore a candidate for capture, not a closed
+question.
+
 Each skip and each OPEN row is analysed, costed and given a recommendation in
 docs/SOURCE_FIELDS_DECISIONS.md, which also records three defects the
 measuring turned up.
