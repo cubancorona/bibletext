@@ -44,6 +44,17 @@ type Verse struct {
 	// consumer is groupVersesIntoParagraphs, which every surface funnels
 	// through, so setting this here reaches all of them at once.
 	ParaStart bool `json:"para_start,omitempty"`
+
+	// Supplied marks the words the TRANSLATORS SUPPLIED — what the King James
+	// tradition sets in italics, added for English sense and standing in no
+	// Hebrew or Greek word of the original. It is the edition's own disclosure
+	// of where a translator made a judgement, and the app used to flatten it
+	// away: roughly three thousand spans in the New Testament alone.
+	//
+	// Offsets into Text, never characters inside it, so the text a reader
+	// searches, shares, copies, hears and links to is unchanged whether this
+	// is set or not.
+	Supplied []TextSpan `json:"supplied,omitempty"`
 }
 
 // Footnote is one note from the TRANSLATORS (never the reader — reader notes
@@ -104,6 +115,15 @@ type OrphanFootnote struct {
 // it is kept apart from the text for that reason. Style is the publisher's own
 // name for what this block is, so a surface can tell a section heading from an
 // acrostic letter without guessing from the words.
+// TextSpan is a half-open range of runes inside a verse's text: [Start, End).
+// It is how the app records something TRUE OF PART OF A VERSE without putting
+// anything into the verse itself — the words the translators supplied, today,
+// and whatever else a publisher marks tomorrow.
+type TextSpan struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
 type Heading struct {
 	// Text is the heading as the publisher set it.
 	Text string `json:"text"`
@@ -114,6 +134,12 @@ type Heading struct {
 	// section, "r"/"mr"/"sr" for a reference line, "qa" for an acrostic
 	// letter, and so on.
 	Style string `json:"style,omitempty"`
+
+	// Footnotes are the notes the publisher put INSIDE this heading. They were
+	// discarded with the block that carried them, which left them with less
+	// trace than any other note in the apparatus; they belong to the heading,
+	// not to whichever verse happened to be current when it was read.
+	Footnotes []Footnote `json:"footnotes,omitempty"`
 
 	// BeforeVerse is the verse this heading stands above. A heading at the
 	// head of a chapter names its first verse; one between verses names the

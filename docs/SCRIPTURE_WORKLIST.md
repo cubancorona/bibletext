@@ -277,7 +277,7 @@ stated reason. Make them agree.
 | S14 | honour the publishers' paragraph breaks | all | M–L | all four | done |
 | S15 | section headings: captured | all | M | all four | done (capture) |
 | S16 | section headings: drawing them | all | M–L | none | todo |
-| S17 | NKJV italics for supplied words | NKJV | M–L | none | todo |
+| S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
 | S18 | speech reads the Psalm title | all | M | none | todo |
 | S19 | mark an omitted verse's gap in the text | all | M | none | todo |
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |

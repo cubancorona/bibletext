@@ -130,11 +130,14 @@ var registeredVersions = []BibleVersion{
 		// front of a verse that opens with a cross-reference;
 		// epoch 1: cross-reference note capture (include-notes=true; the feed
 		// carries no translator footnotes — probed live 2026-08-26).
-		// epoch 4: the publisher's section headings and acrostic letters, kept
-		// instead of skipped; epoch 3 the publisher's paragraphing, read from
+		// epoch 5: the translators' supplied words — the italics of the King
+		// James tradition — kept as offsets, and a note inside a heading kept
+		// with its heading instead of landing on a verse; epoch 4 the
+		// publisher's section headings and acrostic letters, kept instead of
+		// skipped; epoch 3 the publisher's paragraphing, read from
 		// the feed's own paragraph blocks, with the passage walk overlapping one
 		// verse so a chunk boundary cannot invent one.
-		cacheEpoch: 4,
+		cacheEpoch: 5,
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
 }

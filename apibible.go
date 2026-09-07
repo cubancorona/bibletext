@@ -691,6 +691,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	var pendingHeads []Heading
 	inHeading := false
 	var headBuf *strings.Builder
+	var headNotes []Footnote
 
 	supers := map[int]Superscription{}
 	var titleBuf *strings.Builder // non-nil while a title is pending
@@ -736,12 +737,18 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			order = append(order, key)
 		}
 		if key == from {
-			// The join is decided on what the reader will see. A note
-			// sentinel is not text: a verse that opens with a note has no
-			// words yet and takes no break or space, exactly as if the note
-			// were absent (a whole poetry canon once gained a blank first
-			// line on every verse whose cross-reference sits at its start).
-			cur := strings.ReplaceAll(b.String(), string(footnoteSentinel), "")
+			// The join is decided on what the reader will see. NO sentinel is
+			// text: a verse that opens with a note, or whose first words are
+			// marked as supplied, has no words yet and takes no break or
+			// space, exactly as if the marker were absent. A whole poetry
+			// canon once gained a blank first line on every verse whose
+			// cross-reference sits at its start, and the supplied-word
+			// brackets would have done the same to another forty-one.
+			cur := strings.NewReplacer(
+				string(footnoteSentinel), "",
+				string(suppliedOpen), "",
+				string(suppliedClose), "",
+			).Replace(b.String())
 			if pendingBreak {
 				if cur != "" && !strings.HasSuffix(cur, "\n") {
 					b.WriteByte('\n')
@@ -801,7 +808,18 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 				// left for the next real text exactly as if the note were
 				// absent — which is what keeps the text byte-identical.
 				body := apiBibleNoteBody(n)
-				if body != "" && inTitle {
+				if body != "" && inHeading {
+					// A note inside a heading belongs to the heading. It used
+					// to be discarded with the block; before that it would
+					// have attached itself to whatever verse was current,
+					// which is a different verse from the one the heading
+					// stands above.
+					headNotes = append(headNotes, Footnote{
+						Text:   body,
+						Kind:   apiBibleNoteKind(n.Attrs.Style),
+						Caller: strings.TrimSpace(n.Attrs.Caller),
+					})
+				} else if body != "" && inTitle {
 					titleBuf.WriteRune(footnoteSentinel)
 					titleNotes = append(titleNotes, Footnote{
 						Text:   body,
@@ -860,6 +878,23 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 				// LORD/Lord (YHWH/Adonai) distinction and reassembles
 				// "G"+sc"OD" into "GOD".
 				style := strings.ToLower(n.Attrs.Style)
+				if style == "it" && !inTitle && !inHeading {
+					// The translators' supplied words. Bracketed in place and
+					// resolved to rune offsets once the text has settled
+					// (stripSentinels), so nothing is added to the verse.
+					if key := pack(currentCh, current); key%1000 != 0 {
+						if b, ok := texts[key]; ok {
+							b.WriteRune(suppliedOpen)
+						}
+					}
+					walk(n.Items, upcase)
+					if key := pack(currentCh, current); key%1000 != 0 {
+						if b, ok := texts[key]; ok {
+							b.WriteRune(suppliedClose)
+						}
+					}
+					continue
+				}
 				walk(n.Items, upcase || style == "sc" || style == "nd")
 			}
 		}
@@ -902,9 +937,9 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			walk(block.Items, false)
 			inHeading = false
 			if text := strings.TrimSpace(normalizeVerseSpaces(headBuf.String())); text != "" {
-				pendingHeads = append(pendingHeads, Heading{Text: text, Style: style})
+				pendingHeads = append(pendingHeads, Heading{Text: text, Style: style, Footnotes: headNotes})
 			}
-			headBuf = nil
+			headBuf, headNotes = nil, nil
 			continue
 		}
 		isPoetry := strings.HasPrefix(style, "q")
@@ -948,7 +983,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 	var orphans map[int][]OrphanFootnote
 	total := 0
 	for _, key := range order {
-		text, anchors := stripFootnoteSentinels(normalizeVerseSpaces(texts[key].String()))
+		text, anchors, supplied := stripSentinels(normalizeVerseSpaces(texts[key].String()))
 		if text == "" {
 			// An omitted verse: the key exists because the provider sent the
 			// verse's markup, but it decodes to no words. Keep any note that
@@ -996,6 +1031,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			Text:      text,
 			Footnotes: notes,
 			ParaStart: paraStarts[key],
+			Supplied:  supplied,
 		})
 		total++
 	}
@@ -1027,34 +1063,78 @@ func apiBibleSkipPara(style string) bool {
 // stripped — recording rune anchors — before the text leaves the decoder.
 const footnoteSentinel = '\uE000'
 
+// suppliedOpen and suppliedClose bracket a span of words the TRANSLATORS
+// SUPPLIED — the italics of the King James tradition, marking what was added
+// for English sense and stands in no Hebrew or Greek word. The feed sends them
+// as char spans (style "it"); they are bracketed here for the same reason a
+// footnote is marked with a sentinel, because the text is still being
+// assembled and normalised, and a rune offset taken now would not survive.
+// Both are private-use runes that cannot occur in scripture and that
+// normalizeVerseSpaces leaves alone.
+const (
+	suppliedOpen  = '\uE001'
+	suppliedClose = '\uE002'
+)
+
 // stripFootnoteSentinels removes every sentinel from s, returning the clean
 // text and the rune offset each sentinel occupied. A sentinel standing alone
 // between two spaces takes the following space with it, so the text reads as
 // if the marker had never been there.
 func stripFootnoteSentinels(s string) (string, []int) {
-	if !strings.ContainsRune(s, footnoteSentinel) {
-		return s, nil
+	text, anchors, _ := stripSentinels(s)
+	return text, anchors
+}
+
+// stripSentinels removes every sentinel in ONE pass and reports what each
+// marked, in offsets into the text that is left. One pass rather than two,
+// because each kind shifts the other's offsets: a footnote stripped after an
+// italic range was measured would leave that range pointing a rune or two past
+// where its words now sit.
+//
+// A footnote sentinel standing alone between two spaces takes the following
+// space with it, so the text reads as if the marker had never been there. A
+// supplied-word bracket never owns a space: it sits tight against the words it
+// marks.
+func stripSentinels(s string) (string, []int, []TextSpan) {
+	if !strings.ContainsAny(s, string([]rune{footnoteSentinel, suppliedOpen, suppliedClose})) {
+		return s, nil, nil
 	}
 	runes := []rune(s)
 	var b strings.Builder
 	var anchors []int
+	var supplied []TextSpan
+	var open []int
 	emitted := 0
 	lastEmitted := rune(0)
 	for i := 0; i < len(runes); i++ {
-		r := runes[i]
-		if r != footnoteSentinel {
+		switch r := runes[i]; r {
+		case footnoteSentinel:
+			anchors = append(anchors, emitted)
+			if i+1 < len(runes) && runes[i+1] == ' ' &&
+				(emitted == 0 || lastEmitted == ' ' || lastEmitted == '\n') {
+				i++ // the sentinel owned this space; dropping both avoids a double
+			}
+		case suppliedOpen:
+			open = append(open, emitted)
+		case suppliedClose:
+			// An unmatched close is dropped rather than guessed at: the feed
+			// has never sent one, and inventing a start would mark words the
+			// publisher did not.
+			if n := len(open); n > 0 {
+				start := open[n-1]
+				open = open[:n-1]
+				if emitted > start {
+					supplied = append(supplied, TextSpan{Start: start, End: emitted})
+				}
+			}
+		default:
 			b.WriteRune(r)
 			lastEmitted = r
 			emitted++
-			continue
-		}
-		anchors = append(anchors, emitted)
-		if i+1 < len(runes) && runes[i+1] == ' ' &&
-			(emitted == 0 || lastEmitted == ' ' || lastEmitted == '\n') {
-			i++ // the sentinel owned this space; dropping both avoids a double
 		}
 	}
-	return b.String(), anchors
+	sort.Slice(supplied, func(i, j int) bool { return supplied[i].Start < supplied[j].Start })
+	return b.String(), anchors, supplied
 }
 
 // apiBibleNoteKind maps a USX note style to the app's Footnote.Kind: "x"/"ex"
