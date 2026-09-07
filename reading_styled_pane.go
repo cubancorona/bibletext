@@ -373,7 +373,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	// belongs to, like the sticker's.
 	fnSize := p.textSize * styledFnRatio
 	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, func(s string) float32 {
-		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.font)
+		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.faceFor(s))
 		return w.Width
 	})
 	p.fnGeom.place(p.insetX(), p.lay.Height+p.styledLineHeight())
@@ -412,8 +412,37 @@ func (p *styledReadingPane) measure(text string, kind runKind) float32 {
 	if kind == runVerseNum {
 		size *= styledNumRatio
 	}
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.font)
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.faceFor(text))
 	return w.Width
+}
+
+// faceFor is the ONE place a run's face is decided, and every ruler and every
+// drawn object goes through it. Measuring with one face and drawing with
+// another is how wrap geometry, hit-testing and glyphs drift apart.
+//
+// The reading family has no Hebrew — no Latin family with four properly
+// featured cuts does — so a Hebrew run is drawn in the Hebrew face the app
+// ships instead. Without that it would fall through to whatever the platform
+// supplies, which differs on every platform and is the borrowing this change
+// exists to end.
+func (p *styledReadingPane) faceFor(text string) fyne.Resource {
+	if hasHebrew(text) {
+		if heb := hebrewReadingFont(); heb != nil {
+			return heb
+		}
+	}
+	return p.font
+}
+
+// hasHebrew reports whether s carries any Hebrew, letters or marks alike: a
+// run of bare points belongs with its letters, not with the Latin around it.
+func hasHebrew(s string) bool {
+	for _, r := range s {
+		if (r >= 0x0590 && r <= 0x05FF) || (r >= 0xFB1D && r <= 0xFB4F) {
+			return true
+		}
+	}
+	return false
 }
 
 const styledNumRatio = float32(0.66)
@@ -631,7 +660,7 @@ func (r *styledPaneRenderer) rebuild() {
 
 	for _, dr := range p.drawRuns {
 		t := canvas.NewText(dr.Text, r.runColor(dr))
-		t.FontSource = p.font // the scripture serif, same face iOS shows
+		t.FontSource = p.faceFor(dr.Text)
 		t.TextSize = p.textSize
 		if dr.Kind == runVerseNum {
 			// The serif at the small superscript size (iOS renders numbers in
@@ -675,7 +704,7 @@ func (r *styledPaneRenderer) rebuild() {
 				c = p.pal.VerseNumber
 			}
 			t := canvas.NewText(ft.Text, c)
-			t.FontSource = p.font
+			t.FontSource = p.faceFor(ft.Text)
 			t.TextSize = p.textSize * styledFnRatio
 			r.fnTexts = append(r.fnTexts, t)
 			r.objects = append(r.objects, t)

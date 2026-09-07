@@ -1,44 +1,64 @@
 package bibletext
 
-// THE READING FACE IS SHIPPED, NOT BORROWED.
+// THE READING FACES ARE SHIPPED, NOT BORROWED — AND THERE ARE TWO OF THEM.
 //
-// The app used to ask the operating system for a serif and take the first one
-// it found: real Georgia on macOS and Windows, whatever the distribution
-// installed on Linux, and the embedded Gelasio when neither answered. So the
-// same chapter was set in a different type depending on where it was read, and
-// nothing had chosen any of it — the fallbacks were simply what was left.
-// Georgia could not be shipped to close the gap because it is a licensed
-// system font.
+// The app used to ask the operating system for a serif and take the first it
+// found, so the same chapter was set in a different type depending on where it
+// was read, and nothing had chosen any of it. Georgia could not be shipped to
+// close the gap because it is a licensed system font.
 //
-// Spectral is shipped instead, under the SIL Open Font License, and every
-// surface draws the same face. It was chosen by measurement rather than
-// taste: summing advance widths over a line of John 3:16 puts it within 0.3%
-// of Georgia's line, so a page wraps where a page of Georgia wrapped, and it
-// is the only open face measured that carries real small-capital glyphs in
-// both weights — which is what lets the divine name be set as the publisher
-// sets it instead of uppercased into the stored text.
+// WHY TWO. The app draws three scripts: English, the polytonic Greek of the
+// footnotes, and pointed Hebrew. Sixty-six faces were measured against what it
+// actually needs and no single one passes. The faces that cover every script
+// have three cuts, or put their small capitals in the regular alone, or reuse
+// one upright regular-weight Greek in every cut — so Greek inside the
+// translators' italicised words would render upright. The faces with four
+// properly featured cuts have no Hebrew at all.
 //
-// Two of the four faces cost nothing: the share cards already embed the
-// regular and the bold, and Go stores one copy of a file however many times it
-// is embedded. Only the italics are new bytes, and the italic is not optional
-// now that the translators' supplied words are captured and waiting to be
-// drawn.
+//	Junicode   Latin and polytonic Greek, four real cuts. SIL Open Font
+//	           License, declaring no Reserved Font Name, so the subset in
+//	           assets/fonts/reading keeps the family's own name.
+//	Ezra SIL   pointed Hebrew as the BHS sets it, every mark in mark coverage.
+//	           Shipped UNMODIFIED: "Ezra" and "SIL" are Reserved Font Names, and
+//	           at 151 KB a subset is not worth the renaming obligation.
+//
+// WHAT JUNICODE WINS ON, and it is not a typographic argument. It carries the
+// UNICODE SMALL CAPITALS — real codepoints, not an OpenType feature — in all
+// four cuts. That lets the divine name be SET in small capitals on every
+// surface with nothing but characters: no stylesheet, no sweep over an imported
+// attributed string, no per-span paint setting, and no patched toolkit on the
+// two platforms whose text stack exposes no OpenType control at all.
+//
+// Rebuild both with scripts/build-reading-fonts.sh, which checks that the
+// subset kept the small capitals, the Greek Extended and the superior figures.
+// The small capitals are scattered across three Unicode blocks and a subset
+// that misses one loses letters from the divine name silently.
 
 import (
 	_ "embed"
+	"sync"
 
 	"fyne.io/fyne/v2"
 )
 
-//go:embed assets/fonts/share/Spectral-Italic.ttf
+//go:embed assets/fonts/reading/Junicode-Regular.ttf
+var readingFontRegular []byte
+
+//go:embed assets/fonts/reading/Junicode-Italic.ttf
 var readingFontItalic []byte
 
-//go:embed assets/fonts/share/Spectral-BoldItalic.ttf
+//go:embed assets/fonts/reading/Junicode-Bold.ttf
+var readingFontBold []byte
+
+//go:embed assets/fonts/reading/Junicode-BoldItalic.ttf
 var readingFontBoldItalic []byte
 
-// loadReadingFonts returns the embedded Spectral family the reading surfaces
-// set scripture in. Never nil in a real build: the bytes are compiled in, so
-// there is no file to be missing and no platform that can answer differently.
+//go:embed assets/fonts/reading/EzraSIL-Regular.ttf
+var readingFontHebrew []byte
+
+// loadReadingFonts returns the family that sets Latin and Greek. Never nil in a
+// real build: the bytes are compiled in, so there is no file to be missing and
+// no platform that can answer differently.
 func loadReadingFonts() *bookFonts {
 	res := func(name string, b []byte) fyne.Resource {
 		if len(b) == 0 {
@@ -46,14 +66,39 @@ func loadReadingFonts() *bookFonts {
 		}
 		return fyne.NewStaticResource(name, b)
 	}
-	reg := res("Spectral-Regular.ttf", shareFontSpectral)
+	reg := res("Junicode-Regular.ttf", readingFontRegular)
 	if reg == nil {
 		return nil
 	}
 	return &bookFonts{
 		regular:    reg,
-		bold:       res("Spectral-Bold.ttf", shareFontSpectralBold),
-		italic:     res("Spectral-Italic.ttf", readingFontItalic),
-		boldItalic: res("Spectral-BoldItalic.ttf", readingFontBoldItalic),
+		bold:       res("Junicode-Bold.ttf", readingFontBold),
+		italic:     res("Junicode-Italic.ttf", readingFontItalic),
+		boldItalic: res("Junicode-BoldItalic.ttf", readingFontBoldItalic),
 	}
+}
+
+// hebrewFontOnce guards the Hebrew face for the same reason the Latin one is
+// guarded: relayout runs continuously during a window drag-resize, and a fresh
+// resource pointer each time would defeat the toolkit's own font cache, which
+// is keyed on the resource.
+var (
+	hebrewFontOnce   sync.Once
+	hebrewFontCached fyne.Resource
+)
+
+// hebrewReadingFont returns the face that draws pointed Hebrew.
+//
+// Without it a Hebrew run falls through to whatever the platform supplies,
+// which differs on every platform and is exactly the borrowing this change
+// exists to end. The Latin face has no Hebrew at all, so this is not a
+// refinement: it is the difference between the app choosing the type its
+// readers see and the operating system choosing it.
+func hebrewReadingFont() fyne.Resource {
+	hebrewFontOnce.Do(func() {
+		if len(readingFontHebrew) > 0 {
+			hebrewFontCached = fyne.NewStaticResource("EzraSIL-Regular.ttf", readingFontHebrew)
+		}
+	})
+	return hebrewFontCached
 }

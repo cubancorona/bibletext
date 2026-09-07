@@ -64,7 +64,7 @@ func (p *styledReadingPane) segTextSize(kind runKind) float32 {
 // segWidth measures segment text with the pane's serif source — the SAME
 // ruler the renderer draws with, so hit-tests always agree with pixels.
 func (p *styledReadingPane) segWidth(text string, kind runKind) float32 {
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, p.font)
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, p.faceFor(text))
 	return w.Width
 }
 

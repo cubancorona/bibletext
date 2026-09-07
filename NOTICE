@@ -29,9 +29,14 @@ own terms:
   assets/parallels/.
 - UI typeface: Atkinson Hyperlegible by the Braille Institute of America, Inc.,
   used under the SIL Open Font License 1.1 (see assets/fonts/atkinson/OFL.txt).
-- Reading typeface: Spectral by Production Type, used under the SIL Open Font
-  License 1.1 (see assets/fonts/share/OFL-LICENSES.txt). Scripture is set in it
-  on every platform.
+- Reading typefaces: Scripture is set in Junicode by Peter S. Baker, used under
+  the SIL Open Font License 1.1 (see assets/fonts/reading/Junicode-OFL.txt), and
+  pointed Hebrew in Ezra SIL by SIL International, used under the SIL Open Font
+  License 1.1 with Reserved Font Names "SIL" and "Ezra" and shipped unmodified,
+  its Hebrew layout intelligence copyright Ralph Hancock and John Hudson under
+  the MIT/X11 License (see assets/fonts/reading/EzraSIL-Licenses.txt). Two faces
+  because no single one carries Latin, polytonic Greek and pointed Hebrew with
+  four cuts and small capitals.
 - Share-card typefaces: Cardo, Crimson Text, DM Serif Display, Gelasio, Libre
   Baskerville, Prata and Spectral, each used under the SIL Open Font License
   1.1 (see assets/fonts/share/OFL-LICENSES.txt).

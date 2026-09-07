@@ -70,8 +70,8 @@ func TestMimicLinuxFlipsSeams(t *testing.T) {
 	// There is no scripture-face seam to check any more. The reading face is
 	// embedded, so a Mac, a Windows machine and a Linux machine all draw the
 	// same Spectral and there is nothing for a mimic to approximate.
-	if f := styledPaneFont(); f == nil || !strings.HasPrefix(f.Name(), "Spectral") {
-		t.Errorf("styledPaneFont() = %v under mimic, want the shipped Spectral on every target", f)
+	if f := styledPaneFont(); f == nil || !strings.HasPrefix(f.Name(), "Junicode") {
+		t.Errorf("styledPaneFont() = %v under mimic, want the shipped Junicode on every target", f)
 	}
 }
 
