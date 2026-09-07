@@ -58,14 +58,22 @@ type styledDrawRun struct {
 }
 
 // mergeDrawRuns collapses a line's token runs into style segments. Adjacent
-// runs merge when kind, red-letter, and tint all match; the model text
+// runs merge when kind, red-letter, tint AND SCRIPT all match; the model text
 // between two adjacent runs on one line is always a single space.
+//
+// Script is in that list because a merged run is drawn with ONE face, and the
+// face is chosen from the run's text. Without it a single Hebrew word pulled
+// its whole sentence into the Hebrew face — every Latin letter around it drawn
+// by a face that has Latin but is not the reading face, and the Greek beside it
+// dropped to the system, because the merge happens before anything looks at
+// what the run says.
 func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
 	var out []styledDrawRun
 	for _, r := range ln.Runs {
 		if n := len(out); n > 0 {
 			prev := &out[n-1]
-			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint {
+			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint &&
+				hasHebrew(prev.Text) == hasHebrew(r.Text) {
 				prev.Text += " " + r.Text
 				continue
 			}
