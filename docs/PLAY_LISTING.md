@@ -110,6 +110,19 @@ final image visually and with OCR, and meet Play's current aspect-ratio and pixe
 requirements. Do not overwrite the old assets in place until the new set has
 been reviewed side by side.
 
+**A candidate set for 1.2.5 is in `play-assets/2026-09-1.2.5/`**, captured from
+the release APK (versionCode 176) on a Pixel 7 emulator: reading with red
+letters, search results, the grouped Books list, the same passage in the NKJV
+fetched live through API.Bible, and the translation picker showing the licence
+notice. They sit beside the old set rather than replacing it, per the paragraph
+above.
+
+**A raw phone capture is not uploadable.** A Pixel screenshot is 1080x2400,
+which is 2.222:1, and Play rejects anything past 2:1. The candidates are
+cropped to 1080x2160 - exactly 2:1 - by removing the status bar and the gesture
+pill, which a store image should not show anyway. Check this on any future
+capture: the aspect rule is the failure that only shows up at upload.
+
 ## Data safety
 
 Do not copy a previous “No data collected or shared” answer without reviewing
