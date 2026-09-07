@@ -735,6 +735,38 @@ seven of the ten superior figures absent, no small capitals — it is a Hebrew
 face and nothing else. "Ezra" and "SIL" are reserved names, so a subsetted build
 must be renamed. Its vendor states it will not be extended.
 
+### Both halves work in native Fyne, and the second one changes the plan
+
+Tested by rendering through the toolkit rather than by reading its source.
+
+**The pairing renders.** A run given the Hebrew face draws pointed Hebrew with
+its marks in place; the same string given the Latin face falls through to the
+system, and the two produce visibly different ink, so the per-run choice is
+really taking effect. Polytonic Greek draws from the Latin face itself, with its
+breathings and circumflexes.
+
+**Small capitals render too, with no fork and no feature control.** Unicode has
+real codepoints for the Latin small capitals, and Junicode carries 25 of the 26
+in ALL FOUR cuts — every letter the divine name needs, in regular, italic and
+bold. Drawing `Lᴏʀᴅ` gives a full-size L and small-capital ORD on the canvas
+pane today.
+
+That is the same technique the app already uses for verse numbers, which are
+written as real superscript characters rather than asked for as a feature. And
+it settles the question the same way on every surface at once: characters need
+no CSS, no post-import sweep on the Apple panes, no per-span paint setting on
+Android, and no patched toolkit on Windows and Linux.
+
+Two properties make it safe rather than merely clever. The substitution happens
+when the drawn runs are built, so the STORED text keeps the publisher's own
+characters. And it is rune-count preserving — `Lord` is four runes and `Lᴏʀᴅ` is
+four runes — so every offset the app stores stays valid: footnote anchors,
+supplied-word spans, red-letter spans and selection alike.
+
+What it needs is one addition to `outboundText`, which already exists to strip
+the app's own typography from text leaving the app: it maps a superscript
+numeral back to a digit today, and would map a small capital back to a letter.
+
 ### The actual work is the mechanism, not the file
 
 A pairing cannot be adopted by swapping a resource. `bibleTheme.Font` returns
