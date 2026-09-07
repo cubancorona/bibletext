@@ -318,6 +318,10 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 // paragraph attribute it is typography rather than text, which is the point —
 // the two spaces it replaced were read straight out of the text storage into
 // the reader's clipboard by the system's Copy.
+// Defined in reading_fonts_apple.go. Returns the shipped reading face at a
+// run's own size and traits, with a cascade to the Hebrew face.
+extern CTFontRef btReadingFontLike(CTFontRef src);
+
 static CGFloat gMacReporterIndent = 0;
 
 static NSScrollView *gScroll = nil;
@@ -1393,6 +1397,24 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
             ps.firstLineHeadIndent = (ps.alignment == NSTextAlignmentJustified) ? gMacReporterIndent : 0;
         }
         [as addAttribute:NSParagraphStyleAttributeName value:ps range:r];
+    }];
+    // THE READING FACE. The stylesheet cannot ask for it: the HTML importer
+    // will not resolve an app-private font by name and silently returns the
+    // system serif instead, so the family is replaced here, run by run, at each
+    // run's OWN point size. The size is what carries meaning on this pane — the
+    // verse number is 0.66 of the body and the footnote section 0.85 — so it is
+    // read off the imported font rather than recomputed.
+    //
+    // Hebrew needs no handling: the substituted font carries a cascade list to
+    // the Hebrew face and CoreText falls through to it per glyph.
+    [as enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, as.length) options:0
+                usingBlock:^(id v, NSRange r, BOOL *stop) {
+        if (v == nil) return;
+        CTFontRef sub = btReadingFontLike((__bridge CTFontRef)v);
+        if (sub == NULL) return;
+        [as addAttribute:NSFontAttributeName value:(__bridge NSFont *)sub range:r];
+        CFRelease(sub);
     }];
     // New chapter text: a narration wash from the previous chapter must not be
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
@@ -2938,6 +2960,11 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// the apply block installs the band. Both hop through the main queue, which
 	// is FIFO, so this ordering holds.
 	pushNoteToPane(state)
+
+	// BEFORE the first import. The sweep that installs the reading face asks
+	// CoreText for it by name, and a face registered after an import is of no
+	// use to a sweep that has already run.
+	registerAppleReadingFonts()
 
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)

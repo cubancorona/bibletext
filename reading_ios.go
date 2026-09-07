@@ -18,6 +18,7 @@ package bibletext
 #cgo LDFLAGS: -framework UIKit -framework Foundation -framework CoreGraphics
 
 #import <UIKit/UIKit.h>
+#import <CoreText/CoreText.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -559,6 +560,10 @@ static void btIOSApplyInsets(CGFloat w) {
 // written into the paragraph's own text, and the system's Copy read them
 // straight out of the text storage into the reader's clipboard. Applied as a
 // paragraph attribute instead, it is typography again rather than text.
+// Defined in reading_fonts_apple.go. Returns the shipped reading face at a
+// run's own size and traits, with a cascade to the Hebrew face.
+extern CTFontRef btReadingFontLike(CTFontRef src);
+
 static CGFloat gReporterIndent = 0;
 
 void bibleTextSetReporterIndent(double pts) {
@@ -3033,6 +3038,25 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         }
         [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
     }];
+    // THE READING FACE. The stylesheet cannot ask for it: the HTML importer
+    // will not resolve an app-private font by name and silently returns the
+    // system serif instead, so the family is replaced here, run by run, at each
+    // run's OWN point size. The size is what carries meaning on this pane — the
+    // verse number is 0.66 of the body and the footnote section 0.85, and
+    // btIOSVerseFontThreshold and btIOSFindContentEnd read them — so it is
+    // taken from the imported font rather than recomputed.
+    //
+    // Hebrew needs no handling: the substituted font carries a cascade list to
+    // the Hebrew face and CoreText falls through to it per glyph.
+    [mas enumerateAttribute:NSFontAttributeName
+                    inRange:NSMakeRange(0, mas.length) options:0
+                 usingBlock:^(id v, NSRange r, BOOL *stop) {
+        if (v == nil) return;
+        CTFontRef sub = btReadingFontLike((__bridge CTFontRef)v);
+        if (sub == NULL) return;
+        [mas addAttribute:NSFontAttributeName value:(__bridge UIFont *)sub range:r];
+        CFRelease(sub);
+    }];
     // The dialect's .hl rule arrives as an OPAQUE background attribute, which on
     // this pane would sit above UIKit's selection highlight and hide it (see
     // BTWashView). Lift it off while the string is still free to edit — no
@@ -3777,6 +3801,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// Keep the native reporter column in sync with the text-size setting (the
 	// measure is em-based, so Large/XL widen the column and keep the line's
 	// character count at the reporter's ~59). Phones pass 0 → legacy insets.
+	// BEFORE the import below. A face registered afterwards is of no use to a
+	// sweep that has already run.
+	registerAppleReadingFonts()
 	if reporterLayoutActive() {
 		bodyPx := math.Round(21 * readingTextScale())
 		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
