@@ -49,6 +49,11 @@ func IsWordsOfChrist(book string, chapter, verse int) bool {
 type TextRun struct {
 	Text string
 	Red  bool
+	// Italic marks the words the translators supplied. The generated site sets
+	// them in italic exactly as the app does, because the edition discloses
+	// them and a reader following a shared link should see the same
+	// disclosure.
+	Italic bool
 }
 
 // RedLetterRuns splits one verse of one translation into its red and not-red
@@ -79,7 +84,7 @@ func RedLetterRuns(versionID string, v Verse) []TextRun {
 	runs := trimRuns(redLetterRuns(versionID, v, true))
 	out := make([]TextRun, 0, len(runs))
 	for _, r := range runs {
-		out = append(out, TextRun{Text: r.Text, Red: r.Red})
+		out = append(out, TextRun{Text: r.Text, Red: r.Red, Italic: r.Italic})
 	}
 	return out
 }

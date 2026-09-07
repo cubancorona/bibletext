@@ -85,6 +85,8 @@ func mobileParagraphSegments(state *AppState, verses []Verse) []widget.RichTextS
 				Style: widget.RichTextStyle{
 					Inline:    true,
 					ColorName: mobileRunColorName(run.Red, tint),
+					// The translators' supplied words.
+					TextStyle: fyne.TextStyle{Italic: run.Italic},
 				},
 			})
 		}

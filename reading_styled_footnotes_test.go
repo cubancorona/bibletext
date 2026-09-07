@@ -173,7 +173,7 @@ func TestStyledFootnoteSectionRewrapsOnResize(t *testing.T) {
 	// one line at both widths.
 	var longest float32
 	for _, ft := range p.fnGeom.texts {
-		if w := p.measure(ft.Text, runWord); w > longest {
+		if w := p.measure(ft.Text, runWord, false); w > longest {
 			longest = w
 		}
 	}

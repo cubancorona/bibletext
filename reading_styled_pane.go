@@ -47,7 +47,10 @@ type styledDrawRun struct {
 	Text string
 	Kind runKind
 	Red  bool
-	Tint verseTint
+	// Supplied is drawn in the italic cut: the translators' own disclosure of
+	// where a judgement was made.
+	Supplied bool
+	Tint     verseTint
 
 	X float32 // relative to the line's left edge (pane adds the inset)
 
@@ -73,13 +76,14 @@ func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
 		if n := len(out); n > 0 {
 			prev := &out[n-1]
 			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint &&
+				prev.Supplied == r.Supplied &&
 				hasHebrew(prev.Text) == hasHebrew(r.Text) {
 				prev.Text += " " + r.Text
 				continue
 			}
 		}
 		out = append(out, styledDrawRun{
-			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, Tint: r.Tint,
+			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, Supplied: r.Supplied, Tint: r.Tint,
 			X: r.X, FirstOffset: r.Offset, Line: lineIdx,
 		})
 	}
@@ -291,7 +295,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    paraGap,
-		SpaceW:     p.measure(" ", runWord),
+		SpaceW:     p.measure(" ", runWord, false),
 		Indent:     indent,
 		TopPad:     p.superGeom.height,
 		BandVerse:  p.noteAnchorVerse(),
@@ -381,7 +385,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	// belongs to, like the sticker's.
 	fnSize := p.textSize * styledFnRatio
 	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, func(s string) float32 {
-		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.faceFor(s))
+		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.faceFor(s, false))
 		return w.Width
 	})
 	p.fnGeom.place(p.insetX(), p.lay.Height+p.styledLineHeight())
@@ -415,12 +419,12 @@ func (p *styledReadingPane) noteAnchorVerse() int {
 // source the renderer draws with (RenderedTextSize honours FontSource, which
 // fyne.MeasureText cannot), so wrap geometry, hit-testing and glyphs can
 // never drift apart.
-func (p *styledReadingPane) measure(text string, kind runKind) float32 {
+func (p *styledReadingPane) measure(text string, kind runKind, italic bool) float32 {
 	size := p.textSize
 	if kind == runVerseNum {
 		size *= styledNumRatio
 	}
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.faceFor(text))
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.faceFor(text, italic))
 	return w.Width
 }
 
@@ -433,10 +437,18 @@ func (p *styledReadingPane) measure(text string, kind runKind) float32 {
 // ships instead. Without that it would fall through to whatever the platform
 // supplies, which differs on every platform and is the borrowing this change
 // exists to end.
-func (p *styledReadingPane) faceFor(text string) fyne.Resource {
+func (p *styledReadingPane) faceFor(text string, italic bool) fyne.Resource {
 	if hasHebrew(text) {
+		// The Hebrew face has one cut, so an italic Hebrew run is set upright.
+		// No edition marks Hebrew as supplied, and an upright word beats a
+		// mechanically slanted one.
 		if heb := hebrewReadingFont(); heb != nil {
 			return heb
+		}
+	}
+	if italic {
+		if f := loadReadingFonts(); f != nil && f.italic != nil {
+			return f.italic
 		}
 	}
 	return p.font
@@ -668,7 +680,7 @@ func (r *styledPaneRenderer) rebuild() {
 
 	for _, dr := range p.drawRuns {
 		t := canvas.NewText(dr.Text, r.runColor(dr))
-		t.FontSource = p.faceFor(dr.Text)
+		t.FontSource = p.faceFor(dr.Text, dr.Supplied)
 		t.TextSize = p.textSize
 		if dr.Kind == runVerseNum {
 			// The serif at the small superscript size (iOS renders numbers in
@@ -712,7 +724,7 @@ func (r *styledPaneRenderer) rebuild() {
 				c = p.pal.VerseNumber
 			}
 			t := canvas.NewText(ft.Text, c)
-			t.FontSource = p.faceFor(ft.Text)
+			t.FontSource = p.faceFor(ft.Text, false)
 			t.TextSize = p.textSize * styledFnRatio
 			r.fnTexts = append(r.fnTexts, t)
 			r.objects = append(r.objects, t)

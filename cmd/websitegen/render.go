@@ -222,6 +222,12 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
 			if text == "" {
 				continue
 			}
+			if run.Italic {
+				// The translators' supplied words, as the edition discloses
+				// them. Inside the red span where the two overlap, so a
+				// supplied word in Christ's words stays red AND italic.
+				text = "<i>" + text + "</i>"
+			}
 			if run.Red {
 				fmt.Fprintf(&b, `<span class="wj">%s</span>`, text)
 			} else {

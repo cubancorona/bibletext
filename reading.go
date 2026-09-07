@@ -801,6 +801,11 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			if len(runs) > 1 {
 				for _, run := range runs {
 					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
+					if run.Italic {
+						// The translators' supplied words. Italic is one of the
+						// few things every one of these dialects can say.
+						piece = "<i>" + piece + "</i>"
+					}
 					writeTintedHTML(&b, mk, run.Red, piece)
 				}
 				continue

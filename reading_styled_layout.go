@@ -46,7 +46,10 @@ type styledRun struct {
 	// Provenance, for styling and selection→verse attribution.
 	Verse     int
 	RedLetter bool
-	Tint      verseTint
+	// Supplied marks a token the TRANSLATORS supplied — set in italic, as the
+	// King James tradition does and as every other surface now does.
+	Supplied bool
+	Tint     verseTint
 
 	// Geometry (set by layout).
 	X, W float32
@@ -155,7 +158,10 @@ type noteBand struct {
 }
 
 // styledMeasure measures one run's text width at its rendered size.
-type styledMeasure func(text string, kind runKind) float32
+// The italic flag is part of the signature because the translators' supplied
+// words are DRAWN in the italic cut, and a run measured in one face and drawn
+// in another is how wrap geometry and hit-testing come apart.
+type styledMeasure func(text string, kind runKind, italic bool) float32
 
 // styledLayoutParams collects the knobs so tests can pin exact geometry.
 type styledLayoutParams struct {
@@ -364,6 +370,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// behaviour, so nothing but the BSB moves.
 			toks := verseTokens(v)
 			redTok := redLetterTokenFlags(state.CurrentVersion, v, redLetter, toks)
+			supTok := suppliedTokenFlags(v, toks)
 			// The divine name is DRAWN in small capitals. It happens here,
 			// after the red-letter machinery has answered, because that
 			// machinery matches these tokens back against the publisher's own
@@ -396,13 +403,13 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 					word := strings.TrimPrefix(tok, num+" ")
 					unit = []styledRun{
 						{Text: num, Kind: runVerseNum, Verse: v.Verse, Tint: tint,
-							W: measure(num, runVerseNum)},
-						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti], Tint: tint,
-							W: measure(word, runWord)},
+							W: measure(num, runVerseNum, false)},
+						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti],
+							Supplied: supTok[ti], Tint: tint, W: measure(word, runWord, supTok[ti])},
 					}
 				} else {
 					unit = []styledRun{{Text: tok, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti],
-						Tint: tint, W: measure(tok, runWord)}}
+						Supplied: supTok[ti], Tint: tint, W: measure(tok, runWord, supTok[ti])}}
 				}
 				place(unit)
 				if first {

@@ -136,3 +136,62 @@ func smallCapsText(v Verse) string {
 	}
 	return applySmallCaps(v, []verseRun{{Text: v.Text}})[0].Text
 }
+
+// finishRuns is the LAST thing every path through redLetterRuns does, and the
+// one place a surface-independent decision about a verse's typography is
+// applied. Both of the things it does are the edition's own judgement about a
+// stretch of text, and doing them here is what keeps four renderers from each
+// having to work them out again — which is how they came to disagree before.
+//
+// Order matters only in one direction: the supplied words SPLIT runs, and the
+// small capitals SUBSTITUTE characters without changing rune counts. Splitting
+// first means the substitution walks the final set of runs; doing it the other
+// way would work too, and this way needs no argument about why.
+func finishRuns(v Verse, runs []verseRun) []verseRun {
+	return applySmallCaps(v, applySupplied(v, runs))
+}
+
+// applySupplied splits the runs at the boundaries of the words the translators
+// supplied, and marks those pieces italic.
+//
+// Splitting rather than flagging whole runs, because a supplied word sits
+// INSIDE a sentence: "there is none righteous" is the translators' "is" in the
+// middle of the original's words, and a run is the unit a surface draws with
+// one style.
+func applySupplied(v Verse, runs []verseRun) []verseRun {
+	if len(v.Supplied) == 0 || len(runs) == 0 {
+		return runs
+	}
+	inSpan := make(map[int]bool)
+	total := len([]rune(v.Text))
+	for _, sp := range v.Supplied {
+		if sp.Start < 0 || sp.End > total || sp.Start >= sp.End {
+			continue
+		}
+		for i := sp.Start; i < sp.End; i++ {
+			inSpan[i] = true
+		}
+	}
+	if len(inSpan) == 0 {
+		return runs
+	}
+	var out []verseRun
+	at := 0
+	for _, run := range runs {
+		rs := []rune(run.Text)
+		start := 0
+		for i := 1; i <= len(rs); i++ {
+			// Cut where the answer changes, and at the run's end.
+			if i < len(rs) && inSpan[at+i] == inSpan[at+start] {
+				continue
+			}
+			piece := run
+			piece.Text = string(rs[start:i])
+			piece.Italic = inSpan[at+start]
+			out = append(out, piece)
+			start = i
+		}
+		at += len(rs)
+	}
+	return out
+}
