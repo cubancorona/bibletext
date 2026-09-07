@@ -305,6 +305,21 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 
 @end
 
+// gMacReporterIndent is the reporter page's FIRST-LINE INDENT in points, the
+// AppKit twin of the iOS one, and the ONLY thing that marks a paragraph on this
+// pane. The reporter stylesheet sets margin:0 deliberately — the octavo page
+// separates paragraphs by indenting, not by spacing — so without this a new
+// paragraph opens flush left on the next line, indistinguishable from an
+// ordinary line wrap. This pane is ALWAYS in that layout (reporter_macos.go),
+// so the publishers' paragraphing has been invisible here since the indent
+// stopped being two literal spaces in the text.
+//
+// It cannot come from the stylesheet: the HTML importer drops text-indent. As a
+// paragraph attribute it is typography rather than text, which is the point —
+// the two spaces it replaced were read straight out of the text storage into
+// the reader's clipboard by the system's Copy.
+static CGFloat gMacReporterIndent = 0;
+
 static NSScrollView *gScroll = nil;
 static NSTextView   *gTextView = nil;
 
@@ -1369,6 +1384,14 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
         if (v == nil) return;
         NSMutableParagraphStyle *ps = [(NSParagraphStyle *)v mutableCopy];
         ps.paragraphSpacingBefore = 0;
+        // The reporter page's first-line indent, on the PROSE paragraphs only.
+        // Poetry is never first-line indented in print, and the two are already
+        // told apart by the alignment the stylesheet gave them: justified for
+        // prose, left for a paragraph that opens on a poem line. Alignment is
+        // one of the few properties the importer keeps.
+        if (gMacReporterIndent > 0) {
+            ps.firstLineHeadIndent = (ps.alignment == NSTextAlignmentJustified) ? gMacReporterIndent : 0;
+        }
         [as addAttribute:NSParagraphStyleAttributeName value:ps range:r];
     }];
     // New chapter text: a narration wash from the previous chapter must not be
@@ -1501,6 +1524,10 @@ void bibleTextMacSetReadingMeasure(double m) {
         gMacReadingMeasure = (CGFloat)m;
         if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) btMacRefreshNote();
     });
+}
+
+void bibleTextMacSetReporterIndent(double pts) {
+    dispatch_async(dispatch_get_main_queue(), ^{ gMacReporterIndent = (CGFloat)pts; });
 }
 
 // ─── The note sticker ────────────────────────────────────────────────────────
@@ -2922,8 +2949,14 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	if reporterLayoutActive() {
 		bodyPx := math.Round(21 * readingTextScale())
 		C.bibleTextMacSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+		// The same ~1.5em the em+en pair used to draw, as a paragraph
+		// attribute so it cannot be copied out as text. Without it this pane
+		// shows no paragraph boundary at all, because the reporter stylesheet
+		// separates paragraphs by indent alone.
+		C.bibleTextMacSetReporterIndent(C.double(reporterIndentEm * bodyPx))
 	} else {
 		C.bibleTextMacSetReadingMeasure(0)
+		C.bibleTextMacSetReporterIndent(0)
 	}
 	syncNativeAIMenu(state) // the menu gate must match the setting before any selection
 	// TWO fingerprints, because the two changes cost different things to apply —
