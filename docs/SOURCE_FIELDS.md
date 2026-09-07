@@ -53,58 +53,70 @@ the HTML, and the provider's own plain text, which renders the verse as
 
 ### The shape of it
 
-Measured across the whole canon through the passages endpoint, 359 sites in
-39 books have two word characters meeting across a note boundary. Every one of
-them is a cross reference; no footnote or other note style is involved.
+259 verses across 35 books run two words together. Each one has been checked
+against the provider's own `/verses` endpoint, and all 259 reproduce there.
 
-| book | sites |
+| book | verses |
 |---|---|
-| Isaiah | 62 |
-| Jeremiah | 39 |
 | Job | 38 |
-| Psalms | 19 |
+| Isaiah | 37 |
+| Jeremiah | 24 |
 | Acts | 18 |
-| Hosea | 16 |
-| the other 33 books | 167 |
+| Matthew | 12 |
+| Proverbs | 11 |
+| Hosea | 11 |
+| Psalms | 10 |
+| the other 27 books | 98 |
 
-The cause is a left-trim in the provider's content pipeline. Sampled over ten
-chapters, 355 note boundaries were examined: not one text fragment following a
-note begins with whitespace, while 266 of the fragments preceding a note end
-with it. Whitespace on one side of a note survives and whitespace on the other
-side never does.
+257 of them sit at a cross-reference note and 2 at an italic span. The
+complete list, with the current and correct reading of each, is kept outside
+the repository because it quotes a licensed text.
+
+### It is specific to this edition, not to the platform
+
+Counted across the whole canon, over every text fragment that directly follows
+a note element:
+
+| edition | fragment after a note begins with whitespace |
+|---|---|
+| NKJV `63097d2a0a2f7db3-01` | 9 of 30,085 — 0.03% |
+| KJV `de4e12af7f28f599-01` | 4,208 of 5,801 — 72.5% |
+
+Character spans behave the same in both editions, 42.3% against 41.7%, so this
+is not how the platform serializes in general. In the NKJV the space is
+normally carried on the fragment *before* the note instead, 83.7% of the time.
+The 259 defects are the places where it is carried on neither.
 
 ### Why it cannot be repaired locally
 
-The same left-trim erases the distinction that a repair would need. A note
-anchored between two words and a note anchored inside a word arrive in exactly
-the same shape.
+The response does not distinguish a marker anchored between two words from one
+anchored inside a word. Both arrive as two fragments meeting at a letter.
 
-| site | fragments | correct reading |
+| verse | fragments | correct reading |
 |---|---|---|
 | Ecclesiastes 12:8 | `“Vanity` + note + `of vanities,”` | a space belongs here |
-| Genesis 42:20 | `And bring your young` + note + `est brother to me` | `youngest`, no space |
-| Exodus 12:25 | `will give you, j` + note + `ust as He promised` | `just`, no space |
+| Genesis 42:20 | `young` + note + `est brother` | `youngest`, no space |
+| Exodus 12:25 | `j` + note + `ust as He promised` | `just`, no space |
+| Ephesians 2:20 | `the chief corner` + span + `stone,` | `cornerstone`, no space |
 
 Inserting a space wherever two word characters meet across a note would repair
-Ecclesiastes and corrupt Genesis and Exodus. A dictionary test on the joined
-form was tried and is not sound enough to ship: the joined text of Job 22:2 is
-`Cana`, a place in the canon, and the word lists available disagree about
-common inflections.
+Ecclesiastes and corrupt the other three. Fourteen such legitimate joins were
+found and confirmed. A dictionary test on the joined form was tried and is not
+sound enough to ship: the joined text of Job 22:2 is `Cana`, a place in the
+canon, and the available word lists disagree about common inflections.
 
 So there is no local signal, and manufacturing one would be an editorial act on
 someone else's edition. The verses stand as the provider sends them.
 
 ### What to do about it
 
-Report it upstream — it is the provider's defect and only the provider can fix
-it at the source, for every application reading this edition. The scan that
-produced the 359 sites is reproducible and can accompany the report.
+Report it upstream. It is the provider's defect, and only the provider can fix
+it at the source for every application reading this edition.
 
 Add the check to the decode-time checks so the count is tracked rather than
 rediscovered: a note boundary joining two word characters is worth counting on
 every download, and a change in the count is the signal that the provider has
 acted.
-
 
 ## The helloao editions — WEB, WEB Catholic, BSB
 
