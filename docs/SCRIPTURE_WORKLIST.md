@@ -70,6 +70,27 @@ should wait for another NKJV decoder change to travel with.
 and no reader-visible change, and every later item is safer with them in
 place: they are what would make a bad decode visible instead of silent.
 
+## The leaks, and the one that is left
+
+Text leaving the app had the reading surface's own characters in it. Three
+paths are fixed: the assistant received the raw selection and sent it to an
+external provider, the desktop pane's Copy put its superscript verse numbers
+on the clipboard, and the website joined every number to its verse with a
+no-break space that a browser copy carried away. One cleaner now serves every
+outbound path, and the native panes no longer put a no-break space in the text
+at all, since the system's own Copy reads the storage directly and cannot be
+reached.
+
+ONE LEAK REMAINS, and it cannot be fixed by stripping. In the presented
+reporter layout a paragraph opens with an em-space and an en-space, written as
+literal characters because the platform HTML importers ignore the CSS that
+would indent it. The app's own verbs strip them; the system's Copy on a phone
+in landscape does not. Removing them means indenting some other way: a
+first-line indent applied to the imported paragraph style on the Apple panes,
+and a leading-margin span on Android. Native work on two platforms, and until
+it is done a paragraph copied out of the landscape reader begins with two
+spaces nobody typed.
+
 ## Stage 1 — the defects
 
 Found while measuring for the analysis. These are not product decisions.
