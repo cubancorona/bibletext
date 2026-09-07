@@ -837,10 +837,22 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 			// "q" poetry prefix would otherwise claim), section heads
 			// (s*/ms*/mr/sr/r/sp/cl/cd). include-titles=false does NOT strip
 			// qa, so Psalm 119's א/Aleph headings once leaked into verse text.
+			//
+			// The TEXT is dropped; the POSITION is not. In print a heading
+			// always begins a new unit, and in an acrostic each letter marks a
+			// stanza — Psalm 119's twenty-two of them are the psalm's whole
+			// structure. This feed sends no blank-line instruction at all, so
+			// without this a chapter of poetry arrives with nothing at all to
+			// break it.
+			blockOpens = true
 			continue
 		}
 		isPoetry := strings.HasPrefix(style, "q")
-		blockOpens = !isPoetry
+		// A prose block opens a paragraph. A q block is a LINE inside one, so
+		// it opens nothing of its own — but it must not CLEAR a break a
+		// skipped heading just set, or an acrostic letter followed by its
+		// first poetry line would lose the stanza it marks.
+		blockOpens = blockOpens || !isPoetry
 		// A paragraph boundary continues the current verse. For poetry that
 		// boundary is an authored line; for prose it is just flow.
 		if current != 0 {

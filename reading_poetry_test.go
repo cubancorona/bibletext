@@ -297,14 +297,14 @@ func TestBuildChapterHTMLMixedParagraphs(t *testing.T) {
 	reporterLayout = func() bool { return false }
 	defer func() { reporterLayout = orig }()
 
-	// Enough prose to close the first paragraph (>=320 chars ending on a
-	// sentence), then poetry: only the poetry paragraph is ragged-right.
+	// A prose paragraph, then a poetry one: only the poetry paragraph is
+	// ragged-right. The second paragraph is marked, as a publisher marks it.
 	prose := "In the beginning God created the heavens and the earth. Now the earth was formless and void, and darkness was over the surface of the deep. And the Spirit of God was hovering over the surface of the waters. And God said, Let there be light, and there was light. And God saw that the light was good, and He separated the light from the darkness."
 	bd := &BibleData{
 		Books: []string{"Genesis"},
 		Verses: map[string]map[int][]Verse{"Genesis": {1: {
 			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 1, Text: prose},
-			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 27,
+			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 27, ParaStart: true,
 				Text: "So God created man in His own image;\nin the image of God He created him;\nmale and female He created them."},
 		}}},
 	}

@@ -37,11 +37,11 @@ func TestArrivalSurvivesTheDoubleRebuild(t *testing.T) {
 	st := planTestState(t)
 	long := make([]Verse, 0, 57)
 	for i := 1; i <= 57; i++ {
-		txt := "A verse long enough that the paragraph splitter works with real material, running on toward its threshold."
-		if i%5 == 0 {
-			txt += " And here the sentence closes so a paragraph may end."
-		}
-		long = append(long, Verse{BookName: "John", Book: "John", Chapter: 3, Verse: i, Text: txt})
+		txt := "A verse long enough that the pane works with real material, and the band it raises has room above it."
+		// Paragraphs are the publisher's; the fixture marks its own so the
+		// note lands in one of several rather than in a chapter-long block.
+		long = append(long, Verse{BookName: "John", Book: "John", Chapter: 3,
+			Verse: i, Text: txt, ParaStart: i%5 == 1})
 	}
 	st.Bible.Verses["John"][3] = long
 	win := app.NewWindow("double")

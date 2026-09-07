@@ -197,12 +197,15 @@ func TestASingleNotedParagraphKeepsItsAnchor(t *testing.T) {
 
 // A chapter whose verses are long enough that groupVersesIntoParagraphs really
 // breaks it — the 320-character rule, at a sentence end.
+// The app draws only the paragraphing its publisher supplies, so a fixture
+// that needs two paragraphs marks where the second begins rather than making
+// its verses long enough to trip a rule that no longer exists.
 func longEnoughForTwoParagraphs() []Verse {
-	long := "This verse is deliberately long so that the paragraph splitter reaches its " +
-		"character threshold and breaks at the next sentence ending, which is here."
+	long := "This verse is deliberately long, so a paragraph of them is a realistic " +
+		"height for the bands and pills these tests measure."
 	out := make([]Verse, 0, 8)
 	for i := 1; i <= 8; i++ {
-		out = append(out, Verse{BookName: "John", Chapter: 3, Verse: i, Text: long})
+		out = append(out, Verse{BookName: "John", Chapter: 3, Verse: i, Text: long, ParaStart: i == 5})
 	}
 	return out
 }

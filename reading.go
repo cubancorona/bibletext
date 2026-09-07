@@ -1714,75 +1714,37 @@ func poeticJoin(prevText, curText string) bool {
 // pane, the website, the share text, and the note chrome that reserves a band
 // above a paragraph.
 //
-// Where the publisher paragraphed the chapter, the app uses THAT and nothing
-// else. Paragraphing is the translators' reading of the passage, so a chapter
-// they set is already complete, and adding the app's own breaks inside their
-// paragraphs would put a boundary where they deliberately kept none — which
-// is what the app did to the whole Bible before. The length rule survives for
-// a chapter carrying no marks at all, so an edition that ships none still
-// reads as paragraphs rather than one block.
+// The publisher's paragraphing is the ONLY paragraphing. Where a chapter is
+// broken, it is broken where the translators broke it; where it is not, it is
+// one paragraph, which is what a poem with no stanza break is in print.
+//
+// The app used to manufacture paragraphs from a character count — a break
+// after 320 characters at the next sentence end. That rule came in with the
+// first commit, when the only source served bare verses and there was nothing
+// else to go on, and no printed or digital edition has ever set text that
+// way. Now that every edition supplies its own structure, it is gone rather
+// than kept as a fallback: a fallback would only ever fire where the
+// publisher had deliberately left a passage unbroken.
 func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	if len(verses) == 0 {
 		return nil
 	}
 
-	publisherSet := false
-	for _, v := range verses {
-		if v.ParaStart {
-			publisherSet = true
-			break
-		}
-	}
-
 	paragraphs := make([][]Verse, 0, len(verses)/4+1)
 	current := make([]Verse, 0, 6)
-	charCount := 0
 
 	for i, verse := range verses {
-		if len(current) > 0 {
-			prev := current[len(current)-1]
-			brk := verse.ParaStart
-			if !publisherSet {
-				brk = shouldBreakParagraph(prev.Text, charCount)
-			}
-			if brk {
-				paragraphs = append(paragraphs, current)
-				current = make([]Verse, 0, 6)
-				charCount = 0
-			}
+		if len(current) > 0 && verse.ParaStart {
+			paragraphs = append(paragraphs, current)
+			current = make([]Verse, 0, 6)
 		}
 		current = append(current, verse)
-		charCount += len([]rune(verse.Text)) + 1
 
 		if i == len(verses)-1 && len(current) > 0 {
 			paragraphs = append(paragraphs, current)
 		}
 	}
 	return paragraphs
-}
-
-// paragraphEnders are the characters a verse may end on for the fallback rule
-// to close a paragraph after it. Sentence punctuation, and the marks that
-// close reported speech — in BOTH forms, because the editions set speech with
-// typographic quotation marks and a rule that knew only the typewriter forms
-// refused every one of them. That refusal was worth about a fifth of the
-// rule's own break points (roughly 2,100 in each of the two public-domain
-// editions), and it fell hardest on dialogue, which is exactly where a
-// paragraph most wants to end: "…let all the people say, 'Amen!'" would not
-// close a paragraph, so the next curse joined it, and the one after that.
-var paragraphEnders = []string{".", "!", "?", "\"", "'", "\u201d", "\u2019"}
-
-func shouldBreakParagraph(prevVerseText string, currentParagraphChars int) bool {
-	if currentParagraphChars < 320 {
-		return false
-	}
-	trimmed := strings.TrimSpace(prevVerseText)
-	for _, end := range paragraphEnders {
-		if strings.HasSuffix(trimmed, end) {
-			return true
-		}
-	}
-	return false
 }
 
 func superscriptNumber(n int) string {

@@ -151,10 +151,12 @@ func paragraphFixtureChapters(t *testing.T) []struct {
 	for i := 1; i <= 16; i++ {
 		txt := "A poetic line that ends without a full stop and runs on,"
 		if i%4 == 0 {
-			txt = "and here the sentence closes so the splitter may break. " +
-				"This tail makes the paragraph long enough to reach the threshold."
+			txt = "and here the line closes, as the stanza does."
 		}
-		poem = append(poem, Verse{BookName: "Psalms", Book: "Psalms", Chapter: 119, Verse: i, Text: txt})
+		// Stanzas, as an acrostic marks them: the publisher's structure, which
+		// is now the only structure there is.
+		poem = append(poem, Verse{BookName: "Psalms", Book: "Psalms", Chapter: 119,
+			Verse: i, Text: txt, ParaStart: i%4 == 1})
 	}
 	out = append(out, struct {
 		name   string

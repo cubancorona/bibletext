@@ -89,6 +89,45 @@ which is what lets a search for LORD behave, and what keeps sharing, speech
 and links agreeing with the page. Changing that trades a typographic gain for
 a change to four pipelines, and nothing suggests the trade is wanted.
 
+## The paragraph rule is gone
+
+The app no longer invents paragraphs. The character-count rule — a break after
+320 characters at the next sentence end — came in with the first commit, when
+the only source served bare verses and there was nothing else to go on, and no
+printed or digital edition sets text that way. It has been removed rather than
+kept as a fallback: a fallback fires only where a publisher deliberately left a
+passage unbroken.
+
+Two things replaced it, beyond the paragraph marks the feeds already carry.
+
+The NKJV's skipped headings now open a paragraph BY POSITION. Their text is
+still dropped, because it is not Scripture, but in print a heading always
+begins a new unit and an acrostic letter marks a stanza. That feed sends no
+blank-line instruction at all, so without this a chapter of poetry arrived
+with nothing to break it. It takes the NKJV from 78% of chapters following its
+publisher to 98%.
+
+The helloao `descriptive` runs do the same. In the Psalms these are the
+acrostic letters, which arrive at the end of the last verse of the previous
+stanza, so the verse that follows one opens a stanza. This is what restores
+Psalm 119's twenty-two stanzas in the WEB, where they had become a single
+176-verse paragraph.
+
+Where the editions now stand, measured over whole Bibles:
+
+| edition | chapters following the publisher |
+|---|---|
+| BSB | 1,186 of 1,189 (99.7%) |
+| NKJV | 1,163 of 1,189 (97.8%) |
+| WEB Catholic | 1,202 of 1,328 (90.5%) |
+| WEB | 1,065 of 1,189 (89.6%) |
+
+The rest are poetry the publisher set continuously — Psalm 78, Psalm 18,
+Proverbs 14, Job 31 — where one paragraph is the honest rendering and a
+character count was never anything but noise. The one consequence worth
+watching is that a note in such a chapter raises a single band for the whole
+of it, because bands are reserved per paragraph.
+
 ## Stage 2 — the decode-time checks
 
 No epoch, no reader-visible change, and they make every later item safer.

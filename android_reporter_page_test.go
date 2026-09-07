@@ -23,7 +23,11 @@ func androidReporterState() *AppState {
 		Books: []string{"Genesis"},
 		Verses: map[string]map[int][]Verse{"Genesis": {1: {
 			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 1, Text: prose},
-			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 2, Text: "And God said, Let there be a firmament in the midst of the waters, and let it divide the waters from the waters."},
+			// ParaStart, because this test is about what an indented paragraph
+			// looks like and so needs two of them. It used to get the second
+			// by making verse 1 long enough to trip a character rule; the app
+			// no longer invents paragraphs, so the fixture states its own.
+			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 2, ParaStart: true, Text: "And God said, Let there be a firmament in the midst of the waters, and let it divide the waters from the waters."},
 		}}},
 	}
 	return &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1}

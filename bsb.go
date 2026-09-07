@@ -244,7 +244,8 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				Footnotes: notes,
 				ParaStart: paraStart,
 			})
-			paraStart = false
+			// An acrostic letter or an oracle's title heads what comes NEXT.
+			paraStart = bsbVerseHasDescriptive(head.Content)
 		}
 		if len(verses) > 0 {
 			chapters[num] = verses
@@ -328,6 +329,28 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 // {noteId} + "”" → "heel.”"); bsbTidySpacing strips those — and any space that
 // lands just after an opening bracket/quote — after the fact, which is always safe
 // because English never spaces before closing or after opening punctuation.
+// bsbVerseHasDescriptive reports whether a verse carries a `descriptive` run —
+// the USFM \d class, which these feeds use for two different things. In the
+// Psalms it is the acrostic letter that heads a stanza: Psalm 119's twenty-two
+// of them arrive at the END of the last verse of the stanza before, so the
+// verse that FOLLOWS one opens a stanza. In the Berean it also carries an
+// oracle's title (Zechariah 12:1), where the same rule holds and the feed
+// already marks the break itself.
+//
+// Only the position is read here. The run's TEXT is still part of the verse,
+// which for the acrostic letters is a defect of its own, tracked separately.
+func bsbVerseHasDescriptive(content []json.RawMessage) bool {
+	for _, node := range content {
+		var obj struct {
+			Descriptive bool `json:"descriptive"`
+		}
+		if json.Unmarshal(node, &obj) == nil && obj.Descriptive {
+			return true
+		}
+	}
+	return false
+}
+
 func bsbVerseText(content []json.RawMessage) string {
 	text, _ := bsbVerseTextMarked(content)
 	return text

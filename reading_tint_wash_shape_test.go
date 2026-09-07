@@ -388,7 +388,7 @@ func longProseChapter() []Verse {
 	long := strings.Repeat("The word of the LORD stands, and the promise given to the fathers is kept. ", 2) + "Amen."
 	vs := make([]Verse, 0, 6)
 	for i := 1; i <= 6; i++ {
-		vs = append(vs, Verse{BookName: "Romans", Chapter: 8, Verse: i, Text: long})
+		vs = append(vs, Verse{BookName: "Romans", Chapter: 8, Verse: i, Text: long, ParaStart: i == 4})
 	}
 	return vs
 }

@@ -43,12 +43,20 @@ import (
 // PILLS_SET — the state the per-paragraph pills exist for — was not enumerated
 // at all while the axis was being added for it. Measured: sample John 3 = 1
 // verse, 1 paragraph, and every received note the harness files lands on v16.
+// Paragraphs are stated, not induced: the app draws only the paragraphing its
+// publisher supplies (Verse.ParaStart), so a fixture that needs several
+// paragraphs says where they are. This one opens one every three verses, which
+// puts verse 16 at the head of its own and leaves plenty of others to spread
+// notes across.
 func enumerationChapter() []Verse {
-	long := "This verse is deliberately long so that the paragraph splitter reaches " +
-		"its character threshold and breaks at the next sentence ending, which is here."
+	long := "This verse is deliberately long, so a paragraph of them is a realistic " +
+		"height for the bands and pills these tests measure."
 	out := make([]Verse, 0, 20)
 	for i := 1; i <= 20; i++ {
-		out = append(out, Verse{BookName: "John", Book: "John", Chapter: 3, Verse: i, Text: long})
+		out = append(out, Verse{
+			BookName: "John", Book: "John", Chapter: 3, Verse: i, Text: long,
+			ParaStart: i%3 == 1,
+		})
 	}
 	return out
 }
