@@ -407,9 +407,126 @@ the repository do carry real ones, Cardo and Spectral, but they are share-card
 faces, not the reading face.
 
 So it is the same structural work as S17: the run type carries one flag today
-and would need to carry independent style dimensions. Do them together, and
-decide first whether synthesised small capitals are worth having, or whether
-this waits on a reading face that has them.
+and would need to carry independent style dimensions. Do them together. Whether to
+synthesise small capitals or wait for a face that has real ones is answered
+below, under "The reading face": wait.
+
+## The reading face
+
+S23 ends on a question this section answers: whether small capitals should be
+synthesised, or wait for a reading face that has real ones. It waits. And the
+face that has them is also the face that fixes a second problem, which is that
+the same chapter is set in four different types depending on where it is read.
+
+### What is drawn today
+
+| surface | face actually drawn |
+|---|---|
+| macOS, both panes | Georgia |
+| iOS | Georgia |
+| Windows | Georgia |
+| Android | the platform's generic serif — Noto Serif |
+| Linux | DejaVu Serif |
+| the website | whatever the visitor's device has; a visitor on Android or Linux has none of the three named |
+
+Georgia is not shipped with the app, it is borrowed from the operating system,
+and only three of the six surfaces have one to borrow. That is the whole of the
+inconsistency: nothing chose Noto Serif or DejaVu Serif, they are what is left
+when the stack's first three names are absent. Georgia cannot be shipped to
+close the gap because it is a licensed system font and not redistributable.
+That is why Gelasio is already embedded — an open, metrically identical
+substitute — but it is used only for share cards and as the desktop fallback.
+
+### What a switch would cost
+
+Line breaks are the thing a reader would notice, so the candidates were
+measured by summing advance widths for one line of John 3:16. Vertical figures
+are fractions of the em.
+
+| face | line width | vs Georgia | x-height | real small caps |
+|---|---|---|---|---|
+| Georgia | 44.19 em | — | 0.481 | no |
+| Gelasio | 44.19 em | 0.0% | 0.481 | no |
+| Spectral | 44.33 em | +0.3% | 0.450 | yes, regular and bold |
+| Cardo | 42.69 em | −3.4% | 0.439 | regular only |
+| Crimson Text | 39.56 em | −10.5% | 0.420 | no |
+| Libre Baskerville | 51.73 em | +17.1% | 0.530 | no |
+
+Gelasio is metrically identical to Georgia by design, so it would change
+nothing and solve nothing: it has no small capitals either. Spectral is the
+outlier that matters. It sets a line within a third of a percent of Georgia's,
+so a page of it wraps where Georgia's page wraps, and it is the only candidate
+carrying small capitals in both weights.
+
+### Small capitals need c2sc, not smcp
+
+This is the fact that settles the choice between the two faces that have them.
+
+The live NKJV sends the divine name split across a span boundary with the
+remainder already in capitals, `G` + sc`OD`. Both halves are capitals, so the
+substitution needed is capitals-to-small-capitals, `c2sc`, not the ordinary
+lowercase-to-small-capitals `smcp`. Asking `smcp` to set text that is already
+uppercase does nothing at all.
+
+| face | smcp | c2sc |
+|---|---|---|
+| Spectral regular | yes | yes |
+| Spectral bold | yes | yes |
+| Cardo regular | yes | no |
+| Cardo bold | none — the face carries no OpenType features at all | |
+| Georgia | no | no |
+| Gelasio | no | no |
+
+So Cardo cannot render this text as small capitals without first lowercasing
+it, which is a change to the text. Spectral can render it untouched. Spectral
+is the recommendation.
+
+### The rest of the bill
+
+Four things come with it, and none is hidden.
+
+The repository ships Spectral in regular and bold only. Italic and bold italic
+have to be added, which is roughly another half megabyte, and italic is not
+optional now that the NKJV's supplied words are captured and waiting to be
+drawn.
+
+Spectral's x-height is 6% smaller than Georgia's, so the same point size reads
+smaller. Its default line box is a third taller — 1.522 em against Georgia's
+1.136 — so every line-height constant is wrong until it is re-tuned, including
+the website's, which were derived from screenshots of the app.
+
+Georgia's digits are oldstyle by default and Spectral's are lining, so verse
+numbers would change shape unless `onum` is turned on. Spectral has it.
+Georgia, as it happens, carries almost no OpenType features at all, which means
+the `onum` already requested in the reading stylesheet has never done anything
+there.
+
+And one surface still cannot draw real small capitals afterwards. The Apple
+panes can ask for the feature in their markup, and Android can set it per span
+on the text paint, but the styled canvas pane on Windows and Linux draws its
+own glyphs through Fyne, which exposes no OpenType feature control. Those two
+platforms would keep the uppercase realization. That is a narrowing of the
+defect from six surfaces to two, not a fix on all six, and it should be
+described that way rather than as done.
+
+### What is actually manufactured here
+
+Separately from which face is used: the decoder uppercases every `sc` and `nd`
+span into the stored text. The publisher did not spell the word `LORD` in four
+capitals; it sent an initial capital and a small-capital remainder, and the app
+replaced that with capital letters and then forgot where the span was. A reader
+who copies a verse out of the app gets a spelling no edition of the NKJV
+prints. Under the standard at the top of this document that is an addition, and
+it is the same shape as the verse-number superscript: keep the typography on
+the page, and let the plain text leaving the app carry the conventional
+uppercase realization, which is what every other edition's copy behaviour
+produces.
+
+The fix is the one already used for supplied words — mark the span with
+sentinels, resolve it to rune offsets once the text has settled, store the
+offsets and not a case change. It is an NKJV cache epoch either way, so it
+should be done in the same epoch as S17's supplied words rather than a second
+one.
 
 ## Decided against
 
