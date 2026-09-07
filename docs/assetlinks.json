@@ -1,11 +1,14 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "uk.co.bibletext",
       "sha256_cert_fingerprints": [
-        "41:B3:DF:F3:D9:9D:5C:7E:F7:79:A7:DA:8F:85:F5:C3:84:18:C2:3C:19:FE:9D:86:D9:95:30:0B:90:59:07:55"
+        "41:B3:DF:F3:D9:9D:5C:7E:F7:79:A7:DA:8F:85:F5:C3:84:18:C2:3C:19:FE:9D:86:D9:95:30:0B:90:59:07:55",
+        "4D:A1:78:59:07:20:3A:04:2C:CF:7F:6F:FC:32:73:21:AF:A5:77:5C:6D:9C:D9:64:BA:32:A5:AA:83:EB:2D:78"
       ]
     }
   }
