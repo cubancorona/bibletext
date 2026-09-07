@@ -652,68 +652,104 @@ the small capitals.
 
 The face question was posed as a Latin one and that was the wrong question. The
 app draws three scripts, and a face covering only Latin hands the other two to
-whatever the platform supplies — which differs on every platform, and which is
-what split a Greek word between two typefaces mid-word.
+whatever the platform supplies — which is what split a Greek word between two
+typefaces mid-word.
+
+Sixty-six faces were examined against what the app actually needs. **None of
+them passes.** The ones that cover every script fail on the cuts and the
+features; the ones with four properly featured cuts have no Hebrew.
 
 ### What the app must be able to draw
 
-Counted over the four editions, 145 distinct characters. The count is not the
-hard part:
+Counted over the four editions: 145 distinct characters. The count is not the
+hard part.
 
 | requirement | detail |
 |---|---|
 | polytonic Greek | 25 codepoints of the Greek block, 8 of Greek Extended |
-| Hebrew | 9 letters and SEVEN COMBINING MARKS — cantillation and niqqud, which need real GPOS mark attachment, not merely glyphs |
-| small capitals | `smcp` suffices: the feed sends the whole word in ordinary case in 286 of 288 spans, so a full-size L and a small-capital ord is what `smcp` alone produces |
-| superior figures | the verse numbers are ¹²³, not digits, so the face's superior figures ARE the numerals a reader sees |
+| Hebrew | 9 letters and SEVEN COMBINING MARKS, cantillation and niqqud, needing real GPOS mark attachment rather than glyphs |
+| small capitals | `smcp` suffices — the feed sends the whole word in ordinary case in 286 of 288 spans — but it is needed in EVERY cut, because the italic carries the translators' supplied words |
+| superior figures | verse numbers are ¹²³, not digits, so the face's superior figures ARE the numerals |
 | four cuts | the toolkit synthesises neither bold nor italic |
-| licence | redistributable inside a shipped app on six platforms and from a website |
+| licence | redistributable inside a shipped app and from a website |
 
 Hebrew volume: 447 footnote runs. Greek: 67. Etnahta occurs 80 times, holam 80,
-tevir twice — so a face missing a mark is missing it in real text, not in theory.
+tevir twice.
 
-### Measured
+### Comparing at the same size compares nothing
 
-| face | Greek | Greek Ext | Hebrew | marks | small caps | cuts | line vs Georgia |
-|---|---|---|---|---|---|---|---|
-| **Cardo** | 100% | 100% | 100% | 6 of 7 | smcp | R I B | −3.4% |
-| Libertinus Serif | 100% | 100% | 87% | 5 of 7 | OTF only | R I B BI | −6.4% |
-| Gentium Plus / Book Plus | 100% | 100% | none | none | smcp + c2sc | many | −6.6% / −4.9% |
-| EB Garamond | 100% | 100% | none | none | smcp + c2sc | many | −13.7% |
-| Noto Serif | 100% | 100% | none | none | smcp + c2sc | many | +8.5% |
-| Spectral | 12% | none | none | none | smcp + c2sc | R I B BI | +0.3% |
-| Georgia | 100% | none | none | none | none | R I B BI | — |
+This invalidates every line-width figure recorded before it. A measure taken at
+the same nominal size says nothing between faces of different x-height, because
+they do not read as the same size. Normalised so each reads as large as Georgia
+at 21px:
 
-**Cardo is the only face with nothing missing**, and it is already in the
-repository, embedded for the share cards, under the SIL Open Font License. It
-was drawn for classical and biblical scholarship, which is this problem exactly.
+| face | raw measure | raw vs Georgia | x-height | size to match | measure at that size |
+|---|---|---|---|---|---|
+| Georgia | 44.19 | — | 0.481 | 21.0px | — |
+| Junicode | 39.10 | −11.5% | 0.415 | 24.3px | **+2.6%** |
+| Cardo | 42.69 | −3.4% | 0.439 | 23.0px | +5.8% |
+| Spectral | 44.33 | +0.3% | 0.450 | 22.4px | **+7.2%** |
 
-Two candidates fail in ways their coverage figures hide. Libertinus keeps its
-OpenType features only in the OTF build — the static TTF has four features and
-no small capitals — and rendered through the app's own engine it returns Hebrew
-with the letters out of order and the cantillation gone, so 87% overstates what
-it can set. Noto covers Hebrew only in a SEPARATE family, which is a pairing,
-not one face.
+Spectral's "+0.3%", quoted as the headline reason to choose it, was the wrong
+measurement. It reads 6.4% smaller at the same point size, so the match holds
+only where the text is smaller. At equal apparent size Spectral is the FURTHEST
+from Georgia's measure of the three, and Junicode the closest.
 
-### What Cardo costs
+### Why the face that covers everything still fails
 
-- No bold italic exists. Regular, italic and bold only.
-- The features live in the regular: the italic carries seven and the bold one.
-  Small capitals and oldstyle figures work where the divine name and the
-  footnotes are set, and nowhere else.
-- Holam is present but not attached by the font's mark positioning, so in 80
-  footnotes it may sit slightly off. The other six marks attach properly.
-- It sets 3.4% narrower than Georgia against Spectral's 0.3%, so line breaks
-  move further. Its superior figures, however, sit at +0.252..+0.683 em against
-  Georgia's +0.222..+0.709 — near enough that the verse numbers would barely
-  move, which is the opposite of the trouble Spectral's caused.
+Cardo covers all three scripts, and coverage was never the whole requirement.
 
-### The alternative if Cardo's cuts are judged too thin
+- No bold italic exists. Confirmed five ways, including that the upstream source
+  repository holds no bold-italic source to build one from.
+- Small capitals work in the regular alone. The italic has no `smcp` and the
+  bold has no GSUB table at all, so the divine name silently loses its small
+  capitals in every italic and bold passage — and the italic is exactly where
+  the translators' supplied words are set.
+- **The Greek is one upright regular-weight design reused in all three cuts.**
+  Ink area over the required Greek Extended characters differs from the regular
+  by +0.1% in the italic and −0.0% in the bold, against −18.8% and +43.7% for
+  Latin. Greek inside an italicised supplied-word span renders upright, and
+  Greek in bold is not bold.
+- Hebrew mark attachment exists only in the regular, and even there holam is
+  outside mark coverage with no mark-to-mark lookups, so stacked point and
+  cantillation collide.
 
-A chosen primary face plus a chosen, EMBEDDED secondary for Greek and Hebrew, so
-the fallback is the app's own rather than the platform's. That is what the
-mid-word split argues for: the problem was never that a fallback happened, but
-that nobody chose it.
+It remains excellent as a regular-weight fallback for Greek and Hebrew, which is
+a supporting role, not a text face.
+
+### What to do instead
+
+A chosen primary face plus a chosen, EMBEDDED secondary for Hebrew, so the
+fallback is the app's own rather than the platform's.
+
+**Junicode 2** for Latin and Greek. Verified against the binaries: `smcp` and
+`c2sc` in all four cuts, with the "Lord" test passing in every one — the L
+untouched, the ord substituted. Complete polytonic Greek in all four. SIL Open
+Font License with NO reserved font name, so a subset keeps its name. About 1 MB
+a cut raw and 24 KB subsetted to what this app draws. Closest to Georgia's
+measure at equal apparent size. No Hebrew whatsoever.
+
+**Ezra SIL** for Hebrew. All 27 letters, all seven marks in mark coverage, and
+Genesis 1:1 shapes with no missing glyph. One cut, no Greek, no Latin macrons,
+seven of the ten superior figures absent, no small capitals — it is a Hebrew
+face and nothing else. "Ezra" and "SIL" are reserved names, so a subsetted build
+must be renamed. Its vendor states it will not be extended.
+
+### The actual work is the mechanism, not the file
+
+A pairing cannot be adopted by swapping a resource. `bibleTheme.Font` returns
+one resource per style, and the toolkit takes its fallback from the platform's
+default font rather than an app-chosen one, so on Windows, Linux and Android a
+Hebrew run would still reach whatever the system supplies — precisely the
+behaviour being retired. The Apple panes can cascade through CoreText.
+
+The hook does exist: the reading pane already assigns a font source PER RUN, and
+already tokenises the text. Choosing the Hebrew face for a Hebrew run is a
+change at that seam.
+
+Also settled, and it constrains the choice: the toolkit never sets variation
+coordinates, so a variable font renders at its default instance. Four STATIC
+cuts have to ship.
 
 ## Decided against
 
