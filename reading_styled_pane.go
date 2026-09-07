@@ -424,8 +424,25 @@ func (p *styledReadingPane) measure(text string, kind runKind, italic bool) floa
 	if kind == runVerseNum {
 		size *= styledNumRatio
 	}
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.faceFor(text, italic))
+	face := p.faceFor(text, italic)
+	if kind == runHeading {
+		// Measured in the cut it is DRAWN in, or the heading wraps to a width
+		// it does not occupy.
+		face = p.headingFace()
+	}
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, face)
 	return w.Width
+}
+
+// headingFace is the bold cut a publisher's section heading is set in. Body
+// size and bold, matching what the other surfaces do: this pane reads meaning
+// from a run's KIND rather than its size, but the panes beside it read size,
+// and one look across the app is worth more than a larger heading here.
+func (p *styledReadingPane) headingFace() fyne.Resource {
+	if f := loadReadingFonts(); f != nil && f.bold != nil {
+		return f.bold
+	}
+	return p.font
 }
 
 // faceFor is the ONE place a run's face is decided, and every ruler and every
@@ -629,6 +646,10 @@ type styledPaneRenderer struct {
 	fnTexts []*canvas.Text
 	// The superscription's lines — own slice, same reason.
 	superTexts []*canvas.Text
+	// headTexts is one object per publisher's-heading LINE, built from the
+	// layout's heading lines and index-parallel to them.
+	headTexts []*canvas.Text
+	headLines []int
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -694,6 +715,23 @@ func (r *styledPaneRenderer) rebuild() {
 	// The superscription: italic at body size where the platform's serif
 	// has an italic; the pane's regular face in the muted tone otherwise,
 	// so the title's register survives either way.
+	// The publisher's section headings: one object per heading line, in the
+	// bold cut, in the body colour. Built from the LINES rather than from runs,
+	// because a heading line deliberately carries none — that is what keeps it
+	// out of the selection model.
+	r.headTexts = r.headTexts[:0]
+	r.headLines = r.headLines[:0]
+	for li, ln := range p.lay.Lines {
+		if ln.Heading == "" {
+			continue
+		}
+		t := canvas.NewText(ln.Heading, p.pal.Text)
+		t.FontSource = p.headingFace()
+		t.TextSize = p.textSize
+		r.headTexts = append(r.headTexts, t)
+		r.headLines = append(r.headLines, li)
+		r.objects = append(r.objects, t)
+	}
 	r.superTexts = r.superTexts[:0]
 	if p.superGeom.present {
 		font, italic := styledSuperFont()
@@ -832,6 +870,17 @@ func (r *styledPaneRenderer) position() {
 			y = ln.Y + (lh-bodyH)/2 - p.textSize*styledNumRaise
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
+	}
+
+	// The headings, from the lines they were laid out on.
+	for i, t := range r.headTexts {
+		if i < len(r.headLines) && r.headLines[i] < len(p.lay.Lines) {
+			ln := p.lay.Lines[r.headLines[i]]
+			t.Move(fyne.NewPos(p.insetX(), ln.Y+(ln.H-t.MinSize().Height)/2))
+			t.Show()
+		} else {
+			t.Hide()
+		}
 	}
 
 	// The superscription, from its geometry table alone — hide, never
