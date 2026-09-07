@@ -364,6 +364,20 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// behaviour, so nothing but the BSB moves.
 			toks := verseTokens(v)
 			redTok := redLetterTokenFlags(state.CurrentVersion, v, redLetter, toks)
+			// The divine name is DRAWN in small capitals. It happens here,
+			// after the red-letter machinery has answered, because that
+			// machinery matches these tokens back against the publisher's own
+			// text and would fail to recognise a substituted one. Re-tokenising
+			// is safe because the substitution preserves rune counts, so the
+			// words fall in the same places; the length check says so out loud
+			// rather than trusting it.
+			if len(v.SmallCaps) > 0 {
+				drawn := v
+				drawn.Text = smallCapsText(v)
+				if dt := verseTokens(drawn); len(dt) == len(toks) {
+					toks = dt
+				}
+			}
 			tint := tints.of(v)
 
 			// Provisional first-line record; place() may wrap the first unit

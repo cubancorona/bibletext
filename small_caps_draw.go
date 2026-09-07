@@ -122,3 +122,17 @@ func applySmallCaps(v Verse, runs []verseRun) []verseRun {
 	}
 	return out
 }
+
+// smallCapsText is v.Text as it should be DRAWN. Same length in runes, same
+// words in the same places; only the letterforms of the marked spans differ.
+//
+// The canvas pane needs this rather than the runs, because it draws word
+// tokens and asks the red-letter machinery only which of them are Christ's —
+// and that machinery matches its tokens back against the publisher's own text,
+// so the substitution has to happen after it has answered, never before.
+func smallCapsText(v Verse) string {
+	if len(v.SmallCaps) == 0 {
+		return v.Text
+	}
+	return applySmallCaps(v, []verseRun{{Text: v.Text}})[0].Text
+}
