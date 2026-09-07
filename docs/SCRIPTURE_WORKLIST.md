@@ -815,9 +815,26 @@ Worth noting what this does NOT need any more. The small capitals are drawn as
 characters, so nothing here depends on the importer honouring a font feature —
 which was the other reason this pane was going to need special handling.
 
-Still to check before doing it: whether the Hebrew face needs registering too,
-and how a run carrying Hebrew is to be recognised once the text is an
-attributed string rather than tokens.
+### The Hebrew needs no detection on three of the four surfaces
+
+Probed on macOS, and it removes most of the work this looked like:
+
+    Junicode alone                    hebrew -> LucidaGrande
+    with a cascade list to Ezra SIL   hebrew -> EzraSIL
+
+Register both faces, give the swept font a cascade list naming the Hebrew one,
+and CoreText falls through PER GLYPH to the app's own choice. Latin and Greek
+stay in the reading face; Hebrew resolves to the Hebrew face; nothing has to
+recognise a Hebrew run at all.
+
+The web has the same property for free — a two-family stack in `--scripture`
+cascades per glyph in every browser. Android has it from API 29 through
+Typeface.CustomFallbackBuilder, above the app's floor of 21, so below that it
+keeps today's system fallback.
+
+The canvas pane is the exception, and the only surface that needs the explicit
+per-run rule already written for it: its toolkit falls back per rune too, but
+only ever to a SYSTEM font, never to one the app chose.
 
 ## Decided against
 
