@@ -148,7 +148,7 @@ changes what S16's NKJV half has to carry.
 |---|---|---|---|---|---|
 | S10 | website renders Psalm titles | website | S | none | todo |
 | S11 | search indexes Psalm titles | search | S | none | todo |
-| S12 | regenerate the offline seed from the current decoder | seed | S | none | todo |
+| S12 | regenerate the offline seed from the current decoder | seed | S | none | done |
 | S13 | Android long-press copy keeps poem lines | Android fallback | XS | none | todo |
 
 **S10.** The site renders verses only. The accessor is already exported, so
@@ -161,11 +161,13 @@ built from verse text alone. Index the titles, keyed so a hit opens
 somewhere sensible, and decide whether a title hit is labelled as such in the
 results.
 
-**S12.** The embedded seed is the four Gospels with no poem breaks, no notes
-and no titles. It is used only when a first launch can neither read a cache
-nor reach the network, which is exactly when a new reader first sees the app.
-Regenerate it, and say in its comment that it must be regenerated whenever
-the decoder's output changes.
+**S12.** DONE. The embedded seed was the four Gospels with no poem breaks, no
+notes and no paragraphing — a snapshot of a decoder several changes old, shown
+at exactly the moment a new reader first sees the app. Regenerated from a
+current decode: of its 3,778 verses, 76 now carry authored poem lines, 214
+carry the translators' notes and 1,409 open a publisher's paragraph, against
+none of each before. `scripts/gen-seed-gospels.py` rebuilds it, `seed.go` says
+when to, and `seed_content_test.go` fails if it drifts back.
 
 **S13.** In the Android fallback pane's long-press menu, copying the chapter
 keeps poem lines while copying a verse or a paragraph flattens them, with no
