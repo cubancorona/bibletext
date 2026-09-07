@@ -530,101 +530,99 @@ one.
 
 ## Display issues found while unifying the reading face
 
-Each of these was checked by rendering or by measurement, not by reading the
-code alone. Where a first guess turned out to be wrong it is recorded as wrong,
-because the wrong version is the one that sounds plausible and will be guessed
-again.
+Checked by rendering or measurement, not by reading code. Corrections of
+earlier conclusions are kept AS corrections, because the wrong version is the
+one that sounds plausible and will be arrived at again.
 
-### 1. The divine name is currently drawn as ordinary text
+### Must not ship
 
-The decoder stopped uppercasing the small-capital spans into the stored text
-and records their positions instead. Nothing reads those positions yet, so the
-NKJV now shows `Lord` where it used to show `LORD`, and the distinction between
-the Tetragrammaton and Adonai — which is the whole reason the edition sets the
-name in small capitals — is not visible at all.
+**The divine name draws as ordinary text.** The decoder keeps the publisher's
+characters and records the small-capital spans; nothing reads them yet, so the
+NKJV shows `Lord` where it showed `LORD` and the distinction the edition
+carries in its letterforms is invisible.
 
-This is the one item on this list that must not ship. Either a renderer draws
-the span, or the text is uppercased again until one does.
+**Fifteen verses paint the narrator's words red.** The red-letter table refuses
+a verse unless a hash of its text matches, and a refusal paints the whole verse
+red. The case change keeps the rune count, so only the fingerprint trips —
+silently, since the licensed text is not in this repository. Where Christ quotes
+the Old Testament and the quotation carries the divine name, the narration is
+printed as his. Guarded now by an epoch assertion that fails the build; the
+table must be regenerated against the new decoder.
 
-### 2. The verse number climbed out of its line — FIXED
+**macOS has no paragraph separation at all.** No blank line and no indent: the
+reporter stylesheet emits `margin: 0`, and the first-line indent was moved out
+of the text and re-applied on iOS only. A new paragraph begins flush left on the
+next line, indistinguishable from a wrap, so the publishers' paragraphing is
+invisible there.
 
-The pane lifted the number by a fraction of its MEASURED height, and what
-`RenderedTextSize` measures is the face's declared line box rather than its
-ink. At an 18pt body in a 27.9pt line the number's top sat at +1.27 with the
-borrowed system serif and at -3.03 with the shipped face: above the top of its
-own line, near enough to the line above to read as a misprint. The lift is now
-a fraction of the text size.
+### Fixed
 
-Nothing else in the pane takes a HEIGHT from a measurement. Every other
-`RenderedTextSize` call uses the width alone, which is what kept this to one
-site.
+**The verse number left its line.** Twice. The lift was first taken from the
+face's DECLARED line box, which is a third larger in the shipped face; the
+correction that replaced it had the wrong sign, because the numerals are
+Unicode superscripts already and the shipped face draws them 0.232 em higher
+than the borrowed one. It is a drop of 0.117 em, and both leadings are pinned
+by a test, at the shipping body size — a bare test theme puts every width on the
+same side of the reporter gate, so only one leading is otherwise reached.
 
-### 3. Verse numbers change shape, and one surface cannot change them back
+### Visible, still open
 
-The borrowed serif's figures are oldstyle by default — varying heights, some
-descending below the baseline — and the shipped face's are lining, uniform and
-sitting on the baseline. Measured from both fonts' own outlines.
+**Greek words are split between two faces mid-word.** The shipped face carries
+exactly three codepoints of the Greek block — Δ, μ and π, kept for mathematics
+— so `ἐπίσκοπον` draws two letters in the reading face and seven in a system
+fallback, differing in weight, colour and fit inside one word. This is the
+corrected form of an earlier claim that Greek would be LOST: it is not, the
+toolkit falls back per rune, and that is exactly what makes the split.
 
-The shipped face carries an `onum` feature that restores oldstyle figures, and
-three of the four surfaces can ask for it. The canvas pane on Windows and Linux
-cannot: the toolkit exposes no OpenType feature control at all. That is the
-same gap that blocks small capitals there, so one fork change buys both.
+**A share card can silently drop a letter.** Prata has no `Ē`, and its .notdef
+is an invisible blank, so a card of Genesis 4:18 reads `“ ´noch`. The seven
+faces are cycled deliberately, so a reader who taps Regenerate reaches it. An
+earlier check called every face complete; it was made against the
+public-domain editions, which contain no `Ē`.
 
-### 4. Greek and Hebrew are NOT a coverage problem — the first reading was wrong
+**Verse numbers change shape on Windows and Linux only.** The borrowed serif's
+figures are oldstyle by default and the shipped face's are lining. Three
+surfaces can ask for `onum`; the canvas pane cannot, because the toolkit exposes
+no OpenType feature control — the same gap that blocks small capitals there.
 
-The shipped face has no Greek and no Hebrew, and the first conclusion drawn from
-that was that 67 footnote runs would lose their Greek and 445 would show empty
-boxes. That was wrong, and it was wrong because it assumed no fallback.
+**One chapter, four faces.** Only the canvas surfaces took the shipped face. The
+Apple panes, Android and the website still ask for the borrowed one.
 
-The toolkit resolves a face PER RUNE and queries the system font map for
-anything the given face lacks. Verified by rendering: Greek and Hebrew draw real
-glyphs, and two different letters of each script draw different ink, which a
-row of identical empty boxes could not.
+**Android's line pitch is wrong, and was already.** `setLineHeightPx` reads the
+CURRENT paint's metrics and stores the difference; the pane sets the typeface
+afterwards, so the pitch is out by the gap between the two fonts. Lines carrying
+a verse number are 10-11px taller than their neighbours, so a wash looks stepped.
 
-What is left is a style mismatch, not missing text: roughly 67 footnote runs
-have Greek that the borrowed serif drew in the reading face and a fallback face
-now draws instead. Hebrew already fell back, because the borrowed serif had none
-either.
+### Corrections to earlier conclusions
 
-### 5. The leading does NOT need re-tuning — the second wrong reading
+**The leading does not need re-tuning.** The declared line boxes are 1.522 em
+against 1.136 em, which was reported as meaning every constant was stale. The
+ink extent over the characters scripture uses is 0.990 em against 0.973 em, and
+rendered at the pane's own leading the two are indistinguishable. A declared
+line box is not a claim about ink. Where the number does matter is a surface
+that derives its leading from font metrics rather than setting it: Android.
 
-The faces' declared line boxes are 1.522 em against 1.136 em, a third apart,
-which looks alarming and was reported as meaning every leading constant was
-stale. Measured against what is actually drawn, the INK extent over the letters,
-digits and punctuation scripture uses is 0.990 em against 0.973 em — 1.7% apart.
+**`font-feature-settings` is not dropped by the Apple importer.** It is filtered
+to what the resolved face implements, and the borrowed serif implements none of
+what is asked for, which looks identical to a drop. The old-style figures on
+screen today are that face's defaults. After the swap the request genuinely
+takes effect, so the Apple panes keep old-style figures — and the small-capitals
+route works there.
 
-Rendered at the pane's own leading the two are indistinguishable: the same 18px
-line pitch, and where the borrowed serif leaves clean empty rows between lines
-the shipped face leaves one to three stray pixels of descender. A declared line
-box is not a claim about ink.
+### Text defects a reader sees, not caused by the face
 
-Where the number DOES matter is any surface that derives its leading from the
-font's own metrics rather than setting it outright. That is the Android case
-below.
+- 259 NKJV verses run two words together where the source lost a space.
+- WEB Catholic Mark 9:47 reads `the Gehenna oF fire`; the plain WEB has `of`.
+- Psalm 119's acrostic letters print at the end of the preceding verse, so
+  119:8 ends `Don't utterly forsake me. BETH`, and being inside the verse text
+  they reach search, sharing, links, the website and speech.
+- The website sets 990 poetic paragraphs justified and auto-hyphenated, because
+  the paragraph's kind is decided by its first verse alone.
 
-### 6. Android sets its line height against the wrong font
+### Captured and still not drawn
 
-`TextView.setLineHeight` is not a stored instruction. Read from the platform's
-own source, it takes the CURRENT paint's font metrics and stores the difference
-as extra spacing:
-
-    final int fontHeight = getPaint().getFontMetricsInt(null);
-    if (lineHeight != fontHeight) {
-        setLineSpacing(lineHeight - fontHeight, 1f);
-    }
-
-The reading pane calls it and THEN sets the typeface, so the difference was
-computed against a font that is not the one drawing. The line pitch has
-therefore been wrong by the gap between the default sans and the serif for as
-long as that code has existed, and the shipped face — whose declared height is
-larger still — widens the error. The typeface must be set first.
-
-### 7. Everything captured and still not drawn
-
-Section headings, the translators' supplied words, poetry indent depths and now
-the small capitals are all captured and none of them reaches a reader. The
-small capitals are urgent for the reason in item 1; the others are the existing
-worklist.
+Section headings, the translators' supplied words, poetry indent depths, and now
+the small capitals.
 
 ## Decided against
 
