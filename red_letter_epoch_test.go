@@ -21,7 +21,7 @@ import "testing"
 // cache written by the NEW decoder, then raise this constant. The script reads
 // the cached HTML it already has, so it costs no API quota beyond one fresh
 // download of the edition.
-const nkjvRedLetterTableEpoch = 6
+const nkjvRedLetterTableEpoch = 7
 
 func TestNKJVRedLetterTableMatchesTheDecoderThatMadeIt(t *testing.T) {
 	v, ok := versionByID("nkjv")
