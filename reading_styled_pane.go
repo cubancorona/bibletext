@@ -418,6 +418,12 @@ func (p *styledReadingPane) measure(text string, kind runKind) float32 {
 
 const styledNumRatio = float32(0.66)
 
+// styledNumRaise lifts the verse number above the body's top, as a fraction of
+// the body text size. Calibrated so the number's INK sits where it sat when the
+// pane borrowed the system serif, which is what a reader recognises as a
+// superscript.
+const styledNumRaise = float32(0.086)
+
 func (p *styledReadingPane) CreateRenderer() fyne.WidgetRenderer {
 	r := &styledPaneRenderer{pane: p}
 	r.rebuild()
@@ -750,15 +756,21 @@ func (r *styledPaneRenderer) position() {
 	}
 	drv := fyne.CurrentApp().Driver()
 	bodyS, _ := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.font)
-	numS, _ := drv.RenderedTextSize("1", p.textSize*styledNumRatio, fyne.TextStyle{}, p.font)
-	bodyH, numH := bodyS.Height, numS.Height
+	bodyH := bodyS.Height
 	for i, dr := range p.drawRuns {
 		ln := p.lay.Lines[dr.Line]
 		y := ln.Y + (lh-bodyH)/2
 		if dr.Kind == runVerseNum {
-			// Raised superscript: top-align the small label against the
-			// body's ascent region.
-			y = ln.Y + (lh-bodyH)/2 - numH*0.18
+			// Raised superscript, lifted by a fraction of the TEXT SIZE and
+			// never by a fraction of the measured box.
+			//
+			// RenderedTextSize reports the face's DECLARED line box, not the
+			// height of its ink, and faces declare wildly different ones: the
+			// reading face's box is a third larger than the system serif the
+			// pane used to borrow. A raise taken from that box grew with it and
+			// pushed the number out of the top of its own line, close enough to
+			// the line above to read as a misprint.
+			y = ln.Y + (lh-bodyH)/2 - p.textSize*styledNumRaise
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
 	}
