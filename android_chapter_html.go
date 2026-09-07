@@ -19,6 +19,12 @@ import (
 // left here is the paragraph and join structure — which must stay identical to
 // buildChapterHTML's, because a poem that breaks in different places on two
 // platforms is the divergence this file was split out to prevent.
+// androidIndentMarker stands where the reporter page's first-line indent goes.
+// A private-use rune, so it cannot occur in scripture and cannot be confused
+// with anything the publisher sent; BtBridge.setHtml removes it during the
+// import and turns it into a leading margin.
+const androidIndentMarker = "&#xE010;"
+
 func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	redLetter := redLetterEnabled()
@@ -75,13 +81,20 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	for _, para := range groupVersesIntoParagraphs(verses) {
 		b.WriteString("<p>")
 		if reporter && !verseIsPoetic(para[0].Text) {
-			// The same rule and the same em+en characters as the Apple dialect
+			// A MARKER, not an indent. The same rule as the Apple dialect
 			// (reading.go): every paragraph is indented except one that OPENS
 			// on a poem line, because poetry is never first-line indented in
-			// print. A mixed paragraph opening with prose keeps it — with the
-			// gap gone, the indent is what tells the reader a new paragraph
-			// started.
-			b.WriteString("&#8195;&#8194;")
+			// print, and a mixed paragraph opening with prose keeps it — with
+			// the gap gone, the indent is what tells the reader a new
+			// paragraph started.
+			//
+			// This used to be an em-space and an en-space, drawing the indent
+			// with characters because the importer has no CSS. They were the
+			// app's own characters in the reader's text, and Android's Copy
+			// took them. The bridge deletes this marker as it imports and
+			// applies a real leading margin in its place (BtBridge.setHtml),
+			// so the text the reader can select has nothing extra in it.
+			b.WriteString(androidIndentMarker)
 		}
 		for i, v := range para {
 			mk := markupFor(markup[:], tints.of(v))

@@ -653,9 +653,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		-webkit-hyphens: auto;
 	}`
 	if reporter {
-		// NOTE: no text-indent here — the AppKit/UIKit HTML importer drops it
-		// (verified on the iPad sim), so the indent is a literal em+en space
-		// prepended to each paragraph's text below.
+		// No text-indent here: the AppKit/UIKit HTML importer drops it
+		// (verified on the iPad sim). The indent is applied to the imported
+		// paragraph style instead, which keeps it out of the text.
 		lineHeight, paraCSS = "1.3", `p {
 		margin: 0;
 		text-align: justify;
@@ -746,17 +746,17 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		} else {
 			b.WriteString("<p>")
 		}
-		if reporter && !verseIsPoetic(para[0].Text) {
-			// The U.S. Reports paragraph grammar: a ~1.5em first-line indent
-			// instead of a blank line. Emitted as em+en space characters
-			// because the HTML importer ignores the text-indent CSS property.
-			// Poetry is never first-line indented in print, so a paragraph
-			// that OPENS on a poem line skips it — but a mixed paragraph
-			// opening with prose keeps the indent (in reporter mode it is the
-			// only paragraph-boundary marker; dropping it would visually
-			// merge the paragraph into the previous one).
-			b.WriteString("&#8195;&#8194;")
-		}
+		// NO INDENT CHARACTERS HERE. The U.S. Reports paragraph grammar wants a
+		// ~1.5em first-line indent instead of a blank line, and the HTML
+		// importer drops text-indent, so this used to write an em-space and an
+		// en-space into the paragraph's own text. They were the app's
+		// characters and the system's Copy took them straight out of the text
+		// storage, so a paragraph copied from the landscape reader began with
+		// two spaces nobody typed. The indent is applied natively instead
+		// (bibleTextSetReporterIndent), to the justified paragraphs only —
+		// poetry is never first-line indented in print, and the stylesheet
+		// already leaves a paragraph opening on a poem line ragged (p.pm),
+		// which is the signal the native side reads.
 		for i, v := range para {
 			// The tint decides the markup, and the markup comes from the tint's
 			// own row (appleTintHTML, tint.go) rather than from a branch here.
@@ -1693,6 +1693,11 @@ func indexOf(values []int, target int) int {
 }
 
 // --- Paragraph grouping -----------------------------------------------------
+
+// reporterIndentEm is the reporter page's first-line indent, in ems. It is the
+// width the em-space and en-space pair used to draw, kept so the page did not
+// change when the characters stopped being characters.
+const reporterIndentEm = 1.5
 
 // verseIsPoetic reports whether a verse's text carries authored poem line
 // breaks (the decoder emits "\n" between poem clauses). A verse that is

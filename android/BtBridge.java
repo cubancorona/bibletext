@@ -2215,6 +2215,10 @@ public final class BtBridge {
     // listener re-asks with these.
     private static int lastPadLDp = 10, lastPadTDp = 14, lastPadRDp = 10, lastPadBDp = 14;
     private static float lastMeasureDp = 0f;
+    // The reading text's size in pixels, as the last style push resolved it.
+    // The reporter page's first-line indent is a multiple of it, and the
+    // import needs the number without asking the view mid-assignment.
+    private static float lastTextPx = 0f;
 
     /**
      * extendIntoTheCutout lets the activity window reach under the display
@@ -2366,6 +2370,7 @@ public final class BtBridge {
                 lastPadLDp = padLDp; lastPadTDp = padTDp;
                 lastPadRDp = padRDp; lastPadBDp = padBDp;
                 lastMeasureDp = measureDp;
+                lastTextPx = textSizePx;
                 text.setTextColor(textColor);
                 text.setBackgroundColor(paperColor);
                 scroll.setBackgroundColor(paperColor);
@@ -2425,6 +2430,10 @@ public final class BtBridge {
     /** setHtml atomically replaces a chapter and its initial placement: an
      *  arrival verse outranks frac, frac>=0 restores, otherwise the chapter
      *  starts at the top. */
+    /** The rune the reporter page marks an indented paragraph with; deleted
+     *  during the import and replaced by a real leading margin. */
+    private static final char INDENT_MARKER = '\uE010';
+
     public static void setHtml(final String html, final float frac, final int arrivalVerse) {
         UI.post(new Runnable() {
             @Override public void run() {
@@ -2469,6 +2478,27 @@ public final class BtBridge {
                 // set, so the view receives its final spans in one assignment
                 // and no span mutation lands on a layout the arrival placement
                 // is about to measure.
+                // The reporter page's first-line indent arrives as a marker
+                // rune, not as spaces: the indent has to be drawn somehow and
+                // this importer has no CSS, but characters in the text are
+                // characters the reader's Copy takes away. Each marker is
+                // deleted and replaced by a real leading margin on its own
+                // paragraph, so the text ends up with nothing extra in it.
+                if (s instanceof android.text.SpannableStringBuilder) {
+                    android.text.SpannableStringBuilder ssb = (android.text.SpannableStringBuilder) s;
+                    float indentPx = lastTextPx > 0f ? lastTextPx * 1.5f : 0f;
+                    for (int i = ssb.length() - 1; i >= 0; i--) {
+                        if (ssb.charAt(i) != INDENT_MARKER) continue;
+                        ssb.delete(i, i + 1);
+                        if (indentPx <= 0f) continue;
+                        int end = i;
+                        while (end < ssb.length() && ssb.charAt(end) != '\n') end++;
+                        if (end > i) {
+                            ssb.setSpan(new android.text.style.LeadingMarginSpan.Standard((int) indentPx, 0),
+                                    i, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        }
+                    }
+                }
                 if (s instanceof Spannable) liftWashToLineBackground((Spannable) s);
                 text.setText(s, TextView.BufferType.SPANNABLE);
                 // The prior chapter's highlight span belonged to the old text; drop

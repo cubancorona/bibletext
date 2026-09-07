@@ -553,6 +553,18 @@ static void btIOSApplyInsets(CGFloat w) {
     btIOSRebuildWash();
 }
 
+// gReporterIndent is the reporter page's FIRST-LINE INDENT, in points, or 0
+// when the page is not in that layout. It exists because the HTML importer
+// drops text-indent: the indent used to be two literal space characters
+// written into the paragraph's own text, and the system's Copy read them
+// straight out of the text storage into the reader's clipboard. Applied as a
+// paragraph attribute instead, it is typography again rather than text.
+static CGFloat gReporterIndent = 0;
+
+void bibleTextSetReporterIndent(double pts) {
+    dispatch_async(dispatch_get_main_queue(), ^{ gReporterIndent = (CGFloat)pts; });
+}
+
 void bibleTextSetReadingMeasure(double m) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingMeasure = (CGFloat)m;
@@ -3011,6 +3023,14 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         if (v == nil) return;
         NSMutableParagraphStyle *ps = [(NSParagraphStyle*)v mutableCopy];
         ps.paragraphSpacingBefore = 0;
+        // The reporter page's first-line indent, on the PROSE paragraphs only.
+        // Poetry is never first-line indented in print, and the two are
+        // already told apart by the alignment the stylesheet gave them:
+        // justified for prose, left for a paragraph that opens on a poem line
+        // (p.pm). Alignment is one of the few properties the importer keeps.
+        if (gReporterIndent > 0) {
+            ps.firstLineHeadIndent = (ps.alignment == NSTextAlignmentJustified) ? gReporterIndent : 0;
+        }
         [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
     }];
     // The dialect's .hl rule arrives as an OPAQUE background attribute, which on
@@ -3760,8 +3780,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	if reporterLayoutActive() {
 		bodyPx := math.Round(21 * readingTextScale())
 		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+		// The same ~1.5em the em+en pair used to draw, now as a paragraph
+		// attribute so it cannot be copied out as text.
+		C.bibleTextSetReporterIndent(C.double(reporterIndentEm * bodyPx))
 	} else {
 		C.bibleTextSetReadingMeasure(0)
+		C.bibleTextSetReporterIndent(0)
 	}
 
 	// TWO fingerprints, because the two changes cost different things to apply.

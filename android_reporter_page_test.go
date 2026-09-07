@@ -49,10 +49,10 @@ func TestAndroidReporterPageIndentsItsParagraphs(t *testing.T) {
 	defer app.Quit()
 
 	html := androidChapterHTMLWithReporter(t, true)
-	if !strings.HasPrefix(html, "<p>&#8195;&#8194;") {
+	if !strings.HasPrefix(html, "<p>&#xE010;") {
 		t.Errorf("the first paragraph is indented too:\n%s", html)
 	}
-	if got := strings.Count(html, "<p>&#8195;&#8194;"); got != 2 {
+	if got := strings.Count(html, "<p>&#xE010;"); got != 2 {
 		t.Errorf("both prose paragraphs must be indented, found %d:\n%s", got, html)
 	}
 }
@@ -69,7 +69,7 @@ func TestAndroidReporterPageKeepsParagraphsAsBlocks(t *testing.T) {
 	if !strings.Contains(html, "</p><p>") {
 		t.Errorf("paragraph boundaries must stay in the markup:\n%s", html)
 	}
-	if strings.Contains(html, "<br>&#8195;&#8194;") {
+	if strings.Contains(html, "<br>&#xE010;") {
 		t.Errorf("an indent must not follow a hard break — that is a poem line:\n%s", html)
 	}
 }
@@ -83,7 +83,7 @@ func TestAndroidPhonePageKeepsItsParagraphBlocks(t *testing.T) {
 	if !strings.Contains(html, "</p><p>") {
 		t.Errorf("the phone page separates paragraphs with blocks:\n%s", html)
 	}
-	if strings.Contains(html, "&#8195;&#8194;") || strings.Contains(html, androidReporterIndent) {
+	if strings.Contains(html, "&#xE010;") || strings.Contains(html, androidReporterIndent) {
 		t.Errorf("the phone page must not indent:\n%s", html)
 	}
 }
@@ -102,7 +102,7 @@ func TestAndroidReporterPageIndentsProseAndNotPoetry(t *testing.T) {
 	// A chapter of poetry throughout: no indent anywhere.
 	st := psalm23State()
 	html := buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 23))
-	if strings.Contains(html, "&#8195;&#8194;") {
+	if strings.Contains(html, "&#xE010;") {
 		t.Errorf("a chapter of poetry must carry no indent:\n%s", html)
 	}
 
@@ -121,14 +121,14 @@ func TestAndroidReporterPageIndentsProseAndNotPoetry(t *testing.T) {
 	}
 	st2 := &AppState{Bible: bd, CurrentBook: "Exodus", CurrentChapter: 15}
 	mixed := buildChapterHTMLAndroid(st2, bd.GetChapter("Exodus", 15))
-	if !strings.HasPrefix(mixed, "<p>&#8195;&#8194;") {
+	if !strings.HasPrefix(mixed, "<p>&#xE010;") {
 		t.Errorf("a mixed paragraph opening with prose must keep its indent:\n%s", mixed)
 	}
 	// And the poem line inside it is still a hard break, not a new paragraph.
 	if !strings.Contains(mixed, "<br>") {
 		t.Errorf("the poem line must still break:\n%s", mixed)
 	}
-	if strings.Contains(mixed, "<br>&#8195;&#8194;") {
+	if strings.Contains(mixed, "<br>&#xE010;") {
 		t.Errorf("a poem line must not be indented like a paragraph:\n%s", mixed)
 	}
 }
