@@ -97,7 +97,7 @@ func TestLinkVersionUnavailableOnlySpeaksForALockedTranslation(t *testing.T) {
 func TestLockedTranslationLinkOpensThePassageAndSaysSo(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	win := app.NewWindow("nkjv link")
 	win.Resize(fyne.NewSize(402, 812))
@@ -142,7 +142,7 @@ func TestLockedTranslationLinkOpensThePassageAndSaysSo(t *testing.T) {
 func TestAvailableTranslationLinkSaysNothing(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	win := app.NewWindow("web link")
 	win.Resize(fyne.NewSize(402, 812))
@@ -164,7 +164,7 @@ func TestAvailableTranslationLinkSaysNothing(t *testing.T) {
 func TestNoteOnALockedTranslationLinkIsFiledUnderThatTranslation(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	win := app.NewWindow("nkjv note")
 	win.Resize(fyne.NewSize(402, 812))

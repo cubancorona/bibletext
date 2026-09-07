@@ -54,7 +54,7 @@ func devMimicLabel() string {
 // devApplyMimic reads BIBLETEXT_MIMIC and, for a recognised target, flips the
 // runtime seams to that platform's answers. Called once at the very top of
 // Run() — before CreateMainUI installs the sheet-close consume closure and
-// before loadBookFonts picks the scripture face, both of which read seams this
+// which reads a seam this
 // sets. Unknown values are ignored (the mode simply stays off).
 func devApplyMimic() {
 	t := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_MIMIC")))
@@ -99,18 +99,7 @@ func devApplyMimicSeams(target string) {
 	// with no recording (licensed versions, the deuterocanon).
 	ttsSupported = func() bool { return false }
 
-	// Scripture face: Windows ships Georgia (the same family macOS loads
-	// first, so the list stands); Linux ships DejaVu Serif, which the macOS
-	// host does not expose at Linux paths. Dropping the Georgia candidates lets
-	// the styled pane fall back to the embedded Gelasio, the app's own
-	// no-serif-found path. The doc states the Linux face is approximated.
-	if target == "linux" {
-		var linuxOnly [][4]string
-		for _, set := range serifFontCandidates {
-			if strings.Contains(strings.ToLower(set[0]), "dejavu") {
-				linuxOnly = append(linuxOnly, set)
-			}
-		}
-		serifFontCandidates = linuxOnly
-	}
+	// There is no scripture-face seam any more: the reading face is embedded,
+	// so Windows, Linux and macOS all draw the same one and there is nothing
+	// for a mimic to approximate.
 }

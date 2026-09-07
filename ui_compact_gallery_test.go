@@ -32,7 +32,7 @@ func TestCompactLayoutGallery(t *testing.T) {
 	}
 
 	app := test.NewApp()
-	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	realTheme := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(realTheme)
 
 	cases := []struct {

@@ -114,7 +114,7 @@ func TestSettingsSheetFitsEveryScreen(t *testing.T) {
 				// The app's real theme, not the test stub: the sheet's text
 				// measurements — which are the whole point here — have to come
 				// off the faces the app actually ships.
-				th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+				th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 				app.Settings().SetTheme(th)
 
 				state := sampleState()
@@ -166,7 +166,7 @@ func TestSettingsSheetDoesNotOverflowSideways(t *testing.T) {
 		t.Run(sc.name, func(t *testing.T) {
 			app := test.NewApp()
 			defer app.Quit()
-			th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+			th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 			app.Settings().SetTheme(th)
 			win := app.NewWindow("Settings")
 			win.Resize(fyne.NewSize(sc.w, sc.h))
@@ -226,7 +226,7 @@ func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {
 	defer app.Quit()
 	win := app.NewWindow("Settings")
 	win.Resize(fyne.NewSize(1200, 2400)) // absurdly tall: nothing can need capping
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	state := sampleState()
 	state.window = win
@@ -251,7 +251,7 @@ func TestSettingsSheetIgnoresOutsideTaps(t *testing.T) {
 	defer app.Quit()
 	win := app.NewWindow("Settings")
 	win.Resize(fyne.NewSize(440, 956))
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 
 	state := sampleState()

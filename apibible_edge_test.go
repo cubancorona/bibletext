@@ -7,11 +7,11 @@ package bibletext
 // chapter that keeps 500ing through the retry).
 
 import (
-	"reflect"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"

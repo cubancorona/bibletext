@@ -181,7 +181,7 @@ func TestOfferButtonsNeverOverlap(t *testing.T) {
 		t.Run(fmt.Sprintf("%gpt", w), func(t *testing.T) {
 			app := test.NewApp()
 			defer app.Quit()
-			th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+			th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 			app.Settings().SetTheme(th)
 			win := app.NewWindow("offer")
 			win.Resize(fyne.NewSize(w, 812))

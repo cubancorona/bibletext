@@ -92,7 +92,7 @@ func contextFixture(t *testing.T, note string, pill bool) (*AppState, []Verse, s
 func TestStyledNoteGallery(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	realTheme := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	dir := os.Getenv("BIBLETEXT_PANE_SNAPSHOT_DIR")
 
 	cases := []galleryCase{

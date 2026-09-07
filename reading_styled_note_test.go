@@ -940,7 +940,7 @@ func countColorNear(img image.Image, c color.NRGBA, x, y, w, h int) int {
 func TestStyledStickerSnapshots(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	realTheme := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 
 	for _, tc := range []struct {
 		name    string

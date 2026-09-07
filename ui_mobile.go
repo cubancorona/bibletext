@@ -29,7 +29,7 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	state.window = window
 	registerAIState(state)
 	if state.theme == nil {
-		state.theme = &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+		state.theme = &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	}
 	applyTheme(app, state)
 

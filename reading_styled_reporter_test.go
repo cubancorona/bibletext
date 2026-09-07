@@ -80,7 +80,7 @@ func TestLayoutChapterFirstLineIndent(t *testing.T) {
 func TestStyledPaneReporterGate(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 
 	st := reporterTestState()
@@ -138,7 +138,7 @@ func TestStyledPaneReporterGate(t *testing.T) {
 func TestStyledPaneSelectionUsesLiveInset(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 
 	st := reporterTestState()

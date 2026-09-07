@@ -24,7 +24,6 @@ func saveMimicSeams(t *testing.T) {
 	origSticker := nativeNoteSticker
 	origReporter := reporterLayout
 	origTTS := ttsSupported
-	origFonts := serifFontCandidates
 	origTarget := devMimicTargetValue
 	t.Cleanup(func() {
 		useStyledPane = origStyled
@@ -32,7 +31,6 @@ func saveMimicSeams(t *testing.T) {
 		nativeNoteSticker = origSticker
 		reporterLayout = origReporter
 		ttsSupported = origTTS
-		serifFontCandidates = origFonts
 		devMimicTargetValue = origTarget
 	})
 }
@@ -69,16 +67,17 @@ func TestMimicLinuxFlipsSeams(t *testing.T) {
 	if got := devMimicLabel(); got != "MIMIC: Linux" {
 		t.Errorf("devMimicLabel() = %q, want %q — the badge is what keeps mimic screenshots honest", got, "MIMIC: Linux")
 	}
-	for _, set := range serifFontCandidates {
-		if strings.Contains(strings.ToLower(set[0]), "georgia") {
-			t.Errorf("mimic=linux left a Georgia candidate %q — the Mac would falsely render Georgia where Linux ships DejaVu/Gelasio", set[0])
-		}
+	// There is no scripture-face seam to check any more. The reading face is
+	// embedded, so a Mac, a Windows machine and a Linux machine all draw the
+	// same Spectral and there is nothing for a mimic to approximate.
+	if f := styledPaneFont(); f == nil || !strings.HasPrefix(f.Name(), "Spectral") {
+		t.Errorf("styledPaneFont() = %v under mimic, want the shipped Spectral on every target", f)
 	}
 }
 
-// The windows target keeps the Georgia candidates (macOS loads the same family
-// Windows ships) while flipping the same behavioural seams.
-func TestMimicWindowsKeepsGeorgia(t *testing.T) {
+// The windows target flips the same behavioural seams. It no longer has
+// anything to say about the scripture face: that is shipped, not borrowed.
+func TestMimicWindowsFlipsTheBehaviouralSeams(t *testing.T) {
 	saveMimicSeams(t)
 	t.Setenv("BIBLETEXT_MIMIC", "windows")
 	devApplyMimic()
@@ -89,15 +88,7 @@ func TestMimicWindowsKeepsGeorgia(t *testing.T) {
 	if got := devMimicLabel(); got != "MIMIC: Windows" {
 		t.Errorf("devMimicLabel() = %q, want %q", got, "MIMIC: Windows")
 	}
-	georgia := false
-	for _, set := range serifFontCandidates {
-		if strings.Contains(strings.ToLower(set[0]), "georgia") {
-			georgia = true
-		}
-	}
-	if !georgia {
-		t.Error("mimic=windows dropped the Georgia candidates — Windows ships Georgia, and the Mac's copy is the honest stand-in")
-	}
+
 }
 
 // An unknown target leaves the mode off and every seam at its platform answer.

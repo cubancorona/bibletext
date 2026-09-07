@@ -10,6 +10,7 @@ package bibletext
 // recorded here on purpose as the reason the span exists.
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -129,7 +130,12 @@ func TestStyledPaneSelectedVerseSpan(t *testing.T) {
 		t.Fatalf("no selection must yield the zero span; got %+v", s)
 	}
 
-	runes := []rune(p.lay.Text)
+	// The laid-out text carries the pane's own wrap breaks, so a phrase can be
+	// split by a newline wherever a line ends. Searching the text with those
+	// breaks folded back to spaces makes these offsets independent of the
+	// reading face's metrics: a newline and a space are one rune each, so the
+	// offsets still line up with p.lay.Text exactly.
+	runes := []rune(strings.ReplaceAll(p.lay.Text, "\n", " "))
 	// Rune offset of verse 2's refrain: the copy after verse 2's number.
 	offOf := func(needle string, from int) int {
 		sub := string(runes[from:])

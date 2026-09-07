@@ -198,18 +198,20 @@ func styledPaneTextSize() float32 {
 	return size * float32(readingTextScale())
 }
 
-// styledPaneFont resolves the scripture face ONCE per process: the same
-// family iOS renders through its HTML stack (font-family: Georgia, …) — the
-// first serif loadBookFonts finds (real Georgia on Windows/macOS; on Linux
-// typically DejaVu Serif, the usual distro serif), else the embedded Gelasio,
-// Georgia's metrics-compatible OFL equivalent that the share cards already
-// carry. Never nil, so drawing and measuring always use the same face.
+// styledPaneFont resolves the scripture face ONCE per process. It is the
+// SHIPPED face now (see reading_fonts_embed.go), the same Spectral every other
+// surface sets scripture in, rather than whichever serif the operating system
+// happened to offer. Resolved once because relayout runs continuously during a
+// window drag-resize; never nil, so drawing and measuring always use the same
+// face.
 func styledPaneFont() fyne.Resource {
 	styledFontOnce.Do(func() {
-		if fonts := loadBookFonts(); fonts != nil && fonts.regular != nil {
+		if fonts := loadReadingFonts(); fonts != nil && fonts.regular != nil {
 			styledFontCached = fonts.regular
 			return
 		}
+		// Unreachable in a real build: the bytes are compiled in. Kept so a
+		// stripped test binary draws something rather than nothing.
 		styledFontCached = fyne.NewStaticResource("Gelasio-Regular.ttf", shareFontGelasio)
 	})
 	return styledFontCached

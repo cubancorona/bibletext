@@ -72,13 +72,13 @@ func TestNavBarVerticalMarginsAreEqual(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := test.NewApp()
 			defer app.Quit()
-			app.Settings().SetTheme(&bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()})
+			app.Settings().SetTheme(&bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()})
 
 			st := compactGalleryState(t)
 			w := test.NewWindow(nil)
 			defer w.Close()
 			w.Resize(fyne.NewSize(tc.w, tc.h))
-			st.window, st.app, st.theme = w, app, &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+			st.window, st.app, st.theme = w, app, &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 
 			// The bar must be laid out the way buildCompactUI lays it out — in a
 			// Border's bottom slot, full width, natural height. Sizing it by hand

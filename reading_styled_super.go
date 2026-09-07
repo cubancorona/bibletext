@@ -63,17 +63,18 @@ func (g styledSuperGeom) hits(p fyne.Position) bool {
 	return g.present && g.rect.contains(p)
 }
 
-// styledSuperFont is the face the title draws and measures with: the system
-// serif's true italic where the platform provides one, else the pane's
-// regular face (the register is then carried by the muted colour instead —
-// canvas.Text cannot synthesize italics from a single-face FontSource any
-// more than it can bold). Resolved ONCE per process, exactly like
-// styledPaneFont and for the same reason: loadBookFonts reads multi-MB font
-// files from disk and mints fresh resource pointers, and relayout runs
+// styledSuperFont is the face the title draws and measures with: a true
+// italic, which this surface now always has. It used to depend on the
+// operating system supplying one — Linux distributions often did not, and the
+// embedded fallback had no italic at all, so the Psalm title lost its register
+// and was carried by colour alone. The shipped family carries all four cuts,
+// because canvas.Text cannot synthesize an italic from a single-face
+// FontSource any more than it can synthesize a bold. Resolved ONCE per
+// process, exactly like styledPaneFont and for the same reason: relayout runs
 // continuously during a window drag-resize.
 func styledSuperFont() (fyne.Resource, bool) {
 	styledSuperFontOnce.Do(func() {
-		if fonts := loadBookFonts(); fonts != nil && fonts.italic != nil {
+		if fonts := loadReadingFonts(); fonts != nil && fonts.italic != nil {
 			styledSuperFontCached, styledSuperFontItalic = fonts.italic, true
 			return
 		}
