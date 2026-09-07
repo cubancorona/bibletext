@@ -49,7 +49,12 @@ closed.
 
 The drawn page is outside this. The verse numbers the app prints, the note
 chrome, the highlight wash and the footnote section's own furniture are the
-app's and always were. The line is whether the thing can escape into text.
+app's and always were. The line is whether the thing can escape into text —
+and several of them do, which is a defect rather than an exemption.
+
+The full accounting against this standard is docs/ADDITIONS_AND_DROPS.md: what
+the app adds that no publisher supplied, what it drops that a publisher sent,
+which of those has a recorded decision, and which has none.
 
 ## Two rules that shape the order
 
