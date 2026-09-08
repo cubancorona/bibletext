@@ -18,6 +18,8 @@ testing-track releases, tester lists and store presence - deliberately NOT
   play-publish.py tracks                       what tracks exist
   play-publish.py upload <bundle.aab> [track]  upload, assign, commit (default: internal)
   play-publish.py --dry-run upload <b> [track] everything except the commit
+  --status draft|completed                     draft is REQUIRED until the app
+                                               has been published once
 """
 import base64, json, os, sys, time, urllib.parse, urllib.request
 from cryptography.hazmat.primitives import hashes, serialization
@@ -65,6 +67,15 @@ def call(url, token, method="GET", payload=None, raw=None, content_type="applica
 def main(argv):
     dry = "--dry-run" in argv
     argv = [a for a in argv if a != "--dry-run"]
+    status = "completed"
+    if "--status" in argv:
+        i = argv.index("--status")
+        if i + 1 >= len(argv):
+            raise SystemExit("--status needs a value: draft or completed")
+        status = argv[i + 1]
+        if status not in ("draft", "completed"):
+            raise SystemExit(f"--status must be draft or completed, not {status!r}")
+        del argv[i:i + 2]
     cmd = argv[1] if len(argv) > 1 else "tracks"
     token = access_token()
 
@@ -91,9 +102,14 @@ def main(argv):
                     raw=blob, content_type="application/octet-stream")
         code = b["versionCode"]
         print(f"  uploaded versionCode {code} (sha1 {b.get('sha1')})")
+        # An app that has never been published is a DRAFT app, and Play refuses
+        # any release on it whose status is not "draft" ("Only releases with
+        # status draft may be created on draft app"). The first release of a new
+        # app therefore has to be created as a draft here and sent for review
+        # from the console; every release after the app is live is "completed".
         call(f"{BASE}/edits/{eid}/tracks/{track}", token, "PUT",
-             {"track": track, "releases": [{"status": "completed", "versionCodes": [str(code)]}]})
-        print(f"  assigned {code} to '{track}'")
+             {"track": track, "releases": [{"status": status, "versionCodes": [str(code)]}]})
+        print(f"  assigned {code} to '{track}' with status '{status}'")
         if dry:
             call(f"{BASE}/edits/{eid}", token, "DELETE")
             print("  --dry-run: edit discarded, nothing changed on Play")
