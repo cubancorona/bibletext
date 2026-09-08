@@ -95,8 +95,14 @@
 		</intent>
 	</queries>
 
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+	<!-- Only the verse-card export writes outside the sandbox, and only on the
+	     pre-scoped-storage path: shareImage publishes the PNG through MediaStore
+	     (BtBridge.shareImage), which needs no permission from API 29. Capped so a
+	     store listing does not advertise storage access every modern device
+	     ignores. READ_EXTERNAL_STORAGE came from the Fyne manifest template and
+	     had no caller anywhere in the app, so it is gone. -->
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+		android:maxSdkVersion="28" />
 	<uses-permission android:name="android.permission.INTERNET" />
 
 	<!-- Background audio (Phase 2) -->
