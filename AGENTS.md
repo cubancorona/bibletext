@@ -5,6 +5,15 @@ BibleText is a cross-platform Bible reader built from one Go module with
 for product usage, [ARCHITECTURE.md](ARCHITECTURE.md) for system design, and
 [CONTRIBUTING.md](CONTRIBUTING.md) before preparing a change.
 
+## Documentation
+
+[docs/README.md](docs/README.md) indexes every document under `docs/` by **when
+to read it**, which is the part a directory listing cannot tell you. Check it
+before assuming something is undocumented — several of these files record rules
+and checklists that are cheaper to read than to rediscover. It is held to set
+equality with the directory by `docs_index_test.go`, so a new document must be
+added to it.
+
 ## Project layout
 
 - The repository root is the shared `bibletext` library package. It is not a
