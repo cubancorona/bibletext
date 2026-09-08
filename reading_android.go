@@ -1004,7 +1004,7 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 	if state.readingFullScreen() {
 		// Shared with the iOS pane — see reading_fullscreen_row.go.
-		body := container.NewBorder(fullScreenExitRow(state), nil, nil, nil, container.NewStack(paper, host))
+		body := container.NewBorder(fullScreenTop(state), nil, nil, nil, container.NewStack(paper, host))
 		return container.NewPadded(body)
 	}
 

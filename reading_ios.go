@@ -3617,7 +3617,7 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	if state.readingFullScreen() {
 		// The row, and what it offers at each end, is shared with the Android
 		// pane (reading_fullscreen_row.go) so the two cannot drift.
-		body := container.NewBorder(fullScreenExitRow(state), nil, nil, nil, container.NewStack(paper, host))
+		body := container.NewBorder(fullScreenTop(state), nil, nil, nil, container.NewStack(paper, host))
 		return container.NewPadded(body)
 	}
 

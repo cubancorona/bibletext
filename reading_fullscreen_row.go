@@ -20,6 +20,29 @@ import (
 // mode: a quiet "Book Chapter" marker on the left so the reader keeps their
 // place, and on the right whatever that entry way owes them
 // (fullScreenExitControls). Muted so it never competes with the verse text.
+// fullScreenTop is everything above the text in the presented mode: the exit
+// row, and — only when there is one — the note banner.
+//
+// THE BANNER HAS TO BE HERE, chrome-free mode or not. On the native panes the
+// banner is only ever the notice: the sentence that tells a reader a shared
+// link's payload could not be read (docs/NOTE_WIRE_FORMAT.md rule 5). It is the
+// ONLY thing that ever says so, the in-text sticker cannot carry it because
+// there is no decoded note to hang it on, and this mode is the DEFAULT for a
+// phone held sideways. Both panes used to return before the banner call, so a
+// reader who tapped a bad link in landscape — on the two platforms where links
+// actually arrive — was handed the passage and told nothing at all.
+//
+// It costs an ordinary read nothing: buildNoteBanner returns nil when there is
+// nothing to say, and then this returns the bare row it always did.
+func fullScreenTop(state *AppState) fyne.CanvasObject {
+	row := fullScreenExitRow(state)
+	banner := buildNoteBanner(state)
+	if banner == nil {
+		return row
+	}
+	return container.NewVBox(row, banner)
+}
+
 func fullScreenExitRow(state *AppState) fyne.CanvasObject {
 	ref := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), state.pal().TextMuted)
 	ref.TextSize = 16
