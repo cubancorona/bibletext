@@ -71,12 +71,22 @@ iOS versions — which is exactly what App Store Connect seeded it from.
 
 ## Release identity and local build
 
-Before producing the 1.2.5 binary, verify that `cmd/mobile/FyneApp.toml` reads:
+Before producing a binary, verify that `cmd/mobile/FyneApp.toml` names the
+version being prepared and a build number nothing has been uploaded under. It
+still holds the numbers 1.2.5 shipped as:
 
 ```toml
 Version = "1.2.5"
 Build = 176
 ```
+
+Both are spent, so the next store release moves the ledger to 1.2.7 and to a
+build above 176, along with `cmd/desktop/FyneApp.toml`, both review-notes files,
+and a What's New file named for the new version.
+`scripts/check-release-identity.py` holds the two ledgers to one version and to
+`appstore/review-notes.txt` — and to the tag, when the release workflow passes
+one; the macOS notes and the version-named What's New file are held by
+`appstore_review_notes_test.go`.
 
 The version/build change is a separate release step; this document does not make
 it. Never rebuild changed code under an already-uploaded build number.
@@ -94,7 +104,8 @@ go vet ./...
 `release-ios.sh` derives the version and build from `FyneApp.toml`, applies the
 required Fyne patches, produces a universal archive, and does not upload unless
 `BIBLETEXT_UPLOAD=1` is explicitly set. Leave that variable unset during
-preparation. The final output must identify version 1.2.5, build 176.
+preparation. The final output must identify the version and build the ledger
+declares.
 
 Release builds intentionally contain the project's API.Bible fallback, supplied
 from the dedicated external release-key source and transformed/injected at link
@@ -115,11 +126,12 @@ icon catalog, `UIDeviceFamily=[1,2]`, `get-task-allow=false`, and
 ## Metadata — preview first, write only deliberately
 
 Editable staging files are under `build/appstore/metadata/` and are ignored by
-Git. For 1.2.5 the English (UK) set must include:
+Git. For the version being prepared the English (UK) set must include:
 
 - the current public description naming WEB, WEB Catholic, BSB, NKJV, shared
   notes, narration, and optional bring-your-own-key AI study;
-- `whats-new-1.2.5.txt` describing this release;
+- a `whats-new-<version>.txt` describing this release (`whats-new-1.2.5.txt`
+  is the newest one written);
 - current name, subtitle, keywords, promotional text, support URL, marketing
   URL, and privacy URL.
 
@@ -131,19 +143,20 @@ python3 appstore/push-metadata.py
 ```
 
 It validates every local input before making any request, resolves exactly one
-1.2.5 record and `en-GB` localization, and prints the proposed differences. It
-does not PATCH without both `--write` and an exact version confirmation. A
-network-free local validation is also available:
+record for the ledger's version and `en-GB` localization, and prints the
+proposed differences. It does not PATCH without both `--write` and an exact
+version confirmation. A network-free local validation is also available:
 
 ```bash
 python3 appstore/push-metadata.py --local-only
 ```
 
 After reviewing the remote preview, an authorized operator may repeat the
-command with `--write --confirm-version 1.2.5`. The helper reads every written
-field back and fails on a mismatch. A metadata write neither selects a build nor
-submits a version. `build/appstore/push_metadata.py` is retained only as a local
-compatibility entry point for the tracked helper.
+command with `--write --confirm-version <the version being written>`. The
+helper reads every written field back and fails on a mismatch. A metadata write
+neither selects a build nor submits a version.
+`build/appstore/push_metadata.py` is retained only as a local compatibility
+entry point for the tracked helper.
 
 For the Mac version, `--platform MAC_OS` reads the Mac description and
 promotional text from `build/appstore/metadata/en-GB/mac/` (deliberately not
@@ -158,7 +171,8 @@ for that debut alone.
 
 Each platform has its own review-notes field and its own tracked source of
 truth: `appstore/review-notes.txt` for iOS and `appstore/review-notes-macos.txt`
-for the Mac. Both must name 1.2.5, and each is held to its own platform's
+for the Mac. Both must name the version their platform's ledger declares —
+1.2.5 in both files today — and each is held to its own platform's
 FyneApp.toml by `appstore_review_notes_test.go`. Validate the local sources
 without contacting App Store Connect:
 
@@ -179,8 +193,8 @@ python3 appstore/push-review-notes.py
 ```
 
 Only an authorized operator should repeat the command with
-`--write --confirm-version 1.2.5`; the helper reads the field back and fails on
-a mismatch.
+`--write --confirm-version <that version>`; the helper reads the field back and
+fails on a mismatch.
 
 The macOS notes must additionally cover what is Mac-specific: the right-click
 Study with AI gesture, the App Sandbox and the one-time container migration
@@ -198,8 +212,10 @@ provider credentials and accurately describe fetched versus embedded text.
 
 ## Screenshots
 
-The live 1.2.2 listing has eight iPhone 6.9-inch images and eight iPad 13-inch
-images. A complete 1.2.3 replacement set is prepared locally at:
+The live listing is 1.2.5, and its images are still the eight iPhone 6.9-inch
+and eight iPad 13-inch captures made for 1.2.2: the complete 1.2.3 replacement
+set was prepared and never uploaded, so App Store Connect carried the older
+images forward with each release since. That set is prepared locally at:
 
 - `build/appstore/screenshots-iphone-1.2.3/`
 - `build/appstore/screenshots-1.2.3/`
@@ -291,13 +307,14 @@ Review rather than copy forward:
 
 ## Final read-back and submission
 
-Before a human submits 1.2.5:
+Before a human submits a version:
 
 1. Run `appstore/preflight.py` for every platform being submitted (the
    default run covers iOS only; add `--platform MAC_OS` for the Mac) and
    resolve every warning.
-2. Confirm version 1.2.5/build 176 (iOS) or desktop build 46 (Mac) and the
-   intended release mode.
+2. Confirm the version and build being submitted against that platform's
+   ledger — 1.2.5 shipped as iOS build 176 and Mac desktop build 46, and the
+   next Mac upload starts at desktop build 48 — and the intended release mode.
 3. Read back description, What's New, review notes, URLs, copyright, privacy
    answers, age rating, and screenshot order from App Store Connect.
 4. Inspect the selected build and archive evidence.

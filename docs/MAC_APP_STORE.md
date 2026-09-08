@@ -10,9 +10,9 @@ The plain desktop release — unsigned, unsandboxed, one zip per architecture �
 is unchanged and remains available beside the Store build.
 
 **Status: shipped.** The first Mac submission — 1.2.4, desktop build 44,
-uploaded 28 August 2026 — is `READY_FOR_SALE`; the second, 1.2.5 (desktop
-build 46), was submitted 3 September 2026 with the platform's first What's
-New. The listing carries both platforms and the
+uploaded 28 August 2026 — reached `READY_FOR_SALE`; so has the second, 1.2.5
+(desktop build 46), submitted 3 September 2026 with the platform's first What's
+New and now the live Mac version. The listing carries both platforms and the
 "one decision that cannot be undone" below is spent: the bundle id, the minimum
 macOS version and the sandbox posture recorded here are what the Store holds.
 Everything below is therefore a record of how it was done and what constrains
@@ -213,6 +213,11 @@ applies, with a new platform target.
   `NSWorkspace` (`external_link_darwin.go`) rather than a subprocess precisely
   so the sandbox does not refuse them, but a reviewer will click them and a
   failure is silent by nature.
-- Settle whether the bundled API.Bible key ships in a Store build. It is
-  extractable from any released binary by design, and the Store raises the
-  stakes; see `docs/API_KEY_HANDLING.md`.
+- The bundled API.Bible key does ship in a Store build; that was settled
+  before the first submission, and both Mac releases carry it.
+  `release-mac-store.sh` sources `release-bible-key.sh`, links both slices with
+  `$BIBLE_KEY_LDFLAGS`, and `verify-release-package.sh` fails the build unless
+  that payload reached the binary. The reason it needed settling has not gone
+  away — the key is extractable from any released binary by design, and the
+  Store raises the stakes — so what remains open is the provider coordination
+  recorded in `docs/API_KEY_HANDLING.md`, not the packaging decision.

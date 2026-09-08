@@ -152,9 +152,14 @@ under the last visible line of the highlight, re-pinned on resize.
   translation switch.
 - **App compose** — done, "Share with note" on all four menu surfaces. The note
   also goes into the shared message body.
-- **Persistence** (`notes_store.go`) — done: one note per version+book+chapter,
-  minimize and delete recorded in the store, picked up again in
-  `addRecentChapter`, so a note returns on a later visit and survives relaunch.
+- **Persistence** (`notes_store.go`) — done: at this point one note per
+  version+book+chapter, minimize and delete recorded in the store, picked up
+  again in `addRecentChapter`, so a note returns on a later visit and survives
+  relaunch. The one-note-per-passage key did not last. The store is ID-keyed
+  now: `StoredNote` records in a line-framed `notes.store` blob, each with an
+  `ID` minted from a persisted counter that a delete never frees for reuse, so
+  a passage holds as many notes as arrive on it and every verb addresses one
+  record rather than a key rebuilt from where the reader is standing.
 - **iOS bubble** — done, as a native sticker (below).
 - **Notes browser** (`notes_browse.go`) — done, on the SEARCH tab, not in
   Settings. A note is a message about a passage, so the only thing to do with
@@ -188,7 +193,14 @@ under the last visible line of the highlight, re-pinned on resize.
   release pipelines never opt in. Build with `run-ios-device.sh --dev`.
 - **macOS / Android / desktop bubbles (recorded snapshot)** — were not done at
   this point in the implementation history. Those platforms then fell back to
-  a dismissable card over the passage.
+  a dismissable card over the passage. They have since caught up, and each
+  draws the note in the text rather than over it: macOS has the NSTextView
+  twin of the iOS sticker (`reading_macos.go`), Android has a TextView sticker
+  in both of its reading modes (`BtBridge.setNote`), and the Windows/Linux
+  styled pane draws its own band, card and tail in pure Fyne
+  (`reading_styled_note.go`). What each of them draws is the chapter's whole
+  SET, not one note — the open note as the bubble, every other note on the
+  passage as a chip or a per-paragraph pill.
 
 ### The iOS sticker, and why it was not HTML
 

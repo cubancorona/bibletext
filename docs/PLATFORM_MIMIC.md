@@ -44,7 +44,6 @@ pattern — flipped once at startup by `devApplyMimic` (called first thing in
 | `reporterLayout` | false | The styled pane applies its own **width-gated** reporter typesetting (wide pane → centred 27.5em, 1.3 leading, geometric indent; narrow → cozy 1.55), exactly the target platforms' truth. |
 | `ttsSupported` | false | No "Read aloud" source row, and **no audio button at all** on chapters without a recording (licensed versions, the deuterocanon) — the most visible Win/Linux audio difference, in the reading header. |
 | `nativeNoteSticker` | **true** (not pinned — it follows `useStyledPane`) | Shared notes render as the styled pane's own **in-text sticker** (`reading_styled_note.go`): one card drawn in a band above the note's verse, with a speech tail pointing at the passage, the byline and "K of N in this chapter ›" counts on one row, the sender's words below, and − / ✕ at the top right — the exact Win/Linux surface since 19 Aug. `dev_mimic_on.go` no longer assigns this seam at all: it asks "does the pane draw the note itself?", and `useStyledPane` (set two lines above it) already answers yes. What still comes from the Fyne **banner** on those platforms, and so under mimic: the could-not-read-the-payload **notice**, and the **R4 unplaced** rows, whose sentence does not fit a one-band sticker. |
-| `serifFontCandidates` | linux target only | The Georgia candidates are dropped, so the pane falls to the embedded Gelasio — the app's own no-serif-found path. See the caveat below. |
 | Share verbs | fallback bodies | `nativeShareText`/`nativeShareImage` on darwin route to the real Win/Linux bodies (`share_fallback.go`): clipboard + notice popup, save-to-`~/Downloads` + file-manager reveal (`open -R` stands in for Explorer/xdg-open). |
 
 Also active by construction (safe, unconditional two-line delegations added to
@@ -55,10 +54,20 @@ styled helpers on the UI goroutine exactly as `readalong_other.go` does.
 
 **Identical by construction (checked, not skipped):** keystore
 (preferences-backed on every desktop), cache paths, open-URL/pasted-link
-handling, device class, overlay recovery, the lifecycle close-intercept +
-reading-state flush. These are the *same code* on macOS and Windows/Linux, so
-mimic does not touch them. (Storage *locations* differ per OS — `%AppData%` vs
-`~/Library` vs `~/.config` — but that is the OS, not app behaviour.)
+handling, device class, overlay recovery, the reading face, the lifecycle
+close-intercept + reading-state flush. These are the *same code* on macOS and
+Windows/Linux, so mimic does not touch them. (Storage *locations* differ per OS
+— `%AppData%` vs `~/Library` vs `~/.config` — but that is the OS, not app
+behaviour.)
+
+The reading face is on that list because the divergence it used to stand for
+is gone. The scripture text was once set in whichever serif the host offered —
+Georgia, DejaVu Serif or Gelasio — so a font-candidate seam was part of this
+mode, and mimic=linux dropped the Georgia candidates to reach the app's own
+no-serif-found path. The faces are now embedded and shipped
+(`reading_fonts_embed.go`), so Windows, Linux and macOS all draw the same type
+and there is no scripture-face seam left to flip — `dev_mimic_on.go` says
+exactly that where the seam used to be assigned.
 
 **Harmlessly present, exercising nothing:** `syncNativeAIMenu` still sets a C
 flag no menu reads (the native selection menu never exists under mimic); the
@@ -91,11 +100,6 @@ into.
   supplies the macOS title bar, application menu and Cmd (vs Ctrl) below any
   app seam. Functionally trivial here (the only shortcuts are Find-focus and
   Escape), but never read a mimic screenshot's title bar as evidence.
-- **Linux font inventory.** Mimic=linux drops to the embedded Gelasio when the
-  macOS host does not expose DejaVu Serif at the Linux paths — the **Linux face
-  is approximated**, and real fontconfig/distro variation is not reproducible
-  here; only the shipped candidate chain is. (Mimic=windows is a near-exact
-  match: macOS loads the same Georgia family Windows ships.)
 - **OS integration endpoints.** Explorer `/select` vs `xdg-open` vs the Mac's
   `open -R`, what the default browser is, whether `libasound` is present,
   desktop-portal behaviour — properties of the target OS, not the binary.
@@ -112,13 +116,22 @@ into.
   the revert; the primary mimic is already truthful for `redLetterSupported`
   (true on both sides while the styled pane ships), so no red-letter routing
   was needed either.
-- A bundled **DejaVu Serif** embed for mimic=linux. The ~350 KB dev-only embed
-  was rejected in favor of the Gelasio approximation and this caveat.
+- A bundled **DejaVu Serif** embed for mimic=linux, back when the Linux face
+  was whatever serif the host happened to hold. The ~350 KB dev-only embed was
+  rejected in favor of the Gelasio approximation and a caveat; the question
+  closed for good when the reading faces themselves became embedded, identical
+  on every platform and so nothing for a mimic to approximate.
 
 ## Tests
 
-- `dev_mimic_test.go` (dev tag): seam flips per target, font-candidate
-  handling, unknown-target inertness, and the styled pane actually building —
-  verses visible in the Fyne tree — on the darwin host.
+- `dev_mimic_test.go` (dev tag): seam flips per target, the linux target
+  still resolving the shipped reading face (the one thing the retired font
+  seam used to change; the windows test says outright that it has nothing
+  left to say about the face), unknown-target inertness, and the styled pane
+  actually building — verses visible in the Fyne tree — on the darwin host.
 - `dev_mimic_guard_test.go` (release-shaped): with `BIBLETEXT_MIMIC` set, the
-  switch is absent and every seam still answers its platform constant.
+  switch is absent and the seams it checks — `useStyledPane`,
+  `sheetConsumeClosure`, `nativeNoteSticker`, `ttsSupported` — still answer
+  their platform answer: a bare constant for three of them, and for
+  `nativeNoteSticker` the constant OR `styledPaneEnabledOnPlatform`, because
+  that seam is composed rather than pinned.

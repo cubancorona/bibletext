@@ -76,6 +76,18 @@ Actions deploy of the main site — better long-term shape but its *first* deplo
 replaces the entire live tree of the site that must not break; available later
 as a deliberate migration. Subdomain URLs are also shorter in messages.
 
+That alternative is what shipped, and not later: no subdomain and no second
+repository are in use, and the reader lives at the ROOT of bibletext.co.uk
+(`/web/`, `/bsb/`, `/webc/`), sharing the namespace with the hand-written
+landing, privacy and support pages rather than sitting under `/read/`. What
+makes the risky first deploy safe is `scripts/publish-site.sh`, the only
+publisher: it generates the reader and renders the project pages into one
+tree, refuses to go on unless the per-version chapter counts are exact and the
+CNAME, `.nojekyll`, the app-association files and all three root pages are
+present, and only then mirrors that whole tree onto `gh-pages`. Because it
+writes both halves at once, neither can delete the other — which a hand-copied
+publish of either one would do.
+
 ## The URL contract (forever-frozen; links in old messages must never break)
 
     https://bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
@@ -128,7 +140,9 @@ as a deliberate migration. Subdomain URLs are also shorter in messages.
    local preview; render tests.
 3. **M3 — deploy**: create `bibletext-reader` repo, Pages via Actions,
    staging check on `*.github.io`, then the DNS CNAME + domain verification;
-   DNS changes require explicit authorization.
+   DNS changes require explicit authorization. Shipped instead as one
+   publisher for the existing site — `scripts/publish-site.sh` — so there was
+   no new repo, no subdomain and no DNS change to authorize.
 4. **M4 — app wiring**: the three share menus + share composition; full
    matrix + phone build.
 5. **M5 — polish & review**: visual pass against the app side-by-side, docs
@@ -137,14 +151,18 @@ as a deliberate migration. Subdomain URLs are also shorter in messages.
 ## Decisions needed ⚖
 
 1. **Domain**: `read.bibletext.co.uk` (recommended) vs `bibletext.co.uk/read/`
-   (requires the risky unified-deploy migration of the main site).
+   (requires the risky unified-deploy migration of the main site). Settled the
+   second way, and further: the reader is served from the ROOT of
+   bibletext.co.uk rather than under `/read/`, and the unified deploy is
+   `scripts/publish-site.sh`.
 2. **Generator**: confirm the Go `cmd/websitegen` recommendation over a JS
    framework (reverses the initial client-framework instinct — reasoning
    above).
 3. **Versions at launch**: all three PD versions (recommended) or WEB only?
 4. **Defer** client-side search and audio streaming (both fit the contract
    later; the audio mirror even serves range-seekable MP3s) — recommended.
-5. New repo name: `bibletext-reader`?
+5. New repo name: `bibletext-reader`? Moot — no second repository was created;
+   the site is published from this one, to its `gh-pages` branch.
 
 ## Known risks
 

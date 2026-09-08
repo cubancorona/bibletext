@@ -35,6 +35,10 @@ pure already exists in the codebase (the red-letter side table); and the
 presentation that honours that standard is the one the notes feature
 already established.
 
+The NKJV half of that verdict did not survive the probe in §8: that feed has no
+translator footnotes to gate, only cross-references, which are captured and left
+dark.
+
 ## 1. What the data holds (measured, not assumed)
 
 Fetched and analysed the complete corpus for all three helloao translations:
@@ -117,6 +121,11 @@ off switch. For this app, ranked:
    notes-browser mould — cheapest possible build, identical everywhere.
    Weakness: the reader can't see which word carries a note (rows can bold
    the annotated word to compensate).
+   **Superseded by §9**: the marker-free half of this was adopted and the
+   sheet was not. The notes are keyed by verse in a rule-separated section at
+   the chapter's bottom, in the page itself, which keeps the purity property
+   whole — Scripture above the rule is byte-identical with the section on or
+   off — without a second surface to open.
 2. **Step two, opt-in refinement — one quiet marker glyph, tap-to-peek.**
    A single repeated muted glyph (the BSB's own `+`/asterisk convention,
    ~0.6em, `pal.TextMuted` — visually *subordinate* to the semibold verse
@@ -175,9 +184,9 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   failure. The decoder now skips `note` nodes explicitly, pinned by
   `TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes`. This guard is worth
   having whether or not footnotes ever ship.
-- **Unverified** (deliberately): the live shape of NKJV notes. One
-  manually-run call against the release credential captures the ground
-  truth:
+- **Unverified** (deliberately) when this section was written: the live shape
+  of NKJV notes. One manually-run call against the release credential
+  captures the ground truth:
 
   ```
   KEY="$(security find-generic-password -a release -s uk.co.bibletext.apibible-release -w)"; curl -sS -H "api-key: $KEY" 'https://rest.api.bible/v1/bibles/63097d2a0a2f7db3-01/chapters/JHN.3?content-type=json&include-notes=true' > /tmp/jhn3-notes.json
@@ -185,6 +194,13 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 
   (John 3 because the print NKJV carries NU-Text notes at 3:13 and a *Lit.*
   note at 3:20.)
+
+  **That call has since been made, and it refutes this section's premise:**
+  the feed carries no translator footnotes at all — only cross-references —
+  so there is no NKJV apparatus to gate, and `include-notes=true` (now the
+  standing request) captures a cross-reference apparatus instead. The probe
+  and its consequences are recorded in §8; the reasoning above is kept
+  because it is why the probe was run before any licensing was pursued.
 - **Licence**: nothing public says whether the Starter grant covers
   *displaying* Thomas Nelson's apparatus, whether selective display
   (markers in text, bodies in a labelled panel, off by default) satisfies
@@ -198,12 +214,17 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    superscription-anchored bodies for now; helloao translations only.
 2. **Phase 1**: decode + store + the per-chapter "Translation notes" sheet,
    OFF by default. No markers anywhere; every purity property holds by
-   construction; one new sheet, identical on all platforms.
+   construction; one new sheet, identical on all platforms. *Shipped, but as
+   §9's chapter-bottom section rather than a sheet: same marker-free
+   property, same off-by-default, built into the reading pane instead of
+   beside it.*
 3. **Phase 2 (opt-in, later)**: the quiet marker + tap-to-peek, surface by
    surface — web reader first, Apple panes next, styled pane, Android last
    (after the BtBridge scan fix).
 4. **NKJV notes**: only after the API.Bible answers arrive, and after the
-   one-call probe confirms the feed carries them.
+   one-call probe confirms the feed carries them. *The probe found none: the
+   feed carries cross-references only, which are captured and stay dark
+   (§8).*
 
 ## 7. Open decisions
 
@@ -266,7 +287,10 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
 
 ### Open questions (superseding §7)
 
-1. Whether Phase 1 presentation (the per-chapter sheet) ships, and when.
+1. Whether Phase 1 presentation (the per-chapter sheet) ships, and when —
+   **answered by §9 and §10**: it ships as the chapter-bottom section rather
+   than a sheet, off by default, everywhere `footnoteSectionSupported` is
+   true.
 2. The omitted verses: whether an empty verse number one day appears with
    its explanatory note, or stays silent as today.
 3. NKJV crossrefs: display eventually, or leave captured-but-dark.

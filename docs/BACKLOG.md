@@ -1,7 +1,11 @@
 # Backlog
 
-Deferred work, one entry per item. An entry carries enough scope to be picked
-up cold; delete it when the work lands.
+Deferred work, one entry per item, and the record of the work that has closed.
+An entry carries enough scope to be picked up cold. The rule here was to delete
+an entry when the work landed; it is kept instead — marked DONE, or FIXED with
+the date — and says what shipped and why. Closed entries earn their place: this
+is the file to read before re-investigating a defect that may already be fixed,
+and a fix's reasoning is the expensive half to reconstruct.
 
 ## Phone landscape reading — shipped on both phone platforms — DONE
 
@@ -188,6 +192,14 @@ Two spaces remain to enumerate, both scouted with the cells already chosen:
 - **The download space** — `fullPending` x `seedOnly` x `fullDownloading` x
   backoff delay, across the apply / retry / foreground / picker-open events,
   built on an `AppState` literal.
+
+Both have since been enumerated. The launch space went in joined to reading
+position and canon shape rather than alone (`version_launch_flow_test.go`,
+M5 x M6 x M7), because the failure it was built for lives in that intersection
+and in none of the three separately; the block below is its record. The
+download space went in as M3, refresh and download
+(`version_refresh_flow_test.go`): 160 cells over those axes plus the active
+version, and 310 journeys to depth four.
 
 ### Reported defects — status, severity, and the order to take them
 

@@ -374,9 +374,91 @@ one widget tree, and the static website generator. All five consult the same
 | static website | generated reader pages | `cmd/websitegen/render.go` |
 
 The styled desktop pane colours whole TOKENS, the other four split at rune
-level. Two BSB spans end mid-token (Mark 7:34, Acts 20:35), so that pane paints
-3 characters red there that the others leave black. Deliberate, and the only
-known cross-platform difference.
+level, so wherever a publisher's span ends inside a token that pane paints the
+rest of the token red and the other four leave it black. Deliberate: a span
+that stops one rune short would otherwise drop the colour off a quotation's
+closing mark, which reads as a rendering fault rather than as an editorial
+line. It is the only known cross-platform difference.
+
+Two BSB spans were once thought to be the whole of it, at 3 characters: Mark
+7:34, whose span ends inside `opened!”).`, and Acts 20:35, inside `receive.’”`.
+Both are real, but they are not the whole of it. Recomputing the tokens against
+the shipped tables and the app's own decoded text finds more, all of the same
+kind **[measured]**:
+
+| edition | verses | runes |
+| --- | --- | --- |
+| WEB | 11 | 16 |
+| WEB Catholic | 11 | 16 |
+| BSB | 12 | 16 |
+| NKJV | not measurable here | — |
+
+Every one is closing punctuation left outside a span that ends on the word, and
+the shapes are not one class: of the 48 runes, 28 are a closing double quotation
+mark (`receive.’”`), 18 — over a third — are a question mark, either with no
+quotation mark after it (`while’?`, `up’?`) or standing before one
+(`Father’?”`), and the last two are the closing bracket and full stop of Mark
+7:34's `opened!”).`
+
+The rule is the one the pane itself uses: take each edition's span table
+(`red_letter_*_data.go`), accept a verse only where its rune count and FNV-1a
+fingerprint match the cached text, as `tableSpansFor` does; cut the text into
+maximal non-whitespace tokens, as `verseTokenSpans` does; and count the runes
+that are not inside a span but sit in a token that is. From the repository root,
+against the app's own decoded caches:
+
+```sh
+python3 - ~/Library/Caches/bibletext/bibletext-web-v*.json \
+          ~/Library/Caches/bibletext/bibletext-webc-v*.json \
+          ~/Library/Caches/bibletext/bibletext-bsb-v*.json <<'PY'
+import collections, json, re, sys
+
+def table(go, name, cell):                    # read a generated map as data
+    body = open(go).read().split("var %s = map[string]" % name, 1)[1]
+    body = body[body.index("{") + 1:body.index("\n}\n")]
+    rows = (re.match(r'\s*"(.+?)":\s*(.*?),?\s*$', ln) for ln in body.splitlines())
+    return {m[1]: cell(m[2]) for m in rows if m}
+
+def fnv1a(s):                                 # redLetterTextHash, over bytes
+    h = 0xcbf29ce484222325
+    for b in s.encode():
+        h = ((h ^ b) * 0x100000001b3) & 0xffffffffffffffff
+    return h
+
+hist, totals = collections.Counter(), [0, 0]
+for cache, go, ed in zip(sys.argv[1:],
+                         ("red_letter_web_data.go",) * 2 + ("red_letter_bsb_data.go",),
+                         ("web", "webc", "bsb")):
+    span = table(go, ed + "RedLetterSpans",
+                 lambda s: [(int(a), int(b)) for a, b in re.findall(r"\{(\d+), ?(\d+)\}", s)])
+    runes = table(go, ed + "RedLetterRunes", lambda s: int(s, 0))
+    hashes = table(go, ed + "RedLetterHashes", lambda s: int(s, 0))
+    hit = [0, 0]
+    for book in json.load(open(cache))["data"]["Verses"].values():
+        for chapter in book.values():
+            for v in chapter:
+                key = "%s %d:%d" % (v["BookName"], v["Chapter"], v["Verse"])
+                text = v["Text"]
+                if key not in span or len(text) != runes[key] or fnv1a(text) != hashes[key]:
+                    continue                  # tableSpansFor's own guard
+                red = [any(a <= i < b for a, b in span[key]) for i in range(len(text))]
+                over = [text[i] for tok in re.finditer(r"\S+", text)
+                        if any(red[tok.start():tok.end()])
+                        for i in range(*tok.span()) if not red[i]]
+                hit[0] += bool(over)
+                hit[1] += len(over)
+                hist.update(over)
+    print(ed, hit[0], "verses,", hit[1], "runes")
+    totals = [totals[0] + hit[0], totals[1] + hit[1]]
+print("total", totals[0], "verses,", totals[1], "runes;", dict(hist))
+PY
+```
+
+The NKJV cannot be counted in this repository, which holds that edition's
+offsets but not the licensed text they index; the count needs a decoded NKJV
+cache, which is never committed. An earlier pass that had one measured 48 verses
+/ 82 runes across all four editions, which is consistent with the three counted
+above if the NKJV carries the remaining 14 verses / 34 runes.
 
 ### Regenerating the data
 

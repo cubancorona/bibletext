@@ -245,9 +245,12 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   an Android instrumentation test.
 
 - **Bible cache**: `os.UserCacheDir()` has no writable target on Android, so
-  `defaultCachePath()` uses Fyne's per-app storage there
-  (`cache_path_android.go` → `/data/data/uk.co.bibletext/files/fyne/`). Without
-  it the app re-downloaded the Bible every launch and couldn't work offline.
+  `defaultCachePath()` asks `appStorageDir()` for one (`cache_path_android.go`
+  → `/data/data/uk.co.bibletext/no_backup/bibletext/`, reached by walking up
+  from Fyne's `files/fyne` storage root). Without it the app re-downloaded the
+  Bible every launch and couldn't work offline; the caches sit outside `files/`
+  so Android's Auto Backup cannot carry them off the device — see "Where the
+  Bible caches live, and why it is not files/".
 - **Hardware-key doubling (upstream Fyne)**: characters typed through the
   HARDWARE key path arrive doubled in Fyne entries ("sheep" → "sshheeeepp") —
   Fyne processes both the raw key event and the IME echo. On-glass touch typing

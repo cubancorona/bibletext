@@ -161,12 +161,18 @@ regression even if every existing test stays green.
 `share_link_flow_test.go` walks the cross-product of the app-side variables — 48
 states — driving `HandleShareLink` from a real URL, and asserts I1: every state
 opens the passage, says something, or parks a target that will do one of those.
-The four that do none of it are pinned by name, and the assertion is on set
-*equality*, so it fails when a dead end appears **and** when one is fixed without
-being struck off here and in this document.
+Any state that does none of it must be pinned by name in `knownBlocked`, and the
+assertion is on set *equality*, so it fails when a dead end appears **and** when
+one is fixed without being struck off here and in this document. The pinned list
+held four — every combination where the target book was not in the loaded canon —
+until Batch 1 gave each of them something to say: a park with a reason where a
+download can still supply the book, and a plain "it isn't in this translation"
+where none can. **It is now empty**, and the machinery is kept rather than
+deleted because that is the strongest form of the assertion.
 
-It is mechanically checked: introducing a new dead end takes the blocked count
-from 4 to 26 and turns it red.
+It is mechanically checked: with nothing pinned, a single new dead end anywhere
+in the 48 takes the blocked count off zero and turns it red, naming the
+combination that reaches it.
 
 **It cannot reach the handoffs.** H1–H5 are OS and platform behaviour — an App
 Store install, Safari's same-domain rule, whether the OS offers a browser

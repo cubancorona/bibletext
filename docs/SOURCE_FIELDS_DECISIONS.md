@@ -38,10 +38,11 @@ shared text and images, in copied text, in the link payload, on the website,
 and they are read aloud. A search for "beth" matches Psalm 119:8.
 
 The app already treats this as a defect in the other direction. The NKJV
-decoder drops the acrostic style on purpose, its comment records that these
-headings once leaked into verse text, and the live canon test asserts that
-Psalm 119:1 does not contain "Aleph". The NKJV canon is clean; the two WEB
-editions are not.
+decoder keeps the acrostic style out of verse text on purpose — it holds the
+letters in the chapter's side-band as headings, under their own style name —
+its comment records that these headings once leaked into verse text, and the
+live canon test asserts that Psalm 119:1 does not contain "Aleph". The NKJV
+canon is clean; the two WEB editions are not.
 
 **Fix it.** Route descriptive runs out of verse text into the chapter's
 side-band, where superscriptions already live, and ignore a Hebrew subtitle
@@ -53,50 +54,72 @@ follow that decision.
 
 ### 2. The paragraph rule ignores curly quotation marks
 
-Paragraphs are made by one shared function: a break happens once the
-paragraph has reached 320 characters and the previous verse ends in a full
-stop, exclamation mark, question mark, or a straight quotation mark. The text
-uses curly quotation marks, so a verse that closes reported speech is not
-recognised as a place to break, and the paragraph runs on.
+The rule this describes no longer exists, and the figures below are why it went
+rather than why it was mended. Paragraphs were made by one shared function: a
+break happened once the paragraph had reached 320 characters and the previous
+verse ended in a full stop, exclamation mark, question mark, or a straight
+quotation mark. The text uses curly quotation marks, so a verse that closed
+reported speech was not recognised as a place to break, and the paragraph ran
+on.
+
+The character count was removed outright rather than kept as a fallback, once
+every edition could be paragraphed from its publisher's own marks (item 5). The
+shared function now opens a paragraph only where a verse carries the
+publisher's paragraph start, so a chapter a publisher left unbroken stays
+unbroken.
 
 | edition | break points past the length threshold | refused only for a curly quote |
 |---|---|---|
 | BSB | 11,536 | 2,094 (18.2%) |
 | WEB | 11,978 | 2,272 (19.0%) |
 
-Nearly a fifth of eligible breaks are suppressed by a character class the
-rule does not know. Every edition and every surface is affected, because they
-all funnel through this one function. It is a one-line fix and needs no cache
-epoch bump, since paragraphs are computed at render time.
+Nearly a fifth of eligible breaks were suppressed by a character class the
+rule did not know. Every edition and every surface was affected, because they
+all funnel through this one function. The one-line fix was made first — the
+curly closing marks were added to the suffix test — and cost no cache epoch,
+since paragraphs are computed at render time. The rule it mended was then
+retired entirely.
 
 ### 3. The NKJV names Jesus in capitals in four verses
 
-The decoder renders a small-caps span as full uppercase, which is right for
-the divine name and reassembles the source's split letters into GOD. Across
-the canon that yields LORD 6,504 times and GOD 308 times, plus a set of
+The decoder rendered a small-caps span as full uppercase, which was right for
+the divine name and reassembled the source's split letters into GOD. Across
+the canon that yielded LORD 6,504 times and GOD 308 times, plus a set of
 genuine inscriptions that print also capitalises: the notice on the cross in
 all four Gospels, the writing on the wall in Daniel 5, "HOLINESS TO THE LORD"
 on the priest's plate and the horses' bells, "THE LORD OUR RIGHTEOUSNESS",
 "THE LORD IS THERE", "TO THE UNKNOWN GOD", and the names written in
-Revelation 17 and 19. All of those read correctly.
+Revelation 17 and 19. All of those read correctly. The inscriptions still do,
+and always did so on their own: they carry no span at all and are literal
+capitals in the feed.
 
-Four verses are the exception, and they are the only ones: Matthew 1:21,
-Matthew 1:25, Luke 1:31 and Luke 2:21 each now read "call His name JESUS".
+Four verses were the exception, and they were the only ones: Matthew 1:21,
+Matthew 1:25, Luke 1:31 and Luke 2:21 each read "call His name JESUS".
 The feed marks the name with the same small-caps style it uses for the divine
-name, and the app has no small caps, so it uppercases.
+name, and the app had no small caps, so it uppercased.
 
 This is not a defect. The publisher marks those four names with the
 small-caps style deliberately, and its own web edition sets them in small
-caps. The app has no small caps: it folds a small-caps span to uppercase in
+caps. The app had no small caps: it folded a small-caps span to uppercase in
 the stored text, which is the standard plain-text rendering of small caps and
-the same treatment that yields LORD for the divine name. The output is a
+the same treatment that yielded LORD for the divine name. The output was a
 faithful flattening of what the publisher set.
 
-The residue is typographic, not textual. Drawing true small caps would mean
-keeping the text in mixed case and applying the style at render time, and
-today the uppercase IS the text — which is what makes a search for LORD
-behave, and what keeps sharing, speech and links agreeing with the page. No
-change is recommended.
+The residue was typographic, not textual, and the recommendation was to leave
+it: drawing true small caps would mean keeping the text in mixed case and
+applying the style at render time, and the uppercase WAS the text — which is
+what made a search for LORD behave, and what kept sharing, speech and links
+agreeing with the page.
+
+That recommendation has been overtaken, and by a route it did not consider.
+The span is kept as offsets, so the stored text is the publisher's own casing
+again; the small capitals are real Unicode CHARACTERS substituted into the
+drawn runs, which preserves the rune count exactly; and text on its way out of
+the app is mapped back to ordinary capitals, which is the conventional
+plain-text realisation this defect was arguing for all along. Search, sharing,
+speech and links therefore behave as before, and these four verses are set in
+small capitals like every other marked span. Nothing here was wrong; it simply
+assumed that keeping the typography meant changing the text, and it does not.
 
 ## Decision table
 
@@ -107,11 +130,11 @@ edition to download the text again.
 | # | item | editions | what is lost today | recommendation | effort | epoch | confidence |
 |---|---|---|---|---|---|---|---|
 | 1 | acrostic letters in verse text | WEB, WEBC | 21 verses plus one false title | fix | S | web, webc | high |
-| 2 | curly quotes in the paragraph rule | all | ~2,100 breaks per edition | fix | XS | none | high |
-| 3 | "JESUS" in capitals | NKJV | nothing; the publisher marks it | no change | — | none | high |
-| 4 | section headings | BSB, WEBC, NKJV | 3,091 / 5 / about 3,300 | capture and render behind a toggle | M–L | bsb, webc, later nkjv | medium |
-| 5 | source paragraph boundaries | all | 13,894 BSB breaks, 742 WEB | honour as extra breaks, keep the rule as fallback | M | three helloao | medium-high |
-| 6 | italics for supplied words | NKJV | about 3,000 in the New Testament | generate the table, then design the run type | M–L | none | medium |
+| 2 | curly quotes in the paragraph rule | all | ~2,100 breaks per edition | fix — SHIPPED, and the rule it mended has since been removed altogether | XS | none | high |
+| 3 | "JESUS" in capitals | NKJV | nothing; the publisher marks it | no change — SINCE OVERTAKEN: the uppercasing is gone, the span is kept as offsets and drawn in small capitals | — | nkjv (spent) | high |
+| 4 | section headings | BSB, WEBC, NKJV | 3,091 / 5 / about 3,300 | capture and render behind a toggle — SHIPPED on all four editions and all four surfaces, but with neither the toggle nor the shape guard | M–L | bsb, webc, nkjv (all spent) | medium |
+| 5 | source paragraph boundaries | all | 13,894 BSB breaks, 742 WEB | honour as extra breaks, keep the rule as fallback — SHIPPED, except that the rule was removed rather than kept | M | three helloao, plus nkjv (all spent) | medium-high |
+| 6 | italics for supplied words | NKJV | about 3,000 in the New Testament | generate the table, then design the run type — SHIPPED as decoder-kept offsets rather than a generated table, and the run type carries the two dimensions | M–L | nkjv (spent), not none | medium |
 | 7 | poem indent depth | all | every second-level line | keep skipping | — | — | medium |
 | 8 | Selah placement | WEB, BSB | set differently in each | keep the source's placement | — | — | medium |
 | 9 | descriptive runs | BSB | one oracle title | capture with item 1 | S | with item 1 | medium |
@@ -167,6 +190,14 @@ indexes must learn to exclude a heading paragraph. That last part is the same
 class of change as the selection-over-wash work, so it deserves a device pass
 over a mid-chapter heading before it ships.
 
+Capture and rendering both shipped, and the shared-model-first order held: one
+block model decides a chapter's order as heading-then-paragraph and all four
+surfaces read it. The toggle and the shape guard did not ship. So a heading is
+drawn on every surface with no way to turn it off, and the fused 510-character
+Greek Daniel 3 string is drawn whole, which is the one case this recommendation
+was written to catch. Both are still worth doing, and the guard is the cheaper
+and the more urgent of the two.
+
 ### Source paragraph boundaries
 
 The two editions differ enormously in how much paragraphing they carry, which
@@ -207,6 +238,14 @@ same pass, because the fallback keeps running inside long unmarked stretches.
 One design question is open: whether a source break also resets the length
 counter. The NKJV needs new decoder work to detect a verse that opens a
 paragraph block, so it should follow rather than hold up the rest.
+
+The flag and the one branch are what shipped, and the NKJV followed rather than
+held up the rest, exactly as sequenced. The fallback did not survive: with all
+four editions paragraphed from their publishers' own marks there was nowhere
+left for a character count to fire that a publisher had not deliberately left
+unbroken, so the rule was deleted instead of demoted, and the open design
+question about resetting the counter went with it. A chapter no publisher broke
+is now one paragraph, which is what such a chapter is in print.
 
 ### Poem indent depth
 
@@ -359,11 +398,22 @@ batched with another decoder change rather than spent alone.
 touching the decoder, run the five-call probe below to find out how many
 notes the heading skip is discarding.
 
+The NKJV did follow the BSB, and it now follows it all the way: the headings are
+captured with the publisher's own style name — 2,721 of them, 2,674 section
+heads and 47 acrostic letters — and drawn by the same block model every other
+edition uses. Two things about that are worth saying plainly. The epoch was
+spent, batched with the capture; drawing costs none. And the block model is
+edition-blind, so nothing in the drawing path consults this edition's licensing
+at all — the sequencing this recommendation asked for is not enforced anywhere
+in the code, and holds only for as long as someone remembers it. The probe was
+never run; what the skip was discarding is moot now that a note inside a heading
+is kept on the heading, but the count is still unknown.
+
 ### Italics: the translators' supplied words
 
 The NKJV inherits the King James convention of italicising words supplied for
 English sense, which are not in the Hebrew or Greek. The feed marks them; the
-decoder flattens them.
+decoder flattened them, which is the loss this section was written about.
 
 In the 174 chapters available offline there are 2,244 such spans across 1,661
 verses, most often a supplied copula or pronoun ("For My yoke *is* easy") and
@@ -392,6 +442,16 @@ a verse cannot degrade to whole-verse italic.
 
 **Worth doing, in two steps.** Generate and pin the table first, which is
 mechanical. Then design the two-dimension run type before touching any pane.
+
+Both steps are done, and the first took a different road. There is no generated
+table: the decoder keeps the `it` spans as rune offsets on the verse itself
+(`Verse.Supplied`), which is the same licensing category — offsets, never
+characters, so the stored text is byte-identical whether they are captured or
+not — and costs an NKJV epoch instead of a generator run. The second step went
+as described: the run type carries red and italic as two independent
+dimensions, the supplied spans SPLIT the runs and the small capitals substitute
+characters within them, and every surface draws the result, the token-level
+styled pane included.
 
 ### The apparatus
 
@@ -431,7 +491,9 @@ Scripture, because dropping an unlisted Scripture span is the worse failure.
 
 ## Downstream surfaces
 
-**The website** renders verses only. Psalm titles are ready to ship: the
+**The website** rendered verses only when this was written; it draws the
+publisher's section headings now, and still nothing else beside the verses.
+Psalm titles are ready to ship: the
 accessor is already exported, the change is an italic line ahead of the verse
 loop and one style rule, and no URL changes, so the frozen contract is not
 touched. The footnote section is a larger question, because the site has no
@@ -474,10 +536,13 @@ off.
 ## Recommended order of work
 
 The worklist that tracks this, item by item with a status, is
-`docs/SCRIPTURE_WORKLIST.md`. The order below is its stages.
+`docs/SCRIPTURE_WORKLIST.md`. The order below is its stages. It is kept as
+written, with what has since been done marked, because the order was the
+argument: several of these ran ahead of their place in it, and the last two
+entries are where that shows.
 
 1. **Defect 2**, the curly quotation mark. One line, no epoch, improves every
-   edition on every surface immediately.
+   edition on every surface immediately. DONE, and then superseded by 6.
 2. **Defect 1**, the acrostic leak, with descriptive-run capture. Removes
    wrong text from search, sharing and speech. Epochs for `web` and `webc`.
 3. **The defensive checks**, all of them together, so the four editions
@@ -490,10 +555,13 @@ The worklist that tracks this, item by item with a status, is
 5. **Website Psalm titles**, and **search indexing of titles**. Small, and
    they finish work already done everywhere else.
 6. **Source paragraph boundaries**, hybrid, with the three helloao epochs
-   taken once.
+   taken once. DONE, and not hybrid: the app's own rule was removed.
 7. **Section headings** behind a toggle, BSB and WEB Catholic first with the
-   shape guard, NKJV after, batched with its epoch.
-8. **NKJV supplied words**: table first, then the run-type design.
+   shape guard, NKJV after, batched with its epoch. Captured and DRAWN, on all
+   four editions, without the toggle and without the shape guard — and ahead
+   of 3 and 4, which were to make it safe.
+8. **NKJV supplied words**: table first, then the run-type design. DONE, with
+   decoder-kept offsets in place of the table.
 9. **Defect 3** whenever a printed NKJV is to hand.
 
 Small items that can ride with any of the above: regenerating the offline

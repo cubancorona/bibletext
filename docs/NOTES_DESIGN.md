@@ -45,9 +45,16 @@ Three missing facts, each killing a family of defects:
 | **identity carried, not reconstructed** | `noteStoreVersion()` rebuilds a third of a key from where the reader stands — `notes_store.go:379-387` | X5, COLLAPSED_STUCK, and X1/X2 structurally rather than by guard |
 | **the mark's origin and frame** | five writers into five undiscriminated fields — `state.go:65-69` | X4, X8, X9, X10, X11, ORPHAN_HL, GHOST_LOC, HL_FRAME |
 
-**The store does not change.** `version|book|chapter`, `SharedNote`, `noteKey`,
-`saveNote`, `deleteNote`, `setNoteMinimized`, `readNotesChecked`, `writeNotes`:
-untouched. No migration, no new preferences key, nothing to roll back.
+**The store was not meant to change.** The plan kept
+`version|book|chapter`, `SharedNote`, `noteKey`, `saveNote`, `deleteNote`,
+`setNoteMinimized`, `readNotesChecked` and `writeNotes` untouched so the model
+could land with no migration, no new preferences key and nothing to roll back.
+That is the one part of the plan the implementation did not keep: the store is
+ID-keyed now. Notes are `StoredNote` records in a line-framed `notes.store`
+blob, each carrying an `ID` minted from a persisted monotonic counter
+(`prefNotesNextID`, its own key, never reused after a delete), and the
+passage-keyed helpers above are gone — the identity a verb addresses is
+`StoredNote.ID`, not a key rebuilt from where the reader stands.
 
 ### What becomes structural, and what stays checked
 
@@ -223,17 +230,34 @@ itself the largest risk in the plan.
 | Step | What | Closes | Cost |
 |---|---|---|---|
 | **S0** ✅ | Truth maintenance: land the harness, strike X1/X2, pin X12, correct the doc to 110 | — | done |
-| **S1** | `Mark`: origin + identity. Fold five fields into one struct, delete `HasHighlightedVerse`, set `Origin` at all five writers | ORPHAN_HL, X4, X8, X9, X10, GHOST_LOC | 2d |
+| **S1** ✅ | `Mark`: origin + identity. Fold five fields into one struct, delete `HasHighlightedVerse`, set `Origin` at all five writers | ORPHAN_HL, X4, X8, X9, X10, GHOST_LOC | 2d |
 | | **STOP 1** — shippable alone, closes the oldest defect, zero pixels move | | |
-| **S2** | `Mark`'s frame. `applyLoadedVersion` renumbers through `MapVerse` or clears | X11, HL_FRAME → origin space reaches **zero** | 1d |
+| **S2** ✅ | `Mark`'s frame. `applyLoadedVersion` renumbers through `MapVerse` or clears | X11, HL_FRAME → origin space reaches **zero** | 1d |
 | | **STOP 2** — the entire highlight family done, no visual change, no new UI to review | | |
-| **S3** | Identity carried. `NoteKey` opaque, `noteStoreVersion()` deleted, verbs take a key | X5, COLLAPSED_STUCK; cements X1/X2 structurally | 2d |
-| **S4** | The set. `deriveChapterNotes`, `placementKind`, `drawnNotes` + focus — behind a flag whose plan is still truncated to one note | nothing visible; the whole model lands | 3d |
+| **S3** ✅ | Identity carried. `NoteKey` opaque, `noteStoreVersion()` deleted, verbs take a key | X5, COLLAPSED_STUCK; cements X1/X2 structurally | 2d |
+| **S4** ✅ | The set. `deriveChapterNotes`, `placementKind`, `drawnNotes` + focus — behind a flag whose plan is still truncated to one note | nothing visible; the whole model lands | 3d |
 | | **STOP 3** — where the risk lives, and it ships with the view unchanged | | |
-| **S5** | Flip the flag on the Fyne banner: **Windows, Linux, Android go plural** | X7, X12, NOTE_MASKED, COLLAPSED_MASK, UNREACHABLE, NOTE_SUBSTITUTED + **R2, R4** → notes space reaches **zero** | 2d |
-| **S6** | The Apple sticker draws the set: array C API, one band per anchor, stacking | full parity | 4–6d |
-| **S7** | The browser bubble: shared builder, version label outside | browser/read-view parity | 1–2d |
-| **S8** | The tap menu addresses the note under the finger (`gHasNote` → per-verse key map) | the last place a verb can miss | 1d |
+| **S5** ✅ | Flip the flag on the Fyne banner: **Windows, Linux, Android go plural** | X7, X12, NOTE_MASKED, COLLAPSED_MASK, UNREACHABLE, NOTE_SUBSTITUTED + **R2, R4** → notes space reaches **zero** | 2d |
+| **S6** part | The Apple sticker draws the set: array C API, one band per anchor, stacking | full parity | 4–6d |
+| **S7** ✅ | The browser bubble: shared builder, version label outside | browser/read-view parity | 1–2d |
+| **S8** open | The tap menu addresses the note under the finger (`gHasNote` → per-verse key map) | the last place a verb can miss | 1d |
+
+**What the staging actually did.** S1-S5 and S7 all landed, and the enumeration
+that gates them reports no violation the pill gate's off value does not account
+for. Three of them landed in a different shape from the sketch above: S3's
+identity is `StoredNote.ID`, not an opaque `NoteKey`; S4's derive is
+`buildChapterPlan` returning a `chapterPlan` of `drawnNote`, not
+`deriveChapterNotes`; and what S7's shared builder puts outside the bubble is
+the BYLINE (`noteBubbleWithByline`), the translation having moved into the
+heading beside the reference. S6 landed as far as this document's own fallback and no
+further: the Apple sticker is still the arity-1 projection with an honest count
+folded into its own text, and what the array C API (`bibleTextSetNoteBands` and
+its macOS twin) actually carries is the per-paragraph pill row rather than one
+band per anchor with stacking. S8 is still open — the pill press carries a
+group key into the keyed verb entry point (`performNoteAction`,
+`bibleTextNoteAction`), but the iOS tap menu is still gated on the chapter-level
+`gHasNote` and its Hide and Delete are still the unkeyed exports
+(`reading_ios.go:438-449`).
 
 **Why the highlight first.** It is 46 of the 110 violations, it needs no UI
 change at all, and it is independently shippable. **Why S4 and S5 must not be

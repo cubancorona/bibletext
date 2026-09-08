@@ -245,11 +245,14 @@ and which one is in force is derived, not stored.
 | `AS_PILLS` | `notesPillPerParagraph`, and the sticker is either the set's own collapsed form or is showing an OWN note | one pill per noted paragraph, each with that paragraph's count |
 | `AS_COUNT` | a received note is OPEN | its who line, "K of N in this chapter" |
 
-`notesPillPerParagraph` (`notes_plan.go`) gates `AS_PILLS`. It is a package
-variable, default false, flipped only by the dev build's Links panel, so the
-shipped app is always `AS_STICKER` or `AS_COUNT`. Only the styled pane
-(Windows, Linux) can draw `AS_PILLS` at all; iOS, macOS and Android have one
-sticker and no pill row.
+`notesPillPerParagraph` (`notes_plan.go:888`) gates `AS_PILLS`. It is a package
+variable. It defaulted to false while only the styled pane (Windows, Linux)
+could draw a pill row at all — iOS, macOS and Android had one sticker and no
+pill row — so the shipped app was always `AS_STICKER` or `AS_COUNT`. The
+band-spec pushes carried the row to those three surfaces
+(`bibleTextSetNoteBands` and its twins) and the default became true, so
+`AS_PILLS` is the shipped collapsed state everywhere. The off value survives as
+the dev build's Links-panel comparison state and the one-line reversion.
 
 `Pill` alone does NOT mean "the sticker is the received set's collapsed form".
 It means the sticker is CLOSED, and a focused own note is closed too whenever a
@@ -501,10 +504,12 @@ tap leaves the reader on John 3 and the row stays in the list.
 in what it refuses to do and silent about refusing — a blocked state by
 `docs/NKJV_FLOW.md`'s own rule.
 
-### The pill presentation [OBSERVED — styled pane, gated]
+### The pill presentation [OBSERVED]
 
-Reachable only with `notesPillPerParagraph` on, so today only in a dev build on
-Windows or Linux.
+Recorded while `notesPillPerParagraph` was off by default and only the styled
+pane could draw a pill row, which made these states reachable then only in a dev
+build on Windows or Linux. The gate defaults on now and every surface draws
+the row, so they are the shipped collapsed state.
 
 **`PILLS_SET`** — every received note collapsed, two or more noted paragraphs.
 One pill per noted paragraph, each carrying that paragraph's own count; the
@@ -643,8 +648,12 @@ replace, I1–I6 in `docs/NKJV_FLOW.md`.
   was SHOWING, so an own note both suppressed the pills (zero) and, in the naive
   repair, was itself blanked by them. Fixed: the stand-down is keyed on
   `styledNote.Pill`, which is true only when the sticker IS the received set's
-  collapsed form.* Still violated by `X16` on the three surfaces that have no
-  pill row, which is 168 cells of the enumeration, judged at all three moments.
+  collapsed form.* Violated by `X16` wherever the per-paragraph pill gate is
+  OFF. That was the shipped state of iOS, macOS and Android while they had no
+  pill row; the band-spec pushes gave them one and `notesPillPerParagraph`
+  defaults to true, so `X16` is struck as the shipped experience and survives
+  as the debt the one-line reversion would reincur — 336 cells of the
+  enumeration, judged at all three moments.
 - **N10 — What the mirror says is on screen is actually DRAWN.** The model and
   the pane are two accounts of one page, and they can disagree: the pane owns
   its geometry, and zeroing the wrong one blanks a note the model still
@@ -1362,13 +1371,15 @@ Three things are **not** fixed by either and must not be assumed away:
 
 - **The notes space** — feature on/off × placement (none / own / followed / both)
   × collapsed × a foreign highlight already present × **session focus (unset /
-  none / the exact-key note / a followed note — the S7 axis)** × a note-bearing
-  link arriving × verb (none / Hide / Show / Delete / turn notes off) =
-  **1,280 states**, of which 764 are skipped because the surface offers no such
-  verb there or the focus names a note the world does not contain (the
-  banner's Hide and Delete exist only when a note is on screen,
-  `notes_banner.go:38`; the iOS pair is gated on `gHasNote`,
-  `reading_ios.go:2005-2011`; and a note-bearing link with notes off never reaches
+  none / the exact-key note / a followed note / one of the reader's own — the S7
+  axis)** × a note-bearing link arriving × verb (none / Hide / Show / Delete /
+  turn notes off) × a note of the reader's OWN on the chapter × a second
+  received note in another paragraph × an UNPLACED note on the book × the
+  per-paragraph pill gate = **25,600 states**. Cells are skipped where the
+  surface offers no such verb there or the focus names a note the world does not
+  contain (the banner's Hide and Delete exist only when a note is on screen,
+  built by `noteOpenBubble`, `notes_banner.go:173-182`; the iOS pair is gated on
+  `gHasNote`, `reading_ios.go:438-449`; and a note-bearing link with notes off never reaches
   `applyShareTarget` at all, `share_link_open.go:62-65`). Asserts N1–N6, and
   since S7 the V-invariants over the PLAN in every cell: at most one `Open`;
   `Open` never a stored-Minimized note; suppression means zero `Open` with the
@@ -1379,18 +1390,21 @@ Three things are **not** fixed by either and must not be assumed away:
   translation) = **20 states**. Asserts N1 and N7, on Romans 14 because that is
   where the numbering actually diverges.
 
-Together they find **ZERO violations**. Both pinned lists are empty, and the
-set-equality assertion is what holds them there: any violation now fails as a
-NEW incoherent state, with nothing to hide behind.
+Together they find **one named violation and nothing else**. The origin space's
+pinned list is empty; the notes space's holds `X16` alone, at **336 cells** —
+every one of them `focus=own pills=false`, the debt a reversion of the pill
+gate's default would reincur (`notes_state_flow_test.go`'s `expectedHits`). The
+set-equality assertion is what holds the rest there: any other violation fails
+as a NEW incoherent state, with nothing to hide behind.
 
-Current coverage is deliberately fixed at 1,280 notes-space cells and 20
-highlight-origin cells. The suite reports zero violations across both spaces.
-It verifies that every visible note appears in the chapter plan, at most one
-note is open, suppression opens none without deleting stored notes, note-owned
-highlights carry an explicit origin and version frame, and translation changes
-either renumber that span coherently or clear it.
+Current coverage is deliberately fixed at 25,600 notes-space cells and 20
+highlight-origin cells. The suite reports no violation in either space that
+`X16` does not account for. It verifies that every visible note appears in the
+chapter plan, at most one note is open, suppression opens none without deleting
+stored notes, note-owned highlights carry an explicit origin and version frame,
+and translation changes either renumber that span coherently or clear it.
 
-The empty violation set applies to these enumerations only. Single-state tests
+That result applies to these enumerations only. Single-state tests
 separately cover bare-link highlight removal and other shapes that would add
 unhelpful cross-product axes. Store states such as `UNREADABLE`, `WIPED`, and
 `JUNK_PURGED`, plus native repaint behavior, retain their dedicated coverage and

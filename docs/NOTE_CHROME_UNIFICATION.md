@@ -12,7 +12,9 @@
                 detour gated); Android gained a trailing boolean on
                 BtBridge.setNote and gates both the tail drawable and the bottom
                 pad. Two guards came with it: the Go source contract
-                (TestJNIDescriptorsMatchBtBridge) and a BYTECODE check the
+                (TestJNIDescriptorsMatchJava, a table over all three bridges —
+                BtBridge, BtAudio and BtKeys — because a regexp hard-wired to
+                one of them checks nothing for the other two) and a BYTECODE check the
                 Android build now runs over the shipped dex
                 (verify_android_jni_descriptors) — a JNI descriptor is only a
                 string, and a stale one fails nowhere but on a device.
@@ -118,7 +120,11 @@
                          cmd/websitegen/note_chrome_shared_test.go, each pin
                          verified able to fail. The live site takes all of it
                          on the next publish-site.sh run.
-                The nine steps are COMPLETE. Also landed beside them: the
+                The nine steps are COMPLETE except for one piece of step 4:
+                the TWIN DIFF (notes_chrome_twins_test.go, divergentTwins) was
+                never written, so the near-identical-edit class it was meant to
+                catch is still covered only by the registry's spell/banned
+                pairs. Also landed beside them: the
                 enumeration hardening (N11-N16 chrome tripwires with an
                 unplaced axis and a stub measurer; every assertion
                 mutation-verified) and the anchor fix it forced — placement
@@ -371,9 +377,17 @@ func TestEverySurfaceConsumesEveryChromeField(t *testing.T)
 
 A field with no `spell` entry for a surface and no `pendingAdoption` entry is a hard failure naming both. Adoption is proved by the **disappearance of the banned expression**, not only the appearance of the new token — that is the answer to "the registry can be satisfied cosmetically". Fields describing genuinely new behaviour have no banned expression; those are marked `weak` in the registry, and the marking itself is asserted so nobody can quietly widen the weak set.
 
-### The twin diff
+### The twin diff — designed, not built
 
-`notes_chrome_twins_test.go`, landing with the first native adoption. `NSTextStorage`/`NSLayoutManager`/`NSTextContainer` are the same classes under UIKit and AppKit, so the iOS and macOS chrome functions are twins by construction. Extract both bodies with `nativeFunctionSource` (the technique already in note_cycle_apple_contract_test.go:9), apply `kNote↔kMacNote`, `btIOS↔btMac`, `gNote↔gMacNote`, `UI↔NS`, normalise whitespace, require equality. Legitimate divergences — `btMacNoteTopGap`, the bottom-up placement, the trash image source — sit on a `divergentTwins` set asserted by set equality, so a divergence that goes away must be struck off. Defects 1 and 2 were *literally* two near-identical edits; this is the test that fails when only one is made.
+**It was never written.** There is no `notes_chrome_twins_test.go` and no
+`divergentTwins` set in the tree; the near-identical-edit class it was meant to
+catch is held, as far as it is held at all, by the registry's spell/banned
+pairs in `notes_spacing_spec_test.go`. The design is kept because it is still
+the cheapest answer to that class, and because two of the arguments below —
+dropping the macOS cgo oracle, and what the registry cannot see — were settled
+on the assumption that it would exist.
+
+`notes_chrome_twins_test.go` was to land with the first native adoption. `NSTextStorage`/`NSLayoutManager`/`NSTextContainer` are the same classes under UIKit and AppKit, so the iOS and macOS chrome functions are twins by construction. Extract both bodies with `nativeFunctionSource` (the technique already in note_cycle_apple_contract_test.go:9), apply `kNote↔kMacNote`, `btIOS↔btMac`, `gNote↔gMacNote`, `UI↔NS`, normalise whitespace, require equality. Legitimate divergences — `btMacNoteTopGap`, the bottom-up placement, the trash image source — sit on a `divergentTwins` set asserted by set equality, so a divergence that goes away must be struck off. Defects 1 and 2 were *literally* two near-identical edits; this is the test that fails when only one is made.
 
 ---
 
@@ -427,7 +441,7 @@ Each lands alone. Each ABI commit follows two hard rules: **exactly one new fiel
 
 **3. `Present` / `Collapsed` / `Chevron`.** Natives touched, no ABI: they read pushed values instead of re-deriving. Deletes `btIOSNotePresent`/`btIOSNotePill` (reading_ios.go:852-853), `btMacNotePresent`/`btMacNotePill` (:1527-1528), `notePresent`/`notePillNow` (BtBridge.java:1168-1169). Normalises Android's `"  ›"` two-space chevron. Nothing user-visible should move; if it does, one of the four expressions was already wrong, which is the point.
 
-**4. `Tail` — defect 3.** First ABI widening, one appended `int`, deliberately the smallest possible field so the wire mechanism is proved on something nobody can argue about. Each native sets `gNoteShapeExtra = gNoteTail ? kNoteTail : 0` **once**, in its `SetNote`, and every band formula reads that scalar. `banned` fragments forbid `btIOSNotePill() ?` / `btMacNotePill() ?` inside the install and layout functions. Lands on iOS, macOS and Android. **It changes no pixel on those three surfaces yet, and the plan was wrong to claim it would.** A census over the enumeration (TestDerivedChromeDecisionsAgreeWithTheirTuple) found 13 expanded cards and *none* of them anchorless: a note with no passage on this chapter has nothing to open and stands down to the pill, and a pill was already tail-free on every surface. What the step actually buys is that the three natives now ask the right question — resolved once, read as a scalar — so the anchorless card the bands step puts in front of them renders correctly the first time instead of growing a tail that points at verse 1. The tripwire in that census fails if the anchorless state ever becomes reachable through the single-card push, which is the signal to get a device picture of it. The twin diff lands here.
+**4. `Tail` — defect 3.** First ABI widening, one appended `int`, deliberately the smallest possible field so the wire mechanism is proved on something nobody can argue about. Each native sets `gNoteShapeExtra = gNoteTail ? kNoteTail : 0` **once**, in its `SetNote`, and every band formula reads that scalar. `banned` fragments forbid `btIOSNotePill() ?` / `btMacNotePill() ?` inside the install and layout functions. Lands on iOS, macOS and Android. **It changes no pixel on those three surfaces yet, and the plan was wrong to claim it would.** A census over the enumeration (TestDerivedChromeDecisionsAgreeWithTheirTuple) found 13 expanded cards and *none* of them anchorless: a note with no passage on this chapter has nothing to open and stands down to the pill, and a pill was already tail-free on every surface. What the step actually buys is that the three natives now ask the right question — resolved once, read as a scalar — so the anchorless card the bands step puts in front of them renders correctly the first time instead of growing a tail that points at verse 1. The tripwire in that census fails if the anchorless state ever becomes reachable through the single-card push, which is the signal to get a device picture of it. The twin diff was to land here, and did not.
 
 **5. `Verbs`.** One appended enum. Android's 🗑 emoji (BtBridge.java:1514) and its non-own-aware who-row width (`wlp.rightMargin = 2*dp(NOTE_BTN)`, :1451 — two verb slots reserved even for an own note, so its who line fits one button sooner than everyone's) fall out as adoption failures rather than as someone noticing.
 
@@ -457,7 +471,7 @@ With `snap.chrome` and `snap.arrival` on `planSnap`, all of that becomes a model
 - **Band count and band verses.** The walk has never seen a band. `len(Bands)` must equal `len(chapterNoteGroups(...))` in both states of `notesPillPerParagraph` — which is the gate that decides when the flag may flip.
 - **The `partly` decisions, with a stub measurer.** Feed `noteMeasure{BodyH: 40, WhoSz: 11, Btn: 28, TextW: func(s string) float32 { return float32(len(s)) * 6 }}` and `noteBandH`, `noteCardH`, `notePillW` and `noteFitWho` are assertable at every cell with no device — including the degenerate who-line case where the four current implementations already disagree. Band height has never been enumerable at all.
 
-What it still cannot watch, honestly: whether a native **obeys** what it was pushed. That stays `notes_spacing_spec_test.go`'s parsing, the registry's spell/banned pairs, and the twin diff — the right tools for the fourteen decisions that must stay in Objective-C and Java, and the wrong tools for the twelve that never needed to be there. And a semantic bug present in **both** Apple twins passes the twin diff by construction. That hole cannot be closed by any host-side test: it needs the platforms themselves.
+What it still cannot watch, honestly: whether a native **obeys** what it was pushed. That stays `notes_spacing_spec_test.go`'s parsing and the registry's spell/banned pairs — the right tools for the fourteen decisions that must stay in Objective-C and Java, and the wrong tools for the twelve that never needed to be there. The twin diff was to be the third of those tools and was never built, so no **general** twin comparison exists; the near-identical-edit class is held only where a source contract happens to name the expression on both twins — `note_cycle_apple_contract_test.go`, `reading_native_scroll_contract_test.go`, `notes_own_controls_test.go` and `verb_set_contract_test.go` are each table-driven over `reading_ios.go` and `reading_macos.go` and fail when only one of the pair is edited at the token they name. Everywhere else the class is unguarded. And a semantic bug present in **both** Apple twins would pass the twin diff by construction even if it were built. That hole cannot be closed by any host-side test: it needs the platforms themselves.
 
 ---
 
@@ -485,7 +499,7 @@ This is acceptable because none of it is a *decision*. Every item above is a mec
 
 **Step 8 is the riskiest change in this plan and everyone said so.** `gNoteReservedPara` is one NSRange that must be taken back when the sticker moves; `btIOSClearReservedPara` exists because a next-tap once left a phantom band at the previous note's verse. N ranges is that failure at N times the surface area. Android is worse: `NoteBandSpan` is a `LineHeightSpan`, paragraph-scoped with a reused `FontMetricsInt`, and two spans on one paragraph is produced *by construction* the moment the chapter-top group meets paragraph 0's own group. Both known traps there were only visible on the emulator. *Reversible by:* `notesPillPerParagraph` is already a runtime `var`, not a build constant, so the model reverts without a reinstall; and everything through step 7 is valuable with the flag off, which is why it is last.
 
-**The registry can be satisfied cosmetically** — a surface can name a field in a dead branch. `notes_spacing_spec_test.go` records this limit about itself. *Mitigated by:* pairing every `spell` with the `banned` re-derivation it replaces, so adoption is proved by a disappearance. *Not mitigated for* genuinely new behaviour, where no banned expression exists; those are the `weak` cells, they are marked as such, the marking is asserted, and they lean on the twin diff and a named single-state test instead.
+**The registry can be satisfied cosmetically** — a surface can name a field in a dead branch. `notes_spacing_spec_test.go` records this limit about itself. *Mitigated by:* pairing every `spell` with the `banned` re-derivation it replaces, so adoption is proved by a disappearance. *Not mitigated for* genuinely new behaviour, where no banned expression exists; those are the `weak` cells, they are marked as such, the marking is asserted, and they were to lean on the twin diff and a named single-state test instead — the named tests carry them alone, the twin diff never having been built.
 
 **Fragment brittleness.** A native rename fails the suite as a defect rather than as a rename. *Mitigated by:* failure text that names the surface, the field, the expected token and the reason, good enough that the next reader does not simply update the string. (`readNativeSource` already normalises CRLF; the repo has met this three times on line endings alone.)
 

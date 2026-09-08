@@ -90,10 +90,13 @@ Every release since 1.1.0 is universal (`UIDeviceFamily=[1,2]`).
 `scripts/release-ios.sh` preserves that requirement; an iPhone-only update cannot
 remove iPad support from the existing App Store record.
 
-App Store Connect requires current iPad screenshots. The public 1.2.2 listing
-uses eight iPhone and eight iPad images showing the unified navigation. The next
-release must read those fields back with `appstore/preflight.py` before
-submission; do not assume App Store Connect copied the intended set forward.
+App Store Connect requires current iPad screenshots. The live listing is 1.2.5
+on both platforms, but its images are still the eight iPhone and eight iPad
+captures made for 1.2.2, which show the unified navigation; the replacement set
+prepared for 1.2.3 was never uploaded, and App Store Connect copied the older
+images forward with each release. The next release must read those fields back
+with `appstore/preflight.py` before submission; do not assume App Store Connect
+copied the intended set forward.
 
 Hardware-keyboard shortcuts remain desktop-only unless a later change wires
 them explicitly on iPad.

@@ -156,7 +156,8 @@ kept or broken over time and every way it breaks is a sequence.
 | the credential trio | keychain / env | whether a licensed source is `available()` |
 
 `fullPending` is computed **for the default version only**, whatever
-translation the reader is restored onto — see `V8` in the register.
+translation the reader is restored onto — see `D3` in the register, which is
+the silence that computation left in the translation actually on screen.
 
 ## The states
 

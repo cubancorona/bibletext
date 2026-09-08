@@ -63,14 +63,15 @@ which of those has a recorded decision, and which has none.
 again. For the public-domain editions that is bandwidth; for the NKJV it is
 also quota against a metered monthly allowance. Items that need the same
 edition's epoch should ship together in one release, not one at a time.
-Items S2 and S14 both need the helloao editions; S16's NKJV half
-should wait for another NKJV decoder change to travel with.
+Items S2 and S14 both need the helloao editions. S16's NKJV half was to wait
+for another NKJV decoder change to travel with; it needed no epoch of its own
+in the end, because capture had already spent one and drawing spends none.
 
 **Checks before changes.** The decode-time checks in stage 2 cost no epoch
 and no reader-visible change, and every later item is safer with them in
 place: they are what would make a bad decode visible instead of silent.
 
-## The leaks, and the one that is left
+## The leaks, and how the last one closed
 
 Text leaving the app had the reading surface's own characters in it. Three
 paths are fixed: the assistant received the raw selection and sent it to an
@@ -81,25 +82,28 @@ outbound path, and the native panes no longer put a no-break space in the text
 at all, since the system's own Copy reads the storage directly and cannot be
 reached.
 
-ONE LEAK REMAINS, and it cannot be fixed by stripping. In the presented
-reporter layout a paragraph opens with an em-space and an en-space, written as
+THE LAST LEAK could not be fixed by stripping, and was not. In the presented
+reporter layout a paragraph opened with an em-space and an en-space, written as
 literal characters because the platform HTML importers ignore the CSS that
-would indent it. The app's own verbs strip them; the system's Copy on a phone
-in landscape does not. Removing them means indenting some other way: a
-first-line indent applied to the imported paragraph style on the Apple panes,
-and a leading-margin span on Android. Native work on two platforms, and until
-it is done a paragraph copied out of the landscape reader begins with two
-spaces nobody typed.
+would indent it. The app's own verbs stripped them; the system's Copy on a phone
+in landscape did not, so a paragraph copied out of the landscape reader began
+with two spaces nobody typed. Removing them meant indenting some other way, and
+that is what shipped, on both platforms it needed: a first-line head indent
+applied to the imported paragraph style on the Apple panes, and on Android a
+private-use marker rune that the bridge deletes as it imports, replacing it with
+a real leading-margin span. No indent characters are written into the text on any
+surface now. The outbound cleaner still maps the pair away, which costs nothing
+and covers text that was captured before the change.
 
 ## Stage 1 — the defects
 
 Found while measuring for the analysis. These are not product decisions.
 
-S1 is done: the rule now ends a paragraph on a typographic closing quotation
-mark as well as a typewriter one. S14 is done with it, and supersedes most of
-S1's effect: every edition now paragraphs where its publisher does, and the
-rule runs only in a chapter that carries no marks at all. S3 turned out not
-to be a defect. S2 is the one still open.
+S1 is done: the rule ended a paragraph on a typographic closing quotation mark
+as well as a typewriter one. S14 is done with it, and supersedes S1 entirely:
+every edition paragraphs where its publisher does, and the rule S1 mended was
+then removed rather than kept as a fallback, so nothing is left for it to run
+in. S3 turned out not to be a defect. S2 is the one still open.
 
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
@@ -107,15 +111,16 @@ to be a defect. S2 is the one still open.
 | S2 | Psalm 119 acrostic letters in verse text | WEB, WEBC | S | web, webc | todo |
 | S3 | "JESUS" set in capitals in four verses | NKJV | — | none | closed, not a defect |
 
-**S1.** `shouldBreakParagraph` in `reading.go` allows a paragraph break only
-when the previous verse ends in a full stop, exclamation mark, question mark,
-or a *straight* quotation mark. The text uses curly quotation marks, so a
-verse that closes reported speech never starts a new paragraph: 2,094
-suppressed breaks in the BSB and 2,272 in the WEB, about a fifth of all
-eligible ones. Every edition and every surface is affected, because they all
-go through this one function. Paragraphs are computed at render time, so no
-epoch. Add the curly closing marks to the suffix test and pin it with a case
-that fails on the current code.
+**S1.** The paragraph rule allowed a break only when the previous verse ended
+in a full stop, exclamation mark, question mark, or a *straight* quotation
+mark. The text uses curly quotation marks, so a verse that closed reported
+speech never started a new paragraph: 2,094 suppressed breaks in the BSB and
+2,272 in the WEB, about a fifth of all eligible ones. Every edition and every
+surface was affected, because they all went through this one function.
+Paragraphs are computed at render time, so no epoch. The curly closing marks
+were added to the suffix test and pinned with a case that failed on the old
+code; S14 then took the rule away altogether, so neither the function nor the
+test remains.
 
 **S2.** The WEB and WEB Catholic put the Psalm 119 acrostic letters in the
 text. ALEPH is stored as the psalm's superscription and drawn as its title;
@@ -133,19 +138,21 @@ item is close behind.
 
 **S3.** CLOSED, not a defect. The publisher marks the name with the
 small-caps style at those four verses and means to: its own web edition sets
-them in small caps. The app has no small caps anywhere, and folds a
+them in small caps. The app had no small caps anywhere, and folded a
 small-caps span to uppercase in the stored text, which is the standard
-plain-text rendering of small caps and the same treatment that produces LORD
-for the divine name. So "call His name JESUS" is a faithful flattening of
+plain-text rendering of small caps and the same treatment that produced LORD
+for the divine name. So "call His name JESUS" was a faithful flattening of
 what the publisher set, not a decoder fault.
 
-What remains is a display question rather than a correctness one, and it is
-not on this list because it is not about the text. True small caps could be
-drawn on the panes that render markup, but only by keeping the text in mixed
-case and applying the style at render time; today the uppercase IS the text,
-which is what lets a search for LORD behave, and what keeps sharing, speech
-and links agreeing with the page. Changing that trades a typographic gain for
-a change to four pipelines, and nothing suggests the trade is wanted.
+What remained was a display question rather than a correctness one, and it was
+not on this list because it is not about the text. The reasoning for leaving it
+was that true small caps could be drawn only by keeping the text in mixed case
+and applying the style at render time, that the uppercase WAS the text, and
+that changing it traded a typographic gain for a change to four pipelines. That
+reasoning turned out to have a way past it, and S23 took it: the letterforms are
+substituted into the DRAWN runs and the stored text keeps the publisher's own
+characters, so nothing downstream changed at all. These four verses are set in
+small capitals now like every other marked span.
 
 ## The paragraph rule is gone
 
@@ -234,10 +241,12 @@ verses, and no verse currently falls back to whole-verse red. Keep the table
 as the source of red and use the flag as a second witness, so drift is
 reported at decode time instead of degrading quietly at render time.
 
-**S9.** Five API calls. The NKJV's skipped section headings may contain
-cross-reference notes, which are discarded with the block; nothing on disk
-can say how many. Count them before any NKJV heading work, since the answer
-changes what S16's NKJV half has to carry.
+**S9.** Five API calls. The NKJV's section headings may contain cross-reference
+notes; nothing on disk can say how many. They were discarded with the block when
+this was written, and the count was wanted before any NKJV heading work because
+it changed what S16's NKJV half had to carry. That is settled — a note inside a
+heading is now kept on the heading itself — so what remains is the count, which
+is still unknown and still five calls away.
 
 ## Stage 3 — small, self-contained wins
 
@@ -248,7 +257,8 @@ changes what S16's NKJV half has to carry.
 | S12 | regenerate the offline seed from the current decoder | seed | S | none | done |
 | S13 | Android long-press copy keeps poem lines | Android fallback | XS | none | todo |
 
-**S10.** The site renders verses only. The accessor is already exported, so
+**S10.** The site renders verses and the publisher's section headings, and
+nothing else beside them. The accessor is already exported, so
 this is an italic line ahead of the verse loop and one style rule. No URL
 changes, so the frozen contract is untouched. Decide at the same time whether
 a title should lead a psalm's link preview.
@@ -276,14 +286,14 @@ stated reason. Make them agree.
 |---|---|---|---|---|---|
 | S14 | honour the publishers' paragraph breaks | all | M–L | all four | done |
 | S15 | section headings: captured | all | M | all four | done (capture) |
-| S16 | section headings: drawing them | all | M–L | none | todo |
+| S16 | section headings: drawing them | all | M–L | none | done |
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
 | S18 | speech reads the Psalm title | all | M | none | todo |
 | S19 | mark an omitted verse's gap in the text | all | M | none | todo |
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |
 | S21 | website renders the footnote section | website | M | none | todo |
 | S22 | in-text footnote markers | all | L | none | blocked |
-| S23 | draw small caps as small caps | NKJV | M | nkjv | todo |
+| S23 | draw small caps as small caps | NKJV | M | nkjv | done |
 
 **S14.** The app makes its own paragraphs from a length-and-punctuation
 rule, and both source editions are paragraphed by their publishers, so what
@@ -331,17 +341,31 @@ dialogue's shape is lost and the first break falls inside Jesus's reply.
 
 **S15.** 3,091 headings in the BSB, at least one per chapter, and five in the
 WEB Catholic of which four are the names by which those passages are known.
-Render behind a setting, default off, with a shape guard that drops and
-counts any heading over about 120 characters or containing a chapter-and-verse
-reference: that rejects exactly one malformed WEB Catholic heading in Greek
-Daniel 3 and nothing in the BSB. Build the shared model first, then the
-website and styled pane, then the Apple and Android panes, whose verse
-indexes must learn to exclude a heading paragraph. That last part is the same
-class of change as the selection-over-wash work and wants a device pass.
+The plan was to render behind a setting, default off, with a shape guard that
+drops and counts any heading over about 120 characters or containing a
+chapter-and-verse reference: that would reject exactly one malformed WEB
+Catholic heading in Greek Daniel 3 and nothing in the BSB. One of the three
+shipped and the other two did not. The shared model was built first, as planned,
+and it is what let all four surfaces follow; but a heading draws
+unconditionally, with neither the setting nor the shape guard, so the fused
+510-character Greek Daniel 3 string is drawn whole and a reader has no way to
+turn headings off. Both remain to be decided rather than done.
 
-**S16.** The NKJV's roughly 3,300 headings, after S9 says what the skip is
-discarding and after the licensing enquiry names headings. Its epoch should
-travel with another NKJV decoder change.
+**S16.** DONE. A heading is not a fact about a verse — it stands BETWEEN two of
+them, which is why it fitted none of the run machinery that carries the red
+letter, the supplied words and the small capitals. So the chapter's own ORDER
+became the shared thing instead: `chapterBlocksFor` returns a chapter as
+heading-then-paragraph blocks, and each surface only has to know how to set
+those two. A heading always opens a paragraph, and where a publisher's heading
+names a verse partway through one of its own paragraphs the paragraph splits
+rather than the heading moving, because the placement is the publisher's
+statement about the text and the paragraph break is the softer claim.
+
+It is edition-blind, so the NKJV's headings draw by the same path as the BSB's,
+without the separate NKJV pass this item was written to describe and without an
+NKJV epoch of its own — capture had already spent one. Their notes ride on the
+heading rather than on a neighbouring verse, so S9's probe is no longer what
+gates this; it is still worth running for the count, and is still listed as such.
 
 **S17.** Roughly 3,000 spans of italicised supplied words in the New
 Testament alone, the King James tradition's own way of telling a reader which
@@ -382,34 +406,42 @@ the section hides cross references, so they are captured and dark, including
 43 attached to Psalm titles. Keep those 43 with the general decision rather
 than carving them out.
 
-**S23.** Today a small-caps span is folded to uppercase in the stored text,
-so LORD, GOD and the four names of Jesus are literally capitals. Drawing them
-as small capitals is possible, and cheaper than it first looks.
+**S23.** DONE. A small-caps span was folded to uppercase in the stored text,
+so LORD, GOD and the four names of Jesus were literally capitals. Drawing them
+as small capitals was possible, and cheaper than it first looked.
 
 The mechanism exists. Red letter already carries per-rune-range styling to
 every surface: the Apple builder and the Android dialect wrap a run in
 markup, and the styled canvas pane carries a flag on each run and measures it
 itself. Small caps ride the same path.
 
-It also needs no change to the text, which is what makes it safe. Because the
-text is ALREADY uppercase, a renderer synthesises small caps by drawing the
-first letter at full size and the rest smaller — no case change, so the rune
-count is identical and every selection offset, share, copy, link, search and
-spoken word is untouched. The earlier claim that this would cost four
-pipelines was wrong.
+It also needs no change to the text, which is what makes it safe — and the
+route it took makes that even plainer than planned. The plan was to leave the
+uppercase alone and have a renderer synthesise small caps by drawing the first
+letter at full size and the rest smaller. What shipped instead restores the
+publisher's own casing to the stored text and substitutes the real Unicode
+small-capital CHARACTERS into the drawn runs, which is rune-count preserving
+just the same, so every selection offset, share, copy, link, search and spoken
+word is untouched. The earlier claim that this would cost four pipelines was
+wrong.
 
-Two things it does cost. The decoder discards which spans were marked, so
-recovering them is an NKJV cache epoch. And the reading face has no
-small-capital glyphs — Georgia has none, nor does the embedded Gelasio
-fallback, nor Times New Roman — so they would be synthesised by shrinking
-capitals, which reads thinner than the text around it. Two faces already in
-the repository do carry real ones, Cardo and Spectral, but they are share-card
-faces, not the reading face.
+One of the two costs was real and was paid: the decoder discarded which spans
+were marked, so recovering them took an NKJV cache epoch, number 7. The other
+dissolved. It looked as though the small capitals would have to be synthesised
+by shrinking capitals, because the reading face had no small-capital glyphs —
+Georgia has none, nor does the embedded Gelasio fallback, nor Times New Roman.
+The shipped face carries 25 of the 26 as real characters in all four cuts, so
+they are drawn rather than faked, and no surface needs OpenType feature control
+to get them.
 
-So it is the same structural work as S17: the run type carries one flag today
-and would need to carry independent style dimensions. Do them together. Whether to
-synthesise small capitals or wait for a face that has real ones is answered
-below, under "The reading face": wait.
+The structural work is shared with S17, as expected: the run type carries red
+and italic as independent dimensions, and the small capitals substitute
+characters within whatever runs that produces.
+
+Whether to synthesise small capitals or wait for a face that has real ones was
+left to the section below, "The reading face", and the answer it gave was: wait.
+That is how it went. The wait ended with the face, nothing is synthesised, and
+what ended it is set out under "The universal reading face".
 
 ## The reading face
 
@@ -417,6 +449,14 @@ S23 ends on a question this section answers: whether small capitals should be
 synthesised, or wait for a reading face that has real ones. It waits. And the
 face that has them is also the face that fixes a second problem, which is that
 the same chapter is set in four different types depending on where it is read.
+
+That answer held; the face it named did not. Everything in this section — what
+is drawn today, what a switch would cost, and Spectral as the recommendation —
+is the survey as it stood at that point, and it was overtaken by a second one,
+"The universal reading face" below, which found that its comparisons were taken
+at the wrong size and chose Junicode 2 with Ezra SIL instead. Read the two in
+that order: this section is why waiting was right, and that one is what the wait
+ended in.
 
 ### What is drawn today
 
@@ -481,6 +521,13 @@ So Cardo cannot render this text as small capitals without first lowercasing
 it, which is a change to the text. Spectral can render it untouched. Spectral
 is the recommendation.
 
+It is the recommendation this survey reached, and not the face that shipped. It
+rests on a line width measured at the same nominal size, which "Comparing at the
+same size compares nothing" below shows says nothing between faces of different
+x-height; and it rests on `c2sc`, which the app in the end never asks any face
+for, because the small capitals are drawn as Unicode CHARACTERS rather than
+requested as a feature.
+
 ### The rest of the bill
 
 Four things come with it, and none is hidden.
@@ -509,24 +556,31 @@ platforms would keep the uppercase realization. That is a narrowing of the
 defect from six surfaces to two, not a fix on all six, and it should be
 described that way rather than as done.
 
+That reservation is the one part of this bill the change of technique cancelled
+outright. Substituting Unicode small-capital characters asks no toolkit for a
+feature, so the canvas pane draws them off the same `applySmallCaps` step as
+every other surface, and the defect was fixed on all six rather than narrowed to
+two.
+
 ### What is actually manufactured here
 
-Separately from which face is used: the decoder uppercases every `sc` and `nd`
-span into the stored text. The publisher did not spell the word `LORD` in four
-capitals; it sent an initial capital and a small-capital remainder, and the app
-replaced that with capital letters and then forgot where the span was. A reader
-who copies a verse out of the app gets a spelling no edition of the NKJV
+Separately from which face is used: the decoder used to uppercase every `sc` and
+`nd` span into the stored text. The publisher did not spell the word `LORD` in
+four capitals; it sent an initial capital and a small-capital remainder, and the
+app replaced that with capital letters and then forgot where the span was. A
+reader who copied a verse out of the app got a spelling no edition of the NKJV
 prints. Under the standard at the top of this document that is an addition, and
 it is the same shape as the verse-number superscript: keep the typography on
 the page, and let the plain text leaving the app carry the conventional
 uppercase realization, which is what every other edition's copy behaviour
 produces.
 
-The fix is the one already used for supplied words — mark the span with
+The fix was the one already used for supplied words — mark the span with
 sentinels, resolve it to rune offsets once the text has settled, store the
-offsets and not a case change. It is an NKJV cache epoch either way, so it
-should be done in the same epoch as S17's supplied words rather than a second
-one.
+offsets and not a case change — and that is what shipped. It cost an NKJV cache
+epoch of its own, epoch 7, rather than travelling in S17's; the red-letter
+table was regenerated against the restored text in the same move, since the
+case change was what its fingerprints had been tripping on.
 
 ## Display issues found while unifying the reading face
 
@@ -536,42 +590,62 @@ one that sounds plausible and will be arrived at again.
 
 ### Must not ship
 
-**The divine name draws as ordinary text, in 5,891 verses.** The decoder keeps
-the publisher's characters and records the small-capital spans; nothing reads
-them yet, on any surface.
+Nothing stands here. All three items that did — the divine name unrendered,
+sixteen verses of lost red letter, and a macOS pane with no paragraph
+separation — shipped their fixes, and are recorded below with what they were.
 
-Larger than it first appeared, in two ways. The feed sends the WHOLE word inside
-the span in ordinary case far more often than it sends a capital outside it —
-286 of 288 spans in a live sweep — so almost every span changes letters, not the
-handful assumed. And it is not only the divine name: `call His name JESUS`
-becomes `call His name Jesus` in Matthew 1:21 and 1:25, Luke 1:31 and 2:21.
-Psalm 110:1 is the sharpest, now reading `The Lord said to my Lord,` with
-nothing left to tell the two apart, and Genesis 15:2 loses `Lord GOD` the same
-way.
+### Fixed
+
+**The divine name drew as ordinary text, in 5,891 verses.** The decoder kept the
+publisher's characters and recorded the small-capital spans, and nothing read
+them on any surface. They are read now: `applySmallCaps` substitutes the Unicode
+small capitals into the DRAWN runs, so every surface gets them from the one
+shared step every red-letter path already ends in, and `outboundText` maps them
+back to ordinary capitals on the way out. Not to the publisher's own letters: a
+small capital does not record whether it stood for an upper or a lower case
+letter, so `smallCapitalToLetter` chooses the capital deliberately. A verse the
+publisher sent as `Lord` and the page draws as `Lᴏʀᴅ` comes back out of that
+cleaner as `LORD`, which is the conventional plain-text realisation of a
+small-capital divine name and what keeps the Tetragrammaton distinct from
+Adonai — the same answer "What is actually manufactured here" reaches above, and
+the same one `docs/SOURCE_FIELDS_DECISIONS.md` records at Defect 3. Where the publisher
+sent capitals inside the span, as it does in `G` + `OD`, what comes back out is
+exactly what it sent.
+
+Larger than it first appeared, in two ways, and this is why the span data had to
+be read rather than the case folded into the text. The feed sends the WHOLE word
+inside the span in ordinary case far more often than it sends a capital outside
+it — 286 of 288 spans in a live sweep — so almost every span changes letters, not
+the handful assumed. And it is not only the divine name: `call His name JESUS`
+became `call His name Jesus` in Matthew 1:21 and 1:25, Luke 1:31 and 2:21. Psalm
+110:1 was the sharpest, reading `The Lord said to my Lord,` with nothing left to
+tell the two apart, and Genesis 15:2 lost `Lord GOD` the same way.
 
 The inscriptions are untouched, contrary to what was assumed when this was
 planned: `MENE, MENE, TEKEL, UPHARSIN`, `THIS IS JESUS THE KING OF THE JEWS`,
 `TO THE UNKNOWN GOD` and `MYSTERY, BABYLON` carry no span at all — they are
 literal capitals in the feed and stay as they are.
 
-**Sixteen verses lose their red-letter spans, seven of them visibly.** The red-letter table refuses
-a verse unless a hash of its text matches, and a refusal paints the whole verse
-red. The case change keeps the rune count, so only the fingerprint trips —
-silently, since the licensed text is not in this repository. Where Christ quotes
-the Old Testament and the quotation carries the divine name, the narration is
-printed as his. Seven read wrongly — Matthew 4:7, 4:10, 21:42, 22:37, Mark
-12:29, Luke 4:8 and 4:12 — seven differ only in whitespace already black, and
-two improve. The website is not affected, since it never publishes this edition.
-Guarded now by an epoch assertion that fails the build; the table must be
-regenerated against the new decoder.
+**Sixteen verses lost their red-letter spans, seven of them visibly.** The
+red-letter table refuses a verse unless a hash of its text matches, and a refusal
+paints the whole verse red. The case change kept the rune count, so only the
+fingerprint tripped — silently, since the licensed text is not in this
+repository. Where Christ quotes the Old Testament and the quotation carries the
+divine name, the narration was printed as his. Seven read wrongly — Matthew 4:7,
+4:10, 21:42, 22:37, Mark 12:29, Luke 4:8 and 4:12 — seven differed only in
+whitespace already black, and two improved. The website was never affected, since
+it never publishes this edition. The epoch assertion that caught it still stands
+and still fails the build on any drift; the table has been regenerated against
+the decoder that removed the case change, and the two agree at NKJV cache epoch
+7.
 
-**macOS has no paragraph separation at all.** No blank line and no indent: the
-reporter stylesheet emits `margin: 0`, and the first-line indent was moved out
-of the text and re-applied on iOS only. A new paragraph begins flush left on the
-next line, indistinguishable from a wrap, so the publishers' paragraphing is
-invisible there.
-
-### Fixed
+**macOS had no paragraph separation at all.** No blank line and no indent: the
+reporter stylesheet emits `margin: 0`, and the first-line indent had been moved
+out of the text and re-applied on iOS only. A new paragraph began flush left on
+the next line, indistinguishable from a wrap, so the publishers' paragraphing was
+invisible there. The AppKit twin of the iOS indent now exists, so the pane sets a
+first-line head indent on its justified paragraphs — typography rather than text,
+which is the whole point of having moved it out of the text.
 
 **The verse number left its line.** Twice. The lift was first taken from the
 face's DECLARED line box, which is a third larger in the shipped face; the

@@ -98,9 +98,14 @@ upstream bug suitable for a fork commit on `bt-2.8` and an upstream fix. See
 ## Not yet on the fork
 
 `bt-2.8` carries the drawloop, caret and emoji commits, but **nothing touches
-`GoNativeActivity.java`** — 2.8 still has no `onNewIntent`, so the Android
-new-intent patch (in flight in this repo) must land as a fork commit before an
-Android build can go the fork route on either branch.
+`GoNativeActivity.java`** — 2.8 still has no `onNewIntent`. The Android
+new-intent patch is no longer an open question on this side: it is tracked as
+`patches/fyne-2.7.4-android-newintent.patch`, applied to the vendored copy by
+`scripts/setup-fyne-patch.sh`, compiled into the replacement `classes.dex` by
+`scripts/build-android.sh` — which fails the build if the patch is missing and
+re-checks the bridge in the finished artifact — and warm shared links depend
+on it. It still has to be carried across as a fork commit before an Android
+build can go the fork route on either branch.
 
 ## Recommended order
 
