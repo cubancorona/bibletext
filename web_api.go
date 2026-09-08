@@ -32,6 +32,32 @@ func GroupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	return groupVersesIntoParagraphs(verses)
 }
 
+// ChapterBlock is one piece of a chapter as it is set on the page: either a
+// publisher's section heading, or a paragraph of verses. The exported shape of
+// what every reading surface now walks.
+type ChapterBlock struct {
+	// HeadingText is the heading, or "" when this block is a paragraph.
+	HeadingText string
+	// Verses is the paragraph's verses, nil when this block is a heading.
+	Verses []Verse
+}
+
+// ChapterBlocks returns a chapter in the order it is set — the publisher's
+// headings among its own paragraphs. Exported so the page places them exactly
+// where the reading pane does.
+func ChapterBlocks(bd *BibleData, book string, chapter int, verses []Verse) []ChapterBlock {
+	blocks := chapterBlocksFor(bd, book, chapter, verses)
+	out := make([]ChapterBlock, 0, len(blocks))
+	for _, b := range blocks {
+		if b.IsHeading() {
+			out = append(out, ChapterBlock{HeadingText: b.Heading.Text})
+			continue
+		}
+		out = append(out, ChapterBlock{Verses: b.Verses})
+	}
+	return out
+}
+
 // IsWordsOfChrist reports whether a verse falls in a red-letter range.
 //
 // DEPRECATED FOR RENDERING. This is the WEB's verse-level judgement and it is
@@ -49,6 +75,11 @@ func IsWordsOfChrist(book string, chapter, verse int) bool {
 type TextRun struct {
 	Text string
 	Red  bool
+	// Italic marks the words the translators supplied. The generated site sets
+	// them in italic exactly as the app does, because the edition discloses
+	// them and a reader following a shared link should see the same
+	// disclosure.
+	Italic bool
 }
 
 // RedLetterRuns splits one verse of one translation into its red and not-red
@@ -79,7 +110,7 @@ func RedLetterRuns(versionID string, v Verse) []TextRun {
 	runs := trimRuns(redLetterRuns(versionID, v, true))
 	out := make([]TextRun, 0, len(runs))
 	for _, r := range runs {
-		out = append(out, TextRun{Text: r.Text, Red: r.Red})
+		out = append(out, TextRun{Text: r.Text, Red: r.Red, Italic: r.Italic})
 	}
 	return out
 }

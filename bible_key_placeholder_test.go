@@ -30,7 +30,7 @@ func TestBibleKeyPlaceholderFollowsTheState(t *testing.T) {
 func TestBibleKeyPlaceholderFitsTheNarrowestField(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	app.Settings().SetTheme(&bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()})
+	app.Settings().SetTheme(&bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()})
 
 	// The budget recorded in bibleKeySection: a 320pt phone leaves the box about
 	// 199pt of usable width, and the app draws body text at 18 — theme.TextSize()

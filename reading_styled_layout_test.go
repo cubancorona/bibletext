@@ -17,7 +17,7 @@ import (
 
 // fixedMeasure is a deterministic ruler: every rune is 10 units wide at body
 // size, 6 at verse-number size — so wraps land at predictable points.
-func fixedMeasure(text string, kind runKind) float32 {
+func fixedMeasure(text string, kind runKind, _ bool) float32 {
 	w := float32(10)
 	if kind == runVerseNum {
 		w = 6
@@ -37,7 +37,7 @@ func layoutText(lay *chapterLayout) string { return lay.Text }
 // fyneMeasure is the production ruler at a fixed size, for parity tests
 // against rewrap (which uses fyne.MeasureText with the same style).
 func fyneMeasure(size float32) styledMeasure {
-	return func(text string, kind runKind) float32 {
+	return func(text string, kind runKind, _ bool) float32 {
 		return fyne.MeasureText(text, size, fyne.TextStyle{}).Width
 	}
 }
@@ -77,7 +77,7 @@ func TestStyledLayoutTextModelParity(t *testing.T) {
 				LineHeight: 20,
 				ParaGap:    10,
 				SpaceW:     fyne.MeasureText(" ", size, fyne.TextStyle{}).Width,
-			}, func(text string, kind runKind) float32 {
+			}, func(text string, kind runKind, _ bool) float32 {
 				return fyne.MeasureText(text, size, fyne.TextStyle{}).Width
 			})
 

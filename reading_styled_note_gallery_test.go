@@ -56,10 +56,10 @@ func contextFixture(t *testing.T, note string, pill bool) (*AppState, []Verse, s
 	deleteAllNotes(appPrefs())
 	t.Cleanup(func() { deleteAllNotes(appPrefs()) })
 
-	// shouldBreakParagraph closes a paragraph once it passes 320 characters and
-	// the previous verse ended on a terminal, so a verse over that length is a
-	// paragraph of its own — which is what gives this picture one paragraph
-	// above the note and one below.
+	// Each verse opens its own paragraph (Verse.ParaStart), which is what gives
+	// this picture one paragraph above the note and one below. It used to rely
+	// on each verse being long enough to trip a character rule; that rule is
+	// gone, and a picture should not have depended on one anyway.
 	long := "Then she arose with her daughters in law that she might return from the " +
 		"country of Moab, for she had heard in the country of Moab how the LORD had " +
 		"visited His people in giving them bread, and she went out from the place " +
@@ -67,7 +67,8 @@ func contextFixture(t *testing.T, note string, pill bool) (*AppState, []Verse, s
 		"way to return to the land of Judah. "
 	vs := make([]Verse, 0, 3)
 	for i := 1; i <= 3; i++ {
-		vs = append(vs, Verse{BookName: "Ruth", Book: "Ruth", Chapter: 3, Verse: i, Text: long})
+		vs = append(vs, Verse{BookName: "Ruth", Book: "Ruth", Chapter: 3,
+			Verse: i, Text: long, ParaStart: true})
 	}
 	bd := &BibleData{Books: []string{"Ruth"}, Verses: map[string]map[int][]Verse{"Ruth": {3: vs}}}
 	st := &AppState{Bible: bd, CurrentBook: "Ruth", CurrentChapter: 3, CurrentVersion: "web"}
@@ -91,7 +92,7 @@ func contextFixture(t *testing.T, note string, pill bool) (*AppState, []Verse, s
 func TestStyledNoteGallery(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	realTheme := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	dir := os.Getenv("BIBLETEXT_PANE_SNAPSHOT_DIR")
 
 	cases := []galleryCase{

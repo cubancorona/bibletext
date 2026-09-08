@@ -64,7 +64,7 @@ func (p *styledReadingPane) segTextSize(kind runKind) float32 {
 // segWidth measures segment text with the pane's serif source — the SAME
 // ruler the renderer draws with, so hit-tests always agree with pixels.
 func (p *styledReadingPane) segWidth(text string, kind runKind) float32 {
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, p.font)
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, p.faceFor(text, false))
 	return w.Width
 }
 
@@ -384,7 +384,10 @@ func (p *styledReadingPane) copyToClipboard() {
 	if p.clipboard == nil || p.selStart < 0 || p.selEnd <= p.selStart {
 		return
 	}
-	p.clipboard.SetContent(p.copySelected())
+	// What reaches the clipboard is the publisher's text, not the pane's
+	// typography: this pane draws its verse numbers as superscript CHARACTERS
+	// (superscriptNumber), so without this a paste carries "¹⁶" (outbound_text.go).
+	p.clipboard.SetContent(outboundText(p.copySelected()))
 }
 
 // --- The study menu ----------------------------------------------------------

@@ -84,7 +84,7 @@ func BenchmarkChapterTintAndroidPane(b *testing.B) {
 func BenchmarkChapterTintStyledLayout(b *testing.B) {
 	app := test.NewApp()
 	defer app.Quit()
-	measure := func(text string, kind runKind) float32 { return float32(len(text)) * 7 }
+	measure := func(text string, kind runKind, _ bool) float32 { return float32(len(text)) * 7 }
 	benchBothMarks(b, "styled-layout", func(s *AppState, v []Verse) {
 		sinkLayout = layoutChapter(s, v, styledLayoutParams{
 			Width: 700, LineHeight: 24, ParaGap: 12, SpaceW: 4,

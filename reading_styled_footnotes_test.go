@@ -165,9 +165,26 @@ func TestStyledFootnoteSectionRewrapsOnResize(t *testing.T) {
 
 	p := newTestPane(t, styledFnState(), 520)
 	wide := p.fnGeom.height
-	p.Resize(fyne.NewSize(220, 400))
+
+	// Derive the narrow width from the text rather than naming a number. A
+	// fixed width only forces a re-wrap for a face of a particular set width,
+	// and the reading face is not a fixed quantity: this asserted nothing at
+	// all once a narrower one shipped, because the longest note then fitted on
+	// one line at both widths.
+	var longest float32
+	for _, ft := range p.fnGeom.texts {
+		if w := p.measure(ft.Text, runWord, false); w > longest {
+			longest = w
+		}
+	}
+	if longest == 0 {
+		t.Fatal("no footnote text was measured — the test would prove nothing")
+	}
+	narrow := longest/2 + 2*styledPaneInset
+	p.Resize(fyne.NewSize(narrow, 400))
 	if p.fnGeom.height <= wide {
-		t.Errorf("narrow width must re-wrap the section taller: %v <= %v", p.fnGeom.height, wide)
+		t.Errorf("narrow width (%v, half the longest note's %v) must re-wrap the section taller: %v <= %v",
+			narrow, longest, p.fnGeom.height, wide)
 	}
 }
 

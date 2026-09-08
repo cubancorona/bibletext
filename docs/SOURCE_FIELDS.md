@@ -12,6 +12,13 @@ of three verdicts:
 The rule this document enforces: a skip that is not explained here is a
 defect. When a decoder changes, this file changes with it.
 
+That rule is now stricter. Under the standard at the top of
+docs/SCRIPTURE_WORKLIST.md, an explanation is not enough: everything a
+publisher sends is captured unless there is an explicit decision to drop it,
+and anything the app adds of its own is a defect until decided. Every
+"skipped" row below is therefore a candidate for capture, not a closed
+question.
+
 Each skip and each OPEN row is analysed, costed and given a recommendation in
 docs/SOURCE_FIELDS_DECISIONS.md, which also records three defects the
 measuring turned up.
@@ -25,6 +32,91 @@ How to re-census the sources:
   the app does, checks the counts below, and with
   `BIBLETEXT_FULL_CANON_COMPARE` reproduces an earlier decoded canon byte
   for byte. `TestLiveAPIBibleProbe` is the cheap five-call check.
+
+
+## A defect in the licensed source: spaces lost at cross references
+
+Ecclesiastes 12:8 reads `“Vanityof vanities,” says the Preacher,` in the app.
+The space is missing, and it is missing because the source never sends it.
+
+The chapter arrives as a sequence of text fragments. Between `“Vanity` and
+`of vanities,” says the Preacher,` sits a cross-reference note, `style="x"`
+with `caller="-"`, which is the marker-less form. The decoder concatenates
+fragments raw, deliberately, because inserting a space corrupts the
+constructions where a span abuts punctuation or splits a word. So the two
+fragments meet with nothing between them.
+
+This is not the decoder dropping a field. The space is absent from the
+provider's data in all three of its serializations: the JSON the app reads,
+the HTML, and the provider's own plain text, which renders the verse as
+`“Vanityof vanities,”`.
+
+### The shape of it
+
+259 verses across 35 books run two words together. Each one has been checked
+against the provider's own `/verses` endpoint, and all 259 reproduce there.
+
+| book | verses |
+|---|---|
+| Job | 38 |
+| Isaiah | 37 |
+| Jeremiah | 24 |
+| Acts | 18 |
+| Matthew | 12 |
+| Proverbs | 11 |
+| Hosea | 11 |
+| Psalms | 10 |
+| the other 27 books | 98 |
+
+257 of them sit at a cross-reference note and 2 at an italic span. The
+complete list, with the current and correct reading of each, is kept outside
+the repository because it quotes a licensed text.
+
+### It is specific to this edition, not to the platform
+
+Counted across the whole canon, over every text fragment that directly follows
+a note element:
+
+| edition | fragment after a note begins with whitespace |
+|---|---|
+| NKJV `63097d2a0a2f7db3-01` | 9 of 30,085 — 0.03% |
+| KJV `de4e12af7f28f599-01` | 4,208 of 5,801 — 72.5% |
+
+Character spans behave the same in both editions, 42.3% against 41.7%, so this
+is not how the platform serializes in general. In the NKJV the space is
+normally carried on the fragment *before* the note instead, 83.7% of the time.
+The 259 defects are the places where it is carried on neither.
+
+### Why it cannot be repaired locally
+
+The response does not distinguish a marker anchored between two words from one
+anchored inside a word. Both arrive as two fragments meeting at a letter.
+
+| verse | fragments | correct reading |
+|---|---|---|
+| Ecclesiastes 12:8 | `“Vanity` + note + `of vanities,”` | a space belongs here |
+| Genesis 42:20 | `young` + note + `est brother` | `youngest`, no space |
+| Exodus 12:25 | `j` + note + `ust as He promised` | `just`, no space |
+| Ephesians 2:20 | `the chief corner` + span + `stone,` | `cornerstone`, no space |
+
+Inserting a space wherever two word characters meet across a note would repair
+Ecclesiastes and corrupt the other three. Fourteen such legitimate joins were
+found and confirmed. A dictionary test on the joined form was tried and is not
+sound enough to ship: the joined text of Job 22:2 is `Cana`, a place in the
+canon, and the available word lists disagree about common inflections.
+
+So there is no local signal, and manufacturing one would be an editorial act on
+someone else's edition. The verses stand as the provider sends them.
+
+### What to do about it
+
+Report it upstream. It is the provider's defect, and only the provider can fix
+it at the source for every application reading this edition.
+
+Add the check to the decode-time checks so the count is tracked rather than
+rediscovered: a note boundary joining two word characters is worth counting on
+every download, and a change in the count is the signal that the provider has
+acted.
 
 ## The helloao editions — WEB, WEB Catholic, BSB
 
@@ -57,18 +149,18 @@ Census of the captures (chapter-level nodes / verse items):
 |---|---|---|
 | verse text (plain strings and `{text}` runs) | kept | `Verse.Text`, joined with single spaces and tidied (`bsbTidySpacing`); read by every pane, search, share, speech, links, the website |
 | poetry runs `{text, poem: N}` | kept (presence) | a `"\n"` is written before each poem run that follows earlier content, so every surface draws it as a line; a verse that is one poem run has no break and reads as prose |
-| poem indent level `N` | OPEN | only presence is tested; the level (1, 2, and one level 3 in WEB Catholic) is discarded. Keeping it would mean a second indent depth on every pane |
+| poem indent level `N` | kept | `Verse.PoemLevels`, one entry per line of the verse: 1 opens a Hebrew couplet, 2 answers it, and the Catholic edition sends seven at a third depth. Print sets the answering half indented under the opening one, which is the pairing a reader sees; every line still draws flush left until a surface reads this |
 | `{lineBreak: true}` inside a verse (prose lists such as Genesis 10) | kept | a `"\n"` in `Verse.Text` |
 | `wordsOfJesus: true` on a run (WEB and WEB Catholic only; the BSB feed carries none) | skipped | the text is kept, the flag is not read. Red letter comes from the span tables generated from the publishers' USFM (`red_letter_web_data.go`, `red_letter_bsb_data.go`), which cover every edition the same way and are guarded by rune count and hash. The flag would be an alternative source for two of the four editions; it is not used because the table already covers them |
-| `descriptive: true` on a run (Zechariah 12:1 in the BSB; 21 runs in WEB) | OPEN | text kept, styling flag dropped; nothing renders a descriptive run differently |
+| `descriptive: true` on a run (Zechariah 12:1 in the BSB; 21 runs in WEB) | position kept, text OPEN | the verse that FOLLOWS one opens a paragraph: in the Psalms these are the acrostic letters, so this is what restores Psalm 119's twenty-two stanzas. The run's TEXT is still inside the verse, which for the acrostic letters is a defect (see the worklist) |
 | footnote markers `{noteId}` with a chapter-level body | kept | `Verse.Footnotes{Anchor, Text, Caller}`; the anchor is the rune count of the text before the marker; the marker itself adds no characters. Shown in the chapter-bottom section when the Settings toggle is on |
 | footnote `caller` (always `+` here) | kept, unread | stored on the note; no surface draws callers (the section numbers notes itself) |
 | footnote `reference{chapter, verse}` | skipped | the join is by `noteId`, which is exact; every reference in the captures agrees with the verse the marker sits in (`docs/FOOTNOTES.md`) |
 | a marker with no body, or an empty body | skipped | nothing to show |
 | a verse node with a marker and no text (Luke 17:36, Acts 8:37, 15:34, 24:7, Romans 16:25; 24 versification gaps in Sirach) | kept | `BibleData.OrphanFootnotes`, so the chapter-bottom section can say why the number is absent; no verse number is drawn |
 | `hebrew_subtitle` (the Psalm titles: 117 WEB, 116 BSB; 3 and 36 with notes) | kept | `BibleData.Superscriptions`, drawn as an italic unnumbered line above verse 1 on every reading pane; its notes are keyed "Title" in the section. Render-only: never in `Verse.Text`, so never in search, speech, share, copy or links |
-| chapter-level `line_break` (the source's paragraph boundaries) | kept | the verse that follows one is marked `Verse.ParaStart`, and `groupVersesIntoParagraphs` opens a paragraph there, so every surface paragraphs where the translators did. Where a chapter carries any such mark the app's own length rule does not run at all: supplementing the publisher put breaks inside paragraphs they had kept whole |
-| chapter-level `heading` (BSB 3,091 — "The Creation"; WEB Catholic 5; WEB 0) | OPEN | skipped whole. The BSB is the edition where this carries real editorial content. Showing headings is a product decision about what the page is |
+| chapter-level `line_break` (the source's paragraph boundaries, and its stanza breaks — the feeds send `\b` this way too) | kept | the verse that follows one is marked `Verse.ParaStart`, and `groupVersesIntoParagraphs` opens a paragraph there. It is now the ONLY thing that opens one: the app's character-count rule is gone, so a chapter the publisher left unbroken stays unbroken, which is what a poem with no stanza break is in print |
+| chapter-level `heading` (BSB 3,091 — "The Creation"; WEB Catholic 5; WEB 0) | kept | `BibleData.Headings`, each named against the verse it stands above, and each also opening a paragraph as it does in print. Never in `Verse.Text`, so it cannot reach search, speech, sharing or a link. Whether a surface draws one is a separate question, still open |
 | any other chapter-level node type | skipped | the decoder names the three kinds it knows and drops the rest; none other was observed in the captures |
 | any object inside verse content that is not text, a marker or a line break | skipped | dropped without a count; none observed. A count in the decode log would make a new shape visible |
 | Selah | kept as the source has it | in the WEB, Psalm 3:2's "Selah." is its own poem run and so its own line; in the other 73 verses it ends a longer run. In the BSB it is a plain string and joins the end of the last line with a space. The two editions therefore place it differently; nothing normalises this |
@@ -117,13 +209,13 @@ The canon as decoded (verified 5 Sep 2026 against the app's own decode of
 | `p` and every other non-skipped, non-`q` paragraph style (`m`, `pi`, `nb`, `pc`, …) | kept | two things: a single space where a verse flows across the boundary, and the block's first verse marked `Verse.ParaStart`, so the app paragraphs where the publisher does. Poetry blocks are excluded from the second, since a `q` block is a line inside a paragraph and marking those would make every line of a psalm its own paragraph |
 | char `sc` and `nd` | kept, uppercased | small caps and the divine name read as UPPERCASE in plain text, which is what keeps LORD and Lord apart and reassembles "G" + "OD" |
 | char `wj` | kept as plain text | the tag is discarded; red letter comes from the generated offsets table (`red_letter_nkjv_data.go`), guarded by rune count and hash, with whole-verse red when the text no longer matches |
-| char `it` (the NKJV's italicised supplied words) and `bd` | kept as plain text | italics and bold are not carried on any surface. `it` nested inside `wj` counts as red in the offsets table |
+| char `it` (the NKJV's italicised supplied words) | kept | `Verse.Supplied`, as rune offsets into the text — 17,940 spans across 12,459 verses. It is the edition's own disclosure of where a translator added a word for English sense, and it was being flattened away. Offsets, never characters, so the text is byte-identical whether it is captured or not. `bd` (bold) is still flattened; the feed's New Testament carries 30 |
 | notes of style `x` / `ex` (the feed's only note kind) | kept, not shown | `Verse.Footnotes` with `Kind` cross-reference, anchored where the note sits. The chapter-bottom section excludes cross-reference notes on purpose (`footnote_section.go`), so these are captured and dark. The print edition's NU-/M-Text apparatus is not in the feed at all (`docs/FOOTNOTES.md`) |
 | notes of any other style (`f`, `fe`, …) | kept | same path, shown in the section; proven by fixture only, the live feed carries none |
 | a note in a verse whose markup decodes to no words | kept | `OrphanFootnotes` |
 | a note that opens a verse | kept, anchored at 0 | the note's sentinel is not text: the poem break or prose space owed at the paragraph boundary is decided on the words alone, so the verse's first word stays first. (The earlier decode wrote the break in front of it: 1,995 poetry verses opened with a blank line. Fixed at cache epoch 2) |
 | the `d` paragraph (Psalm superscription), with its notes | kept | `BibleData.Superscriptions`, exactly as for the helloao editions. Read through the same walk as a verse, so char spans and notes are handled alike; attached at the next verse marker, because on the passages endpoint chapter N+1's title is read while the decoder is still in chapter N. A title left over at a chunk's tail is attached only when its own `verseId` names the chapter, never guessed; the live feed carries no `verseId` on titles and re-serves a title with a range that starts at its chapter's first verse, so none is left over. A title's cross-reference note is captured and dark like every other NKJV note |
-| `qa` (acrostic letters) | skipped | not Scripture; and the `q` poetry prefix would otherwise claim it. The letters carry a `verseId`, which is why the exact-match skip exists |
+| `qa` (acrostic letters), `s`/`s1-4`, `ms`/`ms1-3`, `mr`, `sr`, `r`, `sp`, `cl`, `cd` | kept | captured into `BibleData.Headings` with the publisher's own style name, so a section head can be told from an acrostic letter without guessing — 2,721 of them, 2,674 section heads and 47 acrostic letters. The position also opens a paragraph, because in print a heading always begins a new unit and an acrostic letter marks a stanza. This feed sends no blank-line instruction at all, so without it a chapter of poetry would arrive with nothing to break it — it is what takes the NKJV from 78% of chapters following its publisher to 98% |
 | `s`, `s1`–`s4`, `ms`, `ms1`–`ms3`, `mr`, `sr`, `r`, `sp`, `cl`, `cd` | OPEN (skipped) | the publisher's section headings and cross-reference lines, dropped whole, including any note inside the block. Same decision as the helloao `heading` row |
 | heading-like styles outside that exact list (`s5`, `ms4`, `mt*`, `mte`, `imt`, `is`, `ip`, `io*`, `sd*`) | skipped by consequence | would fall to the prose path: dropped before verse 1, appended to the verse after it. In the chapters sampled live and the 174 New Testament chapters of the red-letter generator's cache, the paragraph styles that arrive are `s`, `d`, `qa`, `p`, `q1`, `q2` and `pc`; and a leak into verse text anywhere in the canon would have shown in the byte-for-byte comparison with the titles-off decode, which found none |
 | char styles whose text is not Scripture (`rq`, `fig`, `va`, `vp`, `w`, `wh`, `wg`) | skipped by consequence | none observed; a leak would appear as changed verse text in the full-canon comparison |

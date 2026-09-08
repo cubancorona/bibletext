@@ -202,12 +202,12 @@ func TestCitedTextSharePreservesParagraphsNotSoftWraps(t *testing.T) {
 	bd.Books = []string{"Test"}
 	bd.Verses["Test"] = map[int][]Verse{1: {
 		{BookName: "Test", Chapter: 1, Verse: 1, Text: longVerse},
-		{BookName: "Test", Chapter: 1, Verse: 2, Text: "Second paragraph."},
+		{BookName: "Test", Chapter: 1, Verse: 2, ParaStart: true, Text: "Second paragraph."},
 	}}
 	state := &AppState{Bible: bd, CurrentBook: "Test", CurrentChapter: 1}
 
-	// The reader intentionally starts verse 2 as a new paragraph once the first
-	// paragraph passes its measure; that structural break survives sharing.
+	// The publisher starts verse 2 as a new paragraph; that structural break
+	// survives sharing, while the soft wraps inside verse 1 do not.
 	flat := longVerse + " Second paragraph."
 	if got, want := restoreShareLineBreaks(state, flat, -1, 0), longVerse+"\n\nSecond paragraph."; got != want {
 		t.Errorf("paragraph structure:\n got %q\nwant %q", got, want)

@@ -120,7 +120,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	b.WriteString(`</div></div>`)
 	fmt.Fprintf(&b, `<p class="ver">%s</p>`, template.HTMLEscapeString(v.Name))
 	b.WriteString(`<article class="text">`)
-	b.WriteString(chapterBody(v.ID, book, verses))
+	b.WriteString(chapterBody(v.bible, v.ID, book, chapter, verses))
 	b.WriteString(`</article>`)
 
 	// Prev/next keep the reader moving without going back to an index.
@@ -151,7 +151,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 // versionID is threaded all the way down because red letters are PER
 // TRANSLATION: each edition has its own span table, and rendering one
 // translation with another's marks is exactly the bug this argument fixed.
-func chapterBody(versionID, book string, verses []bibletext.Verse) string {
+func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, verses []bibletext.Verse) string {
 	if len(verses) == 0 {
 		// THE SENTENCE THAT USED TO BE HERE — "This chapter is not available in
 		// this translation." — IS RETIRED, not moved. It was unreachable dead
@@ -170,7 +170,16 @@ func chapterBody(versionID, book string, verses []bibletext.Verse) string {
 	// breaks where the reading pane breaks. A paragraph that OPENS with a poetic
 	// verse is marked .pm: the app skips its reporter indent and sets it ragged
 	// rather than justified, because a psalm is lines, not prose.
-	for _, para := range bibletext.GroupVersesIntoParagraphs(verses) {
+	// Blocks, not paragraphs: the publisher's section headings stand among
+	// them, in the places the publisher put them and the reading pane sets
+	// them. A page that dropped them would be a different page from the app's.
+	for _, blk := range bibletext.ChapterBlocks(bd, book, chapter, verses) {
+		if blk.HeadingText != "" {
+			fmt.Fprintf(&b, `<h2 class="sec">%s</h2>`,
+				template.HTMLEscapeString(blk.HeadingText))
+			continue
+		}
+		para := blk.Verses
 		if len(para) == 0 {
 			continue
 		}
@@ -199,7 +208,13 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
 			}
 		}
 		fmt.Fprintf(&b, `<span class="v" id="v%d">`, v.Verse)
-		fmt.Fprintf(&b, `<sup class="n"><a href="#v%d">%d</a></sup>&nbsp;`, v.Verse, v.Verse)
+		// An ORDINARY space after the number, not a no-break one. The page can
+		// afford to let a superscript sit at a line end; a reader copying a
+		// verse out of the page cannot afford a character nobody typed, and a
+		// no-break space pasted into a document is exactly that. The app's own
+		// surfaces strip it on the way out (outbound_text.go); the page has no
+		// such moment, so it must not put one there in the first place.
+		fmt.Fprintf(&b, `<sup class="n"><a href="#v%d">%d</a></sup> `, v.Verse, v.Verse)
 		// RUNS, not a whole-verse yes/no. This asked IsWordsOfChrist until the
 		// app grew per-edition span tables and the page did not: a verse where
 		// Christ answers somebody came out entirely red, the other speaker
@@ -215,6 +230,12 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
 			text := strings.ReplaceAll(template.HTMLEscapeString(run.Text), "\n", "<br>")
 			if text == "" {
 				continue
+			}
+			if run.Italic {
+				// The translators' supplied words, as the edition discloses
+				// them. Inside the red span where the two overlap, so a
+				// supplied word in Christ's words stays red AND italic.
+				text = "<i>" + text + "</i>"
 			}
 			if run.Red {
 				fmt.Fprintf(&b, `<span class="wj">%s</span>`, text)

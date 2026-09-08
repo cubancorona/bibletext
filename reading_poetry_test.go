@@ -297,14 +297,14 @@ func TestBuildChapterHTMLMixedParagraphs(t *testing.T) {
 	reporterLayout = func() bool { return false }
 	defer func() { reporterLayout = orig }()
 
-	// Enough prose to close the first paragraph (>=320 chars ending on a
-	// sentence), then poetry: only the poetry paragraph is ragged-right.
+	// A prose paragraph, then a poetry one: only the poetry paragraph is
+	// ragged-right. The second paragraph is marked, as a publisher marks it.
 	prose := "In the beginning God created the heavens and the earth. Now the earth was formless and void, and darkness was over the surface of the deep. And the Spirit of God was hovering over the surface of the waters. And God said, Let there be light, and there was light. And God saw that the light was good, and He separated the light from the darkness."
 	bd := &BibleData{
 		Books: []string{"Genesis"},
 		Verses: map[string]map[int][]Verse{"Genesis": {1: {
 			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 1, Text: prose},
-			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 27,
+			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 27, ParaStart: true,
 				Text: "So God created man in His own image;\nin the image of God He created him;\nmale and female He created them."},
 		}}},
 	}
@@ -327,17 +327,43 @@ func TestBuildChapterHTMLReporterIndent(t *testing.T) {
 	reporterLayout = func() bool { return true }
 	defer func() { reporterLayout = orig }()
 
-	const indent = "  " // the em+en pair, as characters post-entity
-
-	// All-poetic paragraph: no first-line indent (print poetry is unindented).
-	st := psalm23State()
-	html := buildChapterHTML(st, st.Bible.GetChapter("Psalms", 23))
-	if strings.Contains(html, `<p class="pm">&#8195;&#8194;`) || strings.Contains(html, `<p class="pm">`+indent) {
-		t.Errorf("a paragraph opening on a poem line must not be indented:\n%s", html)
+	// THE INDENT IS NO LONGER IN THE TEXT. It used to be an em-space and an
+	// en-space written into each paragraph, because the HTML importer drops
+	// text-indent; the system's Copy read them out of the text storage, so a
+	// paragraph copied from the landscape reader began with two spaces nobody
+	// typed. The indent is a paragraph attribute now
+	// (bibleTextSetReporterIndent), applied to the justified paragraphs only.
+	for _, tc := range []struct {
+		name string
+		st   *AppState
+		book string
+		ch   int
+	}{
+		{"a chapter of poetry", psalm23State(), "Psalms", 23},
+		{"prose and poetry together", mixedProseAndPoetryState(), "Exodus", 15},
+	} {
+		html := buildChapterHTML(tc.st, tc.st.Bible.GetChapter(tc.book, tc.ch))
+		for _, bad := range []string{"&#8195;", "&#8194;", "\u2003", "\u2002"} {
+			if strings.Contains(html, bad) {
+				t.Errorf("%s: the body still carries an indent character %q:\n%s", tc.name, bad, html)
+			}
+		}
 	}
 
-	// Mixed paragraph OPENING with prose: the indent is reporter mode's only
-	// paragraph-boundary marker and must survive.
+	// The signal the native side reads instead: poetry stays ragged, prose is
+	// justified, and that is what tells the two apart after the import.
+	poem := buildChapterHTML(psalm23State(), psalm23State().Bible.GetChapter("Psalms", 23))
+	if !strings.Contains(poem, `p.pm { text-align: left; }`) {
+		t.Errorf("the stylesheet must leave a poem paragraph ragged:\n%s", poem)
+	}
+	if !strings.Contains(poem, "text-align: justify") {
+		t.Errorf("prose must stay justified — it is how the pane finds it:\n%s", poem)
+	}
+}
+
+// mixedProseAndPoetryState is a paragraph that OPENS with prose and turns into
+// poetry, which in print keeps its first-line indent.
+func mixedProseAndPoetryState() *AppState {
 	bd := &BibleData{
 		Books: []string{"Exodus"},
 		Verses: map[string]map[int][]Verse{"Exodus": {15: {
@@ -347,9 +373,5 @@ func TestBuildChapterHTMLReporterIndent(t *testing.T) {
 				Text: "The LORD is my strength and my song,\nand He has become my salvation."},
 		}}},
 	}
-	st2 := &AppState{Bible: bd, CurrentBook: "Exodus", CurrentChapter: 15}
-	html2 := buildChapterHTML(st2, bd.GetChapter("Exodus", 15))
-	if !strings.Contains(html2, `<p class="pm">&#8195;&#8194;`) {
-		t.Errorf("a mixed paragraph opening with prose must keep its indent:\n%s", html2)
-	}
+	return &AppState{Bible: bd, CurrentBook: "Exodus", CurrentChapter: 15}
 }

@@ -29,6 +29,33 @@ var webUIFontBold []byte
 //go:embed assets/fonts/atkinson/OFL.txt
 var webUIFontLicense []byte
 
+//go:embed assets/fonts/reading/web/Junicode-Regular.woff2
+var webScriptureFontRegular []byte
+
+//go:embed assets/fonts/reading/web/Junicode-Bold.woff2
+var webScriptureFontBold []byte
+
+//go:embed assets/fonts/reading/Junicode-OFL.txt
+var webScriptureFontLicense []byte
+
+// WebScriptureFontRegular is the subsetted reading face (WOFF2). Built from the
+// SAME file the app embeds, so the site and the app can never drift to
+// different releases of it. Narrower than the app's subset: the site publishes
+// no edition that marks a divine name, so it needs no small capitals, and its
+// note chrome is set in the UI face, so its scripture face never draws Greek or
+// Hebrew.
+func WebScriptureFontRegular() []byte { return webScriptureFontRegular }
+
+// WebScriptureFontBold is the subsetted reading face, bold. Required, and not
+// obviously so: the only bold inside the reading column is the verse number,
+// and with a webfont a weight of 600 resolves to the 700 face — so shipping
+// regular alone would leave every verse number synthesised.
+func WebScriptureFontBold() []byte { return webScriptureFontBold }
+
+// WebScriptureFontLicense is the reading face's licence. The OFL requires it to
+// travel with the font, which is why the site publishes it beside the file.
+func WebScriptureFontLicense() []byte { return webScriptureFontLicense }
+
 // WebUIFontRegular is the subsetted Atkinson Hyperlegible regular face (WOFF2).
 func WebUIFontRegular() []byte { return webUIFontRegular }
 

@@ -195,9 +195,13 @@ def fnv1a64(text):
 def derive():
     import glob
     app_cache = None
+    # The cache name carries the decoder's EPOCH — bibletext-nkjv-v7.json — so
+    # a table can only ever be built against a text some decoder really
+    # produced. Globbing the bare name found nothing once epochs arrived, and a
+    # generator that silently finds no text is worse than one that stops.
     for pat in (
-        os.path.expanduser("~/Library/Caches/bibletext/bibletext-nkjv.json"),
-        os.path.expanduser("~/Library/Developer/CoreSimulator/Devices/*/data/Containers/Data/Application/*/Library/Caches/bibletext/bibletext-nkjv.json"),
+        os.path.expanduser("~/Library/Caches/bibletext/bibletext-nkjv*.json"),
+        os.path.expanduser("~/Library/Developer/CoreSimulator/Devices/*/data/Containers/Data/Application/*/Library/Caches/bibletext/bibletext-nkjv*.json"),
     ):
         hits = sorted(glob.glob(pat), key=os.path.getmtime, reverse=True)
         if hits:

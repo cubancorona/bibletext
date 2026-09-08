@@ -47,7 +47,10 @@ type styledDrawRun struct {
 	Text string
 	Kind runKind
 	Red  bool
-	Tint verseTint
+	// Supplied is drawn in the italic cut: the translators' own disclosure of
+	// where a judgement was made.
+	Supplied bool
+	Tint     verseTint
 
 	X float32 // relative to the line's left edge (pane adds the inset)
 
@@ -58,20 +61,29 @@ type styledDrawRun struct {
 }
 
 // mergeDrawRuns collapses a line's token runs into style segments. Adjacent
-// runs merge when kind, red-letter, and tint all match; the model text
+// runs merge when kind, red-letter, tint AND SCRIPT all match; the model text
 // between two adjacent runs on one line is always a single space.
+//
+// Script is in that list because a merged run is drawn with ONE face, and the
+// face is chosen from the run's text. Without it a single Hebrew word pulled
+// its whole sentence into the Hebrew face — every Latin letter around it drawn
+// by a face that has Latin but is not the reading face, and the Greek beside it
+// dropped to the system, because the merge happens before anything looks at
+// what the run says.
 func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
 	var out []styledDrawRun
 	for _, r := range ln.Runs {
 		if n := len(out); n > 0 {
 			prev := &out[n-1]
-			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint {
+			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint &&
+				prev.Supplied == r.Supplied &&
+				hasHebrew(prev.Text) == hasHebrew(r.Text) {
 				prev.Text += " " + r.Text
 				continue
 			}
 		}
 		out = append(out, styledDrawRun{
-			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, Tint: r.Tint,
+			Text: r.Text, Kind: r.Kind, Red: r.RedLetter, Supplied: r.Supplied, Tint: r.Tint,
 			X: r.X, FirstOffset: r.Offset, Line: lineIdx,
 		})
 	}
@@ -96,9 +108,14 @@ type styledReadingPane struct {
 	state  *AppState
 	verses []Verse
 
+	// textSize is the size the type is SET at — the optical scale is already in
+	// it, so every leading, indent and gap reckoned from it rides along and the
+	// page keeps its proportions. refSize is the same size WITHOUT the scale,
+	// and it has exactly one job: the measure below. See reading_face_scale.go.
 	textSize float32
+	refSize  float32
 	pal      palette
-	font     fyne.Resource // the scripture serif (Georgia, or embedded Gelasio)
+	font     fyne.Resource // the shipped scripture face
 
 	lay       *chapterLayout
 	drawRuns  []styledDrawRun
@@ -159,6 +176,7 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 		state:     state,
 		verses:    verses,
 		textSize:  styledPaneTextSize(),
+		refSize:   styledPaneReferenceSize(),
 		pal:       state.pal(),
 		font:      styledPaneFont(),
 		selAnchor: -1, selStart: -1, selEnd: -1,
@@ -190,7 +208,10 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 // styledPaneTextSize matches chapterText's sizing: the theme body size scaled
 // by the reader's Settings → Text size choice, with a sane default for bare
 // test constructions (no running app).
-func styledPaneTextSize() float32 {
+// styledPaneReferenceSize is the pane's body size before the optical scale: what
+// the toolkit's text size and the reader's own setting ask for between them. Only
+// the measure is figured from it.
+func styledPaneReferenceSize() float32 {
 	size := float32(15)
 	if app := fyne.CurrentApp(); app != nil {
 		size = fyneTheme.TextSize()
@@ -198,18 +219,41 @@ func styledPaneTextSize() float32 {
 	return size * float32(readingTextScale())
 }
 
-// styledPaneFont resolves the scripture face ONCE per process: the same
-// family iOS renders through its HTML stack (font-family: Georgia, …) — the
-// first serif loadBookFonts finds (real Georgia on Windows/macOS; on Linux
-// typically DejaVu Serif, the usual distro serif), else the embedded Gelasio,
-// Georgia's metrics-compatible OFL equivalent that the share cards already
-// carry. Never nil, so drawing and measuring always use the same face.
+// styledPaneTextSize is the size the shipped face is actually set at. The scale
+// belongs here rather than on the theme size it starts from: the theme's text
+// size dresses the whole interface, and Scripture is the only thing set in this
+// face (reading_face_scale.go).
+func styledPaneTextSize() float32 {
+	return readingGlyphSize(styledPaneReferenceSize())
+}
+
+// referenceSize backs the measure out of the set size for a pane built bare —
+// the tests construct one directly, and a zero here would read as an infinitely
+// narrow column and put every pane into the reporter layout.
+func (p *styledReadingPane) referenceSize() float32 {
+	if p.refSize > 0 {
+		return p.refSize
+	}
+	if p.textSize > 0 {
+		return p.textSize / float32(readingOpticalScale())
+	}
+	return styledPaneReferenceSize()
+}
+
+// styledPaneFont resolves the scripture face ONCE per process. It is the
+// SHIPPED face now (see reading_fonts_embed.go), the same face every other
+// surface sets scripture in, rather than whichever serif the operating system
+// happened to offer. Resolved once because relayout runs continuously during a
+// window drag-resize; never nil, so drawing and measuring always use the same
+// face.
 func styledPaneFont() fyne.Resource {
 	styledFontOnce.Do(func() {
-		if fonts := loadBookFonts(); fonts != nil && fonts.regular != nil {
+		if fonts := loadReadingFonts(); fonts != nil && fonts.regular != nil {
 			styledFontCached = fonts.regular
 			return
 		}
+		// Unreachable in a real build: the bytes are compiled in. Kept so a
+		// stripped test binary draws something rather than nothing.
 		styledFontCached = fyne.NewStaticResource("Gelasio-Regular.ttf", shareFontGelasio)
 	})
 	return styledFontCached
@@ -241,7 +285,10 @@ func (p *styledReadingPane) relayout(width float32) {
 	// today's cozy narrow-pane layout and a resize glides between the two.
 	// The em is the pane's own body size, exactly as the iPad's measure is
 	// 27.5 × ITS body px.
-	if m := reporterMeasureEm * p.textSize; avail > m {
+	// The REFERENCE size, not the size the type is set at: a measure fixes the
+	// column's physical width, and holding it still while the glyphs inside it
+	// grow is what puts the line back to its old character count.
+	if m := reporterMeasureEm * p.referenceSize(); avail > m {
 		p.extraInset = float32(int((avail - m) / 2)) // whole px: keep glyphs crisp
 		avail = m
 		lh = p.textSize * 1.3
@@ -281,7 +328,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    paraGap,
-		SpaceW:     p.measure(" ", runWord),
+		SpaceW:     p.measure(" ", runWord, false),
 		Indent:     indent,
 		TopPad:     p.superGeom.height,
 		BandVerse:  p.noteAnchorVerse(),
@@ -371,7 +418,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	// belongs to, like the sticker's.
 	fnSize := p.textSize * styledFnRatio
 	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, func(s string) float32 {
-		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.font)
+		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.faceFor(s, false))
 		return w.Width
 	})
 	p.fnGeom.place(p.insetX(), p.lay.Height+p.styledLineHeight())
@@ -405,16 +452,90 @@ func (p *styledReadingPane) noteAnchorVerse() int {
 // source the renderer draws with (RenderedTextSize honours FontSource, which
 // fyne.MeasureText cannot), so wrap geometry, hit-testing and glyphs can
 // never drift apart.
-func (p *styledReadingPane) measure(text string, kind runKind) float32 {
+func (p *styledReadingPane) measure(text string, kind runKind, italic bool) float32 {
 	size := p.textSize
 	if kind == runVerseNum {
 		size *= styledNumRatio
 	}
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, p.font)
+	face := p.faceFor(text, italic)
+	if kind == runHeading {
+		// Measured in the cut it is DRAWN in, or the heading wraps to a width
+		// it does not occupy.
+		face = p.headingFace()
+	}
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, face)
 	return w.Width
 }
 
+// headingFace is the bold cut a publisher's section heading is set in. Body
+// size and bold, matching what the other surfaces do: this pane reads meaning
+// from a run's KIND rather than its size, but the panes beside it read size,
+// and one look across the app is worth more than a larger heading here.
+func (p *styledReadingPane) headingFace() fyne.Resource {
+	if f := loadReadingFonts(); f != nil && f.bold != nil {
+		return f.bold
+	}
+	return p.font
+}
+
+// faceFor is the ONE place a run's face is decided, and every ruler and every
+// drawn object goes through it. Measuring with one face and drawing with
+// another is how wrap geometry, hit-testing and glyphs drift apart.
+//
+// The reading family has no Hebrew — no Latin family with four properly
+// featured cuts does — so a Hebrew run is drawn in the Hebrew face the app
+// ships instead. Without that it would fall through to whatever the platform
+// supplies, which differs on every platform and is the borrowing this change
+// exists to end.
+func (p *styledReadingPane) faceFor(text string, italic bool) fyne.Resource {
+	if hasHebrew(text) {
+		// The Hebrew face has one cut, so an italic Hebrew run is set upright.
+		// No edition marks Hebrew as supplied, and an upright word beats a
+		// mechanically slanted one.
+		if heb := hebrewReadingFont(); heb != nil {
+			return heb
+		}
+	}
+	if italic {
+		if f := loadReadingFonts(); f != nil && f.italic != nil {
+			return f.italic
+		}
+	}
+	return p.font
+}
+
+// hasHebrew reports whether s carries any Hebrew, letters or marks alike: a
+// run of bare points belongs with its letters, not with the Latin around it.
+func hasHebrew(s string) bool {
+	for _, r := range s {
+		if (r >= 0x0590 && r <= 0x05FF) || (r >= 0xFB1D && r <= 0xFB4F) {
+			return true
+		}
+	}
+	return false
+}
+
 const styledNumRatio = float32(0.66)
+
+// styledNumRaise moves the verse number relative to the body's top, as a
+// fraction of the body text size. It is NEGATIVE: the number is dropped, not
+// lifted.
+//
+// That reads backwards until you notice that the number is already a
+// superscript before the pane touches it. The runs carry Unicode superscript
+// figures (superscriptNumber), so the face has drawn them raised, and how far
+// raised is the face's decision. The reading face draws them 0.232 em higher
+// than the system serif the pane used to borrow, measured from both faces'
+// outlines. Lifting them again put a third of the numeral above the top of its
+// own line and outside the wash a marked verse is painted with, so a search hit
+// or a selection coloured the words and left the number hanging over them.
+//
+// The value matches the numeral's ink CENTRE to where the borrowed serif put
+// it. Both the line height and the body box fall out of that equation, so one
+// constant is right for the cozy column and the reporter page alike — which is
+// what the first attempt at this got wrong, having been checked against the
+// cozy leading only.
+const styledNumRaise = float32(-0.117)
 
 func (p *styledReadingPane) CreateRenderer() fyne.WidgetRenderer {
 	r := &styledPaneRenderer{pane: p}
@@ -558,6 +679,10 @@ type styledPaneRenderer struct {
 	fnTexts []*canvas.Text
 	// The superscription's lines — own slice, same reason.
 	superTexts []*canvas.Text
+	// headTexts is one object per publisher's-heading LINE, built from the
+	// layout's heading lines and index-parallel to them.
+	headTexts []*canvas.Text
+	headLines []int
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -609,7 +734,7 @@ func (r *styledPaneRenderer) rebuild() {
 
 	for _, dr := range p.drawRuns {
 		t := canvas.NewText(dr.Text, r.runColor(dr))
-		t.FontSource = p.font // the scripture serif, same face iOS shows
+		t.FontSource = p.faceFor(dr.Text, dr.Supplied)
 		t.TextSize = p.textSize
 		if dr.Kind == runVerseNum {
 			// The serif at the small superscript size (iOS renders numbers in
@@ -623,6 +748,23 @@ func (r *styledPaneRenderer) rebuild() {
 	// The superscription: italic at body size where the platform's serif
 	// has an italic; the pane's regular face in the muted tone otherwise,
 	// so the title's register survives either way.
+	// The publisher's section headings: one object per heading line, in the
+	// bold cut, in the body colour. Built from the LINES rather than from runs,
+	// because a heading line deliberately carries none — that is what keeps it
+	// out of the selection model.
+	r.headTexts = r.headTexts[:0]
+	r.headLines = r.headLines[:0]
+	for li, ln := range p.lay.Lines {
+		if ln.Heading == "" {
+			continue
+		}
+		t := canvas.NewText(ln.Heading, p.pal.Text)
+		t.FontSource = p.headingFace()
+		t.TextSize = p.textSize
+		r.headTexts = append(r.headTexts, t)
+		r.headLines = append(r.headLines, li)
+		r.objects = append(r.objects, t)
+	}
 	r.superTexts = r.superTexts[:0]
 	if p.superGeom.present {
 		font, italic := styledSuperFont()
@@ -653,7 +795,7 @@ func (r *styledPaneRenderer) rebuild() {
 				c = p.pal.VerseNumber
 			}
 			t := canvas.NewText(ft.Text, c)
-			t.FontSource = p.font
+			t.FontSource = p.faceFor(ft.Text, false)
 			t.TextSize = p.textSize * styledFnRatio
 			r.fnTexts = append(r.fnTexts, t)
 			r.objects = append(r.objects, t)
@@ -748,17 +890,30 @@ func (r *styledPaneRenderer) position() {
 	}
 	drv := fyne.CurrentApp().Driver()
 	bodyS, _ := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.font)
-	numS, _ := drv.RenderedTextSize("1", p.textSize*styledNumRatio, fyne.TextStyle{}, p.font)
-	bodyH, numH := bodyS.Height, numS.Height
+	bodyH := bodyS.Height
 	for i, dr := range p.drawRuns {
 		ln := p.lay.Lines[dr.Line]
 		y := ln.Y + (lh-bodyH)/2
 		if dr.Kind == runVerseNum {
-			// Raised superscript: top-align the small label against the
-			// body's ascent region.
-			y = ln.Y + (lh-bodyH)/2 - numH*0.18
+			// The number is placed from the TEXT SIZE, never from a
+			// measured box. RenderedTextSize reports the face's DECLARED line
+			// box rather than the height of its ink, and faces declare wildly
+			// different ones, so anything derived from it moves when the face
+			// does. See styledNumRaise for why the offset is a drop.
+			y = ln.Y + (lh-bodyH)/2 - p.textSize*styledNumRaise
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
+	}
+
+	// The headings, from the lines they were laid out on.
+	for i, t := range r.headTexts {
+		if i < len(r.headLines) && r.headLines[i] < len(p.lay.Lines) {
+			ln := p.lay.Lines[r.headLines[i]]
+			t.Move(fyne.NewPos(p.insetX(), ln.Y+(ln.H-t.MinSize().Height)/2))
+			t.Show()
+		} else {
+			t.Hide()
+		}
 	}
 
 	// The superscription, from its geometry table alone — hide, never

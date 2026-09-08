@@ -18,6 +18,7 @@ package bibletext
 #cgo LDFLAGS: -framework UIKit -framework Foundation -framework CoreGraphics
 
 #import <UIKit/UIKit.h>
+#import <CoreText/CoreText.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -553,6 +554,28 @@ static void btIOSApplyInsets(CGFloat w) {
     btIOSRebuildWash();
 }
 
+// gReporterIndent is the reporter page's FIRST-LINE INDENT, in points, or 0
+// when the page is not in that layout. It exists because the HTML importer
+// drops text-indent: the indent used to be two literal space characters
+// written into the paragraph's own text, and the system's Copy read them
+// straight out of the text storage into the reader's clipboard. Applied as a
+// paragraph attribute instead, it is typography again rather than text.
+// Defined in reading_fonts_apple.go. Returns the shipped reading face at a
+// run's own size and traits, with a cascade to the Hebrew face.
+extern CTFontRef btReadingFontLike(CTFontRef src);
+
+static CGFloat gReporterIndent = 0;
+
+// The leading, as a multiple of each paragraph's own largest font. 0 leaves the
+// importer's own line metrics alone (reading_face_scale.go).
+static CGFloat gReadingLinePitchEm = 0;
+
+void bibleTextSetReadingLinePitch(double em) { gReadingLinePitchEm = (CGFloat)em; }
+
+void bibleTextSetReporterIndent(double pts) {
+    dispatch_async(dispatch_get_main_queue(), ^{ gReporterIndent = (CGFloat)pts; });
+}
+
 void bibleTextSetReadingMeasure(double m) {
     dispatch_async(dispatch_get_main_queue(), ^{
         gReadingMeasure = (CGFloat)m;
@@ -595,6 +618,15 @@ static CGFloat btIOSVerseFontThreshold(NSTextStorage *ts) {
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (val != nil && ((UIFont *)val).pointSize > maxSize) maxSize = ((UIFont *)val).pointSize;
     }];
+    // A DEAD ARM, and deliberately left as a literal. It is reached only when the
+    // storage carries no font attribute anywhere — in which case the walks that
+    // use this threshold find nothing to classify either, because they skip runs
+    // with no font. The number no longer means what it once did: it was chosen to
+    // sit above a numeral of 0.66 x 21pt = 13.86, and the optically corrected body
+    // puts a numeral at 0.66 x 24 = 15.84 (reading_face_scale.go). Were the arm
+    // ever live it would now under-classify — miss verse numbers rather than
+    // invent them, which is the harmless direction — but do not read it as a
+    // statement about what a verse number measures.
     return maxSize > 0 ? maxSize * 0.8 : 15.0;
 }
 
@@ -658,7 +690,8 @@ static NSUInteger btIOSContentStart(void) {
     return gVerseIndexCount > 0 ? gVerseIndex[0].loc : 0;
 }
 
-// btIOSBuildVerseIndex captures every verse-number run (the only sub-15pt runs) into
+// btIOSBuildVerseIndex captures every verse-number run (those below the 0.8x
+// threshold, which is derived per render and not an absolute size) into
 // gVerseIndex. Called on every text assignment; the single buffer is reused for the
 // app's life. ts==nil (plain-text fallback) clears the table. The walk stops at the
 // content end: the footnote section's 0.85em runs sit above the 0.8× threshold, so
@@ -3011,7 +3044,59 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         if (v == nil) return;
         NSMutableParagraphStyle *ps = [(NSParagraphStyle*)v mutableCopy];
         ps.paragraphSpacingBefore = 0;
+        // THE LEADING, SAID OUT LOUD. Left to the stylesheet it is an accident:
+        // the importer turns a unitless line-height into a minimum line height
+        // per RUN, and a paragraph takes its leading from the FIRST run — always
+        // the 0.66em verse numeral — so the drawn pitch was 2.0 x 0.66 x the
+        // body and would have moved if that numeral were ever resized. Set from
+        // each paragraph's OWN largest font, so the footnote apparatus and the
+        // headings lead in proportion to their own size rather than the body's.
+        // Read off the untouched import, not the copy being mutated here.
+        if (gReadingLinePitchEm > 0) {
+            // The RANGE MATTERS. The importer hands out paragraph styles per RUN,
+            // not per paragraph, so `r` is routinely just the verse numeral —
+            // taking the largest font over it set the whole page's leading from
+            // a 0.66em superscript and the lines collided. Widen to the real
+            // paragraph first.
+            NSRange pr = [as.string paragraphRangeForRange:r];
+            __block CGFloat big = 0;
+            [as enumerateAttribute:NSFontAttributeName inRange:pr options:0
+                        usingBlock:^(id fv, NSRange fr, BOOL *fstop) {
+                if (fv != nil && ((UIFont *)fv).pointSize > big) big = ((UIFont *)fv).pointSize;
+            }];
+            if (big > 0) {
+                ps.minimumLineHeight = big * gReadingLinePitchEm;
+                ps.maximumLineHeight = big * gReadingLinePitchEm;
+            }
+        }
+        // The reporter page's first-line indent, on the PROSE paragraphs only.
+        // Poetry is never first-line indented in print, and the two are
+        // already told apart by the alignment the stylesheet gave them:
+        // justified for prose, left for a paragraph that opens on a poem line
+        // (p.pm). Alignment is one of the few properties the importer keeps.
+        if (gReporterIndent > 0) {
+            ps.firstLineHeadIndent = (ps.alignment == NSTextAlignmentJustified) ? gReporterIndent : 0;
+        }
         [mas addAttribute:NSParagraphStyleAttributeName value:ps range:r];
+    }];
+    // THE READING FACE. The stylesheet cannot ask for it: the HTML importer
+    // will not resolve an app-private font by name and silently returns the
+    // system serif instead, so the family is replaced here, run by run, at each
+    // run's OWN point size. The size is what carries meaning on this pane — the
+    // verse number is 0.66 of the body and the footnote section 0.85, and
+    // btIOSVerseFontThreshold and btIOSFindContentEnd read them — so it is
+    // taken from the imported font rather than recomputed.
+    //
+    // Hebrew needs no handling: the substituted font carries a cascade list to
+    // the Hebrew face and CoreText falls through to it per glyph.
+    [mas enumerateAttribute:NSFontAttributeName
+                    inRange:NSMakeRange(0, mas.length) options:0
+                 usingBlock:^(id v, NSRange r, BOOL *stop) {
+        if (v == nil) return;
+        CTFontRef sub = btReadingFontLike((__bridge CTFontRef)v);
+        if (sub == NULL) return;
+        [mas addAttribute:NSFontAttributeName value:(__bridge UIFont *)sub range:r];
+        CFRelease(sub);
     }];
     // The dialect's .hl rule arrives as an OPAQUE background attribute, which on
     // this pane would sit above UIKit's selection highlight and hide it (see
@@ -3473,7 +3558,6 @@ import "C"
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"os"
 	"time"
 	"unsafe"
@@ -3757,11 +3841,27 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// Keep the native reporter column in sync with the text-size setting (the
 	// measure is em-based, so Large/XL widen the column and keep the line's
 	// character count at the reporter's ~59). Phones pass 0 → legacy insets.
+	// BEFORE the import below. A face registered afterwards is of no use to a
+	// sweep that has already run.
+	registerAppleReadingFonts()
+	// The leading, chosen rather than inherited from the numeral that happens
+	// to open each paragraph (reading_face_scale.go).
+	C.bibleTextSetReadingLinePitch(C.double(readingLinePitchEm))
 	if reporterLayoutActive() {
-		bodyPx := math.Round(21 * readingTextScale())
-		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * bodyPx))
+		// The REFERENCE size, deliberately, not the size the face is set at.
+		// The column is measured in ems and its width is what decides how many
+		// characters land on a line; figuring it from the optically scaled size
+		// would widen it 15% and hand the line back the extra characters the
+		// narrower face already gave it (reading_face_scale.go).
+		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * readingReferencePx()))
+		// The same ~1.5em the em+en pair used to draw, now as a paragraph
+		// attribute so it cannot be copied out as text. An em of the type as it
+		// is SET, unlike the measure above — an indent is a mark made in the
+		// type's own units and grows with it.
+		C.bibleTextSetReporterIndent(C.double(reporterIndentEm * readingGlyphPx()))
 	} else {
 		C.bibleTextSetReadingMeasure(0)
+		C.bibleTextSetReporterIndent(0)
 	}
 
 	// TWO fingerprints, because the two changes cost different things to apply.

@@ -125,7 +125,7 @@ func decodeHelloAOCatholic(body []byte) (*BibleData, error) {
 		if name == "" {
 			continue // unrecognized USFM id (not expected for eng_webc)
 		}
-		chapters, orphans, supers := decodeHelloAOChapters(name, b)
+		chapters, orphans, supers, heads := decodeHelloAOChapters(name, b)
 		if len(chapters) > 0 {
 			bd.Verses[name] = chapters
 			present[name] = true
@@ -141,6 +141,12 @@ func decodeHelloAOCatholic(body []byte) (*BibleData, error) {
 				bd.Superscriptions = make(map[string]map[int]Superscription)
 			}
 			bd.Superscriptions[name] = supers
+		}
+		if len(heads) > 0 {
+			if bd.Headings == nil {
+				bd.Headings = make(map[string]map[int][]Heading)
+			}
+			bd.Headings[name] = heads
 		}
 	}
 	for _, name := range catholicBooks {

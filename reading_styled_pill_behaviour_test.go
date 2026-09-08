@@ -399,12 +399,13 @@ func TestANoteReachingThisChapterViaElsewhereStillGetsAPill(t *testing.T) {
 	// A real-length Romans 16: the doxology maps onto vv25-27, so a chapter
 	// that stops short would drop the note for want of a verse rather than for
 	// the reason under test.
-	long := "This verse is deliberately long so that the paragraph splitter reaches its " +
-		"character threshold and breaks at the next sentence ending, which is here."
+	long := "This verse is deliberately long, so a paragraph of them is a realistic " +
+		"height for the bands and pills this test measures."
 	var rom []Verse
 	for i := 1; i <= 27; i++ {
+		// Paragraphs are stated: the app draws only what a publisher marks.
 		rom = append(rom, Verse{BookName: "Romans", Book: "Romans", Chapter: 16,
-			Verse: i, Text: long})
+			Verse: i, Text: long, ParaStart: i%3 == 1})
 	}
 	st.Bible.Verses["Romans"] = map[int][]Verse{16: rom}
 	st.CurrentBook, st.CurrentChapter = "Romans", 16

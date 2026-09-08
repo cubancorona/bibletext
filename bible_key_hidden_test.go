@@ -38,7 +38,7 @@ func findKeyEntry(o fyne.CanvasObject) *widget.Entry {
 func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	t.Setenv("BIBLE_API_KEY", "")
 	fake := withFakeSharedKeys(t)
@@ -109,7 +109,7 @@ func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {
 func TestBundledKeyStillClearable(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	t.Setenv("BIBLE_API_KEY", "")
 	fake := withFakeSharedKeys(t)
@@ -167,7 +167,7 @@ func obfuscateForTest(key string) string {
 func TestRealKeySectionPutsTheLinkTopRight(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	t.Setenv("BIBLE_API_KEY", "")
 	fake := withFakeSharedKeys(t)

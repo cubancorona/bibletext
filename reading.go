@@ -635,7 +635,12 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 
 	// The reader's chosen text size scales the whole page: body px here, and the
 	// verse-number superscripts via their em sizing. 21px is the "Normal" base.
-	bodyPx := int(math.Round(21 * readingTextScale()))
+	// A GLYPH size, so it carries the optical scale: the shipped face spends
+	// less of its em on the lowercase than the one the panes used to resolve,
+	// and without the correction the same nominal size reads 13% smaller
+	// (reading_face_scale.go). Every em-based measure and indent on these panes
+	// is figured from readingReferencePx instead, and does not move.
+	bodyPx := int(math.Round(readingGlyphPx()))
 	reporter := reporterLayout()
 
 	// Line spacing + paragraph treatment: phones keep the airy 2.0 leading with
@@ -646,6 +651,13 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// paragraphs, the octavo page's paragraph grammar. The line LENGTH half of
 	// the reporter page (27.5em measure, centred) is native: the UITextView's
 	// textContainerInset, driven by bibleTextSetReadingMeasure.
+	// NOTE: on the Apple panes these line-height values are now INERT. The
+	// native paragraph sweep sets the leading explicitly from readingLinePitchEm
+	// (reading_ios.go / reading_macos.go), because left to the stylesheet the
+	// pitch came out as the value below times the 0.66em verse numeral that
+	// opens each paragraph — an accident nobody could read off this file. They
+	// are kept because a paragraph the sweep does not reach still falls back to
+	// them, and because the reporter/phone split they encode is still true.
 	lineHeight, paraCSS := "2.0", `p {
 		margin: 0 0 24px 0;
 		text-align: justify;
@@ -653,9 +665,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		-webkit-hyphens: auto;
 	}`
 	if reporter {
-		// NOTE: no text-indent here — the AppKit/UIKit HTML importer drops it
-		// (verified on the iPad sim), so the indent is a literal em+en space
-		// prepended to each paragraph's text below.
+		// No text-indent here: the AppKit/UIKit HTML importer drops it
+		// (verified on the iPad sim). The indent is applied to the imported
+		// paragraph style instead, which keeps it out of the text.
 		lineHeight, paraCSS = "1.3", `p {
 		margin: 0;
 		text-align: justify;
@@ -678,6 +690,17 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}`, bodyPx, textHex, lineHeight)
 	b.WriteString(paraCSS)
+	// The publisher's section headings. BODY SIZE, deliberately: the panes read
+	// meaning from point size — a numeral is 0.66 of the body and the footnote
+	// section 0.85, and thresholds tell them apart — so a heading at a new size
+	// would be a new thing for those thresholds to misread. Bold and left is
+	// enough to say heading, and it says it without inventing a size.
+	b.WriteString(`p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
+	}`)
 	fmt.Fprintf(&b, `sup.v {
 		color: %s;
 		font-weight: 600;
@@ -733,7 +756,19 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		fmt.Fprintf(&b, `<p class="pst">%s</p>`, htmlEscape(super.Text))
 	}
 
-	for _, para := range groupVersesIntoParagraphs(verses) {
+	// Blocks, not paragraphs: the publisher's section headings stand among them
+	// where the publisher put them. The heading is its own paragraph and never
+	// justified — a heading is a label, and the reporter indent would push it
+	// off its own left edge.
+	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+		if blk.IsHeading() {
+			fmt.Fprintf(&b, `<p class="sec">%s</p>`, htmlEscape(blk.Heading.Text))
+			continue
+		}
+		para := blk.Verses
+		if len(para) == 0 {
+			continue
+		}
 		poetic := false
 		for _, v := range para {
 			if verseIsPoetic(v.Text) {
@@ -746,17 +781,17 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		} else {
 			b.WriteString("<p>")
 		}
-		if reporter && !verseIsPoetic(para[0].Text) {
-			// The U.S. Reports paragraph grammar: a ~1.5em first-line indent
-			// instead of a blank line. Emitted as em+en space characters
-			// because the HTML importer ignores the text-indent CSS property.
-			// Poetry is never first-line indented in print, so a paragraph
-			// that OPENS on a poem line skips it — but a mixed paragraph
-			// opening with prose keeps the indent (in reporter mode it is the
-			// only paragraph-boundary marker; dropping it would visually
-			// merge the paragraph into the previous one).
-			b.WriteString("&#8195;&#8194;")
-		}
+		// NO INDENT CHARACTERS HERE. The U.S. Reports paragraph grammar wants a
+		// ~1.5em first-line indent instead of a blank line, and the HTML
+		// importer drops text-indent, so this used to write an em-space and an
+		// en-space into the paragraph's own text. They were the app's
+		// characters and the system's Copy took them straight out of the text
+		// storage, so a paragraph copied from the landscape reader began with
+		// two spaces nobody typed. The indent is applied natively instead
+		// (bibleTextSetReporterIndent), to the justified paragraphs only —
+		// poetry is never first-line indented in print, and the stylesheet
+		// already leaves a paragraph opening on a poem line ragged (p.pm),
+		// which is the signal the native side reads.
 		for i, v := range para {
 			// The tint decides the markup, and the markup comes from the tint's
 			// own row (appleTintHTML, tint.go) rather than from a branch here.
@@ -801,11 +836,20 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			if len(runs) > 1 {
 				for _, run := range runs {
 					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
+					if run.Italic {
+						// The translators' supplied words. Italic is one of the
+						// few things every one of these dialects can say.
+						piece = "<i>" + piece + "</i>"
+					}
 					writeTintedHTML(&b, mk, run.Red, piece)
 				}
 				continue
 			}
-			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
+			// smallCapsText, not v.Text: the ONE-run path still has to carry the
+			// divine name's small capitals, and most verses take it. The
+			// substitution preserves whitespace and rune counts exactly, so the
+			// trim below behaves as it always did.
+			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(smallCapsText(v))), "\n", "<br>")
 			// From the runs, NOT from isWordsOfChrist again: the edition's own
 			// table has already had the final word, and asking the WEB's gate a
 			// second time here would overrule it.
@@ -977,7 +1021,13 @@ func newChapterText(state *AppState, verses []Verse) *chapterText {
 		tints:         chapterTint(state),
 		highlightLine: -1,
 		state:         state,
-		textSize:      theme.TextSize() * float32(readingTextScale()),
+		// NO optical scale here, deliberately. This pane draws in the CHROME
+		// face, not the shipped scripture face — bibleTheme.Font returns the UI
+		// family for every non-monospace style, and readingPaneTheme overrides
+		// the size only. The scale corrects for the scripture face's small
+		// x-height and would simply make this pane 15% too large
+		// (reading_face_scale.go).
+		textSize: theme.TextSize() * float32(readingTextScale()),
 	}
 	if state.window != nil {
 		c.clipboard = state.window.Clipboard()
@@ -1694,6 +1744,11 @@ func indexOf(values []int, target int) int {
 
 // --- Paragraph grouping -----------------------------------------------------
 
+// reporterIndentEm is the reporter page's first-line indent, in ems. It is the
+// width the em-space and en-space pair used to draw, kept so the page did not
+// change when the characters stopped being characters.
+const reporterIndentEm = 1.5
+
 // verseIsPoetic reports whether a verse's text carries authored poem line
 // breaks (the decoder emits "\n" between poem clauses). A verse that is
 // exactly ONE poem line decodes with no internal break and reads as prose
@@ -1714,75 +1769,37 @@ func poeticJoin(prevText, curText string) bool {
 // pane, the website, the share text, and the note chrome that reserves a band
 // above a paragraph.
 //
-// Where the publisher paragraphed the chapter, the app uses THAT and nothing
-// else. Paragraphing is the translators' reading of the passage, so a chapter
-// they set is already complete, and adding the app's own breaks inside their
-// paragraphs would put a boundary where they deliberately kept none — which
-// is what the app did to the whole Bible before. The length rule survives for
-// a chapter carrying no marks at all, so an edition that ships none still
-// reads as paragraphs rather than one block.
+// The publisher's paragraphing is the ONLY paragraphing. Where a chapter is
+// broken, it is broken where the translators broke it; where it is not, it is
+// one paragraph, which is what a poem with no stanza break is in print.
+//
+// The app used to manufacture paragraphs from a character count — a break
+// after 320 characters at the next sentence end. That rule came in with the
+// first commit, when the only source served bare verses and there was nothing
+// else to go on, and no printed or digital edition has ever set text that
+// way. Now that every edition supplies its own structure, it is gone rather
+// than kept as a fallback: a fallback would only ever fire where the
+// publisher had deliberately left a passage unbroken.
 func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	if len(verses) == 0 {
 		return nil
 	}
 
-	publisherSet := false
-	for _, v := range verses {
-		if v.ParaStart {
-			publisherSet = true
-			break
-		}
-	}
-
 	paragraphs := make([][]Verse, 0, len(verses)/4+1)
 	current := make([]Verse, 0, 6)
-	charCount := 0
 
 	for i, verse := range verses {
-		if len(current) > 0 {
-			prev := current[len(current)-1]
-			brk := verse.ParaStart
-			if !publisherSet {
-				brk = shouldBreakParagraph(prev.Text, charCount)
-			}
-			if brk {
-				paragraphs = append(paragraphs, current)
-				current = make([]Verse, 0, 6)
-				charCount = 0
-			}
+		if len(current) > 0 && verse.ParaStart {
+			paragraphs = append(paragraphs, current)
+			current = make([]Verse, 0, 6)
 		}
 		current = append(current, verse)
-		charCount += len([]rune(verse.Text)) + 1
 
 		if i == len(verses)-1 && len(current) > 0 {
 			paragraphs = append(paragraphs, current)
 		}
 	}
 	return paragraphs
-}
-
-// paragraphEnders are the characters a verse may end on for the fallback rule
-// to close a paragraph after it. Sentence punctuation, and the marks that
-// close reported speech — in BOTH forms, because the editions set speech with
-// typographic quotation marks and a rule that knew only the typewriter forms
-// refused every one of them. That refusal was worth about a fifth of the
-// rule's own break points (roughly 2,100 in each of the two public-domain
-// editions), and it fell hardest on dialogue, which is exactly where a
-// paragraph most wants to end: "…let all the people say, 'Amen!'" would not
-// close a paragraph, so the next curse joined it, and the one after that.
-var paragraphEnders = []string{".", "!", "?", "\"", "'", "\u201d", "\u2019"}
-
-func shouldBreakParagraph(prevVerseText string, currentParagraphChars int) bool {
-	if currentParagraphChars < 320 {
-		return false
-	}
-	trimmed := strings.TrimSpace(prevVerseText)
-	for _, end := range paragraphEnders {
-		if strings.HasSuffix(trimmed, end) {
-			return true
-		}
-	}
-	return false
 }
 
 func superscriptNumber(n int) string {
@@ -2102,9 +2119,14 @@ func chapterPickerColumns(total int) int {
 // phone page's legacy side padding. Untagged and pure so the host can test the
 // arithmetic the bridge is handed (reading_android.go pushes it,
 // BtBridge.applyReadingPadding centres it).
-func androidReadingMeasureDp(reporter bool, textDp float32) float32 {
-	if !reporter || textDp <= 0 {
+// It takes the REFERENCE size, not the size the type is set at: a measure fixes
+// the column's physical width and is the one quantity the optical scale must not
+// reach (reading_face_scale.go). The parameter is named for that, because passing
+// the set size here would widen the Android column 15% and the arithmetic would
+// look perfectly reasonable.
+func androidReadingMeasureDp(reporter bool, referenceDp float32) float32 {
+	if !reporter || referenceDp <= 0 {
 		return 0
 	}
-	return reporterMeasureEm * textDp
+	return reporterMeasureEm * referenceDp
 }

@@ -51,20 +51,21 @@ func TestAPublisherBreakOpensAParagraphTheRuleWouldNotFind(t *testing.T) {
 	if !sameShape(got, want) {
 		t.Errorf("paragraphs open at %v, want %v", got, want)
 	}
-	// Without the marks the same chapter is one paragraph, which is what the
-	// app drew before.
+	// Without the marks the same chapter is one paragraph.
 	plain := paraShape(groupVersesIntoParagraphs(paraVerses(9, "A short verse.")))
 	if !sameShape(plain, []int{1}) {
 		t.Errorf("unmarked short verses should stay one paragraph, got %v", plain)
 	}
 }
 
-// An edition that marks nothing still gets paragraphs, from the fallback.
-func TestTheFallbackRuleStillAppliesWhereNothingIsMarked(t *testing.T) {
-	long := "This verse is long enough on its own to carry the running paragraph past the threshold the fallback rule uses."
+// An edition that marks nothing is ONE paragraph, which is what a poem with no
+// stanza break is in print. The app used to chop such a chapter up by
+// character count; it no longer invents anything.
+func TestAnUnmarkedChapterIsOneParagraph(t *testing.T) {
+	long := "This verse is long enough that the old character rule would have broken the chapter several times over."
 	got := paraShape(groupVersesIntoParagraphs(paraVerses(8, long)))
-	if len(got) < 2 {
-		t.Fatalf("an unmarked chapter of long verses must still break, got %v", got)
+	if !sameShape(got, []int{1}) {
+		t.Errorf("an unmarked chapter opens at %v, want one paragraph at [1]", got)
 	}
 }
 
@@ -139,7 +140,7 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 		book.Chapters[0].Chapter.Content = append(book.Chapters[0].Chapter.Content, json.RawMessage(raw))
 	}
 
-	chapters, _, _ := decodeHelloAOChapters("John", book)
+	chapters, _, _, headings := decodeHelloAOChapters("John", book)
 	verses := chapters[3]
 	if len(verses) != 4 {
 		t.Fatalf("decoded %d verses, want 4", len(verses))
@@ -149,7 +150,7 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 		want  bool
 		why   string
 	}{
-		{1, false, "the first verse carries no mark; the chapter opens a paragraph anyway"},
+		{1, true, "a heading precedes it, and in print a heading always opens a paragraph"},
 		{2, false, "no break precedes it"},
 		{3, true, "a break precedes it"},
 		{4, true, "two breaks in a row still open one paragraph"},
@@ -162,6 +163,10 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 	shape := paraShape(groupVersesIntoParagraphs(verses))
 	if !sameShape(shape, []int{1, 3, 4}) {
 		t.Errorf("paragraphs open at %v, want [1 3 4]", shape)
+	}
+	// And the heading itself is kept, named against the verse it stands above.
+	if len(headings[3]) != 1 || headings[3][0].BeforeVerse != 1 {
+		t.Errorf("the heading was not captured against verse 1: %+v", headings[3])
 	}
 }
 
@@ -179,9 +184,4 @@ func TestThePublishersParagraphingIsNotSupplemented(t *testing.T) {
 		t.Errorf("paragraphs open at %v, want [1 5]: the publisher set one break and the rule must not add more", got)
 	}
 
-	// The same verses with no mark at all still break, on the rule.
-	plain := paraShape(groupVersesIntoParagraphs(paraVerses(9, long)))
-	if len(plain) < 3 {
-		t.Errorf("an unmarked chapter of long verses must still break: %v", plain)
-	}
 }

@@ -44,6 +44,43 @@ type Verse struct {
 	// consumer is groupVersesIntoParagraphs, which every surface funnels
 	// through, so setting this here reaches all of them at once.
 	ParaStart bool `json:"para_start,omitempty"`
+
+	// Supplied marks the words the TRANSLATORS SUPPLIED — what the King James
+	// tradition sets in italics, added for English sense and standing in no
+	// Hebrew or Greek word of the original. It is the edition's own disclosure
+	// of where a translator made a judgement, and the app used to flatten it
+	// away: roughly three thousand spans in the New Testament alone.
+	//
+	// Offsets into Text, never characters inside it, so the text a reader
+	// searches, shares, copies, hears and links to is unchanged whether this
+	// is set or not.
+	Supplied []TextSpan `json:"supplied,omitempty"`
+
+	// SmallCaps marks the words the edition sets in SMALL CAPITALS — above all
+	// the divine name, where "Lord" in small capitals renders the Tetragrammaton
+	// and "Lord" in ordinary case renders Adonai. The distinction is the
+	// edition's, it is carried entirely by the letterforms, and the app used to
+	// realise it by uppercasing the letters into the stored text, so a reader
+	// who copied a verse received a spelling no edition prints.
+	//
+	// The publisher's own characters are kept instead, and this says where the
+	// feature applies. The feed sends the span two ways — "Lord" with the
+	// remainder in lower case, and a capital outside the span with the
+	// remainder inside it as in "G" + "OD" — so a renderer asks for smcp and
+	// c2sc together and the face resolves both correctly.
+	//
+	// Offsets into Text, never characters inside it.
+	SmallCaps []TextSpan `json:"small_caps,omitempty"`
+
+	// PoemLevels is the indent depth of each LINE of this verse, in order:
+	// one entry per line of Text, zero where a line is not poetry. Hebrew
+	// poetry is built of paired lines, and print sets the second half of a
+	// pair indented under the first so the pairing can be seen; every edition
+	// marks the depth and the app used to keep only the fact that a line was
+	// poetry at all, so every line drew flush left.
+	//
+	// Lines, not characters: Text is unchanged whether this is set or not.
+	PoemLevels []int `json:"poem_levels,omitempty"`
 }
 
 // Footnote is one note from the TRANSLATORS (never the reader — reader notes
@@ -95,6 +132,49 @@ type OrphanFootnote struct {
 // decision. Its notes (the "Gittith is probably a musical term" glosses)
 // join the chapter-bottom footnote section keyed "Title", ahead of the
 // verse-keyed notes, under the same toggle.
+// Heading is one of the publisher's section headings — "The Beatitudes", "The
+// LORD Is My Shepherd", the speaker labels in the Song of Songs — or one of
+// the other non-Scripture blocks an edition sets between verses: a major
+// section head, a parallel-passage reference line, an acrostic letter.
+//
+// It is editorial matter, added by the translators rather than translated, and
+// it is kept apart from the text for that reason. Style is the publisher's own
+// name for what this block is, so a surface can tell a section heading from an
+// acrostic letter without guessing from the words.
+// TextSpan is a half-open range of runes inside a verse's text: [Start, End).
+// It is how the app records something TRUE OF PART OF A VERSE without putting
+// anything into the verse itself — the words the translators supplied, today,
+// and whatever else a publisher marks tomorrow.
+type TextSpan struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+type Heading struct {
+	// Text is the heading as the publisher set it.
+	Text string `json:"text"`
+
+	// Style is the publisher's classification: "heading" for the helloao
+	// feeds, which name only the one kind, and the USX paragraph style for
+	// API.Bible — "s" and "s1".."s4" for section heads, "ms" for a major
+	// section, "r"/"mr"/"sr" for a reference line, "qa" for an acrostic
+	// letter, and so on.
+	Style string `json:"style,omitempty"`
+
+	// Footnotes are the notes the publisher put INSIDE this heading. They were
+	// discarded with the block that carried them, which left them with less
+	// trace than any other note in the apparatus; they belong to the heading,
+	// not to whichever verse happened to be current when it was read.
+	Footnotes []Footnote `json:"footnotes,omitempty"`
+
+	// BeforeVerse is the verse this heading stands above. A heading at the
+	// head of a chapter names its first verse; one between verses names the
+	// verse that follows it. Zero means the heading closed a chapter with no
+	// verse after it, which the sources do not do but the decoders do not
+	// assume.
+	BeforeVerse int `json:"before_verse,omitempty"`
+}
+
 type Superscription struct {
 	// Text is the title line, assembled by the same marked-text path verse
 	// text uses, so its spacing rules are identical.
@@ -134,6 +214,17 @@ type BibleData struct {
 	// book → chapter. omitempty + nil-safe accessors, for the same
 	// pre-field-cache reasons as OrphanFootnotes.
 	Superscriptions map[string]map[int]Superscription `json:"superscriptions,omitempty"`
+
+	// Headings carries the publisher's own section headings, keyed by book and
+	// chapter (see Heading). Every edition sets them and the app used to drop
+	// every one: 3,091 in the Berean alone, which is its translators' map of
+	// what each chapter is about. They are captured here whether or not any
+	// surface draws them, because a thing a publisher sent is kept.
+	//
+	// Like a superscription, a heading is NOT Scripture. It never enters
+	// Verse.Text, so it cannot reach search, speech, sharing, copying or a
+	// link by accident; a surface that wants to draw one asks for it.
+	Headings map[string]map[int][]Heading `json:"headings,omitempty"`
 
 	// chapterNums caches the sorted chapter numbers per book so the reading
 	// view, search, and navigation don't re-allocate + re-sort on every call.

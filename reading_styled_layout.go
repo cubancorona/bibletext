@@ -30,6 +30,7 @@ type runKind uint8
 const (
 	runWord     runKind = iota // scripture text, body size
 	runVerseNum                // verse-number label, small + raised
+	runHeading                 // a publisher's section heading, body size + bold
 )
 
 // verseTint, its constants and overridesTextColour used to live HERE. They moved
@@ -46,7 +47,10 @@ type styledRun struct {
 	// Provenance, for styling and selection→verse attribution.
 	Verse     int
 	RedLetter bool
-	Tint      verseTint
+	// Supplied marks a token the TRANSLATORS supplied — set in italic, as the
+	// King James tradition does and as every other surface now does.
+	Supplied bool
+	Tint     verseTint
 
 	// Geometry (set by layout).
 	X, W float32
@@ -76,6 +80,13 @@ type styledLine struct {
 	// selection text model — the selection and copy layers walk lines with
 	// them.
 	StartOffset, EndOffset int
+
+	// Heading is the publisher's section heading when this line is one. A
+	// heading line carries NO runs, and that is what keeps it out of the flat
+	// selection text model: the selection, copy and verse-attribution layers
+	// all walk runs, so a heading adds nothing for them to walk and shifts no
+	// offset. It is drawn from this field alone.
+	Heading string
 }
 
 // chapterLayout is the laid-out chapter plus the geometry indexes the
@@ -155,7 +166,10 @@ type noteBand struct {
 }
 
 // styledMeasure measures one run's text width at its rendered size.
-type styledMeasure func(text string, kind runKind) float32
+// The italic flag is part of the signature because the translators' supplied
+// words are DRAWN in the italic cut, and a run measured in one face and drawn
+// in another is how wrap geometry and hit-testing come apart.
+type styledMeasure func(text string, kind runKind, italic bool) float32
 
 // styledLayoutParams collects the knobs so tests can pin exact geometry.
 type styledLayoutParams struct {
@@ -225,7 +239,21 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	y := p.TopPad // the superscription's reserved advance (0 = none)
 
 	var opened []int // band indices this paragraph opened; reused per paragraph
-	for pi, para := range groupVersesIntoParagraphs(verses) {
+	// Blocks, so the publisher's headings stand where the publisher put them.
+	// The paragraph counter is kept separately: the separator below asks "is
+	// this the first PARAGRAPH", and a heading between two of them must not
+	// answer that question.
+	pi := -1
+	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+		if blk.IsHeading() {
+			y = appendHeadingLines(lay, blk.Heading.Text, y, p, measure, offset)
+			continue
+		}
+		para := blk.Verses
+		if len(para) == 0 {
+			continue
+		}
+		pi++
 		if pi > 0 {
 			// One half of the paragraph separator; the other "\n" is written
 			// when the paragraph's first unit opens its line, so the model
@@ -364,6 +392,21 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// behaviour, so nothing but the BSB moves.
 			toks := verseTokens(v)
 			redTok := redLetterTokenFlags(state.CurrentVersion, v, redLetter, toks)
+			supTok := suppliedTokenFlags(v, toks)
+			// The divine name is DRAWN in small capitals. It happens here,
+			// after the red-letter machinery has answered, because that
+			// machinery matches these tokens back against the publisher's own
+			// text and would fail to recognise a substituted one. Re-tokenising
+			// is safe because the substitution preserves rune counts, so the
+			// words fall in the same places; the length check says so out loud
+			// rather than trusting it.
+			if len(v.SmallCaps) > 0 {
+				drawn := v
+				drawn.Text = smallCapsText(v)
+				if dt := verseTokens(drawn); len(dt) == len(toks) {
+					toks = dt
+				}
+			}
 			tint := tints.of(v)
 
 			// Provisional first-line record; place() may wrap the first unit
@@ -382,13 +425,13 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 					word := strings.TrimPrefix(tok, num+" ")
 					unit = []styledRun{
 						{Text: num, Kind: runVerseNum, Verse: v.Verse, Tint: tint,
-							W: measure(num, runVerseNum)},
-						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti], Tint: tint,
-							W: measure(word, runWord)},
+							W: measure(num, runVerseNum, false)},
+						{Text: word, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti],
+							Supplied: supTok[ti], Tint: tint, W: measure(word, runWord, supTok[ti])},
 					}
 				} else {
 					unit = []styledRun{{Text: tok, Kind: runWord, Verse: v.Verse, RedLetter: redTok[ti],
-						Tint: tint, W: measure(tok, runWord)}}
+						Supplied: supTok[ti], Tint: tint, W: measure(tok, runWord, supTok[ti])}}
 				}
 				place(unit)
 				if first {
@@ -515,4 +558,55 @@ func runSpansForLayout(lay *chapterLayout, tintOf func(styledRun) verseTint) []t
 		}
 	}
 	return spans
+}
+
+// appendHeadingLines lays a publisher's section heading out as its own lines
+// and returns the y below it.
+//
+// The lines carry NO runs. That is the whole design: the selection, copy and
+// verse-attribution layers walk runs, so a heading contributes nothing for them
+// to walk and moves no offset in the flat text model. A reader cannot select a
+// heading, which is right — it is the publisher's label on the passage, not a
+// part of the passage, and a quote that carried it would be quoting the wrong
+// thing.
+func appendHeadingLines(lay *chapterLayout, text string, y float32, p styledLayoutParams, measure styledMeasure, offset int) float32 {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return y
+	}
+	// Space above, so the heading belongs to what follows rather than floating
+	// between. None at the very top: a chapter that opens with one needs no gap
+	// above its own first line.
+	if len(lay.Lines) > 0 {
+		y += p.ParaGap
+	}
+	for _, row := range wrapHeading(text, p.Width, measure) {
+		lay.Lines = append(lay.Lines, styledLine{
+			Y: y, H: p.LineHeight, Heading: row,
+			StartOffset: offset, EndOffset: offset,
+		})
+		y += p.LineHeight
+	}
+	return y
+}
+
+// wrapHeading breaks a heading to the column, measured in the BOLD cut it is
+// drawn in.
+func wrapHeading(text string, width float32, measure styledMeasure) []string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+	var rows []string
+	cur := words[0]
+	for _, w := range words[1:] {
+		try := cur + " " + w
+		if measure(try, runHeading, false) <= width {
+			cur = try
+			continue
+		}
+		rows = append(rows, cur)
+		cur = w
+	}
+	return append(rows, cur)
 }

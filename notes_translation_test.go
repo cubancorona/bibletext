@@ -10,6 +10,7 @@ package bibletext
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -132,6 +133,12 @@ func TestForcedFallbackDoesNotEraseTheChosenTranslation(t *testing.T) {
 	loadVersionForRestore = func(BibleVersion, *BibleData) (*BibleData, dataMode, error) {
 		return nil, modeReal, errOfflineForTest
 	}
+	// Isolate the cache directory. This test asserts that a licensed version
+	// FALLS BACK because it cannot be served, and a real cache on the machine
+	// running it serves the licensed version perfectly well — so without this
+	// the test passes only on a developer who has never opened that
+	// translation, and fails on everyone who has.
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), "cache.json"))
 	t.Setenv("BIBLE_API_KEY", "")
 	fake := withFakeSharedKeys(t)
 	fake.setBibleAPIKey("unlocks-the-licensed-version")

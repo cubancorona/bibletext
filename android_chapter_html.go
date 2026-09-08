@@ -19,6 +19,12 @@ import (
 // left here is the paragraph and join structure — which must stay identical to
 // buildChapterHTML's, because a poem that breaks in different places on two
 // platforms is the divergence this file was split out to prevent.
+// androidIndentMarker stands where the reporter page's first-line indent goes.
+// A private-use rune, so it cannot occur in scripture and cannot be confused
+// with anything the publisher sent; BtBridge.setHtml removes it during the
+// import and turns it into a leading margin.
+const androidIndentMarker = "&#xE010;"
+
 func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	redLetter := redLetterEnabled()
@@ -72,16 +78,34 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.Text))
 		}
 	}
-	for _, para := range groupVersesIntoParagraphs(verses) {
+	// Blocks, not paragraphs — see the note in reading.go. Bold in its own
+	// paragraph is the whole of what this dialect can say, and it is enough:
+	// fromHtml maps <b> to a StyleSpan the text system draws.
+	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+		if blk.IsHeading() {
+			fmt.Fprintf(&b, "<p><b>%s</b></p>", htmlEscape(blk.Heading.Text))
+			continue
+		}
+		para := blk.Verses
+		if len(para) == 0 {
+			continue
+		}
 		b.WriteString("<p>")
 		if reporter && !verseIsPoetic(para[0].Text) {
-			// The same rule and the same em+en characters as the Apple dialect
+			// A MARKER, not an indent. The same rule as the Apple dialect
 			// (reading.go): every paragraph is indented except one that OPENS
 			// on a poem line, because poetry is never first-line indented in
-			// print. A mixed paragraph opening with prose keeps it — with the
-			// gap gone, the indent is what tells the reader a new paragraph
-			// started.
-			b.WriteString("&#8195;&#8194;")
+			// print, and a mixed paragraph opening with prose keeps it — with
+			// the gap gone, the indent is what tells the reader a new
+			// paragraph started.
+			//
+			// This used to be an em-space and an en-space, drawing the indent
+			// with characters because the importer has no CSS. They were the
+			// app's own characters in the reader's text, and Android's Copy
+			// took them. The bridge deletes this marker as it imports and
+			// applies a real leading margin in its place (BtBridge.setHtml),
+			// so the text the reader can select has nothing extra in it.
+			b.WriteString(androidIndentMarker)
 		}
 		for i, v := range para {
 			mk := markupFor(markup[:], tints.of(v))
@@ -116,11 +140,17 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			if len(runs) > 1 {
 				for _, run := range runs {
 					piece := strings.ReplaceAll(htmlEscape(run.Text), "\n", "<br>")
+					if run.Italic {
+						// The translators' supplied words. Italic is one of the
+						// few things every one of these dialects can say.
+						piece = "<i>" + piece + "</i>"
+					}
 					writeTintedHTML(&b, mk, run.Red, piece)
 				}
 				continue
 			}
-			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(v.Text)), "\n", "<br>")
+			// smallCapsText, not v.Text — see the note in reading.go.
+			body := strings.ReplaceAll(htmlEscape(strings.TrimSpace(smallCapsText(v))), "\n", "<br>")
 			// From the runs — see the note in reading.go.
 			writeTintedHTML(&b, mk, len(runs) == 1 && runs[0].Red, body)
 		}

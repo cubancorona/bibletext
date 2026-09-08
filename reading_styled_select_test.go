@@ -105,9 +105,12 @@ func TestStyledSelectCopyFidelity(t *testing.T) {
 	p.clipboard = clip
 	p.selectAll()
 	p.copyToClipboard()
-	want := superscriptNumber(1) + " The LORD is my shepherd;\n" +
+	// ORDINARY numbers, not the superscript characters this pane draws: the
+	// clipboard is text leaving the app, and the raised form is the page's
+	// typography rather than anything a publisher sent (outbound_text.go).
+	want := "1 The LORD is my shepherd;\n" +
 		"I shall not want.\n" +
-		superscriptNumber(2) + " He makes me lie down in green pastures;\n" +
+		"2 He makes me lie down in green pastures;\n" +
 		"He leads me beside quiet waters."
 	if clip.content != want {
 		t.Errorf("poetry copy:\n got %q\nwant %q", clip.content, want)

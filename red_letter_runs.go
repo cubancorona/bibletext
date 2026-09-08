@@ -13,6 +13,13 @@ import (
 type verseRun struct {
 	Text string
 	Red  bool
+	// Italic marks the words the TRANSLATORS SUPPLIED — what the King James
+	// tradition sets in italic, added for English sense and standing in no
+	// Hebrew or Greek word of the original. It rides beside Red because it is
+	// the same kind of fact and travels the same road: the edition's own
+	// judgement about a stretch of the verse, decided once here so that no
+	// surface has to work it out again.
+	Italic bool
 }
 
 // redLetterRuns splits a verse into runs by whether the words are Christ's.
@@ -25,18 +32,18 @@ type verseRun struct {
 //     red run. This fallback stays inside the same edition's judgement.
 func redLetterRuns(versionID string, v Verse, redLetter bool) []verseRun {
 	if !redLetter {
-		return []verseRun{{Text: v.Text}}
+		return finishRuns(v, []verseRun{{Text: v.Text}})
 	}
 	if spans, ok := redLetterSpansFor(versionID, v.BookName, v.Chapter, v.Verse, v.Text); ok {
-		return runsFromSpans(v.Text, spans)
+		return finishRuns(v, runsFromSpans(v.Text, spans))
 	}
 	// A missing entry means black for that edition. A present entry with stale
 	// offsets remains red at verse granularity; it never consults WEB unless the
 	// selected edition itself is WEB/WEBC.
 	if !redLetterVerseMarked(versionID, v.BookName, v.Chapter, v.Verse) {
-		return []verseRun{{Text: v.Text}}
+		return finishRuns(v, []verseRun{{Text: v.Text}})
 	}
-	return []verseRun{{Text: v.Text, Red: true}}
+	return finishRuns(v, []verseRun{{Text: v.Text, Red: true}})
 }
 
 // runsFromSpans turns rune offsets into alternating runs. The spans are sorted
@@ -198,6 +205,45 @@ func redLetterTokenFlags(versionID string, v Verse, redLetter bool, tokens []str
 	for i, s := range spans {
 		for j := s.Start; j < s.End && j < len(red); j++ {
 			if red[j] {
+				flags[i] = true
+				break
+			}
+		}
+	}
+	return flags
+}
+
+// suppliedTokenFlags answers, token by token, which of verseTokens(v)'s tokens
+// the translators supplied — the twin of redLetterTokenFlags, and for the same
+// reason: the canvas pane colours and styles whole TOKENS, while the spans are
+// recorded at rune level.
+//
+// A token counts as supplied when any of its runes is. The spans mark words
+// rather than parts of them, so in practice this is exact; where an edition
+// ever marked half a word, italicising the whole of it is the reading a printed
+// Bible gives anyway.
+func suppliedTokenFlags(v Verse, tokens []string) []bool {
+	flags := make([]bool, len(tokens))
+	if len(v.Supplied) == 0 || len(tokens) == 0 {
+		return flags
+	}
+	spans, ok := verseTokenSpans(v, tokens)
+	if !ok {
+		return flags
+	}
+	total := len([]rune(v.Text))
+	supplied := make([]bool, total)
+	for _, sp := range v.Supplied {
+		if sp.Start < 0 || sp.End > total || sp.Start >= sp.End {
+			continue
+		}
+		for i := sp.Start; i < sp.End; i++ {
+			supplied[i] = true
+		}
+	}
+	for i, s := range spans {
+		for j := s.Start; j < s.End && j < total; j++ {
+			if supplied[j] {
 				flags[i] = true
 				break
 			}

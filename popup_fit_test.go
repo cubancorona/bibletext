@@ -19,7 +19,7 @@ func smallPhone(t *testing.T) (*AppState, fyne.Window) {
 	t.Helper()
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	win := app.NewWindow("popup")
 	win.Resize(fyne.NewSize(320, 568))

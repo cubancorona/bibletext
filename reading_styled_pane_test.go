@@ -290,7 +290,7 @@ func TestStyledPaneRepresentativeSnapshots(t *testing.T) {
 	setRedLetterEnabled(true)
 
 	// The REAL app theme, exactly as CreateMainUI constructs it.
-	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	realTheme := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(realTheme)
 
 	for _, tc := range []struct {

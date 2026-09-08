@@ -77,7 +77,7 @@ func TestButtonIconsAreThemed(t *testing.T) {
 func TestThemedIconsFollowTheTheme(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 
 	for _, tc := range []struct {

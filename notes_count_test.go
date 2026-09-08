@@ -14,7 +14,7 @@ import (
 func TestDeleteAllNotesShowsAndLinksTheCount(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	th := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())

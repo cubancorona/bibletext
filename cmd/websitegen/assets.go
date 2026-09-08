@@ -24,15 +24,47 @@ import (
 
 // readerCSS fills in the webfont URLs. They are content-hashed like the
 // stylesheet itself, and since both live in assets/ the src is a bare filename.
-func readerCSS(regularFile, boldFile string) string {
+// webFonts names the four hashed font files the stylesheet references. A struct
+// rather than four positional strings, because four filenames in a row are four
+// chances to swap two of them and get a page that loads and looks wrong.
+type webFonts struct {
+	uiRegular        string
+	uiBold           string
+	scriptureRegular string
+	scriptureBold    string
+}
+
+func readerCSS(f webFonts) string {
 	light, dark := bibletext.WebReaderPalettes()
 	return strings.NewReplacer(
-		"__FONT_REGULAR__", regularFile,
-		"__FONT_BOLD__", boldFile,
+		"__FONT_REGULAR__", f.uiRegular,
+		"__FONT_BOLD__", f.uiBold,
+		"__SCRIPTURE_REGULAR__", f.scriptureRegular,
+		"__SCRIPTURE_BOLD__", f.scriptureBold,
 		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
+		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
+		"__HEADING_REM__", remSize(webHeadingBaseRem),
+		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
 	).Replace(readerCSSTemplate)
+}
+
+// The reading sizes BEFORE the optical scale, at a 16px root: 1.3125rem is the
+// app's own 21px body, and the heading has always been set a step under it.
+const (
+	webScriptureBaseRem = 1.3125
+	webHeadingBaseRem   = 1.0
+)
+
+// remSize opens a reading size up by the shipped face's optical scale — the same
+// correction the app applies, for the same reason. Setting the raw number here
+// would put the web page 13% smaller than the app showing the same chapter
+// (bibletext.ReadingOpticalScale, reading_face_scale.go). A MEASURE takes no such
+// correction: .wrap's max-width is in root rem and deliberately does not move,
+// which is what returns the line to its old character count as the glyphs grow.
+func remSize(base float64) string {
+	return strconv.FormatFloat(base*bibletext.ReadingOpticalScale(), 'f', 4, 64) + "rem"
 }
 
 func readerPaletteCSS(p bibletext.WebReaderPalette, indent string) string {
@@ -69,13 +101,27 @@ const readerCSSTemplate = `
   font-family:"Atkinson Hyperlegible"; font-style:normal; font-weight:700;
   font-display:swap; src:url(__FONT_BOLD__) format("woff2");
 }
+/* Junicode (c) Peter S. Baker — SIL Open Font License 1.1, published beside
+   these files as assets/junicode-OFL.txt. Scripture is set in it here exactly
+   as it is in the app, so a shared link shows a reader the page they know.
+   Built from the same file the app embeds and subsetted more tightly: no small
+   capitals, since the site publishes no edition that marks a divine name, and
+   no Greek or Hebrew, since the note chrome below is set in the UI face. */
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(__SCRIPTURE_REGULAR__) format("woff2");
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(__SCRIPTURE_BOLD__) format("woff2");
+}
 :root{
 __LIGHT_PALETTE__
-  /* The app's two faces: chrome in Atkinson, scripture in Georgia. The system
-     stack trails Atkinson so glyphs it lacks — the ← → of the chapter nav —
-     fall back per-glyph instead of tofu. */
+  /* The app's two faces: chrome in Atkinson, scripture in Junicode. Each stack
+     trails a system fallback so glyphs the face lacks — the ← → of the chapter
+     nav, an unexpected accent — fall back per-glyph instead of tofu. */
   --ui:"Atkinson Hyperlegible",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  --scripture:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --scripture:"Junicode",Georgia,"Iowan Old Style","Times New Roman",serif;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -255,15 +301,34 @@ body{
 
    Both numbers are unitless/em so they still scale with a reader's own font
    size. If the app's reading pane is ever re-typeset, re-measure — do not read
-   these off buildChapterHTML. */
+   these off buildChapterHTML.
+
+   RE-MEASURED after the reading face was given its optical scale
+   (reading_face_scale.go). The body size here moved with it; 1.3175 did NOT
+   need to. The iOS pitch turns out to be 2.0 x 0.66 x body — TextKit takes a
+   paragraph's line height from its FIRST run, which is always the 0.66em verse
+   numeral — so it is linear in the body size and the ratio survives the change.
+   Confirmed on the iPhone 17 Pro simulator: 83 device px at the old 21px body,
+   95 at the corrected 24px, i.e. 1.3196 against the 1.3175 written here. */
 .text{
   font-family:var(--scripture);
-  font-size:1.3125rem; line-height:1.3175; letter-spacing:.004em;
+  font-size:__SCRIPTURE_REM__; line-height:__LEADING__; letter-spacing:.004em;
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text{--pgap:calc(1.3175 * 1.3125rem)}
+.text{--pgap:calc(__LEADING__ * __SCRIPTURE_REM__)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
+/* The publisher's section headings. Set in the scripture face, because they are
+   the publisher's words and not the app's chrome, but never justified and never
+   indented: a heading is a label, and the reporter indent below would push it
+   off its own left edge. The space above is the reader's cue that a new section
+   opens; a heading that opened the chapter needs none. */
+.text .sec{
+  font-size:__HEADING_REM__; font-weight:700; letter-spacing:.01em; line-height:1.3;
+  text-align:left; text-indent:0; hyphens:none;
+  margin:calc(var(--pgap) + .4rem) 0 calc(var(--pgap) * .5);
+}
+.text .sec:first-child{margin-top:0}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
    space (the app's phone reading pane); from tablet width up the app switches
    to its iPad "reporter" setting — a first-line indent with no blank line

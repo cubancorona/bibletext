@@ -716,6 +716,68 @@ public final class BtBridge {
         });
     }
 
+    // ─── The reading faces ───────────────────────────────────────────────────
+    //
+    // Scripture is set in the face the app ships, not in the platform's serif,
+    // so a reader sees the same page here as on every other surface. Go writes
+    // the files into <package>/no_backup/bibletext/fonts before the bridge
+    // comes up (reading_fonts_android.go); getNoBackupFilesDir() is the same
+    // root from this side.
+    //
+    // A FAMILY, not one face. The chapter markup uses <b> for verse numbers and
+    // footnote keys and <i> for the Psalm title, and a Typeface built from a
+    // single file leaves the platform to fake both — a smeared bold and a
+    // mechanical slant. Building the family needs API 29, so below that the
+    // platform serif is kept: today's look, rather than a worse one.
+    //
+    // The Hebrew rides as a FALLBACK inside the family. The reading face has no
+    // Hebrew at all, and without this a footnote quoting it would fall to
+    // whatever the system supplies, which is the borrowing this replaces.
+    private static android.graphics.Typeface readingFace;
+    private static boolean readingFaceTried;
+
+    private static android.graphics.Typeface readingTypeface() {
+        if (readingFaceTried) return readingFace;
+        readingFaceTried = true;
+        if (activity == null || android.os.Build.VERSION.SDK_INT < 29) return null;
+        try {
+            java.io.File dir = new java.io.File(activity.getNoBackupFilesDir(), "bibletext/fonts");
+            java.io.File reg = new java.io.File(dir, "Junicode-Regular.ttf");
+            if (!reg.isFile()) return null;
+            android.graphics.fonts.FontFamily.Builder fam =
+                new android.graphics.fonts.FontFamily.Builder(
+                    new android.graphics.fonts.Font.Builder(reg).build());
+            String[][] cuts = {
+                {"Junicode-Italic.ttf", "400", "1"},
+                {"Junicode-Bold.ttf", "700", "0"},
+                {"Junicode-BoldItalic.ttf", "700", "1"},
+            };
+            for (String[] c : cuts) {
+                java.io.File f = new java.io.File(dir, c[0]);
+                if (!f.isFile()) continue;
+                fam.addFont(new android.graphics.fonts.Font.Builder(f)
+                    .setWeight(Integer.parseInt(c[1]))
+                    .setSlant(c[2].equals("1")
+                        ? android.graphics.fonts.FontStyle.FONT_SLANT_ITALIC
+                        : android.graphics.fonts.FontStyle.FONT_SLANT_UPRIGHT)
+                    .build());
+            }
+            android.graphics.Typeface.CustomFallbackBuilder b =
+                new android.graphics.Typeface.CustomFallbackBuilder(fam.build());
+            java.io.File heb = new java.io.File(dir, "EzraSIL-Regular.ttf");
+            if (heb.isFile()) {
+                b.addCustomFallback(new android.graphics.fonts.FontFamily.Builder(
+                    new android.graphics.fonts.Font.Builder(heb).build()).build());
+            }
+            readingFace = b.build();
+        } catch (Throwable t) {
+            // Any failure keeps the platform serif. A reading pane that draws
+            // in the wrong face is a blemish; one that throws is a blank page.
+            readingFace = null;
+        }
+        return readingFace;
+    }
+
     public static void init(final Activity act) {
         UI.post(new Runnable() {
             @Override public void run() {
@@ -2215,6 +2277,10 @@ public final class BtBridge {
     // listener re-asks with these.
     private static int lastPadLDp = 10, lastPadTDp = 14, lastPadRDp = 10, lastPadBDp = 14;
     private static float lastMeasureDp = 0f;
+    // The reading text's size in pixels, as the last style push resolved it.
+    // The reporter page's first-line indent is a multiple of it, and the
+    // import needs the number without asking the view mid-assignment.
+    private static float lastTextPx = 0f;
 
     /**
      * extendIntoTheCutout lets the activity window reach under the display
@@ -2350,7 +2416,8 @@ public final class BtBridge {
      */
     public static void setStyle(final int textColor, final int paperColor, final float textSizeDp,
                                 final float lineMult, final int padLDp, final int padTDp,
-                                final int padRDp, final int padBDp, final float measureDp) {
+                                final int padRDp, final int padBDp, final float measureDp,
+                                final float opticalScale) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
@@ -2360,12 +2427,25 @@ public final class BtBridge {
                 // different size on every phone (reading_android.go says).
                 float density = activity != null
                         ? activity.getResources().getDisplayMetrics().density : 2f;
-                float textSizePx = textSizeDp * density;
+                // THE OPTICAL SCALE, AND WHY IT IS DECIDED HERE. The pushed dp
+                // is the reference size; the shipped face spends less of its em
+                // on the lowercase than the platform serif and needs opening up
+                // by ~15% to read the same size (reading_face_scale.go). But
+                // that correction belongs to THAT face: readingTypeface()
+                // returns null below API 29 and the overlay draws in the
+                // platform serif, which would simply come out 15% too large.
+                // Only this side knows which face it got, so only this side can
+                // decide. Resolved before the size because the size depends on
+                // the answer; the typeface is still SET below, where its
+                // ordering against setLineHeight matters.
+                android.graphics.Typeface face = readingTypeface();
+                float textSizePx = textSizeDp * density * (face != null ? opticalScale : 1f);
                 lastTextColor = textColor;
                 lastPaperColor = paperColor;
                 lastPadLDp = padLDp; lastPadTDp = padTDp;
                 lastPadRDp = padRDp; lastPadBDp = padBDp;
                 lastMeasureDp = measureDp;
+                lastTextPx = textSizePx;
                 text.setTextColor(textColor);
                 text.setBackgroundColor(paperColor);
                 scroll.setBackgroundColor(paperColor);
@@ -2383,15 +2463,28 @@ public final class BtBridge {
                 // multiplier, deriving it from the font's own metrics rather
                 // than guessing, so the two paths agree as closely as the older
                 // API allows.
+                // THE TYPEFACE FIRST. setLineHeight reads the CURRENT paint's
+                // font metrics and stores the difference as extra spacing, so a
+                // typeface set afterwards leaves the stored extra measured
+                // against a font that is not the one drawing, and the pitch
+                // comes out wrong by the gap between the two. It was set after
+                // for as long as this code has existed.
+                text.setTypeface(face != null ? face : android.graphics.Typeface.SERIF);
+                // lineMult is the leading the shipped face is set with. Below
+                // API 29 readingTypeface() returned null and this overlay draws
+                // in the platform serif, whose own leading was measured against
+                // the iOS pane long before that face arrived — so that fleet
+                // keeps the number it was tuned with rather than inheriting one
+                // chosen for different metrics.
+                final float pitch = (face != null) ? lineMult : 1.35f;
                 if (android.os.Build.VERSION.SDK_INT >= 28) {
-                    text.setLineHeight(Math.round(lineMult * textSizePx));
+                    text.setLineHeight(Math.round(pitch * textSizePx));
                 } else {
                     android.graphics.Paint.FontMetrics fm = text.getPaint().getFontMetrics();
                     float natural = fm.descent - fm.ascent + fm.leading;
-                    float mult = natural > 0f ? (lineMult * textSizePx) / natural : lineMult;
+                    float mult = natural > 0f ? (pitch * textSizePx) / natural : pitch;
                     text.setLineSpacing(0f, mult);
                 }
-                text.setTypeface(android.graphics.Typeface.SERIF);
                 applyReadingPadding();
                 // Say the break strategy and hyphenation out loud rather than
                 // inheriting a release's default: Android 13 changed the
@@ -2425,6 +2518,10 @@ public final class BtBridge {
     /** setHtml atomically replaces a chapter and its initial placement: an
      *  arrival verse outranks frac, frac>=0 restores, otherwise the chapter
      *  starts at the top. */
+    /** The rune the reporter page marks an indented paragraph with; deleted
+     *  during the import and replaced by a real leading margin. */
+    private static final char INDENT_MARKER = '\uE010';
+
     public static void setHtml(final String html, final float frac, final int arrivalVerse) {
         UI.post(new Runnable() {
             @Override public void run() {
@@ -2469,6 +2566,27 @@ public final class BtBridge {
                 // set, so the view receives its final spans in one assignment
                 // and no span mutation lands on a layout the arrival placement
                 // is about to measure.
+                // The reporter page's first-line indent arrives as a marker
+                // rune, not as spaces: the indent has to be drawn somehow and
+                // this importer has no CSS, but characters in the text are
+                // characters the reader's Copy takes away. Each marker is
+                // deleted and replaced by a real leading margin on its own
+                // paragraph, so the text ends up with nothing extra in it.
+                if (s instanceof android.text.SpannableStringBuilder) {
+                    android.text.SpannableStringBuilder ssb = (android.text.SpannableStringBuilder) s;
+                    float indentPx = lastTextPx > 0f ? lastTextPx * 1.5f : 0f;
+                    for (int i = ssb.length() - 1; i >= 0; i--) {
+                        if (ssb.charAt(i) != INDENT_MARKER) continue;
+                        ssb.delete(i, i + 1);
+                        if (indentPx <= 0f) continue;
+                        int end = i;
+                        while (end < ssb.length() && ssb.charAt(end) != '\n') end++;
+                        if (end > i) {
+                            ssb.setSpan(new android.text.style.LeadingMarginSpan.Standard((int) indentPx, 0),
+                                    i, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        }
+                    }
+                }
                 if (s instanceof Spannable) liftWashToLineBackground((Spannable) s);
                 text.setText(s, TextView.BufferType.SPANNABLE);
                 // The prior chapter's highlight span belonged to the old text; drop

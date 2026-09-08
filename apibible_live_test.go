@@ -52,7 +52,7 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 	if err := apiBibleGet(ctx, client, key, "/bibles/"+bibleID+"/chapters/PSA.46?content-type=json", &psalm); err != nil {
 		t.Fatalf("PSA.46: %v", err)
 	}
-	verses, _, _, err := decodeAPIBibleChapter(psalm.Data.Content, "Psalms", 46)
+	verses, _, _, _, err := decodeAPIBibleChapter(psalm.Data.Content, "Psalms", 46)
 	if err != nil {
 		t.Fatalf("decode PSA.46: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 	if err := apiBibleGet(ctx, client, key, "/bibles/"+bibleID+"/chapters/JHN.11?content-type=json", &john); err != nil {
 		t.Fatalf("JHN.11: %v", err)
 	}
-	jv, _, _, err := decodeAPIBibleChapter(john.Data.Content, "John", 11)
+	jv, _, _, _, err := decodeAPIBibleChapter(john.Data.Content, "John", 11)
 	if err != nil {
 		t.Fatalf("decode JHN.11: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 	if err := apiBibleGet(ctx, client, key, "/bibles/"+bibleID+"/chapters/PSA.3?"+apiBibleContentQuery, &ps3); err != nil {
 		t.Fatalf("PSA.3: %v", err)
 	}
-	p3, _, sup3, err := decodeAPIBibleChapter(ps3.Data.Content, "Psalms", 3)
+	p3, _, sup3, _, err := decodeAPIBibleChapter(ps3.Data.Content, "Psalms", 3)
 	if err != nil {
 		t.Fatalf("decode PSA.3: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 			head = head[:240]
 		}
 		t.Logf("%s opens: %s", rng, head)
-		_, _, supers, err := decodeAPIBiblePassage(pr.Data.Content, "Psalms", 3)
+		_, _, supers, _, err := decodeAPIBiblePassage(pr.Data.Content, "Psalms", 3)
 		if err != nil {
 			t.Fatalf("decode %s: %v", rng, err)
 		}

@@ -1,7 +1,7 @@
 ### prose/no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -14,6 +14,11 @@
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -28,15 +33,15 @@
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/no-mark | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -49,6 +54,11 @@
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -63,10 +73,10 @@
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/no-mark | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/no-mark | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -147,7 +157,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/range-1-4 | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -160,6 +170,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -174,15 +189,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">1</sup><span class="hl">&nbsp;</span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">1</sup><span class="hl"> </span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl"> </span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl"> </span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl"> </span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/range-1-4 | android-html reporter=false
-<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">Therefore, there is now no condemnation.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For the law of the Spirit set you free.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For what the law was powerless to do.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">So that the righteous standard is fulfilled.</span> <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>1</b></font></small></sup> </span><span style="background-color:#ffe08a">Therefore, there is now no condemnation.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup> </span><span style="background-color:#ffe08a">For the law of the Spirit set you free.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup> </span><span style="background-color:#ffe08a">For what the law was powerless to do.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup> </span><span style="background-color:#ffe08a">So that the righteous standard is fulfilled.</span> <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/range-1-4 | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -195,6 +210,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -209,10 +229,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v hl">1</sup><span class="hl">&nbsp;</span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">1</sup><span class="hl"> </span><span class="hl">Therefore, there is now no condemnation.</span><span class="hl"> </span><sup class="v hl">2</sup><span class="hl"> </span><span class="hl">For the law of the Spirit set you free.</span><span class="hl"> </span><sup class="v hl">3</sup><span class="hl"> </span><span class="hl">For what the law was powerless to do.</span><span class="hl"> </span><sup class="v hl">4</sup><span class="hl"> </span><span class="hl">So that the righteous standard is fulfilled.</span> <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/range-1-4 | android-html reporter=true
-<p>&#8195;&#8194;<span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">Therefore, there is now no condemnation.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For the law of the Spirit set you free.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For what the law was powerless to do.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">So that the righteous standard is fulfilled.</span> <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>1</b></font></small></sup> </span><span style="background-color:#ffe08a">Therefore, there is now no condemnation.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup> </span><span style="background-color:#ffe08a">For the law of the Spirit set you free.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup> </span><span style="background-color:#ffe08a">For what the law was powerless to do.</span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup> </span><span style="background-color:#ffe08a">So that the righteous standard is fulfilled.</span> <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/range-1-4 | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -299,7 +319,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/single-3 | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -312,6 +332,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -326,15 +351,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl"> </span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/single-3 | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For what the law was powerless to do.</span> <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup> </span><span style="background-color:#ffe08a">For what the law was powerless to do.</span> <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/single-3 | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -347,6 +372,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -361,10 +391,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v hl">3</sup><span class="hl"> </span><span class="hl">For what the law was powerless to do.</span> <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/single-3 | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">For what the law was powerless to do.</span> <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup> </span><span style="background-color:#ffe08a">For what the law was powerless to do.</span> <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/single-3 | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -447,7 +477,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-on-another-chapter | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -460,6 +490,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -474,15 +509,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-on-another-chapter | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/mark-on-another-chapter | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -495,6 +530,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -509,10 +549,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-on-another-chapter | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/mark-on-another-chapter | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -593,7 +633,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-on-another-book | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -606,6 +646,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -620,15 +665,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-on-another-book | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/mark-on-another-book | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -641,6 +686,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -655,10 +705,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-on-another-book | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/mark-on-another-book | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -739,7 +789,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/mark-past-the-last-verse | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -752,6 +802,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -766,15 +821,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-past-the-last-verse | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/mark-past-the-last-verse | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -787,6 +842,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -801,10 +861,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/mark-past-the-last-verse | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/mark-past-the-last-verse | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -885,7 +945,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### prose/chapter-level-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -898,6 +958,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -912,15 +977,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/chapter-level-mark | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/chapter-level-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -933,6 +998,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -947,10 +1017,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">1</sup>&nbsp;Therefore, there is now no condemnation. <sup class="v">2</sup>&nbsp;For the law of the Spirit set you free. <sup class="v">3</sup>&nbsp;For what the law was powerless to do. <sup class="v">4</sup>&nbsp;So that the righteous standard is fulfilled. <sup class="v">5</sup>&nbsp;Those who live according to the flesh.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">1</sup> Therefore, there is now no condemnation. <sup class="v">2</sup> For the law of the Spirit set you free. <sup class="v">3</sup> For what the law was powerless to do. <sup class="v">4</sup> So that the righteous standard is fulfilled. <sup class="v">5</sup> Those who live according to the flesh.</p></body></html>
 
 ### prose/chapter-level-mark | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;Those who live according to the flesh.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>1</b></font></small></sup> Therefore, there is now no condemnation. <sup><small><font color="#53688f"><b>2</b></font></small></sup> For the law of the Spirit set you free. <sup><small><font color="#53688f"><b>3</b></font></small></sup> For what the law was powerless to do. <sup><small><font color="#53688f"><b>4</b></font></small></sup> So that the righteous standard is fulfilled. <sup><small><font color="#53688f"><b>5</b></font></small></sup> Those who live according to the flesh.</p>
 
 ### prose/chapter-level-mark | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,28)
@@ -1031,7 +1101,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 ### poetry/no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1044,6 +1114,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1058,15 +1133,15 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup> The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup> He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup> He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup> Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
 
 ### poetry/no-mark | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> The LORD is my shepherd;<br>I shall not want.<br><sup><small><font color="#53688f"><b>2</b></font></small></sup> He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup><small><font color="#53688f"><b>3</b></font></small></sup> He restores my soul;<br>He guides me in paths of righteousness.<br><sup><small><font color="#53688f"><b>4</b></font></small></sup> Even though I walk through the valley,<br>I will fear no evil.</p>
 
 ### poetry/no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1079,6 +1154,11 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1093,10 +1173,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup> The LORD is my shepherd;<br>I shall not want.<br><sup class="v">2</sup> He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup class="v">3</sup> He restores my soul;<br>He guides me in paths of righteousness.<br><sup class="v">4</sup> Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
 
 ### poetry/no-mark | android-html reporter=true
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;He restores my soul;<br>He guides me in paths of righteousness.<br><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> The LORD is my shepherd;<br>I shall not want.<br><sup><small><font color="#53688f"><b>2</b></font></small></sup> He makes me lie down in green pastures;<br>He leads me beside quiet waters.<br><sup><small><font color="#53688f"><b>3</b></font></small></sup> He restores my soul;<br>He guides me in paths of righteousness.<br><sup><small><font color="#53688f"><b>4</b></font></small></sup> Even though I walk through the valley,<br>I will fear no evil.</p>
 
 ### poetry/no-mark | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=true [0,26)
@@ -1186,7 +1266,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 ### poetry/range-2-3 | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1199,6 +1279,11 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1213,15 +1298,15 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup> The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl"> </span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl"> </span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup> Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
 
 ### poetry/range-2-3 | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> The LORD is my shepherd;<br>I shall not want.<br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup> </span><span style="background-color:#ffe08a">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup> </span><span style="background-color:#ffe08a">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup><small><font color="#53688f"><b>4</b></font></small></sup> Even though I walk through the valley,<br>I will fear no evil.</p>
 
 ### poetry/range-2-3 | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1234,6 +1319,11 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1248,10 +1338,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl">&nbsp;</span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl">&nbsp;</span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">1</sup> The LORD is my shepherd;<br>I shall not want.<br><sup class="v hl">2</sup><span class="hl"> </span><span class="hl">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><sup class="v hl">3</sup><span class="hl"> </span><span class="hl">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup class="v">4</sup> Even though I walk through the valley,<br>I will fear no evil.</p></body></html>
 
 ### poetry/range-2-3 | android-html reporter=true
-<p><sup><small><font color="#53688f"><b>1</b></font></small></sup>&nbsp;The LORD is my shepherd;<br>I shall not want.<br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;Even though I walk through the valley,<br>I will fear no evil.</p>
+<p><sup><small><font color="#53688f"><b>1</b></font></small></sup> The LORD is my shepherd;<br>I shall not want.<br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>2</b></font></small></sup> </span><span style="background-color:#ffe08a">He makes me lie down in green pastures;<br>He leads me beside quiet waters.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>3</b></font></small></sup> </span><span style="background-color:#ffe08a">He restores my soul;<br>He guides me in paths of righteousness.</span><br><sup><small><font color="#53688f"><b>4</b></font></small></sup> Even though I walk through the valley,<br>I will fear no evil.</p>
 
 ### poetry/range-2-3 | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=true [0,26)
@@ -1347,7 +1437,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 ### red/whole-verse-under-the-band | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1360,6 +1450,11 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1374,15 +1469,15 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">15</sup><span class="hl">&nbsp;</span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl">&nbsp;</span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">15</sup><span class="hl"> </span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl"> </span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup> <span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
 
 ### red/whole-verse-under-the-band | android-html reporter=false
-<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>15</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">that whoever believes in Him may have eternal life.</font></span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>16</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font></span> <sup><small><font color="#53688f"><b>17</b></font></small></sup>&nbsp;<font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
+<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>15</b></font></small></sup> </span><span style="background-color:#ffe08a"><font color="#b23a2e">that whoever believes in Him may have eternal life.</font></span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>16</b></font></small></sup> </span><span style="background-color:#ffe08a"><font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font></span> <sup><small><font color="#53688f"><b>17</b></font></small></sup> <font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
 
 ### red/whole-verse-under-the-band | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1395,6 +1490,11 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1409,10 +1509,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v hl">15</sup><span class="hl">&nbsp;</span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl">&nbsp;</span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v hl">15</sup><span class="hl"> </span><span class="hl wj">that whoever believes in Him may have eternal life.</span><span class="hl"> </span><sup class="v hl">16</sup><span class="hl"> </span><span class="hl wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup> <span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
 
 ### red/whole-verse-under-the-band | android-html reporter=true
-<p>&#8195;&#8194;<span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>15</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">that whoever believes in Him may have eternal life.</font></span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>16</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font></span> <sup><small><font color="#53688f"><b>17</b></font></small></sup>&nbsp;<font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
+<p>&#xE010;<span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>15</b></font></small></sup> </span><span style="background-color:#ffe08a"><font color="#b23a2e">that whoever believes in Him may have eternal life.</font></span><span style="background-color:#ffe08a"> </span><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>16</b></font></small></sup> </span><span style="background-color:#ffe08a"><font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font></span> <sup><small><font color="#53688f"><b>17</b></font></small></sup> <font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
 
 ### red/whole-verse-under-the-band | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,31)
@@ -1487,7 +1587,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 ### red/whole-verse-no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1500,6 +1600,11 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1514,15 +1619,15 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">15</sup>&nbsp;<span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup>&nbsp;<span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">15</sup> <span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup> <span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup> <span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
 
 ### red/whole-verse-no-mark | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>15</b></font></small></sup>&nbsp;<font color="#b23a2e">that whoever believes in Him may have eternal life.</font> <sup><small><font color="#53688f"><b>16</b></font></small></sup>&nbsp;<font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font> <sup><small><font color="#53688f"><b>17</b></font></small></sup>&nbsp;<font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
+<p><sup><small><font color="#53688f"><b>15</b></font></small></sup> <font color="#b23a2e">that whoever believes in Him may have eternal life.</font> <sup><small><font color="#53688f"><b>16</b></font></small></sup> <font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font> <sup><small><font color="#53688f"><b>17</b></font></small></sup> <font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
 
 ### red/whole-verse-no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1535,6 +1640,11 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1549,10 +1659,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p>&#8195;&#8194;<sup class="v">15</sup>&nbsp;<span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup>&nbsp;<span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup>&nbsp;<span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p><sup class="v">15</sup> <span class="wj">that whoever believes in Him may have eternal life.</span> <sup class="v">16</sup> <span class="wj">For God so loved the world that He gave His one and only Son.</span> <sup class="v">17</sup> <span class="wj">For God did not send His Son into the world to condemn it.</span></p></body></html>
 
 ### red/whole-verse-no-mark | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>15</b></font></small></sup>&nbsp;<font color="#b23a2e">that whoever believes in Him may have eternal life.</font> <sup><small><font color="#53688f"><b>16</b></font></small></sup>&nbsp;<font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font> <sup><small><font color="#53688f"><b>17</b></font></small></sup>&nbsp;<font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>15</b></font></small></sup> <font color="#b23a2e">that whoever believes in Him may have eternal life.</font> <sup><small><font color="#53688f"><b>16</b></font></small></sup> <font color="#b23a2e">For God so loved the world that He gave His one and only Son.</font> <sup><small><font color="#53688f"><b>17</b></font></small></sup> <font color="#b23a2e">For God did not send His Son into the world to condemn it.</font></p>
 
 ### red/whole-verse-no-mark | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=false [0,31)
@@ -1623,7 +1733,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 ### red/bsb-spans-under-the-band | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1636,6 +1746,11 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1650,15 +1765,15 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl">&nbsp;</span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v hl">4</sup><span class="hl"> </span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl"> </span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup> And He instructed the crowd to sit down.</p></body></html>
 
 ### red/bsb-spans-under-the-band | android-html reporter=false
-<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">His disciples replied to Him.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">“How many loaves do you have?”</font></span><span style="background-color:#ffe08a"> Jesus asked.<br>“Seven,” they replied.</span><br><sup><small><font color="#53688f"><b>6</b></font></small></sup>&nbsp;And He instructed the crowd to sit down.</p>
+<p><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup> </span><span style="background-color:#ffe08a">His disciples replied to Him.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>5</b></font></small></sup> </span><span style="background-color:#ffe08a"><font color="#b23a2e">“How many loaves do you have?”</font></span><span style="background-color:#ffe08a"> Jesus asked.<br>“Seven,” they replied.</span><br><sup><small><font color="#53688f"><b>6</b></font></small></sup> And He instructed the crowd to sit down.</p>
 
 ### red/bsb-spans-under-the-band | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1671,6 +1786,11 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1685,10 +1805,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm">&#8195;&#8194;<sup class="v hl">4</sup><span class="hl">&nbsp;</span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl">&nbsp;</span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v hl">4</sup><span class="hl"> </span><span class="hl">His disciples replied to Him.</span><br><sup class="v hl">5</sup><span class="hl"> </span><span class="hl wj">“How many loaves do you have?”</span><span class="hl"> Jesus asked.<br>“Seven,” they replied.</span><br><sup class="v">6</sup> And He instructed the crowd to sit down.</p></body></html>
 
 ### red/bsb-spans-under-the-band | android-html reporter=true
-<p>&#8195;&#8194;<span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a">His disciples replied to Him.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;</span><span style="background-color:#ffe08a"><font color="#b23a2e">“How many loaves do you have?”</font></span><span style="background-color:#ffe08a"> Jesus asked.<br>“Seven,” they replied.</span><br><sup><small><font color="#53688f"><b>6</b></font></small></sup>&nbsp;And He instructed the crowd to sit down.</p>
+<p>&#xE010;<span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>4</b></font></small></sup> </span><span style="background-color:#ffe08a">His disciples replied to Him.</span><br><span style="background-color:#ffe08a"><sup><small><font color="#53688f"><b>5</b></font></small></sup> </span><span style="background-color:#ffe08a"><font color="#b23a2e">“How many loaves do you have?”</font></span><span style="background-color:#ffe08a"> Jesus asked.<br>“Seven,” they replied.</span><br><sup><small><font color="#53688f"><b>6</b></font></small></sup> And He instructed the crowd to sit down.</p>
 
 ### red/bsb-spans-under-the-band | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=true [0,31)
@@ -1752,7 +1872,7 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 ### red/bsb-spans-no-mark | apple-html reporter=false
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 2.0;
 		letter-spacing: 0.004em;
@@ -1765,6 +1885,11 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1779,15 +1904,15 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">4</sup>&nbsp;His disciples replied to Him.<br><sup class="v">5</sup>&nbsp;<span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">4</sup> His disciples replied to Him.<br><sup class="v">5</sup> <span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup> And He instructed the crowd to sit down.</p></body></html>
 
 ### red/bsb-spans-no-mark | android-html reporter=false
-<p><sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;His disciples replied to Him.<br><sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;<font color="#b23a2e">“How many loaves do you have?”</font> Jesus asked.<br>“Seven,” they replied.<br><sup><small><font color="#53688f"><b>6</b></font></small></sup>&nbsp;And He instructed the crowd to sit down.</p>
+<p><sup><small><font color="#53688f"><b>4</b></font></small></sup> His disciples replied to Him.<br><sup><small><font color="#53688f"><b>5</b></font></small></sup> <font color="#b23a2e">“How many loaves do you have?”</font> Jesus asked.<br>“Seven,” they replied.<br><sup><small><font color="#53688f"><b>6</b></font></small></sup> And He instructed the crowd to sit down.</p>
 
 ### red/bsb-spans-no-mark | apple-html reporter=true
 <html><head><style>body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: 21px;
+		font-size: 24px;
 		color: #25221d;
 		line-height: 1.3;
 		letter-spacing: 0.004em;
@@ -1800,6 +1925,11 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
+	}p.sec {
+		font-weight: 700;
+		text-align: left;
+		text-indent: 0;
+		margin: 1.1em 0 0.35em 0;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1814,10 +1944,10 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		background-color: #c7dbf5;
 		padding: 0 2px;
 		border-radius: 2px;
-	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm">&#8195;&#8194;<sup class="v">4</sup>&nbsp;His disciples replied to Him.<br><sup class="v">5</sup>&nbsp;<span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup>&nbsp;And He instructed the crowd to sit down.</p></body></html>
+	}.wj { color: #b23a2e; }p.pm { text-align: left; }</style></head><body><p class="pm"><sup class="v">4</sup> His disciples replied to Him.<br><sup class="v">5</sup> <span class="wj">“How many loaves do you have?”</span> Jesus asked.<br>“Seven,” they replied.<br><sup class="v">6</sup> And He instructed the crowd to sit down.</p></body></html>
 
 ### red/bsb-spans-no-mark | android-html reporter=true
-<p>&#8195;&#8194;<sup><small><font color="#53688f"><b>4</b></font></small></sup>&nbsp;His disciples replied to Him.<br><sup><small><font color="#53688f"><b>5</b></font></small></sup>&nbsp;<font color="#b23a2e">“How many loaves do you have?”</font> Jesus asked.<br>“Seven,” they replied.<br><sup><small><font color="#53688f"><b>6</b></font></small></sup>&nbsp;And He instructed the crowd to sit down.</p>
+<p>&#xE010;<sup><small><font color="#53688f"><b>4</b></font></small></sup> His disciples replied to Him.<br><sup><small><font color="#53688f"><b>5</b></font></small></sup> <font color="#b23a2e">“How many loaves do you have?”</font> Jesus asked.<br>“Seven,” they replied.<br><sup><small><font color="#53688f"><b>6</b></font></small></sup> And He instructed the crowd to sit down.</p>
 
 ### red/bsb-spans-no-mark | styled-layout
 line 0 y=0.0 paraFirst=true poemBreak=true [0,31)

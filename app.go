@@ -507,7 +507,7 @@ func Run() {
 	// Dev builds only: BIBLETEXT_MIMIC=windows|linux flips the runtime seams so
 	// this build follows the Windows/Linux code paths (docs/PLATFORM_MIMIC.md).
 	// Must run before CreateMainUI (installSheetCloseConsume reads a seam) and
-	// before loadBookFonts (the font candidates are one). No-op — and not
+	// (installSheetCloseConsume reads a seam). No-op — and not
 	// compiled in — for shipping builds (dev_mimic_off.go).
 	devApplyMimic()
 	myApp := app.NewWithID(devAppID("bibletext"))

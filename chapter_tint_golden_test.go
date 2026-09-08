@@ -183,7 +183,7 @@ func withReporterLayout(on bool, fn func()) {
 // (what the text colour rules read) and the derived wash rectangles (what the
 // renderer paints). A deterministic ruler, so the geometry is exact.
 func dumpStyledLayout(state *AppState, verses []Verse) string {
-	measure := func(text string, kind runKind) float32 {
+	measure := func(text string, kind runKind, _ bool) float32 {
 		w := float32(len([]rune(text))) * 7
 		if kind == runVerseNum {
 			w = float32(len([]rune(text))) * 5

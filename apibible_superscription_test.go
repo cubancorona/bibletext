@@ -59,7 +59,7 @@ func passageOf(paras ...string) json.RawMessage {
 }
 
 func TestDecodeAPIBibleChapterKeepsThePsalmTitleBesideTheChapter(t *testing.T) {
-	vs, _, sup, err := decodeAPIBibleChapter(json.RawMessage(psalmTitledChapterContent), "Psalms", 3)
+	vs, _, sup, _, err := decodeAPIBibleChapter(json.RawMessage(psalmTitledChapterContent), "Psalms", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,19 +87,24 @@ func TestDecodeAPIBibleChapterKeepsThePsalmTitleBesideTheChapter(t *testing.T) {
 	if len(vs) != 1 {
 		t.Fatalf("got %d verses, want 1: %+v", len(vs), vs)
 	}
-	want := "LORD, how they have increased who trouble me!\nMany are they who rise up against me."
+	want := "Lord, how they have increased who trouble me!\nMany are they who rise up against me."
 	if vs[0].Text != want {
 		t.Errorf("verse 1:\n got  %q\n want %q", vs[0].Text, want)
 	}
 	if len(vs[0].Footnotes) != 0 {
 		t.Errorf("verse 1 took the title's note: %+v", vs[0].Footnotes)
 	}
+	// The divine name keeps the publisher's characters and is recorded as a
+	// span instead: the first four runes, "Lord".
+	if len(vs[0].SmallCaps) != 1 || vs[0].SmallCaps[0] != (TextSpan{Start: 0, End: 4}) {
+		t.Errorf("small-caps spans = %+v, want one covering \"Lord\"", vs[0].SmallCaps)
+	}
 }
 
 // On the passages endpoint the title for chapter 4 is read while the decoder
 // is still in chapter 3; it must land on 4.
 func TestDecodeAPIBiblePassageAttachesATitleToTheChapterItOpens(t *testing.T) {
-	byCh, _, supers, err := decodeAPIBiblePassage(passageOf(psalm3LastVersePara, psalm4TitlePara(""), psalm4FirstVersePara), "Psalms", 3)
+	byCh, _, supers, _, err := decodeAPIBiblePassage(passageOf(psalm3LastVersePara, psalm4TitlePara(""), psalm4FirstVersePara), "Psalms", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +126,7 @@ func TestDecodeAPIBiblePassageAttachesATitleToTheChapterItOpens(t *testing.T) {
 // chapter's — it is attached only when the provider's own verseId says which
 // chapter, and never guessed onto the chapter just read.
 func TestDecodeAPIBiblePassageNeverGuessesAChunkTailTitle(t *testing.T) {
-	_, _, supers, err := decodeAPIBiblePassage(passageOf(psalm3LastVersePara, psalm4TitlePara("")), "Psalms", 3)
+	_, _, supers, _, err := decodeAPIBiblePassage(passageOf(psalm3LastVersePara, psalm4TitlePara("")), "Psalms", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +134,7 @@ func TestDecodeAPIBiblePassageNeverGuessesAChunkTailTitle(t *testing.T) {
 		t.Errorf("an unattributable tail title was attached: %+v", supers)
 	}
 
-	_, _, supers, err = decodeAPIBiblePassage(passageOf(psalm3LastVersePara, psalm4TitlePara("PSA.4.1")), "Psalms", 3)
+	_, _, supers, _, err = decodeAPIBiblePassage(passageOf(psalm3LastVersePara, psalm4TitlePara("PSA.4.1")), "Psalms", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +146,7 @@ func TestDecodeAPIBiblePassageNeverGuessesAChunkTailTitle(t *testing.T) {
 // A title is not a verse: a chunk of nothing but a title is still "no verse
 // text decoded", exactly as before titles were read.
 func TestDecodeAPIBiblePassageTitleAloneIsNotAChapter(t *testing.T) {
-	if _, _, _, err := decodeAPIBiblePassage(passageOf(psalm4TitlePara("PSA.4.1")), "Psalms", 4); err == nil {
+	if _, _, _, _, err := decodeAPIBiblePassage(passageOf(psalm4TitlePara("PSA.4.1")), "Psalms", 4); err == nil {
 		t.Error("a title with no verses decoded as a chapter")
 	}
 }

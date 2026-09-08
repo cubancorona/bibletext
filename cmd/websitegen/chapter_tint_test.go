@@ -42,11 +42,11 @@ func TestChapterBodyIsByteIdenticalAcrossTheTintRefactor(t *testing.T) {
 		v("Romans", 8, 3, "For what the law was powerless to do."),
 	}
 	const want = `<p>` +
-		`<span class="v" id="v1"><sup class="n"><a href="#v1">1</a></sup>&nbsp;Therefore, there is now no condemnation.</span>` +
-		` <span class="v" id="v2"><sup class="n"><a href="#v2">2</a></sup>&nbsp;For the law of the Spirit set you free.</span>` +
-		` <span class="v" id="v3"><sup class="n"><a href="#v3">3</a></sup>&nbsp;For what the law was powerless to do.</span>` +
+		`<span class="v" id="v1"><sup class="n"><a href="#v1">1</a></sup> Therefore, there is now no condemnation.</span>` +
+		` <span class="v" id="v2"><sup class="n"><a href="#v2">2</a></sup> For the law of the Spirit set you free.</span>` +
+		` <span class="v" id="v3"><sup class="n"><a href="#v3">3</a></sup> For what the law was powerless to do.</span>` +
 		`</p>`
-	if got := chapterBody("web", "Romans", verses); got != want {
+	if got := chapterBody(nil, "web", "Romans", 1, verses); got != want {
 		t.Errorf("chapter markup moved.\n got: %s\nwant: %s", got, want)
 	}
 }
@@ -59,7 +59,7 @@ func TestEveryVerseGetsItsOwnTintCarrier(t *testing.T) {
 		v("Romans", 8, 1, "Therefore, there is now no condemnation."),
 		v("Romans", 8, 2, "For the law of the Spirit set you free."),
 	}
-	got := chapterBody("web", "Romans", verses)
+	got := chapterBody(nil, "web", "Romans", 1, verses)
 	for _, want := range []string{`<span class="v" id="v1">`, `<span class="v" id="v2">`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing per-verse tint carrier %s in:\n%s", want, got)
@@ -75,7 +75,7 @@ func TestSiteUsesTheAppsTintClass(t *testing.T) {
 		t.Fatal("the highlight tint must name a class — the static reader has no other way to paint it")
 	}
 
-	css := readerCSS("x.woff2", "y.woff2")
+	css := readerCSS(webFonts{uiRegular: "x.woff2", uiBold: "y.woff2", scriptureRegular: "s.woff2", scriptureBold: "sb.woff2"})
 	if !strings.Contains(css, ".v:target,.v."+cls+"{") {
 		t.Errorf("reader.css does not style the app's tint class %q — a highlighted range would render unlit", cls)
 	}

@@ -42,7 +42,7 @@ func TestNoteAtVerseStartTakesNoJoin(t *testing.T) {
 		{"q1", "Sing to the LORD, all the earth;\nProclaim the good news of His salvation."},
 		{"p", "Sing to the LORD, all the earth;\nProclaim the good news of His salvation."},
 	} {
-		vs, _, _, err := decodeAPIBibleChapter(chapterWithNoteAtVerseStart(tc.style), "1 Chronicles", 16)
+		vs, _, _, _, err := decodeAPIBibleChapter(chapterWithNoteAtVerseStart(tc.style), "1 Chronicles", 16)
 		if err != nil {
 			t.Fatal(err)
 		}

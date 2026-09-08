@@ -258,7 +258,12 @@ func dispatchAIAction(state *AppState, action, selectedText string, _ selSpan) {
 	if !aiFeaturesEnabled(state) {
 		return
 	}
-	selectedText = strings.TrimSpace(selectedText)
+	// The reader's selection carries the page's own typography with it — the
+	// superscript verse number, the no-break space glued to it, the reporter
+	// layout's indent. None of that is the publisher's, and this text leaves
+	// the machine, so it is cleaned exactly as the share pipeline cleans its
+	// own copy of the same selection (outbound_text.go).
+	selectedText = strings.TrimSpace(outboundText(selectedText))
 	if selectedText == "" {
 		return
 	}

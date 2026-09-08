@@ -125,10 +125,11 @@ type helloAOBook struct {
 // line breaks and headings are editorial nodes outside verse text and are skipped on
 // purpose (docs/SOURCE_FIELDS.md); Hebrew subtitles (Psalm superscriptions like "A Psalm
 // of David") become the chapter's Superscription. Shared by both decoders.
-func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription) {
+func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
 	var orphans map[int][]OrphanFootnote
 	var supers map[int]Superscription
+	var headings map[int][]Heading
 	for _, cj := range b.Chapters {
 		num := cj.Chapter.Number
 		// noteId → body, for joining the in-verse markers to their text.
@@ -139,6 +140,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 			bodies[fn.NoteID] = helloAOFootnoteBody{text: fn.Text, caller: fn.Caller}
 		}
 		var verses []Verse
+		var heads []Heading
 		// A chapter-level line_break is the publisher's paragraph boundary:
 		// the NEXT verse opens a paragraph. Carried on the verse
 		// (Verse.ParaStart) rather than dropped, so every surface paragraphs
@@ -188,10 +190,20 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				paraStart = true
 				continue
 			}
+			if head.Type == "heading" {
+				// The publisher's section heading. Captured with the verse it
+				// stands above, filled in when that verse arrives; a heading
+				// also opens a paragraph, because in print it always does.
+				if text := strings.TrimSpace(bsbVerseText(head.Content)); text != "" {
+					heads = append(heads, Heading{Text: text, Style: "heading"})
+					paraStart = true
+				}
+				continue
+			}
 			if head.Type != "verse" {
 				continue
 			}
-			text, marks := bsbVerseTextMarked(head.Content)
+			text, marks, levels := bsbVerseTextMarkedLevels(head.Content)
 			if text == "" {
 				// A verse node with a marker but NO text is a critical-text
 				// omission (Luke 17:36 and kin): the verse number exists in
@@ -235,22 +247,35 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 					Caller: body.caller,
 				})
 			}
+			for i := range heads {
+				if heads[i].BeforeVerse == 0 {
+					heads[i].BeforeVerse = head.Number
+				}
+			}
 			verses = append(verses, Verse{
-				BookName:  book,
-				Book:      book,
-				Chapter:   num,
-				Verse:     head.Number,
-				Text:      text,
-				Footnotes: notes,
-				ParaStart: paraStart,
+				BookName:   book,
+				Book:       book,
+				Chapter:    num,
+				Verse:      head.Number,
+				Text:       text,
+				Footnotes:  notes,
+				ParaStart:  paraStart,
+				PoemLevels: levels,
 			})
-			paraStart = false
+			// An acrostic letter or an oracle's title heads what comes NEXT.
+			paraStart = bsbVerseHasDescriptive(head.Content)
 		}
 		if len(verses) > 0 {
 			chapters[num] = verses
 		}
+		if len(heads) > 0 {
+			if headings == nil {
+				headings = make(map[int][]Heading)
+			}
+			headings[num] = heads
+		}
 	}
-	return chapters, orphans, supers
+	return chapters, orphans, supers, headings
 }
 
 // helloAOFootnoteBody is one chapter-level note body awaiting its in-verse marker.
@@ -285,7 +310,7 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		chapters, orphans, supers := decodeHelloAOChapters(book, b)
+		chapters, orphans, supers, heads := decodeHelloAOChapters(book, b)
 		if len(chapters) > 0 {
 			bd.Verses[book] = chapters
 		}
@@ -300,6 +325,12 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 				bd.Superscriptions = make(map[string]map[int]Superscription)
 			}
 			bd.Superscriptions[book] = supers
+		}
+		if len(heads) > 0 {
+			if bd.Headings == nil {
+				bd.Headings = make(map[string]map[int][]Heading)
+			}
+			bd.Headings[book] = heads
 		}
 	}
 	// Note: PrepareSearchIndex is left to the caller (loadBibleData), matching
@@ -328,6 +359,42 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 // {noteId} + "”" → "heel.”"); bsbTidySpacing strips those — and any space that
 // lands just after an opening bracket/quote — after the fact, which is always safe
 // because English never spaces before closing or after opening punctuation.
+// bsbVerseHasDescriptive reports whether a verse carries a `descriptive` run —
+// the USFM \d class, which these feeds use for two different things. In the
+// Psalms it is the acrostic letter that heads a stanza: Psalm 119's twenty-two
+// of them arrive at the END of the last verse of the stanza before, so the
+// verse that FOLLOWS one opens a stanza. In the Berean it also carries an
+// oracle's title (Zechariah 12:1), where the same rule holds and the feed
+// already marks the break itself.
+//
+// Only the position is read here. The run's TEXT is still part of the verse,
+// which for the acrostic letters is a defect of its own, tracked separately.
+// poemLevel reads the indent depth out of a clause's `poem` value, which the
+// feeds send as a bare number. A level the app cannot read is reported as 1,
+// the shallowest real depth, rather than as no poetry at all.
+func poemLevel(raw json.RawMessage) int {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var n int
+	if err := json.Unmarshal(raw, &n); err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
+func bsbVerseHasDescriptive(content []json.RawMessage) bool {
+	for _, node := range content {
+		var obj struct {
+			Descriptive bool `json:"descriptive"`
+		}
+		if json.Unmarshal(node, &obj) == nil && obj.Descriptive {
+			return true
+		}
+	}
+	return false
+}
+
 func bsbVerseText(content []json.RawMessage) string {
 	text, _ := bsbVerseTextMarked(content)
 	return text
@@ -352,8 +419,21 @@ type bsbMark struct {
 // at the end of the earlier line (the "\n" is only synthesized when the NEXT
 // poem clause arrives, after the marker).
 func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
+	text, marks, _ := bsbVerseTextMarkedLevels(content)
+	return text, marks
+}
+
+// bsbVerseTextMarkedLevels is bsbVerseTextMarked plus the INDENT DEPTH of each
+// line. The feeds give every poetry clause a level — 1 for the opening half of
+// a Hebrew couplet, 2 for the answering half, and a third exists in the
+// Catholic edition — and the app read only whether a level was present at all,
+// so every line drew flush left and the pairing print shows was invisible.
+//
+// One entry per line of the finished text, zero where a line is not poetry.
+func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []int) {
 	var pieces []string
 	var marks []bsbMark // anchor holds the piece INDEX until resolved below
+	levels := []int{0}  // the depth of each line, the first line included
 	for _, node := range content {
 		var s string
 		if err := json.Unmarshal(node, &s); err == nil {
@@ -384,6 +464,15 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 				prevBreak := len(pieces) > 0 && pieces[len(pieces)-1] == "\n"
 				if isPoem && len(pieces) > 0 && !prevBreak && !startsWithClosingPunct(*obj.Text) {
 					pieces = append(pieces, "\n")
+					levels = append(levels, 0)
+				}
+				if isPoem {
+					// The clause's own depth, which belongs to the line it
+					// opens. A line built from more than one clause keeps the
+					// first depth it was given.
+					if n := poemLevel(obj.Poem); n > 0 && levels[len(levels)-1] == 0 {
+						levels[len(levels)-1] = n
+					}
 				}
 				pieces = append(pieces, *obj.Text)
 			case obj.NoteID != nil:
@@ -392,6 +481,7 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 				marks = append(marks, bsbMark{noteID: *obj.NoteID, anchor: len(pieces)})
 			case obj.LineBreak:
 				pieces = append(pieces, "\n")
+				levels = append(levels, 0)
 			}
 			continue
 		}
@@ -400,7 +490,18 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 	for i, m := range marks {
 		marks[i].anchor = utf8.RuneCountInString(bsbTidySpacing(strings.Join(pieces[:m.anchor], " ")))
 	}
-	return text, marks
+	// Only report depths that describe the text as it actually came out. The
+	// tidier never adds or removes a line, but saying so is cheaper than
+	// trusting it, and a verse with no poetry reports nothing at all.
+	if lines := strings.Count(text, "\n") + 1; lines != len(levels) {
+		return text, marks, nil
+	}
+	for _, n := range levels {
+		if n > 0 {
+			return text, marks, levels
+		}
+	}
+	return text, marks, nil
 }
 
 // Spacing artifacts that survive the synthesized-space join: a space before

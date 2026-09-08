@@ -160,7 +160,7 @@ func twoParagraphState() *AppState {
 		"me home again empty, so why call me Naomi seeing the LORD has testified against me. "
 	vs := make([]Verse, 0, 8)
 	for i := 1; i <= 8; i++ {
-		vs = append(vs, Verse{BookName: "Ruth", Book: "Ruth", Chapter: 2, Verse: i, Text: long})
+		vs = append(vs, Verse{BookName: "Ruth", Book: "Ruth", Chapter: 2, Verse: i, Text: long, ParaStart: i == 5})
 	}
 	bd := &BibleData{Books: []string{"Ruth"}, Verses: map[string]map[int][]Verse{"Ruth": {2: vs}}}
 	return &AppState{Bible: bd, CurrentBook: "Ruth", CurrentChapter: 2, CurrentVersion: "web"}
@@ -940,7 +940,7 @@ func countColorNear(img image.Image, c color.NRGBA, x, y, w, h int) int {
 func TestStyledStickerSnapshots(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	realTheme := &bibleTheme{fonts: loadBookFonts(), uiFonts: loadUIFonts()}
+	realTheme := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 
 	for _, tc := range []struct {
 		name    string

@@ -51,7 +51,7 @@ func TestWebReaderNoteChromeComesFromTheSharedFunctions(t *testing.T) {
 		}
 	}
 
-	css := readerCSS("r.woff2", "b.woff2")
+	css := readerCSS(webFonts{uiRegular: "r.woff2", uiBold: "b.woff2", scriptureRegular: "s.woff2", scriptureBold: "sb.woff2"})
 	if want := fmt.Sprintf("scroll-margin-top:%dpx", bibletext.WebNoteArrivalLeadPx()); !strings.Contains(css, want) {
 		t.Errorf("the generated reader.css does not carry the shared arrival lead %q", want)
 	}
