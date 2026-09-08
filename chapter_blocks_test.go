@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -17,23 +18,11 @@ func blockShape(bs []chapterBlock) []string {
 			if i > 0 {
 				s += ","
 			}
-			s += itoa(v.Verse)
+			s += strconv.Itoa(v.Verse)
 		}
 		out = append(out, s)
 	}
 	return out
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
 }
 
 func TestChapterBlocksPlaceTheHeadings(t *testing.T) {
