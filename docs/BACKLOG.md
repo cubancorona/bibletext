@@ -614,18 +614,6 @@ or reflection on the protected `Layout.setJustificationMode`, which the
 hidden-API policy may refuse. Neither is worth it for a rendering that
 Android 15 already gets right.
 
-**CLOSED 2026-09-08 by going the other way: Android is ragged on EVERY release
-now.** The reasoning above quietly assumed Android 15 was where most readers
-are. It is not — 15 and 16 together are roughly a quarter to a third of the
-fleet, so justification was the MINORITY rendering, and the gate shipped one app
-with two pages. This pane already forks once on API 29 for the reading face, and
-two forks inside the same paragraph of text is a worse fault than a ragged right
-edge. Ragged is also defensible on its own terms at a phone measure: the
-justified page's word spaces varied nearly threefold from line to line, the
-classic rivers problem on a narrow column, and the hyphenation the pane already
-sets is what carries a ragged edge well. Neither workaround above was built, and
-neither should be — the reason to want them is gone.
-
 ## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module — DONE
 
 Cut as an ANNOTATED tag (the kind docs/VERSIONING.md asked the next cut to
