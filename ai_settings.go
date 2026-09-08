@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -571,7 +572,7 @@ func showAISettings(state *AppState) {
 	}
 	notesNote := widget.NewRichText(&widget.TextSegment{
 		Text: "A shared link still opens the passage in BibleText when notes are off — only the message is left out. " +
-			"To stop links opening in the app at all, use iOS Settings.",
+			notesLinkOptOutSentence(runtime.GOOS),
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
 	notesNote.Wrapping = fyne.TextWrapWord
@@ -1058,4 +1059,30 @@ func (c compactTheme) Size(name fyne.ThemeSizeName) float32 {
 		return c.text
 	}
 	return c.Theme.Size(name)
+}
+
+// notesLinkOptOutSentence names where a reader turns link handling off, which
+// is a different place on every platform — and for a while named the wrong one
+// on two of them. The Settings sheet is shared code, so it told an Android
+// reader to "use iOS Settings", which on Android is not a place. notes_setting.go
+// had recorded the correct pair in a comment the whole time; the string simply
+// never asked.
+//
+// Pure, and taking the platform rather than reading it, for the reason
+// linkVersionUnavailable and linkDisplacedMessage are pure: a test can ask a
+// function what every platform would be told, and cannot ask a widget.
+//
+// Desktop gets NOTHING rather than a guess. There is no per-app link toggle on
+// macOS, Windows or Linux the way there is on the phones, and naming a
+// plausible-sounding place a reader cannot find is worse than leaving the
+// sentence at what is already true: the passage opens, the message does not.
+func notesLinkOptOutSentence(goos string) string {
+	switch goos {
+	case "android":
+		return "To stop links opening in the app at all, use Open by default in Android's app settings."
+	case "ios":
+		return "To stop links opening in the app at all, use iOS Settings."
+	default:
+		return ""
+	}
 }
