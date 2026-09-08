@@ -770,3 +770,32 @@ The code is the newer of the two. Left alone rather than guessed at because the
 sentence also asserts a reason — that the gate exists to prevent a double
 draw — and whether that concern is now handled by the banner standing down, or
 was simply overtaken, is worth confirming before rewriting it.
+
+## Target audience is 13+, and it was meant to include 9-12
+
+The Play target-audience declaration was saved as **13-15, 16-17, 18 and over**.
+That is not the intended answer. The intent was to include **9-12** so the app
+is offered to children as well, and the content rating supports it: ESRB
+Everyone 10+ and PEGI 3 put the floor at 9, not 13.
+
+It was set to 13+ deliberately, to get the app-content checklist finished.
+Including any band under 13 turns the app into a Families-policy app and adds a
+step the console will not let anyone else complete: a legal certification that
+the app, including all APIs, SDKs and ads, complies with COPPA and GDPR. That is
+the owner's to sign, and only the owner's.
+
+Nothing is lost in the meantime. The rating is unchanged, so a child can still
+find and install the app; target audience governs Families-programme placement
+and the policy obligations that come with it, not who may download it.
+
+To change it: App content -> Target audience, tick 9-12, and sign the
+certification at step 2 of 5. Note the selection is NOT saved until the wizard's
+final Save, and leaving the page discards it, so it has to be finished in one
+sitting.
+
+Before signing, the two things a Families reviewer would look at are worth
+having closed: the AI answer markdown vector (fixed) and the storage permissions
+(fixed), plus the recovery breadcrumb for a key that did not survive a device
+move, which is still outstanding. The app has no ads at all, which is the single
+biggest Families-policy failure mode, and the audit in docs/PLAY_LISTING.md
+found no identifiers, analytics or crash reporting anywhere.
