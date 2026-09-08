@@ -95,7 +95,9 @@ The icon and feature graphic under `docs/play-assets/` remain usable:
 | Feature graphic | `feature-graphic.png` | 1024×500 PNG |
 
 The existing `01-reading.png`, `02-search.png`, and `03-books.png` phone images
-show an older interface and must not be uploaded for 1.2.3. Recapture at least:
+show an older interface and must not be uploaded for 1.2.5. They date from 4
+July 2026 and predate the note chrome, the current typography, and the grouped
+Books grid. Recapture at least:
 
 1. reading with edition-correct red letters;
 2. Search/cross-references;
@@ -107,6 +109,28 @@ Use the release build or an equivalent current emulator build, inspect every
 final image visually and with OCR, and meet Play's current aspect-ratio and pixel
 requirements. Do not overwrite the old assets in place until the new set has
 been reviewed side by side.
+
+**Capture on a freshly booted emulator, and set the appearance BEFORE the app
+starts.** Changing the system theme while it is running brought it back with
+its pane occupying the top ~45% of the window - readable, and useless as a
+store image. Worse, it is invisible to the obvious check: "does content reach
+the bottom of the screen" passes anyway, because the page background is not
+the system background. `scripts/play-shot-check.py` asks the specific question
+instead - is there ink where the tab bar belongs - and it caught two images
+that had already been committed as fine.
+
+**A candidate set for 1.2.5 is in `play-assets/2026-09-1.2.5/`**, captured from
+the release APK (versionCode 176) on a Pixel 7 emulator: reading with red
+letters, search results, the grouped Books list, the same passage in the NKJV
+fetched live through API.Bible, and the translation picker showing the licence
+notice. They sit beside the old set rather than replacing it, per the paragraph
+above.
+
+**A raw phone capture is not uploadable.** A Pixel screenshot is 1080x2400,
+which is 2.222:1, and Play rejects anything past 2:1. The candidates are
+cropped to 1080x2160 - exactly 2:1 - by removing the status bar and the gesture
+pill, which a store image should not show anyway. Check this on any future
+capture: the aspect rule is the failure that only shows up at upload.
 
 ## Data safety
 
@@ -146,16 +170,16 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
-## Closed-test release notes — 1.2.3
+## Closed-test release notes — 1.2.5
 
-> BibleText 1.2.3 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
+> BibleText 1.2.5 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
 > search, cross-references, narration/read-along, shared verse notes, and optional
 > bring-your-own-key AI study. Red-letter text now follows each translation's own
 > publisher markings. No ads, account, analytics, or tracking.
 
 Suggested tester coverage:
 
-- install/upgrade and confirm version 1.2.3 (174);
+- install/upgrade and confirm version 1.2.5 (176);
 - switch all four translations and test first-download/offline behaviour;
 - check NKJV Mark 5:31, Matthew 27:63, Luke 17:36, and Luke 24:7 with Words of
   Jesus enabled;
@@ -168,7 +192,99 @@ Suggested tester coverage:
 - rotate phones and tablets between portrait bottom tabs and the landscape left
   rail on Books and Search, and a phone's Read tab into its full-screen
   landscape reading, confirming the reading pane remains usable after a warm
-  App Link.
+  App Link; and
+- exercise the note chrome reworked across 1.2.4-1.2.5: open a received note and
+  confirm no pills are drawn beside it, collapse it and confirm the pill stack
+  centres on the visible inter-paragraph gap, and check both in light and dark
+  appearance at more than one text size.
+
+## Prepared console answers, and what iOS actually declared
+
+Pulled from App Store Connect on 7 September 2026, so this is the shipped
+record rather than a recollection:
+
+| iOS declaration | Value |
+| --- | --- |
+| App Store age rating | **4+** (Brazil: L) |
+| Age-rating declaration | **every content question at its default** - no violence, no mature or suggestive themes, no profanity, no horror, no gambling, no contests, no unrestricted web access, no user-generated content flagged |
+| Primary category | Reference |
+| Primary locale | en-GB |
+
+That is the precedent for the IARC questionnaire, but it is not a substitute
+for answering it: Apple and IARC ask different questions, and two of them below
+have a defensible answer either way. Where that is so, it is said outright
+rather than hidden in a tick.
+
+### Create app
+
+| Field | Value |
+| --- | --- |
+| App name | `BibleText` |
+| Package name | `uk.co.bibletext` (confirmed available) |
+| Default language | English (United Kingdom) - en-GB |
+| App or game | App |
+| Free or paid | Free |
+
+### Content rating - the two that need a human answer
+
+**User interaction.** IARC asks whether users can interact or exchange content
+with other users. BibleText has no account, server, directory or messaging of
+its own - but a reader can attach a short note to a verse and send it as a
+link, and the recipient sees text another person wrote. The message travels in
+the URL fragment through the sender's own messaging app and never reaches any
+host of ours. So "no in-app user interaction" is true of the architecture, and
+"users can share user-generated content" is true of the experience. Answer it
+from what a rating body would consider a reader capable of receiving, and
+declare the sharing rather than the plumbing.
+
+**Mature themes.** The app presents scripture unaltered, and scripture narrates
+violence and sexual content. Apple's form produced 4+ with no descriptors,
+because the questions there are about depiction and simulation. IARC's wording
+differs. Read the live questions and answer them about the text as presented.
+
+Everything else is unambiguous and matches iOS: no ads, no in-app purchases or
+subscriptions, no gambling or contests, no location sharing, no account, no
+unrestricted web browsing.
+
+### Data safety - the reasoning, not just the answer
+
+The developer operates no analytics, advertising, account or application
+server, and receives no reading history, notes or keys. Three off-device
+transfers exist and each is initiated by the reader:
+
+1. **Scripture and study data** are fetched from their documented providers.
+   The provider learns which resource was requested. No reader identifier is
+   attached.
+2. **The licensed NKJV** is fetched through API.Bible, with the project key or
+   the reader's own.
+3. **Optional AI** sends the query or the selected passage to the provider the
+   reader chose, under the reader's own key, stored only in the device
+   keystore. Off by default; the app is fully usable without ever enabling it.
+
+Google treats collection and sharing as separate questions, and the
+user-initiated-transfer exception answers only the sharing one. The honest
+reading is that no data type on Google's list is collected: nothing is
+persisted off device, no identifier is transmitted, and the AI path carries
+only what the reader typed or selected, to a party they nominated. Declare all
+traffic encrypted in transit (it is - HTTPS throughout), and that there is no
+account to delete, with in-app removal for on-device notes and keys.
+
+**Answer the live form, and record the reasoning where it is used.** The above
+is the argument, not a set of ticks to copy.
+
+### Two console decisions that are not paperwork
+
+**Play App Signing.** Accepting its Terms of Service is a condition of
+uploading an app bundle, and it means Google holds the app signing key while
+this project keeps its own upload keystore and signs the GitHub APK itself.
+That is a key-custody decision for the owner, not a formality.
+
+**Automatic protection.** The create-app form offers an installer check added
+to the app's code: a reader who obtained the app from another source is
+prompted to get it from Google Play. BibleText deliberately publishes a
+sideload APK on GitHub, so this would nag exactly the readers that channel
+exists for. The form has a "Turn off" control at creation time. Decide it
+deliberately.
 
 ## Play Console flow
 
