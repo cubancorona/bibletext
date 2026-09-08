@@ -258,16 +258,26 @@ transfers exist and each is initiated by the reader:
 2. **The licensed NKJV** is fetched through API.Bible, with the project key or
    the reader's own.
 3. **Optional AI** sends the query or the selected passage to the provider the
-   reader chose, under the reader's own key, stored only in the device
-   keystore. Off by default; the app is fully usable without ever enabling it.
+   reader chose, under the reader's own key. The Assistant setting ships *on*
+   with a provider preselected, but it is inert until the reader supplies a
+   key - present and offered, not enabled. No key is bundled. The key is held
+   in the system credential store on Apple platforms and in the app's own
+   settings store on Android, Windows, and Linux.
 
 Google treats collection and sharing as separate questions, and the
-user-initiated-transfer exception answers only the sharing one. The honest
-reading is that no data type on Google's list is collected: nothing is
-persisted off device, no identifier is transmitted, and the AI path carries
-only what the reader typed or selected, to a party they nominated. Declare all
-traffic encrypted in transit (it is - HTTPS throughout), and that there is no
-account to delete, with in-app removal for on-device notes and keys.
+user-initiated-transfer exception answers only the sharing one. Collection,
+though, turns on *transmission off the device* - not on whether the developer
+persists anything. On that test the AI path is collection: the app itself POSTs
+the reader's typed question to another company, which may retain it. So declare
+**In-app search history** and **Other user-generated content** as collected and
+shared, marked Optional, for App functionality; every other data type on
+Google's list is No. Do not claim ephemeral processing - provider retention is
+outside our knowledge. Declare all traffic encrypted in transit (it is - HTTPS
+throughout), and that there is no account to delete, with in-app removal for
+on-device notes and keys.
+
+Notes are *not* declarable. A shared note rides in the URL fragment, which HTTP
+never transmits, and the share sheet is a hand-off to another app on the device.
 
 **Answer the live form, and record the reasoning where it is used.** The above
 is the argument, not a set of ticks to copy.
