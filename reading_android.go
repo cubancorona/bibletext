@@ -823,7 +823,13 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			// landscape, put the drawn line pitch at 83px and 82px — one
 			// percent apart. Following the CSS numbers here would open a 54%
 			// gap between two panes that are meant to match.
-			C.float(referenceDp), C.float(1.35),
+			//
+			// It is no longer a measured constant either. Both Apple panes now
+			// set their leading explicitly to readingLinePitchEm, so the same
+			// number crosses here and the two agree by construction rather than
+			// by a screenshot taken once. The Java side keeps its own legacy
+			// value for the older fleet that never got the shipped face.
+			C.float(referenceDp), C.float(readingLinePitchEm),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT),
 			C.float(measureDp), C.float(readingOpticalScale()))
 		ch := C.CString(html)

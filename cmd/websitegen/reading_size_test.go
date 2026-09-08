@@ -6,6 +6,7 @@ package main
 // defect the optical scale exists to remove, reintroduced one surface over.
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -45,8 +46,20 @@ func TestScriptureIsSetAtTheOpticallyCorrectedSize(t *testing.T) {
 	// The paragraph gap is a line of the type, so it has to follow the type. A
 	// literal left behind here would show as paragraphs that no longer sit a
 	// line apart.
-	if !strings.Contains(css, "--pgap:calc(1.3175 * "+want+")") {
-		t.Errorf("the paragraph gap is not figured from the corrected size %s", want)
+	lead := strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64)
+	if !strings.Contains(css, "--pgap:calc("+lead+" * "+want+")") {
+		t.Errorf("the paragraph gap is not figured from the corrected size %s at the "+
+			"chosen leading %s", want, lead)
+	}
+
+	// The leading is a shared number now, not a value measured off a screenshot
+	// once and copied. If the site drifts from the app the two disagree on the
+	// page's rhythm, which is the same class of defect as disagreeing on its size.
+	if !strings.Contains(css, "line-height:"+lead+";") {
+		t.Errorf("the stylesheet does not set the scripture leading to %s", lead)
+	}
+	if strings.Contains(css, "line-height:1.3175") {
+		t.Error("the old measured-once leading 1.3175 is still in the stylesheet")
 	}
 }
 

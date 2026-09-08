@@ -324,6 +324,12 @@ extern CTFontRef btReadingFontLike(CTFontRef src);
 
 static CGFloat gMacReporterIndent = 0;
 
+// The leading, as a multiple of each paragraph's own largest font. 0 leaves the
+// importer's own line metrics alone (reading_face_scale.go).
+static CGFloat gReadingLinePitchEm = 0;
+
+void bibleTextMacSetReadingLinePitch(double em) { gReadingLinePitchEm = (CGFloat)em; }
+
 static NSScrollView *gScroll = nil;
 static NSTextView   *gTextView = nil;
 
@@ -1391,12 +1397,36 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
     btMacPerfLog("html-import", t0);
     // The HTML importer injects a phantom paragraphSpacingBefore on the first
     // paragraph; zero it so the chapter starts flush at the top.
+    //
+    // The sweep mutates `as` in place, so the leading below reads its font sizes
+    // off an immutable snapshot rather than enumerating the string it is editing.
+    NSAttributedString *imported = [as copy];
     [as enumerateAttribute:NSParagraphStyleAttributeName
                    inRange:NSMakeRange(0, as.length) options:0
                 usingBlock:^(id v, NSRange r, BOOL *stop) {
         if (v == nil) return;
         NSMutableParagraphStyle *ps = [(NSParagraphStyle *)v mutableCopy];
         ps.paragraphSpacingBefore = 0;
+        // THE LEADING, SAID OUT LOUD — see the iOS twin. Taken from each
+        // paragraph's OWN largest font, so the footnote apparatus and the
+        // headings lead in proportion to their own size rather than the body's.
+        if (gReadingLinePitchEm > 0) {
+            // The RANGE MATTERS. The importer hands out paragraph styles per RUN,
+            // not per paragraph, so `r` is routinely just the verse numeral —
+            // taking the largest font over it set the whole page's leading from
+            // a 0.66em superscript and the lines collided. Widen to the real
+            // paragraph first.
+            NSRange pr = [imported.string paragraphRangeForRange:r];
+            __block CGFloat big = 0;
+            [imported enumerateAttribute:NSFontAttributeName inRange:pr options:0
+                              usingBlock:^(id fv, NSRange fr, BOOL *fstop) {
+                if (fv != nil && ((NSFont *)fv).pointSize > big) big = ((NSFont *)fv).pointSize;
+            }];
+            if (big > 0) {
+                ps.minimumLineHeight = big * gReadingLinePitchEm;
+                ps.maximumLineHeight = big * gReadingLinePitchEm;
+            }
+        }
         // The reporter page's first-line indent, on the PROSE paragraphs only.
         // Poetry is never first-line indented in print, and the two are already
         // told apart by the alignment the stylesheet gave them: justified for
@@ -2977,6 +3007,9 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	h := &macReadingHost{state: state}
 	h.ExtendBaseWidget(h)
 	macCurrentHost = h
+	// The leading, chosen rather than inherited from the numeral that happens to
+	// open each paragraph (reading_face_scale.go).
+	C.bibleTextMacSetReadingLinePitch(C.double(readingLinePitchEm))
 	// Keep the native reporter column in sync with the text-size setting: the
 	// measure is em-based (27.5 × body px), so Large/XL widen the column and
 	// keep its character count at the reporter's ~59 (the iOS twin does the

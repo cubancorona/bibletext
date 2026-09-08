@@ -651,6 +651,13 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// paragraphs, the octavo page's paragraph grammar. The line LENGTH half of
 	// the reporter page (27.5em measure, centred) is native: the UITextView's
 	// textContainerInset, driven by bibleTextSetReadingMeasure.
+	// NOTE: on the Apple panes these line-height values are now INERT. The
+	// native paragraph sweep sets the leading explicitly from readingLinePitchEm
+	// (reading_ios.go / reading_macos.go), because left to the stylesheet the
+	// pitch came out as the value below times the 0.66em verse numeral that
+	// opens each paragraph — an accident nobody could read off this file. They
+	// are kept because a paragraph the sweep does not reach still falls back to
+	// them, and because the reporter/phone split they encode is still true.
 	lineHeight, paraCSS := "2.0", `p {
 		margin: 0 0 24px 0;
 		text-align: justify;

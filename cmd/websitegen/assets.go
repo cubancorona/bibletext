@@ -46,6 +46,7 @@ func readerCSS(f webFonts) string {
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
 		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
 		"__HEADING_REM__", remSize(webHeadingBaseRem),
+		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
 	).Replace(readerCSSTemplate)
 }
 
@@ -311,11 +312,11 @@ body{
    95 at the corrected 24px, i.e. 1.3196 against the 1.3175 written here. */
 .text{
   font-family:var(--scripture);
-  font-size:__SCRIPTURE_REM__; line-height:1.3175; letter-spacing:.004em;
+  font-size:__SCRIPTURE_REM__; line-height:__LEADING__; letter-spacing:.004em;
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text{--pgap:calc(1.3175 * __SCRIPTURE_REM__)}
+.text{--pgap:calc(__LEADING__ * __SCRIPTURE_REM__)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* The publisher's section headings. Set in the scripture face, because they are
    the publisher's words and not the app's chrome, but never justified and never

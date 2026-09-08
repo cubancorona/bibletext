@@ -2470,12 +2470,19 @@ public final class BtBridge {
                 // comes out wrong by the gap between the two. It was set after
                 // for as long as this code has existed.
                 text.setTypeface(face != null ? face : android.graphics.Typeface.SERIF);
+                // lineMult is the leading the shipped face is set with. Below
+                // API 29 readingTypeface() returned null and this overlay draws
+                // in the platform serif, whose own leading was measured against
+                // the iOS pane long before that face arrived — so that fleet
+                // keeps the number it was tuned with rather than inheriting one
+                // chosen for different metrics.
+                final float pitch = (face != null) ? lineMult : 1.35f;
                 if (android.os.Build.VERSION.SDK_INT >= 28) {
-                    text.setLineHeight(Math.round(lineMult * textSizePx));
+                    text.setLineHeight(Math.round(pitch * textSizePx));
                 } else {
                     android.graphics.Paint.FontMetrics fm = text.getPaint().getFontMetrics();
                     float natural = fm.descent - fm.ascent + fm.leading;
-                    float mult = natural > 0f ? (lineMult * textSizePx) / natural : lineMult;
+                    float mult = natural > 0f ? (pitch * textSizePx) / natural : pitch;
                     text.setLineSpacing(0f, mult);
                 }
                 applyReadingPadding();

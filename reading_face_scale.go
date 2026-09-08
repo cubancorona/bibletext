@@ -89,3 +89,23 @@ func readingGlyphSize(reference float32) float32 {
 // it up by the same amount, or a chapter read on the web is visibly smaller than
 // the same chapter read in the app.
 func ReadingOpticalScale() float64 { return readingOpticalScale() }
+
+// THE LEADING, AS A MULTIPLE OF THE SIZE THE TYPE IS SET AT.
+//
+// It is a chosen number now. It was not before: the stylesheet asked for a
+// unitless line-height, the importer turned that into a minimum line height on
+// each RUN, and the panes take a paragraph's leading from its FIRST run — which
+// is always the 0.66em verse numeral. So the drawn pitch was 2.0 × 0.66 × the
+// body, an accident that would have moved if the numeral were ever resized, and
+// that no reader of the stylesheet could have predicted.
+//
+// 1.2222 sets a 24pt body on a 29.33pt line — 88 device pixels on a 3× phone.
+// Judged against the face's REAL ink rather than its declared line box, which
+// overstates what it draws by 27%: at this pitch the deepest descender clears the
+// next line's tallest ascender by 5.4pt. The face it replaced had 7.2pt at its
+// own smaller size, and leaving this at the old accidental value gave 7.7pt.
+const readingLinePitchEm = 1.2222
+
+// ReadingLinePitchEm is the same number for the generated site, whose CSS
+// line-height multiplies the font size directly — no numeral in the way.
+func ReadingLinePitchEm() float64 { return readingLinePitchEm }

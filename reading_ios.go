@@ -566,6 +566,12 @@ extern CTFontRef btReadingFontLike(CTFontRef src);
 
 static CGFloat gReporterIndent = 0;
 
+// The leading, as a multiple of each paragraph's own largest font. 0 leaves the
+// importer's own line metrics alone (reading_face_scale.go).
+static CGFloat gReadingLinePitchEm = 0;
+
+void bibleTextSetReadingLinePitch(double em) { gReadingLinePitchEm = (CGFloat)em; }
+
 void bibleTextSetReporterIndent(double pts) {
     dispatch_async(dispatch_get_main_queue(), ^{ gReporterIndent = (CGFloat)pts; });
 }
@@ -3038,6 +3044,31 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         if (v == nil) return;
         NSMutableParagraphStyle *ps = [(NSParagraphStyle*)v mutableCopy];
         ps.paragraphSpacingBefore = 0;
+        // THE LEADING, SAID OUT LOUD. Left to the stylesheet it is an accident:
+        // the importer turns a unitless line-height into a minimum line height
+        // per RUN, and a paragraph takes its leading from the FIRST run — always
+        // the 0.66em verse numeral — so the drawn pitch was 2.0 x 0.66 x the
+        // body and would have moved if that numeral were ever resized. Set from
+        // each paragraph's OWN largest font, so the footnote apparatus and the
+        // headings lead in proportion to their own size rather than the body's.
+        // Read off the untouched import, not the copy being mutated here.
+        if (gReadingLinePitchEm > 0) {
+            // The RANGE MATTERS. The importer hands out paragraph styles per RUN,
+            // not per paragraph, so `r` is routinely just the verse numeral —
+            // taking the largest font over it set the whole page's leading from
+            // a 0.66em superscript and the lines collided. Widen to the real
+            // paragraph first.
+            NSRange pr = [as.string paragraphRangeForRange:r];
+            __block CGFloat big = 0;
+            [as enumerateAttribute:NSFontAttributeName inRange:pr options:0
+                        usingBlock:^(id fv, NSRange fr, BOOL *fstop) {
+                if (fv != nil && ((UIFont *)fv).pointSize > big) big = ((UIFont *)fv).pointSize;
+            }];
+            if (big > 0) {
+                ps.minimumLineHeight = big * gReadingLinePitchEm;
+                ps.maximumLineHeight = big * gReadingLinePitchEm;
+            }
+        }
         // The reporter page's first-line indent, on the PROSE paragraphs only.
         // Poetry is never first-line indented in print, and the two are
         // already told apart by the alignment the stylesheet gave them:
@@ -3813,6 +3844,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// BEFORE the import below. A face registered afterwards is of no use to a
 	// sweep that has already run.
 	registerAppleReadingFonts()
+	// The leading, chosen rather than inherited from the numeral that happens
+	// to open each paragraph (reading_face_scale.go).
+	C.bibleTextSetReadingLinePitch(C.double(readingLinePitchEm))
 	if reporterLayoutActive() {
 		// The REFERENCE size, deliberately, not the size the face is set at.
 		// The column is measured in ems and its width is what decides how many
