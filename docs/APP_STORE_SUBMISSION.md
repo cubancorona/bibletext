@@ -6,22 +6,27 @@ Store Connect state.
 
 ## Current release state — verify before acting
 
-As observed against App Store Connect on 6 September 2026:
+As observed against App Store Connect on 6 September 2026, with the 1.2.7
+preparation recorded on 8 September 2026:
 
 - **Live App Store version (iOS):** 1.2.5, READY_FOR_SALE since its 2 September
   version record; 1.2.4 before it.
 - **Live Mac App Store version:** 1.2.5, READY_FOR_SALE; 1.2.4 was the
   platform's first release and took no What's New, 1.2.5 is its second and does.
-- **Prepared next version:** none. The ledgers still read 1.2.5, which is now
-  spent on both stores, so the next store release moves everything to 1.2.7 at
-  once (v1.2.6 is a source-only tag with no ledger of its own — see
-  docs/VERSIONING.md).
-- **Submission state:** nothing is in review. 1.2.5 was submitted on 3
-  September 2026 (iOS build 176, Mac desktop build 46) and both platforms
-  cleared; the annotated tag v1.2.5 sits at the release commit every channel
-  built from. Work merged since then is unreleased: phone landscape reading on
-  both phone platforms, the desktop full-screen row, the selection-under-wash
-  fix, the macOS restore and note-placement fixes, and the NKJV Psalm titles.
+- **Prepared next version:** 1.2.7. Both ledgers now read 1.2.7 — mobile build
+  177, desktop build 48 — and both review-notes files and a What's New file on
+  each platform path describe this release rather than the last (v1.2.6 is a
+  source-only tag with no ledger of its own — see docs/VERSIONING.md).
+- **Submission state:** nothing is in review on either Apple platform. 1.2.5 was
+  submitted on 3 September 2026 (iOS build 176, Mac desktop build 46) and both
+  platforms cleared; the annotated tag v1.2.5 sits at the release commit every
+  channel built from. Google Play is a separate channel and IS in review: 1.2.7
+  / versionCode 177 was sent on 8 September 2026, the app's first publication
+  anywhere on Android (see docs/PLAY_LISTING.md). The Apple 1.2.7 submissions
+  carry phone landscape reading, the desktop full-screen row, the
+  selection-under-wash fix, the macOS restore and note-placement fixes, the
+  publishers' own paragraphing, the Junicode reading face, chapter-bottom
+  footnotes, and the NKJV Psalm titles.
   Note that `fyne package` bumps the desktop ledger's Build AFTER packaging
   (46 became 47 in the working tree once the Mac package existed); the
   shipped build is the committed number, so discard that bump rather than
@@ -73,16 +78,18 @@ iOS versions — which is exactly what App Store Connect seeded it from.
 
 Before producing a binary, verify that `cmd/mobile/FyneApp.toml` names the
 version being prepared and a build number nothing has been uploaded under. It
-still holds the numbers 1.2.5 shipped as:
+now holds the numbers 1.2.7 is prepared as:
 
 ```toml
-Version = "1.2.5"
-Build = 176
+Version = "1.2.7"
+Build = 177
 ```
 
-Both are spent, so the next store release moves the ledger to 1.2.7 and to a
-build above 176, along with `cmd/desktop/FyneApp.toml`, both review-notes files,
-and a What's New file named for the new version.
+Build 177 has been uploaded to Google Play; it has NOT been uploaded to App
+Store Connect, so it remains the correct iOS build number until an Apple upload
+succeeds under it. The desktop ledger is at build 48, above the 47 that reached
+the wild. A release after this one moves both ledgers again, along with both
+review-notes files and a What's New file named for the new version.
 `scripts/check-release-identity.py` holds the two ledgers to one version and to
 `appstore/review-notes.txt` — and to the tag, when the release workflow passes
 one; the macOS notes and the version-named What's New file are held by

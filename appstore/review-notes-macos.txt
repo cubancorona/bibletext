@@ -2,7 +2,7 @@ VERSION 1.2.7 (macOS)
 
 BibleText is a Bible reader. No account, login, or registration is required, and reading, search, navigation, notes, and cross-references need no AI-provider key. Downloaded scripture stays readable and searchable offline; downloads and optional provider services need connectivity when used.
 
-These notes cover what is specific to the Mac, then what is new in 1.2.5.
+These notes cover what is specific to the Mac, then what is new in 1.2.7.
 
 STUDY GESTURE ON THE MAC
 Selection actions live on the right-click menu rather than a touch popover. Select any passage and right-click: the menu offers the system's Copy and Look Up, Cross-references, a Share submenu, and — only when an AI provider is configured — a Study with AI submenu. Settings → Assistant defaults to None, so no AI items appear and no AI setup is needed for review.
@@ -13,7 +13,7 @@ The Store edition runs in the App Sandbox. On the first launch that creates its 
 KEYS AND TRANSLATIONS
 The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version; a reader can replace it with their own key. The NKJV text is fetched from API.Bible, not packaged in the app or published on the website.
 
-No AI-provider key is bundled. The optional Study with AI features stay off until the reader enters their own provider key in Settings → Assistant. New in this release, the Store edition keeps that key (and any API.Bible key the reader adds) in the login Keychain rather than the preferences file; a key saved by an earlier release moves across once. Requests go directly to the selected provider.
+No AI-provider key is bundled. The optional Study with AI features stay off until the reader enters their own provider key in Settings → Assistant. The Store edition keeps that key (and any API.Bible key the reader adds) in the login Keychain rather than the preferences file; a key saved by an earlier release moves across once. Requests go directly to the selected provider.
 
 The full WEB, WEB Catholic, and BSB texts are fetched and cached at runtime. The only embedded scripture is a small WEB Gospels seed shown on first launch; the Gospel-parallels dataset holds references, not another translation.
 
@@ -26,9 +26,10 @@ To receive on the Mac: paste the link into Notes or Messages and click it — wi
 
 PRIVACY: the message is encoded in the URL fragment and travels only through the channel the sender chose. There is no server, account, user directory, or developer copy, and the fragment is not sent to the website host. A received message is rendered as plain text with neutral attribution, never as markup. The recipient can delete one note, delete all in Settings, or disable notes entirely.
 
-WHAT IS NEW IN 1.2.5, AND HOW TO EXERCISE IT
-• A chapter that holds shared notes shows one small "Note" pill above each paragraph that carries one, evenly spaced between the paragraphs; clicking it opens that paragraph's note, whose heading counts "1 of N in this chapter". To see it, receive a note as above, close it with the − button, then click the pill.
-• Arriving from a shared link or a search result lands on the verse; the chapter arrows and picker open each chapter at the top.
-• Switching translations no longer serves stale text from an earlier download, and a reference made in one translation is read back in that translation.
-• Narration: the WEB Catholic edition's Greek-origin books (Tobit through 2 Maccabees, with the additions to Esther and Daniel) now play a synthetic-voice recording of their own text — open Tobit 1 in that edition and press the audio button.
-• Study with AI says so when a model stopped mid-answer and offers to ask again.
+WHAT IS NEW IN 1.2.7, AND HOW TO EXERCISE IT
+• Section headings now appear where the publisher set them, and paragraphs break where the publisher broke them, in every translation rather than on a rule of our own. Open any chapter to see it.
+• A new reading face, Junicode, with Ezra SIL for Hebrew. The divine name is set in small capitals as the editions intend; copying a verse still gives ordinary letters.
+• Psalm titles — the superscriptions that name a psalm's author or occasion — are now shown in the New King James Version. Open Psalm 3 to see the superscription above verse 1.
+• Footnotes gather at the foot of the chapter, so a marker has somewhere to take you. Scroll to a chapter's end.
+• Reopening the app returns you to where you were reading, instead of jumping once the window had settled, and a note card is now placed against the text as actually laid out. Quit while reading and reopen.
+• Selecting a verse that carries a highlight now shows the selection; it was being painted underneath.

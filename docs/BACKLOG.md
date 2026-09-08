@@ -7,6 +7,42 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Share as image fails silently on Android 6.0-9.0 (API 23-28)
+
+Not a 1.2.7 regression: the behaviour is as old as the feature, and Android has
+never shipped through a store, so nothing in the wild is affected. It surfaced
+after 1.2.7 was already with Google for review, which is why the entry weighs
+superseding the in-review build at the end.
+
+`BtBridge.shareImage` (android/BtBridge.java) publishes the rendered verse card
+through `MediaStore` rather than a FileProvider, and the manifest declares
+`WRITE_EXTERNAL_STORAGE` capped at `maxSdkVersion="28"` to justify it
+(cmd/mobile/AndroidManifest.xml). On API 29 and later, scoped storage means the
+`MediaStore` insert needs no permission at all and the feature works. On API
+23-28 that permission is runtime-granted, and the app never calls
+`requestPermissions` for it — the only runtime request anywhere in the app is
+POST_NOTIFICATIONS in BtAudio.java. So the insert fails, and because the whole
+body is wrapped in `catch (Throwable)` that only logs, the reader taps "Share as
+image" and nothing happens: no share sheet, no error, no toast.
+
+Two things to fix, and they are separable:
+
+1. The silence. A swallowed `Throwable` on a user-initiated action should say
+   something. Cheapest correct fix even if the permission work is deferred.
+2. The permission. Either request WRITE_EXTERNAL_STORAGE at runtime on API
+   23-28 before the insert, or drop the API 23-28 path and gate the "Share as
+   image" action off below API 29 so the action is absent rather than broken.
+   Dropping it also removes the last justification for declaring the permission
+   at all, which is worth having: an unused declared permission is the kind of
+   thing a Play reviewer's unused-permission check flags, and the manifest
+   comment already records that READ_EXTERNAL_STORAGE was removed for exactly
+   that reason.
+
+Whether to supersede the in-review build for this is a judgement call about
+reach: API 23-28 is a small and shrinking slice, and the closed testers will
+almost certainly be on API 29+. Fixing it in the next release is defensible.
+
+
 ## Phone landscape reading — shipped on both phone platforms — DONE
 
 Shipped and on by default on both phone platforms, verified on an iPhone

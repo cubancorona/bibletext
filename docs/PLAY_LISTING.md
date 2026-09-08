@@ -1,14 +1,16 @@
 # Google Play listing — copy, assets, and console review
 
-BibleText does not yet have a public Google Play listing. This document prepares
-the record without claiming that an account, closed test, production access, or
-submission already exists.
+BibleText's Google Play listing exists and its first submission is with Google.
+1.2.7 (versionCode 177) was sent for review on 8 September 2026 on the closed
+testing track "Alpha", targeting 176 countries, with testers supplied through the
+Google Group `testers-community@googlegroups.com`. Production access has not been
+granted and no production release exists.
 
 Prepared release identity:
 
 - package: `uk.co.bibletext`
-- version: 1.2.5
-- versionCode: 176
+- version: 1.2.7
+- versionCode: 177
 - minimum SDK: Android 5.0 / API 21
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
@@ -95,7 +97,7 @@ The icon and feature graphic under `docs/play-assets/` remain usable:
 | Feature graphic | `feature-graphic.png` | 1024×500 PNG |
 
 The existing `01-reading.png`, `02-search.png`, and `03-books.png` phone images
-show an older interface and must not be uploaded for 1.2.5. They date from 4
+show an older interface and must not be uploaded for 1.2.7. They date from 4
 July 2026 and predate the note chrome, the current typography, and the grouped
 Books grid. Recapture at least:
 
@@ -119,8 +121,11 @@ the system background. `scripts/play-shot-check.py` asks the specific question
 instead - is there ink where the tab bar belongs - and it caught two images
 that had already been committed as fine.
 
-**A candidate set for 1.2.5 is in `play-assets/2026-09-1.2.5/`**, captured from
-the release APK (versionCode 176) on a Pixel 7 emulator: reading with red
+**A candidate set is in `play-assets/2026-09-1.2.5/`**, captured from the
+versionCode 176 release APK on a Pixel 7 emulator. It predates 1.2.7's reading
+face (Junicode with small-capital divine name) and the publishers' own
+paragraphing, so it no longer shows the shipped text; recapture before the
+listing goes public. It shows: reading with red
 letters, search results, the grouped Books list, the same passage in the NKJV
 fetched live through API.Bible, and the translation picker showing the licence
 notice. They sit beside the old set rather than replacing it, per the paragraph
@@ -170,33 +175,38 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
-## Closed-test release notes — 1.2.5
+## Closed-test release notes — 1.2.7
 
-> BibleText 1.2.5 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
+> BibleText 1.2.7 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
 > search, cross-references, narration/read-along, shared verse notes, and optional
-> bring-your-own-key AI study. Red-letter text now follows each translation's own
-> publisher markings. No ads, account, analytics, or tracking.
+> bring-your-own-key AI study. This release adds full-screen landscape reading on
+> the phone, the publishers' own section headings and paragraphing, a new reading
+> face, NKJV Psalm titles, and chapter-bottom footnotes. No ads, account,
+> analytics, or tracking.
 
 Suggested tester coverage:
 
-- install/upgrade and confirm version 1.2.5 (176);
-- switch all four translations and test first-download/offline behaviour;
-- check NKJV Mark 5:31, Matthew 27:63, Luke 17:36, and Luke 24:7 with Words of
-  Jesus enabled;
+- install and confirm version 1.2.7 (177);
+- rotate the phone on the Read tab: the chapter fills the screen with no header
+  or tab bar and the chapter arrows sit beside the reference, and rotating back
+  restores the usual chrome; Books and Search keep the bottom tab bar;
+- switch all four translations and test first-download/offline behaviour, and
+  confirm section headings and paragraph breaks follow each publisher;
+- check that the divine name renders in small capitals but copies as ordinary
+  letters, and read a Hebrew-script passage in the new face;
+- open Psalm 3 in the NKJV and confirm the superscription sits above verse 1;
+- follow a footnote marker to the chapter-bottom footnote section;
+- select a verse that carries a highlight and confirm the selection is visible
+  over it, in light and dark appearance at more than one text size;
+- **enter an AI provider key in Settings and confirm it survives a force-stop and
+  relaunch** — 1.2.7 moves Android provider keys into the Android Keystore, and
+  this is the change on this platform most worth a human confirming;
 - use the grouped Books grid, Go to, keyword/reference search, and Back to
   results;
 - open cross-references and Gospel parallels in differently numbered editions;
-- send/receive/delete a note using neutral synthetic text;
+- send/receive/delete a note using neutral synthetic text; and
 - play recorded narration/read-aloud, read-along, background continuation, and
-  notification controls; and
-- rotate phones and tablets between portrait bottom tabs and the landscape left
-  rail on Books and Search, and a phone's Read tab into its full-screen
-  landscape reading, confirming the reading pane remains usable after a warm
-  App Link; and
-- exercise the note chrome reworked across 1.2.4-1.2.5: open a received note and
-  confirm no pills are drawn beside it, collapse it and confirm the pill stack
-  centres on the visible inter-paragraph gap, and check both in light and dark
-  appearance at more than one text size.
+  notification controls.
 
 ## Prepared console answers, and what iOS actually declared
 
