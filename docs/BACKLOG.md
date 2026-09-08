@@ -704,3 +704,69 @@ that tag, then `go build` inside the clone — so the module line never enters
 into it and that command works today on v1.2.5. A source build by either
 route carries no release ldflags, so it has no bundled NKJV key: the reader
 adds their own API.Bible key in Settings for that translation.
+
+## A shared verse carries the app's own small capitals, and then cannot find itself
+
+Found while checking whether a sentence in docs/ADDITIONS_AND_DROPS.md was true.
+It was not, and the reason is a live defect.
+
+`outboundText` (outbound_text.go) is the cleaner that strips the app's own
+typography from text on its way out — superscript verse numbers back to digits,
+the no-break join back to a space, the paragraph indent dropped, and the drawn
+small capitals mapped back. It has exactly two call sites: `ai.go:266` and the
+styled pane's Copy at `reading_styled_select.go:390`. **Share is not one of
+them.**
+
+The share path takes `plainSelection` (reading.go:1409) instead, which is
+`cleanCopy` plus superscript-to-digit and nothing else, and then
+`stripVerseMarkers(collapseSpaces(raw))` at share.go:435. Neither maps a small
+capital back. Two consequences, on any verse the edition sets in small capitals
+— which is the whole point of the NKJV divine-name work:
+
+1. The shared text carries the substituted characters. A reader pastes `Lᴏʀᴅ`
+   where every other edition and reader gives `LORD`.
+2. `normalizeShareSelection` then looks for that text inside `chapterProse`
+   (share.go:260), which is built from `Verse.Text` — the publisher's own
+   letters. `Lᴏʀᴅ` cannot match `Lord`, so the selection is not located and the
+   share drops to the legacy probe-based citation path.
+
+The fix is probably to route the share path through `outboundText` as the AI
+path already does, but the locate is the part to think about: `chapterProse` is
+publisher text, so whatever the share carries has to be in those letters by the
+time it is matched. Worth a test that shares a divine-name verse and asserts
+both the outgoing text and that the selection was located rather than fell back.
+
+## Three comments that describe code that changed under them
+
+Each verified against the source; all are comments, none change behaviour.
+
+- `outbound_text.go:61-62` says the small-capital branch maps "Back to the
+  publisher's own letter". It does not. `smallCapitalToLetter`
+  (small_caps_draw.go:47-62) maps to the CAPITAL, deliberately, and gives the
+  reason two lines down: a small capital does not record its original case, and
+  uppercase is the conventional plain-text realisation that keeps the
+  Tetragrammaton distinct from Adonai. The call-site comment contradicts the
+  map's own reasoning.
+- `dev_mimic_test.go:72` says a Mac, a Windows machine and a Linux machine "all
+  draw the same Spectral" while the assertion two lines below requires
+  `Junicode`. The face changed; the sentence did not. `dev_mimic_on.go`'s file
+  header still lists "and font candidates" among the seams, though that seam is
+  gone from the tree.
+- `app.go:508-511` carries a duplicated fragment from the same commit that
+  retired the font seam: "Must run before CreateMainUI (installSheetCloseConsume
+  reads a seam) and / (installSheetCloseConsume reads a seam)." The sentence
+  never completes. `dev_mimic_on.go:56-57` has the same kind of damage.
+
+## docs/ANDROID.md and reading_android.go disagree about the note sticker
+
+docs/ANDROID.md:183-185 says the Android shared-note sticker "is gated to
+`IsFullScreen` in Go (`pushNoteToOverlay`, reading_android.go) precisely so the
+reader never sees the note twice." The function it cites opens by saying the
+opposite: "BOTH reading modes now, not full-screen alone (settled by comparing
+the two platforms side by side) ... Same sticker, both modes, and the Fyne
+banner stands down" (reading_android.go:615).
+
+The code is the newer of the two. Left alone rather than guessed at because the
+sentence also asserts a reason — that the gate exists to prevent a double
+draw — and whether that concern is now handled by the banner standing down, or
+was simply overtaken, is worth confirming before rewriting it.
