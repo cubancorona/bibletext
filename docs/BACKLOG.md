@@ -593,6 +593,31 @@ chose, and it then unzips both and checks their CFBundleVersion against the
 ledger rather than trusting the restore. `test-release-key-flow.sh` asserts all
 of it and fails if a restore is removed.
 
+## The verse wash was measured in two conventions — FIXED 2026-09-08
+
+`Layout.getHorizontal` never applies justification on any release from 26 to 36,
+while the line-level extents (`getLineLeft` / `getLineRight`, through
+`getLineExtent`) do. WashSpan took one edge from each: line extents where the
+verse reached a line edge, `getPrimaryHorizontal` where it stopped mid-line.
+
+So on a justified line — Android 15 and newer, which is where the pane justifies
+— a verse ending mid-line had its right edge measured as if the line were ragged,
+which is left of where the glyphs are. The full stop closing the verse fell
+OUTSIDE the wash. Verified against the ragged Android 13 build, where the two
+conventions agree and the same verse washed correctly; that control is what ruled
+out the obvious alternative, that the verse range simply excluded the period.
+
+Fixed by reconstructing the platform's own INTER_WORD arithmetic from public API:
+`TextLine.justify` spreads (target − unjustified) over the line's stretchable
+spaces, so the drawn x of an offset is its blind x plus one share for every
+stretchable space before it (`drawnHorizontal`, android/BtBridge.java). It is
+self-disabling — on a ragged line the extra comes out at or below zero and the
+blind value is returned unchanged, which a pixel diff of the Android 13 build
+confirms at zero differing pixels.
+
+The selection popup's anchor had the same blind measurement and is routed through
+the same helper.
+
 ## Android 13/14: the reading text cannot be justified while it stays selectable
 
 The native reading pane is a selectable `TextView`, which Android lays out

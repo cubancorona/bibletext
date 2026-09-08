@@ -291,6 +291,64 @@ public final class BtBridge {
     private static int raVerse = 0;
     private static BackgroundColorSpan raSpan;
 
+    // THE X OF AN OFFSET AS IT IS ACTUALLY DRAWN, justification included.
+    //
+    // Layout.getPrimaryHorizontal is justification-BLIND on every release from
+    // 26 to 36: Layout.getHorizontal measures the line with TextLine WITHOUT
+    // calling justify(), so on a justified line it answers where the glyph
+    // WOULD be if the line were ragged — left of where it is. The line-level
+    // extents (getLineLeft/getLineRight, through getLineExtent) DO justify, so
+    // mixing the two puts one edge of a rectangle in each convention.
+    //
+    // That is exactly what the verse wash did. A verse ending mid-line had its
+    // right edge measured blind and came up short: on Android 15 the full stop
+    // closing the verse fell OUTSIDE the wash, while the same code on Android 13
+    // — ragged, where the two conventions agree — included it.
+    //
+    // The platform justifies INTER_WORD: TextLine.justify spreads
+    // (target - unjustified) over the line's stretchable spaces and adds it to
+    // each one. So the drawn x of an offset is its blind x plus one share for
+    // every stretchable space before it. Reconstructed here from public API
+    // only, and self-disabling: on a ragged line, or one the layout did not
+    // stretch, the extra comes out at or below zero and this returns the blind
+    // value unchanged.
+    private static int stretchableSpaces(CharSequence cs, int from, int to) {
+        int n = 0;
+        for (int i = from; i < to && i < cs.length(); i++) {
+            if (cs.charAt(i) == ' ') n++;
+        }
+        return n;
+    }
+
+    private static float wordSpacingOn(Layout lay, int lnum) {
+        CharSequence cs = lay.getText();
+        int start = lay.getLineStart(lnum), end = lay.getLineEnd(lnum);
+        if (cs == null || end <= start) return 0f;
+        // Trailing whitespace is not stretched, and an offset AT the line end
+        // belongs to the next line for getPrimaryHorizontal, so probe inside.
+        int probe = end;
+        while (probe > start && probe - 1 < cs.length()
+                && (cs.charAt(probe - 1) == ' ' || cs.charAt(probe - 1) == '\n')) {
+            probe--;
+        }
+        if (probe >= end) probe = end - 1;
+        if (probe <= start) return 0f;
+        int spaces = stretchableSpaces(cs, start, probe);
+        if (spaces <= 0) return 0f;
+        float left = lay.getLineLeft(lnum);
+        float extra = (lay.getLineRight(lnum) - left) - (lay.getPrimaryHorizontal(probe) - left);
+        if (extra <= 0.5f) return 0f;   // ragged, or nothing to spread
+        return extra / spaces;
+    }
+
+    private static float drawnHorizontal(Layout lay, int lnum, int offset) {
+        float x = lay.getPrimaryHorizontal(offset);
+        float ws = wordSpacingOn(lay, lnum);
+        if (ws <= 0f) return x;
+        return x + ws * stretchableSpaces(lay.getText(), lay.getLineStart(lnum), offset);
+    }
+
+
     // The chapter wash, drawn in the LINE-BACKGROUND pass rather than as the
     // BackgroundColorSpan Html.fromHtml makes from the tint table's
     // background-color. Layout.draw paints line backgrounds first, then the
@@ -324,11 +382,11 @@ public final class BtBridge {
             int lo = Math.max(start, sp.getSpanStart(this)), hi = Math.min(end, sp.getSpanEnd(this));
             if (lo >= hi) return;
             int lineStart = lay.getLineStart(lnum), lineEnd = lay.getLineEnd(lnum);
-            float x0 = lo <= lineStart ? lay.getLineLeft(lnum) : lay.getPrimaryHorizontal(lo);
+            float x0 = lo <= lineStart ? lay.getLineLeft(lnum) : drawnHorizontal(lay, lnum, lo);
             // An offset AT the line end already belongs to the next line for
             // getPrimaryHorizontal; the line's own right extent is the
             // glyph-tight edge (it excludes trailing whitespace).
-            float x1 = hi >= lineEnd ? lay.getLineRight(lnum) : lay.getPrimaryHorizontal(hi);
+            float x1 = hi >= lineEnd ? lay.getLineRight(lnum) : drawnHorizontal(lay, lnum, hi);
             if (x1 <= x0) return;
             // A NOTE'S RESERVED AIR IS NOT PART OF THE LINE. applyNoteBand
             // reserves a note's band by growing a line's descent (or, for a
@@ -605,7 +663,7 @@ public final class BtBridge {
             // invisible, but the reporter page's centred column insets the text
             // by a large fraction of the width (applyReadingPadding) and the
             // popup would open that far to the left of the selection.
-            ax = lay.getPrimaryHorizontal(selEnd) + text.getTotalPaddingLeft()
+            ax = drawnHorizontal(lay, line, selEnd) + text.getTotalPaddingLeft()
                     + text.getLeft() - scroll.getScrollX();
             lineTop = lay.getLineTop(line) + text.getTotalPaddingTop()
                     + text.getTop() - scroll.getScrollY();
