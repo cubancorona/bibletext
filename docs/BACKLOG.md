@@ -7,6 +7,42 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Recapture the App Store and Play screenshots — deferred from 1.2.7
+
+1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
+inherits from the last captured set (build/appstore/screenshots-1.2.3/). Those
+images predate two changes 1.2.7 makes to the text itself, so the store pages
+show typography the installed app no longer uses:
+
+- the reading face is now Junicode, with Ezra SIL for Hebrew, and the divine
+  name is set in small capitals; and
+- section headings and paragraph breaks now follow each publisher's own
+  typesetting rather than a rule of our own.
+
+Five of the eight iPad shots are reading views, so most of the set is affected.
+`appstore/preflight.py` flags this every run — screenshots are a PER_RELEASE
+field, and an inherited value is reported as "INHERITED from <previous>" under
+"PER-RELEASE FIELDS THAT WERE NOT WRITTEN FOR THIS RELEASE". Expect that
+warning until the set is recaptured; it is accurate, not noise.
+
+What a recapture needs:
+
+- iOS: the 6.9" iPhone and 13" iPad slots, in the pixel sizes
+  `ACCEPTED_SCREENSHOT_SIZES` lists in appstore/preflight.py. An off-list size
+  does not error at upload — it reaches assetDeliveryState FAILED silently
+  later — so validate locally first, which the preflight does for
+  `build/appstore/screenshots-ready-<version>/en-GB/` and `.../ipad13/`.
+- macOS: landscape only, per the same table.
+- Play: `docs/PLAY_LISTING.md` carries its own capture recipe, including
+  `scripts/play-shot-check.py` and the boot-the-emulator-before-setting-the-
+  appearance rule. The Play candidate set has the same staleness and is noted
+  there.
+
+Worth capturing the new reading face deliberately rather than incidentally: a
+passage with the divine name in small capitals, and a chapter whose publisher
+paragraphing differs visibly from the old uniform rule, are the two images that
+show what changed.
+
 ## Share as image fails silently on Android 6.0-9.0 (API 23-28)
 
 Not a 1.2.7 regression: the behaviour is as old as the feature, and Android has
