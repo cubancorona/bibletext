@@ -49,22 +49,27 @@
   <p>Bible translations and study data are downloaded from public, free services so the app can
   display scripture: <a href="https://bible.helloao.org/docs/">bible.helloao.org</a> (the primary
   source for the World English Bible — including the Catholic edition — and the Berean
-  Standard Bible), <a href="https://bible-api.com">bible-api.com</a> (a fallback text source), and
-  <a href="https://openbible.info">openbible.info</a> (cross-reference data), and
-  <a href="https://scripture.api.bible">rest.api.bible</a> (the New King James Version). The
+  Standard Bible), <a href="https://openbible.info">openbible.info</a> (cross-reference data),
+  and <a href="https://scripture.api.bible">API.Bible</a>, at <code>rest.api.bible</code>
+  (the New King James Version). The
   API.Bible request carries the passage being fetched and an API key — the project fallback
   included with release builds, or your own replacement added in Settings. BibleText does not
   attach your notes, reading history, AI-provider keys, or an app account. API.Bible receives
   ordinary network metadata and may associate a reader-supplied key with that reader's API.Bible
   account; it handles the request under its own terms. If you play a
   chapter's audio, the public-domain recordings are streamed from the project's own
-  public mirror hosted on <a href="https://github.com/cubancorona/bibletext-audio">GitHub</a>
-  (originally recorded for <a href="https://openbible.com">openbible.com</a> — Berean Standard
-  Bible narration — for the World English Bible, David Williams's public-domain narration
-  via <a href="https://www.audiotreasure.com">audiotreasure.com</a>, and for the World English
-  Bible Catholic edition's Greek books a public-domain synthetic narration from
-  <a href="https://ebible.org/eng-webbe/">eBible.org</a>); the on-device
-  read-aloud option uses your device's speech synthesis and makes no network request. These are
+  public mirror hosted on <a href="https://github.com/cubancorona/bibletext-audio">GitHub</a>,
+  which is the only host contacted for playback. The recordings originate with
+  <a href="https://openbible.com">openbible.com</a> (Berean Standard Bible narration),
+  David Williams's public-domain narration distributed by
+  <a href="https://www.audiotreasure.com">audiotreasure.com</a> (World English Bible), and
+  <a href="https://ebible.org/eng-webbe/">eBible.org</a> (a public-domain synthetic narration
+  of the World English Bible Catholic edition's Greek books); those are recording credits, and
+  BibleText does not contact them. The read-aloud option instead hands the chapter text to your
+  device's own speech-synthesis engine, and BibleText makes no network request to do so. On
+  Apple devices that synthesis happens on the device. On Android, whether the engine you have
+  set as your system default synthesises on the device or through its own online service is
+  determined by that engine, not by BibleText. These are
   ordinary network requests for the text, study data, and audio themselves; no personal
   information about you is attached to them.</p>
 
