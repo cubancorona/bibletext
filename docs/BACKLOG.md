@@ -614,6 +614,26 @@ or reflection on the protected `Layout.setJustificationMode`, which the
 hidden-API policy may refuse. Neither is worth it for a rendering that
 Android 15 already gets right.
 
+**REVISITED 2026-09-08, and the gate STAYS.** Two things were established and
+then weighed the other way round from the sentence above.
+
+The fleet share is worse than that sentence assumes: Android 15 and 16 together
+are roughly a quarter to a third of active devices, so justification is the
+MINORITY rendering here and will be for years. Levelling everything down to
+ragged was therefore considered — it would have deleted a split in a pane that
+already forks once on API 29 for the reading face, and ragged is defensible at a
+phone measure (the justified page's word spaces vary nearly threefold from line
+to line, the rivers a narrow column always gives).
+
+It was rejected, and the principle is worth keeping: **give each platform the
+best rendering it can manage, rather than holding everyone to what the weakest
+can do.** A reader on a capable release should not get a worse page so that it
+matches an older one. Ragged stays where the platform cannot do better, which is
+what the gate already expresses.
+
+So: the gate is correct, neither workaround above should be built, and the
+inconsistency between fleet bands is accepted rather than overlooked.
+
 ## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module — DONE
 
 Cut as an ANNOTATED tag (the kind docs/VERSIONING.md asked the next cut to
