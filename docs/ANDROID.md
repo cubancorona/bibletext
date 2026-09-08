@@ -449,4 +449,108 @@ keep surviving a lost phone. That split is the whole point of relocating only
 the caches rather than setting `android:allowBackup="false"`, which would have
 protected the text by throwing away the reader's notes.
 
+The reader's AI-provider keys used to be the hole in that reasoning — they sat
+in `preferences.json`, so they backed up too. They now live encrypted beside
+the caches; see the next section.
+
 Existing installs re-download their translations once, into the new location.
+
+## Where the AI keys live, and how to verify it on a device
+
+The reader's bring-your-own-key API keys are wrapped with an AES-256-GCM key
+generated in the Android Keystore, which never leaves the device, and the
+ciphertext goes in `no_backup/bibletext/keys/ai-<account>.bin` — one file per
+account, mode `0600`, framed `0x01 || iv(12) || ciphertext || tag(16)`. The
+account id is the GCM **AAD**, so a blob is bound to its slot and a file moved
+between providers fails authentication instead of decrypting into the wrong
+field. Renaming an account id is therefore a key-destroying change.
+
+`android/BtKeys.java` does the cipher call and nothing else. The envelope, the
+atomic write and the `(found, ok)` answer are in `ai_secure_store_blob.go`,
+which carries **no build tag** on purpose: there is no on-device Go test runner
+here, so anything left in Java or in the JNI shim is code no test executes.
+Only the cipher earns that.
+
+The classification is deliberately lopsided. `found=false, ok=true` — the
+answer that lets the caller erase the plaintext copy — is returned for exactly
+one condition: the blob file does not exist. A missing alias, a failed
+authentication, an unknown envelope version and a JNI call that could not run
+all report a store *error*, which merely blocks a migration and leaves the
+reader's working key alone. No exception-classification mistake, in Java or in
+C, can reach that erase.
+
+**The trade:** a Keystore key cannot be migrated, so an Android key is now
+device-bound. `ai_secure_store_darwin.go` chose backup-restorable Keychain
+accessibility precisely so an Apple key survives a device move; Android has no
+third option — plaintext in the reader's Drive, or encrypted and device-bound.
+A reader restoring onto a new phone has to paste theirs again.
+
+### Verifying the crypto without installing anything
+
+`BtKeys` needs no `Context`, so it runs standalone. This exercises the real
+Keystore without disturbing whatever build is on the device — useful when
+someone else is using the emulator.
+
+```bash
+# Compile the real BtKeys.java together with a harness that calls it.
+AJ="$ANDROID_HOME/platforms/android-36/android.jar"
+BT="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)"
+javac --release 8 -cp "$AJ" -d classes android/BtKeys.java Probe.java
+"$BT/d8" --min-api 21 --lib "$AJ" --output dex $(find classes -name '*.class')
+adb push dex/classes.dex /data/local/tmp/ksprobe.dex
+adb shell "CLASSPATH=/data/local/tmp/ksprobe.dex app_process / Probe"
+```
+
+**The trap:** a bare `app_process` runtime has no `AndroidKeyStore` provider
+registered — a real app gets it during startup — so `available()` returns false
+and every call fails. That is the harness, not the code. The harness must
+install it first, by reflection, and hidden-API enforcement has to be off for
+the shell while it does:
+
+```bash
+adb shell settings put global hidden_api_policy 1     # restore when done
+# in Probe.main, before touching BtKeys:
+#   Class.forName("android.security.keystore2.AndroidKeyStoreProvider")
+#        .getMethod("install").invoke(null);
+#   ...falling back to android.security.keystore.AndroidKeyStoreProvider,
+#   which is the class name before keystore2 (API 30).
+adb shell settings delete global hidden_api_policy
+```
+
+Worth asserting in the harness: the round trip; that a blob is
+`12 + len + 16`; that unwrapping under a **different account id** returns a
+zero-length array (dead) rather than plaintext; that a flipped tag byte does
+the same; that two wraps of one plaintext differ; and that a short blob returns
+**null** (transient) rather than dead.
+
+### Verifying the migration end to end
+
+```bash
+adb root                                    # emulator images allow this
+P=/data/data/uk.co.bibletext/files/fyne/preferences.json
+adb shell am force-stop uk.co.bibletext
+# seed a plaintext key, as a pre-upgrade reader would have had
+adb pull "$P" /tmp/p.json && python3 -c "import json;d=json.load(open('/tmp/p.json'));\
+d['ai.key.gemini']='PROBE';json.dump(d,open('/tmp/p.json','w'))"
+adb push /tmp/p.json "$P" && adb shell "chown u0_a174:u0_a174 $P; chmod 600 $P"
+adb shell am start -n uk.co.bibletext/org.golang.app.GoNativeActivity
+adb shell ls -la /data/data/uk.co.bibletext/no_backup/bibletext/keys/
+```
+
+**`run-as` does not work here** — the APK is signed with the upload key and is
+not debuggable — so `adb root` is the way in.
+
+**What the result proves.** The preference is cleared only when `Write` returns
+true, and `Write` returns true only after reading the blob back and decrypting
+it to the exact value. So an emptied `ai.key.gemini` alongside a new
+`ai-gemini.bin` is proof that the device wrapped, wrote durably, read back and
+unwrapped — not merely that a file appeared.
+
+Use `am start`, not `monkey`: as noted under Emulator, `monkey` exits 251
+against the current manifest and starts nothing, which reads exactly like a
+migration that failed to run.
+
+Still unverified anywhere: API 21–22 degradation on a genuinely old image (the
+gate is structural, pinned by `TestBtKeysGatesOnAPI23`), and that `no_backup/`
+really is excluded from a `bmgr backupnow`/restore cycle — which the Bible
+caches have always assumed too.
