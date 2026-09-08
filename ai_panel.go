@@ -292,7 +292,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		current = text
 		copyBtn.Enable()
 		reportBtn.Enable()
-		answer.ParseMarkdown(sanitizeAIMarkdown(text))
+		setAIAnswerText(answer, text)
 		// A word-wrapped RichText only reports its true height once it has wrapped
 		// at a known width. Pre-wrap at the body width so the height is right, then
 		// fit the panel to the answer (capped at maxBodyH).
