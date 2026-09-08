@@ -2507,9 +2507,25 @@ public final class BtBridge {
                 // draws exactly as it breaks. Unjustified breaks never
                 // overflow, so older releases read ragged but whole.
                 if (android.os.Build.VERSION.SDK_INT >= 26) {
-                    text.setJustificationMode(android.os.Build.VERSION.SDK_INT >= 35
-                            ? android.text.Layout.JUSTIFICATION_MODE_INTER_WORD
-                            : android.text.Layout.JUSTIFICATION_MODE_NONE);
+                    // RAGGED ON EVERY RELEASE, and said out loud rather than
+                    // inherited. Justification was gated to API 35+ because a
+                    // selectable TextView lays out with a DynamicLayout, and
+                    // before Android 15 that layout never handed the mode to the
+                    // Layout that DRAWS: lines broke justified and then nothing
+                    // shrank the spaces, so they spilled past the right edge.
+                    //
+                    // The gate worked, but it shipped one app with two pages.
+                    // Android 15 and newer is around a quarter to a third of the
+                    // fleet, so justification was the MINORITY rendering — and
+                    // this pane already forks once on API 29 for the reading
+                    // face. Two forks in the same paragraph of text is a worse
+                    // fault than a ragged right edge, which on a phone measure
+                    // is a defensible setting in its own right: the justified
+                    // page's word spaces varied nearly threefold from line to
+                    // line, which is the classic rivers problem on a narrow
+                    // column, and the hyphenation below is what carries a ragged
+                    // edge well.
+                    text.setJustificationMode(android.text.Layout.JUSTIFICATION_MODE_NONE);
                 }
             }
         });
