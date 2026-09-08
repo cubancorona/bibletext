@@ -110,6 +110,15 @@ final image visually and with OCR, and meet Play's current aspect-ratio and pixe
 requirements. Do not overwrite the old assets in place until the new set has
 been reviewed side by side.
 
+**Capture on a freshly booted emulator, and set the appearance BEFORE the app
+starts.** Changing the system theme while it is running brought it back with
+its pane occupying the top ~45% of the window - readable, and useless as a
+store image. Worse, it is invisible to the obvious check: "does content reach
+the bottom of the screen" passes anyway, because the page background is not
+the system background. `scripts/play-shot-check.py` asks the specific question
+instead - is there ink where the tab bar belongs - and it caught two images
+that had already been committed as fine.
+
 **A candidate set for 1.2.5 is in `play-assets/2026-09-1.2.5/`**, captured from
 the release APK (versionCode 176) on a Pixel 7 emulator: reading with red
 letters, search results, the grouped Books list, the same passage in the NKJV
