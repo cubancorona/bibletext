@@ -15,8 +15,15 @@ import (
 // A host test cannot load the class, but it can read both sides of the
 // contract, because both are source in this repo.
 
-var jniLookup = regexp.MustCompile(
-	`GetStaticMethodID\(env,\s*btaClass,\s*"([A-Za-z0-9_]+)",\s*\n?\s*"([^"]*)"\)`)
+// jniLookupFor matches the GetStaticMethodID calls made against one cached
+// class variable. It is per-class rather than fixed because there are three
+// bridges, and a regexp hard-wired to one of them silently checks nothing for
+// the other two.
+func jniLookupFor(classVar string) *regexp.Regexp {
+	return regexp.MustCompile(
+		`GetStaticMethodID\(env,\s*` + regexp.QuoteMeta(classVar) +
+			`,\s*"([A-Za-z0-9_]+)",\s*\n?\s*"([^"]*)"\)`)
+}
 
 // Only the types the bridge actually passes. An unknown type is a test
 // failure, not a silent pass — a new parameter type must be added here
@@ -66,28 +73,47 @@ func javaMethodDescriptor(t *testing.T, java, name string) (string, bool) {
 	return fmt.Sprintf("(%s)%s", strings.Join(args, ""), ret), true
 }
 
-func TestJNIDescriptorsMatchBtBridge(t *testing.T) {
-	goSrc := readNativeSource(t, "reading_android.go")
-	java := readNativeSource(t, "android/BtBridge.java")
+// Every Go↔Java bridge in the app. BtAudio's seven descriptors were checked by
+// nothing before this became a table; BtKeys' three carry a reader's API key,
+// and a skew there means the store silently reports itself absent.
+var jniBridges = []struct {
+	goFile   string
+	javaFile string
+	classVar string
+	min      int // drift guard: fewer lookups than this means the regexp missed
+}{
+	{"reading_android.go", "android/BtBridge.java", "btaClass", 10},
+	{"audio_android.go", "android/BtAudio.java", "btAudioClass", 5},
+	{"ai_secure_store_android.go", "android/BtKeys.java", "btKeysClass", 3},
+}
 
-	found := jniLookup.FindAllStringSubmatch(goSrc, -1)
-	if len(found) < 10 {
-		t.Fatalf("matched only %d GetStaticMethodID lookups — the regexp has drifted "+
-			"from reading_android.go and this test is checking nothing", len(found))
-	}
-	for _, m := range found {
-		name, want := m[1], m[2]
-		got, ok := javaMethodDescriptor(t, java, name)
-		if !ok {
-			t.Errorf("reading_android.go looks up %q, which BtBridge.java does not declare "+
-				"as a public static method", name)
-			continue
-		}
-		if got != want {
-			t.Errorf("JNI descriptor skew for %s:\n  reading_android.go: %s\n  BtBridge.java:      %s\n"+
-				"On a device this lookup returns NULL and the call silently does nothing.",
-				name, want, got)
-		}
+func TestJNIDescriptorsMatchJava(t *testing.T) {
+	for _, b := range jniBridges {
+		t.Run(b.classVar, func(t *testing.T) {
+			goSrc := readNativeSource(t, b.goFile)
+			java := readNativeSource(t, b.javaFile)
+
+			found := jniLookupFor(b.classVar).FindAllStringSubmatch(goSrc, -1)
+			if len(found) < b.min {
+				t.Fatalf("matched only %d GetStaticMethodID lookups against %s — the regexp "+
+					"has drifted from %s and this test is checking nothing",
+					len(found), b.classVar, b.goFile)
+			}
+			for _, m := range found {
+				name, want := m[1], m[2]
+				got, ok := javaMethodDescriptor(t, java, name)
+				if !ok {
+					t.Errorf("%s looks up %q, which %s does not declare as a public static method",
+						b.goFile, name, b.javaFile)
+					continue
+				}
+				if got != want {
+					t.Errorf("JNI descriptor skew for %s:\n  %s: %s\n  %s: %s\n"+
+						"On a device this lookup returns NULL and the call silently does nothing.",
+						name, b.goFile, want, b.javaFile, got)
+				}
+			}
+		})
 	}
 }
 
