@@ -182,6 +182,15 @@ type tintHTML struct {
 	Number    string // ONE %d — the verse number and whatever wash it sits in
 	Body      string // ONE %s — verse text under this tint; "" = write it bare
 	BodyWJ    string // ONE %s — verse text that is ALSO the words of Christ
+	// Gap is ONE %d — an OMITTED verse's number, marked in the hole it leaves
+	// (verse_gaps.go). Never a <sup>: the iOS and macOS verse indexes classify
+	// a small run by its integerValue, and Android's by SuperscriptSpan, so a
+	// bracketed number in a plain small span is invisible to all three — which
+	// is what stops a mark inventing a verse, losing one from the index, or
+	// clamping Android's content end. The trailing space is written OUTSIDE
+	// the mark's span at body size, so the mark's small run can never sit
+	// adjacent to a verse number's small run and coalesce with it.
+	Gap string
 
 	// CSS is this tint's stylesheet rule, ONE %s for its wash colour, and ""
 	// for a tint that needs none. Class dialects only — the Android dialect
@@ -216,6 +225,7 @@ var appleTintHTML = func() [tintCount]tintHTML {
 				// be reached, so the character must not be there to take.
 				Number: `<sup class="v">%d</sup> `,
 				BodyWJ: `<span class="wj">%s</span>`,
+				Gap:    `<span class="vg">[%d]</span> `,
 			}
 			continue // and no CSS rule: there is no wash to define
 		}
@@ -231,6 +241,7 @@ var appleTintHTML = func() [tintCount]tintHTML {
 			Number:    fmt.Sprintf(`<sup class="v %s">%%d</sup><span class="%s"> </span>`, cls, cls),
 			Body:      fmt.Sprintf(`<span class="%s">%%s</span>`, cls),
 			BodyWJ:    fmt.Sprintf(`<span class="%s wj">%%s</span>`, cls),
+			Gap:       fmt.Sprintf(`<span class="vg %s">[%%d]</span><span class="%s"> </span>`, cls, cls),
 			// NO font-weight, and NO colour override. Bold Georgia sets ~17%%
 			// wider than the regular face, so a wash that bolded re-wrapped the
 			// paragraph and the text jumped when it cleared; and recolouring
@@ -259,7 +270,7 @@ var appleTintHTML = func() [tintCount]tintHTML {
 // bold serif sets ~17% wider), so the paragraph re-wrapped and the text jumped
 // the moment the wash cleared — the same refusal the Apple dialect and the
 // styled pane make.
-func androidTintHTML(pal palette, numHex, redHex string) [tintCount]tintHTML {
+func androidTintHTML(pal palette, numHex, redHex, mutedHex string) [tintCount]tintHTML {
 	var t [tintCount]tintHTML
 	for tint := verseTint(0); tint < tintCount; tint++ {
 		c, ok := tint.wash(pal)
@@ -267,6 +278,7 @@ func androidTintHTML(pal palette, numHex, redHex string) [tintCount]tintHTML {
 			t[tint] = tintHTML{
 				Number: fmt.Sprintf(`<sup><small><font color="%s"><b>%%d</b></font></small></sup> `, numHex),
 				BodyWJ: fmt.Sprintf(`<font color="%s">%%s</font>`, redHex),
+				Gap:    fmt.Sprintf(`<small><font color="%s">[%%d]</font></small> `, mutedHex),
 			}
 			continue
 		}
@@ -284,6 +296,8 @@ func androidTintHTML(pal palette, numHex, redHex string) [tintCount]tintHTML {
 			Body: fmt.Sprintf(`<span style="background-color:%s">%%s</span>`, bg),
 			BodyWJ: fmt.Sprintf(
 				`<span style="background-color:%s"><font color="%s">%%s</font></span>`, bg, redHex),
+			Gap: fmt.Sprintf(
+				`<span style="background-color:%s"><small><font color="%s">[%%d]</font></small> </span>`, bg, mutedHex),
 		}
 	}
 	return t

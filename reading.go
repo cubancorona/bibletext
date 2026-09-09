@@ -623,10 +623,15 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// regardless of the footnotes toggle; only its NOTES ride the toggle.
 	super := state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter)
 	var footnotes []footnoteEntry
+	// The holes an omitted verse leaves, marked in the text on the same toggle
+	// (verse_gaps.go). Gated on the toggle and NOT on the chapter having notes:
+	// the Berean omits sixteen verses and explains none of them.
+	var gaps map[int][]int
 	if footnotesEnabled() {
 		footnotes = chapterFootnoteEntries(verses,
 			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
 			super.Footnotes)
+		gaps = gapsBefore(state.CurrentVersion, state.CurrentBook, state.CurrentChapter, verses)
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
 	// Nothing here decides what a wash looks like any more — it asks the tint,
@@ -751,6 +756,17 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	if len(footnotes) > 0 {
 		writeFootnoteCSS(&b, nrgbaToHex(pal.TextMuted))
 	}
+	if len(gaps) > 0 {
+		// The mark: the number's size, the apparatus's colour, and NOT a
+		// <sup> — see tintHTML.Gap for why that is load-bearing. No
+		// background here: a washed mark takes the tint's own class, as the
+		// wash guard requires of every background on this page.
+		fmt.Fprintf(&b, `span.vg {
+		color: %s;
+		font-size: 0.66em;
+		letter-spacing: 0;
+	}`, nrgbaToHex(pal.TextMuted))
+	}
 	b.WriteString("</style></head><body>")
 	if super.Text != "" {
 		fmt.Fprintf(&b, `<p class="pst">%s</p>`, htmlEscape(super.Text))
@@ -818,6 +834,14 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 				default:
 					b.WriteByte(' ')
 				}
+			}
+			// An omitted verse's mark stands where its number would have: after
+			// the join the switch above already wrote (so never a leading space
+			// of its own, which at i == 0 would be the em-space leak all over
+			// again) and before this verse's number. Its trailing space is the
+			// row's, outside the small span, so the two small runs never touch.
+			for _, n := range gaps[v.Verse] {
+				fmt.Fprintf(&b, mk.Gap, n)
 			}
 			// The number joins the wash when its verse carries one: leaving it
 			// out punched a pale hole in the middle of the band, which reads as

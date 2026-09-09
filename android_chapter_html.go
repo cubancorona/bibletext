@@ -35,17 +35,22 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	// the pre-feature dialect.
 	super := state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter)
 	var footnotes []footnoteEntry
+	// And the holes omitted verses leave, on the same toggle (verse_gaps.go);
+	// gated on the toggle rather than on notes existing, because the Berean
+	// omits sixteen verses and explains none.
+	var gaps map[int][]int
 	if footnotesEnabled() {
 		footnotes = chapterFootnoteEntries(verses,
 			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
 			super.Footnotes)
+		gaps = gapsBefore(state.CurrentVersion, state.CurrentBook, state.CurrentChapter, verses)
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below,
 	// plus this dialect's markup for each tint. The markup table is built HERE,
 	// per render, because it carries palette colours rather than class names —
 	// so the theme is baked in once instead of at every verse.
 	tints := chapterTint(state)
-	markup := androidTintHTML(pal, nrgbaToHex(pal.VerseNumber), nrgbaToHex(pal.RedLetter))
+	markup := androidTintHTML(pal, nrgbaToHex(pal.VerseNumber), nrgbaToHex(pal.RedLetter), nrgbaToHex(pal.TextMuted))
 
 	// The reporter page's paragraph grammar (reporter_android.go): a first-line
 	// indent instead of a blank line between paragraphs.
@@ -123,6 +128,14 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 				default:
 					b.WriteString(" ")
 				}
+			}
+			// An omitted verse's mark, before this verse's number and after the
+			// join already written above. <small>, never <sup>: BtBridge's verse
+			// index reads SuperscriptSpans alone and sets the chapter's content
+			// end at the first non-digit one, so a mark written as a <sup>
+			// would clamp every verb from here down (see tintHTML.Gap).
+			for _, n := range gaps[v.Verse] {
+				fmt.Fprintf(&b, mk.Gap, n)
 			}
 			// The number joins the band too — leaving it out punches a pale
 			// hole through the middle of the highlight (iOS parity). Whether it

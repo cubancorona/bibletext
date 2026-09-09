@@ -291,8 +291,14 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
    **answered by §9 and §10**: it ships as the chapter-bottom section rather
    than a sheet, off by default, everywhere `footnoteSectionSupported` is
    true.
-2. The omitted verses: whether an empty verse number one day appears with
-   its explanatory note, or stays silent as today.
+2. The omitted verses: ANSWERED. The hole an omitted verse leaves is marked
+   in the text — a muted "[36]" where Luke 17:36 would stand — on every
+   reading surface, on this same toggle, whether or not a note explains it
+   (verse_gaps.go). Which holes exist comes from an offline table
+   (omitted_verses_data.go), never from the numbering: a merged verse and an
+   interrupted fetch both leave gaps that are not omissions. The mark is never
+   a superscript, so the three native verse indexes cannot mistake it for a
+   verse, and it is stripped on every outbound path (outbound_text.go).
 3. NKJV crossrefs: display eventually, or leave captured-but-dark.
 4. AI prompts: whether note bodies may travel with an Explain request
    (default no).

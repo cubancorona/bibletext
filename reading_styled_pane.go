@@ -454,7 +454,7 @@ func (p *styledReadingPane) noteAnchorVerse() int {
 // never drift apart.
 func (p *styledReadingPane) measure(text string, kind runKind, italic bool) float32 {
 	size := p.textSize
-	if kind == runVerseNum {
+	if kind == runVerseNum || kind == runVerseGap {
 		size *= styledNumRatio
 	}
 	face := p.faceFor(text, italic)
@@ -736,10 +736,12 @@ func (r *styledPaneRenderer) rebuild() {
 		t := canvas.NewText(dr.Text, r.runColor(dr))
 		t.FontSource = p.faceFor(dr.Text, dr.Supplied)
 		t.TextSize = p.textSize
-		if dr.Kind == runVerseNum {
+		if dr.Kind == runVerseNum || dr.Kind == runVerseGap {
 			// The serif at the small superscript size (iOS renders numbers in
 			// the same family); no Bold — the source is a single face and a
-			// synthetic-bold fallback would leave the serif for a sans.
+			// synthetic-bold fallback would leave the serif for a sans. An
+			// omitted verse's mark takes the same size: it stands where a
+			// number would.
 			t.TextSize = p.textSize * styledNumRatio
 		}
 		r.texts = append(r.texts, t)
@@ -817,6 +819,9 @@ func (r *styledPaneRenderer) runColor(dr styledDrawRun) color.Color {
 		return p.pal.RedLetter
 	case dr.Kind == runVerseNum:
 		return p.pal.VerseNumber
+	case dr.Kind == runVerseGap:
+		// The apparatus's colour, not the number's: it explains an absence.
+		return p.pal.TextMuted
 	default:
 		return p.pal.Text
 	}
@@ -894,7 +899,7 @@ func (r *styledPaneRenderer) position() {
 	for i, dr := range p.drawRuns {
 		ln := p.lay.Lines[dr.Line]
 		y := ln.Y + (lh-bodyH)/2
-		if dr.Kind == runVerseNum {
+		if dr.Kind == runVerseNum || dr.Kind == runVerseGap {
 			// The number is placed from the TEXT SIZE, never from a
 			// measured box. RenderedTextSize reports the face's DECLARED line
 			// box rather than the height of its ink, and faces declare wildly

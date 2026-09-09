@@ -55,7 +55,10 @@ func (p *styledReadingPane) lineAtY(y float32) int {
 
 // segTextSize returns the rendered size for a segment's kind.
 func (p *styledReadingPane) segTextSize(kind runKind) float32 {
-	if kind == runVerseNum {
+	if kind == runVerseNum || kind == runVerseGap {
+		// Both are drawn at the small size, so both must be MEASURED at it —
+		// a mark drawn small and hit-tested at body size would put every
+		// click after it on the wrong rune.
 		return p.textSize * styledNumRatio
 	}
 	return p.textSize
@@ -86,6 +89,12 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 		if x < seg.X {
 			return seg.FirstOffset
 		}
+		if seg.Kind == runVerseGap && x <= seg.X+w {
+			// A ghost occupies width but no runes: it IS the offset it was
+			// placed at, and a search inside it would invent rune positions
+			// the model does not have.
+			return seg.FirstOffset
+		}
 		if x <= seg.X+w {
 			// Within this segment: binary search the rune prefix whose width
 			// brackets x.
@@ -112,6 +121,11 @@ func (p *styledReadingPane) xForOffset(li, offset int) float32 {
 		return p.insetX()
 	}
 	for i, seg := range segs {
+		if seg.Kind == runVerseGap {
+			// No runes of its own; the offset it carries belongs to the next
+			// segment, which is where the caret should draw.
+			continue
+		}
 		segRunes := []rune(seg.Text)
 		end := seg.FirstOffset + len(segRunes)
 		if offset < seg.FirstOffset {

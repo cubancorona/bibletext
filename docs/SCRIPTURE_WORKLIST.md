@@ -444,7 +444,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S16 | section headings: drawing them | all | M–L | none | done |
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
 | S18 | speech reads the Psalm title | all | M | none | todo |
-| S19 | mark an omitted verse's gap in the text | all | M | none | table done; the marks are next |
+| S19 | mark an omitted verse's gap in the text | all | M | none | done |
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
@@ -566,13 +566,40 @@ The generator refuses to write the table unless every verse
 from a different source by a different script), and a test re-walks the feeds
 and requires the table to name every interior hole and no other.
 
-What remains is the drawing, and it is the part that needs care rather than
-data. A mark is a new app-authored token in the reader's text storage, and three
-things make that harder than it looks: iOS and macOS merge two adjacent 0.66em
-runs, which can invent a verse or lose one from the index; Android sets
-`contentEnd` at the first non-digit superscript, so a mark written as one clamps
-every verb below it; and the mark has to be stripped at every outbound funnel or
-it reaches a share.
+**The drawing is done too.** A muted "[36]" stands where the verse would, on
+the footnotes toggle, on all three reading surfaces — and it is gated on the
+toggle rather than on the chapter having notes, because the Berean's sixteen
+have none. The three surfaces ask one shared question (`gapsBefore`,
+verse_gaps.go) and draw the answer in their own dialect, the way headings go
+through `chapter_blocks.go`.
+
+A mark is a new app-authored token in the reader's text, and three things made
+that harder than it looks. Each is closed by construction and pinned by a test:
+
+- iOS and macOS classify a small run as a verse number by its `integerValue`,
+  and two adjacent small runs can coalesce — so a mark could invent verse 21 or
+  lose verse 22 from the index. The mark is never a `<sup>`, `[21]` reads as
+  zero, and its trailing space is written OUTSIDE the small span at body size
+  so the two small runs never touch. The test counts one `<sup>` per verse.
+- Android sets the chapter's `contentEnd` at the first non-digit
+  `SuperscriptSpan`, so a mark written as one would clamp every verb below it.
+  The Android row uses `<small>`, never `<sup>`.
+- The styled pane's selection model must stay byte-identical with the toggle
+  on or off — the guarantee the footnote section already carries. The mark is
+  a GHOST run (`runVerseGap`): laid out and drawn, hit-tested at its real
+  size, but never appended to `lay.Text`, so copy and offsets cannot see it.
+  That is the same discipline as the superscription's `TopPad`.
+- Every outbound path strips it in the one place they all pass through
+  (`outboundText`), by shape — a bracketed run of digits — which is safe only
+  because no verse in any shipped edition contains one; a test walks all three
+  feeds to keep that true. The system's own Copy on iOS and macOS reads the
+  text storage directly and keeps it, exactly as it keeps the superscript
+  numbers; that is the same category of thing and was accepted for the same
+  reason.
+
+A washed mark takes the tint's own class on its own span (`vg hl`), the pairing
+red-under-wash already relies on, because background does not inherit through
+the importer and nesting would have left the mark unwashed on macOS.
 
 **S21. DONE.** The apparatus is on the pages: the translators' wording and
 manuscript notes, the ones explaining a verse the translation omits, and any

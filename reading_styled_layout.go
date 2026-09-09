@@ -31,6 +31,12 @@ const (
 	runWord     runKind = iota // scripture text, body size
 	runVerseNum                // verse-number label, small + raised
 	runHeading                 // a publisher's section heading, body size + bold
+	// runVerseGap is an OMITTED verse's mark, "[36]", small + raised + muted.
+	// GEOMETRY ONLY: it is laid out and drawn but never appended to the
+	// selection text model, so lay.Text is byte-identical with the mark on or
+	// off and copy, selection offsets and verse attribution never see it —
+	// the same discipline as the superscription's TopPad and a note's band.
+	runVerseGap
 )
 
 // verseTint, its constants and overridesTextColour used to live HERE. They moved
@@ -234,6 +240,13 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	}
 
 	redLetter := redLetterEnabled()
+	// The holes omitted verses leave, marked on the footnotes toggle
+	// (verse_gaps.go). Decided here, once, so every paragraph asks the same
+	// answer; the marks themselves are ghost runs (runVerseGap).
+	var gaps map[int][]int
+	if footnotesEnabled() {
+		gaps = gapsBefore(state.CurrentVersion, state.CurrentBook, state.CurrentChapter, verses)
+	}
 	// ONE tint answer for the whole chapter, asked per verse below (tint.go).
 	tints := chapterTint(state)
 	y := p.TopPad // the superscription's reserved advance (0 = none)
@@ -340,7 +353,22 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		// place adds one wrap UNIT — 1..2 runs that must stay on the same
 		// line (a verse number and its first word) — wrapping first if it
 		// does not fit. Intra-unit spaces count toward the unit's width.
+		// lineHasText reports whether the current line holds a run that is IN
+		// the text model. A ghost (runVerseGap) is on the line for geometry
+		// but not for text, so the separator a unit owes the model is decided
+		// as if the ghost were not there — otherwise a ghost opening a line
+		// would swallow the "\n" the next real unit must write.
+		lineHasText := func() bool {
+			for _, r := range cur {
+				if r.Kind != runVerseGap {
+					return true
+				}
+			}
+			return false
+		}
+
 		place := func(unit []styledRun) {
+			ghost := len(unit) > 0 && unit[0].Kind == runVerseGap
 			unitW := float32(0)
 			for i, r := range unit {
 				unitW += r.W
@@ -355,10 +383,12 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			if len(cur) > 0 && curW+add > p.Width {
 				flushLine(false) // width wrap — never an authored break
 			}
-			if len(cur) > 0 {
-				appendText(" ")
-			} else if text.Len() > 0 {
-				appendText("\n") // this unit opens a new line
+			if !ghost {
+				if lineHasText() {
+					appendText(" ")
+				} else if text.Len() > 0 {
+					appendText("\n") // this unit opens a new line
+				}
 			}
 			x := curW
 			if len(cur) > 0 {
@@ -371,7 +401,9 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 				}
 				unit[i].X = x
 				unit[i].Offset = offset
-				appendText(unit[i].Text)
+				if !ghost {
+					appendText(unit[i].Text)
+				}
 				x += unit[i].W
 			}
 			cur = append(cur, unit...)
@@ -413,6 +445,15 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// onto a fresh line, so the index is patched after placing.
 			lay.VerseLines = append(lay.VerseLines, verseLine{verse: v.Verse, line: len(lay.Lines)})
 			vlIdx := len(lay.VerseLines) - 1
+
+			// The marks for verses this one follows a hole after, laid out as
+			// ghosts ahead of the verse's own number. Measured at the number's
+			// size, in the pane's ruler, so hit-testing agrees with the pixels.
+			for _, n := range gaps[v.Verse] {
+				mark := verseGapMark(n)
+				place([]styledRun{{Text: mark, Kind: runVerseGap, Verse: v.Verse, Tint: tint,
+					W: measure(mark, runVerseGap, false)}})
+			}
 
 			first := true
 			for ti, tok := range toks {

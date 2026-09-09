@@ -41,10 +41,19 @@ const (
 // outboundText strips the app's own typography from text on its way out, and
 // changes nothing else: the publisher's words, their spacing and their
 // authored line breaks all survive byte for byte.
+//
+// An omitted verse's mark — "[36]" in the hole Luke 17:36 leaves (verse_gaps.go)
+// — is the newest of the page's own characters and goes the same way. It is
+// stripped by SHAPE, a bracketed run of digits, because no publisher text in
+// any shipped edition contains one (outbound_text_test.go walks the feeds to
+// keep that true), and by shape rather than by state so every funnel is
+// covered by this one place. The space after it goes with it, or "left. [36]
+// They" would become "left.  They".
 func outboundText(s string) string {
 	if s == "" {
 		return s
 	}
+	s = stripVerseGapMarks(s)
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {
@@ -64,6 +73,36 @@ func outboundText(s string) string {
 		default:
 			b.WriteRune(r)
 		}
+	}
+	return b.String()
+}
+
+// stripVerseGapMarks removes every "[digits]" token and one following space.
+// Hand-rolled rather than a regexp: this runs on every share, copy and AI
+// request, and the shape is three cases.
+func stripVerseGapMarks(s string) string {
+	if !strings.Contains(s, "[") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	i := 0
+	for i < len(s) {
+		if s[i] == '[' {
+			j := i + 1
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+			if j > i+1 && j < len(s) && s[j] == ']' {
+				i = j + 1
+				if i < len(s) && s[i] == ' ' {
+					i++
+				}
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+		i++
 	}
 	return b.String()
 }
