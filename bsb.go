@@ -16,6 +16,7 @@ package bibletext
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -94,29 +95,48 @@ func fetchHelloAOComplete(label, url string, client httpClient, decode func([]by
 // order-based 66-book decoder (decodeBSBComplete) and the id-based Catholic decoder
 // (decodeHelloAOCatholic, catholic.go).
 type helloAOBook struct {
-	ID       string `json:"id"`
-	Order    int    `json:"order"`
-	Chapters []struct {
-		Chapter struct {
-			Number  int               `json:"number"`
-			Content []json.RawMessage `json:"content"`
-			// Footnotes are the chapter's note BODIES; the in-verse
-			// {"noteId":N} markers point into this list. A marker inside a
-			// Psalm superscription is captured with the title
-			// (Superscription.Footnotes); a marker in any other non-verse
-			// node has nowhere to belong and its body is dropped. See
-			// docs/FOOTNOTES.md and docs/SOURCE_FIELDS.md.
-			Footnotes []struct {
-				NoteID    int    `json:"noteId"`
-				Caller    string `json:"caller"`
-				Text      string `json:"text"`
-				Reference struct {
-					Chapter int `json:"chapter"`
-					Verse   int `json:"verse"`
-				} `json:"reference"`
-			} `json:"footnotes"`
-		} `json:"chapter"`
-	} `json:"chapters"`
+	ID    string `json:"id"`
+	Order int    `json:"order"`
+	// TotalNumberOfVerses is the feed's own count of this book's verse NODES,
+	// omitted verses included. It is the only independent witness we get that a
+	// book arrived whole, which is the failure a cached Bible hides best: a
+	// truncated book reads as a shorter book, not as an error. Reconciled in
+	// verse_count.go; never used to decide anything about the text.
+	TotalNumberOfVerses int                   `json:"totalNumberOfVerses"`
+	Chapters            []helloAOChapterEntry `json:"chapters"`
+}
+
+// helloAOChapterEntry is one element of a book's `chapters` array: the chapter
+// itself, plus the feed's own count of its verses.
+//
+// Named rather than left anonymous because tests build these directly, and an
+// anonymous struct makes them restate its entire shape — so adding one field
+// here broke two unrelated tests. A name means the next field costs nothing.
+type helloAOChapterEntry struct {
+	// NumberOfVerses is the feed's verse count for THIS chapter, and it sits
+	// here, beside `chapter` rather than inside it — worth stating because the
+	// obvious guess puts it one level deeper. It localises a shortfall to the
+	// chapter instead of leaving it somewhere in a book of 1,533 verses.
+	NumberOfVerses int `json:"numberOfVerses"`
+	Chapter        struct {
+		Number  int               `json:"number"`
+		Content []json.RawMessage `json:"content"`
+		// Footnotes are the chapter's note BODIES; the in-verse
+		// {"noteId":N} markers point into this list. A marker inside a
+		// Psalm superscription is captured with the title
+		// (Superscription.Footnotes); a marker in any other non-verse
+		// node has nowhere to belong and its body is dropped. See
+		// docs/FOOTNOTES.md and docs/SOURCE_FIELDS.md.
+		Footnotes []struct {
+			NoteID    int    `json:"noteId"`
+			Caller    string `json:"caller"`
+			Text      string `json:"text"`
+			Reference struct {
+				Chapter int `json:"chapter"`
+				Verse   int `json:"verse"`
+			} `json:"reference"`
+		} `json:"footnotes"`
+	} `json:"chapter"`
 }
 
 // decodeHelloAOChapters turns one helloao book's chapters into the app's chapter→[]Verse
@@ -125,7 +145,7 @@ type helloAOBook struct {
 // line breaks and headings are editorial nodes outside verse text and are skipped on
 // purpose (docs/SOURCE_FIELDS.md); Hebrew subtitles (Psalm superscriptions like "A Psalm
 // of David") become the chapter's Superscription. Shared by both decoders.
-func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading) {
+func decodeHelloAOChapters(book string, b helloAOBook, ck *helloAOChecks) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading) {
 	chapters := make(map[int][]Verse, len(b.Chapters))
 	var orphans map[int][]OrphanFootnote
 	var supers map[int]Superscription
@@ -137,7 +157,10 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 		// simply a subset view; collisions cannot occur.
 		bodies := make(map[int]helloAOFootnoteBody, len(cj.Chapter.Footnotes))
 		for _, fn := range cj.Chapter.Footnotes {
-			bodies[fn.NoteID] = helloAOFootnoteBody{text: fn.Text, caller: fn.Caller}
+			bodies[fn.NoteID] = helloAOFootnoteBody{
+				text: fn.Text, caller: fn.Caller,
+				refChapter: fn.Reference.Chapter, refVerse: fn.Reference.Verse,
+			}
 		}
 		var verses []Verse
 		var heads []Heading
@@ -154,8 +177,10 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				Content []json.RawMessage `json:"content"`
 			}
 			if err := json.Unmarshal(node, &head); err != nil {
+				ck.census().badNode()
 				continue
 			}
+			ck.census().node(head.Type)
 			if head.Type == "hebrew_subtitle" {
 				// The Psalm title, assembled by the SAME marked-text path
 				// verse text uses — identical spacing rules, and the title's
@@ -164,7 +189,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				// numbers them as verse 1), rendered as an italic unnumbered
 				// line above verse 1; their notes join the chapter-bottom
 				// section keyed "Title".
-				text, marks := bsbVerseTextMarked(head.Content)
+				text, marks := bsbVerseTextMarkedChecked(head.Content, ck, "")
 				if text == "" {
 					continue
 				}
@@ -174,6 +199,10 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 					if !ok || strings.TrimSpace(body.text) == "" {
 						continue
 					}
+					// A title's note belongs to verse 0 by the feed's own
+					// convention, which is what makes it distinguishable from
+					// a note on verse 1.
+					ck.noteRefs().note(book, num, 0, body.refChapter, body.refVerse)
 					notes = append(notes, Footnote{
 						Anchor: m.anchor,
 						Text:   strings.TrimSpace(body.text),
@@ -203,7 +232,8 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 			if head.Type != "verse" {
 				continue
 			}
-			text, marks, levels := bsbVerseTextMarkedLevels(head.Content)
+			text, marks, levels := bsbVerseTextMarkedLevelsChecked(head.Content, ck,
+				book+" "+itoa(num)+":"+itoa(head.Number))
 			if text == "" {
 				// A verse node with a marker but NO text is a critical-text
 				// omission (Luke 17:36 and kin): the verse number exists in
@@ -220,6 +250,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 						if !ok || strings.TrimSpace(body.text) == "" {
 							continue
 						}
+						ck.noteRefs().note(book, num, head.Number, body.refChapter, body.refVerse)
 						if orphans == nil {
 							orphans = make(map[int][]OrphanFootnote)
 						}
@@ -241,6 +272,7 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 				if !ok || strings.TrimSpace(body.text) == "" {
 					continue // a marker with no body is nothing to show
 				}
+				ck.noteRefs().note(book, num, head.Number, body.refChapter, body.refVerse)
 				notes = append(notes, Footnote{
 					Anchor: m.anchor,
 					Text:   strings.TrimSpace(body.text),
@@ -282,6 +314,11 @@ func decodeHelloAOChapters(book string, b helloAOBook) (map[int][]Verse, map[int
 type helloAOFootnoteBody struct {
 	text   string
 	caller string
+	// The chapter and verse the feed itself says this note belongs to. Read
+	// only by the note-reference audit (helloao_checks.go): where a note is
+	// ATTACHED is decided by the marker's position, exactly as before.
+	refChapter int
+	refVerse   int
 }
 
 // decodeBSBComplete maps a 66-book bible.helloao.org complete.json into a BibleData
@@ -292,6 +329,11 @@ type helloAOFootnoteBody struct {
 // the BSB and (Protestant) WEB; the Catholic edition maps by id (decodeHelloAOCatholic).
 func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 	var doc struct {
+		// The feed names itself, which is the only reason a decoder shared by
+		// two editions can say WHICH one failed to add up. Nothing routes on it.
+		Translation struct {
+			ShortName string `json:"shortName"`
+		} `json:"translation"`
 		Books []helloAOBook `json:"books"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
@@ -300,6 +342,16 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 	if len(doc.Books) == 0 {
 		return nil, fmt.Errorf("no books in response")
 	}
+
+	audit := newVerseCountAudit(doc.Translation.ShortName)
+	defer audit.report()
+	redTable := redLetterTableFor(doc.Translation.ShortName)
+	checks := &helloAOChecks{
+		Census:    newHelloAOCensus(doc.Translation.ShortName, log.Printf),
+		NoteRefs:  newNoteRefAudit(doc.Translation.ShortName, log.Printf),
+		RedLetter: newRedLetterWitness(doc.Translation.ShortName, log.Printf, redTable != nil),
+	}
+	defer checks.report(redTable)
 
 	bd := &BibleData{
 		Verses: make(map[string]map[int][]Verse, len(appBooks)),
@@ -310,7 +362,8 @@ func decodeBSBComplete(body []byte, appBooks []string) (*BibleData, error) {
 			continue // outside the canonical 66 (not expected for the BSB/WEB)
 		}
 		book := appBooks[b.Order-1]
-		chapters, orphans, supers, heads := decodeHelloAOChapters(book, b)
+		chapters, orphans, supers, heads := decodeHelloAOChapters(book, b, checks)
+		audit.book(book, b.TotalNumberOfVerses, chapters, orphans)
 		if len(chapters) > 0 {
 			bd.Verses[book] = chapters
 		}
@@ -423,6 +476,17 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 	return text, marks
 }
 
+// The census-carrying forms. The plain names above stay for callers that have
+// no census to give — the share and seed paths, and the tests that predate it.
+func bsbVerseTextMarkedChecked(content []json.RawMessage, ck *helloAOChecks, ref string) (string, []bsbMark) {
+	text, marks, _ := bsbVerseTextMarkedLevelsChecked(content, ck, ref)
+	return text, marks
+}
+
+func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []int) {
+	return bsbVerseTextMarkedLevelsChecked(content, nil, "")
+}
+
 // bsbVerseTextMarkedLevels is bsbVerseTextMarked plus the INDENT DEPTH of each
 // line. The feeds give every poetry clause a level — 1 for the opening half of
 // a Hebrew couplet, 2 for the answering half, and a third exists in the
@@ -430,7 +494,7 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 // so every line drew flush left and the pairing print shows was invisible.
 //
 // One entry per line of the finished text, zero where a line is not poetry.
-func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []int) {
+func bsbVerseTextMarkedLevelsChecked(content []json.RawMessage, ck *helloAOChecks, ref string) (string, []bsbMark, []int) {
 	var pieces []string
 	var marks []bsbMark // anchor holds the piece INDEX until resolved below
 	levels := []int{0}  // the depth of each line, the first line included
@@ -447,6 +511,10 @@ func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []i
 			LineBreak bool            `json:"lineBreak"`
 			Poem      json.RawMessage `json:"poem"`
 			NoteID    *int            `json:"noteId"`
+			// The feed's own words-of-Jesus mark. Read as a WITNESS only: the
+			// red a reader sees comes from the generated table, which carries
+			// rune offsets this flag cannot. See redLetterWitness.
+			WordsOfJesus bool `json:"wordsOfJesus"`
 		}
 		if err := json.Unmarshal(node, &obj); err == nil {
 			switch {
@@ -475,6 +543,9 @@ func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []i
 					}
 				}
 				pieces = append(pieces, *obj.Text)
+				if obj.WordsOfJesus {
+					ck.redLetter().verse(ref)
+				}
 			case obj.NoteID != nil:
 				// The marker contributes nothing to the text (historical
 				// behaviour); it records where in the piece stream it stood.
@@ -482,9 +553,20 @@ func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []i
 			case obj.LineBreak:
 				pieces = append(pieces, "\n")
 				levels = append(levels, 0)
+			default:
+				// THE SILENT DROP. An item that unmarshals cleanly and matches
+				// nothing contributes no text, no marker and no break, and
+				// before the census left no trace whatsoever. A feed that grew
+				// a new item shape would simply lose those words. No current
+				// edition reaches this line, which is exactly why it needs to
+				// announce itself when one does.
+				ck.census().unmatchedItem(node)
 			}
 			continue
 		}
+		// The item is neither a bare string nor an object this decoder can
+		// read. Same silence, same reason to break it.
+		ck.census().unmatchedItem(node)
 	}
 	text := bsbTidySpacing(strings.Join(pieces, " "))
 	for i, m := range marks {

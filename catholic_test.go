@@ -15,12 +15,12 @@ import (
 func TestDecodeHelloAOCatholic(t *testing.T) {
 	// A tiny eng_webc-shaped doc: a couple of protocanon books plus deuterocanon, given
 	// in helloao's APPENDED order (Tobit/Esther-Greek/Daniel-Greek at the end).
-	body := []byte(`{"books":[
-	  {"id":"GEN","order":1,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["In the beginning"]}]}}]},
-	  {"id":"NEH","order":16,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["The words of Nehemiah"]}]}}]},
-	  {"id":"TOB","order":65,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["The book of Tobit"]}]}}]},
-	  {"id":"ESG","order":67,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["In the second year"]}]}}]},
-	  {"id":"DAG","order":73,"chapters":[{"chapter":{"number":13,"content":[{"type":"verse","number":1,"content":["There was a man living in Babylon"]}]}}]}
+	body := []byte(`{"translation":{"id":"eng_webc","shortName":"WEBC"},"books":[
+	  {"id":"GEN","order":1,"totalNumberOfVerses":1,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["In the beginning"]}]}}]},
+	  {"id":"NEH","order":16,"totalNumberOfVerses":1,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["The words of Nehemiah"]}]}}]},
+	  {"id":"TOB","order":65,"totalNumberOfVerses":1,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["The book of Tobit"]}]}}]},
+	  {"id":"ESG","order":67,"totalNumberOfVerses":1,"chapters":[{"chapter":{"number":1,"content":[{"type":"verse","number":1,"content":["In the second year"]}]}}]},
+	  {"id":"DAG","order":73,"totalNumberOfVerses":1,"chapters":[{"chapter":{"number":13,"content":[{"type":"verse","number":1,"content":["There was a man living in Babylon"]}]}}]}
 	]}`)
 	bd, err := decodeHelloAOCatholic(body)
 	if err != nil {

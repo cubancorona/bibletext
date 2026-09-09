@@ -196,16 +196,69 @@ of it, because bands are reserved per paragraph.
 ## Stage 2 — the decode-time checks
 
 No epoch, no reader-visible change, and they make every later item safer.
-Ship them as one change so all four editions report alike.
+Shipped as one change, so all four editions report alike.
 
 | id | item | editions | effort | status |
 |---|---|---|---|---|
-| S4 | verify each book's verse count against the feed's own | helloao | S | todo |
-| S5 | verify each note's own chapter and verse | helloao | S | todo |
-| S6 | count unknown node types and verse-item shapes | helloao | S | todo |
-| S7 | census paragraph and character styles, extend the heading families, deny non-Scripture character styles | NKJV | S | todo |
-| S8 | cross-check the feed's words-of-Jesus flag against the red-letter table | WEB, WEBC | S | todo |
-| S9 | probe whether skipped headings carry notes | NKJV | XS | todo |
+| S4 | verify each book's verse count against the feed's own | helloao | S | done |
+| S5 | verify each note's own chapter and verse | helloao | S | done |
+| S6 | count unknown node types and verse-item shapes | helloao | S | done |
+| S7 | census paragraph and character styles, extend the heading families, deny non-Scripture character styles | NKJV | S | census done; the two list extensions deferred, and why is below |
+| S8 | cross-check the feed's words-of-Jesus flag against the red-letter table | WEB, WEBC | S | done |
+| S9 | probe whether skipped headings carry notes | NKJV | XS | done — answered |
+
+**What the checks found when they first ran.** Every measurement this section
+predicted was reproduced, which is the outcome worth recording: the identities
+held, so the checks now stand as guards rather than as claims.
+
+- S4: decoded verses plus distinct omitted verse numbers equals the feed's own
+  total for all 205 books of the three editions, exactly. It also holds per
+  CHAPTER against the `numberOfVerses` on the chapters[] wrapper, which this
+  section had not noticed — chapter level is strictly better, because it
+  localises a shortfall instead of leaving it somewhere in a 1,533-verse book.
+- S5: 7,752 notes audited (BSB 4,853, WEB 1,226, WEB Catholic 1,673) and not
+  one sits at a verse it does not name.
+- S6: nothing is being dropped today. All three feeds send exactly four
+  chapter-level node kinds — verse, line_break, heading, hebrew_subtitle — and
+  seven verse-content item shapes, every one of which reaches a case. The
+  census reports zero, which is the correct baseline: the hole was real, and
+  nothing had fallen through it yet.
+- S8: the feed's flag and the generated table agree on 2,059 verses in both
+  the WEB and the WEB Catholic, in both directions, with no exceptions.
+  Worth being clear about what this does NOT mean: red has never come from the
+  feed. It comes from `red_letter_web_data.go`, generated offline from
+  eBible's own `\wj` markers, and `wordsOfJesus` was not read anywhere in the
+  app until this change. The flag's value is being a SECOND, INDEPENDENT
+  derivation — eBible's USFM against helloao's own marking — so a divergence
+  between two upstreams now reports itself instead of sitting unnoticed.
+- S9: ANSWERED. Five passages chosen where a heading was most likely to carry
+  a note (Matthew 3, Mark 1, 2 Chronicles 1, Psalm 119, Hebrews 1) returned 23
+  headings, of which NONE carries a note. The styles seen were `s`×17 and
+  `qa`×6; no parallel-passage `r` heading appeared at all, which is itself the
+  answer to why none carried a reference. This is a five-passage sample, not
+  the canon, and that is the honest scope of it — but the question was whether
+  anything was being lost, and in the places most likely to lose it, nothing
+  is. The probe is `TestLiveNKJVHeadingNotes`, key-gated, about five calls.
+
+**Why S7 shipped as the census only.** The item asks for three things, and two
+of them cannot travel in a Stage-2 change. Adding a style to `apiBibleSkipPara`
+moves any block of that style off the prose path: its words leave `Verse.Text`
+where a verse was open, and it becomes a `BibleData.Headings` entry that
+`chapter_blocks.go` draws unconditionally on all five surfaces. Adding a
+character style to a live denylist removes those characters from `Verse.Text`.
+Either one, if the style occurs even once in the canon, is a decoded-text change
+AND a drawn change — a cache epoch, and a full re-download of a LICENSED
+edition against a metered quota. Stage 2's premise is the opposite of that.
+
+And nothing on disk can say whether those styles occur: the cached chapters are
+New Testament only, and the titles-on/titles-off comparison bounds only the
+styles the titles flag strips. So the census ships first and reports what the
+canon actually sends. A style it reports as never carrying text can then be
+skipped with no epoch at all, because for a text-free block the skip path and
+the prose path leave identical state — which is why the census records that
+split rather than a bare count. Expect the first full-canon run to name styles
+beyond `apiBibleKnownParaStyles`; that is the check working. Re-measure from
+what it reports. Do not widen the list to silence it.
 
 **S4.** The feed states a verse count per book, and it is exact: it equals
 the decoded count in all 66 BSB books, and exceeds it in exactly three WEB

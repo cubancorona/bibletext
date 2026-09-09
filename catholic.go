@@ -31,6 +31,7 @@ package bibletext
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 )
 
 // webcCompleteURL is helloao's whole-translation endpoint for the World English Bible
@@ -109,6 +110,9 @@ func (webCatholicSource) fetch() (*BibleData, error) {
 // the books that actually came through.
 func decodeHelloAOCatholic(body []byte) (*BibleData, error) {
 	var doc struct {
+		Translation struct {
+			ShortName string `json:"shortName"`
+		} `json:"translation"`
 		Books []helloAOBook `json:"books"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
@@ -118,6 +122,16 @@ func decodeHelloAOCatholic(body []byte) (*BibleData, error) {
 		return nil, fmt.Errorf("no books in response")
 	}
 
+	audit := newVerseCountAudit(doc.Translation.ShortName)
+	defer audit.report()
+	redTable := redLetterTableFor(doc.Translation.ShortName)
+	checks := &helloAOChecks{
+		Census:    newHelloAOCensus(doc.Translation.ShortName, log.Printf),
+		NoteRefs:  newNoteRefAudit(doc.Translation.ShortName, log.Printf),
+		RedLetter: newRedLetterWitness(doc.Translation.ShortName, log.Printf, redTable != nil),
+	}
+	defer checks.report(redTable)
+
 	bd := &BibleData{Verses: make(map[string]map[int][]Verse, len(catholicBooks))}
 	present := make(map[string]bool, len(catholicBooks))
 	for _, b := range doc.Books {
@@ -125,7 +139,8 @@ func decodeHelloAOCatholic(body []byte) (*BibleData, error) {
 		if name == "" {
 			continue // unrecognized USFM id (not expected for eng_webc)
 		}
-		chapters, orphans, supers, heads := decodeHelloAOChapters(name, b)
+		chapters, orphans, supers, heads := decodeHelloAOChapters(name, b, checks)
+		audit.book(name, b.TotalNumberOfVerses, chapters, orphans)
 		if len(chapters) > 0 {
 			bd.Verses[name] = chapters
 			present[name] = true

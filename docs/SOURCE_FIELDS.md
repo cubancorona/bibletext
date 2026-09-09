@@ -240,6 +240,37 @@ The canon as decoded (verified 5 Sep 2026 against the app's own decode of
 | red-letter precision | whole-verse red when the runtime text no longer matches the table | on purpose: the table is keyed to a text revision and guards itself |
 | the source's paragraph boundaries | nowhere — they reach every surface | shown. Every surface used to draw app-synthesized paragraphs instead; the character-count rule that made them is gone, and a paragraph now opens only where the publisher's own mark does (see the `line_break` row) |
 
+## What the feed sends that we do not read, and what watches it
+
+Every field above is classified, but a classification is a statement about the
+feed as it was measured. Four decode-time checks now hold that statement to the
+feed as it arrives (docs/SCRIPTURE_WORKLIST.md, Stage 2). None of them changes a
+decode, fails a fetch, or drops anything; each is silent unless it has something
+to say.
+
+| check | what it watches | where |
+|---|---|---|
+| verse counts | decoded verses + distinct omitted verse numbers against the feed's own `totalNumberOfVerses`, per book | `verse_count.go` |
+| feed census | chapter-level node types, and verse-content item shapes that reach no case in the content switch | `helloao_census.go` |
+| note references | each note body's stated chapter and verse against the position of the marker that pointed at it | `helloao_checks.go` |
+| words of Jesus | the feed's `wordsOfJesus` flag against the generated red-letter table, both directions | `helloao_checks.go` |
+| NKJV styles | paragraph and character styles the decoder has no considered answer for, split by whether the block carried text | `apibible_styles.go` |
+
+Two things this made explicit that the inventory above had only implied.
+
+`wordsOfJesus` (WEB and WEB Catholic, 2,289 items) was not read anywhere in the
+app before this. That is not a gap in the red-letter feature: red comes from
+`red_letter_web_data.go`, generated offline from eBible's own `\wj` markers,
+which carries rune offsets the flag cannot and ships with the rune counts and
+hashes that catch runtime text drift. The flag is redundant as a SOURCE. It is
+now read as a second, independent witness, and it agrees with the table on all
+2,059 verses.
+
+The NKJV's section headings carry no notes — probed live across the five
+passages most likely to have them, 23 headings, none with a note, styles `s` and
+`qa` only. Recorded here so the question is not asked a third time; the scope is
+a five-passage sample, not the canon.
+
 ## Open decisions
 
 The OPEN rows above, gathered. The first two have been answered; they stay

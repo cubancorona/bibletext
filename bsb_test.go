@@ -95,7 +95,7 @@ const bsbSampleComplete = `{
   "translation": {"id":"BSB","shortName":"BSB"},
   "books": [
     {
-      "id":"GEN","order":1,"name":"Genesis",
+      "id":"GEN","order":1,"name":"Genesis","totalNumberOfVerses":2,
       "chapters":[
         {"chapter":{"number":1,"content":[
           {"type":"heading","content":["The Creation"]},
@@ -112,7 +112,7 @@ const bsbSampleComplete = `{
       ]
     },
     {
-      "id":"JHN","order":43,"name":"John",
+      "id":"JHN","order":43,"name":"John","totalNumberOfVerses":1,
       "chapters":[
         {"chapter":{"number":1,"content":[
           {"type":"hebrew_subtitle","content":["a subtitle the reader view drops"]},

@@ -42,6 +42,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -359,6 +360,8 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 	var orphans map[int][]OrphanFootnote
 	var supers map[int]Superscription
 	var heads map[int][]Heading
+	styleCensus := newAPIBibleStyleCensus(plan.name, log.Printf)
+	defer styleCensus.report()
 	startCh, startV := 1, 1
 	bumpedChapter := false
 	for {
@@ -382,7 +385,7 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 			return nil, nil, nil, nil, err
 		}
 		bumpedChapter = false
-		chunk, chunkOrphans, chunkSupers, chunkHeads, err := decodeAPIBiblePassage(pr.Data.Content, plan.name, startCh)
+		chunk, chunkOrphans, chunkSupers, chunkHeads, err := decodeAPIBiblePassageChecked(pr.Data.Content, plan.name, startCh, styleCensus)
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("%s passage %s: %w", plan.name, rangeID, err)
 		}
@@ -636,6 +639,12 @@ func decodeAPIBibleChapter(raw json.RawMessage, bookName string, chapter int) ([
 // omitted verses would silently lose exactly the notes the orphan machinery
 // exists to keep.
 func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter int) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading, error) {
+	return decodeAPIBiblePassageChecked(raw, bookName, defaultChapter, nil)
+}
+
+// decodeAPIBiblePassageChecked is decodeAPIBiblePassage with the fetch's style
+// census. The census only counts; it never changes what is decoded.
+func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultChapter int, cen *apiBibleStyleCensus) (map[int][]Verse, map[int][]OrphanFootnote, map[int]Superscription, map[int][]Heading, error) {
 	if len(raw) == 0 {
 		return nil, nil, nil, nil, fmt.Errorf("empty chapter content")
 	}
@@ -893,6 +902,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 				// offsets once the text has settled (stripSentinels), so
 				// nothing is added to the verse and nothing taken from it.
 				style := strings.ToLower(n.Attrs.Style)
+				cen.char(style)
 				if openRune, closeRune, marked := spanSentinels(style); marked && !inTitle && !inHeading {
 					bracket := func(r rune) {
 						key := pack(currentCh, current)
@@ -919,6 +929,7 @@ func decodeAPIBiblePassage(raw json.RawMessage, bookName string, defaultChapter 
 
 	for _, block := range blocks {
 		style := strings.ToLower(block.Attrs.Style)
+		cen.para(style, apiBibleBlockHasText(block.Items))
 		if style == "d" {
 			// The superscription: Scripture's own title for the Psalm, kept
 			// beside the chapter (BibleData.Superscriptions) and never in a

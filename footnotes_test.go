@@ -73,7 +73,7 @@ func decodeFixtureBookAll(t *testing.T) (map[int][]Verse, map[int][]OrphanFootno
 	if err := json.Unmarshal([]byte(helloAOFixtureBook), &b); err != nil {
 		t.Fatal(err)
 	}
-	return decodeHelloAOChapters("Psalms", b)
+	return decodeHelloAOChapters("Psalms", b, nil)
 }
 
 // (1) Byte-identity: the text with capture on is the historical text — the
@@ -165,7 +165,7 @@ func TestFootnotesOmittedVerseNoteBecomesOrphan(t *testing.T) {
 	if err := json.Unmarshal([]byte(book), &b); err != nil {
 		t.Fatal(err)
 	}
-	chapters, orphans, _, _ := decodeHelloAOChapters("Luke", b)
+	chapters, orphans, _, _ := decodeHelloAOChapters("Luke", b, nil)
 	vs := chapters[17]
 	if len(vs) != 1 || vs[0].Verse != 35 {
 		t.Fatalf("empty verse 36 must stay out of the TEXT as it always was: %+v", vs)

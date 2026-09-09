@@ -60,21 +60,7 @@ func TestTheBereanKeepsEveryHeadingItsPublisherSets(t *testing.T) {
 // impossible to confuse with the verse it precedes.
 func TestAHeadingNeverEntersTheText(t *testing.T) {
 	book := helloAOBook{ID: "GEN", Order: 1}
-	book.Chapters = []struct {
-		Chapter struct {
-			Number    int               `json:"number"`
-			Content   []json.RawMessage `json:"content"`
-			Footnotes []struct {
-				NoteID    int    `json:"noteId"`
-				Caller    string `json:"caller"`
-				Text      string `json:"text"`
-				Reference struct {
-					Chapter int `json:"chapter"`
-					Verse   int `json:"verse"`
-				} `json:"reference"`
-			} `json:"footnotes"`
-		} `json:"chapter"`
-	}{{}}
+	book.Chapters = []helloAOChapterEntry{{}}
 	book.Chapters[0].Chapter.Number = 1
 	for _, raw := range []string{
 		`{"type":"heading","content":["ZZ A HEADING NO VERSE COULD CONTAIN ZZ"]}`,
@@ -85,7 +71,7 @@ func TestAHeadingNeverEntersTheText(t *testing.T) {
 		book.Chapters[0].Chapter.Content = append(book.Chapters[0].Chapter.Content, json.RawMessage(raw))
 	}
 
-	chapters, _, _, headings := decodeHelloAOChapters("Genesis", book)
+	chapters, _, _, headings := decodeHelloAOChapters("Genesis", book, nil)
 	for _, v := range chapters[1] {
 		if strings.Contains(v.Text, "ZZ") {
 			t.Errorf("verse %d carries heading text: %q", v.Verse, v.Text)

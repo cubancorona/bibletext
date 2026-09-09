@@ -110,21 +110,7 @@ func TestParagraphSourcesNeverLoseAVerse(t *testing.T) {
 // that follows, and a break with no verse after it must not strand a flag.
 func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 	book := helloAOBook{ID: "JHN", Order: 43}
-	book.Chapters = []struct {
-		Chapter struct {
-			Number    int               `json:"number"`
-			Content   []json.RawMessage `json:"content"`
-			Footnotes []struct {
-				NoteID    int    `json:"noteId"`
-				Caller    string `json:"caller"`
-				Text      string `json:"text"`
-				Reference struct {
-					Chapter int `json:"chapter"`
-					Verse   int `json:"verse"`
-				} `json:"reference"`
-			} `json:"footnotes"`
-		} `json:"chapter"`
-	}{{}}
+	book.Chapters = []helloAOChapterEntry{{}}
 	book.Chapters[0].Chapter.Number = 3
 	for _, raw := range []string{
 		`{"type":"heading","content":["A heading, which is not a break"]}`,
@@ -140,7 +126,7 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 		book.Chapters[0].Chapter.Content = append(book.Chapters[0].Chapter.Content, json.RawMessage(raw))
 	}
 
-	chapters, _, _, headings := decodeHelloAOChapters("John", book)
+	chapters, _, _, headings := decodeHelloAOChapters("John", book, nil)
 	verses := chapters[3]
 	if len(verses) != 4 {
 		t.Fatalf("decoded %d verses, want 4", len(verses))
