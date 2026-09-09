@@ -444,7 +444,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S16 | section headings: drawing them | all | M–L | none | done |
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
 | S18 | speech reads the Psalm title | all | M | none | todo |
-| S19 | mark an omitted verse's gap in the text | all | M | none | todo |
+| S19 | mark an omitted verse's gap in the text | all | M | none | table done; the marks are next |
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
@@ -534,10 +534,45 @@ start the second step until the first is pinned.
 **S18.** The text change is trivial; the work is the read-along model, which
 has no slot for a title before verse 1. Do it when that model gains one.
 
-**S19.** An omitted verse leaves a hole in the numbering with no explanation
-unless footnotes are on, in 34 places across the corpus. Mark the gap only
-when footnotes are already on, which extends a decision already taken and
-keeps the page identical when they are off.
+**S19. THE TABLE IS DONE**; the marks are the remaining half.
+
+The original plan was to drive the marks from `BibleData.OrphanFootnotes` — the
+notes an omitted verse leaves behind. Measuring that first is what changed the
+shape of the item: orphan coverage is WEB 4 of 4, WEB Catholic 26 of 41, and
+**the Berean 0 of 16**. The Berean omits sixteen verses and leaves no note on
+any of them, so the whole classic set — Matthew 17:21, 18:11, 23:14, Mark 7:16,
+9:44, 9:46, 11:26, 15:28, Luke 17:36, 23:17, John 5:4, Acts 8:37, 15:34, 24:7,
+28:29, Romans 16:24 — would have been marked nowhere.
+
+Deriving it from the numbering instead does not work either, and this is the
+reason the table exists rather than a rule: a merged verse is keyed by its first
+number, so "17-18" filed under 17 is indistinguishable from an omission; and an
+interrupted fetch leaves gaps that are decode faults, so a runtime rule would
+have the app assert, in its own voice, an omission the publisher never made.
+
+So the holes are resolved OFFLINE, from the publishers' own complete feeds, and
+shipped as `omitted_verses_data.go` — the same shape the red-letter and
+paragraph tables use. **58 verses across three editions**: Berean 16, World
+English 4, WEB Catholic 38. The licensed edition has no table at all, so it
+answers nothing rather than guessing.
+
+Greek Esther is excluded. Its numbering corresponds to nothing —
+`versification.go` already records the book as incommensurable — so its three
+gaps are not omissions and are not reported as any.
+
+Two independent checks, because one derivation checking itself proves nothing.
+The generator refuses to write the table unless every verse
+`versification_data.go` records as absent appears as a hole (12 of them, derived
+from a different source by a different script), and a test re-walks the feeds
+and requires the table to name every interior hole and no other.
+
+What remains is the drawing, and it is the part that needs care rather than
+data. A mark is a new app-authored token in the reader's text storage, and three
+things make that harder than it looks: iOS and macOS merge two adjacent 0.66em
+runs, which can invent a verse or lose one from the index; Android sets
+`contentEnd` at the first non-digit superscript, so a mark written as one clamps
+every verb below it; and the mark has to be stripped at every outbound funnel or
+it reaches a share.
 
 **S21. DONE.** The apparatus is on the pages: the translators' wording and
 manuscript notes, the ones explaining a verse the translation omits, and any
