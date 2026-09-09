@@ -810,41 +810,44 @@ than the borrowed one. It is a drop of 0.117 em, and both leadings are pinned
 by a test, at the shipping body size — a bare test theme puts every width on the
 same side of the reporter gate, so only one leading is otherwise reached.
 
-### Visible, still open
+### Was visible, and is not any more — re-checked 9 September 2026
 
-**Greek footnote words fall out of the reading face.** The shipped face carries
-three codepoints of the Greek block — Δ, μ and π, kept for mathematics — so a
-Greek word keeps its leading μ or π in the reading face and draws the rest in a
-system fallback.
+All four entries this section held were STALE, and every one had been fixed by
+work that landed after they were written. They are kept here rather than deleted
+because a reader who remembers the symptom needs to find the answer, and because
+four wrong "still open" entries in one section is itself the lesson: a section
+naming live defects has to be re-run, not re-read.
 
-Twice corrected, and smaller than it first looked. Greek is not LOST: the
-toolkit falls back per rune, which is what produces the split. And the borrowed
-serif was not whole either — it carries 74 basic-Greek codepoints and NO Greek
-Extended, so the headline example, `ἐπίσκοπον`, was already split before any of
-this. The real regression is 14 words in 10 chapters, `μονογενη` in John 3:16
-among them, which used to be set entirely in the reading face and now sit almost
-entirely in a fallback that does not match the English beside them. It reaches
-only Windows and Linux, and only with the footnote section turned on, which it
-is not by default.
+**Greek footnote words fall out of the reading face. FIXED by the face itself.**
+The claim was that the shipped face carried three codepoints of the Greek block,
+so a Greek word kept its leading letter and drew the rest in a system fallback.
+That described the face this app shipped BEFORE Junicode. Measured now:
+**Greek Extended 233 of 233, basic Greek 95 of 135**, and both words the entry
+named — `μονογενη` and `ἐπίσκοπον` — set entirely in the reading face.
+Pinned by `reading_face_coverage_test.go`, which also walks every rune of all
+1,226 shipped notes and finds nothing either face cannot draw.
 
-**A share card can silently drop a letter.** Prata has no `Ē`, and its .notdef
-is an invisible blank, so a card of Genesis 4:18 reads `“ ´noch`. The seven
-faces are cycled deliberately, so a reader who taps Regenerate reaches it. An
-earlier check called every face complete; it was made against the
-public-domain editions, which contain no `Ē`.
+**A share card can silently drop a letter. FIXED.** Prata has no macron vowels
+and its `.notdef` is an invisible blank, so a card of Genesis 4:18 read
+`" ´noch`. `typefaceForText` now skips any face that cannot set the verse it is
+about to draw, and `share_image.go:248` passes it the verse text rather than the
+reference alone — which is the half that makes the guard real.
+`share_image_glyphs_test.go` walks every variant a reader can reach by tapping
+Regenerate, and carries a control that skips the test if no face is actually
+blind, so it cannot pass vacuously.
 
-**Windows regressed.** It drew real Georgia before and matched macOS, iOS and
-the website exactly; it now matches only Linux, because the shipped face reaches
-the canvas pane alone. So "Share as link" hands a Windows reader the same
-chapter in a different face one tap away. Three faces are in the wild, not four:
-the shipped one on Windows and Linux, the borrowed serif on macOS, iOS and any
-web visitor who has it, and the platform's generic serif on Android and
-everywhere else.
+**Windows regressed to a different face. FIXED.** The claim was that the shipped
+face reached the canvas pane alone, leaving three faces in the wild.
+`reading_fonts_embed.go` carries no build tag, so Junicode is compiled into
+every platform, and `ui_desktop.go` (`//go:build !ios && !android` — Windows and
+Linux included) and `ui_mobile.go` both build the theme from
+`loadReadingFonts()`. One face, everywhere.
 
-**Android's line pitch is wrong, and was already.** `setLineHeightPx` reads the
-CURRENT paint's metrics and stores the difference; the pane sets the typeface
-afterwards, so the pitch is out by the gap between the two fonts. Lines carrying
-a verse number are 10-11px taller than their neighbours, so a wash looks stepped.
+**Android's line pitch is wrong. FIXED.** `setLineHeight` reads the CURRENT
+paint's metrics and stores the difference, so a typeface set afterwards leaves
+the stored extra measured against a font that is not the one drawing.
+`BtBridge.java` sets the typeface FIRST now, and its comment says so and says
+how long it had been the other way round.
 
 ### Corrections to earlier conclusions
 
