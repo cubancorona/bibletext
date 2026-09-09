@@ -236,7 +236,7 @@ func TestCollapsedControlClearsStaleReadAlong(t *testing.T) {
 	defer func() { // reset the package singleton for other tests
 		gAudio.mu.Lock()
 		gAudio.loaded, gAudio.loadedFP, gAudio.state = false, "", audioIdle
-		gAudio.readAlong, gAudio.readAlongVerse = nil, 0
+		gAudio.readAlong, gAudio.readAlongVerse = nil, readAlongNone
 		gAudio.mu.Unlock()
 	}()
 

@@ -925,8 +925,10 @@ func nativeShareImage(path string) {
 //     Java side hops to the main thread, so they're safe from the BtAudio
 //     position-poll/TTS-range callbacks as well as the Fyne goroutine. -----------
 
-// readAlongHighlight tints the verse being narrated (clearing the previous one) and,
-// when follow is set, gently scrolls it into a comfortable band. verse<=0 just clears.
+// readAlongHighlight tints the row being narrated (clearing the previous one) and,
+// when follow is set, gently scrolls it into a comfortable band. The int is Go's
+// three-state row passed through: readAlongNone clears, readAlongTitle is the
+// Psalm's title, n >= 1 is verse n (RA_NONE / RA_TITLE on the Java side).
 func readAlongHighlight(verse int, follow bool) {
 	runBta(func(env uintptr) {
 		f := C.int(0)

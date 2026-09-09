@@ -220,16 +220,23 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	bd.OrphanFootnotes = map[string]map[int][]OrphanFootnote{
 		"Psalms": {23: {{Verse: 7, Text: "Some copies add an orphanprobe verse."}}},
 	}
-	// The superscription is render-only: the title's words must be as absent
-	// from these pipelines as the notes are.
+	// The superscription is TEXT: speech reads it ahead of verse 1 and the
+	// search finds it (docs/SCRIPTURE_WORKLIST.md, S10 and S18). Its NOTES stay
+	// as absent from every pipeline as the verses' own. The share prose still
+	// omits the title itself (docs/SOURCE_FIELDS_DECISIONS.md, decision 17).
 	bd.Superscriptions = map[string]map[int]Superscription{
-		"Psalms": {23: {Text: "A titleprobe of David."}},
+		"Psalms": {23: {Text: "A titleprobe of David.",
+			Footnotes: []Footnote{{Text: "A titlenoteprobe gloss.", Caller: "+"}}}},
 	}
 	bd.PrepareSearchIndex()
 
-	// Search: a distinctive word from a footnote body must find nothing.
+	// Search: a distinctive word from a footnote body must find nothing — a
+	// verse's note or the title's.
 	if hits := bd.Search("tends"); len(hits) != 0 {
 		t.Errorf("footnote text is searchable: %d hits for a body-only word", len(hits))
+	}
+	if hits := bd.Search("titlenoteprobe"); len(hits) != 0 {
+		t.Errorf("a title note is searchable: %d hits", len(hits))
 	}
 	// The index itself: Verse.Search built from Text only.
 	for _, v := range bd.Verses["Psalms"][23] {
@@ -244,12 +251,20 @@ func TestFootnotesNeverReachSearchSpeechOrProse(t *testing.T) {
 	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23}
 	speech := chapterSpeechText(state)
 	prose, _ := chapterShareStructure(state)
-	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final", "orphanprobe", "titleprobe"} {
+	// CONTROL for the speech probes: the title IS spoken, first, so the loop
+	// below is walking a string that carries the title and can therefore see a
+	// title note leak.
+	if !strings.HasPrefix(speech, "A titleprobe of David. ") {
+		t.Fatalf("the title is not spoken ahead of verse 1: %q", speech)
+	}
+	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final", "orphanprobe", "titlenoteprobe"} {
 		if strings.Contains(strings.ToLower(speech), probe) {
 			t.Errorf("footnote text reached the spoken chapter: %q", probe)
 		}
+	}
+	for _, probe := range []string{"tends", "waters of rest", "glued", "verse-final", "orphanprobe", "titlenoteprobe", "titleprobe"} {
 		if strings.Contains(strings.ToLower(prose), probe) {
-			t.Errorf("footnote text reached the share prose: %q", probe)
+			t.Errorf("footnote or title text reached the share prose: %q", probe)
 		}
 	}
 

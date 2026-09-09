@@ -439,10 +439,15 @@ probably a musical term" glosses, the 42 previously dropped) join the
 chapter-bottom section keyed **Title**, ahead of the verse-keyed rows, under
 the toggle. Capture reuses the marked-text path verse text uses
 (hebrew_subtitle branch in decodeHelloAOChapters), so title-note anchors are
-exact rune offsets into the title. RENDER-ONLY for now: the title never
-enters Verse.Text, lay.Text, search, speech, share, copy or links — pinned in
-the purity sweep — and promoting it into those pipelines is recorded as its
-own decision. Corpus-verified exact: BSB 116 titles / 36 notes, WEB 117 / 3,
+exact rune offsets into the title. Never in Verse.Text or lay.Text, so
+share, copy and links omit it by construction (pinned in the purity sweep);
+two pipelines were later promoted on their own decisions — the search indexes
+it as a verse-0 hit (S10) and speech reads it as the read-along's verse-0 row
+(S18). Under narration every pane lights the title at verse 0: the styled pane
+a wash per title line taken from the same superGeom table (washes) the glyphs
+draw from, never from runs; the Apple panes the italic paragraph before the
+content start; Android the leading StyleSpan(ITALIC) before contentStart. A
+chapter without a title lights nothing at 0. Corpus-verified exact: BSB 116 titles / 36 notes, WEB 117 / 3,
 WEBC 117 / 3; orphan counts unchanged. Epochs: web 4→5, bsb 5→6, webc 4→5.
 With this, every note body in all three helloao feeds is rendered: in-verse
 + omitted-verse orphans + title notes = the whole apparatus, nothing dropped.

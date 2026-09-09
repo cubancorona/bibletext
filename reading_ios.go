@@ -127,6 +127,12 @@ static BOOL    gHasLastTouch      = NO;
 // the read-along statics live with the highlight code further down.
 static BOOL gReadAlongActive = NO;
 static BOOL gReadAlongUserLatch = NO;
+// The read-along's three states, exactly as Go sends them (readalong.go:
+// readAlongNone / readAlongTitle / verse n). gReadAlongVerse holds the same
+// three values: 0 is the Psalm's title, and "nothing painted" is the negative
+// sentinel — a host test holds these equal to Go's.
+static const NSInteger kBTReadAlongNone = -1;
+static const NSInteger kBTReadAlongTitle = 0;
 
 static NSInteger  gMarkerVerse = 0;
 static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
@@ -708,6 +714,46 @@ static NSUInteger btIOSContentStart(void) {
     return gVerseIndexCount > 0 ? gVerseIndex[0].loc : 0;
 }
 
+// The Psalm superscription's character range — the read-along's verse 0. It is
+// a paragraph wholly BEFORE the content start (so verse 1's range can never
+// absorb it, nor it verse 1's) and it is ITALIC, the one property that separates
+// it from a bold `p.sec` heading standing above verse 1. Found once per import
+// beside the content boundary it depends on, never per tick; NSNotFound when the
+// chapter has no title, and then verse 0 paints nothing.
+static NSRange gTitleRange = {NSNotFound, 0};
+static void btIOSFindTitleRange(NSTextStorage *ts) {
+    gTitleRange = NSMakeRange(NSNotFound, 0);
+    if (ts == nil || ts.length == 0) return;
+    NSUInteger start = btIOSContentStart();
+    if (start == 0) return;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger loc = 0;
+    while (loc < start) {
+        NSRange para = [s paragraphRangeForRange:NSMakeRange(loc, 0)];
+        if (para.length == 0 || NSMaxRange(para) > start) break;
+        // The font at the paragraph's first non-blank character decides.
+        NSUInteger i = para.location;
+        while (i < NSMaxRange(para) && [blank characterIsMember:[s characterAtIndex:i]]) i++;
+        if (i < NSMaxRange(para)) {
+            UIFont *f = [ts attribute:NSFontAttributeName atIndex:i effectiveRange:NULL];
+            if (f != nil && (CTFontGetSymbolicTraits((__bridge CTFontRef)f) & kCTFontTraitItalic)) {
+                gTitleRange = para;
+                return;
+            }
+        }
+        loc = NSMaxRange(para);
+    }
+}
+
+// btIOSTitleRange is gTitleRange clamped to the given storage — NSNotFound
+// unless the whole range fits, like btIOSContentEnd's clamp.
+static NSRange btIOSTitleRange(NSTextStorage *ts) {
+    if (ts == nil || gTitleRange.location == NSNotFound || NSMaxRange(gTitleRange) > ts.length)
+        return NSMakeRange(NSNotFound, 0);
+    return gTitleRange;
+}
+
 // btIOSBuildVerseIndex captures every verse-number run (those below the 0.8x
 // threshold, which is derived per render and not an absolute size) into
 // gVerseIndex. Called on every text assignment; the single buffer is reused for the
@@ -821,7 +867,7 @@ static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
 // stale: it is only valid against the text storage it was measured in, and every
 // re-import replaces that. The range is now derived where it is used — in the
 // follow-scroll, from the verse — and the repaint asks the wash model.
-static NSInteger gReadAlongVerse = 0;
+static NSInteger gReadAlongVerse = kBTReadAlongNone;
 static UIColor *gReadAlongColor = nil;
 
 // ---- The chapter's wash model ------------------------------------------------
@@ -880,7 +926,7 @@ static int  gBodyGenApplied = 0;
 // audio controller is deliberate: this is the only place that knows what is
 // painted, it is right for TTS and recordings alike, and it cannot disagree with
 // what bibleTextIOSHighlightVerse last did.
-static NSInteger gPendingReadAlongVerse = 0;
+static NSInteger gPendingReadAlongVerse = kBTReadAlongNone;
 
 // --- Timing, for the two paths this seam exists to tell apart -----------------
 // Off unless BIBLETEXT_PERF is set in the environment (simctl forwards
@@ -2234,10 +2280,13 @@ void bibleTextSetFollowButtonColors(double bgR, double bgG, double bgB,
 }
 
 // btIOSReadAlongRange returns verse's number-run start through just before the next
-// verse's number run (or end of text) — i.e. the whole verse, number + words. The
+// verse's number run (or end of text) — i.e. the whole verse, number + words.
+// Verse 0 (kBTReadAlongTitle) is the Psalm's title paragraph, which ends at or
+// before the first number run, so neither range can absorb the other. The
 // prebuilt index is in document order, so the entry after `verse` IS the next run
 // (no storage enumeration, unlike the macOS twin).
 static NSRange btIOSReadAlongRange(NSTextStorage *ts, NSInteger verse) {
+    if (verse == kBTReadAlongTitle) return btIOSTitleRange(ts);
     NSUInteger lo = 0, hi = gVerseIndexCount;
     while (lo < hi) {
         NSUInteger mid = lo + (hi - lo) / 2;
@@ -2480,7 +2529,7 @@ static void btIOSRebuildWash(void) {
 // The caller owns beginEditing/endEditing so a move (restore one verse, paint
 // another) is a single layout transaction.
 static void btIOSPaintVerseWash(NSTextStorage *ts, NSInteger verse, BOOL narrated) {
-    if (verse <= 0 || ts == nil) return;
+    if (verse < kBTReadAlongTitle || ts == nil) return;
     NSRange whole = btIOSReadAlongRange(ts, verse);
     if (whole.location == NSNotFound || NSMaxRange(whole) > ts.length) return;
     [ts removeAttribute:NSBackgroundColorAttributeName range:whole];
@@ -2629,7 +2678,7 @@ void bibleTextIOSSetTintRuns(const BTTintRun *runs, int n, int repaint) {
 void bibleTextIOSBeginChapterPush(int sameChapter) {
     void (^block)(void) = ^{
         gBodyGenPending++;
-        gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : 0;
+        gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : kBTReadAlongNone;
     };
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
@@ -2644,12 +2693,12 @@ void bibleTextIOSReadAlongClear(void) {
     void (^block)(void) = ^{
         if (gReadingTV == nil) return;
         NSTextStorage *ts = gReadingTV.textStorage;
-        if (gReadAlongVerse > 0) {
+        if (gReadAlongVerse != kBTReadAlongNone) {
             [ts beginEditing];
             btIOSPaintVerseWash(ts, gReadAlongVerse, NO);
             [ts endEditing];
         }
-        gReadAlongVerse = 0;
+        gReadAlongVerse = kBTReadAlongNone;
         gReadAlongActive = NO;
         gReadAlongUserLatch = NO;
     };
@@ -2663,7 +2712,9 @@ void bibleTextIOSReadAlongClear(void) {
 // verse — and never while the reader's finger owns the scroll
 // (dragging/decelerating). The plain contentOffset assignment sets neither of
 // those flags, so the scroll-restore/marker machinery in scrollViewDidScroll is
-// untouched. verse<=0 just clears (the recording's intro).
+// untouched. kBTReadAlongNone clears (the recording's intro); kBTReadAlongTitle
+// is the Psalm's title, painted and followed like a verse, and a no-op in a
+// chapter without one.
 //
 // MOVING OFF A VERSE removes the narration attribute and nothing else. That
 // was once an erasing bug — over a verse carrying a note or a search hit the
@@ -2679,10 +2730,10 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
         NSTextStorage *ts = tv.textStorage;
         uint64_t t0 = btIOSPerfNow();
         [ts beginEditing];
-        if (gReadAlongVerse > 0) btIOSPaintVerseWash(ts, gReadAlongVerse, NO);
-        gReadAlongVerse = 0;
+        if (gReadAlongVerse != kBTReadAlongNone) btIOSPaintVerseWash(ts, gReadAlongVerse, NO);
+        gReadAlongVerse = kBTReadAlongNone;
         NSRange painted = NSMakeRange(NSNotFound, 0);
-        if (verse > 0) {
+        if (verse >= kBTReadAlongTitle) {
             NSRange r = btIOSReadAlongRange(ts, verse);
             if (r.location != NSNotFound && NSMaxRange(r) <= ts.length) {
                 btIOSPaintVerseWash(ts, verse, YES);
@@ -2693,7 +2744,10 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
         [ts endEditing];
         if (btIOSPerfOn()) NSLog(@"bibletext-perf: readalong-verse %d", verse);
         btIOSPerfLog("readalong-move", t0);
-        gReadAlongActive = (verse > 0);
+        // Painted-ness, not the argument: a verse 0 in a chapter without a title
+        // is nothing painted, and active with nothing painted is the lie the
+        // bounds observer acts on (see the import reset).
+        gReadAlongActive = (gReadAlongVerse != kBTReadAlongNone);
         if (follow) gReadAlongUserLatch = NO;   // following again → re-arm the one-shot
 
         if (!follow) return;   // reader scrolled away; tint only, never yank the view
@@ -3142,7 +3196,7 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
     // All three, because gReadAlongActive left YES with nothing painted is a lie
     // the bounds observer acts on.
-    gReadAlongVerse = 0;
+    gReadAlongVerse = kBTReadAlongNone;
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
     gReadingTV.attributedText = as;
@@ -3157,6 +3211,7 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     btIOSApplyReadingBG();
     btIOSFindContentEnd(gReadingTV.textStorage); // scripture/apparatus boundary, before the index that stops at it
     btIOSBuildVerseIndex(gReadingTV.textStorage); // cache verse positions for cheap scroll-end anchoring
+    btIOSFindTitleRange(gReadingTV.textStorage); // the read-along's verse 0, bounded by the content start above
     // The storage now holds the chapter Go announced, so wash mutations against
     // verse numbers are meaningful again — and anything refused while it did not
     // is covered by the unconditional rebuild below.
@@ -3176,7 +3231,7 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // Put the narration back if it is still live on this chapter (see
     // gPendingReadAlongVerse). Painted, not follow-scrolled: the scroll cadence
     // below owns where the view lands, and the next verse tick will follow.
-    if (gPendingReadAlongVerse > 0) {
+    if (gPendingReadAlongVerse != kBTReadAlongNone) {
         NSTextStorage *rts = gReadingTV.textStorage;
         NSRange rr = btIOSReadAlongRange(rts, gPendingReadAlongVerse);
         if (rr.location != NSNotFound && NSMaxRange(rr) <= rts.length) {
@@ -3305,6 +3360,7 @@ void bibleTextTVSetHTML(const char *html) {
                     btIOSApplyReadingBG(); // keep the view opaque on the fallback path too
                     gContentEnd = gReadingTV.textStorage.length; // apparatus stripped above — all scripture
                     btIOSBuildVerseIndex(nil); // plain text has no verse runs — clear the stale table
+                    btIOSFindTitleRange(nil);  // and no title range either
                 }
             });
         });
@@ -4212,8 +4268,10 @@ func pushNativeTint(state *AppState, verses []Verse, repaint C.int) {
 }
 
 // readAlongHighlight / readAlongClear drive the audio read-along tint (see
-// audio_controller.go). The C side marshals to the main thread itself, so these
-// are safe from both the AVPlayer time observer and the Fyne goroutine.
+// audio_controller.go). The int is Go's three-state row (readAlongNone /
+// readAlongTitle / verse n) passed through unchanged. The C side marshals to
+// the main thread itself, so these are safe from both the AVPlayer time
+// observer and the Fyne goroutine.
 func readAlongHighlight(verse int, follow bool) {
 	f := C.int(0)
 	if follow {

@@ -126,10 +126,11 @@ type OrphanFootnote struct {
 // the Psalter (the Masoretic tradition numbers these lines as verse 1; the
 // English versification leaves them unnumbered). Print sets them as an
 // italic, unnumbered line between the psalm number and verse 1, and that is
-// how the reading panes render them. RENDER-ONLY for now: the title never
-// enters Verse.Text, so search, speech, share, copy and links are untouched
-// by construction; promoting titles into those pipelines is its own
-// decision. Its notes (the "Gittith is probably a musical term" glosses)
+// how the reading panes render them. Never in Verse.Text: the search indexes
+// it as a verse-0 hit (SearchSmartLimited) and speech reads it as the
+// read-along's verse-0 row (speechSegments, audio.go); share, copy and links
+// still omit it, each its own decision (docs/SOURCE_FIELDS_DECISIONS.md).
+// Its notes (the "Gittith is probably a musical term" glosses)
 // join the chapter-bottom footnote section keyed "Title", ahead of the
 // verse-keyed notes, under the same toggle.
 // Heading is one of the publisher's section headings — "The Beatitudes", "The

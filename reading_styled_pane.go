@@ -127,8 +127,12 @@ type styledReadingPane struct {
 	// Selection state (milestone 3): rune offsets into lay.Text, -1 = none.
 	selAnchor, selStart, selEnd int
 
-	// raVerse is the verse the narration is on (read-along tint), 0 = none.
-	// Driven by reading_styled_readalong.go on the UI goroutine.
+	// raVerse is the row the narration is on (read-along tint): readAlongNone
+	// when nothing is narrated, readAlongTitle for the Psalm's superscription
+	// (lit only when superGeom.present — see raTitleLit), n >= 1 for verse n.
+	// Driven by reading_styled_readalong.go on the UI goroutine. The zero
+	// value is NOT none any more: the constructor must set readAlongNone, or a
+	// fresh titled pane would open with its title lit.
 	raVerse int
 
 	// note is the pushed sticker presentation (reading_styled_note.go), read
@@ -180,6 +184,7 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 		pal:       state.pal(),
 		font:      styledPaneFont(),
 		selAnchor: -1, selStart: -1, selEnd: -1,
+		raVerse: readAlongNone,
 	}
 	if state.window != nil {
 		p.clipboard = state.window.Clipboard()
@@ -643,9 +648,13 @@ type styledPaneRenderer struct {
 	// tinted runs' own X range, never the full column.
 	tintRects []*canvas.Rectangle
 	raRects   []*canvas.Rectangle
-	selRects  []*canvas.Rectangle
-	texts     []*canvas.Text
-	objects   []fyne.CanvasObject
+	// raTitleRects is the title's narration wash, index-parallel to
+	// pane.superGeom.washes — its own slice because raRects is index-parallel
+	// to p.raSpans, a different table.
+	raTitleRects []*canvas.Rectangle
+	selRects     []*canvas.Rectangle
+	texts        []*canvas.Text
+	objects      []fyne.CanvasObject
 
 	// The in-text note sticker (reading_styled_note.go). Built LAST and
 	// appended LAST, so it paints above the glyphs — the Fyne twin of the
@@ -718,6 +727,18 @@ func (r *styledPaneRenderer) rebuild() {
 		rect := canvas.NewRectangle(styledReadAlongTint)
 		r.raRects = append(r.raRects, rect)
 		r.objects = append(r.objects, rect)
+	}
+	// The title's narration wash: same colour, same layer (above the verse
+	// wash, below selection, glyphs and the title's own texts), one rect per
+	// title line from the superscription's geometry table. Geometry is
+	// position()'s, from that table alone.
+	r.raTitleRects = r.raTitleRects[:0]
+	if p.raTitleLit() {
+		for range p.superGeom.washes {
+			rect := canvas.NewRectangle(styledReadAlongTint)
+			r.raTitleRects = append(r.raTitleRects, rect)
+			r.objects = append(r.objects, rect)
+		}
 	}
 
 	selColor := p.pal.Accent
@@ -888,6 +909,19 @@ func (r *styledPaneRenderer) position() {
 	for i := len(p.raSpans); i < len(r.raRects); i++ {
 		r.raRects[i].Hide()
 	}
+	// The title's wash, from the superscription's geometry table alone — the
+	// washes are already absolute (place() moved them with the lines), so no
+	// insetX() here; and hide, never merely skip (the ghost-wash lesson).
+	for i, rect := range r.raTitleRects {
+		if p.raTitleLit() && i < len(p.superGeom.washes) {
+			w := p.superGeom.washes[i]
+			rect.Move(w.pos())
+			rect.Resize(w.size())
+			rect.Show()
+		} else {
+			rect.Hide()
+		}
+	}
 
 	lh := p.lh
 	if lh == 0 {
@@ -998,6 +1032,21 @@ func (p *styledReadingPane) yForVerse(verse int) (float32, bool) {
 	return 0, false
 }
 
+// readAlongTop is the top of the narrated THING, for the follow-scroll: the
+// title block's top for readAlongTitle (the title has no VerseLines entry),
+// the verse's first line otherwise; ok is false when nothing is narrated or
+// the chapter has no title to light. yForVerse itself is left alone — the
+// restore path (reading_styled_area.go) and its tests are its other readers.
+func (p *styledReadingPane) readAlongTop() (float32, bool) {
+	switch {
+	case p.raVerse < 0:
+		return 0, false
+	case p.raVerse == readAlongTitle:
+		return p.superGeom.rect.Y, p.superGeom.present
+	}
+	return p.yForVerse(p.raVerse)
+}
+
 // highlightOwnsScroll reports whether a search/cross-ref highlight should own
 // the scroll position (mirrors chapterText.highlightLine >= 0) — and only when
 // the pushed arrival class says this render places anything at all. A PLAIN
@@ -1023,8 +1072,17 @@ func (p *styledReadingPane) setReadAlongVerse(verse int) {
 		return
 	}
 	p.raVerse = verse
-	p.raSpans = verseSpansForLayout(p.lay, verse)
+	p.raSpans = verseSpansForLayout(p.lay, verse) // nil for the title: no verse has number 0
 	p.Refresh()
+}
+
+// raTitleLit reports whether the narration is on the Psalm's title AND the
+// chapter has one to light. DERIVED, never stored — raVerse stays the one
+// writer (a second field would be two fields standing for one fact, the
+// shape the comment above blames for this subsystem's worst defects), and a
+// chapter without a title lights nothing at readAlongTitle.
+func (p *styledReadingPane) raTitleLit() bool {
+	return p.raVerse == readAlongTitle && p.superGeom.present
 }
 
 // verseLineSpan returns the [first,last] line indexes the verse's runs touch —

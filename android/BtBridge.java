@@ -282,13 +282,22 @@ public final class BtBridge {
     // so the app verbs clamp to [contentStart, contentEnd): title words can
     // never be dispatched or cited under verse 1's number.
     private static int contentStart;
+    // The Psalm superscription's char span, [titleStart, titleEnd) — the
+    // read-along's verse 0; -1/-1 when the chapter has none. Measured with the
+    // verse index (findTitleRange) and dropped with the view.
+    private static int titleStart = -1, titleEnd = -1;
 
-    // The verse currently tinted and the span painting it (kept so each tick can
-    // clear the previous cheaply — and so we remove OUR span, never the search
-    // highlight's BackgroundColorSpan). raActive marks a live read-along;
-    // raFollowing mirrors iOS's !gReadAlongUserLatch (auto-scroll armed vs the
-    // reader has taken the scroll over).
-    private static int raVerse = 0;
+    // The read-along's three states, exactly as Go sends them (readalong.go:
+    // readAlongNone / readAlongTitle / verse n); a host test holds these equal
+    // to Go's. raVerse is the row currently tinted — RA_TITLE the Psalm's
+    // title, RA_NONE nothing — and raSpan the span painting it (kept so each
+    // tick can clear the previous cheaply — and so we remove OUR span, never
+    // the search highlight's BackgroundColorSpan). raActive marks a live
+    // read-along; raFollowing mirrors iOS's !gReadAlongUserLatch (auto-scroll
+    // armed vs the reader has taken the scroll over).
+    private static final int RA_NONE = -1;
+    private static final int RA_TITLE = 0;
+    private static int raVerse = RA_NONE;
     private static BackgroundColorSpan raSpan;
 
     // THE X OF AN OFFSET AS IT IS ACTUALLY DRAWN, justification included.
@@ -872,7 +881,7 @@ public final class BtBridge {
                 // Read-along spans/index belonged to the destroyed view; reset. The
                 // Go controller re-drives highlight/pill on the next audio tick.
                 raSpan = null;
-                raVerse = 0;
+                raVerse = RA_NONE;
                 raActive = false;
                 raFollowing = true;
                 followWanted = false;
@@ -881,6 +890,7 @@ public final class BtBridge {
                 verseEnds = new int[0];
                 contentEnd = 0;
                 contentStart = 0;
+                titleStart = titleEnd = -1;
                 pendingReflowFrac = -1f;
                 activity = act;
                 installKeyboardWatcher(act);
@@ -1369,8 +1379,47 @@ public final class BtBridge {
         return null;
     }
 
-    /** readAlongHighlight tints the narrated verse (clearing the previous) and, when
-     *  follow is set, scrolls it into a comfortable band. verse<=0 just clears. */
+    // findTitleRange locates the Psalm superscription for the read-along's
+    // verse 0. Html.fromHtml turns the dialect's leading <p><i>…</i></p> into a
+    // StyleSpan(ITALIC) at the head of the text whose end precedes the first
+    // verse-number sup (contentStart): a heading's <b> is StyleSpan(BOLD) and
+    // fails the style test, and a supplied-word italic inside a verse starts at
+    // or after contentStart and fails the start test. Runs with the verse
+    // index, never per tick; a chapter without a title leaves -1/-1.
+    private static void findTitleRange(CharSequence cs) {
+        titleStart = titleEnd = -1;
+        if (!(cs instanceof Spanned) || contentStart <= 0) return;
+        Spanned sp = (Spanned) cs;
+        int lead = 0;   // the title starts at the first non-blank character
+        while (lead < contentStart && Character.isWhitespace(sp.charAt(lead))) lead++;
+        android.text.style.StyleSpan[] spans = sp.getSpans(0, contentStart, android.text.style.StyleSpan.class);
+        if (spans == null) return;
+        for (android.text.style.StyleSpan ss : spans) {
+            if (ss.getStyle() != android.graphics.Typeface.ITALIC) continue;
+            int st = sp.getSpanStart(ss), en = sp.getSpanEnd(ss);
+            if (st <= lead && en > lead && en <= contentStart) {
+                titleStart = st;
+                titleEnd = en;
+                return;
+            }
+        }
+    }
+
+    // readAlongRange is the read-along's own resolver: the title's span for
+    // RA_TITLE (null when the chapter has none), verseRange otherwise.
+    // verseRange keeps its other callers (note sticker, scroll anchors)
+    // unchanged.
+    private static int[] readAlongRange(int verse) {
+        if (verse == RA_TITLE) {
+            return (titleStart >= 0 && titleEnd > titleStart) ? new int[]{titleStart, titleEnd} : null;
+        }
+        return verseRange(verse);
+    }
+
+    /** readAlongHighlight tints the narrated row (clearing the previous) and, when
+     *  follow is set, scrolls it into a comfortable band. RA_NONE clears; RA_TITLE
+     *  is the Psalm's title, painted and followed like a verse and a no-op when the
+     *  chapter has none. */
     public static void readAlongHighlight(final int verse, final boolean follow) {
         UI.post(new Runnable() {
             @Override public void run() {
@@ -1382,9 +1431,9 @@ public final class BtBridge {
                     try { sp.removeSpan(raSpan); } catch (Throwable ignored) {}
                     raSpan = null;
                 }
-                raVerse = 0;
-                if (verse > 0) {
-                    int[] r = verseRange(verse);
+                raVerse = RA_NONE;
+                if (verse >= RA_TITLE) {
+                    int[] r = readAlongRange(verse);
                     if (r != null) r = trimTrailingBlank(sp, r);
                     if (r != null && r[0] >= 0 && r[1] <= sp.length() && r[0] < r[1]) {
                         raSpan = new BackgroundColorSpan(raHighlightColor);
@@ -1392,9 +1441,11 @@ public final class BtBridge {
                         raVerse = verse;
                     }
                 }
-                raActive = (verse > 0);
+                // Painted-ness, not the argument: a verse 0 in a chapter without a
+                // title is nothing painted, and must not count as live.
+                raActive = (raVerse != RA_NONE);
                 if (follow) raFollowing = true;   // following again → re-arm the latch
-                if (!follow || raVerse == 0) return;
+                if (!follow || raVerse == RA_NONE) return;
                 followScrollTo(raVerse);
             }
         });
@@ -1408,7 +1459,7 @@ public final class BtBridge {
         if (text == null || scroll == null) return;
         Layout layout = text.getLayout();
         if (layout == null) return;   // not laid out yet — the next tick catches it
-        int[] r = verseRange(verse);
+        int[] r = readAlongRange(verse);
         if (r == null) return;
         int line = layout.getLineForOffset(r[0]);
         int verseY = text.getTotalPaddingTop() + layout.getLineTop(line);
@@ -1432,7 +1483,7 @@ public final class BtBridge {
                     try { ((Spannable) text.getText()).removeSpan(raSpan); } catch (Throwable ignored) {}
                 }
                 raSpan = null;
-                raVerse = 0;
+                raVerse = RA_NONE;
                 raActive = false;
                 raFollowing = true;
             }
@@ -2651,8 +2702,9 @@ public final class BtBridge {
                 // the reference (the span itself went with the replaced Spanned) and
                 // re-index the verses for read-along on the fresh content.
                 raSpan = null;
-                raVerse = 0;
+                raVerse = RA_NONE;
                 buildVerseIndex(text.getText());
+                findTitleRange(text.getText());   // the read-along's verse 0, bounded by contentStart
                 // The note band went with the old Spanned too; re-derive the
                 // sticker against the fresh text + verse index (the pushed
                 // tuple for this chapter arrived just before this setHtml).

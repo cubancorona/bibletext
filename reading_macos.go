@@ -480,6 +480,45 @@ static void btMacFindContentStart(NSTextStorage *ts) {
     gMacContentStart = loc;
 }
 
+// The Psalm superscription's character range — the read-along's verse 0. The
+// line-for-line twin of the iOS finder: a paragraph wholly BEFORE the content
+// start, and ITALIC, which separates it from a bold `p.sec` heading standing
+// above verse 1. Found once per import beside the content boundary it depends
+// on; NSNotFound when the chapter has no title, and then verse 0 paints nothing.
+static NSRange gMacTitleRange = {NSNotFound, 0};
+static void btMacFindTitleRange(NSTextStorage *ts) {
+    gMacTitleRange = NSMakeRange(NSNotFound, 0);
+    if (ts == nil || ts.length == 0) return;
+    NSUInteger start = gMacContentStart;
+    if (start == 0) return;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger loc = 0;
+    while (loc < start) {
+        NSRange para = [s paragraphRangeForRange:NSMakeRange(loc, 0)];
+        if (para.length == 0 || NSMaxRange(para) > start) break;
+        // The font at the paragraph's first non-blank character decides.
+        NSUInteger i = para.location;
+        while (i < NSMaxRange(para) && [blank characterIsMember:[s characterAtIndex:i]]) i++;
+        if (i < NSMaxRange(para)) {
+            NSFont *f = [ts attribute:NSFontAttributeName atIndex:i effectiveRange:NULL];
+            if (f != nil && (CTFontGetSymbolicTraits((__bridge CTFontRef)f) & kCTFontTraitItalic)) {
+                gMacTitleRange = para;
+                return;
+            }
+        }
+        loc = NSMaxRange(para);
+    }
+}
+
+// btMacTitleRange is gMacTitleRange clamped to the given storage — NSNotFound
+// unless the whole range fits, like btMacContentEnd's clamp.
+static NSRange btMacTitleRange(NSTextStorage *ts) {
+    if (ts == nil || gMacTitleRange.location == NSNotFound || NSMaxRange(gMacTitleRange) > ts.length)
+        return NSMakeRange(NSNotFound, 0);
+    return gMacTitleRange;
+}
+
 // btMacVerseSpanForRange maps a selected character range to its verse span:
 // lo/hi are the last verse-number runs at or before the range's first and last
 // characters. A selection that starts inside a verse's NUMBER run starts at or
@@ -548,10 +587,15 @@ static NSInteger btMacVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
 }
 
 // ---- Read-along: highlight the verse being narrated + gently follow-scroll -------
-// gReadAlongVerse is the verse the narration is on, and it is the ONLY thing
-// remembered about it — see the iOS twin for why the char range that used to sit
-// beside it was the half that goes stale.
-static NSInteger gReadAlongVerse = 0;
+// The read-along's three states, exactly as Go sends them (readalong.go:
+// readAlongNone / readAlongTitle / verse n); a host test holds these equal to
+// Go's. gReadAlongVerse is the row the narration is on — 0 the Psalm's title,
+// the negative sentinel nothing painted — and it is the ONLY thing remembered
+// about it: see the iOS twin for why the char range that used to sit beside it
+// was the half that goes stale.
+static const NSInteger kBTReadAlongNone = -1;
+static const NSInteger kBTReadAlongTitle = 0;
+static NSInteger gReadAlongVerse = kBTReadAlongNone;
 static NSColor *gReadAlongColor = nil;
 
 // ---- The chapter's wash model ------------------------------------------------
@@ -577,7 +621,7 @@ static BTTintModel gTint = {0};
 static int  gBodyGenPending = 0;
 static int  gBodyGenApplied = 0;
 static BOOL gTintUnpainted  = NO;
-static NSInteger gPendingReadAlongVerse = 0;
+static NSInteger gPendingReadAlongVerse = kBTReadAlongNone;
 
 // --- Timing, for the two paths this seam exists to tell apart -----------------
 // Off unless BIBLETEXT_PERF is set in the environment. It prints the two costs
@@ -776,7 +820,12 @@ void bibleTextMacSetFollowButtonColors(double bgR, double bgG, double bgB,
 
 // btMacReadAlongRange returns verse's number-run start through just before the next
 // verse's number run (or end of text) — i.e. the whole verse, number + words.
+// Verse 0 (kBTReadAlongTitle) is the Psalm's title paragraph, resolved AHEAD of
+// btMacLocForVerse, which enumerates for integerValue == verse and would accept
+// any sub-threshold non-numeric run for 0; the title ends at or before the first
+// number run, so neither range can absorb the other.
 static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
+    if (verse == kBTReadAlongTitle) return btMacTitleRange(ts);
     NSUInteger start = btMacLocForVerse(ts, verse);
     if (start == NSNotFound) return NSMakeRange(NSNotFound, 0);
     // The LAST verse ends at the content end, not ts.length — the appended
@@ -896,7 +945,7 @@ static void btMacPaintRunWash(NSTextStorage *ts, int i, NSColor *c) {
 // what a verse's background can be, and the erasing bug this replaces was
 // exactly one of those lists being shorter than the other.
 static void btMacPaintVerseWash(NSTextStorage *ts, NSInteger verse, BOOL narrated) {
-    if (verse <= 0 || ts == nil) return;
+    if (verse < kBTReadAlongTitle || ts == nil) return;
     NSRange whole = btMacReadAlongRange(ts, verse);
     if (whole.location == NSNotFound || NSMaxRange(whole) > ts.length) return;
     [ts removeAttribute:NSBackgroundColorAttributeName range:whole];
@@ -969,7 +1018,7 @@ void bibleTextMacSetTintRuns(const BTTintRun *runs, int n, int repaint) {
         for (int i = 0; i < gTint.n; i++) btMacPaintRunWash(ts, i, btMacTintColor(i));
         // The narration keeps its place whatever the chapter wash just did —
         // including when the wash it was sitting on has just gone away.
-        if (gReadAlongVerse > 0) btMacPaintVerseWash(ts, gReadAlongVerse, YES);
+        if (gReadAlongVerse != kBTReadAlongNone) btMacPaintVerseWash(ts, gReadAlongVerse, YES);
         [ts endEditing];
         btMacRefreshHighlightRange(ts);
         // A wash change can arrive with the window long idle (a note cleared from
@@ -989,7 +1038,7 @@ void bibleTextMacSetTintRuns(const BTTintRun *runs, int n, int repaint) {
 void bibleTextMacBeginChapterPush(int sameChapter) {
     dispatch_block_t block = ^{
         gBodyGenPending++;
-        gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : 0;
+        gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : kBTReadAlongNone;
     };
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
@@ -1019,7 +1068,7 @@ void bibleTextMacReadAlongClear(void) {
     }
     if (gTextView == nil) return;
     NSTextStorage *ts = gTextView.textStorage;
-    if (gReadAlongVerse > 0) {
+    if (gReadAlongVerse != kBTReadAlongNone) {
         [ts beginEditing];
         btMacPaintVerseWash(ts, gReadAlongVerse, NO);
         [ts endEditing];
@@ -1029,7 +1078,7 @@ void bibleTextMacReadAlongClear(void) {
         // invalidation. Force the repaint so the tint never visibly lingers.
         [gTextView setNeedsDisplayInRect:gTextView.visibleRect];
     }
-    gReadAlongVerse = 0;
+    gReadAlongVerse = kBTReadAlongNone;
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
 }
@@ -1037,7 +1086,9 @@ void bibleTextMacReadAlongClear(void) {
 // bibleTextMacHighlightVerse tints the narrated verse (restoring the previous one
 // to whatever the chapter says belongs on it) and follow-scrolls only when the
 // verse has drifted out of a comfortable band, so the text isn't yanked on every
-// verse. verse<=0 just clears (recording's intro).
+// verse. kBTReadAlongNone clears (recording's intro); kBTReadAlongTitle is the
+// Psalm's title, painted and followed like a verse, and a no-op in a chapter
+// without one.
 //
 // MOVING OFF A VERSE IS A REPAINT, NOT AN ERASE. This used to removeAttribute
 // over the range it had tinted, which is only correct when nothing was
@@ -1052,10 +1103,10 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
     NSTextStorage *ts = gTextView.textStorage;
     uint64_t t0 = btMacPerfNow();
     [ts beginEditing];
-    if (gReadAlongVerse > 0) btMacPaintVerseWash(ts, gReadAlongVerse, NO);
-    gReadAlongVerse = 0;
+    if (gReadAlongVerse != kBTReadAlongNone) btMacPaintVerseWash(ts, gReadAlongVerse, NO);
+    gReadAlongVerse = kBTReadAlongNone;
     NSRange painted = NSMakeRange(NSNotFound, 0);
-    if (verse > 0) {
+    if (verse >= kBTReadAlongTitle) {
         NSRange r = btMacReadAlongRange(ts, verse);
         if (r.location != NSNotFound && NSMaxRange(r) <= ts.length) {
             btMacPaintVerseWash(ts, verse, YES);
@@ -1066,7 +1117,10 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
     [ts endEditing];
     if (btMacPerfOn()) NSLog(@"bibletext-perf: readalong-verse %d", verse);
     btMacPerfLog("readalong-move", t0);
-    gReadAlongActive = (verse > 0);
+    // Painted-ness, not the argument: a verse 0 in a chapter without a title is
+    // nothing painted, and active with nothing painted is the lie the bounds
+    // observer acts on (see the import reset).
+    gReadAlongActive = (gReadAlongVerse != kBTReadAlongNone);
     if (follow) gReadAlongUserLatch = NO;   // following again → re-arm the one-shot
 
     if (!follow) return;   // reader scrolled away; tint only, never yank the view
@@ -1461,7 +1515,7 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
     // is a lie, and the bounds observer above acts on it — one scroll belonging to
     // no live narration would latch gReadAlongUserLatch and kill follow-scroll for
     // the rest of the recording.
-    gReadAlongVerse = 0;
+    gReadAlongVerse = kBTReadAlongNone;
     gReadAlongActive = NO;
     gReadAlongUserLatch = NO;
     [gTextView.textStorage setAttributedString:as];
@@ -1469,6 +1523,7 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
     // derives a range from them (see gMacContentEnd / gMacContentStart).
     btMacFindContentEnd(gTextView.textStorage);
     btMacFindContentStart(gTextView.textStorage);
+    btMacFindTitleRange(gTextView.textStorage); // the read-along's verse 0, bounded by the content start
     // The storage now holds the chapter Go announced; anything refused while it
     // did not gets re-asserted. See gBodyGenPending.
     gBodyGenApplied = gBodyGenPending;
@@ -1484,7 +1539,7 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
     // mid-playback (hiding a note, a theme flip, a text-size change) otherwise
     // drops its wash until the next verse tick. Painted, not follow-scrolled: the
     // scroll below owns where the view lands.
-    if (gPendingReadAlongVerse > 0) {
+    if (gPendingReadAlongVerse != kBTReadAlongNone) {
         NSTextStorage *rts = gTextView.textStorage;
         NSRange rr = btMacReadAlongRange(rts, gPendingReadAlongVerse);
         if (rr.location != NSNotFound && NSMaxRange(rr) <= rts.length) {
@@ -3291,8 +3346,9 @@ func pushNativeTint(state *AppState, verses []Verse, repaint C.int) {
 	C.bibleTextMacSetTintRuns(&c[0], C.int(len(c)), repaint)
 }
 
-// readAlongHighlight tints the verse being narrated (0 clears) and follow-scrolls it
-// into view; readAlongClear removes the tint. Both run on the macOS main thread — the
+// readAlongHighlight tints the row being narrated — Go's three-state int passed
+// through: readAlongNone clears, readAlongTitle is the Psalm's title, n >= 1 is
+// verse n — and follow-scrolls it into view; readAlongClear removes the tint. Both run on the macOS main thread — the
 // audio time-observer's main queue, or the Fyne UI goroutine (which is that thread).
 //
 // When the styled pane is the reading surface (the mimic dev mode) the wash is

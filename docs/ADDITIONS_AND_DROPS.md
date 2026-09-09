@@ -105,7 +105,7 @@ Items the repository states as a deliberate choice, with the substance quoted, f
 | Website link-unfurl preview flattens poem breaks | same "one-line contexts" reasoning | `docs/SOURCE_FIELDS.md` |
 | Bluebook citation apparatus manufactured on partial-verse shares | explicit implementation of Bluebook Rules 5.1–5.3, with a dedicated test suite | `share.go`, `bluebook_test.go` |
 | Sharing omits Psalm titles | "there is no whole-chapter share to attach one to, so this is low priority" | `docs/SOURCE_FIELDS_DECISIONS.md` |
-| TTS does not read Psalm titles | "the work is the read-along model, which has no slot for a title before verse 1. Do it when that model gains one" | `docs/SOURCE_FIELDS_DECISIONS.md` |
+| TTS does not read Psalm titles | resolved: the read-along model gained a verse-0 slot and both speech and the recorded tables use it (`docs/SCRIPTURE_WORKLIST.md`, S18) | `docs/SOURCE_FIELDS_DECISIONS.md` |
 | Footnotes withheld from nine of ten downstream pipelines | "nothing here may ever enter Text, the search index, the share pipeline, spoken audio, or a link ... enforced by construction and pinned by tests" | `bible.go`, `Footnotes` field comment |
 | Omitted-verse orphan notes invisible to search/speech/share/copy/links | "Nothing but the chapter-bottom footnote section reads it ... invisible ... by construction" | `bible.go`, `OrphanFootnotes` field comment |
 | Android "Fyne fallback" reading pane's internal inconsistencies | "genuinely unreachable in what ships ... no feature work, pin the release path" | Decision #22 |

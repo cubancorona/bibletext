@@ -10,9 +10,10 @@ package bibletext
 //     WEB-Catholic's Greek books add a synthetic one. Self-hosting pins the exact
 //     audio bytes the bundled read-along verse timings were aligned against, so
 //     the highlight can never drift out of sync with the recording.
-//   - TTS: on-device text-to-speech of the chapter's own verses. Always available
-//     and always matches the displayed version exactly (the deuterocanon and any
-//     future translation without a recording).
+//   - TTS: on-device text-to-speech of the chapter's own text — a Psalm's title
+//     and then its verses. Always available and always matches the displayed
+//     version exactly (the deuterocanon and any future translation without a
+//     recording).
 //
 // audioForChapter resolves which applies; the reader shows a play icon for recorded
 // audio and a "voice" icon for TTS. The native players (AVPlayer / AVSpeechSynthesizer
@@ -22,6 +23,7 @@ package bibletext
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // audioKind distinguishes a streamed recording from on-device text-to-speech.
@@ -245,49 +247,85 @@ func ttsAudioForChapter(state *AppState) chapterAudio {
 	return chapterAudio{Kind: audioTTS, Text: chapterSpeechText(state), Title: title, Subtitle: sub}
 }
 
-// chapterSpeechText is the plain text fed to TTS: the current chapter's verses in order,
-// joined into flowing prose (no spoken verse numbers), matching what's on screen.
-func chapterSpeechText(state *AppState) string {
-	if state == nil || state.Bible == nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, v := range state.Bible.Verses[state.CurrentBook][state.CurrentChapter] {
-		t := strings.TrimSpace(v.Text)
-		if t == "" {
-			continue
-		}
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(t)
-	}
-	return b.String()
+// speechSegment is one narrated unit of the spoken chapter: the row it belongs
+// to (readAlongTitle for the Psalm's superscription, else the verse number) and
+// its text.
+type speechSegment struct {
+	verse int
+	text  string
 }
 
-// speechVerseOffsets mirrors chapterSpeechText's construction exactly (same trim,
-// same skip-empty, same single-space separator) and returns where each spoken
-// verse STARTS within the utterance — in UTF-16 code units, because that's the
-// unit of the NSRange the speech synthesizer's willSpeakRangeOfSpeechString
-// callback reports against the NSString it was given. Reuses verseTiming with
-// start holding the offset, so the recorded path's verseAtTime lookup works
-// unchanged for TTS read-along.
-func speechVerseOffsets(state *AppState) []verseTiming {
+// speechSegments is the ONE walk both the spoken text and its read-along
+// offsets are derived from — lockstep by construction, where two loops that
+// had to agree used to be held together by a comment. The Psalm's
+// superscription leads, as the verse-0 row, when the chapter has one
+// (SuperscriptionFor is nil-safe at every level, so an untitled chapter yields
+// exactly the verse walk it always did); then every verse with any text,
+// trimmed, in order. The title's NOTES never ride along, like the verses' own.
+func speechSegments(state *AppState) []speechSegment {
 	if state == nil || state.Bible == nil {
 		return nil
 	}
-	var out []verseTiming
-	off := 0
+	var segs []speechSegment
+	if t := speechSentence(state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter).Text); t != "" {
+		segs = append(segs, speechSegment{verse: readAlongTitle, text: t})
+	}
 	for _, v := range state.Bible.Verses[state.CurrentBook][state.CurrentChapter] {
 		t := strings.TrimSpace(v.Text)
 		if t == "" {
 			continue
 		}
+		segs = append(segs, speechSegment{verse: v.Verse, text: t})
+	}
+	return segs
+}
+
+// speechSentence makes a title a sentence of its own, so every synthesizer
+// pauses between it and verse 1 rather than running "A Psalm of David LORD,
+// how many are my foes" together. The BSB and WEB titles already end in a
+// full stop; the NKJV's do not. A closing quote or bracket after the stop is
+// looked through, and any of . ! ? counts as terminated.
+func speechSentence(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	probe := strings.TrimRight(title, "\u201d\u2019\")]")
+	last, _ := utf8.DecodeLastRuneInString(probe)
+	if probe == "" || !strings.ContainsRune(".!?", last) {
+		return title + "."
+	}
+	return title
+}
+
+// chapterSpeechText is the plain text fed to TTS: the current chapter's title
+// (Psalms) and verses in order, joined into flowing prose (no spoken verse
+// numbers), matching what's on screen.
+func chapterSpeechText(state *AppState) string {
+	segs := speechSegments(state)
+	parts := make([]string, len(segs))
+	for i, s := range segs {
+		parts[i] = s.text
+	}
+	return strings.Join(parts, " ")
+}
+
+// speechVerseOffsets returns where each spoken segment STARTS within the
+// utterance — in UTF-16 code units, because that's the unit of the NSRange the
+// speech synthesizer's willSpeakRangeOfSpeechString callback reports against
+// the NSString it was given. Derived from the same speechSegments walk as
+// chapterSpeechText, so the two cannot drift. Reuses verseTiming with start
+// holding the offset, so the recorded path's verseAtTime lookup works
+// unchanged for TTS read-along — and the title is its verse-0 row here too.
+func speechVerseOffsets(state *AppState) []verseTiming {
+	var out []verseTiming
+	off := 0
+	for _, s := range speechSegments(state) {
 		if len(out) > 0 {
 			off++ // the joining space
 		}
-		out = append(out, verseTiming{verse: v.Verse, start: float64(off)})
-		off += utf16Len(t)
+		out = append(out, verseTiming{verse: s.verse, start: float64(off)})
+		off += utf16Len(s.text)
 	}
 	return out
 }

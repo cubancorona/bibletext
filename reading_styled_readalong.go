@@ -1,10 +1,11 @@
 package bibletext
 
-// Read-along for the styled desktop pane: the amber tint over the verse being
-// narrated, the comfort-band follow-scroll, and the floating "Follow narration"
-// pill — the styled twin of the native overlays' read-along (reading_macos.go's
-// bibleTextMacHighlightVerse is the reference behaviour). The audio controller
-// stays the single source of truth; these helpers only paint and scroll.
+// Read-along for the styled desktop pane: the amber tint over the row being
+// narrated — a verse, or the Psalm's title as readAlongTitle — the comfort-band
+// follow-scroll, and the floating "Follow narration" pill — the styled twin of
+// the native overlays' read-along (reading_macos.go's bibleTextMacHighlightVerse
+// is the reference behaviour). The audio controller stays the single source of
+// truth; these helpers only paint and scroll.
 //
 // Untagged so the whole feature runs in the default host test suite. On the
 // native-overlay platforms it is dead code: the readAlong* entry points there
@@ -70,15 +71,19 @@ var styledRAFollowPending bool
 // survive a search jump, and read-along would go inert on Windows and Linux.
 var styledHighlightCeded bool
 
-// styledReadAlongApply tints the narrated verse (0 clears — the recording's
-// intro) and, when follow is set, keeps it inside the comfortable band.
+// styledReadAlongApply tints the narrated row — a verse, or readAlongTitle for
+// the Psalm's title (a chapter without one lights nothing) — and, when follow
+// is set, keeps it inside the comfortable band; readAlongNone clears. The title
+// follows like verse 1 does: an untitled readAlongTitle latches the pending
+// follow briefly, and styledReadAlongFollowScroll clears it before readAlongTop
+// reports nothing, so nothing sticks.
 func styledReadAlongApply(verse int, follow bool) {
 	pane := styledPane
 	if pane == nil {
 		return
 	}
 	pane.setReadAlongVerse(verse)
-	if follow && verse > 0 {
+	if follow && verse >= readAlongTitle {
 		styledRAFollowPending = true
 		styledReadAlongFollowScroll()
 	}
@@ -91,17 +96,18 @@ func styledReadAlongClearTint() {
 	if pane == nil {
 		return
 	}
-	pane.setReadAlongVerse(0)
+	pane.setReadAlongVerse(readAlongNone)
 }
 
-// styledReadAlongFollowScroll moves the narrated verse back into the comfort
-// band: only when its top has drifted above the viewport or below 70% of it,
-// and then to 30% down — the same thresholds as the native overlays, so the
-// text is never yanked on every verse. No-op until the layout has real sizes
-// (styledRAFollowPending stays set and styledColumn.Layout retries).
+// styledReadAlongFollowScroll moves the narrated row (a verse, or the title)
+// back into the comfort band: only when its top has drifted above the viewport
+// or below 70% of it, and then to 30% down — the same thresholds as the native
+// overlays, so the text is never yanked on every verse. No-op until the layout
+// has real sizes (styledRAFollowPending stays set and styledColumn.Layout
+// retries).
 func styledReadAlongFollowScroll() {
 	scroll, pane := styledScroll, styledPane
-	if scroll == nil || pane == nil || pane.raVerse <= 0 {
+	if scroll == nil || pane == nil || pane.raVerse < readAlongTitle {
 		return
 	}
 	// Re-check suspension NOW, on the UI goroutine: the follow decision was
@@ -118,7 +124,7 @@ func styledReadAlongFollowScroll() {
 		return // geometry not settled; the next layout pass retries
 	}
 	styledRAFollowPending = false
-	vTop, ok := pane.yForVerse(pane.raVerse)
+	vTop, ok := pane.readAlongTop()
 	if !ok {
 		return
 	}

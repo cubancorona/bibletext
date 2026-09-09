@@ -336,3 +336,186 @@ func TestStyledAreaReassertsReadAlongForPlayingChapter(t *testing.T) {
 		t.Errorf("a rebuild for the playing chapter must reassert exactly once (fired %d)", fired)
 	}
 }
+
+// --- S18: the Psalm title is the read-along's verse 0 -------------------------
+
+// titledPsalmState is longPsalmState with a superscription. The fixture's
+// chapter is synthetic (the real 119 has no title), which is irrelevant here.
+func titledPsalmState(title string) *AppState {
+	st := longPsalmState()
+	st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {119: {Text: title}}}
+	return st
+}
+
+// The title's wash is the title's own geometry — one rect per title line,
+// exactly the washes table measureStyledSuperscription filled, never a verse
+// span — and it goes with the rest of the narration when the row moves on.
+func TestStyledReadAlongTitleWashIsTheTitleGeometry(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+
+	st := titledPsalmState("A Psalm of David, when he fled from Absalom his son, and a line more so that it wraps.")
+	w := buildStyledAreaWindow(t, st)
+	defer w.Close()
+	pane := styledPane
+	if !pane.superGeom.present || len(pane.superGeom.washes) < 2 {
+		t.Fatalf("fixture must produce a wrapped title (%d washes)", len(pane.superGeom.washes))
+	}
+	if got := styledRARects(t, pane); len(got) != 0 {
+		t.Fatalf("a fresh titled pane opened with %d wash rects lit", len(got))
+	}
+
+	styledReadAlongApply(readAlongTitle, false)
+	rects := styledRARects(t, pane)
+	if len(rects) != len(pane.superGeom.washes) {
+		t.Fatalf("%d wash rects for a %d-line title", len(rects), len(pane.superGeom.washes))
+	}
+	for i, rect := range rects {
+		want := pane.superGeom.washes[i]
+		if rect.Position() != want.pos() || rect.Size() != want.size() {
+			t.Errorf("title wash %d at %v %v, want %v %v", i, rect.Position(), rect.Size(), want.pos(), want.size())
+		}
+		if rect.Position().Y+rect.Size().Height > pane.lay.Lines[0].Y {
+			t.Errorf("title wash %d reaches into verse 1's line", i)
+		}
+	}
+	if len(pane.raSpans) != 0 {
+		t.Errorf("the title lit %d verse spans; it must light none", len(pane.raSpans))
+	}
+
+	// Moving on to verse 1 takes the title's wash off and lights the verse.
+	styledReadAlongApply(1, false)
+	moved := styledRARects(t, pane)
+	if y1, _ := pane.yForVerse(1); len(moved) == 0 || moved[0].Position().Y != y1 {
+		t.Errorf("verse 1's wash is not at verse 1 (%v)", moved)
+	}
+	for _, rect := range moved {
+		if rect.Position().Y < pane.lay.Lines[0].Y {
+			t.Error("a title wash rect is still lit after the narration moved to verse 1")
+		}
+	}
+	styledReadAlongClearTint()
+	if got := styledRARects(t, pane); len(got) != 0 {
+		t.Errorf("clear left %d rects lit", len(got))
+	}
+}
+
+// CONTROL for the wash: a chapter with no title lights nothing at verse 0 and
+// leaves nothing pending — and readAlongNone, not 0, is what clears.
+func TestStyledReadAlongVerseZeroLightsNothingWithoutATitle(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+
+	st := longPsalmState()
+	armControllerReadAlong(t, st)
+	w := buildStyledAreaWindow(t, st)
+	defer w.Close()
+	pane := styledPane
+
+	styledReadAlongApply(3, true)
+	if len(styledRARects(t, pane)) == 0 {
+		t.Fatal("verse 3 must light")
+	}
+	styledReadAlongApply(readAlongTitle, true)
+	if got := styledRARects(t, pane); len(got) != 0 {
+		t.Errorf("verse 0 in an untitled chapter lit %d rects", len(got))
+	}
+	if styledRAFollowPending {
+		t.Error("an untitled verse 0 left a follow pending")
+	}
+	if pane.raVerse != readAlongTitle || pane.raTitleLit() {
+		t.Errorf("raVerse=%d lit=%v; the row is the title, but nothing is lit", pane.raVerse, pane.raTitleLit())
+	}
+	styledReadAlongClearTint()
+	if pane.raVerse != readAlongNone {
+		t.Errorf("clear left raVerse=%d, want readAlongNone", pane.raVerse)
+	}
+}
+
+// A resize between measure and rebuild re-places the wash from the current
+// geometry table: it can never stay where the old title was.
+func TestStyledReadAlongTitleWashFollowsAResize(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+
+	st := titledPsalmState("A Psalm of David, when he fled from Absalom his son, and a line more so that it wraps.")
+	w := buildStyledAreaWindow(t, st)
+	defer w.Close()
+	pane := styledPane
+	styledReadAlongApply(readAlongTitle, false)
+	before := styledRARects(t, pane)
+	if len(before) < 2 {
+		t.Fatalf("fixture must wrap the title (%d rects)", len(before))
+	}
+	beforeW := before[0].Size().Width
+
+	w.Resize(fyne.NewSize(260, 300))
+	after := styledRARects(t, pane)
+	if len(after) != len(pane.superGeom.washes) || len(after) <= len(before) {
+		t.Fatalf("after narrowing: %d rects for %d washes (was %d)", len(after), len(pane.superGeom.washes), len(before))
+	}
+	for i, rect := range after {
+		want := pane.superGeom.washes[i]
+		if rect.Position() != want.pos() || rect.Size() != want.size() {
+			t.Errorf("after the resize, wash %d at %v %v, want %v %v", i, rect.Position(), rect.Size(), want.pos(), want.size())
+		}
+		if rect.Size().Width >= beforeW {
+			t.Errorf("wash %d is %v wide after narrowing to 260 (was %v)", i, rect.Size().Width, beforeW)
+		}
+	}
+}
+
+// The title follows like verse 1 does: from far below, a follow on the title
+// lands the view at the top; and verse 1, inside the band, then does not yank.
+func TestStyledReadAlongFollowScrollsToTheTitle(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	defer resetStyledWiring()
+
+	st := titledPsalmState("A Psalm of David.")
+	armControllerReadAlong(t, st)
+	w := buildStyledAreaWindow(t, st)
+	defer w.Close()
+	pane, scroll := styledPane, styledScroll
+	viewH := scroll.Size().Height
+	if viewH <= 0 {
+		t.Fatal("viewport must have real height")
+	}
+
+	// Park the view far down, then narrate the title.
+	styledReadAlongApply(25, true)
+	if scroll.Offset.Y <= 0 {
+		t.Fatal("verse 25 must have scrolled the view down")
+	}
+	styledReadAlongApply(readAlongTitle, true)
+	if scroll.Offset.Y != 0 {
+		t.Errorf("follow to the title landed at %v, want 0 (the title's top is the page's top)", scroll.Offset.Y)
+	}
+	if top, ok := pane.readAlongTop(); !ok || top != pane.superGeom.rect.Y {
+		t.Errorf("readAlongTop = %v,%v; want the title block's top %v", top, ok, pane.superGeom.rect.Y)
+	}
+	// Verse 1 is inside the band now: no scroll.
+	styledReadAlongApply(1, true)
+	if scroll.Offset.Y != 0 {
+		t.Errorf("verse 1 yanked the view to %v right after the title", scroll.Offset.Y)
+	}
+	// CONTROL: the same follow in an untitled chapter reports nothing to
+	// scroll to and leaves the view alone.
+	resetStyledWiring()
+	st2 := longPsalmState()
+	armControllerReadAlong(t, st2)
+	w2 := buildStyledAreaWindow(t, st2)
+	defer w2.Close()
+	styledReadAlongApply(25, true)
+	parked := styledScroll.Offset.Y
+	styledReadAlongApply(readAlongTitle, true)
+	if styledScroll.Offset.Y != parked {
+		t.Errorf("an untitled verse 0 moved the view %v -> %v", parked, styledScroll.Offset.Y)
+	}
+	if _, ok := styledPane.readAlongTop(); ok {
+		t.Error("readAlongTop reported a top for a title the chapter does not have")
+	}
+}

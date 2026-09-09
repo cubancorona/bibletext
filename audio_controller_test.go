@@ -200,7 +200,7 @@ func TestReadAlongFollowSuspend(t *testing.T) {
 		gAudio.mu.Lock()
 		gAudio.loaded, gAudio.loadedFP, gAudio.loadedRecID = false, "", ""
 		gAudio.kind, gAudio.state = audioRecorded, audioIdle
-		gAudio.readAlong, gAudio.readAlongVerse, gAudio.followSuspended = nil, 0, false
+		gAudio.readAlong, gAudio.readAlongVerse, gAudio.followSuspended = nil, readAlongNone, false
 		gAudio.mu.Unlock()
 	}
 	defer reset()
@@ -316,5 +316,117 @@ func TestAdvanceToNextChapterPreservesSearchContext(t *testing.T) {
 	}
 	if len(state.RecentChapters) == 0 || state.RecentChapters[0].Book != "BookB" || state.RecentChapters[0].Chapter != 1 {
 		t.Errorf("boundary advance must still record history; head = %+v", state.RecentChapters)
+	}
+}
+
+// TestReadAlongTitleTickHighlights pins the title's path through the controller.
+// The controller dedupes ticks against the row it last announced, and that row
+// used to start life as 0 — the value the title now occupies — so a titled
+// psalm's opening tick was swallowed and the title never lit. The none value is
+// readAlongNone, nothing-narrated reaches the surface as an explicit clear, and
+// the follow resume and the reassert re-issue the title like any verse. The
+// calls are recorded through the highlightVerse/clearHighlight seams — the
+// exact calls the shipped controller makes — and the old initial value is forced
+// back in as the control.
+func TestReadAlongTitleTickHighlights(t *testing.T) {
+	type call struct {
+		verse  int
+		follow bool
+	}
+	var calls []call
+	clears := 0
+	highlightVerse = func(v int, follow bool) { calls = append(calls, call{v, follow}) }
+	clearHighlight = func() { clears++ }
+	showFollowButton = func(bool) {}
+	defer func() {
+		highlightVerse, clearHighlight, showFollowButton = readAlongHighlight, readAlongClear, readAlongFollowButton
+	}()
+	defer func() {
+		gAudio.clearReadAlong()
+		gAudio.mu.Lock()
+		gAudio.loaded, gAudio.loadedFP = false, ""
+		gAudio.mu.Unlock()
+	}()
+
+	bd := &BibleData{
+		Books: []string{"Psalms"},
+		Verses: map[string]map[int][]Verse{"Psalms": {3: {
+			{Verse: 1, Text: "LORD, how my foes have increased!"},
+			{Verse: 2, Text: "Many say of me."},
+		}}},
+		Superscriptions: map[string]map[int]Superscription{"Psalms": {3: {Text: "A Psalm of David."}}},
+	}
+	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 3, CurrentVersion: "bsb"}
+	gAudio.armReadAlong(state, chapterAudio{Kind: audioTTS}) // the 0 row comes from speechVerseOffsets, not a hand table
+	offs := speechVerseOffsets(state)
+	if len(offs) != 3 || offs[0].verse != readAlongTitle {
+		t.Fatalf("fixture offsets = %+v, want the title row first", offs)
+	}
+
+	calls = nil
+	gAudio.onSpeechRange(0)
+	if len(calls) != 1 || calls[0] != (call{readAlongTitle, true}) {
+		t.Fatalf("the title's first tick produced %v, want one highlight of the title with follow", calls)
+	}
+	gAudio.onSpeechRange(5) // still inside the title: deduped
+	if len(calls) != 1 {
+		t.Fatalf("a tick inside the title re-announced it: %v", calls)
+	}
+	gAudio.onSpeechRange(int(offs[1].start))
+	if len(calls) != 2 || calls[1] != (call{1, true}) {
+		t.Fatalf("verse 1's tick produced %v, want a highlight of verse 1", calls)
+	}
+
+	// CONTROL: with the old initial value forced back in, the same title tick
+	// is swallowed — the defect the sentinel exists for.
+	gAudio.mu.Lock()
+	gAudio.readAlongVerse = 0
+	gAudio.mu.Unlock()
+	calls = nil
+	gAudio.onSpeechRange(0)
+	if len(calls) != 0 {
+		t.Fatalf("with the last row forced to 0 the title tick still announced %v; the control does not reproduce the swallow", calls)
+	}
+
+	// A seek back before the first row is an explicit clear, never a highlight
+	// of the none value.
+	gAudio.mu.Lock()
+	gAudio.readAlong = []verseTiming{{0, 3, 6}, {1, 6.5, 12}}
+	gAudio.readAlongVerse = 1
+	gAudio.mu.Unlock()
+	calls, clears = nil, 0
+	gAudio.onTimeUpdate(1.0)
+	if clears != 1 || len(calls) != 0 {
+		t.Fatalf("seek before the first row: %d clears, highlights %v; want one clear and no highlight", clears, calls)
+	}
+	gAudio.onTimeUpdate(1.5) // still nothing: deduped against readAlongNone
+	if clears != 1 {
+		t.Fatalf("a second tick in the intro cleared again (%d clears)", clears)
+	}
+
+	// With the title current, the follow resume and the reassert both re-issue
+	// it — formerly skipped by a `v > 0` guard.
+	gAudio.mu.Lock()
+	gAudio.loaded, gAudio.loadedFP = true, chapterAudioFingerprint(state)
+	gAudio.readAlongVerse, gAudio.followSuspended = readAlongTitle, true
+	gAudio.mu.Unlock()
+	calls = nil
+	gAudio.resumeReadAlongFollow()
+	if len(calls) != 1 || calls[0] != (call{readAlongTitle, true}) {
+		t.Fatalf("resume with the title current produced %v, want a highlight of the title", calls)
+	}
+	gAudio.reassertReadAlong()
+	if len(calls) != 2 || calls[1] != (call{readAlongTitle, true}) {
+		t.Fatalf("reassert with the title current produced %v, want a second highlight of the title", calls)
+	}
+	// And with nothing current, neither says anything.
+	gAudio.mu.Lock()
+	gAudio.readAlongVerse, gAudio.followSuspended = readAlongNone, true
+	gAudio.mu.Unlock()
+	calls = nil
+	gAudio.resumeReadAlongFollow()
+	gAudio.reassertReadAlong()
+	if len(calls) != 0 {
+		t.Fatalf("with nothing narrated, resume/reassert highlighted %v", calls)
 	}
 }

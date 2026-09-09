@@ -18,9 +18,10 @@ import (
 // written ONLY in relayout, beside the layout whose TopPad it measured.
 type styledSuperGeom struct {
 	present bool
-	rect    styledNoteRect // the whole title block, for the press guards
-	lines   []styledFnText // positioned lines (Key unused)
-	height  float32        // total advance to reserve, including the gap below
+	rect    styledNoteRect   // the whole title block, for the press guards
+	lines   []styledFnText   // positioned lines (Key unused)
+	washes  []styledNoteRect // one per line: the narration wash, on the lines' own ruler
+	height  float32          // total advance to reserve, including the gap below
 }
 
 // measureStyledSuperscription wraps the title at body size to the layout's
@@ -35,6 +36,10 @@ func measureStyledSuperscription(text string, avail, size, lineH float32, meas f
 	y := float32(0)
 	for _, ln := range styledFnWrap(text, avail, avail, meas) {
 		g.lines = append(g.lines, styledFnText{Text: ln, X: 0, Y: y})
+		// The wash is the line's own box, as wide as the glyphs the SAME meas
+		// wrapped it with — the pixel twin of a verse wash (per line, bounded
+		// to the run). The gap below the title stays unwashed.
+		g.washes = append(g.washes, styledNoteRect{X: 0, Y: y, W: meas(ln), H: lineH})
 		y += lineH
 	}
 	y += lineH * 0.45 // the gap between the title and verse 1
@@ -53,6 +58,10 @@ func (g *styledSuperGeom) place(x, y float32) {
 	for i := range g.lines {
 		g.lines[i].X += x
 		g.lines[i].Y += y
+	}
+	for i := range g.washes {
+		g.washes[i].X += x
+		g.washes[i].Y += y
 	}
 }
 

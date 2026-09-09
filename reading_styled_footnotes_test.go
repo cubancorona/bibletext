@@ -240,6 +240,43 @@ func TestStyledSuperscriptionIsGeometryOnly(t *testing.T) {
 	}
 }
 
+// The title's narration washes mirror its lines exactly: one per line, each
+// the line's box at the width the same measurer wrapped it to, moved with the
+// lines by place(), and never reaching the gap below the title. CONTROLS: a
+// blank title measures to nothing; a one-line title to exactly one wash.
+func TestMeasureStyledSuperscriptionWashesMirrorItsLines(t *testing.T) {
+	meas := func(s string) float32 { return float32(len([]rune(s))) * 6 }
+	g := measureStyledSuperscription("aa bb cc dd ee ff gg hh", 60, 12, 10, meas)
+	if !g.present || len(g.lines) < 2 || len(g.washes) != len(g.lines) {
+		t.Fatalf("present=%v lines=%d washes=%d; want a wrapped title with one wash per line", g.present, len(g.lines), len(g.washes))
+	}
+	for i, w := range g.washes {
+		want := styledNoteRect{X: 0, Y: float32(i) * 10, W: meas(g.lines[i].Text), H: 10}
+		if w != want {
+			t.Errorf("wash %d = %+v, want %+v", i, w, want)
+		}
+		if w.W > 60 {
+			t.Errorf("wash %d is wider than the column", i)
+		}
+	}
+	last := g.washes[len(g.washes)-1]
+	if last.Y+last.H >= g.rect.H || g.rect.H != float32(len(g.lines))*10+4.5 {
+		t.Errorf("the last wash ends at %v in a %v-tall block; the gap below the title must stay unwashed", last.Y+last.H, g.rect.H)
+	}
+	g.place(7, 3)
+	for i, w := range g.washes {
+		if w.X != 7 || w.Y != g.lines[i].Y || w.Y != float32(i)*10+3 {
+			t.Errorf("after place, wash %d at (%v,%v), line at Y=%v", i, w.X, w.Y, g.lines[i].Y)
+		}
+	}
+	if blank := measureStyledSuperscription("   ", 60, 12, 10, meas); blank.present || len(blank.washes) != 0 {
+		t.Errorf("a blank title measured %d washes", len(blank.washes))
+	}
+	if one := measureStyledSuperscription("aa bb", 60, 12, 10, meas); len(one.washes) != 1 || one.washes[0].W != meas("aa bb") || one.washes[0].W >= 60 {
+		t.Errorf("a one-line title measured %+v", one.washes)
+	}
+}
+
 // A superscription note keys as "Title" on this pane too — the shared key
 // helper reaches all three section renderers.
 func TestStyledFootnoteSectionKeysTitleNotes(t *testing.T) {

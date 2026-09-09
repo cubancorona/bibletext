@@ -80,9 +80,11 @@ type audioController struct {
 	// fireChange must therefore stay a no-op (it never reaches fyne.Do).
 	onChange func()
 
-	// Read-along: the loaded chapter's verse timing table (recorded audio only) and
-	// the verse currently highlighted, so a playback-time tick only touches the native
-	// text view when the verse actually changes. Set on start, cleared on stop.
+	// Read-along: the loaded chapter's timing table (recorded audio: seconds;
+	// TTS: UTF-16 offsets) and the row currently highlighted — readAlongNone when
+	// nothing is, readAlongTitle for a Psalm's superscription, n >= 1 for verse n
+	// — so a playback-time tick only touches the reading surface when the row
+	// actually changes. Set on start, cleared on stop.
 	// followSuspended is raised when the reader scrolls away mid-narration: the
 	// highlight keeps tracking the voice, but auto-scroll stops fighting them until
 	// they tap the floating "Follow narration" button (resumeReadAlongFollow).
@@ -98,6 +100,18 @@ var gAudio = &audioController{state: audioIdle}
 // (not a direct call) so TestReadAlongFollowSuspend can record the pill
 // transitions the shipped UI actually performs; production never swaps it.
 var showFollowButton = readAlongFollowButton
+
+// highlightVerse / clearHighlight are the two things the controller ever says
+// to the reading surface about narration: light this row (with or without the
+// follow-scroll), or light nothing. Indirections for the same reason as
+// showFollowButton — the controller tests record the calls the shipped
+// controller actually makes; production never swaps them. Nothing narrated is
+// ALWAYS the explicit clear, never a magic row number, which is what frees
+// verse 0 for the title.
+var (
+	highlightVerse = readAlongHighlight
+	clearHighlight = readAlongClear
+)
 
 // playPauseCurrent is the play button's tap handler — the ONLY thing that starts
 // audio. If the chapter is already loaded it toggles play/pause; otherwise it
@@ -315,10 +329,10 @@ func (c *audioController) armReadAlong(state *AppState, a chapterAudio) {
 	}
 	c.mu.Lock()
 	c.readAlong = vs
-	c.readAlongVerse = 0
+	c.readAlongVerse = readAlongNone
 	c.followSuspended = false
 	c.mu.Unlock()
-	readAlongClear()
+	clearHighlight()
 	showFollowButton(false) // a fresh chapter always starts out following
 }
 
@@ -327,12 +341,12 @@ func (c *audioController) clearReadAlong() {
 	c.mu.Lock()
 	had := c.readAlong != nil
 	c.readAlong = nil
-	c.readAlongVerse = 0
+	c.readAlongVerse = readAlongNone
 	c.followSuspended = false
 	c.mu.Unlock()
 	raDebug("clearReadAlong had=%v", had)
 	if had {
-		readAlongClear()
+		clearHighlight()
 	}
 	showFollowButton(false) // nothing to follow → no way-back button
 }
@@ -340,7 +354,8 @@ func (c *audioController) clearReadAlong() {
 // onTimeUpdate is posted from the native player's periodic time observer (recorded
 // audio) with the current playback position. It runs on the native main thread, so it
 // may call the native highlight directly. Only touches the text view when the narrated
-// verse actually changes.
+// row actually changes — and says "nothing" as an explicit clear (a seek back
+// before the first row), never as a highlight of the none value.
 func (c *audioController) onTimeUpdate(t float64) {
 	c.mu.Lock()
 	vs := c.readAlong
@@ -360,7 +375,11 @@ func (c *audioController) onTimeUpdate(t float64) {
 	c.mu.Lock()
 	c.readAlongVerse = v
 	c.mu.Unlock()
-	readAlongHighlight(v, follow)
+	if v == readAlongNone {
+		clearHighlight()
+		return
+	}
+	highlightVerse(v, follow)
 }
 
 // onReadAlongUserScroll is posted from the native reading views when the READER
@@ -415,8 +434,8 @@ func (c *audioController) resumeReadAlongFollow() {
 	c.followSuspended = false
 	v := c.readAlongVerse
 	c.mu.Unlock()
-	if v > 0 {
-		readAlongHighlight(v, true)
+	if v != readAlongNone {
+		highlightVerse(v, true)
 	}
 	showFollowButton(false) // way back taken — drop the button
 }
@@ -440,8 +459,8 @@ func (c *audioController) reassertReadAlong() {
 	if !armed {
 		return
 	}
-	if v > 0 {
-		readAlongHighlight(v, !suspended)
+	if v != readAlongNone {
+		highlightVerse(v, !suspended)
 	}
 	showFollowButton(suspended) // restore the "Follow narration" pill if it was up
 }

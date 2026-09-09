@@ -144,7 +144,7 @@ edition to download the text again.
 | 13 | website: Psalm titles | WEB, WEBC, BSB | every title | ship | S | none | high |
 | 14 | website: footnote section | WEB, WEBC, BSB | the whole apparatus | defer, needs a presentation model | M | none | medium |
 | 15 | search does not index titles | all | "Absalom" finds nothing | index titles | S | none | medium-high |
-| 16 | speech does not read titles | all | the title before verse 1 | do it after the read-along model allows it | M | none | medium |
+| 16 | speech does not read titles | all | the title before verse 1 | done: speech reads the title as the read-along's verse-0 row, and the recorded tables carry the row (S18) | M | none | medium |
 | 17 | share omits titles | all | the title with a shared psalm | low priority, no hook exists | — | — | medium |
 | 18 | copy omits titles | Apple | nothing on native panes | no change | — | — | high |
 | 19 | poem breaks in the Android long-press menu | Android fallback | line structure | match its own chapter copy | XS | none | medium |
@@ -504,9 +504,11 @@ disclosed without scripting. Ship the titles, defer the section.
 the pipeline where the omission most reads as a loss, and the fix is confined
 to the index plus a decision about where a title hit opens. **Index them.**
 
-**Speech** does not read titles. The text change is trivial; the work is the
-read-along model, which has no slot for a title before verse 1. Do it when
-that model gains one.
+**Speech** reads titles (S18). The read-along model's rows are verse 0 for
+the title and n ≥ 1 for verse n, with a negative sentinel for nothing
+narrated; the spoken text leads with the title as a sentence of its own, and
+the recorded tables were re-aligned with the title in the transcript. Every
+pane paints verse 0 as the title, and nothing in a chapter without one.
 
 **Sharing** omits titles, and there is no whole-chapter share to attach one
 to, so this is low priority.
