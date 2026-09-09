@@ -122,6 +122,7 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	b.WriteString(`<article class="text">`)
 	b.WriteString(chapterBody(v.bible, v.ID, book, chapter, verses))
 	b.WriteString(`</article>`)
+	b.WriteString(chapterNotes(v.bible, book, chapter, verses))
 
 	// Prev/next keep the reader moving without going back to an index.
 	b.WriteString(`<nav class="pager">`)
@@ -412,4 +413,39 @@ func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 	page = strings.ReplaceAll(page, `href="assets/`, `href="/assets/`)
 	page = strings.ReplaceAll(page, `src="assets/`, `src="/assets/`)
 	return site.write("404.html", page)
+}
+
+// chapterNotes writes the chapter's footnote section — the translators' own
+// wording-and-manuscript notes, the ones explaining a verse the translation
+// omits, and any riding on a psalm's title.
+//
+// ALWAYS VISIBLE, not a disclosure. The site has no settings and no scripting,
+// so there is no toggle to honour and nothing to remember a choice in; a
+// <details> would ask every reader to discover the apparatus for themselves on
+// every page. The app shows the section to a reader who has asked for it, and
+// the page's answer to "who asked for it" is that a reader who scrolled past
+// the end of the chapter did.
+//
+// It sits OUTSIDE </article>, which is deliberate: the article is the scripture,
+// and the apparatus is about it. Nothing here can reach a verse.
+//
+// Ordering, keying and the cross-reference exclusion all come from
+// bibletext.ChapterFootnoteEntries rather than being worked out again here, so
+// the page cannot drift from the app. That exclusion is why the NKJV
+// contributes nothing — its entire apparatus is cross-references — and it would
+// contribute nothing anyway, since a licensed chapter has no page here at all
+// (notice.go, which never calls chapterBody).
+func chapterNotes(bd *bibletext.BibleData, book string, chapter int, verses []bibletext.Verse) string {
+	entries := bibletext.ChapterFootnoteEntries(bd, book, chapter, verses)
+	if len(entries) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(`<aside class="notes"><h2>Notes</h2><dl>`)
+	for _, e := range entries {
+		fmt.Fprintf(&b, `<dt>%s</dt><dd>%s</dd>`,
+			template.HTMLEscapeString(e.Key), template.HTMLEscapeString(e.Text))
+	}
+	b.WriteString(`</dl></aside>`)
+	return b.String()
 }

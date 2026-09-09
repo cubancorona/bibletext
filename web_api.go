@@ -194,3 +194,41 @@ func WebNotePillLabel() string { return stickerPillWho(1, 0) }
 // WebNoteArrivalLeadPx is the shared arrival lead (noteMetrics().Lead): how
 // far below the top of the viewport an arrival places its target.
 func WebNoteArrivalLeadPx() int { return int(noteMetrics().Lead) }
+
+// FootnoteEntry is one row of a chapter's footnote section: the key it is filed
+// under and the translators' words.
+type FootnoteEntry struct {
+	// Key is "Title" for a superscription's note and the verse number
+	// otherwise — the same string every in-app renderer prints.
+	Key  string
+	Text string
+}
+
+// ChapterFootnoteEntries is the chapter's apparatus in the order the app shows
+// it: title notes first, then verse notes in verse order, with an omitted
+// verse's note sorted into its natural place between its neighbours.
+//
+// Exported as a WHOLE ROW rather than as its parts so the website cannot
+// re-derive the ordering, the key or the cross-reference exclusion and drift
+// away from the app. In particular the exclusion is not cosmetic: the NKJV's
+// entire apparatus is cross-references, and whether they display at all is an
+// open licensing question (docs/SCRIPTURE_WORKLIST.md S20).
+func ChapterFootnoteEntries(bd *BibleData, book string, chapter int, verses []Verse) []FootnoteEntry {
+	if bd == nil {
+		return nil
+	}
+	var orphans []OrphanFootnote
+	if bd.OrphanFootnotes != nil {
+		orphans = bd.OrphanFootnotes[book][chapter]
+	}
+	titleNotes := bd.SuperscriptionFor(book, chapter).Footnotes
+	inner := chapterFootnoteEntries(verses, orphans, titleNotes)
+	if len(inner) == 0 {
+		return nil
+	}
+	out := make([]FootnoteEntry, 0, len(inner))
+	for _, e := range inner {
+		out = append(out, FootnoteEntry{Key: footnoteEntryKey(e), Text: e.Text})
+	}
+	return out
+}

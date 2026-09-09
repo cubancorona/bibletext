@@ -359,6 +359,19 @@ body{
    oblique — accepted, because the alternative is a fifth hashed font asset for
    one line per psalm. */
 .text p.pst{font-style:italic; text-indent:0; margin:0 0 calc(.45em * __LEADING__)}
+/* THE FOOTNOTE SECTION. The translators' apparatus, after the chapter and
+   outside the article, because the article is the scripture and this is about
+   it. Set smaller and muted so it reads as an appendix rather than as more
+   verse: a reader scrolling for the next chapter passes it, and a reader who
+   wants it has it without a control the site has no way to remember.
+   The key column is the verse number the note belongs to, or "Title". */
+.notes{margin:2.2rem 0 0; padding-top:1.1rem; border-top:1px solid var(--border);
+  font-size:.86em; color:var(--muted)}
+.notes h2{font-size:.86em; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 .7rem}
+.notes dl{margin:0; display:grid; grid-template-columns:2.4em 1fr; gap:.34rem .7rem}
+.notes dt{font-variant-numeric:tabular-nums; text-align:right; opacity:.75}
+.notes dd{margin:0}
 /* The app's verse number: sup.v — 0.66em, weight 600, no tracking, 2px of air
    after it. The raise is left to the browser's own <sup> handling, damped so a
    superscript cannot open up the line it sits on. */

@@ -446,7 +446,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S18 | speech reads the Psalm title | all | M | none | todo |
 | S19 | mark an omitted verse's gap in the text | all | M | none | todo |
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |
-| S21 | website renders the footnote section | website | M | none | todo |
+| S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
 
@@ -539,12 +539,31 @@ unless footnotes are on, in 34 places across the corpus. Mark the gap only
 when footnotes are already on, which extends a decision already taken and
 keeps the page identical when they are off.
 
-**S21.** The website renders no footnote section, so the whole apparatus is
-absent from the pages: notes, omitted-verse orphans and title notes. The data
-fields are already exported; what is missing is a presentation model, because
-the site has no settings and therefore no toggle, so the section would have
-to be always visible or disclosed without scripting. Decide that first. Ships
-after S10, which is the same renderer.
+**S21. DONE.** The apparatus is on the pages: the translators' wording and
+manuscript notes, the ones explaining a verse the translation omits, and any
+riding on a psalm's title. BSB 1,091 pages, WEB Catholic 664, WEB 570.
+
+**Always visible, not a disclosure.** The site has no settings and no
+scripting, so there is no toggle to honour and nothing to remember a choice in;
+a `<details>` would ask every reader to discover the apparatus for themselves on
+every page. The app shows the section to a reader who asked for it, and the
+page's answer to "who asked" is that a reader who scrolled past the end of the
+chapter did. It is set smaller and muted so it reads as an appendix rather than
+as more verse.
+
+It sits OUTSIDE `</article>`, deliberately: the article is the scripture and the
+apparatus is about it. A test pins that nothing from it reaches the chapter body.
+
+Ordering, the key and the cross-reference exclusion all come from one exported
+row — `bibletext.ChapterFootnoteEntries` — rather than being worked out again in
+the generator, so the page cannot drift from the app.
+
+**The NKJV contributes nothing, for two independent reasons**, which is why
+"all editions" needed no licensing decision. Its entire apparatus is cross
+references and the section excludes those (S20, still blocked); and a licensed
+chapter has no page here at all — `/nkjv/` is a notice page that never calls
+`chapterBody`. Measured on the generated site: 0 NKJV pages carry a notes
+section.
 
 **S22.** In-text footnote markers, the superscript caller at each note's
 anchor. The data has been carried since the apparatus landed: every note
