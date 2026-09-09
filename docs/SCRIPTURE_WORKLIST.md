@@ -349,21 +349,63 @@ is still unknown and still five calls away.
 
 | id | item | area | effort | epoch | status |
 |---|---|---|---|---|---|
-| S10 | website renders Psalm titles | website | S | none | todo |
-| S11 | search indexes Psalm titles | search | S | none | todo |
+| S10 | website renders Psalm titles | website | S | none | done |
+| S11 | search indexes Psalm titles | search | S | none | done |
 | S12 | regenerate the offline seed from the current decoder | seed | S | none | done |
-| S13 | Android long-press copy keeps poem lines | Android fallback | XS | none | todo |
+| S13 | Android long-press copy keeps poem lines | Android fallback | XS | none | done |
 
-**S10.** The site renders verses and the publisher's section headings, and
-nothing else beside them. The accessor is already exported, so
-this is an italic line ahead of the verse loop and one style rule. No URL
-changes, so the frozen contract is untouched. Decide at the same time whether
-a title should lead a psalm's link preview.
+**S10. DONE.** An italic unnumbered `p.pst` ahead of the block loop, one style
+rule, and two adjacent-sibling selectors. 116 titled psalms on each of the WEB,
+WEBC and BSB; none outside the Psalter; Psalm 119 correctly has no title and 22
+acrostic headings instead. No URL changes and no new files, so the frozen
+contract and publish-site.sh's page counts are untouched.
 
-**S11.** A search for "Absalom" does not find Psalm 3, because the index is
-built from verse text alone. Index the titles, keyed so a hit opens
-somewhere sensible, and decide whether a title hit is labelled as such in the
-results.
+Two things worth recording. The existing chapterBody golden survives byte for
+byte because it is called with a nil BibleData, which yields an empty title and
+skips the line — that nil-safety is what made this a safe change rather than a
+golden rewrite. And putting a first child into `.text` silently broke two
+`:first-child` rules: the first verse would have gained a reporter indent and a
+note chip on verse 1 would have lost its margin, so both selectors name the
+title case now.
+
+**The link preview does NOT lead with the title.** WEB titles run to 224
+characters (Psalm 60) and 211 (Psalm 18) against a ~200-character preview cap,
+so a shared link to those psalms would unfurl with nothing but musical
+directions and ascription and no scripture at all. About ten psalms would be
+degraded to buy a small gain on the other hundred-odd, and the preview is the
+one place the words have to do the work. `og:title` already carries the citation.
+
+**Still open, and now visible on every BSB psalm page:** the title is drawn
+ABOVE the publisher's section heading, while the feed sends heading, then
+subtitle, then verse 1. All four app panes already draw the title first, so the
+site is propagating an existing decision rather than inventing one — but it is a
+decision nobody took deliberately. Fixing it means teaching the shared block
+model about the title, which is S16-sized: the styled pane draws the title as
+reserved geometry rather than as a block.
+
+**S11. DONE.** A title hit is keyed to its CHAPTER at verse 0 — the key
+`footnoteEntryKey` already uses for a superscription's notes — and carries NO
+text on the Verse. That is the load-bearing part: a Verse whose Text held a
+title could be shared, copied or sent to an assistant as though a translator had
+written it as a verse, and the whole reason titles live outside `Verse.Text` is
+that they must never be mistaken for one. The card reads the title back to draw
+it.
+
+Opening one needed no change: `openSearchResultRange` already guards its
+highlight with `if verse.Verse > 0`, so a title hit opens the psalm at the top,
+which is where the title is.
+
+**A title hit is labelled** — a muted "Title" beside the reference, the shape
+notes_browse.go already uses for a fact about which passage a row is. Without it
+a row whose reference carries no verse number reads as a rendering fault, and
+the "N matches" count silently includes rows that are not verses.
+
+**Section and acrostic headings stay OUT.** The Berean carries 3,091 section
+headings against 116 titles and the World English carries none at all, so
+heading search would exist on two editions of four and change shape with the
+version picker. The heading vocabulary is also the verse vocabulary — 161 BSB
+headings contain "Jesus", 145 "God", 119 "Israel" — so those rows would compete
+with the verses they name for the result cap.
 
 **S12.** DONE. The embedded seed was the four Gospels with no poem breaks, no
 notes and no paragraphing — a snapshot of a decoder several changes old, shown
@@ -373,9 +415,25 @@ carry the translators' notes and 1,409 open a publisher's paragraph, against
 none of each before. `scripts/gen-seed-gospels.py` rebuilds it, `seed.go` says
 when to, and `seed_content_test.go` fails if it drifts back.
 
-**S13.** In the Android fallback pane's long-press menu, copying the chapter
-keeps poem lines while copying a verse or a paragraph flattens them, with no
-stated reason. Make them agree.
+**S13. DONE**, in the direction that had a reason behind it. `chapterCopyText`
+kept the authored poem lines and said why — a chapter copy is a plain-text
+export, and poetry copying as poetry is the cited-text share's own principle —
+while the verse and paragraph paths flattened with `ReplaceAll(v.Text, "\n", " ")`
+and no reason anywhere. They keep the lines now.
+
+Prose is unchanged: a paragraph carrying ANY authored break is poetry and its
+verses join with a newline, otherwise they still join with a space. A rule that
+made everything poetry would be as wrong as the one that made everything prose.
+
+"Copy verse with reference" also gained the share layout's shape — a BLANK line
+before the reference rather than a dash on the same line. `composeShareText`
+explains why that blank line is load-bearing: a poetic quote already contains
+single breaks, so a citation on a bare next line reads as one more poem line.
+
+The rule moved OUT of `reading_mobile.go` (`//go:build android`) into an
+untagged `copy_text.go`, because nothing on the host or in CI could compile a
+test against it where it was. A decision about whether the translators' line
+breaks survive a copy is too easy to get wrong to leave where no test can reach.
 
 ## Stage 4 — the larger questions
 

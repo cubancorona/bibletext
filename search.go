@@ -465,20 +465,49 @@ func buildSearchModeControls(state *AppState, onSelect func(mode searchMode)) fy
 }
 
 func searchResultRow(state *AppState, verse Verse, terms []string, pal palette) fyne.CanvasObject {
-	ref := canvas.NewText(fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse), pal.Accent)
+	// A verse 0 result is the psalm's TITLE, not a verse: the search index
+	// keys a title hit to its chapter and carries no text on the Verse, so the
+	// row reads the title back here. Everything else about the card is the
+	// same, which is the point — a title hit is a passage hit.
+	title := ""
+	if verse.Verse == 0 && state != nil {
+		title = strings.TrimSpace(state.Bible.SuperscriptionFor(verse.BookName, verse.Chapter).Text)
+	}
+
+	refText := fmt.Sprintf("%s %d:%d", verse.BookName, verse.Chapter, verse.Verse)
+	if title != "" {
+		refText = fmt.Sprintf("%s %d", verse.BookName, verse.Chapter)
+	}
+	ref := canvas.NewText(refText, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 18
 
+	// The tag says WHICH PASSAGE this is, beside the reference rather than
+	// under it, so it reads as one heading instead of a second line making a
+	// second claim (the shape notes_browse.go already uses). Without it a row
+	// whose reference carries no verse number reads as a rendering fault, and
+	// the "N matches" count silently includes rows that are not verses.
+	var head fyne.CanvasObject = ref
+	if title != "" {
+		tag := canvas.NewText("Title", pal.TextMuted)
+		tag.TextSize = 12
+		head = container.NewHBox(ref, tag)
+	}
+
 	// Cards are one-snippet UI: flatten authored poem lines here (the reading
 	// pane and text shares keep them — this is presentation, not content).
-	cardText := strings.Join(strings.Fields(verse.Text), " ")
+	body := verse.Text
+	if title != "" {
+		body = title
+	}
+	cardText := strings.Join(strings.Fields(body), " ")
 	segs := termHighlightSegments(cardText, terms, colorNameVerseText, colorNameHighlightHi)
 	text := widget.NewRichText(segs...)
 	text.Wrapping = fyne.TextWrapWord
 
 	// The whole card is one tap target — reference, verse text, and surrounding
 	// padding — not just the reference heading.
-	inner := container.NewPadded(container.NewVBox(ref, text))
+	inner := container.NewPadded(container.NewVBox(head, text))
 	card := newSearchResultCard(state, verse, inner, pal)
 
 	return container.NewVBox(card, widget.NewSeparator())

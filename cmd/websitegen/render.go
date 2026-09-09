@@ -166,6 +166,20 @@ func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, v
 		return ""
 	}
 	var b strings.Builder
+	// The psalm's own title, above everything, exactly as all four app panes set
+	// it. It is Scripture's title for the psalm rather than a section heading,
+	// so it is unnumbered and italic and never enters a verse — the separation
+	// BibleData keeps between Superscriptions and Verse.Text is the whole
+	// reason it can be drawn here at all.
+	//
+	// Only the Psalter has these, and after the acrostic lift Psalm 119 has
+	// none: its ALEPH is a stanza heading now, so this simply does not fire
+	// there. A nil BibleData yields an empty title and skips the line, which is
+	// what keeps the existing chapterBody golden (chapter_tint_test.go) byte
+	// identical.
+	if title := strings.TrimSpace(bd.SuperscriptionFor(book, chapter).Text); title != "" {
+		fmt.Fprintf(&b, `<p class="pst">%s</p>`, template.HTMLEscapeString(title))
+	}
 	// Paragraphs come from the APP's rule, not a web-specific one, so the page
 	// breaks where the reading pane breaks. A paragraph that OPENS with a poetic
 	// verse is marked .pm: the app skips its reporter indent and sets it ragged

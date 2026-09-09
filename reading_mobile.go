@@ -195,7 +195,11 @@ func (s *selectableParagraph) showMenu(at fyne.Position) {
 	cnv := s.state.window.Canvas()
 	v := s.touchedVerse()
 	verseRef := fmt.Sprintf("%s %d:%d", v.BookName, v.Chapter, v.Verse)
-	verseBody := strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " "))
+	// Poetry copies as poetry. Copying a chapter has always kept the authored
+	// line breaks (chapterCopyText) and so has the cited-text share, and there
+	// was never a reason for a verse or a paragraph to be the exception —
+	// flattening them silently turned a couplet into a run-on sentence.
+	verseBody := strings.TrimSpace(v.Text)
 
 	paraText := s.plainText()
 	paraRef := fmt.Sprintf("%s %d:%d-%d",
@@ -214,7 +218,7 @@ func (s *selectableParagraph) showMenu(at fyne.Position) {
 
 	menu := fyne.NewMenu("",
 		fyne.NewMenuItem("Copy verse ("+verseRef+")", func() { set(verseBody) }),
-		fyne.NewMenuItem("Copy verse with reference", func() { set(verseBody + " — " + verseRef) }),
+		fyne.NewMenuItem("Copy verse with reference", func() { set(citedCopy(verseBody, verseRef)) }),
 		fyne.NewMenuItem("Copy paragraph ("+paraRef+")", func() { set(paraText) }),
 		fyne.NewMenuItem("Copy chapter", func() { copyChapter(s.state) }),
 		fyne.NewMenuItem("Look up", func() { openLookup(verseRef + " " + verseBody) }),
@@ -223,18 +227,10 @@ func (s *selectableParagraph) showMenu(at fyne.Position) {
 	widget.ShowPopUpMenuAtPosition(menu, cnv, at)
 }
 
-// plainText returns the paragraph's verses joined as one space-separated
-// string, with superscript verse numbers stripped — i.e. the clean text the
-// user expects when they "Copy paragraph".
+// plainText is the paragraph's copy text; the rule lives in copy_text.go so a
+// host test can reach it.
 func (s *selectableParagraph) plainText() string {
-	var b strings.Builder
-	for i, v := range s.verses {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(strings.TrimSpace(strings.ReplaceAll(v.Text, "\n", " ")))
-	}
-	return b.String()
+	return paragraphCopyText(s.verses)
 }
 
 // openLookup pops Safari with a search for the query. Native dictionary

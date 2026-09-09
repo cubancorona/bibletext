@@ -616,6 +616,46 @@ func (bd *BibleData) SearchSmartLimited(query string, limit int) ([]Verse, bool)
 		}
 		for _, chapter := range bd.GetChapterNumbersForBook(book) {
 			verses := chapters[chapter]
+			// The psalm's own title is searchable, and was not: the index was
+			// built from verse text alone, so "Absalom" did not find Psalm 3
+			// even though the psalm says so in its own first line. A title is
+			// Scripture, and a reader looking for its words is looking for
+			// that psalm.
+			//
+			// A title hit is keyed to the CHAPTER, at verse 0 — the key
+			// footnoteEntryKey already uses for a superscription's notes — and
+			// carries NO text of its own. That is deliberate: a Verse whose
+			// Text held a title could be shared, copied or sent to an
+			// assistant as though a translator had written it as a verse, and
+			// the whole reason titles live outside Verse.Text is that they
+			// must never be mistaken for one. The card looks the title up.
+			if title := strings.ToLower(strings.TrimSpace(bd.SuperscriptionFor(book, chapter).Text)); title != "" {
+				titleRef := strings.ToLower(fmt.Sprintf("%s %d", book, chapter))
+				all, score := true, 0
+				for _, term := range terms {
+					inTitle := strings.Contains(title, term)
+					inRef := strings.Contains(titleRef, term)
+					if !inTitle && !inRef {
+						all = false
+						break
+					}
+					if inRef {
+						score += 3
+					}
+					if inTitle {
+						score++
+					}
+				}
+				if all {
+					if strings.Contains(title, phrase) || strings.Contains(titleRef, phrase) {
+						score += 5
+					}
+					matches = append(matches, scoredVerse{
+						verse: Verse{BookName: book, Book: book, Chapter: chapter, Verse: 0},
+						score: score,
+					})
+				}
+			}
 			for _, verse := range verses {
 				text := searchText(verse)
 				ref := refText(verse)
