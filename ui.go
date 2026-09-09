@@ -38,7 +38,9 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 
 	// The subtitle doubles as the translation switcher (WEB / BSB / NKJV), with a
 	// TESTING badge when a version is showing placeholder text (see versions.go).
-	left := container.NewVBox(titleRow, versionSelector(state))
+	// The title and the version line read as one two-line block, so they sit
+	// tight against each other rather than a padding apart.
+	left := container.New(layout.NewCustomPaddedVBoxLayout(0), titleRow, versionSelector(state))
 
 	// Retained hook for the former regular iPad layout. The current classifier
 	// never selects it; shared mobile navigation is built by buildCompactUI.
@@ -71,15 +73,22 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	rule.StrokeWidth = 1
 
 	bg := canvas.NewRectangle(pal.SurfaceAlt)
-	// Tight, OPTICALLY-balanced top/bottom padding keeps the app header compact (more
-	// screen for reading) without the band going bottom-heavy. The rule is stacked
-	// with a ZERO inter-element gap: a plain VBox(row, rule) inserts a full
-	// theme.Padding() (~7pt) between the row and the rule, which pooled empty band
-	// under the version line while "BibleText" sat almost flush to the top. We give a
-	// little MORE headroom above the title than below the version line (≈12 vs ≈8pt):
-	// the title is large and bold and the version line small and muted, so equal
-	// numeric margins read as bottom-heavy — biasing the top evens them out by eye.
-	rowWrap := container.New(layout.NewCustomPaddedLayout(9, 2, theme.Padding(), theme.Padding()), row)
+	// SYMMETRIC top/bottom padding, and tight, because this band is chrome above
+	// the reading text and should take as little of the screen as it can.
+	//
+	// It used to be 9 above and 2 below, deliberately: the argument was that the
+	// title is large and bold while the version line is small and muted, so equal
+	// numeric margins read as bottom-heavy and biasing the top evens them by eye.
+	// That argument holds for the title column alone. It breaks once the "Go to"
+	// chip is in the same band — a bounded shape with two crisp horizontal edges
+	// makes the bias legible as an error rather than reading as balance, and
+	// measured on a phone the chip sat 24.3pt below the band's top edge and only
+	// 16.7pt above its bottom. Judged on screenshots, not in the abstract.
+	//
+	// The rule is still stacked with a ZERO inter-element gap: a plain
+	// VBox(row, rule) inserts a full theme.Padding() (~7pt) between the row and
+	// the rule, which pooled empty band under the version line.
+	rowWrap := container.New(layout.NewCustomPaddedLayout(3, 3, theme.Padding(), theme.Padding()), row)
 	content := container.New(layout.NewCustomPaddedVBoxLayout(0), rowWrap, rule)
 	return container.NewStack(bg, content)
 }
