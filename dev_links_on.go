@@ -20,6 +20,7 @@ package bibletext
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -344,7 +345,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		if notesEnabled() {
 			on = "on"
 		}
-		status.Text = "Notes are " + on + " · " + itoa(storedNoteCount(appPrefs())) + " stored"
+		status.Text = "Notes are " + on + " · " + strconv.Itoa(storedNoteCount(appPrefs())) + " stored"
 		status.Refresh()
 	}
 	refreshStatus()
@@ -575,26 +576,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 // shortenForDev keeps a long note payload from turning the row into a wall.
 func shortenForDev(u string) string {
 	if i := strings.Index(u, "&n="); i >= 0 && len(u) > i+22 {
-		return u[:i+14] + "…(" + itoa(len(u)-i-3) + " chars)"
+		return u[:i+14] + "…(" + strconv.Itoa(len(u)-i-3) + " chars)"
 	}
 	return u
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	if neg {
-		return "-" + string(b)
-	}
-	return string(b)
 }
