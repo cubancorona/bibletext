@@ -16,6 +16,19 @@ Three corpora:
                    --version webc --out-dir timings-webbe
 
     [--shard i/N] [--limit N] [--book "John"]
+
+The Psalm titles. A titled psalm's transcript leads with a verse-0 row (see
+extract_transcript.py), so its chapter aligns to a title row ahead of verse 1.
+To bring a table built before the titles up to date, re-align the Psalms into a
+FRESH out-dir (the run resumes by output existence, so the old dir would skip
+every chapter), then copy the chapter files over the old ones and rebuild the
+asset with its counts named:
+    for i in 0 1 2 3; do BIBLETEXT_ALIGN_DEVICE=cpu BIBLETEXT_ALIGN_THREADS=3 \
+      batch_align.py --book Psalms --out-dir timings-psalms-bsb --shard $i/4 & done; wait
+    cp timings-psalms-bsb/Psalms_*.json timings/
+    make_timings_asset.py --timings timings --out ../../assets/timings/bsb.json --chapters 1189 --titles 116
+A title the narrator skipped comes out as a sliver the aligner crammed the
+title's words into; such chapters are logged TITLE-SUSPECT and marked not-ok.
 """
 import argparse
 import json
@@ -27,6 +40,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import align_chapter as A  # noqa: E402
 from extract_transcript import APP_BOOKS  # noqa: E402
+from timing_rows import title_pace_ok  # noqa: E402
 
 DATA = A.DATA
 FAIL_LOG = os.path.join(DATA, "align_failures.log")
@@ -128,10 +142,15 @@ def main():
             vs = slim["verses"]
             mono = all(vs[j]["start"] <= vs[j + 1]["start"] for j in range(len(vs) - 1))
             cover = vs[-1]["end"] / slim["duration"] if vs else 0
-            slim["ok"] = bool(mono and cover > 0.85)
+            title_words = res["_word_verse"].count(0)
+            pace_ok = title_pace_ok(vs, title_words)
+            slim["ok"] = bool(mono and cover > 0.85 and pace_ok)
             json.dump(slim, open(outp(book, ch), "w"))
-            if not slim["ok"]:
+            if not (mono and cover > 0.85):
                 open(FAIL_LOG, "a").write(f"SUSPECT {ver} {book} {ch}: monotonic={mono} coverage={cover:.2f}\n")
+            if not pace_ok:
+                open(FAIL_LOG, "a").write(f"TITLE-SUSPECT {ver} {book} {ch}: title span "
+                                          f"{vs[0]['end'] - vs[0]['start']:.2f}s for {title_words} words\n")
         except Exception as e:  # noqa: BLE001
             fails += 1
             open(FAIL_LOG, "a").write(f"ERROR {ver} {book} {ch}: {e!r}\n")

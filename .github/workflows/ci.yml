@@ -26,6 +26,7 @@ jobs:
           scripts/check-product-identity.py
           scripts/check-mac-store-config.py
           scripts/check-min-os-versions.py
+          python3 -m unittest discover -s scripts/audio-align -p 'test_*.py'
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..HEAD"
           else

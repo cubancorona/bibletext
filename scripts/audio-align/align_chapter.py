@@ -17,6 +17,9 @@ import sys
 import torch
 import torchaudio
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from timing_rows import rollup_verses  # noqa: E402
+
 DATA = os.environ.get("BIBLETEXT_AUDIO_DATA", os.path.expanduser("~/Dev/bibletext-audiodata"))
 # Model forward runs on this device (MPS gives a nice speedup on Apple Silicon);
 # the CTC forced_align op itself is CPU-only, so emission is moved to CPU before it.
@@ -110,19 +113,13 @@ def align_chapter(book, chapter, transcript, manifest, ver="bsb"):
     for spans in token_spans:
         word_times.append((secs(spans[0].start), secs(spans[-1].end)))
 
-    # roll up to verses: verse span = [first word start, last word end]
-    verse_times = {}
-    for (s, e), vn in zip(word_times, word_verse):
-        if vn not in verse_times:
-            verse_times[vn] = [s, e]
-        else:
-            verse_times[vn][1] = e
-
     return {
         "book": book, "chapter": chapter, "version": ver,
         "audio": os.path.basename(path), "duration": round(total_s, 2),
         "n_words": len(words),
-        "verses": [{"v": vn, "start": st, "end": en} for vn, (st, en) in sorted(verse_times.items())],
+        # rows: verse span = [first word start, last word end]; a title's words
+        # are tagged 0 and roll up to the leading verse-0 row (timing_rows.py)
+        "verses": rollup_verses(word_times, word_verse),
         "_word_times": word_times, "_word_verse": word_verse,
     }
 
@@ -135,7 +132,7 @@ def diagnostics(res):
     gap0 = vs[0]["start"] if vs else 0
     print(f"  {res['book']} {res['chapter']}: {len(vs)} verses, {res['n_words']} words, "
           f"audio {res['duration']}s")
-    print(f"  monotonic={monotonic}  first_verse_starts@{gap0}s  last_verse_ends@{vs[-1]['end']}s "
+    print(f"  monotonic={monotonic}  first_row(v{vs[0]['v'] if vs else '-'})_starts@{gap0}s  last_verse_ends@{vs[-1]['end']}s "
           f"({covers*100:.0f}% of audio)")
     # show a few verses
     for v in vs[:3] + (vs[-2:] if len(vs) > 5 else []):

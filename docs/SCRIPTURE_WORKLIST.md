@@ -443,7 +443,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S15 | section headings: captured | all | M | all four | done (capture) |
 | S16 | section headings: drawing them | all | M–L | none | done |
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
-| S18 | speech reads the Psalm title | all | M | none | todo |
+| S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
 | S20 | show the NKJV's cross references | NKJV | S | none | blocked |
 | S21 | website renders the footnote section | website | M | none | done |
@@ -531,8 +531,26 @@ independent style dimensions, since italics and red letter overlap on the
 same characters and there is no coherent fallback for stale offsets. Do not
 start the second step until the first is pinned.
 
-**S18.** The text change is trivial; the work is the read-along model, which
-has no slot for a title before verse 1. Do it when that model gains one.
+**S18. DONE.** The read-along model gained its slot: a chapter's rows are
+verse 0 for the Psalm's title and n ≥ 1 for verse n, with `readAlongNone`
+(-1) for nothing narrated — zero used to mean none, so the sentinel had to
+move. Speech reads the title first, as a sentence of its own (`speechSegments`
+in audio.go is the ONE walk both the spoken text and its UTF-16 offsets come
+from; NKJV titles gain the full stop the BSB/WEB ones already carry), and the
+controller says "nothing" as an explicit clear, never as a highlight of 0.
+The recorded tables were re-aligned for the Psalms with the title in the
+transcript (`extract_transcript.py` emits it as a v 0 row; ALEPH excluded by
+the app's own acrostic rule): 116 titled psalms per narration, verse 1's start
+moved later in 24 BSB and 34 WEB chapters and never earlier, every other row
+unchanged but WEB Psalm 18, whose 44-word title the old table had smeared
+verse 2 back across. Each pane resolves verse 0 itself: the styled pane a
+wash per title line from the superscription's own geometry table; the Apple
+panes the italic paragraph before the content start (`btIOSFindTitleRange`,
+`btMacFindTitleRange`); Android the leading `StyleSpan(ITALIC)` before
+`contentStart` (`findTitleRange`). A chapter without a title lights nothing at
+0. The native constants are held equal to Go's by
+`readalong_title_native_contract_test.go`; `make_timings_asset.py` now refuses
+to build without the chapter and title counts it was told to expect.
 
 **S19. THE TABLE IS DONE**; the marks are the remaining half.
 

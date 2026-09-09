@@ -569,7 +569,7 @@ under the same discipline:
 | `red_letter_nkjv_data.go` | API.Bible NKJV `<span class="wj">` | `scripts/gen-nkjv-redletter.py` | committed offsets/fingerprints only; no licensed text |
 | `scripts/data/bsb-redletter-adjudications.json` | retired derived table | — | historical record; no longer used by generation or runtime |
 | `scripts/data/nkjv-wj-verses.json` | retired BSB derivation input | — | historical verse numbers; no longer used by BSB generation |
-| `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment | `scripts/audio-align` | timing only; no claim about the text |
+| `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment; verse 0 is the Psalm's superscription (116 per narration) | `scripts/audio-align` | timing only; no claim about the text |
 | `assets/timings/webbe.json` | per-verse read-along alignment | `scripts/audio-align` | timing, **and** the coverage claim in §8 — a chapter's presence here is what makes the app offer its recording |
 | `assets/parallels` | cross-reference data | — | provenance not yet recorded here |
 

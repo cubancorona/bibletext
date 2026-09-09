@@ -3,6 +3,15 @@
 matching the app's decode (bsb.go: verse nodes only; footnotes / line breaks /
 headings dropped). Output: transcript.json = {book: {chapter: [{"v":n,"text":..}]}}.
 
+A Psalm's TITLE (the hebrew_subtitle node — "A Psalm of David, when he fled from
+Absalom his son") is emitted as a verse-0 row ahead of verse 1. The narrators read
+the titles: across the Berean tables, titled psalms carry ~2.4s more audio before
+verse 1 than untitled ones, and without a row to pin it to that audio was unaligned
+"intro" during which nothing highlighted. Verse 0 is the key the app already uses
+for a title everywhere else (its footnotes, its search hit). Psalm 119's ALEPH is
+not a title but an acrostic letter — a single all-capital word, the only subtitle
+of 350 that is — and is skipped exactly as the app's acrosticLetterLabel skips it.
+
 The verse boundaries are what the forced aligner needs to roll word timings up to
 verse-level timings. Usage:
     extract_transcript.py <complete.json> <out.json>
@@ -43,11 +52,21 @@ def flatten_verse(content):
     return re.sub(r"\s{2,}", " ", s).strip()
 
 
-def main():
-    src, out = sys.argv[1], sys.argv[2]
-    doc = json.load(open(src))
+def acrostic_letter_label(text):
+    """The app's own rule (bsb.go acrosticLetterLabel): a non-empty run of
+    capital letters and nothing else is an acrostic letter — Psalm 119's ALEPH —
+    not a title."""
+    text = text.strip()
+    return bool(text) and all("A" <= c <= "Z" for c in text)
+
+
+def extract(doc):
+    """The transcript for one edition: {book: {chapter: [{"v": n, "text": ...}]}}
+    with a titled psalm's title first as v 0. Returns (transcript, n_chapters,
+    n_rows, n_titles); the title count is the run's own control — 116 per
+    edition, and 117 would mean ALEPH leaked through."""
     result = {}
-    n_ch = n_v = 0
+    n_ch = n_v = n_t = 0
     for b in doc["books"]:
         order = b.get("order", 0)
         if not (1 <= order <= len(APP_BOOKS)):
@@ -58,7 +77,15 @@ def main():
             ch = cj["chapter"]["number"]
             verses = []
             for node in cj["chapter"]["content"]:
-                if isinstance(node, dict) and node.get("type") == "verse":
+                if not isinstance(node, dict):
+                    continue
+                if node.get("type") == "hebrew_subtitle":
+                    title = flatten_verse(node.get("content", []))
+                    if title and not acrostic_letter_label(title):
+                        verses.append({"v": 0, "text": title})
+                        n_t += 1
+                    continue
+                if node.get("type") == "verse":
                     text = flatten_verse(node.get("content", []))
                     if text:
                         verses.append({"v": node.get("number"), "text": text})
@@ -68,8 +95,14 @@ def main():
                 n_v += len(verses)
         if chapters:
             result[book] = chapters
+    return result, n_ch, n_v, n_t
+
+
+def main():
+    src, out = sys.argv[1], sys.argv[2]
+    result, n_ch, n_v, n_t = extract(json.load(open(src)))
     json.dump(result, open(out, "w"), ensure_ascii=False)
-    print(f"{len(result)} books, {n_ch} chapters, {n_v} verses -> {out}")
+    print(f"{len(result)} books, {n_ch} chapters, {n_v} rows, {n_t} titles -> {out}")
 
 
 if __name__ == "__main__":
