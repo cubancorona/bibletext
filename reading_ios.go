@@ -572,6 +572,24 @@ static CGFloat gReadingLinePitchEm = 0;
 
 void bibleTextSetReadingLinePitch(double em) { gReadingLinePitchEm = (CGFloat)em; }
 
+// HOW MUCH TEXT THE PANE IS ACTUALLY HOLDING, for the foreground recovery.
+//
+// The Go side tracks what it BELIEVES it pushed (lastPushedBodyFP) and gates a
+// re-push on it, so if this view is ever emptied behind the app's back the two
+// disagree for ever and every ordinary refresh is gated out — the reader is left
+// on a blank page that cannot heal itself. Asking the view is the only way to
+// tell the difference between "already drawn" and "gone".
+//
+// Returns the character count of the text storage, or 0 when the view does not
+// exist yet, which the caller must treat as "nothing to recover" rather than as
+// an empty pane.
+int bibleTextIOSReadingTextLength(void) {
+    if (gReadingTV == nil) return 0;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    if (ts == nil) return (int)gReadingTV.text.length;
+    return (int)ts.length;
+}
+
 void bibleTextSetReporterIndent(double pts) {
     dispatch_async(dispatch_get_main_queue(), ^{ gReporterIndent = (CGFloat)pts; });
 }
@@ -4006,6 +4024,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 // captureReadingAnchor / armReadingRestore bridge the reading-position restore
 // (reading_state.go) to the native UITextView scroll machinery.
+// nativeReadingTextLength reports how many characters the native reading view is
+// actually holding, so the foreground recovery can tell "already drawn" from
+// "gone". 0 also covers "no view yet", which the caller separates by asking
+// whether a chapter was ever pushed.
+func nativeReadingTextLength() int { return int(C.bibleTextIOSReadingTextLength()) }
+
 func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 	a := C.bibleTextTVCaptureAnchor()
 	return int(a.verse), float64(a.delta), float64(a.frac), a.ok != 0

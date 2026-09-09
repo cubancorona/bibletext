@@ -1,11 +1,12 @@
-//go:build !android
+//go:build !android && !ios
 
 package bibletext
 
-// foregroundOverlayRecovery is Android-only (reading_android.go): Android can
-// RECREATE the activity while the app is backgrounded (swipe-away with the
-// process kept alive by the audio service, rotation, memory pressure), leaving
-// the native reading overlay blank until re-driven. The Apple platforms keep
-// their native text views in the app's own (never-recreated) window, so the
-// foreground hook has nothing to recover there; desktop has no backgrounding.
+// foregroundOverlayRecovery has a real implementation on the two platforms whose
+// native reading overlay can be emptied behind the app's back: Android, where the
+// ACTIVITY is recreated (reading_android.go), and iOS, where a long background can
+// leave the UITextView holding nothing (overlay_recovery_ios.go).
+//
+// macOS keeps its NSTextView in a window the system never recreates, and the
+// desktop builds do not background at all, so there is nothing to recover here.
 func foregroundOverlayRecovery(state *AppState) {}
