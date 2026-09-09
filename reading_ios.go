@@ -3049,7 +3049,20 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     uint64_t t0 = btIOSPerfNow();
     NSAttributedString *as = [[NSAttributedString alloc]
                                 initWithData:data options:opts documentAttributes:nil error:&err];
-    if (as == nil) return NO;
+    // EMPTY IS A FAILURE, NOT A SUCCESS. The importer does not only fail by
+    // returning nil: it can hand back a non-nil, ZERO-LENGTH string, and the
+    // check here used to accept that. Accepting it wrote an empty attributed
+    // string into the view, advanced the generation counter so the mismatch
+    // tripwire was satisfied, and returned YES — which also stopped the retry
+    // ladder in bibleTextTVSetHTML, whose whole reason for existing is that this
+    // importer "fails intermittently, most often right after the app returns to
+    // the foreground". The reader was left on a blank page that could not heal,
+    // because the Go side had already recorded the chapter as pushed.
+    //
+    // Failing instead costs nothing when a chapter really is empty: the ladder
+    // retries twice more and lands on the plain-text fallback, which for an
+    // empty chapter draws the same nothing, a quarter of a second later.
+    if (as == nil || as.length == 0) return NO;
     btIOSPerfLog("html-import", t0);
     // NSAttributedString's HTML importer routinely injects a non-zero
     // paragraphSpacingBefore (and sometimes a minimumLineHeight) on the FIRST
