@@ -1,36 +1,40 @@
 package bibletext
 
-// The NKJV style census — docs/SCRIPTURE_WORKLIST.md, S7, first part only.
+// The NKJV style census — docs/SCRIPTURE_WORKLIST.md, S7.
 //
-// WHY ONLY THE CENSUS, AND NOT THE SKIP LIST
-//
-// S7 asks for three things: extend apiBibleSkipPara to the full USFM heading
+// S7 asked for three things: extend apiBibleSkipPara to the full USFM heading
 // families, deny character styles that are not Scripture, and census what
-// arrives. The first two cannot ship in a Stage-2 change, and the reason is
-// worth stating so nobody re-derives it.
+// arrives. The census shipped first because the other two could not be decided
+// without it — adding a style to apiBibleSkipPara moves any block of that style
+// off the prose path, so its words leave Verse.Text and it becomes a Heading
+// that every surface draws, which is a decoded-text change, a cacheEpoch bump,
+// and a re-download of a LICENSED edition against a metered quota. Doing that
+// blind, to guard against styles that might not exist, would have been an
+// expensive way to change nothing.
 //
-// Adding a style to apiBibleSkipPara moves any block of that style OFF the
-// prose path: its words leave Verse.Text where a verse was open, and it becomes
-// a BibleData.Headings entry, which chapter_blocks.go draws unconditionally on
-// all five surfaces. Adding a character style to a live denylist removes those
-// characters from Verse.Text. Either one, if the style occurs even once in the
-// canon, is a decoded-text change AND a drawn change — which means a cacheEpoch
-// bump and a full re-download of a LICENSED edition against a metered quota.
-// Stage 2's whole premise is "no epoch, no reader-visible change".
+// THE CENSUS THEN ANSWERED IT. Run over the whole canon on 9 September 2026,
+// the NKJV feed sends exactly seven paragraph styles and six character styles:
 //
-// And nothing on disk can tell us whether those styles occur. The cached
-// chapters are New Testament only; the titles-on/titles-off comparison bounds
-// only the styles the titles flag strips. So the honest order is: census first,
-// learn what the canon actually sends, then extend the lists in a change that
-// owns its epoch. A style the census reports as never carrying text can be
-// added later with no epoch at all, because for a text-free block the skip path
-// and the prose path leave identical state — which is why the census records
-// that split rather than a bare count.
+//	paragraph  q2 21,543 · p 8,668 · q1 3,318 · s 2,822 · d 116 · qa 66 · pc 18
+//	character  it 18,375 · sc 7,085 · wj 3,539 · qs 74 · bd 47 · sls 4
+//
+// Every one of them already has a considered answer, and no block of any style
+// arrived empty. Nothing in the heading families the skip list would have
+// gained — ms*, mr, sr, r, sp, cl, cd, s1-s5, sd, mt, the introduction and
+// back-matter families — occurs at all. Neither does a single non-Scripture
+// character style: no fig, no xt/xo, no rq, no va/vp. So both extensions would
+// have been no-ops, and the right change was no change: no epoch, no
+// re-download, and the census left in place as the standing guard for the day
+// the feed does send one.
+//
+// Re-measure with BIBLETEXT_STYLE_INVENTORY=1 (see report) rather than trusting
+// this list; it is a record of one run, not a property of the format.
 //
 // Nothing in this file is consulted by the decoder's routing. Every function
 // here decides which COUNTER to increment and nothing else.
 
 import (
+	"os"
 	"sort"
 	"strings"
 )
@@ -39,11 +43,13 @@ import (
 // answer for: the ones it skips (apiBibleSkipPara), the superscription, and the
 // prose and poetry families it deliberately walks into verse text.
 //
-// Measured against the cached NT chapters, only p, s, q1, q2 and pc occur; the
-// Old Testament is unmeasured, so this set is a considered list rather than an
-// observation, and the census exists precisely because the first full-canon run
-// will probably report styles beyond it. THAT IS THE CHECK WORKING. Re-measure
-// from what the run reports; do not widen this to silence a log line.
+// Wider than what the canon actually sends: the full-canon run found only q2,
+// p, q1, s, d, qa and pc. The rest are here because they are ordinary USFM
+// prose, poetry and list styles that this decoder would handle correctly if the
+// feed began sending them, and a census that cried about them would be noise.
+// A style NOT in this map is one nobody has thought about, which is the only
+// thing worth a log line. Do not widen it to silence a report — re-measure with
+// BIBLETEXT_STYLE_INVENTORY=1 and decide what the new style should do.
 var apiBibleKnownParaStyles = map[string]bool{
 	// skipped as headings or non-scripture (apiBibleSkipPara)
 	"qa": true, "cl": true, "cd": true, "mr": true, "sr": true, "r": true, "sp": true,
@@ -72,6 +78,13 @@ var apiBibleKnownCharStyles = map[string]bool{
 	"add": true, // supplied words
 	"qs":  true, // Selah
 	"tl":  true, "pn": true, "k": true, "ord": true, "sig": true, "w": true,
+	// sls marks a passage in a SECONDARY LANGUAGE — the Aramaic of Daniel
+	// 2:4b-7:28, and one span in Zechariah. This census found it on its first
+	// full-canon run (Daniel ×3, Zechariah ×1), which is the check doing
+	// exactly what it was built for. Walking it transparently is right: those
+	// words ARE the text, whatever language the translators rendered them
+	// from, and the app has nowhere to show the distinction.
+	"sls": true,
 }
 
 // apiBibleStyleCensus records every paragraph and character style one NKJV
@@ -128,9 +141,18 @@ func (c *apiBibleStyleCensus) char(style string) {
 
 // report names only what the decoder has no considered answer for. A full
 // inventory on every fetch would be unreadable; the unknowns are the news.
+//
+// BIBLETEXT_STYLE_INVENTORY=1 asks for the whole list instead. That is how the
+// question "which styles does the canon ACTUALLY send" gets answered — the
+// unknown-only report cannot answer it, because a style being known says
+// nothing about whether it occurs. Deciding what may be added to
+// apiBibleSkipPara needs the occurrence list, not the unknown list.
 func (c *apiBibleStyleCensus) report() {
 	if c == nil {
 		return
+	}
+	if os.Getenv("BIBLETEXT_STYLE_INVENTORY") == "1" {
+		c.inventory()
 	}
 	var unknownPara []string
 	for s, n := range c.paraWithText {
@@ -195,4 +217,24 @@ func apiBibleBlockHasText(items []apiBibleNode) bool {
 		}
 	}
 	return false
+}
+
+// inventory logs every style seen, known or not, with the text split. Env-gated
+// because it is a page of output per book and is only ever wanted deliberately.
+func (c *apiBibleStyleCensus) inventory() {
+	line := func(kind string, m map[string]int, suffix string) {
+		if len(m) == 0 {
+			return
+		}
+		var all []string
+		for s, n := range m {
+			all = append(all, formatCount(s, n))
+		}
+		sort.Strings(all)
+		c.logf("bibletext: NKJV style inventory: %s: %s%s: %s",
+			c.label, kind, suffix, strings.Join(all, ", "))
+	}
+	line("paragraph", c.paraWithText, " (with text)")
+	line("paragraph", c.paraEmpty, " (no text)")
+	line("character", c.charStyles, "")
 }

@@ -99,16 +99,18 @@ and covers text that was captured before the change.
 
 Found while measuring for the analysis. These are not product decisions.
 
-S1 is done: the rule ended a paragraph on a typographic closing quotation mark
-as well as a typewriter one. S14 is done with it, and supersedes S1 entirely:
-every edition paragraphs where its publisher does, and the rule S1 mended was
-then removed rather than kept as a fallback, so nothing is left for it to run
-in. S3 turned out not to be a defect. S2 is the one still open.
+All three are closed. S1 is done: the rule ended a paragraph on a typographic
+closing quotation mark as well as a typewriter one. S14 is done with it, and
+supersedes S1 entirely: every edition paragraphs where its publisher does, and
+the rule S1 mended was then removed rather than kept as a fallback, so nothing
+is left for it to run in. S3 turned out not to be a defect. S2 is done, and the
+rule it needed turned out to be about POSITION rather than about words — see
+below.
 
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
 | S1 | paragraph rule ignores curly quotation marks | all | XS | none | done |
-| S2 | Psalm 119 acrostic letters in verse text | WEB, WEBC | S | web, webc | todo |
+| S2 | Psalm 119 acrostic letters in verse text | WEB, WEBC | S | web, webc | done |
 | S3 | "JESUS" set in capitals in four verses | NKJV | — | none | closed, not a defect |
 
 **S1.** The paragraph rule allowed a break only when the previous verse ended
@@ -122,19 +124,47 @@ were added to the suffix test and pinned with a case that failed on the old
 code; S14 then took the rule away altogether, so neither the function nor the
 test remains.
 
-**S2.** The WEB and WEB Catholic put the Psalm 119 acrostic letters in the
-text. ALEPH is stored as the psalm's superscription and drawn as its title;
-the other 21 letters are appended to the last verse of each stanza, so Psalm
-119:8 ends "Don't utterly forsake me. BETH". They reach search, sharing,
-copying, links, the website and speech. Route `descriptive` runs out of verse
-text into the chapter's side-band in `bsbVerseTextMarked`'s content switch,
-and ignore a Hebrew subtitle whose whole text is an acrostic letter, in the
-`hebrew_subtitle` branch of `decodeHelloAOChapters`.
+**S2. DONE**, at web and webc epoch 9. The WEB and WEB Catholic put the Psalm
+119 acrostic letters in the text: ALEPH stored as the psalm's superscription
+and drawn as its title, the other 21 appended to the last verse of each stanza,
+so Psalm 119:8 ended "Don't utterly forsake me. BETH". They reached search,
+sharing, copying, links, the website and speech.
 
-Take the BSB's one genuine descriptive run with it, since it is the same
-code: Zechariah 12:1 is an oracle title, so decide whether it stays inside
-the verse as today or becomes a title line. Batch the epochs with S14 if that
-item is close behind.
+**The rule is POSITION, not words**, and that was the thing worth finding. Both
+editions and the Berean send these as `descriptive` runs, so a rule that treated
+every descriptive run alike would have taken the Berean's Zechariah 12:1 —
+"This is the burden of the word of the LORD concerning Israel." — out of its
+verse too, which is scripture and not a label. The feeds distinguish them
+structurally:
+
+- an acrostic letter is the LAST item of its verse, and labels the stanza that
+  FOLLOWS (verified: all 21, in both editions);
+- Zechariah 12:1's oracle title is the FIRST item, followed by a line break and
+  then the verse proper, and titles the verse it opens.
+
+So a trailing descriptive run is lifted out and becomes a heading the next verse
+claims; a descriptive run anywhere else stays exactly where it is. No content is
+inspected, no list of Hebrew letter names is needed, and the Berean is untouched
+— which is also why it owes no epoch.
+
+ALEPH needed its own rule, because it arrives as a `hebrew_subtitle` rather than
+as a descriptive run — which is why these editions carried 117 subtitles to the
+Berean's 116. A subtitle whose whole text is a single all-capital word is an
+acrostic letter and not a title. That is exact rather than approximate: across
+the 350 subtitles the three editions send, ALEPH is the only one that matches,
+and every real title is a sentence.
+
+Nothing is dropped. The 22 letters are drawn as stanza headings, which is what
+they are and what the NKJV decoder has always done with the equivalent (`qa`).
+Psalm 119 now yields exactly 22 headings and no superscription in both editions,
+and no verse of it ends in a letter.
+
+**The Berean's Zechariah 12:1 stays in its verse**, which also answers open
+decision 4 in docs/SOURCE_FIELDS.md for the case that actually occurs. Moving it
+would take translated words out of a verse on a judgement call, and the
+publisher includes it in verse 1 while styling it as a title. It is still worth
+revisiting deliberately; it is not worth doing as a side effect of an acrostic
+fix.
 
 **S3.** CLOSED, not a defect. The publisher marks the name with the
 small-caps style at those four verses and means to: its own web edition sets
@@ -203,7 +233,7 @@ Shipped as one change, so all four editions report alike.
 | S4 | verify each book's verse count against the feed's own | helloao | S | done |
 | S5 | verify each note's own chapter and verse | helloao | S | done |
 | S6 | count unknown node types and verse-item shapes | helloao | S | done |
-| S7 | census paragraph and character styles, extend the heading families, deny non-Scripture character styles | NKJV | S | census done; the two list extensions deferred, and why is below |
+| S7 | census paragraph and character styles, extend the heading families, deny non-Scripture character styles | NKJV | S | done — the census answered the other two, and the answer was no change |
 | S8 | cross-check the feed's words-of-Jesus flag against the red-letter table | WEB, WEBC | S | done |
 | S9 | probe whether skipped headings carry notes | NKJV | XS | done — answered |
 
@@ -240,25 +270,39 @@ held, so the checks now stand as guards rather than as claims.
   anything was being lost, and in the places most likely to lose it, nothing
   is. The probe is `TestLiveNKJVHeadingNotes`, key-gated, about five calls.
 
-**Why S7 shipped as the census only.** The item asks for three things, and two
-of them cannot travel in a Stage-2 change. Adding a style to `apiBibleSkipPara`
-moves any block of that style off the prose path: its words leave `Verse.Text`
-where a verse was open, and it becomes a `BibleData.Headings` entry that
-`chapter_blocks.go` draws unconditionally on all five surfaces. Adding a
-character style to a live denylist removes those characters from `Verse.Text`.
-Either one, if the style occurs even once in the canon, is a decoded-text change
-AND a drawn change — a cache epoch, and a full re-download of a LICENSED
-edition against a metered quota. Stage 2's premise is the opposite of that.
+**S7's other two parts turned out to need no change, and the census is what
+proved it.** Extending `apiBibleSkipPara` moves any block of that style off the
+prose path — its words leave `Verse.Text` and it becomes a `Headings` entry that
+`chapter_blocks.go` draws on all five surfaces — so it is a decoded-text change,
+a cache epoch, and a re-download of a LICENSED edition against a metered quota.
+Doing that blind, to guard against styles that might not exist, would have been
+an expensive way to change nothing. So the census shipped first and was then run
+over the whole canon (`BIBLETEXT_LIVE_FULL_CANON=1 BIBLETEXT_STYLE_INVENTORY=1`,
+about 200 calls, 17 seconds).
 
-And nothing on disk can say whether those styles occur: the cached chapters are
-New Testament only, and the titles-on/titles-off comparison bounds only the
-styles the titles flag strips. So the census ships first and reports what the
-canon actually sends. A style it reports as never carrying text can then be
-skipped with no epoch at all, because for a text-free block the skip path and
-the prose path leave identical state — which is why the census records that
-split rather than a bare count. Expect the first full-canon run to name styles
-beyond `apiBibleKnownParaStyles`; that is the check working. Re-measure from
-what it reports. Do not widen the list to silence it.
+The NKJV feed sends exactly seven paragraph styles and six character styles:
+
+    paragraph  q2 21,543 · p 8,668 · q1 3,318 · s 2,822 · d 116 · qa 66 · pc 18
+    character  it 18,375 · sc 7,085 · wj 3,539 · qs 74 · bd 47 · sls 4
+
+Every one already has a considered answer, and no block of any style arrived
+empty. NONE of the heading families the skip list would have gained occurs at
+all — no `ms*`, `mr`, `sr`, `r`, `sp`, `cl`, `cd`, `s1`-`s5`, `sd`, `mt`, no
+introduction or back-matter family. Neither does a single non-Scripture
+character style: no `fig`, no `xt`/`xo`, no `rq`, no `va`/`vp`. Both extensions
+would have been no-ops. The right change was no change: no epoch, no
+re-download, and the census left in place as the standing guard for the day the
+feed does send one.
+
+One style was genuinely new: `sls`, a passage in a secondary language — the
+Aramaic of Daniel 2:4b-7:28 (×3) and one span in Zechariah. The census found it
+on its first run, which is the check doing what it was built for. It is walked
+transparently, and that is right: those words are the text, whatever language
+the translators rendered them from.
+
+`it` at 18,375 spans is worth knowing: the NKJV marks its SUPPLIED words with
+`it`, not with `add`, and `spanSentinels` already maps it to the supplied-word
+span. `add` never appears.
 
 **S4.** The feed states a verse count per book, and it is exact: it equals
 the decoded count in all 66 BSB books, and exceeds it in exactly three WEB

@@ -55,7 +55,7 @@ func TestCachePathForVersion(t *testing.T) {
 	legacy := filepath.Join(dir, "bibletext-cache.json")
 	t.Setenv("BIBLETEXT_CACHE_PATH", legacy)
 
-	wantWEB := filepath.Join(dir, "bibletext-web-v8.json")
+	wantWEB := filepath.Join(dir, "bibletext-web-v9.json")
 	if got := cachePathForVersion("web"); got != wantWEB {
 		t.Errorf("web cache = %q, want %q", got, wantWEB)
 	}
@@ -295,12 +295,12 @@ func TestVersionCacheIsCurrent(t *testing.T) {
 	if versionCacheIsCurrent(web) {
 		t.Error("the legacy (epoch-0) file must NOT count as web's current epoch")
 	}
-	current := filepath.Join(dir, "bibletext-web-v8.json")
+	current := filepath.Join(dir, "bibletext-web-v9.json")
 	if err := saveBibleToCache(current, fullValidBible(), currentUTCTime); err != nil {
 		t.Fatal(err)
 	}
 	if !versionCacheIsCurrent(web) {
-		t.Error("the v8 file is web's current epoch")
+		t.Error("the v9 file is web's current epoch")
 	}
 	// And the property that closed V1: a file that exists at the current
 	// epoch but cannot be served does NOT count as current, or the reader

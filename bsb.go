@@ -189,7 +189,7 @@ func decodeHelloAOChapters(book string, b helloAOBook, ck *helloAOChecks) (map[i
 				// numbers them as verse 1), rendered as an italic unnumbered
 				// line above verse 1; their notes join the chapter-bottom
 				// section keyed "Title".
-				text, marks := bsbVerseTextMarkedChecked(head.Content, ck, "")
+				text, marks, _ := bsbVerseTextMarkedChecked(head.Content, ck, "")
 				if text == "" {
 					continue
 				}
@@ -208,6 +208,19 @@ func decodeHelloAOChapters(book string, b helloAOBook, ck *helloAOChecks) (map[i
 						Text:   strings.TrimSpace(body.text),
 						Caller: body.caller,
 					})
+				}
+				// Psalm 119's ALEPH arrives as the psalm's SUBTITLE rather
+				// than as a descriptive run, so it would be drawn as the
+				// psalm's title — which is why this edition has 117 titles to
+				// the Berean's 116. It is not a title; it is the first of the
+				// twenty-two acrostic letters, and the other twenty-one arrive
+				// as trailing descriptive runs. A title that is a single
+				// all-capital word is that and nothing else: across all three
+				// editions' 350 subtitles, ALEPH is the only one, and a real
+				// title is a sentence ("A Psalm of David, when he fled...").
+				if acrosticLetterLabel(text) {
+					heads = append(heads, Heading{Text: text, Style: "acrostic"})
+					continue
 				}
 				if supers == nil {
 					supers = make(map[int]Superscription)
@@ -232,7 +245,7 @@ func decodeHelloAOChapters(book string, b helloAOBook, ck *helloAOChecks) (map[i
 			if head.Type != "verse" {
 				continue
 			}
-			text, marks, levels := bsbVerseTextMarkedLevelsChecked(head.Content, ck,
+			text, marks, levels, label := bsbVerseTextMarkedLevelsChecked(head.Content, ck,
 				book+" "+itoa(num)+":"+itoa(head.Number))
 			if text == "" {
 				// A verse node with a marker but NO text is a critical-text
@@ -294,6 +307,12 @@ func decodeHelloAOChapters(book string, b helloAOBook, ck *helloAOChecks) (map[i
 				ParaStart:  paraStart,
 				PoemLevels: levels,
 			})
+			// A trailing descriptive run labels the stanza that FOLLOWS, so it
+			// is appended AFTER this verse — the pending-heading sweep above
+			// has already run, and the NEXT verse will claim it.
+			if label != "" {
+				heads = append(heads, Heading{Text: label, Style: "acrostic"})
+			}
 			// An acrostic letter or an oracle's title heads what comes NEXT.
 			paraStart = bsbVerseHasDescriptive(head.Content)
 		}
@@ -478,13 +497,14 @@ func bsbVerseTextMarked(content []json.RawMessage) (string, []bsbMark) {
 
 // The census-carrying forms. The plain names above stay for callers that have
 // no census to give — the share and seed paths, and the tests that predate it.
-func bsbVerseTextMarkedChecked(content []json.RawMessage, ck *helloAOChecks, ref string) (string, []bsbMark) {
-	text, marks, _ := bsbVerseTextMarkedLevelsChecked(content, ck, ref)
-	return text, marks
+func bsbVerseTextMarkedChecked(content []json.RawMessage, ck *helloAOChecks, ref string) (string, []bsbMark, string) {
+	text, marks, _, label := bsbVerseTextMarkedLevelsChecked(content, ck, ref)
+	return text, marks, label
 }
 
 func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []int) {
-	return bsbVerseTextMarkedLevelsChecked(content, nil, "")
+	text, marks, levels, _ := bsbVerseTextMarkedLevelsChecked(content, nil, "")
+	return text, marks, levels
 }
 
 // bsbVerseTextMarkedLevels is bsbVerseTextMarked plus the INDENT DEPTH of each
@@ -494,11 +514,13 @@ func bsbVerseTextMarkedLevels(content []json.RawMessage) (string, []bsbMark, []i
 // so every line drew flush left and the pairing print shows was invisible.
 //
 // One entry per line of the finished text, zero where a line is not poetry.
-func bsbVerseTextMarkedLevelsChecked(content []json.RawMessage, ck *helloAOChecks, ref string) (string, []bsbMark, []int) {
+func bsbVerseTextMarkedLevelsChecked(content []json.RawMessage, ck *helloAOChecks, ref string) (string, []bsbMark, []int, string) {
 	var pieces []string
 	var marks []bsbMark // anchor holds the piece INDEX until resolved below
 	levels := []int{0}  // the depth of each line, the first line included
-	for _, node := range content {
+	var trailingLabel string
+	for idx, node := range content {
+		last := idx == len(content)-1
 		var s string
 		if err := json.Unmarshal(node, &s); err == nil {
 			if s != "" {
@@ -515,6 +537,10 @@ func bsbVerseTextMarkedLevelsChecked(content []json.RawMessage, ck *helloAOCheck
 			// red a reader sees comes from the generated table, which carries
 			// rune offsets this flag cannot. See redLetterWitness.
 			WordsOfJesus bool `json:"wordsOfJesus"`
+			// Descriptive marks a run the publisher sets as a label rather than
+			// as the verse's own words — in these feeds, the acrostic letters
+			// of Psalm 119 and one oracle title in Zechariah.
+			Descriptive bool `json:"descriptive"`
 		}
 		if err := json.Unmarshal(node, &obj); err == nil {
 			switch {
@@ -541,6 +567,20 @@ func bsbVerseTextMarkedLevelsChecked(content []json.RawMessage, ck *helloAOCheck
 					if n := poemLevel(obj.Poem); n > 0 && levels[len(levels)-1] == 0 {
 						levels[len(levels)-1] = n
 					}
+				}
+				// A descriptive run in the LAST position labels what FOLLOWS,
+				// not the verse it sits in: these are Psalm 119's acrostic
+				// letters, so verse 8 ended "Don't utterly forsake me. BETH"
+				// and BETH is the head of the next stanza. Lift it out, and
+				// let the next verse claim it as a heading.
+				//
+				// Position is the whole rule, and it is the publisher's own
+				// structure rather than a guess about the words: a descriptive
+				// run anywhere ELSE is a title for the verse it opens (the
+				// Berean's Zechariah 12:1) and stays exactly where it is.
+				if obj.Descriptive && last && trailingLabel == "" {
+					trailingLabel = strings.TrimSpace(*obj.Text)
+					continue
 				}
 				pieces = append(pieces, *obj.Text)
 				if obj.WordsOfJesus {
@@ -576,14 +616,14 @@ func bsbVerseTextMarkedLevelsChecked(content []json.RawMessage, ck *helloAOCheck
 	// tidier never adds or removes a line, but saying so is cheaper than
 	// trusting it, and a verse with no poetry reports nothing at all.
 	if lines := strings.Count(text, "\n") + 1; lines != len(levels) {
-		return text, marks, nil
+		return text, marks, nil, trailingLabel
 	}
 	for _, n := range levels {
 		if n > 0 {
-			return text, marks, levels
+			return text, marks, levels, trailingLabel
 		}
 	}
-	return text, marks, nil
+	return text, marks, nil, trailingLabel
 }
 
 // Spacing artifacts that survive the synthesized-space join: a space before
@@ -621,4 +661,26 @@ func bsbTidySpacing(s string) string {
 		lines[i] = bsbSpaceAfterOpen.ReplaceAllString(line, "$1")
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// acrosticLetterLabel reports whether a Psalm subtitle is really one of the
+// twenty-two acrostic letters rather than a title.
+//
+// Psalm 119's ALEPH arrives as a hebrew_subtitle while its other twenty-one
+// letters arrive as trailing descriptive runs, so without this the psalm gains
+// a title no translator wrote and the World English editions carry 117
+// subtitles to the Berean's 116. A single all-capital word is the whole test,
+// and it is exact: across the 350 subtitles the three editions send, ALEPH is
+// the only one that matches, and every genuine title is a sentence.
+func acrosticLetterLabel(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	for _, r := range text {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }

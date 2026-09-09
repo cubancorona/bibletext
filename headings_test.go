@@ -94,10 +94,26 @@ func TestAHeadingNeverEntersTheText(t *testing.T) {
 // than a failure to read them: its own published markup carries only five.
 func TestTheWorldEnglishFeedSetsNoHeadings(t *testing.T) {
 	bd := headingCapture(t, "build/biblecache/web.json", decodeWEB)
+	acrostics := 0
 	for book, chs := range bd.Headings {
 		for ch, hs := range chs {
-			t.Errorf("%s %d unexpectedly carries %d headings", book, ch, len(hs))
+			for _, h := range hs {
+				// Psalm 119's acrostic letters are headings too, but they are
+				// not the publisher's SECTION headings — they are the psalm's
+				// own structure, lifted out of the verse text they used to sit
+				// in (docs/SCRIPTURE_WORKLIST.md, S2). They carry their own
+				// style so the two can be told apart, which is exactly what
+				// this test needs to keep meaning what it says.
+				if h.Style == "acrostic" {
+					acrostics++
+					continue
+				}
+				t.Errorf("%s %d unexpectedly carries a section heading %q", book, ch, h.Text)
+			}
 		}
+	}
+	if acrostics != 22 {
+		t.Errorf("Psalm 119 yielded %d acrostic headings, want 22", acrostics)
 	}
 }
 
@@ -107,14 +123,23 @@ func TestTheWorldEnglishFeedSetsNoHeadings(t *testing.T) {
 // pins the shape so a decision about drawing it can be taken on the real data.
 func TestTheCatholicEditionKeepsItsFiveHeadings(t *testing.T) {
 	bd := headingCapture(t, "build/biblecache/webc.json", decodeHelloAOCatholic)
-	n := 0
+	n, acrostics := 0, 0
 	for _, chs := range bd.Headings {
 		for _, hs := range chs {
-			n += len(hs)
+			for _, h := range hs {
+				if h.Style == "acrostic" {
+					acrostics++ // Psalm 119's letters; see S2
+					continue
+				}
+				n++
+			}
 		}
 	}
 	if n != 5 {
-		t.Errorf("captured %d headings, want 5", n)
+		t.Errorf("captured %d section headings, want 5", n)
+	}
+	if acrostics != 22 {
+		t.Errorf("captured %d acrostic headings, want 22", acrostics)
 	}
 	if got := bd.Headings["Daniel"][13]; len(got) != 1 || got[0].Text != "THE HISTORY OF SUSANNA" {
 		t.Errorf("Daniel 13 heading = %+v", got)

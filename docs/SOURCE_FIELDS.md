@@ -152,7 +152,7 @@ Census of the captures (chapter-level nodes / verse items):
 | poem indent level `N` | kept | `Verse.PoemLevels`, one entry per line of the verse: 1 opens a Hebrew couplet, 2 answers it, and the Catholic edition sends seven at a third depth. Print sets the answering half indented under the opening one, which is the pairing a reader sees; every line still draws flush left until a surface reads this |
 | `{lineBreak: true}` inside a verse (prose lists such as Genesis 10) | kept | a `"\n"` in `Verse.Text` |
 | `wordsOfJesus: true` on a run (WEB and WEB Catholic only; the BSB feed carries none) | skipped | the text is kept, the flag is not read. Red letter comes from the span tables generated from the publishers' USFM (`red_letter_web_data.go`, `red_letter_bsb_data.go`), which cover every edition the same way and are guarded by rune count and hash. The flag would be an alternative source for two of the four editions; it is not used because the table already covers them |
-| `descriptive: true` on a run (Zechariah 12:1 in the BSB; 21 runs in WEB) | position kept, text OPEN | the verse that FOLLOWS one opens a paragraph: in the Psalms these are the acrostic letters, so this is what restores Psalm 119's twenty-two stanzas. The run's TEXT is still inside the verse, which for the acrostic letters is a defect (see the worklist) |
+| `descriptive: true` on a run (Zechariah 12:1 in the BSB; 21 runs in WEB and in WEBC) | position kept; text kept or lifted, by POSITION | the verse that FOLLOWS one opens a paragraph, which is what restores Psalm 119's twenty-two stanzas. What happens to the TEXT now depends on where the run sits, because the two uses are structurally different: a run in the LAST position labels the stanza that follows (all 21 acrostic letters) and is lifted out into a heading the next verse claims; a run anywhere else titles the verse it opens (the Berean's single one) and stays in the verse. No words are inspected and nothing is dropped — the letters are drawn as headings, as the NKJV's `qa` always has been. See the worklist, S2 |
 | footnote markers `{noteId}` with a chapter-level body | kept | `Verse.Footnotes{Anchor, Text, Caller}`; the anchor is the rune count of the text before the marker; the marker itself adds no characters. Shown in the chapter-bottom section when the Settings toggle is on |
 | footnote `caller` (always `+` here) | kept, unread | stored on the note; no surface draws callers (the section numbers notes itself) |
 | footnote `reference{chapter, verse}` | skipped | the join is by `noteId`, which is exact; every reference in the captures agrees with the verse the marker sits in (`docs/FOOTNOTES.md`) |
@@ -283,7 +283,12 @@ listed, with the answer, because the answer is part of the record.
    TAKEN: honoured; the app's own rule was removed rather than kept as a
    fallback.
 3. Poem indent depth — one depth on every pane, or the source's two (three).
-4. `descriptive` runs — a style of their own, or plain.
+4. `descriptive` runs — a style of their own, or plain. PARTLY TAKEN: the
+   acrostic letters are lifted out of verse text and drawn as stanza headings
+   (S2). The Berean's Zechariah 12:1 oracle title stays inside its verse, on
+   the ground that moving it takes translated words out of a verse on a
+   judgement call; what remains open is only whether it should eventually be
+   drawn as a title line.
 5. Selah — leave each edition's placement, or normalise to its own line.
 6. Reference-style helloao notes — render as now, or mark as cross
    references and keep them dark like the NKJV's.

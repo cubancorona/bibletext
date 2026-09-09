@@ -89,7 +89,7 @@ var registeredVersions = []BibleVersion{
 		// publisher's section headings, kept instead of skipped;
 		// epoch 6 the publisher's paragraphing, recovered from the edition's
 		// own USFM because the feed drops about 92% of it (paragraph_web.go).
-		cacheEpoch: 8,
+		cacheEpoch: 9,
 		source:     webSource{},
 	},
 	{
@@ -117,7 +117,7 @@ var registeredVersions = []BibleVersion{
 		// epoch 6 the publisher's paragraphing, from the edition's own USFM;
 		// epoch 5 Psalm superscriptions + notes; 4 omitted-verse orphans (29);
 		// 3 footnote capture; 2 poem-clause breaks.
-		cacheEpoch: 8,
+		cacheEpoch: 9,
 		source:     webCatholicSource{},
 	},
 	{

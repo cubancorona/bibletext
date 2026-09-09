@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -251,6 +252,7 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 	t.Logf("fetched in %s", time.Since(started).Round(time.Second))
 
 	verses, poetry, lord, notes := 0, 0, 0, 0
+	smallCapsText := map[string]int{}
 	for book, chapters := range data.Verses {
 		for _, vs := range chapters {
 			for _, v := range vs {
@@ -258,8 +260,22 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 				if strings.Contains(v.Text, "\n") {
 					poetry++
 				}
-				if strings.Contains(v.Text, "LORD") {
+				// The divine name is no longer UPPERCASE in the stored text.
+				// Since the small capitals became a span rather than a fold
+				// (the decoder keeps the publisher's own letters and the
+				// letterforms are substituted when drawing), the name reads
+				// "Lord" in v.Text and lives in v.SmallCaps. Counting "LORD"
+				// here matched 8 verses out of 5,622 — the handful of genuine
+				// all-caps inscriptions — and had been failing unnoticed
+				// because this test needs both a key and an env var to run.
+				if len(v.SmallCaps) > 0 {
 					lord++
+					for _, sp := range v.SmallCaps {
+						r := []rune(v.Text)
+						if sp.Start >= 0 && sp.End <= len(r) && sp.Start < sp.End {
+							smallCapsText[string(r[sp.Start:sp.End])]++
+						}
+					}
 				}
 				notes += len(v.Footnotes)
 				if strings.ContainsRune(v.Text, footnoteSentinel) {
@@ -269,6 +285,20 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 		}
 	}
 	t.Logf("books %d, verses %d, poetry %d, LORD %d, notes %d", len(data.Verses), verses, poetry, lord, notes)
+	// The counts, re-measured 9 September 2026. The small-capital figure
+	// replaced an older one of 5,622 "verses naming the LORD", which counted
+	// the literal string LORD in the text. That count stopped meaning what it
+	// said when the small capitals became a span instead of an uppercase fold:
+	// the stored text now keeps the publisher's own letters ("Lord"), so the
+	// old assertion matched 8 verses and had been failing unnoticed, this test
+	// needing both a key and an env var to run.
+	//
+	// 5,887 is verses carrying ANY small-capital span, which is the same fact
+	// the old number was reaching for and a slightly larger set: it includes
+	// the verses where the divine name appears only as GOD (Adonai YHWH) and
+	// which never contained the string LORD at all. The spans decompose as
+	// "Lord" x6,632, "God" x298, "OD" x8 (the publisher marks only the small
+	// letters of GOD; the G stays full size), "Jesus" x4, "Yah" x2, "AH" x1.
 	for _, tc := range []struct {
 		name      string
 		got, want int
@@ -276,10 +306,31 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 		{"books", len(data.Verses), 66},
 		{"verses", verses, 31102},
 		{"poetry verses", poetry, 8349},
-		{"verses naming the LORD", lord, 5622},
+		{"verses setting a name in small capitals", lord, 5887},
 	} {
 		if tc.got != tc.want {
-			t.Errorf("%s = %d, want %d (the canon of 2026-08-23)", tc.name, tc.got, tc.want)
+			t.Errorf("%s = %d, want %d", tc.name, tc.got, tc.want)
+		}
+	}
+
+	// What is actually being set in small capitals, so the count above is an
+	// explained number rather than a remembered one.
+	{
+		type sc struct {
+			text string
+			n    int
+		}
+		var all []sc
+		for t, n := range smallCapsText {
+			all = append(all, sc{t, n})
+		}
+		sort.Slice(all, func(i, j int) bool { return all[i].n > all[j].n })
+		for i, e := range all {
+			if i >= 8 {
+				t.Logf("  … and %d more distinct small-capital texts", len(all)-8)
+				break
+			}
+			t.Logf("  small capitals %q ×%d", e.text, e.n)
 		}
 	}
 
@@ -382,7 +433,12 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 		}
 		return ""
 	}
-	if got := first("Psalms", 3); !strings.HasPrefix(got, "LORD, how they have increased") {
+	// "Lord", not "LORD": the stored text keeps the publisher's own letters and
+	// the small capitals are applied when drawing (v.SmallCaps). This assertion
+	// is about the HEADING never reaching the verse, so what matters is the
+	// opening words, not their case — but the case is pinned deliberately,
+	// because it silently stopped matching once the fold was removed.
+	if got := first("Psalms", 3); !strings.HasPrefix(got, "Lord, how they have increased") {
 		t.Errorf("Psalm 3:1 = %q", got)
 	}
 	if got := first("Psalms", 119); strings.Contains(got, "Aleph") {

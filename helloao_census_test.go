@@ -94,7 +94,7 @@ func TestAnItemThatMatchesNoCaseIsCensusedNotSwallowed(t *testing.T) {
 		json.RawMessage(`{"text":"In the beginning","poem":1}`),
 		json.RawMessage(`{"strongs":"H7225"}`),
 	}
-	text, _, _ := bsbVerseTextMarkedLevelsChecked(content, &helloAOChecks{Census: c}, "")
+	text, _, _, _ := bsbVerseTextMarkedLevelsChecked(content, &helloAOChecks{Census: c}, "")
 
 	if text != "In the beginning" {
 		t.Errorf("the census changed the decoded text: %q", text)
