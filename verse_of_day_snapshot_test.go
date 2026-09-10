@@ -2,9 +2,9 @@ package bibletext
 
 // The rotation against the SHIPPED EDITIONS, offline.
 //
-// The public-domain editions are downloaded, not committed, so CI cannot load
-// them; and a test that loads them when present and skips otherwise proves
-// nothing on the machine that matters. scripts/gen-votd-snapshot.py records,
+// The editions are downloaded, not committed — the licensed one through the
+// owner's key — so CI cannot load them; and a test that loads them when present
+// and skips otherwise proves nothing on the machine that matters. scripts/gen-votd-snapshot.py records,
 // for every entry and every edition, whether the passage is present and how
 // its text begins and ends. These tests read that record. When the list
 // changes, regenerate the snapshot in the same change — the first test here
@@ -46,7 +46,7 @@ func loadVOTDSnapshot(t *testing.T) map[string]map[string]votdSnapshotEntry {
 // where the edition lacks the book — and the snapshot matches the list.
 func TestEveryRotationEntryResolvesInEveryShippedEdition(t *testing.T) {
 	eds := loadVOTDSnapshot(t)
-	for _, want := range []string{"web", "bsb", "webc"} {
+	for _, want := range []string{"web", "bsb", "webc", "nkjv"} {
 		if _, ok := eds[want]; !ok {
 			t.Errorf("snapshot has no %s edition", want)
 		}

@@ -17,7 +17,26 @@ import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.expanduser("~/Library/Caches/bibletext")
-EDITIONS = {"web": "bibletext-web-v8.json", "bsb": "bibletext-bsb-v6.json", "webc": "bibletext-webc-v5.json"}
+# The licensed edition is included: its cache is written by the app once the
+# owner's key has fetched it (see bibletext-nkjv-key-permission in the owner's
+# notes). The snapshot carries only presence and first/last characters — never
+# the text.
+EDITIONS = ["web", "bsb", "webc", "nkjv"]
+
+def cache_file(edition):
+    """The edition's newest cache: bibletext-<id>-v<epoch>.json with the highest
+    epoch, else the unversioned bibletext-<id>.json. The app bumps the epoch
+    whenever its decoder changes and migrates the file, so a fixed name here
+    would go stale the first time it did."""
+    best, best_epoch = None, -1
+    for name in os.listdir(CACHE) if os.path.isdir(CACHE) else []:
+        m = re.fullmatch(rf"bibletext-{re.escape(edition)}(?:-v(\d+))?\.json", name)
+        if not m:
+            continue
+        epoch = int(m.group(1) or 0)
+        if epoch > best_epoch:
+            best, best_epoch = name, epoch
+    return best
 
 src = open(os.path.join(ROOT, "verse_of_day.go")).read()
 body = src.split("var verseOfDayRefs = []dayPassage{", 1)[1].split("\n}\n", 1)[0]
@@ -31,11 +50,11 @@ def key(p):
     b, c, lo, hi = p
     return f"{b} {c}:{lo}" if hi in (0, lo) else f"{b} {c}:{lo}-{hi}"
 
-def load(name):
-    path = os.path.join(CACHE, name)
-    if not os.path.exists(path):
-        sys.exit(f"missing cache {path}: open the app and let it download that edition first")
-    return json.load(open(path))["data"]
+def load(edition):
+    name = cache_file(edition)
+    if name is None:
+        sys.exit(f"no cache for {edition} in {CACHE}: open the app and let it load that edition first")
+    return json.load(open(os.path.join(CACHE, name)))["data"], name
 
 def passage(d, p):
     b, c, lo, hi = p
@@ -51,9 +70,10 @@ def passage(d, p):
         texts.append(row["Text"].strip())
     return "\n".join(texts), None
 
-out = {"editions": {}}
-for ed, fname in EDITIONS.items():
-    d = load(fname)
+out = {"editions": {}, "sources": {}}
+sources = {}
+for ed in EDITIONS:
+    d, sources[ed] = load(ed)
     table = {}
     for p in refs:
         text, why = passage(d, p)
@@ -68,6 +88,7 @@ for ed, fname in EDITIONS.items():
             entry["last"] = text[-1]
         table[key(p)] = entry
     out["editions"][ed] = table
+out["sources"] = sources
 path = os.path.join(ROOT, "testdata", "verse_of_day_snapshot.json")
 json.dump(out, open(path, "w"), ensure_ascii=False, indent=1, sort_keys=True)
 missing = [(ed, k) for ed, t in out["editions"].items() for k, e in t.items() if "missing" in e]

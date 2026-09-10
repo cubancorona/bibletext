@@ -306,7 +306,7 @@ func TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly(t *testing.T)
 			"run with BIBLETEXT_EXHAUSTIVE=1")
 	}
 	walked := 0
-	for _, id := range []string{"web", "bsb", "webc"} {
+	for _, id := range []string{"web", "bsb", "webc", "nkjv"} {
 		v, known := versionByID(id)
 		if !known {
 			t.Fatalf("version %q is not in the catalogue", id)
