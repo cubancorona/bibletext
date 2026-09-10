@@ -58,6 +58,9 @@ jobs:
       - name: Android target SDK regression
         run: scripts/test-android-target-sdk.sh
 
+      - name: Site drift report regression
+        run: scripts/test-site-drift.sh
+
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"

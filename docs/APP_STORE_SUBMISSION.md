@@ -381,7 +381,18 @@ each step it lists.
    from `~/Library/Android/bibletext-dist`, compare its SHA after download,
    then `gh release edit v<version> --draft=false`, and verify every
    `/releases/latest/download/<asset>` link resolves to the new version.
-7. Work merged after the tag ships under the next number.
+7. Publish the site from the same commit: `scripts/publish-site.sh --dry-run`
+   prints a drift report against `origin/gh-pages` — "none", or how many
+   pages changed, were added or removed — and `scripts/publish-site.sh`
+   pushes. The reader is generated from the app's decoder and the local
+   translation caches, which CI does not have, so this is an owner-machine
+   step like the uploads; it is in the sequence because the web is a channel
+   of the same tree and was two days behind the app before this step existed.
+8. Work merged after the tag ships under the next number.
+
+Before asking "are we ready to release?", the same three answers are the
+readiness check: CI green on the commit, `check-release-identity.py`, and the
+publisher's drift report.
 
 ## Release-specific metadata invariants
 

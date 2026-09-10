@@ -216,6 +216,22 @@ grep -q '"/support.html", "exclude": true' "$OUT/.well-known/apple-app-site-asso
   || fail "the Apple association file no longer excludes support.html"
 echo "    CNAME, .nojekyll, both association files and all three root pages present"
 
+# --- Drift: how the tree about to be published differs from what is live ---
+# Reported in both modes, so "is the web current?" is one dry run. The live
+# tree is read from origin/gh-pages as an archive (no worktree, no trap: the
+# publish path below installs its own).
+. scripts/site-drift.sh
+echo "==> drift against origin/gh-pages"
+if git fetch --quiet origin gh-pages 2>/dev/null; then
+  LIVE_TREE=$(mktemp -d)
+  git archive origin/gh-pages | tar -x -C "$LIVE_TREE"
+  if site_drift "$LIVE_TREE" "$OUT"; then SITE_CURRENT=true; else SITE_CURRENT=false; fi
+  rm -rf "$LIVE_TREE"
+else
+  echo "    origin/gh-pages could not be fetched; drift unknown"
+  SITE_CURRENT=false
+fi
+
 if $DRY_RUN; then
   echo "==> --dry-run: built and verified $OUT; nothing pushed"
   exit 0
