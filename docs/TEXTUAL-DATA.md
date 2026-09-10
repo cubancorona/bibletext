@@ -571,7 +571,7 @@ under the same discipline:
 | `scripts/data/nkjv-wj-verses.json` | retired BSB derivation input | — | historical verse numbers; no longer used by BSB generation |
 | `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment; verse 0 is the Psalm's superscription (116 per narration) | `scripts/audio-align` | timing only; no claim about the text |
 | `assets/timings/webbe.json` | per-verse read-along alignment | `scripts/audio-align` | timing, **and** the coverage claim in §8 — a chapter's presence here is what makes the app offer its recording |
-| `assets/parallels` | cross-reference data | — | provenance not yet recorded here |
+| `assets/parallels` | Gospel synopsis: 267 pericopes, each an event with its passage in whichever Gospels tell it | — | compiled for this app (commit fff5e4091, 2026-06-23) from the four Gospels' own text; not transcribed from a published synopsis — its 17 section names and its divisions match none of the standard outlines (Aland, Robertson, Huck, the Wikipedia harmony), and it carries divisions of its own (six Lukan doublets kept apart, two John passages placed twice). First-party content under the repository's licence; the app credits it as "synopsis" |
 
 All active span tables now have committed generators. Regeneration is fail-closed:
 an unlocatable publisher marker stops generation instead of being replaced by a

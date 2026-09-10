@@ -25,8 +25,9 @@ own terms:
 - Cross-references: Treasury of Scripture Knowledge dataset from OpenBible.info,
   used under the Creative Commons Attribution (CC BY) license
   (https://www.openbible.info/labs/cross-references/).
-- Gospel parallels: a synopsis (harmony) of the four Gospels, embedded in
-  assets/parallels/.
+- Gospel parallels: a synopsis (harmony) of the four Gospels compiled for this
+  app from the Gospels' own text (assets/parallels/), not taken from a
+  published synopsis; first-party content under this repository's licence.
 - UI typeface: Atkinson Hyperlegible by the Braille Institute of America, Inc.,
   used under the SIL Open Font License 1.1 (see assets/fonts/atkinson/OFL.txt).
 - Reading typefaces: Scripture is set in Junicode by Peter S. Baker, used under
