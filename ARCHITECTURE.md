@@ -472,8 +472,12 @@ app stop / window-close (raw `nativeAudioStop()` from the lifecycle hooks — ne
 - **Red-letter mode** ([red_letter.go](red_letter.go),
   `red_letter_{web,bsb,nkjv}_data.go`) — publisher-marked spans for each edition;
   toggle persisted in preferences and folded into the reading fingerprint.
-- **Verse of the day** ([verse_of_day.go](verse_of_day.go)) — a deterministic
-  daily-rotating Christ-centred verse with a jump-to-context.
+- **Verse of the day** ([verse_of_day.go](verse_of_day.go)) — a curated
+  rotation of short passages in a frozen hash order, indexed by civil date over
+  the whole list (an entry the edition lacks falls back to the compacted list),
+  with alternates for the Catholic edition's own books, set in the reading face
+  at the reader's size, with a jump-to-context. The list is pinned offline by
+  `testdata/verse_of_day_snapshot.json` (`scripts/gen-votd-snapshot.py`).
 
 ## AI study (bring your own key)
 

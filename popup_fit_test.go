@@ -7,9 +7,11 @@ package bibletext
 // sheet_fit_test.go.
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
@@ -94,17 +96,51 @@ func TestVersionLoadingCardFitsNarrowPhone(t *testing.T) {
 	assertBoxOnScreen(t, p, win.Canvas(), "loading card")
 }
 
-// Verse of the day on a short canvas: the button row must stay inside the card.
+// Verse of the day on a short canvas: the button row must stay inside the card
+// and the passage must scroll rather than push it out.
+//
+// THE FIXTURE OVERFLOWS ON PURPOSE. The suite's sample verses never did — the
+// tallest rotation passage they carry laid out 12pt short of the cap on this
+// canvas — so the scroll and the height cap were never exercised, and a test
+// that read only the modal's frame could not fail anyway: the modal renderer
+// clamps its frame to the canvas whatever the content does. One long verse,
+// the only entry the fixture can show, is what makes the cap and the scroll
+// load-bearing here.
+//
+// Mutations this guards: dropping the VScroll (the buttons leave the canvas);
+// dropping the height cap (same); wrapping the passage at a width other than
+// the one it is drawn at (a row is wider than its column and clips).
 func TestVerseOfDayFitsShortCanvas(t *testing.T) {
 	st, win := smallPhone(t)
 	win.Resize(fyne.NewSize(320, 400)) // shorter than any phone: the split-screen shape
+	long := strings.Repeat("Jesus said to him, I am the way, the truth, and the life. ", 40)
+	st.Bible = &BibleData{
+		Books: []string{"John"},
+		Verses: map[string]map[int][]Verse{"John": {14: {
+			{BookName: "John", Chapter: 14, Verse: 6, Text: long},
+		}}},
+	}
+	votdSynchronousRemeasure(t)
 	showVerseOfDay(st)
 	p := topPopup(t, win)
 	test.WidgetRenderer(p).Layout(p.Size())
 
-	assertBoxOnScreen(t, p, win.Canvas(), "verse-of-day card")
-	if findScroll(p.Content) == nil {
+	scroll := findScroll(p.Content)
+	if scroll == nil {
 		t.Fatal("no scroll in the verse-of-day card")
+	}
+	body := findReadingParagraph(p.Content)
+	if body == nil {
+		t.Fatal("the card sets no reading paragraph")
+	}
+	if body.MinSize().Height <= scroll.Size().Height {
+		t.Fatalf("the fixture does not overflow (passage %vpt in a %vpt scroll): this test "+
+			"cannot see the defect it exists for", body.MinSize().Height, scroll.Size().Height)
+	}
+	top, bottom := assertBoxOnScreen(t, p, win.Canvas(), "verse-of-day card")
+	pos, sz := win.Canvas().InteractiveArea()
+	if maxH := sheetMaxHeight(win.Canvas().Size().Height, pos.Y, sz.Height, pos.Y+16); bottom-top > maxH+0.5 {
+		t.Errorf("card is %vpt tall against a %vpt cap", bottom-top, maxH)
 	}
 	rb := findTreeButton(p.Content, "Read in context")
 	if findTreeButton(p.Content, "Close") == nil || rb == nil {
@@ -114,6 +150,46 @@ func TestVerseOfDayFitsShortCanvas(t *testing.T) {
 	if bot := bp.Y + rb.Size().Height; bot > win.Canvas().Size().Height {
 		t.Errorf("button row ends at y=%v on a %vpt canvas", bot, win.Canvas().Size().Height)
 	}
+	// Every drawn row fits the column it was given: the passage was wrapped at
+	// the width it is really drawn at, not at a guess.
+	r := test.WidgetRenderer(body).(*readingParagraphRenderer)
+	for i, wd := range r.rowWidths() {
+		if wd > body.Size().Width+0.5 {
+			t.Errorf("row %d is %vpt wide in a %vpt column", i, wd, body.Size().Width)
+		}
+	}
+}
+
+// votdSynchronousRemeasure runs the card's deferred second fit inline for the
+// rest of the test, so the layout the assertions read is the settled one and no
+// timer outlives the test (see votdRemeasure).
+func votdSynchronousRemeasure(t *testing.T) {
+	t.Helper()
+	prev := votdRemeasure
+	votdRemeasure = func(fit func()) { fit() }
+	t.Cleanup(func() { votdRemeasure = prev })
+}
+
+func findReadingParagraph(o fyne.CanvasObject) *readingParagraph {
+	switch v := o.(type) {
+	case *readingParagraph:
+		return v
+	case *fyne.Container:
+		for _, c := range v.Objects {
+			if p := findReadingParagraph(c); p != nil {
+				return p
+			}
+		}
+	case *container.Scroll:
+		return findReadingParagraph(v.Content)
+	case fyne.Widget:
+		for _, c := range test.WidgetRenderer(v).Objects() {
+			if p := findReadingParagraph(c); p != nil {
+				return p
+			}
+		}
+	}
+	return nil
 }
 
 // The compose sheet's counter line is the only content wider than a small

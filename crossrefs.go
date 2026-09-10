@@ -504,6 +504,14 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 // nothing at all. The matching path survives only as the fallback for
 // selections that arrive without a position (legacy Entry pane, zero span).
 func selectionVerses(state *AppState, text string, span selSpan) []Verse {
+	book, chapter := readerChapter(state)
+	return selectionVersesIn(state, book, chapter, text, span)
+}
+
+// selectionVersesIn is selectionVerses read against a named chapter rather
+// than the reader's — the share pipeline's passage route (shareQuoteForPassage)
+// runs its legacy citation fallback through here.
+func selectionVersesIn(state *AppState, book string, chapter int, text string, span selSpan) []Verse {
 	if state.Bible == nil {
 		return nil
 	}
@@ -520,11 +528,11 @@ func selectionVerses(state *AppState, text string, span selSpan) []Verse {
 		// answer only where the normalize declines outright (a selection that
 		// is ONLY a verse number, a single partial word), where "the verse the
 		// position touches" is the honest reading.
-		if _, l, h, _, ok := normalizeShareSelection(state, text, span); ok {
+		if _, l, h, _, ok := normalizeShareSelectionIn(state, book, chapter, text, span); ok {
 			lo, hi = l, h
 		}
 		var out []Verse
-		for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+		for _, v := range state.Bible.GetChapter(book, chapter) {
 			if v.Verse >= lo && v.Verse <= hi {
 				out = append(out, v)
 			}
@@ -534,7 +542,7 @@ func selectionVerses(state *AppState, text string, span selSpan) []Verse {
 	norm := collapseSpaces(text)
 	selProbe := firstRunes(norm, 24)
 	var out []Verse
-	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+	for _, v := range state.Bible.GetChapter(book, chapter) {
 		vt := collapseSpaces(v.Text)
 		vProbe := firstRunes(vt, 24)
 		if (len([]rune(vProbe)) >= 8 && strings.Contains(norm, vProbe)) ||

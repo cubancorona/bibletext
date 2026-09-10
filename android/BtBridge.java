@@ -2846,6 +2846,11 @@ public final class BtBridge {
     /** getScrollFrac is read by the Go side when persisting the reading position. */
     public static float getScrollFrac() { return lastFrac; }
 
+    /** timeZoneID is the device's zone database name (Europe/London), read by the
+     *  Go side to set its local zone: Go's own Android start-up leaves that at
+     *  UTC, and fyne's launch-time repair fixes only the offset then in force. */
+    public static String timeZoneID() { return java.util.TimeZone.getDefault().getID(); }
+
     /** setFrame stores the RAW Fyne pixel frame; applyFrame adds the screen origin. */
     public static void setFrame(final int x, final int y, final int w, final int h) {
         UI.post(new Runnable() {

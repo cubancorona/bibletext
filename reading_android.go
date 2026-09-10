@@ -26,7 +26,7 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaSetNoteM, btaSetNoteBandsM;
+                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -84,6 +84,8 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// The per-paragraph band specs (the Apple panes' bibleTextSetNoteBands):
 	// parallel key/verse arrays plus the pill labels '\n'-joined as UTF-8.
 	btaSetNoteBandsM = (*env)->GetStaticMethodID(env, btaClass, "setNoteBands", "([I[I[B)V");
+	// The device's zone database name, for time.Local (timezone_mobile.go).
+	btaTimeZoneIDM = (*env)->GetStaticMethodID(env, btaClass, "timeZoneID", "()Ljava/lang/String;");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -97,7 +99,8 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
-	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL) {
+	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL ||
+	    btaTimeZoneIDM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -145,6 +148,28 @@ static float btaGetFrac(uintptr_t jni_env) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return -1.0f;
 	return (*env)->CallStaticFloatMethod(env, btaClass, btaGetFracM);
+}
+
+// btaTimeZoneID copies the device's zone database name into buf; empty when
+// the bridge is absent or Java threw, either of which sends the caller to the
+// C library's offset instead (timezone_mobile.go).
+static void btaTimeZoneID(uintptr_t jni_env, char *buf, size_t n) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	buf[0] = 0;
+	if (btaClass == NULL) return;
+	jstring s = (jstring)(*env)->CallStaticObjectMethod(env, btaClass, btaTimeZoneIDM);
+	if ((*env)->ExceptionCheck(env)) {
+		(*env)->ExceptionClear(env);
+		return;
+	}
+	if (s == NULL) return;
+	const char *u = (*env)->GetStringUTFChars(env, s, NULL);
+	if (u != NULL) {
+		strncpy(buf, u, n - 1);
+		buf[n - 1] = 0;
+		(*env)->ReleaseStringUTFChars(env, s, u);
+	}
+	(*env)->DeleteLocalRef(env, s);
 }
 
 static void btaSetFrame(uintptr_t jni_env, int x, int y, int w, int h) {
@@ -864,6 +889,20 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 		return 0, 0, 0, false
 	}
 	return 0, 0, float64(f), true
+}
+
+// deviceTimeZoneName is the zone database name Java reports for the device
+// (TimeZone.getDefault().getID()), read through the bridge; "" without the
+// bridge dex, which sends refreshLocalTimeZone (timezone_mobile.go) to the C
+// library's offset instead. The framework resets Java's default zone in every
+// live process when the setting changes, so a read on return to the foreground
+// sees the new zone.
+func deviceTimeZoneName() string {
+	var buf [128]C.char
+	runBta(func(env uintptr) {
+		C.btaTimeZoneID(C.uintptr_t(env), &buf[0], C.size_t(len(buf)))
+	})
+	return C.GoString(&buf[0])
 }
 
 // armReadingRestore arms the one-shot scroll target. A verse-anchored save
