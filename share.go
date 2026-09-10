@@ -160,18 +160,8 @@ func linkVersesForSelection(state *AppState, text string, span selSpan) (lo, hi 
 // an initialism — the Bluebook always names the version in full (e.g. "(King
 // James)"), so we use "(World English Bible)" / "(Berean Standard Bible)".
 func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
-	cleaned, cite, at, baseLen := prepareShareQuote(state, text, span)
+	quote, cite := shareQuoteIn(state, state.CurrentBook, state.CurrentChapter, text, span)
 	version := state.currentVersion().Name
-	terminal := originalSentenceTerminal(state, cleaned, at, baseLen)
-	// BOTH shares retain authored structure: source poetry lines and the reading
-	// view's paragraph boundaries. They are rebuilt from the chapter data, never
-	// copied from rendered wrapping, so resizing the reader cannot change what is
-	// shared. prepareShareQuote collapses every "\n" out of the selection, so
-	// without this the card could not break a psalm even though its renderer
-	// knows how (poemSegments) — a card is the one surface where a flattened
-	// psalm is most conspicuous.
-	cleaned = restoreShareLineBreaks(state, cleaned, at, baseLen)
-	quote := formatBibleQuote(cleaned, terminal)
 	if asImage {
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
@@ -179,6 +169,98 @@ func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
 		return
 	}
 	nativeShareText(composeShareText(quote, cite, version))
+}
+
+// shareQuoteIn is the whole text pipeline for one selection read against ONE
+// chapter, book/chapter: the located-and-normalized quote, the original
+// sentence terminal, the authored line breaks, then the Bluebook framing. It
+// is the single body behind both share routes — the selection menu (the
+// reader's chapter) and the verse-of-the-day card (whatever chapter the verse
+// is in) — so they cannot drift: what the card shares for a passage is, by
+// construction, what selecting that passage in its own chapter would share.
+//
+// BOTH shares retain authored structure: source poetry lines and the reading
+// view's paragraph boundaries. They are rebuilt from the chapter data, never
+// copied from rendered wrapping, so resizing the reader cannot change what is
+// shared. prepareShareQuote collapses every "\n" out of the selection, so
+// without this the card could not break a psalm even though its renderer
+// knows how (poemSegments) — a card is the one surface where a flattened
+// psalm is most conspicuous.
+func shareQuoteIn(state *AppState, book string, chapter int, raw string, span selSpan) (quote, cite string) {
+	cleaned, cite, at, baseLen := prepareShareQuoteIn(state, book, chapter, raw, span)
+	terminal := originalSentenceTerminalIn(state, book, chapter, cleaned, at, baseLen)
+	cleaned = restoreShareLineBreaksIn(state, book, chapter, cleaned, at, baseLen)
+	return formatBibleQuote(cleaned, terminal), cite
+}
+
+// shareQuoteForPassage returns exactly what the selection route would share
+// for the whole of verses lo..hi of book/chapter selected in their own
+// chapter: the Bluebook-framed quote and its citation. It is the share route
+// for a passage the reader is NOT on — the verse-of-the-day card — where the
+// selection route's every stage reads the reader's current chapter and would
+// cite Psalm 23:1 as "Matthew 5". The passage goes through the same pipeline
+// as a selection of its verses (shareQuoteIn, narrowed to lo..hi by the span
+// exactly as a native pane's selection is), so the trailing clause-mark strip,
+// the sentence completion, the original terminal and the poem/paragraph
+// restore all apply — a bare formatBibleQuote of the verse text skips the
+// first of those and ships "…glory of God; . . . ." for a verse ending in ";".
+// The reader is never moved: nothing here reads or writes state.CurrentBook or
+// state.CurrentChapter. ok is false when there is nothing to share — no
+// Bible, an empty or inverted range, verses the chapter does not have.
+func shareQuoteForPassage(state *AppState, book string, chapter, lo, hi int) (quote, cite string, ok bool) {
+	if state == nil || state.Bible == nil || lo < 1 || hi < lo {
+		return "", "", false
+	}
+	// The "selection": the verses' own text, joined as chapterProse joins them,
+	// so the locate lands on the passage's copy of the words and every verse in
+	// lo..hi contributes to the citation. No verse-number markers are prepended
+	// — stripVerseMarkers would only take them off again.
+	var b strings.Builder
+	for _, v := range state.Bible.GetChapter(book, chapter) {
+		if v.Verse < lo || v.Verse > hi {
+			continue
+		}
+		t := collapseSpaces(v.Text)
+		if t == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(t)
+	}
+	raw := b.String()
+	if raw == "" {
+		return "", "", false
+	}
+	quote, cite = shareQuoteIn(state, book, chapter, raw, selSpanFromNative(lo, hi))
+	if quote == "" {
+		return "", "", false
+	}
+	return quote, cite, true
+}
+
+// sharePassageText hands the passage to the native share sheet as text: the
+// same message the selection route's "Share with citation" builds
+// (composeShareText — the quote, a blank line, the citation line naming the
+// translation in full). On Windows/Linux nativeShareText is the clipboard
+// fallback with its notice (share_fallback.go), as it is for a selection.
+func sharePassageText(state *AppState, book string, chapter, lo, hi int) {
+	msg, ok := sharePassageMessage(state, book, chapter, lo, hi)
+	if !ok {
+		return
+	}
+	nativeShareText(msg)
+}
+
+// sharePassageMessage is the text sharePassageText hands over, kept apart
+// from the hand-off so it can be pinned without presenting a share sheet.
+func sharePassageMessage(state *AppState, book string, chapter, lo, hi int) (string, bool) {
+	quote, cite, ok := shareQuoteForPassage(state, book, chapter, lo, hi)
+	if !ok {
+		return "", false
+	}
+	return composeShareText(quote, cite, state.currentVersion().Name), true
 }
 
 // citationLine is the Bluebook reference line shown under both the plain-text share
@@ -206,11 +288,16 @@ func composeShareText(quote, cite, version string) string {
 // in the source — is collapsed to single spaces. The user's actual selection
 // (whole verses or a phrase) is otherwise preserved.
 func cleanQuoteText(state *AppState, raw string) string {
+	book, chapter := readerChapter(state)
+	return cleanQuoteTextIn(state, book, chapter, raw)
+}
+
+func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) string {
 	s := collapseSpaces(raw)
 	if state == nil || state.Bible == nil {
 		return s
 	}
-	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+	for _, v := range state.Bible.GetChapter(book, chapter) {
 		body := collapseSpaces(v.Text)
 		if body == "" {
 			continue
@@ -245,22 +332,46 @@ func cleanQuoteText(state *AppState, raw string) string {
 // repeated wording the completion and the line-break restore ran against the
 // EARLIER copy's surroundings (sweep findings share.go:332/:565/:846).
 func prepareShareQuote(state *AppState, raw string, span selSpan) (text, cite string, at, baseLen int) {
-	if t, lo, hi, idx, ok := normalizeShareSelection(state, raw, span); ok {
-		return completeTrailingSentence(state, t, idx), verseRangeCitation(state, lo, hi), idx, len(t)
-	}
-	cleaned := completeTrailingSentence(state, cleanQuoteText(state, raw), -1)
-	return cleaned, citationForSelection(state, raw, span), -1, 0
+	book, chapter := readerChapter(state)
+	return prepareShareQuoteIn(state, book, chapter, raw, span)
 }
 
-// chapterProse joins the current chapter's verses (marker-free, spaces
-// collapsed) into one string, recording each verse's [start,end) span — the
-// positional ground truth for locating a selection and attributing verses.
+func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, span selSpan) (text, cite string, at, baseLen int) {
+	if t, lo, hi, idx, ok := normalizeShareSelectionIn(state, book, chapter, raw, span); ok {
+		return completeTrailingSentenceIn(state, book, chapter, t, idx), verseRangeCitation(book, chapter, lo, hi), idx, len(t)
+	}
+	cleaned := completeTrailingSentenceIn(state, book, chapter, cleanQuoteTextIn(state, book, chapter, raw), -1)
+	return cleaned, citationForSelectionIn(state, book, chapter, raw, span), -1, 0
+}
+
+// Every stage of the pipeline from here down reads ONE chapter, and the
+// ...In spelling names it outright as (book, chapter). The bare spelling is
+// the selection route's: it reads the reader's current chapter (readerChapter)
+// and is what every existing caller and test holds to. A passage the reader
+// is not on — the verse-of-the-day card — runs the ...In spellings with its
+// own chapter (shareQuoteForPassage), so it is located, normalized and cited
+// in the chapter it belongs to, and the reader stays where they are.
+func readerChapter(state *AppState) (book string, chapter int) {
+	if state == nil {
+		return "", 0
+	}
+	return state.CurrentBook, state.CurrentChapter
+}
+
+// chapterProse joins a chapter's verses (marker-free, spaces collapsed) into
+// one string, recording each verse's [start,end) span — the positional ground
+// truth for locating a selection and attributing verses.
 type verseSpan struct{ verse, start, end int }
 
 func chapterProse(state *AppState) (string, []verseSpan) {
+	book, chapter := readerChapter(state)
+	return chapterProseIn(state, book, chapter)
+}
+
+func chapterProseIn(state *AppState, book string, chapter int) (string, []verseSpan) {
 	var b strings.Builder
 	var spans []verseSpan
-	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+	for _, v := range state.Bible.GetChapter(book, chapter) {
 		t := collapseSpaces(v.Text)
 		if t == "" {
 			continue
@@ -317,10 +428,15 @@ func verseShareStructure(s string) (string, []shareTextBreak) {
 // breaks come from the same grouping the reader displays; line breaks inside a
 // verse come from the translation source retained in Verse.Text.
 func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
+	book, chapter := readerChapter(state)
+	return chapterShareStructureIn(state, book, chapter)
+}
+
+func chapterShareStructureIn(state *AppState, book string, chapter int) (string, []shareTextBreak) {
 	if state == nil || state.Bible == nil {
 		return "", nil
 	}
-	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
+	verses := state.Bible.GetChapter(book, chapter)
 	var b strings.Builder
 	var breaks []shareTextBreak
 	prevPoetic := false
@@ -375,7 +491,12 @@ func chapterShareStructure(state *AppState) (string, []shareTextBreak) {
 // is no longer a contiguous substring), losing the quote's poem breaks; the
 // positional path restores those too, because only text[:baseLen] must match.
 func restoreShareLineBreaks(state *AppState, text string, at, baseLen int) string {
-	flat, breaks := chapterShareStructure(state)
+	book, chapter := readerChapter(state)
+	return restoreShareLineBreaksIn(state, book, chapter, text, at, baseLen)
+}
+
+func restoreShareLineBreaksIn(state *AppState, book string, chapter int, text string, at, baseLen int) string {
+	flat, breaks := chapterShareStructureIn(state, book, chapter)
 	if text == "" || flat == "" || len(breaks) == 0 {
 		return text
 	}
@@ -429,11 +550,16 @@ func isWordRune(r rune) bool {
 // still drops it from the citation. The whole-corpus search remains as the
 // safety net for a span that somehow disagrees with the words.
 func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
+	book, chapter := readerChapter(state)
+	return normalizeShareSelectionIn(state, book, chapter, raw, span)
+}
+
+func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	if state == nil || state.Bible == nil {
 		return "", 0, 0, -1, false
 	}
-	s := stripVerseMarkers(state, collapseSpaces(raw))
-	corpus, spans := chapterProse(state)
+	s := stripVerseMarkers(state, book, chapter, collapseSpaces(raw))
+	corpus, spans := chapterProseIn(state, book, chapter)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
 	}
@@ -615,13 +741,18 @@ func normalizeShareSelection(state *AppState, raw string, span selSpan) (text st
 // copy, the forward scan read the wrong copy's surroundings and completed (or
 // refused to complete) the wrong sentence.
 func completeTrailingSentence(state *AppState, s string, at int) string {
+	book, chapter := readerChapter(state)
+	return completeTrailingSentenceIn(state, book, chapter, s, at)
+}
+
+func completeTrailingSentenceIn(state *AppState, book string, chapter int, s string, at int) string {
 	if state == nil || state.Bible == nil || s == "" {
 		return s
 	}
 	if r, _ := utf8.DecodeLastRuneInString(strings.TrimRight(s, " \t”’\"'")); r == '.' || r == '!' || r == '?' || r == '…' {
 		return s // already complete
 	}
-	corpus, _ := chapterProse(state)
+	corpus, _ := chapterProseIn(state, book, chapter)
 	idx := -1
 	if at >= 0 && at+len(s) <= len(corpus) && strings.HasPrefix(corpus[at:], s) {
 		idx = at
@@ -674,8 +805,8 @@ func completeTrailingSentence(state *AppState, s string, at int) string {
 // short tails, which is how a marker once leaked into a shared card). A number
 // appearing inside verse prose never matches its own verse's opening, so it is
 // never touched.
-func stripVerseMarkers(state *AppState, s string) string {
-	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
+func stripVerseMarkers(state *AppState, book string, chapter int, s string) string {
+	for _, v := range state.Bible.GetChapter(book, chapter) {
 		body := collapseSpaces(v.Text)
 		if body == "" {
 			continue
@@ -705,8 +836,7 @@ func stripVerseMarkers(state *AppState, s string) string {
 }
 
 // verseRangeCitation renders "Book C:lo" / "Book C:lo–hi" (en dash per Bluebook).
-func verseRangeCitation(state *AppState, lo, hi int) string {
-	book, ch := state.CurrentBook, state.CurrentChapter
+func verseRangeCitation(book string, ch, lo, hi int) string {
 	if lo == hi {
 		return fmt.Sprintf("%s %d:%d", book, ch, lo)
 	}
@@ -736,14 +866,15 @@ const blockQuoteWords = 50
 //     correctly gets ONE set of plain double marks — Rule 5.2(f)(i): omit the
 //     enclosing internal marks when the whole quotation is itself a quotation.
 //
-// Documented deviations (deliberate, for a chat/card medium): paragraph/line
-// structure is preserved only on the TEXT share path (restoreShareLineBreaks) —
-// the image card still flattens (Rule 5.1(a)(iii) would keep it in 50+ word
-// blocks); a third nesting
-// level is not re-alternated back to double (5.1(b)(i)) —
-// the closing single glyph ’ doubles as the apostrophe, so auto-flipping is
-// unreliable; and the card centers its citation rather than starting it at the
-// left margin on the following line.
+// Documented deviations (deliberate, for a chat/card medium): a third nesting
+// level is not re-alternated back to double (5.1(b)(i)) — the closing single
+// glyph ’ doubles as the apostrophe, so auto-flipping is unreliable; and the
+// card centers its citation rather than starting it at the left margin on the
+// following line. Authored structure is kept on BOTH share paths, as Rule
+// 5.1(a)(iii) asks of a block: restoreShareLineBreaks runs before either, the
+// text share carries its "\n"/"\n\n" verbatim, and the card lays each poem
+// line out on its own (poemSegments) — a paragraph boundary there is a line
+// break too, its blank line dropped.
 //
 // It stays faithful to the SELECTION otherwise: balanceQuoteMarks repairs marks whose
 // partner sits in the unselected surrounding text; no words are added or dropped.
@@ -897,33 +1028,27 @@ func bracketStartCapital(s string) string {
 // selected copy's sentence — and reads it even when the completion has appended
 // past a skipped quote-closer, where the string search cannot match at all.
 func originalSentenceTerminal(state *AppState, sel string, at, baseLen int) rune {
+	book, chapter := readerChapter(state)
+	return originalSentenceTerminalIn(state, book, chapter, sel, at, baseLen)
+}
+
+func originalSentenceTerminalIn(state *AppState, book string, chapter int, sel string, at, baseLen int) rune {
 	if state == nil || state.Bible == nil {
 		return '.'
 	}
-	var b strings.Builder
-	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
-		t := collapseSpaces(v.Text)
-		if t == "" {
-			continue
-		}
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(t)
-	}
-	chapter := b.String()
+	prose, _ := chapterProseIn(state, book, chapter)
 	s := collapseSpaces(sel)
 	idx, scanFrom := -1, 0
-	if at >= 0 && baseLen > 0 && baseLen <= len(s) && at+baseLen <= len(chapter) &&
-		chapter[at:at+baseLen] == s[:baseLen] {
+	if at >= 0 && baseLen > 0 && baseLen <= len(s) && at+baseLen <= len(prose) &&
+		prose[at:at+baseLen] == s[:baseLen] {
 		idx, scanFrom = at, at+baseLen
-	} else if i := strings.Index(chapter, s); i >= 0 {
+	} else if i := strings.Index(prose, s); i >= 0 {
 		idx, scanFrom = i, i+len(s)
 	}
 	if idx < 0 {
 		return '.'
 	}
-	for _, r := range chapter[scanFrom:] {
+	for _, r := range prose[scanFrom:] {
 		switch r {
 		case '.', '…':
 			return '.'
@@ -1084,10 +1209,14 @@ func balanceQuoteMarks(s string) string {
 // shared selection carries an accurate citation. Falls back to "Book C" when the
 // selection can't be pinned to specific verses (e.g. a partial phrase).
 func citationForSelection(state *AppState, text string, span selSpan) string {
+	book, chapter := readerChapter(state)
+	return citationForSelectionIn(state, book, chapter, text, span)
+}
+
+func citationForSelectionIn(state *AppState, book string, ch int, text string, span selSpan) string {
 	if state == nil {
 		return ""
 	}
-	book, ch := state.CurrentBook, state.CurrentChapter
 	if state.Bible == nil {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
@@ -1096,7 +1225,7 @@ func citationForSelection(state *AppState, text string, span selSpan) string {
 	// contains the selection) so a partial selection — e.g. one that omits the
 	// verse's leading quotation mark — still pins to the verse it falls within,
 	// rather than dropping to the chapter-only fallback.
-	matched := selectionVerses(state, text, span)
+	matched := selectionVersesIn(state, book, ch, text, span)
 	if len(matched) == 0 {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
