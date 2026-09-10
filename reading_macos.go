@@ -1600,6 +1600,16 @@ void bibleTextMacTVSetHTML(const char *html) {
                     [gTextView setString:bibleTextMacPlainFromHTML(plainSrc)];
                     gMacContentEnd = gTextView.textStorage.length; // apparatus stripped above — all scripture
                     gMacContentStart = 0; // plain text: no font geometry to find the title by
+                    // And no title range either. The finder runs only from the
+                    // latched import, which returns before touching any
+                    // geometry global when the import fails, so the previous
+                    // chapter's range would survive here — and btMacTitleRange
+                    // clamps on length alone, which a LONGER fallback string
+                    // passes, so verse 0 would paint (and follow-scroll to)
+                    // whatever text now sits under the old range. The iOS twin
+                    // clears its title range on this same path. (No verse table
+                    // to drop beside it: btMacLocForVerse walks the runs live.)
+                    btMacFindTitleRange(nil);
                 }
             });
         });

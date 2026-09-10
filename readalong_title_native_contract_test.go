@@ -127,7 +127,8 @@ func TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne(t *testing.T)
 	if !inOrder(apply, "btIOSBuildVerseIndex(gReadingTV.textStorage);", "btIOSFindTitleRange(gReadingTV.textStorage);") {
 		t.Error("iOS: the title range must be found after the verse index that bounds it")
 	}
-	if !inOrder(readNativeSource(t, "reading_ios.go"), "btIOSBuildVerseIndex(nil);", "btIOSFindTitleRange(nil);") {
+	iosFallback := nativeFunctionSource(t, "reading_ios.go", "void bibleTextTVSetHTML(const char *html) {")
+	if !inOrder(iosFallback, "btIOSBuildVerseIndex(nil);", "btIOSFindTitleRange(nil);") {
 		t.Error("iOS: the plain-text fallback must clear the title range with the verse index")
 	}
 
@@ -140,6 +141,17 @@ func TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne(t *testing.T)
 	latched := nativeFunctionSource(t, "reading_macos.go", "static BOOL btMacApplyHTMLLatched(NSData *data) {")
 	if !inOrder(latched, "btMacFindContentStart(gTextView.textStorage);", "btMacFindTitleRange(gTextView.textStorage);") {
 		t.Error("macOS: the title range must be found after the content start that bounds it")
+	}
+	// The same property as the iOS fallback check above. The latched import
+	// returns NO before writing any geometry global when the import fails, so
+	// the fallback is the only place the previous chapter's title range can be
+	// dropped — and btMacTitleRange clamps on length alone, which the LONGER
+	// plain string passes. macOS has no verse table to clear beside it
+	// (btMacLocForVerse walks the font runs live), so the reset rides on the
+	// content-start reset that bounds the finder instead.
+	macFallback := nativeFunctionSource(t, "reading_macos.go", "void bibleTextMacTVSetHTML(const char *html) {")
+	if !inOrder(macFallback, "gMacContentStart = 0;", "btMacFindTitleRange(nil);") {
+		t.Error("macOS: the plain-text fallback must clear the title range with the content start")
 	}
 
 	java := readNativeSource(t, "android/BtBridge.java")
@@ -162,6 +174,13 @@ func TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne(t *testing.T)
 		"\x00", "btIOSFindTitleRange(gReadingTV.textStorage);", 1)
 	if inOrder(swapped, "btIOSBuildVerseIndex(gReadingTV.textStorage);", "btIOSFindTitleRange(gReadingTV.textStorage);") {
 		t.Fatal("inOrder still passes with the calls swapped; the check proves nothing")
+	}
+	// CONTROL: both fallback checks fail when their reset is taken out.
+	if inOrder(strings.Replace(iosFallback, "btIOSFindTitleRange(nil);", "", 1), "btIOSBuildVerseIndex(nil);", "btIOSFindTitleRange(nil);") {
+		t.Fatal("inOrder still passes with the iOS fallback reset removed; the check proves nothing")
+	}
+	if inOrder(strings.Replace(macFallback, "btMacFindTitleRange(nil);", "", 1), "gMacContentStart = 0;", "btMacFindTitleRange(nil);") {
+		t.Fatal("inOrder still passes with the macOS fallback reset removed; the check proves nothing")
 	}
 }
 
