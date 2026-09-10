@@ -296,10 +296,13 @@ func TestPassageShareMessageIsTheSelectionRoutesMessage(t *testing.T) {
 // so: the caches are downloaded translation data, not repository content, so a
 // CI checkout has none of them. A translation with no cache present is
 // skipped; one whose cache is present but will not load is an error, since
-// that is not absence. Skipped entirely under -short.
+// that is not absence. Opt-in by BIBLETEXT_EXHAUSTIVE=1: it adds a minute to
+// every run, and the CI-runnable tests above already carry the fixtures that
+// reproduce every fragment shape it would find.
 func TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly(t *testing.T) {
-	if testing.Short() {
-		t.Skip("local-only: walks three ~30k-verse translation caches")
+	if os.Getenv("BIBLETEXT_EXHAUSTIVE") == "" {
+		t.Skip("local-only and opt-in: walks three ~30k-verse translation caches (a minute); " +
+			"run with BIBLETEXT_EXHAUSTIVE=1")
 	}
 	walked := 0
 	for _, id := range []string{"web", "bsb", "webc"} {

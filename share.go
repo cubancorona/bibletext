@@ -168,8 +168,14 @@ func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
 		showShareImagePreview(state, quote, cite, version)
 		return
 	}
-	nativeShareText(composeShareText(quote, cite, version))
+	shareTextOut(composeShareText(quote, cite, version))
 }
+
+// shareTextOut hands a composed text share to the platform. It is a variable
+// so a test can read what a surface shares without a share sheet or a
+// clipboard — the test driver's window clipboard is single-use, so nothing
+// written to it can be read back. Both text routes deliver through it.
+var shareTextOut = func(s string) { nativeShareText(s) }
 
 // shareQuoteIn is the whole text pipeline for one selection read against ONE
 // chapter, book/chapter: the located-and-normalized quote, the original
@@ -250,7 +256,7 @@ func sharePassageText(state *AppState, book string, chapter, lo, hi int) {
 	if !ok {
 		return
 	}
-	nativeShareText(msg)
+	shareTextOut(msg)
 }
 
 // sharePassageMessage is the text sharePassageText hands over, kept apart

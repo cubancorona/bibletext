@@ -1,11 +1,15 @@
 package bibletext
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 )
 
 // A fixture that carries every rotation entry as a real verse (text "x"), so
@@ -428,4 +432,91 @@ func TestTheCardSetsThePassageInTheReadingFace(t *testing.T) {
 	if strings.TrimSpace(body.text) == "" {
 		t.Error("the paragraph carries no text")
 	}
+}
+
+// THE CARD SHARES THE PASSAGE IN ITS OWN CHAPTER. The selection route reads
+// the chapter the reader is on at every stage, so a card over Matthew 5 would
+// cite Psalm 23 as "Matthew 5". Mutation: route the card's Share through
+// shareVerse (the selection route) — the citation names the reader's chapter.
+func TestTheCardSharesThePassageNotTheReadersChapter(t *testing.T) {
+	st, win := smallPhone(t)
+	votdSynchronousRemeasure(t)
+	st.Bible = &BibleData{
+		Books: []string{"Matthew", "John"},
+		Verses: map[string]map[int][]Verse{
+			"Matthew": {5: {{BookName: "Matthew", Chapter: 5, Verse: 3, Text: "Blessed are the poor in spirit."}}},
+			"John": {3: {
+				{BookName: "John", Chapter: 3, Verse: 16, Text: "For God so loved the world, that he gave his only born Son."},
+				{BookName: "John", Chapter: 3, Verse: 17, Text: "For God didn't send his Son into the world to judge the world."},
+			}},
+		},
+	}
+	// The reader is on Matthew 5; the rotation entry the fixture can show is
+	// John 3:16-17 (Matthew 5:3 is one too — both resolve, and the pick is
+	// whichever the day lands on; either way the card's chapter is not
+	// guaranteed to be the reader's, which is what the assertion needs).
+	st.CurrentBook, st.CurrentChapter = "Matthew", 5
+	var got string
+	prevOut := shareTextOut
+	shareTextOut = func(s string) { got = s }
+	t.Cleanup(func() { shareTextOut = prevOut })
+	showVerseOfDay(st)
+	p := topPopup(t, win)
+	test.WidgetRenderer(p).Layout(p.Size())
+
+	d, ok := verseOfTheDay(st)
+	if !ok {
+		t.Fatal("fixture: no verse of the day")
+	}
+	if d.Book == st.CurrentBook && d.Chapter == st.CurrentChapter {
+		// Make the reader's chapter differ from the card's so the two routes
+		// cannot agree by coincidence.
+		st.CurrentBook, st.CurrentChapter = "John", 3
+		if d.Book == "John" {
+			st.CurrentBook, st.CurrentChapter = "Matthew", 5
+		}
+	}
+	share := findIconTapButton(p.Content, theme.MailSendIcon().Name())
+	if share == nil {
+		t.Fatal("the card has no share control")
+	}
+	share.Tapped(&fyne.PointEvent{})
+
+	want, ok := sharePassageMessage(st, d.Book, d.Chapter, d.Lo, d.Hi)
+	if !ok {
+		t.Fatal("fixture: the passage route produced nothing")
+	}
+	if got != want {
+		t.Errorf("the card shared:\n%s\nthe passage route says:\n%s", got, want)
+	}
+	if !strings.Contains(got, d.reference()) {
+		t.Errorf("the share does not cite the card's passage %s:\n%s", d.reference(), got)
+	}
+	if strings.Contains(got, fmt.Sprintf("%s %d", st.CurrentBook, st.CurrentChapter)) {
+		t.Errorf("the share cites the reader's chapter %s %d:\n%s", st.CurrentBook, st.CurrentChapter, got)
+	}
+}
+
+func findIconTapButton(o fyne.CanvasObject, iconName string) *iconTapButton {
+	switch v := o.(type) {
+	case *iconTapButton:
+		if v.icon != nil && v.icon.Name() == iconName {
+			return v
+		}
+	case *fyne.Container:
+		for _, c := range v.Objects {
+			if b := findIconTapButton(c, iconName); b != nil {
+				return b
+			}
+		}
+	case *container.Scroll:
+		return findIconTapButton(v.Content, iconName)
+	case fyne.Widget:
+		for _, c := range test.WidgetRenderer(v).Objects() {
+			if b := findIconTapButton(c, iconName); b != nil {
+				return b
+			}
+		}
+	}
+	return nil
 }

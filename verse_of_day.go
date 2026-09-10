@@ -710,6 +710,20 @@ func showVerseOfDay(state *AppState) {
 	kicker := canvas.NewText("Verse of the day", pal.Accent)
 	kicker.TextStyle = fyne.TextStyle{Bold: true}
 	kicker.TextSize = 12
+	// Share sits in the kicker row, not the button row: the row below holds
+	// Close and Read in context at the narrowest card width with nothing to
+	// spare, and a third control there overflows a small phone. A compact
+	// icon beside the kicker costs the card no width and little height.
+	//
+	// THE PASSAGE ROUTE, NOT THE SELECTION ROUTE. Every stage of the selection
+	// share reads the chapter the reader is on, so sharing Psalm 23 from the
+	// card over Matthew 5 would cite "Matthew 5"; sharePassageText reads the
+	// passage's own chapter and moves the reader nowhere.
+	shareBtn := newIconTapButton(state, theme.MailSendIcon(), 17, 22, func() {
+		sharePassageText(state, d.Book, d.Chapter, d.Lo, d.Hi)
+	})
+	top := container.NewBorder(nil, nil, nil, shareBtn,
+		container.NewVBox(layout.NewSpacer(), kicker, layout.NewSpacer()))
 
 	// The pane's own cached face: the toolkit's font cache is keyed on the
 	// resource, so handing it a fresh one per card would miss every time.
@@ -758,7 +772,7 @@ func showVerseOfDay(state *AppState) {
 	// the cap the scroll never engages and the card looks exactly as before.
 	bodyScroll := container.NewVScroll(container.New(squeezeWidthLayout{}, body))
 	content := container.NewBorder(
-		kicker,
+		top,
 		container.NewVBox(ref, widget.NewSeparator(),
 			container.NewHBox(layout.NewSpacer(), closeBtn, readBtn)),
 		nil, nil,
