@@ -175,6 +175,31 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.8
+
+> BibleText 1.2.8 rebuilds the verse of the day: a short passage rather than a
+> clause, set in the reading face at your text size with Christ's words in red,
+> shareable from the card in its own chapter. The rotation moves between books
+> daily and every reader on every translation sees the same passage on the same
+> date; the day changes at your local midnight. Updating re-times the rotation
+> once. No ads, account, analytics, or tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.8 (178);
+- tap the sparkle in the header: the card shows a passage in the reading face
+  at the Settings text size, with red text where the passage is Christ's words
+  (Matthew 5 or John 14 are good days to look for) and none when red letter is
+  off in Settings;
+- share from the card's paper-plane control and confirm the citation names the
+  passage's own chapter, not the chapter you were reading;
+- tap "Read in context" and confirm the whole passage is highlighted;
+- check the card the day after: a different book, and the change happens at
+  local midnight, not at 01:00;
+- switch to WEB Catholic and confirm the card can show a passage from Wisdom,
+  Sirach, Judith or Baruch on its day, while WEB shows a Psalm or Isaiah on
+  the same day;
+
 ## Closed-test release notes — 1.2.7
 
 > BibleText 1.2.7 reads WEB, WEB Catholic, BSB, and the licensed NKJV; includes
