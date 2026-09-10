@@ -76,6 +76,22 @@ def main(argv):
         if status not in ("draft", "completed"):
             raise SystemExit(f"--status must be draft or completed, not {status!r}")
         del argv[i:i + 2]
+    # --notes <file>: the release notes for the en-GB listing, carried on the
+    # track release itself. Play caps them at 500 characters per language and
+    # accepts a release without any, so a release sent from here would
+    # otherwise reach review with the field empty.
+    notes = None
+    if "--notes" in argv:
+        i = argv.index("--notes")
+        if i + 1 >= len(argv):
+            raise SystemExit("--notes needs a file path")
+        with open(argv[i + 1], encoding="utf-8") as f:
+            notes = " ".join(f.read().split())
+        if not notes:
+            raise SystemExit(f"--notes: {argv[i + 1]} is empty")
+        if len(notes) > 500:
+            raise SystemExit(f"--notes: {len(notes)} characters; Play caps release notes at 500")
+        del argv[i:i + 2]
     cmd = argv[1] if len(argv) > 1 else "tracks"
     token = access_token()
 
@@ -91,7 +107,7 @@ def main(argv):
 
     if cmd == "upload":
         if len(argv) < 3:
-            raise SystemExit("usage: play-publish.py upload <bundle.aab> [track]")
+            raise SystemExit("usage: play-publish.py [--status draft|completed] [--notes file] upload <bundle.aab> [track]")
         aab, track = argv[2], (argv[3] if len(argv) > 3 else "internal")
         with open(aab, "rb") as f:
             blob = f.read()
@@ -107,9 +123,13 @@ def main(argv):
         # status draft may be created on draft app"). The first release of a new
         # app therefore has to be created as a draft here and sent for review
         # from the console; every release after the app is live is "completed".
+        release = {"status": status, "versionCodes": [str(code)]}
+        if notes:
+            release["releaseNotes"] = [{"language": "en-GB", "text": notes}]
         call(f"{BASE}/edits/{eid}/tracks/{track}", token, "PUT",
-             {"track": track, "releases": [{"status": status, "versionCodes": [str(code)]}]})
-        print(f"  assigned {code} to '{track}' with status '{status}'")
+             {"track": track, "releases": [release]})
+        print(f"  assigned {code} to '{track}' with status '{status}'"
+              + (f", notes {len(notes)} chars" if notes else ", no release notes"))
         if dry:
             call(f"{BASE}/edits/{eid}", token, "DELETE")
             print("  --dry-run: edit discarded, nothing changed on Play")
