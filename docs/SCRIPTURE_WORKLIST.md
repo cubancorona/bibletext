@@ -445,7 +445,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | M | none | built, gated on the licensing reply |
+| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass paused; gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -693,6 +693,14 @@ the verse-text previews the panel shows, which it never did.
 On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
 the tag goes; on a no nothing needs unwinding. The 43 title notes ride the
 same rule as the rest, keyed "Title" when the selection reaches verse 1.
+
+**Paused 10 September** after the first look on a phone: the presentation is
+not right — the Treasury's accordion title forces the list wider than the
+panel and clips every row, and the publisher's rows use a different idiom
+from the cards around them. The findings, the agreed direction (one row
+idiom, one heading style, the notice once, the Treasury behind a plain
+"Show more" link) and the recipe for seeing the panel without a device are
+in `docs/BACKLOG.md`, "NKJV cross references: the panel's second pass".
 
 **S23.** DONE. A small-caps span was folded to uppercase in the stored text,
 so LORD, GOD and the four names of Jesus were literally capitals. Drawing them

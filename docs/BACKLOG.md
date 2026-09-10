@@ -43,6 +43,91 @@ passage with the divine name in small capitals, and a chapter whose publisher
 paragraphing differs visibly from the old uniform rule, are the two images that
 show what changed.
 
+## NKJV cross references: the panel's second pass — PAUSED 10 September 2026
+
+The edition's own cross-reference apparatus is captured, resolved and drawn
+in the cross-references panel behind the `nkjvxrefs` build tag (commits
+ecdeb1cad, 94385ac27; the design memo and the decision are in
+`docs/SCRIPTURE_WORKLIST.md` S20 and `docs/SOURCE_FIELDS_DECISIONS.md`).
+What is DONE and stays: the decoder keeps each tagged citation as a span
+(`Footnote.Refs`, no cache-epoch bump); `publisher_xrefs.go` resolves the
+notes; `crossref_list.go` composes the panel in blocks; the flag is set for
+the NKJV only in `versions_nkjvxrefs.go`; `scripts/run-ios-device.sh
+--nkjvxrefs` builds it for a phone; the canon census and the copyright-line
+assertion are in `apibible_live_test.go`; the tests carry controls.
+
+What the first look on the phone found — and `TestRenderCrossRefPanel`
+reproduces at phone size without a device — is that the presentation is
+wrong, in ways a reader sees as "confusing and not consistent":
+
+1. Rows run off the right edge. The Treasury's accordion title ("More
+   references — Treasury of Scripture Knowledge") is wider than the panel
+   and forces the whole list to that width, so every row is clipped, the
+   parallel rows' previews included. A defect, not a design choice, and the
+   biggest single cause.
+2. Two row idioms in one list: the Treasury and parallel rows are cards
+   (bold accent reference, preview, tap the card); the publisher's rows are
+   a small grey verse number over a paragraph with inline links.
+3. Two heading styles: the small bold block heading and the accordion's
+   large bold button with a chevron.
+4. The verse number repeated on every row of a single-verse selection.
+5. The edition's notice shown twice, in the block and in the footer.
+6. A lone parenthesised "compare" citation standing as a whole row,
+   explained only by a legend further down.
+7. The empty state (a verse with no note) is a heading, a line, a long
+   notice, then the accordion — the notice dominates a screen with nothing
+   to show.
+
+WHERE IT IS GOING — agreed in principle, not yet built. One panel, not two
+stacked in one:
+
+- One row idiom everywhere. The publisher's references become the same
+  cards the Treasury uses — bold reference, preview, tap the card — one
+  card per cited passage, in the publisher's order, never re-sorted or
+  capped, labelled from the tagged id ("John 19:39", so a continuation
+  such as "19:39" is readable). The parenthesised "compare" citations
+  become one muted "Compare: (1 John 4:9, 10; Rev. 1:5)" line under the
+  cards of the note they belong to — kept, self-explanatory, no legend.
+  Full-card taps also settle the small-tap-target concern the memo raised.
+  This reverses the memo's verbatim-per-note row; the reason the memo gave
+  (unreadable continuation labels) does not hold when the label comes from
+  the id rather than the citation text.
+- One heading style: small muted section labels — NKJV · Treasury of
+  Scripture Knowledge — with the Treasury folded behind a plain "Show N
+  more references" link rather than an accordion, which also removes the
+  width defect.
+- Verse labels only where they carry information: a small "Verse N"
+  divider when the selection spans several verses, nothing otherwise.
+- The notice once, in the footer, with the sources line naming each set
+  once: NKJV (Thomas Nelson) · Treasury: OpenBible.info (CC-BY) · Gospel
+  parallels.
+- The empty state in one line — "No NKJV cross references for this
+  verse" — with the Treasury shown open beneath.
+
+This touches the presentation layer only — `crossref_list.go`, plus a small
+helper in `publisher_xrefs.go` that splits a note's untagged "compare"
+remainder from its tagged citations — and the tests in
+`crossref_list_test.go`, which pin the current composition and must be
+rewritten with it. The decoder, the data, the resolver's order and the
+build tag are unchanged by it.
+
+GATES. Nothing displays in a store build until the API.Bible licensing
+reply (sent; awaiting) says it may; the second pass can be built and looked
+at on a tagged device build meanwhile. On a yes: move the one line in
+`versions_nkjvxrefs.go` into the registry entry and drop the tag; add the
+dedicated copyright page the terms' §7 asks for (a standing pre-ship item,
+`versions_ui.go`). On a no: nothing to unwind.
+
+TO RESUME. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
+See the panel without a device: run `TestLiveAPIBibleFullCanon` with
+`BIBLETEXT_FULL_CANON_OUT` set (19 s on the Pro plan; the decoded canon is
+licensed text and must stay outside the repository), then
+`BIBLETEXT_RENDER_XREFS=<that file> BIBLETEXT_RENDER_OUT=<dir> go test -run
+TestRenderCrossRefPanel -v .` writes seven phone-sized PNGs (John 3:16 on and
+off, John 3:1-3, Matthew 3:1 with parallels, Psalm 3:1 with a title note,
+Psalm 3:2 empty). Look at those before and after the change; the seven
+findings above are all visible in the "before" set.
+
 ## Share as image fails silently on Android 6.0-9.0 (API 23-28)
 
 Not a 1.2.7 regression: the behaviour is as old as the feature, and Android has
