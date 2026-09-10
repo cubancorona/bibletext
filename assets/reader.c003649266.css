@@ -254,11 +254,37 @@ body{
      app's 1.3 exactly as it drops the phone's 2.0. */
   .text{--pgap:0rem}
   .text p{margin:0; text-indent:1.5em}
-  .text p:first-child{text-indent:0}
+  /* The first paragraph takes no reporter indent — and a psalm's title is a
+     <p> too, so once it stands first the verse paragraph after it must be
+     named as well or every titled psalm gains an indent it never had. */
+  .text p:first-child, .text p.pst + p{text-indent:0}
   .text p.pm{margin:.55rem 0; text-indent:0}
   .text p.pm + p{text-indent:0}
 }
 .text p.pm{text-align:left; hyphens:none}
+/* THE PSALM'S TITLE. Scripture's own title for the psalm — "A Psalm of David,
+   when he fled from Absalom his son" — not a section heading, so it is set as
+   an italic unnumbered line rather than as a heading, and it takes no reporter
+   indent. Leading is inherited deliberately: on all four app panes the title
+   sets at the body's own rhythm, so naming a line-height here would make the
+   web the one surface that differs. The gap below is the same 0.45 of a line
+   the panes measure. The face ships no italic cut, so this is a synthesised
+   oblique — accepted, because the alternative is a fifth hashed font asset for
+   one line per psalm. */
+.text p.pst{font-style:italic; text-indent:0; margin:0 0 calc(.45em * 1.2222)}
+/* THE FOOTNOTE SECTION. The translators' apparatus, after the chapter and
+   outside the article, because the article is the scripture and this is about
+   it. Set smaller and muted so it reads as an appendix rather than as more
+   verse: a reader scrolling for the next chapter passes it, and a reader who
+   wants it has it without a control the site has no way to remember.
+   The key column is the verse number the note belongs to, or "Title". */
+.notes{margin:2.2rem 0 0; padding-top:1.1rem; border-top:1px solid var(--border);
+  font-size:.86em; color:var(--muted)}
+.notes h2{font-size:.86em; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 .7rem}
+.notes dl{margin:0; display:grid; grid-template-columns:2.4em 1fr; gap:.34rem .7rem}
+.notes dt{font-variant-numeric:tabular-nums; text-align:right; opacity:.75}
+.notes dd{margin:0}
 /* The app's verse number: sup.v — 0.66em, weight 600, no tracking, 2px of air
    after it. The raise is left to the browser's own <sup> handling, damped so a
    superscript cannot open up the line it sits on. */
@@ -398,8 +424,10 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 /* No separator above, no split: a chip before the FIRST paragraph (it becomes
    .text's first child) and the chapter-top parking (outside .text, where
    --pgap never reaches it anyway) keep the plain margins — the app's rule
-   that the chapter top never lifts. */
-.text .notechip:first-child, .notechip.notail{margin:1.1rem 0}
+   that the chapter top never lifts. A psalm's title takes .text's first-child
+   slot, so a chip on verse 1 of a titled psalm has to be named the same way or
+   it would be lifted against a separator that is not there. */
+.text .notechip:first-child, .text p.pst + .notechip, .notechip.notail{margin:1.1rem 0}
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
 /* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's
