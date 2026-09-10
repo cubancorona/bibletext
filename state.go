@@ -209,6 +209,11 @@ type AppState struct {
 	// any popup). Both are nil/no-op on desktop and Android.
 	hideReadingOverlay func()
 	showReadingOverlay func()
+	// dismissSheet closes the card sheet that is up, if any — set by the sheet
+	// while it is showing and cleared when it closes. The desktop Escape
+	// handler calls it when an overlay is on top, instead of acting on the
+	// reading view beneath the sheet (installShortcuts, ui_desktop.go).
+	dismissSheet func()
 
 	// aiKeys holds the user's AI provider choice + keys (bring-your-own-key),
 	// lazily created via keys(); nil-safe so unit tests work without a Fyne app.

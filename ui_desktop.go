@@ -121,6 +121,17 @@ func installShortcuts(state *AppState) {
 		if ev.Name != fyne.KeyEscape {
 			return
 		}
+		// A sheet on top owns the key. widget.PopUp handles no keys and a
+		// card opens with nothing focused, so without this the press fell
+		// through to the reading view under the modal and cleared whatever
+		// mark was live there — a search hit, a note's mark, a Read-in-
+		// context wash — while the card stayed up.
+		if cnv.Overlays().Top() != nil {
+			if state.dismissSheet != nil {
+				state.dismissSheet()
+			}
+			return
+		}
 		if !state.IsSearching && !state.hasMark() {
 			return
 		}

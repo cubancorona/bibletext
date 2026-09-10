@@ -393,10 +393,17 @@ func TestNKJVLicenseNotice(t *testing.T) {
 
 // --- Verse of the day -----------------------------------------------------------
 
-// TestNKJVVerseOfDayOnCanon: over a full NKJV-shaped canon (the fixture
-// fetch), verse of the day honours its contract — unresolvable curated refs
-// are skipped, the pick exists in the loaded translation with real text, and
-// the choice is stable within a day.
+// TestNKJVVerseOfDayOnCanon: over an NKJV-shaped canon — the fixture serves
+// all 66 books with a sample of chapters — the resolver behaves as its
+// contract says: an entry resolves exactly when every verse of its run is in
+// the edition, an entry from a book the edition lacks resolves through its
+// alternate exactly when that is, the pick exists with real text, and the
+// choice is stable within a day.
+//
+// Mutation this guards: a run resolving on its first verse alone (the rest
+// missing), or an alternate standing in for a missing VERSE rather than a
+// missing book. It used to require only that something resolved, which a
+// rotation with one surviving verse would satisfy.
 func TestNKJVVerseOfDayOnCanon(t *testing.T) {
 	srv := apiBibleFixture(t)
 	defer srv.Close()
@@ -411,34 +418,48 @@ func TestNKJVVerseOfDayOnCanon(t *testing.T) {
 	data.PrepareSearchIndex()
 	state := &AppState{Bible: data, CurrentVersion: "nkjv", CurrentBook: "John", CurrentChapter: 1}
 
-	valid := resolvedVerseOfDay(state)
-	if len(valid) == 0 {
-		t.Fatal("the rotation must resolve at least one ref against the canon")
-	}
-	for _, rv := range valid {
-		if state.Bible.GetVerse(rv.BookName, rv.Chapter, rv.Verse) == nil {
-			t.Errorf("resolved rotation entry %s %d:%d does not exist in the canon",
-				rv.BookName, rv.Chapter, rv.Verse)
+	present := func(p dayPassage) bool {
+		book, ok := resolveBookName(data.Books, p.Book)
+		if !ok {
+			return false
 		}
+		for n := p.Lo; n <= p.hi(); n++ {
+			if data.GetVerse(book, p.Chapter, n) == nil {
+				return false
+			}
+		}
+		return true
+	}
+	resolved := 0
+	for _, p := range verseOfDayRefs {
+		want := present(p)
+		if _, hasBook := resolveBookName(data.Books, p.Book); !hasBook {
+			if alt, ok := verseOfDayAlternates[p]; ok {
+				want = present(alt)
+			}
+		}
+		d, got := resolveDayEntry(data, p)
+		if got != want {
+			t.Errorf("%s: resolved=%v, but the edition carries it=%v", p.key(), got, want)
+		}
+		if got {
+			resolved++
+			if strings.TrimSpace(d.text()) == "" {
+				t.Errorf("%s resolved with no text", d.reference())
+			}
+		}
+	}
+	if resolved == 0 || resolved == len(verseOfDayRefs) {
+		t.Fatalf("%d of %d entries resolve on the sample canon; the fixture must be partial for "+
+			"this test to see the resolver's edges", resolved, len(verseOfDayRefs))
 	}
 
 	v, ok := verseOfTheDay(state)
 	if !ok {
-		t.Fatal("verseOfTheDay must return a verse for a populated canon")
+		t.Fatal("verseOfTheDay returned nothing on a canon where entries resolve")
 	}
-	if strings.TrimSpace(v.Text) == "" {
-		t.Errorf("verse of the day has no text: %+v", v)
-	}
-	if state.Bible.GetVerse(v.BookName, v.Chapter, v.Verse) == nil {
-		t.Errorf("verse of the day %s %d:%d is not in the loaded translation",
-			v.BookName, v.Chapter, v.Verse)
-	}
-	// Verse carries a slice now (Footnotes), so compare identity, not the
-	// struct: same reference and same words is the stability the test means.
-	if again, ok2 := verseOfTheDay(state); !ok2 ||
-		again.BookName != v.BookName || again.Chapter != v.Chapter ||
-		again.Verse != v.Verse || again.Text != v.Text {
-		t.Error("verse of the day must be stable within a calendar day")
+	if again, ok2 := verseOfTheDay(state); !ok2 || again.reference() != v.reference() {
+		t.Errorf("verse of the day moved within one day: %s then %s", v.reference(), again.reference())
 	}
 }
 

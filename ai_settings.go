@@ -776,7 +776,11 @@ func showAISettings(state *AppState) {
 	form.Add(bibleKeysFooter)
 	form.Add(sheetGapAfterCaption())
 	form.Add(sectionLabel("READING", pal))
-	form.Add(settingsGroup(pal, textSizeRow))
+	// The only place the verse of the day is named. Its control is an
+	// unlabelled icon, and the toolkit has no tooltip and no accessibility
+	// layer to name it with, so the caption is the honest mitigation.
+	form.Add(settingsGroup(pal, textSizeRow,
+		caption("Verse of the day: the sparkle in the header opens today's passage, with a jump to read it in context.")))
 	form.Add(sheetGap())
 	form.Add(sectionLabel("SHARED NOTES", pal))
 	form.Add(settingsGroup(pal, notes, widget.NewSeparator(), deleteNotesRow))

@@ -116,6 +116,7 @@ the conclusion that the face needs far more room than it does.
 | Apple panes (iOS + macOS) | `reading.go` — the CSS `font-size`, from `readingGlyphPx()` | the native paragraph sweep, from `readingLinePitchEm` | `reporterMeasureEm × readingReferencePx()` across the bridge |
 | Fyne canvas pane | `styledPaneTextSize()` | `p.textSize × 1.55` (cozy) / `× 1.3` (reporter) | `reporterMeasureEm × p.referenceSize()` |
 | Android overlay | Java: `textSizeDp × density × opticalScale` | Java: `pitch × textSizePx` | `androidReadingMeasureDp(reporter, referenceDp)` |
+| Verse-of-the-day card | `readingGlyphPx()`, the Apple/Android body size, as a `canvas.Text` `FontSource` | the face's own line box (`readingParagraph`) | the card's inner width — no reporter measure; it is one passage |
 | generated site | `remSize(webScriptureBaseRem)` | `ReadingLinePitchEm()` | `.wrap{max-width:40rem}` — root rem, deliberately not em |
 | share card | its own face rotation, auto-fitted | n/a | n/a |
 

@@ -1,0 +1,3968 @@
+{
+ "editions": {
+  "bsb": {
+   "1 Chronicles 16:11": {
+    "first": "S",
+    "last": "."
+   },
+   "1 Chronicles 16:34": {
+    "first": "G",
+    "last": "."
+   },
+   "1 Chronicles 29:11": {
+    "first": "Y",
+    "last": "."
+   },
+   "1 Corinthians 10:13": {
+    "first": "N",
+    "last": "."
+   },
+   "1 Corinthians 13:13": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Corinthians 13:4-7": {
+    "first": "L",
+    "last": "."
+   },
+   "1 Corinthians 15:57-58": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Corinthians 16:13-14": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Corinthians 1:18": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Corinthians 2:9": {
+    "first": "R",
+    "last": "”"
+   },
+   "1 Corinthians 6:19-20": {
+    "first": "D",
+    "last": "."
+   },
+   "1 John 1:7": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 1:9": {
+    "first": "I",
+    "last": "."
+   },
+   "1 John 3:1": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 3:16": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 4:16": {
+    "first": "A",
+    "last": "."
+   },
+   "1 John 4:18": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 4:19": {
+    "first": "W",
+    "last": "."
+   },
+   "1 John 4:4": {
+    "first": "Y",
+    "last": "."
+   },
+   "1 John 4:7-8": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 4:9-10": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 5:11": {
+    "first": "A",
+    "last": "."
+   },
+   "1 John 5:14": {
+    "first": "A",
+    "last": "."
+   },
+   "1 John 5:4-5": {
+    "first": "b",
+    "last": "."
+   },
+   "1 Kings 8:56": {
+    "first": "“",
+    "last": "."
+   },
+   "1 Peter 1:3-5": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 2:24": {
+    "first": "H",
+    "last": "”"
+   },
+   "1 Peter 2:9": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 3:15": {
+    "first": "B",
+    "last": ","
+   },
+   "1 Peter 4:8": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Peter 5:10": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Peter 5:6-7": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Peter 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Samuel 16:7": {
+    "first": "B",
+    "last": "”"
+   },
+   "1 Samuel 2:2": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Thessalonians 5:11": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Thessalonians 5:16-18": {
+    "first": "R",
+    "last": "."
+   },
+   "1 Thessalonians 5:24": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Timothy 2:5-6": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Timothy 4:12": {
+    "first": "L",
+    "last": "."
+   },
+   "1 Timothy 6:12": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Timothy 6:6": {
+    "first": "O",
+    "last": "."
+   },
+   "2 Chronicles 20:15": {
+    "first": "A",
+    "last": "."
+   },
+   "2 Corinthians 12:9": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Corinthians 1:3-4": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Corinthians 3:18": {
+    "first": "A",
+    "last": "."
+   },
+   "2 Corinthians 4:16-18": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Corinthians 5:17": {
+    "first": "T",
+    "last": "!"
+   },
+   "2 Corinthians 5:21": {
+    "first": "G",
+    "last": "."
+   },
+   "2 Corinthians 5:7": {
+    "first": "F",
+    "last": "."
+   },
+   "2 Corinthians 9:8": {
+    "first": "A",
+    "last": "."
+   },
+   "2 John 1:3": {
+    "first": "G",
+    "last": "."
+   },
+   "2 Kings 6:16": {
+    "first": "“",
+    "last": "”"
+   },
+   "2 Peter 1:3-4": {
+    "first": "H",
+    "last": "."
+   },
+   "2 Peter 3:18": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Peter 3:9": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Samuel 22:31": {
+    "first": "A",
+    "last": "."
+   },
+   "2 Thessalonians 3:3": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Timothy 1:7": {
+    "first": "F",
+    "last": "."
+   },
+   "2 Timothy 2:15": {
+    "first": "M",
+    "last": "."
+   },
+   "2 Timothy 3:16-17": {
+    "first": "A",
+    "last": "."
+   },
+   "2 Timothy 4:7": {
+    "first": "I",
+    "last": "."
+   },
+   "Acts 16:31": {
+    "first": "T",
+    "last": "”"
+   },
+   "Acts 17:28": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Acts 1:8": {
+    "first": "B",
+    "last": "”"
+   },
+   "Acts 20:24": {
+    "first": "B",
+    "last": "."
+   },
+   "Acts 2:38": {
+    "first": "P",
+    "last": "."
+   },
+   "Acts 4:12": {
+    "first": "S",
+    "last": "”"
+   },
+   "Amos 5:4": {
+    "first": "F",
+    "last": "!"
+   },
+   "Baruch 4:22": {
+    "first": "F",
+    "last": ",",
+    "via": "Isaiah 25:4"
+   },
+   "Colossians 1:16-17": {
+    "first": "F",
+    "last": "."
+   },
+   "Colossians 2:6-7": {
+    "first": "T",
+    "last": "."
+   },
+   "Colossians 3:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Colossians 3:12-13": {
+    "first": "T",
+    "last": "."
+   },
+   "Colossians 3:15": {
+    "first": "L",
+    "last": "."
+   },
+   "Colossians 3:17": {
+    "first": "A",
+    "last": "."
+   },
+   "Colossians 3:23-24": {
+    "first": "W",
+    "last": "."
+   },
+   "Daniel 3:17-18": {
+    "first": "I",
+    "last": "”"
+   },
+   "Deuteronomy 31:6": {
+    "first": "B",
+    "last": "”"
+   },
+   "Deuteronomy 31:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Deuteronomy 6:5": {
+    "first": "A",
+    "last": "."
+   },
+   "Deuteronomy 7:9": {
+    "first": "K",
+    "last": "."
+   },
+   "Ecclesiastes 12:13": {
+    "first": "W",
+    "last": "."
+   },
+   "Ecclesiastes 3:11": {
+    "first": "H",
+    "last": "."
+   },
+   "Ephesians 1:7": {
+    "first": "I",
+    "last": "e"
+   },
+   "Ephesians 2:4-5": {
+    "first": "B",
+    "last": "!"
+   },
+   "Ephesians 2:8-10": {
+    "first": "F",
+    "last": "."
+   },
+   "Ephesians 3:20-21": {
+    "first": "N",
+    "last": "."
+   },
+   "Ephesians 4:32": {
+    "first": "B",
+    "last": "."
+   },
+   "Ephesians 6:10-11": {
+    "first": "F",
+    "last": "."
+   },
+   "Esther 4:14": {
+    "first": "F",
+    "last": "”"
+   },
+   "Exodus 14:14": {
+    "first": "T",
+    "last": "”"
+   },
+   "Exodus 15:2": {
+    "first": "T",
+    "last": "."
+   },
+   "Exodus 33:14": {
+    "first": "A",
+    "last": "”"
+   },
+   "Exodus 34:6": {
+    "first": "T",
+    "last": ","
+   },
+   "Ezekiel 36:26": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 2:20": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 5:1": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 5:22-23": {
+    "first": "B",
+    "last": "."
+   },
+   "Galatians 6:9": {
+    "first": "L",
+    "last": "."
+   },
+   "Genesis 15:6": {
+    "first": "A",
+    "last": "."
+   },
+   "Genesis 1:1": {
+    "first": "I",
+    "last": "."
+   },
+   "Genesis 1:27": {
+    "first": "S",
+    "last": "."
+   },
+   "Genesis 28:15": {
+    "first": "L",
+    "last": "”"
+   },
+   "Genesis 50:20": {
+    "first": "A",
+    "last": "."
+   },
+   "Habakkuk 3:17-18": {
+    "first": "T",
+    "last": "!"
+   },
+   "Hebrews 10:23-25": {
+    "first": "L",
+    "last": "."
+   },
+   "Hebrews 11:1": {
+    "first": "N",
+    "last": "."
+   },
+   "Hebrews 11:6": {
+    "first": "A",
+    "last": "."
+   },
+   "Hebrews 12:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Hebrews 13:5-6": {
+    "first": "K",
+    "last": "”"
+   },
+   "Hebrews 13:8": {
+    "first": "J",
+    "last": "."
+   },
+   "Hebrews 4:12": {
+    "first": "F",
+    "last": "."
+   },
+   "Hebrews 4:16": {
+    "first": "L",
+    "last": "."
+   },
+   "Hebrews 6:19-20": {
+    "first": "W",
+    "last": "."
+   },
+   "Hosea 14:4": {
+    "first": "I",
+    "last": "."
+   },
+   "Hosea 6:6": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 12:2": {
+    "first": "S",
+    "last": "”"
+   },
+   "Isaiah 25:1": {
+    "first": "O",
+    "last": "."
+   },
+   "Isaiah 26:3": {
+    "first": "Y",
+    "last": "."
+   },
+   "Isaiah 30:21": {
+    "first": "A",
+    "last": "”"
+   },
+   "Isaiah 40:28-29": {
+    "first": "D",
+    "last": "."
+   },
+   "Isaiah 40:30-31": {
+    "first": "E",
+    "last": "."
+   },
+   "Isaiah 40:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Isaiah 41:10": {
+    "first": "D",
+    "last": "."
+   },
+   "Isaiah 41:13": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 43:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 43:19": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 46:4": {
+    "first": "E",
+    "last": "."
+   },
+   "Isaiah 53:4-6": {
+    "first": "S",
+    "last": "."
+   },
+   "Isaiah 54:10": {
+    "first": "T",
+    "last": "."
+   },
+   "Isaiah 55:10-11": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 55:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Isaiah 55:8": {
+    "first": "“",
+    "last": "."
+   },
+   "Isaiah 58:11": {
+    "first": "T",
+    "last": "."
+   },
+   "Isaiah 61:1": {
+    "first": "T",
+    "last": ","
+   },
+   "Isaiah 64:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 6:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Isaiah 9:6": {
+    "first": "F",
+    "last": "."
+   },
+   "James 1:12": {
+    "first": "B",
+    "last": "."
+   },
+   "James 1:17": {
+    "first": "E",
+    "last": "."
+   },
+   "James 1:2-4": {
+    "first": "C",
+    "last": "."
+   },
+   "James 1:22": {
+    "first": "B",
+    "last": "."
+   },
+   "James 1:5": {
+    "first": "N",
+    "last": "."
+   },
+   "James 4:7-8": {
+    "first": "S",
+    "last": "."
+   },
+   "James 5:16": {
+    "first": "T",
+    "last": "."
+   },
+   "Jeremiah 17:7": {
+    "first": "B",
+    "last": "."
+   },
+   "Jeremiah 29:11-13": {
+    "first": "F",
+    "last": "."
+   },
+   "Jeremiah 31:3": {
+    "first": "T",
+    "last": "."
+   },
+   "Jeremiah 32:17": {
+    "first": "“",
+    "last": "!"
+   },
+   "Jeremiah 33:3": {
+    "first": "C",
+    "last": "."
+   },
+   "Job 19:25": {
+    "first": "B",
+    "last": "."
+   },
+   "Job 23:10": {
+    "first": "Y",
+    "last": "."
+   },
+   "Job 42:2": {
+    "first": "“",
+    "last": "."
+   },
+   "Joel 2:13": {
+    "first": "S",
+    "last": "."
+   },
+   "Joel 2:32": {
+    "first": "A",
+    "last": "."
+   },
+   "John 10:10": {
+    "first": "T",
+    "last": "."
+   },
+   "John 10:11": {
+    "first": "I",
+    "last": "."
+   },
+   "John 10:28": {
+    "first": "I",
+    "last": "."
+   },
+   "John 11:25": {
+    "first": "J",
+    "last": "."
+   },
+   "John 13:34": {
+    "first": "A",
+    "last": "."
+   },
+   "John 14:1-3": {
+    "first": "“",
+    "last": "."
+   },
+   "John 14:27": {
+    "first": "P",
+    "last": "."
+   },
+   "John 14:6": {
+    "first": "J",
+    "last": "."
+   },
+   "John 15:13": {
+    "first": "G",
+    "last": "."
+   },
+   "John 15:5": {
+    "first": "I",
+    "last": "."
+   },
+   "John 16:33": {
+    "first": "I",
+    "last": "”"
+   },
+   "John 17:3": {
+    "first": "N",
+    "last": "."
+   },
+   "John 1:1": {
+    "first": "I",
+    "last": "."
+   },
+   "John 1:12-13": {
+    "first": "B",
+    "last": "."
+   },
+   "John 1:14": {
+    "first": "T",
+    "last": "."
+   },
+   "John 1:29": {
+    "first": "T",
+    "last": "!"
+   },
+   "John 20:29": {
+    "first": "J",
+    "last": "”"
+   },
+   "John 3:16-17": {
+    "first": "F",
+    "last": "."
+   },
+   "John 4:13-14": {
+    "first": "J",
+    "last": "”"
+   },
+   "John 6:35": {
+    "first": "J",
+    "last": "."
+   },
+   "John 8:12": {
+    "first": "O",
+    "last": "”"
+   },
+   "John 8:32": {
+    "first": "T",
+    "last": "”"
+   },
+   "John 8:36": {
+    "first": "S",
+    "last": "."
+   },
+   "Jonah 2:9": {
+    "first": "B",
+    "last": "”"
+   },
+   "Joshua 1:9": {
+    "first": "H",
+    "last": "”"
+   },
+   "Joshua 24:15": {
+    "first": "B",
+    "last": "”"
+   },
+   "Jude 1:24-25": {
+    "first": "N",
+    "last": "."
+   },
+   "Judith 9:11": {
+    "first": "B",
+    "last": ".",
+    "via": "Psalms 10:14"
+   },
+   "Lamentations 3:22-23": {
+    "first": "B",
+    "last": "!"
+   },
+   "Lamentations 3:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Leviticus 26:12": {
+    "first": "I",
+    "last": "."
+   },
+   "Luke 11:9": {
+    "first": "S",
+    "last": "."
+   },
+   "Luke 12:34": {
+    "first": "F",
+    "last": "."
+   },
+   "Luke 19:10": {
+    "first": "F",
+    "last": "”"
+   },
+   "Luke 1:37": {
+    "first": "F",
+    "last": "”"
+   },
+   "Luke 2:10-11": {
+    "first": "B",
+    "last": "!"
+   },
+   "Luke 4:18-19": {
+    "first": "“",
+    "last": "”"
+   },
+   "Luke 6:31": {
+    "first": "D",
+    "last": "."
+   },
+   "Luke 6:37": {
+    "first": "D",
+    "last": "."
+   },
+   "Malachi 3:6": {
+    "first": "“",
+    "last": "."
+   },
+   "Mark 10:27": {
+    "first": "J",
+    "last": "”"
+   },
+   "Mark 10:45": {
+    "first": "F",
+    "last": "”"
+   },
+   "Mark 12:30-31": {
+    "first": "L",
+    "last": "”"
+   },
+   "Mark 16:15": {
+    "first": "A",
+    "last": "."
+   },
+   "Mark 9:23": {
+    "first": "“",
+    "last": "”"
+   },
+   "Matthew 11:28-30": {
+    "first": "C",
+    "last": "”"
+   },
+   "Matthew 16:24": {
+    "first": "T",
+    "last": "."
+   },
+   "Matthew 18:20": {
+    "first": "F",
+    "last": "”"
+   },
+   "Matthew 19:26": {
+    "first": "J",
+    "last": "”"
+   },
+   "Matthew 22:37-39": {
+    "first": "J",
+    "last": "’"
+   },
+   "Matthew 28:19-20": {
+    "first": "T",
+    "last": "”"
+   },
+   "Matthew 28:6": {
+    "first": "H",
+    "last": "."
+   },
+   "Matthew 4:4": {
+    "first": "B",
+    "last": "”"
+   },
+   "Matthew 5:14": {
+    "first": "Y",
+    "last": "."
+   },
+   "Matthew 5:16": {
+    "first": "I",
+    "last": "."
+   },
+   "Matthew 5:3": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 5:44-45": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 5:6": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 6:19-21": {
+    "first": "D",
+    "last": "."
+   },
+   "Matthew 6:33-34": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 7:12": {
+    "first": "I",
+    "last": "."
+   },
+   "Matthew 7:7": {
+    "first": "A",
+    "last": "."
+   },
+   "Micah 6:8": {
+    "first": "H",
+    "last": "?"
+   },
+   "Micah 7:7": {
+    "first": "B",
+    "last": "."
+   },
+   "Nahum 1:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Nehemiah 8:10": {
+    "first": "T",
+    "last": "”"
+   },
+   "Numbers 23:19": {
+    "first": "G",
+    "last": "?"
+   },
+   "Numbers 6:24-26": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Philippians 1:6": {
+    "first": "b",
+    "last": "."
+   },
+   "Philippians 2:3-4": {
+    "first": "D",
+    "last": "."
+   },
+   "Philippians 2:5-8": {
+    "first": "L",
+    "last": "."
+   },
+   "Philippians 3:14": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:12-13": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:19": {
+    "first": "A",
+    "last": "."
+   },
+   "Philippians 4:4": {
+    "first": "R",
+    "last": "!"
+   },
+   "Philippians 4:6-7": {
+    "first": "B",
+    "last": "."
+   },
+   "Philippians 4:8": {
+    "first": "F",
+    "last": "."
+   },
+   "Proverbs 11:25": {
+    "first": "A",
+    "last": "."
+   },
+   "Proverbs 16:3": {
+    "first": "C",
+    "last": "."
+   },
+   "Proverbs 16:9": {
+    "first": "A",
+    "last": "."
+   },
+   "Proverbs 18:10": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 19:21": {
+    "first": "M",
+    "last": "."
+   },
+   "Proverbs 29:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 30:5": {
+    "first": "E",
+    "last": "."
+   },
+   "Proverbs 3:5-6": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 4:23": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 100:5": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 103:1": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 103:12": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 103:2-5": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 103:8": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 107:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 118:24": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 119:105": {
+    "first": "Y",
+    "last": "."
+   },
+   "Psalms 119:11": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 121:1-2": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 121:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 130:5": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 138:8": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 139:14": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 139:23-24": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 143:8": {
+    "first": "L",
+    "last": "."
+   },
+   "Psalms 145:8-9": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 147:3": {
+    "first": "H",
+    "last": "."
+   },
+   "Psalms 150:6": {
+    "first": "L",
+    "last": "!"
+   },
+   "Psalms 16:11": {
+    "first": "Y",
+    "last": "."
+   },
+   "Psalms 16:8": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 18:2": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 19:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 19:14": {
+    "first": "M",
+    "last": "."
+   },
+   "Psalms 1:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 23:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 23:4": {
+    "first": "E",
+    "last": "."
+   },
+   "Psalms 23:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 27:1": {
+    "first": "T",
+    "last": "?"
+   },
+   "Psalms 27:14": {
+    "first": "W",
+    "last": "!"
+   },
+   "Psalms 27:4": {
+    "first": "O",
+    "last": "."
+   },
+   "Psalms 28:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 30:5": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 31:24": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 32:8": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 34:18": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 34:8": {
+    "first": "T",
+    "last": "!"
+   },
+   "Psalms 37:4-6": {
+    "first": "D",
+    "last": "."
+   },
+   "Psalms 42:1": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 42:11": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 46:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 46:10": {
+    "first": "“",
+    "last": "”"
+   },
+   "Psalms 51:10": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 55:22": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 56:3": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 62:1": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 63:1": {
+    "first": "O",
+    "last": "."
+   },
+   "Psalms 73:26": {
+    "first": "M",
+    "last": "."
+   },
+   "Psalms 84:11": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 90:12": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 91:1-2": {
+    "first": "H",
+    "last": "”"
+   },
+   "Psalms 91:4": {
+    "first": "H",
+    "last": "."
+   },
+   "Psalms 94:19": {
+    "first": "W",
+    "last": "."
+   },
+   "Revelation 1:8": {
+    "first": "“",
+    "last": "."
+   },
+   "Revelation 21:4-5": {
+    "first": "‘",
+    "last": "”"
+   },
+   "Revelation 22:13": {
+    "first": "I",
+    "last": "”"
+   },
+   "Revelation 3:20": {
+    "first": "B",
+    "last": "."
+   },
+   "Revelation 4:11": {
+    "first": "“",
+    "last": "”"
+   },
+   "Revelation 5:11-12": {
+    "first": "T",
+    "last": "”"
+   },
+   "Revelation 7:16-17": {
+    "first": "‘",
+    "last": "”"
+   },
+   "Romans 10:13": {
+    "first": "f",
+    "last": "”"
+   },
+   "Romans 10:9-10": {
+    "first": "t",
+    "last": "."
+   },
+   "Romans 12:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 12:12": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 12:21": {
+    "first": "D",
+    "last": "."
+   },
+   "Romans 15:13": {
+    "first": "N",
+    "last": "."
+   },
+   "Romans 1:16": {
+    "first": "I",
+    "last": "."
+   },
+   "Romans 3:23-24": {
+    "first": "f",
+    "last": "."
+   },
+   "Romans 5:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 6:23": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 8:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 8:11": {
+    "first": "A",
+    "last": "."
+   },
+   "Romans 8:18": {
+    "first": "I",
+    "last": "."
+   },
+   "Romans 8:28": {
+    "first": "A",
+    "last": "."
+   },
+   "Romans 8:31": {
+    "first": "W",
+    "last": "?"
+   },
+   "Romans 8:37-39": {
+    "first": "N",
+    "last": "."
+   },
+   "Ruth 1:16": {
+    "first": "B",
+    "last": "."
+   },
+   "Sirach 2:10-11": {
+    "first": "I",
+    "last": ".",
+    "via": "Psalms 22:4-5"
+   },
+   "Song of Solomon 2:4": {
+    "first": "H",
+    "last": "."
+   },
+   "Titus 2:11-14": {
+    "first": "F",
+    "last": "."
+   },
+   "Titus 3:4-7": {
+    "first": "B",
+    "last": "."
+   },
+   "Wisdom 11:24-26": {
+    "first": "H",
+    "last": "!",
+    "via": "Psalms 36:7"
+   },
+   "Wisdom 3:1-3": {
+    "first": "P",
+    "last": ".",
+    "via": "Psalms 116:15"
+   },
+   "Zechariah 4:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Zephaniah 3:17": {
+    "first": "T",
+    "last": "”"
+   }
+  },
+  "web": {
+   "1 Chronicles 16:11": {
+    "first": "S",
+    "last": "."
+   },
+   "1 Chronicles 16:34": {
+    "first": "O",
+    "last": "."
+   },
+   "1 Chronicles 29:11": {
+    "first": "Y",
+    "last": "."
+   },
+   "1 Corinthians 10:13": {
+    "first": "N",
+    "last": "."
+   },
+   "1 Corinthians 13:13": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Corinthians 13:4-7": {
+    "first": "L",
+    "last": "."
+   },
+   "1 Corinthians 15:57-58": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Corinthians 16:13-14": {
+    "first": "W",
+    "last": "."
+   },
+   "1 Corinthians 1:18": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Corinthians 2:9": {
+    "first": "B",
+    "last": "”"
+   },
+   "1 Corinthians 6:19-20": {
+    "first": "O",
+    "last": "."
+   },
+   "1 John 1:7": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 1:9": {
+    "first": "I",
+    "last": "."
+   },
+   "1 John 3:1": {
+    "first": "S",
+    "last": "."
+   },
+   "1 John 3:16": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 4:16": {
+    "first": "W",
+    "last": "."
+   },
+   "1 John 4:18": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 4:19": {
+    "first": "W",
+    "last": "."
+   },
+   "1 John 4:4": {
+    "first": "Y",
+    "last": "."
+   },
+   "1 John 4:7-8": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 4:9-10": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 5:11": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 5:14": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 5:4-5": {
+    "first": "F",
+    "last": "?"
+   },
+   "1 Kings 8:56": {
+    "first": "“",
+    "last": "."
+   },
+   "1 Peter 1:3-5": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 2:24": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Peter 2:9": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 3:15": {
+    "first": "B",
+    "last": ","
+   },
+   "1 Peter 4:8": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Peter 5:10": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 5:6-7": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Peter 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Samuel 16:7": {
+    "first": "B",
+    "last": "”"
+   },
+   "1 Samuel 2:2": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Thessalonians 5:11": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Thessalonians 5:16-18": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Thessalonians 5:24": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Timothy 2:5-6": {
+    "first": "F",
+    "last": ","
+   },
+   "1 Timothy 4:12": {
+    "first": "L",
+    "last": "."
+   },
+   "1 Timothy 6:12": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Timothy 6:6": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Chronicles 20:15": {
+    "first": "a",
+    "last": "."
+   },
+   "2 Corinthians 12:9": {
+    "first": "H",
+    "last": "."
+   },
+   "2 Corinthians 1:3-4": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Corinthians 3:18": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Corinthians 4:16-18": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Corinthians 5:17": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Corinthians 5:21": {
+    "first": "F",
+    "last": "."
+   },
+   "2 Corinthians 5:7": {
+    "first": "f",
+    "last": "."
+   },
+   "2 Corinthians 9:8": {
+    "first": "A",
+    "last": "."
+   },
+   "2 John 1:3": {
+    "first": "G",
+    "last": "."
+   },
+   "2 Kings 6:16": {
+    "first": "H",
+    "last": "”"
+   },
+   "2 Peter 1:3-4": {
+    "first": "s",
+    "last": "."
+   },
+   "2 Peter 3:18": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Peter 3:9": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Samuel 22:31": {
+    "first": "A",
+    "last": "."
+   },
+   "2 Thessalonians 3:3": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Timothy 1:7": {
+    "first": "F",
+    "last": "."
+   },
+   "2 Timothy 2:15": {
+    "first": "G",
+    "last": "."
+   },
+   "2 Timothy 3:16-17": {
+    "first": "E",
+    "last": "."
+   },
+   "2 Timothy 4:7": {
+    "first": "I",
+    "last": "."
+   },
+   "Acts 16:31": {
+    "first": "T",
+    "last": "”"
+   },
+   "Acts 17:28": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Acts 1:8": {
+    "first": "B",
+    "last": "”"
+   },
+   "Acts 20:24": {
+    "first": "B",
+    "last": "."
+   },
+   "Acts 2:38": {
+    "first": "P",
+    "last": "."
+   },
+   "Acts 4:12": {
+    "first": "T",
+    "last": "”"
+   },
+   "Amos 5:4": {
+    "first": "F",
+    "last": ";"
+   },
+   "Baruch 4:22": {
+    "first": "F",
+    "last": ".",
+    "via": "Isaiah 25:4"
+   },
+   "Colossians 1:16-17": {
+    "first": "F",
+    "last": "."
+   },
+   "Colossians 2:6-7": {
+    "first": "A",
+    "last": "."
+   },
+   "Colossians 3:1-2": {
+    "first": "I",
+    "last": "."
+   },
+   "Colossians 3:12-13": {
+    "first": "P",
+    "last": "."
+   },
+   "Colossians 3:15": {
+    "first": "A",
+    "last": "."
+   },
+   "Colossians 3:17": {
+    "first": "W",
+    "last": "."
+   },
+   "Colossians 3:23-24": {
+    "first": "A",
+    "last": "."
+   },
+   "Daniel 3:17-18": {
+    "first": "I",
+    "last": "”"
+   },
+   "Deuteronomy 31:6": {
+    "first": "B",
+    "last": "”"
+   },
+   "Deuteronomy 31:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Deuteronomy 6:5": {
+    "first": "Y",
+    "last": "."
+   },
+   "Deuteronomy 7:9": {
+    "first": "K",
+    "last": ","
+   },
+   "Ecclesiastes 12:13": {
+    "first": "T",
+    "last": "."
+   },
+   "Ecclesiastes 3:11": {
+    "first": "H",
+    "last": "."
+   },
+   "Ephesians 1:7": {
+    "first": "I",
+    "last": "e"
+   },
+   "Ephesians 2:4-5": {
+    "first": "B",
+    "last": "—"
+   },
+   "Ephesians 2:8-10": {
+    "first": "f",
+    "last": "."
+   },
+   "Ephesians 3:20-21": {
+    "first": "N",
+    "last": "."
+   },
+   "Ephesians 4:32": {
+    "first": "A",
+    "last": "."
+   },
+   "Ephesians 6:10-11": {
+    "first": "F",
+    "last": "."
+   },
+   "Esther 4:14": {
+    "first": "F",
+    "last": "”"
+   },
+   "Exodus 14:14": {
+    "first": "T",
+    "last": "”"
+   },
+   "Exodus 15:2": {
+    "first": "T",
+    "last": "."
+   },
+   "Exodus 33:14": {
+    "first": "H",
+    "last": "”"
+   },
+   "Exodus 34:6": {
+    "first": "T",
+    "last": ","
+   },
+   "Ezekiel 36:26": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 2:20": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 5:1": {
+    "first": "S",
+    "last": "."
+   },
+   "Galatians 5:22-23": {
+    "first": "B",
+    "last": "."
+   },
+   "Galatians 6:9": {
+    "first": "L",
+    "last": "."
+   },
+   "Genesis 15:6": {
+    "first": "H",
+    "last": "."
+   },
+   "Genesis 1:1": {
+    "first": "I",
+    "last": "."
+   },
+   "Genesis 1:27": {
+    "first": "G",
+    "last": "."
+   },
+   "Genesis 28:15": {
+    "first": "B",
+    "last": "”"
+   },
+   "Genesis 50:20": {
+    "first": "A",
+    "last": "."
+   },
+   "Habakkuk 3:17-18": {
+    "first": "F",
+    "last": "!"
+   },
+   "Hebrews 10:23-25": {
+    "first": "l",
+    "last": "."
+   },
+   "Hebrews 11:1": {
+    "first": "N",
+    "last": "."
+   },
+   "Hebrews 11:6": {
+    "first": "W",
+    "last": "."
+   },
+   "Hebrews 12:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Hebrews 13:5-6": {
+    "first": "B",
+    "last": "”"
+   },
+   "Hebrews 13:8": {
+    "first": "J",
+    "last": "."
+   },
+   "Hebrews 4:12": {
+    "first": "F",
+    "last": "."
+   },
+   "Hebrews 4:16": {
+    "first": "L",
+    "last": "."
+   },
+   "Hebrews 6:19-20": {
+    "first": "T",
+    "last": "."
+   },
+   "Hosea 14:4": {
+    "first": "“",
+    "last": "."
+   },
+   "Hosea 6:6": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 12:2": {
+    "first": "B",
+    "last": "”"
+   },
+   "Isaiah 25:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Isaiah 26:3": {
+    "first": "Y",
+    "last": "."
+   },
+   "Isaiah 30:21": {
+    "first": "a",
+    "last": "”"
+   },
+   "Isaiah 40:28-29": {
+    "first": "H",
+    "last": "."
+   },
+   "Isaiah 40:30-31": {
+    "first": "E",
+    "last": "."
+   },
+   "Isaiah 40:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Isaiah 41:10": {
+    "first": "D",
+    "last": "."
+   },
+   "Isaiah 41:13": {
+    "first": "F",
+    "last": "’"
+   },
+   "Isaiah 43:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 43:19": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 46:4": {
+    "first": "E",
+    "last": "."
+   },
+   "Isaiah 53:4-6": {
+    "first": "S",
+    "last": "."
+   },
+   "Isaiah 54:10": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 55:10-11": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 55:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Isaiah 55:8": {
+    "first": "“",
+    "last": "."
+   },
+   "Isaiah 58:11": {
+    "first": "a",
+    "last": "."
+   },
+   "Isaiah 61:1": {
+    "first": "T",
+    "last": ","
+   },
+   "Isaiah 64:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 6:8": {
+    "first": "I",
+    "last": "”"
+   },
+   "Isaiah 9:6": {
+    "first": "F",
+    "last": "."
+   },
+   "James 1:12": {
+    "first": "B",
+    "last": "."
+   },
+   "James 1:17": {
+    "first": "E",
+    "last": "."
+   },
+   "James 1:2-4": {
+    "first": "C",
+    "last": "."
+   },
+   "James 1:22": {
+    "first": "B",
+    "last": "."
+   },
+   "James 1:5": {
+    "first": "B",
+    "last": "."
+   },
+   "James 4:7-8": {
+    "first": "B",
+    "last": "."
+   },
+   "James 5:16": {
+    "first": "C",
+    "last": "."
+   },
+   "Jeremiah 17:7": {
+    "first": "“",
+    "last": "."
+   },
+   "Jeremiah 29:11-13": {
+    "first": "F",
+    "last": "."
+   },
+   "Jeremiah 31:3": {
+    "first": "T",
+    "last": "."
+   },
+   "Jeremiah 32:17": {
+    "first": "“",
+    "last": "."
+   },
+   "Jeremiah 33:3": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Job 19:25": {
+    "first": "B",
+    "last": "."
+   },
+   "Job 23:10": {
+    "first": "B",
+    "last": "."
+   },
+   "Job 42:2": {
+    "first": "“",
+    "last": "."
+   },
+   "Joel 2:13": {
+    "first": "T",
+    "last": "."
+   },
+   "Joel 2:32": {
+    "first": "I",
+    "last": "."
+   },
+   "John 10:10": {
+    "first": "T",
+    "last": "."
+   },
+   "John 10:11": {
+    "first": "“",
+    "last": "."
+   },
+   "John 10:28": {
+    "first": "I",
+    "last": "."
+   },
+   "John 11:25": {
+    "first": "J",
+    "last": "."
+   },
+   "John 13:34": {
+    "first": "A",
+    "last": "."
+   },
+   "John 14:1-3": {
+    "first": "“",
+    "last": "."
+   },
+   "John 14:27": {
+    "first": "P",
+    "last": "."
+   },
+   "John 14:6": {
+    "first": "J",
+    "last": "."
+   },
+   "John 15:13": {
+    "first": "G",
+    "last": "."
+   },
+   "John 15:5": {
+    "first": "I",
+    "last": "."
+   },
+   "John 16:33": {
+    "first": "I",
+    "last": "”"
+   },
+   "John 17:3": {
+    "first": "T",
+    "last": "."
+   },
+   "John 1:1": {
+    "first": "I",
+    "last": "."
+   },
+   "John 1:12-13": {
+    "first": "B",
+    "last": "."
+   },
+   "John 1:14": {
+    "first": "T",
+    "last": "."
+   },
+   "John 1:29": {
+    "first": "T",
+    "last": "!"
+   },
+   "John 20:29": {
+    "first": "J",
+    "last": "”"
+   },
+   "John 3:16-17": {
+    "first": "F",
+    "last": "."
+   },
+   "John 4:13-14": {
+    "first": "J",
+    "last": "”"
+   },
+   "John 6:35": {
+    "first": "J",
+    "last": "."
+   },
+   "John 8:12": {
+    "first": "A",
+    "last": "”"
+   },
+   "John 8:32": {
+    "first": "Y",
+    "last": "”"
+   },
+   "John 8:36": {
+    "first": "I",
+    "last": "."
+   },
+   "Jonah 2:9": {
+    "first": "B",
+    "last": "”"
+   },
+   "Joshua 1:9": {
+    "first": "H",
+    "last": "”"
+   },
+   "Joshua 24:15": {
+    "first": "I",
+    "last": "”"
+   },
+   "Jude 1:24-25": {
+    "first": "N",
+    "last": "."
+   },
+   "Judith 9:11": {
+    "first": "B",
+    "last": ".",
+    "via": "Psalms 10:14"
+   },
+   "Lamentations 3:22-23": {
+    "first": "I",
+    "last": "."
+   },
+   "Lamentations 3:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Leviticus 26:12": {
+    "first": "I",
+    "last": "."
+   },
+   "Luke 11:9": {
+    "first": "“",
+    "last": "."
+   },
+   "Luke 12:34": {
+    "first": "F",
+    "last": "."
+   },
+   "Luke 19:10": {
+    "first": "F",
+    "last": "”"
+   },
+   "Luke 1:37": {
+    "first": "F",
+    "last": "”"
+   },
+   "Luke 2:10-11": {
+    "first": "T",
+    "last": "."
+   },
+   "Luke 4:18-19": {
+    "first": "“",
+    "last": "”"
+   },
+   "Luke 6:31": {
+    "first": "“",
+    "last": "."
+   },
+   "Luke 6:37": {
+    "first": "D",
+    "last": "."
+   },
+   "Malachi 3:6": {
+    "first": "“",
+    "last": "."
+   },
+   "Mark 10:27": {
+    "first": "J",
+    "last": "”"
+   },
+   "Mark 10:45": {
+    "first": "F",
+    "last": "”"
+   },
+   "Mark 12:30-31": {
+    "first": "Y",
+    "last": "”"
+   },
+   "Mark 16:15": {
+    "first": "H",
+    "last": "."
+   },
+   "Mark 9:23": {
+    "first": "J",
+    "last": "”"
+   },
+   "Matthew 11:28-30": {
+    "first": "“",
+    "last": "”"
+   },
+   "Matthew 16:24": {
+    "first": "T",
+    "last": "."
+   },
+   "Matthew 18:20": {
+    "first": "F",
+    "last": "”"
+   },
+   "Matthew 19:26": {
+    "first": "L",
+    "last": "”"
+   },
+   "Matthew 22:37-39": {
+    "first": "J",
+    "last": "’"
+   },
+   "Matthew 28:19-20": {
+    "first": "G",
+    "last": "."
+   },
+   "Matthew 28:6": {
+    "first": "H",
+    "last": "."
+   },
+   "Matthew 4:4": {
+    "first": "B",
+    "last": "”"
+   },
+   "Matthew 5:14": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 5:16": {
+    "first": "E",
+    "last": "."
+   },
+   "Matthew 5:3": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 5:44-45": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 5:6": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 6:19-21": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 6:33-34": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 7:12": {
+    "first": "T",
+    "last": "."
+   },
+   "Matthew 7:7": {
+    "first": "“",
+    "last": "."
+   },
+   "Micah 6:8": {
+    "first": "H",
+    "last": "?"
+   },
+   "Micah 7:7": {
+    "first": "B",
+    "last": "."
+   },
+   "Nahum 1:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Nehemiah 8:10": {
+    "first": "T",
+    "last": "”"
+   },
+   "Numbers 23:19": {
+    "first": "G",
+    "last": "?"
+   },
+   "Numbers 6:24-26": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Philippians 1:6": {
+    "first": "b",
+    "last": "."
+   },
+   "Philippians 2:3-4": {
+    "first": "d",
+    "last": "."
+   },
+   "Philippians 2:5-8": {
+    "first": "H",
+    "last": "."
+   },
+   "Philippians 3:14": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:12-13": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:19": {
+    "first": "M",
+    "last": "."
+   },
+   "Philippians 4:4": {
+    "first": "R",
+    "last": "”"
+   },
+   "Philippians 4:6-7": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:8": {
+    "first": "F",
+    "last": "."
+   },
+   "Proverbs 11:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 16:3": {
+    "first": "C",
+    "last": "."
+   },
+   "Proverbs 16:9": {
+    "first": "A",
+    "last": "."
+   },
+   "Proverbs 18:10": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 19:21": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 29:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 30:5": {
+    "first": "“",
+    "last": "."
+   },
+   "Proverbs 3:5-6": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 4:23": {
+    "first": "K",
+    "last": "."
+   },
+   "Psalms 100:5": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 103:1": {
+    "first": "P",
+    "last": "!"
+   },
+   "Psalms 103:12": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 103:2-5": {
+    "first": "P",
+    "last": "."
+   },
+   "Psalms 103:8": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 107:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 118:24": {
+    "first": "T",
+    "last": "!"
+   },
+   "Psalms 119:105": {
+    "first": "Y",
+    "last": "."
+   },
+   "Psalms 119:11": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 121:1-2": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 121:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 130:5": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 138:8": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 139:14": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 139:23-24": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 143:8": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 145:8-9": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 147:3": {
+    "first": "H",
+    "last": "."
+   },
+   "Psalms 150:6": {
+    "first": "L",
+    "last": "!"
+   },
+   "Psalms 16:11": {
+    "first": "Y",
+    "last": "."
+   },
+   "Psalms 16:8": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 18:2": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 19:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 19:14": {
+    "first": "L",
+    "last": "."
+   },
+   "Psalms 1:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 23:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 23:4": {
+    "first": "E",
+    "last": "."
+   },
+   "Psalms 23:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 27:1": {
+    "first": "T",
+    "last": "?"
+   },
+   "Psalms 27:14": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 27:4": {
+    "first": "O",
+    "last": "."
+   },
+   "Psalms 28:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 30:5": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 31:24": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 32:8": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 34:18": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 34:8": {
+    "first": "O",
+    "last": "."
+   },
+   "Psalms 37:4-6": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 42:1": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 42:11": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 46:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 46:10": {
+    "first": "“",
+    "last": "”"
+   },
+   "Psalms 51:10": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 55:22": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 56:3": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 62:1": {
+    "first": "M",
+    "last": "."
+   },
+   "Psalms 63:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 73:26": {
+    "first": "M",
+    "last": "."
+   },
+   "Psalms 84:11": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 90:12": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 91:1-2": {
+    "first": "H",
+    "last": "”"
+   },
+   "Psalms 91:4": {
+    "first": "H",
+    "last": "."
+   },
+   "Psalms 94:19": {
+    "first": "I",
+    "last": "."
+   },
+   "Revelation 1:8": {
+    "first": "“",
+    "last": "”"
+   },
+   "Revelation 21:4-5": {
+    "first": "H",
+    "last": "”"
+   },
+   "Revelation 22:13": {
+    "first": "I",
+    "last": "."
+   },
+   "Revelation 3:20": {
+    "first": "B",
+    "last": "."
+   },
+   "Revelation 4:11": {
+    "first": "“",
+    "last": "”"
+   },
+   "Revelation 5:11-12": {
+    "first": "I",
+    "last": "”"
+   },
+   "Revelation 7:16-17": {
+    "first": "T",
+    "last": "”"
+   },
+   "Romans 10:13": {
+    "first": "F",
+    "last": "”"
+   },
+   "Romans 10:9-10": {
+    "first": "t",
+    "last": "."
+   },
+   "Romans 12:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 12:12": {
+    "first": "r",
+    "last": ","
+   },
+   "Romans 12:21": {
+    "first": "D",
+    "last": "."
+   },
+   "Romans 15:13": {
+    "first": "N",
+    "last": "."
+   },
+   "Romans 1:16": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 3:23-24": {
+    "first": "f",
+    "last": ","
+   },
+   "Romans 5:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 6:23": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 8:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 8:11": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 8:18": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 8:28": {
+    "first": "W",
+    "last": "."
+   },
+   "Romans 8:31": {
+    "first": "W",
+    "last": "?"
+   },
+   "Romans 8:37-39": {
+    "first": "N",
+    "last": "."
+   },
+   "Ruth 1:16": {
+    "first": "R",
+    "last": "."
+   },
+   "Sirach 2:10-11": {
+    "first": "O",
+    "last": ".",
+    "via": "Psalms 22:4-5"
+   },
+   "Song of Solomon 2:4": {
+    "first": "H",
+    "last": "."
+   },
+   "Titus 2:11-14": {
+    "first": "F",
+    "last": "."
+   },
+   "Titus 3:4-7": {
+    "first": "B",
+    "last": "."
+   },
+   "Wisdom 11:24-26": {
+    "first": "H",
+    "last": ".",
+    "via": "Psalms 36:7"
+   },
+   "Wisdom 3:1-3": {
+    "first": "P",
+    "last": ".",
+    "via": "Psalms 116:15"
+   },
+   "Zechariah 4:6": {
+    "first": "T",
+    "last": "."
+   },
+   "Zephaniah 3:17": {
+    "first": "T",
+    "last": "."
+   }
+  },
+  "webc": {
+   "1 Chronicles 16:11": {
+    "first": "S",
+    "last": "."
+   },
+   "1 Chronicles 16:34": {
+    "first": "O",
+    "last": "."
+   },
+   "1 Chronicles 29:11": {
+    "first": "Y",
+    "last": "."
+   },
+   "1 Corinthians 10:13": {
+    "first": "N",
+    "last": "."
+   },
+   "1 Corinthians 13:13": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Corinthians 13:4-7": {
+    "first": "L",
+    "last": "."
+   },
+   "1 Corinthians 15:57-58": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Corinthians 16:13-14": {
+    "first": "W",
+    "last": "."
+   },
+   "1 Corinthians 1:18": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Corinthians 2:9": {
+    "first": "B",
+    "last": "”"
+   },
+   "1 Corinthians 6:19-20": {
+    "first": "O",
+    "last": "."
+   },
+   "1 John 1:7": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 1:9": {
+    "first": "I",
+    "last": "."
+   },
+   "1 John 3:1": {
+    "first": "S",
+    "last": "."
+   },
+   "1 John 3:16": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 4:16": {
+    "first": "W",
+    "last": "."
+   },
+   "1 John 4:18": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 4:19": {
+    "first": "W",
+    "last": "."
+   },
+   "1 John 4:4": {
+    "first": "Y",
+    "last": "."
+   },
+   "1 John 4:7-8": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 4:9-10": {
+    "first": "B",
+    "last": "."
+   },
+   "1 John 5:11": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 5:14": {
+    "first": "T",
+    "last": "."
+   },
+   "1 John 5:4-5": {
+    "first": "F",
+    "last": "?"
+   },
+   "1 Kings 8:56": {
+    "first": "“",
+    "last": "."
+   },
+   "1 Peter 1:3-5": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 2:24": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Peter 2:9": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 3:15": {
+    "first": "B",
+    "last": ","
+   },
+   "1 Peter 4:8": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Peter 5:10": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Peter 5:6-7": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Peter 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "1 Samuel 16:7": {
+    "first": "B",
+    "last": "”"
+   },
+   "1 Samuel 2:2": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Thessalonians 5:11": {
+    "first": "T",
+    "last": "."
+   },
+   "1 Thessalonians 5:16-18": {
+    "first": "A",
+    "last": "."
+   },
+   "1 Thessalonians 5:24": {
+    "first": "H",
+    "last": "."
+   },
+   "1 Timothy 2:5-6": {
+    "first": "F",
+    "last": ","
+   },
+   "1 Timothy 4:12": {
+    "first": "L",
+    "last": "."
+   },
+   "1 Timothy 6:12": {
+    "first": "F",
+    "last": "."
+   },
+   "1 Timothy 6:6": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Chronicles 20:15": {
+    "first": "a",
+    "last": "."
+   },
+   "2 Corinthians 12:9": {
+    "first": "H",
+    "last": "."
+   },
+   "2 Corinthians 1:3-4": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Corinthians 3:18": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Corinthians 4:16-18": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Corinthians 5:17": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Corinthians 5:21": {
+    "first": "F",
+    "last": "."
+   },
+   "2 Corinthians 5:7": {
+    "first": "f",
+    "last": "."
+   },
+   "2 Corinthians 9:8": {
+    "first": "A",
+    "last": "."
+   },
+   "2 John 1:3": {
+    "first": "G",
+    "last": "."
+   },
+   "2 Kings 6:16": {
+    "first": "H",
+    "last": "”"
+   },
+   "2 Peter 1:3-4": {
+    "first": "s",
+    "last": "."
+   },
+   "2 Peter 3:18": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Peter 3:9": {
+    "first": "T",
+    "last": "."
+   },
+   "2 Samuel 22:31": {
+    "first": "A",
+    "last": "."
+   },
+   "2 Thessalonians 3:3": {
+    "first": "B",
+    "last": "."
+   },
+   "2 Timothy 1:7": {
+    "first": "F",
+    "last": "."
+   },
+   "2 Timothy 2:15": {
+    "first": "G",
+    "last": "."
+   },
+   "2 Timothy 3:16-17": {
+    "first": "E",
+    "last": "."
+   },
+   "2 Timothy 4:7": {
+    "first": "I",
+    "last": "."
+   },
+   "Acts 16:31": {
+    "first": "T",
+    "last": "”"
+   },
+   "Acts 17:28": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Acts 1:8": {
+    "first": "B",
+    "last": "”"
+   },
+   "Acts 20:24": {
+    "first": "B",
+    "last": "."
+   },
+   "Acts 2:38": {
+    "first": "P",
+    "last": "."
+   },
+   "Acts 4:12": {
+    "first": "T",
+    "last": "”"
+   },
+   "Amos 5:4": {
+    "first": "F",
+    "last": ";"
+   },
+   "Baruch 4:22": {
+    "first": "F",
+    "last": "."
+   },
+   "Colossians 1:16-17": {
+    "first": "F",
+    "last": "."
+   },
+   "Colossians 2:6-7": {
+    "first": "A",
+    "last": "."
+   },
+   "Colossians 3:1-2": {
+    "first": "I",
+    "last": "."
+   },
+   "Colossians 3:12-13": {
+    "first": "P",
+    "last": "."
+   },
+   "Colossians 3:15": {
+    "first": "A",
+    "last": "."
+   },
+   "Colossians 3:17": {
+    "first": "W",
+    "last": "."
+   },
+   "Colossians 3:23-24": {
+    "first": "A",
+    "last": "."
+   },
+   "Daniel 3:17-18": {
+    "first": "I",
+    "last": "”"
+   },
+   "Deuteronomy 31:6": {
+    "first": "B",
+    "last": "”"
+   },
+   "Deuteronomy 31:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Deuteronomy 6:5": {
+    "first": "Y",
+    "last": "."
+   },
+   "Deuteronomy 7:9": {
+    "first": "K",
+    "last": ","
+   },
+   "Ecclesiastes 12:13": {
+    "first": "T",
+    "last": "."
+   },
+   "Ecclesiastes 3:11": {
+    "first": "H",
+    "last": "."
+   },
+   "Ephesians 1:7": {
+    "first": "I",
+    "last": "e"
+   },
+   "Ephesians 2:4-5": {
+    "first": "B",
+    "last": "—"
+   },
+   "Ephesians 2:8-10": {
+    "first": "f",
+    "last": "."
+   },
+   "Ephesians 3:20-21": {
+    "first": "N",
+    "last": "."
+   },
+   "Ephesians 4:32": {
+    "first": "A",
+    "last": "."
+   },
+   "Ephesians 6:10-11": {
+    "first": "F",
+    "last": "."
+   },
+   "Esther 4:14": {
+    "first": "F",
+    "last": "”"
+   },
+   "Exodus 14:14": {
+    "first": "T",
+    "last": "”"
+   },
+   "Exodus 15:2": {
+    "first": "T",
+    "last": "."
+   },
+   "Exodus 33:14": {
+    "first": "H",
+    "last": "”"
+   },
+   "Exodus 34:6": {
+    "first": "T",
+    "last": ","
+   },
+   "Ezekiel 36:26": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 2:20": {
+    "first": "I",
+    "last": "."
+   },
+   "Galatians 5:1": {
+    "first": "S",
+    "last": "."
+   },
+   "Galatians 5:22-23": {
+    "first": "B",
+    "last": "."
+   },
+   "Galatians 6:9": {
+    "first": "L",
+    "last": "."
+   },
+   "Genesis 15:6": {
+    "first": "H",
+    "last": "."
+   },
+   "Genesis 1:1": {
+    "first": "I",
+    "last": "."
+   },
+   "Genesis 1:27": {
+    "first": "G",
+    "last": "."
+   },
+   "Genesis 28:15": {
+    "first": "B",
+    "last": "”"
+   },
+   "Genesis 50:20": {
+    "first": "A",
+    "last": "."
+   },
+   "Habakkuk 3:17-18": {
+    "first": "F",
+    "last": "!"
+   },
+   "Hebrews 10:23-25": {
+    "first": "l",
+    "last": "."
+   },
+   "Hebrews 11:1": {
+    "first": "N",
+    "last": "."
+   },
+   "Hebrews 11:6": {
+    "first": "W",
+    "last": "."
+   },
+   "Hebrews 12:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Hebrews 13:5-6": {
+    "first": "B",
+    "last": "”"
+   },
+   "Hebrews 13:8": {
+    "first": "J",
+    "last": "."
+   },
+   "Hebrews 4:12": {
+    "first": "F",
+    "last": "."
+   },
+   "Hebrews 4:16": {
+    "first": "L",
+    "last": "."
+   },
+   "Hebrews 6:19-20": {
+    "first": "T",
+    "last": "."
+   },
+   "Hosea 14:4": {
+    "first": "“",
+    "last": "."
+   },
+   "Hosea 6:6": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 12:2": {
+    "first": "B",
+    "last": "”"
+   },
+   "Isaiah 25:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Isaiah 26:3": {
+    "first": "Y",
+    "last": "."
+   },
+   "Isaiah 30:21": {
+    "first": "a",
+    "last": "”"
+   },
+   "Isaiah 40:28-29": {
+    "first": "H",
+    "last": "."
+   },
+   "Isaiah 40:30-31": {
+    "first": "E",
+    "last": "."
+   },
+   "Isaiah 40:8": {
+    "first": "T",
+    "last": "”"
+   },
+   "Isaiah 41:10": {
+    "first": "D",
+    "last": "."
+   },
+   "Isaiah 41:13": {
+    "first": "F",
+    "last": "’"
+   },
+   "Isaiah 43:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 43:19": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 46:4": {
+    "first": "E",
+    "last": "."
+   },
+   "Isaiah 53:4-6": {
+    "first": "S",
+    "last": "."
+   },
+   "Isaiah 54:10": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 55:10-11": {
+    "first": "F",
+    "last": "."
+   },
+   "Isaiah 55:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Isaiah 55:8": {
+    "first": "“",
+    "last": "."
+   },
+   "Isaiah 58:11": {
+    "first": "a",
+    "last": "."
+   },
+   "Isaiah 61:1": {
+    "first": "T",
+    "last": ","
+   },
+   "Isaiah 64:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Isaiah 6:8": {
+    "first": "I",
+    "last": "”"
+   },
+   "Isaiah 9:6": {
+    "first": "F",
+    "last": "."
+   },
+   "James 1:12": {
+    "first": "B",
+    "last": "."
+   },
+   "James 1:17": {
+    "first": "E",
+    "last": "."
+   },
+   "James 1:2-4": {
+    "first": "C",
+    "last": "."
+   },
+   "James 1:22": {
+    "first": "B",
+    "last": "."
+   },
+   "James 1:5": {
+    "first": "B",
+    "last": "."
+   },
+   "James 4:7-8": {
+    "first": "B",
+    "last": "."
+   },
+   "James 5:16": {
+    "first": "C",
+    "last": "."
+   },
+   "Jeremiah 17:7": {
+    "first": "“",
+    "last": "."
+   },
+   "Jeremiah 29:11-13": {
+    "first": "F",
+    "last": "."
+   },
+   "Jeremiah 31:3": {
+    "first": "T",
+    "last": "."
+   },
+   "Jeremiah 32:17": {
+    "first": "“",
+    "last": "."
+   },
+   "Jeremiah 33:3": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Job 19:25": {
+    "first": "B",
+    "last": "."
+   },
+   "Job 23:10": {
+    "first": "B",
+    "last": "."
+   },
+   "Job 42:2": {
+    "first": "“",
+    "last": "."
+   },
+   "Joel 2:13": {
+    "first": "T",
+    "last": "."
+   },
+   "Joel 2:32": {
+    "first": "I",
+    "last": "."
+   },
+   "John 10:10": {
+    "first": "T",
+    "last": "."
+   },
+   "John 10:11": {
+    "first": "“",
+    "last": "."
+   },
+   "John 10:28": {
+    "first": "I",
+    "last": "."
+   },
+   "John 11:25": {
+    "first": "J",
+    "last": "."
+   },
+   "John 13:34": {
+    "first": "A",
+    "last": "."
+   },
+   "John 14:1-3": {
+    "first": "“",
+    "last": "."
+   },
+   "John 14:27": {
+    "first": "P",
+    "last": "."
+   },
+   "John 14:6": {
+    "first": "J",
+    "last": "."
+   },
+   "John 15:13": {
+    "first": "G",
+    "last": "."
+   },
+   "John 15:5": {
+    "first": "I",
+    "last": "."
+   },
+   "John 16:33": {
+    "first": "I",
+    "last": "”"
+   },
+   "John 17:3": {
+    "first": "T",
+    "last": "."
+   },
+   "John 1:1": {
+    "first": "I",
+    "last": "."
+   },
+   "John 1:12-13": {
+    "first": "B",
+    "last": "."
+   },
+   "John 1:14": {
+    "first": "T",
+    "last": "."
+   },
+   "John 1:29": {
+    "first": "T",
+    "last": "!"
+   },
+   "John 20:29": {
+    "first": "J",
+    "last": "”"
+   },
+   "John 3:16-17": {
+    "first": "F",
+    "last": "."
+   },
+   "John 4:13-14": {
+    "first": "J",
+    "last": "”"
+   },
+   "John 6:35": {
+    "first": "J",
+    "last": "."
+   },
+   "John 8:12": {
+    "first": "A",
+    "last": "”"
+   },
+   "John 8:32": {
+    "first": "Y",
+    "last": "”"
+   },
+   "John 8:36": {
+    "first": "I",
+    "last": "."
+   },
+   "Jonah 2:9": {
+    "first": "B",
+    "last": "”"
+   },
+   "Joshua 1:9": {
+    "first": "H",
+    "last": "”"
+   },
+   "Joshua 24:15": {
+    "first": "I",
+    "last": "”"
+   },
+   "Jude 1:24-25": {
+    "first": "N",
+    "last": "."
+   },
+   "Judith 9:11": {
+    "first": "F",
+    "last": "."
+   },
+   "Lamentations 3:22-23": {
+    "first": "I",
+    "last": "."
+   },
+   "Lamentations 3:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Leviticus 26:12": {
+    "first": "I",
+    "last": "."
+   },
+   "Luke 11:9": {
+    "first": "“",
+    "last": "."
+   },
+   "Luke 12:34": {
+    "first": "F",
+    "last": "."
+   },
+   "Luke 19:10": {
+    "first": "F",
+    "last": "”"
+   },
+   "Luke 1:37": {
+    "first": "F",
+    "last": "”"
+   },
+   "Luke 2:10-11": {
+    "first": "T",
+    "last": "."
+   },
+   "Luke 4:18-19": {
+    "first": "“",
+    "last": "”"
+   },
+   "Luke 6:31": {
+    "first": "“",
+    "last": "."
+   },
+   "Luke 6:37": {
+    "first": "D",
+    "last": "."
+   },
+   "Malachi 3:6": {
+    "first": "“",
+    "last": "."
+   },
+   "Mark 10:27": {
+    "first": "J",
+    "last": "”"
+   },
+   "Mark 10:45": {
+    "first": "F",
+    "last": "”"
+   },
+   "Mark 12:30-31": {
+    "first": "Y",
+    "last": "”"
+   },
+   "Mark 16:15": {
+    "first": "H",
+    "last": "."
+   },
+   "Mark 9:23": {
+    "first": "J",
+    "last": "”"
+   },
+   "Matthew 11:28-30": {
+    "first": "“",
+    "last": "”"
+   },
+   "Matthew 16:24": {
+    "first": "T",
+    "last": "."
+   },
+   "Matthew 18:20": {
+    "first": "F",
+    "last": "”"
+   },
+   "Matthew 19:26": {
+    "first": "L",
+    "last": "”"
+   },
+   "Matthew 22:37-39": {
+    "first": "J",
+    "last": "’"
+   },
+   "Matthew 28:19-20": {
+    "first": "G",
+    "last": "."
+   },
+   "Matthew 28:6": {
+    "first": "H",
+    "last": "."
+   },
+   "Matthew 4:4": {
+    "first": "B",
+    "last": "”"
+   },
+   "Matthew 5:14": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 5:16": {
+    "first": "E",
+    "last": "."
+   },
+   "Matthew 5:3": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 5:44-45": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 5:6": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 6:19-21": {
+    "first": "“",
+    "last": "."
+   },
+   "Matthew 6:33-34": {
+    "first": "B",
+    "last": "."
+   },
+   "Matthew 7:12": {
+    "first": "T",
+    "last": "."
+   },
+   "Matthew 7:7": {
+    "first": "“",
+    "last": "."
+   },
+   "Micah 6:8": {
+    "first": "H",
+    "last": "?"
+   },
+   "Micah 7:7": {
+    "first": "B",
+    "last": "."
+   },
+   "Nahum 1:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Nehemiah 8:10": {
+    "first": "T",
+    "last": "”"
+   },
+   "Numbers 23:19": {
+    "first": "G",
+    "last": "?"
+   },
+   "Numbers 6:24-26": {
+    "first": "‘",
+    "last": "’"
+   },
+   "Philippians 1:6": {
+    "first": "b",
+    "last": "."
+   },
+   "Philippians 2:3-4": {
+    "first": "d",
+    "last": "."
+   },
+   "Philippians 2:5-8": {
+    "first": "H",
+    "last": "."
+   },
+   "Philippians 3:14": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:12-13": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:19": {
+    "first": "M",
+    "last": "."
+   },
+   "Philippians 4:4": {
+    "first": "R",
+    "last": "”"
+   },
+   "Philippians 4:6-7": {
+    "first": "I",
+    "last": "."
+   },
+   "Philippians 4:8": {
+    "first": "F",
+    "last": "."
+   },
+   "Proverbs 11:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 16:3": {
+    "first": "C",
+    "last": "."
+   },
+   "Proverbs 16:9": {
+    "first": "A",
+    "last": "."
+   },
+   "Proverbs 18:10": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 19:21": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 29:25": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 30:5": {
+    "first": "“",
+    "last": "."
+   },
+   "Proverbs 3:5-6": {
+    "first": "T",
+    "last": "."
+   },
+   "Proverbs 4:23": {
+    "first": "K",
+    "last": "."
+   },
+   "Psalms 100:5": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 103:1": {
+    "first": "P",
+    "last": "!"
+   },
+   "Psalms 103:12": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 103:2-5": {
+    "first": "P",
+    "last": "."
+   },
+   "Psalms 103:8": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 107:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 118:24": {
+    "first": "T",
+    "last": "!"
+   },
+   "Psalms 119:105": {
+    "first": "Y",
+    "last": "."
+   },
+   "Psalms 119:11": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 121:1-2": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 121:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 130:5": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 138:8": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 139:14": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 139:23-24": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 143:8": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 145:8-9": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 147:3": {
+    "first": "H",
+    "last": "."
+   },
+   "Psalms 150:6": {
+    "first": "L",
+    "last": "!"
+   },
+   "Psalms 16:11": {
+    "first": "Y",
+    "last": "."
+   },
+   "Psalms 16:8": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 18:2": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 19:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 19:14": {
+    "first": "L",
+    "last": "."
+   },
+   "Psalms 1:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 23:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 23:4": {
+    "first": "E",
+    "last": "."
+   },
+   "Psalms 23:6": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 27:1": {
+    "first": "T",
+    "last": "?"
+   },
+   "Psalms 27:14": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 27:4": {
+    "first": "O",
+    "last": "."
+   },
+   "Psalms 28:7": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 30:5": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 31:24": {
+    "first": "B",
+    "last": "."
+   },
+   "Psalms 32:8": {
+    "first": "I",
+    "last": "."
+   },
+   "Psalms 34:18": {
+    "first": "T",
+    "last": "."
+   },
+   "Psalms 34:8": {
+    "first": "O",
+    "last": "."
+   },
+   "Psalms 37:4-6": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 42:1": {
+    "first": "A",
+    "last": "."
+   },
+   "Psalms 42:11": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 46:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 46:10": {
+    "first": "“",
+    "last": "”"
+   },
+   "Psalms 51:10": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 55:22": {
+    "first": "C",
+    "last": "."
+   },
+   "Psalms 56:3": {
+    "first": "W",
+    "last": "."
+   },
+   "Psalms 62:1": {
+    "first": "M",
+    "last": "."
+   },
+   "Psalms 63:1": {
+    "first": "G",
+    "last": "."
+   },
+   "Psalms 73:26": {
+    "first": "M",
+    "last": "."
+   },
+   "Psalms 84:11": {
+    "first": "F",
+    "last": "."
+   },
+   "Psalms 90:12": {
+    "first": "S",
+    "last": "."
+   },
+   "Psalms 91:1-2": {
+    "first": "H",
+    "last": "”"
+   },
+   "Psalms 91:4": {
+    "first": "H",
+    "last": "."
+   },
+   "Psalms 94:19": {
+    "first": "I",
+    "last": "."
+   },
+   "Revelation 1:8": {
+    "first": "“",
+    "last": "”"
+   },
+   "Revelation 21:4-5": {
+    "first": "H",
+    "last": "”"
+   },
+   "Revelation 22:13": {
+    "first": "I",
+    "last": "."
+   },
+   "Revelation 3:20": {
+    "first": "B",
+    "last": "."
+   },
+   "Revelation 4:11": {
+    "first": "“",
+    "last": "”"
+   },
+   "Revelation 5:11-12": {
+    "first": "I",
+    "last": "”"
+   },
+   "Revelation 7:16-17": {
+    "first": "T",
+    "last": "”"
+   },
+   "Romans 10:13": {
+    "first": "F",
+    "last": "”"
+   },
+   "Romans 10:9-10": {
+    "first": "t",
+    "last": "."
+   },
+   "Romans 12:1-2": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 12:12": {
+    "first": "r",
+    "last": ","
+   },
+   "Romans 12:21": {
+    "first": "D",
+    "last": "."
+   },
+   "Romans 15:13": {
+    "first": "N",
+    "last": "."
+   },
+   "Romans 1:16": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 3:23-24": {
+    "first": "f",
+    "last": ","
+   },
+   "Romans 5:1-2": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 5:8": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 6:23": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 8:1": {
+    "first": "T",
+    "last": "."
+   },
+   "Romans 8:11": {
+    "first": "B",
+    "last": "."
+   },
+   "Romans 8:18": {
+    "first": "F",
+    "last": "."
+   },
+   "Romans 8:28": {
+    "first": "W",
+    "last": "."
+   },
+   "Romans 8:31": {
+    "first": "W",
+    "last": "?"
+   },
+   "Romans 8:37-39": {
+    "first": "N",
+    "last": "."
+   },
+   "Ruth 1:16": {
+    "first": "R",
+    "last": "."
+   },
+   "Sirach 2:10-11": {
+    "first": "L",
+    "last": "."
+   },
+   "Song of Solomon 2:4": {
+    "first": "H",
+    "last": "."
+   },
+   "Titus 2:11-14": {
+    "first": "F",
+    "last": "."
+   },
+   "Titus 3:4-7": {
+    "first": "B",
+    "last": "."
+   },
+   "Wisdom 11:24-26": {
+    "first": "F",
+    "last": "."
+   },
+   "Wisdom 3:1-3": {
+    "first": "B",
+    "last": "."
+   },
+   "Zechariah 4:6": {
+    "first": "T",
+    "last": "."
+   },
+   "Zephaniah 3:17": {
+    "first": "T",
+    "last": "."
+   }
+  }
+ }
+}
