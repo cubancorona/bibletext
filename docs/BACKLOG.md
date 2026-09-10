@@ -7,6 +7,47 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Verse of the day: possible later additions
+
+The 10 Sep 2026 rework (branch verse-of-day: civil-date key with the device
+zone on phones, frozen hash order, passages with alternates for the Catholic
+edition's own books, the reading face on the card, Share in the passage's own
+chapter, the desktop Escape guard, an offline snapshot of the rotation) left
+these undone by decision or by scope. Each is small enough to pick up cold;
+none is owed.
+
+- **A page at bibletext.co.uk/today** — one verse, one "Read in context" link,
+  no archive. Static, so the page must pick with the same civil-date
+  arithmetic in JavaScript and be generated from the same commit as the app,
+  or the two drift. Needs the site-root allow-list
+  (cmd/websitegen/licensed_exclusion_test.go), its own hashed CSS/JS pair, and
+  the Smart App Banner treatment for the link (a same-domain link stays in
+  Safari on iPhone). Days of site work. Settle first whether one verse and one
+  link fits "not a page".
+- **A first-open-of-the-day surfacing** — a small dot on the sparkle until
+  opened, at most. A modal on first open was declined: the desktop foreground
+  hook fires on every alt-tab back, and an unbidden daily modal is the closest
+  thing to an engagement mechanic on the list.
+- **Yesterday / tomorrow** — declined as a feed by another name; the reader
+  who missed a day has the reading pane. Revisit only if the stance changes.
+- **A spoken label for the sparkle** — the toolkit has no accessibility layer,
+  so nothing Fyne-side can name the button for VoiceOver or TalkBack. The
+  Settings caption is the mitigation. If accessibility is ever taken on, do
+  the header as a whole, not this one control.
+- **The sparkle in phone landscape** — landscape strips every header control
+  but the chapter arrows (reading_fullscreen_row.go), so the card is
+  unreachable there. A 22 pt newIconTapButton beside the arrows, plus the
+  count-pinning tests. A policy exception, not a bug, so it waits on a
+  decision rather than a fix.
+- **A feast overlay** (Christmas, Good Friday, Easter as substitutions on the
+  civil date) — declined 10 Sep 2026. Hours if ever wanted; Western Easter
+  only.
+
+The next pieces that ARE wanted: one opt-in local notification a day, iOS
+first, then Android after the Play closed-testing review clears — see the
+rework's proposal for the design (calendar triggers carrying the full date,
+re-issued on foreground, the passage computed with the fixed day key).
+
 ## Recapture the App Store and Play screenshots — deferred from 1.2.7
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
