@@ -46,6 +46,7 @@ import (
 	"image/color"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -442,27 +443,150 @@ func dayIndex(day int64, n int) int {
 // mark. Opening and closing quotation marks are looked past, not counted; an
 // ellipsis that belongs inside a closing quote is put there.
 func fragmentFrame(s string) string {
-	t := strings.TrimSpace(s)
-	if t == "" {
-		return t
-	}
+	return frameTail(frameLead(strings.TrimSpace(s)))
+}
+
+// frameLead is the leading half: "… " before a lower-case first letter,
+// placed inside any opening quotation marks — the ellipsis stands for words
+// of the speech, not for narration before it.
+func frameLead(t string) string {
 	rs := []rune(t)
 	i := 0
 	for i < len(rs) && strings.ContainsRune("‘“\"'(", rs[i]) {
 		i++
 	}
 	if i < len(rs) && unicode.IsLower(rs[i]) {
-		t = "… " + t
-		rs = []rune(t)
+		return string(rs[:i]) + "… " + string(rs[i:])
 	}
+	return t
+}
+
+// frameTail is the trailing half: "…" after a last letter or clause mark,
+// placed inside any closing quotation marks.
+func frameTail(t string) string {
+	rs := []rune(t)
 	j := len(rs) - 1
 	for j >= 0 && strings.ContainsRune("’”\"')", rs[j]) {
 		j--
 	}
 	if j >= 0 && (unicode.IsLetter(rs[j]) || strings.ContainsRune(",;:—–", rs[j])) {
-		t = string(rs[:j+1]) + "…" + string(rs[j+1:])
+		return string(rs[:j+1]) + "…" + string(rs[j+1:])
 	}
 	return t
+}
+
+// THE MARKS. An edition closes a speech where the speech ends, chapters after
+// the verse that opened it, and verse boundaries carry no marks at all — so a
+// passage lifted out at verse granularity inherits an orphan: an opening mark
+// with no close (Matthew 5:14), or a close with no opening (Exodus 14:14).
+// Fifty-odd of the rotation's passages do, in every edition. The share route
+// already answers this the way the Bluebook does for a quotation that is only
+// part of the excerpt (Rule 5.2(f)(ii), balanceQuoteMarks): retain the marks
+// and complete them, so the excerpt is self-contained. The card does the same,
+// so the card and the share of the same passage agree on the marks. Not
+// stripped: a completed pair says only what is true — these words are speech —
+// while an orphan makes a claim the card never honours.
+//
+// cardMarkBalance is what to add at each end: the double marks by the share
+// route's own count, and an opening single ‘ never closed gets its ’. A lone
+// ’ is left alone — it is also the apostrophe, and there is no telling.
+func cardMarkBalance(text string) (prefix, suffix string) {
+	depth, minDepth := 0, 0
+	for _, r := range text {
+		switch r {
+		case '“':
+			depth++
+		case '”':
+			depth--
+			if depth < minDepth {
+				minDepth = depth
+			}
+		}
+	}
+	prefix = strings.Repeat("“", -minDepth)
+	suffix = strings.Repeat("”", depth-minDepth)
+	single := 0
+	for _, r := range text {
+		switch r {
+		case '‘':
+			single++
+		case '’':
+			if single > 0 {
+				single--
+			}
+		}
+	}
+	suffix += strings.Repeat("’", single)
+	return prefix, suffix
+}
+
+// balanceCardMarks is cardMarkBalance applied to a plain string.
+func balanceCardMarks(text string) string {
+	prefix, suffix := cardMarkBalance(text)
+	return prefix + text + suffix
+}
+
+// cardRun is one styled stretch of the card's passage: the words, whether
+// they are Christ's, whether the translators supplied them, and whether a
+// line break precedes it — a poem line, or the next verse of a run.
+type cardRun struct {
+	Text   string
+	Red    bool
+	Italic bool
+	Break  bool
+}
+
+// runs is the passage as the panes would draw it: each verse through the same
+// redLetterRuns the reading surfaces use, so the card colours Christ's words
+// where the pane does and sets the supplied words in italic, with the divine
+// name's small capitals applied on the way. Verses of a run start on their own
+// lines, as do a verse's poem lines.
+func (d dayVerse) runs(versionID string, red bool) []cardRun {
+	var out []cardRun
+	for vi, v := range d.Verses {
+		for ri, r := range redLetterRuns(versionID, v, red) {
+			for li, line := range strings.Split(r.Text, "\n") {
+				out = append(out, cardRun{
+					Text:   line,
+					Red:    r.Red,
+					Italic: r.Italic,
+					Break:  li > 0 || (ri == 0 && vi > 0),
+				})
+			}
+		}
+	}
+	return out
+}
+
+// runsText is the runs read back as one string, breaks as newlines — what
+// the framing and balancing rules look at, and what a test compares.
+func runsText(runs []cardRun) string {
+	var b strings.Builder
+	for _, r := range runs {
+		if r.Break {
+			b.WriteByte('\n')
+		}
+		b.WriteString(r.Text)
+	}
+	return b.String()
+}
+
+// frameAndBalance applies the fragment framing and the mark balance to the
+// runs, at their ends. Both rules place their marks inside any quotation
+// marks they meet — the ellipsis stands for words of the speech — so the two
+// commute, and “… for all have sinned…” comes out the same either way round.
+func frameAndBalance(runs []cardRun) []cardRun {
+	if len(runs) == 0 {
+		return runs
+	}
+	out := append([]cardRun(nil), runs...)
+	first, last := 0, len(out)-1
+	out[first].Text = frameLead(strings.TrimLeft(out[first].Text, " \t"))
+	out[last].Text = frameTail(strings.TrimRight(out[last].Text, " \t"))
+	prefix, suffix := cardMarkBalance(runsText(out))
+	out[first].Text = prefix + out[first].Text
+	out[last].Text += suffix
+	return out
 }
 
 // iconVerseOfDay is a small filled four-point "sparkle" — a quiet light, not a
@@ -541,18 +665,21 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 // small capitals (the chrome face has no such glyphs).
 //
 // readingParagraph wraps to whatever width it is given, so the card can be as
-// wide as the window allows and a rotation re-wraps it. Rows are canvas.Text,
-// which is the only toolkit text that takes a FontSource.
+// wide as the window allows and a rotation re-wraps it. Rows are canvas.Text
+// fragments, which is the only toolkit text that takes a FontSource; a row
+// holds several because a run's colour or slant changes mid-line.
 type readingParagraph struct {
 	widget.BaseWidget
-	text  string
-	size  float32
-	color color.Color
-	face  fyne.Resource
+	runs    []cardRun
+	size    float32
+	color   color.Color
+	red     color.Color
+	regular fyne.Resource
+	italic  fyne.Resource
 }
 
-func newReadingParagraph(text string, size float32, col color.Color, face fyne.Resource) *readingParagraph {
-	p := &readingParagraph{text: text, size: size, color: col, face: face}
+func newReadingParagraph(runs []cardRun, size float32, col, red color.Color, regular, italic fyne.Resource) *readingParagraph {
+	p := &readingParagraph{runs: runs, size: size, color: col, red: red, regular: regular, italic: italic}
 	p.ExtendBaseWidget(p)
 	return p
 }
@@ -561,16 +688,63 @@ func (p *readingParagraph) CreateRenderer() fyne.WidgetRenderer {
 	return &readingParagraphRenderer{p: p}
 }
 
+// text is the runs read back as one string, for a test to compare.
+func (p *readingParagraph) text() string { return runsText(p.runs) }
+
+// paragraphFragment is one word-piece of the passage with its style and whether
+// a space (and so a possible line break) precedes it. A run boundary inside a
+// word — the red closes and the black opens with no space between — yields two
+// fragments drawn flush, never a break.
+type paragraphFragment struct {
+	text        string
+	red, italic bool
+	spaceBefore bool
+	breakBefore bool
+}
+
+func (p *readingParagraph) fragments() []paragraphFragment {
+	var out []paragraphFragment
+	for _, r := range p.runs {
+		leading := strings.HasPrefix(r.Text, " ")
+		words := strings.Fields(r.Text)
+		for i, w := range words {
+			out = append(out, paragraphFragment{
+				text: w, red: r.Red, italic: r.Italic,
+				spaceBefore: i > 0 || leading,
+				breakBefore: i == 0 && r.Break,
+			})
+		}
+		if len(words) == 0 && r.Break {
+			out = append(out, paragraphFragment{breakBefore: true})
+		}
+		if len(words) > 0 && strings.HasSuffix(r.Text, " ") && len(out) > 0 {
+			// The space belongs to the text; carry it to the next fragment.
+			out[len(out)-1].text += "\u0000" // marker consumed below
+		}
+	}
+	// Resolve the trailing-space markers into spaceBefore on the follower.
+	for i := range out {
+		if strings.HasSuffix(out[i].text, "\u0000") {
+			out[i].text = strings.TrimSuffix(out[i].text, "\u0000")
+			if i+1 < len(out) {
+				out[i+1].spaceBefore = true
+			}
+		}
+	}
+	return out
+}
+
 // readingParagraphRenderer re-wraps only when the width changes; MinSize
 // reports the height of the rows at the LAST width it wrapped for, which is the
 // contract the sheet-fitting arithmetic relies on (resize to the inner width,
 // then read MinSize).
 type readingParagraphRenderer struct {
-	p     *readingParagraph
-	width float32
-	rowH  float32
-	rows  []*canvas.Text
-	objs  []fyne.CanvasObject
+	p      *readingParagraph
+	width  float32
+	rowH   float32
+	spaceW float32
+	rows   [][]*canvas.Text
+	objs   []fyne.CanvasObject
 }
 
 // readingParagraphGuessWidth is the width wrapped for before any layout has
@@ -578,8 +752,15 @@ type readingParagraphRenderer struct {
 // near the truth rather than one word per row.
 const readingParagraphGuessWidth = 300
 
-func (r *readingParagraphRenderer) measure(s string) fyne.Size {
-	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, r.p.size, fyne.TextStyle{}, r.p.face)
+func (r *readingParagraphRenderer) face(italic bool) fyne.Resource {
+	if italic && r.p.italic != nil {
+		return r.p.italic
+	}
+	return r.p.regular
+}
+
+func (r *readingParagraphRenderer) measure(s string, italic bool) fyne.Size {
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, r.p.size, fyne.TextStyle{}, r.face(italic))
 	return sz
 }
 
@@ -594,44 +775,57 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 	r.rows = r.rows[:0]
 	r.objs = r.objs[:0]
 	if r.rowH == 0 {
-		r.rowH = r.measure("Ag").Height
+		r.rowH = r.measure("Ag", false).Height
+		r.spaceW = r.measure("a a", false).Width - r.measure("aa", false).Width
 	}
-	add := func(s string) {
-		t := canvas.NewText(s, r.p.color)
-		t.TextSize = r.p.size
-		t.FontSource = r.p.face
-		r.rows = append(r.rows, t)
-		r.objs = append(r.objs, t)
+	var row []*canvas.Text
+	x := float32(0)
+	newRow := func() {
+		r.rows = append(r.rows, row)
+		row = nil
+		x = 0
 	}
-	for _, line := range strings.Split(r.p.text, "\n") {
-		words := strings.Fields(line)
-		if len(words) == 0 {
-			add("")
+	for _, f := range r.p.fragments() {
+		if f.breakBefore && (len(row) > 0 || len(r.rows) > 0) {
+			newRow()
+		}
+		if f.text == "" {
 			continue
 		}
-		cur := ""
-		for _, w := range words {
-			try := w
-			if cur != "" {
-				try = cur + " " + w
-			}
-			if cur != "" && r.measure(try).Width > width {
-				add(cur)
-				cur = w
-				continue
-			}
-			cur = try
+		w := r.measure(f.text, f.italic).Width
+		gap := float32(0)
+		if f.spaceBefore && len(row) > 0 {
+			gap = r.spaceW
 		}
-		add(cur)
+		if len(row) > 0 && f.spaceBefore && x+gap+w > width {
+			newRow()
+			gap = 0
+		}
+		col := r.p.color
+		if f.red {
+			col = r.p.red
+		}
+		t := canvas.NewText(f.text, col)
+		t.TextSize = r.p.size
+		t.FontSource = r.face(f.italic)
+		t.Move(fyne.NewPos(x+gap, 0))
+		t.Resize(fyne.NewSize(w, r.rowH))
+		row = append(row, t)
+		r.objs = append(r.objs, t)
+		x += gap + w
+	}
+	if len(row) > 0 || len(r.rows) == 0 {
+		r.rows = append(r.rows, row)
 	}
 }
 
 func (r *readingParagraphRenderer) Layout(size fyne.Size) {
 	r.wrap(size.Width)
 	y := float32(0)
-	for _, t := range r.rows {
-		t.Move(fyne.NewPos(0, y))
-		t.Resize(fyne.NewSize(size.Width, r.rowH))
+	for _, row := range r.rows {
+		for _, t := range row {
+			t.Move(fyne.NewPos(t.Position().X, y))
+		}
 		y += r.rowH
 	}
 }
@@ -658,11 +852,44 @@ func (r *readingParagraphRenderer) Destroy()                     {}
 // against the width the paragraph was given.
 func (r *readingParagraphRenderer) rowWidths() []float32 {
 	out := make([]float32, 0, len(r.rows))
-	for _, t := range r.rows {
-		out = append(out, r.measure(t.Text).Width)
+	for _, row := range r.rows {
+		if len(row) == 0 {
+			out = append(out, 0)
+			continue
+		}
+		last := row[len(row)-1]
+		out = append(out, last.Position().X+last.Size().Width)
 	}
 	return out
 }
+
+// fragmentColours reports the colour of every drawn fragment, for a test.
+func (r *readingParagraphRenderer) fragmentColours() []color.Color {
+	var out []color.Color
+	for _, row := range r.rows {
+		for _, t := range row {
+			out = append(out, t.Color)
+		}
+	}
+	return out
+}
+
+// cardItalicFont is the reading family's italic cut, cached for the same
+// reason styledPaneFont caches the regular: the toolkit's font cache is keyed
+// on the resource.
+func cardItalicFont() fyne.Resource {
+	cardItalicOnce.Do(func() {
+		if f := loadReadingFonts(); f != nil {
+			cardItalicCached = f.italic
+		}
+	})
+	return cardItalicCached
+}
+
+var (
+	cardItalicOnce   sync.Once
+	cardItalicCached fyne.Resource
+)
 
 // votdRemeasure schedules the card's second fit, once the real layout has
 // landed, so the card fits the passage snugly. It is a variable so the test
@@ -742,9 +969,11 @@ func showVerseOfDay(state *AppState) {
 	top := container.NewBorder(nil, nil, nil, shareBtn,
 		container.NewVBox(layout.NewSpacer(), kicker, layout.NewSpacer()))
 
-	// The pane's own cached face: the toolkit's font cache is keyed on the
+	// The pane's own cached faces: the toolkit's font cache is keyed on the
 	// resource, so handing it a fresh one per card would miss every time.
-	body := newReadingParagraph(fragmentFrame(d.text()), float32(readingGlyphPx()), pal.Text, styledPaneFont())
+	body := newReadingParagraph(
+		frameAndBalance(d.runs(state.currentVersion().ID, redLetterEnabled())),
+		float32(readingGlyphPx()), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
 
 	ref := canvas.NewText(
 		fmt.Sprintf("%s · %s", d.reference(), state.currentVersion().Abbrev),

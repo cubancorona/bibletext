@@ -420,16 +420,16 @@ func TestTheCardSetsThePassageInTheReadingFace(t *testing.T) {
 	if body == nil {
 		t.Fatal("the card sets no reading paragraph")
 	}
-	if body.face == nil || body.face != styledPaneFont() {
+	if body.regular == nil || body.regular != styledPaneFont() {
 		t.Error("the passage is not set in the reading face the pane uses")
 	}
-	if fonts := loadReadingFonts(); fonts == nil || body.face.Name() != fonts.regular.Name() {
-		t.Errorf("the card's face is %v, not the reading family", body.face)
+	if fonts := loadReadingFonts(); fonts == nil || body.regular.Name() != fonts.regular.Name() {
+		t.Errorf("the card's face is %v, not the reading family", body.regular)
 	}
 	if want := float32(readingGlyphPx()); body.size != want {
 		t.Errorf("the passage is set at %vpt; the reading panes set their body at %vpt", body.size, want)
 	}
-	if strings.TrimSpace(body.text) == "" {
+	if strings.TrimSpace(body.text()) == "" {
 		t.Error("the paragraph carries no text")
 	}
 }
@@ -519,4 +519,91 @@ func findIconTapButton(o fyne.CanvasObject, iconName string) *iconTapButton {
 		}
 	}
 	return nil
+}
+
+func TestBalanceCardMarks(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"“You are the light of the world.", "“You are the light of the world.”"},
+		{"The LORD will fight for you.”", "“The LORD will fight for you.”"},
+		{"‘The LORD bless you.", "‘The LORD bless you.’"},
+		{"A city can’t be hidden.", "A city can’t be hidden."},
+		{"“I am the way,” he said.", "“I am the way,” he said."},
+		{"he said, “I am the way", "he said, “I am the way”"},
+	}
+	for _, c := range cases {
+		if got := balanceCardMarks(c.in); got != c.want {
+			t.Errorf("balanceCardMarks(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// THE MARKS ARE COMPLETED, AND THEY ENCLOSE THE ELLIPSIS. Mutations: the
+// balance dropped (the orphan mark stays); the leading ellipsis placed before
+// an opening mark rather than inside it.
+func TestTheCardBalancesItsMarksAroundTheEllipsis(t *testing.T) {
+	cases := []struct{ text, want string }{
+		{"“You are the light of the world. A city located on a hill can’t be hidden.",
+			"“You are the light of the world. A city located on a hill can’t be hidden.”"},
+		{"for God so loved the world", "… for God so loved the world…"},
+		{"“for God so loved the world", "“… for God so loved the world…”"},
+		{"hold your peace.”", "“… hold your peace.”"},
+		{"Hold your peace.”", "“Hold your peace.”"},
+	}
+	for _, c := range cases {
+		d := dayVerse{Book: "John", Chapter: 3, Lo: 16, Hi: 16,
+			Verses: []Verse{{BookName: "John", Chapter: 3, Verse: 16, Text: c.text}}}
+		got := runsText(frameAndBalance(d.runs("web", false)))
+		if got != c.want {
+			t.Errorf("card text for %q:\n got %q\nwant %q", c.text, got, c.want)
+		}
+	}
+}
+
+// CHRIST'S WORDS ARE RED ON THE CARD where the pane would set them red, and
+// black when the reader has turned red letter off. Mutation: the fragment
+// colour ignoring the run's Red.
+func TestTheCardSetsChristsWordsInRed(t *testing.T) {
+	st, win := smallPhone(t)
+	votdSynchronousRemeasure(t)
+	st.CurrentVersion = "web"
+	st.Bible = &BibleData{
+		Books: []string{"John"},
+		Verses: map[string]map[int][]Verse{"John": {14: {{BookName: "John", Chapter: 14, Verse: 6,
+			Text: "Jesus said to him, “I am the way, the truth, and the life. No one comes to the Father, except through me."}}}},
+	}
+	prev := redLetterEnabled()
+	t.Cleanup(func() { setRedLetterEnabled(prev) })
+	pal := st.pal()
+
+	count := func() (red, base int) {
+		showVerseOfDay(st)
+		p := topPopup(t, win)
+		test.WidgetRenderer(p).Layout(p.Size())
+		body := findReadingParagraph(p.Content)
+		if body == nil {
+			t.Fatal("the card sets no reading paragraph")
+		}
+		for _, c := range test.WidgetRenderer(body).(*readingParagraphRenderer).fragmentColours() {
+			switch c {
+			case pal.RedLetter:
+				red++
+			case pal.Text:
+				base++
+			}
+		}
+		p.Hide()
+		return
+	}
+	setRedLetterEnabled(true)
+	red, base := count()
+	if red == 0 {
+		t.Error("red letter on: no fragment of Christ's words is drawn in the red-letter colour")
+	}
+	if base == 0 {
+		t.Error("red letter on: the narrator's words are not drawn in the text colour — the whole verse is red")
+	}
+	setRedLetterEnabled(false)
+	if red, _ := count(); red != 0 {
+		t.Errorf("red letter off: %d fragments are still red", red)
+	}
 }
