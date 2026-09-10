@@ -675,11 +675,28 @@ var votdRemeasure = func(fit func()) {
 	time.AfterFunc(40*time.Millisecond, func() { fyne.Do(fit) })
 }
 
-// votdCardInset is how much of the card's width its own frame takes: the
-// surface border and padding, the padded container, and the scroll — both
-// edges. The paragraph is resized to the remainder before the first fit, so
-// the first measurement wraps at the width it will really be drawn at.
-const votdCardInset = 22
+// THE CARD'S AIR. The passage is set at the reading size, and a reading size
+// wants the margins a page gives it: the toolkit's two 7pt paddings left the
+// kicker sitting on the first line, the reference hugging the last, and the
+// glyphs within 12pt of the card's edge on a card that itself stood 36pt in
+// from the screen's. These add the inner side margin and the room above and
+// below the passage, and the phone margin is narrowed so the card gains
+// measure rather than just losing it to padding.
+const (
+	votdCardPad      = 8  // inner side margin, beyond the surface's own paddings
+	votdCardAbove    = 8  // kicker row to passage
+	votdCardBelow    = 10 // passage to reference line
+	votdCardTop      = 4  // extra at the card's top and bottom edges
+	votdScreenMargin = 40 // the card's distance from the screen's edges, both sides together
+)
+
+// votdCardInset is how much of the card's width its own frame takes, both
+// edges: the surface's padding, the padded container inside it, and the inner
+// side margin. The paragraph is resized to the remainder before the first fit,
+// so the first measurement wraps at the width it will really be drawn at.
+func votdCardInset() float32 {
+	return 4*theme.Padding() + 2*votdCardPad
+}
 
 // showVerseOfDay presents the calm one-passage card.
 func showVerseOfDay(state *AppState) {
@@ -735,8 +752,8 @@ func showVerseOfDay(state *AppState) {
 	ref.TextStyle = fyne.TextStyle{Italic: true}
 	ref.TextSize = subheadingTextSize
 
-	// Width: comfortable for one passage, capped, with margins on a phone.
-	w := cnv.Size().Width - 72
+	// Width: comfortable for one passage, capped, with a margin on a phone.
+	w := cnv.Size().Width - votdScreenMargin
 	if w > 420 {
 		w = 420
 	}
@@ -744,7 +761,7 @@ func showVerseOfDay(state *AppState) {
 		w = 260
 	}
 	// Pre-wrap the passage at the inner width so its height is known.
-	body.Resize(fyne.NewSize(w-votdCardInset, body.MinSize().Height))
+	body.Resize(fyne.NewSize(w-votdCardInset(), body.MinSize().Height))
 
 	var popup *widget.PopUp
 	closeAnd := func(after func()) func() {
@@ -771,14 +788,16 @@ func showVerseOfDay(state *AppState) {
 	// renderer clamps to — buttons on a modal that ignores outside taps. Under
 	// the cap the scroll never engages and the card looks exactly as before.
 	bodyScroll := container.NewVScroll(container.New(squeezeWidthLayout{}, body))
+	passage := container.New(layout.NewCustomPaddedLayout(votdCardAbove, votdCardBelow, 0, 0), bodyScroll)
 	content := container.NewBorder(
 		top,
 		container.NewVBox(ref, widget.NewSeparator(),
 			container.NewHBox(layout.NewSpacer(), closeBtn, readBtn)),
 		nil, nil,
-		bodyScroll,
+		passage,
 	)
-	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
+	inner := container.New(layout.NewCustomPaddedLayout(votdCardTop, votdCardTop, votdCardPad, votdCardPad), content)
+	card := surface(container.NewPadded(inner), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	// Escape on the desktop closes the card, rather than falling through to
 	// the canvas handler and clearing whatever mark is live underneath it
