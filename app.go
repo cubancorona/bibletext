@@ -158,6 +158,12 @@ var loadProgressFn func(book string, bookNum, totalBooks, chapter int)
 //
 // Exported so both entry points (desktop Run, cmd/mobile) use the same path.
 func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
+	// The device's zone, before anything computes a date. The loading-phase
+	// window already on screen shows no date, and everything that does — the
+	// verse of the day's day number, note bylines — is built only after the
+	// load this starts. Synchronous, so nothing on the goroutine below or the
+	// UI goroutine can read time.Local before it is right. See timezone.go.
+	refreshLocalTimeZone()
 	go func() {
 		// Licensed translations whose licence configuration is gone must not
 		// keep their on-device copies (the removal obligation that comes with
@@ -481,7 +487,11 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	// overlay when Android recreated the activity while we were away — without
 	// it the reading pane comes back blank after a swipe-away relaunch (common
 	// now that the audio foreground service keeps the process alive).
+	// refreshLocalTimeZone first: a clock change or a change of country while
+	// the app was away must be in time.Local before anything below rebuilds a
+	// window with a date in it (timezone.go).
 	lc.SetOnEnteredForeground(func() {
+		refreshLocalTimeZone()
 		foregroundOverlayRecovery(state)
 		fyne.Do(func() { triggerFullDownload(state) })
 	})
