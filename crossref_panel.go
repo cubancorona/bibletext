@@ -70,13 +70,19 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		restore()
 	}
 	closeBtn := widget.NewButton("Close", closePanel)
-	credit := canvas.NewText("Cross-references: OpenBible.info (CC-BY) · Gospel parallels: synopsis", pal.TextMuted)
+	// The credit names the sources whose rows stand in the open, and the
+	// on-screen edition's own notice when it is licensed: the preview under
+	// every row is that edition's verse text, and it used to sit under a line
+	// that credited only the reference dataset.
+	sources, notice := crossRefFooterCredit(state)
+	credit := canvas.NewText(sources, pal.TextMuted)
 	credit.TextSize = 11
-	footer := container.NewVBox(
-		widget.NewSeparator(),
-		credit,
-		container.NewHBox(layout.NewSpacer(), closeBtn),
-	)
+	footerLines := []fyne.CanvasObject{widget.NewSeparator(), credit}
+	if notice != "" {
+		footerLines = append(footerLines, crossRefCaption(notice))
+	}
+	footerLines = append(footerLines, container.NewHBox(layout.NewSpacer(), closeBtn))
+	footer := container.NewVBox(footerLines...)
 
 	setCentered := func(o fyne.CanvasObject) {
 		body.Objects = []fyne.CanvasObject{container.NewVBox(layout.NewSpacer(), o, layout.NewSpacer())}
@@ -103,22 +109,20 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		msg.Alignment = fyne.TextAlignCenter
 		setCentered(container.NewVBox(msg, bar))
 	}
-	showRefs := func(refs []crossRef) {
+	follow := func(cc crossRef) {
+		closePanel()
+		if v := state.Bible.GetVerse(cc.Book, cc.Chapter, cc.Verse); v != nil {
+			goToVerse(state, *v)
+		}
+	}
+	showRefs := func(refs []crossRef, tskErr error) {
 		stopThinking()
-		if len(refs) == 0 {
+		lst := buildCrossRefList(state, selectionVerses(state, text, span), refs, tskErr, pal, follow)
+		if len(lst.Objects) == 0 {
 			setMessage("No cross-references for this selection.")
 			return
 		}
-		rows := make([]fyne.CanvasObject, 0, len(refs))
-		for _, c := range refs {
-			rows = append(rows, crossRefRow(state, c, pal, func(cc crossRef) {
-				closePanel()
-				if v := state.Bible.GetVerse(cc.Book, cc.Chapter, cc.Verse); v != nil {
-					goToVerse(state, *v)
-				}
-			}))
-		}
-		listBox.Objects = rows
+		listBox.Objects = lst.Objects
 		listBox.Refresh()
 		body.Objects = []fyne.CanvasObject{scroll}
 		body.Refresh()
@@ -141,11 +145,14 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		// shows parallels, and we only surface the error when there's nothing at all.
 		refs := crossRefsForSelection(state, text, span)
 		fyne.Do(func() {
-			if len(refs) == 0 && err != nil {
+			// With the edition's own block in the list, a Treasury that failed
+			// to load is reported in its own place (buildCrossRefList) and the
+			// block still shows — it needs no network.
+			if len(refs) == 0 && err != nil && !state.currentVersion().PublisherCrossRefs {
 				setMessage("Couldn't load cross-references.\nCheck your connection and try again.")
 				return
 			}
-			showRefs(refs)
+			showRefs(refs, err)
 		})
 	}()
 }

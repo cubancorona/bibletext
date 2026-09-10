@@ -50,6 +50,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 )
 
 // apiBibleBaseURL is a var so tests can point the client at a local server.
@@ -115,8 +116,30 @@ type apiBiblePassageResponse struct {
 	Data struct {
 		ID         string          `json:"id"` // the range actually served, e.g. "GEN.8.17-GEN.17.2"
 		VerseCount int             `json:"verseCount"`
+		Copyright  string          `json:"copyright"` // the rights holder's line, per response
 		Content    json.RawMessage `json:"content"`
 	} `json:"data"`
+}
+
+// apiBibleCopyrightSeen counts the distinct copyright lines the responses of a
+// fetch carried. The app credits a licensed edition with ONE pinned notice
+// (BibleVersion.LicenseNotice), which is only honest while every response
+// carries the same line; the live full-canon test asserts that it does, so a
+// provider that starts varying the line per book is caught before the notice
+// is wrong anywhere.
+var (
+	apiBibleCopyrightMu   sync.Mutex
+	apiBibleCopyrightSeen = map[string]int{}
+)
+
+func apiBibleNoteCopyright(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	apiBibleCopyrightMu.Lock()
+	apiBibleCopyrightSeen[line]++
+	apiBibleCopyrightMu.Unlock()
 }
 
 // apiBiblePassageCap is the API's per-passage verse limit (verified live: a
@@ -173,6 +196,7 @@ type apiBibleNode struct {
 		VerseID string `json:"verseId"`
 		Caller  string `json:"caller"`
 		SID     string `json:"sid"`
+		ID      string `json:"id"` // a ref tag's target ("JHN.7.50"); a note's own id otherwise
 	} `json:"attrs"`
 	Items []apiBibleNode `json:"items"`
 }
@@ -385,6 +409,7 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 			return nil, nil, nil, nil, err
 		}
 		bumpedChapter = false
+		apiBibleNoteCopyright(pr.Data.Copyright)
 		chunk, chunkOrphans, chunkSupers, chunkHeads, err := decodeAPIBiblePassageChecked(pr.Data.Content, plan.name, startCh, styleCensus)
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("%s passage %s: %w", plan.name, rangeID, err)
@@ -828,26 +853,18 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 				// appendText, so a pending poem break or paragraph space is
 				// left for the next real text exactly as if the note were
 				// absent — which is what keeps the text byte-identical.
-				body := apiBibleNoteBody(n)
-				if body != "" && inHeading {
+				fn, has := apiBibleFootnote(n)
+				if has && inHeading {
 					// A note inside a heading belongs to the heading. It used
 					// to be discarded with the block; before that it would
 					// have attached itself to whatever verse was current,
 					// which is a different verse from the one the heading
 					// stands above.
-					headNotes = append(headNotes, Footnote{
-						Text:   body,
-						Kind:   apiBibleNoteKind(n.Attrs.Style),
-						Caller: strings.TrimSpace(n.Attrs.Caller),
-					})
-				} else if body != "" && inTitle {
+					headNotes = append(headNotes, fn)
+				} else if has && inTitle {
 					titleBuf.WriteRune(footnoteSentinel)
-					titleNotes = append(titleNotes, Footnote{
-						Text:   body,
-						Kind:   apiBibleNoteKind(n.Attrs.Style),
-						Caller: strings.TrimSpace(n.Attrs.Caller),
-					})
-				} else if body != "" {
+					titleNotes = append(titleNotes, fn)
+				} else if has {
 					key := pack(currentCh, current)
 					if key%1000 != 0 {
 						b, ok := texts[key]
@@ -857,11 +874,7 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 							order = append(order, key)
 						}
 						b.WriteRune(footnoteSentinel)
-						pendingNotes[key] = append(pendingNotes[key], Footnote{
-							Text:   body,
-							Kind:   apiBibleNoteKind(n.Attrs.Style),
-							Caller: strings.TrimSpace(n.Attrs.Caller),
-						})
+						pendingNotes[key] = append(pendingNotes[key], fn)
 					}
 				}
 			case n.Name == "verse":
@@ -1128,6 +1141,11 @@ const (
 const (
 	smallCapsOpen  = '\uE003'
 	smallCapsClose = '\uE004'
+	// The brackets around a cited passage inside a NOTE's text (apiBibleNote).
+	// They never enter a verse builder: a note's text is assembled on its own
+	// and stripped before it is stored, so withoutSentinels need not know them.
+	noteRefOpen  = '\uE005'
+	noteRefClose = '\uE006'
 )
 
 // withoutSentinels removes every marker from a part-assembled verse so the
@@ -1262,13 +1280,28 @@ func apiBibleNoteKind(style string) string {
 }
 
 // apiBibleNoteBody flattens a note subtree into its display text: every text
-// node in document order — including text inside ref tags — EXCEPT the origin
-// reference spans (xo for cross-references, fr for footnotes), which restate
-// the verse the note belongs to; the anchor already carries that. Fragments
-// concatenate raw (they hold their own spacing) and the result is
-// space-normalized.
+// node in document order — including the words inside ref tags — EXCEPT the
+// origin reference spans (xo for cross-references, fr for footnotes), which
+// restate the verse the note belongs to; the anchor already carries that. The
+// citations' ids are dropped here; apiBibleNote keeps them.
 func apiBibleNoteBody(n apiBibleNode) string {
+	text, _ := apiBibleNote(n)
+	return text
+}
+
+// apiBibleNote is apiBibleNoteBody with the citations kept: each ref tag's
+// id, with the rune span its words occupy in the finished text. The ids are
+// bracketed in place while the text is assembled and resolved once it has
+// settled — the discipline the supplied-word and small-capital spans follow
+// (spanSentinels) — so the text is the same whether or not the ids are kept,
+// and a reader who copies a note receives the publisher's own words.
+// Fragments concatenate raw (they hold their own spacing) and the result is
+// space-normalized exactly as apiBibleNoteBody always normalized it, with the
+// brackets invisible to that normalization (normalizeNoteText), so keeping
+// the ids cannot move a space.
+func apiBibleNote(n apiBibleNode) (string, []NoteRef) {
 	var b strings.Builder
+	var ids []string
 	var walk func(nodes []apiBibleNode)
 	walk = func(nodes []apiBibleNode) {
 		for _, c := range nodes {
@@ -1276,14 +1309,92 @@ func apiBibleNoteBody(n apiBibleNode) string {
 			if c.Name == "char" && (style == "xo" || style == "fr") {
 				continue
 			}
+			id := strings.TrimSpace(c.Attrs.ID)
+			cited := c.Name == "ref" && id != ""
+			if cited {
+				ids = append(ids, id)
+				b.WriteRune(noteRefOpen)
+			}
 			if c.Text != "" {
 				b.WriteString(c.Text)
 			}
 			walk(c.Items)
+			if cited {
+				b.WriteRune(noteRefClose)
+			}
 		}
 	}
 	walk(n.Items)
-	return strings.TrimSpace(strings.Join(strings.Fields(b.String()), " "))
+	return normalizeNoteText(b.String(), ids)
+}
+
+// normalizeNoteText is the note flattening's whitespace rule — every run of
+// whitespace becomes one space and the ends are trimmed, which is what
+// strings.Join(strings.Fields(s), " ") does — applied while the citation
+// brackets are lifted out, so that a bracket standing beside a space can
+// neither keep the space nor become one. It reports each bracketed
+// citation's span in offsets into the text that is left. Ids pair with
+// brackets in opening order, so a citation nested inside another (which no
+// feed sends, but which costs nothing to get right) resolves to its own id. A
+// span starts at its first word and ends after its last; a citation with no
+// words — an id and nothing to tap — is dropped, and the text keeps nothing
+// of it either way.
+func normalizeNoteText(raw string, ids []string) (string, []NoteRef) {
+	type opened struct{ start, id int } // start is -1 until the first word lands
+	var stack []opened
+	var out []rune
+	var refs []NoteRef
+	seen := 0
+	pendingSpace := false
+	for _, r := range raw {
+		switch {
+		case r == noteRefOpen:
+			stack = append(stack, opened{start: -1, id: seen})
+			seen++
+		case r == noteRefClose:
+			if len(stack) == 0 {
+				continue // a stray close: nothing was opened for it
+			}
+			o := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if o.start >= 0 && o.start < len(out) && o.id < len(ids) {
+				refs = append(refs, NoteRef{ID: ids[o.id], Start: o.start, End: len(out)})
+			}
+		case unicode.IsSpace(r):
+			pendingSpace = len(out) > 0
+		default:
+			if pendingSpace {
+				out = append(out, ' ')
+				pendingSpace = false
+			}
+			for i := range stack {
+				if stack[i].start < 0 {
+					stack[i].start = len(out)
+				}
+			}
+			out = append(out, r)
+		}
+	}
+	// Refs are appended as their brackets CLOSE; a nested citation closes
+	// before its parent, so put them back into text order.
+	sort.SliceStable(refs, func(i, j int) bool { return refs[i].Start < refs[j].Start })
+	return string(out), refs
+}
+
+// apiBibleFootnote is the side-band note for one note node; has is false when
+// the note carries no words. One constructor, so a note inside a title or a
+// heading keeps its citations exactly as a verse's does.
+func apiBibleFootnote(n apiBibleNode) (Footnote, bool) {
+	body, refs := apiBibleNote(n)
+	if body == "" {
+		return Footnote{}, false
+	}
+	return Footnote{
+		Text:   body,
+		Kind:   apiBibleNoteKind(n.Attrs.Style),
+		Caller: strings.TrimSpace(n.Attrs.Caller),
+		Refs:   refs,
+	}, true
 }
 
 // normalizeVerseSpaces trims each poem line and collapses interior space runs

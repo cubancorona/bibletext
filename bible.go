@@ -102,6 +102,24 @@ type Footnote struct {
 	// Caller is the source's marker glyph ("+" throughout helloao, "-" in
 	// the NKJV feed). Stored for fidelity; no surface renders it yet.
 	Caller string `json:"caller,omitempty"`
+	// Refs are the citations inside a cross-reference note that the source
+	// tagged with a machine-readable target, in text order. Only the NKJV feed
+	// tags them (its ref elements); the helloao editions' notes carry none and
+	// leave this nil, as does a cache written before the field existed.
+	// Offsets into Text, never characters added to it, so a note's words are
+	// the publisher's own whether or not its citations were kept.
+	Refs []NoteRef `json:"refs,omitempty"`
+}
+
+// NoteRef is one tagged citation inside a note: the source's own target id
+// ("JHN.7.50"; a range is "MAT.3.1-MAT.3.12") and the rune span within
+// Footnote.Text that the citation's words occupy ("John 7:50"). A citation
+// the source left untagged — the NKJV's parenthesised "(Acts 10:38)" — has no
+// NoteRef; its words are still in Text.
+type NoteRef struct {
+	ID    string `json:"id"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
 }
 
 // footnoteKindCrossref marks cross-reference apparatus (USX note style "x").

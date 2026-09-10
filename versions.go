@@ -48,6 +48,15 @@ type BibleVersion struct {
 	// PublicDomain marks freely-distributable text (no license required).
 	PublicDomain bool
 
+	// PublisherCrossRefs shows the edition's OWN cross-reference apparatus in
+	// the cross-references panel (publisher_xrefs.go), ahead of the Treasury
+	// of Scripture Knowledge. False everywhere in a store build: displaying a
+	// licensed publisher's apparatus is the subject of a licensing enquiry that
+	// has been sent and not answered, so the one line that sets it — for the
+	// NKJV — lives behind the nkjvxrefs build tag (versions_nkjvxrefs.go),
+	// where no shipped binary compiles it.
+	PublisherCrossRefs bool
+
 	// cacheEpoch invalidates this version's on-disk cache when its DECODING
 	// changes (not the cache file format — that is cacheSchemaVersion). The cache
 	// stores already-decoded text, so a decoder fix would otherwise stay masked by

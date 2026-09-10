@@ -445,7 +445,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | S | none | blocked |
+| S20 | show the NKJV's cross references | NKJV | M | none | built, gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -654,11 +654,45 @@ selection and copying for everything after it. Fix that scan first; the
 documented order after it is the web reader, then the Apple panes, then the
 styled pane, then Android.
 
-**S20.** Blocked on the licensing enquiry about displaying the publisher's
-apparatus, which is unsent. All 32,473 NKJV notes are cross references and
-the section hides cross references, so they are captured and dark, including
-43 attached to Psalm titles. Keep those 43 with the general decision rather
-than carving them out.
+**S20. BUILT, behind the `nkjvxrefs` build tag**, and gated on the licensing
+enquiry about displaying the publisher's apparatus, which has been sent and is
+awaiting a reply. All 32,473 NKJV notes are cross references — the print
+edition's centre column, note for note — and 43 more sit on Psalm titles (and
+one on a heading). Across the canon, fetched 10 September, the feed tags
+66,306 citations with a machine-readable id (`JHN.7.50`, `MAT.3.1-MAT.3.12`;
+3,504 ranges, none crossing a book); the parenthesised "compare" citations —
+4,850 groups — arrive as bare text, and 1,685 notes (5%) carry nothing else.
+Every response carries the same copyright line, which the live canon test now
+asserts. The decoder now keeps the ids as rune spans
+beside each note's unchanged text (`Footnote.Refs`; apibible.go's
+`apiBibleNote`), with no cache-epoch bump: a licensed cache past its 30-day
+window is refetched whole anyway, so the field reaches every reader within a
+window, and a note without it is rendered as words only.
+
+The design settled here rather than "lift the filter": the chapter-bottom
+section stays the wording-and-manuscript apparatus and still excludes cross
+references. When the edition's flag is on, the cross-references panel leads
+with the publisher's notes — ONE ROW PER NOTE, verbatim, in verse order, each
+tagged citation a link when its passage is in the loaded text and the
+parenthesised ones left as words under a legend, under the edition's own
+heading and its LicenseNotice (`publisher_xrefs.go`, `crossref_list.go`).
+Nothing is sorted, capped, deduplicated or mapped: the targets are in the
+edition's own numbering, which is the numbering on screen. The Treasury of
+Scripture Knowledge is not removed — 31.7% of NKJV verses carry no note
+(9,853 of 31,102 on the 7 September canon) — but moves into a separately
+headed, separately credited disclosure beneath, closed when the publisher's
+block has rows and open when it has none; the two never share a list or a
+credit, which is what the misattribution worry in
+`docs/SOURCE_FIELDS_DECISIONS.md` actually forbids. The Gospel parallels stay
+first, badged, unchanged: event-level and titled, they answer on every verse
+of a pericope where the edition's own parallel-style notes appear only at
+pericope starts and untitled. A flag off (every store build) leaves the panel
+exactly as it was, except that a licensed edition's notice now stands under
+the verse-text previews the panel shows, which it never did.
+
+On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
+the tag goes; on a no nothing needs unwinding. The 43 title notes ride the
+same rule as the rest, keyed "Title" when the selection reaches verse 1.
 
 **S23.** DONE. A small-caps span was folded to uppercase in the stored text,
 so LORD, GOD and the four names of Jesus were literally capitals. Drawing them

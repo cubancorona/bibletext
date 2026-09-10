@@ -206,7 +206,8 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   (markers in text, bodies in a labelled panel, off by default) satisfies
   the no-alteration/format clauses, or whether §12 copy limits and the §9.1
   TTS restriction treat note text like verse text. **Six concrete questions
-  are drafted for API.Bible support** — that inquiry is the gating action.
+  were drafted for API.Bible support**, and that inquiry has been sent; the
+  reply is the gating event.
 
 ## 6. Recommended phasing
 
@@ -232,8 +233,8 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    or is even a labelled sheet of translators' notes unwanted?
 2. Superscription-anchored notes: drop (recommended) or re-anchor to v1?
 3. Should note bodies ever travel with an AI Explain request? (Default: no.)
-4. The API.Bible inquiry, with the six footnote questions added, remains
-   unsent.
+4. The API.Bible inquiry, with the six footnote questions added, has been
+   sent; awaiting a reply.
 
 ---
 
@@ -270,9 +271,11 @@ Thomas Nelson's textual apparatus is not in the feed. Consequences: the
 hardest §5 licensing question (displaying their *footnotes*) is moot for
 now; what is capturable — and now captured, tagged `kind:"crossref"` — is a
 cross-reference apparatus, a kind the app already offers from public-domain
-TSK. Whether NKJV crossrefs ever display is a presentation question for
-later; several §5 questions (do cached notes ride §11/§10; §12 copy limits)
-still belong in the support email.
+TSK. Whether NKJV crossrefs ever display is the licensing question the
+support enquiry now asks (sent; awaiting a reply); the presentation is built
+behind the `nkjvxrefs` build tag — the publisher's notes lead the
+cross-references panel, one row per note verbatim, the feed's tagged
+citations as links (docs/SCRIPTURE_WORKLIST.md, S20).
 
 ### The omitted verses — the investigation's most striking find
 
@@ -302,8 +305,8 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
 3. NKJV crossrefs: display eventually, or leave captured-but-dark.
 4. AI prompts: whether note bodies may travel with an Explain request
    (default no).
-5. The API.Bible support inquiry remains unsent (its footnote questions now
-   narrower — §8 above).
+5. The API.Bible support inquiry has been sent and is awaiting a reply (its
+   footnote questions now narrower — §8 above).
 
 ### Decision (2026-08-26): no dev tab — presentation trials happen on the main reading pane
 

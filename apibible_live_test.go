@@ -244,12 +244,28 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 	if bibleID == "" {
 		bibleID = "63097d2a0a2f7db3-01"
 	}
+	apiBibleCopyrightMu.Lock()
+	apiBibleCopyrightSeen = map[string]int{}
+	apiBibleCopyrightMu.Unlock()
 	started := time.Now()
 	data, err := fetchAPIBible("NKJV", bibleID, key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("fetched in %s", time.Since(started).Round(time.Second))
+	// The app credits the edition with ONE pinned notice; that is honest only
+	// while every response carries the same copyright line.
+	apiBibleCopyrightMu.Lock()
+	lines := make([]string, 0, len(apiBibleCopyrightSeen))
+	for line, n := range apiBibleCopyrightSeen {
+		lines = append(lines, fmt.Sprintf("%q ×%d", line, n))
+	}
+	apiBibleCopyrightMu.Unlock()
+	if len(lines) != 1 {
+		t.Errorf("the responses carried %d distinct copyright lines, want 1: %v", len(lines), lines)
+	} else {
+		t.Logf("copyright line on every response: %s", lines[0])
+	}
 
 	verses, poetry, lord, notes := 0, 0, 0, 0
 	smallCapsText := map[string]int{}
