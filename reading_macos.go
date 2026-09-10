@@ -1610,6 +1610,34 @@ void bibleTextMacTVSetHTML(const char *html) {
                     // clears its title range on this same path. (No verse table
                     // to drop beside it: btMacLocForVerse walks the runs live.)
                     btMacFindTitleRange(nil);
+                    // The two derivations the latched import makes AFTER those,
+                    // made here too, in its order, from the same model. The
+                    // highlight union is written only by the import and by the
+                    // wash mutation, and bibleTextMacSetTintRuns defers the
+                    // mutation while the generations disagree — which they do
+                    // from here until the next successful import — so the
+                    // previous chapter's union would otherwise survive under
+                    // the plain text, where a window resize (btMacApplyFrame)
+                    // or a reposition (bibleTextMacScrollToHighlight) scrolls
+                    // to it and the note card anchors on it, both clamped on
+                    // length alone. Against a uniform-font string every verse
+                    // resolves to NSNotFound (btMacLocForVerse skips runs at
+                    // the threshold), so the union is nothing — derived, not
+                    // assigned, so the model stays the range's only writer and
+                    // the highlight is real again the day the fallback gains
+                    // geometry.
+                    btMacRefreshHighlightRange(gTextView.textStorage);
+                    // And the note, whose band list still holds the previous
+                    // storage's paragraph ranges: the layout this setString:
+                    // provoked places the pills from them (HBLayoutWatcher,
+                    // btMacPlaceNoteAfterLayout, clamped on length alone)
+                    // unless the refresh runs first. On plain text the verse
+                    // anchors resolve to nothing, so the sticker takes the
+                    // chapter top and every pill whose verse the string cannot
+                    // place hides; a chapter-top pill keeps its inset tenancy,
+                    // which needs no verse. The note still shows, in the only
+                    // place this string can put it.
+                    btMacRefreshNote();
                 }
             });
         });

@@ -807,8 +807,9 @@ static void btIOSApplyMarker(void) {
 // done) — and is a no-op if no marker is currently applied.
 //
 // gMarkerApplied==YES implies gMarkerLoc/Len are valid for the CURRENT text storage:
-// the only thing that replaces textStorage is bibleTextApplyHTML, which resets
-// gMarkerApplied=NO before touching it. So the bounds check below never fails while
+// the two paths that replace textStorage — bibleTextApplyHTML and the plain-text
+// fallback in bibleTextTVSetHTML — both reset gMarkerApplied=NO with the new
+// storage. So the bounds check below never fails while
 // applied; it is a crash-guard, not a real branch. The metadata is forgotten
 // UNCONDITIONALLY (outside the guard) on purpose: dropping the marker is always the
 // safe outcome, and keeping gMarkerVerse set on a bounds miss could let a later
@@ -3361,6 +3362,36 @@ void bibleTextTVSetHTML(const char *html) {
                     gContentEnd = gReadingTV.textStorage.length; // apparatus stripped above — all scripture
                     btIOSBuildVerseIndex(nil); // plain text has no verse runs — clear the stale table
                     btIOSFindTitleRange(nil);  // and no title range either
+                    // The two derivations the import makes AFTER those, made
+                    // here too, in its order (the macOS twin carries the full
+                    // reasoning). The highlight union is written only by the
+                    // import and by the wash mutation, and
+                    // bibleTextIOSSetTintRuns defers the mutation while the
+                    // generations disagree — which they do from here until the
+                    // next successful import — so the previous chapter's union
+                    // would otherwise survive under the plain text for
+                    // bibleTextIOSScrollToHighlight and the note anchor, both
+                    // clamped on length alone. Against the emptied index every
+                    // run resolves to NSNotFound, so the union is nothing, and
+                    // the highlight tap and its edit menu go with it.
+                    btIOSRefreshHighlightRange(gReadingTV.textStorage);
+                    // And the note, whose band list still holds the previous
+                    // storage's paragraph ranges — the next frame change would
+                    // place the pills from them. On plain text the verse
+                    // anchors resolve to nothing, so the sticker takes the
+                    // chapter top and every pill whose verse the string
+                    // cannot place hides; a chapter-top pill keeps its inset
+                    // tenancy, which needs no verse.
+                    btIOSRefreshNote();
+                    // And the resume marker, the one cached run a scroll can
+                    // write BACK: applied, its saved colour is painted over
+                    // [gMarkerLoc, +gMarkerLen) on the reader's first drag
+                    // (btIOSClearMarker) within a guard on length alone. The
+                    // import forgets it before every fresh storage for that
+                    // reason; so does this path. Nothing re-applies it here:
+                    // the plain string has no verse run to put it on.
+                    gHasLastTouch = NO;
+                    gMarkerApplied = NO;
                 }
             });
         });
