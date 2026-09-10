@@ -72,7 +72,10 @@ IOS_MIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["iosMi
 DEV_TAG=""
 for arg in "$@"; do
     case "$arg" in
-        --dev) DEV_TAG=",bibletextdev" ;;
+        --dev) DEV_TAG="$DEV_TAG,bibletextdev" ;;
+        # The NKJV's own cross references in the panel (versions_nkjvxrefs.go):
+        # a device build for looking, never a store build.
+        --nkjvxrefs) DEV_TAG="$DEV_TAG,nkjvxrefs" ;;
     esac
 done
 
