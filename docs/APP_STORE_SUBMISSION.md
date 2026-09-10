@@ -328,7 +328,60 @@ Before a human submits a version:
 5. Confirm no previous version is blocking review.
 6. Submit only through an explicitly authorized App Store Connect action.
 
-None of the repository helpers should submit a version implicitly.
+None of the repository helpers submit a version implicitly. The one that
+submits at all, `appstore/submit-version.py`, does so only behind `--write`,
+an exact `--confirm-version`, and a separate `--submit` flag — and only after
+it has attached the build (checked against altool's delivery UUID, which IS
+the build's App Store Connect id), run both metadata writers, and had
+`preflight.py` report every per-release field written. It refuses to create a
+review submission otherwise. That order is the lesson of 1.2.8's Mac
+submission: App Store Connect accepted the submission record and then refused
+the item naming the version because its What's New was empty, leaving an
+empty submission behind. Screenshots are the one field a release may knowingly
+inherit; say so with `--accept-inherited-screenshots`.
+
+    . scripts/asc-env.sh
+    python3 appstore/submit-version.py --platform IOS --build 178 \
+        --delivery-uuid <from altool> --write --confirm-version 1.2.8 --submit
+    python3 appstore/submit-version.py --platform MAC_OS --build 49 \
+        --delivery-uuid <from altool> --write --confirm-version 1.2.8 --submit
+
+## The whole release, every channel, in order
+
+This is the order that keeps one version naming one tree everywhere
+(docs/VERSIONING.md) and that the 1.2.8 release settled on after paying for
+each step it lists.
+
+1. Prepare on main: bump `cmd/mobile/FyneApp.toml` and `cmd/desktop/FyneApp.toml`,
+   the `VERSION` lines of both review-notes files, the writer's pin in
+   `appstore/push-review-notes.py`; write `build/appstore/metadata/en-GB/whats-new-<v>.txt`
+   AND `…/en-GB/mac/whats-new-<v>.txt` (the Mac has its own — the write refuses
+   without it); add the Play notes section to `docs/PLAY_LISTING.md`.
+   `scripts/check-release-identity.py` and the review-notes tests must pass.
+2. Push main; wait for CI on all three OSes. Nothing is uploaded before it is green.
+3. Build the three store artifacts from that commit, ONE AT A TIME —
+   `build-android.sh` swaps `go.mod` and `FyneApp.toml` under a trap, so a
+   concurrent build reads a modified tree:
+   `scripts/release-ios.sh` (no `BIBLETEXT_UPLOAD`; it leaves `build/BibleText.ipa`),
+   `scripts/release-mac-store.sh` (defaults the team id and the Mac App Store
+   profile at `~/.private_keys/mac-distribution/`; set `BIBLETEXT_TEAM_ID` /
+   `BIBLETEXT_MAC_PROFILE` only to override), `scripts/build-android.sh --release`.
+   Read each artifact back: version, build, minimum OS, and for Android the
+   manifest through `bundletool dump manifest`.
+4. Upload: `xcrun altool --upload-app -t ios|macos` with the ASC key (set
+   `API_PRIVATE_KEYS_DIR` to the key's directory); keep each Delivery UUID.
+   Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
+   first (uploads into a discarded edit), then the same without `--dry-run`.
+   The notes file is the blockquote of that version's section in
+   `docs/PLAY_LISTING.md`, under 500 characters.
+5. Wait for each Apple build to reach VALID, then `submit-version.py` per
+   platform as above.
+6. Tag LAST: an annotated `v<version>` at the build commit, pushed; the release
+   workflow builds the desktop assets into a DRAFT. Upload the sideload APK
+   from `~/Library/Android/bibletext-dist`, compare its SHA after download,
+   then `gh release edit v<version> --draft=false`, and verify every
+   `/releases/latest/download/<asset>` link resolves to the new version.
+7. Work merged after the tag ships under the next number.
 
 ## Release-specific metadata invariants
 
@@ -354,5 +407,11 @@ The Mac App Store hit this on 1.2.4, its first public version: the shared
 `metadata/en-GB/whats-new-<version>.txt` is right for iOS, which has
 shipped since 1.1.x, and wrong for a platform's debut.
 
-So a platform's first release simply has no `mac/whats-new-<version>.txt`.
-Add one for the release after it, when there is something to compare to.
+So a platform's first release has no `mac/whats-new-<version>.txt`, and
+`push-metadata.py` takes `--first-on-platform` to say so. Every release after
+it REQUIRES the file: App Store Connect refuses the review submission for a
+version whose What's New is empty (`ENTITY_ERROR.ATTRIBUTE.REQUIRED` on
+`whatsNew`), and the helper used to announce the absent file as a note and
+write nothing — which is how 1.2.8's Mac submission was refused once. The
+write now fails without the file, and `TestWhatsNewIsNamedForThisRelease`
+fails on a machine that has the metadata directory.

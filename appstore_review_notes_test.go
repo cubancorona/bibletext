@@ -254,6 +254,22 @@ func TestWhatsNewIsNamedForThisRelease(t *testing.T) {
 	if n := len([]rune(string(b))); n > 4000 {
 		t.Fatalf("%s is %d characters; App Store Connect caps What's New at 4,000", mine, n)
 	}
+	// The Mac has its own What's New, in its own file: the two releases say
+	// different things, and App Store Connect refuses a review submission for
+	// a version whose What's New is empty. 1.2.8's Mac submission was refused
+	// for exactly this before the file existed; the helper used to announce
+	// the absence as a note and write nothing.
+	macDir := filepath.Join(dir, "mac")
+	if _, err := os.Stat(macDir); err == nil {
+		mac := filepath.Join(macDir, "whats-new-"+want+".txt")
+		mb, err := os.ReadFile(mac)
+		if err != nil {
+			t.Errorf("no Mac What's New for the shipping version: %s is missing — the Mac "+
+				"submission will be refused (%v)", mac, err)
+		} else if len(strings.TrimSpace(string(mb))) == 0 {
+			t.Errorf("%s is empty", mac)
+		}
+	}
 	// And it must not merely be a copy of another release's notes.
 	others, _ := filepath.Glob(filepath.Join(dir, "whats-new-*.txt"))
 	for _, o := range others {

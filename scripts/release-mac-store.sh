@@ -72,11 +72,20 @@ APP_ID=$(python3 -c 'import json;print(json.load(open("config/product.json"))["d
 MAC_MIN=$(python3 -c 'import json;print(json.load(open("config/product.json"))["macMinimumOSVersion"],end="")')
 [ -n "$MAC_MIN" ] || fail "could not read macMinimumOSVersion from config/product.json"
 
-TEAM_ID="${BIBLETEXT_TEAM_ID:-}"
-[ -n "$TEAM_ID" ] || fail "set BIBLETEXT_TEAM_ID to your Apple Developer team id"
+# The paid team and the Mac App Store profile, defaulted the way release-ios.sh
+# defaults its team: a release cut without either variable set used to fail
+# twice in a row, once per variable, after the build had already been started.
+# The profile is the one App Store Connect lists as ACTIVE for MAC_OS; it lives
+# outside the repository and outside Xcode's own profiles folder (which holds
+# only the iOS profiles), so the message names the path.
+TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"
+DEFAULT_MAC_PROFILE="$HOME/.private_keys/mac-distribution/BibleText_Mac_App_Store.provisionprofile"
 PROFILE="${BIBLETEXT_MAC_PROFILE:-}"
+if [ -z "$PROFILE" ] && [ -f "$DEFAULT_MAC_PROFILE" ]; then
+  PROFILE="$DEFAULT_MAC_PROFILE"
+fi
 [ -n "$PROFILE" ] && [ -f "$PROFILE" ] ||
-  fail "set BIBLETEXT_MAC_PROFILE to a Mac App Store provisioning profile for $APP_ID"
+  fail "set BIBLETEXT_MAC_PROFILE to a Mac App Store provisioning profile for $APP_ID (expected at $DEFAULT_MAC_PROFILE; download the ACTIVE MAC_OS profile from App Store Connect if it is missing)"
 
 note "checking the store configuration before building anything"
 # The same gates release-ios.sh and build-android.sh run. This script had

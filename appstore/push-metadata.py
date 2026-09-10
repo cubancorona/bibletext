@@ -100,13 +100,17 @@ def validate_length(label, value, maximum):
         raise SystemExit(f"{label} is {len(value)} characters; maximum is {maximum}")
 
 
-def load_and_validate(platform, version_string):
+def load_and_validate(platform, version_string, first_on_platform=False):
     """Load every prospective field before authentication or network access."""
     # A platform's FIRST version has no What's New field in App Store Connect
-    # at all, so for MAC_OS the file is optional and an absent one simply
-    # omits the field rather than failing or writing a stale iOS text.
+    # at all, which is why the Mac file was once optional. Every version after
+    # the first REQUIRES it: App Store Connect refuses the review submission
+    # for a version whose What's New is empty, and an absent Mac file used to
+    # be announced as a note and then cost a refused submission. The Mac text
+    # is its own file, not the iOS one — the two releases say different things
+    # — so the genuine first-version case is now an explicit flag.
     whats_new = read_platform_file(platform, f"whats-new-{version_string}.txt",
-                                   required=platform == "IOS")
+                                   required=not (platform == "MAC_OS" and first_on_platform))
     version = {
         "description": read_platform_file(platform, "description.txt"),
         "keywords": read_platform_file(platform, "keywords.txt", shared_fallback=True),
@@ -117,7 +121,7 @@ def load_and_validate(platform, version_string):
     if whats_new is not None:
         version["whatsNew"] = whats_new
     elif platform == "MAC_OS":
-        print(f"note: no {LOCALE}/mac/whats-new-{version_string}.txt; "
+        print(f"note: --first-on-platform: no {LOCALE}/mac/whats-new-{version_string}.txt; "
               "What's New will not be compared or written (a platform's first "
               "version has no such field)")
 
@@ -200,6 +204,10 @@ def parse_args():
         help="required with --write; must exactly equal the configured version",
     )
     parser.add_argument(
+        "--first-on-platform", action="store_true",
+        help="this is the platform's FIRST App Store version, which has no What's "
+             "New field; only then may the Mac What's New file be absent")
+    parser.add_argument(
         "--platform", choices=sorted(PLATFORM_VERSION_CONFIG), default="IOS",
         help="App Store platform to target (default: IOS); the version string "
              "comes from that platform's FyneApp.toml",
@@ -261,7 +269,8 @@ def main():
     contact = subprocess.run([sys.executable, SUPPORT_CONTACT_CHECK], cwd=REPO)
     if contact.returncode != 0:
         raise SystemExit("public support configuration is not release-safe")
-    version_values, app_info_values, copyright_text = load_and_validate(platform, version)
+    version_values, app_info_values, copyright_text = load_and_validate(
+        platform, version, first_on_platform=args.first_on_platform)
     validate_private_inputs()
     print(f"local metadata preflight: OK ({LOCALE}, {platform} version {version})")
     if args.local_only:
