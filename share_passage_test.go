@@ -109,7 +109,8 @@ func passageFixtures() map[string]*BibleData {
 }
 
 // comparePassageRoutes runs both routes over every verse of every chapter of
-// bd, as a single verse and as a 2- and 3-verse range, with the card state's
+// bd, as a single verse and as ranges of two to five verses (the rotation
+// carries passages of up to five), with the card state's
 // reader on a different chapter. It reports the first few mismatches in full
 // and returns the totals so a caller can fail on the rest.
 func comparePassageRoutes(t *testing.T, name string, bd *BibleData) (compared, mismatched int) {
@@ -120,7 +121,7 @@ func comparePassageRoutes(t *testing.T, name string, bd *BibleData) (compared, m
 			verses := bd.GetChapter(book, chapter)
 			rb, rc := readerElsewhere(bd, book, chapter)
 			for i := range verses {
-				for width := 1; width <= 3 && i+width <= len(verses); width++ {
+				for width := 1; width <= 5 && i+width <= len(verses); width++ {
 					lo, hi := verses[i].Verse, verses[i+width-1].Verse
 					if hi < lo {
 						continue
@@ -333,5 +334,28 @@ func TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly(t *testing.T)
 	}
 	if walked == 0 {
 		t.Skip("local-only: no translation cache present")
+	}
+}
+
+// sharePassageText's own guard: an empty or inverted range hands NOTHING to
+// the platform, rather than an empty message. Mutation: drop the ok check
+// before shareTextOut.
+func TestSharePassageTextDeliversNothingForAnEmptyRange(t *testing.T) {
+	calls := 0
+	prev := shareTextOut
+	shareTextOut = func(string) { calls++ }
+	t.Cleanup(func() { shareTextOut = prev })
+	st := &AppState{Bible: fragmentShapesBible()}
+	book := st.Bible.Books[0]
+	chapter := st.Bible.GetChapterNumbersForBook(book)[0]
+	first := st.Bible.GetChapter(book, chapter)[0].Verse
+	sharePassageText(st, book, chapter, first+1, first) // inverted
+	sharePassageText(st, book, chapter, 999, 999)       // absent
+	if calls != 0 {
+		t.Errorf("an unshareable range still reached the platform %d time(s)", calls)
+	}
+	sharePassageText(st, book, chapter, first, first)
+	if calls != 1 {
+		t.Errorf("a shareable passage reached the platform %d time(s), not once — the control", calls)
 	}
 }

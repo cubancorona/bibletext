@@ -37,10 +37,12 @@ func TestLocalZoneForLoadsTheNamedZoneWithItsTransitions(t *testing.T) {
 // be loaded. The fallback must carry the C library's offset, or a device with
 // a zone the embedded database lacks would roll the day at 00:00 UTC.
 func TestLocalZoneForFallsBackToTheOffsetForAnUnknownName(t *testing.T) {
-	loc := localZoneFor("Mars/Olympus_Mons", "BST", 3600)
+	// A different pair from the other fallback tests, so a fallback that
+	// returned a hard-coded zone could not pass all three.
+	loc := localZoneFor("Mars/Olympus_Mons", "PST", -28800)
 	name, offset := time.Now().In(loc).Zone()
-	if name != "BST" || offset != 3600 {
-		t.Fatalf("unknown name answered %s/%d; want the fallback BST/3600", name, offset)
+	if name != "PST" || offset != -28800 {
+		t.Fatalf("unknown name answered %s/%d; want the fallback PST/-28800", name, offset)
 	}
 }
 
@@ -72,6 +74,20 @@ func TestLocalZoneForNeverAnswersWithTheZoneBeingReplaced(t *testing.T) {
 	}
 }
 
+// liveLine is the index of the line in src that IS stmt once trimmed — no
+// comment marker, nothing else on it — or -1. A substring search counts a
+// statement that has been commented out; this does not.
+func liveLine(src, stmt string) int {
+	at := 0
+	for _, line := range strings.SplitAfter(src, "\n") {
+		if strings.TrimSpace(line) == stmt {
+			return at
+		}
+		at += len(line)
+	}
+	return -1
+}
+
 func readSourceForShape(t *testing.T, path string) string {
 	t.Helper()
 	src, err := os.ReadFile(path)
@@ -93,7 +109,7 @@ func TestTheZoneRefreshIsWiredAtStartupAndOnEveryForeground(t *testing.T) {
 		t.Fatal("StartBackgroundLoad is gone")
 	}
 	body := app[start:]
-	refresh := strings.Index(body, "refreshLocalTimeZone()")
+	refresh := liveLine(body, "refreshLocalTimeZone()")
 	spawn := strings.Index(body, "go func() {")
 	if refresh < 0 {
 		t.Fatal("StartBackgroundLoad no longer refreshes the zone; a phone's first " +
@@ -112,7 +128,7 @@ func TestTheZoneRefreshIsWiredAtStartupAndOnEveryForeground(t *testing.T) {
 	if end := strings.Index(hookBody, "\n\t})"); end > 0 {
 		hookBody = hookBody[:end]
 	}
-	if !strings.Contains(hookBody, "refreshLocalTimeZone()") {
+	if liveLine(hookBody, "refreshLocalTimeZone()") < 0 {
 		t.Error("the foreground hook no longer refreshes the zone, so a clock change " +
 			"while the app was in the background lands only at the next launch")
 	}
@@ -143,7 +159,7 @@ func TestTheMobileRefreshIsAThinWrapperAroundLocalZoneFor(t *testing.T) {
 	if i := strings.Index(head, "package "); i > 0 {
 		head = head[:i]
 	}
-	if !strings.Contains(head, "//go:build ios || android") {
+	if liveLine(head, "//go:build ios || android") < 0 {
 		t.Errorf("timezone_mobile.go's build tag is not `ios || android`: %q", strings.TrimSpace(head))
 	}
 	for _, want := range []string{
@@ -159,6 +175,12 @@ func TestTheMobileRefreshIsAThinWrapperAroundLocalZoneFor(t *testing.T) {
 	if strings.Contains(src, "time.FixedZone(") {
 		t.Error("timezone_mobile.go builds a FixedZone itself; the choice belongs to " +
 			"localZoneFor, which is the half the host suite can hold")
+	}
+	// The C library caches the zone it first read; tzset before localtime_r is
+	// what makes a zone changed in the phone's settings visible to the fallback.
+	if ts, lr := liveLine(src, "tzset();"), strings.Index(src, "localtime_r("); ts < 0 || lr < 0 || ts > lr {
+		t.Error("timezone_mobile.go's fallback does not run tzset() before localtime_r(), so a " +
+			"changed zone would be read from the library's stale cache")
 	}
 
 	// CONTROL.
@@ -176,7 +198,7 @@ func TestExactlyOneZoneRefreshCompilesPerPlatform(t *testing.T) {
 	if i := strings.Index(head, "package "); i > 0 {
 		head = head[:i]
 	}
-	if !strings.Contains(head, "//go:build !ios && !android") {
+	if liveLine(head, "//go:build !ios && !android") < 0 {
 		t.Errorf("timezone_other.go's build tag is %q; it must exclude exactly the two "+
 			"platforms timezone_mobile.go claims", strings.TrimSpace(head))
 	}
@@ -202,7 +224,10 @@ func TestEachPhoneReadsItsZoneNameFromThePlatform(t *testing.T) {
 			t.Errorf("timezone_ios.go no longer contains %q", want)
 		}
 	}
-	if strings.Index(ios, "resetSystemTimeZone") > strings.Index(ios, "localTimeZone].name") {
+	reset := liveLine(ios, "[NSTimeZone resetSystemTimeZone];")
+	if reset < 0 {
+		t.Error("timezone_ios.go no longer resets the cached system zone as a live statement")
+	} else if reset > strings.Index(ios, "localTimeZone].name") {
 		t.Error("timezone_ios.go reads the name BEFORE resetting the cached system zone")
 	}
 
