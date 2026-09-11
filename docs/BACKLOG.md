@@ -48,6 +48,19 @@ first, then Android after the Play closed-testing review clears — see the
 rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
+## A non-default translation served from a superseded cache epoch is never refreshed
+
+`loadVersionFromCacheOnly` serves a superseded-epoch cache by design (an
+offline upgrader keeps their Bible), and `triggerFullDownload` upgrades it in
+the background — for the DEFAULT translation only (`fullPending` is computed
+for it; app.go's refresh targets `defaultVersionID`). A reader whose current
+translation is another one, served from an old epoch at startup, keeps the old
+decode until they switch away and back (the switch path, `loadVersionData`,
+drops a stale cache and refetches). Seen 11 Sep 2026 on a Mac reading the WEB
+Catholic edition from an epoch-5 cache four epochs behind. Fix: record that
+the current translation was served superseded and refresh it as well; the
+version-state tests (docs/VERSION_STATES.md) are the place to pin it.
+
 ## Recapture the App Store and Play screenshots — deferred from 1.2.7
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
