@@ -247,6 +247,120 @@ public final class BtBridge {
         }
     }
 
+    // --- Paragraph air --------------------------------------------------------
+    //
+    // THE AIR BETWEEN PARAGRAPHS, IN EMS OF THE BODY — the numbers every other
+    // pane keeps (reading.go: p and p.sec): 1em between paragraphs, 1.1em
+    // before a publisher's heading, .35em after one. On the phone page the
+    // importer separates paragraphs with a BLANK line, and a blank line is a
+    // whole line of the pane's own pitch plus the extra setLineHeight adds —
+    // nearly twice the iOS gap, which read as far too much air. Each blank
+    // line now takes an exact height. The compact page has no blank line, so a
+    // heading there reserves its lead in its own first line's ascent and its
+    // tail in the following line's ascent, the way a note band reserves its
+    // space (NoteBandSpan), and the wash rectangles subtract it the same way.
+    private static final float PARA_GAP_EM = 1.0f, HEAD_LEAD_EM = 1.1f, HEAD_TAIL_EM = 0.35f;
+    private static final java.util.ArrayList<AirSpan> airSpans = new java.util.ArrayList<AirSpan>();
+
+    private static final class AirSpan
+            implements android.text.style.LineHeightSpan, android.text.style.UpdateLayout {
+        final int px;         // the air, in pixels
+        final boolean exact;  // a blank separator line: px is the line's WHOLE height
+        final int at;         // the character whose line takes the air (ascent mode)
+        final int add;        // what setLineHeight adds to every line, taken back for an exact height
+        private int inflatedTo = -1;
+        AirSpan(int px, boolean exact, int at, int add) { this.px = px; this.exact = exact; this.at = at; this.add = add; }
+        @Override public void chooseHeight(CharSequence t, int start, int end,
+                int spanstartv, int lineHeight, android.graphics.Paint.FontMetricsInt fm) {
+            if (exact) {
+                // The line is its own paragraph, so this runs once. The layout
+                // adds `add` after us; the box is set so the SUM is px.
+                int h = Math.max(1, px - add);
+                fm.top = fm.ascent = -h;
+                fm.bottom = fm.descent = 0;
+                return;
+            }
+            // The paragraph-wide traps NoteBandSpan documents: chooseHeight runs
+            // for every line of the paragraph over one reused FontMetricsInt,
+            // so inflate only the line carrying `at`, and put it back on the
+            // next line.
+            if (start <= at && at < end) {
+                fm.ascent -= px;
+                fm.top -= px;
+                inflatedTo = end;
+            } else if (start == inflatedTo) {
+                fm.ascent += px;
+                fm.top += px;
+                inflatedTo = -1;
+            }
+        }
+    }
+
+    // isHeadingParagraph: the dialect writes a heading as <p><b>…</b></p>, which
+    // the importer turns into a paragraph wholly under one StyleSpan(BOLD).
+    private static boolean isHeadingParagraph(Spanned sp, int ps, int pe) {
+        int e = pe;
+        while (e > ps && Character.isWhitespace(sp.charAt(e - 1))) e--;
+        if (e <= ps) return false;
+        android.text.style.StyleSpan[] spans = sp.getSpans(ps, e, android.text.style.StyleSpan.class);
+        if (spans == null) return false;
+        for (android.text.style.StyleSpan st : spans) {
+            if (st.getStyle() == android.graphics.Typeface.BOLD
+                    && sp.getSpanStart(st) <= ps && sp.getSpanEnd(st) >= e) return true;
+        }
+        return false;
+    }
+
+    // applyParagraphAir attaches the air spans for one chapter's Spanned. Runs
+    // after the indent markers are resolved and before the text is set, so the
+    // view receives its final spans in one assignment.
+    private static void applyParagraphAir(android.text.SpannableStringBuilder ssb, TextView tv) {
+        airSpans.clear();
+        if (ssb == null || tv == null || lastTextPx <= 0f) return;
+        final int em = Math.round(lastTextPx);
+        final int add = Math.round(tv.getLineSpacingExtra());
+        final int gap = Math.round(PARA_GAP_EM * em), lead = Math.round(HEAD_LEAD_EM * em), tail = Math.round(HEAD_TAIL_EM * em);
+        final int n = ssb.length();
+        // Paragraph bounds, once: [starts[i], ends[i]) excludes the '\n'.
+        java.util.ArrayList<int[]> paras = new java.util.ArrayList<int[]>();
+        int ps = 0;
+        for (int i = 0; i <= n; i++) {
+            if (i == n || ssb.charAt(i) == '\n') { paras.add(new int[]{ps, i}); ps = i + 1; }
+        }
+        boolean anyBlank = false;
+        for (int[] pr : paras) if (pr[1] == pr[0]) { anyBlank = true; break; }
+        for (int k = 0; k < paras.size(); k++) {
+            int[] pr = paras.get(k);
+            if (pr[1] == pr[0]) {
+                // A blank separator line (the phone page). Its height depends on
+                // what stands either side of it.
+                if (pr[0] >= n) continue;
+                boolean headNext = k + 1 < paras.size() && isHeadingParagraph(ssb, paras.get(k + 1)[0], paras.get(k + 1)[1]);
+                boolean headPrev = k > 0 && isHeadingParagraph(ssb, paras.get(k - 1)[0], paras.get(k - 1)[1]);
+                int h = headNext ? lead : (headPrev ? tail : gap);
+                AirSpan a = new AirSpan(h, true, pr[0], add);
+                ssb.setSpan(a, pr[0], pr[0] + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                airSpans.add(a);
+                continue;
+            }
+            if (anyBlank) continue; // the blank lines carry the air on this page
+            if (!isHeadingParagraph(ssb, pr[0], pr[1])) continue;
+            // The compact page: lead above the heading (none at the very top),
+            // tail on the paragraph after it.
+            if (k > 0) {
+                AirSpan a = new AirSpan(lead, false, pr[0], add);
+                ssb.setSpan(a, pr[0], Math.min(pr[0] + 1, n), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                airSpans.add(a);
+            }
+            if (k + 1 < paras.size() && paras.get(k + 1)[1] > paras.get(k + 1)[0]) {
+                int q = paras.get(k + 1)[0];
+                AirSpan a = new AirSpan(tail, false, q, add);
+                ssb.setSpan(a, q, Math.min(q + 1, n), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                airSpans.add(a);
+            }
+        }
+    }
+
     // --- Read-along (audio) state ------------------------------------------
     // The floating "Follow narration" pill, a child of the overlay window (the
     // reading text paints ABOVE the Fyne canvas, so only a native view in this
@@ -415,6 +529,11 @@ public final class BtBridge {
                 } else if (!ns.below && ns.at == lineStart) {
                     t += ns.band;
                 }
+            }
+            // A heading's lead or tail reserved in this line's ascent (the
+            // compact page) is air, not text: keep the wash off it.
+            for (AirSpan a : airSpans) {
+                if (!a.exact && a.at == lineStart) t += a.px;
             }
             if (b <= t) return;
             c.drawRect(x0, t, x1, b, fill);
@@ -2695,6 +2814,9 @@ public final class BtBridge {
                                     i, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         }
                     }
+                }
+                if (s instanceof android.text.SpannableStringBuilder) {
+                    applyParagraphAir((android.text.SpannableStringBuilder) s, text);
                 }
                 if (s instanceof Spannable) liftWashToLineBackground((Spannable) s);
                 text.setText(s, TextView.BufferType.SPANNABLE);
