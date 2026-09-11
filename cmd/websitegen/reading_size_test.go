@@ -80,17 +80,41 @@ func TestTheWebMeasureDoesNotTakeTheOpticalScale(t *testing.T) {
 	}
 }
 
-// Headings are set in the scripture face, so they take the same correction — the
-// point is to preserve the ratio between heading and body, not to redesign it.
-func TestHeadingsTakeTheSameCorrection(t *testing.T) {
+// Headings are set exactly as the app panes set them (reading.go, p.sec): at the
+// body's size, bold, with 1.1em above and .35em below. The web once gave them a
+// size a step under the body and margins figured from the paragraph gap — zero
+// on the reporter page — so a desktop reader saw a three-quarter-size heading
+// with 6px above and nothing below. Mutations: a size of the heading's own
+// (rem or px); the size left out, which lets the browser's 1.5em h2 default
+// in; margins figured from --pgap again.
+func TestHeadingsAreSetAsThePanesSetThem(t *testing.T) {
 	css := testCSS()
-	want := remSize(webHeadingBaseRem)
-	if !strings.Contains(css, "font-size:"+want+";") {
-		t.Errorf("the section heading is not set at the corrected %s", want)
+	i := strings.Index(css, ".text .sec{")
+	if i < 0 {
+		t.Fatal("the section heading rule is gone")
 	}
-	ratio := webHeadingBaseRem / webScriptureBaseRem
-	if ratio < 0.7 || ratio > 0.85 {
-		t.Errorf("the heading/body ratio has moved to %.3f; it was 0.762 and the "+
-			"correction is not supposed to change it", ratio)
+	rule := css[i : strings.Index(css[i:], "}")+i]
+	// font-size:1em, stated: the heading is an <h2>, whose browser default is
+	// 1.5em, so leaving the size out is not the same as inheriting the body's.
+	if !strings.Contains(rule, "font-size:1em;") {
+		t.Errorf("the heading rule does not pin the body size (font-size:1em); an <h2> defaults to 1.5em: %s", rule)
+	}
+	if strings.Contains(rule, "rem") || strings.Contains(rule, "px") {
+		t.Errorf("the heading rule sets a size of its own; the panes set headings at the body size: %s", rule)
+	}
+	if !strings.Contains(rule, "margin:1.1em 0 .35em") {
+		t.Errorf("the heading margins are not the panes' 1.1em above and .35em below: %s", rule)
+	}
+	if strings.Contains(rule, "--pgap") {
+		t.Errorf("the heading margins are figured from the paragraph gap again, which is zero on the reporter page: %s", rule)
+	}
+	if !strings.Contains(rule, "font-weight:700") {
+		t.Errorf("the heading is no longer bold: %s", rule)
+	}
+	// The control: the body rule still carries the corrected size, so a missing
+	// font-size on the heading means inheritance, not a stylesheet that lost
+	// its sizes altogether.
+	if !strings.Contains(css, "font-size:"+remSize(webScriptureBaseRem)) {
+		t.Fatal("the body size is gone from the stylesheet, so the check above proves nothing")
 	}
 }

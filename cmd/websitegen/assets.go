@@ -45,17 +45,14 @@ func readerCSS(f webFonts) string {
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
 		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
-		"__HEADING_REM__", remSize(webHeadingBaseRem),
 		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
 	).Replace(readerCSSTemplate)
 }
 
-// The reading sizes BEFORE the optical scale, at a 16px root: 1.3125rem is the
-// app's own 21px body, and the heading has always been set a step under it.
-const (
-	webScriptureBaseRem = 1.3125
-	webHeadingBaseRem   = 1.0
-)
+// The reading size BEFORE the optical scale, at a 16px root: 1.3125rem is the
+// app's own 21px body. Headings take no size of their own — they are set at
+// the body size, as on every app pane.
+const webScriptureBaseRem = 1.3125
 
 // remSize opens a reading size up by the shipped face's optical scale — the same
 // correction the app applies, for the same reason. Setting the raw number here
@@ -318,15 +315,21 @@ body{
 }
 .text{--pgap:calc(__LEADING__ * __SCRIPTURE_REM__)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
-/* The publisher's section headings. Set in the scripture face, because they are
-   the publisher's words and not the app's chrome, but never justified and never
-   indented: a heading is a label, and the reporter indent below would push it
-   off its own left edge. The space above is the reader's cue that a new section
-   opens; a heading that opened the chapter needs none. */
+/* SECTION HEADINGS, as the app panes set them (reading.go, p.sec): the body's
+   own size, bold, left, no indent — a heading is a label, and the reporter
+   indent below would push it off its own left edge — with 1.1em above and
+   .35em below, in ems of the body it is set in. The web once gave headings a
+   size of their own, a step under the body, and margins figured from the
+   paragraph gap, which is zero on the reporter page: a desktop reader saw a
+   heading three-quarters the size of the text with 6px above and nothing
+   below. One rule now, shared with the panes; no size is invented — and
+   font-size:1em is stated rather than left out, because the heading is an
+   <h2> for the document's outline where the panes use a <p>, and a browser's
+   own h2 size is 1.5em. A heading that opens the chapter needs no space
+   above it. */
 .text .sec{
-  font-size:__HEADING_REM__; font-weight:700; letter-spacing:.01em; line-height:1.3;
-  text-align:left; text-indent:0; hyphens:none;
-  margin:calc(var(--pgap) + .4rem) 0 calc(var(--pgap) * .5);
+  font-size:1em; font-weight:700; text-align:left; text-indent:0; hyphens:none;
+  margin:1.1em 0 .35em;
 }
 .text .sec:first-child{margin-top:0}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
