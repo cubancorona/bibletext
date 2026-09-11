@@ -74,6 +74,42 @@ type webVersion struct {
 	// decode turns the downloaded body into the app's BibleData using the very
 	// same decoder the app uses, so the site can never disagree with the app.
 	decode func([]byte) (*bibletext.BibleData, error)
+	// headings says the edition's feed carries the publisher's section
+	// headings, so a decode that yields none is a stale or broken feed, not a
+	// plain edition. The live site published the Catholic edition without a
+	// single heading for weeks on the strength of a feed cached in August.
+	headings bool
+}
+
+// cacheFileName keys the raw feed by the app's decoder epoch for the edition,
+// so the site never decodes a feed older than the app's own understanding of
+// it: the cache used to be keyed by id alone and was downloaded ONCE, on 9
+// August, and reused for every publish after.
+func cacheFileName(v webVersion) string {
+	return fmt.Sprintf("%s-v%d.json", v.ID, bibletext.VersionCacheEpoch(v.ID))
+}
+
+// headingCount is the publisher's headings an edition decoded to.
+func headingCount(bd *bibletext.BibleData) int {
+	n := 0
+	for _, chapters := range bd.Headings {
+		for _, hs := range chapters {
+			n += len(hs)
+		}
+	}
+	return n
+}
+
+// checkDecoded refuses a decode that cannot be what the app shows.
+func checkDecoded(v webVersion, bd *bibletext.BibleData) error {
+	if len(bd.Books) == 0 {
+		return fmt.Errorf("%s: decoded no books", v.ID)
+	}
+	if v.headings && headingCount(bd) == 0 {
+		return fmt.Errorf("%s: decoded no publisher headings; the cached feed predates them — "+
+			"delete build/biblecache/%s and rebuild", v.ID, cacheFileName(v))
+	}
+	return nil
 }
 
 func publishedVersions() []webVersion {
@@ -81,7 +117,7 @@ func publishedVersions() []webVersion {
 		{ID: "web", Name: "World English Bible",
 			URL: "https://bible.helloao.org/api/ENGWEBP/complete.json", decode: bibletext.DecodeCanonical66},
 		{ID: "bsb", Name: "Berean Standard Bible",
-			URL: "https://bible.helloao.org/api/BSB/complete.json", decode: bibletext.DecodeCanonical66},
+			URL: "https://bible.helloao.org/api/BSB/complete.json", decode: bibletext.DecodeCanonical66, headings: true},
 		{ID: "webc", Name: "World English Bible (Catholic)",
 			URL: "https://bible.helloao.org/api/eng_webc/complete.json", decode: bibletext.DecodeHelloAOCatholic},
 	}
@@ -155,8 +191,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("%s: decode: %v", v.ID, err)
 		}
+		if err := checkDecoded(v, bible); err != nil {
+			log.Fatal(err)
+		}
 		loaded = append(loaded, loadedVersion{webVersion: v, bible: bible})
-		log.Printf("%-5s %d books", v.ID, len(bible.Books))
+		log.Printf("%-5s %d books, %d headings", v.ID, len(bible.Books), headingCount(bible))
 	}
 
 	if err := writeSite(site, loaded); err != nil {
@@ -183,7 +222,7 @@ type loadedVersion struct {
 // rebuilding the site is offline and instant. The cache is build output, not
 // source: delete it and the next run re-downloads.
 func fetchWithCache(v webVersion, cacheDir string, offline bool) ([]byte, error) {
-	path := filepath.Join(cacheDir, v.ID+".json")
+	path := filepath.Join(cacheDir, cacheFileName(v))
 	if b, err := os.ReadFile(path); err == nil && len(b) > 0 {
 		return b, nil
 	}

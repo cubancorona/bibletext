@@ -483,6 +483,19 @@ func placeholderVerseText(abbrev, book string, chapter, verse int) string {
 // translations live beside it as bibletext-<id>.json. A version with a non-zero
 // cacheEpoch gets bibletext-<id>-v<epoch>.json, including the default translation,
 // so a stale cache produced by an older decoder is bypassed.
+// VersionCacheEpoch is the decoder epoch a version's cache is keyed by — the
+// number the app bumps whenever its decode of that edition changes. The site
+// generator keys its own raw-feed cache by it, so a decoder change on this side
+// refetches the feed rather than decoding a copy taken under an older
+// understanding of it. 0 for an unknown id or an unversioned cache.
+func VersionCacheEpoch(id string) int {
+	v, ok := versionByID(id)
+	if !ok {
+		return 0
+	}
+	return v.cacheEpoch
+}
+
 func cachePathForVersion(id string) string {
 	base := defaultCachePath()
 	v, known := versionByID(id)
