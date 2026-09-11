@@ -183,6 +183,7 @@ type styledLayoutParams struct {
 	LineHeight float32 // baseline-to-baseline for body lines
 	ParaGap    float32 // extra gap above a paragraph's first line (not the first paragraph)
 	SpaceW     float32 // width of the inter-word space at body size
+	TextSize   float32 // the body size the em-reckoned spaces are figured from
 
 	// Indent is the reporter layout's first-line paragraph indent (0 = off).
 	// GEOMETRY ONLY, deliberately: the iOS HTML path has to smuggle its indent
@@ -257,9 +258,11 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	// this the first PARAGRAPH", and a heading between two of them must not
 	// answer that question.
 	pi := -1
+	afterHeading := false
 	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
 		if blk.IsHeading() {
 			y = appendHeadingLines(lay, blk.Heading.Text, y, p, measure, offset)
+			afterHeading = true
 			continue
 		}
 		para := blk.Verses
@@ -270,10 +273,16 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		if pi > 0 {
 			// One half of the paragraph separator; the other "\n" is written
 			// when the paragraph's first unit opens its line, so the model
-			// carries the same "\n\n" join rewrap produced.
+			// carries the same "\n\n" join rewrap produced. The GAP is the
+			// heading's own when one stands between: its tail has already
+			// been added, and adding the paragraph gap as well would give the
+			// page a heading with more air below it than above.
 			appendText("\n")
-			y += p.ParaGap
+			if !afterHeading {
+				y += p.ParaGap
+			}
 		}
+		afterHeading = false
 
 		// THE BAND OPENS ABOVE THE WHOLE PARAGRAPH the note's verse belongs
 		// to — never between two of its lines: a note band must never break a
@@ -615,11 +624,14 @@ func appendHeadingLines(lay *chapterLayout, text string, y float32, p styledLayo
 	if text == "" {
 		return y
 	}
-	// Space above, so the heading belongs to what follows rather than floating
-	// between. None at the very top: a chapter that opens with one needs no gap
-	// above its own first line.
+	// Space above and below, in ems of the body, as every other pane gives a
+	// heading (reading.go's p.sec: 1.1em above, .35em below). It used to be
+	// the paragraph gap above and nothing below — and the reporter page's
+	// paragraph gap is zero, so on a wide window a heading stood flush against
+	// the text on both sides. None above at the very top: a chapter that opens
+	// with one needs no gap above its own first line.
 	if len(lay.Lines) > 0 {
-		y += p.ParaGap
+		y += headingLeadAbove * p.TextSize
 	}
 	for _, row := range wrapHeading(text, p.Width, measure) {
 		lay.Lines = append(lay.Lines, styledLine{
@@ -628,8 +640,15 @@ func appendHeadingLines(lay *chapterLayout, text string, y float32, p styledLayo
 		})
 		y += p.LineHeight
 	}
-	return y
+	return y + headingLeadBelow*p.TextSize
 }
+
+// The heading's air, as multiples of the body size — the numbers reading.go
+// sets for the native panes, so the four surfaces agree.
+const (
+	headingLeadAbove = 1.1
+	headingLeadBelow = 0.35
+)
 
 // wrapHeading breaks a heading to the column, measured in the BOLD cut it is
 // drawn in.

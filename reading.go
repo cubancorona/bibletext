@@ -700,11 +700,23 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// section 0.85, and thresholds tell them apart — so a heading at a new size
 	// would be a new thing for those thresholds to misread. Bold and left is
 	// enough to say heading, and it says it without inventing a size.
+	//
+	// THE LEAD ABOVE A HEADING IS THE PARAGRAPH BEFORE IT. The native sweeps
+	// zero paragraphSpacingBefore on every paragraph (the importer injects a
+	// phantom one on the first), so a margin-top here never reaches the page:
+	// headings stood with .35em below and nothing above. Bottom margins
+	// survive, so the 1.1em the other panes give a heading is written as the
+	// bottom margin of the paragraph that precedes it (class pre-sec, set by
+	// the block loop), and a heading that opens the chapter, having no
+	// paragraph before it, takes no lead — as on every other surface.
 	b.WriteString(`p.sec {
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}`)
 	fmt.Fprintf(&b, `sup.v {
 		color: %s;
@@ -768,15 +780,21 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	}`, nrgbaToHex(pal.TextMuted))
 	}
 	b.WriteString("</style></head><body>")
-	if super.Text != "" {
-		fmt.Fprintf(&b, `<p class="pst">%s</p>`, htmlEscape(super.Text))
-	}
-
 	// Blocks, not paragraphs: the publisher's section headings stand among them
 	// where the publisher put them. The heading is its own paragraph and never
 	// justified — a heading is a label, and the reporter indent would push it
 	// off its own left edge.
-	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+	blocks := chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses)
+	if super.Text != "" {
+		// A psalm's title standing before a heading carries the heading's lead
+		// exactly as a paragraph would (p.pre-sec).
+		cls := "pst"
+		if len(blocks) > 0 && blocks[0].IsHeading() {
+			cls = "pst pre-sec"
+		}
+		fmt.Fprintf(&b, `<p class="%s">%s</p>`, cls, htmlEscape(super.Text))
+	}
+	for bi, blk := range blocks {
 		if blk.IsHeading() {
 			fmt.Fprintf(&b, `<p class="sec">%s</p>`, htmlEscape(blk.Heading.Text))
 			continue
@@ -792,8 +810,17 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 				break
 			}
 		}
+		// The paragraph before a heading carries the heading's lead as its
+		// bottom margin (p.pre-sec above).
+		var cls []string
 		if poetic {
-			b.WriteString(`<p class="pm">`)
+			cls = append(cls, "pm")
+		}
+		if bi+1 < len(blocks) && blocks[bi+1].IsHeading() {
+			cls = append(cls, "pre-sec")
+		}
+		if len(cls) > 0 {
+			fmt.Fprintf(&b, `<p class="%s">`, strings.Join(cls, " "))
 		} else {
 			b.WriteString("<p>")
 		}

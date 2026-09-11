@@ -18,7 +18,10 @@
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -58,7 +61,10 @@
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -174,7 +180,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -214,7 +223,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -336,7 +348,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -376,7 +391,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -494,7 +512,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -534,7 +555,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -650,7 +674,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -690,7 +717,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -806,7 +836,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -846,7 +879,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -962,7 +998,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1002,7 +1041,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1118,7 +1160,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1158,7 +1203,10 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1283,7 +1331,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1323,7 +1374,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1454,7 +1508,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1494,7 +1551,10 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1604,7 +1664,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1644,7 +1707,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1750,7 +1816,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1790,7 +1859,10 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1889,7 +1961,10 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;
@@ -1929,7 +2004,10 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 1.1em 0 0.35em 0;
+		margin: 0 0 0.35em 0;
+	}
+	p.pre-sec {
+		margin-bottom: 1.1em;
 	}sup.v {
 		color: #53688f;
 		font-weight: 600;

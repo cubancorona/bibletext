@@ -333,6 +333,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    paraGap,
+		TextSize:   p.textSize,
 		SpaceW:     p.measure(" ", runWord, false),
 		Indent:     indent,
 		TopPad:     p.superGeom.height,
