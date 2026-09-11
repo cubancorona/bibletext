@@ -263,10 +263,13 @@ func TestTitleParagraphLeadsBothDialectsEvenUnderAHeading(t *testing.T) {
 
 			apple := buildChapterHTML(st, verses)
 			body := apple[strings.Index(apple, "<body>")+len("<body>"):]
-			if !strings.HasPrefix(body, `<p class="pst">`) {
+			// The title's class may carry pre-sec — a title standing before a
+			// heading carries the heading's lead (reading.go) — so match the
+			// class's opening, not the whole attribute.
+			if !strings.HasPrefix(body, `<p class="pst`) {
 				t.Errorf("reporter=%v: the Apple body does not open with the title: %.80q", reporter, body)
 			}
-			if !inOrder(body, `<p class="pst">`, `<p class="sec">A heading probe</p>`) ||
+			if !inOrder(body, `<p class="pst`, `<p class="sec">A heading probe</p>`) ||
 				!inOrder(body, `<p class="sec">A heading probe</p>`, `<sup class="v">16</sup>`) {
 				t.Errorf("reporter=%v: Apple order is not title, heading, verse 1: %.200q", reporter, body)
 			}
