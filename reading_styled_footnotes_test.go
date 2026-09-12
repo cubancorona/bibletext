@@ -260,7 +260,7 @@ func TestMeasureStyledSuperscriptionWashesMirrorItsLines(t *testing.T) {
 		}
 	}
 	last := g.washes[len(g.washes)-1]
-	if last.Y+last.H >= g.rect.H || g.rect.H != float32(len(g.lines))*10+4.5 {
+	if last.Y+last.H >= g.rect.H || g.rect.H != float32(len(g.lines))*10+float32(readingTitleGapEm)*12 {
 		t.Errorf("the last wash ends at %v in a %v-tall block; the gap below the title must stay unwashed", last.Y+last.H, g.rect.H)
 	}
 	g.place(7, 3)

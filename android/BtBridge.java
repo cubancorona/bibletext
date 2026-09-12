@@ -259,7 +259,10 @@ public final class BtBridge {
     // heading there reserves its lead in its own first line's ascent and its
     // tail in the following line's ascent, the way a note band reserves its
     // space (NoteBandSpan), and the wash rectangles subtract it the same way.
-    private static final float PARA_GAP_EM = 1.0f, HEAD_LEAD_EM = 1.1f, HEAD_TAIL_EM = 0.35f;
+    // These five equal the Go constants in reading_spacing.go; a host test
+    // (android_spacing_contract_test.go) holds them to it, since this file
+    // cannot import Go. INDENT_EM is the reporter page's first-line indent.
+    private static final float PARA_GAP_EM = 1.0f, HEAD_LEAD_EM = 1.1f, HEAD_TAIL_EM = 0.35f, TITLE_GAP_EM = 0.55f, INDENT_EM = 1.5f;
     private static final java.util.ArrayList<AirSpan> airSpans = new java.util.ArrayList<AirSpan>();
 
     private static final class AirSpan
@@ -311,6 +314,22 @@ public final class BtBridge {
         return false;
     }
 
+    // isTitleParagraph: the dialect writes the psalm superscription as the
+    // leading <p><i>…</i></p>, a first paragraph wholly under StyleSpan(ITALIC)
+    // (findTitleRange reads the same premise).
+    private static boolean isTitleParagraph(Spanned sp, int ps, int pe) {
+        int e = pe;
+        while (e > ps && Character.isWhitespace(sp.charAt(e - 1))) e--;
+        if (e <= ps) return false;
+        android.text.style.StyleSpan[] spans = sp.getSpans(ps, e, android.text.style.StyleSpan.class);
+        if (spans == null) return false;
+        for (android.text.style.StyleSpan st : spans) {
+            if (st.getStyle() == android.graphics.Typeface.ITALIC
+                    && sp.getSpanStart(st) <= ps && sp.getSpanEnd(st) >= e) return true;
+        }
+        return false;
+    }
+
     // applyParagraphAir attaches the air spans for one chapter's Spanned. Runs
     // after the indent markers are resolved and before the text is set, so the
     // view receives its final spans in one assignment.
@@ -320,6 +339,7 @@ public final class BtBridge {
         final int em = Math.round(lastTextPx);
         final int add = Math.round(tv.getLineSpacingExtra());
         final int gap = Math.round(PARA_GAP_EM * em), lead = Math.round(HEAD_LEAD_EM * em), tail = Math.round(HEAD_TAIL_EM * em);
+        final int titleGap = Math.round(TITLE_GAP_EM * em);
         final int n = ssb.length();
         // Paragraph bounds, once: [starts[i], ends[i]) excludes the '\n'.
         java.util.ArrayList<int[]> paras = new java.util.ArrayList<int[]>();
@@ -337,7 +357,11 @@ public final class BtBridge {
                 if (pr[0] >= n) continue;
                 boolean headNext = k + 1 < paras.size() && isHeadingParagraph(ssb, paras.get(k + 1)[0], paras.get(k + 1)[1]);
                 boolean headPrev = k > 0 && isHeadingParagraph(ssb, paras.get(k - 1)[0], paras.get(k - 1)[1]);
-                int h = headNext ? lead : (headPrev ? tail : gap);
+                // The blank line after a psalm's title is the title's own gap
+                // to verse 1, not a paragraph gap — unless a heading follows,
+                // whose lead wins as it does on the Apple panes.
+                boolean titlePrev = k == 1 && isTitleParagraph(ssb, paras.get(0)[0], paras.get(0)[1]);
+                int h = headNext ? lead : (headPrev ? tail : (titlePrev ? titleGap : gap));
                 AirSpan a = new AirSpan(h, true, pr[0], add);
                 ssb.setSpan(a, pr[0], pr[0] + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 airSpans.add(a);
@@ -2802,7 +2826,7 @@ public final class BtBridge {
                 // paragraph, so the text ends up with nothing extra in it.
                 if (s instanceof android.text.SpannableStringBuilder) {
                     android.text.SpannableStringBuilder ssb = (android.text.SpannableStringBuilder) s;
-                    float indentPx = lastTextPx > 0f ? lastTextPx * 1.5f : 0f;
+                    float indentPx = lastTextPx > 0f ? lastTextPx * INDENT_EM : 0f;
                     for (int i = ssb.length() - 1; i >= 0; i--) {
                         if (ssb.charAt(i) != INDENT_MARKER) continue;
                         ssb.delete(i, i + 1);

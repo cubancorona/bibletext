@@ -249,6 +249,25 @@ func devAutoNotesS8(state *AppState) {
 		// chapter where the reader left off), so this asks for the verse two
 		// above the note's own and lets the pane place it.
 		at(15*time.Second, func() { armReadingRestore(4, 0, 0) })
+	case "headnote":
+		// THE HEADING SHOT: a note whose paragraph a section heading opens,
+		// in the one shipped translation whose feed has headings nearly
+		// everywhere. BSB John 11:17 is the paragraph under "Jesus Comforts
+		// Martha and Mary", so one frame carries the paragraph before, the
+		// heading with its lead and tail, the note band and the noted
+		// paragraph — the whole vertical stack every surface derives from
+		// reading_spacing.go, in one picture. The link names the version, so
+		// the arrival switches to the BSB itself. Collapse, restore and
+		// scroll back for the same reason s10ctx does.
+		at(1500*time.Millisecond, func() {
+			HandleShareLink(state, ShareLinkURLWithNote("bsb", "John", 11, 17, 17,
+				"Fixture note on the paragraph a heading opens."))
+		})
+		at(7*time.Second, func() { hideCurrentNote(state); state.refreshReadingOnly() })
+		at(11*time.Second, func() { restoreCurrentNote(state); state.refreshReadingOnly() })
+		// The styled pane applies an armed restore from its next layout pass,
+		// so ask for one; the natives read the arm itself.
+		at(15*time.Second, func() { armReadingRestore(15, 0, 0); state.refreshReadingOnly() })
 	case "linkscroll":
 		// The Links-tab state sequence (the
 		// compact tab bar is CurrentTab + rebuildWindow — no widget to tap):

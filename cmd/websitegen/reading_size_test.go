@@ -43,13 +43,14 @@ func TestScriptureIsSetAtTheOpticallyCorrectedSize(t *testing.T) {
 		t.Error("the uncorrected 1.3125rem scripture size is still in the stylesheet")
 	}
 
-	// The paragraph gap is a line of the type, so it has to follow the type. A
-	// literal left behind here would show as paragraphs that no longer sit a
-	// line apart.
+	// The paragraph gap is a body's worth of air (reading_spacing.go), so it
+	// has to follow the type. A literal left behind here would show as
+	// paragraphs that no longer sit the app's gap apart.
+	gap := strconv.FormatFloat(bibletext.ReadingParaGapEm(), 'f', -1, 64)
 	lead := strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64)
-	if !strings.Contains(css, "--pgap:calc("+lead+" * "+want+")") {
+	if !strings.Contains(css, "--pgap:calc("+gap+" * "+want+")") {
 		t.Errorf("the paragraph gap is not figured from the corrected size %s at the "+
-			"chosen leading %s", want, lead)
+			"app's gap %s", want, gap)
 	}
 
 	// The leading is a shared number now, not a value measured off a screenshot
@@ -102,8 +103,9 @@ func TestHeadingsAreSetAsThePanesSetThem(t *testing.T) {
 	if strings.Contains(rule, "rem") || strings.Contains(rule, "px") {
 		t.Errorf("the heading rule sets a size of its own; the panes set headings at the body size: %s", rule)
 	}
-	if !strings.Contains(rule, "margin:1.1em 0 .35em") {
-		t.Errorf("the heading margins are not the panes' 1.1em above and .35em below: %s", rule)
+	want := "margin:" + bibletext.EmCSS(bibletext.ReadingHeadLeadEm()) + " 0 " + bibletext.EmCSS(bibletext.ReadingHeadTailEm())
+	if !strings.Contains(rule, want) {
+		t.Errorf("the heading margins are not the app's (%s): %s", want, rule)
 	}
 	if strings.Contains(rule, "--pgap") {
 		t.Errorf("the heading margins are figured from the paragraph gap again, which is zero on the reporter page: %s", rule)

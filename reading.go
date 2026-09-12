@@ -663,12 +663,12 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// opens each paragraph — an accident nobody could read off this file. They
 	// are kept because a paragraph the sweep does not reach still falls back to
 	// them, and because the reporter/phone split they encode is still true.
-	lineHeight, paraCSS := "2.0", `p {
-		margin: 0 0 24px 0;
+	lineHeight, paraCSS := "2.0", fmt.Sprintf(`p {
+		margin: 0 0 %s 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
-	}`
+	}`, emCSS(readingParaGapEm))
 	if reporter {
 		// No text-indent here: the AppKit/UIKit HTML importer drops it
 		// (verified on the iPad sim). The indent is applied to the imported
@@ -709,15 +709,15 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// bottom margin of the paragraph that precedes it (class pre-sec, set by
 	// the block loop), and a heading that opens the chapter, having no
 	// paragraph before it, takes no lead — as on every other surface.
-	b.WriteString(`p.sec {
+	fmt.Fprintf(&b, `p.sec {
 		font-weight: 700;
 		text-align: left;
 		text-indent: 0;
-		margin: 0 0 0.35em 0;
+		margin: 0 0 %s 0;
 	}
 	p.pre-sec {
-		margin-bottom: 1.1em;
-	}`)
+		margin-bottom: %s;
+	}`, emCSS(readingHeadTailEm), emCSS(readingHeadLeadEm))
 	fmt.Fprintf(&b, `sup.v {
 		color: %s;
 		font-weight: 600;
@@ -758,12 +758,12 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		// exactly. At body size (1.0em) it is invisible to the verse-number
 		// scans (sub-0.8× only) and to the content-end band ([0.8, 0.95)).
 		// margin-bottom only: the importer zeroes every margin-top.
-		b.WriteString(`p.pst {
+		fmt.Fprintf(&b, `p.pst {
 		font-style: italic;
 		text-align: left;
 		line-height: 1.5;
-		margin: 0 0 14px 0;
-	}`)
+		margin: 0 0 %s 0;
+	}`, emCSS(readingTitleGapEm))
 	}
 	if len(footnotes) > 0 {
 		writeFootnoteCSS(&b, nrgbaToHex(pal.TextMuted))
@@ -1794,11 +1794,6 @@ func indexOf(values []int, target int) int {
 }
 
 // --- Paragraph grouping -----------------------------------------------------
-
-// reporterIndentEm is the reporter page's first-line indent, in ems. It is the
-// width the em-space and en-space pair used to draw, kept so the page did not
-// change when the characters stopped being characters.
-const reporterIndentEm = 1.5
 
 // verseIsPoetic reports whether a verse's text carries authored poem line
 // breaks (the decoder emits "\n" between poem clauses). A verse that is

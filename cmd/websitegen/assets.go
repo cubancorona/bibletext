@@ -46,6 +46,15 @@ func readerCSS(f webFonts) string {
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
 		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
 		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
+		// The reading pane's air, from the one place the numbers live
+		// (reading_spacing.go): the paragraph gap as a factor of the body
+		// size (kept in rem so --pgap means the same inside every element),
+		// the heading's lead and tail and the title's gap as ems.
+		"__PARA_GAP__", strconv.FormatFloat(bibletext.ReadingParaGapEm(), 'f', -1, 64),
+		"__HEAD_LEAD__", bibletext.EmCSS(bibletext.ReadingHeadLeadEm()),
+		"__HEAD_TAIL__", bibletext.EmCSS(bibletext.ReadingHeadTailEm()),
+		"__TITLE_GAP__", bibletext.EmCSS(bibletext.ReadingTitleGapEm()),
+		"__INDENT__", bibletext.EmCSS(bibletext.ReadingReporterIndentEm()),
 	).Replace(readerCSSTemplate)
 }
 
@@ -313,7 +322,7 @@ body{
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text{--pgap:calc(__LEADING__ * __SCRIPTURE_REM__)}
+.text{--pgap:calc(__PARA_GAP__ * __SCRIPTURE_REM__)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* SECTION HEADINGS, as the app panes set them (reading.go, p.sec): the body's
    own size, bold, left, no indent — a heading is a label, and the reporter
@@ -329,7 +338,7 @@ body{
    above it. */
 .text .sec{
   font-size:1em; font-weight:700; text-align:left; text-indent:0; hyphens:none;
-  margin:1.1em 0 .35em;
+  margin:__HEAD_LEAD__ 0 __HEAD_TAIL__;
 }
 .text .sec:first-child{margin-top:0}
 /* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
@@ -343,7 +352,7 @@ body{
      (the app's em+en spaces). Leading stays natural — the importer drops the
      app's 1.3 exactly as it drops the phone's 2.0. */
   .text{--pgap:0rem}
-  .text p{margin:0; text-indent:1.5em}
+  .text p{margin:0; text-indent:__INDENT__}
   /* The first paragraph takes no reporter indent — and a psalm's title is a
      <p> too, so once it stands first the verse paragraph after it must be
      named as well or every titled psalm gains an indent it never had. */
@@ -361,7 +370,7 @@ body{
    the panes measure. The face ships no italic cut, so this is a synthesised
    oblique — accepted, because the alternative is a fifth hashed font asset for
    one line per psalm. */
-.text p.pst{font-style:italic; text-indent:0; margin:0 0 calc(.45em * __LEADING__)}
+.text p.pst{font-style:italic; text-indent:0; margin:0 0 __TITLE_GAP__}
 /* THE FOOTNOTE SECTION. The translators' apparatus, after the chapter and
    outside the article, because the article is the scripture and this is about
    it. Set smaller and muted so it reads as an appendix rather than as more

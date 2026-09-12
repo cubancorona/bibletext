@@ -280,7 +280,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		avail = 80
 	}
 	lh := p.styledLineHeight()
-	paraGap := lh * 0.65
+	paraGap := float32(readingParaGapEm) * p.textSize
 	indent := float32(0)
 	p.extraInset = 0
 	// THE REPORTER PAGE, when the pane can hold it: the desktop reads like the
@@ -298,7 +298,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		avail = m
 		lh = p.textSize * 1.3
 		paraGap = 0
-		indent = 1.5 * p.textSize
+		indent = float32(reporterIndentEm) * p.textSize
 	}
 	p.lh = lh
 	// MEASURE THE STICKER FIRST. The band's height IS this measurement, so it

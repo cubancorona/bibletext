@@ -624,14 +624,14 @@ func appendHeadingLines(lay *chapterLayout, text string, y float32, p styledLayo
 	if text == "" {
 		return y
 	}
-	// Space above and below, in ems of the body, as every other pane gives a
-	// heading (reading.go's p.sec: 1.1em above, .35em below). It used to be
+	// Space above and below, in ems of the body, from the one place the
+	// numbers live (reading_spacing.go), as every other pane gives a heading. It used to be
 	// the paragraph gap above and nothing below — and the reporter page's
 	// paragraph gap is zero, so on a wide window a heading stood flush against
 	// the text on both sides. None above at the very top: a chapter that opens
 	// with one needs no gap above its own first line.
 	if len(lay.Lines) > 0 {
-		y += headingLeadAbove * p.TextSize
+		y += float32(readingHeadLeadEm) * p.TextSize
 	}
 	for _, row := range wrapHeading(text, p.Width, measure) {
 		lay.Lines = append(lay.Lines, styledLine{
@@ -640,15 +640,8 @@ func appendHeadingLines(lay *chapterLayout, text string, y float32, p styledLayo
 		})
 		y += p.LineHeight
 	}
-	return y + headingLeadBelow*p.TextSize
+	return y + float32(readingHeadTailEm)*p.TextSize
 }
-
-// The heading's air, as multiples of the body size — the numbers reading.go
-// sets for the native panes, so the four surfaces agree.
-const (
-	headingLeadAbove = 1.1
-	headingLeadBelow = 0.35
-)
 
 // wrapHeading breaks a heading to the column, measured in the BOLD cut it is
 // drawn in.

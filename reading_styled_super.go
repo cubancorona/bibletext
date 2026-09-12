@@ -42,7 +42,7 @@ func measureStyledSuperscription(text string, avail, size, lineH float32, meas f
 		g.washes = append(g.washes, styledNoteRect{X: 0, Y: y, W: meas(ln), H: lineH})
 		y += lineH
 	}
-	y += lineH * 0.45 // the gap between the title and verse 1
+	y += float32(readingTitleGapEm) * size // the gap between the title and verse 1 (reading_spacing.go)
 	g.height = y
 	g.rect = styledNoteRect{X: 0, Y: 0, W: avail, H: y}
 	return g

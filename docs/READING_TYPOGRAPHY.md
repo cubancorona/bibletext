@@ -158,77 +158,80 @@ on the panes, the corrected scripture rem on the web) unless marked fixed.
 | quantity | value | where it applies |
 |---|---|---|
 | leading | 1.2222 lines | every surface — see above |
-| paragraph gap, gapped page | **1em** — *not yet everywhere, see the spread* | phone pages: the blank space between paragraphs |
-| paragraph gap, reporter page | 0, with a **1.5em** first-line indent | wide pages: the octavo grammar, no blank line |
-| heading lead | **1.1em** above, **0.35em** below; the heading at the body size, bold | every surface, one rule (`reading.go` p.sec is the source of the numbers) |
+| paragraph gap, gapped page | **1em** (`readingParaGapEm`) | phone pages: the blank space between paragraphs |
+| paragraph gap, reporter page | 0, with a **1.5em** first-line indent (`reporterIndentEm`) | wide pages: the octavo grammar, no blank line |
+| heading lead | **1.1em** above, **0.35em** below (`readingHeadLeadEm`, `readingHeadTailEm`); the heading at the body size, bold | every surface, one rule |
 | heading at the top of a chapter | no lead | nothing stands above it to lead from |
-| psalm title → verse 1 | ~0.55em (0.45 × the leading) — *see the spread* | the italic superscription's gap to the text |
+| psalm title → verse 1 | **0.55em** (`readingTitleGapEm`) | the italic superscription's gap to the text |
 | poem lines | a line break, no extra air | an authored line inside a paragraph |
 | paragraph opening on a poem line | keeps the gap, takes no indent | the reporter page's one exception |
 | note band | measured: the card plus its own gaps above and below | reserved above the noted paragraph, never inside it |
 | footnote section | its own gap and rule | after the last verse; each surface's own |
 
-### The spread as it stands
+### One source, `reading_spacing.go`
 
-Where a surface does not keep the rule, the document says so rather than
-pretending. Measured 11 Sep 2026.
+The five numbers live once, in `reading_spacing.go`, and every surface derives
+from them: the Apple stylesheet is formatted from them, the Fyne pane reads
+them, the website substitutes them (`__PARA_GAP__`, `__HEAD_LEAD__`,
+`__HEAD_TAIL__`, `__TITLE_GAP__`, `__INDENT__`), and the Android bridge's five
+constants are held equal to them by `android_spacing_contract_test.go`,
+since Java cannot import Go. Change a number there and every surface moves
+together; change one surface's copy and its test fails.
 
-| quantity | Apple panes | Fyne pane | Android | web |
-|---|---|---|---|---|
-| paragraph gap, gapped | **24px fixed** — 1em at the normal size, but it does not scale with the reader's text size | 0.65 × the 1.55 line = **1.0em** | **1em** | **1.22em** — a full line |
-| paragraph gap, reporter | 0 + 1.5em indent | 0 + 1.5em indent | 0 + 1.5em indent | 0 + 1.5em indent |
-| heading lead / tail | 1.1em / 0.35em | 1.1em / 0.35em | 1.1em / 0.35em | 1.1em / 0.35em |
-| psalm title → text | **14px fixed** | 0.45 × line: 0.70em cozy, 0.59em reporter | **1em** (the blank line after the title is treated as a paragraph gap) | 0.45 × 1.2222 = 0.55em |
-
-Two decisions are open, and this table is where they should be taken: the
-gapped paragraph gap (1em everywhere, and Apple's 24px made an em so it
-scales), and the title gap (one figure; Android's 1em is the odd one).
+Before 11 Sep 2026 they were five copies and had drifted: the Apple panes gave
+a paragraph a fixed 24px that did not scale with the reader's size, the web a
+full 1.22em line, the Fyne pane 0.65 of a 1.55 line, Android a blank line of
+its pitch; a psalm's title stood 14px, 0.45 of a line, or a whole paragraph
+gap above its psalm depending on the platform. The two decisions that settled
+it: the gapped paragraph gap is **1em** (three surfaces already were, to
+within rounding), and the title's gap is **0.55em** (what 0.45 of the leading
+came to on the two surfaces that reckoned it that way).
 
 ### Where each quantity lives, and the trap on that surface
 
 | surface | paragraph gap | heading | title gap | the trap |
 |---|---|---|---|---|
-| **Apple panes** | `reading.go` `p { margin: 0 0 24px }` (gapped) / `margin: 0` + `bibleTextSetReporterIndent(reporterIndentEm × readingGlyphPx())` | `p.sec` (0.35em below) and **`p.pre-sec { margin-bottom: 1.1em }` on the paragraph or title BEFORE the heading**, set by the block loop | `p.pst { margin: 0 0 14px }` | **The native sweeps zero `paragraphSpacingBefore` on every paragraph** (to remove the phantom the importer injects on the first), so a `margin-top` never reaches the page. Space above anything must be the bottom margin of what precedes it. |
-| **Fyne pane** | `reading_styled_pane.go`: `paraGap = lh × 0.65`, 0 on the reporter page; `indent = 1.5 × textSize` | `reading_styled_layout.go` `appendHeadingLines`: `headingLeadAbove`/`headingLeadBelow` × `styledLayoutParams.TextSize`; the paragraph after a heading skips its own gap | `reading_styled_super.go`: `lineH × 0.45` | **The reporter page's paragraph gap is zero**, so anything figured "from the paragraph gap" vanishes on a wide window. Figure air from the text size. |
-| **Android** | `BtBridge.java` `applyParagraphAir`: the importer's blank separator line takes an exact height (`PARA_GAP_EM`); the compact page has no blank line, `INDENT_MARKER` → `LeadingMarginSpan` 1.5 × text | same sweep: `HEAD_LEAD_EM` / `HEAD_TAIL_EM` on the separator either side; on the compact page an `AirSpan` in the heading line's ascent and the next line's | the blank line after the title, as a paragraph gap | **`Html.fromHtml` separates paragraphs with a blank LINE** whose height is the pane's pitch plus `setLineHeight`'s extra — not a margin. A `LineHeightSpan` runs for every line of its paragraph over one reused `FontMetricsInt`: inflate only the line named, and put the metrics back on the next call (see `NoteBandSpan`). The wash paints full line boxes, so reserved air must be subtracted from wash rects. |
-| **web** | `cmd/websitegen/assets.go`: `--pgap` = leading × body; `0rem` + `text-indent:1.5em` from 46rem up | `.text .sec`: `font-size:1em`, `margin:1.1em 0 .35em` | `p.pst{margin:0 0 calc(.45em × leading)}` | **The heading is an `<h2>`** for the outline, whose browser default is `font-size:1.5em`: leaving the size out is not inheriting. Margins figured from `--pgap` are zero on the reporter page. |
+| **Apple panes** | `reading.go`: `p { margin: 0 0 <readingParaGapEm> }` (gapped) / `margin: 0` + `bibleTextSetReporterIndent(reporterIndentEm × readingGlyphPx())` | `p.sec` (0.35em below) and **`p.pre-sec { margin-bottom: 1.1em }` on the paragraph or title BEFORE the heading**, set by the block loop | `p.pst { margin: 0 0 <readingTitleGapEm> }` | **The native sweeps zero `paragraphSpacingBefore` on every paragraph** (to remove the phantom the importer injects on the first), so a `margin-top` never reaches the page. Space above anything must be the bottom margin of what precedes it. |
+| **Fyne pane** | `reading_styled_pane.go`: `paraGap = readingParaGapEm × textSize`, 0 on the reporter page; `indent = reporterIndentEm × textSize` | `reading_styled_layout.go` `appendHeadingLines`: `readingHeadLeadEm`/`readingHeadTailEm` × `styledLayoutParams.TextSize`; the paragraph after a heading skips its own gap | `reading_styled_super.go`: `readingTitleGapEm × size` | **The reporter page's paragraph gap is zero**, so anything figured "from the paragraph gap" vanishes on a wide window. Figure air from the text size. |
+| **Android** | `BtBridge.java` `applyParagraphAir`: the importer's blank separator line takes an exact height (`PARA_GAP_EM`); the compact page has no blank line, `INDENT_MARKER` → `LeadingMarginSpan` `INDENT_EM` × text | same sweep: `HEAD_LEAD_EM` / `HEAD_TAIL_EM` on the separator either side; on the compact page an `AirSpan` in the heading line's ascent and the next line's | the blank line after the title takes `TITLE_GAP_EM` | **`Html.fromHtml` separates paragraphs with a blank LINE** whose height is the pane's pitch plus `setLineHeight`'s extra — not a margin. A `LineHeightSpan` runs for every line of its paragraph over one reused `FontMetricsInt`: inflate only the line named, and put the metrics back on the next call (see `NoteBandSpan`). The wash paints full line boxes, so reserved air must be subtracted from wash rects. |
+| **web** | `cmd/websitegen/assets.go`: `--pgap` = `__PARA_GAP__` × body; `0rem` + `text-indent:__INDENT__` from 46rem up | `.text .sec`: `font-size:1em`, `margin:__HEAD_LEAD__ 0 __HEAD_TAIL__` | `p.pst{margin:0 0 __TITLE_GAP__}` | **The heading is an `<h2>`** for the outline, whose browser default is `font-size:1.5em`: leaving the size out is not inheriting. Margins figured from `--pgap` are zero on the reporter page. |
 
 ### To change one thing, touch these
 
-- **Heading lead or tail**: `reading.go` (`p.sec`, `p.pre-sec`), `reading_styled_layout.go`
-  (`headingLeadAbove`, `headingLeadBelow`), `android/BtBridge.java` (`HEAD_LEAD_EM`,
-  `HEAD_TAIL_EM`), `cmd/websitegen/assets.go` (`.text .sec`). Tests:
-  `heading_lead_test.go` (Apple + Fyne), `cmd/websitegen/reading_size_test.go`
-  (`TestHeadingsAreSetAsThePanesSetThem`); the tint golden regenerates.
-- **Paragraph gap**: `reading.go` (`p` margin), `reading_styled_pane.go` (`paraGap`),
-  `BtBridge.java` (`PARA_GAP_EM`), `assets.go` (`--pgap`).
-- **Reporter indent**: `reading.go` `reporterIndentEm` (the Apple bridge reads it),
-  `reading_styled_pane.go` (`indent`), `BtBridge.java` (the `INDENT_MARKER` margin),
-  `assets.go` (`text-indent`).
-- **Title gap**: `reading.go` (`p.pst`), `reading_styled_super.go`, `assets.go` (`p.pst`),
-  Android (the separator rule).
-
-The direction of travel is the one the leading already took: the numbers
-live once in Go and every surface reads them or is tested against them.
-`headingLeadAbove`/`headingLeadBelow` are that already for the Fyne pane;
-the Apple stylesheet, the Android constants and the web literals are not yet
-bound to them.
+- **Any of the five numbers**: `reading_spacing.go`, and the matching Java constant in
+  `android/BtBridge.java` (the contract test names it). Nothing else.
+- **A surface's mechanism** (not the number): Apple `reading.go` (`p`, `p.sec`, `p.pre-sec`,
+  `p.pst`); Fyne `reading_styled_pane.go` (`paraGap`, `indent`), `reading_styled_layout.go`
+  (`appendHeadingLines`), `reading_styled_super.go`; Android `BtBridge.java`
+  (`applyParagraphAir`, the `INDENT_MARKER` margin); web `cmd/websitegen/assets.go`.
+  Tests: `reading_spacing_test.go`, `heading_lead_test.go`, `android_spacing_contract_test.go`,
+  `cmd/websitegen/spacing_test.go`, `cmd/websitegen/reading_size_test.go`.
+  The tint golden regenerates.
 
 ### Looking at it
 
 A spacing change is looked at on every surface before it ships, on a chapter
 with headings (the BSB has 3,091; the two World English editions have only
-Psalm 119's acrostic letters, so "no headings" there is the data):
+Psalm 119's acrostic letters, so "no headings" there is the data). The
+picture to take is the `headnote` fixture (docs/VISUAL_TESTS.md): a note on
+BSB John 11:17, the paragraph a section heading opens, so the paragraph
+before, the heading's lead and tail, the note band and the paragraph gap are
+all in one frame. The arrival pins the band to the top; scroll up a few
+lines.
 
 - desktop, native and both mimics: `go build -tags bibletextdev ./cmd/desktop`,
-  run with `BIBLETEXT_DEV_SWITCH=bsb` and `BIBLETEXT_MIMIC=linux` or `windows`;
-  bring the window to the front before `screencapture`;
-- iOS: `scripts/run-ios-sim.sh --dev`, then `xcrun simctl io booted screenshot`;
-- Android: `scripts/build-android.sh`, `adb install -r`, launch with
-  `am start -n uk.co.bibletext/org.golang.app.GoNativeActivity`, `adb exec-out
-  screencap -p`; the tablet AVD for the compact page;
-- web: `scripts/publish-site.sh --dry-run`, serve `build/site` locally, read the
-  computed styles in the browser rather than eyeballing.
+  run with `BIBLETEXT_DEV_NOTES=headnote` and `BIBLETEXT_MIMIC=linux` or
+  `windows`; bring the window to the front before `screencapture`, and scroll
+  with real wheel events (the Fyne pane takes them only after a mouse move
+  over it);
+- iOS: `scripts/run-ios-sim.sh --dev`, then `SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=headnote
+  xcrun simctl launch <udid> uk.co.bibletext` and `xcrun simctl io booted screenshot`;
+- Android: `BT_ANDROID_TAGS=bibletextdev scripts/build-android.sh`, `adb install -r`,
+  open the fixture's link with `am start -a android.intent.action.VIEW -d <link>`,
+  `adb exec-out screencap -p`; the tablet AVD for the compact page;
+- web: `go run ./cmd/websitegen -out build/site -offline`, serve `build/site`
+  locally, open the same link there, and read the computed styles in the
+  browser rather than eyeballing.
 
 ## Changing any of this safely
 

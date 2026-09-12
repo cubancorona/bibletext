@@ -10,7 +10,7 @@
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -172,7 +172,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -340,7 +340,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -504,7 +504,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -666,7 +666,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -828,7 +828,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -990,7 +990,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -1152,7 +1152,7 @@ text="¹ Therefore, there is now no condemnation. ² For\nthe law of the Spirit 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -1323,7 +1323,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -1500,7 +1500,7 @@ text="¹ The LORD is my shepherd;\nI shall not want.\n² He makes me lie down in
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -1656,7 +1656,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -1808,7 +1808,7 @@ text="¹⁵ that whoever believes in Him may have eternal\nlife. ¹⁶ For God s
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
@@ -1953,7 +1953,7 @@ text="⁴ His disciples replied to Him.\n⁵ “How many loaves do you have?” 
 		-webkit-font-smoothing: antialiased;
 		font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "onum" 1;
 	}p {
-		margin: 0 0 24px 0;
+		margin: 0 0 1em 0;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;

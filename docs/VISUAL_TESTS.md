@@ -37,6 +37,20 @@ Wipe the store first ("Delete all stored notes") — stale notes from earlier
 sessions change every count and every band, and an evening was once lost to
 exactly that.
 
+The one scenario for the READING PANE'S AIR: **headnote** (dev builds) — a
+received note on BSB John 11:17, the paragraph the section heading "Jesus
+Comforts Martha and Mary" opens, so one frame carries the paragraph before,
+the heading with its lead and tail, the note band and the noted paragraph:
+every vertical quantity `reading_spacing.go` governs, beside the note band it
+does not yet. The arrival pins the band to the top of the pane on every
+surface, so scroll up a few lines for the picture (the styled pane and the
+natives all take a real wheel or drag; the armed restore is not enough).
+Run it on every surface after touching spacing, and read it against the
+"Vertical spacing of the reading pane" table in `docs/READING_TYPOGRAPHY.md`.
+On Android and the web the same fixture is the link
+`ShareLinkURLWithNote("bsb", "John", 11, 17, 17, …)` opened by `am start`
+or in the browser.
+
 ## V1 — the collapsed state (pills), the sharpest fixture
 
 Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
