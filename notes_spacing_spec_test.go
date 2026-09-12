@@ -207,6 +207,9 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 		{
 			path: "reading_ios.go",
 			banned: map[string]string{
+				"fabs(sep - own) > 0.5": "a lift gated on the page's rhythm alone: the stack centres in " +
+					"WHATEVER air stands above its paragraph — a heading's tail or a title's gap as much " +
+					"as the paragraph gap — and stands down only at 0",
 				"kNotePad - 2, whoW": "the who row's -2 shim: it made the stated 12+14+4 rhythm " +
 					"describe a card whose real top padding was 10",
 				"kNoteTail - 1": "the tail's -1: a survival of the two-shape era that drew " +
@@ -264,10 +267,6 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"gReadingTV.textStorage, gNoteBands[b].para, paraGlyph, kNotePill);": "the " +
 					"single collapsed pill centres INSIDE btIOSStickerBandY, so placement " +
 					"and scroll target move together by construction",
-				"if (own <= 0 || fabs(sep - own) > 0.5) return 0;": "the lift fires only " +
-					"on the PAGE'S rhythm — the gap above must equal the noted " +
-					"paragraph's own after-spacing (a superscription's one-off margin " +
-					"is not the rhythm, and the reporter's 0 stands down for free)",
 				"return sep / 2;": "the lift IS half the separator — " +
 					"notePillSeparatorLift's /2, read from the previous paragraph's " +
 					"after-spacing, never a private constant",
@@ -287,8 +286,13 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"the list the sweep walks; an unrecorded band is unreachable by the " +
 					"take-back and survives as a phantom gap",
 				"gNoteShapeExtra = gNoteTail ? kNoteTail : 0;": "the tail's contribution to the " +
-					"card's shape must be resolved ONCE, in SetNote, so every band formula reads " +
-					"one scalar and none of them can branch differently",
+					"card's shape must be resolved ONCE, in SetNote; the band formulae read it " +
+					"through the drawn shape's extra (0 for a pill) and nowhere else",
+				"gNoteBandH = kNoteGapAbove + h + btIOSNoteShapeExtra() + kNoteGapBelow;": "the band " +
+					"reserves the DRAWN shape's extra: a pill has no tail, so no tail slot",
+				"gNoteView.frame = CGRectMake(x, y, w, h + btIOSNoteShapeExtra());": "the view is " +
+					"the drawn shape's height — no empty tail slot under a pill",
+				"if (inkY >= 0) { y = inkY; }": "the ink-centred answer must be USED, not just computed",
 				"if (gNoteTail) {": "the outline must gate the tail detour — a card that points " +
 					"at nothing must not draw a point",
 			},
@@ -310,6 +314,22 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"reservation above the card is the spec's constant alone",
 				"return kMacNoteGapAbove + kMacNotePill + kMacNoteGapBelow;": "the pill's band " +
 					"must be the spec's three terms",
+				"return sep / 2;": "the lift IS half the separator — notePillSeparatorLift's /2, " +
+					"read from the previous paragraph's after-spacing (the iOS twin's spelling)",
+				"- btMacPillSeparatorLift(ts, para);": "the per-paragraph pills must take the centering lift",
+				"CGFloat inkY = btMacPillStackInkTop(lm, ts, para, g.location, btMacPillStackH(bandIdx));": "the " +
+					"pills centre in the VISIBLE air where it can be measured (the iOS twin's rule)",
+				"CGFloat inkY = btMacPillStackInkTop(lm, ts, para, g.location, kMacNotePill);": "the single " +
+					"collapsed pill centres in the visible air too",
+				"if (inkY >= 0) return inkY;":                                 "…and that answer must be USED",
+				"if (inkY >= 0) { y = inkY + btMacBandStackAbove(bandIdx); }": "the pills' ink answer must be USED, below any co-tenant above",
+				"return textTop - kMacNoteGapBelow - stickerH - lift;":        "the box lift must reach the sticker's placement",
+				"gMacNoteBandH = btMacNoteTopGap(ts, para) + h + btMacNoteShapeExtra() + kMacNoteGapBelow;": "the band " +
+					"reserves the DRAWN shape's extra: a pill has no tail, so no tail slot",
+				"gMacNoteView.frame = NSMakeRect(x, y, w, h + btMacNoteShapeExtra());": "the view is the " +
+					"drawn shape's height — no empty tail slot under a pill",
+				"CGFloat lift = btMacNotePill() ? btMacPillSeparatorLift(ts, para) : 0;": "the single " +
+					"collapsed pill takes the lift and the open card does not (the pinned tail)",
 				"btMacTrashImage(kMacNoteTrashPt)": "the closing control's bin must be DRAWN, " +
 					"and drawn from FYNE's path so the app has one bin rather than two designs",
 				"if (gMacNoteVerbs == kMacNoteVerbsOwn) {":              "the iOS twin's reason",

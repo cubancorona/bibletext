@@ -1012,14 +1012,16 @@ static BOOL      gNoteOwn = NO;
 static NSInteger gNoteAnchorVerse = 0;   // the verse the note belongs to
 
 // gNoteTail is the PUSHED decision "does this card point at a passage", and
-// gNoteShapeExtra is that decision resolved to a height ONCE, here, so that no
-// band formula carries a branch.
-//
-// The formulae used to gate the tail's depth on "is it a pill" — the wrong
-// question, transcribed. "Is it collapsed" is not "does it point somewhere": a
-// note parked at chapter scope has no passage to point at, and a tail there
-// claims verse 1. Resolving the term once turns the transcriptions into a sum
-// of named terms with no local decision left in them to get wrong.
+// gNoteShapeExtra is that decision resolved to a height ONCE, here. The band
+// formulae read it through btIOSNoteShapeExtra, the DRAWN shape's extra: the
+// tail's depth when the shape is the card and it points at a passage, nothing
+// when the shape is a pill — two conditions, and both are the right question.
+// "Is it collapsed" was once made to stand in for "does it point somewhere",
+// which is the conflation this comment is about: a note parked at chapter
+// scope has no passage to point at, and a tail there claims verse 1; that
+// decision is pushed, not derived here. A pill's tail-lessness is the other
+// condition, and forgetting it reserved the card's tail slot, empty, under
+// every collapsed sticker.
 // The verb sets, in noteChrome.verbs()'s own order (notes_chrome.go). A
 // contract test holds these three names against that iota.
 enum { kNoteVerbsNone = 0, kNoteVerbsReceived = 1, kNoteVerbsOwn = 2 };
@@ -1061,6 +1063,13 @@ static NSString *gNoteCounts = nil;
 static int       gNoteVerbs = 1;        // kNoteVerbsReceived
 static BOOL      gNoteTail = YES;
 static CGFloat   gNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
+// btIOSNoteShapeExtra is the DRAWN shape's extra: the tail's depth under an
+// open card whose anchor names a passage, and nothing under a pill — a pill
+// has no tail whatever its anchor says, and the band and the view must not
+// keep the card's tail slot empty beneath it (that phantom sat the collapsed
+// sticker a tail's depth above where the spec puts a pill's bottom).
+static BOOL btIOSNotePill(void);
+static CGFloat btIOSNoteShapeExtra(void) { return btIOSNotePill() ? 0 : gNoteShapeExtra; }
 static CGFloat   gNoteTopInset = 0;      // band reserved above the FIRST paragraph
 static CAShapeLayer *gNoteCard = nil;    // the whole bubble: card + speech tail
 static CGFloat   gNoteBandH = 0;       // what we reserved, in points
@@ -1462,7 +1471,7 @@ static void btIOSInstallStickerBand(void) {
     // pill STACK centres across it at placement (btIOSPillSeparatorLift, the
     // notePillSeparatorLift mirror); the card never does (noteMetrics records
     // why).
-    gNoteBandH = kNoteGapAbove + h + gNoteShapeExtra + kNoteGapBelow;
+    gNoteBandH = kNoteGapAbove + h + btIOSNoteShapeExtra() + kNoteGapBelow;
 
     NSRange anchor = btIOSNoteAnchorRange(ts, ts.string, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
@@ -1872,7 +1881,7 @@ static void btIOSLayoutNote(void) {
     // no longer matches what we need, reserve again and let the layout settle;
     // the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = kNoteGapAbove + h + gNoteShapeExtra + kNoteGapBelow;
+    CGFloat want = kNoteGapAbove + h + btIOSNoteShapeExtra() + kNoteGapBelow;
     if (!reconciling && fabs(want - gNoteBandH) > 1.0) {
         reconciling = YES;
         btIOSInstallNote();
@@ -1895,7 +1904,7 @@ static void btIOSLayoutNote(void) {
         return;
     }
 
-    gNoteView.frame = CGRectMake(x, y, w, h + gNoteShapeExtra);
+    gNoteView.frame = CGRectMake(x, y, w, h + btIOSNoteShapeExtra());
 
     // The card fills the top; the tail hangs under its left shoulder, pointing
     // down at the passage the note is about. One path for both.
@@ -2034,17 +2043,15 @@ static CGFloat btIOSPillSeparatorLift(NSTextStorage *ts, NSRange para) {
     }
     NSParagraphStyle *pv = [ts attribute:NSParagraphStyleAttributeName
                                  atIndex:para.location - 1 effectiveRange:NULL];
-    NSParagraphStyle *ownStyle = [ts attribute:NSParagraphStyleAttributeName
-                                      atIndex:para.location effectiveRange:NULL];
+    // WHATEVER air the page put above this paragraph is the air the reader
+    // sees the stack sit in: the page's own separator, a section heading's
+    // tail, a psalm title's gap — read off the layout, never a constant. An
+    // earlier gate lifted for the page's rhythm alone and stood down under a
+    // heading or a title, where the pill then hugged the passage with all
+    // the air piled above it; the styled pane and the web read the same
+    // separator, and Android measures the same ink.
     CGFloat sep = pv ? pv.paragraphSpacing : 0;
-    // The PAGE'S rhythm only: lift when the gap above is the same separator
-    // every scripture paragraph carries — read off the noted paragraph's OWN
-    // after-spacing, never a constant. A Psalm superscription's smaller title
-    // margin is a one-off, not the rhythm, and centring across it broke the
-    // reporter layout's pixel-identity (the title margin is emitted on every
-    // layout); the mismatch stands the lift down there on all of them.
-    CGFloat own = ownStyle ? ownStyle.paragraphSpacing : 0;
-    if (own <= 0 || fabs(sep - own) > 0.5) return 0;
+    if (sep <= 0) return 0;
     return sep / 2;
 }
 

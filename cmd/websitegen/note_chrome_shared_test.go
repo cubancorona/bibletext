@@ -76,7 +76,11 @@ func TestWebReaderNoteChromeComesFromTheSharedFunctions(t *testing.T) {
 		fmt.Sprintf("margin:%dpx 0 %dpx;", m, below),
 		fmt.Sprintf(".note.notail{margin-bottom:%dpx}", bibletext.WebNoteGapBelowPx()),
 		fmt.Sprintf("margin:calc(%dpx - var(--pgap, 0rem)/2) 0 calc(%dpx + var(--pgap, 0rem)/2);", m, bibletext.WebNoteGapBelowPx()),
-		fmt.Sprintf(".text .sec + .notechip, .notechip.notail{margin:%dpx 0 %dpx}", m, bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf(".text .notechip:first-child, .notechip.notail{margin:%dpx 0 %dpx}", m, bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf(".text .sec + .notechip{margin:calc(%dpx - var(--htail)/2) 0 calc(%dpx + var(--htail)/2)}", m, bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf(".text p.pst + .notechip{margin:calc(%dpx - var(--tgap)/2) 0 calc(%dpx + var(--tgap)/2)}", m, bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf("--htail:calc(%s * ", strconv.FormatFloat(bibletext.ReadingHeadTailEm(), 'f', -1, 64)),
+		fmt.Sprintf("--tgap:calc(%s * ", strconv.FormatFloat(bibletext.ReadingTitleGapEm(), 'f', -1, 64)),
 		fmt.Sprintf("min-height:%dpx; min-width:%dpx;", bibletext.WebNotePillHPx(), bibletext.WebNotePillMinWPx()),
 		fmt.Sprintf("padding:.3rem %dpx;", bibletext.WebNotePillPadXPx()),
 		"box-sizing:border-box;\n  bottom:calc(-" + webNoteTailHalf() + "px - 1px);",
@@ -99,7 +103,10 @@ func TestWebReaderNoteChromeComesFromTheSharedFunctions(t *testing.T) {
 		".note.notail{": {"margin-bottom:__NOTE_GAP_BELOW__px"},
 		".note::after{": {"box-sizing:border-box;", "bottom:calc(-__NOTE_TAIL_HALF__px - 1px);", "width:__NOTE_TAIL_SIDE__px; height:__NOTE_TAIL_SIDE__px;"},
 		".notechip{":    {"min-height:__NOTE_PILL_H__px; min-width:__NOTE_PILL_MIN_W__px;", "margin:calc(__NOTE_GAP_ABOVE__px - var(--pgap, 0rem)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--pgap, 0rem)/2);", "padding:.3rem __NOTE_PILL_PAD_X__px;"},
-		".text .notechip:first-child, .text p.pst + .notechip": {".text .sec + .notechip", "margin:__NOTE_GAP_ABOVE__px 0 __NOTE_GAP_BELOW__px"},
+		".text .notechip:first-child, .notechip.notail{": {"margin:__NOTE_GAP_ABOVE__px 0 __NOTE_GAP_BELOW__px"},
+		".text .sec + .notechip{":                        {"calc(__NOTE_GAP_ABOVE__px - var(--htail)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--htail)/2)"},
+		".text p.pst + .notechip{":                       {"calc(__NOTE_GAP_ABOVE__px - var(--tgap)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--tgap)/2)"},
+		".text{--pgap:":                                  {"--htail:calc(__HEAD_TAIL_FACTOR__ * __SCRIPTURE_REM__)", "--tgap:calc(__TITLE_GAP_FACTOR__ * __SCRIPTURE_REM__)"},
 	} {
 		r := rule(sel)
 		for _, w := range wants {

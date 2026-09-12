@@ -48,20 +48,31 @@ first, then Android after the Play closed-testing review clears — see the
 rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
-## A collapsed note pill directly under a section heading: the surfaces disagree
+## Android's compact page: a pill under a heading or a title stands down
 
-The pill's centering rule (`notePillSeparatorLift`: the pill rises half the
-paragraph separator above its band top, so it sits centred in the air a
-reader sees between two paragraphs) assumes the air above the band is the
-paragraph gap. When the noted paragraph is the one a section heading opens,
-the air above is the heading's 0.35em tail instead. iOS stands the lift down
-whenever the air above is not the page's rhythm (`btIOSPillSeparatorLift`),
-and since 12 Sep 2026 the web does the same (`.text .sec + .notechip`);
-Android centres the pill in the measured ink gap, and the styled pane lifts
-by `paraGap` unconditionally (`reading_styled_pane.go`), so under a heading
-its pill climbs into the tail. Look at the styled pane and Android with the
-`headnote` fixture minimized and settle one rule. Not urgent: an open card is
-unaffected, and a pill under a heading is a rarer arrival.
+The one surface left out of the pill rule (below). On Android's compact page
+— phone landscape reading — `Html.fromHtml` puts no blank separator line
+between paragraphs, so the heading's tail rides as an ascent-mode `AirSpan` on
+the next paragraph's first line and `btPillStackInkTop` has no separator line
+to measure; it returns -1 and the pill keeps the band-top placement. A psalm
+title gets no air on that page at all (`TITLE_GAP_EM` is applied only in the
+blank-line branch). Centring there needs the ascent-mode air read back off
+the span rather than off a line. Rare: it needs landscape reading, a note,
+minimized, on the paragraph a heading or a title opens.
+
+## A collapsed note pill directly under a section heading — DONE 12 Sep 2026
+
+The surfaces disagreed: iOS and the web stood the centering lift down when
+the air above was not the page's rhythm, Android centred in the measured
+ink, and the styled pane lifted by the paragraph gap even under a heading,
+where the air above is only the 0.35em tail. One rule now, the spec's own
+doctrine: the stack centres in whatever air the page put above its paragraph
+— the paragraph gap, a heading's tail, a psalm title's gap — and stands down
+only at 0 or beside an open card. The styled layout records each band's
+separator (`noteBand.SepAbove`), iOS reads the previous paragraph's
+after-spacing without the rhythm gate, macOS gained the same mirror
+(`btMacPillSeparatorLift`), and the web's `.text .sec + .notechip` and
+`.text p.pst + .notechip` centre in `--htail` and `--tgap`.
 
 ## A non-default translation served from a superseded cache epoch is never refreshed
 

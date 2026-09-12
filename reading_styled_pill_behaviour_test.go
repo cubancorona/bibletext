@@ -1211,10 +1211,12 @@ func TestOwnNessComesFromTheSamePredicateAsTheVerbs(t *testing.T) {
 
 // The centering rule (notePillSeparatorLift): on the narrow layout a collapsed
 // stack whose bottom neighbour is the passage rises half the paragraph
-// separator above its band top, so the air reads the same on both sides. The
-// chapter-top band (Line 0) has no separator above it and stays put, and the
-// reporter layout's paraGap is 0, so nothing moves there — the same absence of
-// a width branch the rule promises in notes_bubble.go.
+// separator above its band top, so the air reads the same on both sides. In
+// this untitled fixture the chapter-top band (Line 0) has no separator above
+// it and stays put, and the reporter layout's paraGap is 0, so nothing moves
+// there — the same absence of a width branch the rule promises in
+// notes_bubble.go. (A heading or a title above a paragraph is a separator
+// too; TestStyledPillsCentreUnderAHeadingAndATitle covers those.)
 func TestNarrowPillsCentreAcrossTheParagraphSeparator(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1238,7 +1240,7 @@ func TestNarrowPillsCentreAcrossTheParagraphSeparator(t *testing.T) {
 		if len(pane.pillGeoms) != 2 {
 			t.Fatalf("want 2 pills, got %d", len(pane.pillGeoms))
 		}
-		paraGap := pane.styledLineHeight() * 0.65
+		paraGap := float32(readingParaGapEm) * pane.textSize
 		if !wantLifted {
 			paraGap = 0
 		}
@@ -1324,7 +1326,7 @@ func TestNarrowSinglePillCentresAndTheCardDoesNot(t *testing.T) {
 			}
 			want := p.lay.BandY + styledNoteGapAbv
 			if tc.pill {
-				want -= notePillSeparatorLift(p.styledLineHeight() * 0.65)
+				want -= notePillSeparatorLift(float32(readingParaGapEm) * p.textSize)
 			}
 			if got := g.card.Y; got < want-0.6 || got > want+0.6 {
 				t.Errorf("shape sits at %.1f, want %.1f (band top %.1f)",
@@ -1388,5 +1390,146 @@ func TestSharedSpotSinglePillKeepsItsBandPlacement(t *testing.T) {
 		t.Errorf("the shared-spot own pill sits at %.1f, want %.1f (band top %.1f) — "+
 			"it must keep its band placement, not lift toward the stack above",
 			got, want, pane.lay.BandY)
+	}
+}
+
+// THE SEPARATOR A BAND RECORDS IS WHATEVER AIR THE PAGE PUT ABOVE ITS
+// PARAGRAPH — the paragraph gap, a section heading's tail, a psalm title's
+// gap, nothing at the bare chapter top — and every band on one paragraph
+// carries the same value, so the layout's own numbers, not a constant, drive
+// notePillSeparatorLift. Mutations: the tail replaced by the paragraph gap
+// under a heading (the old unconditional lift); the title's gap not
+// recorded above the first paragraph.
+func TestStyledBandsRecordTheAirAboveTheirParagraph(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	st := headedChapterState()
+	p := testLayoutParams
+	p.TextSize = 20
+	p.ParaGap = 11
+	p.TitleGap = 9
+	// The three separators must be pairwise distinct, or a branch that
+	// records the wrong one passes: the heading's tail is 0.35em of the size.
+	if tail := float32(readingHeadTailEm) * p.TextSize; p.TitleGap == tail || p.ParaGap == tail || p.TitleGap == p.ParaGap {
+		t.Fatalf("fixture separators collide (tail %.2f, gap %.2f, title %.2f)", tail, p.ParaGap, p.TitleGap)
+	}
+	p.Bands = []bandRequest{
+		{Key: 1, Verse: 1, H: 30, Count: 1}, // paragraph 0, under the title
+		{Key: 2, Verse: 3, H: 30, Count: 1}, // the paragraph the heading opens
+		{Key: 3, Verse: 4, H: 30, Count: 1}, // a plain paragraph after a gap
+	}
+	lay := layoutChapter(st, st.Bible.GetChapter("Matthew", 5), p, fixedMeasure)
+	if len(lay.Bands) != 3 {
+		t.Fatalf("want 3 bands, got %d", len(lay.Bands))
+	}
+	near := func(a, b float32) bool { return a-b < 0.01 && b-a < 0.01 }
+	for _, want := range []struct {
+		key  int
+		sep  float32
+		what string
+	}{
+		{1, p.TitleGap, "the title's gap above the first paragraph"},
+		{2, float32(readingHeadTailEm) * p.TextSize, "the heading's tail"},
+		{3, p.ParaGap, "the paragraph gap"},
+	} {
+		var b *noteBand
+		for i := range lay.Bands {
+			if lay.Bands[i].Key == want.key {
+				b = &lay.Bands[i]
+			}
+		}
+		if b == nil {
+			t.Fatalf("band %d not reserved", want.key)
+		}
+		if !near(b.SepAbove, want.sep) {
+			t.Errorf("band %d records %.2f above its paragraph; want %s = %.2f", want.key, b.SepAbove, want.what, want.sep)
+		}
+	}
+	// The single band, on the paragraph the heading opens, records the tail
+	// too; and with no title the first paragraph records nothing.
+	p.Bands = nil
+	p.BandVerse, p.BandH = 3, 30
+	if lay := layoutChapter(st, st.Bible.GetChapter("Matthew", 5), p, fixedMeasure); !near(lay.BandSepAbove, float32(readingHeadTailEm)*p.TextSize) {
+		t.Errorf("the single band records %.2f above the heading's paragraph; want the tail %.2f", lay.BandSepAbove, float32(readingHeadTailEm)*p.TextSize)
+	}
+	p.TitleGap = 0
+	p.BandVerse = 1
+	if lay := layoutChapter(st, st.Bible.GetChapter("Matthew", 5), p, fixedMeasure); lay.BandSepAbove != 0 {
+		t.Errorf("the first paragraph of an untitled chapter records %.2f above itself; want 0", lay.BandSepAbove)
+	}
+}
+
+// THE PANE LIFTS BY THE SEPARATOR THE LAYOUT RECORDED, not by the paragraph
+// gap: a collapsed pill on the paragraph a section heading opens rises half
+// the heading's tail, on the narrow AND the reporter page (the tail is there
+// on both); a pill on verse 1 of a titled psalm rises half the title's gap,
+// though its band is on line 0. Mutations: the old unconditional
+// notePillSeparatorLift(paraGap) (wrong on the narrow page under a heading,
+// no lift at all on the reporter page); the old Line-0 stand-down (no lift
+// under the title).
+func TestStyledPillsCentreUnderAHeadingAndATitle(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	for _, tc := range []struct {
+		name    string
+		heading bool
+		verse   int
+		width   float32
+		sep     func(p *styledReadingPane) float32
+	}{
+		{"heading, narrow", true, 5, 320, func(p *styledReadingPane) float32 { return float32(readingHeadTailEm) * p.textSize }},
+		{"heading, reporter", true, 5, 900, func(p *styledReadingPane) float32 { return float32(readingHeadTailEm) * p.textSize }},
+		{"title, narrow", false, 1, 320, func(p *styledReadingPane) float32 { return float32(readingTitleGapEm) * p.textSize }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setNotesEnabled(true)
+			deleteAllNotes(appPrefs())
+			defer deleteAllNotes(appPrefs())
+
+			st := psalm23State()
+			verses := longEnoughForTwoParagraphs()
+			st.Bible.Verses["John"] = map[int][]Verse{3: verses}
+			st.CurrentBook, st.CurrentChapter = "John", 3
+			if tc.heading {
+				st.Bible.Headings = map[string]map[int][]Heading{"John": {3: {{Text: "A fixture heading", Style: "heading", BeforeVerse: 5}}}}
+			} else {
+				st.Bible.Superscriptions = map[string]map[int]Superscription{"John": {3: {Text: "A fixture title."}}}
+			}
+			if _, ok := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
+				Book: "John", Chapter: 3, VerseLo: tc.verse,
+				Text: "A note measured under a heading or a title."}); !ok {
+				t.Fatal("could not store the fixture note")
+			}
+			applyNoteForCurrentChapter(st)
+			hideCurrentNote(st)
+			p := newStyledReadingPane(st, verses)
+			w := test.NewWindow(p)
+			defer w.Close()
+			w.Resize(fyne.NewSize(tc.width, 900))
+			p.Refresh()
+
+			g := p.noteGeom
+			if !g.present || !g.pill {
+				t.Fatalf("precondition: a collapsed pill (present=%v pill=%v)", g.present, g.pill)
+			}
+			if p.lay.BandLine < 0 {
+				t.Fatal("precondition: a band")
+			}
+			if tc.heading == (p.lay.BandLine == 0) {
+				t.Fatalf("precondition: the heading case is mid-chapter and the title case is line 0 (band line %d)", p.lay.BandLine)
+			}
+			if !tc.heading && !p.superGeom.present {
+				t.Fatal("precondition: the title is drawn")
+			}
+			sep := tc.sep(p)
+			if got := p.lay.BandSepAbove; got < sep-0.01 || got > sep+0.01 {
+				t.Errorf("the band records %.2f above its paragraph; want %.2f", got, sep)
+			}
+			want := p.lay.BandY + styledNoteGapAbv - notePillSeparatorLift(sep)
+			if got := g.card.Y; got < want-0.6 || got > want+0.6 {
+				t.Errorf("pill sits at %.1f, want %.1f (band top %.1f, separator %.2f)", got, want, p.lay.BandY, sep)
+			}
+		})
 	}
 }

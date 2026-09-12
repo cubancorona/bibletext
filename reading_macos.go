@@ -1761,10 +1761,15 @@ static BOOL          gMacNoteOwn = NO;
 static NSInteger     gMacNoteAnchorVerse = 0;
 
 // gMacNoteTail is the PUSHED decision "does this card point at a passage", and
-// gMacNoteShapeExtra is that decision resolved to a height ONCE so no band
-// formula carries a branch. The formulae used to gate the tail on
-// btMacNotePill() — "is it collapsed", which is a different question: a note
-// parked at chapter scope points at nothing, and a tail there claims verse 1.
+// gMacNoteShapeExtra is that decision resolved to a height ONCE. The band
+// formulae read it through btMacNoteShapeExtra, the DRAWN shape's extra: the
+// tail's depth when the shape is the card and it points at a passage, nothing
+// when the shape is a pill — two conditions, both the right question. "Is it
+// collapsed" once stood in for "does it point somewhere" (a note parked at
+// chapter scope points at nothing, and a tail there claims verse 1); that
+// decision is pushed. A pill's tail-lessness is the other condition, and
+// forgetting it reserved the card's tail slot, empty, under every collapsed
+// sticker.
 // The twin of gNoteVerbs (reading_ios.go): WHICH CONTROLS, decided in Go.
 // The twin of gNoteCounts (reading_ios.go): the substring of the who line
 // that is a control, composed in Go and FOUND here by a backwards search.
@@ -1772,6 +1777,14 @@ static NSString *gMacNoteCounts = nil;
 static int       gMacNoteVerbs = 1;   // kMacNoteVerbsReceived
 static BOOL      gMacNoteTail = YES;
 static CGFloat   gMacNoteShapeExtra = 0;   // set by SetNote, which always precedes a draw
+// btMacNoteShapeExtra is the DRAWN shape's extra (the iOS twin is
+// btIOSNoteShapeExtra): the tail's depth under an open card whose anchor
+// names a passage, and nothing under a pill — a pill has no tail whatever its
+// anchor says, and the band and the view must not keep the card's tail slot
+// empty beneath it (that phantom sat the collapsed sticker a tail's depth
+// above where the spec puts a pill's bottom).
+static BOOL btMacNotePill(void);
+static CGFloat btMacNoteShapeExtra(void) { return btMacNotePill() ? 0 : gMacNoteShapeExtra; }
 static CGFloat       gMacNoteBandH = 0;
 static CGFloat       gMacNoteTopInset = 0;
 static CGFloat gMacNoteBg[3]     = {0.99, 0.98, 0.97};
@@ -2059,7 +2072,7 @@ static void btMacInstallStickerBand(void) {
     if (para.location == NSNotFound || NSMaxRange(para) > ts.length) {
         return;
     }
-    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + gMacNoteShapeExtra + kMacNoteGapBelow;
+    gMacNoteBandH = btMacNoteTopGap(ts, para) + h + btMacNoteShapeExtra() + kMacNoteGapBelow;
     if (getenv("BT_NOTE_GEOM")) fprintf(stderr, "[geom] install: w=%.1f h=%.1f topGap=%.1f bandH=%.1f para={%lu,%lu}\n",
         w, h, btMacNoteTopGap(ts, para), gMacNoteBandH, (unsigned long)para.location, (unsigned long)para.length);
     if (para.location == 0) {
@@ -2092,6 +2105,92 @@ static void btMacInstallStickerBand(void) {
 // paragraph is the first) summing into the container inset.
 static CGFloat btMacPillBandH(void) {
     return kMacNoteGapAbove + kMacNotePill + kMacNoteGapBelow;
+}
+
+// btMacPillSeparatorLift is notePillSeparatorLift's mirror here (the iOS twin
+// is btIOSPillSeparatorLift; notes_bubble.go owns the rule): a collapsed
+// stack whose bottom neighbour is the PASSAGE centres in the air above it,
+// lifting half the separator above its band top. The separator is the
+// PREVIOUS paragraph's after-spacing — a section heading's tail or a psalm
+// title's gap on this reporter page, whose plain paragraphs carry 0 — so the
+// plain case falls out with no branch. Zero when an OPEN card shares the
+// spot: the card is the stack's bottom neighbour there, and the card never
+// centres — its tail's distance to the passage is the pinned invariant.
+static CGFloat btMacPillSeparatorLift(NSTextStorage *ts, NSRange para) {
+    if (ts == nil || para.location == NSNotFound || para.location == 0 ||
+        para.location > ts.length) return 0;
+    for (int b = 0; b < gMacNoteBandCount; b++) {
+        if (gMacNoteBands[b].key != kMacNoteStickerBandKey) continue;
+        if (gMacNoteBands[b].para.location == para.location && !btMacNotePill()) return 0;
+        break;
+    }
+    NSParagraphStyle *pv = [ts attribute:NSParagraphStyleAttributeName
+                                 atIndex:para.location - 1 effectiveRange:NULL];
+    CGFloat sep = pv ? pv.paragraphSpacing : 0;
+    if (sep <= 0) return 0;
+    return sep / 2;
+}
+
+// btMacPillStackH is the drawn height of the pill stack sharing a spot (the
+// iOS twin is btIOSPillStackH): n pills and the gaps between them. The
+// sticker never counts — a card-sharing spot stands down before this.
+static CGFloat btMacPillStackH(int bi) {
+    if (bi < 0 || bi >= gMacNoteBandCount) return kMacNotePill;
+    BTMacNoteBandRes *me = &gMacNoteBands[bi];
+    int n = 0;
+    for (int b = 0; b < gMacNoteBandCount; b++) {
+        BTMacNoteBandRes *o = &gMacNoteBands[b];
+        if (o->key == kMacNoteStickerBandKey) continue;
+        BOOL sameSpot = (me->para.location == NSNotFound)
+            ? (o->para.location == NSNotFound)
+            : (o->para.location == me->para.location);
+        if (sameSpot) n++;
+    }
+    if (n < 1) n = 1;
+    return n * kMacNotePill + (n - 1) * (kMacNoteGapBelow + kMacNoteGapAbove);
+}
+
+// btMacPillStackInkTop is btIOSPillStackInkTop's twin: where a pill stack's
+// FIRST pill goes, in the text view's content coordinates, centred in the
+// VISIBLE inter-paragraph air — the ink bottom of whatever stands above to the
+// noted paragraph's first ink top. This import piles its leading ABOVE each
+// line's glyphs too, so the box answer (the separator lift alone) sat the pill
+// a few points low. Ink bottom is the previous line's used-rect bottom plus
+// the font's descender; ink top is the BODY run's baseline minus its cap
+// height — the passage's own cap line, not the raised verse number's top.
+// Returns -1 to stand down — no separator above, an open card sharing the
+// spot (btMacPillSeparatorLift's gates), degenerate geometry — and the caller
+// keeps the band arithmetic.
+static CGFloat btMacPillStackInkTop(NSLayoutManager *lm, NSTextStorage *ts,
+                                    NSRange para, NSUInteger paraGlyph, CGFloat stackH) {
+    if (lm == nil || btMacPillSeparatorLift(ts, para) <= 0) return -1;
+    NSRange pg = [lm glyphRangeForCharacterRange:NSMakeRange(para.location - 1, 1)
+                             actualCharacterRange:NULL];
+    if (pg.length == 0) return -1;
+    NSRect pUsed = [lm lineFragmentUsedRectForGlyphAtIndex:pg.location effectiveRange:NULL];
+    NSFont *pf = [ts attribute:NSFontAttributeName atIndex:para.location - 1 effectiveRange:NULL];
+    NSRange lineGlyphs;
+    NSRect nFrag = [lm lineFragmentRectForGlyphAtIndex:paraGlyph effectiveRange:&lineGlyphs];
+    NSRange lineChars = [lm characterRangeForGlyphRange:lineGlyphs actualGlyphRange:NULL];
+    __block NSFont *body = nil;
+    __block NSUInteger bodyChar = lineChars.location;
+    [ts enumerateAttribute:NSFontAttributeName inRange:lineChars options:0
+                usingBlock:^(id v, NSRange r, BOOL *stop) {
+        NSFont *f = v;
+        if (f != nil && (body == nil || f.pointSize > body.pointSize)) {
+            body = f;
+            bodyChar = r.location;
+        }
+    }];
+    if (body == nil) return -1;
+    NSRange bg = [lm glyphRangeForCharacterRange:NSMakeRange(bodyChar, 1) actualCharacterRange:NULL];
+    if (bg.length == 0) return -1;
+    NSPoint bLoc = [lm locationForGlyphAtIndex:bg.location];
+    CGFloat inkBottom = NSMaxY(pUsed) + (pf ? pf.descender : 0);
+    CGFloat inkTop = NSMinY(nFrag) + bLoc.y - body.capHeight;
+    CGFloat gap = inkTop - inkBottom;
+    if (gap <= stackH) return -1;
+    return inkBottom + (gap - stackH) / 2 + gTextView.textContainerInset.height;
 }
 
 // btMacBandStackAbove is the height of the co-tenants stacked ABOVE band bi
@@ -2179,9 +2278,13 @@ static void btMacInstallPillBands(void) {
 }
 
 // btMacEnsurePillViews / btMacLayoutPillViews — the iOS twins, with NSButton.
-// The pill hangs ABOVE its paragraph's text top by the spec's gap — the
-// bottom-up arithmetic this pane uses for the sticker, for the documented
-// reason the fragment-origin approach failed here twice.
+// A pill centres in the air above its paragraph: in the visible ink where
+// btMacPillStackInkTop can measure it, by btMacPillSeparatorLift's half-
+// separator otherwise, standing down only at a 0 separator (the reporter
+// page's plain paragraphs, the chapter top) or beside an open card — where it
+// hangs the spec's gap above the text top, the bottom-up arithmetic this
+// pane uses for the sticker, for the documented reason the fragment-origin
+// approach failed here twice.
 static void btMacEnsurePillViews(void) {
     if (gMacNotePillViews == nil) gMacNotePillViews = [NSMutableArray array];
     for (NSButton *b in gMacNotePillViews) [b removeFromSuperview];
@@ -2249,8 +2352,16 @@ static void btMacLayoutPillViews(void) {
             // Hang the pill a gap above where the reader sees the passage
             // start — the sticker's own bottom-up rule (btMacNoteStickerY) —
             // less whatever co-tenants sit between it and the text: the
-            // sticker's share and any later pill's (btMacBandStackBelow).
-            y = textTopRaw + inset - btMacBandStackBelow(bandIdx) - kMacNoteGapBelow - kMacNotePill;
+            // sticker's share and any later pill's (btMacBandStackBelow) —
+            // and lifted by half the separator above the paragraph, so the
+            // stack centres in the air the reader sees (btMacPillSeparatorLift).
+            y = textTopRaw + inset - btMacBandStackBelow(bandIdx) - kMacNoteGapBelow - kMacNotePill
+                - btMacPillSeparatorLift(ts, para);
+            // …and, where the ink can be measured, centred in the VISIBLE air
+            // instead (the iOS twin's rule): this import piles its leading
+            // above the glyphs, so the box lift alone read a few points low.
+            CGFloat inkY = btMacPillStackInkTop(lm, ts, para, g.location, btMacPillStackH(bandIdx));
+            if (inkY >= 0) { y = inkY + btMacBandStackAbove(bandIdx); }
         } else {
             chip.hidden = YES;
             continue;
@@ -2470,7 +2581,7 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
     }
     CGFloat textTop = textTopRaw + inset;
     CGFloat stickerH = btMacNoteHeightForWidth(tc.size.width - 2 * tc.lineFragmentPadding)
-                     + gMacNoteShapeExtra;
+                     + btMacNoteShapeExtra();
     if (getenv("BT_NOTE_GEOM")) {
         fprintf(stderr, "[geom] layout: used.y=%.1f frag.y=%.1f frag.h=%.1f inset=%.1f stickerH=%.1f "
                         "bandH=%.1f spacingBefore=%.1f y=%.1f\n",
@@ -2496,7 +2607,16 @@ static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
                 fragNow.origin.y, glyphInWin.origin.y, glyphInWin.size.height, cardInWin.origin.y, cardInWin.size.height);
         });
     }
-    return textTop - kMacNoteGapBelow - stickerH;
+    // The single collapsed pill centres in the air above like any stack (its
+    // stack is itself alone), in the visible ink where it can be measured
+    // and by the box lift otherwise; the open card never does — the pinned
+    // tail.
+    CGFloat lift = btMacNotePill() ? btMacPillSeparatorLift(ts, para) : 0;
+    if (btMacNotePill() && g.length > 0) {
+        CGFloat inkY = btMacPillStackInkTop(lm, ts, para, g.location, kMacNotePill);
+        if (inkY >= 0) return inkY;
+    }
+    return textTop - kMacNoteGapBelow - stickerH - lift;
 }
 
 // Put the sticker in the band the text reserved. Runs after every layout.
@@ -2524,7 +2644,7 @@ static void btMacLayoutNote(void) {
     // reserved no longer matches what we need, reserve again and let the layout
     // settle; the flag stops that becoming a loop.
     static BOOL reconciling = NO;
-    CGFloat want = btMacNoteTopGap(ts, para) + h + gMacNoteShapeExtra + kMacNoteGapBelow;
+    CGFloat want = btMacNoteTopGap(ts, para) + h + btMacNoteShapeExtra() + kMacNoteGapBelow;
     if (!reconciling && fabs(want - gMacNoteBandH) > 1.0) {
         reconciling = YES;
         btMacInstallNote();
@@ -2551,7 +2671,7 @@ static void btMacLayoutNote(void) {
         return;
     }
 
-    gMacNoteView.frame = NSMakeRect(x, y, w, h + gMacNoteShapeExtra);
+    gMacNoteView.frame = NSMakeRect(x, y, w, h + btMacNoteShapeExtra());
     gMacNoteCard.frame = gMacNoteView.bounds;
     gMacNoteCard.path = btMacNoteBubblePath(w, h).CGPath;
 

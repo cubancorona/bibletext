@@ -329,6 +329,12 @@ func (p *styledReadingPane) relayout(width float32) {
 		// here made the reader's own note vanish the moment the pills appeared.
 		p.noteGeom = styledNoteGeom{}
 	}
+	// A psalm's title is the first paragraph's neighbour above, and its gap
+	// (reading_spacing.go) is the air a pill there centres in.
+	titleGap := float32(0)
+	if p.superGeom.present {
+		titleGap = float32(readingTitleGapEm) * p.textSize
+	}
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
 		Width:      avail,
 		LineHeight: lh,
@@ -337,6 +343,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		SpaceW:     p.measure(" ", runWord, false),
 		Indent:     indent,
 		TopPad:     p.superGeom.height,
+		TitleGap:   titleGap,
 		BandVerse:  p.noteAnchorVerse(),
 		BandH:      p.noteGeom.bandH(),
 		Bands:      pillReq,
@@ -362,13 +369,14 @@ func (p *styledReadingPane) relayout(width float32) {
 				g := p.pillGeoms[i]
 				// The centering rule (notePillSeparatorLift): a collapsed
 				// stack whose bottom neighbour is the passage rises half the
-				// paragraph separator, so the air reads the same on both
-				// sides. paraGap is already 0 on the reporter page; band
-				// Line 0 is paragraph 0, which has no separator above it;
-				// and a band sharing its line with an OPEN card keeps its
-				// band placement — the card owns the bottom air there.
-				lift := notePillSeparatorLift(paraGap)
-				if b.Line == 0 || (p.noteGeom.present && p.lay.BandLine == b.Line) {
+				// separator the layout put above its paragraph — the gap, a
+				// heading's tail, a title's gap; 0 at the bare chapter top
+				// and on the reporter page's plain paragraphs — so the air
+				// reads the same on both sides. A band sharing its line with
+				// an OPEN card keeps its band placement: the card owns the
+				// bottom air there.
+				lift := notePillSeparatorLift(b.SepAbove)
+				if p.noteGeom.present && p.lay.BandLine == b.Line {
 					lift = 0
 				}
 				g.place(p.insetX(), b.Y-lift)
@@ -386,15 +394,16 @@ func (p *styledReadingPane) relayout(width float32) {
 			p.noteGeom = styledNoteGeom{}
 		} else {
 			// The single collapsed pill takes the same centering lift as the
-			// per-paragraph stacks; the OPEN card never does — its tail's
-			// distance to the passage is the pinned invariant. Line 0 is
-			// paragraph 0: no separator above, no lift. And a pill SHARING
-			// its paragraph with a per-paragraph band keeps its band
-			// placement — the co-tenant stack's bottom neighbour is not the
-			// passage alone, so the whole stack stands down together (the
-			// band side's gate is the noteGeom.present check above).
+			// per-paragraph stacks, from the same separator the layout
+			// recorded (0 at the bare chapter top); the OPEN card never does
+			// — its tail's distance to the passage is the pinned invariant.
+			// And a pill SHARING its paragraph with a per-paragraph band
+			// keeps its band placement — the co-tenant stack's bottom
+			// neighbour is not the passage alone, so the whole stack stands
+			// down together (the band side's gate is the noteGeom.present
+			// check above).
 			lift := float32(0)
-			if p.noteGeom.pill && p.lay.BandLine > 0 {
+			if p.noteGeom.pill {
 				shared := false
 				for i := range p.lay.Bands {
 					if p.lay.Bands[i].Line == p.lay.BandLine {
@@ -403,7 +412,7 @@ func (p *styledReadingPane) relayout(width float32) {
 					}
 				}
 				if !shared {
-					lift = notePillSeparatorLift(paraGap)
+					lift = notePillSeparatorLift(p.lay.BandSepAbove)
 				}
 			}
 			p.noteGeom.place(p.insetX(), p.lay.BandY-lift)

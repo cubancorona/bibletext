@@ -138,6 +138,10 @@ type chapterLayout struct {
 	BandLastLine int
 	BandY        float32
 	BandH        float32
+	// BandSepAbove is the air the page put above the band's paragraph — the
+	// paragraph gap, a heading's tail, a psalm title's gap, 0 at the bare
+	// chapter top — which a collapsed pill centres in (notePillSeparatorLift).
+	BandSepAbove float32
 
 	// Bands is every band reserved by the multi-band request, in line order.
 	// Empty whenever the single-band fields above are in force, so a reader of
@@ -169,6 +173,10 @@ type noteBand struct {
 	Y, H     float32
 	Verse    int // the anchor verse that found this paragraph
 	Count    int // notes this paragraph carries, for the pill's own label
+	// SepAbove is the air the page put above this band's paragraph (see
+	// styledLayout.BandSepAbove); every band on one paragraph carries the
+	// same value, so a stack of them moves as one.
+	SepAbove float32
 }
 
 // styledMeasure measures one run's text width at its rendered size.
@@ -200,6 +208,11 @@ type styledLayoutParams struct {
 	// title never enters the selection text model, so lay.Text is
 	// byte-identical with and without it and copy stays clean.
 	TopPad float32
+	// TitleGap is the air between a psalm's superscription and its first
+	// paragraph, when there is one (0 otherwise): the first paragraph's
+	// separator above, for a pill's centering. GEOMETRY ONLY, like TopPad,
+	// whose measure already includes it.
+	TitleGap float32
 
 	// BandVerse / BandH reserve vertical room ABOVE that verse's first line
 	// for the in-text note sticker (reading_styled_note.go). BandH is measured
@@ -270,6 +283,14 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			continue
 		}
 		pi++
+		// The air the page puts above this paragraph, which a collapsed pill
+		// stack centres in (notePillSeparatorLift): a heading's tail when one
+		// stands between, the paragraph gap otherwise, a psalm title's gap
+		// above the first paragraph, and nothing at the chapter's bare top.
+		sepAbove := p.TitleGap
+		if afterHeading {
+			sepAbove = float32(readingHeadTailEm) * p.TextSize
+		}
 		if pi > 0 {
 			// One half of the paragraph separator; the other "\n" is written
 			// when the paragraph's first unit opens its line, so the model
@@ -280,6 +301,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			appendText("\n")
 			if !afterHeading {
 				y += p.ParaGap
+				sepAbove = p.ParaGap
 			}
 		}
 		afterHeading = false
@@ -324,12 +346,14 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			lay.Bands = append(lay.Bands, noteBand{
 				Key: br.Key, Line: len(lay.Lines), LastLine: -1,
 				Y: y - br.H, H: br.H, Verse: br.Verse, Count: br.Count,
+				SepAbove: sepAbove,
 			})
 		}
 		if p.BandH > 0 && lay.BandLine < 0 && paraCarriesVerse(para, p.BandVerse) {
 			y += p.BandH
 			lay.BandLine = len(lay.Lines)
 			lay.BandY, lay.BandH = y-p.BandH, p.BandH
+			lay.BandSepAbove = sepAbove
 			singleOpensHere = true
 		}
 

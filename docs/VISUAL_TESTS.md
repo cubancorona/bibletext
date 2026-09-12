@@ -61,10 +61,15 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] Mid-chapter pills read CENTERED between the paragraphs on layouts with
       a paragraph separator (phones, narrow styled, narrow web): the air
       above ≈ the air below (the centering rule, notePillSeparatorLift —
-      the pill rises half the separator above its band top). On reporter
-      layouts (iPad/macOS/wide) nothing moved: GapAbove into the band as
-      always. The OPEN card never centres — its tail stays the pinned 10
-      above the passage.
+      the pill rises half the separator above its band top). Under a
+      section heading or a psalm title the separator is the heading's tail
+      or the title's gap, on every layout including the reporter ones, and
+      the pill centres in that (the `headnote` fixture, minimized) — except
+      Android's compact page, whose import has no separator line to measure
+      and stands the pill down there (docs/BACKLOG.md). On
+      reporter layouts (iPad/macOS/wide) a pill under a plain paragraph has
+      not moved: GapAbove into the band as always. The OPEN card never
+      centres — its tail stays the pinned 10 above the passage.
 - [ ] The chapter top carries the co-tenant STACK: the chapter-scope band
       and the first paragraph's own, two pills, fully visible, not
       overlapping, not clipped.

@@ -68,6 +68,10 @@ func readerCSS(f webFonts) string {
 		"__NOTE_PILL_H__", strconv.Itoa(bibletext.WebNotePillHPx()),
 		"__NOTE_PILL_PAD_X__", strconv.Itoa(bibletext.WebNotePillPadXPx()),
 		"__NOTE_PILL_MIN_W__", strconv.Itoa(bibletext.WebNotePillMinWPx()),
+		// The heading's tail and the title's gap as FACTORS of the body size
+		// (--htail, --tgap), so a pill under either can centre in that air.
+		"__HEAD_TAIL_FACTOR__", strconv.FormatFloat(bibletext.ReadingHeadTailEm(), 'f', -1, 64),
+		"__TITLE_GAP_FACTOR__", strconv.FormatFloat(bibletext.ReadingTitleGapEm(), 'f', -1, 64),
 		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
 		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
 		// The reading pane's air, from the one place the numbers live
@@ -346,7 +350,7 @@ body{
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
 }
-.text{--pgap:calc(__PARA_GAP__ * __SCRIPTURE_REM__)}
+.text{--pgap:calc(__PARA_GAP__ * __SCRIPTURE_REM__); --htail:calc(__HEAD_TAIL_FACTOR__ * __SCRIPTURE_REM__); --tgap:calc(__TITLE_GAP_FACTOR__ * __SCRIPTURE_REM__)}
 .text p{margin:0 0 var(--pgap); text-align:justify; hyphens:auto; -webkit-hyphens:auto}
 /* SECTION HEADINGS, as the app panes set them (reading.go, p.sec): the body's
    own size, bold, left, no indent — a heading is a label, and the reporter
@@ -554,12 +558,13 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    margin collapsing with the neighbouring paragraphs) and vertical-align:top
    keeps the anonymous line box's strut from eating the shrunken top margin.
    The chapter-top parking (.notail, after the header instead of a
-   paragraph) has no separator above it and keeps the plain margins; so
-   does a chip on the paragraph a section heading opens, whose air above
-   is the heading's tail and not the page's rhythm — iOS stands the lift
-   down there for the same reason. The height, side padding and width floor
-   are the spec's too; the height is a floor, so a label the browser sets
-   larger than the app's grows the chip rather than escaping it. */
+   paragraph) has no separator above it and keeps the plain margins. Under
+   a section heading or a psalm title the separator is the heading's tail
+   or the title's gap (--htail, --tgap), and the chip centres in THAT air —
+   the app's rule reads whatever the page put above the paragraph, never
+   only its rhythm. The height, side padding and width floor are the spec's
+   too; the height is a floor, so a label the browser sets larger than the
+   app's grows the chip rather than escaping it. */
 .notechip{
   display:inline-flex; align-items:center; justify-content:center; gap:.35rem;
   min-height:__NOTE_PILL_H__px; min-width:__NOTE_PILL_MIN_W__px;
@@ -574,10 +579,12 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 /* No separator above, no split: a chip before the FIRST paragraph (it becomes
    .text's first child) and the chapter-top parking (outside .text, where
    --pgap never reaches it anyway) keep the plain margins — the app's rule
-   that the chapter top never lifts. A psalm's title takes .text's first-child
-   slot, so a chip on verse 1 of a titled psalm has to be named the same way or
-   it would be lifted against a separator that is not there. */
-.text .notechip:first-child, .text p.pst + .notechip, .text .sec + .notechip, .notechip.notail{margin:__NOTE_GAP_ABOVE__px 0 __NOTE_GAP_BELOW__px}
+   that the bare chapter top never lifts. A psalm's title takes .text's
+   first-child slot, so a chip on verse 1 of a titled psalm is NOT the first
+   child: it follows the title and centres in the title's gap, below. */
+.text .notechip:first-child, .notechip.notail{margin:__NOTE_GAP_ABOVE__px 0 __NOTE_GAP_BELOW__px}
+.text .sec + .notechip{margin:calc(__NOTE_GAP_ABOVE__px - var(--htail)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--htail)/2)}
+.text p.pst + .notechip{margin:calc(__NOTE_GAP_ABOVE__px - var(--tgap)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--tgap)/2)}
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
 /* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's

@@ -113,18 +113,23 @@ import (
 //     the words, and lifting the card away from them breaks the one distance
 //     a reader consciously reads.
 //   - A COLLAPSED pill stack whose bottom neighbour is the PASSAGE centres in
-//     the inter-paragraph air a reader SEES — the previous paragraph's ink
-//     bottom to the noted paragraph's first ink top. Engines that split
-//     their leading evenly around the glyphs (the styled pane centres them
-//     in the line box; CSS half-leading is symmetric by spec) implement
-//     that as box arithmetic — notePillSeparatorLift (separator/2) above
-//     the band top, air = separator/2 + GapAbove each side. The natives
-//     measure the ink instead (btIOSPillStackInkTop, btPillStackInkTop):
-//     their imports pile the leading ABOVE each line's glyphs, so the box
-//     answer sat visibly low, worse at larger text sizes. Where the
-//     separator is 0 (the reporter layouts, the chapter-top inset) every
-//     form stands down and the pill sits GapAbove into its band exactly as
-//     before — one rule, no layout branch.
+//     the inter-paragraph air a reader SEES — the ink bottom of whatever
+//     stands above to the noted paragraph's first ink top. The SEPARATOR is
+//     whatever air the page put there: its own paragraph gap, a section
+//     heading's tail, a psalm title's gap — one rule, read off the layout,
+//     never off a constant, and never only the page's rhythm (a gate that
+//     lifted for the rhythm alone stood the stack down under a heading, and
+//     the pill hugged the passage with all the air piled above it). Engines
+//     that split their leading evenly around the glyphs (the styled pane
+//     centres them in the line box; CSS half-leading is symmetric by spec)
+//     implement that as box arithmetic — notePillSeparatorLift
+//     (separator/2) above the band top, air = separator/2 + GapAbove each
+//     side. The natives measure the ink instead (btIOSPillStackInkTop,
+//     btPillStackInkTop): their imports pile the leading ABOVE each line's
+//     glyphs, so the box answer sat visibly low, worse at larger text sizes.
+//     Where the separator is 0 (the reporter layouts' plain paragraphs, the
+//     chapter-top inset) every form stands down and the pill sits GapAbove
+//     into its band exactly as before — one rule, no layout branch.
 //   - A pill stack whose bottom neighbour is an OPEN card (the own-note-open
 //     co-tenancy) does NOT lift: the symmetry argument is about the air
 //     between two paragraphs, and there the card owns the bottom air.
@@ -353,10 +358,12 @@ func noteBandH(shapeH float32, hasTail bool) float32 {
 
 // notePillSeparatorLift is the collapsed stack's centering rule (the doctrine
 // above says which shapes it applies to and why the card is exempt): a pill
-// stack lifts half the paragraph separator above its band top, so the air on
-// each side of the stack reads separator/2 + GapAbove. At separator 0 — the
-// reporter layouts, the chapter-top inset — the lift is 0 and placement is
-// unchanged, which is why no caller needs a layout branch. The styled pane
+// stack lifts half the separator above its band top — the paragraph gap, a
+// section heading's tail or a psalm title's gap, whichever the layout put
+// there — so the air on each side of the stack reads separator/2 + GapAbove.
+// At separator 0 — the reporter layouts' plain paragraphs, the chapter-top
+// inset — the lift is 0 and placement is unchanged, which is why no caller
+// needs a layout branch. The styled pane
 // calls this directly; the natives mirror the /2 with their own separator
 // reads (each platform's separator lives in its own text engine), and
 // notes_spacing_spec_test.go pins those mirrors to this spelling.
