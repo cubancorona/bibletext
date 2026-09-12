@@ -15,14 +15,15 @@ spacing), how to reproduce the pictures, and how to adjust the spec safely.
 Read that comment first. Everything below is only "which file, and why it is
 interesting".
 
-## The four surfaces
+## The five surfaces
 
 | Surface | File | Reserves the band with |
 |---|---|---|
 | iOS | `reading_ios.go` (`btIOSInstallNote`) | `paragraphSpacingBefore`, plus a top-inset case for the first paragraph |
-| macOS | `reading_macos.go` (`btMacInstallNote`) | the same, plus a measured top-gap correction; places the sticker bottom-up |
+| macOS | `reading_macos.go` (`btMacInstallNote`) | the same; places the sticker bottom-up (its larger top-gap reservation was retired on 12 Sep 2026) |
 | Android | `android/BtBridge.java` (`applyNoteBand`, `NoteBandSpan`) | a `LineHeightSpan` on the preceding line's descent |
 | Windows/Linux | `reading_styled_layout.go` (`BandVerse`/`BandLine`) | advance at the paragraph's top, like `ParaGap` |
+| Web | `cmd/websitegen/assets.go` (`.note`, `.notechip`) | an inline-level card whose margins are the table's numbers, so they stack on the paragraph gap or a heading's tail instead of collapsing |
 
 ## What enforces it
 
@@ -37,6 +38,9 @@ interesting".
 - **`notes_spacing_spec_test.go`** parses the three native sources and fails if
   a literal or a shape leaves the Go table behind. It runs on a Mac for
   platforms a Mac cannot compile.
+- **`cmd/websitegen/note_chrome_shared_test.go`** holds the web's stylesheet to
+  the same table: the placeholders in the template, the filled numbers in the
+  generated sheet, and the inline-level card the numbers depend on.
 - **`reading_styled_note_gallery_test.go`** renders 14 permutations × light and
   dark to a real software canvas, asserting the geometry before it writes each
   PNG.

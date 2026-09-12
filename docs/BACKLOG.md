@@ -48,6 +48,21 @@ first, then Android after the Play closed-testing review clears — see the
 rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
+## A collapsed note pill directly under a section heading: the surfaces disagree
+
+The pill's centering rule (`notePillSeparatorLift`: the pill rises half the
+paragraph separator above its band top, so it sits centred in the air a
+reader sees between two paragraphs) assumes the air above the band is the
+paragraph gap. When the noted paragraph is the one a section heading opens,
+the air above is the heading's 0.35em tail instead. iOS stands the lift down
+whenever the air above is not the page's rhythm (`btIOSPillSeparatorLift`),
+and since 12 Sep 2026 the web does the same (`.text .sec + .notechip`);
+Android centres the pill in the measured ink gap, and the styled pane lifts
+by `paraGap` unconditionally (`reading_styled_pane.go`), so under a heading
+its pill climbs into the tail. Look at the styled pane and Android with the
+`headnote` fixture minimized and settle one rule. Not urgent: an open card is
+unaffected, and a pill under a heading is a rarer arrival.
+
 ## A non-default translation served from a superseded cache epoch is never refreshed
 
 `loadVersionFromCacheOnly` serves a superseded-epoch cache by design (an

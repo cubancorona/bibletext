@@ -299,10 +299,13 @@ Apple points, Android density-independent pixels, and styled-layout units.
 | `PillMinW` | 86 |
 
 The drawn shape owns the gap below; for an expanded card that means the tail
-apex, and for a pill it means the pill bottom. macOS may reserve more than ten
-points above through `max(GapAbove, lineHeight)` to accommodate TextKit line
-geometry. Paragraph spacing outside the reserved band belongs to the reading
-layout, and the RESERVATION never touches it. Body font size and platform
+apex, and for a pill it means the pill bottom. Every surface, macOS included,
+reserves exactly `GapAbove` above the card (macOS's larger
+`max(GapAbove, lineHeight)` reservation was retired on 12 Sep 2026: measured,
+it put a whole em of empty line between the text and the card). Paragraph
+spacing outside the reserved band belongs to the reading layout, and the
+RESERVATION never touches it — the band stacks on top of that spacing, on
+every surface. Body font size and platform
 control hit areas are also outside this table.
 
 At PLACEMENT the collapsed pill stack centres in the inter-paragraph air a

@@ -20,6 +20,10 @@ import "strconv"
 // blank line of its pitch; a psalm's title stood 14px, 0.45 of a line, or a
 // whole paragraph gap above its psalm depending on the platform. See
 // docs/READING_TYPOGRAPHY.md, "Vertical spacing of the reading pane".
+//
+// The note band — the air reserved above and below a note's card — is the
+// one vertical quantity that lives elsewhere: noteMetrics() in
+// notes_bubble.go, in points, because the card is chrome rather than text.
 const (
 	// readingParaGapEm is the air between paragraphs on the gapped (phone)
 	// page. The reporter page has none and indents instead.

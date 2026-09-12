@@ -99,9 +99,10 @@ import (
 // between paragraphs belongs to the reading page, not to the note: it is the
 // same for every paragraph in the chapter, note or no note, and the
 // RESERVATION never cancels it — a noted paragraph keeps at least its
-// neighbours' separation. It is 24px on iOS phones, 0 in the reporter layout
-// (iPad/macOS/wide styled pane), one blank line on Android, and ParaGap on
-// the narrow styled pane. The boundary is recorded in
+// neighbours' separation. It is readingParaGapEm (1em) on every gapped page
+// — iOS phones, Android, the narrow styled pane, the web's phone page — and 0
+// in the reporter layout (iPad/macOS/wide styled pane/wide web), where the
+// paragraphs indent instead. The boundary is recorded in
 // docs/NOTES_SPEC.md#sticker-spacing.
 //
 // What a reader SEES above the shape depends on WHICH shape:
@@ -160,15 +161,14 @@ import (
 //	         chapter's first paragraph is reserved with the container's top
 //	         inset instead (gNoteTopInset) — a real defect once: the bubble sat
 //	         on top of the opening verses.
-//	macOS    the same mechanism (reading_macos.go, btMacInstallNote) PLUS a
-//	         measured top-gap correction (btMacNoteTopGap, floored at
-//	         GapAbove): at the reporter leading the previous line's ink
-//	         overhangs its own fragment box, so a bare GapAbove read tight on
-//	         real pixels. It is a MEASUREMENT correction, not a design choice —
-//	         the one residual difference between the four, named here and in
-//	         docs/NOTES_SPEC.md#sticker-spacing. macOS also
+//	macOS    the same mechanism (reading_macos.go, btMacInstallNote), and the
+//	         same GapAbove. Until 12 Sep 2026 btMacNoteTopGap reserved
+//	         max(GapAbove, one line of the anchor font) as a correction for
+//	         fragment geometry that the pitch sweep and after-layout placement
+//	         have since made exact; measured, the card sat a whole em further
+//	         from the text above it here than anywhere else. macOS still
 //	         places the sticker BOTTOM-UP off the passage, which is what makes
-//	         GapBelow exact there and lets error land in the air above.
+//	         GapBelow exact there and lets any error land in the air above.
 //	Android  a LineHeightSpan on the character BEFORE the paragraph, growing
 //	         THAT line's descent (android/BtBridge.java, applyNoteBand +
 //	         NoteBandSpan). TWO TRAPS, both paid for on the emulator and both
@@ -231,6 +231,7 @@ import (
 //	   → fails per native source that still carries the old literal, naming the
 //	     file and the constant. Update those three, and nothing else.
 //	go test -run TestStyledNoteGallery ./        → the styled pane's geometry
+//	go test ./cmd/websitegen/                    → the web's stylesheet, filled
 //	scripts/view-test-gate.sh                    → the planted-defect gate
 //	then LOOK: the gallery snapshots, and the platforms you changed.
 //

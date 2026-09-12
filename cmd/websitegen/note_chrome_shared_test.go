@@ -11,6 +11,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -57,6 +59,89 @@ func TestWebReaderNoteChromeComesFromTheSharedFunctions(t *testing.T) {
 	}
 	if strings.Contains(css, "__NOTE_LEAD__") {
 		t.Error("__NOTE_LEAD__ survives into the generated reader.css unfilled")
+	}
+
+	// The band's air is the spec's (noteMetrics), stacked on whatever stands
+	// above the card the way every native reserves it. The generated sheet is
+	// checked for the filled numbers, and the TEMPLATE's own rules for the
+	// placeholder spellings — so a px literal typed into a rule fails even when
+	// it happens to equal today's spec — and for the mechanism: an inline-level
+	// card, whose margins cannot collapse with the paragraph gap or a heading's
+	// tail (block-level, the spec's numbers would stop meaning what they mean
+	// everywhere else).
+	m := bibletext.WebNoteGapAbovePx()
+	below := bibletext.WebNoteTailDepthPx() + bibletext.WebNoteGapBelowPx()
+	for _, want := range []string{
+		"display:inline-block; width:100%; vertical-align:top;",
+		fmt.Sprintf("margin:%dpx 0 %dpx;", m, below),
+		fmt.Sprintf(".note.notail{margin-bottom:%dpx}", bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf("margin:calc(%dpx - var(--pgap, 0rem)/2) 0 calc(%dpx + var(--pgap, 0rem)/2);", m, bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf(".text .sec + .notechip, .notechip.notail{margin:%dpx 0 %dpx}", m, bibletext.WebNoteGapBelowPx()),
+		fmt.Sprintf("min-height:%dpx; min-width:%dpx;", bibletext.WebNotePillHPx(), bibletext.WebNotePillMinWPx()),
+		fmt.Sprintf("padding:.3rem %dpx;", bibletext.WebNotePillPadXPx()),
+		"box-sizing:border-box;\n  bottom:calc(-" + webNoteTailHalf() + "px - 1px);",
+		fmt.Sprintf("width:%spx; height:%spx;", webNoteTailSide(), webNoteTailSide()),
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("the generated reader.css does not carry the spec's band air: missing %q", want)
+		}
+	}
+	rule := func(sel string) string {
+		i := strings.Index(readerCSSTemplate, sel)
+		if i < 0 {
+			t.Fatalf("readerCSSTemplate lost the %s rule", sel)
+		}
+		r := readerCSSTemplate[i:]
+		return r[:strings.Index(r, "}")+1]
+	}
+	for sel, wants := range map[string][]string{
+		".note{":        {"display:inline-block; width:100%; vertical-align:top;", "margin:__NOTE_GAP_ABOVE__px 0 __NOTE_BAND_BELOW__px;"},
+		".note.notail{": {"margin-bottom:__NOTE_GAP_BELOW__px"},
+		".note::after{": {"box-sizing:border-box;", "bottom:calc(-__NOTE_TAIL_HALF__px - 1px);", "width:__NOTE_TAIL_SIDE__px; height:__NOTE_TAIL_SIDE__px;"},
+		".notechip{":    {"min-height:__NOTE_PILL_H__px; min-width:__NOTE_PILL_MIN_W__px;", "margin:calc(__NOTE_GAP_ABOVE__px - var(--pgap, 0rem)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--pgap, 0rem)/2);", "padding:.3rem __NOTE_PILL_PAD_X__px;"},
+		".text .notechip:first-child, .text p.pst + .notechip": {".text .sec + .notechip", "margin:__NOTE_GAP_ABOVE__px 0 __NOTE_GAP_BELOW__px"},
+	} {
+		r := rule(sel)
+		for _, w := range wants {
+			if !strings.Contains(r, w) {
+				t.Errorf("the template's %s rule does not spell %q — the number or the mechanism is this file's own again", sel, w)
+			}
+		}
+	}
+	for _, ph := range []string{"__NOTE_GAP_ABOVE__", "__NOTE_GAP_BELOW__", "__NOTE_BAND_BELOW__", "__NOTE_TAIL_SIDE__", "__NOTE_TAIL_HALF__", "__NOTE_PILL_H__", "__NOTE_PILL_PAD_X__", "__NOTE_PILL_MIN_W__"} {
+		if strings.Contains(css, ph) {
+			t.Errorf("%s survives into the generated reader.css unfilled", ph)
+		}
+	}
+	// The card's and the chip's rules carry no margin of the template's own:
+	// the notice card (.notenotice) is chrome outside the spec and keeps its.
+	for _, sel := range []string{".note{", ".notechip{", ".text .notechip:first-child"} {
+		i := strings.Index(readerCSSTemplate, sel)
+		if i < 0 {
+			t.Fatalf("readerCSSTemplate lost the %s rule", sel)
+		}
+		rule := readerCSSTemplate[i:]
+		rule = rule[:strings.Index(rule, "}")+1]
+		if strings.Contains(rule, "rem 0") || strings.Contains(rule, "calc(1.1rem") {
+			t.Errorf("the %s rule spells a margin of its own again — the band's air is noteMetrics': %q", sel, rule)
+		}
+	}
+}
+
+// The tail is the spec's shape: a square of side TailWidth/√2 turned 45° with
+// its centre on the card's edge hangs TailWidth/2 = TailDepth below it. The
+// spec says 9 and 18, so the two must agree or the formula is wrong.
+func TestWebReaderTailIsTheSpecsShape(t *testing.T) {
+	if got, want := bibletext.WebNoteTailWidthPx(), 2*bibletext.WebNoteTailDepthPx(); got != want {
+		t.Fatalf("the turned-square tail hangs TailWidth/2 below the card; the spec's TailWidth %d is not 2 × TailDepth %d", got, bibletext.WebNoteTailDepthPx())
+	}
+	side, _ := strconv.ParseFloat(webNoteTailSide(), 64)
+	half, _ := strconv.ParseFloat(webNoteTailHalf(), 64)
+	if d := side / math.Sqrt2; math.Abs(d-float64(bibletext.WebNoteTailDepthPx())) > 0.01 {
+		t.Errorf("tail side %.2f hangs %.2f below the edge; the spec's TailDepth is %d", side, d, bibletext.WebNoteTailDepthPx())
+	}
+	if math.Abs(half*2-side) > 0.011 {
+		t.Errorf("tail half %.2f is not half the side %.2f", half, side)
 	}
 }
 

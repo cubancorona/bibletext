@@ -1809,37 +1809,30 @@ enum { kMacNoteVerbsNone = 0, kMacNoteVerbsReceived = 1, kMacNoteVerbsOwn = 2 };
 
 
 static const CGFloat kMacNoteTail = 9, kMacNoteTailW = 18, kMacNoteTailX = 24;
-// THE ONE DELIBERATE RESIDUAL IN THE SPEC, and it lives here.
+// btMacNoteTopGap is the air reserved ABOVE the card: the spec's GapAbove, the
+// same ten points every other surface hangs its card below the band's top.
 //
-// Every other surface reserves exactly noteMetrics.GapAbove above the card.
-// This one reserves max(GapAbove, one line of the anchor paragraph's own font),
-// which at the reporter leading is roughly 24pt rather than 10 — so a macOS card
-// carries about 14pt more air above it than an iOS, Android or styled-pane card
-// does. It is kept because removing it makes the card overlap preceding ink at
-// reporter leading, not because the number is prettier.
+// Until 12 Sep 2026 this reserved max(GapAbove, one line of the anchor
+// paragraph's font) instead — 31pt at the normal size with Junicode's 1.27em
+// box, 21pt more than the spec (26 at Large, 30 at Extra large) — as a
+// correction for line fragments whose ink overhung their box at the reporter
+// leading. That overhang belonged to the pre-sweep pitch, set by the 0.66em
+// verse numeral, and to a card placed from a stale layout. Since the import
+// sweep pins min = max line height (btMacApplyHTML) and the card is placed
+// once layout has completed (HBLayoutWatcher), the descender ink ends inside
+// its box at all three sizes, and what the correction reserved was an empty
+// line: the same fixture measured a whole em more air between a heading and
+// the card here than on iOS, Android, the styled pane or the web. The
+// function keeps its shape so the band (btMacInstallNote), the chapter-top
+// inset, the reconcile and the trace all read one answer.
 //
-// What it corrects: at the reporter layout's leading the preceding line's INK
-// overhangs the bottom of its own line box by most of a line. Place the card
-// 10pt below that box — which every rect the layout manager will sell you says
-// is clear — and it still lands across the bottom half of the text above it.
-// This is a MEASUREMENT CORRECTION for TextKit's fragment geometry, not a design
-// gap, and reading it off the font keeps it right at all three text sizes
-// instead of at whichever one it was tuned against.
-//
-// It is also why this pane places the sticker BOTTOM-UP off the passage
-// (btMacNoteStickerY): the tail→passage distance is the pinned invariant, and
-// any slack in the correction falls into the gap above, where there is already
-// air.
+// The sticker is still placed BOTTOM-UP off the passage (btMacNoteStickerY):
+// the tail→passage distance is the pinned invariant, so any slack falls into
+// the air above the card, never below it.
 static CGFloat btMacNoteTopGap(NSTextStorage *ts, NSRange para) {
     const CGFloat floorGap = kMacNoteGapAbove;   // the spec's own reservation
-    if (ts == nil || para.length < 3) return floorGap;
-    // A character near the END of the paragraph: its start is the verse number,
-    // which is a superscript in a smaller font, and measuring that was what made
-    // an earlier attempt at this compute a clearance of zero.
-    NSFont *f = [ts attribute:NSFontAttributeName atIndex:NSMaxRange(para) - 2 effectiveRange:NULL];
-    if (f == nil) return floorGap;
-    CGFloat natural = ceil(f.ascender - f.descender + f.leading);
-    return natural > floorGap ? natural : floorGap;
+    (void)ts; (void)para;
+    return floorGap;
 }
 
 static void btMacInstallNote(void);
@@ -2058,8 +2051,9 @@ static void btMacInstallStickerBand(void) {
     CGFloat w = gTextView.textContainer.size.width - 2 * gTextView.textContainer.lineFragmentPadding;
     CGFloat h = btMacNoteHeightForWidth(w);
     if (h <= 0) { return; }
-    // The paragraph first: the top gap is read off ITS font, so the band cannot
-    // be sized before we know which paragraph it belongs to.
+    // The paragraph first: the chapter-top inset branch and the band record
+    // are keyed by it, so the band cannot be placed before we know which
+    // paragraph it belongs to.
     NSRange anchor = btMacNoteAnchorRange(ts, ts.length);
     NSRange para = [ts.string paragraphRangeForRange:anchor];
     if (para.location == NSNotFound || NSMaxRange(para) > ts.length) {
@@ -2409,12 +2403,15 @@ static void btMacEnsureNoteView(void) {
 // the two cannot disagree about where the note is.
 //
 // It does not simply trust the anchor paragraph's line-fragment origin, which is
-// what the iOS twin does and what the first cut here did. The reporter layout
-// sets a line height tighter than this serif face's natural leading, so the
-// PRECEDING line's glyphs overflow the bottom of their fragment box — the card
-// was placed correctly with respect to the fragments and still landed across the
-// bottom half of the line above it. Asking the layout manager for the glyphs'
-// actual bounding rect is the measurement that matches what a reader sees.
+// what the iOS twin does and what the first cut here did. Before the import
+// sweep pinned the line pitch, the reporter layout's line height was tighter
+// than this serif face's box and the PRECEDING line's glyphs overflowed the
+// bottom of their fragment — the card was placed correctly with respect to the
+// fragments and still landed across the line above it. The pin has since put
+// the descender ink back inside its box at every text size (btMacNoteTopGap
+// says how that was measured), and this stays because asking the layout
+// manager for the glyphs' actual bounding rect is the measurement that matches
+// what a reader sees, whether or not the fragments happen to agree with it.
 static CGFloat btMacNoteStickerY(NSLayoutManager *lm, NSTextContainer *tc,
                                  NSTextStorage *ts, NSRange para, NSRange g) {
     CGFloat inset = gTextView.textContainerInset.height;

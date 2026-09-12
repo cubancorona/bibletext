@@ -219,6 +219,7 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"until a note could be parked at the chapter top",
 			},
 			required: map[string]string{
+				"return kNoteGapAbove + kNotePill + kNoteGapBelow;": "the pill's band must be the spec's three terms",
 				"btIOSTrashImage(kNoteTrashPt": "the closing control's bin must be DRAWN " +
 					"(SF Symbols, template-tinted) rather than typed as an emoji, which renders " +
 					"at the button's font size in its own colours — a loud mark on a quiet card",
@@ -301,8 +302,14 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"gMacNoteMinimized ? 0 : kMacNoteTail": "the iOS twin's wrong question",
 				"ps.paragraphSpacingBefore = gMacNoteBandH": "the assignment form of the " +
 					"reservation — see the required += twin",
+				"f.ascender - f.descender": "the retired top-gap measurement: the reservation " +
+					"above the card is the spec's GapAbove, never a line of the anchor's font",
 			},
 			required: map[string]string{
+				"(void)ts; (void)para;": "btMacNoteTopGap reads nothing off the paragraph: the " +
+					"reservation above the card is the spec's constant alone",
+				"return kMacNoteGapAbove + kMacNotePill + kMacNoteGapBelow;": "the pill's band " +
+					"must be the spec's three terms",
 				"btMacTrashImage(kMacNoteTrashPt)": "the closing control's bin must be DRAWN, " +
 					"and drawn from FYNE's path so the app has one bin rather than two designs",
 				"if (gMacNoteVerbs == kMacNoteVerbsOwn) {":              "the iOS twin's reason",
@@ -311,8 +318,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 				"tw + 2 * kMacNotePillPadX": "the pill's side padding must be the spec's; this pane had " +
 					"its own 24, which made the same label narrower here than on the phone",
 				"cw < kMacNotePillMinW": "the pill's width floor must be the spec's; this pane had its own 76",
-				"const CGFloat floorGap = kMacNoteGapAbove;": "the measured top-gap correction " +
-					"must be floored at the SPEC's reservation, not at a private 10",
+				"const CGFloat floorGap = kMacNoteGapAbove;": "the reservation above the card " +
+					"is the SPEC's, spelled from its constant, not a private 10",
 				"textTop - kMacNoteGapBelow - stickerH": "the pinned invariant: the sticker hangs " +
 					"the spec's gap above the passage it points at",
 				"cw, kMacNotePill)": "the pill's height must be the spec's",
@@ -356,6 +363,8 @@ func TestNoteSpacingShapeInTheNatives(t *testing.T) {
 					"and the pill's short label may still truncate.)",
 			},
 			required: map[string]string{
+				"int pillBand = gapAbove + dp(NOTE_PILL_H) + gapBelow;":                     "the pill's band must be the spec's three terms",
+				"int pillBand = dp(NOTE_GAP_ABOVE) + dp(NOTE_PILL_H) + dp(NOTE_GAP_BELOW);": "the pill's band must be the spec's three terms (the stack's spelling)",
 				"noteVerbs == VERBS_OWN": "the closing control's mark must say what the press " +
 					"does, off the PUSHED verb set",
 				"path.cubicTo(6 * u, 20.1f * u, 6.9f * u, 21 * u, 8 * u, 21 * u)": "the bin must be " +

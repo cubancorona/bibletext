@@ -41,8 +41,8 @@ The one scenario for the READING PANE'S AIR: **headnote** (dev builds) — a
 received note on BSB John 11:17, the paragraph the section heading "Jesus
 Comforts Martha and Mary" opens, so one frame carries the paragraph before,
 the heading with its lead and tail, the note band and the noted paragraph:
-every vertical quantity `reading_spacing.go` governs, beside the note band it
-does not yet. The arrival pins the band to the top of the pane on every
+every vertical quantity `reading_spacing.go` governs, beside the note band,
+whose numbers live in the spec table in `notes_bubble.go`. The arrival pins the band to the top of the pane on every
 surface, so scroll up a few lines for the picture (the styled pane and the
 natives all take a real wheel or drag; the armed restore is not enough).
 Run it on every surface after touching spacing, and read it against the

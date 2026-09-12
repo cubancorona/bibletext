@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,17 @@ type webFonts struct {
 	scriptureBold    string
 }
 
+// The web's tail is a square turned 45°: its side is TailWidth/√2, and half of
+// that is how far its centre — on the card's bottom edge — sits inside the
+// card's box. Two decimals: the browser rounds to device pixels anyway.
+func webNoteTailSide() string {
+	return strconv.FormatFloat(float64(bibletext.WebNoteTailWidthPx())/math.Sqrt2, 'f', 2, 64)
+}
+
+func webNoteTailHalf() string {
+	return strconv.FormatFloat(float64(bibletext.WebNoteTailWidthPx())/math.Sqrt2/2, 'f', 2, 64)
+}
+
 func readerCSS(f webFonts) string {
 	light, dark := bibletext.WebReaderPalettes()
 	return strings.NewReplacer(
@@ -44,6 +56,18 @@ func readerCSS(f webFonts) string {
 		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
+		// The note band's air, from the spec (noteMetrics): the reservation
+		// above the card, the reservation below it (with the tail's depth on
+		// top when the card has one), the tail as a turned square, and the
+		// collapsed pill's height.
+		"__NOTE_GAP_ABOVE__", strconv.Itoa(bibletext.WebNoteGapAbovePx()),
+		"__NOTE_GAP_BELOW__", strconv.Itoa(bibletext.WebNoteGapBelowPx()),
+		"__NOTE_BAND_BELOW__", strconv.Itoa(bibletext.WebNoteTailDepthPx()+bibletext.WebNoteGapBelowPx()),
+		"__NOTE_TAIL_SIDE__", webNoteTailSide(),
+		"__NOTE_TAIL_HALF__", webNoteTailHalf(),
+		"__NOTE_PILL_H__", strconv.Itoa(bibletext.WebNotePillHPx()),
+		"__NOTE_PILL_PAD_X__", strconv.Itoa(bibletext.WebNotePillPadXPx()),
+		"__NOTE_PILL_MIN_W__", strconv.Itoa(bibletext.WebNotePillMinWPx()),
 		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
 		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
 		// The reading pane's air, from the one place the numbers live
@@ -357,6 +381,11 @@ body{
      <p> too, so once it stands first the verse paragraph after it must be
      named as well or every titled psalm gains an indent it never had. */
   .text p:first-child, .text p.pst + p{text-indent:0}
+  /* A note's card, chip or notice is inserted BEFORE its paragraph, so the
+     first paragraph of a chapter (or of a titled psalm) stops being the first
+     child once it is noted; it keeps the no-indent it had without the note. */
+  .text .note:first-child + p, .text .notechip:first-child + p, .text .notenotice:first-child + p,
+  .text p.pst + .note + p, .text p.pst + .notechip + p, .text p.pst + .notenotice + p{text-indent:0}
   .text p.pm{margin:.55rem 0; text-indent:0}
   .text p.pm + p{text-indent:0}
 }
@@ -458,7 +487,15 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    here is an explicit reset: a reader must never have to work out whether the
    words in front of them are the Bible or a stranger's message. */
 .note{
-  position:relative; margin:1.1rem 0; padding:.85rem 2.2rem .9rem 1rem;
+  /* An inline-level box so its margins NEVER collapse with the paragraph gap
+     or a heading's tail above it: the band stacks on whatever air stands
+     there, exactly as the natives reserve it, and the numbers are the spec's
+     (noteMetrics GapAbove above; TailDepth + GapBelow below a card with a
+     tail, GapBelow alone without one — the tail apex, not the card's edge,
+     is what stands GapBelow above the passage). */
+  display:inline-block; width:100%; vertical-align:top;
+  position:relative; margin:__NOTE_GAP_ABOVE__px 0 __NOTE_BAND_BELOW__px;
+  padding:.85rem 2.2rem .9rem 1rem;
   /* The shared arrival lead (noteMetrics().Lead), not this file's own offset.
      The VERSE target keeps its larger 6.5rem margin — a bare #vN jump is the
      browser's own scroll, held well clear of the page top for legibility.
@@ -472,16 +509,24 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   font-feature-settings:normal;
 }
 .note p{margin:0; text-align:left; text-indent:0; hyphens:none}
-/* The tail, which is what makes it read as somebody speaking. */
+/* The tail, which is what makes it read as somebody speaking: a square of
+   side TailWidth/√2 turned 45° with its centre on the card's OUTER bottom
+   edge, so the apex hangs TailWidth/2 = TailDepth below the edge and the base
+   is TailWidth across — the spec's 9 × 18. Two things the arithmetic must
+   include: the universal box-sizing rule never reaches a pseudo-element, so
+   the square's own 1px borders are put inside its side here, and its bottom
+   is measured from the card's padding edge, one border above the outer one. */
 .note::after{
-  content:""; position:absolute; left:1.6rem; bottom:-9px;
-  width:14px; height:14px; background:var(--surface);
+  content:""; position:absolute; left:1.6rem; box-sizing:border-box;
+  bottom:calc(-__NOTE_TAIL_HALF__px - 1px);
+  width:__NOTE_TAIL_SIDE__px; height:__NOTE_TAIL_SIDE__px; background:var(--surface);
   border-right:1px solid var(--border); border-bottom:1px solid var(--border);
   transform:rotate(45deg);
 }
 /* No passage to point at, no tail — the shared rule (noteChrome.hasTail);
    anchorToPassage sets the class on the chapter-top parking. */
 .note.notail::after{display:none}
+.note.notail{margin-bottom:__NOTE_GAP_BELOW__px}
 .notewho{
   margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
   letter-spacing:.01em;
@@ -504,20 +549,26 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    the app): the paragraph separator above it (--pgap, the preceding p's
    bottom margin) splits evenly around the chip, so the air reads the same on
    both sides — margin-top gives up pgap/2, margin-bottom takes it. On the
-   reporter page --pgap is 0 and both margins are the plain 1.1rem again.
-   The chip stays inline-flex (an atomic inline box: no margin collapsing
-   with the neighbouring paragraphs) and vertical-align:top keeps the
-   anonymous line box's strut from eating the shrunken top margin. The
-   chapter-top parking (.notail, after the header instead of a paragraph)
-   has no separator above it and keeps the plain margins. */
+   reporter page --pgap is 0 and both margins are the spec's GapAbove and
+   GapBelow again. The chip stays inline-flex (an atomic inline box: no
+   margin collapsing with the neighbouring paragraphs) and vertical-align:top
+   keeps the anonymous line box's strut from eating the shrunken top margin.
+   The chapter-top parking (.notail, after the header instead of a
+   paragraph) has no separator above it and keeps the plain margins; so
+   does a chip on the paragraph a section heading opens, whose air above
+   is the heading's tail and not the page's rhythm — iOS stands the lift
+   down there for the same reason. The height, side padding and width floor
+   are the spec's too; the height is a floor, so a label the browser sets
+   larger than the app's grows the chip rather than escaping it. */
 .notechip{
-  display:inline-flex; align-items:center; gap:.35rem;
-  margin:calc(1.1rem - var(--pgap, 0rem)/2) 0 calc(1.1rem + var(--pgap, 0rem)/2);
+  display:inline-flex; align-items:center; justify-content:center; gap:.35rem;
+  min-height:__NOTE_PILL_H__px; min-width:__NOTE_PILL_MIN_W__px;
+  margin:calc(__NOTE_GAP_ABOVE__px - var(--pgap, 0rem)/2) 0 calc(__NOTE_GAP_BELOW__px + var(--pgap, 0rem)/2);
   vertical-align:top;
   scroll-margin-top:__NOTE_LEAD__px;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
-  padding:.3rem .8rem; font-size:.78rem; font-family:var(--ui);
+  padding:.3rem __NOTE_PILL_PAD_X__px; font-size:.78rem; font-family:var(--ui);
   color:var(--muted); cursor:pointer; line-height:1.2;
 }
 /* No separator above, no split: a chip before the FIRST paragraph (it becomes
@@ -526,7 +577,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
    that the chapter top never lifts. A psalm's title takes .text's first-child
    slot, so a chip on verse 1 of a titled psalm has to be named the same way or
    it would be lifted against a separator that is not there. */
-.text .notechip:first-child, .text p.pst + .notechip, .notechip.notail{margin:1.1rem 0}
+.text .notechip:first-child, .text p.pst + .notechip, .text .sec + .notechip, .notechip.notail{margin:__NOTE_GAP_ABOVE__px 0 __NOTE_GAP_BELOW__px}
 .notechip svg{width:13px; height:13px; fill:currentColor; display:block}
 .notechip:hover{border-color:var(--accent); color:var(--accent)}
 /* THE COULD-NOT-READ NOTICE: what stands in the note's place when a link's

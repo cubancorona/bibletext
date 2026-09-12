@@ -165,7 +165,7 @@ on the panes, the corrected scripture rem on the web) unless marked fixed.
 | psalm title → verse 1 | **0.55em** (`readingTitleGapEm`) | the italic superscription's gap to the text |
 | poem lines | a line break, no extra air | an authored line inside a paragraph |
 | paragraph opening on a poem line | keeps the gap, takes no indent | the reporter page's one exception |
-| note band | measured: the card plus its own gaps above and below | reserved above the noted paragraph, never inside it |
+| note band | **10pt** above the card, the shape (a 9pt tail) and **10pt** below it — `noteMetrics()` in notes_bubble.go, in points because the card is chrome, not text; held by `notes_spacing_spec_test.go` on iOS, macOS, Android and the Fyne pane and by `cmd/websitegen/note_chrome_shared_test.go` on the web | reserved above the noted paragraph, ON TOP of whatever air already stands there (the paragraph gap, a heading's tail), never inside it; macOS's larger reservation is gone since 12 Sep 2026 |
 | footnote section | its own gap and rule | after the last verse; each surface's own |
 
 ### One source, `reading_spacing.go`
@@ -176,7 +176,13 @@ them, the website substitutes them (`__PARA_GAP__`, `__HEAD_LEAD__`,
 `__HEAD_TAIL__`, `__TITLE_GAP__`, `__INDENT__`), and the Android bridge's five
 constants are held equal to them by `android_spacing_contract_test.go`,
 since Java cannot import Go. Change a number there and every surface moves
-together; change one surface's copy and its test fails.
+together; change one surface's copy and its test fails. The note band's air
+is the one vertical quantity that lives elsewhere — `noteMetrics()` in
+notes_bubble.go, in points, with its own adjusting recipe — bound to the
+natives by `notes_spacing_spec_test.go` and to the web by
+`cmd/websitegen/note_chrome_shared_test.go`; the web card is an inline-level
+box so its margins stack on the paragraph gap or the heading's tail instead
+of collapsing into them.
 
 Before 11 Sep 2026 they were five copies and had drifted: the Apple panes gave
 a paragraph a fixed 24px that did not scale with the reader's size, the web a
@@ -200,6 +206,9 @@ came to on the two surfaces that reckoned it that way).
 
 - **Any of the five numbers**: `reading_spacing.go`, and the matching Java constant in
   `android/BtBridge.java` (the contract test names it). Nothing else.
+- **The note band**: the spec table in `notes_bubble.go` and its "ADJUSTING IT"
+  recipe; the spec test names each native's copy, and the web test the
+  stylesheet's placeholders.
 - **A surface's mechanism** (not the number): Apple `reading.go` (`p`, `p.sec`, `p.pre-sec`,
   `p.pst`); Fyne `reading_styled_pane.go` (`paraGap`, `indent`), `reading_styled_layout.go`
   (`appendHeadingLines`), `reading_styled_super.go`; Android `BtBridge.java`

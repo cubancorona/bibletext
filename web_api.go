@@ -195,6 +195,18 @@ func WebNotePillLabel() string { return stickerPillWho(1, 0) }
 // far below the top of the viewport an arrival places its target.
 func WebNoteArrivalLeadPx() int { return int(noteMetrics().Lead) }
 
+// The note band's air for the website generator: the spec's reservation above
+// the card, the tail the shape hangs below it, the reservation below that, and
+// the collapsed pill's height (noteMetrics; notes_bubble.go). CSS px stand for
+// the natives' points.
+func WebNoteGapAbovePx() int  { return int(noteMetrics().GapAbove) }
+func WebNoteGapBelowPx() int  { return int(noteMetrics().GapBelow) }
+func WebNoteTailDepthPx() int { return int(noteMetrics().TailDepth) }
+func WebNoteTailWidthPx() int { return int(noteMetrics().TailWidth) }
+func WebNotePillHPx() int     { return int(noteMetrics().PillH) }
+func WebNotePillPadXPx() int  { return int(noteMetrics().PillPadX) }
+func WebNotePillMinWPx() int  { return int(noteMetrics().PillMinW) }
+
 // FootnoteEntry is one row of a chapter's footnote section: the key it is filed
 // under and the translators' words.
 type FootnoteEntry struct {
