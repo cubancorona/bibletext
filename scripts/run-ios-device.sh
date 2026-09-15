@@ -131,7 +131,11 @@ note "signing identity: $CERT_NAME  (team $TEAM_ID)"
 # (CoreDevice network tunnel) — install works in either state. Match any reachable
 # iPhone/iPad and pull the UDID by its UUID shape, not column position (the State
 # column is one or two words, which shifts the positional fields).
-DEVICE_ID="${BIBLETEXT_DEVICE_ID:-$(xcrun devicectl list devices 2>/dev/null | awk '/(iPhone|iPad)/ && !/unavailable/ && (/connected/ || /available/ || /paired/) { for (i=1; i<=NF; i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) { print $i; exit } }')}"
+# The identifier column carries EITHER a CoreDevice UUID (8-4-4-4-12 hex, what
+# Xcode 26 printed) OR the hardware UDID (8-16 hex, what Xcode 27 prints for a
+# phone); devicectl accepts both, so accept both here — the UUID-only match
+# reported "no connected iPhone" against a paired, reachable phone.
+DEVICE_ID="${BIBLETEXT_DEVICE_ID:-$(xcrun devicectl list devices 2>/dev/null | awk '/(iPhone|iPad)/ && !/unavailable/ && !/simulated/ && (/connected/ || /available/ || /paired/) { for (i=1; i<=NF; i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/ || $i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}$/) { print $i; exit } }')}"
 [ -n "$DEVICE_ID" ] || { xcrun devicectl list devices 2>&1 | sed 's/^/  /'; fail "No connected iPhone. Plug it in, unlock, Trust, enable Developer Mode."; }
 note "target device: $DEVICE_ID"
 

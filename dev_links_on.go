@@ -150,6 +150,23 @@ func devScenarios() []devScenario {
 		// that only some readers see is the one worth being able to tap.
 		{"Note in the NKJV (licensed)", "Switches if you have it; otherwise opens here plus a message",
 			ShareLinkURLWithNote("nkjv", "Psalms", 23, 1, 4, "Fixture version message alpha beta gamma.")},
+		// The licensed text is the one with a publisher's heading over nearly
+		// every section, so it is where the heading air, the note band and the
+		// collapsed pill's centering meet most often. Three notes across the
+		// Sermon on the Mount, each on the paragraph a heading opens; the
+		// headnote fixture's twin on John 11; a range; a poem.
+		{"NKJV SPREAD 1 of 3 — Matthew 5:13 (Salt and Light)", "Three received notes across the Sermon on the Mount, each on the paragraph a section heading opens: the heading's air above the band, and the pill centred under it once minimized",
+			ShareLinkURLWithNote("nkjv", "Matthew", 5, 13, 13, "NKJV spread note one — the salt of the earth.")},
+		{"NKJV SPREAD 2 of 3 — Matthew 5:21", "Second of three — a heading between it and the first",
+			ShareLinkURLWithNote("nkjv", "Matthew", 5, 21, 21, "NKJV spread note two — anger and the judgment.")},
+		{"NKJV SPREAD 3 of 3 — Matthew 5:43", "Third of three — the chapter's last section; minimize all three for the pills",
+			ShareLinkURLWithNote("nkjv", "Matthew", 5, 43, 43, "NKJV spread note three — love your enemies.")},
+		{"NKJV note under a heading — John 11:17", "The headnote fixture on the licensed text: the card sits below the heading's tail, and the pill centres in that air when minimized",
+			ShareLinkURLWithNote("nkjv", "John", 11, 17, 17, "NKJV note on the paragraph a heading opens.")},
+		{"NKJV note on a verse range — Romans 8:1-4", "vv.1-4 washed together under the chapter's opening heading",
+			ShareLinkURLWithNote("nkjv", "Romans", 8, 1, 4, "NKJV verse-range note — no condemnation.")},
+		{"NKJV note in a poem — Psalm 1:1-2", "Poetic lines: the band above the whole psalm, the wash on the first two verses' lines",
+			ShareLinkURLWithNote("nkjv", "Psalms", 1, 1, 2, "NKJV poem note — the blessed man.")},
 	}
 }
 
@@ -472,6 +489,38 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		state.refresh()
 	})
 
+	// The same three arrangements on the LICENSED text, written as NKJV notes
+	// (the record names the translation), on Psalm 23 — a titled psalm, so the
+	// first paragraph's note sits under the superscription. Opening goes
+	// through the share-link path so the NKJV branch behaves as a link does:
+	// it switches when the reader has the text and says so when they do not.
+	seedMineNKJV := widget.NewButton("Seed 3 of MY notes on the NKJV (Psalm 23)", func() {
+		for _, m := range []struct {
+			lo, hi int
+			text   string
+		}{
+			{1, 0, "My own NKJV note under the psalm's title."},
+			{4, 0, "My own NKJV note in the valley of the shadow."},
+			{6, 0, "My own NKJV note on the closing verse."},
+		} {
+			nonce := make([]byte, noteNonceLen)
+			for i := range nonce {
+				nonce[i] = byte(m.lo*37 + i + 7)
+			}
+			saveMyNote(appPrefs(), StoredNote{
+				VersionID: "nkjv",
+				Book:      "Psalms", Chapter: 23,
+				VerseLo: m.lo, VerseHi: m.hi,
+				Text:  m.text,
+				Nonce: nonce,
+			})
+		}
+		HandleShareLink(state, ShareLinkURL("nkjv", "Psalms", 23, 1, 1))
+		applyNoteForCurrentChapter(state)
+		refreshStatus()
+		state.refresh()
+	})
+
 	// Wrapping must be set explicitly — widget.Label does not wrap by default, and
 	// an unwrapped one reports its whole single line as its MinSize, which is how
 	// this line ran off the side of the screen.
@@ -489,7 +538,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, pillMode, landscapeMode, landscapeTypo, wipe, minAll, seedMine, status,
+		notesSwitch, pillMode, landscapeMode, landscapeTypo, wipe, minAll, seedMine, seedMineNKJV, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,
