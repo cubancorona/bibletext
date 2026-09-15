@@ -109,7 +109,10 @@ go vet ./...
 ```
 
 `release-ios.sh` derives the version and build from `FyneApp.toml`, applies the
-required Fyne patches, produces a universal archive, and does not upload unless
+required Fyne patches, packages with the patched Fyne CLI built from
+`third_party/fyne-tools` (the stock CLI writes a 9.0 deployment target into
+the Xcode project it generates, which Xcode 27 refuses; the patch sets the
+product's 15.0), produces a universal archive, and does not upload unless
 `BIBLETEXT_UPLOAD=1` is explicitly set. Leave that variable unset during
 preparation. The final output must identify the version and build the ledger
 declares.

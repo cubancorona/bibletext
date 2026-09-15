@@ -82,6 +82,15 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 # Apply the iOS-only Fyne scroll-lag patch for this build. The exact original
 # go.mod and mobile package metadata are restored by the exit trap.
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
+
+# The stock fyne CLI writes IPHONEOS_DEPLOYMENT_TARGET = 9.0 into the Xcode
+# project it generates, which Xcode 27 refuses (minimum 15.0). Package with the
+# patched copy instead — the same one build-android.sh uses — built into
+# build/, which is untracked.
+"${REPO_ROOT}/scripts/setup-fyne-tools-patch.sh"
+mkdir -p "$REPO_ROOT/build/fyne-cli"
+( cd "$REPO_ROOT/third_party/fyne-tools" && go build -trimpath -o "$REPO_ROOT/build/fyne-cli/fyne" ./cmd/fyne )
+export PATH="$REPO_ROOT/build/fyne-cli:$PATH"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
 # fyne's iOS packager requires an "Apple Development" certificate even for the

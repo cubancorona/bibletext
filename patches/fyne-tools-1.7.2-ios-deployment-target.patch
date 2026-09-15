@@ -1,0 +1,50 @@
+--- a/cmd/fyne/internal/mobile/build_iosapp.go	2026-09-15 18:05:28
++++ b/cmd/fyne/internal/mobile/build_iosapp.go	2026-09-15 18:05:28
+@@ -523,7 +523,7 @@
+         GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+         GCC_WARN_UNUSED_FUNCTION = YES;
+         GCC_WARN_UNUSED_VARIABLE = YES;
+-        IPHONEOS_DEPLOYMENT_TARGET = 9.0;
++        IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+         MTL_ENABLE_DEBUG_INFO = {{if .Debug}}YES{{else}}NO{{end}};
+         PRODUCT_BUNDLE_IDENTIFIER = {{.BundleID}};
+         PROVISIONING_PROFILE_SPECIFIER = "{{.Profile}}";
+--- a/cmd/fyne/internal/commands/package-mobile.go	2026-09-15 18:05:28
++++ b/cmd/fyne/internal/commands/package-mobile.go	2026-09-15 18:05:28
+@@ -70,7 +70,7 @@
+ 
+ 	appDir := filepath.Join(p.dir, mobile.AppOutputName(p.os, p.Name, p.release))
+ 	return runCmdCaptureOutput("xcrun", "actool", "Images.xcassets", "--compile", appDir, "--platform",
+-		"iphoneos", "--target-device", "iphone", "--minimum-deployment-target", "9.0", "--app-icon", "AppIcon",
++		"iphoneos", "--target-device", "iphone", "--minimum-deployment-target", "15.0", "--app-icon", "AppIcon",
+ 		"--output-format", "human-readable-text", "--output-partial-info-plist", "/dev/null")
+ }
+ 
+--- /dev/null	2026-09-15 18:05:57
++++ b/cmd/fyne/internal/mobile/build_iosapp_bibletext_test.go	2026-09-15 18:05:57
+@@ -0,0 +1,25 @@
++package mobile
++
++import (
++	"bytes"
++	"strings"
++	"testing"
++)
++
++// The generated Xcode project must declare the deployment target BibleText
++// ships for. Xcode 27 refuses a project whose IPHONEOS_DEPLOYMENT_TARGET is
++// below 15.0, and upstream's template says 9.0.
++func TestBibleTextIOSDeploymentTarget(t *testing.T) {
++	var out bytes.Buffer
++	if err := projPbxprojTmpl.Execute(&out, projPbxprojTmplData{
++		BitcodeEnabled: false, Debug: false, BundleID: "test.bundle", Profile: "", TeamID: "TEAM",
++	}); err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(out.String(), "IPHONEOS_DEPLOYMENT_TARGET = 15.0;") {
++		t.Fatal("the Xcode project template does not declare IPHONEOS_DEPLOYMENT_TARGET = 15.0")
++	}
++	if strings.Contains(out.String(), "IPHONEOS_DEPLOYMENT_TARGET = 9.0;") {
++		t.Fatal("the Xcode project template still declares upstream's 9.0 deployment target")
++	}
++}

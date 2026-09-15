@@ -14,6 +14,9 @@ application source.
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `widget/entry_cursor_anim.go` |
 | **Change 3 (caret CPU burn)** | The Entry caret's smooth fade → a **discrete blink** (snap dim↔opaque at the half-cycle). Cuts a focused-but-idle Entry from ~8 full-canvas repaints/s to 2/s: **~50% CPU → ~22%** (iPad Pro 13" sim, ambient ~20%). Cadence and typing-interrupt behaviour unchanged. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
+| **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
+| **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |
+| **Change** | The generated Xcode project's `IPHONEOS_DEPLOYMENT_TARGET` and the asset catalog's minimum: **`9.0` → `15.0`**, the target the app ships for (`config/product.json`). Xcode 27 refuses a project below 15.0, which is how the first 1.2.9 iOS build failed. Applied by [`../scripts/setup-fyne-tools-patch.sh`](../scripts/setup-fyne-tools-patch.sh) beside the Android patch; held by `scripts/test-ios-deployment-target.sh` (CI) and an in-tree test. |
 | **Build wiring** | `replace fyne.io/fyne/v2 => ./third_party/fyne` in `go.mod` |
 
 ## Why change 2 (no half-drawn frames) is needed

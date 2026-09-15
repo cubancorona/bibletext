@@ -79,6 +79,15 @@ trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$W
 note "applying iOS Fyne drawloop patch (go.mod restored on exit)"
 "${REPO_ROOT}/scripts/setup-fyne-patch.sh"
 
+# The stock fyne CLI writes IPHONEOS_DEPLOYMENT_TARGET = 9.0 into the Xcode
+# project it generates, which Xcode 27 refuses (minimum 15.0). Package with the
+# patched copy instead — the same one build-android.sh uses — built into
+# build/, which is untracked.
+"${REPO_ROOT}/scripts/setup-fyne-tools-patch.sh"
+mkdir -p "$REPO_ROOT/build/fyne-cli"
+( cd "$REPO_ROOT/third_party/fyne-tools" && go build -trimpath -o "$REPO_ROOT/build/fyne-cli/fyne" ./cmd/fyne )
+export PATH="$REPO_ROOT/build/fyne-cli:$PATH"
+
 # Release builds remain keyed during the migration window. The credential was
 # isolated before any subprocess and is injected only into the final executable
 # at link time; no source file is generated in the repository.

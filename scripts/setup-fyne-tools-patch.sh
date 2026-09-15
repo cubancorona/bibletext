@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# Regenerate the Android-only Fyne CLI copy used by build-android.sh.
+# Regenerate the patched Fyne CLI copy used by build-android.sh and the three
+# iOS scripts (release-ios.sh, run-ios-sim.sh, run-ios-device.sh).
 #
 # fyne.io/tools v1.7.2 hardcodes target SDK 29 for debug packages and 35 for
 # release packages. BibleText re-signs its debug APK with current signature
 # schemes, so both packaging modes can and must target API 36. The tiny patch
 # also lets the wrapper pin the exact API-36 platform and build-tools paths.
+#
+# The same CLI writes IPHONEOS_DEPLOYMENT_TARGET = 9.0 into the Xcode project
+# it generates for iOS, and Xcode 27 refuses any target below 15.0 — the app
+# ships for 15.0 (config/product.json). The second patch sets the template to
+# 15.0; scripts/test-ios-deployment-target.sh holds it to the product file.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -12,7 +18,10 @@ cd "$(dirname "$0")/.."
 TOOLS_VERSION="v1.7.2"
 TOOLS_SUM="h1:+uDZ3uOPVfdcOGRxzTI7uwBj7y3VRzz9qwntZ59J62M="
 TOOLS_GOMOD_SUM="h1:MOPy1Z0+abfaOOyFxFqiuVuKx587jlfprGANBcOqvO0="
-PATCH="patches/fyne-tools-1.7.2-android-api-36.patch"
+PATCHES=(
+  "patches/fyne-tools-1.7.2-android-api-36.patch"
+  "patches/fyne-tools-1.7.2-ios-deployment-target.patch"
+)
 DEST="third_party/fyne-tools"
 FETCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bibletext-fyne-tools.XXXXXX")"
 trap 'rm -rf -- "$FETCH_DIR"' EXIT
@@ -81,28 +90,30 @@ chmod -R u+w "$DEST"
 # A dry run must match the exact pinned source without fuzzy context or line
 # offsets. Suppress backup files as an additional guarantee that generated
 # patch residue can never be mistaken for source by the local CLI build.
-PATCH_CHECK_LOG="$FETCH_DIR/patch-check.log"
-if ! patch --dry-run -p1 -F 0 -V none -d "$DEST" < "$PATCH" >"$PATCH_CHECK_LOG" 2>&1; then
-  sed -n '1,160p' "$PATCH_CHECK_LOG" >&2
-  echo "ERROR: Fyne tools patch does not apply to the verified ${TOOLS_VERSION} source" >&2
-  exit 1
-fi
-if grep -Eiq 'offset|fuzz' "$PATCH_CHECK_LOG"; then
-  sed -n '1,160p' "$PATCH_CHECK_LOG" >&2
-  echo "ERROR: Fyne tools patch requires an offset or fuzzy context" >&2
-  exit 1
-fi
-PATCH_APPLY_LOG="$FETCH_DIR/patch-apply.log"
-if ! patch -p1 -F 0 -V none -d "$DEST" < "$PATCH" >"$PATCH_APPLY_LOG" 2>&1; then
-  sed -n '1,160p' "$PATCH_APPLY_LOG" >&2
-  echo "ERROR: Fyne tools patch application failed" >&2
-  exit 1
-fi
-if grep -Eiq 'offset|fuzz' "$PATCH_APPLY_LOG"; then
-  sed -n '1,160p' "$PATCH_APPLY_LOG" >&2
-  echo "ERROR: Fyne tools patch applied non-deterministically" >&2
-  exit 1
-fi
+for PATCH in "${PATCHES[@]}"; do
+  PATCH_CHECK_LOG="$FETCH_DIR/patch-check.log"
+  if ! patch --dry-run -p1 -F 0 -V none -d "$DEST" < "$PATCH" >"$PATCH_CHECK_LOG" 2>&1; then
+    sed -n '1,160p' "$PATCH_CHECK_LOG" >&2
+    echo "ERROR: Fyne tools patch $PATCH does not apply to the verified ${TOOLS_VERSION} source" >&2
+    exit 1
+  fi
+  if grep -Eiq 'offset|fuzz' "$PATCH_CHECK_LOG"; then
+    sed -n '1,160p' "$PATCH_CHECK_LOG" >&2
+    echo "ERROR: Fyne tools patch $PATCH requires an offset or fuzzy context" >&2
+    exit 1
+  fi
+  PATCH_APPLY_LOG="$FETCH_DIR/patch-apply.log"
+  if ! patch -p1 -F 0 -V none -d "$DEST" < "$PATCH" >"$PATCH_APPLY_LOG" 2>&1; then
+    sed -n '1,160p' "$PATCH_APPLY_LOG" >&2
+    echo "ERROR: Fyne tools patch $PATCH application failed" >&2
+    exit 1
+  fi
+  if grep -Eiq 'offset|fuzz' "$PATCH_APPLY_LOG"; then
+    sed -n '1,160p' "$PATCH_APPLY_LOG" >&2
+    echo "ERROR: Fyne tools patch $PATCH applied non-deterministically" >&2
+    exit 1
+  fi
+done
 
 PATCH_RESIDUE="$(find "$DEST" -type f \( -name '*.orig' -o -name '*.rej' \) -print -quit)"
 [ -z "$PATCH_RESIDUE" ] || {
@@ -133,4 +144,14 @@ fi
 [ -s "$DEST/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go" ] \
   || { echo "ERROR: fyne.io/tools platform regression test is missing" >&2; exit 1; }
 
-echo "OK: patched fyne.io/tools ${TOOLS_VERSION} for Android target API 36."
+IOS_TEMPLATE="$DEST/cmd/fyne/internal/mobile/build_iosapp.go"
+IOS_MIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["iosMinimumOSVersion"],end="")' config/product.json)"
+if ! grep -q "IPHONEOS_DEPLOYMENT_TARGET = ${IOS_MIN};" "$IOS_TEMPLATE" \
+   || grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 9.0;' "$IOS_TEMPLATE"; then
+  echo "ERROR: fyne.io/tools iOS deployment-target patch did not apply, or names a target other than the product's ${IOS_MIN}" >&2
+  exit 1
+fi
+[ -s "$DEST/cmd/fyne/internal/mobile/build_iosapp_bibletext_test.go" ] \
+  || { echo "ERROR: fyne.io/tools iOS deployment-target regression test is missing" >&2; exit 1; }
+
+echo "OK: patched fyne.io/tools ${TOOLS_VERSION} for Android target API 36 and iOS deployment target ${IOS_MIN}."
