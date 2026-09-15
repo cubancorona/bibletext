@@ -175,6 +175,28 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.9
+
+> BibleText 1.2.9 sets headings and spacing right: section headings in the
+> Berean Standard Bible and the NKJV stand at the text's own size, in bold,
+> with even air above and below; paragraphs sit one line apart rather than
+> nearly two; the gap under a psalm's title follows your text size; and a
+> collapsed note pill under a heading centres in its space. No ads, account,
+> analytics, or tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.9 (179);
+- open the Berean Standard Bible at John 11: the section headings are bold at
+  the text's size with clear air above each and a little below, and the
+  paragraphs sit one blank line apart;
+- change the text size in Settings: the paragraph gaps and the heading air grow
+  and shrink with the text;
+- open Psalm 23: the italic title stands a little above verse 1, and that gap
+  follows the text size too;
+- open a shared note on a paragraph a heading opens and minimize it: the pill
+  sits centred between the heading and the verse.
+
 ## Closed-test release notes — 1.2.8
 
 > BibleText 1.2.8 rebuilds the verse of the day: a short passage rather than a
