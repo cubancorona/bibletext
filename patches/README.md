@@ -17,6 +17,9 @@ application source.
 | **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |
 | **Change** | The generated Xcode project's `IPHONEOS_DEPLOYMENT_TARGET` and the asset catalog's minimum: **`9.0` → `15.0`**, the target the app ships for (`config/product.json`). Xcode 27 refuses a project below 15.0, which is how the first 1.2.9 iOS build failed. Applied by [`../scripts/setup-fyne-tools-patch.sh`](../scripts/setup-fyne-tools-patch.sh) beside the Android patch; held by `scripts/test-ios-deployment-target.sh` (CI) and an in-tree test. |
+| **Patch (tools)** | [`fyne-tools-1.7.2-linux-scheme-handler.patch`](fyne-tools-1.7.2-linux-scheme-handler.patch) |
+| **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/commands/package-unix.go` + `cmd/fyne/internal/templates/data/{entry.desktop, Makefile}` |
+| **Change** | A desktop entry whose MIME types include an `x-scheme-handler/` is launched with `%u` (the URL) instead of `%F`; the field code no longer rides on the binary name (which broke the generated Makefile's `Exec :=`); both `install` targets run `update-desktop-database` so the handler reaches `mimeinfo.cache`. This is how the Linux build registers the `bibletext:` scheme (`cmd/desktop/FyneApp.toml` `[CanOpen]`). Applied by [`../scripts/setup-fyne-tools-patch.sh`](../scripts/setup-fyne-tools-patch.sh); the Linux release job builds the patched CLI and asserts the packaged entry; an in-tree test renders both templates. |
 | **Build wiring** | `replace fyne.io/fyne/v2 => ./third_party/fyne` in `go.mod` |
 
 ## Why change 2 (no half-drawn frames) is needed

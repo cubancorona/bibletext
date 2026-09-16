@@ -6,3 +6,6 @@ Name = "BibleText"
 ID = "uk.co.bibletext"
 Version = "1.2.9"
 Build = 50
+
+[CanOpen]
+MimeTypes = "x-scheme-handler/bibletext;"

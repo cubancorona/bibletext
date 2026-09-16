@@ -61,6 +61,9 @@ jobs:
       - name: iOS deployment target regression
         run: scripts/test-ios-deployment-target.sh
 
+      - name: Linux scheme-handler regression
+        run: scripts/test-linux-scheme-handler.sh
+
       - name: Site drift report regression
         run: scripts/test-site-drift.sh
 

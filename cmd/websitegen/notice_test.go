@@ -534,3 +534,31 @@ func TestUnionCanonIsEveryChapterAnyTranslationCarries(t *testing.T) {
 		}
 	}
 }
+
+// Windows and Linux readers get the bibletext: scheme — the page's own URL
+// with the scheme swapped, fragment and all — and, because a browser without
+// a handler answers with nothing, the download named beneath. The Android
+// test must come first: Android user agents also say "Linux".
+func TestNoticeJSOffersTheSchemeOnWindowsAndLinux(t *testing.T) {
+	js := noticeJS
+	want := `'bibletext://' + location.host + location.pathname + location.hash`
+	if !strings.Contains(js, want) {
+		t.Fatalf("notice.js lacks the scheme href %s", want)
+	}
+	android := strings.Index(js, "if (isAndroid)")
+	desktop := strings.Index(js, "/Windows NT|Linux|X11/")
+	if android < 0 || desktop < 0 || desktop < android {
+		t.Errorf("the desktop branch (at %d) must come after the Android test (at %d)", desktop, android)
+	}
+	if !strings.Contains(js, "window.addEventListener('hashchange', schemeHref)") {
+		t.Error("the scheme href is not re-wired on hashchange; a late fragment would be lost")
+	}
+	site, _ := noticeFixture(t)
+	page, err := os.ReadFile(filepath.Join(site.root, "nkjv", "john", "3", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `id="getapp" hidden`) {
+		t.Error("the notice page has no hidden download line for a machine without the app")
+	}
+}

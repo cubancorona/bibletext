@@ -11,6 +11,12 @@
 # it generates for iOS, and Xcode 27 refuses any target below 15.0 — the app
 # ships for 15.0 (config/product.json). The second patch sets the template to
 # 15.0; scripts/test-ios-deployment-target.sh holds it to the product file.
+#
+# The Linux packager glues " %F" onto the binary name when FyneApp.toml
+# declares MIME types, which breaks the generated Makefile, and never emits
+# %u for a URL-scheme handler. The third patch gives a scheme handler
+# Exec=… %u, keeps the Makefile's binary name bare, and refreshes
+# mimeinfo.cache on install so browsers can find the bibletext: handler.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -21,6 +27,7 @@ TOOLS_GOMOD_SUM="h1:MOPy1Z0+abfaOOyFxFqiuVuKx587jlfprGANBcOqvO0="
 PATCHES=(
   "patches/fyne-tools-1.7.2-android-api-36.patch"
   "patches/fyne-tools-1.7.2-ios-deployment-target.patch"
+  "patches/fyne-tools-1.7.2-linux-scheme-handler.patch"
 )
 DEST="third_party/fyne-tools"
 FETCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bibletext-fyne-tools.XXXXXX")"
@@ -144,6 +151,18 @@ fi
 [ -s "$DEST/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go" ] \
   || { echo "ERROR: fyne.io/tools platform regression test is missing" >&2; exit 1; }
 
+UNIX_PACKAGER="$DEST/cmd/fyne/internal/commands/package-unix.go"
+UNIX_ENTRY="$DEST/cmd/fyne/internal/templates/data/entry.desktop"
+UNIX_MAKEFILE="$DEST/cmd/fyne/internal/templates/data/Makefile"
+if ! grep -q 'openWith = " %u"' "$UNIX_PACKAGER" \
+   || ! grep -q 'Exec={{.Exec}}{{.ExecField}}' "$UNIX_ENTRY" \
+   || [ "$(grep -c 'update-desktop-database' "$UNIX_MAKEFILE")" != 2 ]; then
+  echo "ERROR: fyne.io/tools Linux scheme-handler patch did not apply" >&2
+  exit 1
+fi
+[ -s "$DEST/cmd/fyne/internal/commands/package_unix_bibletext_test.go" ] \
+  || { echo "ERROR: fyne.io/tools Linux scheme-handler regression test is missing" >&2; exit 1; }
+
 IOS_TEMPLATE="$DEST/cmd/fyne/internal/mobile/build_iosapp.go"
 IOS_MIN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["iosMinimumOSVersion"],end="")' config/product.json)"
 if ! grep -q "IPHONEOS_DEPLOYMENT_TARGET = ${IOS_MIN};" "$IOS_TEMPLATE" \
@@ -154,4 +173,4 @@ fi
 [ -s "$DEST/cmd/fyne/internal/mobile/build_iosapp_bibletext_test.go" ] \
   || { echo "ERROR: fyne.io/tools iOS deployment-target regression test is missing" >&2; exit 1; }
 
-echo "OK: patched fyne.io/tools ${TOOLS_VERSION} for Android target API 36 and iOS deployment target ${IOS_MIN}."
+echo "OK: patched fyne.io/tools ${TOOLS_VERSION} for Android target API 36, iOS deployment target ${IOS_MIN} and the Linux scheme-handler desktop entry."

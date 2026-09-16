@@ -1,0 +1,160 @@
+--- a/cmd/fyne/internal/commands/package-unix.go
++++ b/cmd/fyne/internal/commands/package-unix.go
+@@ -23,6 +23,7 @@
+ 	Comment        string
+ 	Keywords       string
+ 	ExecParams     string
++	ExecField      string
+ 	MimeTypes      string
+ 	StartupWMClass string
+ 
+@@ -72,7 +73,13 @@
+ 	openWith := ""
+ 	if p.CanOpen != nil && p.CanOpen.MimeTypes != "" {
+ 		mimes = p.CanOpen.MimeTypes
++		// A URL-scheme handler is launched with the URL (%u); a file opener
++		// with the file list (%F). A desktop entry may carry only one of the
++		// field codes, so a scheme handler that also opens files takes %u.
+ 		openWith = " %F"
++		if strings.Contains(mimes, "x-scheme-handler/") {
++			openWith = " %u"
++		}
+ 	}
+ 
+ 	appsDir := util.EnsureSubDir(shareDir, "applications")
+@@ -91,7 +98,8 @@
+ 	tplData := unixData{
+ 		Name:           p.Name,
+ 		AppID:          p.AppID,
+-		Exec:           filepath.Base(p.exe) + openWith,
++		Exec:           filepath.Base(p.exe),
++		ExecField:      openWith,
+ 		Icon:           appIDOrName,
+ 		Local:          local,
+ 		GenericName:    linuxBSD.GenericName,
+--- a/cmd/fyne/internal/templates/data/entry.desktop
++++ b/cmd/fyne/internal/templates/data/entry.desktop
+@@ -3,7 +3,7 @@
+ Name={{.Name}}
+ {{- if ne .GenericName ""}}
+ GenericName={{.GenericName}}{{end}}
+-Exec={{.Exec}} {{- .ExecParams}}
++Exec={{.Exec}}{{.ExecField}}{{if ne .ExecParams ""}} {{.ExecParams}}{{end}}
+ Icon={{.Icon}}
+ {{- if ne .Comment ""}}
+ Comment={{.Comment}}{{end}}
+--- a/cmd/fyne/internal/templates/data/Makefile
++++ b/cmd/fyne/internal/templates/data/Makefile
+@@ -22,6 +22,7 @@
+ 	install -Dm00644 usr/{{.Local}}share/applications/$(AppID).desktop $(DESTDIR)$(PREFIX)/share/applications/$(AppID).desktop
+ 	install -Dm00755 usr/{{.Local}}bin/$(Exec) $(DESTDIR)$(PREFIX)/bin/$(Exec)
+ 	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon) $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon)
++	-update-desktop-database $(DESTDIR)$(PREFIX)/share/applications || echo "update-desktop-database not found: install desktop-file-utils and run it, or bibletext: links will not open the app"
+ uninstall:
+ 	-rm $(DESTDIR)$(PREFIX)/share/applications/$(AppID).desktop
+ 	-rm $(DESTDIR)$(PREFIX)/bin/$(Exec)
+@@ -32,6 +33,7 @@
+ 	install -Dm00755 usr/{{.Local}}bin/$(Exec) $(DESTDIR)$(HOME)/.local/bin/$(Exec)
+ 	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon) $(DESTDIR)$(HOME)/.local/share/icons/$(Icon)
+ 	sed -i -e "s,Exec=$(Exec),Exec=$(DESTDIR)$(HOME)/.local/bin/$(Exec),g" $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
++	-update-desktop-database $(DESTDIR)$(HOME)/.local/share/applications || echo "update-desktop-database not found: install desktop-file-utils and run it, or bibletext: links will not open the app"
+ 
+ user-uninstall:
+ 	-rm $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
+--- /dev/null
++++ b/cmd/fyne/internal/commands/package_unix_bibletext_test.go
+@@ -0,0 +1,76 @@
++package commands
++
++import (
++	"bytes"
++	"strings"
++	"testing"
++
++	"fyne.io/tools/cmd/fyne/internal/templates"
++)
++
++// A desktop entry that registers a URL scheme must be launched with the URL
++// (%u), the Makefile must keep the bare binary name, and the installed entry
++// must reach mimeinfo.cache, or no browser ever finds the handler.
++func TestSchemeHandlerEntryUsesTheURLFieldCode(t *testing.T) {
++	render := func(data unixData) (entry, makefile string) {
++		var e, m bytes.Buffer
++		if err := templates.DesktopFileUNIX.Execute(&e, data); err != nil {
++			t.Fatal(err)
++		}
++		if err := templates.MakefileUNIX.Execute(&m, data); err != nil {
++			t.Fatal(err)
++		}
++		return e.String(), m.String()
++	}
++	scheme := unixData{Name: "BibleText", AppID: "uk.co.bibletext", Exec: "desktop", ExecField: " %u",
++		Icon: "uk.co.bibletext", MimeTypes: "x-scheme-handler/bibletext;", StartupWMClass: "BibleText"}
++	entry, makefile := render(scheme)
++	for _, want := range []string{"Exec=desktop %u\n", "MimeType=x-scheme-handler/bibletext;\n"} {
++		if !strings.Contains(entry, want) {
++			t.Errorf("desktop entry lacks %q:\n%s", want, entry)
++		}
++	}
++	if !strings.Contains(makefile, `Exec := "desktop"`) {
++		t.Errorf("the Makefile does not keep the bare binary name:\n%s", makefile)
++	}
++	if strings.Count(makefile, "\n\t-update-desktop-database ") != 2 {
++		t.Errorf("the Makefile must refresh mimeinfo.cache on both installs, tolerating a missing tool:\n%s", makefile)
++	}
++	if !strings.Contains(makefile, "|| echo \"update-desktop-database not found") {
++		t.Errorf("a missing update-desktop-database must be said out loud, not swallowed:\n%s", makefile)
++	}
++
++	files := scheme
++	files.ExecField = " %F"
++	files.MimeTypes = "text/plain;"
++	entry, _ = render(files)
++	if !strings.Contains(entry, "Exec=desktop %F\n") {
++		t.Errorf("a file opener lost its %%F:\n%s", entry)
++	}
++
++	params := scheme
++	params.ExecParams = "-x 42"
++	entry, _ = render(params)
++	if !strings.Contains(entry, "Exec=desktop %u -x 42\n") {
++		t.Errorf("ExecParams are not appended after the field code:\n%s", entry)
++	}
++}
++
++// packageUNIX decides the field code from the MIME types: a scheme handler
++// takes %u even when it also opens files, anything else %F.
++func TestSchemeHandlerFieldCodeComesFromTheMimeTypes(t *testing.T) {
++	src := readPackageUnixSource(t)
++	for _, want := range []string{
++		`strings.Contains(mimes, "x-scheme-handler/")`,
++		`openWith = " %u"`,
++		`ExecField:      openWith,`,
++		`Exec:           filepath.Base(p.exe),`,
++	} {
++		if !strings.Contains(src, want) {
++			t.Errorf("package-unix.go lacks %q", want)
++		}
++	}
++	if strings.Contains(src, `Exec:           filepath.Base(p.exe) + openWith,`) {
++		t.Error("the field code is glued onto the binary name again, which breaks the Makefile")
++	}
++}
+--- /dev/null
++++ b/cmd/fyne/internal/commands/package_unix_bibletext_source_test.go
+@@ -0,0 +1,15 @@
++package commands
++
++import (
++	"os"
++	"testing"
++)
++
++func readPackageUnixSource(t *testing.T) string {
++	t.Helper()
++	b, err := os.ReadFile("package-unix.go")
++	if err != nil {
++		t.Fatal(err)
++	}
++	return string(b)
++}

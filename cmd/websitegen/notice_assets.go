@@ -211,6 +211,23 @@ const noticeJS = `
       btn.textContent = label2;
       var note = document.getElementById('iosnote');
       if (note) note.hidden = false;
+    } else if (/Windows NT|Linux|X11/.test(ua)) {
+      // Windows (the Store build; the direct download only once it registers
+      // the scheme itself) and Linux: the bibletext: scheme is this page's own
+      // URL with the scheme swapped, so host, path AND fragment cross — the
+      // verse and the note arrive, unlike the intent:// branch. Re-wired on
+      // hashchange for the same reason the offers are. Chrome and Edge show
+      // nothing at all when no handler is installed, so the download stays
+      // one line below, revealed only here. The Android test runs first
+      // because Android user agents also say "Linux".
+      var schemeHref = function () {
+        btn.setAttribute('href', 'bibletext://' + location.host + location.pathname + location.hash);
+      };
+      schemeHref();
+      window.addEventListener('hashchange', schemeHref);
+      btn.textContent = label2;
+      var get = document.getElementById('getapp');
+      if (get) get.hidden = false;
     }
   }
 })();

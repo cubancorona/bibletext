@@ -404,14 +404,18 @@ func (n noticeSpec) absentLede() string {
 //	         S.browser_fallback_url, which really does hand the URL to the app
 //	         when it is there and falls back to the download page when it is
 //	         not.
-//	Desktop  there is no app to hand off to from a browser, so the affordance is
-//	         the download — which is also the server-rendered default, and
-//	         therefore what a reader with scripting off gets everywhere.
+//	Windows  the bibletext: scheme — this page's URL with the scheme swapped,
+//	Linux    so the verse and the note cross — registered by the Store package
+//	         (msstore/AppxManifest.xml.in) and the Linux desktop entry
+//	         (cmd/desktop/FyneApp.toml [CanOpen]); a hidden "Get BibleText"
+//	         line beneath it is revealed on those platforms, because Chrome
+//	         and Edge show nothing when no handler answers a scheme.
+//	Mac      the download: no scheme is registered there yet.
 //
-// The href here is that default; notice.js narrows it per platform. Structured
-// so that registering a custom scheme later changes ONE branch of notice.js and
-// no markup: the button is already an id with a data- attribute for each
-// platform's target.
+// The href here is the all-platforms default; notice.js narrows it per
+// platform. Structured so that a new platform target changes ONE branch of
+// notice.js and at most one hidden line of markup: the button is an id with
+// a data- attribute for each platform's target.
 func openInApp(n noticeSpec) string {
 	var b strings.Builder
 	b.WriteString(`<section class="nsec">`)
@@ -431,6 +435,11 @@ func openInApp(n noticeSpec) string {
 	// link to the app.
 	b.WriteString(`<p class="opensub" id="iosnote" hidden>On iPhone and iPad this goes by way of the ` +
 		`App Store &mdash; Safari can't pass a bibletext.co.uk link to the app itself.</p>`)
+	// Windows and Linux: the button becomes a bibletext: link, which a
+	// machine without the app answers with silence, so the download is named
+	// beneath it — revealed by notice.js on those platforms only.
+	fmt.Fprintf(&b, `<p class="opensub" id="getapp" hidden>Don't have it? <a href="%s">Get BibleText</a></p>`,
+		appLandingURL)
 	b.WriteString(`</section>`)
 	return b.String()
 }
