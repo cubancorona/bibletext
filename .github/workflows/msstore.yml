@@ -1,0 +1,142 @@
+# Builds the Microsoft Store package: an unsigned MSIX (the Store signs it)
+# around the same BibleText.exe the GitHub release ships, with the manifest
+# filled from the reserved identity and the desktop ledger, and the tiles
+# generated from icon/full.png. The .msix artifact is what gets uploaded in
+# Partner Center; docs/WINDOWS_STORE_LISTING.md holds the listing.
+#
+# The smoke job then proves the package installs and launches: a COPY of the
+# layout gets Mesa's software OpenGL (the runner has no GPU) and a throwaway
+# self-signed certificate whose subject is the reserved publisher, is
+# installed with Add-AppxPackage, activated through the shell like a Store
+# install, and must still be running 30 s later. The Store package itself
+# never carries Mesa or a signature of ours.
+name: Microsoft Store package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "msstore/**"
+      - "cmd/msstore/**"
+      - "scripts/build-windows-exe.sh"
+      - ".github/workflows/msstore.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  msix:
+    name: pack and smoke-install (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@v1.7.2
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
+      - name: build BibleText.exe
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+        run: scripts/build-windows-exe.sh
+      - name: lay out the package
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The committed tiles must be the generator's own output and the
+          # template must fill completely before anything is packed.
+          go test ./cmd/msstore
+          layout=build/msstore/layout
+          mkdir -p "$layout"
+          go run ./cmd/msstore manifest -out "$layout/AppxManifest.xml"
+          cp cmd/desktop/BibleText.exe "$layout/"
+          cp -r msstore/Assets "$layout/Assets"
+          find "$layout" -type f | sort
+      - name: makepri + makeappx
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = & scripts/windows-sdk-bin.ps1
+          Write-Host "Windows SDK tools: $bin"
+          $layout = (Resolve-Path build\msstore\layout).Path
+          & "$bin\makepri.exe" createconfig /cf build\msstore\priconfig.xml /dq en-GB /pv 10.0.0 /o
+          if ($LASTEXITCODE -ne 0) { throw "makepri createconfig failed" }
+          & "$bin\makepri.exe" new /pr $layout /cf build\msstore\priconfig.xml /of build\msstore\resources.pri /o
+          if ($LASTEXITCODE -ne 0) { throw "makepri new failed" }
+          Copy-Item build\msstore\resources.pri $layout\
+          & "$bin\makeappx.exe" pack /d $layout /p build\msstore\BibleText-Windows-x64.msix /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
+          Get-Item build\msstore\BibleText-Windows-x64.msix | Format-List Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BibleText-Windows-x64-msix
+          path: build/msstore/BibleText-Windows-x64.msix
+          if-no-files-found: error
+      - name: smoke-install a signed copy with software OpenGL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = & scripts/windows-sdk-bin.ps1
+          $id = Get-Content msstore\identity.json | ConvertFrom-Json
+          $smoke = "build\msstore\smoke"
+          Copy-Item build\msstore\layout $smoke -Recurse
+          # Mesa llvmpipe beside the exe: the runner's VM has no OpenGL 2.0
+          # (the same trick windows-visual-smoke.yml uses). Smoke copy only.
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -like '*release-msvc.7z' } | Select-Object -First 1
+          Write-Host "Using $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile build\msstore\mesa.7z
+          7z x build\msstore\mesa.7z -obuild\msstore\mesa | Out-Null
+          Copy-Item build\msstore\mesa\x64\*.dll $smoke\
+          & "$bin\makeappx.exe" pack /d $smoke /p build\msstore\smoke.msix /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx pack (smoke) failed" }
+          # A throwaway certificate whose subject is the reserved publisher;
+          # AppX install requires the subject to equal Identity/Publisher.
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $id.identityPublisher `
+            -KeyUsage DigitalSignature -FriendlyName "BibleText smoke" `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          $pw = ConvertTo-SecureString -String "smoke" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath build\msstore\smoke.pfx -Password $pw | Out-Null
+          Import-PfxCertificate -FilePath build\msstore\smoke.pfx -CertStoreLocation Cert:\LocalMachine\TrustedPeople -Password $pw | Out-Null
+          Import-PfxCertificate -FilePath build\msstore\smoke.pfx -CertStoreLocation Cert:\LocalMachine\Root -Password $pw | Out-Null
+          & "$bin\signtool.exe" sign /fd SHA256 /a /f build\msstore\smoke.pfx /p smoke build\msstore\smoke.msix
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+          reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock /v AllowAllTrustedApps /t REG_DWORD /d 1 /f | Out-Null
+          reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock /v AllowDevelopmentWithoutDevLicense /t REG_DWORD /d 1 /f | Out-Null
+          Add-AppxPackage -Path build\msstore\smoke.msix
+          $pkg = Get-AppxPackage -Name $id.identityName
+          if (-not $pkg) { throw "the package did not install" }
+          Write-Host "installed $($pkg.PackageFullName)"
+          if ($pkg.PackageFamilyName -ne $id.packageFamilyName) {
+            throw "package family name $($pkg.PackageFamilyName) differs from msstore/identity.json ($($id.packageFamilyName))"
+          }
+          cmd /c start "" "shell:AppsFolder\$($pkg.PackageFamilyName)!BibleText"
+          Start-Sleep 30
+          $proc = Get-Process -Name BibleText -ErrorAction SilentlyContinue
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("build\msstore\smoke-30s.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose(); $bmp.Dispose()
+          if (-not $proc) { throw "BibleText.exe is not running 30 s after activation" }
+          Write-Host "BibleText.exe (pid $($proc.Id)) is running from $($proc.Path)"
+          Stop-Process -Id $proc.Id -Force
+          Remove-AppxPackage -Package $pkg.PackageFullName
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: msstore-smoke-screenshot
+          path: build/msstore/smoke-30s.png
+          if-no-files-found: ignore

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Builds cmd/desktop/BibleText.exe for the Microsoft Store package exactly the
+# way .github/workflows/release.yml's Windows job builds the release zip: the
+# bundled NKJV key comes from BIBLETEXT_BUNDLED_KEY_ENC, the binary is
+# trimmed and stripped, `fyne package` adds the icon and version resources,
+# and the release-package verifier checks the result. The command lines here
+# are held identical to the release job's by scripts/test-release-key-flow.sh,
+# so the two channels cannot drift apart. Runs on the windows-latest runner
+# (bash, Go, the fyne CLI under GOPATH/bin).
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+# shellcheck source=scripts/release-bible-key.sh
+source scripts/release-bible-key.sh
+load_encoded_release_bible_key
+trap clear_release_bible_key EXIT
+
+cd cmd/desktop
+CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
+# Fyne's Windows packager rebuilds the target to add icon/version
+# resources. GOFLAGS keeps that metadata pass trimmed and stripped.
+GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext --executable BibleText.exe
+BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe

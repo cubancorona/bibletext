@@ -87,6 +87,30 @@ Catholic edition from an epoch-5 cache four epochs behind. Fix: record that
 the current translation was served superseded and refresh it as well; the
 version-state tests (docs/VERSION_STATES.md) are the place to pin it.
 
+## Microsoft Store: from the reserved name to the first submission
+
+The name `BibleText` was reserved on 16 September 2026 (Store ID
+9NDCCZH9RB9K; identity in msstore/identity.json) and the package pipeline
+exists (.github/workflows/msstore.yml builds the unsigned MSIX and
+smoke-installs a signed copy). docs/WINDOWS_STORE_LISTING.md is the listing.
+A reservation lapses three months after it is made, so the first submission
+is due by mid-December 2026. Left to do, in order:
+
+1. **Software OpenGL fallback.** Certification runs on virtual machines with
+   OpenGL 1.1; the toolkit needs 2.0 and the app fails at start-up there.
+   Ship Mesa llvmpipe's `opengl32.dll` in a subfolder and choose it with
+   `SetDllDirectory` before the toolkit loads OpenGL when no hardware ICD is
+   registered (the display class keys' `OpenGLDriverName`, or the legacy
+   `OpenGLDrivers` key). The workflow's smoke copy shows the app runs under
+   llvmpipe; the fallback makes the Store package itself do so.
+2. **Screenshots** from the Windows build, 1920×1080 PNG, four of them,
+   captured with the recapture the other stores wait on (next entry).
+3. **Entra tenant and application** for the submission API (owner creates
+   the tenant, a work account with a password; the app registration and the
+   key follow in Partner Center; secrets in the login keychain).
+4. **First submission by hand** from the listing document, with the
+   publishing hold on; then `msstore/msstore.py` for later releases.
+
 ## Recapture the App Store and Play screenshots — deferred from 1.2.7
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn

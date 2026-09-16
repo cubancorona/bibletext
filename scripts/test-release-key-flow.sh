@@ -39,6 +39,7 @@ ANDROID_RELEASE="$SCRIPT_DIR/build-android.sh"
 IOS_RELEASE="$SCRIPT_DIR/release-ios.sh"
 IOS_SIM="$SCRIPT_DIR/run-ios-sim.sh"
 DESKTOP_RELEASE="$SCRIPT_DIR/../.github/workflows/release.yml"
+STORE_BUILD="$SCRIPT_DIR/build-windows-exe.sh"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/bibletext-release-key-test.XXXXXX")"
 trap 'rm -rf "$TEST_TMP"' EXIT
@@ -80,7 +81,7 @@ PY
 }
 
 for required in "$HELPER" "$WRAPPER" "$VERIFIER" "$PACKAGE_VERIFIER" \
-  "$ANDROID_RELEASE" "$IOS_RELEASE" "$IOS_SIM" "$DESKTOP_RELEASE"; do
+  "$ANDROID_RELEASE" "$IOS_RELEASE" "$IOS_SIM" "$DESKTOP_RELEASE" "$STORE_BUILD"; do
   [ -f "$required" ] || fail "required release component is missing"
 done
 
@@ -167,12 +168,13 @@ PY
 # Desktop jobs receive only the encoded payload through an Actions secret and
 # must inject and verify it for every published architecture. The raw project
 # key must never be configured on a GitHub runner.
-python3 - "$DESKTOP_RELEASE" "$PACKAGE_VERIFIER" <<'PY'
+python3 - "$DESKTOP_RELEASE" "$PACKAGE_VERIFIER" "$STORE_BUILD" <<'PY'
 from pathlib import Path
 import sys
 
 workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
 verifier = Path(sys.argv[2]).read_text(encoding="utf-8")
+store_build = Path(sys.argv[3]).read_text(encoding="utf-8")
 
 store = Path(sys.argv[1]).parent.joinpath("release-mac-store.sh")
 if store.exists():
@@ -199,6 +201,23 @@ if '-ldflags=$BIBLE_KEY_LDFLAGS' not in workflow:
     raise SystemExit("release.yml: Windows resource rebuild must preserve the linker value")
 if 'verify-release-key.py" "$binary_path"' not in verifier:
     raise SystemExit("verify-release-package.sh: packaged key verification is missing")
+
+# The Microsoft Store package (.github/workflows/msstore.yml) is built by
+# scripts/build-windows-exe.sh from the same recipe as the release zip: key
+# isolation, the trimmed and stripped build, the resource rebuild that keeps
+# the linker value, and the packaged-key verification, each line identical.
+for line in (
+    "unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY",
+    "load_encoded_release_bible_key",
+    "trap clear_release_bible_key EXIT",
+    'CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .',
+    'GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext --executable BibleText.exe',
+    'BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe',
+):
+    if line not in workflow:
+        raise SystemExit("release.yml: the Windows job lost a line the Store build script mirrors")
+    if line not in store_build:
+        raise SystemExit("build-windows-exe.sh: the Store build must mirror the release job's Windows recipe")
 
 # `fyne package` rewrites FyneApp.toml's Build after each successful package.
 # Both macOS architectures are packaged from ONE checkout, so without a restore
