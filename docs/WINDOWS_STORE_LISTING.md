@@ -146,14 +146,17 @@ composed or foreign-platform images), with the current typeface, headings and
 the verse-of-the-day card in frame: the same recapture the other stores wait
 on (`docs/BACKLOG.md`). The GitHub Windows runner's screen is 1024×768, too
 small for the Store, so the capture is done on a Windows machine with the
-release zip or the smoke package. Suggested four: a chapter with a heading
+release zip or the sideloaded package (see "Resuming with a Windows
+machine"). Suggested four: a chapter with a heading
 and a note pill, search results, the notes browser, and the settings page
 with the audio controls visible.
 
 ## Packaging
 
-The GitHub release ships a bare `BibleText.exe` (`scripts/build-windows-exe.sh`,
-run by `.github/workflows/release.yml`). The Store wants either an MSIX
+The GitHub release ships `BibleText-Windows-amd64.zip` (one `BibleText.exe`
+inside), built by the Windows job of `.github/workflows/release.yml`;
+`scripts/build-windows-exe.sh` is the same recipe, held line-identical to
+that job by `scripts/test-release-key-flow.sh`. The Store wants either an MSIX
 package or an EXE/MSI installer hosted by the developer and signed with the
 developer's own certificate. The MSIX route needs no certificate (the Store
 re-signs the package with the identity above) and hosts the binary in the
@@ -161,9 +164,9 @@ Store, so it is the one taken. `fyne release -os windows` produces an .appx
 whose manifest is not ours to shape, so it is not used.
 
 `.github/workflows/msstore.yml` (windows-latest; on demand, and on pushes to
-`main` that touch the packaging inputs):
+`main` that touch the packaging inputs or the link code):
 
-1. builds `BibleText.exe` with the same script as the release;
+1. builds `BibleText.exe` with the same recipe as the release;
 2. runs the `cmd/msstore` tests, then fills `msstore/AppxManifest.xml.in`
    from `msstore/identity.json` and the desktop ledger, and lays out the
    exe, the manifest and `msstore/Assets/` under `build/msstore/layout/`;
@@ -172,8 +175,9 @@ whose manifest is not ours to shape, so it is not used.
 4. smoke-installs a COPY: Mesa's software OpenGL beside the exe (the runner
    has no GPU), a throwaway self-signed certificate whose subject is the
    reserved publisher, `Add-AppxPackage`, activation through the shell, and
-   the process must still be running after 30 s. The Store package never
-   carries Mesa or a signature of ours.
+   the process must still be running after 30 s; then the link checks
+   under "Links" below. The Store package never carries Mesa or a
+   signature of ours.
 
 Manifest choices (also in the template's own comment): `Windows.Desktop` from
 `10.0.19041.0` with `uap10:RuntimeBehavior="packagedClassicApp"` and
@@ -192,8 +196,8 @@ channel.
   Teams, the Run box, anything that calls ShellExecute) opens the app at the
   verse. The site consents in `/.well-known/windows-app-web-link` (source
   `docs/windows-app-web-link`, published by `scripts/publish-site.sh` at the
-  root as well); Windows fetches that file itself and re-reads it every few
-  days; the Store checks nothing. Links clicked inside Edge, Chrome or Firefox
+  root as well); Windows fetches that file itself and sees a change between the same
+  day and eight days later; the Store checks nothing. Links clicked inside Edge, Chrome or Firefox
   stay in the browser, by Microsoft's design, and the reader chooses the
   default app under Settings → Apps → Apps for websites (there is no per-app
   switch to promise; an administrator can disable the feature device-wide).
@@ -206,7 +210,7 @@ and `Parameters`); `share_link_argv.go` reads it once at start. A second
 launch while the reader is open hands the link to the running instance over
 loopback and exits (`single_instance.go`; the record lives at
 `%LocalAppData%\bibletext\single-instance.bibletext.store.json`, which MSIX
-redirects into the package's LocalCache). "Read it in the browser" starts the
+redirects to `…\Packages\<package family name>\LocalCache\Local\bibletext\`). "Read it in the browser" starts the
 default browser directly rather than through the shell, or the handler would
 catch the app's own link; an echo guard bounds the loop if that fallback is
 ever taken. The smoke job checks the installed declarations, validates the
@@ -218,10 +222,10 @@ running (one process must remain), and tries an https link through the shell
 What a packaged full-trust app changes at runtime: the install directory is
 read-only, so nothing may be written beside the exe (BibleText writes only
 under the user's config and cache directories); new files under
-`%AppData%\Local` and `%AppData%\Roaming` are redirected to
-`%LocalAppData%\Packages\<package family name>\LocalCache\`, which is where
-preferences, notes and the Bible cache land for a Store install and what an
-uninstall removes. Nothing in the app assumes otherwise.
+`%LocalAppData%` and `%AppData%` are redirected to
+`%LocalAppData%\Packages\<package family name>\LocalCache\Local\` and
+`…\LocalCache\Roaming\`, which is where the Bible cache, the preferences
+and the notes land for a Store install and what an uninstall removes. Nothing in the app assumes otherwise.
 
 ## Submission (first release, by hand)
 
@@ -272,7 +276,7 @@ went straight into the login Keychain with the tenant and client ids:
 | --- | --- |
 | `uk.co.bibletext.msstore` | `tenant-id`, `client-id`, `client-secret` |
 
-`. scripts/msstore-env.sh` exports them (nothing printed), the way
+`. scripts/msstore-env.sh` exports them (no credential is printed), the way
 `scripts/asc-env.sh` does for App Store Connect. `msstore/msstore.py`
 (standard library) takes a client-credentials token for the classic Dev
 Center resource and reads the account: `apps` lists every product with its
@@ -282,9 +286,124 @@ listed `9NDCCZH9RB9K BibleText`, which proves the tenant association, the
 role and the key. The write side (create a submission, upload the package to
 its SAS URL, commit, poll) is written against the second release, once the
 first has gone through the console: name reservation, the age rating and the
-first publish are console-only. `msstore-cli` remains the oracle when the
-two disagree. Rotating the key is the same console path; the Keychain item
+first publish are console-only. Microsoft's own command-line tool (`msstore`, from
+github.com/microsoft/msstore-cli; it runs on macOS on .NET) answers the same
+reads with `msstore apps list` and is the cross-check when this client and
+the console disagree. Rotating the key is the same console path; the Keychain item
 is replaced and nothing in the repository changes.
+
+## Resuming with a Windows machine
+
+State on 16 September 2026, so the work can be picked up cold. Everything
+below the line "verified" was observed; everything under "to verify" needs a
+Windows 11 client (the runner is Windows Server) and is the reason to sit
+down at one.
+
+**Verified, on the windows-latest runner (Windows Server 2025, build
+26100; `.github/workflows/msstore.yml`, run 35076702153 of 16 September
+2026):** the package builds by the release's own recipe; a copy signed with a
+throwaway certificate installs under the reserved identity, and the
+installed manifest carries both link handlers; the consent file passes
+Windows' verifier (exit 0, and exit 1 for a deliberately broken copy); a
+cold `bibletext://…/web/john/3/#v16` activation starts the app with the full
+URL, fragment included, on its command line — the smoke asserts the command
+line, and that the reader landed on John 3:16 was read off the run's
+screenshot, kept as `docs/windows-store-smoke-john3.jpg`; a second
+activation while running hands off to the first process and exits. An https
+link launched through the shell did NOT open the app on the server edition,
+which is expected there and settles nothing. On the Mac, the handoff and the
+intake are covered by `go test` and `go test -tags bibletextdev`
+(`share_link_argv_test.go`, `single_instance_test.go`,
+`single_instance_dev_test.go`); the Store package tests run in CI on every
+push. Run logs and artifacts expire after 90 days, so the numbers above are
+history, not something to fetch.
+
+**To get the package onto the machine:** download the
+`BibleText-Windows-x64-msix` artifact from the latest green run of the Store
+workflow (Actions → Microsoft Store package). Artifacts live 90 days and the
+workflow runs only on pushes that touch its inputs, so if no live one
+exists, start it by hand (Run workflow) and take that run's artifact; it
+carries the desktop ledger's version of that tree. Then, in a PowerShell 7
+started with Run as administrator under your own account, at the
+repository root, with the Windows SDK installed:
+
+```powershell
+pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-Windows-x64.msix
+```
+
+It signs a copy with a throwaway certificate (the artifact itself stays
+unsigned, as the Store wants it), trusts the certificate's public half,
+installs, and prints the launch, scheme and https commands and the record
+file's location. `-Uninstall` removes package and certificate; `-Mesa <dir>`
+adds software OpenGL for a virtual machine with no GPU driver. A sideloaded
+package has its web-to-app links validated at install without the site's
+consent file being fetched (Microsoft's rule for sideloads), which shapes
+step 4 below.
+
+**To verify, in this order** (each line names what it settles):
+
+1. Plain launch from Start; open a chapter; quit; launch again — the app
+   runs from `C:\Program Files\WindowsApps\…` and keeps its reading position
+   (data under `%LocalAppData%\Packages\<package family name>\LocalCache\`).
+2. Paste `bibletext://bibletext.co.uk/web/john/3/#v16` into Win+R (the
+   Run box takes a bare URL; `start` is a cmd built-in, so in cmd it is
+   `start "" "bibletext://…"` as the smoke runs it, and in PowerShell
+   `start` is Start-Process) with the app CLOSED, then again with it OPEN
+   and minimised — cold start opens John 3:16; the warm one comes to the
+   front un-minimised, one process in Task Manager
+   (`AllowSetForegroundWindow`, `SW_RESTORE`).
+3. The notice page's "Open in BibleText" button (any `/nkjv/…` chapter on
+   the site) in Edge, Chrome and Firefox, twice: (a) with the app installed
+   — each browser's own prompt for an unknown scheme, whether it offers
+   "always allow", then the app; (b) after `-Uninstall` — whether the
+   browser shows nothing at all, which is what the hidden "Get BibleText"
+   line beneath the button assumes (`cmd/websitegen/notice.go`), or a
+   dialog. Reinstall afterwards.
+4. The web-to-app handler, in two passes. (a) Paste
+   `https://bibletext.co.uk/web/john/3/#v16` into Win+R, and click an https
+   link to the site in Outlook or Teams — a sideloaded package has these
+   links validated at install, so this settles `desktop2:Parameters` on
+   `uap3:AppUriHandler` and the handler firing on a client, and nothing
+   about the site's consent file. Settings → Apps → Apps for websites
+   should list BibleText for bibletext.co.uk. The same link clicked INSIDE
+   Edge or Chrome must stay in the browser. (b) Set the registry value
+   `ForceValidation` = 1 (DWORD) under
+   `HKCU\Software\Classes\LocalSettings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\<package family name>\AppUriHandlers`
+   (the family name is in `msstore/identity.json`), reinstall, and repeat —
+   only this pass, or the Store's own install after certification, shows
+   whether the consent file as GitHub Pages serves it
+   (`application/octet-stream`) is accepted; Windows re-reads it between
+   the same day and eight days later.
+5. In the app, a note-bearing link with notes switched off → "Read it in
+   the browser" — the default browser opens the link directly (the
+   association query, not ShellExecute) and the app does not relaunch
+   itself; check with Edge, Chrome and Firefox as the default in turn.
+6. Book-index link `bibletext://bibletext.co.uk/web/john/` — the app opens
+   the browser at that index rather than showing nothing (invariant I2).
+7. A machine or VM with no OpenGL 2.0 driver: the app fails to start. That
+   is the certification risk under "Risks" and the reason for the software
+   OpenGL fallback in `docs/BACKLOG.md`; `-Mesa` on the sideload script
+   shows what the fallback would give.
+8. The direct-download build on the same machine: run the release zip's
+   `BibleText.exe` once and note whether Windows Defender Firewall prompts
+   for its loopback listener (the package never prompts; the bare exe is
+   the open question), then launch it a second time with a `bibletext:`
+   link — the direct channel's record is
+   `%LocalAppData%\bibletext\single-instance.bibletext.direct.json` and the
+   handoff must work there too.
+9. Screenshots for the listing: four PNGs at 1920×1080 from this build
+   (a chapter with a heading and a note pill, search results, the notes
+   browser, settings with the audio controls) — see "Images".
+
+**Then, in this order:** the software OpenGL fallback (backlog); the
+screenshots; the first submission by hand from this document with the
+publishing hold on; after it is live, the write side of `msstore/msstore.py`
+against the second release. The Linux half has its own checks: `make
+user-install` from the release tarball, `xdg-open bibletext://…`, the
+browsers' prompts, and whether the window comes to the front under
+XWayland (the toolkit asks X11 for it; the compositor decides), with the
+desktop entry's `Exec=desktop %u` and `MimeType=x-scheme-handler/bibletext;`
+already asserted by the release job.
 
 ## Risks
 
@@ -303,9 +422,11 @@ is replaced and nothing in the repository changes.
   the https step that would exercise the handler is advisory on the server
   runner), that the web-to-app handler fires with the consent file
   served by GitHub Pages as `application/octet-stream` (Microsoft documents
-  no content type; Outlook's own file is served the same way), the browsers'
-  prompt for the `bibletext:` scheme, the foreground grant, and Partner
-  Center's reaction to the two declarations.
+  no content type; Outlook's own file is served the same way; a plain
+  sideload proves nothing here because sideloaded links are validated
+  without the file — `ForceValidation`, step 4b above), the browsers' prompt
+  for the `bibletext:` scheme, the foreground grant, and Partner Center's
+  reaction to the two declarations.
 - **Policy 11.16** requires the generative-AI declaration and disclosure in
   the description; both are in place. Policy 10.3 asks that a product be
   testable: the notes for certification say how, and API.Bible must be up.

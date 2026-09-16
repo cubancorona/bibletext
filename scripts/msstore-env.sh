@@ -10,7 +10,7 @@
 # settings → User management → Microsoft Entra applications → the app →
 # Add new key) and goes straight into the Keychain; it is never written down.
 #
-# NOTHING IS PRINTED. Sourced, not executed: it exports into the calling shell.
+# NO CREDENTIAL IS PRINTED. Sourced, not executed: it exports into the calling shell.
 
 case "$-" in
   *x*)

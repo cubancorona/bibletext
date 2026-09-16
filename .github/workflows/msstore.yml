@@ -8,8 +8,13 @@
 # layout gets Mesa's software OpenGL (the runner has no GPU) and a throwaway
 # self-signed certificate whose subject is the reserved publisher, is
 # installed with Add-AppxPackage, activated through the shell like a Store
-# install, and must still be running 30 s later. The Store package itself
-# never carries Mesa or a signature of ours.
+# install, and must still be running 30 s later. It then checks the two link
+# handlers in the installed manifest, validates the site's consent file with
+# Windows' verifier against a deliberately broken copy, activates the
+# bibletext: scheme cold (the command line must carry the URL and its
+# fragment) and warm (one process must remain), and tries an https link
+# through the shell as an advisory step. The Store package itself never
+# carries Mesa or a signature of ours.
 name: Microsoft Store package
 
 on:

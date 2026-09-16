@@ -113,23 +113,21 @@ is due by mid-December 2026. Left to do, in order:
    release.
 4. **First submission by hand** from the listing document, with the
    publishing hold on; then `msstore/msstore.py` for later releases.
-5. **Links** (done in the tree 16 Sep 2026, unverified on a Windows client):
-   the manifest declares the web-to-app handler and the `bibletext:` scheme,
-   `docs/windows-app-web-link` is published beside the Apple and Android
-   files, the app reads its command line and hands a second launch to the
-   running instance. Open: the direct-download zip could register the
+5. **Links** — done and pushed 16 Sep 2026, proven on the runner for the
+   `bibletext:` scheme and the single-instance handoff; the web-to-app
+   handler (https links through the shell) and the browsers' scheme prompts
+   still need a Windows 11 client. The ordered checklist for that sitting,
+   and the sideload script that installs the workflow's artifact, are in
+   `docs/WINDOWS_STORE_LISTING.md` under "Resuming with a Windows machine".
+   Still unproven anywhere: the window coming to the front under XWayland
+   on Linux, and whether the direct-download exe's loopback listener draws
+   a firewall prompt on Windows (both on that checklist).
+   Deferred from the same change: the direct-download zip registering the
    `bibletext:` scheme itself (`HKCU\Software\Classes\bibletext`, gated on
-   not being packaged, with a Settings switch to remove it — the app's first
-   registry write, deferred rather than folded into the link change); a
-   macOS `CFBundleURLTypes` for the
-   same scheme (the delegate's `openURLs` entry point is already there); an
-   "Open in BibleText" affordance on the reader pages, not only the notice
-   pages. Unverifiable without a Windows 11 client or a Linux desktop:
-   `desktop2:Parameters` on a packaged classic app (the smoke's scheme step
-   settles only the `uap3:Protocol` form; the https step is advisory on the
-   server runner), the handler firing on Windows 11 with
-   the file served as `application/octet-stream`, the browsers' scheme
-   prompt, the foreground grant, the X11 raise under XWayland.
+   not being packaged, with a Settings switch to remove it — the app's
+   first registry write); a macOS `CFBundleURLTypes` for the same scheme
+   (the delegate's `openURLs` entry point is already there); an "Open in
+   BibleText" affordance on the reader pages, not only the notice pages.
 
 ## Recapture the App Store and Play screenshots — deferred from 1.2.7
 

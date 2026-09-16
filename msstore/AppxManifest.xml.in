@@ -13,7 +13,8 @@
   - Windows.Desktop from 10.0.19041.0: the uap10 RuntimeBehavior/TrustLevel
     form of a packaged classic app needs that floor; older systems would
     refuse the install rather than run it. MaxVersionTested is the newest
-    Windows 11 the app was exercised on.
+    build the app was exercised on: 26100, Windows Server 2025 on the Store
+    smoke runner, the same build as Windows 11 24H2.
   - runFullTrust is the only capability: a full-trust Win32 process already
     runs as the user, so internetClient and the other AppContainer
     capabilities do not apply to it.
