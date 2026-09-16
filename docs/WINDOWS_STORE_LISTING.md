@@ -140,17 +140,20 @@ in `cmd/msstore` hold the committed files equal to a fresh render.
 | --- | --- | --- |
 | Store logo (tile) | 300×300 PNG | `msstore/listing/store-logo-300.png` |
 | Box art 1:1 | 1080×1080 PNG | `msstore/listing/box-art-1080.png` |
-| Desktop screenshots | PNG, 1366×768 or larger (1920×1080 preferred), ≤ 50 MB, up to 10; one is required, four or more recommended; key content in the top two thirds; no added logos or marketing text; optional caption ≤ 200 characters | to capture |
+| Desktop screenshots | PNG, 1366×768 or larger, ≤ 50 MB, up to 10; one is required, four or more recommended; key content in the top two thirds; no added logos or marketing text; optional caption ≤ 200 characters | `docs/screenshots/windows/` — four at 1600×960 |
 
-Screenshots must come from the Windows build itself (the Store rejects
-composed or foreign-platform images), with the current typeface, headings and
-the verse-of-the-day card in frame: the same recapture the other stores wait
-on (`docs/BACKLOG.md`). The GitHub Windows runner's screen is 1024×768, too
-small for the Store, so the capture is done on a Windows machine with the
-release zip or the sideloaded package (see "Resuming with a Windows
-machine"). Suggested four: a chapter with a heading
-and a note pill, search results, the notes browser, and the settings page
-with the audio controls visible.
+Screenshots must come from the Windows build itself; the Store rejects
+composed or foreign-platform images. They are captured on the runner rather
+than by hand: `.github/workflows/windows-screenshots.yml` raises the runner's
+screen from 1024×768 to 1920×1080 (`Set-DisplayResolution`), builds the
+release executable with Mesa's software OpenGL beside it, opens it with links
+minted by the app's own link code, and saves the WINDOW's client area — no
+desktop, no frame, no evaluation watermark — for four scenes: a note received
+inside a shared link under its section heading, a passage, search results,
+and the settings sheet. Dispatch it, download the artifact, replace
+`docs/screenshots/windows/` (`docs/screenshots/README.md`), then upload them
+in Partner Center. Different scenes are a change to
+`scripts/capture-windows-screenshots.ps1`.
 
 ## Packaging
 
@@ -392,9 +395,8 @@ step 4 below.
    link — the direct channel's record is
    `%LocalAppData%\bibletext\single-instance.bibletext.direct.json` and the
    handoff must work there too.
-9. Screenshots for the listing: four PNGs at 1920×1080 from this build
-   (a chapter with a heading and a note pill, search results, the notes
-   browser, settings with the audio controls) — see "Images".
+9. Screenshots: only if the runner-captured set in `docs/screenshots/windows/`
+   needs a scene the capture script cannot drive — see "Images".
 
 **Then, in this order:** the software OpenGL fallback (backlog); the
 screenshots; the first submission by hand from this document with the
