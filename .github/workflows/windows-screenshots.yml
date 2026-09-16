@@ -1,0 +1,103 @@
+# Tries to capture the Windows listing screenshots on a runner. The runner's
+# screen is 1024x768 by default, below the Store's 1366x768 floor; this
+# raises it with Set-DisplayResolution first and reports what it got, then
+# launches the release build with Mesa's software OpenGL beside it and takes
+# one capture per scene. Dispatch it and read the artifact; if the
+# resolution cannot be raised the run says so and the Windows sitting keeps
+# the screenshots (docs/WINDOWS_STORE_LISTING.md).
+name: Windows screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
+      - name: build the keyed executable and the share links
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+        run: |
+          set -euo pipefail
+          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+          source scripts/release-bible-key.sh
+          load_encoded_release_bible_key
+          trap clear_release_bible_key EXIT
+          mkdir -p build/shots build/linkgen
+          (cd cmd/desktop && CGO_ENABLED=1 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w -H windowsgui" -o ../../build/shots/BibleText.exe .)
+          cat > build/linkgen/main.go <<'GO'
+          package main
+
+          import (
+          	"fmt"
+
+          	"github.com/cubancorona/bibletext"
+          )
+
+          func main() {
+          	fmt.Println(bibletext.ShareLinkURLWithNote("bsb", "John", 11, 17, 17, "Read this one slowly. Martha's faith, before the miracle."))
+          	fmt.Println(bibletext.ShareLinkURL("bsb", "John", 3, 16, 16))
+          }
+          GO
+          go run ./build/linkgen > build/shots/links.txt
+      - name: Mesa llvmpipe beside the exe (the runner has no OpenGL 2.0)
+        shell: pwsh
+        run: |
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -like '*release-msvc.7z' } | Select-Object -First 1
+          Invoke-WebRequest $asset.browser_download_url -OutFile mesa.7z
+          7z x mesa.7z -omesa | Out-Null
+          Copy-Item mesa\x64\*.dll build\shots\
+      - name: raise the screen and capture
+        shell: pwsh
+        env:
+          FYNE_THEME: light
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $before = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          Write-Host "screen before: $($before.Width)x$($before.Height)"
+          try { Set-DisplayResolution -Width 1920 -Height 1080 -Force } catch { Write-Host "Set-DisplayResolution failed: $_" }
+          Start-Sleep 3
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          Write-Host "screen after: $($b.Width)x$($b.Height)"
+          if ($b.Width -lt 1366) { Write-Host "::warning::the runner's screen stays at $($b.Width)x$($b.Height), below the Store's 1366x768 floor; the Windows sitting keeps the screenshots" }
+          function Shot([string]$name) {
+            $bb = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $bb.Width, $bb.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($bb.Location, [System.Drawing.Point]::Empty, $bb.Size)
+            New-Item -ItemType Directory -Force build\shots\out | Out-Null
+            $bmp.Save("build\shots\out\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+            Write-Host "captured $name"
+          }
+          $links = Get-Content build\shots\links.txt
+          $app = Start-Process -FilePath build\shots\BibleText.exe -ArgumentList "`"$($links[0])`"" -PassThru
+          Start-Sleep 45
+          Shot "note"
+          Start-Process -FilePath build\shots\BibleText.exe -ArgumentList "`"$($links[1])`"" -Wait
+          Start-Sleep 6
+          Shot "reading"
+          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshots
+          path: build/shots/out/*.png
+          if-no-files-found: warn

@@ -14,7 +14,7 @@ import (
 
 const repo = "../.."
 
-// The committed tiles are the generator's own output from icon/full.png: a
+// The committed tiles are the generator's own output from the shipped icon: a
 // stray, missing, resized or hand-edited file fails here, and the fix is to
 // run `go run ./cmd/msstore assets` again.
 func TestCommittedTilesAreTheGeneratorsOutput(t *testing.T) {
@@ -27,7 +27,7 @@ func TestCommittedListingLogosAreTheGeneratorsOutput(t *testing.T) {
 
 func checkRendered(t *testing.T, dir string, table []asset, command string) {
 	t.Helper()
-	icon, err := loadIcon(filepath.Join(repo, "icon", "full.png"))
+	icon, err := loadIcon(filepath.Join(repo, "cmd", "desktop", "Icon.png"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -34,7 +34,7 @@ single-instance code, and one version names one tree on every channel).
 | Categories | `Education;Spirituality;` | the registry ties Spirituality to Education |
 | Licences | `project_license` Apache-2.0; `metadata_license` CC0-1.0; LICENSE, NOTICE and the font licences installed under `share/licenses/<id>` | NOTICE now names Noto Color Emoji, which every patched build embeds |
 | Developer name | `cubancorona`, the copyright holder in LICENSE and NOTICE | AppStream forbids a domain-style name; **open: a personal name or "BibleText" instead** |
-| Icon | scaled from `cmd/desktop/Icon.png`, the shipped mark | `icon/full.png` is the retired dove, which `cmd/msstore` still renders the Windows tiles from — **open, separate fix** |
+| Icon | scaled from `cmd/desktop/Icon.png`, the shipped mark | the same source the Windows tiles now use; `icon/full.png` is the retired dove |
 | Brand colours | `#2F4C86` light, `#7CA0E4` dark | the app's own accents (`theme.go`) |
 | Screenshots | four window captures under `docs/screenshots/linux/`, referenced by commit-pinned raw URLs; the `<screenshots>` block is left out until `screenshots.ref` names that commit | not captured yet; captured by the Linux smoke workflow on a runner |
 

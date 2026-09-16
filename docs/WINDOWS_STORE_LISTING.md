@@ -131,7 +131,8 @@ note the other stores get (`build/appstore/metadata/en-GB/whats-new-<v>.txt`).
 
 ## Images
 
-Package tiles and listing logos are generated from `icon/full.png` by
+Package tiles and listing logos are generated from the shipped icon,
+`cmd/desktop/Icon.png` (the same mark every other channel carries), by
 `go run ./cmd/msstore assets` and `go run ./cmd/msstore listing`; the tests
 in `cmd/msstore` hold the committed files equal to a fresh render.
 

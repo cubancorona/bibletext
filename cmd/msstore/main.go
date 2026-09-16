@@ -1,5 +1,6 @@
 // Command msstore prepares the inputs of the Microsoft Store package: the
-// tile assets scaled from icon/full.png, and the AppxManifest filled from the
+// tile assets scaled from the shipped icon (cmd/desktop/Icon.png, the mark
+// every other channel carries), and the AppxManifest filled from the
 // desktop ledger (cmd/desktop/FyneApp.toml) and the identity Partner Center
 // assigned when the name was reserved (msstore/identity.json).
 //
@@ -74,7 +75,7 @@ func assetTable() []asset {
 	return out
 }
 
-// renderAsset scales the square source icon to the asset's size. A wide tile
+// renderAsset scales the square source icon (the shipped mark) to the asset's size. A wide tile
 // keeps the icon square, scaled to the tile's height and centred on a
 // transparent canvas, so the tile's own background colour shows either side.
 func renderAsset(src image.Image, a asset) *image.NRGBA {
@@ -204,7 +205,7 @@ func repoRelative(parts ...string) string {
 
 func runAssets(args []string) error {
 	fs := flag.NewFlagSet("assets", flag.ContinueOnError)
-	icon := fs.String("icon", repoRelative("icon", "full.png"), "square source icon")
+	icon := fs.String("icon", repoRelative("cmd", "desktop", "Icon.png"), "square source icon")
 	out := fs.String("out", repoRelative("msstore", "Assets"), "directory the tiles are written to")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -218,7 +219,7 @@ func runAssets(args []string) error {
 
 func runListing(args []string) error {
 	fs := flag.NewFlagSet("listing", flag.ContinueOnError)
-	icon := fs.String("icon", repoRelative("icon", "full.png"), "square source icon")
+	icon := fs.String("icon", repoRelative("cmd", "desktop", "Icon.png"), "square source icon")
 	out := fs.String("out", repoRelative("msstore", "listing"), "directory the listing logos are written to")
 	if err := fs.Parse(args); err != nil {
 		return err

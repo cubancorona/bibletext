@@ -1,0 +1,106 @@
+# Captures the Linux listing screenshots on a runner: the release build under
+# Xvfb with software OpenGL in the light theme, driven by xdotool through
+# four scenes, each saved as a PNG artifact. Dispatch it, download the
+# artifact, commit the four files under docs/screenshots/linux/, then set
+# screenshots.ref in linux/listing.toml to that commit and re-render
+# (docs/LINUX_STORES.md, "Order of work").
+name: Linux screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install GL/X11/ALSA headers and the capture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev xvfb xdotool imagemagick mesa-utils
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
+      - name: build the keyed executable and the share links
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+        run: |
+          set -euo pipefail
+          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+          source scripts/release-bible-key.sh
+          load_encoded_release_bible_key
+          trap clear_release_bible_key EXIT
+          (cd cmd/desktop && CGO_ENABLED=1 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/shots/bibletext .)
+          # The links the scenes open, minted by the app's own link code so the
+          # note travels in the grammar the app reads.
+          mkdir -p build/linkgen
+          cat > build/linkgen/main.go <<'GO'
+          package main
+
+          import (
+          	"fmt"
+
+          	"github.com/cubancorona/bibletext"
+          )
+
+          func main() {
+          	fmt.Println(bibletext.ShareLinkURLWithNote("bsb", "John", 11, 17, 17, "Read this one slowly. Martha's faith, before the miracle."))
+          	fmt.Println(bibletext.ShareLinkURL("bsb", "John", 3, 16, 16))
+          }
+          GO
+          go run ./build/linkgen > build/shots/links.txt
+          cat build/shots/links.txt
+      - name: capture the four scenes
+        shell: bash
+        env:
+          FYNE_THEME: light
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p build/shots/out
+          NOTE_LINK="$(sed -n 1p build/shots/links.txt)"
+          PLAIN_LINK="$(sed -n 2p build/shots/links.txt)"
+          export NOTE_LINK PLAIN_LINK
+          xvfb-run -a -s "-screen 0 1600x1000x24" bash -c '
+            set -euo pipefail
+            shot() { sleep 2; import -window root -crop 1280x860+0+0 +repage "build/shots/out/$1.png"; echo "captured $1"; }
+            # Scene 1: a note received inside a shared link, on a chapter with a heading.
+            build/shots/bibletext "$NOTE_LINK" &
+            APP=$!
+            sleep 45
+            shot note
+            # Scene 2: a plain passage, delivered to the running instance by a second launch.
+            timeout 20 build/shots/bibletext "$PLAIN_LINK" || true
+            sleep 6
+            shot reading
+            # Scene 3: search results. The rail is at the left edge; Search is its third entry.
+            xdotool mousemove 30 575 click 1
+            sleep 2
+            xdotool type --delay 40 "light of the world"
+            xdotool key Return
+            sleep 8
+            shot search
+            # Scene 4: settings, from the gear at the top right of the header.
+            xdotool mousemove 30 360 click 1
+            sleep 2
+            xdotool mousemove 1247 40 click 1
+            sleep 4
+            shot settings
+            kill $APP
+          '
+          ls -la build/shots/out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-screenshots
+          path: build/shots/out/*.png
+          if-no-files-found: error

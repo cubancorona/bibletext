@@ -150,8 +150,6 @@ verification token. Deferred with it:
   fallback question in both sandboxes.
 - **An SVG of the shipped icon** — Flathub prefers one; the full-bleed PNG
   draws a quality note, not a rejection.
-- **The Windows tiles render from `icon/full.png`**, the retired mark, while
-  every other channel ships `cmd/desktop/Icon.png`; decide, then regenerate.
 - **Snap preferences under the per-revision data dir** — a revert restores
   older notes; `XDG_CONFIG_HOME=$SNAP_USER_COMMON/.config` would opt out.
 - **Bump the Flatpak runtime to 26.08** when the golang SDK extension has
