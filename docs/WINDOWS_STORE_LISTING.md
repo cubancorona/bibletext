@@ -184,6 +184,37 @@ so the package version is the ledger's `Version` with `.0`, and re-uploading
 for the same app version means a patch bump: one version, one tree, on every
 channel.
 
+**Links.** The manifest declares two handlers under the application's
+`Extensions`, both tested by `cmd/msstore`:
+
+- a web-to-app handler (`uap3:AppUriHandler`) for `bibletext.co.uk`, so an
+  `https://bibletext.co.uk/...` link launched through the shell (Outlook,
+  Teams, the Run box, anything that calls ShellExecute) opens the app at the
+  verse. The site consents in `/.well-known/windows-app-web-link` (source
+  `docs/windows-app-web-link`, published by `scripts/publish-site.sh` at the
+  root as well); Windows fetches that file itself and re-reads it every few
+  days; the Store checks nothing. Links clicked inside Edge, Chrome or Firefox
+  stay in the browser, by Microsoft's design, and the reader chooses the
+  default app under Settings → Apps → Apps for websites (there is no per-app
+  switch to promise; an administrator can disable the feature device-wide).
+- the `bibletext:` scheme (`uap3:Protocol`), the only route from a browser
+  click on any desktop and what the site's "Open in BibleText" button uses.
+  The payload is the https link with the scheme swapped.
+
+Both put the URL on `BibleText.exe`'s command line (`desktop2:Parameters`
+and `Parameters`); `share_link_argv.go` reads it once at start. A second
+launch while the reader is open hands the link to the running instance over
+loopback and exits (`single_instance.go`; the record lives at
+`%LocalAppData%\bibletext\single-instance.bibletext.store.json`, which MSIX
+redirects into the package's LocalCache). "Read it in the browser" starts the
+default browser directly rather than through the shell, or the handler would
+catch the app's own link; an echo guard bounds the loop if that fallback is
+ever taken. The smoke job checks the installed declarations, validates the
+consent file with Windows' own verifier, activates the scheme cold (the
+command line must carry the URL and its fragment), activates it again while
+running (one process must remain), and tries an https link through the shell
+(advisory on the server runner).
+
 What a packaged full-trust app changes at runtime: the install directory is
 read-only, so nothing may be written beside the exe (BibleText writes only
 under the user's config and cache directories); new files under
@@ -264,6 +295,15 @@ login keychain.
   with `SetDllDirectory` before the toolkit loads OpenGL); until then a
   certification failure on this point is possible and would cost a round.
 - **Publisher name on an individual account** (Policy 10.14, above).
+- **Unverifiable without a Windows 11 client**: that `desktop2:Parameters`
+  on the web-to-app handler is honoured for a packaged classic app (the
+  smoke's scheme step hard-fails only on the `uap3:Protocol` `Parameters`;
+  the https step that would exercise the handler is advisory on the server
+  runner), that the web-to-app handler fires with the consent file
+  served by GitHub Pages as `application/octet-stream` (Microsoft documents
+  no content type; Outlook's own file is served the same way), the browsers'
+  prompt for the `bibletext:` scheme, the foreground grant, and Partner
+  Center's reaction to the two declarations.
 - **Policy 11.16** requires the generative-AI declaration and disclosure in
   the description; both are in place. Policy 10.3 asks that a product be
   testable: the notes for certification say how, and API.Bible must be up.

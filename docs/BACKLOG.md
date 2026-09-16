@@ -110,6 +110,23 @@ is due by mid-December 2026. Left to do, in order:
    key follow in Partner Center; secrets in the login keychain).
 4. **First submission by hand** from the listing document, with the
    publishing hold on; then `msstore/msstore.py` for later releases.
+5. **Links** (done in the tree 16 Sep 2026, unverified on a Windows client):
+   the manifest declares the web-to-app handler and the `bibletext:` scheme,
+   `docs/windows-app-web-link` is published beside the Apple and Android
+   files, the app reads its command line and hands a second launch to the
+   running instance. Open: the direct-download zip could register the
+   `bibletext:` scheme itself (`HKCU\Software\Classes\bibletext`, gated on
+   not being packaged, with a Settings switch to remove it — the app's first
+   registry write, deferred rather than folded into the link change); a
+   macOS `CFBundleURLTypes` for the
+   same scheme (the delegate's `openURLs` entry point is already there); an
+   "Open in BibleText" affordance on the reader pages, not only the notice
+   pages. Unverifiable without a Windows 11 client or a Linux desktop:
+   `desktop2:Parameters` on a packaged classic app (the smoke's scheme step
+   settles only the `uap3:Protocol` form; the https step is advisory on the
+   server runner), the handler firing on Windows 11 with
+   the file served as `application/octet-stream`, the browsers' scheme
+   prompt, the foreground grant, the X11 raise under XWayland.
 
 ## Recapture the App Store and Play screenshots — deferred from 1.2.7
 

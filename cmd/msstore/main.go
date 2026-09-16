@@ -135,6 +135,7 @@ type identity struct {
 	IdentityName         string `json:"identityName"`
 	IdentityPublisher    string `json:"identityPublisher"`
 	PublisherDisplayName string `json:"publisherDisplayName"`
+	PackageFamilyName    string `json:"packageFamilyName"`
 }
 
 func loadIdentity(path string) (identity, error) {
@@ -153,6 +154,8 @@ func loadIdentity(path string) (identity, error) {
 		return id, fmt.Errorf("%s: identityPublisher must be the CN=… value Partner Center shows, got %q", path, id.IdentityPublisher)
 	case id.PublisherDisplayName == "":
 		return id, fmt.Errorf("%s: publisherDisplayName is empty", path)
+	case !strings.HasPrefix(id.PackageFamilyName, id.IdentityName+"_"):
+		return id, fmt.Errorf("%s: packageFamilyName must be the identity name plus the Store's suffix, got %q", path, id.PackageFamilyName)
 	}
 	return id, nil
 }

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"image/png"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -73,7 +75,10 @@ func checkRendered(t *testing.T, dir string, table []asset, command string) {
 	}
 }
 
-func TestManifestFillsFromTheLedgerAndTheReservedIdentity(t *testing.T) {
+// filledManifest is the manifest as the runner fills it: template, reserved
+// identity and the desktop ledger's version.
+func filledManifest(t *testing.T) (string, identity, string) {
+	t.Helper()
 	tmpl, err := os.ReadFile(filepath.Join(repo, "msstore", "AppxManifest.xml.in"))
 	if err != nil {
 		t.Fatal(err)
@@ -86,12 +91,17 @@ func TestManifestFillsFromTheLedgerAndTheReservedIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`^\d+\.\d+\.\d+\.0$`).MatchString(version) {
-		t.Fatalf("package version %q is not x.y.z.0 (the Store reserves the fourth part)", version)
-	}
 	filled, err := fillManifest(string(tmpl), id, version)
 	if err != nil {
 		t.Fatal(err)
+	}
+	return filled, id, version
+}
+
+func TestManifestFillsFromTheLedgerAndTheReservedIdentity(t *testing.T) {
+	filled, id, version := filledManifest(t)
+	if !regexp.MustCompile(`^\d+\.\d+\.\d+\.0$`).MatchString(version) {
+		t.Fatalf("package version %q is not x.y.z.0 (the Store reserves the fourth part)", version)
 	}
 	var doc struct {
 		Identity struct {
@@ -166,5 +176,144 @@ func TestPackageVersionNeedsAThreePartLedgerVersion(t *testing.T) {
 	}
 	if _, err := packageVersion(path); err == nil {
 		t.Fatal("a two-part version was accepted")
+	}
+}
+
+// The two link handlers: the web-to-app handler for our host alone (www
+// redirects to the apex and is deliberately absent) with the URL passed on
+// the command line, and the bibletext: scheme, both under one application.
+func TestManifestDeclaresTheLinkHandlers(t *testing.T) {
+	filled, _, _ := filledManifest(t)
+	var doc struct {
+		Ignorable    string `xml:"IgnorableNamespaces,attr"`
+		Applications struct {
+			Application []struct {
+				Extensions struct {
+					Extension []struct {
+						Category      string `xml:"Category,attr"`
+						AppUriHandler *struct {
+							// The namespace is the point: Windows honours the
+							// attribute only in desktop2, so a tidied prefix must fail.
+							Parameters string `xml:"http://schemas.microsoft.com/appx/manifest/desktop/windows10/2 Parameters,attr"`
+							Host       []struct {
+								Name string `xml:"Name,attr"`
+							} `xml:"Host"`
+						} `xml:"AppUriHandler"`
+						Protocol *struct {
+							Name       string `xml:"Name,attr"`
+							Parameters string `xml:"Parameters,attr"`
+						} `xml:"Protocol"`
+					} `xml:"Extension"`
+				} `xml:"Extensions"`
+			} `xml:"Application"`
+		} `xml:"Applications"`
+	}
+	if err := xml.Unmarshal([]byte(filled), &doc); err != nil {
+		t.Fatalf("filled manifest is not XML: %v", err)
+	}
+	if n := len(doc.Applications.Application); n != 1 {
+		t.Fatalf("%d applications, want 1", n)
+	}
+	var uri, proto int
+	for _, e := range doc.Applications.Application[0].Extensions.Extension {
+		switch e.Category {
+		case "windows.appUriHandler":
+			uri++
+			if e.AppUriHandler == nil || len(e.AppUriHandler.Host) != 1 || e.AppUriHandler.Host[0].Name != "bibletext.co.uk" {
+				t.Errorf("appUriHandler = %+v, want exactly the host bibletext.co.uk", e.AppUriHandler)
+			}
+			if e.AppUriHandler != nil && e.AppUriHandler.Parameters != "%1" {
+				t.Errorf("desktop2:Parameters = %q, want %%1: without it the URL never reaches os.Args", e.AppUriHandler.Parameters)
+			}
+		case "windows.protocol":
+			proto++
+			if e.Protocol == nil || e.Protocol.Name != "bibletext" || e.Protocol.Parameters != `"%1"` {
+				t.Errorf("protocol = %+v, want Name=bibletext Parameters=\"%%1\"", e.Protocol)
+			}
+		}
+	}
+	if uri != 1 || proto != 1 {
+		t.Errorf("%d appUriHandler and %d protocol extensions, want one of each", uri, proto)
+	}
+	for _, ns := range []string{"uap3", "desktop2"} {
+		if !slices.Contains(strings.Fields(doc.Ignorable), ns) {
+			t.Errorf("IgnorableNamespaces %q lacks %s", doc.Ignorable, ns)
+		}
+	}
+	for _, must := range []string{
+		`xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"`,
+		`xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"`,
+		`<uap3:Protocol Name="bibletext" Parameters="&quot;%1&quot;">`,
+	} {
+		if !strings.Contains(filled, must) {
+			t.Errorf("manifest lacks %s", must)
+		}
+	}
+}
+
+// The site's consent file for the Windows handler names the reserved package
+// family and claims exactly the paths the Apple file claims, excluding
+// exactly what it excludes — one scope on both platforms.
+func TestWindowsAppWebLinkAgreesWithTheAppleFileAndTheIdentity(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repo, "docs", "windows-app-web-link"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entries []struct {
+		PackageFamilyName string   `json:"packageFamilyName"`
+		Paths             []string `json:"paths"`
+		ExcludePaths      []string `json:"excludePaths"`
+	}
+	if err := json.Unmarshal(data, &entries); err != nil {
+		t.Fatalf("docs/windows-app-web-link is not the documented JSON array: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("%d entries, want one package", len(entries))
+	}
+	id, err := loadIdentity(filepath.Join(repo, "msstore", "identity.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries[0].PackageFamilyName != id.PackageFamilyName {
+		t.Errorf("packageFamilyName %q, identity says %q", entries[0].PackageFamilyName, id.PackageFamilyName)
+	}
+	apple, err := os.ReadFile(filepath.Join(repo, "docs", "apple-app-site-association"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var aasa struct {
+		Applinks struct {
+			Details []struct {
+				Components []struct {
+					Path    string `json:"/"`
+					Exclude bool   `json:"exclude"`
+				} `json:"components"`
+			} `json:"details"`
+		} `json:"applinks"`
+	}
+	if err := json.Unmarshal(apple, &aasa); err != nil {
+		t.Fatal(err)
+	}
+	var claimed, excluded []string
+	for _, d := range aasa.Applinks.Details {
+		for _, c := range d.Components {
+			if c.Exclude {
+				excluded = append(excluded, c.Path)
+			} else {
+				claimed = append(claimed, c.Path)
+			}
+		}
+	}
+	if len(claimed) == 0 || len(excluded) == 0 {
+		t.Fatalf("the Apple file yielded %d claims and %d exclusions; the comparison proves nothing", len(claimed), len(excluded))
+	}
+	if !slices.Equal(entries[0].Paths, claimed) {
+		t.Errorf("paths %q, the Apple file claims %q", entries[0].Paths, claimed)
+	}
+	if !slices.Equal(entries[0].ExcludePaths, excluded) {
+		t.Errorf("excludePaths %q, the Apple file excludes %q", entries[0].ExcludePaths, excluded)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "docs", "windows-app-web-link.json")); err == nil {
+		t.Error("docs/windows-app-web-link.json exists; Windows ignores the file with a .json suffix")
 	}
 }

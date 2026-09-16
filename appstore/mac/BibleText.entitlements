@@ -34,7 +34,12 @@
       DELIBERATELY NOT REQUESTED. Each line states the code fact that makes
       the capability unnecessary:
 
-      network.server                  nothing listens; no net.Listen anywhere
+      network.server                  nothing listens in a darwin release
+                                      build: the single-instance listener
+                                      (single_instance.go) is wired in only
+                                      for windows || linux || bibletextdev
+                                      (single_instance_on.go), held by
+                                      TestSingleInstanceAbsentFromDarwinReleaseBuilds
       files.user-selected.read-write  the app shows no file dialogs at all
       files.downloads.read-write      the only ~/Downloads write is behind the
                                       platform-mimic gate, which is a constant

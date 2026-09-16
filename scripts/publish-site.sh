@@ -164,6 +164,10 @@ mkdir -p "$OUT/.well-known"
 cp docs/apple-app-site-association "$OUT/.well-known/apple-app-site-association"
 cp docs/apple-app-site-association "$OUT/apple-app-site-association"
 cp docs/assetlinks.json "$OUT/.well-known/assetlinks.json"
+# Windows (Store build): the same consent, for the web-to-app handler the
+# package declares. Microsoft accepts either location; both cost nothing.
+cp docs/windows-app-web-link "$OUT/.well-known/windows-app-web-link"
+cp docs/windows-app-web-link "$OUT/windows-app-web-link"
 
 # The favicon serves the whole site from the root: browsers request
 # /favicon.ico by default, so the ~5,500 reader pages get it without carrying a
@@ -200,7 +204,8 @@ unset support_email
 # The association files decide whether a tapped link opens the app, and a
 # malformed one fails SILENTLY and slowly (Apple caches per-domain for ~24h,
 # and a 404 is cached as a negative result). Validate before pushing.
-for f in ".well-known/apple-app-site-association" ".well-known/assetlinks.json"; do
+for f in ".well-known/apple-app-site-association" ".well-known/assetlinks.json" \
+         ".well-known/windows-app-web-link" "windows-app-web-link"; do
   [[ -s "$OUT/$f" ]] || fail "$f missing — shared links would stop opening the app"
   python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT/$f" \
     || fail "$f is not valid JSON — shared links would stop opening the app"
@@ -214,7 +219,18 @@ grep -q '"/privacy.html", "exclude": true' "$OUT/.well-known/apple-app-site-asso
   || fail "the Apple association file no longer excludes privacy.html"
 grep -q '"/support.html", "exclude": true' "$OUT/.well-known/apple-app-site-association" \
   || fail "the Apple association file no longer excludes support.html"
-echo "    CNAME, .nojekyll, both association files and all three root pages present"
+pfn="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["packageFamilyName"], end="")' msstore/identity.json)"
+grep -Fq "\"$pfn\"" "$OUT/.well-known/windows-app-web-link" \
+  || fail "the Windows association file does not name the package family from msstore/identity.json"
+unset pfn
+python3 - "$OUT/.well-known/windows-app-web-link" <<'PY' \
+  || fail "the Windows association file no longer excludes privacy.html (or claims it)"
+import json, sys
+entries = json.load(open(sys.argv[1]))
+e = entries[0]
+sys.exit(0 if "/privacy.html" in e["excludePaths"] and "/privacy.html" not in e["paths"] else 1)
+PY
+echo "    CNAME, .nojekyll, all three association files and all three root pages present"
 
 # --- Drift: how the tree about to be published differs from what is live ---
 # Reported in both modes, so "is the web current?" is one dry run. The live

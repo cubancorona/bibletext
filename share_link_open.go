@@ -3,8 +3,10 @@ package bibletext
 // Opening a shared link inside the app.
 //
 // A tapped bibletext.co.uk verse link arrives here from the platform (iOS
-// Universal Link, Android App Link) already parsed by ParseShareLink. This file
-// is the platform-independent half: what the app DOES with it.
+// Universal Link, Android App Link, the Mac's delegate, and on Windows and
+// Linux the command line and the single-instance handoff — share_link_argv.go)
+// already parsed by ParseShareLink. This file is the platform-independent
+// half: what the app DOES with it.
 //
 // Two rules govern the design, both learned the hard way:
 //
@@ -642,7 +644,10 @@ func linkParkedMessage(state *AppState, replaced bool) string {
 // The iOS delegate callback is already on the main thread; the Android JNI one
 // is not, so everything goes through fyne.Do rather than assuming.
 // It returns whether the URL is one of OURS — which the caller reports straight
-// back to the OS.
+// back to the OS. The desktops' third path (share_link_argv.go, the
+// single-instance listener) deliberately does NOT come through here: an
+// activated Windows or Linux app has no OS to report a decline to, so it
+// opens a declined URL in the browser itself.
 //
 // THE ANSWER IS AVAILABLE WITHOUT THE HOP, and that is the whole trick. The
 // handling has to marshal onto the Fyne UI goroutine, so the native side used to

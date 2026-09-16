@@ -1,13 +1,18 @@
-//go:build !ios && !android
+//go:build !ios && !android && !windows
 
 package bibletext
 
-// openLinkInBrowser on the desktops: hand the URL to the system browser via
-// Fyne. Desktop never has a link handed to it by the OS, but it can now be
-// handed one by the READER — a bibletext.co.uk link pasted into Search opens
-// in-app (executeSearch → HandleShareLink) — and the notes-off offer's "Read
-// it in the browser" has to actually go somewhere on every platform that can
-// show the offer.
+// openLinkInBrowser on macOS and Linux: hand the URL to the system browser
+// via Fyne. The desktops do receive links from the OS now — the Mac App Store
+// build through its Universal Link delegate (share_link_macos.go), Windows
+// and Linux through the command line and the single-instance handoff
+// (share_link_argv.go, single_instance.go) — and a reader can still paste one
+// into Search (executeSearch → HandleShareLink). This is where the notes-off
+// offer's "Read it in the browser" and a declined startup link go. No echo is
+// possible here (neither OS routes an https link back to the app), so the
+// echo guard is not armed; Windows has its own opener
+// (share_link_browser_windows.go) because its Store build would intercept
+// the toolkit's ShellExecute route.
 
 import (
 	"net/url"

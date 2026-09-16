@@ -54,7 +54,13 @@ styled helpers on the UI goroutine exactly as `readalong_other.go` does.
 
 **Identical by construction (checked, not skipped):** keystore
 (preferences-backed on every desktop), cache paths, open-URL/pasted-link
-handling, device class, overlay recovery, the reading face, the lifecycle
+handling, the command-line link intake, the single-instance handoff and the
+browser echo guard (`share_link_argv.go`, `single_instance.go`,
+`share_link_echo.go` — the dev build wires the listener in, so
+`BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop
+'https://bibletext.co.uk/web/john/3/#v16'` twice is the rehearsal: the
+second launch exits at once and the first opens John 3 and comes forward),
+device class, overlay recovery, the reading face, the lifecycle
 close-intercept + reading-state flush. These are the *same code* on macOS and
 Windows/Linux, so mimic does not touch them. (Storage *locations* differ per OS
 — `%AppData%` vs `~/Library` vs `~/.config` — but that is the OS, not app
@@ -79,6 +85,15 @@ into.
 
 ## What the mode CANNOT prove (do not read mimic as evidence here)
 
+- **The OS side of links.** That Windows puts an activated URL on the
+  command line (`desktop2:Parameters`), MSIX's redirection of the
+  single-instance record, `AllowSetForegroundWindow` and `SW_RESTORE`, the
+  direct browser command the shell answers with (Edge, Chrome, Firefox), a
+  firewall prompt for the direct-download build's loopback bind, and the X11
+  raise under XWayland. The Store smoke (`.github/workflows/msstore.yml`)
+  settles the `uap3:Protocol` form of the first on the runner (the
+  web-to-app handler's `desktop2:Parameters` only if its advisory https step
+  launches the app); the rest need a Windows 11 client or a Linux desktop.
 - **Recorded-audio engine.** Playback still runs through AVPlayer
   (`audio_macos.go`), not the Win/Linux oto + go-mp3 engine
   (`audio_other.go`). Scoped out of this phase deliberately: co-compiling the

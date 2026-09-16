@@ -20,13 +20,19 @@
   - The tiles are the qualifier-named files under Assets/, generated from
     icon/full.png by the same command; makepri turns the qualifiers into
     resources.pri on the runner.
+  - Two link handlers under Extensions: the web-to-app handler for
+    bibletext.co.uk (shell-launched https links) and the bibletext: scheme
+    (browser clicks, via the site's button). Both hand the URL to the exe on
+    its command line. cmd/msstore's tests pin them.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap10 rescap">
+  IgnorableNamespaces="uap uap3 uap10 desktop2 rescap">
 
   <Identity
     Name="__IDENTITY_NAME__"
@@ -62,6 +68,36 @@
         Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
       </uap:VisualElements>
+      <Extensions>
+        <!--
+          Web-to-app linking (Settings > Apps > Apps for websites): a
+          https://bibletext.co.uk/... link launched THROUGH THE SHELL (Outlook,
+          Teams, the Run box, Explorer - anything that calls ShellExecuteEx)
+          opens the app. Links clicked in Edge, Chrome or Firefox stay in the
+          browser by Microsoft's design. The site consents in
+          /.well-known/windows-app-web-link (docs/windows-app-web-link), which
+          Windows fetches itself; the Store checks nothing. desktop2:Parameters
+          puts the URL on BibleText.exe's command line (share_link_argv.go).
+          www is not listed: it redirects to the apex and serves nothing.
+        -->
+        <uap3:Extension Category="windows.appUriHandler">
+          <uap3:AppUriHandler desktop2:Parameters="%1">
+            <uap3:Host Name="bibletext.co.uk" />
+          </uap3:AppUriHandler>
+        </uap3:Extension>
+        <!--
+          The bibletext: scheme - the only route from a browser click on any
+          desktop, and what the site's "Open in BibleText" button uses. The
+          payload is the https link with the scheme swapped; the app swaps it
+          back before ParseShareLink. Full-trust apps take the URI as a
+          command-line parameter; the quoted %1 is Microsoft's own example.
+        -->
+        <uap3:Extension Category="windows.protocol">
+          <uap3:Protocol Name="bibletext" Parameters="&quot;%1&quot;">
+            <uap:DisplayName>BibleText link</uap:DisplayName>
+          </uap3:Protocol>
+        </uap3:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

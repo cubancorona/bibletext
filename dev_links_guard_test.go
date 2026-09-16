@@ -30,6 +30,10 @@ func TestReleaseScriptsNeverPassTheDevTag(t *testing.T) {
 	for _, path := range []string{
 		"scripts/release-ios.sh",
 		"scripts/build-android.sh",
+		"scripts/release-mac-store.sh",
+		"scripts/build-windows-exe.sh",
+		".github/workflows/release.yml",
+		".github/workflows/msstore.yml",
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {

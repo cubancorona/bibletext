@@ -21,6 +21,10 @@ on:
       - "cmd/msstore/**"
       - "scripts/build-windows-exe.sh"
       - ".github/workflows/msstore.yml"
+      - "app.go"
+      - "share_link_*.go"
+      - "single_instance*.go"
+      - "docs/windows-app-web-link"
 
 permissions:
   contents: read
@@ -119,24 +123,97 @@ jobs:
           if ($pkg.PackageFamilyName -ne $id.packageFamilyName) {
             throw "package family name $($pkg.PackageFamilyName) differs from msstore/identity.json ($($id.packageFamilyName))"
           }
+          # What the installed package declares. Windows accepted the manifest,
+          # so this proves the two link handlers are in the package as read.
+          $m = Get-AppxPackageManifest -Package $pkg.PackageFullName
+          $ext = @($m.Package.Applications.Application.Extensions.Extension)
+          $uri = @($ext | Where-Object Category -eq 'windows.appUriHandler')
+          if ($uri.Count -ne 1) { throw "expected one windows.appUriHandler extension, found $($uri.Count)" }
+          if ($uri[0].AppUriHandler.Host.Name -ne 'bibletext.co.uk') { throw "AppUriHandler host is '$($uri[0].AppUriHandler.Host.Name)'" }
+          $proto = @($ext | Where-Object Category -eq 'windows.protocol')
+          if ($proto.Count -ne 1 -or $proto[0].Protocol.Name -ne 'bibletext') { throw "protocol declaration missing or misnamed" }
+          # The site's consent file, checked by Windows' own verifier. The
+          # control (a broken copy) must fail first, or the pass means nothing.
+          $verifier = "$env:windir\System32\AppHostRegistrationVerifier.exe"
+          if (Test-Path $verifier) {
+            $broken = Join-Path $env:TEMP 'windows-app-web-link'
+            (Get-Content docs\windows-app-web-link -Raw) -replace 'packageFamilyName', 'packageFamilyNam' | Set-Content $broken -NoNewline
+            $out = & $verifier bibletext.co.uk $id.packageFamilyName $broken 2>&1
+            if ($LASTEXITCODE -eq 0 -and -not $out) { throw "the verifier accepted a broken file; the check proves nothing" }
+            $out = & $verifier bibletext.co.uk $id.packageFamilyName (Resolve-Path docs\windows-app-web-link).Path 2>&1
+            if ($LASTEXITCODE -ne 0 -or $out) { throw "docs/windows-app-web-link fails validation: $out" }
+            Write-Host "docs/windows-app-web-link validates for $($id.packageFamilyName)"
+          } else {
+            Write-Host "::warning::AppHostRegistrationVerifier.exe is not on this runner; the consent file was not validated"
+          }
+          function Wait-BibleText([int]$seconds) {
+            for ($i = 0; $i -lt $seconds; $i++) {
+              $p = Get-Process -Name BibleText -ErrorAction SilentlyContinue
+              if ($p) { return $p }
+              Start-Sleep 1
+            }
+            return $null
+          }
+          function CommandLineOf([int]$procId) { (Get-CimInstance Win32_Process -Filter "ProcessId=$procId").CommandLine }
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          function Shot([string]$name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save($name, [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          # 1. Plain activation, as from Start.
           cmd /c start "" "shell:AppsFolder\$($pkg.PackageFamilyName)!BibleText"
           Start-Sleep 30
           $proc = Get-Process -Name BibleText -ErrorAction SilentlyContinue
-          Add-Type -AssemblyName System.Windows.Forms
-          Add-Type -AssemblyName System.Drawing
-          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
-          $bmp.Save("build\msstore\smoke-30s.png", [System.Drawing.Imaging.ImageFormat]::Png)
-          $g.Dispose(); $bmp.Dispose()
+          Shot "build\msstore\smoke-30s.png"
           if (-not $proc) { throw "BibleText.exe is not running 30 s after activation" }
           Write-Host "BibleText.exe (pid $($proc.Id)) is running from $($proc.Path)"
           Stop-Process -Id $proc.Id -Force
+          Start-Sleep 3
+          # 2. The bibletext: scheme through the shell, cold. Protocol activation
+          #    of a packaged app has no policy gate, and the command line shows
+          #    exactly what Parameters delivered - fragment included.
+          cmd /c start "" "bibletext://bibletext.co.uk/web/john/3/#v16"
+          $p1 = Wait-BibleText 30
+          if (-not $p1) { throw "BibleText.exe did not start from a bibletext: URL" }
+          $cl = CommandLineOf $p1.Id
+          Write-Host "scheme activation command line: $cl"
+          if ($cl -notlike '*bibletext://bibletext.co.uk/web/john/3/#v16*') { throw "the URL (or its fragment) did not reach the command line: $cl" }
+          Start-Sleep 30
+          Shot "build\msstore\smoke-scheme.png"
+          # 3. A second activation while running: the new process must hand the
+          #    link to the first and exit - one process, the original pid.
+          cmd /c start "" "bibletext://bibletext.co.uk/web/john/3/#v17"
+          Start-Sleep 10
+          $procs = @(Get-Process -Name BibleText -ErrorAction SilentlyContinue)
+          if ($procs.Count -ne 1 -or $procs[0].Id -ne $p1.Id) { throw "second activation left $($procs.Count) process(es); the forwarder did not hand off and exit" }
+          Write-Host "second activation handed off to pid $($p1.Id)"
+          Stop-Process -Id $p1.Id -Force
+          Start-Sleep 3
+          # 4. An https link through the shell, cold - advisory here: whether a
+          #    web-to-app handler fires on Windows Server depends on edition
+          #    policy. A launch with a mangled URL is a failure; no launch is a
+          #    warning for a Windows 11 client to settle.
+          cmd /c start "" "https://bibletext.co.uk/web/john/3/#v16"
+          $p2 = Wait-BibleText 30
+          if ($p2) {
+            $cl = CommandLineOf $p2.Id
+            Write-Host "https activation command line: $cl"
+            if ($cl -notlike '*https://bibletext.co.uk/web/john/3/#v16*') { throw "the web-to-app handler launched the app without the URL or its fragment: $cl" }
+            Stop-Process -Id $p2.Id -Force
+          } else {
+            Write-Host "::warning::an https link did not launch the app on this runner (edition policy or browser default); needs a Windows 11 client check"
+          }
           Remove-AppxPackage -Package $pkg.PackageFullName
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: msstore-smoke-screenshot
-          path: build/msstore/smoke-30s.png
+          name: msstore-smoke-screenshots
+          path: |
+            build/msstore/smoke-30s.png
+            build/msstore/smoke-scheme.png
           if-no-files-found: ignore

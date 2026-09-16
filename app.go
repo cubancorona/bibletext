@@ -520,14 +520,38 @@ func Run() {
 	// (installSheetCloseConsume reads a seam). No-op — and not
 	// compiled in — for shipping builds (dev_mimic_off.go).
 	devApplyMimic()
+	// A link the OS launched us with (Windows: the Store manifest's handlers
+	// put it on the command line; Linux: the desktop entry's %u) — or nothing.
+	startup, _ := startupShareLink(os.Args)
+	// A running instance owns the window on Windows and Linux: hand it the
+	// link (or just bring it forward) and leave, before a preferences watcher
+	// or a window exists here. Not compiled in for a darwin release build
+	// (single_instance_off.go).
+	if forwardToRunningInstance(startup) {
+		return
+	}
 	myApp := app.NewWithID(devAppID("bibletext"))
 	// Start in loadPending: the window shows a spinner while the Bible loads on a
 	// background goroutine, then swaps to the reader.
 	state := NewLoadingState()
+	// Claim the single-instance record now, before the window: two launches
+	// inside the same instant cannot both become primaries, and a link that
+	// is forwarded before the window exists parks and raises once the loop
+	// runs. Forwarded means another process already has the window.
+	stopSingleInstance, forwarded := claimSingleInstance(state, startup)
+	if forwarded {
+		return
+	}
+	defer stopSingleInstance()
 
 	window := myApp.NewWindow("BibleText")
 	window.Resize(fyne.NewSize(1280, 860))
 	window.SetContent(CreateMainUI(myApp, state, window))
+	// Parks: loadPhase is still loadPending here, and consumePendingLink opens
+	// it ahead of the startup rebuild — the same shape as a Universal Link
+	// arriving at a cold start on the Mac. After CreateMainUI so the notes-off
+	// offer, should the load ask it, has a window to sit on.
+	deliverStartupLink(state, startup)
 	ObserveSystemThemeChanges(myApp, state)
 	InstallReadingStateFlush(myApp, window, state)
 	InstallDebugCapture() // dev builds only; empty in release (debug_capture_off.go)

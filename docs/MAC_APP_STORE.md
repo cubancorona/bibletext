@@ -82,7 +82,10 @@ that matters: without it the app still launches, but only the embedded Gospels
 seed is reachable, so it looks broken rather than restricted.
 
 The file records what is deliberately absent and why. In short: nothing
-listens, so no server entitlement; there are no file dialogs anywhere in the
+listens in a darwin release build (the Windows/Linux single-instance
+listener is compiled in only for `windows || linux || bibletextdev`,
+`single_instance_on.go`, and `TestSingleInstanceAbsentFromDarwinReleaseBuilds`
+holds that gate), so no server entitlement; there are no file dialogs anywhere in the
 app; the desktop build uses no Keychain at all; and no temporary exception is
 requested, because the migration below needs none.
 
