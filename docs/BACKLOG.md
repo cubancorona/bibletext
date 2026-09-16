@@ -105,9 +105,12 @@ is due by mid-December 2026. Left to do, in order:
    llvmpipe; the fallback makes the Store package itself do so.
 2. **Screenshots** from the Windows build, 1920×1080 PNG, four of them,
    captured with the recapture the other stores wait on (next entry).
-3. **Entra tenant and application** for the submission API (owner creates
-   the tenant, a work account with a password; the app registration and the
-   key follow in Partner Center; secrets in the login keychain).
+3. **Entra tenant and application** — DONE 16 Sep 2026: tenant
+   `bibletext.onmicrosoft.com`, application `bibletext-store-api` with the
+   Manager role, credentials in the login Keychain, `scripts/msstore-env.sh`
+   and the read side of `msstore/msstore.py` proven against the account. The
+   write side (create, upload, commit, poll) is written against the second
+   release.
 4. **First submission by hand** from the listing document, with the
    publishing hold on; then `msstore/msstore.py` for later releases.
 5. **Links** (done in the tree 16 Sep 2026, unverified on a Windows client):

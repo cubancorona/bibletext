@@ -3,8 +3,15 @@ package bibletext
 import (
 	"errors"
 	"net/url"
+	"reflect"
 	"strings"
 )
+
+// externalOpenerIsDefault reports whether the platform opener is still in
+// place, or a test has substituted externalOpener.
+func externalOpenerIsDefault() bool {
+	return reflect.ValueOf(externalOpener).Pointer() == reflect.ValueOf(openExternalURLPlatform).Pointer()
+}
 
 // errNoDirectBrowser is the answer where no direct browser launch exists:
 // every platform but Windows, whose opener installs the real one at init.
@@ -22,7 +29,11 @@ var directBrowserLaunch = func(cmdline, exe string) error { return errNoDirectBr
 // is why the echo guard is armed here and nowhere else. Both spellings the
 // OS may see (the raw URL and the toolkit's re-encoding) are noted.
 func openInBrowserWithFallback(rawURL string, command func(string) (cmdline, exe string, ok bool)) {
-	if cmdline, exe, ok := command(rawURL); ok {
+	// A test that has substituted the toolkit's opener wants no browser at
+	// all, on any platform: the direct route would start one on the Windows
+	// runner and answer nothing to the recorder. So the direct route is
+	// taken only while the opener is the real one.
+	if cmdline, exe, ok := command(rawURL); ok && externalOpenerIsDefault() {
 		if err := directBrowserLaunch(cmdline, exe); err == nil {
 			return
 		}

@@ -160,7 +160,9 @@ func loadIdentity(path string) (identity, error) {
 	return id, nil
 }
 
-var ledgerVersion = regexp.MustCompile(`(?m)^Version = "(\d+)\.(\d+)\.(\d+)"$`)
+// ledgerVersion tolerates a Windows checkout: git may hand the runner CRLF
+// line endings, and a strict $ would then find no Version line at all.
+var ledgerVersion = regexp.MustCompile(`(?m)^Version = "(\d+)\.(\d+)\.(\d+)"\r?$`)
 
 // packageVersion derives the four-part MSIX version from the desktop ledger.
 // The Store reserves the fourth part and requires it to be 0, so a package

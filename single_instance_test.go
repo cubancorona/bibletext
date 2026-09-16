@@ -429,11 +429,8 @@ func TestSingleInstanceWiringIsGatedToTheDesktopsThatNeedIt(t *testing.T) {
 		"single_instance_on.go":  "//go:build windows || linux || bibletextdev",
 		"single_instance_off.go": "//go:build !windows && !linux && !bibletextdev",
 	} {
-		src, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if first := strings.SplitN(string(src), "\n", 2)[0]; first != want {
+		src := readSourceFile(t, file)
+		if first := strings.SplitN(src, "\n", 2)[0]; first != want {
 			t.Errorf("%s first line = %q, want %q", file, first, want)
 		}
 	}

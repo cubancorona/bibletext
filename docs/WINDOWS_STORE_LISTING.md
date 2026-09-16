@@ -258,31 +258,33 @@ document in Partner Center:
 
 ## Automation after the first release
 
-The Microsoft Store submission API and the Store Developer CLI need a
-Microsoft Entra tenant associated with the account and an application
-registered in that tenant with the Manager role (Account settings →
-Organization profile → Tenants; then User management → Microsoft Entra
-applications). Both are account-level changes the owner makes or approves.
-The tenant ID, client ID and client secret then live in the login keychain
-like the App Store Connect key, never in the repository; `scripts/msstore-env.sh`
-will read them the way `scripts/asc-env.sh` does, and a stdlib
-`msstore/msstore.py` will create the submission, upload the package and
-commit it, with `msstore-cli` as the oracle when the two disagree.
+The Microsoft Store submission API needs a Microsoft Entra tenant
+associated with the account and an application registered in that tenant
+with the Manager role. Both exist since 16 September 2026: the tenant
+`bibletext.onmicrosoft.com` (created through Partner Center's own business
+sign-up, an Entra ID Free tenant with a separate work account; Partner
+Center itself stays on the personal account) and the application
+`bibletext-store-api` (Account settings → User management → Microsoft Entra
+applications, role Manager). Its key was generated there, shown once, and
+went straight into the login Keychain with the tenant and client ids:
 
-State on 16 September 2026: Account settings → Tenants lists no tenant. The
-"Create Microsoft Entra ID" button opens Microsoft's business sign-up
-(signup.microsoft.com, Partner Center scenario), which creates a new work
-account — an organisation name, a user name under `<org>.onmicrosoft.com`
-and a password — and returns to the Tenants page with the new tenant
-associated. That account creation is the owner's own step (Entra ID Free,
-no payment). "Associate Microsoft Entra ID" is the alternative when a tenant
-already exists (an Azure or Microsoft 365 sign-in); it asks for that
-tenant's global-admin credentials. Once a tenant is associated, the rest is
-console work that follows from this document: User management → Microsoft
-Entra applications → Add → create a new application (name
-`bibletext-store-api`, role Manager), then "Add new key" for the client
-secret, shown once; tenant ID, client ID and the key go straight into the
-login keychain.
+| Keychain service | account |
+| --- | --- |
+| `uk.co.bibletext.msstore` | `tenant-id`, `client-id`, `client-secret` |
+
+`. scripts/msstore-env.sh` exports them (nothing printed), the way
+`scripts/asc-env.sh` does for App Store Connect. `msstore/msstore.py`
+(standard library) takes a client-credentials token for the classic Dev
+Center resource and reads the account: `apps` lists every product with its
+pending and published submission ids, `app <store id>` prints one product,
+`submission <store id> <id>` prints a submission's status. The first call
+listed `9NDCCZH9RB9K BibleText`, which proves the tenant association, the
+role and the key. The write side (create a submission, upload the package to
+its SAS URL, commit, poll) is written against the second release, once the
+first has gone through the console: name reservation, the age rating and the
+first publish are console-only. `msstore-cli` remains the oracle when the
+two disagree. Rotating the key is the same console path; the Keychain item
+is replaced and nothing in the repository changes.
 
 ## Risks
 

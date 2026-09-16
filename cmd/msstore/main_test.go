@@ -317,3 +317,15 @@ func TestWindowsAppWebLinkAgreesWithTheAppleFileAndTheIdentity(t *testing.T) {
 		t.Error("docs/windows-app-web-link.json exists; Windows ignores the file with a .json suffix")
 	}
 }
+
+// A Windows checkout can carry CRLF line endings; the ledger must still read.
+func TestPackageVersionToleratesWindowsLineEndings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "FyneApp.toml")
+	if err := os.WriteFile(path, []byte("[Details]\r\nVersion = \"1.2.9\"\r\nBuild = 50\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := packageVersion(path)
+	if err != nil || got != "1.2.9.0" {
+		t.Fatalf("packageVersion on a CRLF ledger = %q, %v; want 1.2.9.0", got, err)
+	}
+}

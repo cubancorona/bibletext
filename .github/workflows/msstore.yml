@@ -136,13 +136,32 @@ jobs:
           # control (a broken copy) must fail first, or the pass means nothing.
           $verifier = "$env:windir\System32\AppHostRegistrationVerifier.exe"
           if (Test-Path $verifier) {
+            # The verifier is a native tool: under Stop, PowerShell turns its
+            # stderr and exit code into a terminating error that hides what it
+            # said. Run it leniently, print everything, then judge.
+            function Verify([string]$file) {
+              $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+              $prevNative = $PSNativeCommandUseErrorActionPreference; $PSNativeCommandUseErrorActionPreference = $false
+              try {
+                $text = (& $verifier bibletext.co.uk $id.packageFamilyName $file 2>&1 | Out-String)
+                return @{ code = $LASTEXITCODE; text = $text.Trim() }
+              } finally {
+                $ErrorActionPreference = $prevEap; $PSNativeCommandUseErrorActionPreference = $prevNative
+              }
+            }
             $broken = Join-Path $env:TEMP 'windows-app-web-link'
             (Get-Content docs\windows-app-web-link -Raw) -replace 'packageFamilyName', 'packageFamilyNam' | Set-Content $broken -NoNewline
-            $out = & $verifier bibletext.co.uk $id.packageFamilyName $broken 2>&1
-            if ($LASTEXITCODE -eq 0 -and -not $out) { throw "the verifier accepted a broken file; the check proves nothing" }
-            $out = & $verifier bibletext.co.uk $id.packageFamilyName (Resolve-Path docs\windows-app-web-link).Path 2>&1
-            if ($LASTEXITCODE -ne 0 -or $out) { throw "docs/windows-app-web-link fails validation: $out" }
-            Write-Host "docs/windows-app-web-link validates for $($id.packageFamilyName)"
+            $bad = Verify $broken
+            $good = Verify (Resolve-Path docs\windows-app-web-link).Path
+            Write-Host "verifier on a broken copy: exit $($bad.code)`n$($bad.text)"
+            Write-Host "verifier on docs/windows-app-web-link: exit $($good.code)`n$($good.text)"
+            if ($bad.code -eq $good.code -and $bad.text -eq $good.text) {
+              Write-Host "::warning::the verifier answered the broken copy and the real file alike; its verdict proves nothing here"
+            } elseif ($good.code -ne 0) {
+              throw "docs/windows-app-web-link fails validation (exit $($good.code)): $($good.text)"
+            } else {
+              Write-Host "docs/windows-app-web-link validates for $($id.packageFamilyName)"
+            }
           } else {
             Write-Host "::warning::AppHostRegistrationVerifier.exe is not on this runner; the consent file was not validated"
           }
