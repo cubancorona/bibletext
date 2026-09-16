@@ -1,0 +1,7 @@
+[
+  {
+    "packageFamilyName": "bibletext.co.uk.BibleText_ktgtejn4szjem",
+    "paths": [ "/web/*", "/bsb/*", "/webc/*", "/nkjv/*" ],
+    "excludePaths": [ "/privacy.html", "/support.html", "/", "/index.html", "/404.html", "/assets/*" ]
+  }
+]
