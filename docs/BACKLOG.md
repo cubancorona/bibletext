@@ -97,12 +97,42 @@ A reservation lapses three months after it is made, so the first submission
 is due by mid-December 2026. Left to do, in order:
 
 1. **Software OpenGL fallback.** Certification runs on virtual machines with
-   OpenGL 1.1; the toolkit needs 2.0 and the app fails at start-up there.
-   Ship Mesa llvmpipe's `opengl32.dll` in a subfolder and choose it with
-   `SetDllDirectory` before the toolkit loads OpenGL when no hardware ICD is
-   registered (the display class keys' `OpenGLDriverName`, or the legacy
-   `OpenGLDrivers` key). The workflow's smoke copy shows the app runs under
-   llvmpipe; the fallback makes the Store package itself do so.
+   OpenGL 1.1; the toolkit needs 2.0 and the app fails at start-up there. The
+   Store smoke's copy shows the app runs under Mesa llvmpipe when its
+   `opengl32.dll` sits beside the exe; the fallback would make the shipped
+   package do that only where no hardware driver exists.
+
+   **The obvious route is refuted — read this before starting.** The plan was
+   to ship Mesa in a subfolder and point at it with `SetDllDirectory` before
+   the toolkit loads OpenGL. That cannot work: `opengl32.dll` is a STATIC
+   import of `BibleText.exe`, so Windows maps the System32 copy before any Go
+   code runs, and every later bare-name load is answered from the
+   loaded-module list, which both documented search orders consult before any
+   directory. (Verified by parsing the shipped 1.2.9 exe's import table — one
+   import, `wglGetProcAddress` — and traced to `go-gl/gl`'s `procaddr.go`,
+   whose `#cgo !gles2,windows LDFLAGS: -lopengl32` and direct
+   `wglGetProcAddress` call create it; the toolkit's own GLFW imports nothing
+   and loads the name lazily at the first window.)
+
+   What remains, in order:
+   - **Remove the static import.** A patch to `go-gl/gl` resolving
+     `wglGetProcAddress` through `GetProcAddress` at run time, applied the way
+     `patches/` and `scripts/setup-fyne-patch.sh` apply the toolkit patches,
+     with a grep guard and a regression test.
+   - **Then choose the library by full path** before the first window:
+     `LoadLibraryExW` of `<exe dir>\mesa\opengl32.dll`, which needs no search
+     and is documented for packaged and unpackaged apps alike; afterwards the
+     loaded-module list answers the toolkit's bare-name load. An app-directory
+     copy would work too (`opengl32.dll` is not a Known DLL, which is why the
+     smoke's copy works) but forces software rendering on every machine.
+   - **Detect the absence of a driver** from the display class keys'
+     `OpenGLDriverName` (or the legacy `OpenGLDrivers` key), with an
+     environment override both ways for support.
+   - **Ship Mesa lawfully**: the licence texts beside the DLLs, a NOTICE line,
+     the release pinned by checksum like the AppImage tools.
+   - **Prove it on the runner**: the smoke stops copying Mesa beside the exe
+     and the package carries the subfolder, with a control that fails when the
+     fallback is disabled, since that is what shows the runner has no driver.
 2. **Screenshots** from the Windows build, 1920×1080 PNG, four of them,
    captured with the recapture the other stores wait on (next entry).
 3. **Entra tenant and application** — DONE 16 Sep 2026: tenant

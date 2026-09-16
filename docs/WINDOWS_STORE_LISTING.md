@@ -413,9 +413,13 @@ already asserted by the release job.
   floor; on such a machine the app fails at start-up. The GitHub runner is
   the same kind of machine, which is why the smoke copy carries Mesa. Before
   the first submission the app should choose software OpenGL itself when no
-  hardware ICD is registered (a subfolder with Mesa's `opengl32.dll`, chosen
-  with `SetDllDirectory` before the toolkit loads OpenGL); until then a
-  certification failure on this point is possible and would cost a round.
+  hardware driver is registered; until then a certification failure on this
+  point is possible and would cost a round. The `SetDllDirectory` approach
+  first written here is refuted: `opengl32.dll` is a static import of the
+  exe, so the System32 copy is mapped before any of the app's code runs and
+  answers every later load by name. `docs/BACKLOG.md` carries the evidence
+  and the route that remains (remove the import, then load Mesa by full
+  path).
 - **Publisher name on an individual account** (Policy 10.14, above).
 - **Unverifiable without a Windows 11 client**: that `desktop2:Parameters`
   on the web-to-app handler is honoured for a packaged classic app (the

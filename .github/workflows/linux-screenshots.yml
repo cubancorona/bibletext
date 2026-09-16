@@ -78,17 +78,24 @@ jobs:
             build/shots/bibletext "$NOTE_LINK" &
             APP=$!
             sleep 45
+            # The link scrolls the verse to the top; two wheel ticks up bring the
+            # section heading into the frame above the note.
+            xdotool mousemove 670 500 click 4 click 4
+            sleep 2
             shot note
             # Scene 2: a plain passage, delivered to the running instance by a second launch.
             timeout 20 build/shots/bibletext "$PLAIN_LINK" || true
             sleep 6
             shot reading
-            # Scene 3: search results. The rail is at the left edge; Search is its third entry.
+            # Scene 3: search results. The rail is at the left edge; Search is its
+            # third entry; the field sits under the Search/Find toggle.
             xdotool mousemove 30 575 click 1
             sleep 2
+            xdotool mousemove 650 152 click 1
+            sleep 1
             xdotool type --delay 40 "light of the world"
             xdotool key Return
-            sleep 8
+            sleep 10
             shot search
             # Scene 4: settings, from the gear at the top right of the header.
             xdotool mousemove 30 360 click 1

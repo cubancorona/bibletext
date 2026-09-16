@@ -69,32 +69,17 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           Add-Type -AssemblyName System.Windows.Forms
-          Add-Type -AssemblyName System.Drawing
           $before = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           Write-Host "screen before: $($before.Width)x$($before.Height)"
           try { Set-DisplayResolution -Width 1920 -Height 1080 -Force } catch { Write-Host "Set-DisplayResolution failed: $_" }
           Start-Sleep 3
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           Write-Host "screen after: $($b.Width)x$($b.Height)"
-          if ($b.Width -lt 1366) { Write-Host "::warning::the runner's screen stays at $($b.Width)x$($b.Height), below the Store's 1366x768 floor; the Windows sitting keeps the screenshots" }
-          function Shot([string]$name) {
-            $bb = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $bmp = New-Object System.Drawing.Bitmap $bb.Width, $bb.Height
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.CopyFromScreen($bb.Location, [System.Drawing.Point]::Empty, $bb.Size)
-            New-Item -ItemType Directory -Force build\shots\out | Out-Null
-            $bmp.Save("build\shots\out\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
-            $g.Dispose(); $bmp.Dispose()
-            Write-Host "captured $name"
+          if ($b.Width -lt 1366) {
+            Write-Host "::warning::the runner's screen stays at $($b.Width)x$($b.Height), below the Store's 1366x768 floor; the Windows sitting keeps the screenshots"
           }
-          $links = Get-Content build\shots\links.txt
-          $app = Start-Process -FilePath build\shots\BibleText.exe -ArgumentList "`"$($links[0])`"" -PassThru
-          Start-Sleep 45
-          Shot "note"
-          Start-Process -FilePath build\shots\BibleText.exe -ArgumentList "`"$($links[1])`"" -Wait
-          Start-Sleep 6
-          Shot "reading"
-          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          $ErrorActionPreference = 'Stop'
+          pwsh scripts/capture-windows-screenshots.ps1 -Exe build\shots\BibleText.exe -Links build\shots\links.txt -Out build\shots\out
       - uses: actions/upload-artifact@v4
         if: always()
         with:
