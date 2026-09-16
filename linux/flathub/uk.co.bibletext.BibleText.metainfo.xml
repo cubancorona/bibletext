@@ -57,6 +57,24 @@
     <color type="primary" scheme_preference="dark">#7CA0E4</color>
   </branding>
   <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Reading John 3 in the Berean Standard Bible, with the words of Christ in red</caption>
+      <image>https://raw.githubusercontent.com/cubancorona/bibletext/06f0b1cc60a7aca9ab313d4773612a27f9087921/docs/screenshots/linux/reading.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Search results and cross-references beside the text</caption>
+      <image>https://raw.githubusercontent.com/cubancorona/bibletext/06f0b1cc60a7aca9ab313d4773612a27f9087921/docs/screenshots/linux/search.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A note received inside a shared link</caption>
+      <image>https://raw.githubusercontent.com/cubancorona/bibletext/06f0b1cc60a7aca9ab313d4773612a27f9087921/docs/screenshots/linux/note.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings, with the translation picker and the narration controls</caption>
+      <image>https://raw.githubusercontent.com/cubancorona/bibletext/06f0b1cc60a7aca9ab313d4773612a27f9087921/docs/screenshots/linux/settings.png</image>
+    </screenshot>
+  </screenshots>
   <releases>
     <release version="1.2.9" date="2026-09-15">
       <description>

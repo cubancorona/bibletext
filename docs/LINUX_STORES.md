@@ -36,7 +36,7 @@ single-instance code, and one version names one tree on every channel).
 | Developer name | `cubancorona`, the copyright holder in LICENSE and NOTICE | AppStream forbids a domain-style name; **open: a personal name or "BibleText" instead** |
 | Icon | scaled from `cmd/desktop/Icon.png`, the shipped mark | the same source the Windows tiles now use; `icon/full.png` is the retired dove |
 | Brand colours | `#2F4C86` light, `#7CA0E4` dark | the app's own accents (`theme.go`) |
-| Screenshots | four window captures under `docs/screenshots/linux/`, referenced by commit-pinned raw URLs; the `<screenshots>` block is left out until `screenshots.ref` names that commit | not captured yet; captured by the Linux smoke workflow on a runner |
+| Screenshots | four window captures under `docs/screenshots/linux/`, referenced by commit-pinned raw URLs; the `<screenshots>` block is left out until `screenshots.ref` names that commit | captured 16 Sep 2026 by `.github/workflows/linux-screenshots.yml`; replace them by dispatching it again (docs/screenshots/README.md) |
 
 **Open for the account holder:** the developer name; the metadata licence
 (CC0-1.0 or FSFAP); the NOTICE line for the emoji font (added, factual);
@@ -117,9 +117,9 @@ proven or corrected, exactly as the Windows Store workflow was.
 1. Account holder: the open decisions above; register `bibletext` on the
    Snap Store and add the credential secret; decide the Flathub disclosure.
 2. Run `linux-stores.yml` by hand and fix what it finds.
-3. Capture the four screenshots on a runner (`linux-visual-smoke.yml`),
-   commit them under `docs/screenshots/linux/`, set `screenshots.ref` in
-   `linux/listing.toml` to that commit, re-render.
+3. Screenshots — done: `linux-screenshots.yml` captured the four scenes,
+   `screenshots.ref` names their commit, and the metainfo carries them, so
+   the Flathub metainfo and repository lints now run.
 4. The next release: bump the ledger, add the release to
    `linux/releases.toml` with the tag's date, tag last; the release run
    produces the tarball, the AppImage and its `.zsync`, and the snap on
