@@ -133,8 +133,10 @@ is due by mid-December 2026. Left to do, in order:
    - **Prove it on the runner**: the smoke stops copying Mesa beside the exe
      and the package carries the subfolder, with a control that fails when the
      fallback is disabled, since that is what shows the runner has no driver.
-2. **Screenshots** from the Windows build, 1920×1080 PNG, four of them,
-   captured with the recapture the other stores wait on (next entry).
+2. **Screenshots** — DONE 16 Sep 2026: four captured on the runner at
+   1600×960 (the window's client area, above the Store's floor) by
+   `.github/workflows/windows-screenshots.yml`, committed under
+   `docs/screenshots/windows/`, uploaded by hand at submission.
 3. **Entra tenant and application** — DONE 16 Sep 2026: tenant
    `bibletext.onmicrosoft.com`, application `bibletext-store-api` with the
    Manager role, credentials in the login Keychain, `scripts/msstore-env.sh`
@@ -166,9 +168,11 @@ runbook; `linux/listing.toml` the source; `cmd/linuxmeta` the generator).
 Nothing has run on a Linux runner yet. In order: the account holder's
 decisions (developer name, metadata licence, the Flathub AI disclosure) and
 the Snap Store name registration; the first `linux-stores.yml` dispatch;
-the four screenshots; the next release; an afternoon on a Linux desktop;
-the Flathub PR, the snap promotion, the AppImageHub PR, the site's
-verification token. Deferred with it:
+the next release; an afternoon on a Linux desktop; the Flathub PR, the snap
+promotion, the AppImageHub PR, the site's verification token. The four
+listing screenshots are captured (`docs/screenshots/linux/`, pinned by
+`screenshots.ref`; re-dispatch `linux-screenshots.yml` to replace them).
+Deferred with it:
 
 - **AppImage registering the `bibletext:` scheme itself** — a Settings
   switch that, when `$APPIMAGE` is set, writes a user desktop entry with
