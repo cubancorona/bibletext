@@ -1,0 +1,58 @@
+# Rendered by cmd/linuxmeta from linux/listing.toml; edit the source, not
+# this file. The binary is NOT built here: the release workflow builds and
+# verifies the keyed executable once (the LXD build sees no repository
+# secrets) and stages it under build/snap-stage with linux/asound.conf.
+# The desktop entry is snap/gui/bibletext.desktop, picked up by name.
+name: bibletext
+title: BibleText
+base: core24
+version: "1.2.9"
+summary: Read and study Scripture
+description: |
+  BibleText is a clean, unhurried place to read Scripture. No ads, no accounts, no tracking — just the text, carefully set, with the tools you use while reading.
+
+  • Four translations: World English Bible, WEB Catholic with the deuterocanon, Berean Standard Bible, and the New King James Version through API.Bible
+  • Words of Christ in red, the publishers' own headings and paragraphs, poetry set as poetry
+  • Search, cross-references and Gospel parallels; Go to for references such as John 3:16
+  • Notes carried inside a shared link — no account, no server
+  • Recorded public-domain narration with read-along highlighting
+  • Optional AI study with your own provider key; leave Assistant set to None to switch it off
+
+  Works offline once a translation has downloaded. Free and open source.
+  Privacy: https://bibletext.co.uk/privacy.html
+license: Apache-2.0
+icon: snap/gui/icon.png
+website: https://bibletext.co.uk
+contact: https://bibletext.co.uk/support.html
+issues: https://github.com/cubancorona/bibletext/issues
+source-code: https://github.com/cubancorona/bibletext
+confinement: strict
+grade: stable
+platforms:
+  amd64:
+
+apps:
+  bibletext:
+    command: bin/bibletext
+    extensions: [gnome]
+    plugs:
+      - network
+      - network-bind
+      - audio-playback
+      - home
+
+layout:
+  /usr/lib/x86_64-linux-gnu/alsa-lib:
+    bind: $SNAP/usr/lib/x86_64-linux-gnu/alsa-lib
+  /usr/share/alsa:
+    bind: $SNAP/usr/share/alsa
+  /etc/asound.conf:
+    bind-file: $SNAP/etc/asound.conf
+
+parts:
+  bibletext:
+    plugin: dump
+    source: build/snap-stage
+    stage-packages:
+      - libasound2-plugins
+      - libasound2-data

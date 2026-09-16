@@ -34,7 +34,7 @@ jobs:
           # --draft is load-bearing: publishing immediately reassigns
           # /releases/latest to this tag while the build jobs are still running,
           # so the download page would point at assets that are not available
-          # yet. Publish only after all five assets are attached:
+          # yet. Publish only after every asset the jobs upload (the Linux job now adds the AppImage and its .zsync) plus the APK are attached:
           #   gh release upload <tag> BibleText-Android.apk --clobber
           #   gh release edit   <tag> --draft=false
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
@@ -125,17 +125,21 @@ jobs:
   linux:
     name: build Linux (amd64)
     needs: create-release
-    runs-on: ubuntu-latest
+    # Pinned: the tarball and the AppImage run on any glibc at or above the
+    # one they were built against, and ubuntu-latest drifts upward
+    # (scripts/check-glibc-floor.sh holds the floor at Ubuntu 22.04's 2.35).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
           cache: true
-      - name: install GL/X11 headers
+      - name: install GL/X11 headers and the packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev \
+            desktop-file-utils appstream zsync binutils
       - name: build against the patched Fyne (Noto emoji + discrete caret blink)
         shell: bash
         run: |
@@ -179,10 +183,71 @@ jobs:
           [ -n "$makefile" ] || { echo "::error::no Makefile in the Linux package"; exit 1; }
           grep -q 'update-desktop-database' "$makefile" || { echo "::error::the Makefile does not refresh mimeinfo.cache"; exit 1; }
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh "${packaged_binaries[0]}" "$scan_dir"
-      - name: upload asset
+          grep -q '^Categories=Education;Spirituality;$' "$entry" || { echo "::error::desktop entry has no Categories"; cat "$entry"; exit 1; }
+          if grep -q '^Keywords=fyne;' "$entry"; then echo "::error::the packager's fallback Keywords shipped"; exit 1; fi
+          ../../scripts/check-glibc-floor.sh desktop 2.35
+          # The AppImage, from the very same executable; verified again once
+          # extracted, since the marker cannot be read through the squashfs.
+          cd "$GITHUB_WORKSPACE"
+          scripts/build-appimage.sh cmd/desktop/desktop BibleText-x86_64.AppImage
+          rm -rf squashfs-root
+          ./BibleText-x86_64.AppImage --appimage-extract >/dev/null
+          grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
+          grep -q '^MimeType=x-scheme-handler/bibletext;' squashfs-root/uk.co.bibletext.BibleText.desktop
+          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
+          rm -rf squashfs-root
+          # The snap job packages this same executable.
+          install -Dm755 cmd/desktop/desktop build/snap-stage/bin/bibletext
+          install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap-stage
+          path: build/snap-stage
+          if-no-files-found: error
+          retention-days: 3
+      - name: upload assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Linux-amd64.tar.xz --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Linux-amd64.tar.xz BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber
+
+  snap:
+    name: build snap (amd64)
+    needs: linux
+    runs-on: ubuntu-24.04
+    env:
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: snap-stage
+          path: build/snap-stage
+      - run: chmod 755 build/snap-stage/bin/bibletext
+      - id: snapcraft
+        uses: snapcore/action-build@v1
+      - name: install and assert the exported entry
+        shell: bash
+        env:
+          SNAP_FILE: ${{ steps.snapcraft.outputs.snap }}
+        run: |
+          set -euo pipefail
+          sudo snap install --dangerous "$SNAP_FILE"
+          entry=/var/lib/snapd/desktop/applications/bibletext_bibletext.desktop
+          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
+          grep -q '^Exec=.*bibletext %u$' "$entry"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bibletext-snap
+          path: ${{ steps.snapcraft.outputs.snap }}
+      # Publishing needs the store login exported for the registered name
+      # (docs/LINUX_STORES.md); until that secret exists the snap is an
+      # artifact only. Promotion beyond edge is by hand after a desktop test.
+      - name: publish to edge
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        uses: snapcore/action-publish@v1
+        with:
+          snap: ${{ steps.snapcraft.outputs.snap }}
+          release: edge
 
   windows:
     name: build Windows (amd64)

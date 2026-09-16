@@ -9,3 +9,9 @@ Build = 50
 
 [CanOpen]
 MimeTypes = "x-scheme-handler/bibletext;"
+
+[LinuxAndBSD]
+GenericName = "Bible reader"
+Comment = "Read and study Scripture"
+Categories = ["Education", "Spirituality"]
+Keywords = ["Bible", "Scripture", "NKJV", "Berean", "WEB", "BSB", "Catholic", "deuterocanon", "audio", "narration", "notes", "offline"]

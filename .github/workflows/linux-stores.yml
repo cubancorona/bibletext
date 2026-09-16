@@ -1,0 +1,256 @@
+# Builds the three Linux store packages from ONE keyed executable and proves
+# each installs and launches headless: the AppImage (scripts/build-appimage.sh),
+# the snap (snapcraft inside LXD from the staged binary) and the Flatpak
+# (flatpak-builder in Flathub's container, keyless, linted). Every package
+# gets the same smoke: the desktop entry with the bibletext: scheme asserted
+# inside the artefact, the executable verified for the bundled key where it
+# carries one, a launch under Xvfb with software OpenGL, and a second launch
+# with a link that must hand off to the first and exit. The AppImage and the
+# snap also ship from release.yml; the Flatpak is built by Flathub from the
+# submitted manifest, so this one is verification only.
+name: Linux stores
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "linux/**"
+      - "flatpak/**"
+      - "snap/**"
+      - "cmd/linuxmeta/**"
+      - "scripts/build-appimage.sh"
+      - "scripts/check-glibc-floor.sh"
+      - "scripts/smoke-linux-launch.sh"
+      - ".github/workflows/linux-stores.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  binary:
+    name: build the keyed executable (amd64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install GL/X11/ALSA headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev binutils
+      - name: the rendered inputs are current (before the toolkit replace touches go.mod)
+        run: go test ./cmd/linuxmeta
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
+      - name: build and verify
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+        run: |
+          set -euo pipefail
+          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+          source scripts/release-bible-key.sh
+          load_encoded_release_bible_key
+          trap clear_release_bible_key EXIT
+          (cd cmd/desktop && CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
+          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh build/linux/bibletext build/linux
+          scripts/check-glibc-floor.sh build/linux/bibletext 2.35
+          install -Dm755 build/linux/bibletext build/snap-stage/bin/bibletext
+          install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: build/linux/bibletext
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap-stage
+          path: build/snap-stage
+          if-no-files-found: error
+          retention-days: 3
+
+  appimage:
+    name: AppImage
+    needs: binary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5 # verify-release-package.sh reads the build info with go version -m
+        with:
+          go-version: "1.24"
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: build/linux
+      - name: install the packaging and smoke tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream zsync binutils xvfb imagemagick mesa-utils
+      - name: build the AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 755 build/linux/bibletext
+          scripts/build-appimage.sh build/linux/bibletext BibleText-x86_64.AppImage
+      - name: assert the entry, verify the executable, smoke
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+        run: |
+          set -euo pipefail
+          rm -rf squashfs-root
+          ./BibleText-x86_64.AppImage --appimage-extract >/dev/null
+          entry=squashfs-root/uk.co.bibletext.BibleText.desktop
+          grep -q '^Exec=bibletext %u$' "$entry"
+          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
+          grep -q "^X-AppImage-Version=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/desktop/FyneApp.toml)$" "$entry"
+          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+          source scripts/release-bible-key.sh
+          load_encoded_release_bible_key
+          trap clear_release_bible_key EXIT
+          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
+          # The payload, launched twice from one extraction (the runtime's own
+          # extract-and-run would extract twice into one content-addressed
+          # directory); the runtime itself is exercised by the update-information
+          # read in build-appimage.sh and by the extraction above.
+          scripts/smoke-linux-launch.sh appimage ./squashfs-root/AppRun
+          rm -rf squashfs-root
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BibleText-x86_64-AppImage
+          path: |
+            BibleText-x86_64.AppImage
+            BibleText-x86_64.AppImage.zsync
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appimage-smoke
+          path: smoke-appimage-*.png
+          if-no-files-found: ignore
+
+  snap:
+    name: snap
+    needs: binary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5 # verify-release-package.sh reads the build info with go version -m
+        with:
+          go-version: "1.24"
+      - uses: actions/download-artifact@v4
+        with:
+          name: snap-stage
+          path: build/snap-stage
+      - run: chmod 755 build/snap-stage/bin/bibletext
+      - id: snapcraft
+        uses: snapcore/action-build@v1
+      - name: install, assert the entry, verify the executable, smoke
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+          SNAP_FILE: ${{ steps.snapcraft.outputs.snap }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb imagemagick mesa-utils squashfs-tools
+          sudo snap install --dangerous "$SNAP_FILE"
+          entry=/var/lib/snapd/desktop/applications/bibletext_bibletext.desktop
+          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
+          grep -q '^Exec=.*bibletext %u$' "$entry"
+          grep -q '^Categories=Education;Spirituality;$' "$entry"
+          unsquashfs -q -d "$RUNNER_TEMP/snapfs" "$SNAP_FILE"
+          test -f "$RUNNER_TEMP/snapfs/usr/lib/x86_64-linux-gnu/alsa-lib/libasound_module_pcm_pulse.so"
+          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+          source scripts/release-bible-key.sh
+          load_encoded_release_bible_key
+          trap clear_release_bible_key EXIT
+          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh "$RUNNER_TEMP/snapfs/bin/bibletext" "$RUNNER_TEMP/snapfs"
+          scripts/smoke-linux-launch.sh snap bibletext
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bibletext-snap
+          path: ${{ steps.snapcraft.outputs.snap }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snap-smoke
+          path: smoke-snap-*.png
+          if-no-files-found: ignore
+
+  flatpak:
+    name: Flatpak (keyless, verification only)
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      # The action lives in the flatpak organisation (the flathub-infra fork
+      # is archived and has no tags); the container images are flathub-infra's.
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/uk.co.bibletext.BibleText.yml
+          bundle: uk.co.bibletext.BibleText.flatpak
+          arch: x86_64
+          cache-key: flatpak-builder-${{ hashFiles('flatpak/**', 'go.sum') }}
+          upload-artifact: true
+          artifact-name: uk.co.bibletext.BibleText-x86_64
+          mirror-screenshots-url: https://dl.flathub.org/media
+      - name: lint the manifest, the metainfo and the repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The image carries flatpak-builder-lint on PATH (org.flatpak.Builder's
+          # tree under /app), not as an installed flatpak.
+          flatpak-builder-lint manifest flatpak/uk.co.bibletext.BibleText.yml
+          if grep -q '<screenshots>' linux/flathub/uk.co.bibletext.BibleText.metainfo.xml; then
+            flatpak-builder-lint appstream linux/flathub/uk.co.bibletext.BibleText.metainfo.xml
+            flatpak-builder-lint repo repo
+          else
+            echo "::notice::no screenshots captured yet (linux/listing.toml screenshots.ref); the appstream and repo lints, which require them, are skipped"
+          fi
+
+  flatpak-smoke:
+    name: smoke the Flatpak
+    needs: flatpak
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: uk.co.bibletext.BibleText-x86_64
+          path: .
+      - name: install the bundle, assert the exported entry, smoke, record
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb imagemagick ffmpeg
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//25.08
+          flatpak install --user -y --bundle uk.co.bibletext.BibleText.flatpak
+          exp=~/.local/share/flatpak/exports/share/applications/uk.co.bibletext.BibleText.desktop
+          grep -q '^MimeType=x-scheme-handler/bibletext;' "$exp"
+          grep -q -- '--file-forwarding uk.co.bibletext.BibleText @@u %u @@' "$exp"
+          scripts/smoke-linux-launch.sh flatpak flatpak run --env=LIBGL_ALWAYS_SOFTWARE=1 uk.co.bibletext.BibleText
+          # A short screen recording for the Flathub PR template.
+          xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            flatpak run --env=LIBGL_ALWAYS_SOFTWARE=1 uk.co.bibletext.BibleText & sleep 25
+            ffmpeg -loglevel error -y -f x11grab -video_size 1280x800 -i "$DISPLAY" -t 20 flatpak-demo.mp4
+            kill %1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flatpak-smoke
+          path: |
+            smoke-flatpak-*.png
+            flatpak-demo.mp4
+          if-no-files-found: ignore

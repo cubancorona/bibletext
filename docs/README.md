@@ -73,6 +73,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 - [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) — before any App Store or Mac App Store step — build identity, metadata, screenshots, review notes, submission
 - [PLAY_LISTING.md](PLAY_LISTING.md) — before creating the Play app record, answering Data safety or IARC, or uploading an AAB or store graphics
 - [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) — before any Microsoft Store step — the reserved identity, the MSIX package and its workflow, the listing fields, the first submission, the API prerequisites
+- [LINUX_STORES.md](LINUX_STORES.md) — before touching the Flathub, Snap Store or AppImage packaging, their listings, or the Linux desktop entry
 
 
 ## Fyne itself

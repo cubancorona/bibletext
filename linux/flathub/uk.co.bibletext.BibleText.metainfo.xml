@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rendered by cmd/linuxmeta from linux/listing.toml; edit the source, not this file. -->
+<component type="desktop-application">
+  <id>uk.co.bibletext.BibleText</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <name>BibleText</name>
+  <summary>Read and study Scripture</summary>
+  <developer id="uk.co.bibletext">
+    <name>cubancorona</name>
+  </developer>
+  <description>
+    <p>BibleText is a clean, unhurried place to read Scripture. No ads, no accounts, no tracking — just the text, carefully set, with the tools you use while reading.</p>
+    <ul>
+      <li>Four translations: World English Bible, WEB Catholic with the deuterocanon, Berean Standard Bible, and the New King James Version through API.Bible</li>
+      <li>Words of Christ in red, the publishers' own headings and paragraphs, poetry set as poetry</li>
+      <li>Search, cross-references and Gospel parallels; Go to for references such as John 3:16</li>
+      <li>Notes carried inside a shared link — no account, no server</li>
+      <li>Recorded public-domain narration with read-along highlighting</li>
+      <li>Optional AI study with your own provider key; leave Assistant set to None to switch it off</li>
+    </ul>
+    <p>Works offline once a translation has downloaded. Free and open source.</p>
+    <p>This build carries no API.Bible key: add your own free key under Settings to read the NKJV.</p>
+  </description>
+  <launchable type="desktop-id">uk.co.bibletext.BibleText.desktop</launchable>
+  <url type="homepage">https://bibletext.co.uk/</url>
+  <url type="bugtracker">https://github.com/cubancorona/bibletext/issues</url>
+  <url type="help">https://bibletext.co.uk/support.html</url>
+  <url type="contact">https://bibletext.co.uk/support.html</url>
+  <url type="vcs-browser">https://github.com/cubancorona/bibletext</url>
+  <categories>
+    <category>Education</category>
+    <category>Spirituality</category>
+  </categories>
+  <keywords>
+    <keyword>Bible</keyword>
+    <keyword>Scripture</keyword>
+    <keyword>NKJV</keyword>
+    <keyword>Berean</keyword>
+    <keyword>WEB</keyword>
+    <keyword>BSB</keyword>
+    <keyword>Catholic</keyword>
+    <keyword>deuterocanon</keyword>
+    <keyword>audio</keyword>
+    <keyword>narration</keyword>
+    <keyword>notes</keyword>
+    <keyword>offline</keyword>
+  </keywords>
+  <provides>
+    <mediatype>x-scheme-handler/bibletext</mediatype>
+  </provides>
+  <recommends>
+    <internet>first-run</internet>
+  </recommends>
+  <branding>
+    <color type="primary" scheme_preference="light">#2F4C86</color>
+    <color type="primary" scheme_preference="dark">#7CA0E4</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.2.9" date="2026-09-15">
+      <description>
+        <p>Headings and spacing, set right.</p>
+        <ul>
+          <li>Section headings in the Berean Standard Bible and the NKJV now stand at the text's own size, in bold, with the same air above them as below.</li>
+          <li>Paragraph spacing and the gap under a psalm's title now follow your text size. They were fixed sizes before, and did not grow with the text.</li>
+          <li>A shared note's collapsed pill under a heading or a psalm's title now sits centred in the space it has, and a little closer to the words it marks.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.8" date="2026-09-10">
+      <description>
+        <p>Verse of the day, rebuilt.</p>
+        <ul>
+          <li>Today's verse is now a short passage — a whole thought rather than a clause — set in the reading face at your own text size, with Christ's words in red where the edition marks them. Share it from the card and it is cited in its own chapter.</li>
+          <li>The rotation moves between books from one day to the next instead of walking one book for weeks, and every reader on every translation sees the same passage on the same date. The Catholic edition's own books take their turn.</li>
+          <li>The day changes at your midnight.</li>
+          <li>On the desktop, Escape closes the card rather than clearing the highlighted verse behind it.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.7" date="2026-09-08">
+      <description>
+        <p>The publishers' own typesetting, and a new reading face.</p>
+        <ul>
+          <li>Section headings now appear where the publisher set them, and paragraphs break where the publisher broke them, in every translation rather than on a rule of our own.</li>
+          <li>A new reading face, Junicode, with Ezra SIL for Hebrew. The divine name is set in small capitals as the editions intend, and copying a verse still gives you ordinary letters.</li>
+          <li>Psalm titles — the superscriptions that name the psalm's author or occasion — are now shown in the New King James Version.</li>
+          <li>Footnotes gather at the foot of the chapter, so a marker in the text has somewhere to take you.</li>
+          <li>Selecting a verse that carries a highlight now shows the selection; it was being painted underneath.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.5" date="2026-09-03">
+      <description>
+        <p>Notes, arrivals, and narration.</p>
+        <ul>
+          <li>Shared notes: each paragraph that carries a note now shows a small Note pill, sitting evenly between the paragraphs. Open it for that paragraph's note; the heading counts them and steps through.</li>
+          <li>Arriving from a shared link or a search result lands on the verse itself; the chapter arrows and picker open each chapter at the top.</li>
+          <li>Switching translations no longer serves stale text from an earlier download, and a reference made in one translation is read back in that translation.</li>
+          <li>Narration: the World English Bible Catholic edition's Greek-origin books now have a recording of their own text.</li>
+          <li>Study with AI says so when a model was cut off mid-answer.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.4" date="2026-08-29">
+      <description>
+        <p>Fixes for cross-references, shared notes, and audio.</p>
+        <ul>
+          <li>Cross-references now work on the Romans doxology (16:25-27).</li>
+          <li>A shared note can no longer reserve a screen-height blank band around the passage it belongs to.</li>
+          <li>Windows and Linux: chapters recorded at a different sample rate no longer silence the rest of the session.</li>
+          <li>Translators' footnotes anchored in verses a translation omits are kept, so the note explaining the omission can still be read.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.3" date="2026-08-27">
+      <description>
+        <p>Red-letter text now follows each translation's own publisher markings instead of borrowing another edition's decisions.</p>
+        <ul>
+          <li>WEB, WEB Catholic, BSB, and NKJV now use their own marked spans, including partial verses.</li>
+          <li>NKJV restores four sayings its publisher marks as Christ's words: Mark 5:31, Matthew 27:63, Luke 17:36, and Luke 24:7.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.2" date="2026-08-23">
+      <description>
+        <p>The book list has been rethought, and translations show only what you can read.</p>
+        <ul>
+          <li>The book list is now a grid, grouped under Old Testament and New Testament.</li>
+          <li>The translation list shows the three public-domain translations and the New King James Version; two copyrighted translations that were never selectable have been taken out.</li>
+          <li>Cross-references and Gospel parallels now follow the numbering of the translation you are reading.</li>
+          <li>On Windows and Linux the passage is no longer drawn inside a box; it sits on the page as it does everywhere else.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.1" date="2026-08-20">
+      <description>
+        <p>Refinements for shared notes, and some fixes worth having.</p>
+        <ul>
+          <li>Notes you wrote yourself now appear on the passage when you open them from your notes list, marked as yours.</li>
+          <li>Every note in the list has a small bin for deleting it on the spot.</li>
+          <li>The words of Christ in the New King James Version are now complete; they had been cut short wherever the NKJV italicises a supplied word.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.0" date="2026-08-20">
+      <description>
+        <p>Someone can now send you a verse with a note attached.</p>
+        <ul>
+          <li>Open their link and BibleText shows the passage with their message beside it, in the translation they were reading. Notes travel inside the link itself — no account, no server, nothing collected.</li>
+          <li>Your notes are kept like a scrapbook on the Search tab: everything you have received and sent, searchable, sorted, and never thrown away.</li>
+          <li>The citation now names exactly the verses you selected, and shared poetry keeps its lines.</li>
+          <li>The New King James Version is available and works as soon as you install the app.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.7" date="2026-08-08"/>
+    <release version="1.1.6" date="2026-08-04"/>
+    <release version="1.1.5" date="2026-07-23"/>
+    <release version="1.1.4" date="2026-07-22"/>
+    <release version="1.1.3" date="2026-07-21"/>
+    <release version="1.1.2" date="2026-07-19"/>
+  </releases>
+</component>

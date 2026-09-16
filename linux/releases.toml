@@ -1,0 +1,128 @@
+# Release history for the AppStream MetaInfo, newest first: every version that
+# shipped an artifact, with its annotated tag's date, and the reader-facing
+# notes the stores carry (the What's New text, whose files are not tracked).
+# The newest entry must be the desktop ledger's Version, dates must descend
+# and may not be in the future. 1.2.6 (a tag with no assets) and 1.1.8 (notes
+# with no tag) are absent on purpose; the history starts at 1.1.2, the first
+# tag that shipped a Linux tarball.
+
+[[release]]
+version = "1.2.9"
+date = "2026-09-15"
+head = "Headings and spacing, set right."
+bullets = [
+  "Section headings in the Berean Standard Bible and the NKJV now stand at the text's own size, in bold, with the same air above them as below.",
+  "Paragraph spacing and the gap under a psalm's title now follow your text size. They were fixed sizes before, and did not grow with the text.",
+  "A shared note's collapsed pill under a heading or a psalm's title now sits centred in the space it has, and a little closer to the words it marks.",
+]
+
+[[release]]
+version = "1.2.8"
+date = "2026-09-10"
+head = "Verse of the day, rebuilt."
+bullets = [
+  "Today's verse is now a short passage — a whole thought rather than a clause — set in the reading face at your own text size, with Christ's words in red where the edition marks them. Share it from the card and it is cited in its own chapter.",
+  "The rotation moves between books from one day to the next instead of walking one book for weeks, and every reader on every translation sees the same passage on the same date. The Catholic edition's own books take their turn.",
+  "The day changes at your midnight.",
+  "On the desktop, Escape closes the card rather than clearing the highlighted verse behind it.",
+]
+
+[[release]]
+version = "1.2.7"
+date = "2026-09-08"
+head = "The publishers' own typesetting, and a new reading face."
+bullets = [
+  "Section headings now appear where the publisher set them, and paragraphs break where the publisher broke them, in every translation rather than on a rule of our own.",
+  "A new reading face, Junicode, with Ezra SIL for Hebrew. The divine name is set in small capitals as the editions intend, and copying a verse still gives you ordinary letters.",
+  "Psalm titles — the superscriptions that name the psalm's author or occasion — are now shown in the New King James Version.",
+  "Footnotes gather at the foot of the chapter, so a marker in the text has somewhere to take you.",
+  "Selecting a verse that carries a highlight now shows the selection; it was being painted underneath.",
+]
+
+[[release]]
+version = "1.2.5"
+date = "2026-09-03"
+head = "Notes, arrivals, and narration."
+bullets = [
+  "Shared notes: each paragraph that carries a note now shows a small Note pill, sitting evenly between the paragraphs. Open it for that paragraph's note; the heading counts them and steps through.",
+  "Arriving from a shared link or a search result lands on the verse itself; the chapter arrows and picker open each chapter at the top.",
+  "Switching translations no longer serves stale text from an earlier download, and a reference made in one translation is read back in that translation.",
+  "Narration: the World English Bible Catholic edition's Greek-origin books now have a recording of their own text.",
+  "Study with AI says so when a model was cut off mid-answer.",
+]
+
+[[release]]
+version = "1.2.4"
+date = "2026-08-29"
+head = "Fixes for cross-references, shared notes, and audio."
+bullets = [
+  "Cross-references now work on the Romans doxology (16:25-27).",
+  "A shared note can no longer reserve a screen-height blank band around the passage it belongs to.",
+  "Windows and Linux: chapters recorded at a different sample rate no longer silence the rest of the session.",
+  "Translators' footnotes anchored in verses a translation omits are kept, so the note explaining the omission can still be read.",
+]
+
+[[release]]
+version = "1.2.3"
+date = "2026-08-27"
+head = "Red-letter text now follows each translation's own publisher markings instead of borrowing another edition's decisions."
+bullets = [
+  "WEB, WEB Catholic, BSB, and NKJV now use their own marked spans, including partial verses.",
+  "NKJV restores four sayings its publisher marks as Christ's words: Mark 5:31, Matthew 27:63, Luke 17:36, and Luke 24:7.",
+]
+
+[[release]]
+version = "1.2.2"
+date = "2026-08-23"
+head = "The book list has been rethought, and translations show only what you can read."
+bullets = [
+  "The book list is now a grid, grouped under Old Testament and New Testament.",
+  "The translation list shows the three public-domain translations and the New King James Version; two copyrighted translations that were never selectable have been taken out.",
+  "Cross-references and Gospel parallels now follow the numbering of the translation you are reading.",
+  "On Windows and Linux the passage is no longer drawn inside a box; it sits on the page as it does everywhere else.",
+]
+
+[[release]]
+version = "1.2.1"
+date = "2026-08-20"
+head = "Refinements for shared notes, and some fixes worth having."
+bullets = [
+  "Notes you wrote yourself now appear on the passage when you open them from your notes list, marked as yours.",
+  "Every note in the list has a small bin for deleting it on the spot.",
+  "The words of Christ in the New King James Version are now complete; they had been cut short wherever the NKJV italicises a supplied word.",
+]
+
+[[release]]
+version = "1.2.0"
+date = "2026-08-20"
+head = "Someone can now send you a verse with a note attached."
+bullets = [
+  "Open their link and BibleText shows the passage with their message beside it, in the translation they were reading. Notes travel inside the link itself — no account, no server, nothing collected.",
+  "Your notes are kept like a scrapbook on the Search tab: everything you have received and sent, searchable, sorted, and never thrown away.",
+  "The citation now names exactly the verses you selected, and shared poetry keeps its lines.",
+  "The New King James Version is available and works as soon as you install the app.",
+]
+
+[[release]]
+version = "1.1.7"
+date = "2026-08-08"
+
+[[release]]
+version = "1.1.6"
+date = "2026-08-04"
+
+[[release]]
+version = "1.1.5"
+date = "2026-07-23"
+
+[[release]]
+version = "1.1.4"
+date = "2026-07-22"
+
+[[release]]
+version = "1.1.3"
+date = "2026-07-21"
+
+[[release]]
+version = "1.1.2"
+date = "2026-07-19"

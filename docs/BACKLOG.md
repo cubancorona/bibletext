@@ -129,6 +129,34 @@ is due by mid-December 2026. Left to do, in order:
    (the delegate's `openURLs` entry point is already there); an "Open in
    BibleText" affordance on the reader pages, not only the notice pages.
 
+## Linux stores: from the listing source to three live channels
+
+Prepared 16 September 2026 (`docs/LINUX_STORES.md` is the listing and the
+runbook; `linux/listing.toml` the source; `cmd/linuxmeta` the generator).
+Nothing has run on a Linux runner yet. In order: the account holder's
+decisions (developer name, metadata licence, the Flathub AI disclosure) and
+the Snap Store name registration; the first `linux-stores.yml` dispatch;
+the four screenshots; the next release; an afternoon on a Linux desktop;
+the Flathub PR, the snap promotion, the AppImageHub PR, the site's
+verification token. Deferred with it:
+
+- **AppImage registering the `bibletext:` scheme itself** — a Settings
+  switch that, when `$APPIMAGE` is set, writes a user desktop entry with
+  `Exec="$APPIMAGE" %u` and the MimeType and runs `update-desktop-database`;
+  the app's first write outside its own directories on Linux, the same
+  stance as the Windows registry item.
+- **oto 3.5 on Linux (pure-Go PulseAudio)** — needs Go 1.25 across CI and
+  the release; would drop `libasound2-dev`, the snap's ALSA plumbing and the
+  fallback question in both sandboxes.
+- **An SVG of the shipped icon** — Flathub prefers one; the full-bleed PNG
+  draws a quality note, not a rejection.
+- **The Windows tiles render from `icon/full.png`**, the retired mark, while
+  every other channel ships `cmd/desktop/Icon.png`; decide, then regenerate.
+- **Snap preferences under the per-revision data dir** — a revert restores
+  older notes; `XDG_CONFIG_HOME=$SNAP_USER_COMMON/.config` would opt out.
+- **Bump the Flatpak runtime to 26.08** when the golang SDK extension has
+  that branch.
+
 ## Recapture the App Store and Play screenshots — deferred from 1.2.7
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn

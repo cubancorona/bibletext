@@ -1,0 +1,63 @@
+# Rendered by cmd/linuxmeta from linux/listing.toml; edit the source, not
+# this file. This copy builds the checked-out tree (CI verification); the
+# copy submitted to Flathub pins a release tag and commit instead
+# (go run ./cmd/linuxmeta flatpak-manifest -tag v1.2.x -commit <sha>).
+app-id: uk.co.bibletext.BibleText
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.golang
+command: bibletext
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --device=dri
+  - --socket=pulseaudio
+  - --share=network
+  - --filesystem=xdg-download
+build-options:
+  append-path: /usr/lib/sdk/golang/bin
+  env:
+    GOROOT: /usr/lib/sdk/golang
+    GOFLAGS: -mod=vendor -trimpath -buildvcs=false
+    GOPROXY: 'off'
+    GOTOOLCHAIN: local
+    CGO_ENABLED: '1'
+modules:
+  - name: bibletext
+    buildsystem: simple
+    build-commands:
+      # The patched toolkit, applied to the vendored stock module the way
+      # scripts/setup-fyne-patch.sh applies it to third_party/fyne.
+      - chmod -R u+w vendor/fyne.io/fyne/v2
+      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-ios-drawloop.patch
+      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-caret-blink.patch
+      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-noto-emoji.patch
+      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-android-newintent.patch
+      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-atomic-prefs.patch
+      - cp patches/NotoColorEmoji.ttf vendor/fyne.io/fyne/v2/theme/font/NotoColorEmoji.ttf
+      - rm -f vendor/fyne.io/fyne/v2/theme/font/EmojiOneColor.otf
+      - grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go
+      - grep -q 'BibleText patch: discrete caret blink' vendor/fyne.io/fyne/v2/widget/entry_cursor_anim.go
+      - grep -q 'BibleText patch: atomic preferences write' vendor/fyne.io/fyne/v2/app/preferences_nonweb.go
+      - grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go
+      # Keyless by design: no linker value for the API.Bible key here
+      # (docs/API_KEY_HANDLING.md); the reader adds a key under Settings.
+      - go build -tags flatpak -ldflags '-s -w' -o bibletext ./cmd/desktop
+      - install -Dm755 bibletext ${FLATPAK_DEST}/bin/bibletext
+      - install -Dm644 linux/uk.co.bibletext.BibleText.desktop ${FLATPAK_DEST}/share/applications/uk.co.bibletext.BibleText.desktop
+      - install -Dm644 linux/flathub/uk.co.bibletext.BibleText.metainfo.xml ${FLATPAK_DEST}/share/metainfo/uk.co.bibletext.BibleText.metainfo.xml
+      - install -Dm644 linux/icons/hicolor/256x256/apps/uk.co.bibletext.BibleText.png ${FLATPAK_DEST}/share/icons/hicolor/256x256/apps/uk.co.bibletext.BibleText.png
+      - install -Dm644 linux/icons/hicolor/512x512/apps/uk.co.bibletext.BibleText.png ${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/uk.co.bibletext.BibleText.png
+      - install -Dm644 LICENSE ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/LICENSE
+      - install -Dm644 NOTICE ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/NOTICE
+      - install -Dm644 assets/fonts/atkinson/OFL.txt ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/OFL-Atkinson-Hyperlegible.txt
+      - install -Dm644 assets/fonts/reading/Junicode-OFL.txt ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/OFL-Junicode.txt
+      - install -Dm644 assets/fonts/reading/EzraSIL-Licenses.txt ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/EzraSIL-Licenses.txt
+      - install -Dm644 assets/fonts/share/OFL-LICENSES.txt ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/OFL-share-card-fonts.txt
+      - install -Dm644 patches/NotoColorEmoji-LICENSE-OFL.txt ${FLATPAK_DEST}/share/licenses/uk.co.bibletext.BibleText/OFL-NotoColorEmoji.txt
+    sources:
+      - type: dir
+        path: ..
+      - go.mod.yml

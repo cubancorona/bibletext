@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=BibleText
+GenericName=Bible reader
+Comment=Read and study Scripture
+Exec=bibletext %u
+Icon=${SNAP}/meta/gui/icon.png
+Terminal=false
+Categories=Education;Spirituality;
+Keywords=Bible;Scripture;NKJV;Berean;WEB;BSB;Catholic;deuterocanon;audio;narration;notes;offline;
+MimeType=x-scheme-handler/bibletext;
+StartupWMClass=BibleText
+StartupNotify=false
