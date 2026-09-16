@@ -43,7 +43,7 @@ func TestCommittedFilesAreTheGeneratorsOutput(t *testing.T) {
 				t.Errorf("%s: %v", o.Path, err)
 				continue
 			}
-			if string(got) != o.Text {
+			if strings.ReplaceAll(string(got), "\r\n", "\n") != o.Text {
 				t.Errorf("%s differs from a fresh render; run `go run ./cmd/linuxmeta render`", o.Path)
 			}
 			continue
@@ -325,11 +325,13 @@ func TestScreenshotsAreLeftOutUntilCaptured(t *testing.T) {
 	}
 }
 
+// readFile reads a repository file with CRLF normalised: .gitattributes asks
+// for LF everywhere, but a test must not depend on the checkout's settings.
 func readFile(t *testing.T, rel string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(repo, rel))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
