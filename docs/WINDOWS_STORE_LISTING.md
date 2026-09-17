@@ -122,7 +122,7 @@ note the other stores get (`build/appstore/metadata/en-GB/whats-new-<v>.txt`).
 | --- | --- | --- |
 | Category | Books + reference / Reference | a reader, not a game, not education-only |
 | Age rating | the IARC questionnaire, or the IARC rating ID from the Play Console (App content → Content rating) | first submission only; `docs/PLAY_LISTING.md` "Content rating" has the two answers that need a human |
-| System requirements | Windows 10 version 2004 (build 19041) or later, x64 | the manifest floor; the app renders through Direct3D, which Windows provides on every machine, so no graphics driver is required; the toolkit renders through OpenGL |
+| System requirements | Windows 10 version 2004 (build 19041) or later, x64 | the manifest floor; the app renders through Direct3D, which Windows provides on every machine, so no graphics driver is required; the toolkit draws in OpenGL ES, which the bundled ANGLE libraries translate to Direct3D |
 | Incorporates generative AI | Yes | Policy 11.16: the optional Study with AI and Find generate text from the reader's own provider key; the description discloses it; no AI content is stored or shared by the app |
 | Accessibility | not declared | the toolkit has no accessibility tree; declaring it would be untrue |
 | Pen and ink, non-Microsoft drivers or services | No | |

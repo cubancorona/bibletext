@@ -17,7 +17,7 @@ go test ./...               # run the test suite
 On Linux, the Fyne GUI needs OpenGL/X11 headers to build:
 
 ```bash
-sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
+sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libasound2-dev
 ```
 
 ## Editor setup

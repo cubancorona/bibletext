@@ -1,16 +1,19 @@
 # Google Play listing — copy, assets, and console review
 
-BibleText's Google Play listing exists and its first submission is with Google.
-1.2.7 (versionCode 177) was sent for review on 8 September 2026 on the closed
-testing track "Alpha", targeting 176 countries, with testers supplied through the
-Google Group `testers-community@googlegroups.com`. Production access has not been
-granted and no production release exists.
+BibleText's Google Play listing exists and the app is on the closed testing track
+"Alpha", targeting 176 countries, with testers supplied through the Google Group
+`testers-community@googlegroups.com`. The first submission, 1.2.7 (versionCode
+177), was sent for review on 8 September 2026; 1.2.9 (179) followed on 15
+September. Production access has not been granted and no production release
+exists; it needs twelve testers opted in for fourteen continuous days. 1.2.10 is
+a desktop-packaging release and was deliberately not sent to Play, so the
+identity below is what a next upload would carry, not what Google holds.
 
 Prepared release identity:
 
 - package: `uk.co.bibletext`
-- version: 1.2.7
-- versionCode: 177
+- version: 1.2.10
+- versionCode: 180
 - minimum SDK: Android 5.0 / API 21
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`

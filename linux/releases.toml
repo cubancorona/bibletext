@@ -12,7 +12,8 @@ date = "2026-09-17"
 head = "Shared links open in the app, and Linux has its own packages."
 bullets = [
   "A shared bibletext: link now opens in the app rather than only in the browser. It goes straight to the passage, carries any note attached to it, and hands off to the window already open instead of starting a second one.",
-  "Linux builds now ship as a Flatpak, a Snap and an AppImage as well as the tarball, each registering the link handler with your desktop.",
+  "Linux now has an AppImage beside the tarball: one file to make executable and run. Flatpak and Snap packages are prepared and will follow.",
+  "The tarball registers the link handler with your desktop, so a shared link opens in the app; with the AppImage, paste the link into Search.",
   "Reading, search, notes and narration are unchanged in this release.",
 ]
 

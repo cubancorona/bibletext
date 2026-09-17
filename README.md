@@ -37,14 +37,21 @@ platforms in one place, or directly:
 - **iPhone, iPad & Mac** — [App Store](https://apps.apple.com/app/id6784567351)
 - **Android** — [sideload APK](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk)
   from Releases (built + signed locally by `scripts/build-android.sh --release`,
-  uploaded per release; Play Store listing prepared in
-  [docs/PLAY_LISTING.md](docs/PLAY_LISTING.md), pending a Play Console account)
+  uploaded per release; the Google Play listing is with Google on the closed
+  testing track — see [docs/PLAY_LISTING.md](docs/PLAY_LISTING.md) — and there
+  is no production release yet)
 - **macOS / Windows / Linux** — grab the latest build from
   [Releases](https://github.com/cubancorona/bibletext/releases/latest). On a Mac
   the App Store edition above is the easier route: signed, sandboxed and updated
   for you. These builds are unsigned, so on macOS right-click → **Open** the
   first time. Desktop artifacts are built by
   [`release.yml`](.github/workflows/release.yml) on every `v*` tag.
+- **Linux, as a single file** —
+  [BibleText-x86_64.AppImage](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage);
+  `chmod +x` it and run it. The static runtime needs no libfuse2, and the file
+  carries zsync update information, so a tool such as `AppImageUpdate` can
+  refresh it in place. Unlike the tarball it does not register the `bibletext:`
+  link scheme — paste a shared link into Search.
 
 ## Build
 
@@ -427,7 +434,7 @@ bibletext/
 ├── scripts/                # build wrappers: build-android.sh, run-ios-*.sh, release-ios.sh
 ├── docs/ANDROID.md         # Android toolchain, build, signing, distribution
 ├── docs/IPAD.md            # unified iPad navigation, typography, testing, shipping
-└── cmd/                    # four programs, all importing the shared package
+└── cmd/                    # six programs; the four app and site ones import the shared package
     ├── desktop/            # `go build ./cmd/desktop` · `fyne install …/cmd/desktop@latest`
     │   ├── main.go
     │   ├── FyneApp.toml    # name, app ID, version/build (read by `fyne package` / `fyne install`)
@@ -438,10 +445,14 @@ bibletext/
     │   ├── AndroidManifest.xml  # custom manifest — media service + session permissions
     │   └── Icon*.png            # app icon + Android adaptive-icon layers
     ├── websitegen/         # the static web reader at bibletext.co.uk (scripts/publish-site.sh)
-    └── sitepages/          # the site's hand-written root pages (scripts/publish-site.sh)
+    ├── sitepages/          # the site's hand-written root pages (scripts/publish-site.sh)
+    ├── linuxmeta/          # renders linux/, flatpak/ and snap/ from linux/listing.toml
+    └── msstore/            # renders the Microsoft Store manifest, listing and tiles
 ```
 
-The same `bibletext` package is consumed by every `cmd/` program; build tags
+The same `bibletext` package is consumed by the four application and site `cmd/`
+programs — `linuxmeta` and `msstore` are standalone packaging generators that
+import none of it; build tags
 on `ui_desktop.go` / `ui_mobile.go` make the linker pick the platform-appropriate
 `CreateMainUI` implementation. Pure data files (`bible.go`, `cache.go`,
 `fetch_bible_data.go`, `annotation.go`) have no UI deps and compile everywhere.

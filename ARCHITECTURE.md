@@ -248,7 +248,7 @@ prose.
 | `share_link_argv.go` | Windows/Linux link intake: the first site URL on the command line (`bibletext:` swapped for https, parsed, capped) delivered through `HandleShareLink`; a declined URL goes to the browser (invariant I2) |
 | `single_instance.go` + `_on/_off/_windows/_linux/_other` | one window per reader on Windows/Linux: exclusive record under the cache dir, loopback handshake (nonce → HMAC → token+URL → ok/no), forward-and-exit or listen; compiled in only for `windows || linux || bibletextdev` |
 | `share_link_echo.go`, `share_link_browser_command.go`, `share_link_browser_windows.go` | the loop-safe browser opener: the default browser's own command via the association API on Windows, the toolkit route as fallback with an echo guard so the Store build's web-to-app handler cannot catch the app's own hop |
-| `cmd/msstore/`, `msstore/` | Microsoft Store packaging inputs: tiles and listing logos from `icon/full.png`, the AppxManifest template filled from `msstore/identity.json` and the desktop ledger, the read-side submission-API client; packaged by `.github/workflows/msstore.yml` |
+| `cmd/msstore/`, `msstore/` | Microsoft Store packaging inputs: tiles and listing logos from `cmd/desktop/Icon.png`, the AppxManifest template filled from `msstore/identity.json` and the desktop ledger, the read-side submission-API client; packaged by `.github/workflows/msstore.yml` |
 
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
 build — the Go build tag picks the *platform*. Both feed the shared composition

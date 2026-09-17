@@ -20,6 +20,7 @@ added to it.
   `main` package, so use `go run ./cmd/desktop` instead of `go run .`.
 - `cmd/desktop` and `cmd/mobile` are the desktop and mobile entry points.
 - `cmd/websitegen` builds the static web reader.
+- `cmd/linuxmeta` and `cmd/msstore` render the Linux and Microsoft Store packaging inputs.
 - Platform-specific behavior is selected with Go build tags. Host tooling may
   grey out files for other platforms; validate those files with the platform
   build commands below.
