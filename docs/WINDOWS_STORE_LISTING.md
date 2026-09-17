@@ -265,6 +265,27 @@ document in Partner Center:
 7. Submit. Certification takes up to three business days; after it passes,
    Publish now.
 
+## Published
+
+BibleText went live on the Microsoft Store on 17 September 2026 at 21:29 UTC.
+Submission 1 passed certification and published itself: the publishing hold was
+set to publish on passing rather than to wait for a manual Publish now, so
+there was no second step. The API is the plainest confirmation —
+`firstPublishedDate` is no longer the 1601 never-published sentinel,
+`pendingApplicationSubmission` is gone and `lastPublishedApplicationSubmission`
+is submission 1. The listing answers at apps.microsoft.com/detail/9NDCCZH9RB9K.
+
+Two things change from here. The name reservation stops being a clock. And the
+submission API's write side is unblocked: `POST /submissions` clones the last
+published submission, and there is one at last, so the next Windows release can
+go create → upload to the SAS URL → commit → poll rather than through a browser.
+The section above records why the first package could not.
+
+1.2.11 was deliberately not submitted. Nothing in it reaches a Windows reader —
+the appearance fix is Android's and the universal build is the macOS direct
+download — and the Store had published hours earlier. The next change that
+touches Windows carries the number.
+
 ## Submission 1 — what is filled and what is not
 
 Submission 1 exists in Partner Center as a draft. Four of its six sections
