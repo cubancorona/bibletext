@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -227,8 +228,22 @@ func TestManifestAppliesEveryTrackedPatch(t *testing.T) {
 	if err != nil || len(tracked) == 0 {
 		t.Fatalf("no toolkit patches found: %v", err)
 	}
-	if len(tracked) != len(fynePatchOrder) {
-		t.Errorf("%d tracked toolkit patches, the manifest applies %d", len(tracked), len(fynePatchOrder))
+	if len(tracked) != len(fynePatchOrder)+len(fynePatchesNotOnLinux) {
+		t.Errorf("%d tracked toolkit patches, the manifest applies %d and %d are declared not to apply on Linux",
+			len(tracked), len(fynePatchOrder), len(fynePatchesNotOnLinux))
+	}
+	// A patch excused from the Linux build must say why, and must really be
+	// absent from the manifest rather than quietly listed in both places.
+	for name, why := range fynePatchesNotOnLinux {
+		if why == "" {
+			t.Errorf("%s is excused from the Flatpak build with no reason given", name)
+		}
+		if slices.Contains(fynePatchOrder, name) {
+			t.Errorf("%s is both applied and excused", name)
+		}
+		if strings.Contains(manifest, "patches/"+name) {
+			t.Errorf("%s is excused from the Flatpak build but the manifest applies it", name)
+		}
 	}
 	// The order is the setup script's: the first mention of each patch file
 	// in scripts/setup-fyne-patch.sh must come in the same sequence.
@@ -259,8 +274,12 @@ func TestManifestAppliesEveryTrackedPatch(t *testing.T) {
 		last = i
 	}
 	for _, p := range tracked {
-		if !strings.Contains(manifest, "patches/"+filepath.Base(p)+"\n") {
-			t.Errorf("tracked patch %s is not applied by the manifest", filepath.Base(p))
+		name := filepath.Base(p)
+		if _, excused := fynePatchesNotOnLinux[name]; excused {
+			continue
+		}
+		if !strings.Contains(manifest, "patches/"+name+"\n") {
+			t.Errorf("tracked patch %s is neither applied by the manifest nor declared in fynePatchesNotOnLinux", name)
 		}
 	}
 	if !strings.Contains(manifest, "go build -tags flatpak") || strings.Contains(manifest, "-X ") {

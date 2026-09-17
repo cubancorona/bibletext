@@ -88,13 +88,22 @@ type inputs struct {
 
 // fynePatchOrder is the order scripts/setup-fyne-patch.sh applies the
 // toolkit patches; the Flatpak build applies them to the vendored module in
-// the same order. TestManifestAppliesEveryTrackedPatch holds it to patches/.
+// the same order. TestManifestAppliesEveryTrackedPatch holds it to patches/,
+// allowing for fynePatchesNotOnLinux.
 var fynePatchOrder = []string{
 	"fyne-2.7.4-ios-drawloop.patch",
 	"fyne-2.7.4-caret-blink.patch",
 	"fyne-2.7.4-noto-emoji.patch",
 	"fyne-2.7.4-android-newintent.patch",
 	"fyne-2.7.4-atomic-prefs.patch",
+}
+
+// fynePatchesNotOnLinux are the tracked toolkit patches the Flatpak build
+// deliberately leaves out, with the reason. A patch listed here is still
+// applied by scripts/setup-fyne-patch.sh everywhere else; it simply has
+// nothing to do on this platform.
+var fynePatchesNotOnLinux = map[string]string{
+	"fyne-2.7.4-windows-egl.patch": "Windows only: it routes the OpenGL ES context through EGL so ANGLE can render with Direct3D",
 }
 
 var ledgerVersion = regexp.MustCompile(`(?m)^Version = "(\d+\.\d+\.\d+)"\r?$`)
