@@ -358,6 +358,46 @@ reads with `msstore apps list` and is the cross-check when this client and
 the console disagree. Rotating the key is the same console path; the Keychain item
 is replaced and nothing in the repository changes.
 
+### Why the first package is attached by hand
+
+Tested against the live account on 17 September 2026 rather than inferred.
+The API reads this submission perfectly: a GET of
+`applications/9NDCCZH9RB9K/submissions/<id>` returns twenty-four fields —
+the en-GB listing, the notes for certification, `targetPublishMode:
+Manual` — every value the console holds. What it does not return is
+`fileUploadUrl`. The field is absent, not empty, and `applicationPackages`
+is `[]`. That URL is the SAS address a package is uploaded to, and the API
+issues one only for a submission the API itself created.
+
+Creating one is the part that cannot work yet. `POST .../submissions`
+"creates a new in-progress submission, which is a copy of your last
+published submission", and this product has never been published — the
+account reports `firstPublishedDate: 1601-01-01`, the never-published
+sentinel. There is nothing to clone, so the call is the documented 409.
+Only one pending submission may exist at a time besides, and this one
+belongs to the console.
+
+So the ~28 MB package is dragged into the Packages page by hand, once. The
+browser bridge used for the rest of the form carries at most 10 MB per
+file, which is a limit of that tool, not of the Store. The package is
+uploaded unsigned on purpose: the Store re-signs MSIX with the publisher
+identity the reservation issued.
+
+**Do not run Microsoft's own Python submission sample against this
+account.** It opens its app-submission flow by DELETING
+`pendingApplicationSubmission`, and StoreBroker does the same behind
+`-Force`. Either would destroy this submission and the five sections
+already completed in it. StoreBroker's `-SubmissionId` switch is the
+documented way to target an existing pending submission instead.
+
+From the second release on, none of this applies: with one submission
+published, `POST` has something to clone, the SAS upload works, and the
+write side becomes create → upload → commit → poll. Microsoft's own
+`msstore` CLI is the alternative it recommends for CI, and it handles MSIX
+and runs on macOS; note that its update path is currently restricted to
+free products, which this one is.
+
+
 ## Resuming with a Windows machine
 
 State on 16 September 2026, so the work can be picked up cold. Everything
