@@ -305,12 +305,16 @@ Filled:
 
 Not filled:
 
-- **Packages** — blocked on the version, not on the packaging. The MSIX
-  version is the desktop ledger version plus `.0`, and a released version
-  number names one tree on every channel (docs/VERSIONING.md), so a package
-  built from a tree past the `v1.2.9` tag may not be labelled 1.2.9.0. Bump
-  the ledger, tag that commit, dispatch `.github/workflows/msstore.yml`, and
-  upload the MSIX from that run.
+- **Packages** — the version block is cleared. 1.2.9 was spent, so 1.2.10 was
+  cut (annotated tag, both ledgers, mobile build 180, desktop build 51) and
+  `.github/workflows/msstore.yml` was dispatched **at the tag**, never at the
+  branch: the MSIX version is the desktop ledger plus `.0`, so a run against a
+  moved branch would label a package for a tree the tag does not name. The
+  artifact was checked before upload — `Version="1.2.10.0"`, the reserved
+  Identity and Publisher, and the three ANGLE libraries inside. Attaching it
+  is the one step that cannot be automated from here: the package is 28 MB and
+  the browser bridge carries at most 10 MB per file, so it is dragged into the
+  Packages page by hand. The device family (Windows 10/11 Desktop) is set.
 - **Age ratings** — the IARC questionnaire needs the account holder's own
   answers, or the existing IARC rating ID from the Play Console under App
   content → Content rating.
