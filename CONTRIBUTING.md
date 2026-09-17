@@ -105,7 +105,7 @@ it and refuses to build if it is malformed. To ship your own deployment:
    API.Bible key, and every public-domain translation is unaffected.
 6. Replace the store metadata under `appstore/` before submitting anywhere.
 
-## Adding a download
+## Adding a download or a store
 
 Every artifact a reader can get is named by filename on the download page at
 `docs/index.html`, which no generator writes. A new release asset is therefore
@@ -125,8 +125,14 @@ gap. The same checker holds the Linux build dependencies identical across the
 README, this file and CI, and holds the README's count of `cmd/` programs to
 what is actually in `cmd/`.
 
-What it cannot do is notice that a true sentence has become a stale one. When
-a release changes what a platform can do, read the prose on both pages.
+A store is different from a download and needs its own step. The checker holds
+any Microsoft Store link on either page equal to the `storeUrl` in
+`msstore/identity.json`, so a typed or moved id fails — but it cannot know
+that a listing went live and ought to be linked at all. That belongs to the
+release sequence in `docs/APP_STORE_SUBMISSION.md`, which now carries it.
+
+What none of it can do is notice that a true sentence has become a stale one.
+When a release changes what a platform can do, read the prose on both pages.
 
 ## License
 

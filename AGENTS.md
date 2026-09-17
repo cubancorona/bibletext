@@ -90,7 +90,9 @@ tree.
   to what the release workflow uploads, fails on a link to an asset no release
   ships, holds the Linux build dependencies identical across the README,
   CONTRIBUTING and CI, and holds the README's count of `cmd/` programs to the
-  directory. It cannot tell that a
+  directory, and holds a Microsoft Store link equal to the `storeUrl` in
+  `msstore/identity.json`. It cannot tell that a channel went live and should
+  be linked at all — that step lives in the release sequence. It cannot tell that a
   sentence is merely old — read the prose too.
 - Keep changes scoped and preserve unrelated work already present in the tree.
 - Never commit API keys, signing material, account identifiers, local

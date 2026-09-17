@@ -32,6 +32,7 @@ checker that cannot fail proves nothing when it passes.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -39,6 +40,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 RELEASE_WORKFLOW = ".github/workflows/release.yml"
+STORE_IDENTITY = "msstore/identity.json"
 DOWNLOAD_PAGE = "docs/index.html"
 READ_ME = "README.md"
 CONTRIBUTING = "CONTRIBUTING.md"
@@ -76,6 +78,19 @@ SIDECAR_SUFFIXES = {
         "in the AppImage, and a reader never downloads it"
     ),
 }
+
+
+# Every public page that points a Windows reader at the Store must use the URL
+# the packaging identity owns. A store link is not an asset, so the release
+# rules above cannot see it: nothing recomputes it, and a listing that moved or
+# an id typed by hand would sit there looking right. This is the cheap half of
+# that problem — it cannot know a channel went live and should be linked, only
+# that a link which exists names the right product.
+STORE_LINK = r"https://apps\.microsoft\.com/detail/[A-Za-z0-9]+"
+
+
+def store_links(text: str) -> set[str]:
+    return set(re.findall(STORE_LINK, text))
 
 
 def is_sidecar(asset: str) -> bool:
@@ -214,6 +229,28 @@ def rule_failures(read, list_cmd) -> list[str]:
                     f"{surface}: links {asset}, which no release step uploads — the link is dead"
                 )
 
+    # 1b. A Microsoft Store link names the product the packaging identity does.
+    identity = text(STORE_IDENTITY)
+    if identity is not None and page is not None and readme is not None:
+        try:
+            want = json.loads(identity).get("storeUrl", "")
+        except json.JSONDecodeError as broken:
+            failures.append(f"{STORE_IDENTITY}: is not valid JSON ({broken})")
+            want = ""
+        if not want:
+            failures.append(
+                f"{STORE_IDENTITY}: has no storeUrl, so this checker cannot tell whether a "
+                f"Store link on a public page is the right one"
+            )
+        else:
+            for surface, body in ((DOWNLOAD_PAGE, page), (READ_ME, readme)):
+                for link in sorted(store_links(body)):
+                    if link != want:
+                        failures.append(
+                            f"{surface}: links {link}, but {STORE_IDENTITY} says the product is "
+                            f"at {want} — one of the two is stale"
+                        )
+
     # 2. One instruction, written out three times, stays one instruction.
     listings = {}
     for rel in DEPENDENCY_SOURCES:
@@ -295,11 +332,13 @@ def self_test() -> list[str]:
             b'        run: gh release upload "$TAG" BibleText-Linux-amd64.tar.xz '
             b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n"
         ),
+        STORE_IDENTITY: b'{"storeId": "TESTID", "storeUrl": "https://apps.microsoft.com/detail/TESTID"}\n',
         DOWNLOAD_PAGE: (
             b'<a href="https://example.invalid/releases/latest/download/'
             b'BibleText-Linux-amd64.tar.xz">Linux</a>\n'
             b'<a href="https://example.invalid/releases/latest/download/'
             b'BibleText-x86_64.AppImage">AppImage</a>\n'
+            b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n'
         ),
         READ_ME: (
             b"```\n"
@@ -365,6 +404,23 @@ def self_test() -> list[str]:
         clean[RELEASE_WORKFLOW] + b'        run: gh release upload "$TAG" $ASSETS --clobber\n'
     )
     violations.append(("an upload step naming no asset", unreadable_upload, pair))
+
+    stale_store = dict(clean)
+    stale_store[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(
+        b"detail/TESTID", b"detail/OLDID")
+    violations.append(("a stale Microsoft Store link", stale_store, pair))
+
+    stale_store_readme = dict(clean)
+    stale_store_readme[READ_ME] = clean[READ_ME] + b"https://apps.microsoft.com/detail/OLDID\n"
+    violations.append(("a stale Store link in the README", stale_store_readme, pair))
+
+    no_store_url = dict(clean)
+    no_store_url[STORE_IDENTITY] = b'{"storeId": "TESTID"}\n'
+    violations.append(("an identity with no storeUrl", no_store_url, pair))
+
+    broken_identity = dict(clean)
+    broken_identity[STORE_IDENTITY] = b"{ this is not json\n"
+    violations.append(("an unreadable store identity", broken_identity, pair))
 
     drifted = dict(clean)
     drifted[CONTRIBUTING] = b"sudo apt-get install gcc libgl1-mesa-dev\n"

@@ -405,7 +405,14 @@ each step it lists.
    translation caches, which CI does not have, so this is an owner-machine
    step like the uploads; it is in the sequence because the web is a channel
    of the same tree and was two days behind the app before this step existed.
-9. Work merged after the tag ships under the next number.
+9. A channel that has just gone LIVE for the first time is linked from the
+   download page and the README before the site publish above, not after.
+   Nothing computes this: a new store is not a new release asset, so
+   `scripts/check-public-surfaces.py` cannot see that one is missing — it can
+   only hold a link that exists to the identity file that owns it. The
+   Microsoft Store went live on 17 September 2026 and neither page mentioned
+   it until someone noticed.
+10. Work merged after the tag ships under the next number.
 
 Before asking "are we ready to release?", the same three answers are the
 readiness check: CI green on the commit, `check-release-identity.py`, and the
