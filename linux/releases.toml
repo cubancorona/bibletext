@@ -7,6 +7,16 @@
 # tag that shipped a Linux tarball.
 
 [[release]]
+version = "1.2.10"
+date = "2026-09-17"
+head = "Shared links open in the app, and Linux has its own packages."
+bullets = [
+  "A shared bibletext: link now opens in the app rather than only in the browser. It goes straight to the passage, carries any note attached to it, and hands off to the window already open instead of starting a second one.",
+  "Linux builds now ship as a Flatpak, a Snap and an AppImage as well as the tarball, each registering the link handler with your desktop.",
+  "Reading, search, notes and narration are unchanged in this release.",
+]
+
+[[release]]
 version = "1.2.9"
 date = "2026-09-15"
 head = "Headings and spacing, set right."
