@@ -35,6 +35,7 @@ modules:
       - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-caret-blink.patch
       - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-noto-emoji.patch
       - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-android-newintent.patch
+      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-android-night-mode.patch
       - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-atomic-prefs.patch
       - cp patches/NotoColorEmoji.ttf vendor/fyne.io/fyne/v2/theme/font/NotoColorEmoji.ttf
       - rm -f vendor/fyne.io/fyne/v2/theme/font/EmojiOneColor.otf

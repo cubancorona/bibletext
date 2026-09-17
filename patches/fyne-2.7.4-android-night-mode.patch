@@ -1,0 +1,27 @@
+--- a/internal/driver/mobile/app/android.go
++++ b/internal/driver/mobile/app/android.go
+@@ -452,6 +452,24 @@
+ 			return nil
+ 		case cfg := <-windowConfigChange:
+ 			pixelsPerPt = cfg.pixelsPerPt
++			// A theme-only configuration change — the phone switching to
++			// dark at sunset — arrives here and nowhere else:
++			// onConfigurationChanged sends this, and the redraw branch below
++			// is the only place that ever stamps darkMode into a size.Event.
++			// Without the send that follows, the flag set by setDarkMode sits
++			// unread until a rotation or a return from the background happens
++			// to produce a redraw, so the app keeps the old palette while the
++			// rest of the system has changed. iOS has no such gap:
++			// traitCollectionDidChange calls updateConfig, which sends a
++			// size.Event carrying isDark() (darwin_ios.go).
++			//
++			// Only a real change is forwarded. A rotation fires this branch
++			// and then the redraw branch, so sending unconditionally would
++			// add a size.Event carrying the pre-rotation dimensions.
++			if surfaceInitialized && currentSize.DarkMode != darkMode {
++				currentSize.DarkMode = darkMode
++				theApp.events.In() <- currentSize
++			}
+ 		case w := <-windowCreated:
+ 			if surfaceInitialized && !wasDestroyed {
+ 				if errStr := C.destroyEGLSurface(); errStr != nil {

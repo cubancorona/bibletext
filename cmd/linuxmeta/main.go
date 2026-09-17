@@ -95,6 +95,7 @@ var fynePatchOrder = []string{
 	"fyne-2.7.4-caret-blink.patch",
 	"fyne-2.7.4-noto-emoji.patch",
 	"fyne-2.7.4-android-newintent.patch",
+	"fyne-2.7.4-android-night-mode.patch",
 	"fyne-2.7.4-atomic-prefs.patch",
 }
 

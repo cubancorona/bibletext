@@ -26,6 +26,7 @@ PATCH="patches/fyne-2.7.4-ios-drawloop.patch"
 PATCH_CARET="patches/fyne-2.7.4-caret-blink.patch"
 PATCH_EMOJI="patches/fyne-2.7.4-noto-emoji.patch"
 PATCH_NEWINTENT="patches/fyne-2.7.4-android-newintent.patch"
+PATCH_NIGHTMODE="patches/fyne-2.7.4-android-night-mode.patch"
 PATCH_ATOMIC="patches/fyne-2.7.4-atomic-prefs.patch"
 PATCH_WINEGL="patches/fyne-2.7.4-windows-egl.patch"
 ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
@@ -62,6 +63,7 @@ patch -p1 -d "$DEST" < "$PATCH"
 patch -p1 -d "$DEST" < "$PATCH_CARET"
 patch -p1 -d "$DEST" < "$PATCH_EMOJI"
 patch -p1 -d "$DEST" < "$PATCH_NEWINTENT"
+patch -p1 -d "$DEST" < "$PATCH_NIGHTMODE"
 patch -p1 -d "$DEST" < "$PATCH_ATOMIC"
 patch -p1 -d "$DEST" < "$PATCH_WINEGL"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
@@ -115,4 +117,4 @@ if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
   echo "ERROR: emoji swap did not land — bundled-emoji.go unpatched or font missing." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context)."
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow)."
