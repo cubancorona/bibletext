@@ -12,8 +12,8 @@ identity below is what a next upload would carry, not what Google holds.
 Prepared release identity:
 
 - package: `uk.co.bibletext`
-- version: 1.2.10
-- versionCode: 180
+- version: 1.2.11
+- versionCode: 181
 - minimum SDK: Android 5.0 / API 21
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
@@ -177,6 +177,22 @@ Also confirm from the final AAB:
   removal controls; and
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
+
+## Closed-test release notes — 1.2.11
+
+> BibleText 1.2.11 follows your phone's dark mode while the app is open. If
+> your phone switches to dark at sunset, the app switches with it — it used to
+> keep the old appearance until you rotated the phone or came back to it.
+> Reading, search, notes and narration are unchanged. No ads, account,
+> analytics, or tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.11 (181);
+- with the app open, switch the phone between light and dark (Settings →
+  Display, or let the scheduled switch do it) and confirm the page follows
+  without being touched;
+- confirm a shared link still opens at its passage with its note.
 
 ## Closed-test release notes — 1.2.9
 

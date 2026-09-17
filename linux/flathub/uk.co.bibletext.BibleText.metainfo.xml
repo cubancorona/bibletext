@@ -76,6 +76,16 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.11" date="2026-09-17">
+      <description>
+        <p>Dark at sunset, and one Mac download.</p>
+        <ul>
+          <li>On Android the app now follows your phone's switch to dark and back while it is open. It used to keep the old appearance until you rotated the phone or came back to it.</li>
+          <li>The Mac download is a single file that runs on Apple Silicon and Intel alike, instead of one download for each.</li>
+          <li>Reading, search, notes and narration are unchanged.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.10" date="2026-09-17">
       <description>
         <p>Shared links open in the app, and Linux has its own packages.</p>
