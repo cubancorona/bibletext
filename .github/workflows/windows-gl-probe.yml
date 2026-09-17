@@ -67,54 +67,15 @@ jobs:
           Expand-Archive angle.zip -DestinationPath angle -Force
           Get-ChildItem -Recurse angle -Filter *.dll | ForEach-Object { Copy-Item $_.FullName build\probe\ }
           Get-ChildItem build\probe
-      - name: launch and judge the pixels
+      - name: launch and judge what was drawn
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
-          Add-Type -AssemblyName System.Windows.Forms
-          Add-Type -AssemblyName System.Drawing
+          $ErrorActionPreference = 'Stop'
           if (Test-Path build\probe\opengl32.dll) { throw "opengl32.dll is beside the exe; this probe must not test that route" }
-          $app = Start-Process -FilePath build\probe\BibleText.exe -PassThru
-          for ($i = 0; $i -lt 60; $i++) {
-            $app.Refresh()
-            if ($app.HasExited -or $app.MainWindowHandle -ne [IntPtr]::Zero) { break }
-            Start-Sleep 1
-          }
-          Start-Sleep 40
-          $alive = -not $app.HasExited
-          Write-Host "process alive after 40 s: $alive"
-          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
           New-Item -ItemType Directory -Force build\probe\out | Out-Null
+          $expect = if ('${{ matrix.angle }}' -eq 'true') { 'render' } else { 'blank' }
           $name = if ('${{ matrix.angle }}' -eq 'true') { 'with-angle' } else { 'control' }
-          $bmp.Save("build\probe\out\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
-          # Did anything actually get drawn? Sample the screen and ask how
-          # dominant the commonest colour is. A live process drawing nothing
-          # looks exactly like a dead one here, which is the point.
-          $counts = @{}
-          for ($y = 0; $y -lt $b.Height; $y += 8) {
-            for ($x = 0; $x -lt $b.Width; $x += 8) {
-              $c = $bmp.GetPixel($x, $y).ToArgb()
-              $counts[$c] = 1 + $counts[$c]
-            }
-          }
-          $total = ($counts.Values | Measure-Object -Sum).Sum
-          $top = ($counts.Values | Measure-Object -Maximum).Maximum
-          $share = [math]::Round(100.0 * $top / $total, 1)
-          $g.Dispose(); $bmp.Dispose()
-          Write-Host "commonest colour covers $share% of the sampled screen"
-          $rendered = $alive -and ($share -lt 98)
-          Write-Host "rendered: $rendered"
-          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
-          if ('${{ matrix.angle }}' -eq 'true') {
-            if (-not $rendered) { throw "with ANGLE the app did not render (alive=$alive, dominant=$share%)" }
-            Write-Host "ANGLE renders on a machine with no OpenGL driver"
-          } else {
-            if ($rendered) { throw "the control RENDERED without ANGLE: this runner is not a driverless machine, so the other job's pass proves nothing" }
-            Write-Host "control failed as it must (alive=$alive, dominant=$share%)"
-          }
+          pwsh scripts/assert-windows-render.ps1 -Exe build\probe\BibleText.exe -Expect $expect -Shot "build\probe\out\$name.png"
       - name: what the executable imports (diagnostics only)
         if: always()
         shell: pwsh
