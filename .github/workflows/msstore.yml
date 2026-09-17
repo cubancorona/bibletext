@@ -68,6 +68,10 @@ jobs:
           go run ./cmd/msstore manifest -out "$layout/AppxManifest.xml"
           cp cmd/desktop/BibleText.exe "$layout/"
           cp -r msstore/Assets "$layout/Assets"
+          # ANGLE renders the app through Direct3D, which Windows provides on
+          # every machine including one with no graphics driver. Without these
+          # the window is never created (scripts/fetch-angle.ps1).
+          pwsh scripts/fetch-angle.ps1 -Dest "$layout"
           find "$layout" -type f | sort
       - name: makepri + makeappx
         shell: pwsh
@@ -96,15 +100,9 @@ jobs:
           $bin = & scripts/windows-sdk-bin.ps1
           $id = Get-Content msstore\identity.json | ConvertFrom-Json
           $smoke = "build\msstore\smoke"
+          # The real layout, unaltered: it already carries ANGLE, so the smoke
+          # tests what ships rather than a copy with graphics added.
           Copy-Item build\msstore\layout $smoke -Recurse
-          # Mesa llvmpipe beside the exe: the runner's VM has no OpenGL 2.0
-          # (the same trick windows-visual-smoke.yml uses). Smoke copy only.
-          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
-          $asset = $rel.assets | Where-Object { $_.name -like '*release-msvc.7z' } | Select-Object -First 1
-          Write-Host "Using $($asset.name)"
-          Invoke-WebRequest $asset.browser_download_url -OutFile build\msstore\mesa.7z
-          7z x build\msstore\mesa.7z -obuild\msstore\mesa | Out-Null
-          Copy-Item build\msstore\mesa\x64\*.dll $smoke\
           & "$bin\makeappx.exe" pack /d $smoke /p build\msstore\smoke.msix /o
           if ($LASTEXITCODE -ne 0) { throw "makeappx pack (smoke) failed" }
           # A throwaway certificate whose subject is the reserved publisher;
@@ -195,6 +193,10 @@ jobs:
           $proc = Get-Process -Name BibleText -ErrorAction SilentlyContinue
           Shot "build\msstore\smoke-30s.png"
           if (-not $proc) { throw "BibleText.exe is not running 30 s after activation" }
+          # Alive is not enough: a graphics failure leaves the process running
+          # with no window at all, which is exactly what this runner would show
+          # if ANGLE were missing from the package.
+          pwsh scripts/assert-windows-render.ps1 -ProcessName BibleText -Expect render -Settle 5
           Write-Host "BibleText.exe (pid $($proc.Id)) is running from $($proc.Path)"
           Stop-Process -Id $proc.Id -Force
           Start-Sleep 3

@@ -5,7 +5,14 @@
 # trimmed and stripped, `fyne package` adds the icon and version resources,
 # and the release-package verifier checks the result. The command lines here
 # are held identical to the release job's by scripts/test-release-key-flow.sh,
-# so the two channels cannot drift apart. Runs on the windows-latest runner
+# so the two channels cannot drift apart.
+#
+# THE TAG APPEARS TWICE ON PURPOSE. `gles` selects the toolkit's OpenGL ES
+# path, which renders through Direct3D by way of ANGLE (scripts/fetch-angle.ps1)
+# and therefore runs on a machine with no graphics driver. The packager
+# REBUILDS the executable to add its icon and version resources, so a tag on
+# the first line alone would be discarded by the second and the shipped
+# binary would quietly revert to desktop OpenGL. Runs on the windows-latest runner
 # (bash, Go, the fyne CLI under GOPATH/bin).
 set -euo pipefail
 
@@ -19,8 +26,8 @@ load_encoded_release_bible_key
 trap clear_release_bible_key EXIT
 
 cd cmd/desktop
-CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
+CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
 # Fyne's Windows packager rebuilds the target to add icon/version
 # resources. GOFLAGS keeps that metadata pass trimmed and stripped.
-GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext --executable BibleText.exe
+GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe
 BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe

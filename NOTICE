@@ -41,6 +41,11 @@ own terms:
 - Emoji: Noto Color Emoji by Google LLC, used under the SIL Open Font License
   1.1 (see patches/NotoColorEmoji-LICENSE-OFL.txt); embedded by the patched
   toolkit build in every shipped binary.
+- Graphics on Windows: ANGLE by Google LLC and the ANGLE Project Authors,
+  used under the BSD 3-Clause License (see windows/ANGLE-LICENSE.txt). The
+  Windows builds render through Direct3D by way of ANGLE's libEGL and
+  libGLESv2, which ship beside the executable in both the Store package and
+  the download.
 - Share-card typefaces: Cardo, Crimson Text, DM Serif Display, Gelasio, Libre
   Baskerville, Prata and Spectral, each used under the SIL Open Font License
   1.1 (see assets/fonts/share/OFL-LICENSES.txt).

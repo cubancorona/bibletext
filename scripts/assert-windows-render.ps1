@@ -11,6 +11,11 @@
 
     pwsh scripts/assert-windows-render.ps1 -Exe build\probe\BibleText.exe -Expect render
     pwsh scripts/assert-windows-render.ps1 -Exe build\probe\BibleText.exe -Expect blank -Shot control.png
+    pwsh scripts/assert-windows-render.ps1 -ProcessName BibleText -Expect render
+
+  -ProcessName judges an app that is ALREADY running, which is how a
+  packaged app has to be started: through the shell, so that it keeps its
+  package identity. It leaves that process running.
 
   -Expect blank is the control: it FAILS if the app renders. A check that
   cannot fail proves nothing, so every use of this in a gate should have a
@@ -18,7 +23,8 @@
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)][string]$Exe,
+  [string]$Exe,
+  [string]$ProcessName,
   [ValidateSet('render', 'blank')][string]$Expect = 'render',
   [string]$Shot,
   [int]$WindowTimeout = 60,
@@ -37,7 +43,20 @@ public struct RECT { public int Left, Top, Right, Bottom; }
 public struct POINT { public int X, Y; }
 "@
 
-$app = Start-Process -FilePath $Exe -PassThru
+if (-not $Exe -and -not $ProcessName) { throw "give either -Exe or -ProcessName" }
+$started = $false
+if ($Exe) {
+  $app = Start-Process -FilePath $Exe -PassThru
+  $started = $true
+} else {
+  $app = $null
+  for ($i = 0; $i -lt $WindowTimeout; $i++) {
+    $app = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($app) { break }
+    Start-Sleep 1
+  }
+  if (-not $app) { throw "no process named $ProcessName is running" }
+}
 $h = [IntPtr]::Zero
 for ($i = 0; $i -lt $WindowTimeout; $i++) {
   $app.Refresh()
@@ -86,7 +105,8 @@ if ($alive -and $h -ne [IntPtr]::Zero) {
 }
 
 Write-Host "alive: $alive; window: $($h -ne [IntPtr]::Zero); commonest colour in the client area: $share%; rendered: $rendered"
-if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+# A process this script did not start belongs to the caller.
+if ($started -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force }
 
 if ($Expect -eq 'render') {
   if (-not $rendered) { throw "expected the app to render; it did not (alive=$alive, window=$($h -ne [IntPtr]::Zero), flat=$share%)" }

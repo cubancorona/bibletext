@@ -277,13 +277,23 @@ jobs:
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
           cd cmd/desktop
-          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
+          CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
           # Fyne's Windows packager rebuilds the target to add icon/version
-          # resources. GOFLAGS keeps that metadata pass trimmed and stripped.
-          GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext --executable BibleText.exe
+          # resources. GOFLAGS keeps that metadata pass trimmed and stripped,
+          # and the tag must be repeated or that rebuild drops the ES path.
+          GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe
           cd ../..
-          7z a BibleText-Windows-amd64.zip ./cmd/desktop/BibleText.exe
+      - name: ANGLE beside the executable (the app renders through Direct3D)
+        shell: pwsh
+        run: pwsh scripts/fetch-angle.ps1 -Dest cmd\desktop
+      - name: zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          7z a BibleText-Windows-amd64.zip ./cmd/desktop/BibleText.exe \
+            ./cmd/desktop/libEGL.dll ./cmd/desktop/libGLESv2.dll \
+            ./cmd/desktop/d3dcompiler_47.dll ./cmd/desktop/ANGLE-LICENSE.txt
       - name: upload asset
         env:
           GH_TOKEN: ${{ github.token }}

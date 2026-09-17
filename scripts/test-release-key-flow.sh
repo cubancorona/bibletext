@@ -189,7 +189,9 @@ if "secrets.BIBLE_API_KEY" in workflow:
     raise SystemExit("release.yml: raw API.Bible credential must not reach GitHub Actions")
 if workflow.count("load_encoded_release_bible_key") != 3:
     raise SystemExit("release.yml: every desktop job must isolate the encoded secret")
-if workflow.count('go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w"') != 4:
+# The Windows build carries a build tag between `go build` and the flags, so
+# the linker value is counted on its own rather than on a fixed prefix.
+if workflow.count('-trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w"') != 4:
     raise SystemExit("release.yml: every desktop architecture must receive the linker value")
 verified = (
     'BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" '
@@ -210,14 +212,31 @@ for line in (
     "unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY",
     "load_encoded_release_bible_key",
     "trap clear_release_bible_key EXIT",
-    'CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .',
-    'GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --app-id uk.co.bibletext --executable BibleText.exe',
+    'CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .',
+    'GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe',
+    # The tag has to survive on BOTH lines: the packager rebuilds the
+    # executable, so tagging only the build would ship desktop OpenGL and the
+    # app would not start on a machine with no graphics driver.
     'BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe',
 ):
     if line not in workflow:
         raise SystemExit("release.yml: the Windows job lost a line the Store build script mirrors")
     if line not in store_build:
         raise SystemExit("build-windows-exe.sh: the Store build must mirror the release job's Windows recipe")
+
+for text, where in ((workflow, "release.yml"), (store_build, "build-windows-exe.sh")):
+    windows_build_lines = [
+        ln for ln in text.splitlines()
+        if "go build" in ln and "BibleText.exe" in ln
+    ] + [ln for ln in text.splitlines() if "fyne" in ln and "package -os windows" in ln]
+    if len(windows_build_lines) != 2:
+        raise SystemExit(f"{where}: expected one Windows build and one package line, found {len(windows_build_lines)}")
+    for ln in windows_build_lines:
+        if "gles" not in ln:
+            raise SystemExit(
+                f"{where}: the Windows build lost the gles tag; without it the app renders "
+                "through desktop OpenGL and will not start on a machine with no graphics driver"
+            )
 
 # `fyne package` rewrites FyneApp.toml's Build after each successful package.
 # Both macOS architectures are packaged from ONE checkout, so without a restore
