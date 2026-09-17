@@ -265,6 +265,63 @@ document in Partner Center:
 7. Submit. Certification takes up to three business days; after it passes,
    Publish now.
 
+## Submission 1 — what is filled and what is not
+
+Submission 1 exists in Partner Center as a draft. Four of its six sections
+are Complete; two are deliberately untouched.
+
+Filled:
+
+- **Pricing and availability** — base price £0 (GBP, United Kingdom) so the
+  product is free, all worldwide markets plus future markets at the base
+  price, public audience, discoverable, release as soon as possible, stop
+  acquisition never. No free trial, no sale pricing. Organizational
+  licensing left at its default: volume acquisition allowed, offline
+  licensing not allowed.
+- **Properties** — Books + reference / Reference, no secondary category.
+  Privacy question answered Yes with `https://bibletext.co.uk/privacy.html`,
+  because the app stores a reader-supplied provider key and sends it to the
+  provider they choose. Website `https://bibletext.co.uk`, support
+  `https://bibletext.co.uk/support.html`; the postal address and phone
+  fields are left empty because the Store prints them on the listing. The
+  generative-AI declaration is checked; accessibility is not. The
+  record-and-broadcast declaration, checked by default, is cleared: the
+  console warns that it only applies to the Games category. No hardware
+  feature, memory, DirectX, processor or graphics requirement is declared —
+  the OS floor comes from the manifest and the app renders through Direct3D
+  on any machine.
+- **Store listing (en-GB only)** — description, seven product features,
+  four screenshots from `docs/screenshots/windows/` in the order reading,
+  search, note, settings with a caption each, 1:1 box art, 300×300 app tile
+  icon, short description, the seven search terms, copyright
+  `© 2026 bibletext.co.uk`. What's new is blank, as a first submission
+  should be. "Developed by" is blank, so the Store shows the publisher
+  display name.
+- **Submission options** — publishing hold set to "Don't publish this
+  submission until I select Publish now".
+- **Additional Testing Information → Notes for Certification** — the note in
+  step 6 above. This is where that note lives; the Submission options page
+  only links to it. No credentials are entered; the app has no login.
+
+Not filled:
+
+- **Packages** — blocked on the version, not on the packaging. The MSIX
+  version is the desktop ledger version plus `.0`, and a released version
+  number names one tree on every channel (docs/VERSIONING.md), so a package
+  built from a tree past the `v1.2.9` tag may not be labelled 1.2.9.0. Bump
+  the ledger, tag that commit, dispatch `.github/workflows/msstore.yml`, and
+  upload the MSIX from that run.
+- **Age ratings** — the IARC questionnaire needs the account holder's own
+  answers, or the existing IARC rating ID from the Play Console under App
+  content → Content rating.
+- **Submit for certification** — the account holder's to press.
+
+Skipped on purpose: 9:16 poster art, 16:9 super hero art, the Xbox images
+and trailers (none exist, and none is required for a Windows-only listing);
+the 150×150 and 71×71 store display images, so the package's own tiles are
+used; short title and voice title, which are Xbox fields; additional licence
+terms, since the Standard Application License Terms are unchanged.
+
 ## Automation after the first release
 
 The Microsoft Store submission API needs a Microsoft Entra tenant
