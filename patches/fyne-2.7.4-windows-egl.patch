@@ -1,0 +1,78 @@
+--- a/internal/driver/glfw/glfw_es.go
++++ b/internal/driver/glfw/glfw_es.go
+@@ -1,4 +1,4 @@
+-//go:build (gles || arm || arm64) && !darwin && !wasm && !test_web_driver
++//go:build (gles || arm || arm64) && !windows && !darwin && !wasm && !test_web_driver
+ 
+ package glfw
+ 
+--- a/internal/painter/gl/gl_es.go
++++ b/internal/painter/gl/gl_es.go
+@@ -63,7 +63,7 @@
+ 
+ func (p *painter) Init() {
+ 	p.ctx = &esContext{}
+-	err := gl.Init()
++	err := initGL()
+ 	if err != nil {
+ 		fyne.LogError("failed to initialise OpenGL", err)
+ 		return
+--- /dev/null
++++ b/internal/driver/glfw/glfw_es_windows.go
+@@ -0,0 +1,21 @@
++//go:build (gles || arm || arm64) && windows && !wasm && !test_web_driver
++
++package glfw
++
++import "github.com/go-gl/glfw/v3.3/glfw"
++
++// BibleText patch: Windows asks for its OpenGL ES context through EGL.
++//
++// GLFW's default context source on Windows is WGL, and its WGL backend
++// refuses an ES context unless the graphics driver offers
++// WGL_EXT_create_context_es2_profile — which is exactly what a machine with
++// no driver, such as a virtual machine or a store's certification host,
++// does not have. Asking for EGL instead routes context creation through
++// ANGLE's libEGL.dll, which renders with Direct3D: the graphics card where
++// there is one, and Windows' own software rasteriser where there is not.
++func initWindowHints() {
++	glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLESAPI)
++	glfw.WindowHint(glfw.ContextCreationAPI, glfw.EGLContextAPI)
++	glfw.WindowHint(glfw.ContextVersionMajor, 2)
++	glfw.WindowHint(glfw.ContextVersionMinor, 0)
++}
+--- /dev/null
++++ b/internal/painter/gl/init_es_windows.go
+@@ -0,0 +1,19 @@
++//go:build (gles || arm || arm64) && windows && !wasm && !test_web_driver
++
++package gl
++
++import (
++	gl "github.com/go-gl/gl/v3.1/gles2"
++
++	"github.com/go-gl/glfw/v3.3/glfw"
++)
++
++// BibleText patch: on Windows the entry points come from the context GLFW
++// created, not from the binding's own loader.
++//
++// The binding resolves names against libGLESv2 through EGL, and EGL only
++// promises to answer for the extensions of the context it made. GLFW asks
++// the library's own export table first and falls back to EGL, so every
++// name the binding requires is found — including the later ES functions
++// the binding insists on even for a 2.0 context.
++func initGL() error { return gl.InitWithProcAddrFunc(glfw.GetProcAddress) }
+--- /dev/null
++++ b/internal/painter/gl/init_es_other.go
+@@ -0,0 +1,10 @@
++//go:build (gles || arm || arm64) && !windows && !android && !ios && !mobile && !darwin && !wasm && !test_web_driver
++
++package gl
++
++import gl "github.com/go-gl/gl/v3.1/gles2"
++
++// BibleText patch: everywhere but Windows the binding's own loader stands,
++// which is what this file preserves while Windows takes its entry points
++// from GLFW (init_es_windows.go).
++func initGL() error { return gl.Init() }

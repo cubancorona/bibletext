@@ -96,43 +96,54 @@ smoke-installs a signed copy). docs/WINDOWS_STORE_LISTING.md is the listing.
 A reservation lapses three months after it is made, so the first submission
 is due by mid-December 2026. Left to do, in order:
 
-1. **Software OpenGL fallback.** Certification runs on virtual machines with
-   OpenGL 1.1; the toolkit needs 2.0 and the app fails at start-up there. The
-   Store smoke's copy shows the app runs under Mesa llvmpipe when its
-   `opengl32.dll` sits beside the exe; the fallback would make the shipped
-   package do that only where no hardware driver exists.
+1. **Windows renders through OpenGL, which Windows does not guarantee.** The
+   toolkit draws with desktop OpenGL 2.1, and a Windows machine with no
+   graphics driver offers only the generic OpenGL 1.1 from 1996, so the app
+   does not start there. Ordinary laptops all have drivers; virtual machines
+   and clean server installs do not, and the GitHub runner demonstrably does
+   not. Whether Microsoft's certification hosts do is unknown: nothing has
+   been submitted, and the claim that they are driverless is an analogy, not
+   an observation. Two Store policies bite if they are (10.1.2 fully
+   functional, 10.4.2 must start and stay responsive).
 
-   **The obvious route is refuted — read this before starting.** The plan was
-   to ship Mesa in a subfolder and point at it with `SetDllDirectory` before
-   the toolkit loads OpenGL. That cannot work: `opengl32.dll` is a STATIC
-   import of `BibleText.exe`, so Windows maps the System32 copy before any Go
-   code runs, and every later bare-name load is answered from the
-   loaded-module list, which both documented search orders consult before any
-   directory. (Verified by parsing the shipped 1.2.9 exe's import table — one
-   import, `wglGetProcAddress` — and traced to `go-gl/gl`'s `procaddr.go`,
-   whose `#cgo !gles2,windows LDFLAGS: -lopengl32` and direct
-   `wglGetProcAddress` call create it; the toolkit's own GLFW imports nothing
-   and loads the name lazily at the first window.)
+   **The route to take is ANGLE, not Mesa** (established 17 Sep 2026 against
+   primary sources; the earlier entry here prescribed `SetDllDirectory` and
+   was wrong twice over, so it is replaced rather than amended):
 
-   What remains, in order:
-   - **Remove the static import.** A patch to `go-gl/gl` resolving
-     `wglGetProcAddress` through `GetProcAddress` at run time, applied the way
-     `patches/` and `scripts/setup-fyne-patch.sh` apply the toolkit patches,
-     with a grep guard and a regression test.
-   - **Then choose the library by full path** before the first window:
-     `LoadLibraryExW` of `<exe dir>\mesa\opengl32.dll`, which needs no search
-     and is documented for packaged and unpackaged apps alike; afterwards the
-     loaded-module list answers the toolkit's bare-name load. An app-directory
-     copy would work too (`opengl32.dll` is not a Known DLL, which is why the
-     smoke's copy works) but forces software rendering on every machine.
-   - **Detect the absence of a driver** from the display class keys'
-     `OpenGLDriverName` (or the legacy `OpenGLDrivers` key), with an
-     environment override both ways for support.
-   - **Ship Mesa lawfully**: the licence texts beside the DLLs, a NOTICE line,
-     the release pinned by checksum like the AppImage tools.
-   - **Prove it on the runner**: the smoke stops copying Mesa beside the exe
-     and the package carries the subfolder, with a control that fails when the
-     fallback is disabled, since that is what shows the runner has no driver.
+   - Windows guarantees Direct3D on a driverless machine, through the
+     in-box software rasteriser WARP, and guarantees no useful OpenGL. That
+     asymmetry is why Store games are Direct3D and why the apps that do need
+     OpenGL ship a translator. Chrome, Firefox, Qt 5 and Krita all bundle
+     ANGLE, which turns OpenGL ES into Direct3D; Microsoft's own porting
+     guidance names it.
+   - The toolkit already has that path: `-tags gles` selects
+     `internal/painter/gl/gl_es.go` and an ES 2.0 context. Those same ES
+     shaders ship from this repository to iOS and Android every day.
+   - So the Windows build switches to the ES path and carries ANGLE's
+     `libEGL.dll`, `libGLESv2.dll` and `d3dcompiler_47.dll`, in the Store
+     package and the zip alike. One code path: the GPU renders where there
+     is one, WARP where there is not. **This deletes the driver detection,
+     the registry probe and the policy 10.4.1 message entirely**, rather
+     than solving them.
+   - Measured: 10.4 MB on disk from a pinned third-party build of ANGLE
+     (there are no official binaries), against Mesa's larger bundle.
+
+   **A correction to keep:** a bundled Mesa `opengl32.dll` beside the
+   executable *does* override the system copy, because the executable's own
+   folder is searched before the system folder and it is not a protected
+   name. Our own Store smoke proves it. The static import only defeats the
+   `SetDllDirectory` variant. So Mesa beside the exe, inside the MSIX only,
+   is a zero-code fallback if ANGLE does not work out, at the cost of
+   putting every Store reader on a software or wrapper renderer.
+
+   **The decisive test comes before the work**
+   (`.github/workflows/windows-gl-probe.yml`): build with the tag on the
+   runner, put ANGLE beside it, launch, and assert on PIXELS rather than on
+   the process still being alive, with a control run that deletes the DLLs
+   and must fail. A pass that cannot fail proves nothing. Open until that
+   runs: whether it links under mingw, whether ANGLE's Direct3D backend
+   initialises on WARP in a runner session, and the frame cost.
+
 2. **Screenshots** — DONE 16 Sep 2026: four captured on the runner at
    1600×960 (the window's client area, above the Store's floor) by
    `.github/workflows/windows-screenshots.yml`, committed under

@@ -13,6 +13,9 @@ application source.
 | **Patch 2** | [`fyne-2.7.4-caret-blink.patch`](fyne-2.7.4-caret-blink.patch) |
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `widget/entry_cursor_anim.go` |
 | **Change 3 (caret CPU burn)** | The Entry caret's smooth fade → a **discrete blink** (snap dim↔opaque at the half-cycle). Cuts a focused-but-idle Entry from ~8 full-canvas repaints/s to 2/s: **~50% CPU → ~22%** (iPad Pro 13" sim, ambient ~20%). Cadence and typing-interrupt behaviour unchanged. |
+| **Patch 6** | [`fyne-2.7.4-windows-egl.patch`](fyne-2.7.4-windows-egl.patch) |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/glfw/glfw_es{,_windows}.go` + `internal/painter/gl/{gl_es.go, init_es_windows.go, init_es_other.go}` |
+| **Change 4 (Windows renders through Direct3D)** | A Windows build with `-tags gles` asks GLFW for its OpenGL ES context through **EGL** rather than WGL, and takes its entry points from GLFW rather than the binding's own loader. GLFW's WGL backend refuses an ES context unless the graphics driver offers `WGL_EXT_create_context_es2_profile`, which a machine with no driver does not have; through EGL the context comes from ANGLE, which renders with Direct3D — the card where there is one, Windows' own software rasteriser where there is not. Only a `gles` build compiles any of it, so a shipping desktop build is untouched. See `docs/BACKLOG.md` item 1 of the Microsoft Store section. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |

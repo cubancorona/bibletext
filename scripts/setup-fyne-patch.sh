@@ -27,6 +27,7 @@ PATCH_CARET="patches/fyne-2.7.4-caret-blink.patch"
 PATCH_EMOJI="patches/fyne-2.7.4-noto-emoji.patch"
 PATCH_NEWINTENT="patches/fyne-2.7.4-android-newintent.patch"
 PATCH_ATOMIC="patches/fyne-2.7.4-atomic-prefs.patch"
+PATCH_WINEGL="patches/fyne-2.7.4-windows-egl.patch"
 ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
 DEST="third_party/fyne"
@@ -62,6 +63,7 @@ patch -p1 -d "$DEST" < "$PATCH_CARET"
 patch -p1 -d "$DEST" < "$PATCH_EMOJI"
 patch -p1 -d "$DEST" < "$PATCH_NEWINTENT"
 patch -p1 -d "$DEST" < "$PATCH_ATOMIC"
+patch -p1 -d "$DEST" < "$PATCH_WINEGL"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
 # the font itself (a binary; it cannot ride a unified diff) is copied in here.
 # Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
@@ -98,9 +100,19 @@ if ! grep -q "BibleText patch: atomic preferences write" "$DEST/app/preferences_
   echo "ERROR: patch did not apply — the preferences writer is unpatched (still truncating in place)." >&2
   exit 1
 fi
+# The Windows ES path: the EGL hint and the entry points from GLFW. Only a
+# build with the gles tag compiles these, so a shipping desktop build is
+# untouched; the Windows Store package is what needs them.
+if ! grep -q "BibleText patch: Windows asks for its OpenGL ES context through EGL" \
+     "$DEST/internal/driver/glfw/glfw_es_windows.go" \
+   || ! grep -q "InitWithProcAddrFunc" "$DEST/internal/painter/gl/init_es_windows.go" \
+   || ! grep -q '&& !windows &&' "$DEST/internal/driver/glfw/glfw_es.go"; then
+  echo "ERROR: patch did not apply — the Windows EGL path is not in place." >&2
+  exit 1
+fi
 if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
    || [ ! -s "$DEST/theme/font/NotoColorEmoji.ttf" ]; then
   echo "ERROR: emoji swap did not land — bundled-emoji.go unpatched or font missing." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write)."
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context)."

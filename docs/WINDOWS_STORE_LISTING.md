@@ -410,18 +410,18 @@ already asserted by the release job.
 
 ## Risks
 
-- **OpenGL on the certification machines.** Certification runs on virtual
-  machines whose display adapter offers OpenGL 1.1, below the toolkit's 2.0
-  floor; on such a machine the app fails at start-up. The GitHub runner is
-  the same kind of machine, which is why the smoke copy carries Mesa. Before
-  the first submission the app should choose software OpenGL itself when no
-  hardware driver is registered; until then a certification failure on this
-  point is possible and would cost a round. The `SetDllDirectory` approach
-  first written here is refuted: `opengl32.dll` is a static import of the
-  exe, so the System32 copy is mapped before any of the app's code runs and
-  answers every later load by name. `docs/BACKLOG.md` carries the evidence
-  and the route that remains (remove the import, then load Mesa by full
-  path).
+- **OpenGL on the certification machines.** The toolkit draws with desktop
+  OpenGL, and a Windows machine with no graphics driver offers only the
+  generic OpenGL 1.1, on which the app does not start. Whether Microsoft's
+  certification hosts are such machines is unknown; the GitHub runner is,
+  which is why the smoke copy carries Mesa. The fix is to render through
+  Direct3D instead, by building Windows with the toolkit's OpenGL ES path
+  and bundling ANGLE, as Chrome, Firefox and Qt do; `docs/BACKLOG.md` item 1
+  carries the evidence, the measured size and the test that decides it. The
+  `SetDllDirectory` approach first written here is refuted, and so is the
+  claim that a bundled library cannot work at all: a copy beside the
+  executable does override the system one, which is what the smoke has been
+  doing all along.
 - **Publisher name on an individual account** (Policy 10.14, above).
 - **Unverifiable without a Windows 11 client**: that `desktop2:Parameters`
   on the web-to-app handler is honoured for a packaged classic app (the

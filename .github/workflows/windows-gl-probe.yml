@@ -1,0 +1,130 @@
+# Decides, in one run, whether BibleText can render on Windows through
+# Direct3D instead of OpenGL: build with the toolkit's OpenGL ES path
+# (-tags gles), put ANGLE's libraries beside the executable, launch, and
+# judge the PIXELS. The runner is a machine with no graphics driver, the
+# same kind Microsoft's certification is assumed to use, so a pass here is
+# the evidence the Store submission needs (docs/BACKLOG.md item 1).
+#
+# The control matters more than the test: the second job deletes the ANGLE
+# libraries and must FAIL to render. If both jobs render, the runner has
+# graphics after all and neither result means anything.
+#
+# Throwaway: delete this workflow once the change it decides has landed.
+name: Windows GL probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ${{ matrix.name }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: with ANGLE (must render)
+            angle: true
+          - name: control, no ANGLE (must NOT render)
+            angle: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: show that this machine has no OpenGL driver
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000'
+          $v = Get-ItemProperty -Path $key -Name OpenGLDriverName -ErrorAction SilentlyContinue
+          if ($v) { Write-Host "::warning::this runner registers an OpenGL driver: $($v.OpenGLDriverName) — the control may not fail" }
+          else { Write-Host "no OpenGLDriverName under the display class: the generic 1.1 implementation is all there is" }
+      - name: build against the patched Fyne, with the ES path
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
+          # Question 1: does the ES path link at all under mingw?
+          (cd cmd/desktop && CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -o ../../build/probe/BibleText.exe .)
+          ls -la build/probe
+      - name: ANGLE beside the executable
+        if: matrix.angle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Pinned: ANGLE publishes no binaries of its own, so this is a
+          # reproducible third-party build, checked by hash.
+          $url = 'https://github.com/mmozeiko/build-angle/releases/download/2026-09-13/angle-x64-2026-09-13.zip'
+          $sha = '9855b571e0cd1e17631a8c96a016ae6d266b2c74fd6474d0c376aa28f2b9bb80'
+          Invoke-WebRequest $url -OutFile angle.zip
+          $got = (Get-FileHash angle.zip -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $sha) { throw "ANGLE zip hash $got, expected $sha" }
+          Expand-Archive angle.zip -DestinationPath angle -Force
+          Get-ChildItem -Recurse angle -Filter *.dll | ForEach-Object { Copy-Item $_.FullName build\probe\ }
+          Get-ChildItem build\probe
+      - name: launch and judge the pixels
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          if (Test-Path build\probe\opengl32.dll) { throw "opengl32.dll is beside the exe; this probe must not test that route" }
+          $app = Start-Process -FilePath build\probe\BibleText.exe -PassThru
+          for ($i = 0; $i -lt 60; $i++) {
+            $app.Refresh()
+            if ($app.HasExited -or $app.MainWindowHandle -ne [IntPtr]::Zero) { break }
+            Start-Sleep 1
+          }
+          Start-Sleep 40
+          $alive = -not $app.HasExited
+          Write-Host "process alive after 40 s: $alive"
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          New-Item -ItemType Directory -Force build\probe\out | Out-Null
+          $name = if ('${{ matrix.angle }}' -eq 'true') { 'with-angle' } else { 'control' }
+          $bmp.Save("build\probe\out\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          # Did anything actually get drawn? Sample the screen and ask how
+          # dominant the commonest colour is. A live process drawing nothing
+          # looks exactly like a dead one here, which is the point.
+          $counts = @{}
+          for ($y = 0; $y -lt $b.Height; $y += 8) {
+            for ($x = 0; $x -lt $b.Width; $x += 8) {
+              $c = $bmp.GetPixel($x, $y).ToArgb()
+              $counts[$c] = 1 + $counts[$c]
+            }
+          }
+          $total = ($counts.Values | Measure-Object -Sum).Sum
+          $top = ($counts.Values | Measure-Object -Maximum).Maximum
+          $share = [math]::Round(100.0 * $top / $total, 1)
+          $g.Dispose(); $bmp.Dispose()
+          Write-Host "commonest colour covers $share% of the sampled screen"
+          $rendered = $alive -and ($share -lt 98)
+          Write-Host "rendered: $rendered"
+          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          if ('${{ matrix.angle }}' -eq 'true') {
+            if (-not $rendered) { throw "with ANGLE the app did not render (alive=$alive, dominant=$share%)" }
+            Write-Host "ANGLE renders on a machine with no OpenGL driver"
+          } else {
+            if ($rendered) { throw "the control RENDERED without ANGLE: this runner is not a driverless machine, so the other job's pass proves nothing" }
+            Write-Host "control failed as it must (alive=$alive, dominant=$share%)"
+          }
+      - name: what the executable imports (diagnostics only)
+        if: always()
+        shell: pwsh
+        run: |
+          $dumpbin = Get-ChildItem "C:\Program Files*\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dumpbin) { & $dumpbin.FullName /imports build\probe\BibleText.exe | Select-String -Pattern '\.dll' | Select-Object -First 20 }
+          else { Write-Host "dumpbin not found; skipping" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gl-probe-${{ matrix.angle && 'with-angle' || 'control' }}
+          path: build/probe/out/*.png
+          if-no-files-found: warn
