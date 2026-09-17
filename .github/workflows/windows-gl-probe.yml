@@ -36,7 +36,7 @@ jobs:
         with:
           go-version: "1.24"
           cache: true
-      - name: show that this machine has no OpenGL driver
+      - name: show that the runner has no OpenGL driver
         shell: pwsh
         run: |
           $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000'
