@@ -197,7 +197,12 @@ verified = (
     'BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" '
     "../../scripts/verify-release-package.sh"
 )
-if workflow.count(verified) != 4:
+# Three packaged executables carry this prefix: the universal macOS .app, the
+# Linux tarball and the Windows .exe. It was four while macOS shipped a bundle
+# per architecture; the count follows the packages, not the architectures, and
+# the two macOS slices are still built separately and joined with lipo, which
+# is why the linker-value count above stays at four.
+if workflow.count(verified) != 3:
     raise SystemExit("release.yml: every packaged desktop executable must be key-verified")
 if '-ldflags=$BIBLE_KEY_LDFLAGS' not in workflow:
     raise SystemExit("release.yml: Windows resource rebuild must preserve the linker value")
@@ -238,12 +243,24 @@ for text, where in ((workflow, "release.yml"), (store_build, "build-windows-exe.
                 "through desktop OpenGL and will not start on a machine with no graphics driver"
             )
 
-# `fyne package` rewrites FyneApp.toml's Build after each successful package.
-# Both macOS architectures are packaged from ONE checkout, so without a restore
-# between them the second zip stamps a CFBundleVersion one higher than the
-# first, and a single release ships two downloads claiming different builds.
-if workflow.count("restore_ledger") < 3:
-    raise SystemExit("release.yml: the desktop ledger must be restored between and after packages")
+# `fyne package` rewrites FyneApp.toml's Build on success, and the macOS job
+# reads the ledger back to prove the zip carries the committed build. So the
+# committed value must be saved before packaging and restored both on exit and
+# before that read — otherwise the comparison passes against a number the
+# packager invented rather than one anybody chose. This is checked by shape
+# rather than by a helper's name: macOS packaged twice from one checkout until
+# 1.2.10, which is how 1.2.5 shipped builds 46 and 47 for one commit; the
+# universal package removes that hazard but not this one.
+if 'cp FyneApp.toml "$RUNNER_TEMP/FyneApp.toml.original"' not in workflow:
+    raise SystemExit("release.yml: the desktop ledger must be saved before packaging")
+if workflow.count('cp "$RUNNER_TEMP/FyneApp.toml.original"') < 2:
+    raise SystemExit("release.yml: the desktop ledger must be restored on exit and before it is read back")
+if 'trap \'clear_release_bible_key; cp "$RUNNER_TEMP/FyneApp.toml.original"' not in workflow:
+    raise SystemExit("release.yml: the ledger restore must also run on a failed package")
+restored = workflow.rindex('cp "$RUNNER_TEMP/FyneApp.toml.original" FyneApp.toml')
+read_back = workflow.index('LEDGER_BUILD="$(sed -n')
+if not restored < read_back:
+    raise SystemExit("release.yml: the ledger is read back before the committed value is restored")
 if "FyneApp.toml.original" not in workflow:
     raise SystemExit("release.yml: the desktop ledger must be saved before packaging")
 if "carries build $got, ledger says" not in workflow:

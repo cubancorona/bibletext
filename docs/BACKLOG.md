@@ -7,7 +7,7 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
-## One universal macOS download instead of two
+## One universal macOS download instead of two — DONE 17 September 2026
 
 The direct download offers `BibleText-macOS-AppleSilicon.zip` and
 `BibleText-macOS-Intel.zip`; the Mac App Store build is already universal
@@ -38,10 +38,63 @@ Three reasons it is still probably right:
 
 The cost is one thing only: about 21 MB of dead weight in every download.
 
-The recipe already exists at `scripts/release-mac-store.sh` lines 154-179 —
-build each slice, `lipo -create`, then package once. The `minos` assertion
-and `verify-release-package.sh` must run against the joined binary, as the
-Store script already does.
+Shipped in the release workflow the same day, following the Store script:
+build each slice, `lipo -create`, package once. The asset is now
+`BibleText-macOS.zip`; the two old names are gone, so a bookmark of either
+returns 404. The job asserts both slices are in the packaged binary — a
+packager that rebuilt instead of copying would ship one slice and still
+look right from outside — and checks each slice's own `minos`, which is
+what the loader enforces. The ledger save-and-restore stays, because the
+packager still rewrites `Build` and the verification reads it back; what
+went is the two-packages-one-checkout hazard that stamped 1.2.5 with two
+different builds.
+
+## The direct downloads do not register `bibletext:` links
+
+Three channels hand a shared link back to the browser because nothing has put
+a handler in front of the system. The packaged builds are fine: the Linux
+tarball installs a desktop entry with `MimeType=x-scheme-handler/bibletext;`,
+and the Store MSIX declares `uap3:Protocol`. The downloads people actually
+take from the site mostly do not.
+
+| Channel | State | What is missing |
+| --- | --- | --- |
+| Linux tarball | works | — |
+| Microsoft Store MSIX | works | — |
+| Flatpak, Snap | works when published | — |
+| **AppImage** | no | nothing installs its desktop entry, and the entry inside says `Exec=bibletext`, a command that is not on `$PATH` |
+| **Windows .zip** | no | no `HKCU\Software\Classes\bibletext` registry entry |
+| **macOS direct .zip** | no | no `CFBundleURLTypes` in the packaged plist |
+
+The AppImage is the one worth understanding, because the metadata is already
+right and still does nothing. `linux/uk.co.bibletext.BibleText.desktop` is
+packed inside the image and carries both `Exec=bibletext %u` and the MimeType;
+the published file was checked and it is there. It fails twice over. A desktop
+entry only becomes a handler once it is in `~/.local/share/applications` and
+`update-desktop-database` has run, and running a single file installs nothing
+— that is the format's whole point, and the entry inside is read only by
+integration daemons most people do not run. And `Exec=bibletext` names a
+binary on `$PATH`; an AppImage lives wherever the reader dropped it, with its
+real path in `$APPIMAGE`, so even a copied-out entry would point at nothing.
+
+Each fix is a first write outside the app's own directories on its platform,
+which is why all three are deferred together rather than one at a time:
+
+- **AppImage** — a Settings switch that, when `$APPIMAGE` is set, writes a
+  user desktop entry with `Exec="$APPIMAGE" %u` and the MimeType, then runs
+  `update-desktop-database`.
+- **Windows .zip** — `HKCU\Software\Classes\bibletext`, gated on not being
+  packaged (the MSIX must never race its own manifest), with a Settings
+  switch to remove it.
+- **macOS direct .zip** — `CFBundleURLTypes` in the packaged plist. The
+  cheapest of the three: the delegate's `openURLs` entry point already
+  exists, so this is plist work rather than new code.
+
+Settle the stance once and apply it to all three: whether the app registers
+itself silently on first run, on a Settings switch, or not at all. A reader
+who downloads a zip and expects a link to open in the app has a reasonable
+expectation; a reader who finds their URL handlers rearranged without asking
+does not.
 
 ## The download page, grouped by platform
 
@@ -256,12 +309,11 @@ is due by mid-December 2026. Left to do, in order:
    Still unproven anywhere: the window coming to the front under XWayland
    on Linux, and whether the direct-download exe's loopback listener draws
    a firewall prompt on Windows (both on that checklist).
-   Deferred from the same change: the direct-download zip registering the
-   `bibletext:` scheme itself (`HKCU\Software\Classes\bibletext`, gated on
-   not being packaged, with a Settings switch to remove it — the app's
-   first registry write); a macOS `CFBundleURLTypes` for the same scheme
-   (the delegate's `openURLs` entry point is already there); an "Open in
-   BibleText" affordance on the reader pages, not only the notice pages.
+   Deferred from the same change: an "Open in BibleText" affordance on the
+   reader pages, not only the notice pages. The Windows registry entry and
+   the macOS `CFBundleURLTypes` moved to "The direct downloads do not
+   register `bibletext:` links", with the AppImage, because all three are
+   the same decision.
 
 ## Linux stores: from the listing source to three live channels
 
@@ -276,11 +328,9 @@ listing screenshots are captured (`docs/screenshots/linux/`, pinned by
 `screenshots.ref`; re-dispatch `linux-screenshots.yml` to replace them).
 Deferred with it:
 
-- **AppImage registering the `bibletext:` scheme itself** — a Settings
-  switch that, when `$APPIMAGE` is set, writes a user desktop entry with
-  `Exec="$APPIMAGE" %u` and the MimeType and runs `update-desktop-database`;
-  the app's first write outside its own directories on Linux, the same
-  stance as the Windows registry item.
+- **AppImage registering the `bibletext:` scheme itself** — moved to "The
+  direct downloads do not register `bibletext:` links", which gathers it
+  with the Windows and macOS halves of the same decision.
 - **oto 3.5 on Linux (pure-Go PulseAudio)** — needs Go 1.25 across CI and
   the release; would drop `libasound2-dev`, the snap's ALSA plumbing and the
   fallback question in both sandboxes.

@@ -44,7 +44,7 @@ jobs:
             --notes "$NOTES"
 
   macos:
-    name: build macOS (arm64 + intel)
+    name: build macOS (universal)
     needs: create-release
     runs-on: macos-latest
     steps:
@@ -60,7 +60,7 @@ jobs:
         run: |
           ./scripts/setup-fyne-patch.sh
           go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
-      - name: package both architectures
+      - name: package one universal app
         shell: bash
         env:
           BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
@@ -78,49 +78,63 @@ jobs:
           MAC_MIN="$(python3 -c 'import json;print(json.load(open("config/product.json"))["macMinimumOSVersion"],end="")')"
           export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
           cd cmd/desktop
-          # `fyne package` REWRITES FyneApp.toml's Build after each successful
-          # package, and both architectures are packaged from this one
-          # checkout — so without restoring it between them the Intel zip
-          # stamps a CFBundleVersion one higher than the Apple Silicon zip, and
-          # one release ships two downloads claiming different builds (1.2.5
-          # shipped 46 and 47 for the same commit).
+          # `fyne package` REWRITES FyneApp.toml's Build on success, and the
+          # verification below reads the ledger back, so the committed value is
+          # saved first and restored before it is read. One package call means
+          # the two-zips-one-checkout hazard is gone: 1.2.5 shipped builds 46
+          # and 47 for the same commit because the ledger advanced between them.
           cp FyneApp.toml "$RUNNER_TEMP/FyneApp.toml.original"
-          restore_ledger() { cp "$RUNNER_TEMP/FyneApp.toml.original" FyneApp.toml; }
           trap 'clear_release_bible_key; cp "$RUNNER_TEMP/FyneApp.toml.original" "$GITHUB_WORKSPACE/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
-          # Apple Silicon
-          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          CGO_ENABLED=1 GOARCH=arm64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
+          # One slice per architecture, joined into a single binary, exactly as
+          # scripts/release-mac-store.sh does for the Store upload — the direct
+          # download differed from the Store build for no reason anyone chose.
+          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$RUNNER_TEMP/desktop-arm64" .
+          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$RUNNER_TEMP/desktop-amd64" .
+          lipo -create -output desktop "$RUNNER_TEMP/desktop-arm64" "$RUNNER_TEMP/desktop-amd64"
+          lipo -info desktop
+          $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
+          rm -f desktop
           /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MAC_MIN" BibleText.app/Contents/Info.plist
-          otool -l BibleText.app/Contents/MacOS/desktop | grep -q "minos $MAC_MIN" || { echo "arm64 binary is not linked for macOS $MAC_MIN" >&2; exit 1; }
+          # Both architectures must be in the packaged binary. `fyne package`
+          # is given the joined file, but a packager that rebuilt instead of
+          # copying would silently ship one slice, and the zip would still look
+          # right from the outside.
+          PACKAGED_ARCHS="$(lipo -info BibleText.app/Contents/MacOS/desktop)"
+          echo "$PACKAGED_ARCHS"
+          for arch in arm64 x86_64; do
+            case "$PACKAGED_ARCHS" in
+              *"$arch"*) ;;
+              *) echo "the packaged binary has no $arch slice: $PACKAGED_ARCHS" >&2; exit 1 ;;
+            esac
+          done
+          # The loader enforces each slice's own minos, so both are checked —
+          # one slice linked for a newer macOS would refuse to start on the
+          # floor the listing promises.
+          MINOS_SEEN="$(otool -l BibleText.app/Contents/MacOS/desktop | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')"
+          [ -n "$MINOS_SEEN" ] || { echo "no LC_BUILD_VERSION minos in the universal binary" >&2; exit 1; }
+          SLICES="$(printf '%s\n' "$MINOS_SEEN" | wc -l | tr -d ' ')"
+          [ "$SLICES" = "2" ] || { echo "expected 2 slices with a minos, found $SLICES" >&2; exit 1; }
+          for m in $MINOS_SEEN; do
+            [ "$m" = "$MAC_MIN" ] || { echo "a slice is linked for macOS $m, not $MAC_MIN" >&2; exit 1; }
+          done
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
-          ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-AppleSilicon.zip
+          ditto -c -k --keepParent BibleText.app ../../BibleText-macOS.zip
           rm -rf BibleText.app
-          restore_ledger
-          # Intel
-          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          CGO_ENABLED=1 GOARCH=amd64 $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
-          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MAC_MIN" BibleText.app/Contents/Info.plist
-          otool -l BibleText.app/Contents/MacOS/desktop | grep -q "minos $MAC_MIN" || { echo "amd64 binary is not linked for macOS $MAC_MIN" >&2; exit 1; }
-          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
-          ditto -c -k --keepParent BibleText.app ../../BibleText-macOS-Intel.zip
-          rm -rf BibleText.app
-          restore_ledger
-          # Both zips now carry the committed Build. Prove it rather than
-          # trusting it: the two Info.plists must agree, and agree with the
-          # ledger, or the release is stamped with a number nobody chose.
+          cp "$RUNNER_TEMP/FyneApp.toml.original" FyneApp.toml
+          # The zip carries the committed Build. Prove it rather than trusting
+          # it: the number in the bundle must be the number in the ledger, or
+          # the release is stamped with one nobody chose.
           LEDGER_BUILD="$(sed -n 's/^Build = \([0-9]*\)/\1/p' FyneApp.toml)"
           cd ../..
-          for z in BibleText-macOS-AppleSilicon.zip BibleText-macOS-Intel.zip; do
-            rm -rf /tmp/verify-zip && mkdir -p /tmp/verify-zip
-            ditto -x -k "$z" /tmp/verify-zip
-            got="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/verify-zip/BibleText.app/Contents/Info.plist)"
-            [ "$got" = "$LEDGER_BUILD" ] || { echo "$z carries build $got, ledger says $LEDGER_BUILD" >&2; exit 1; }
-            echo "$z: build $got"
-          done
+          rm -rf /tmp/verify-zip && mkdir -p /tmp/verify-zip
+          ditto -x -k BibleText-macOS.zip /tmp/verify-zip
+          got="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/verify-zip/BibleText.app/Contents/Info.plist)"
+          [ "$got" = "$LEDGER_BUILD" ] || { echo "BibleText-macOS.zip carries build $got, ledger says $LEDGER_BUILD" >&2; exit 1; }
+          echo "BibleText-macOS.zip: build $got, universal"
       - name: upload assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" BibleText-macOS-AppleSilicon.zip BibleText-macOS-Intel.zip --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-macOS.zip --clobber
 
   linux:
     name: build Linux (amd64)
