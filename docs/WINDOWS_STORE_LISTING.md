@@ -122,7 +122,7 @@ note the other stores get (`build/appstore/metadata/en-GB/whats-new-<v>.txt`).
 | --- | --- | --- |
 | Category | Books + reference / Reference | a reader, not a game, not education-only |
 | Age rating | the IARC questionnaire, or the IARC rating ID from the Play Console (App content → Content rating) | first submission only; `docs/PLAY_LISTING.md` "Content rating" has the two answers that need a human |
-| System requirements | Windows 10 version 2004 (build 19041) or later, x64; a graphics driver with OpenGL 2.0 | the manifest floor; the toolkit renders through OpenGL |
+| System requirements | Windows 10 version 2004 (build 19041) or later, x64 | the manifest floor; the app renders through Direct3D, which Windows provides on every machine, so no graphics driver is required; the toolkit renders through OpenGL |
 | Incorporates generative AI | Yes | Policy 11.16: the optional Study with AI and Find generate text from the reader's own provider key; the description discloses it; no AI content is stored or shared by the app |
 | Accessibility | not declared | the toolkit has no accessibility tree; declaring it would be untrue |
 | Pen and ink, non-Microsoft drivers or services | No | |
@@ -146,7 +146,7 @@ Screenshots must come from the Windows build itself; the Store rejects
 composed or foreign-platform images. They are captured on the runner rather
 than by hand: `.github/workflows/windows-screenshots.yml` raises the runner's
 screen from 1024×768 to 1920×1080 (`Set-DisplayResolution`), builds the
-release executable with Mesa's software OpenGL beside it, opens it with links
+release executable with software graphics beside it, opens it with links
 minted by the app's own link code, and saves the WINDOW's client area — no
 desktop, no frame, no evaluation watermark — for four scenes: a note received
 inside a shared link under its section heading, a passage, search results,
@@ -176,12 +176,12 @@ whose manifest is not ours to shape, so it is not used.
    exe, the manifest and `msstore/Assets/` under `build/msstore/layout/`;
 3. runs `makepri` for the `en-GB` qualifier set and `makeappx pack`, and
    uploads the unsigned `BibleText-Windows-x64.msix` as the run's artifact;
-4. smoke-installs a COPY: Mesa's software OpenGL beside the exe (the runner
-   has no GPU), a throwaway self-signed certificate whose subject is the
-   reserved publisher, `Add-AppxPackage`, activation through the shell, and
-   the process must still be running after 30 s; then the link checks
-   under "Links" below. The Store package never carries Mesa or a
-   signature of ours.
+4. smoke-installs a COPY of the package as it ships, signed with a
+   throwaway certificate whose subject is the reserved publisher:
+   `Add-AppxPackage`, activation through the shell, and then the app must
+   have a window with something drawn in it, because a graphics failure
+   leaves the process alive and blank; then the link checks under "Links"
+   below. The Store package carries no signature of ours.
 
 Manifest choices (also in the template's own comment): `Windows.Desktop` from
 `10.0.19041.0` with `uap10:RuntimeBehavior="packagedClassicApp"` and
@@ -259,8 +259,9 @@ document in Partner Center:
    > without any account. The NKJV translation is fetched from API.Bible
    > with a bundled key. The optional AI study features are off until the
    > reader enters their own provider key under Settings → Assistant; they
-   > generate text from that provider and store nothing. Rendering needs an
-   > OpenGL 2.0-capable graphics driver.
+   > generate text from that provider and store nothing. The app renders
+   > through Direct3D by way of the bundled ANGLE libraries, so it runs on a
+   > machine with no graphics driver.
 7. Submit. Certification takes up to three business days; after it passes,
    Publish now.
 
@@ -384,10 +385,9 @@ step 4 below.
    itself; check with Edge, Chrome and Firefox as the default in turn.
 6. Book-index link `bibletext://bibletext.co.uk/web/john/` — the app opens
    the browser at that index rather than showing nothing (invariant I2).
-7. A machine or VM with no OpenGL 2.0 driver: the app fails to start. That
-   is the certification risk under "Risks" and the reason for the software
-   OpenGL fallback in `docs/BACKLOG.md`; `-Mesa` on the sideload script
-   shows what the fallback would give.
+7. A machine or VM with no graphics driver: the app must still start and
+   draw, because it renders through Direct3D. The runner proves this on
+   every Store package build; a real virtual machine is the confirmation.
 8. The direct-download build on the same machine: run the release zip's
    `BibleText.exe` once and note whether Windows Defender Firewall prompts
    for its loopback listener (the package never prompts; the bare exe is
@@ -398,7 +398,7 @@ step 4 below.
 9. Screenshots: only if the runner-captured set in `docs/screenshots/windows/`
    needs a scene the capture script cannot drive — see "Images".
 
-**Then, in this order:** the software OpenGL fallback (backlog); the
+**Then, in this order:** the
 screenshots; the first submission by hand from this document with the
 publishing hold on; after it is live, the write side of `msstore/msstore.py`
 against the second release. The Linux half has its own checks: `make
@@ -410,18 +410,16 @@ already asserted by the release job.
 
 ## Risks
 
-- **OpenGL on the certification machines.** The toolkit draws with desktop
-  OpenGL, and a Windows machine with no graphics driver offers only the
-  generic OpenGL 1.1, on which the app does not start. Whether Microsoft's
-  certification hosts are such machines is unknown; the GitHub runner is,
-  which is why the smoke copy carries Mesa. The fix is to render through
-  Direct3D instead, by building Windows with the toolkit's OpenGL ES path
-  and bundling ANGLE, as Chrome, Firefox and Qt do; `docs/BACKLOG.md` item 1
-  carries the evidence, the measured size and the test that decides it. The
-  `SetDllDirectory` approach first written here is refuted, and so is the
-  claim that a bundled library cannot work at all: a copy beside the
-  executable does override the system one, which is what the smoke has been
-  doing all along.
+- **Graphics — settled 17 September 2026.** A Windows machine with no
+  graphics driver offers only the generic OpenGL 1.1, on which the app used
+  to fail at start-up; whether Microsoft's certification hosts are such
+  machines is still unknown, and the GitHub runner is. The app now renders
+  through Direct3D, which Windows provides everywhere, by building Windows
+  with the toolkit's OpenGL ES path and bundling ANGLE, as Chrome, Firefox
+  and Qt do. Proven on the runner both bare and inside the installed
+  package, with a control that fails when the libraries are removed. What
+  remains unproven is only the frame cost on a real graphics card, which
+  the Windows sitting will show.
 - **Publisher name on an individual account** (Policy 10.14, above).
 - **Unverifiable without a Windows 11 client**: that `desktop2:Parameters`
   on the web-to-app handler is honoured for a packaged classic app (the
