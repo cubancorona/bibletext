@@ -359,7 +359,11 @@ each step it lists.
    the `VERSION` lines of both review-notes files, the writer's pin in
    `appstore/push-review-notes.py`; write `build/appstore/metadata/en-GB/whats-new-<v>.txt`
    AND `…/en-GB/mac/whats-new-<v>.txt` (the Mac has its own — the write refuses
-   without it); add the Play notes section to `docs/PLAY_LISTING.md`.
+   without it); add the Play notes section to `docs/PLAY_LISTING.md`; prepend a
+   `[[release]]` block to `linux/releases.toml` and run
+   `go run ./cmd/linuxmeta render`, which rewrites the two AppStream MetaInfo
+   files and `snap/snapcraft.yaml` — `cmd/linuxmeta` refuses a newest entry that
+   is not the desktop ledger's version, so CI goes red without it.
    `scripts/check-release-identity.py` and the review-notes tests must pass.
 2. Push main; wait for CI on all three OSes. Nothing is uploaded before it is green.
 3. Build the three store artifacts from that commit, ONE AT A TIME —
@@ -384,14 +388,24 @@ each step it lists.
    from `~/Library/Android/bibletext-dist`, compare its SHA after download,
    then `gh release edit v<version> --draft=false`, and verify every
    `/releases/latest/download/<asset>` link resolves to the new version.
-7. Publish the site from the same commit: `scripts/publish-site.sh --dry-run`
+7. The Microsoft Store, if this version goes there: dispatch the package
+   workflow AT THE TAG, never at the branch — `gh workflow run msstore.yml
+   --ref v<version>` — because the MSIX version is the desktop ledger plus a
+   fourth part, so a run against a moved branch labels a package for a tree the
+   tag does not name. Confirm the artifact's `Version="<version>.0"` before
+   uploading it (docs/WINDOWS_STORE_LISTING.md). Note that the tag's own
+   release run already builds the snap and publishes it to the public `edge`
+   channel whenever `SNAPCRAFT_STORE_CREDENTIALS` is set, so that channel is
+   not a separate decision once the secret exists; the Flathub submission,
+   when it exists, comes from the same tagged tree (docs/LINUX_STORES.md).
+8. Publish the site from the same commit: `scripts/publish-site.sh --dry-run`
    prints a drift report against `origin/gh-pages` — "none", or how many
    pages changed, were added or removed — and `scripts/publish-site.sh`
    pushes. The reader is generated from the app's decoder and the local
    translation caches, which CI does not have, so this is an owner-machine
    step like the uploads; it is in the sequence because the web is a channel
    of the same tree and was two days behind the app before this step existed.
-8. Work merged after the tag ships under the next number.
+9. Work merged after the tag ships under the next number.
 
 Before asking "are we ready to release?", the same three answers are the
 readiness check: CI green on the commit, `check-release-identity.py`, and the

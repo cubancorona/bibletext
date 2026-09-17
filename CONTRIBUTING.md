@@ -105,6 +105,29 @@ it and refuses to build if it is malformed. To ship your own deployment:
    API.Bible key, and every public-domain translation is unaffected.
 6. Replace the store metadata under `appstore/` before submitting anywhere.
 
+## Adding a download
+
+Every artifact a reader can get is named by filename on the download page at
+`docs/index.html`, which no generator writes. A new release asset is therefore
+invisible until someone links it — which is how the AppImage shipped in 1.2.10
+with nothing pointing at it. The README's Download section names some of the
+same files and sends the rest to the Releases page, so it is held to linking
+nothing that does not exist rather than to naming everything.
+
+`scripts/check-public-surfaces.py` (self-testing, run by CI) closes the
+mechanical half: it reads the asset names out of the `gh release upload`
+steps in `.github/workflows/release.yml` and fails if the download page does
+not offer one of them, or if either page links a name no release uploads. An
+asset that is deliberately not offered — the AppImage's `.zsync` sidecar, which
+update tools fetch by themselves — is listed in the checker's `NOT_LINKED`
+map with the reason, so the omission is a reviewable decision rather than a
+gap. The same checker holds the Linux build dependencies identical across the
+README, this file and CI, and holds the README's count of `cmd/` programs to
+what is actually in `cmd/`.
+
+What it cannot do is notice that a true sentence has become a stale one. When
+a release changes what a platform can do, read the prose on both pages.
+
 ## License
 
 By contributing, you agree your contributions are licensed under the project's

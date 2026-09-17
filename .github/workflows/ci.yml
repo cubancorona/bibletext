@@ -26,6 +26,7 @@ jobs:
           scripts/check-product-identity.py
           scripts/check-mac-store-config.py
           scripts/check-min-os-versions.py
+          scripts/check-public-surfaces.py
           python3 -m unittest discover -s scripts/audio-align -p 'test_*.py'
           python3 -m unittest discover -s msstore -p 'test_*.py'
           if [ "${{ github.event_name }}" = "pull_request" ]; then

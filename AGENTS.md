@@ -84,6 +84,14 @@ tree.
   audio host — lives in `config/product.json` and derives from there. Never
   hardcode one of those values; `scripts/check-product-identity.py` holds the
   few tool-owned copies (FyneApp.toml, deep-link files) equal to it in CI.
+- A release that gains an artifact is not finished when the artifact builds.
+  The download page names every download by filename, so a new one is invisible
+  until it is linked; `scripts/check-public-surfaces.py` holds that page equal
+  to what the release workflow uploads, fails on a link to an asset no release
+  ships, holds the Linux build dependencies identical across the README,
+  CONTRIBUTING and CI, and holds the README's count of `cmd/` programs to the
+  directory. It cannot tell that a
+  sentence is merely old — read the prose too.
 - Keep changes scoped and preserve unrelated work already present in the tree.
 - Never commit API keys, signing material, account identifiers, local
   environment files, or generated build artifacts.

@@ -10,7 +10,8 @@ repository hygiene.
 
 The whole shared codebase is **one Go library package, `bibletext`** (every
 `*.go` file in the repo root). It is *not* a `main` package — you cannot
-`go run .` here. Two thin entry points under `cmd/` consume it:
+`go run .` here. Four programs under `cmd/` consume it — the two app entry
+points and the two site generators:
 
 - `cmd/desktop/main.go` — desktop window (shared Read / Books / Search layout,
   left navigation rail by default, plus keyboard shortcuts). The former

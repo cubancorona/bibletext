@@ -134,5 +134,7 @@ proven or corrected, exactly as the Windows Store workflow was.
    the tag-pinned manifest from
    `go run ./cmd/linuxmeta flatpak-manifest -tag v… -commit …`,
    `flatpak/go.mod.yml`, `flatpak/modules.txt` and `flatpak/flathub.json`;
-   the AppImageHub PR; the verification token on the site; the AppImage
-   link on the site's download page, which still names the tarball only.
+   the AppImageHub PR, which the first release carrying an AppImage (1.2.10)
+   unblocked; and the verification token on the site. The download page links
+   the AppImage as of 1.2.10, and `scripts/check-public-surfaces.py` now fails
+   CI if a released artifact goes unlinked.

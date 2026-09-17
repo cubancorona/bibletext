@@ -1,7 +1,7 @@
 # Builds the Microsoft Store package: an unsigned MSIX (the Store signs it)
 # around the same BibleText.exe the GitHub release ships, with the manifest
 # filled from the reserved identity and the desktop ledger, and the tiles
-# generated from icon/full.png. The .msix artifact is what gets uploaded in
+# generated from cmd/desktop/Icon.png, the mark every channel ships. The .msix artifact is what gets uploaded in
 # Partner Center; docs/WINDOWS_STORE_LISTING.md holds the listing.
 #
 # The smoke job then proves the package installs and launches: a COPY of the
