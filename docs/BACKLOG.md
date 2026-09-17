@@ -7,6 +7,37 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Age ratings: aim for all ages in every market
+
+The IARC questionnaire answered for the Microsoft Store on 17 September 2026
+mirrors the answers Google Play already carries, so the two stores say the same
+thing. It yields IARC 3+, PEGI 3, Microsoft 3+, ClassInd L (all ages), CCC 8+,
+ESRB Everyone 10+, USK 12 and PCBP 18+ — adults only in Russia, and twelve and
+over in Germany, for a reader whose content is Scripture set as text with no
+images at all.
+
+The goal is all ages, everywhere. Three answers carry the rating up, and all
+three came across from Play: violence against humans in a realistic setting
+with realistic reactions and mild or limited blood and gore; references to
+sexual activity without descriptive detail; and references to sexual violence.
+Each is defensible for the text of Scripture, and each is exactly what a
+ratings board reacts to.
+
+Settle one question before changing any of them: what IARC intends by these
+questions for a work of literature rather than a game. Several of them, and
+their own tooltips, are written for interactive products — "the perpetrator is
+able to commit them without penalty", uninvolved characters "visibly vulnerable
+to the attacks" — and this app depicts nothing. It renders text; the violence
+in it is referred to, never shown. Whether "Violence, Blood, or Gory Images"
+is answerable as No at all for a Bible reader is the hinge, because every
+raised rating follows from that one Yes.
+
+Doing it properly means re-taking the questionnaire on BOTH stores in the same
+sitting, so they do not drift apart, and reading each summary back afterwards.
+The Store questionnaire is re-takeable from the submission's Age ratings page;
+Play's is under App content -> Content ratings -> Start new questionnaire. A
+retake replaces the certificate, so do it while no submission is in review.
+
 ## Verse of the day: possible later additions
 
 The 10 Sep 2026 rework (branch verse-of-day: civil-date key with the device
