@@ -7,6 +7,66 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## One universal macOS download instead of two
+
+The direct download offers `BibleText-macOS-AppleSilicon.zip` and
+`BibleText-macOS-Intel.zip`; the Mac App Store build is already universal
+(`scripts/release-mac-store.sh` builds both slices and joins them with
+`lipo -create`). The direct path is the odd one out, not a considered
+difference.
+
+Measured on the 1.2.10 artifacts rather than estimated: the two zips are
+21.1 MB and 21.6 MB, their executables 40.8 MB and 41.6 MB, and the bundle is
+essentially all executable — so a real `lipo` join of the two published
+binaries produces an 82.5 MB executable and a **42.2 MB zip**. There is no
+shared-resource saving to be had; universal is almost exactly double.
+
+Three reasons it is still probably right:
+
+- One of the two wrong choices is fatal. An Apple Silicon build on an Intel
+  Mac does not launch at all; an Intel build on Apple Silicon runs under
+  Rosetta, slower but working. The page cannot tell which machine a reader
+  has.
+- It deletes a hazard this repository has already paid for. The macOS job
+  packages twice from one checkout, and `fyne package` rewrites the ledger's
+  `Build` after each success — 1.2.5 shipped two zips stamped 46 and 47 for
+  the same commit. The job now carries a saved ledger, a restore function, a
+  trap and a two-plist comparison purely to contain that. One universal
+  package needs none of it.
+- It removes a button from a page whose whole virtue is that it is short, and
+  a decision from a reader who may not know which Mac they own.
+
+The cost is one thing only: about 21 MB of dead weight in every download.
+
+The recipe already exists at `scripts/release-mac-store.sh` lines 154-179 —
+build each slice, `lipo -create`, then package once. The `minos` assertion
+and `verify-release-package.sh` must run against the joined binary, as the
+Store script already does.
+
+## The download page, grouped by platform
+
+`docs/index.html` lists desktop downloads as a flat run of buttons: two
+macOS, one Windows, and since 1.2.10 two Linux. Flat is still the right shape
+at that size, and the canonical alternative — a heading per operating system
+with the Linux formats as a sub-list — is what projects with many Linux
+formats settle on because Linux always accumulates them.
+
+The trigger is Flathub and the Snap Store going live. Linux then has four
+ways in (tarball, AppImage, Flatpak, Snap) and a flat list stops answering
+the only question a reader has, which is which one they want. Restructure
+then, not before.
+
+Two things to fold in at the same time:
+
+- A line saying which Linux download to take. They are not equivalent: the
+  tarball registers `bibletext:` links and the AppImage does not.
+- Whether macOS is still two buttons by then (see the universal entry above).
+
+Not worth doing: operating-system detection that picks for the reader. It is
+the other canonical pattern and it is what the large projects do, but it
+needs a no-JavaScript fallback that lists everything anyway, which is the
+page as it stands.
+
 ## Age ratings: aim for all ages in every market
 
 The IARC questionnaire answered for the Microsoft Store on 17 September 2026
