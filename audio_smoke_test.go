@@ -81,16 +81,29 @@ func TestDesktopAudioEndToEnd(t *testing.T) {
 	engineToggle()
 	waitFor(t, "PLAYING again", 10*time.Second, func() bool { return gAudio.isPlaying() })
 
-	// Race straight to the end: the engine clamps each seek to the last frame,
-	// so the buffer drains and the watcher must post a natural ENDED, and the
-	// controller's continuous playback must stop cleanly at the end of our
-	// one-book Bible (no runaway restart).
+	// Race to the end: the engine clamps the seek to the last frame, the buffer
+	// drains, the watcher posts a natural ENDED, and the controller's continuous
+	// playback must stop cleanly at the end of our one-book Bible (no runaway
+	// restart).
+	//
+	// The nudge is deliberately RARE. This loop used to seek on every poll —
+	// four times a second — which is a race against the thing it is waiting
+	// for: each seek refills the buffer the drain is trying to empty, so on a
+	// driver whose buffer is larger or whose drain is slower than the poll
+	// interval the end never arrives and the test blames the app. That is how
+	// it read on its first ever run, on a Windows runner. Seek once, then
+	// mostly watch; re-nudge only if the engine has genuinely stalled.
 	t.Log("seeking to the end for the natural-ENDED path…")
+	engineSkip(600) // clamped to the final frame; the drain follows
+	lastNudge := time.Now()
 	waitFor(t, "natural end → controller idle (end of Bible)", 90*time.Second, func() bool {
 		if gAudio.playingFingerprint() == "" && !gAudio.isPlaying() {
 			return true
 		}
-		engineSkip(600) // clamped to the final frame; drain follows
+		if time.Since(lastNudge) > 10*time.Second {
+			engineSkip(600)
+			lastNudge = time.Now()
+		}
 		return false
 	})
 
