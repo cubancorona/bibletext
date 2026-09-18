@@ -545,7 +545,12 @@ func Run() {
 	defer stopSingleInstance()
 
 	window := myApp.NewWindow("BibleText")
-	window.Resize(fyne.NewSize(1280, 860))
+	// Ask for a window this desktop can actually give. Fyne keeps the size that
+	// was REQUESTED rather than the one it was granted, so a request that
+	// overflows the screen leaves the content laid out for a canvas nothing on
+	// screen has: a dead gutter down one side of the reading pane and the text
+	// off the other. See window_size.go.
+	window.Resize(startupWindowSize(startupWorkArea(myApp)))
 	window.SetContent(CreateMainUI(myApp, state, window))
 	// Parks: loadPhase is still loadPending here, and consumePendingLink opens
 	// it ahead of the startup rebuild — the same shape as a Universal Link

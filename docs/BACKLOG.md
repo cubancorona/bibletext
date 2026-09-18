@@ -49,6 +49,127 @@ packager still rewrites `Build` and the verification reads it back; what
 went is the two-packages-one-checkout hazard that stamped 1.2.5 with two
 different builds.
 
+## The first frame is laid out for a window the app did not get
+
+`app.go:548` asks for a fixed window size and never reconciles it with what the
+desktop actually granted:
+
+    window := myApp.NewWindow("BibleText")
+    window.Resize(fyne.NewSize(1280, 860))
+
+There is no clamp to the work area. On a desktop that cannot give 1280x860 the
+window comes back smaller, but the first layout pass has already run against the
+requested size and nothing re-runs it. The reading column is centred in
+`styledColumn.Layout` (`reading_styled_area.go:386`) with
+
+    x := (size.Width - w) / 2
+
+so it is placed for a canvas nobody has: a wide dead gutter down the left and
+the text crowding the right edge. It is not a flash. It persists until something
+forces a fresh layout pass -- maximising, or dragging any edge -- after which it
+is correct for the rest of the session.
+
+THIS IS ALREADY IN THE REPOSITORY. `docs/windows-store-smoke-john3.jpg`, added
+by 84536fd9a on 16 September, is a capture of exactly this defect from the
+`windows-latest` runner (1024x768). Measured: the pane runs x=62..899, the text
+x=379..806, margins 317px left against 93px right. It predates the ANGLE switch
+by a day, so Direct3D has nothing to do with it. The reason it was committed
+without comment is that the only check looking at that image asked whether the
+app had DRAWN -- and it had.
+
+What pins the trigger to the missing resize rather than to the width: MAXIMISING
+cures it. A maximised window on an 800x600 guest is about 800x552, far narrower
+than 1280, and its layout is correct. So it is not "the window must be at least
+1280 wide" -- any resize event at any size reconciles it, and a launch that never
+receives one stays wrong.
+
+Invisible on the machines it is built on, for two independent reasons. A display
+of at least 1280x860 grants the request exactly, so there is no mismatch to
+correct, and this development Mac clears it with room to spare: GLFW reports a
+videomode of 1728x1117 and a work area of 1728x1022 at y=33, measured on the
+machine rather than inferred.
+And the pane that mis-places the column is Windows/Linux only: `useStyledPane()`
+is false on macOS, which uses the native NSTextView overlay in
+`reading_macos.go` instead. The configurations that do NOT clear the size are
+ordinary: 1366x768 at 125% scaling is 1093x614 logical, and 1920x1080 at 150% is
+1280x720.
+
+THE GATE IS IN PLACE BEFORE THE FIX, deliberately.
+`scripts/check-reading-centred.py` measures a screenshot's ink profile, finds the
+text block and its pane, and requires the two margins to agree within 15% of the
+pane width. It self-tests against synthetic images with a known answer on every
+run, and `msstore.yml` runs it against the committed capture above with
+`--expect-fail` before judging the live one, so a rule that has stopped working
+fails loudly instead of passing. Mutation-proved four ways: a limit too
+permissive, a limit too strict, a blinded ink detector and a blinded column
+threshold all trip the self-test rather than returning a false pass.
+
+An earlier attempt at this gate asserted that the WINDOW fits the work area.
+That check would have passed on the committed failure: in that capture the
+caption buttons are fully visible and the content stops at the taskbar, so the
+window was clamped correctly and it is the canvas that was not. Recorded because
+the wrong invariant looked obviously right.
+
+FIXED, by asking for a window the desktop can grant. `app.go` now calls
+`startupWindowSize(startupWorkArea(myApp))`:
+
+  - `window_size.go` holds the arithmetic and nothing else, so it is testable on
+    a host with any screen or none. The work area arrives as a parameter.
+  - `window_workarea_desktop.go` measures it. Fyne exposes no screen accessor at
+    all -- no `Window.Size`, no monitors on `fyne.Driver`, only
+    `Settings().Scale()` -- but GLFW is already linked into the binary (it is
+    what the desktop driver is built on), and `Monitor.GetWorkarea` is the
+    number the toolkit never asks for. `glfw.Init` is idempotent and Fyne sets
+    no init hints before its own, so calling it early discards nothing;
+    verified, along with a second `Init` being a harmless no-op.
+  - `window_workarea_mobile.go` stubs it for ios||android, because `app.go`
+    carries no build tag and so `Run` compiles there even though neither mobile
+    entry point calls it.
+
+The scale term is the whole correctness argument and it is the part the original
+design shipped untested. Fyne multiplies points by
+`round(system*user*10)/10`, and `SystemScaleForWindow` is per-platform: a hard
+1.0 on macOS because its scaling happens at the texture level, the monitor's
+content scale on Windows. Two things fell out of testing it that would each have
+produced a wrong window:
+
+  - Go rounds a half away from zero, so a 125% display becomes a scale of **1.3**,
+    not 1.25. Dividing by 1.25 would leave the budget about 4% too generous --
+    the same defect, just smaller.
+  - This Mac reports a content scale of 2.00 while GLFW's work area is already in
+    POINTS. Using content scale uniformly would compute an 864x511 work area and
+    clamp the window to 860x471 on every Retina Mac. The darwin branch is
+    load-bearing, and is now verified against the machine.
+
+Verified: the seven-mutation battery on `window_size.go` (each clamp removed,
+each frame allowance zeroed, the fallback inverted, the rounding dropped, the
+scale ignored) is caught by the tests; the full suite, the iOS pane check and all
+nine hygiene checks pass; and the app launches on this Mac with the early
+`glfw.Init` and opens at 1280x892 outer -- the preferred 1280x860 content plus a
+32pt title bar, granted unchanged, exactly as the probe predicted for a 1728x1022
+work area.
+
+NOT yet verified end to end: that a Windows build carrying this renders centred
+at 1024x768. That is what the `msstore.yml` gate is for, and it cannot run from
+this host.
+
+STILL WORTH DOING, as a root-cause follow-up rather than a workaround: the defect
+is really that `internal/driver/glfw/window.go` sets `w.canvas.size = size`
+synchronously and then calls `processResized` with the size that was REQUESTED
+rather than reading back what the window actually got. An 8th tracked Fyne patch
+making it read the granted size would fix every cause of the mismatch, including
+ones no clamp can predict -- a tiling window manager, a session that opens
+maximised, `fitContent`'s own minimum. It was scored down during design on the
+claim that a patch would never reach a build, which is FALSE: `release.yml`,
+`msstore.yml` and the release scripts all inject
+`go mod edit -replace fyne.io/fyne/v2=./third_party/fyne`. Only the local
+`go test` run is unpatched. Sequence it after this, with its own test.
+
+Still uncovered by either: window POSITION. Win32 places the first window by the
+CW_USEDEFAULT cascade, the app never calls `CenterOnScreen`, and
+`doCenterOnScreen` (`window_desktop.go:155-177`) centres against `GetVideoMode`
+rather than the work area, so a clamped window is still a cascaded one.
+
 ## The direct downloads do not register `bibletext:` links
 
 Three channels hand a shared link back to the browser because nothing has put
