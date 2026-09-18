@@ -153,22 +153,101 @@ NOT yet verified end to end: that a Windows build carrying this renders centred
 at 1024x768. That is what the `msstore.yml` gate is for, and it cannot run from
 this host.
 
-STILL WORTH DOING, as a root-cause follow-up rather than a workaround: the defect
-is really that `internal/driver/glfw/window.go` sets `w.canvas.size = size`
-synchronously and then calls `processResized` with the size that was REQUESTED
-rather than reading back what the window actually got. An 8th tracked Fyne patch
-making it read the granted size would fix every cause of the mismatch, including
-ones no clamp can predict -- a tiling window manager, a session that opens
-maximised, `fitContent`'s own minimum. It was scored down during design on the
-claim that a patch would never reach a build, which is FALSE: `release.yml`,
-`msstore.yml` and the release scripts all inject
-`go mod edit -replace fyne.io/fyne/v2=./third_party/fyne`. Only the local
-`go test` run is unpatched. Sequence it after this, with its own test.
+TABLED, with triggers: an 8th Fyne patch making the toolkit keep the size it
+was GRANTED. The root cause is that `internal/driver/glfw/window.go` sets
+`w.canvas.size = size` synchronously and then calls `processResized` with the
+requested figure; the patch would read back `w.view().GetSize()` after
+`SetSize` and pass that instead. It was scored down during design on the claim
+that a patch never reaches a build, which is FALSE -- `release.yml`,
+`msstore.yml`, `linux-stores.yml` and the release scripts all inject
+`go mod edit -replace fyne.io/fyne/v2=./third_party/fyne`.
+
+Tabled anyway, for three reasons that outweigh being the root cause:
+
+  - It cannot be tested where it runs. There is no `replace` in the committed
+    go.mod, so local `go build` and `go test` use stock Fyne; the patch could
+    only be held in place by asserting its TEXT, the way
+    dark_mode_follow_test.go does. The clamp is plain Go with a seven-mutation
+    battery behind it, and that is a much better verification loop for the case
+    that actually bit.
+  - Real blast radius. `processResized` also feeds fixed-size windows and
+    `fitContent`, and the branch above it records the requested size
+    deliberately, with a comment saying an invisible window may never get the
+    event. Reading `GetSize()` back before the window is shown is precisely
+    where that becomes delicate.
+  - Its marginal value is over configurations there is no evidence of hitting,
+    against a permanent cost at every Fyne bump.
+
+What makes tabling safe is that the symptom now has a DETECTOR:
+`scripts/check-reading-centred.py` runs on every Store build and fails with a
+screenshot whenever the column is off-centre, whatever the cause. Fix the known
+cause cheaply, watch for the unknown ones, and spend the expensive effort only
+if the watch fires.
+
+Do it when any of these happens:
+
+  - the centring gate fails on a build that already carries the clamp -- that is
+    a mismatch from a cause no clamp can predict, and the screenshot will say so;
+  - a mixed-DPI multi-monitor report arrives. This is the clamp's one
+    non-hypothetical weakness: it reads the PRIMARY monitor's content scale
+    while Fyne uses the scale of the monitor the window actually lands on. It
+    mostly does not bite at launch because the Win32 CW_USEDEFAULT cascade puts
+    the first window on the primary;
+  - tiling window managers become a supported configuration (i3, sway, yabai
+    assign geometry regardless of what is asked for, so the clamp is inert
+    there);
+  - a Fyne bump changes the Resize path, at which point the patch and the clamp
+    should be reconsidered together.
+
+Note for whoever picks it up: upstream issue 6368 was filed and closed, so this
+belongs on the fork (cubancorona/fyne, bt-main) rather than being re-filed. And
+do not pin the assertion to a removed line -- a regenerated diff may emit that
+hunk as pure insertions.
 
 Still uncovered by either: window POSITION. Win32 places the first window by the
 CW_USEDEFAULT cascade, the app never calls `CenterOnScreen`, and
 `doCenterOnScreen` (`window_desktop.go:155-177`) centres against `GetVideoMode`
 rather than the work area, so a clamped window is still a cascaded one.
+
+## The Windows audio smoke is probably testing a silent sink
+
+`windows-audio-smoke.yml` has failed repeatedly at the natural-end step, and
+the investigation has been looking for a defect in the app. The likelier
+explanation is that the test's central premise does not hold on the machine it
+runs on.
+
+Its header says it "plays a REAL narration chapter through the REAL desktop
+audio engine (oto/WASAPI) on a real Windows machine", and that "samples are
+decoded and submitted to WASAPI, playback position advances in real time". But
+a GitHub-hosted Windows runner is a headless VM with NO audio endpoint. oto
+v3.4.0 tries WASAPI, then WinMM, and when both report a missing device it falls
+back to `nullContext` -- a sink that accepts samples and discards them. Nothing
+is submitted to WASAPI because there is nothing to submit to, and a wait for
+playback to reach its natural end is then waiting on a clock that is not the
+one the test assumes.
+
+The counter-evidence, measured 18 September 2026 on the UTM Windows guest,
+which DOES have an audio device: with a chapter playing, `AUDIOSES.DLL` and
+`MMDevAPI.dll` are both mapped into the process, so oto opened a real WASAPI
+render session there and took no fallback. The same check on a runner would
+show neither. So the app is fine and the harness is measuring something else.
+
+What to do, in order:
+
+  1. Make the smoke SAY which backend it got, and fail loudly rather than
+     mysteriously when it is the null sink. A test that cannot distinguish
+     "audio works" from "there is no audio device" is not evidence either way,
+     and right now its failure is being read as the former. The cheap probe is
+     the one used on the guest: the process's loaded modules, filtered for
+     `audioses|mmdevapi`. Assert the expectation explicitly so a runner without
+     a device reports that fact instead of timing out.
+  2. Correct the workflow header and docs/PLATFORM_MIMIC.md, which both state
+     that this proves the WASAPI backend. On a device-less runner it cannot.
+  3. Only then look again at the natural-end path, on a machine that has an
+     audio device -- the UTM guest is one, and so is any real Windows box.
+
+Until 1 is done, a red run of this workflow says nothing about whether Windows
+audio works, and the repeated failures should not be read as a shipping risk.
 
 ## The direct downloads do not register `bibletext:` links
 
