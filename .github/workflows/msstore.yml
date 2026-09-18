@@ -27,6 +27,12 @@ on:
       - "scripts/build-windows-exe.sh"
       - ".github/workflows/msstore.yml"
       - "app.go"
+      # The centring rule and the known-bad capture it is proven against are
+      # only exercised by this job, so an edit to either has to trigger it --
+      # otherwise the rule could be broken by a change that never runs it.
+      - "scripts/check-reading-centred.py"
+      - "docs/windows-store-smoke-john3.jpg"
+      - "docs/windows-reading-centred-ok.png"
       - "share_link_*.go"
       - "single_instance*.go"
       - "docs/windows-app-web-link"
@@ -197,6 +203,10 @@ jobs:
           # with no window at all, which is exactly what this runner would show
           # if ANGLE were missing from the package.
           pwsh scripts/assert-windows-render.ps1 -ProcessName BibleText -Expect render -Settle 5
+          # Taken only now, with the reading pane confirmed drawn: smoke-30s
+          # above can still catch the loading card, and a shot with no text in
+          # it would fail the centring check for the wrong reason.
+          Shot "build\msstore\smoke-render.png"
           Write-Host "BibleText.exe (pid $($proc.Id)) is running from $($proc.Path)"
           Stop-Process -Id $proc.Id -Force
           Start-Sleep 3
@@ -235,11 +245,33 @@ jobs:
             Write-Host "::warning::an https link did not launch the app on this runner (edition policy or browser default); needs a Windows 11 client check"
           }
           Remove-AppxPackage -Package $pkg.PackageFullName
+      - name: is the reading column where it belongs
+        # Rendering is not enough. This runner's screen is 1024x768, below the
+        # 1280x860 the app asks for, which is the configuration that lays the
+        # content out for a window it was not given: a dead gutter down the left
+        # and the text crowding the right edge. docs/windows-store-smoke-john3.jpg
+        # is that failure, captured here on 16 September and committed without
+        # anyone noticing, because the only check looking at it asked whether
+        # the app had drawn -- and it had.
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --disable-pip-version-check Pillow
+          # BOTH fixtures first, and both are real captures rather than
+          # synthetic ones. If the rule stops calling the known-bad one
+          # off-centre, or starts calling the known-good one off-centre, then
+          # the live assertion below passes or fails for the wrong reason and
+          # proves nothing either way.
+          python scripts/check-reading-centred.py --expect-fail docs/windows-store-smoke-john3.jpg
+          python scripts/check-reading-centred.py docs/windows-reading-centred-ok.png
+          # Then the app that just ran on this machine.
+          python scripts/check-reading-centred.py build/msstore/smoke-render.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: msstore-smoke-screenshots
           path: |
             build/msstore/smoke-30s.png
+            build/msstore/smoke-render.png
             build/msstore/smoke-scheme.png
           if-no-files-found: ignore
