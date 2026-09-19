@@ -74,8 +74,8 @@ Status is separate: `shipping` (a release or store submission carries it),
 | Linux | arm64 | Direct download (.tar.xz) | ready | hardware | 19, 20, 25, 26 |
 | Linux | x86_64 | AppImage | shipping | builds | 21 |
 | Linux | arm64 | AppImage | ready | hardware | 21, 26 |
-| Linux | x86_64 | Snap Store | ready | runner | 22, 23 |
-| Linux | arm64 | Snap Store | ready | hardware | 22, 23, 26 |
+| Linux | x86_64 | Snap Store | shipping | runner | 22, 23 |
+| Linux | arm64 | Snap Store | shipping | hardware | 22, 23, 26 |
 | Linux | x86_64 | Flathub | ready | runner | 24 |
 | Linux | arm64 | Flathub | ready | runner | 22, 24, 26 |
 | Linux | any | AppImageHub catalogue | untried | none | — |

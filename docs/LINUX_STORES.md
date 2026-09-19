@@ -47,7 +47,7 @@ and the Flathub generative-AI disclosure (next section).
 
 | Store | What only the account holder can do |
 | --- | --- |
-| Snap Store | An Ubuntu One account. The name **`bibletext` was REGISTERED on 18 September 2026** through the web console at snapcraft.io/register-snap, which needs no Linux host — the `snapcraft register` CLI is one way to do it, not the only one. The console states the review window as **up to 30 days**, not the two working days recorded here before; until it clears, the snap can be uploaded and its metadata edited but the listing stays PRIVATE, and the privacy control is locked to Private in the form. The credential is now DONE: exported on 18 September 2026 with `snapcraft export-login --snaps bibletext --acls package_access,package_push,package_update,package_release --expires 2027-09-18`, and its content set as the repository secret `SNAPCRAFT_STORE_CREDENTIALS`. It is a scoped, revocable macaroon rather than a password, and it verifies as account `cubancorona` with exactly those four permissions. **Setting it changed what a release does**: `release.yml` gates the publish step on that secret, so the next tag now uploads BOTH the amd64 and the arm64 snap to the `edge` channel by itself instead of leaving them artifacts. Promotion beyond edge is still by hand after a desktop test, and the listing stays Private until the name review clears. The export needs a Linux host because `snapcraft` runs only there; the one used was a local Ubuntu 24.04 arm64 VM. |
+| Snap Store | An Ubuntu One account. The name **`bibletext` was REGISTERED on 18 September 2026** through the web console at snapcraft.io/register-snap, which needs no Linux host — the `snapcraft register` CLI is one way to do it, not the only one. The console states the review window as **up to 30 days**, not the two working days recorded here before; the form forces Private at registration and locks all three visibility radios while the review is pending. **In practice the listing is PUBLIC anyway** — verified 19 September 2026: `bibletext` resolves from the unauthenticated store API, has a store page and appears in search. See "Snap Store: what is left" below; the real gate is the absence of a stable release, not visibility. The credential is now DONE: exported on 18 September 2026 with `snapcraft export-login --snaps bibletext --acls package_access,package_push,package_update,package_release --expires 2027-09-18`, and its content set as the repository secret `SNAPCRAFT_STORE_CREDENTIALS`. It is a scoped, revocable macaroon rather than a password, and it verifies as account `cubancorona` with exactly those four permissions. **Setting it changed what a release does**: `release.yml` gates the publish step on that secret, so the next tag now uploads BOTH the amd64 and the arm64 snap to the `edge` channel by itself instead of leaving them artifacts. Promotion beyond edge is still by hand after a desktop test, and the listing stays Private until the name review clears. The export needs a Linux host because `snapcraft` runs only there; the one used was a local Ubuntu 24.04 arm64 VM. |
 | Flathub | A GitHub account with two-factor authentication. Flathub's requirements page (September 2026) asks that AI-generated code, documentation or packaging be disclosed with the affected parts and their extent, and that no AI tool open the PR or write its text or replies: the manifest, the generator and this document were drafted with AI assistance and belong in that disclosure, and the PR, its description and every review reply are written and posted by the account holder. The template also asks for a short video of the Flatpak running (the smoke job records one) and for evidence of development history (the tagged releases, the App Store and Play presence, CI). |
 | AppImageHub | A PR to `AppImage/appimage.github.io` adding `data/BibleText` containing the repository URL, after the first release that carries the AppImage. |
 | bibletext.co.uk | After Flathub publishes: `docs/org.flathub.VerifiedApps.txt` with the token from the Flathub developer page, plus a copy line and a presence check in `scripts/publish-site.sh` beside the other association files (not written yet). |
@@ -112,6 +112,93 @@ The scripts and workflows have not run on a Linux runner yet: the first
 `workflow_dispatch` of `linux-stores.yml` is where the vendored-patch
 recipe, the flatpak-tagged build, the snap layout and the three smokes are
 proven or corrected, exactly as the Windows Store workflow was.
+
+## Snap Store: what is left
+
+Established 19 September 2026 by reading Canonical's documentation and source,
+and by querying the live store. Verified facts first, because two things here
+are not what the dashboard's own wording implies.
+
+**The snap is already PUBLIC.** `bibletext` resolves from the unauthenticated
+API, has a store page, appears in store search, and installs by name. The
+"forced Private" at registration did not survive into a private listing. What a
+reader hits instead is:
+
+    snap install bibletext
+    error: snap "bibletext" is not available on stable but is
+           available to install on the following channels
+
+So **the gate is the absence of a stable release, not visibility.**
+
+**The name review is a separate thing and is about the NAME.** Since March 2024
+every new name registration on the global store goes to manual review by
+Canonical, introduced after a wave of malicious crypto-wallet uploads; a Bible
+reader has no policy collision. The dashboard's "within 30 days" is an AIM, not
+an SLA — real cases run five weeks to two and a half months. If it drags,
+the documented and demonstrably effective lever is a polite nudge on the forum
+in the **`store`** category — NOT `store-requests`, which is scoped to
+classic confinement, privileged interfaces, aliases, tracks and ownership.
+
+### Before promoting to stable
+
+- [ ] **The hardware pass** (order of work, step 5) — still needs an **x86_64**
+      desktop; the ARM VM cannot stand in. arm64 is covered: the published
+      snap was installed from `edge` on 19 September, its exported entry keeps
+      `%u` and the scheme handler, 25 ALSA plugins resolve inside the
+      confinement, and it launched and handed off a `bibletext:` link.
+- [ ] **Check the auto-connections from a STORE install**, not a local one.
+      All four plugs (network, network-bind, audio-playback, home) auto-connect
+      on classic with no assertion and no forum request, and both
+      `gnome-46-2404` and `gpu-2404` hold global auto-connect grants — but
+      core24 publishers have been bitten by connections that were granted
+      globally and still did not attach. `snap connections bibletext` on a
+      store install is the only thing that sees it.
+- [ ] **Run `review-tools` in CI before uploading.** The `review-tools` snap
+      ships `snap-review`, the same tool the store runs, so a rejection can be
+      found on a runner rather than after an upload.
+
+### Promoting
+
+    snapcraft promote bibletext --from-channel edge --to-channel stable
+
+One action covers **every** architecture: the store channel map is keyed by
+(track, risk, architecture), and `promote` refuses a partial set rather than
+releasing one architecture and leaving the other behind. It does not close
+`edge`, and it does not touch beta or candidate. Our credential can do it —
+`package_release` is unrestricted because the export named no `--channels` —
+and `grade: stable` is already declared, without which the store refuses
+candidate and stable outright.
+
+`--yes` exists in Snapcraft 9 for scripting, but `promote` prints that it has
+no stable CLI interface, so prefer running it by hand.
+
+### Listing work that snapcraft.yaml cannot do
+
+`snapcraft.yaml` carries name, title, summary, description, licence, icon,
+website, contact, issues and source-code. It **cannot** carry categories,
+screenshots, the banner, keywords, visibility, territories, the default track,
+or the publisher display name.
+
+- [ ] **Categories** — up to two, dashboard Listing page.
+- [ ] **Screenshots** — up to five; GIF/JPEG/PNG, at least 480x480, at most
+      3840x2160, aspect between 1:2 and 2:1, 2 MB each. We have four in
+      `docs/screenshots/linux/` already, captured by `linux-screenshots.yml`.
+- [ ] **Publisher display name** — not a snapcraft.yaml key and not editable in
+      the Snapcraft dashboard: it is the Ubuntu SSO display name, changed by
+      logging in to Ubuntu SSO itself. Currently "Cuban Corona".
+
+> **ONE-WAY DOOR.** Metadata normally flows from `snapcraft.yaml` to the listing
+> automatically on each release (Update Metadata on Release). **Any manual edit
+> of that metadata in the web UI turns UMoR off**, permanently, and from then on
+> the listing must be maintained by hand. So set categories and screenshots —
+> which UMoR never carried — but do not hand-edit summary, description or icon
+> in the dashboard.
+
+### Not blocking
+
+`package_manage` is absent from our credential and does not matter: it governs
+adding collaborators only. The four ACLs we hold are exactly the set Canonical's
+own publishing action recommends.
 
 ## Order of work
 
