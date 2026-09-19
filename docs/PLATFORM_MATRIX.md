@@ -50,11 +50,11 @@ Status is separate: `shipping` (a release or store submission carries it),
 | OS | Arch | Channel | Status | Proof | Notes |
 | --- | --- | --- | --- | --- | --- |
 | macOS | arm64 | Mac App Store | shipping | builds | 1, 2, 3 |
-| macOS | x86_64 | Mac App Store | shipping | builds | 1, 2, 3 |
+| macOS | x86_64 | Mac App Store | shipping | builds | 1, 2, 3, 27 |
 | macOS | arm64 | Direct download (.zip) | shipping | builds | 1, 2, 4 |
-| macOS | x86_64 | Direct download (.zip) | shipping | builds | 1, 2, 4 |
+| macOS | x86_64 | Direct download (.zip) | shipping | builds | 1, 2, 4, 27 |
 | macOS | arm64 | Build from source (local checkout) | shipping | hardware | 5 |
-| macOS | x86_64 | Build from source | untried | none | 5 |
+| macOS | x86_64 | Build from source | proven | hardware | 5, 27 |
 | iOS | arm64 | App Store — iPhone | shipping | field | 6, 7, 8 |
 | iPadOS | arm64 | App Store — iPad | shipping | builds | 6, 7, 8 |
 | iOS | arm64 | Development install to a device | proven | hardware | 7 |
@@ -207,6 +207,17 @@ place a fix on one does not reach the others.
     found. What has NOT happened is launching the installed application from
     where `make install` puts it — the row's `hardware` covers the executable
     and the snap, not that last step.
+
+27. **x86_64 macOS is now compiled and tested on Intel hardware**, not only
+    cross-compiled from arm64. On 19 September 2026 an Intel MacBook Pro built
+    the whole tree natively — including the 188 KB of AppKit cgo in
+    `reading_macos.go`, which CI has never compiled on this architecture —
+    passed `go vet` and passed the **entire test suite**. The shipped 1.2.12
+    universal build was also checked there: genuinely two slices, `minos 12.0`
+    on each, and the Intel slice carries the patched preferences writer
+    (marker present, control string present). What is still missing is a
+    LAUNCH: driving a GUI app needs a console session, and SSH cannot supply
+    one, so the shipped rows stay `builds`.
 
 ## Deliberate exclusions
 
