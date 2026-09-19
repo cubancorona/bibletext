@@ -50,7 +50,7 @@ jobs:
           ./scripts/setup-fyne-patch.sh
           go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
           # Question 1: does the ES path link at all under mingw?
-          (cd cmd/desktop && CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -o ../../build/probe/BibleText.exe .)
+          (cd cmd/bibletext && CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -o ../../build/probe/BibleText.exe .)
           ls -la build/probe
       - name: ANGLE beside the executable
         if: matrix.angle

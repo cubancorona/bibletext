@@ -9,10 +9,10 @@ import (
 // The module path is the repository's import path, not a bare name.
 //
 // A bare `module bibletext` builds fine from a checkout — including the tagged
-// clone that `fyne install github.com/cubancorona/bibletext/cmd/desktop@latest`
+// clone that `fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest`
 // (the command the Fyne apps directory prints) makes and builds inside — and
 // fails for anyone who resolves the module by its path instead: `go install`
-// and `go run` of github.com/cubancorona/bibletext/cmd/desktop@latest stop at
+// and `go run` of github.com/cubancorona/bibletext/cmd/bibletext@latest stop at
 // "module declares its path as: bibletext but was required as:
 // github.com/cubancorona/bibletext". @latest resolves to the newest tag, so the
 // path reaches those routes from the first tag cut after it; this guards the

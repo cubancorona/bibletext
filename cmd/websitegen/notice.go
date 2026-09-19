@@ -407,7 +407,7 @@ func (n noticeSpec) absentLede() string {
 //	Windows  the bibletext: scheme — this page's URL with the scheme swapped,
 //	Linux    so the verse and the note cross — registered by the Store package
 //	         (msstore/AppxManifest.xml.in) and the Linux desktop entry
-//	         (cmd/desktop/FyneApp.toml [CanOpen]); a hidden "Get BibleText"
+//	         (cmd/bibletext/FyneApp.toml [CanOpen]); a hidden "Get BibleText"
 //	         line beneath it is revealed on those platforms, because Chrome
 //	         and Edge show nothing when no handler answers a scheme.
 //	Mac      the download: no scheme is registered there yet.

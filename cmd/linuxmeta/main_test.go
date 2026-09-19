@@ -301,7 +301,7 @@ func TestLedgerLinuxTableMatchesTheListing(t *testing.T) {
 			MimeTypes string `toml:"MimeTypes"`
 		} `toml:"CanOpen"`
 	}
-	if _, err := toml.DecodeFile(filepath.Join(repo, "cmd", "desktop", "FyneApp.toml"), &ledger); err != nil {
+	if _, err := toml.DecodeFile(filepath.Join(repo, "cmd", "bibletext", "FyneApp.toml"), &ledger); err != nil {
 		t.Fatal(err)
 	}
 	l := loadInputs(t).Listing

@@ -25,7 +25,7 @@ application source.
 | **Change** | The generated Xcode project's `IPHONEOS_DEPLOYMENT_TARGET` and the asset catalog's minimum: **`9.0` → `15.0`**, the target the app ships for (`config/product.json`). Xcode 27 refuses a project below 15.0, which is how the first 1.2.9 iOS build failed. Applied by [`../scripts/setup-fyne-tools-patch.sh`](../scripts/setup-fyne-tools-patch.sh) beside the Android patch; held by `scripts/test-ios-deployment-target.sh` (CI) and an in-tree test. |
 | **Patch (tools)** | [`fyne-tools-1.7.2-linux-scheme-handler.patch`](fyne-tools-1.7.2-linux-scheme-handler.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/commands/package-unix.go` + `cmd/fyne/internal/templates/data/{entry.desktop, Makefile}` |
-| **Change** | A desktop entry whose MIME types include an `x-scheme-handler/` is launched with `%u` (the URL) instead of `%F`; the field code no longer rides on the binary name (which broke the generated Makefile's `Exec :=`); both `install` targets run `update-desktop-database` so the handler reaches `mimeinfo.cache`. This is how the Linux build registers the `bibletext:` scheme (`cmd/desktop/FyneApp.toml` `[CanOpen]`). Applied by [`../scripts/setup-fyne-tools-patch.sh`](../scripts/setup-fyne-tools-patch.sh); the Linux release job builds the patched CLI and asserts the packaged entry; an in-tree test renders both templates. |
+| **Change** | A desktop entry whose MIME types include an `x-scheme-handler/` is launched with `%u` (the URL) instead of `%F`; the field code no longer rides on the binary name (which broke the generated Makefile's `Exec :=`); both `install` targets run `update-desktop-database` so the handler reaches `mimeinfo.cache`. This is how the Linux build registers the `bibletext:` scheme (`cmd/bibletext/FyneApp.toml` `[CanOpen]`). Applied by [`../scripts/setup-fyne-tools-patch.sh`](../scripts/setup-fyne-tools-patch.sh); the Linux release job builds the patched CLI and asserts the packaged entry; an in-tree test renders both templates. |
 | **Build wiring** | `replace fyne.io/fyne/v2 => ./third_party/fyne` in `go.mod` |
 
 ## Why change 2 (no half-drawn frames) is needed
@@ -169,7 +169,7 @@ actually changed, or respect `ShowAnimations()` with a discrete fallback.
 ## How the build uses it (applied by the mobile packaging scripts)
 
 `go.mod` ships **stock** Fyne with **no `replace`**, so `go build ./...`,
-`go run ./cmd/desktop`, and `go test ./...` are one-line with no setup. That is a
+`go run ./cmd/bibletext`, and `go test ./...` are one-line with no setup. That is a
 statement about LOCAL builds only: the three desktop release jobs in
 `.github/workflows/release.yml` run `setup-fyne-patch.sh` and inject the
 `replace` too, so the released macOS, Windows and Linux binaries carry the
@@ -302,7 +302,7 @@ drop the three emoji lines from `setup-fyne-patch.sh`.
 
 NOTE the scope: only builds that go through the patch scripts get this — every
 MOBILE build and every desktop RELEASE build (the release workflow applies the
-patches). A local `go build`/`go run ./cmd/desktop` still uses stock go.mod and
+patches). A local `go build`/`go run ./cmd/bibletext` still uses stock go.mod and
 so still shows Fyne's old emoji set.
 
 ## Patch 5: atomic preferences write (`fyne-2.7.4-atomic-prefs.patch`)
@@ -400,8 +400,8 @@ this writing **every shipped build does**: `release-ios.sh`, `run-ios-sim.sh`,
 `.github/workflows/release.yml` (macOS arm64+Intel, Windows, Linux) call
 `setup-fyne-patch.sh` and inject the `replace`.
 
-What is NOT covered, and cannot be: a bare `go build ./cmd/desktop`, `go run
-./cmd/desktop`, the VS Code tasks, and anyone building from a clone by hand.
+What is NOT covered, and cannot be: a bare `go build ./cmd/bibletext`, `go run
+./cmd/bibletext`, the VS Code tasks, and anyone building from a clone by hand.
 `go.mod` ships stock on purpose. Those builds still truncate. That is a
 tolerable gap for a developer convenience build — but it means the protection
 lives in the *release scripts*, so **removing or bypassing the patch step in

@@ -13,8 +13,8 @@ invisible on the platform it was not found on.
 | iOS simulator | `scripts/run-ios-sim.sh --dev`, then `SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=s12pills xcrun simctl launch <udid> uk.co.bibletext` | the scenario, or the dev Links tab |
 | iPhone | `scripts/run-ios-device.sh --dev` | the dev Links tab |
 | Android emulator | `BT_ANDROID_TAGS=bibletextdev scripts/build-android.sh`, `adb install -r cmd/mobile/BibleText.apk` | the dev Links tab; share links via `adb shell am start -a android.intent.action.VIEW -d "<url>"` (HOME between links — a foregrounded activity swallows repeats) |
-| macOS native | `go run -tags bibletextdev ./cmd/desktop` | the dev Links tab |
-| Styled pane (Windows/Linux) | `BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop` (or `windows`) | the dev Links tab |
+| macOS native | `go run -tags bibletextdev ./cmd/bibletext` | the dev Links tab |
+| Styled pane (Windows/Linux) | `BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/bibletext` (or `windows`) | the dev Links tab |
 | Web reader | `go run ./cmd/websitegen -out build/site -offline`, serve `build/site` | mint links with `ShareLinkURLWithNote` (a throwaway test printing them) |
 
 More drivers for the sections below: `SIMCTL_CHILD_BIBLETEXT_DEV_OPEN=settings|goto|versions|votd`

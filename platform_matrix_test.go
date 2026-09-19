@@ -165,76 +165,100 @@ func TestTheLocalMacBuildUsesTheToolkitWeActuallyShip(t *testing.T) {
 	}
 }
 
-// THE NAME A READER SEES. `fyne package` names the executable after the source
-// directory -- cmd/desktop -- so a Linux tarball built without --executable
-// installs /usr/local/bin/desktop. That name is wrong in three user-visible
-// places at once: it is a generic command in the reader's PATH that any other
-// Fyne app packaged from a desktop/ directory overwrites, it is what a reader
-// must type to start the app, and it is the client name the sound server shows
-// while narration plays -- a Linux volume control read "desktop", never
-// "BibleText". Proved on an arm64 desktop by running one identical binary under
-// both names: as desktop the stream was "PipeWire ALSA [desktop]", as bibletext
-// it was "PipeWire ALSA [bibletext]".
+// THE NAME A READER SEES, AND WHERE IT COMES FROM.
 //
-// The snap and the AppImage each rename the same executable on their way in, so
-// only the tarball ever shipped it raw. macOS still bundles CFBundleExecutable
-// as desktop and is deliberately out of scope here: that binary is signed and
-// shipped through the App Store, so changing it is a release decision rather
-// than a packaging fix.
-func TestTheLinuxPackagesShipTheAppsOwnExecutableName(t *testing.T) {
+// `fyne package` names the executable after its SOURCE DIRECTORY. While that
+// directory was cmd/desktop, every channel that did not override the name
+// shipped a binary called `desktop`: the Linux tarball installed a generic
+// /usr/local/bin/desktop, and a Linux volume control listed the app playing
+// narration as "desktop" rather than BibleText. Proved on an arm64 desktop by
+// running one identical binary under two filenames -- same sha256 -- and
+// watching the sound server's client name move with the filename.
+//
+// Overriding the name per channel fixed the packaged artefacts but could never
+// fix the two routes README.md advertises, because those run `fyne install` and
+// `go install` on the reader's own machine against the module path, and
+// `fyne install` has no --executable flag at all. Renaming the directory to
+// cmd/bibletext is the root fix: it reaches those routes, and every packager
+// then defaults to the right name instead of needing to be told.
+//
+// The per-platform spellings are deliberate and different, because each is the
+// convention of the place it lands: `bibletext` is a command in the reader's
+// PATH, `BibleText.exe` is what Windows shows in Task Manager and the Store
+// manifest, and `BibleText` is what sits in Contents/MacOS the way
+// Safari.app/Contents/MacOS/Safari does.
+func TestTheExecutableIsNamedAfterTheAppOnEveryChannel(t *testing.T) {
+	// The root fix. Everything below is downstream of this directory's name.
+	if _, err := os.Stat(filepath.Join(repoRoot(t), "cmd/bibletext")); err != nil {
+		t.Fatalf("cmd/bibletext is missing (%v); the packagers take the executable "+
+			"name from this directory, so it is the name a reader ends up running", err)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot(t), "cmd/desktop")); err == nil {
+		t.Error("cmd/desktop is back; `fyne install …/cmd/desktop@latest` and " +
+			"`go install …/cmd/desktop@latest` would again put a binary called " +
+			"'desktop' in the reader's PATH, and no packaging flag can reach those routes")
+	}
+
 	wf := readRepoFile(t, ".github/workflows/release.yml")
 
-	for _, bad := range []string{
-		"-os linux --app-id uk.co.bibletext --executable desktop",
-		"cmd/desktop/desktop",
+	// No packaging line on any platform may name the old generic executable.
+	if strings.Contains(wf, "--executable desktop") {
+		t.Error("release.yml packages an executable called 'desktop' again")
+	}
+
+	// Each channel, spelled the way that platform expects.
+	for _, c := range []struct{ what, want string }{
+		{"Linux (a command in PATH)", "-os linux --app-id uk.co.bibletext --executable bibletext"},
+		{"Windows (Task Manager and the Store manifest)", "-os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe"},
+		{"macOS (Contents/MacOS, Activity Monitor, crash reports)", "-os darwin --app-id uk.co.bibletext --executable BibleText"},
 	} {
-		if strings.Contains(wf, bad) {
-			t.Errorf("release.yml still has %q; a Linux install would put a binary called "+
-				"'desktop' in the reader's PATH and name it 'desktop' in the volume control", bad)
+		if !strings.Contains(wf, c.want) {
+			t.Errorf("release.yml no longer names the executable for %s: want a line containing %q", c.what, c.want)
 		}
 	}
-
-	// Both architectures must package under the right name, not just one.
-	if got := strings.Count(wf, "-os linux --app-id uk.co.bibletext --executable bibletext"); got != 2 {
-		t.Errorf("found %d Linux packaging lines naming the executable bibletext, want 2 "+
-			"(amd64 and arm64) -- an architecture that stops passing --executable silently reverts", got)
+	// Both Linux architectures, not just one -- an arch that stops passing the
+	// flag reverts silently while the other still looks right.
+	if got := strings.Count(wf, "--executable bibletext"); got != 2 {
+		t.Errorf("found %d Linux packaging lines naming the executable bibletext, want 2 (amd64 and arm64)", got)
 	}
 
-	// Windows was never affected -- the same packager is told the name there
-	// too -- but nothing held it to that, so both lines could drop --executable
-	// together and revert to BibleText.exe's generic default with no test
-	// noticing. The two must stay in step; scripts/test-release-key-flow.sh
-	// only proves they match EACH OTHER, which a joint edit satisfies.
-	for _, f := range []string{".github/workflows/release.yml", "scripts/build-windows-exe.sh"} {
-		if !strings.Contains(readRepoFile(t, f), "-os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe") {
-			t.Errorf("%s no longer names the Windows executable BibleText.exe; "+
-				"without it the packager falls back to the cmd/desktop directory name", f)
+	// macOS is set in three files, and the two outside the workflow are the
+	// ones that build what actually reaches the Mac App Store.
+	for _, f := range []string{"scripts/release-mac-store.sh", "scripts/run-mac-sandbox-test.sh"} {
+		body := readRepoFile(t, f)
+		if strings.Contains(body, "--executable desktop") || strings.Contains(body, "Contents/MacOS/desktop") {
+			t.Errorf("%s still names the macOS executable 'desktop'", f)
+		}
+		if !strings.Contains(body, "--executable BibleText") {
+			t.Errorf("%s no longer names the macOS executable BibleText", f)
 		}
 	}
-
-	// macOS is the deliberate exception, and it is set in THREE places -- the
-	// release workflow, the Mac App Store script and the sandbox rehearsal.
-	// Pinning only the workflow would leave the channel that actually ships to
-	// the Store unguarded, which is the wrong one to miss.
-	for _, f := range []string{
-		".github/workflows/release.yml",
-		"scripts/release-mac-store.sh",
-		"scripts/run-mac-sandbox-test.sh",
-	} {
-		if !strings.Contains(readRepoFile(t, f), "--executable desktop") {
-			t.Errorf("%s no longer names its darwin executable 'desktop'; this test "+
-				"documents that as a deliberate exception, so update the note above "+
-				"rather than letting the three files drift apart", f)
-		}
+	if !strings.Contains(readRepoFile(t, "scripts/build-windows-exe.sh"), "--executable BibleText.exe") {
+		t.Error("scripts/build-windows-exe.sh no longer names the Windows executable BibleText.exe")
 	}
 
-	// The check that runs in CI must pin the name too, or the workflow could
-	// drift back with nothing to catch it.
+	// The check that runs in CI must pin the Linux name too, or the workflow
+	// could drift back with nothing to catch it.
 	chk := readRepoFile(t, "scripts/check-linux-package.sh")
 	if !strings.Contains(chk, `[ "$exe" = bibletext ]`) {
 		t.Error("check-linux-package.sh no longer asserts the packaged executable is named bibletext")
 	}
 	if !strings.Contains(chk, `grep -q '^Exec=bibletext %u$'`) {
 		t.Error("check-linux-package.sh no longer requires the shipped desktop entry to launch 'bibletext'")
+	}
+
+	// The README's own install routes are the ones a flag cannot reach, so they
+	// have to point at the renamed directory or readers keep installing `desktop`.
+	readme := readRepoFile(t, "README.md")
+	if strings.Contains(readme, "cmd/desktop") {
+		t.Error("README.md still tells readers to install github.com/cubancorona/bibletext/cmd/desktop")
+	}
+	for _, want := range []string{
+		"fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest",
+		"go run github.com/cubancorona/bibletext/cmd/bibletext@latest",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README.md no longer documents %q", want)
+		}
 	}
 }

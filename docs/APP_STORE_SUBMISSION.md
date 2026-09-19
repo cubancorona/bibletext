@@ -70,7 +70,7 @@ All three helpers — `preflight.py`, `push-metadata.py`, `push-review-notes.py`
 — default to the iOS platform and never touch the other one. Pass
 `--platform MAC_OS` to target the Mac version instead; each platform's version
 string comes from its own ledger (`cmd/mobile/FyneApp.toml` for iOS,
-`cmd/desktop/FyneApp.toml` for the Mac). A platform's first version has no
+`cmd/bibletext/FyneApp.toml` for the Mac). A platform's first version has no
 earlier same-platform record, so the preflight compares it against the newest
 iOS versions — which is exactly what App Store Connect seeded it from.
 
@@ -355,7 +355,7 @@ This is the order that keeps one version naming one tree everywhere
 (docs/VERSIONING.md) and that the 1.2.8 release settled on after paying for
 each step it lists.
 
-1. Prepare on main: bump `cmd/mobile/FyneApp.toml` and `cmd/desktop/FyneApp.toml`,
+1. Prepare on main: bump `cmd/mobile/FyneApp.toml` and `cmd/bibletext/FyneApp.toml`,
    the `VERSION` lines of both review-notes files, the writer's pin in
    `appstore/push-review-notes.py`; write `build/appstore/metadata/en-GB/whats-new-<v>.txt`
    AND `…/en-GB/mac/whats-new-<v>.txt` (the Mac has its own — the write refuses

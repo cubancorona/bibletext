@@ -19,7 +19,7 @@
       "label": "Run Desktop (go run)",
       "detail": "Fast build + launch of the desktop reader (no .app bundle)",
       "type": "shell",
-      "command": "go run ./cmd/desktop",
+      "command": "go run ./cmd/bibletext",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -28,7 +28,7 @@
       "label": "Run Desktop (dev build)",
       "detail": "go run with the bibletextdev tag — Links tab, dev scenarios, mimic switch available",
       "type": "shell",
-      "command": "go run -tags bibletextdev ./cmd/desktop",
+      "command": "go run -tags bibletextdev ./cmd/bibletext",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -37,7 +37,7 @@
       "label": "Run Desktop MIMIC (Linux)",
       "detail": "The Mac wears the Linux build: styled pane, Fyne note banner, no TTS, DejaVu→Gelasio fonts. Header shows the MIMIC badge. docs/PLATFORM_MIMIC.md says what this proves.",
       "type": "shell",
-      "command": "BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop",
+      "command": "BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/bibletext",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -46,17 +46,17 @@
       "label": "Run Desktop MIMIC (Windows)",
       "detail": "The Mac wears the Windows build: styled pane, Fyne note banner, no TTS, Georgia stays. Header shows the MIMIC badge.",
       "type": "shell",
-      "command": "BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop",
+      "command": "BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/bibletext",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": ["$go"]
     },
     {
       "label": "Package Desktop (.app)",
-      "detail": "fyne package -> cmd/desktop/BibleText.app",
+      "detail": "fyne package -> cmd/bibletext/BibleText.app",
       "type": "shell",
       "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext",
-      "options": { "cwd": "${workspaceFolder}/cmd/desktop" },
+      "options": { "cwd": "${workspaceFolder}/cmd/bibletext" },
       "group": "build",
       "problemMatcher": ["$go"]
     },

@@ -38,7 +38,7 @@ PLATFORM_SOURCES = {
     },
     "MAC_OS": {
         "notes": os.path.join(HERE, "review-notes-macos.txt"),
-        "config": os.path.join(REPO, "cmd", "desktop", "FyneApp.toml"),
+        "config": os.path.join(REPO, "cmd", "bibletext", "FyneApp.toml"),
     },
 }
 ASC = os.path.join(REPO, "build", "appstore", "asc.py")

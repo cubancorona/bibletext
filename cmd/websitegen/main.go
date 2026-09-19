@@ -6,7 +6,7 @@
 // package. Any external site generator would need a Go export step anyway and
 // would then re-implement those rendering rules in a second template language —
 // two definitions of "how a psalm breaks", guaranteed to drift. This program is
-// a third entry point beside cmd/desktop and cmd/mobile, importing the same
+// a third entry point beside cmd/bibletext and cmd/mobile, importing the same
 // package, so the web page and the app render from one source of truth. It has
 // no dependencies beyond the standard library.
 //

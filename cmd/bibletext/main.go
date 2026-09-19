@@ -3,7 +3,7 @@
 // a leading navigation rail, and desktop keyboard shortcuts. The former HSplit
 // and sidebar remain available only through the explicit diagnostic override.
 //
-//	go build -o bibletext ./cmd/desktop && ./bibletext
+//	go build -o bibletext ./cmd/bibletext && ./bibletext
 package main
 
 import "github.com/cubancorona/bibletext"

@@ -283,7 +283,7 @@ def self_test() -> list[str]:
             "codesign -f -s CERT --entitlements ents.plist APP"),
          "never applied"),
         ("replace directive absent", patch_step_failures(
-            'scripts/setup-fyne-patch.sh\ngo build ./cmd/desktop'),
+            'scripts/setup-fyne-patch.sh\ngo build ./cmd/bibletext'),
          "never pointed at"),
         ("patch verification absent", patch_step_failures(
             'scripts/setup-fyne-patch.sh\n'

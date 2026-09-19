@@ -34,7 +34,7 @@ entry="$(find "$scan_dir" -type f -name 'uk.co.bibletext.desktop' -print -quit)"
 [ -n "$entry" ] || { echo "::error::no uk.co.bibletext.desktop in the Linux package"; exit 1; }
 # THE EXECUTABLE'S NAME IS USER-VISIBLE, IN THREE PLACES AT ONCE, and the
 # packager picks it for us: `fyne package` names the binary after the source
-# directory, which is cmd/desktop. So the tarball installed /usr/local/bin/desktop
+# directory, which is cmd/bibletext. So the tarball installed /usr/local/bin/desktop
 # -- a generic name in the reader's PATH that any other Fyne app packaged from a
 # desktop/ directory overwrites, the command a reader must type to start the app,
 # and the client name the sound server shows while narration plays (a Linux

@@ -89,11 +89,11 @@ load_release_bible_key
 # build or go.mod stays rewritten.
 trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
 (
-  cd cmd/desktop
-  CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop" .
-  cp "$WORK/desktop" ./desktop
-  "$(go env GOPATH)/bin/fyne" package -os darwin --app-id "$TEST_ID" --executable desktop
-  rm -f ./desktop
+  cd cmd/bibletext
+  CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/BibleText" .
+  cp "$WORK/BibleText" ./BibleText
+  "$(go env GOPATH)/bin/fyne" package -os darwin --app-id "$TEST_ID" --executable BibleText
+  rm -f ./BibleText
   mv BibleText.app "$APP"
 )
 
@@ -102,8 +102,8 @@ note "confirming the patched writer reached this build"
 # SIGPIPE, and under `set -o pipefail` that fails the pipeline even though the
 # string WAS found. The control string is what makes a zero mean absence rather
 # than a probe that cannot see anything at all.
-BIN="$APP/Contents/MacOS/desktop"
-[ -f "$BIN" ] || BIN="$WORK/desktop"
+BIN="$APP/Contents/MacOS/BibleText"
+[ -f "$BIN" ] || BIN="$WORK/BibleText"
 [ "$(strings -a "$BIN" | grep -cF "Preferences save not published")" -gt 0 ] ||
   fail "this build lacks the atomic preferences writer — the Fyne patch did not reach it, so it is not the app we ship"
 [ "$(strings -a "$BIN" | grep -cF "World English Bible")" -gt 0 ] ||

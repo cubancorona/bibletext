@@ -11,7 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 LEDGERS = (
     ROOT / "cmd/mobile/FyneApp.toml",
-    ROOT / "cmd/desktop/FyneApp.toml",
+    ROOT / "cmd/bibletext/FyneApp.toml",
 )
 
 

@@ -40,7 +40,7 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
-          (cd cmd/desktop && CGO_ENABLED=1 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/shots/bibletext .)
+          (cd cmd/bibletext && CGO_ENABLED=1 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/shots/bibletext .)
           # The links the scenes open, minted by the app's own link code so the
           # note travels in the grammar the app reads.
           mkdir -p build/linkgen

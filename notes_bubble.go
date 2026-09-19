@@ -221,7 +221,7 @@ import (
 //	    first verse, the 280-rune cap, narrow, wide, multi-verse, poetry, and a
 //	    no-note control). Each asserts geometry BEFORE writing its PNG.
 //	The same pane, live, on macOS:
-//	  BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop
+//	  BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/bibletext
 //	iOS simulator, three notes arriving on one passage:
 //	  SIMCTL_CHILD_BIBLETEXT_DEV_NOTES=s10next xcrun simctl launch <udid> uk.co.bibletext
 //	Android emulator: scripts/build-android.sh, install, then deliver a real

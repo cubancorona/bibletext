@@ -23,7 +23,7 @@ var reviewNotesFiles = []struct {
 	path, versionConfig string
 }{
 	{reviewNotesPath, "cmd/mobile/FyneApp.toml"},
-	{macReviewNotesPath, "cmd/desktop/FyneApp.toml"},
+	{macReviewNotesPath, "cmd/bibletext/FyneApp.toml"},
 }
 
 // packagedVersion reads the version a platform actually ships as. FyneApp.toml
@@ -128,7 +128,7 @@ func TestAppReviewNotesWriterIsPinnedAndGuarded(t *testing.T) {
 		"iOS default platform":     `default="IOS"`,
 		"closed platform choice":   `choices=("IOS", "MAC_OS")`,
 		"macOS notes source":       `review-notes-macos.txt`,
-		"macOS packaging ledger":   `"cmd", "desktop", "FyneApp.toml"`,
+		"macOS packaging ledger":   `"cmd", "bibletext", "FyneApp.toml"`,
 		"write opt-in":             `"--write"`,
 		"version confirmation":     `"--confirm-version"`,
 		"exact confirmation check": `args.confirm_version != TARGET_VERSION`,
@@ -205,7 +205,7 @@ func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	}
 }
 
-// Desktop bundles take their version from cmd/desktop/FyneApp.toml, while
+// Desktop bundles take their version from cmd/bibletext/FyneApp.toml, while
 // mobile bundles use cmd/mobile/FyneApp.toml. Release artifacts must present a
 // single marketing version on every platform.
 func TestDesktopAndMobileShipTheSameVersion(t *testing.T) {
@@ -221,10 +221,10 @@ func TestDesktopAndMobileShipTheSameVersion(t *testing.T) {
 		}
 		return m[1]
 	}
-	desktop := read("cmd/desktop/FyneApp.toml")
+	desktop := read("cmd/bibletext/FyneApp.toml")
 	mobile := read("cmd/mobile/FyneApp.toml")
 	if desktop != mobile {
-		t.Errorf("cmd/desktop/FyneApp.toml ships %s but cmd/mobile/FyneApp.toml ships %s.\n\n"+
+		t.Errorf("cmd/bibletext/FyneApp.toml ships %s but cmd/mobile/FyneApp.toml ships %s.\n\n"+
 			"release.yml titles the GitHub Release from the tag and passes no -appVersion,\n"+
 			"so the desktop bundles would report %s inside a release announced as %s.\n"+
 			"Keep both packaging versions identical.", desktop, mobile, desktop, mobile)

@@ -28,7 +28,7 @@ jobs:
           cache: true
 
       - name: build the Windows desktop binary
-        run: go build -ldflags="-H windowsgui -w" -o bibletext.exe ./cmd/desktop
+        run: go build -ldflags="-H windowsgui -w" -o bibletext.exe ./cmd/bibletext
 
       - name: fetch Mesa llvmpipe DLLs (for GPU-less VMs)
         shell: pwsh

@@ -69,7 +69,7 @@ sudo apt-get install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libasound2-de
 Then, from the repo root:
 
 ```bash
-go run ./cmd/desktop
+go run ./cmd/bibletext
 ```
 
 That's the whole thing. A first run opens immediately on an embedded Gospels seed
@@ -82,10 +82,10 @@ prints. With git and the C toolchain above, plus the Fyne CLI
 builds it, and installs a packaged BibleText where your OS keeps applications:
 
 ```bash
-fyne install github.com/cubancorona/bibletext/cmd/desktop@latest
+fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest
 ```
 
-The plain Go route, `go run github.com/cubancorona/bibletext/cmd/desktop@latest`,
+The plain Go route, `go run github.com/cubancorona/bibletext/cmd/bibletext@latest`,
 works from release 1.2.6 (earlier tags declare the module by a bare name that
 Go's module resolution rejects); `…@main` builds today. A build from source by
 either route carries no bundled NKJV key — add your own free API.Bible key in
@@ -103,11 +103,11 @@ installable debug APK.
 
 ```bash
 # A standalone desktop binary (native for your OS/arch — Intel and Apple Silicon both fine)
-go build -o bibletext ./cmd/desktop
+go build -o bibletext ./cmd/bibletext
 
 # macOS: build for the other Mac architecture (cgo needs the explicit opt-in)
-CGO_ENABLED=1 GOARCH=arm64 go build -o bibletext-macos-arm64 ./cmd/desktop
-CGO_ENABLED=1 GOARCH=amd64 go build -o bibletext-macos-amd64 ./cmd/desktop
+CGO_ENABLED=1 GOARCH=arm64 go build -o bibletext-macos-arm64 ./cmd/bibletext
+CGO_ENABLED=1 GOARCH=amd64 go build -o bibletext-macos-amd64 ./cmd/bibletext
 
 # Linux/Windows builds: Fyne uses cgo, so a bare GOOS=… cross-build won't work —
 # build natively on each OS, or use fyne-cross (https://github.com/fyne-io/fyne-cross).
@@ -438,7 +438,7 @@ bibletext/
 ├── docs/ANDROID.md         # Android toolchain, build, signing, distribution
 ├── docs/IPAD.md            # unified iPad navigation, typography, testing, shipping
 └── cmd/                    # six programs; the four app and site ones import the shared package
-    ├── desktop/            # `go build ./cmd/desktop` · `fyne install …/cmd/desktop@latest`
+    ├── bibletext/          # `go build ./cmd/bibletext` · `fyne install …/cmd/bibletext@latest`
     │   ├── main.go
     │   ├── FyneApp.toml    # name, app ID, version/build (read by `fyne package` / `fyne install`)
     │   └── Icon.png        # app icon

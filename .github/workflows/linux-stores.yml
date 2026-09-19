@@ -69,7 +69,7 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
-          (cd cmd/desktop && CGO_ENABLED=1 GOARCH=${{ matrix.arch }} go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
+          (cd cmd/bibletext && CGO_ENABLED=1 GOARCH=${{ matrix.arch }} go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh build/linux/bibletext build/linux
           scripts/check-glibc-floor.sh build/linux/bibletext 2.35
           install -Dm755 build/linux/bibletext build/snap-stage/bin/bibletext
@@ -135,7 +135,7 @@ jobs:
           entry=squashfs-root/uk.co.bibletext.BibleText.desktop
           grep -q '^Exec=bibletext %u$' "$entry"
           grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
-          grep -q "^X-AppImage-Version=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/desktop/FyneApp.toml)$" "$entry"
+          grep -q "^X-AppImage-Version=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/bibletext/FyneApp.toml)$" "$entry"
           unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key

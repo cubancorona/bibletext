@@ -287,75 +287,105 @@ three files, and produces `mimeinfo.cache`. `scripts/check-linux-package.sh`
 now requires all of that on every packaged tarball — proven to pass the fixed
 tarball and fail the old one.
 
-## FIXED (Linux): the packaged executable was called `desktop` — 19 September 2026
+## FIXED: the executable was named after `cmd/desktop`, not after the app — 19 September 2026
 
-`fyne package` names the executable after the source directory. Ours is
-`cmd/desktop`, so the Linux tarball shipped `usr/local/bin/desktop` and a
-`sudo make install` put **`/usr/bin/desktop`** on the reader's system. The name
-is wrong in three user-visible places at once:
+`fyne package` names the executable after its SOURCE DIRECTORY. Ours was
+`cmd/desktop`, so every channel that did not override the name shipped a binary
+called `desktop`. Each consequence was user-visible:
 
-- a generic command in `PATH` that any other Fyne app packaged from a
-  `desktop/` directory installs over, and that `make uninstall` then removes
-  from under it;
-- the command a reader has to type to start the app, which is `desktop`, not
-  `bibletext`;
-- the client name the sound server shows while narration plays — a Linux
-  volume control listed the playing application as **`desktop`**.
+- the Linux tarball installed **`/usr/bin/desktop`** — a generic command in the
+  reader's PATH that any other Fyne app packaged from a `desktop/` directory
+  installs over, and that `make uninstall` then removes from under it;
+- `desktop` was the command a reader had to type to start the app;
+- a Linux volume control listed the application playing narration as
+  **`desktop`**;
+- macOS shipped `CFBundleExecutable: desktop`, so Activity Monitor, `ps`,
+  Console and every crash report named the app `desktop`, on BOTH the direct
+  download and the Mac App Store build.
 
-The snap (`install -Dm755 … build/snap-stage/bin/bibletext`) and the AppImage
-(`install -Dm755 "$BIN" "$APPDIR/usr/bin/bibletext"`) each rename the same
-executable on their way in, so only the plain tarball ever shipped it raw.
+Windows was never affected: its packaging line already passed `--executable
+BibleText.exe`, and the shipped zip and `.msix` both carry `BibleText.exe`.
 
-Found by running the shipped 1.2.12 arm64 artifacts on a real desktop rather
-than by reading the build: the snap registered as `ALSA plug-in [bibletext]`,
-the AppImage as `PipeWire ALSA [bibletext]`, and the tarball as
-`PipeWire ALSA [desktop]`. Copying one identical binary to a second filename
-and running it under each name — same sha256, nothing else changed — moved the
-client name with the filename, which is the whole proof of cause.
-
-Why nothing caught it: `scripts/check-linux-package.sh` *hardcoded*
-`grep -q '^Exec=desktop %u$'`, so the check ratified the name instead of
-questioning it, and the installed-entry assertion derived `$exe` from whatever
+**How it was found, and why nothing caught it.** The shipped 1.2.12 arm64
+artefacts were run on a real Linux desktop. The snap registered with the sound
+server as `ALSA plug-in [bibletext]`, the AppImage as `PipeWire ALSA
+[bibletext]`, and the tarball as `PipeWire ALSA [desktop]` — the snap and the
+AppImage each rename the executable on their way in, and only the plain tarball
+shipped it raw. Cause was settled by copying one binary to a second filename and
+running it under each name: same sha256, and the sound server's client name
+moved with the filename. Meanwhile `scripts/check-linux-package.sh` had
+*hardcoded* `grep -q '^Exec=desktop %u$'`, so the check ratified the name
+instead of questioning it, and derived the installed-entry name from whatever
 the archive happened to contain — a check that follows the artifact cannot
 notice the artifact going wrong.
 
-The fix passes `--executable bibletext` in both Linux packaging jobs, builds the
-Go binary as `bibletext`, points the AppImage and snap staging at
-`cmd/desktop/bibletext`, and pins the name from both ends in the check and in
-`TestTheLinuxPackagesShipTheAppsOwnExecutableName`.
+**Passing `--executable` per channel was not enough.** It repaired the packaged
+artefacts but could never reach the two routes `README.md` advertises, because
+those build on the reader's own machine from the module path: `fyne install
+github.com/cubancorona/bibletext/cmd/desktop@latest` (the command the public
+Fyne apps directory prints) and `go install` / `go run` of the same path.
+**`fyne install` has no `--executable` flag at all**, so no packaging change
+could have fixed that route.
 
-**Upgrade wrinkle, not yet handled.** A reader who installed any release up to
-1.2.12 has `/usr/local/bin/desktop` (or `/usr/bin/desktop`). Installing the next
-tarball adds `bibletext` and leaves the old binary orphaned: `make uninstall`
-from the new package removes the new name only. Options are a one-line
-`-rm …/desktop` in the Makefile's uninstall target, a note on the download page,
-or accepting the orphan. Decide before the next release ships.
+**The root fix: `cmd/desktop` is now `cmd/bibletext`.** Every packager then
+defaults to the right name instead of having to be told, the module-path routes
+install `bibletext`, and macOS falls out with it. The per-platform spellings are
+deliberately different, each the convention of the place it lands:
 
-### Still open: macOS ships `CFBundleExecutable: desktop`
+| Channel | Executable | Why that spelling |
+| --- | --- | --- |
+| Linux — tarball, snap, AppImage, Flatpak | `bibletext` | a command in the reader's PATH |
+| Windows — zip, Microsoft Store | `BibleText.exe` | Task Manager's Description column and the AppxManifest |
+| macOS — direct download, Mac App Store | `BibleText` | `Contents/MacOS/`, as `Safari.app/Contents/MacOS/Safari` reads |
 
-The same packaging line runs for darwin, in three places —
-`.github/workflows/release.yml`, `scripts/release-mac-store.sh` and
-`scripts/run-mac-sandbox-test.sh` — so `BibleText.app/Contents/MacOS/desktop` is
-what Activity Monitor, `ps`, Console and every crash report name.
+Verified rather than assumed: a locally packaged bundle now carries
+`CFBundleExecutable: BibleText` with `Contents/MacOS/BibleText`, and the running
+process reports `BibleText` to `ps` where it read `desktop` before. On an arm64
+Linux machine the renamed tree still packages a tarball containing
+`usr/local/bin/bibletext`, and `scripts/build-appimage.sh` still produces an
+AppImage whose desktop entry reads `Exec=bibletext %u`.
 
-It was left alone on the stated grounds that the binary is "signed, notarised
-and shipped through the App Store". Two thirds of that is wrong and the record
-should not keep it: there is **no notarisation step anywhere in this
-repository** — `docs/MAC_APP_STORE.md` says the Store was chosen over plain
-notarisation — and the direct-download zip is not signed either, only the Mac
-App Store build is. So the real cost of renaming is a signing re-run on one
-channel, not a notarisation cycle on two.
+**What the macOS rename does NOT disturb**, each keyed on the bundle id
+`uk.co.bibletext` or on the `NewWithID` identifier rather than on the executable
+name: the App Sandbox container, the Fyne preferences directory holding notes
+and reading position, the Keychain service, Universal Links, and the
+code-signing identifier. The app requests no TCC-gated capability, and the Store
+update path replaces the bundle wholesale. An earlier draft of this entry
+deferred the macOS half on the grounds that the binary is "signed, notarised and
+shipped through the App Store"; two thirds of that was wrong and the record
+should not keep it — there is **no notarisation step anywhere in this
+repository** (`docs/MAC_APP_STORE.md` says the Store was chosen over plain
+notarisation), and the direct-download zip is not signed either. The real cost
+was a signing re-run on one channel.
 
-What a rename does NOT disturb, each keyed on the bundle id or on the
-`NewWithID` identifier rather than the executable name: the App Sandbox
-container, the Fyne preferences directory holding notes and reading position,
-the Keychain service, Universal Links, and the code-signing identifier. The app
-requests no TCC-gated capability. The Store update path replaces the bundle
-wholesale, so no orphan can remain there — the one real hazard is a reader who
-unzips the direct download *over* an existing `BibleText.app` instead of
-letting Finder replace it, and ends up with both binaries inside the bundle. `TestTheLinuxPackagesShipTheAppsOwnExecutableName`
-asserts the darwin line still reads `desktop`, so this entry cannot go stale
-silently.
+The one residual macOS hazard is a reader who unzips the direct download *over*
+an existing `BibleText.app` instead of letting Finder replace it: they end up
+with both `desktop` and `BibleText` inside `Contents/MacOS`. The bundle still
+launches, because `CFBundleExecutable` names the new one, so this is untidy
+rather than broken.
+
+**Upgrade wrinkle on Linux, deliberately left to a release note.** A reader who
+ran `sudo make install` from any tarball up to 1.2.12 keeps an orphaned
+`/usr/local/bin/desktop` (or `/usr/bin/desktop`); the next package's `make
+uninstall` removes only the new name. An `-rm …/bin/desktop` line in the
+uninstall target was considered and REJECTED: it would delete a file we can no
+longer prove is ours, which is the exact PATH collision this entry is about. It
+is also the narrowest possible reach — it fires only for someone who installed
+≤1.2.12, *then* installs the next tarball, *then* runs `make uninstall` from the
+new package, while everyone who simply upgrades keeps the orphan regardless. The
+numbers support the light touch: **58 tarball downloads across all 18
+releases**, and until 19 September 2026 `make install` exited non-zero on the
+icon line, so the population that completed an install is smaller still. The
+orphan is inert — the new install overwrites the desktop entry, so nothing
+launches it; the only live harm is someone typing `desktop` from shell history
+and silently running 1.2.12 forever. **Action: one sentence in the next
+release's notes naming the exact `rm`.**
+
+**Still open, lower priority: iOS ships `CFBundleExecutable: main`.** The same
+class of defect with a different generic name, but it surfaces only in crash
+reports and Xcode Organizer, nothing lands in a PATH, and
+`scripts/release-ios.sh` passes no `--executable`. Read off the packaging line,
+not observed on a built bundle.
 
 ## What we ship has largely never been run
 
@@ -1639,7 +1669,7 @@ A source build is already distinguishable — it carries no bundled NKJV key
 and both review-notes files moving together.
 
 Every tag up to v1.2.5 carries the old bare `module bibletext` line, which Go's
-module resolution rejects: `go install github.com/cubancorona/bibletext/cmd/desktop@latest`
+module resolution rejects: `go install github.com/cubancorona/bibletext/cmd/bibletext@latest`
 and `go run …@latest` resolve `@latest` to the newest tag and stop at "module
 declares its path as: bibletext but was required as:
 github.com/cubancorona/bibletext". main declares the repository path
@@ -1647,7 +1677,7 @@ github.com/cubancorona/bibletext". main declares the repository path
 reach `@latest` when v1.2.6 is tagged.
 
 The directory entry (apps.fyne.io/apps/uk.co.bibletext/) prints
-`fyne install github.com/cubancorona/bibletext/cmd/desktop@latest`, which takes
+`fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest`, which takes
 a different route — `git ls-remote` for the newest v-tag, a depth-1 clone of
 that tag, then `go build` inside the clone — so the module line never enters
 into it and that command works today on v1.2.5. A source build by either

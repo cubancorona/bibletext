@@ -31,7 +31,7 @@ jobs:
           cache: true
 
       - name: build the Windows desktop binary
-        run: go build -o bibletext.exe ./cmd/desktop
+        run: go build -o bibletext.exe ./cmd/bibletext
 
       - name: deploy Mesa llvmpipe (software OpenGL) beside the exe
         shell: pwsh

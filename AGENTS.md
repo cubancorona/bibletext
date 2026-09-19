@@ -17,8 +17,8 @@ added to it.
 ## Project layout
 
 - The repository root is the shared `bibletext` library package. It is not a
-  `main` package, so use `go run ./cmd/desktop` instead of `go run .`.
-- `cmd/desktop` and `cmd/mobile` are the desktop and mobile entry points.
+  `main` package, so use `go run ./cmd/bibletext` instead of `go run .`.
+- `cmd/bibletext` and `cmd/mobile` are the desktop and mobile entry points.
 - `cmd/websitegen` builds the static web reader.
 - `cmd/linuxmeta` and `cmd/msstore` render the Linux and Microsoft Store packaging inputs.
 - Platform-specific behavior is selected with Go build tags. Host tooling may
@@ -43,7 +43,7 @@ whitespace errors and inspect `git status --short` before handing work off.
 Launch the desktop application during UI work with:
 
 ```bash
-go run ./cmd/desktop
+go run ./cmd/bibletext
 ```
 
 ## Platform builds

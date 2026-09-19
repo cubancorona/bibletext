@@ -27,7 +27,7 @@ func TestCommittedListingLogosAreTheGeneratorsOutput(t *testing.T) {
 
 func checkRendered(t *testing.T, dir string, table []asset, command string) {
 	t.Helper()
-	icon, err := loadIcon(filepath.Join(repo, "cmd", "desktop", "Icon.png"))
+	icon, err := loadIcon(filepath.Join(repo, "cmd", "bibletext", "Icon.png"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func filledManifest(t *testing.T) (string, identity, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	version, err := packageVersion(filepath.Join(repo, "cmd", "desktop", "FyneApp.toml"))
+	version, err := packageVersion(filepath.Join(repo, "cmd", "bibletext", "FyneApp.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}

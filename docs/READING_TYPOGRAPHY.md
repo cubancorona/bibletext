@@ -228,7 +228,7 @@ before, the heading's lead and tail, the note band and the paragraph gap are
 all in one frame. The arrival pins the band to the top; scroll up a few
 lines.
 
-- desktop, native and both mimics: `go build -tags bibletextdev ./cmd/desktop`,
+- desktop, native and both mimics: `go build -tags bibletextdev ./cmd/bibletext`,
   run with `BIBLETEXT_DEV_NOTES=headnote` and `BIBLETEXT_MIMIC=linux` or
   `windows`; bring the window to the front before `screencapture`, and scroll
   with real wheel events (the Fyne pane takes them only after a mouse move
@@ -260,6 +260,6 @@ for a page whose lines were visibly overlapping. The only measurement that prove
 stable was first-line-top to last-line-top divided by a line count taken from the
 image. **A screenshot read by eye caught what none of them did.**
 
-`BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop` previews the
+`BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/bibletext` previews the
 canvas pane on a Mac (see `docs/PLATFORM_MIMIC.md`); `scripts/run-ios-sim.sh` and
 an Android install cover the rest.
