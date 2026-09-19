@@ -197,16 +197,42 @@ place a fix on one does not reach the others.
     patches; they can drift.
 25. Both Linux architectures run the same packaged-tarball assertions, via
     `scripts/check-linux-package.sh`, so they cannot drift apart.
-26. arm64 Linux was proven on a local UTM VM, 18–19 September 2026: the
+26. arm64 Linux was proven on a local UTM VM, 18–19 September 2026 — first at
+    the build bench, then on a real GNOME X11 desktop. At the bench: the
     executable builds with no new patches and passes
     `scripts/smoke-linux-launch.sh` (launch, `bibletext:` handoff, single
-    instance); the snap packs in LXD, installs, exports its entry with `%u`, and
-    its ALSA layout resolves inside the confinement; and the **tarball** was
-    packaged with the patched CLI and put through
+    instance); the snap packs in LXD, installs and exports its entry with `%u`;
+    and the **tarball** was packaged with the patched CLI and put through
     `scripts/check-linux-package.sh`, which is how the `make install` defect was
-    found. What has NOT happened is launching the installed application from
-    where `make install` puts it — the row's `hardware` covers the executable
-    and the snap, not that last step.
+    found. On the desktop, 19 September, all three channels were run the way a
+    reader runs them:
+
+    - the snap was **installed from the Snap Store** (`snap install bibletext
+      --edge`) and auto-connected all fifteen interfaces, `audio-playback`
+      included, with no manual `snap connect`;
+    - **narration reached the sound server from every sandbox** — the snap as
+      `ALSA plug-in [bibletext]`, the AppImage as `PipeWire ALSA [bibletext]`,
+      the tarball as `PipeWire ALSA [desktop]`, each with both channels active
+      on the hardware sink. This is the check the arch-specific ALSA layout
+      exists for: a wrong triplet builds, packs, installs and launches
+      perfectly and is silent, so only a stream on a real sound server settles
+      it. (That third client name is the executable-name defect — see
+      `docs/BACKLOG.md`.)
+    - **read-along** advanced through the chapter and auto-scrolled to follow;
+    - a `bibletext:` link fired with `xdg-open` reached the running instance,
+      brought its window to the front and navigated, leaving one process. This
+      is the desktop-registration half that `smoke-linux-launch.sh` cannot
+      reach, because that script hands the URL straight to the binary;
+    - the **AppImage runs with no libfuse2 package installed at all**;
+    - the reading pane does **not** scroll sideways — wheel-left and
+      wheel-right moved zero pixels, against a vertical control that moved
+      119,715;
+    - switching GNOME to dark repainted the **confined** snap live, through the
+      `org.freedesktop.appearance` portal, with no restart.
+
+    Still not done: launching the application from where `make install` puts it.
+    The install was run into a `DESTDIR` and its paths checked, and the binary
+    was run from the extracted tree — but not from `/usr/bin` on a live system.
 
 27. **x86_64 macOS is now compiled and tested on Intel hardware**, not only
     cross-compiled from arm64. On 19 September 2026 an Intel MacBook Pro built

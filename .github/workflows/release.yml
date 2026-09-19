@@ -175,8 +175,8 @@ jobs:
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
           cd cmd/desktop
-          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable desktop
+          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o bibletext .
+          "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable bibletext
           mv BibleText.tar.xz ../../BibleText-Linux-amd64.tar.xz
           # Every assertion a packaged Linux tarball must satisfy, on any
           # architecture, lives in one script so the amd64 and arm64 jobs
@@ -186,7 +186,7 @@ jobs:
           # The AppImage, from the very same executable; verified again once
           # extracted, since the marker cannot be read through the squashfs.
           cd "$GITHUB_WORKSPACE"
-          scripts/build-appimage.sh cmd/desktop/desktop BibleText-x86_64.AppImage
+          scripts/build-appimage.sh cmd/desktop/bibletext BibleText-x86_64.AppImage
           rm -rf squashfs-root
           ./BibleText-x86_64.AppImage --appimage-extract >/dev/null
           grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
@@ -194,7 +194,7 @@ jobs:
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
           rm -rf squashfs-root
           # The snap job packages this same executable.
-          install -Dm755 cmd/desktop/desktop build/snap-stage/bin/bibletext
+          install -Dm755 cmd/desktop/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
       - uses: actions/upload-artifact@v4
         with:
@@ -285,22 +285,22 @@ jobs:
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
           cd cmd/desktop
-          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
-          "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable desktop
+          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o bibletext .
+          "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable bibletext
           mv BibleText.tar.xz ../../BibleText-Linux-arm64.tar.xz
           BIBLE_KEY_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
             ../../scripts/check-linux-package.sh ../../BibleText-Linux-arm64.tar.xz 2.35
           # The AppImage, from the very same executable; verified again once
           # extracted, since the marker cannot be read through the squashfs.
           cd "$GITHUB_WORKSPACE"
-          scripts/build-appimage.sh cmd/desktop/desktop BibleText-aarch64.AppImage aarch64
+          scripts/build-appimage.sh cmd/desktop/bibletext BibleText-aarch64.AppImage aarch64
           rm -rf squashfs-root
           ./BibleText-aarch64.AppImage --appimage-extract >/dev/null
           grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
           grep -q '^MimeType=x-scheme-handler/bibletext;' squashfs-root/uk.co.bibletext.BibleText.desktop
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
           rm -rf squashfs-root
-          install -Dm755 cmd/desktop/desktop build/snap-stage/bin/bibletext
+          install -Dm755 cmd/desktop/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
       - uses: actions/upload-artifact@v4
         with:
