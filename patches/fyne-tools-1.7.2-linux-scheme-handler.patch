@@ -1,3 +1,4 @@
+diff -ruN ft-pristine/cmd/fyne/internal/commands/package-unix.go ft-patched/cmd/fyne/internal/commands/package-unix.go
 --- a/cmd/fyne/internal/commands/package-unix.go
 +++ b/cmd/fyne/internal/commands/package-unix.go
 @@ -23,6 +23,7 @@
@@ -32,38 +33,29 @@
  		Icon:           appIDOrName,
  		Local:          local,
  		GenericName:    linuxBSD.GenericName,
---- a/cmd/fyne/internal/templates/data/entry.desktop
-+++ b/cmd/fyne/internal/templates/data/entry.desktop
-@@ -3,7 +3,7 @@
- Name={{.Name}}
- {{- if ne .GenericName ""}}
- GenericName={{.GenericName}}{{end}}
--Exec={{.Exec}} {{- .ExecParams}}
-+Exec={{.Exec}}{{.ExecField}}{{if ne .ExecParams ""}} {{.ExecParams}}{{end}}
- Icon={{.Icon}}
- {{- if ne .Comment ""}}
- Comment={{.Comment}}{{end}}
---- a/cmd/fyne/internal/templates/data/Makefile
-+++ b/cmd/fyne/internal/templates/data/Makefile
-@@ -22,6 +22,7 @@
- 	install -Dm00644 usr/{{.Local}}share/applications/$(AppID).desktop $(DESTDIR)$(PREFIX)/share/applications/$(AppID).desktop
- 	install -Dm00755 usr/{{.Local}}bin/$(Exec) $(DESTDIR)$(PREFIX)/bin/$(Exec)
- 	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon) $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon)
-+	-update-desktop-database $(DESTDIR)$(PREFIX)/share/applications || echo "update-desktop-database not found: install desktop-file-utils and run it, or bibletext: links will not open the app"
- uninstall:
- 	-rm $(DESTDIR)$(PREFIX)/share/applications/$(AppID).desktop
- 	-rm $(DESTDIR)$(PREFIX)/bin/$(Exec)
-@@ -32,6 +33,7 @@
- 	install -Dm00755 usr/{{.Local}}bin/$(Exec) $(DESTDIR)$(HOME)/.local/bin/$(Exec)
- 	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon) $(DESTDIR)$(HOME)/.local/share/icons/$(Icon)
- 	sed -i -e "s,Exec=$(Exec),Exec=$(DESTDIR)$(HOME)/.local/bin/$(Exec),g" $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
-+	-update-desktop-database $(DESTDIR)$(HOME)/.local/share/applications || echo "update-desktop-database not found: install desktop-file-utils and run it, or bibletext: links will not open the app"
- 
- user-uninstall:
- 	-rm $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
---- /dev/null
+diff -ruN ft-pristine/cmd/fyne/internal/commands/package_unix_bibletext_source_test.go ft-patched/cmd/fyne/internal/commands/package_unix_bibletext_source_test.go
+--- a/cmd/fyne/internal/commands/package_unix_bibletext_source_test.go
++++ b/cmd/fyne/internal/commands/package_unix_bibletext_source_test.go
+@@ -0,0 +1,15 @@
++package commands
++
++import (
++	"os"
++	"testing"
++)
++
++func readPackageUnixSource(t *testing.T) string {
++	t.Helper()
++	b, err := os.ReadFile("package-unix.go")
++	if err != nil {
++		t.Fatal(err)
++	}
++	return string(b)
++}
+diff -ruN ft-pristine/cmd/fyne/internal/commands/package_unix_bibletext_test.go ft-patched/cmd/fyne/internal/commands/package_unix_bibletext_test.go
+--- a/cmd/fyne/internal/commands/package_unix_bibletext_test.go
 +++ b/cmd/fyne/internal/commands/package_unix_bibletext_test.go
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,103 @@
 +package commands
 +
 +import (
@@ -106,6 +98,33 @@
 +		t.Errorf("a missing update-desktop-database must be said out loud, not swallowed:\n%s", makefile)
 +	}
 +
++	// The icon is packaged as <AppID>.png but the Makefile's Icon variable holds
++	// the bare app id, so every line that uses it as a FILE NAME must add the
++	// extension. Without this, `make install` runs `install ... pixmaps/uk.co.bibletext`,
++	// which does not exist: the target installs the binary and the desktop entry
++	// and then exits non-zero, leaving the reader an application with no icon and
++	// an error they cannot interpret.
++	for _, want := range []string{
++		"usr/share/pixmaps/$(Icon).png $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon).png",
++		"-rm $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon).png",
++		"$(DESTDIR)$(HOME)/.local/share/icons/$(Icon).png",
++	} {
++		if !strings.Contains(makefile, want) {
++			t.Errorf("the Makefile does not install the icon by its real file name (%q):\n%s", want, makefile)
++		}
++	}
++	// ...and nowhere may it still treat the bare name as a file.
++	for _, bad := range []string{"pixmaps/$(Icon) ", "pixmaps/$(Icon)\n", "icons/$(Icon)\n"} {
++		if strings.Contains(makefile, bad) {
++			t.Errorf("the Makefile still uses the extensionless icon name as a file (%q):\n%s", bad, makefile)
++		}
++	}
++	// The .desktop entry is the opposite: freedesktop icon-theme lookup wants the
++	// name WITHOUT an extension, so the fix must not leak into it.
++	if strings.Contains(entry, "Icon=uk.co.bibletext.png") {
++		t.Errorf("the desktop entry's Icon= gained a file extension; theme lookup wants the bare name:\n%s", entry)
++	}
++
 +	files := scheme
 +	files.ExecField = " %F"
 +	files.MimeTypes = "text/plain;"
@@ -140,21 +159,44 @@
 +		t.Error("the field code is glued onto the binary name again, which breaks the Makefile")
 +	}
 +}
---- /dev/null
-+++ b/cmd/fyne/internal/commands/package_unix_bibletext_source_test.go
-@@ -0,0 +1,15 @@
-+package commands
-+
-+import (
-+	"os"
-+	"testing"
-+)
-+
-+func readPackageUnixSource(t *testing.T) string {
-+	t.Helper()
-+	b, err := os.ReadFile("package-unix.go")
-+	if err != nil {
-+		t.Fatal(err)
-+	}
-+	return string(b)
-+}
+diff -ruN ft-pristine/cmd/fyne/internal/templates/data/Makefile ft-patched/cmd/fyne/internal/templates/data/Makefile
+--- a/cmd/fyne/internal/templates/data/Makefile
++++ b/cmd/fyne/internal/templates/data/Makefile
+@@ -21,19 +21,21 @@
+ install:
+ 	install -Dm00644 usr/{{.Local}}share/applications/$(AppID).desktop $(DESTDIR)$(PREFIX)/share/applications/$(AppID).desktop
+ 	install -Dm00755 usr/{{.Local}}bin/$(Exec) $(DESTDIR)$(PREFIX)/bin/$(Exec)
+-	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon) $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon)
++	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon).png $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon).png
++	-update-desktop-database $(DESTDIR)$(PREFIX)/share/applications || echo "update-desktop-database not found: install desktop-file-utils and run it, or bibletext: links will not open the app"
+ uninstall:
+ 	-rm $(DESTDIR)$(PREFIX)/share/applications/$(AppID).desktop
+ 	-rm $(DESTDIR)$(PREFIX)/bin/$(Exec)
+-	-rm $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon)
++	-rm $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon).png
+ 
+ user-install:
+ 	install -Dm00644 usr/{{.Local}}share/applications/$(AppID).desktop $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
+ 	install -Dm00755 usr/{{.Local}}bin/$(Exec) $(DESTDIR)$(HOME)/.local/bin/$(Exec)
+-	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon) $(DESTDIR)$(HOME)/.local/share/icons/$(Icon)
++	install -Dm00644 usr/{{.Local}}share/pixmaps/$(Icon).png $(DESTDIR)$(HOME)/.local/share/icons/$(Icon).png
+ 	sed -i -e "s,Exec=$(Exec),Exec=$(DESTDIR)$(HOME)/.local/bin/$(Exec),g" $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
++	-update-desktop-database $(DESTDIR)$(HOME)/.local/share/applications || echo "update-desktop-database not found: install desktop-file-utils and run it, or bibletext: links will not open the app"
+ 
+ user-uninstall:
+ 	-rm $(DESTDIR)$(HOME)/.local/share/applications/$(AppID).desktop
+ 	-rm $(DESTDIR)$(HOME)/.local/bin/$(Exec)
+-	-rm $(DESTDIR)$(HOME)/.local/share/icons/$(Icon)
++	-rm $(DESTDIR)$(HOME)/.local/share/icons/$(Icon).png
+diff -ruN ft-pristine/cmd/fyne/internal/templates/data/entry.desktop ft-patched/cmd/fyne/internal/templates/data/entry.desktop
+--- a/cmd/fyne/internal/templates/data/entry.desktop
++++ b/cmd/fyne/internal/templates/data/entry.desktop
+@@ -3,7 +3,7 @@
+ Name={{.Name}}
+ {{- if ne .GenericName ""}}
+ GenericName={{.GenericName}}{{end}}
+-Exec={{.Exec}} {{- .ExecParams}}
++Exec={{.Exec}}{{.ExecField}}{{if ne .ExecParams ""}} {{.ExecParams}}{{end}}
+ Icon={{.Icon}}
+ {{- if ne .Comment ""}}
+ Comment={{.Comment}}{{end}}
