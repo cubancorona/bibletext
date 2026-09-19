@@ -48,7 +48,9 @@ platforms in one place, or directly:
   first time. Desktop artifacts are built by
   [`release.yml`](.github/workflows/release.yml) on every `v*` tag.
 - **Linux, as a single file** —
-  [BibleText-x86_64.AppImage](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage);
+  [BibleText-x86_64.AppImage](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage)
+  or
+  [BibleText-aarch64.AppImage](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-aarch64.AppImage);
   `chmod +x` it and run it. The static runtime needs no libfuse2, and the file
   carries zsync update information, so a tool such as `AppImageUpdate` can
   refresh it in place. Unlike the tarball it does not register the `bibletext:`

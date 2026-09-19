@@ -88,9 +88,23 @@ jobs:
           retention-days: 3
 
   appimage:
-    name: AppImage
+    name: AppImage (${{ matrix.appimage }})
     needs: binary
-    runs-on: ubuntu-24.04
+    # appimagetool RUNS on the build host and the runtime it embeds must match
+    # the executable being wrapped, so each architecture is built on its own
+    # machine. `arch` is Go's spelling, `appimage` the one AppImage uses in
+    # file names.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            appimage: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            appimage: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5 # verify-release-package.sh reads the build info with go version -m
@@ -98,7 +112,7 @@ jobs:
           go-version: "1.24"
       - uses: actions/download-artifact@v4
         with:
-          name: linux-binary-amd64
+          name: linux-binary-${{ matrix.arch }}
           path: build/linux
       - name: install the packaging and smoke tools
         run: |
@@ -109,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           chmod 755 build/linux/bibletext
-          scripts/build-appimage.sh build/linux/bibletext BibleText-x86_64.AppImage
+          scripts/build-appimage.sh build/linux/bibletext BibleText-${{ matrix.appimage }}.AppImage
       - name: assert the entry, verify the executable, smoke
         shell: bash
         env:
@@ -117,7 +131,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf squashfs-root
-          ./BibleText-x86_64.AppImage --appimage-extract >/dev/null
+          ./BibleText-${{ matrix.appimage }}.AppImage --appimage-extract >/dev/null
           entry=squashfs-root/uk.co.bibletext.BibleText.desktop
           grep -q '^Exec=bibletext %u$' "$entry"
           grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
@@ -131,20 +145,20 @@ jobs:
           # extract-and-run would extract twice into one content-addressed
           # directory); the runtime itself is exercised by the update-information
           # read in build-appimage.sh and by the extraction above.
-          scripts/smoke-linux-launch.sh appimage ./squashfs-root/AppRun
+          scripts/smoke-linux-launch.sh appimage-${{ matrix.appimage }} ./squashfs-root/AppRun
           rm -rf squashfs-root
       - uses: actions/upload-artifact@v4
         with:
-          name: BibleText-x86_64-AppImage
+          name: BibleText-${{ matrix.appimage }}-AppImage
           path: |
-            BibleText-x86_64.AppImage
-            BibleText-x86_64.AppImage.zsync
+            BibleText-${{ matrix.appimage }}.AppImage
+            BibleText-${{ matrix.appimage }}.AppImage.zsync
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: appimage-smoke
-          path: smoke-appimage-*.png
+          name: appimage-smoke-${{ matrix.appimage }}
+          path: smoke-appimage-${{ matrix.appimage }}-*.png
           if-no-files-found: ignore
 
   snap:

@@ -73,7 +73,7 @@ Status is separate: `shipping` (a release or store submission carries it),
 | Linux | x86_64 | Direct download (.tar.xz) | shipping | builds | 19, 20, 25 |
 | Linux | arm64 | Direct download (.tar.xz) | ready | hardware | 19, 20, 25, 26 |
 | Linux | x86_64 | AppImage | shipping | builds | 21 |
-| Linux | arm64 | AppImage | untried | none | C |
+| Linux | arm64 | AppImage | ready | hardware | 21, 26 |
 | Linux | x86_64 | Snap Store | ready | runner | 22, 23 |
 | Linux | arm64 | Snap Store | ready | hardware | 22, 23, 26 |
 | Linux | x86_64 | Flathub | ready | runner | 24 |
@@ -174,8 +174,13 @@ place a fix on one does not reach the others.
     with the
     runner pinned to `ubuntu-24.04`, so a runner image drifting upward cannot
     silently raise the floor.
-21. **AppImage tooling pinned by sha256** in `scripts/build-appimage.sh` —
-    appimagetool 1.9.1 and the type-2 runtime — which is exactly why there is no arm64 AppImage yet.
+21. **AppImage tooling pinned by sha256 per architecture** in
+    `scripts/build-appimage.sh`. appimagetool RUNS on the build host while the
+    runtime it embeds must match the executable being wrapped, so the script
+    refuses a target it cannot build here rather than producing an AppImage
+    that launches on the build machine and nowhere else. The
+    update-information string carries the architecture too, or both would
+    advertise the same zsync file and readers would be offered the wrong one.
 22. **Snap-only ALSA plumbing**: `libasound2-plugins` staged plus a `layout`
     binding `/usr/lib/<triplet>/alsa-lib`. **The triplet is architecture
     specific and the bind is a real path.** *Risk:* a snap carrying another
@@ -214,10 +219,10 @@ something nobody got round to.
   assumed blocker was real: ANGLE publishes `angle-arm64` at the tag already
   pinned, and the runner's missing aarch64 compiler is supplied by a pinned
   llvm-mingw. Both channels build it; see divergence 17.
-- **C. Linux arm64 AppImage** — held until an arm64 appimagetool and type-2
-  runtime are pinned by sha256 to the same standard as the x86_64 pair.
-  Shipping an AppImage built with an unpinned tool would be worse than not
-  shipping one.
+- **C. Linux arm64 AppImage** — *resolved 19 September 2026.* Both
+  appimagetool and the type-2 runtime publish aarch64 builds at the tags
+  already pinned, verified with the x86_64 hashes as controls, and both are
+  genuine aarch64 ELF.
 - **D. Flathub aarch64** — *resolved 19 September 2026.* It was held until the
   `aarch64` leg of `linux-stores.yml` had gone green rather than enabled on
   optimism; both the build and the smoke passed, so `flatpak/flathub.json` now
@@ -248,6 +253,11 @@ The honest to-do list, in proof-level terms.
   iPhone use is established; nothing distinguishes an iPad install, and
   `UIDeviceFamily` — the single property that makes it universal — is never
   read back out of the exported `.ipa` (divergence 7).
+- **The AppImage's type-2 runtime is not exercised in CI.** The smoke runs the
+  extracted payload, deliberately: launching the runtime twice would extract
+  twice into one content-addressed directory. It is covered there by the
+  update-information read and the extraction itself, and the mount-and-launch
+  path was proven by hand on arm64 on 19 September 2026 — but no job does it.
 - **The Linux tarball's installer now runs on every packaged tarball**
   (`scripts/check-linux-package.sh`), and the first run of it found `make
   install` had always failed — see docs/BACKLOG.md. Fixed. What is still

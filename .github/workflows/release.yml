@@ -249,10 +249,9 @@ jobs:
   linux-arm64:
     name: build Linux (arm64)
     needs: create-release
-    # Free on public repositories. The AppImage is deliberately NOT built here:
-    # scripts/build-appimage.sh pins an x86_64 appimagetool and runtime by
-    # sha256, so arm64 ships the tarball and the snap until that is done
-    # properly rather than half-done with an unpinned tool.
+    # Free on public repositories. The AppImage is built here too: its tool and
+    # runtime are pinned per architecture by sha256, and appimagetool runs on
+    # this host, which is the architecture it is wrapping.
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
@@ -264,7 +263,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev \
-            desktop-file-utils appstream binutils
+            desktop-file-utils appstream zsync binutils
       - name: build against the patched Fyne (Noto emoji + discrete caret blink)
         shell: bash
         run: |
@@ -291,7 +290,16 @@ jobs:
           mv BibleText.tar.xz ../../BibleText-Linux-arm64.tar.xz
           BIBLE_KEY_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
             ../../scripts/check-linux-package.sh ../../BibleText-Linux-arm64.tar.xz 2.35
+          # The AppImage, from the very same executable; verified again once
+          # extracted, since the marker cannot be read through the squashfs.
           cd "$GITHUB_WORKSPACE"
+          scripts/build-appimage.sh cmd/desktop/desktop BibleText-aarch64.AppImage aarch64
+          rm -rf squashfs-root
+          ./BibleText-aarch64.AppImage --appimage-extract >/dev/null
+          grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
+          grep -q '^MimeType=x-scheme-handler/bibletext;' squashfs-root/uk.co.bibletext.BibleText.desktop
+          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
+          rm -rf squashfs-root
           install -Dm755 cmd/desktop/desktop build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
       - uses: actions/upload-artifact@v4
@@ -303,7 +311,7 @@ jobs:
       - name: upload assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Linux-arm64.tar.xz --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Linux-arm64.tar.xz BibleText-aarch64.AppImage BibleText-aarch64.AppImage.zsync --clobber
 
   snap-arm64:
     name: build snap (arm64)
