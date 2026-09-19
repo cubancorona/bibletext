@@ -41,7 +41,10 @@
   .btn .sub { display: block; font-size: .8rem; color: var(--muted); margin-top: 2px; }
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn.primary .sub { color: #e8eefb; }
+  h3 { font-size: .82rem; text-transform: uppercase; letter-spacing: .1em;
+       color: var(--muted); font-weight: 600; margin: 26px 0 8px; opacity: .85; }
   .note { font-size: .85rem; color: var(--muted); max-width: 460px; margin: 18px auto 0; }
+  .note.pick { margin: 0 auto 12px; }
   .features { max-width: 480px; margin: 0 auto; text-align: left; list-style: none; padding: 0; }
   .features li { margin: 10px 0; padding-left: 2em; text-indent: -2em; }
   .features .emoji { display: inline-block; width: 1.6em; text-indent: 0; }
@@ -99,35 +102,47 @@
     <span class="sub">Windows&nbsp;10 and 11 · signed and kept up to date</span>
   </a>
 
-  <h2>Desktop</h2>
+  <h2>Desktop &mdash; direct downloads</h2>
+  <p class="note">On a Mac the App&nbsp;Store version and on Windows the Microsoft&nbsp;Store
+  version are the easier routes &mdash; signed and kept up to date for you. The downloads here are
+  unsigned, so on macOS right-click the app and choose <em>Open</em> the first time.</p>
+
+  <h3>macOS</h3>
   <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-macOS.zip">
     macOS
-    <span class="sub">Apple&nbsp;Silicon and Intel · .zip</span>
-  </a>
-  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-amd64.zip">
-    Windows — direct download
-    <span class="sub">64-bit · .zip · unsigned</span>
-  </a>
-    <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-arm64.zip">
-    Windows — ARM
-    <span class="sub">arm64 · .zip · unsigned</span>
-  </a>
-  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-amd64.tar.xz">
-    Linux
-    <span class="sub">x86-64 · .tar.xz</span>
-  </a>
-  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-arm64.tar.xz">
-    Linux — ARM
-    <span class="sub">arm64 · .tar.xz</span>
-  </a>
-  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage">
-    Linux — AppImage
-    <span class="sub">x86-64 · one file — chmod +x and run</span>
+    <span class="sub">Apple&nbsp;Silicon and Intel &middot; one universal app &middot; .zip</span>
   </a>
 
-  <p class="note">On a Mac the App&nbsp;Store version and on Windows the Microsoft&nbsp;Store
-  version are the easier routes — signed and kept up to date for you. The downloads here are
-  unsigned, so on macOS right-click the app and choose <em>Open</em> the first time.</p>
+  <h3>Windows</h3>
+  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-amd64.zip">
+    Windows
+    <span class="sub">Intel or AMD 64-bit &middot; .zip</span>
+  </a>
+  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-arm64.zip">
+    Windows on ARM
+    <span class="sub">ARM 64-bit &middot; .zip</span>
+  </a>
+
+  <h3>Linux</h3>
+  <p class="note pick">Take the <strong>.tar.xz</strong> unless you have a reason not to: it
+  installs a desktop entry, so shared <em>Open in BibleText</em> links open the app. The AppImage
+  is a single file you can run from anywhere, but it does not register those links.</p>
+  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-amd64.tar.xz">
+    Linux &middot; .tar.xz
+    <span class="sub">Intel or AMD 64-bit</span>
+  </a>
+  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-arm64.tar.xz">
+    Linux &middot; .tar.xz
+    <span class="sub">ARM 64-bit &mdash; Raspberry&nbsp;Pi, Ampere, Apple&nbsp;Silicon VMs</span>
+  </a>
+  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage">
+    Linux &middot; AppImage
+    <span class="sub">Intel or AMD 64-bit &mdash; chmod +x and run</span>
+  </a>
+  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-aarch64.AppImage">
+    Linux &middot; AppImage
+    <span class="sub">ARM 64-bit &mdash; chmod +x and run</span>
+  </a>
 
   <p class="oss">BibleText is <strong>free and open source</strong> (Apache-2.0) —
   no ads, no accounts, no tracking.<br>
