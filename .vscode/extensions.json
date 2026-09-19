@@ -17,7 +17,7 @@
     // are invisible until a release fails. Worth having on.
     "timonwong.shellcheck",
 
-    // TOML: cmd/desktop/FyneApp.toml and cmd/mobile/FyneApp.toml carry the
+    // TOML: cmd/bibletext/FyneApp.toml and cmd/mobile/FyneApp.toml carry the
     // version and build numbers that App Store submissions are cut from.
     "tamasfe.even-better-toml",
 

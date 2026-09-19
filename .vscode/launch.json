@@ -22,7 +22,7 @@
       // its terminal is open, so WITHOUT this the app quits but the Stop button
       // lingers until you click it. On a COMPILE error `go run` exits non-zero, so
       // `&& exit` is skipped and the terminal stays open with the error visible.
-      "command": "go run ./cmd/desktop && exit",
+      "command": "go run ./cmd/bibletext && exit",
       "cwd": "${workspaceFolder}"
     },
     {
@@ -30,7 +30,7 @@
       // The bibletextdev tag: Links tab, dev scenarios, and the mimic switch.
       "type": "node-terminal",
       "request": "launch",
-      "command": "go run -tags bibletextdev ./cmd/desktop && exit",
+      "command": "go run -tags bibletextdev ./cmd/bibletext && exit",
       "cwd": "${workspaceFolder}"
     },
     {
@@ -40,14 +40,14 @@
       // what still needs real hardware: docs/PLATFORM_MIMIC.md.
       "type": "node-terminal",
       "request": "launch",
-      "command": "BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/desktop && exit",
+      "command": "BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/bibletext && exit",
       "cwd": "${workspaceFolder}"
     },
     {
       "name": "Run Desktop MIMIC: Windows (no debugger)",
       "type": "node-terminal",
       "request": "launch",
-      "command": "BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop && exit",
+      "command": "BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/bibletext && exit",
       "cwd": "${workspaceFolder}"
     },
     {
@@ -58,8 +58,8 @@
       // `&& exit` closes the terminal on a clean quit (see note above).
       "type": "node-terminal",
       "request": "launch",
-      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext && './BibleText.app/Contents/MacOS/desktop' && exit",
-      "cwd": "${workspaceFolder}/cmd/desktop"
+      "command": "PATH=\"$(go env GOPATH)/bin:$PATH\" fyne package -os darwin --app-id uk.co.bibletext && './BibleText.app/Contents/MacOS/BibleText' && exit",
+      "cwd": "${workspaceFolder}/cmd/bibletext"
     },
     {
       "name": "Run on iOS Simulator (no debugger)",
@@ -81,7 +81,7 @@
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/cmd/desktop",
+      "program": "${workspaceFolder}/cmd/bibletext",
       "cwd": "${workspaceFolder}",
       "showLog": true,
       // To exercise AI study with a key while debugging, export a provider env var
@@ -98,7 +98,7 @@
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/cmd/desktop",
+      "program": "${workspaceFolder}/cmd/bibletext",
       "cwd": "${workspaceFolder}",
       "buildFlags": "-tags bibletextdev",
       "env": { "BIBLETEXT_MIMIC": "linux" }
@@ -108,7 +108,7 @@
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/cmd/desktop",
+      "program": "${workspaceFolder}/cmd/bibletext",
       "cwd": "${workspaceFolder}",
       "buildFlags": "-tags bibletextdev",
       "env": { "BIBLETEXT_MIMIC": "windows" }

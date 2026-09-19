@@ -4,7 +4,7 @@
 
   This is a template: `go run ./cmd/msstore manifest -out …` fills the four
   placeholders (the double-underscored upper-case tokens) from msstore/identity.json (what Partner Center assigned
-  when the name was reserved) and cmd/desktop/FyneApp.toml (the version), and
+  when the name was reserved) and cmd/bibletext/FyneApp.toml (the version), and
   refuses to leave any behind. The Store re-signs the package, so the
   Publisher must be the CN=… value Partner Center shows, never a certificate
   of ours.
@@ -19,7 +19,7 @@
     runs as the user, so internetClient and the other AppContainer
     capabilities do not apply to it.
   - The tiles are the qualifier-named files under Assets/, generated from
-    the shipped icon (cmd/desktop/Icon.png) by the same command; makepri
+    the shipped icon (cmd/bibletext/Icon.png) by the same command; makepri
     turns the qualifiers into resources.pri on the runner.
   - Two link handlers under Extensions: the web-to-app handler for
     bibletext.co.uk (shell-launched https links) and the bibletext: scheme

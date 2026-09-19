@@ -216,8 +216,9 @@ place a fix on one does not reach the others.
       on the hardware sink. This is the check the arch-specific ALSA layout
       exists for: a wrong triplet builds, packs, installs and launches
       perfectly and is silent, so only a stream on a real sound server settles
-      it. (That third client name is the executable-name defect — see
-      `docs/BACKLOG.md`.)
+      it. (That third client name was the executable-name defect: the
+      packager took the name from the `cmd/desktop` source directory, which is
+      now `cmd/bibletext` — see `docs/BACKLOG.md`.)
     - **read-along** advanced through the chapter and auto-scrolled to follow;
     - a `bibletext:` link fired with `xdg-open` reached the running instance,
       brought its window to the front and navigated, leaving one process. This

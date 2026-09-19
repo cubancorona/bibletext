@@ -97,8 +97,8 @@ python3 scripts/check-mac-store-config.py || fail "store configuration is not sh
 python3 scripts/check-product-identity.py || fail "product identity is inconsistent"
 python3 scripts/check-min-os-versions.py || fail "declared OS floors are not shippable"
 # A spent version (docs/VERSIONING.md) must never be rebuilt with new code.
-DESKTOP_VERSION=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/desktop/FyneApp.toml)
-[ -n "$DESKTOP_VERSION" ] || fail "could not read Version from cmd/desktop/FyneApp.toml"
+DESKTOP_VERSION=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/bibletext/FyneApp.toml)
+[ -n "$DESKTOP_VERSION" ] || fail "could not read Version from cmd/bibletext/FyneApp.toml"
 ./scripts/check-version-not-spent.sh "$DESKTOP_VERSION" || fail "version $DESKTOP_VERSION is spent"
 
 # Distribution certificates, not the Development ones the device scripts use.
@@ -126,13 +126,13 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 # rename instead. The same step also brings the emoji and caret-blink fixes
 # the other platforms already ship.
 cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
-# `fyne package` REWRITES cmd/desktop/FyneApp.toml's Build after a successful
+# `fyne package` REWRITES cmd/bibletext/FyneApp.toml's Build after a successful
 # package, so a build leaves the ledger one ahead of the number it shipped.
 # Restored on exit, exactly as build-android.sh does, so the tree is never left
 # carrying a bump nobody chose — committing one by accident is how the ledger
 # drifted 44→46 during an earlier release.
-cp "$REPO_ROOT/cmd/desktop/FyneApp.toml" "$WORK/FyneApp.toml.original"
-trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$REPO_ROOT/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
+cp "$REPO_ROOT/cmd/bibletext/FyneApp.toml" "$WORK/FyneApp.toml.original"
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$REPO_ROOT/cmd/bibletext/FyneApp.toml" 2>/dev/null || true' EXIT
 note "applying the Fyne patches (go.mod restored on exit)"
 "$REPO_ROOT/scripts/setup-fyne-patch.sh"
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
@@ -147,12 +147,12 @@ source scripts/release-bible-key.sh
 load_release_bible_key
 # Replaces the go.mod-only trap above: both cleanups, or the key would outlive
 # the build when this trap overwrote the first one.
-trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$REPO_ROOT/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true; cp "$WORK/FyneApp.toml.original" "$REPO_ROOT/cmd/bibletext/FyneApp.toml" 2>/dev/null || true' EXIT
 (
-  cd cmd/desktop
+  cd cmd/bibletext
   export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
-  CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop-arm64" .
-  CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop-amd64" .
+  CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/BibleText-arm64" .
+  CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/BibleText-amd64" .
 )
 
 note "confirming the atomic preferences writer is in both slices"
@@ -165,7 +165,7 @@ note "confirming the atomic preferences writer is in both slices"
 # SIGPIPE, and under `set -o pipefail` that non-zero status fails the pipeline
 # even though the string was found. The first run of this guard refused a
 # perfectly good build for exactly that reason.
-for slice in "$WORK/desktop-arm64" "$WORK/desktop-amd64"; do
+for slice in "$WORK/BibleText-arm64" "$WORK/BibleText-amd64"; do
   [ "$(strings -a "$slice" | grep -cF "Preferences save not published")" -gt 0 ] ||
     fail "$(basename "$slice") lacks the atomic preferences writer — the Fyne patch did not reach this build"
   [ "$(strings -a "$slice" | grep -cF "World English Bible")" -gt 0 ] ||
@@ -175,15 +175,15 @@ echo "  both slices carry the patched writer"
 
 note "joining them into one universal binary"
 # The Store expects a single app, not one upload per architecture.
-lipo -create -output "$WORK/desktop" "$WORK/desktop-arm64" "$WORK/desktop-amd64"
-lipo -info "$WORK/desktop"
+lipo -create -output "$WORK/BibleText" "$WORK/BibleText-arm64" "$WORK/BibleText-amd64"
+lipo -info "$WORK/BibleText"
 
 note "packaging the .app"
 (
-  cd cmd/desktop
-  cp "$WORK/desktop" ./desktop
-  "$(go env GOPATH)/bin/fyne" package -os darwin --app-id "$APP_ID" --executable desktop
-  rm -f ./desktop
+  cd cmd/bibletext
+  cp "$WORK/BibleText" ./BibleText
+  "$(go env GOPATH)/bin/fyne" package -os darwin --app-id "$APP_ID" --executable BibleText
+  rm -f ./BibleText
   mv BibleText.app "$APP"
 )
 
@@ -194,7 +194,7 @@ note "verifying the packaged binary before it is signed"
 # makes the derived root the home directory — exactly the path a local build
 # would leak, and the reason -trimpath is not taken on trust.
 GITHUB_WORKSPACE="$REPO_ROOT" BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
-  ./scripts/verify-release-package.sh "$APP/Contents/MacOS/desktop" "$APP"
+  ./scripts/verify-release-package.sh "$APP/Contents/MacOS/BibleText" "$APP"
 
 note "setting the store category"
 # The packager's Info.plist template writes public.app-category.<category>
@@ -282,7 +282,7 @@ note "confirming the app honours the declared macOS floor"
 # here, which is the prompt to raise the declared floor deliberately.
 PLIST_MIN=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")
 [ "$PLIST_MIN" = "$MAC_MIN" ] || fail "Info.plist declares macOS $PLIST_MIN, not $MAC_MIN"
-MINOS_SEEN=$(otool -l "$APP/Contents/MacOS/desktop" | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')
+MINOS_SEEN=$(otool -l "$APP/Contents/MacOS/BibleText" | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')
 [ -n "$MINOS_SEEN" ] || fail "could not read LC_BUILD_VERSION minos from the universal binary"
 SLICES=$(printf '%s\n' "$MINOS_SEEN" | wc -l | tr -d ' ')
 [ "$SLICES" = "2" ] || fail "expected 2 binary slices with a minos, found $SLICES"

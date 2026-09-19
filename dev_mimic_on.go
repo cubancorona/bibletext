@@ -19,8 +19,8 @@ package bibletext
 //
 // Launch:
 //
-//	BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop
-//	BIBLETEXT_MIMIC=linux   go run -tags bibletextdev ./cmd/desktop
+//	BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/bibletext
+//	BIBLETEXT_MIMIC=linux   go run -tags bibletextdev ./cmd/bibletext
 //
 // The app header shows a "MIMIC: Windows" / "MIMIC: Linux" badge while active,
 // so a screenshot from this mode can never masquerade as the real platform.

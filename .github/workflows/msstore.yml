@@ -1,7 +1,7 @@
 # Builds the Microsoft Store package: an unsigned MSIX (the Store signs it)
 # around the same BibleText.exe the GitHub release ships, with the manifest
 # filled from the reserved identity and the desktop ledger, and the tiles
-# generated from cmd/desktop/Icon.png, the mark every channel ships. The .msix artifact is what gets uploaded in
+# generated from cmd/bibletext/Icon.png, the mark every channel ships. The .msix artifact is what gets uploaded in
 # Partner Center; docs/WINDOWS_STORE_LISTING.md holds the listing.
 #
 # The smoke job then proves the package installs and launches: a COPY of the
@@ -100,7 +100,7 @@ jobs:
           layout=build/msstore/layout
           mkdir -p "$layout"
           go run ./cmd/msstore manifest -arch "${{ matrix.arch }}" -out "$layout/AppxManifest.xml"
-          cp cmd/desktop/BibleText.exe "$layout/"
+          cp cmd/bibletext/BibleText.exe "$layout/"
           cp -r msstore/Assets "$layout/Assets"
           # ANGLE renders the app through Direct3D, which Windows provides on
           # every machine including one with no graphics driver. Without these

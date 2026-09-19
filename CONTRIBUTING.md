@@ -10,7 +10,7 @@ You need [Go](https://go.dev/dl/) 1.24 or newer.
 ```bash
 git clone https://github.com/cubancorona/bibletext.git
 cd bibletext
-go run ./cmd/desktop        # launch the desktop reader
+go run ./cmd/bibletext        # launch the desktop reader
 go test ./...               # run the test suite
 ```
 
@@ -90,7 +90,7 @@ it and refuses to build if it is malformed. To ship your own deployment:
 
 1. Edit `config/product.json` with your values.
 2. Mirror the bundle ids, name, and website into `cmd/mobile/FyneApp.toml`
-   and `cmd/desktop/FyneApp.toml`, and the fallback bundle id in
+   and `cmd/bibletext/FyneApp.toml`, and the fallback bundle id in
    `ai_secure_store_darwin.go` — external tools read these, so they cannot
    derive from JSON; `scripts/check-product-identity.py` fails CI until they
    all agree.

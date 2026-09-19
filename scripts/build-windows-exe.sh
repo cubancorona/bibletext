@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds cmd/desktop/BibleText.exe for the Microsoft Store package exactly the
+# Builds cmd/bibletext/BibleText.exe for the Microsoft Store package exactly the
 # way .github/workflows/release.yml's Windows job builds the release zip: the
 # bundled NKJV key comes from BIBLETEXT_BUNDLED_KEY_ENC, the binary is
 # trimmed and stripped, `fyne package` adds the icon and version resources,
@@ -25,7 +25,7 @@ source scripts/release-bible-key.sh
 load_encoded_release_bible_key
 trap clear_release_bible_key EXIT
 
-cd cmd/desktop
+cd cmd/bibletext
 # EXPORTED, not a command prefix: `fyne package` below rebuilds the
 # executable to add its icon and version resources, and a prefix assignment
 # would not reach it — the rebuild would silently target the host.

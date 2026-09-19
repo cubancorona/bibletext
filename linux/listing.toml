@@ -3,7 +3,7 @@
 # MetaInfo, the desktop entries, the icons, snap/snapcraft.yaml and the
 # Flatpak manifest; the tests in cmd/linuxmeta hold the committed outputs
 # equal to a fresh render. Identity (name, site, support page, repository)
-# comes from config/product.json; the version from cmd/desktop/FyneApp.toml;
+# comes from config/product.json; the version from cmd/bibletext/FyneApp.toml;
 # release dates and notes from linux/releases.toml. Edit here, never the
 # outputs. docs/LINUX_STORES.md carries the reasoning for every value.
 

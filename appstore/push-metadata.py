@@ -8,7 +8,7 @@ Use ``--local-only`` for a validation pass that makes no network request.
 
 The app record carries two platforms. The default is IOS; ``--platform
 MAC_OS`` targets the Mac version instead, taking its version string from
-cmd/desktop/FyneApp.toml and its description, promotional text, and optional
+cmd/bibletext/FyneApp.toml and its description, promotional text, and optional
 What's New from ``metadata/en-GB/mac/``. Keywords and the URLs fall back to
 the shared en-GB files when no Mac-specific file exists, and the app-level
 name/subtitle/privacy-URL fields are skipped — they are one per app, not one
@@ -41,7 +41,7 @@ LOCALE = "en-GB"
 # mobile ledger is how the Mac record went unpreflighted.
 PLATFORM_VERSION_CONFIG = {
     "IOS": os.path.join("cmd", "mobile", "FyneApp.toml"),
-    "MAC_OS": os.path.join("cmd", "desktop", "FyneApp.toml"),
+    "MAC_OS": os.path.join("cmd", "bibletext", "FyneApp.toml"),
 }
 
 

@@ -39,8 +39,8 @@ esac
 ARCH="${3:-$HOST_ARCH}"
 OUT="${2:-BibleText-$ARCH.AppImage}"
 ID=uk.co.bibletext.BibleText
-LEDGER_VERSION="$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/desktop/FyneApp.toml)"
-[ -n "$LEDGER_VERSION" ] || { echo "no Version in cmd/desktop/FyneApp.toml" >&2; exit 1; }
+LEDGER_VERSION="$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/bibletext/FyneApp.toml)"
+[ -n "$LEDGER_VERSION" ] || { echo "no Version in cmd/bibletext/FyneApp.toml" >&2; exit 1; }
 APPDIR=build/BibleText.AppDir
 TOOLS=build/appimage-tools
 # Pinned tool releases, checked once and recorded here (sha256 of the assets).

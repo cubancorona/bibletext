@@ -86,7 +86,7 @@ note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ── 0. apply the iOS-only Fyne scroll-lag patch for this build ───────────────
-# go.mod ships STOCK (so `go build` / `go run ./cmd/desktop` stay one-line); the
+# go.mod ships STOCK (so `go build` / `go run ./cmd/bibletext` stay one-line); the
 # fix is a one-line change to Fyne's iOS drawloop (see patches/README.md). We
 # regenerate a patched Fyne and inject a temporary `replace` just for this build.
 # Preserve the exact pre-build files (including uncommitted version/build edits)

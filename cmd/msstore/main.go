@@ -1,7 +1,7 @@
 // Command msstore prepares the inputs of the Microsoft Store package: the
-// tile assets scaled from the shipped icon (cmd/desktop/Icon.png, the mark
+// tile assets scaled from the shipped icon (cmd/bibletext/Icon.png, the mark
 // every other channel carries), and the AppxManifest filled from the
-// desktop ledger (cmd/desktop/FyneApp.toml) and the identity Partner Center
+// desktop ledger (cmd/bibletext/FyneApp.toml) and the identity Partner Center
 // assigned when the name was reserved (msstore/identity.json).
 //
 //	go run ./cmd/msstore assets
@@ -206,7 +206,7 @@ func repoRelative(parts ...string) string {
 
 func runAssets(args []string) error {
 	fs := flag.NewFlagSet("assets", flag.ContinueOnError)
-	icon := fs.String("icon", repoRelative("cmd", "desktop", "Icon.png"), "square source icon")
+	icon := fs.String("icon", repoRelative("cmd", "bibletext", "Icon.png"), "square source icon")
 	out := fs.String("out", repoRelative("msstore", "Assets"), "directory the tiles are written to")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -220,7 +220,7 @@ func runAssets(args []string) error {
 
 func runListing(args []string) error {
 	fs := flag.NewFlagSet("listing", flag.ContinueOnError)
-	icon := fs.String("icon", repoRelative("cmd", "desktop", "Icon.png"), "square source icon")
+	icon := fs.String("icon", repoRelative("cmd", "bibletext", "Icon.png"), "square source icon")
 	out := fs.String("out", repoRelative("msstore", "listing"), "directory the listing logos are written to")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -236,7 +236,7 @@ func runManifest(args []string) error {
 	fs := flag.NewFlagSet("manifest", flag.ContinueOnError)
 	tmplPath := fs.String("template", repoRelative("msstore", "AppxManifest.xml.in"), "manifest template")
 	idPath := fs.String("identity", repoRelative("msstore", "identity.json"), "identity Partner Center assigned")
-	ledger := fs.String("ledger", repoRelative("cmd", "desktop", "FyneApp.toml"), "desktop version ledger")
+	ledger := fs.String("ledger", repoRelative("cmd", "bibletext", "FyneApp.toml"), "desktop version ledger")
 	out := fs.String("out", "", "where to write AppxManifest.xml (required)")
 	// Windows on ARM runs x64 packages under emulation, so a mislabelled
 	// manifest does not fail — it installs and runs slowly, forever.

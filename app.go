@@ -565,7 +565,7 @@ func Run() {
 }
 
 // systemThemeOnce guarantees we install the system-appearance listener exactly
-// once per process — both cmd/desktop (via Run) and cmd/mobile call
+// once per process — both cmd/bibletext (via Run) and cmd/mobile call
 // ObserveSystemThemeChanges, and we don't want stacked subscribers.
 var systemThemeOnce sync.Once
 

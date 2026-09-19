@@ -13,7 +13,7 @@ The whole shared codebase is **one Go library package, `bibletext`** (every
 `go run .` here. Four programs under `cmd/` consume it — the two app entry
 points and the two site generators:
 
-- `cmd/desktop/main.go` — desktop window (shared Read / Books / Search layout,
+- `cmd/bibletext/main.go` — desktop window (shared Read / Books / Search layout,
   left navigation rail by default, plus keyboard shortcuts). The former
   sidebar/HSplit remains an explicit diagnostic escape hatch.
 - `cmd/mobile/main.go` — iOS / Android; the OS owns the window size and the
@@ -105,7 +105,7 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
-| `cmd/desktop/main.go` | Desktop entry — calls `bibletext.Run()` |
+| `cmd/bibletext/main.go` | Desktop entry — calls `bibletext.Run()` |
 | `cmd/mobile/main.go` | Mobile entry — `app.NewWithID`, show window + spinner, `StartBackgroundLoad`; packaged via the iOS scripts (`scripts/run-ios-*.sh` / `release-ios.sh`) and `scripts/build-android.sh` |
 | `cmd/websitegen/` | Third entry point: generates the static web reader for bibletext.co.uk through the app's own decoders and poem-line rule (public-domain versions only — licensed ids are excluded by test); published solely via `scripts/publish-site.sh` |
 
@@ -249,7 +249,7 @@ prose.
 | `share_link_argv.go` | Windows/Linux link intake: the first site URL on the command line (`bibletext:` swapped for https, parsed, capped) delivered through `HandleShareLink`; a declined URL goes to the browser (invariant I2) |
 | `single_instance.go` + `_on/_off/_windows/_linux/_other` | one window per reader on Windows/Linux: exclusive record under the cache dir, loopback handshake (nonce → HMAC → token+URL → ok/no), forward-and-exit or listen; compiled in only for `windows || linux || bibletextdev` |
 | `share_link_echo.go`, `share_link_browser_command.go`, `share_link_browser_windows.go` | the loop-safe browser opener: the default browser's own command via the association API on Windows, the toolkit route as fallback with an echo guard so the Store build's web-to-app handler cannot catch the app's own hop |
-| `cmd/msstore/`, `msstore/` | Microsoft Store packaging inputs: tiles and listing logos from `cmd/desktop/Icon.png`, the AppxManifest template filled from `msstore/identity.json` and the desktop ledger, the read-side submission-API client; packaged by `.github/workflows/msstore.yml` |
+| `cmd/msstore/`, `msstore/` | Microsoft Store packaging inputs: tiles and listing logos from `cmd/bibletext/Icon.png`, the AppxManifest template filled from `msstore/identity.json` and the desktop ledger, the read-side submission-API client; packaged by `.github/workflows/msstore.yml` |
 
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
 build — the Go build tag picks the *platform*. Both feed the shared composition
@@ -685,11 +685,11 @@ test harness, not the app.
 
 ## Cross-platform builds
 
-Desktop targets compile from `./cmd/desktop` (Fyne pulls in OpenGL/GLFW). Plain
+Desktop targets compile from `./cmd/bibletext` (Fyne pulls in OpenGL/GLFW). Plain
 `go` commands need no setup — `go.mod` ships **stock** Fyne:
 
 ```bash
-go run ./cmd/desktop                    # fast desktop launch
+go run ./cmd/bibletext                    # fast desktop launch
 go build ./...                          # host-platform build
 go test -race ./...                     # tests live in the root package
 ```

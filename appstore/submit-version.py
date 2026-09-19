@@ -37,7 +37,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASC = os.path.join(ROOT, "build", "appstore", "asc.py")
 APP_ID = "6784567351"
-LEDGERS = {"IOS": "cmd/mobile/FyneApp.toml", "MAC_OS": "cmd/desktop/FyneApp.toml"}
+LEDGERS = {"IOS": "cmd/mobile/FyneApp.toml", "MAC_OS": "cmd/bibletext/FyneApp.toml"}
 
 
 def ledger_version(platform):

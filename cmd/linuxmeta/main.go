@@ -8,7 +8,7 @@
 //	go run ./cmd/linuxmeta flatpak-manifest -tag v1.2.10 -commit <sha>   # the flathub-repo copy
 //
 // linux/listing.toml is the source; config/product.json the identity;
-// cmd/desktop/FyneApp.toml the version; linux/releases.toml the history. The
+// cmd/bibletext/FyneApp.toml the version; linux/releases.toml the history. The
 // tests in this package hold every committed output equal to a fresh render.
 package main
 
@@ -126,13 +126,13 @@ func readInputs(repo string) (inputs, error) {
 		return in, fmt.Errorf("linux/releases.toml: %w", err)
 	}
 	in.Releases = rel.Release
-	ledger, err := os.ReadFile(filepath.Join(repo, "cmd", "desktop", "FyneApp.toml"))
+	ledger, err := os.ReadFile(filepath.Join(repo, "cmd", "bibletext", "FyneApp.toml"))
 	if err != nil {
 		return in, err
 	}
 	m := ledgerVersion.FindSubmatch(ledger)
 	if m == nil {
-		return in, errors.New("cmd/desktop/FyneApp.toml: no Version = \"x.y.z\" line")
+		return in, errors.New("cmd/bibletext/FyneApp.toml: no Version = \"x.y.z\" line")
 	}
 	in.Version = string(m[1])
 	in.Patches = fynePatchOrder
@@ -446,7 +446,7 @@ func renderFlatpakManifest(in inputs, src flatpakSource) string {
 	w("      - grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go\n")
 	w("      # Keyless by design: no linker value for the API.Bible key here\n")
 	w("      # (docs/API_KEY_HANDLING.md); the reader adds a key under Settings.\n")
-	w("      - go build -tags flatpak -ldflags '-s -w' -o %s ./cmd/desktop\n", l.Executable)
+	w("      - go build -tags flatpak -ldflags '-s -w' -o %s ./cmd/bibletext\n", l.Executable)
 	w("      - install -Dm755 %s ${FLATPAK_DEST}/bin/%s\n", l.Executable, l.Executable)
 	w("      - install -Dm644 linux/%s.desktop ${FLATPAK_DEST}/share/applications/%s.desktop\n", id, id)
 	w("      - install -Dm644 linux/flathub/%s.metainfo.xml ${FLATPAK_DEST}/share/metainfo/%s.metainfo.xml\n", id, id)
@@ -476,7 +476,7 @@ func renderFlatpakManifest(in inputs, src flatpakSource) string {
 	return b.String()
 }
 
-// renderIcon scales the shipped mark (cmd/desktop/Icon.png) to one size.
+// renderIcon scales the shipped mark (cmd/bibletext/Icon.png) to one size.
 func renderIcon(src image.Image, size int) *image.NRGBA {
 	dst := image.NewNRGBA(image.Rect(0, 0, size, size))
 	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
@@ -507,7 +507,7 @@ type output struct {
 }
 
 func renderAll(repo string, in inputs, a snapArch) ([]output, error) {
-	icon, err := loadIcon(filepath.Join(repo, "cmd", "desktop", "Icon.png"))
+	icon, err := loadIcon(filepath.Join(repo, "cmd", "bibletext", "Icon.png"))
 	if err != nil {
 		return nil, err
 	}

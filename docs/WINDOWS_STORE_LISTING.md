@@ -32,7 +32,7 @@ the console and the package cannot drift.
 | Package/Identity/Publisher | `CN=97067B4D-4523-4164-AFFB-B44233E7CCF2` | manifest `Identity Publisher`, verbatim; the Store signs with it |
 | Package/Properties/PublisherDisplayName | `bibletext.co.uk` | manifest `PublisherDisplayName` |
 | Package family name | `bibletext.co.uk.BibleText_ktgtejn4szjem` | where the app's redirected data lives on a customer's machine |
-| Package version | `<Version>.0` from `cmd/desktop/FyneApp.toml` | the Store reserves the fourth part; a re-upload needs a patch bump |
+| Package version | `<Version>.0` from `cmd/bibletext/FyneApp.toml` | the Store reserves the fourth part; a re-upload needs a patch bump |
 | Default language | `en-GB` | the manifest's `Resource Language`; the PRI is built for it |
 | Category | Books + reference → Reference | secondary category none |
 | Price | Free | all markets |
@@ -132,7 +132,7 @@ note the other stores get (`build/appstore/metadata/en-GB/whats-new-<v>.txt`).
 ## Images
 
 Package tiles and listing logos are generated from the shipped icon,
-`cmd/desktop/Icon.png` (the same mark every other channel carries), by
+`cmd/bibletext/Icon.png` (the same mark every other channel carries), by
 `go run ./cmd/msstore assets` and `go run ./cmd/msstore listing`; the tests
 in `cmd/msstore` hold the committed files equal to a fresh render.
 

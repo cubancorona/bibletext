@@ -52,7 +52,7 @@ def rule_failures(identity: dict, read) -> list[str]:
     # a duplicate line while the fyne CLI reads something else.
     for rel, want_id in (
         ("cmd/mobile/FyneApp.toml", identity["appID"]),
-        ("cmd/desktop/FyneApp.toml", identity["desktopAppID"]),
+        ("cmd/bibletext/FyneApp.toml", identity["desktopAppID"]),
     ):
         if (body := text(rel)) is None:
             continue
@@ -164,7 +164,7 @@ def self_test() -> list[str]:
             b'# Name = "SelfTest"\n'
             b'Name = "Other"\n'
         ),
-        "cmd/desktop/FyneApp.toml": (
+        "cmd/bibletext/FyneApp.toml": (
             b'Website = "https://other.invalid"\n'
             b'ID = "wrong.id"\n'
             b'Name = "Other"\n'
@@ -183,9 +183,9 @@ def self_test() -> list[str]:
         "cmd/mobile/FyneApp.toml: Website does not match",
         "cmd/mobile/FyneApp.toml: ID does not match",
         "cmd/mobile/FyneApp.toml: Name does not match",
-        "cmd/desktop/FyneApp.toml: Website does not match",
-        "cmd/desktop/FyneApp.toml: ID does not match",
-        "cmd/desktop/FyneApp.toml: Name does not match",
+        "cmd/bibletext/FyneApp.toml: Website does not match",
+        "cmd/bibletext/FyneApp.toml: ID does not match",
+        "cmd/bibletext/FyneApp.toml: Name does not match",
         "apple-app-site-association: app id entries",
         "assetlinks.json: package_name entries",
         "keychain fallback bundle id",
@@ -200,7 +200,7 @@ def self_test() -> list[str]:
             b'Name = "SelfTest"\n'
             b'ID = "invalid.selftest"\n'
         ),
-        "cmd/desktop/FyneApp.toml": (
+        "cmd/bibletext/FyneApp.toml": (
             b'Website = "https://selftest.invalid"\n'
             b'Name = "SelfTest"\n'
             b'ID = "invalid.selftest.desktop"\n'

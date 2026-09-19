@@ -77,29 +77,29 @@ jobs:
           # 10.11. The grep after each package proves the flag arrived.
           MAC_MIN="$(python3 -c 'import json;print(json.load(open("config/product.json"))["macMinimumOSVersion"],end="")')"
           export CGO_CFLAGS="-mmacosx-version-min=$MAC_MIN" CGO_LDFLAGS="-mmacosx-version-min=$MAC_MIN"
-          cd cmd/desktop
+          cd cmd/bibletext
           # `fyne package` REWRITES FyneApp.toml's Build on success, and the
           # verification below reads the ledger back, so the committed value is
           # saved first and restored before it is read. One package call means
           # the two-zips-one-checkout hazard is gone: 1.2.5 shipped builds 46
           # and 47 for the same commit because the ledger advanced between them.
           cp FyneApp.toml "$RUNNER_TEMP/FyneApp.toml.original"
-          trap 'clear_release_bible_key; cp "$RUNNER_TEMP/FyneApp.toml.original" "$GITHUB_WORKSPACE/cmd/desktop/FyneApp.toml" 2>/dev/null || true' EXIT
+          trap 'clear_release_bible_key; cp "$RUNNER_TEMP/FyneApp.toml.original" "$GITHUB_WORKSPACE/cmd/bibletext/FyneApp.toml" 2>/dev/null || true' EXIT
           # One slice per architecture, joined into a single binary, exactly as
           # scripts/release-mac-store.sh does for the Store upload — the direct
           # download differed from the Store build for no reason anyone chose.
-          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$RUNNER_TEMP/desktop-arm64" .
-          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$RUNNER_TEMP/desktop-amd64" .
-          lipo -create -output desktop "$RUNNER_TEMP/desktop-arm64" "$RUNNER_TEMP/desktop-amd64"
-          lipo -info desktop
-          $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable desktop
-          rm -f desktop
+          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$RUNNER_TEMP/BibleText-arm64" .
+          CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$RUNNER_TEMP/BibleText-amd64" .
+          lipo -create -output BibleText "$RUNNER_TEMP/BibleText-arm64" "$RUNNER_TEMP/BibleText-amd64"
+          lipo -info BibleText
+          $(go env GOPATH)/bin/fyne package -os darwin --app-id uk.co.bibletext --executable BibleText
+          rm -f BibleText
           /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MAC_MIN" BibleText.app/Contents/Info.plist
           # Both architectures must be in the packaged binary. `fyne package`
           # is given the joined file, but a packager that rebuilt instead of
           # copying would silently ship one slice, and the zip would still look
           # right from the outside.
-          PACKAGED_ARCHS="$(lipo -info BibleText.app/Contents/MacOS/desktop)"
+          PACKAGED_ARCHS="$(lipo -info BibleText.app/Contents/MacOS/BibleText)"
           echo "$PACKAGED_ARCHS"
           for arch in arm64 x86_64; do
             case "$PACKAGED_ARCHS" in
@@ -110,14 +110,14 @@ jobs:
           # The loader enforces each slice's own minos, so both are checked —
           # one slice linked for a newer macOS would refuse to start on the
           # floor the listing promises.
-          MINOS_SEEN="$(otool -l BibleText.app/Contents/MacOS/desktop | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')"
+          MINOS_SEEN="$(otool -l BibleText.app/Contents/MacOS/BibleText | awk '/LC_BUILD_VERSION/{v=1} v && $1=="minos"{print $2; v=0}')"
           [ -n "$MINOS_SEEN" ] || { echo "no LC_BUILD_VERSION minos in the universal binary" >&2; exit 1; }
           SLICES="$(printf '%s\n' "$MINOS_SEEN" | wc -l | tr -d ' ')"
           [ "$SLICES" = "2" ] || { echo "expected 2 slices with a minos, found $SLICES" >&2; exit 1; }
           for m in $MINOS_SEEN; do
             [ "$m" = "$MAC_MIN" ] || { echo "a slice is linked for macOS $m, not $MAC_MIN" >&2; exit 1; }
           done
-          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/desktop BibleText.app
+          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/BibleText BibleText.app
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS.zip
           rm -rf BibleText.app
           cp "$RUNNER_TEMP/FyneApp.toml.original" FyneApp.toml
@@ -174,7 +174,7 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
-          cd cmd/desktop
+          cd cmd/bibletext
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o bibletext .
           "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable bibletext
           mv BibleText.tar.xz ../../BibleText-Linux-amd64.tar.xz
@@ -186,7 +186,7 @@ jobs:
           # The AppImage, from the very same executable; verified again once
           # extracted, since the marker cannot be read through the squashfs.
           cd "$GITHUB_WORKSPACE"
-          scripts/build-appimage.sh cmd/desktop/bibletext BibleText-x86_64.AppImage
+          scripts/build-appimage.sh cmd/bibletext/bibletext BibleText-x86_64.AppImage
           rm -rf squashfs-root
           ./BibleText-x86_64.AppImage --appimage-extract >/dev/null
           grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
@@ -194,7 +194,7 @@ jobs:
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
           rm -rf squashfs-root
           # The snap job packages this same executable.
-          install -Dm755 cmd/desktop/bibletext build/snap-stage/bin/bibletext
+          install -Dm755 cmd/bibletext/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
       - uses: actions/upload-artifact@v4
         with:
@@ -284,7 +284,7 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
-          cd cmd/desktop
+          cd cmd/bibletext
           CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o bibletext .
           "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable bibletext
           mv BibleText.tar.xz ../../BibleText-Linux-arm64.tar.xz
@@ -293,14 +293,14 @@ jobs:
           # The AppImage, from the very same executable; verified again once
           # extracted, since the marker cannot be read through the squashfs.
           cd "$GITHUB_WORKSPACE"
-          scripts/build-appimage.sh cmd/desktop/bibletext BibleText-aarch64.AppImage aarch64
+          scripts/build-appimage.sh cmd/bibletext/bibletext BibleText-aarch64.AppImage aarch64
           rm -rf squashfs-root
           ./BibleText-aarch64.AppImage --appimage-extract >/dev/null
           grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
           grep -q '^MimeType=x-scheme-handler/bibletext;' squashfs-root/uk.co.bibletext.BibleText.desktop
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
           rm -rf squashfs-root
-          install -Dm755 cmd/desktop/bibletext build/snap-stage/bin/bibletext
+          install -Dm755 cmd/bibletext/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
       - uses: actions/upload-artifact@v4
         with:
@@ -416,7 +416,7 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
-          cd cmd/desktop
+          cd cmd/bibletext
           # EXPORTED, not a command prefix: `fyne package` below rebuilds the
           # executable, and a prefix assignment would not reach it.
           export GOARCH="${WIN_GOARCH:-amd64}"
@@ -434,9 +434,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          7z a BibleText-Windows-${{ matrix.goarch }}.zip ./cmd/desktop/BibleText.exe \
-            ./cmd/desktop/libEGL.dll ./cmd/desktop/libGLESv2.dll \
-            ./cmd/desktop/d3dcompiler_47.dll ./cmd/desktop/ANGLE-LICENSE.txt
+          7z a BibleText-Windows-${{ matrix.goarch }}.zip ./cmd/bibletext/BibleText.exe \
+            ./cmd/bibletext/libEGL.dll ./cmd/bibletext/libGLESv2.dll \
+            ./cmd/bibletext/d3dcompiler_47.dll ./cmd/bibletext/ANGLE-LICENSE.txt
       - name: upload asset
         env:
           GH_TOKEN: ${{ github.token }}

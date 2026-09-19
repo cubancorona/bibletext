@@ -53,7 +53,7 @@ the corpus lives in this repo's Go decoders (`bible.go`, `bsb.go`,
 `catholic.go`, `red_letter_data.go`, poetry `\n` conventions with tests). Any
 external SSG still needs a Go export step *plus* a second implementation of
 poetry/red-letter rendering in its template language — permanent drift risk
-with the app. A third entry point beside `cmd/desktop` and `cmd/mobile`, using
+with the app. A third entry point beside `cmd/bibletext` and `cmd/mobile`, using
 stdlib `html/template` + the same decoders, has **zero npm dependencies, zero
 framework churn** (Astro shipped 3 majors in ~18 months), and compiles
 identically in a decade. The site is finished text with almost no

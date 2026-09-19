@@ -504,10 +504,10 @@ assert_json_args "$TEST_TMP/wrapper-empty.json" env GOOS android
 BIBLETEXT_TEST_CAPTURE=1 \
 BIBLETEXT_REAL_GO="$SELF" \
 BIBLETEXT_RELEASE_LDFLAGS="$release_flags" \
-  "$WRAPPER" build -trimpath -ldflags=-w ./cmd/desktop \
+  "$WRAPPER" build -trimpath -ldflags=-w ./cmd/bibletext \
   >"$TEST_TMP/wrapper-nonshared.json"
 assert_json_args "$TEST_TMP/wrapper-nonshared.json" \
-  build -trimpath -ldflags=-w ./cmd/desktop
+  build -trimpath -ldflags=-w ./cmd/bibletext
 
 python3 - "$TEST_TMP" "$marker" <<'PY'
 from pathlib import Path

@@ -1,6 +1,6 @@
 # Compiled application binaries
 /bibletext
-/cmd/desktop/desktop
+/cmd/bibletext/bibletext
 /cmd/mobile/mobile
 # Fyne's Android packaging also drops the gomobile binary at the repository
 # root, which the /cmd/mobile/mobile rule above does not cover.
@@ -36,7 +36,16 @@ bibletext-*.json
 third_party/
 icon_work/
 build/
-/desktop
+
+# Intermediate executables the packagers build inside cmd/bibletext before
+# `fyne package` folds them into a bundle. They are untracked, and the hygiene
+# check scans untracked-but-unignored file CONTENTS for the bundled API key, so
+# a half-finished local Store or Windows build would otherwise report a real
+# key hit. One name per platform, because each channel names its executable the
+# way that platform expects.
+/cmd/bibletext/BibleText
+/cmd/bibletext/BibleText.exe
+/cmd/bibletext/BibleText.app/
 
 # Android bridge build output (compiled by scripts/build-android.sh)
 android/classes/

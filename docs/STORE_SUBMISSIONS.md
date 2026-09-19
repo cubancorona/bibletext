@@ -49,7 +49,7 @@ rebuilds the desktop assets; everything else — the AAB, the `.ipa`, the Mac
 built from the tag, not from a later HEAD.
 
 **Version bumps touch more than the two packaging ledgers**, and each coupling
-is enforced by a test: `cmd/desktop/FyneApp.toml`, `cmd/mobile/FyneApp.toml`,
+is enforced by a test: `cmd/bibletext/FyneApp.toml`, `cmd/mobile/FyneApp.toml`,
 both review-notes files' first line, `appstore/push-review-notes.py`'s
 `TARGET_VERSION`, and version-named What's New files for iOS and Mac.
 

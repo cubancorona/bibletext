@@ -38,7 +38,7 @@ jobs:
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
           mkdir -p build/shots build/linkgen
-          (cd cmd/desktop && CGO_ENABLED=1 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w -H windowsgui" -o ../../build/shots/BibleText.exe .)
+          (cd cmd/bibletext && CGO_ENABLED=1 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w -H windowsgui" -o ../../build/shots/BibleText.exe .)
           cat > build/linkgen/main.go <<'GO'
           package main
 

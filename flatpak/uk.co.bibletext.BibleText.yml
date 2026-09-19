@@ -45,7 +45,7 @@ modules:
       - grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go
       # Keyless by design: no linker value for the API.Bible key here
       # (docs/API_KEY_HANDLING.md); the reader adds a key under Settings.
-      - go build -tags flatpak -ldflags '-s -w' -o bibletext ./cmd/desktop
+      - go build -tags flatpak -ldflags '-s -w' -o bibletext ./cmd/bibletext
       - install -Dm755 bibletext ${FLATPAK_DEST}/bin/bibletext
       - install -Dm644 linux/uk.co.bibletext.BibleText.desktop ${FLATPAK_DEST}/share/applications/uk.co.bibletext.BibleText.desktop
       - install -Dm644 linux/flathub/uk.co.bibletext.BibleText.metainfo.xml ${FLATPAK_DEST}/share/metainfo/uk.co.bibletext.BibleText.metainfo.xml

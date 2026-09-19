@@ -10,7 +10,7 @@ release-specific fields that did not change.
 
 The app record carries two platforms. The default is IOS; pass
 ``--platform MAC_OS`` to preflight the Mac version, whose version string comes
-from cmd/desktop/FyneApp.toml rather than cmd/mobile/FyneApp.toml.
+from cmd/bibletext/FyneApp.toml rather than cmd/mobile/FyneApp.toml.
 
 Screenshots get two real checks beyond the copy-forward diff:
 
@@ -49,7 +49,7 @@ LOCALE = "en-GB"
 # the other's FyneApp.toml is how the Mac record went unexamined for so long.
 PLATFORM_VERSION_CONFIG = {
     "IOS": os.path.join("cmd", "mobile", "FyneApp.toml"),
-    "MAC_OS": os.path.join("cmd", "desktop", "FyneApp.toml"),
+    "MAC_OS": os.path.join("cmd", "bibletext", "FyneApp.toml"),
 }
 
 

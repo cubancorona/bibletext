@@ -13,8 +13,8 @@ remain the final word on what those platforms actually render and play.
 ## Launching
 
 ```bash
-BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop
-BIBLETEXT_MIMIC=linux   go run -tags bibletextdev ./cmd/desktop
+BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/bibletext
+BIBLETEXT_MIMIC=linux   go run -tags bibletextdev ./cmd/bibletext
 ```
 
 Any other value (or unset) leaves the mode off. While active, the app header
@@ -57,7 +57,7 @@ styled helpers on the UI goroutine exactly as `readalong_other.go` does.
 handling, the command-line link intake, the single-instance handoff and the
 browser echo guard (`share_link_argv.go`, `single_instance.go`,
 `share_link_echo.go` — the dev build wires the listener in, so
-`BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/desktop
+`BIBLETEXT_MIMIC=windows go run -tags bibletextdev ./cmd/bibletext
 'https://bibletext.co.uk/web/john/3/#v16'` twice is the rehearsal: the
 second launch exits at once and the first opens John 3 and comes forward),
 device class, overlay recovery, the reading face, the lifecycle
