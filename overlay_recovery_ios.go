@@ -52,7 +52,16 @@ func foregroundOverlayRecovery(state *AppState) {
 		// Keep the reader's place if the view can still say where it was — on a
 		// truly emptied view it cannot, and landing at the top of the right
 		// chapter is a far better outcome than a blank page.
-		if v, d, f, ok := captureReadingAnchor(); ok {
+		//
+		// A POSITION is required, not merely an ok. A view sitting at the top
+		// answers ok with verse, delta and frac all zero — a true answer, and a
+		// useless one to restore to. Installing it anyway left the two sides of
+		// the app each expecting the other to place the view: Go held a restore,
+		// so the arrival stood its own placement down in favour of it, while the
+		// native side was handed 0,0,0 and armed nothing. Neither placed
+		// anything, and a note arriving from a link went unscrolled and unlit.
+		// Every other caller of captureReadingAnchor requires the position too.
+		if v, d, f, ok := captureReadingAnchor(); ok && (v > 0 || f > 0) {
 			state.restore = &restoreAnchor{
 				Book:    state.CurrentBook,
 				Chapter: state.CurrentChapter,

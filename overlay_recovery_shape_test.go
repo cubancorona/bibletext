@@ -117,3 +117,55 @@ func TestTheIOSHTMLImportTreatsAnEmptyResultAsFailure(t *testing.T) {
 		t.Error("the old nil-only guard is still in the file")
 	}
 }
+
+// A captured scroll anchor must carry a POSITION before it becomes a restore.
+//
+// captureReadingAnchor reports ok=1 for a view sitting at the very top, with
+// verse, delta and frac all zero — there is nothing wrong with that answer, it
+// simply means "the top". Every other caller in the tree reads it the same way
+// and requires a position as well as an ok. The foreground recovery did not: it
+// accepted ok alone and installed an all-zero restoreAnchor.
+//
+// That left the two sides of the app disagreeing about who would place the
+// view. Go held a restore, so chapterNoteArrival stood its own placement down
+// in favour of it; the native side was handed 0,0,0 and armed nothing. Neither
+// placed anything, and an arriving note went unscrolled and unlit.
+//
+// The control below is what makes this test honest rather than decorative: the
+// same matcher is run against the sibling call sites, which have always carried
+// the guard. If the matcher itself breaks, the control fails too and the
+// assertion above cannot pass for the wrong reason.
+func TestTheIOSForegroundRecoveryNeedsAPositionNotJustAnOK(t *testing.T) {
+	const guarded = "captureReadingAnchor(); ok && (v > 0 || f > 0)"
+
+	src, err := os.ReadFile("overlay_recovery_ios.go")
+	if err != nil {
+		t.Fatalf("the iOS foreground recovery is gone: %v", err)
+	}
+	if text := string(src); !strings.Contains(text, guarded) {
+		t.Error("overlay_recovery_ios.go accepts a captured anchor on ok alone. " +
+			"A view at the top answers ok with verse, delta and frac all zero, so a " +
+			"restore is installed that the native side then disarms — Go believes a " +
+			"restore will place the view, the native side has nothing armed, and " +
+			"nothing places it. Guard it the way every other caller does: " + guarded)
+	}
+
+	// The control. These have carried the guard all along, so a matcher that
+	// cannot find it here is broken, and the failure above would be noise.
+	for _, sibling := range []string{
+		"reading_state.go",
+		"reading_scroll_fyne.go",
+		"reading_macos.go",
+		"reading_ios.go",
+	} {
+		src, err := os.ReadFile(sibling)
+		if err != nil {
+			t.Fatalf("reading %s: %v", sibling, err)
+		}
+		if !strings.Contains(string(src), guarded) {
+			t.Fatalf("the control failed: %s does not contain %q, so this test's matcher "+
+				"cannot find the guard anywhere and proves nothing about the recovery",
+				sibling, guarded)
+		}
+	}
+}
