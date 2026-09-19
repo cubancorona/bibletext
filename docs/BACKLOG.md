@@ -209,6 +209,233 @@ CW_USEDEFAULT cascade, the app never calls `CenterOnScreen`, and
 `doCenterOnScreen` (`window_desktop.go:155-177`) centres against `GetVideoMode`
 rather than the work area, so a clamped window is still a cascaded one.
 
+## The site must not be published before the release that first ships ARM
+
+`docs/index.html` now offers **Linux — ARM** and **Windows — ARM** downloads,
+pointing at `releases/latest/download/BibleText-Linux-arm64.tar.xz` and
+`BibleText-Windows-arm64.zip`. Nothing produces those names yet: the jobs that
+do are in this same change and have never run, so the current `latest` release
+carries neither.
+
+`scripts/check-public-surfaces.py` is deliberately forward-looking — it holds
+the page equal to what the release WORKFLOW uploads, not to what is published —
+so it is satisfied, correctly. The gap is one of ordering, and it is invisible
+to every check in the repository:
+
+  - publish the site before the next release and both buttons 404;
+  - `scripts/publish-site.sh` is the only publisher and has no coupling to
+    release state, so nothing stops that happening.
+
+So: **cut the release first, confirm both assets are attached, then publish the
+site.** Worth a check in publish-site.sh that every
+`releases/latest/download/<name>` the page links actually exists on the latest
+release — that would close it permanently rather than relying on remembering.
+
+## FIXED: `make install` on the Linux tarball
+
+Found on 19 September 2026 the first time anything ever ran the installer, and
+fixed the same day. It had affected every architecture since the scheme-handler
+work, because it was in the packaging template rather than the build.
+
+The packager wrote the Makefile's icon variable without a file extension
+(`Icon := "uk.co.bibletext"`) while packaging the icon as
+`uk.co.bibletext.png`, so `make install` could not find it. Two consequences,
+and the second is the one that mattered:
+
+  - the target exited NON-ZERO after installing the executable and the desktop
+    entry, leaving a reader an application with no icon and an error they had no
+    way to interpret; and
+  - because make stops at the failed line, it **never reached
+    `update-desktop-database`** — so a tarball install produced no
+    `mimeinfo.cache`, and a `bibletext:` link opened nothing. The scheme handler
+    this whole patch exists for did not work for anyone installing from the
+    tarball.
+
+Fixed in `patches/fyne-tools-1.7.2-linux-scheme-handler.patch`: the four lines
+that use the icon as a FILE NAME now say `$(Icon).png`, while the `Icon :=`
+assignment and the .desktop entry's `Icon=` keep the bare name, which is what
+freedesktop icon-theme lookup expects. The patch was regenerated against the
+checksum-verified module zip rather than hand-edited, and applies with `-F 0`
+and no fuzz. Its own test asserts both directions and was mutation-proved.
+
+Verified end to end on an arm64 machine: `make install` exits 0, installs all
+three files, and produces `mimeinfo.cache`. `scripts/check-linux-package.sh`
+now requires all of that on every packaged tarball — proven to pass the fixed
+tarball and fail the old one.
+
+## The site must not be published before the release that first ships ARM
+
+`docs/index.html` now offers **Linux — ARM** and **Windows — ARM** downloads,
+pointing at `releases/latest/download/BibleText-Linux-arm64.tar.xz` and
+`BibleText-Windows-arm64.zip`. Nothing produces those names yet: the jobs that
+do are in this same change and have never run, so the current `latest` release
+carries neither.
+
+`scripts/check-public-surfaces.py` is deliberately forward-looking — it holds
+the page equal to what the release WORKFLOW uploads, not to what is published —
+so it is satisfied, correctly. The gap is one of ordering, and it is invisible
+to every check in the repository:
+
+  - publish the site before the next release and both buttons 404;
+  - `scripts/publish-site.sh` is the only publisher and has no coupling to
+    release state, so nothing stops that happening.
+
+So: **cut the release first, confirm both assets are attached, then publish the
+site.** Worth a check in publish-site.sh that every
+`releases/latest/download/<name>` the page links actually exists on the latest
+release — that would close it permanently rather than relying on remembering.
+
+## `make install` fails on the Linux tarball, and always has
+
+Found on 19 September 2026 the first time anything ever ran the installer, on a
+real packaged arm64 tarball. It affects every architecture, because it is in the
+packaging template rather than the build.
+
+The packager writes the Makefile's icon variable without a file extension:
+
+    Icon := "uk.co.bibletext"
+
+while it packages the icon as `usr/local/share/pixmaps/uk.co.bibletext.png`. So
+the install target's third line
+
+    install -Dm00644 usr/local/share/pixmaps/$(Icon) $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon)
+
+cannot find its file. `make install` installs the executable and the desktop
+entry, then exits NON-ZERO with `install: cannot stat`. A reader following the
+documented route gets an application that works, no icon, and an error they have
+no way to interpret. `make uninstall` and `make user-install` carry the same
+mistake on their own icon lines.
+
+It is upstream in fyne.io/tools (`cmd/fyne/internal/commands/package-unix.go`
+sets `Icon: appIDOrName`), and we already patch that exact file for Linux
+(`patches/fyne-tools-1.7.2-linux-scheme-handler.patch`), so the fix belongs
+there. Two shapes are possible and the choice matters:
+
+  - give the Makefile template `$(Icon).png` on its four pixmap/icon lines,
+    leaving the .desktop entry's `Icon=` without an extension, which is the
+    freedesktop convention for theme lookup; or
+  - append `.png` to the Icon value itself, which fixes the Makefile but also
+    puts `Icon=uk.co.bibletext.png` in the desktop entry.
+
+The first is the correct one. The patches apply with `-F 0` and no fuzz, and
+the existing patch already edits this template, so the hunks must be regenerated
+rather than hand-extended.
+
+`scripts/check-linux-package.sh` now runs the installer on every packaged
+tarball, and tolerates THIS failure by name and only while it is the only
+install error — any other one fails the build. So the tolerance disappears the
+moment the fix lands, and cannot quietly cover a second defect meanwhile.
+
+## What we ship has largely never been run
+
+Found by a five-platform survey on 18 September 2026, each platform's claims
+then checked by an adversarial reader that refuted 48 of them. The full picture
+is docs/PLATFORM_MATRIX.md; these are the items that need a decision rather
+than a document.
+
+None of this is about architecture. It is about the gap between "CI is green"
+and "somebody ran the thing we give people".
+
+  - **macOS: every row is `builds`.** Nothing we ship has ever been launched
+    from the artefact we ship. PARTLY ADDRESSED 19 Sep 2026: the local rehearsal
+    now applies the Fyne patches and verifies the atomic preferences writer
+    reached the binary, with a control string — measured, a stock build carries
+    0 markers and a patched one 1, so the rehearsal really had been running the
+    unpatched writer. Three axes remain: arm64-only rather than universal, a
+    development certificate rather than the Store one, and no provisioning
+    profile.
+
+  - **No shipped Android artefact has been run.** Every recorded run installs
+    the DEBUG apk; the universal sideload APK and the Play AAB have never been
+    installed or launched, and the whole channel is host-locked to a single
+    machine. DONE 19 Sep 2026: the compile half — `scripts/check-android-pane.sh`
+    cross-compiles android/arm64 (preferring the pinned NDK r27, falling back to
+    whichever NDK is present and saying which it used) and runs in CI beside
+    the iOS gate, proven by a type error that `go build ./...` cannot see. What
+    remains is RUNNING a shipped artefact.
+
+  - **The iOS store artefact has never run on a device.** The on-device evidence
+    in the repository concerns development builds. `UIDeviceFamily` — the single
+    property that makes the app universal iPhone+iPad — is never read back out
+    of the exported .ipa, though other Info.plist keys are.
+
+  - **The Linux tarball's installer now runs, and fails.** See the entry above:
+    `scripts/check-linux-package.sh` exercises it on every packaged tarball and
+    the target exits non-zero on the icon line. What remains unproven is
+    any workflow, script or doc. And the AppImage's type-2 runtime is never
+    executed: the smoke runs `./squashfs-root/AppRun`, the extracted payload.
+
+  - **windows-build.yml has zero runs, ever.** It is registered and
+    dispatch-only, so no push has compiled it either.
+
+  - The owner's outstanding Linux hardware pass needs an x86_64 machine or a
+    cloud desktop; the arm64 VM explicitly cannot stand in for it.
+
+The cheap wins are probably the compile checks (a `GOOS=android` gate costs
+nothing) and launching the packaged macOS artefact rather than a development
+rebuild. The expensive one is deciding what "tested" should mean for a store
+binary we cannot run in CI at all.
+
+## Headings: quoting, notes and links need one deliberate pass
+
+Four heading defects were found and fixed on 18 September 2026 (selection led
+by a heading, a drag begun inside one, a drag that ended in one, and a heading
+selected alone). Each was found by pulling the thread of the one before it,
+which is the signal that this area has never had a deliberate pass -- only
+repairs. What follows is what is still open, or was decided quickly and should
+be decided properly.
+
+THE RULE IS ASSERTED IN ONE PLACE AND BROKEN IN OTHERS. `headings_test.go`
+states that a heading must never reach sharing, yet two live breaches turned up
+in an afternoon: a drag ending inside a heading carried the heading's words into
+the quotation, and a heading selected alone quoted itself as scripture. Both are
+fixed, but neither was caught by anything. The rule needs enforcing at the point
+every quotation is produced, not asserted once and hoped for. Audit every path
+that yields quoted text: `prepareShareQuoteIn`, `cleanQuoteTextIn`, the share
+card, the note composer's preview, the AI panel's quotation, the web reader.
+
+HEADING STYLES ARE NOT ALL ALIKE, AND THE CODE TREATS THEM AS IF THEY WERE.
+`Heading.Style` carries the publisher's own classification -- `s`/`s1`..`s4` for
+section heads, `ms` for a major section, `r`/`mr`/`sr` for a parallel-passage
+reference line, `qa` for an acrostic letter. `stripHeadings` treats all of them
+the same. They are not the same thing to a reader:
+
+  - a reference line is "(Matthew 3:1-12)" -- arguably a citation the reader
+    might legitimately want to copy;
+  - an acrostic letter is a single Hebrew letter name standing over Psalm 119's
+    stanzas, and the heading-only rule would anchor a note on "ALEPH" to the
+    stanza's first verse, which may be right, or may be surprising;
+  - a major section head spans many chapters' worth of material.
+
+PSALM SUPERSCRIPTIONS ARE A DIFFERENT TYPE ENTIRELY and were not touched.
+`Superscription` is its own struct, the timing tables carry verse-0 rows for it,
+and nothing in this work asked what happens when one is selected, noted or
+shared. It is the nearest neighbour to a heading and behaves differently.
+
+THE HEADING-ONLY DECISION WAS TAKEN QUICKLY. A heading selected alone now
+anchors to `Heading.BeforeVerse` and quotes NOTHING -- reference only. The
+reasoning: a note anchored to a heading cannot place for a recipient, because
+headings are the publisher's editorial matter and a shared link opens the
+public-domain web reader whose headings are not the licensed edition's; and
+quoting the verse would attribute words the reader did not select. That holds
+up, but it was one judgement made in one exchange, and it deserves to be
+revisited alongside the style question above rather than standing as settled.
+
+THE NATIVE RULE IS STILL BACKWARD AT THE START. All three native panes resolve
+an offset to a verse by the last verse-number run at or before it, so an offset
+inside a heading resolves to the verse ABOVE. The fix corrects the attribution
+downstream, in the shared normalizer, which is why one change reached macOS, iOS
+and Android at once. But the raw span is still wrong at source, and any future
+consumer of it inherits the defect. Worth deciding whether the native rule
+should look FORWARD when the offset falls in heading matter -- it is the same
+asymmetry noted in the arrival work: `hi` uses the inclusive last character and
+is right, `lo` uses the same backward rule and is not.
+
+WHAT A READER ACTUALLY WANTS IS THE UNANSWERED QUESTION. Everything above is
+mechanism. Nobody has asked what selecting a heading should MEAN: the section it
+introduces, the heading as a label, or nothing at all. The answer probably
+differs by style, and it decides the rest.
+
 ## The Windows audio smoke is probably testing a silent sink
 
 `windows-audio-smoke.yml` has failed repeatedly at the natural-end step, and
