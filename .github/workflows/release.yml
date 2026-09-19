@@ -178,28 +178,11 @@ jobs:
           CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
           "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable desktop
           mv BibleText.tar.xz ../../BibleText-Linux-amd64.tar.xz
-          scan_dir="$(mktemp -d)"
-          trap 'clear_release_bible_key; rm -rf "$scan_dir"' EXIT
-          tar -xJf ../../BibleText-Linux-amd64.tar.xz -C "$scan_dir"
-          mapfile -t packaged_binaries < <(find "$scan_dir" -type f -path '*/bin/desktop' -print)
-          if (( ${#packaged_binaries[@]} != 1 )); then
-            echo "::error::Expected one packaged Linux executable, found ${#packaged_binaries[@]}"
-            exit 1
-          fi
-          # The desktop entry must register the bibletext: scheme and be
-          # launched with the URL, or the site's "Open in BibleText" link
-          # opens nothing on Linux. The stock CLI's %F must never ship again.
-          entry="$(find "$scan_dir" -type f -name 'uk.co.bibletext.desktop' -print -quit)"
-          [ -n "$entry" ] || { echo "::error::no uk.co.bibletext.desktop in the Linux package"; exit 1; }
-          grep -q '^Exec=desktop %u$' "$entry" || { echo "::error::desktop entry Exec line is not 'desktop %u'"; cat "$entry"; exit 1; }
-          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry" || { echo "::error::desktop entry does not register x-scheme-handler/bibletext"; cat "$entry"; exit 1; }
-          makefile="$(find "$scan_dir" -type f -name Makefile -print -quit)"
-          [ -n "$makefile" ] || { echo "::error::no Makefile in the Linux package"; exit 1; }
-          grep -q 'update-desktop-database' "$makefile" || { echo "::error::the Makefile does not refresh mimeinfo.cache"; exit 1; }
-          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh "${packaged_binaries[0]}" "$scan_dir"
-          grep -q '^Categories=Education;Spirituality;$' "$entry" || { echo "::error::desktop entry has no Categories"; cat "$entry"; exit 1; }
-          if grep -q '^Keywords=fyne;' "$entry"; then echo "::error::the packager's fallback Keywords shipped"; exit 1; fi
-          ../../scripts/check-glibc-floor.sh desktop 2.35
+          # Every assertion a packaged Linux tarball must satisfy, on any
+          # architecture, lives in one script so the amd64 and arm64 jobs
+          # cannot drift apart and quietly stop checking the same things.
+          BIBLE_KEY_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+            ../../scripts/check-linux-package.sh ../../BibleText-Linux-amd64.tar.xz 2.35
           # The AppImage, from the very same executable; verified again once
           # extracted, since the marker cannot be read through the squashfs.
           cd "$GITHUB_WORKSPACE"
@@ -263,10 +246,135 @@ jobs:
           snap: ${{ steps.snapcraft.outputs.snap }}
           release: edge
 
-  windows:
-    name: build Windows (amd64)
+  linux-arm64:
+    name: build Linux (arm64)
     needs: create-release
-    runs-on: windows-latest
+    # Free on public repositories. The AppImage is deliberately NOT built here:
+    # scripts/build-appimage.sh pins an x86_64 appimagetool and runtime by
+    # sha256, so arm64 ships the tarball and the snap until that is done
+    # properly rather than half-done with an unpinned tool.
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: install GL/X11/ALSA headers and the packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev \
+            desktop-file-utils appstream binutils
+      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-patch.sh
+          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
+      - name: build the patched fyne CLI (Linux scheme-handler desktop entry)
+        shell: bash
+        run: |
+          ./scripts/setup-fyne-tools-patch.sh
+          (cd third_party/fyne-tools && go build -trimpath -o "$GITHUB_WORKSPACE/build/fyne-cli/fyne" ./cmd/fyne)
+      - name: package
+        shell: bash
+        env:
+          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+        run: |
+          set -euo pipefail
+          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
+          source scripts/release-bible-key.sh
+          load_encoded_release_bible_key
+          trap clear_release_bible_key EXIT
+          cd cmd/desktop
+          CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o desktop .
+          "$GITHUB_WORKSPACE/build/fyne-cli/fyne" package -os linux --app-id uk.co.bibletext --executable desktop
+          mv BibleText.tar.xz ../../BibleText-Linux-arm64.tar.xz
+          BIBLE_KEY_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
+            ../../scripts/check-linux-package.sh ../../BibleText-Linux-arm64.tar.xz 2.35
+          cd "$GITHUB_WORKSPACE"
+          install -Dm755 cmd/desktop/desktop build/snap-stage/bin/bibletext
+          install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap-stage-arm64
+          path: build/snap-stage
+          if-no-files-found: error
+          retention-days: 3
+      - name: upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Linux-arm64.tar.xz --clobber
+
+  snap-arm64:
+    name: build snap (arm64)
+    needs: linux-arm64
+    runs-on: ubuntu-24.04-arm
+    env:
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: snap-stage-arm64
+          path: build/snap-stage
+      - run: chmod 755 build/snap-stage/bin/bibletext
+      # Snap layouts take no variables and snapcraft will not vary one per
+      # platform, so the committed snapcraft.yaml is the amd64 render and this
+      # job re-renders for arm64 first. The layout binds a REAL path: an arm64
+      # snap carrying the x86_64 ALSA triplet builds, packs, installs and
+      # launches perfectly, and has no narration audio at all.
+      - name: render the snap for arm64
+        run: |
+          go run ./cmd/linuxmeta render -arch arm64
+          grep -q '^  arm64:' snap/snapcraft.yaml
+          grep -q 'bind: \$SNAP/usr/lib/aarch64-linux-gnu/alsa-lib' snap/snapcraft.yaml
+      - id: snapcraft
+        uses: snapcore/action-build@v1
+      - name: install and assert the exported entry
+        shell: bash
+        env:
+          SNAP_FILE: ${{ steps.snapcraft.outputs.snap }}
+        run: |
+          set -euo pipefail
+          sudo snap install --dangerous "$SNAP_FILE"
+          entry=/var/lib/snapd/desktop/applications/bibletext_bibletext.desktop
+          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
+          grep -q '^Exec=.*bibletext %u$' "$entry"
+          # The ALSA plugins must actually resolve inside the confinement, not
+          # merely be present in the squashfs.
+          sudo snap run --shell bibletext -c 'ls /usr/lib/aarch64-linux-gnu/alsa-lib/ >/dev/null'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bibletext-snap-arm64
+          path: ${{ steps.snapcraft.outputs.snap }}
+      - name: publish to edge
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        uses: snapcore/action-publish@v1
+        with:
+          snap: ${{ steps.snapcraft.outputs.snap }}
+          release: edge
+
+  windows:
+    name: build Windows (${{ matrix.goarch }})
+    needs: create-release
+    # Windows on ARM runs the x64 build under emulation, so it works today and
+    # a native package is the difference between working and belonging on the
+    # machine. `angle` is the spelling the ANGLE release uses, `goarch` Go's.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            angle: x64
+            runner: windows-latest
+          - goarch: arm64
+            angle: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -284,6 +392,7 @@ jobs:
         shell: bash
         env:
           BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+          WIN_GOARCH: ${{ matrix.goarch }}
         run: |
           set -euo pipefail
           unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
@@ -291,7 +400,10 @@ jobs:
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
           cd cmd/desktop
-          CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
+          # EXPORTED, not a command prefix: `fyne package` below rebuilds the
+          # executable, and a prefix assignment would not reach it.
+          export GOARCH="${WIN_GOARCH:-amd64}"
+          CGO_ENABLED=1 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
           # Fyne's Windows packager rebuilds the target to add icon/version
           # resources. GOFLAGS keeps that metadata pass trimmed and stripped,
           # and the tag must be repeated or that rebuild drops the ES path.
@@ -300,16 +412,16 @@ jobs:
           cd ../..
       - name: ANGLE beside the executable (the app renders through Direct3D)
         shell: pwsh
-        run: pwsh scripts/fetch-angle.ps1 -Dest cmd\desktop
+        run: pwsh scripts/fetch-angle.ps1 -Dest cmd\desktop -Arch ${{ matrix.angle }}
       - name: zip
         shell: bash
         run: |
           set -euo pipefail
-          7z a BibleText-Windows-amd64.zip ./cmd/desktop/BibleText.exe \
+          7z a BibleText-Windows-${{ matrix.goarch }}.zip ./cmd/desktop/BibleText.exe \
             ./cmd/desktop/libEGL.dll ./cmd/desktop/libGLESv2.dll \
             ./cmd/desktop/d3dcompiler_47.dll ./cmd/desktop/ANGLE-LICENSE.txt
       - name: upload asset
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Windows-amd64.zip --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" BibleText-Windows-${{ matrix.goarch }}.zip --clobber
