@@ -315,9 +315,9 @@ func TestAHeadingSelectedOnItsOwnBelongsToTheVerseBelowIt(t *testing.T) {
 	st := headingChapterState()
 
 	for _, sel := range []string{
-		headingText,                      // the whole heading
-		"Falls on the Gentiles",          // a drag that began part-way along it
-		"pirit Falls on the Gentiles",    // and one that began mid-word
+		headingText,                   // the whole heading
+		"Falls on the Gentiles",       // a drag that began part-way along it
+		"pirit Falls on the Gentiles", // and one that began mid-word
 	} {
 		got := selectionVersesIn(st, "Acts", 10, sel, selSpanFromNative(43, 43))
 		if len(got) != 1 || got[0].Verse != 44 {
@@ -349,7 +349,7 @@ func TestAHeadingSelectedOnItsOwnQuotesNothing(t *testing.T) {
 func TestAnUnlocatableSelectionThatIsNotHeadingTextStaysWhereTheSpanPutsIt(t *testing.T) {
 	st := headingChapterState()
 	for _, sel := range []string{
-		"zzz qqq",                 // nothing in the chapter or the heading
+		"zzz qqq", // nothing in the chapter or the heading
 		"words that appear nowhere in this fixture at all",
 	} {
 		got := selectionVersesIn(st, "Acts", 10, sel, selSpanFromNative(43, 43))
