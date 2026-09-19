@@ -164,3 +164,56 @@ func TestTheLocalMacBuildUsesTheToolkitWeActuallyShip(t *testing.T) {
 		t.Error("run-mac-sandbox-test.sh rewrites go.mod without restoring it")
 	}
 }
+
+// THE NAME A READER SEES. `fyne package` names the executable after the source
+// directory -- cmd/desktop -- so a Linux tarball built without --executable
+// installs /usr/local/bin/desktop. That name is wrong in three user-visible
+// places at once: it is a generic command in the reader's PATH that any other
+// Fyne app packaged from a desktop/ directory overwrites, it is what a reader
+// must type to start the app, and it is the client name the sound server shows
+// while narration plays -- a Linux volume control read "desktop", never
+// "BibleText". Proved on an arm64 desktop by running one identical binary under
+// both names: as desktop the stream was "PipeWire ALSA [desktop]", as bibletext
+// it was "PipeWire ALSA [bibletext]".
+//
+// The snap and the AppImage each rename the same executable on their way in, so
+// only the tarball ever shipped it raw. macOS still bundles CFBundleExecutable
+// as desktop and is deliberately out of scope here: that binary is signed and
+// shipped through the App Store, so changing it is a release decision rather
+// than a packaging fix.
+func TestTheLinuxPackagesShipTheAppsOwnExecutableName(t *testing.T) {
+	wf := readRepoFile(t, ".github/workflows/release.yml")
+
+	for _, bad := range []string{
+		"-os linux --app-id uk.co.bibletext --executable desktop",
+		"cmd/desktop/desktop",
+	} {
+		if strings.Contains(wf, bad) {
+			t.Errorf("release.yml still has %q; a Linux install would put a binary called "+
+				"'desktop' in the reader's PATH and name it 'desktop' in the volume control", bad)
+		}
+	}
+
+	// Both architectures must package under the right name, not just one.
+	if got := strings.Count(wf, "-os linux --app-id uk.co.bibletext --executable bibletext"); got != 2 {
+		t.Errorf("found %d Linux packaging lines naming the executable bibletext, want 2 "+
+			"(amd64 and arm64) -- an architecture that stops passing --executable silently reverts", got)
+	}
+
+	// macOS is the deliberate exception; if that line disappears this test's
+	// scope note is stale and the exception needs re-deciding, not ignoring.
+	if !strings.Contains(wf, "-os darwin --app-id uk.co.bibletext --executable desktop") {
+		t.Error("the darwin packaging line no longer names its executable 'desktop'; " +
+			"this test documents that as a deliberate exception, so update the note above")
+	}
+
+	// The check that runs in CI must pin the name too, or the workflow could
+	// drift back with nothing to catch it.
+	chk := readRepoFile(t, "scripts/check-linux-package.sh")
+	if !strings.Contains(chk, `[ "$exe" = bibletext ]`) {
+		t.Error("check-linux-package.sh no longer asserts the packaged executable is named bibletext")
+	}
+	if !strings.Contains(chk, `grep -q '^Exec=bibletext %u$'`) {
+		t.Error("check-linux-package.sh no longer requires the shipped desktop entry to launch 'bibletext'")
+	}
+}

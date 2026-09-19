@@ -287,6 +287,62 @@ three files, and produces `mimeinfo.cache`. `scripts/check-linux-package.sh`
 now requires all of that on every packaged tarball — proven to pass the fixed
 tarball and fail the old one.
 
+## FIXED (Linux): the packaged executable was called `desktop` — 19 September 2026
+
+`fyne package` names the executable after the source directory. Ours is
+`cmd/desktop`, so the Linux tarball shipped `usr/local/bin/desktop` and a
+`sudo make install` put **`/usr/bin/desktop`** on the reader's system. The name
+is wrong in three user-visible places at once:
+
+- a generic command in `PATH` that any other Fyne app packaged from a
+  `desktop/` directory installs over, and that `make uninstall` then removes
+  from under it;
+- the command a reader has to type to start the app, which is `desktop`, not
+  `bibletext`;
+- the client name the sound server shows while narration plays — a Linux
+  volume control listed the playing application as **`desktop`**.
+
+The snap (`install -Dm755 … build/snap-stage/bin/bibletext`) and the AppImage
+(`install -Dm755 "$BIN" "$APPDIR/usr/bin/bibletext"`) each rename the same
+executable on their way in, so only the plain tarball ever shipped it raw.
+
+Found by running the shipped 1.2.12 arm64 artifacts on a real desktop rather
+than by reading the build: the snap registered as `ALSA plug-in [bibletext]`,
+the AppImage as `PipeWire ALSA [bibletext]`, and the tarball as
+`PipeWire ALSA [desktop]`. Copying one identical binary to a second filename
+and running it under each name — same sha256, nothing else changed — moved the
+client name with the filename, which is the whole proof of cause.
+
+Why nothing caught it: `scripts/check-linux-package.sh` *hardcoded*
+`grep -q '^Exec=desktop %u$'`, so the check ratified the name instead of
+questioning it, and the installed-entry assertion derived `$exe` from whatever
+the archive happened to contain — a check that follows the artifact cannot
+notice the artifact going wrong.
+
+The fix passes `--executable bibletext` in both Linux packaging jobs, builds the
+Go binary as `bibletext`, points the AppImage and snap staging at
+`cmd/desktop/bibletext`, and pins the name from both ends in the check and in
+`TestTheLinuxPackagesShipTheAppsOwnExecutableName`.
+
+**Upgrade wrinkle, not yet handled.** A reader who installed any release up to
+1.2.12 has `/usr/local/bin/desktop` (or `/usr/bin/desktop`). Installing the next
+tarball adds `bibletext` and leaves the old binary orphaned: `make uninstall`
+from the new package removes the new name only. Options are a one-line
+`-rm …/desktop` in the Makefile's uninstall target, a note on the download page,
+or accepting the orphan. Decide before the next release ships.
+
+### Still open: macOS ships `CFBundleExecutable: desktop`
+
+The same packaging line runs for darwin (`--executable desktop`), so
+`BibleText.app/Contents/MacOS/desktop` is what Activity Monitor, the audio and
+microphone indicators, and crash reports name. It was deliberately left alone:
+that binary is signed, notarised and shipped through the App Store, so renaming
+it is a release decision rather than a packaging fix — the bundle id does not
+change and updates are unaffected, but it wants its own deliberate pass rather
+than riding along with a Linux fix. `TestTheLinuxPackagesShipTheAppsOwnExecutableName`
+asserts the darwin line still reads `desktop`, so this entry cannot go stale
+silently.
+
 ## What we ship has largely never been run
 
 Found by a five-platform survey on 18 September 2026, each platform's claims

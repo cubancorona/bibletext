@@ -21,7 +21,7 @@ scan_dir="$(mktemp -d)"
 trap 'rm -rf "$scan_dir"' EXIT
 tar -xJf "$tarball" -C "$scan_dir"
 
-mapfile -t packaged_binaries < <(find "$scan_dir" -type f -path '*/bin/desktop' -print)
+mapfile -t packaged_binaries < <(find "$scan_dir" -type f -path '*/bin/bibletext' -print)
 if (( ${#packaged_binaries[@]} != 1 )); then
   echo "::error::Expected one packaged Linux executable, found ${#packaged_binaries[@]}"
   exit 1
@@ -32,7 +32,17 @@ fi
 # CLI's %F must never ship again.
 entry="$(find "$scan_dir" -type f -name 'uk.co.bibletext.desktop' -print -quit)"
 [ -n "$entry" ] || { echo "::error::no uk.co.bibletext.desktop in the Linux package"; exit 1; }
-grep -q '^Exec=desktop %u$' "$entry" || { echo "::error::desktop entry Exec line is not 'desktop %u'"; cat "$entry"; exit 1; }
+# THE EXECUTABLE'S NAME IS USER-VISIBLE, IN THREE PLACES AT ONCE, and the
+# packager picks it for us: `fyne package` names the binary after the source
+# directory, which is cmd/desktop. So the tarball installed /usr/local/bin/desktop
+# -- a generic name in the reader's PATH that any other Fyne app packaged from a
+# desktop/ directory overwrites, the command a reader must type to start the app,
+# and the client name the sound server shows while narration plays (a Linux
+# volume control read "desktop", never "BibleText"). The snap and the AppImage
+# each rename the same executable; only the tarball shipped it raw. Asserted by
+# name rather than derived, because a check that follows whatever the archive
+# happens to contain cannot notice the name going generic again.
+grep -q '^Exec=bibletext %u$' "$entry" || { echo "::error::desktop entry Exec line is not 'bibletext %u'"; cat "$entry"; exit 1; }
 grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry" || { echo "::error::desktop entry does not register x-scheme-handler/bibletext"; cat "$entry"; exit 1; }
 grep -q '^Categories=Education;Spirituality;$' "$entry" || { echo "::error::desktop entry has no Categories"; cat "$entry"; exit 1; }
 if grep -q '^Keywords=fyne;' "$entry"; then echo "::error::the packager's fallback Keywords shipped"; exit 1; fi
@@ -68,6 +78,8 @@ fi
 # Whatever the icon does, these must land, or a reader who installs the tarball
 # has no application and no way for a bibletext: link to reach it.
 exe="$(basename "${packaged_binaries[0]}")"
+[ "$exe" = bibletext ] ||
+  { echo "::error::the packaged executable is named '$exe', not 'bibletext' (see the note above)"; exit 1; }
 for want in "$dest/usr/bin/$exe" \
              "$dest/usr/share/applications/uk.co.bibletext.desktop" \
              "$dest/usr/share/pixmaps/uk.co.bibletext.png" \
