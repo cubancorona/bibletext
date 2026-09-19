@@ -72,11 +72,10 @@ jobs:
         run: |
           ./scripts/setup-fyne-patch.sh
           go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
-      - name: build BibleText.exe
-        shell: bash
       # The runner image's gcc is x86_64 even on the ARM machine, so cgo cannot
-      # assemble aarch64. This puts a native aarch64-targeting toolchain on PATH
-      # and points CC at it; it is a no-op on x64, which already has one.
+      # assemble aarch64 and the build dies on runtime/cgo's first instruction.
+      # This puts a native aarch64-targeting toolchain on PATH and points CC at
+      # it. Skipped on x64, which already has a matching compiler.
       - name: aarch64 C toolchain
         if: matrix.arch == 'arm64'
         shell: pwsh
@@ -85,6 +84,8 @@ jobs:
           "$bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "CC=$bin\aarch64-w64-mingw32-clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & "$bin\aarch64-w64-mingw32-clang.exe" --version
+      - name: build BibleText.exe
+        shell: bash
         env:
           BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
           WIN_GOARCH: ${{ matrix.goarch }}
