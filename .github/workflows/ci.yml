@@ -60,6 +60,15 @@ jobs:
       - name: Android target SDK regression
         run: scripts/test-android-target-sdk.sh
 
+      # The android-tagged sources — the JNI bridge, the audio service glue —
+      # are invisible to `go build ./...`, `go vet` and the whole test suite,
+      # exactly as the ios-tagged ones are. iOS has had a compile gate since the
+      # day a cgo typo survived several rounds of "the tests pass"; Android had
+      # none at all, on any machine or runner. The GitHub Linux image ships an
+      # NDK, and the script fails rather than skips when it cannot find one.
+      - name: Android cross-compile (android/arm64, no packaging)
+        run: scripts/check-android-pane.sh
+
       - name: iOS deployment target regression
         run: scripts/test-ios-deployment-target.sh
 

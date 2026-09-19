@@ -60,6 +60,23 @@ CERT=$(security find-identity -v -p codesigning 2>/dev/null |
 
 note "building (arm64 only — this is a local test, not a release)"
 rm -rf "$WORK"; mkdir -p "$WORK"
+
+# THE PATCHED TOOLKIT, NOT THE STOCK ONE.
+#
+# go.mod ships stock Fyne, so without this the app launched here links the
+# UNPATCHED toolkit and differs from everything we ship. The patch that matters
+# most on macOS is the atomic preferences writer: stock Fyne truncates
+# preferences.json in place, so a death mid-write leaves an empty store and the
+# app reads that as a brand-new reader — every note gone, including the ones
+# that exist nowhere else. A rehearsal on the writer we do not ship is not
+# rehearsing anything.
+#
+# go.mod is restored on exit, exactly as scripts/release-mac-store.sh does it.
+cp "$REPO_ROOT/go.mod" "$WORK/go.mod.original"
+trap 'cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
+note "applying the Fyne patches (go.mod restored on exit)"
+"$REPO_ROOT/scripts/setup-fyne-patch.sh"
+( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 # The key is injected here for the same reason the release build injects it:
 # without it bundledBibleKeyEnc is empty, so the app reports no bundled key,
 # the API.Bible field reads "Paste your API.Bible key" rather than showing the
@@ -68,7 +85,9 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 # shellcheck source=/dev/null
 source scripts/release-bible-key.sh
 load_release_bible_key
-trap clear_release_bible_key EXIT
+# Replaces the go.mod-only trap above: both cleanups, or the key outlives the
+# build or go.mod stays rewritten.
+trap 'clear_release_bible_key; cp "$WORK/go.mod.original" "$REPO_ROOT/go.mod" 2>/dev/null || true' EXIT
 (
   cd cmd/desktop
   CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o "$WORK/desktop" .
@@ -77,6 +96,19 @@ trap clear_release_bible_key EXIT
   rm -f ./desktop
   mv BibleText.app "$APP"
 )
+
+note "confirming the patched writer reached this build"
+# grep -c, never grep -q: -q exits on the first match, strings then dies of
+# SIGPIPE, and under `set -o pipefail` that fails the pipeline even though the
+# string WAS found. The control string is what makes a zero mean absence rather
+# than a probe that cannot see anything at all.
+BIN="$APP/Contents/MacOS/desktop"
+[ -f "$BIN" ] || BIN="$WORK/desktop"
+[ "$(strings -a "$BIN" | grep -cF "Preferences save not published")" -gt 0 ] ||
+  fail "this build lacks the atomic preferences writer — the Fyne patch did not reach it, so it is not the app we ship"
+[ "$(strings -a "$BIN" | grep -cF "World English Bible")" -gt 0 ] ||
+  fail "this build is missing a string every build has; the marker probe cannot be trusted"
+echo "  the launched build carries the patched writer"
 
 note "embedding the container migration"
 mkdir -p "$APP/Contents/Resources"
