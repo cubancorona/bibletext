@@ -39,7 +39,7 @@
     Name="__IDENTITY_NAME__"
     Publisher="__IDENTITY_PUBLISHER__"
     Version="__VERSION__"
-    ProcessorArchitecture="x64" />
+    ProcessorArchitecture="__PROCESSOR_ARCHITECTURE__" />
 
   <Properties>
     <DisplayName>BibleText</DisplayName>

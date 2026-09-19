@@ -185,12 +185,13 @@ var placeholder = regexp.MustCompile(`__[A-Z_]+__`)
 
 // fillManifest substitutes the identity and version into the template and
 // refuses a result that still carries a placeholder.
-func fillManifest(tmpl string, id identity, version string) (string, error) {
+func fillManifest(tmpl string, id identity, version, arch string) (string, error) {
 	r := strings.NewReplacer(
 		"__IDENTITY_NAME__", id.IdentityName,
 		"__IDENTITY_PUBLISHER__", id.IdentityPublisher,
 		"__PUBLISHER_DISPLAY_NAME__", id.PublisherDisplayName,
 		"__VERSION__", version,
+		"__PROCESSOR_ARCHITECTURE__", arch,
 	)
 	out := r.Replace(tmpl)
 	if left := placeholder.FindAllString(out, -1); left != nil {
@@ -237,11 +238,17 @@ func runManifest(args []string) error {
 	idPath := fs.String("identity", repoRelative("msstore", "identity.json"), "identity Partner Center assigned")
 	ledger := fs.String("ledger", repoRelative("cmd", "desktop", "FyneApp.toml"), "desktop version ledger")
 	out := fs.String("out", "", "where to write AppxManifest.xml (required)")
+	// Windows on ARM runs x64 packages under emulation, so a mislabelled
+	// manifest does not fail — it installs and runs slowly, forever.
+	arch := fs.String("arch", "x64", "package processor architecture (x64 or arm64)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *out == "" {
 		return errors.New("manifest: -out is required")
+	}
+	if *arch != "x64" && *arch != "arm64" {
+		return fmt.Errorf("manifest: -arch %q; known: x64, arm64", *arch)
 	}
 	tmpl, err := os.ReadFile(*tmplPath)
 	if err != nil {
@@ -255,7 +262,7 @@ func runManifest(args []string) error {
 	if err != nil {
 		return err
 	}
-	filled, err := fillManifest(string(tmpl), id, version)
+	filled, err := fillManifest(string(tmpl), id, version, *arch)
 	if err != nil {
 		return err
 	}

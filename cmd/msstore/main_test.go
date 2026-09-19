@@ -91,7 +91,7 @@ func filledManifest(t *testing.T) (string, identity, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	filled, err := fillManifest(string(tmpl), id, version)
+	filled, err := fillManifest(string(tmpl), id, version, "x64")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestManifestFillsFromTheLedgerAndTheReservedIdentity(t *testing.T) {
 
 func TestFillRefusesALeftoverPlaceholder(t *testing.T) {
 	id := identity{IdentityName: "n", IdentityPublisher: "CN=x", PublisherDisplayName: "d"}
-	if _, err := fillManifest(`<x a="__IDENTITY_NAME__" b="__NOT_A_FIELD__"/>`, id, "1.0.0.0"); err == nil {
+	if _, err := fillManifest(`<x a="__IDENTITY_NAME__" b="__NOT_A_FIELD__"/>`, id, "1.0.0.0", "x64"); err == nil {
 		t.Fatal("a placeholder the filler does not know survived")
 	}
 }

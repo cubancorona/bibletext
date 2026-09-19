@@ -26,7 +26,11 @@ load_encoded_release_bible_key
 trap clear_release_bible_key EXIT
 
 cd cmd/desktop
-CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
+# EXPORTED, not a command prefix: `fyne package` below rebuilds the
+# executable to add its icon and version resources, and a prefix assignment
+# would not reach it — the rebuild would silently target the host.
+export GOARCH="${WIN_GOARCH:-amd64}"
+CGO_ENABLED=1 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .
 # Fyne's Windows packager rebuilds the target to add icon/version
 # resources. GOFLAGS keeps that metadata pass trimmed and stripped.
 GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe

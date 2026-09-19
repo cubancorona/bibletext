@@ -42,8 +42,23 @@ permissions:
 
 jobs:
   msix:
-    name: pack and smoke-install (x64)
-    runs-on: windows-latest
+    name: pack and smoke-install (${{ matrix.arch }})
+    # Windows on ARM runs x64 packages under emulation, so an arm64 machine is
+    # not evidence that an arm64 package works — only an arm64 package is. Both
+    # legs pack, install and render here. `arch` is the MSIX spelling, `goarch`
+    # the Go one; they differ for x64/amd64, and one name would be wrong in one
+    # of the two places it is used.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            goarch: amd64
+            runner: windows-latest
+          - arch: arm64
+            goarch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -61,6 +76,7 @@ jobs:
         shell: bash
         env:
           BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
+          WIN_GOARCH: ${{ matrix.goarch }}
         run: scripts/build-windows-exe.sh
       - name: lay out the package
         shell: bash
@@ -71,13 +87,13 @@ jobs:
           go test ./cmd/msstore
           layout=build/msstore/layout
           mkdir -p "$layout"
-          go run ./cmd/msstore manifest -out "$layout/AppxManifest.xml"
+          go run ./cmd/msstore manifest -arch "${{ matrix.arch }}" -out "$layout/AppxManifest.xml"
           cp cmd/desktop/BibleText.exe "$layout/"
           cp -r msstore/Assets "$layout/Assets"
           # ANGLE renders the app through Direct3D, which Windows provides on
           # every machine including one with no graphics driver. Without these
           # the window is never created (scripts/fetch-angle.ps1).
-          pwsh scripts/fetch-angle.ps1 -Dest "$layout"
+          pwsh scripts/fetch-angle.ps1 -Dest "$layout" -Arch "${{ matrix.arch }}"
           find "$layout" -type f | sort
       - name: makepri + makeappx
         shell: pwsh
@@ -91,13 +107,13 @@ jobs:
           & "$bin\makepri.exe" new /pr $layout /cf build\msstore\priconfig.xml /of build\msstore\resources.pri /o
           if ($LASTEXITCODE -ne 0) { throw "makepri new failed" }
           Copy-Item build\msstore\resources.pri $layout\
-          & "$bin\makeappx.exe" pack /d $layout /p build\msstore\BibleText-Windows-x64.msix /o
+          & "$bin\makeappx.exe" pack /d $layout /p build\msstore\BibleText-Windows-${{ matrix.arch }}.msix /o
           if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
-          Get-Item build\msstore\BibleText-Windows-x64.msix | Format-List Name, Length
+          Get-Item build\msstore\BibleText-Windows-${{ matrix.arch }}.msix | Format-List Name, Length
       - uses: actions/upload-artifact@v4
         with:
-          name: BibleText-Windows-x64-msix
-          path: build/msstore/BibleText-Windows-x64.msix
+          name: BibleText-Windows-${{ matrix.arch }}-msix
+          path: build/msstore/BibleText-Windows-${{ matrix.arch }}.msix
           if-no-files-found: error
       - name: smoke-install a signed copy with software OpenGL
         shell: pwsh
@@ -269,7 +285,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: msstore-smoke-screenshots
+          name: msstore-smoke-screenshots-${{ matrix.arch }}
           path: |
             build/msstore/smoke-30s.png
             build/msstore/smoke-render.png
