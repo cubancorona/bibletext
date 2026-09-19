@@ -69,6 +69,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 
 - [ANDROID.md](ANDROID.md) — before touching android/ or cmd/mobile/AndroidManifest.xml, or building, signing or shipping an APK/AAB
 - [IPAD.md](IPAD.md) — before changing touch navigation or iPad reading typography, or shipping iOS — every release must stay universal
+- [STORE_SUBMISSIONS.md](STORE_SUBMISSIONS.md) — before assuming a release reached a store: which store fronts exist, what a tag does for each, and who can do the rest
 - [MAC_APP_STORE.md](MAC_APP_STORE.md) — before building, signing or submitting a Mac Store package, or changing the bundle id, sandbox, or macOS floor
 - [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) — before any App Store or Mac App Store step — build identity, metadata, screenshots, review notes, submission
 - [PLAY_LISTING.md](PLAY_LISTING.md) — before creating the Play app record, answering Data safety or IARC, or uploading an AAB or store graphics

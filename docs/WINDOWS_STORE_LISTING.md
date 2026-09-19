@@ -231,6 +231,27 @@ under the user's config and cache directories); new files under
 `…\LocalCache\Roaming\`, which is where the Bible cache, the preferences
 and the notes land for a Store install and what an uninstall removes. Nothing in the app assumes otherwise.
 
+## The next submission should carry both architectures
+
+Since 1.2.12 the release builds an **arm64** MSIX as well as the x64 one, and
+`msstore.yml` builds and smokes both. Neither has been submitted: that workflow
+uploads artifacts and nothing more, and the Store has not moved since 1.2.10.
+
+So the next submission should include **both** packages. Partner Center accepts
+several `.msix` files in one submission, or they can be combined into a single
+`.msixbundle` — that is the decision to make when the submission is prepared.
+
+The arm64 package is not speculative. It is built with a pinned
+aarch64-targeting toolchain (`scripts/fetch-llvm-mingw.ps1`, needed because the
+`windows-11-arm` runner image ships an x86_64 gcc, so cgo cannot otherwise
+assemble aarch64), and on 19 September 2026 it was verified on a real ARM
+runner: the manifest declares `ProcessorArchitecture="arm64"`, and
+`BibleText.exe` with all three bundled ANGLE libraries are genuine ARM64
+images. It installed and passed the render smoke.
+
+Windows on ARM already runs the x64 package under emulation, so this is a
+performance and battery improvement, not a fix for something broken.
+
 ## Submission (first release, by hand)
 
 The first submission cannot be made through the API (name reservation, the
