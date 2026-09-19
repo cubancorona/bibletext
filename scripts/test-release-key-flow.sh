@@ -21,6 +21,7 @@ if [ "${BIBLETEXT_TEST_CAPTURE:-}" = "1" ]; then
   fi
   python3 - "$@" <<'PY'
 import json
+import re
 import sys
 
 print(json.dumps(sys.argv[1:]))
@@ -170,6 +171,7 @@ PY
 # key must never be configured on a GitHub runner.
 python3 - "$DESKTOP_RELEASE" "$PACKAGE_VERIFIER" "$STORE_BUILD" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
@@ -183,27 +185,82 @@ if store.exists():
         raise SystemExit("release-mac-store.sh: the desktop ledger must be restored on exit")
 
 encoded_secret = "BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}"
-if workflow.count(encoded_secret) != 3:
-    raise SystemExit("release.yml: every desktop job must receive the encoded secret")
+# Structural, not a count. This used to assert "exactly 3", which was true until
+# the day a fourth build job was added — and a hardcoded total fails on the
+# addition rather than on the mistake. What actually matters is that every job
+# which LOADS the key also RECEIVES it: a job that calls
+# load_encoded_release_bible_key without the secret in its env produces an
+# unkeyed binary and says nothing about it.
+job_blocks = re.split(r"\n  (?=[a-z][a-z0-9-]*:\n)", workflow)
+keyed = [b for b in job_blocks if "load_encoded_release_bible_key" in b]
+if len(keyed) < 3:
+    raise SystemExit(f"release.yml: found only {len(keyed)} jobs loading the bundled key; the split is broken")
+# The list above is derived FROM the key-loading call, so a job that simply
+# stopped loading the key would drop out of it and every check below would skip
+# it in silence. That is the hole the old fixed counts accidentally covered. So
+# the derivation is checked from the other end: any job that builds a shipped
+# executable must be one of the keyed ones.
+for b in job_blocks:
+    name = b.split(":", 1)[0].strip().splitlines()[-1] if ":" in b else "?"
+    ships = [ln for ln in b.splitlines()
+             if "go build" in ln and " -o " in ln and "third_party" not in ln]
+    if ships and b not in keyed:
+        raise SystemExit(
+            f"release.yml: job {name!r} builds a shipped executable but never loads the bundled key, "
+            f"so it would ship a binary that cannot reach the NKJV: {ships[0].strip()}")
+for b in keyed:
+    name = b.split(":", 1)[0].strip().splitlines()[-1] if ":" in b else "?"
+    if encoded_secret not in b:
+        raise SystemExit(f"release.yml: job {name!r} loads the bundled key but never receives the encoded secret")
 if "secrets.BIBLE_API_KEY" in workflow:
     raise SystemExit("release.yml: raw API.Bible credential must not reach GitHub Actions")
-if workflow.count("load_encoded_release_bible_key") != 3:
-    raise SystemExit("release.yml: every desktop job must isolate the encoded secret")
-# The Windows build carries a build tag between `go build` and the flags, so
-# the linker value is counted on its own rather than on a fixed prefix.
-if workflow.count('-trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w"') != 4:
-    raise SystemExit("release.yml: every desktop architecture must receive the linker value")
+# Structural for the same reason as above: what matters is that a job which
+# loads the key also CLEARS the raw provider variables first, not how many such
+# jobs there happen to be this month.
+isolate = "unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY"
+for b in keyed:
+    name = b.split(":", 1)[0].strip().splitlines()[-1] if ":" in b else "?"
+    if isolate not in b:
+        raise SystemExit(f"release.yml: job {name!r} loads the bundled key without isolating the raw provider keys")
+# Structural. A fixed total answers "are there still four of these?", which is
+# not the question — the question is whether any shipped executable is built
+# WITHOUT the key. A build that forgets it produces a binary that runs fine and
+# simply cannot reach the NKJV, which no test of the build itself would notice.
+# The Windows build carries a build tag between `go build` and the flags, so the
+# linker value is matched on its own rather than on a fixed prefix.
+for b in keyed:
+    name = b.split(":", 1)[0].strip().splitlines()[-1] if ":" in b else "?"
+    # third_party builds are TOOLS (the patched fyne CLI), not shipped
+    # artefacts; they neither need the key nor should carry it.
+    builds = [ln for ln in b.splitlines()
+              if "go build" in ln and " -o " in ln and "third_party" not in ln]
+    if not builds:
+        raise SystemExit(f"release.yml: job {name!r} loads the bundled key but builds nothing with it")
+    for ln in builds:
+        if '-ldflags="$BIBLE_KEY_LDFLAGS -s -w"' not in ln:
+            raise SystemExit(f"release.yml: job {name!r} builds an executable without the bundled-key linker value: {ln.strip()}")
 verified = (
     'BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" '
     "../../scripts/verify-release-package.sh"
 )
-# Three packaged executables carry this prefix: the universal macOS .app, the
-# Linux tarball and the Windows .exe. It was four while macOS shipped a bundle
-# per architecture; the count follows the packages, not the architectures, and
-# the two macOS slices are still built separately and joined with lipo, which
-# is why the linker-value count above stays at four.
-if workflow.count(verified) != 3:
-    raise SystemExit("release.yml: every packaged desktop executable must be key-verified")
+# Every job that builds with the key must also verify the PACKAGED result
+# carries it — packaging rebuilds the executable on more than one platform, so a
+# correct build line is not on its own evidence about the artefact that ships.
+# The Linux jobs delegate to scripts/check-linux-package.sh so that both
+# architectures assert identically; delegation is only acceptable while the
+# delegate actually does the verification, which is asserted immediately below.
+delegate = "scripts/check-linux-package.sh"
+for b in keyed:
+    name = b.split(":", 1)[0].strip().splitlines()[-1] if ":" in b else "?"
+    if verified not in b and delegate not in b:
+        raise SystemExit(f"release.yml: job {name!r} never verifies that its packaged executable carries the key")
+delegate_path = Path(sys.argv[1]).resolve().parents[2].joinpath("scripts", "check-linux-package.sh")
+if delegate in workflow:
+    if not delegate_path.exists():
+        raise SystemExit(f"release.yml delegates package verification to {delegate}, which does not exist")
+    delegate_text = delegate_path.read_text(encoding="utf-8")
+    if "verify-release-package.sh" not in delegate_text:
+        raise SystemExit(f"{delegate} is trusted with package verification but never runs verify-release-package.sh")
 if '-ldflags=$BIBLE_KEY_LDFLAGS' not in workflow:
     raise SystemExit("release.yml: Windows resource rebuild must preserve the linker value")
 if 'verify-release-key.py" "$binary_path"' not in verifier:
@@ -217,7 +274,8 @@ for line in (
     "unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY",
     "load_encoded_release_bible_key",
     "trap clear_release_bible_key EXIT",
-    'CGO_ENABLED=1 GOARCH=amd64 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .',
+    'export GOARCH="${WIN_GOARCH:-amd64}"',
+    'CGO_ENABLED=1 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o BibleText.exe .',
     'GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe',
     # The tag has to survive on BOTH lines: the packager rebuilds the
     # executable, so tagging only the build would ship desktop OpenGL and the

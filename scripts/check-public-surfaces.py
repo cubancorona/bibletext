@@ -115,14 +115,65 @@ def released_assets(text: str) -> tuple[set[str], list[str]]:
     """
     names: set[str] = set()
     unreadable: list[str] = []
-    for line in fold_continuations(text).splitlines():
-        if "gh release upload" not in line:
-            continue
-        found = set(re.findall(ASSET, line))
-        if not found:
-            unreadable.append(line.strip())
-        names.update(found)
+    # A job that ships one artefact per architecture names it through its
+    # matrix, so the literal text carries no asset name at all. Reading the line
+    # verbatim would take `BibleText-Windows-${{ matrix.goarch }}.zip` for an
+    # asset called "BibleText-Windows" and then declare the real, correct links
+    # dead. Expansion is scoped to the job that declares the values, so two jobs
+    # using the same key name for different things cannot contaminate each other.
+    for block in split_jobs(fold_continuations(text)):
+        values = matrix_values(block)
+        for line in block.splitlines():
+            if "gh release upload" not in line:
+                continue
+            for candidate in expand_matrix(line, values):
+                found = set(re.findall(ASSET, candidate))
+                if not found:
+                    unreadable.append(line.strip())
+                names.update(found)
     return names, unreadable
+
+
+def split_jobs(text: str) -> list[str]:
+    """The workflow's job blocks, so matrix values stay with their own job."""
+    return re.split(r"\n  (?=[a-z][a-z0-9-]*:\n)", text)
+
+
+def matrix_values(block: str) -> dict[str, list[str]]:
+    """Every value each matrix key takes in this job."""
+    values: dict[str, list[str]] = {}
+    in_matrix = False
+    for line in block.splitlines():
+        if re.match(r"\s*matrix:\s*$", line):
+            in_matrix = True
+            continue
+        if in_matrix:
+            # The matrix ends at the next key indented no further than `matrix:`.
+            if line.strip() and not line.startswith("        "):
+                in_matrix = False
+                continue
+            m = re.match(r"\s*-?\s*([a-z][a-z0-9_-]*):\s*(\S+)\s*$", line)
+            if m:
+                values.setdefault(m.group(1), []).append(m.group(2))
+    return values
+
+
+def expand_matrix(line: str, values: dict[str, list[str]]) -> list[str]:
+    """One line per combination of the matrix keys it mentions."""
+    used = re.findall(r"\$\{\{\s*matrix\.([a-z][a-z0-9_-]*)\s*\}\}", line)
+    if not used:
+        return [line]
+    out = [line]
+    for key in dict.fromkeys(used):
+        options = values.get(key)
+        if not options:
+            return [line]  # unknown key: leave it, the caller will report it
+        expanded = []
+        for candidate in out:
+            for value in options:
+                expanded.append(re.sub(r"\$\{\{\s*matrix\." + key + r"\s*\}\}", value, candidate))
+        out = expanded
+    return out
 
 
 def linked_assets(text: str) -> set[str]:
@@ -376,7 +427,42 @@ def self_test() -> list[str]:
     if wrapped_dep_failures := run(wrapped_deps):
         problems.append(f"a wrapped dependency line is misread: {wrapped_dep_failures}")
 
+    # A matrixed upload names its asset through the matrix, so the literal text
+    # carries no asset name at all. Read verbatim, the name below would be taken
+    # for an asset called "BibleText-Windows", and every correct link on the page
+    # would then be reported as dead.
+    matrixed = dict(clean)
+    matrixed[RELEASE_WORKFLOW] = (
+        b"  windows:\n"
+        b"    strategy:\n"
+        b"      matrix:\n"
+        b"        include:\n"
+        b"          - goarch: amd64\n"
+        b"          - goarch: arm64\n"
+        b"    steps:\n"
+        b'      - run: gh release upload "$TAG" BibleText-Windows-${{ matrix.goarch }}.zip --clobber\n'
+    )
+    matrixed[DOWNLOAD_PAGE] = (
+        b'<a href="https://example.invalid/releases/latest/download/'
+        b'BibleText-Windows-amd64.zip">Windows</a>\n'
+        b'<a href="https://example.invalid/releases/latest/download/'
+        b'BibleText-Windows-arm64.zip">Windows ARM</a>\n'
+        b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n'
+    )
+    if matrix_failures := run(matrixed):
+        problems.append(f"a matrixed upload step is misread: {matrix_failures}")
+
     violations: list[tuple[str, dict, object]] = []
+
+    # ...and the expansion must still DEMAND each leg. Without this case, matrix
+    # support could satisfy the clean fixture by switching the rule off.
+    matrix_unlinked = dict(matrixed)
+    matrix_unlinked[DOWNLOAD_PAGE] = matrixed[DOWNLOAD_PAGE].replace(
+        b'<a href="https://example.invalid/releases/latest/download/'
+        b'BibleText-Windows-arm64.zip">Windows ARM</a>\n',
+        b"",
+    )
+    violations.append(("one leg of a matrixed asset left unlinked", matrix_unlinked, pair))
 
     unlinked = dict(clean)
     unlinked[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(
