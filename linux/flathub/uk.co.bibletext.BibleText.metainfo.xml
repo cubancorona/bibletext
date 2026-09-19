@@ -76,6 +76,18 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.12" date="2026-09-19">
+      <description>
+        <p>BibleText on ARM computers.</p>
+        <ul>
+          <li>BibleText now runs natively on ARM computers: Windows on ARM, and Linux on ARM including the Raspberry Pi. Before, Windows on ARM ran the Intel build through translation and Linux on ARM had no download at all.</li>
+          <li>A note taken over a section heading is now kept against the verse the heading stands above, rather than the verse before it.</li>
+          <li>Opening a note from a shared link now scrolls to it and lights it up, instead of sometimes leaving you at the top of the chapter.</li>
+          <li>On Linux, installing the download now finishes cleanly and registers the app, so an Open in BibleText link opens the app.</li>
+          <li>Reading, search, notes and narration are otherwise unchanged.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.11" date="2026-09-17">
       <description>
         <p>Dark at sunset, and one Mac download.</p>
