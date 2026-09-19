@@ -143,7 +143,9 @@ place a fix on one does not reach the others.
     excluding Windows from the GLFW OpenGL path.
 16. The render is gated on a real capture by `scripts/check-reading-centred.py`,
     and the package manifest is `msstore/AppxManifest.xml.in`.
-17. Windows arm64 is **wired but unrun**: `scripts/fetch-angle.ps1` takes
+17. Windows arm64 is **wired, attempted, and blocked on the runner's
+    compiler** (docs/BACKLOG.md): the `windows-11-arm` image ships an x86_64
+    gcc, so cgo cannot assemble aarch64. Everything else is per-architecture: `scripts/fetch-angle.ps1` takes
     `-Arch` with a pinned hash per architecture, the MSIX manifest carries
     `ProcessorArchitecture` as a filled placeholder, and the release and
     Store workflows both matrix over `windows-11-arm`. Nothing has built or

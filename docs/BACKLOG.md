@@ -209,6 +209,34 @@ CW_USEDEFAULT cascade, the app never calls `CenterOnScreen`, and
 `doCenterOnScreen` (`window_desktop.go:155-177`) centres against `GetVideoMode`
 rather than the work area, so a clamped window is still a cascaded one.
 
+## Windows arm64 needs a native C toolchain on the runner
+
+Everything for a Windows arm64 package is in place and proven except the one
+thing that has to happen on the runner. Attempted on 19 September 2026 and
+withdrawn the same day, because it turned main red:
+
+    # runtime/cgo
+    gcc_arm64.S: Assembler messages:
+    gcc_arm64.S:30: Error: no such instruction: `stp x29,x30,[sp,'
+
+The `windows-11-arm` image ships an **x86_64 mingw gcc**, so cgo hands
+`runtime/cgo`'s aarch64 assembly to an x86 assembler and every instruction is
+unrecognised. The machine is ARM; its compiler is not.
+
+What already works and stays in the tree: `scripts/fetch-angle.ps1 -Arch` with
+one pinned sha256 per architecture (the arm64 hash verified using the x64 hash
+as a control, and all three DLLs confirmed as genuine ARM64 PE binaries); the
+MSIX manifest's `ProcessorArchitecture` as a filled, validated placeholder; and
+`GOARCH` exported so the packager's rebuild sees it. Re-enabling is one matrix
+entry in each of msstore.yml and release.yml, plus the download button.
+
+What is needed first is a native aarch64 toolchain pinned by hash, the way the
+AppImage tools and ANGLE are — llvm-mingw publishes `aarch64-w64-mingw32-clang`
+for an ARM64 Windows host — with `CC` pointed at it.
+
+Do not re-enable without that: the x64 package already runs on Windows on ARM
+under emulation, so the cost of waiting is performance, not function.
+
 ## The site must not be published before the release that first ships ARM
 
 `docs/index.html` now offers **Linux — ARM** and **Windows — ARM** downloads,
@@ -262,69 +290,6 @@ Verified end to end on an arm64 machine: `make install` exits 0, installs all
 three files, and produces `mimeinfo.cache`. `scripts/check-linux-package.sh`
 now requires all of that on every packaged tarball — proven to pass the fixed
 tarball and fail the old one.
-
-## The site must not be published before the release that first ships ARM
-
-`docs/index.html` now offers **Linux — ARM** and **Windows — ARM** downloads,
-pointing at `releases/latest/download/BibleText-Linux-arm64.tar.xz` and
-`BibleText-Windows-arm64.zip`. Nothing produces those names yet: the jobs that
-do are in this same change and have never run, so the current `latest` release
-carries neither.
-
-`scripts/check-public-surfaces.py` is deliberately forward-looking — it holds
-the page equal to what the release WORKFLOW uploads, not to what is published —
-so it is satisfied, correctly. The gap is one of ordering, and it is invisible
-to every check in the repository:
-
-  - publish the site before the next release and both buttons 404;
-  - `scripts/publish-site.sh` is the only publisher and has no coupling to
-    release state, so nothing stops that happening.
-
-So: **cut the release first, confirm both assets are attached, then publish the
-site.** Worth a check in publish-site.sh that every
-`releases/latest/download/<name>` the page links actually exists on the latest
-release — that would close it permanently rather than relying on remembering.
-
-## `make install` fails on the Linux tarball, and always has
-
-Found on 19 September 2026 the first time anything ever ran the installer, on a
-real packaged arm64 tarball. It affects every architecture, because it is in the
-packaging template rather than the build.
-
-The packager writes the Makefile's icon variable without a file extension:
-
-    Icon := "uk.co.bibletext"
-
-while it packages the icon as `usr/local/share/pixmaps/uk.co.bibletext.png`. So
-the install target's third line
-
-    install -Dm00644 usr/local/share/pixmaps/$(Icon) $(DESTDIR)$(PREFIX)/share/pixmaps/$(Icon)
-
-cannot find its file. `make install` installs the executable and the desktop
-entry, then exits NON-ZERO with `install: cannot stat`. A reader following the
-documented route gets an application that works, no icon, and an error they have
-no way to interpret. `make uninstall` and `make user-install` carry the same
-mistake on their own icon lines.
-
-It is upstream in fyne.io/tools (`cmd/fyne/internal/commands/package-unix.go`
-sets `Icon: appIDOrName`), and we already patch that exact file for Linux
-(`patches/fyne-tools-1.7.2-linux-scheme-handler.patch`), so the fix belongs
-there. Two shapes are possible and the choice matters:
-
-  - give the Makefile template `$(Icon).png` on its four pixmap/icon lines,
-    leaving the .desktop entry's `Icon=` without an extension, which is the
-    freedesktop convention for theme lookup; or
-  - append `.png` to the Icon value itself, which fixes the Makefile but also
-    puts `Icon=uk.co.bibletext.png` in the desktop entry.
-
-The first is the correct one. The patches apply with `-F 0` and no fuzz, and
-the existing patch already edits this template, so the hunks must be regenerated
-rather than hand-extended.
-
-`scripts/check-linux-package.sh` now runs the installer on every packaged
-tarball, and tolerates THIS failure by name and only while it is the only
-install error — any other one fails the build. So the tolerance disappears the
-moment the fix lands, and cannot quietly cover a second defect meanwhile.
 
 ## What we ship has largely never been run
 

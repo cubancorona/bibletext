@@ -371,9 +371,12 @@ jobs:
           - goarch: amd64
             angle: x64
             runner: windows-latest
-          - goarch: arm64
-            angle: arm64
-            runner: windows-11-arm
+          # arm64 is NOT listed yet. The windows-11-arm runner image ships an
+          # x86_64 mingw gcc, so cgo hands runtime/cgo's gcc_arm64.S to an x86
+          # assembler and the build dies on "no such instruction: stp x29,x30".
+          # A native aarch64 toolchain (llvm-mingw) has to be installed and
+          # pinned first; see docs/BACKLOG.md. Everything else here is already
+          # per-architecture, so this becomes one line when that lands.
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
