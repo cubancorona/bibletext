@@ -200,11 +200,32 @@ func TestTheLinuxPackagesShipTheAppsOwnExecutableName(t *testing.T) {
 			"(amd64 and arm64) -- an architecture that stops passing --executable silently reverts", got)
 	}
 
-	// macOS is the deliberate exception; if that line disappears this test's
-	// scope note is stale and the exception needs re-deciding, not ignoring.
-	if !strings.Contains(wf, "-os darwin --app-id uk.co.bibletext --executable desktop") {
-		t.Error("the darwin packaging line no longer names its executable 'desktop'; " +
-			"this test documents that as a deliberate exception, so update the note above")
+	// Windows was never affected -- the same packager is told the name there
+	// too -- but nothing held it to that, so both lines could drop --executable
+	// together and revert to BibleText.exe's generic default with no test
+	// noticing. The two must stay in step; scripts/test-release-key-flow.sh
+	// only proves they match EACH OTHER, which a joint edit satisfies.
+	for _, f := range []string{".github/workflows/release.yml", "scripts/build-windows-exe.sh"} {
+		if !strings.Contains(readRepoFile(t, f), "-os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe") {
+			t.Errorf("%s no longer names the Windows executable BibleText.exe; "+
+				"without it the packager falls back to the cmd/desktop directory name", f)
+		}
+	}
+
+	// macOS is the deliberate exception, and it is set in THREE places -- the
+	// release workflow, the Mac App Store script and the sandbox rehearsal.
+	// Pinning only the workflow would leave the channel that actually ships to
+	// the Store unguarded, which is the wrong one to miss.
+	for _, f := range []string{
+		".github/workflows/release.yml",
+		"scripts/release-mac-store.sh",
+		"scripts/run-mac-sandbox-test.sh",
+	} {
+		if !strings.Contains(readRepoFile(t, f), "--executable desktop") {
+			t.Errorf("%s no longer names its darwin executable 'desktop'; this test "+
+				"documents that as a deliberate exception, so update the note above "+
+				"rather than letting the three files drift apart", f)
+		}
 	}
 
 	// The check that runs in CI must pin the name too, or the workflow could

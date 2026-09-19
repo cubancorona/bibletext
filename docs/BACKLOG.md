@@ -333,13 +333,27 @@ or accepting the orphan. Decide before the next release ships.
 
 ### Still open: macOS ships `CFBundleExecutable: desktop`
 
-The same packaging line runs for darwin (`--executable desktop`), so
-`BibleText.app/Contents/MacOS/desktop` is what Activity Monitor, the audio and
-microphone indicators, and crash reports name. It was deliberately left alone:
-that binary is signed, notarised and shipped through the App Store, so renaming
-it is a release decision rather than a packaging fix — the bundle id does not
-change and updates are unaffected, but it wants its own deliberate pass rather
-than riding along with a Linux fix. `TestTheLinuxPackagesShipTheAppsOwnExecutableName`
+The same packaging line runs for darwin, in three places —
+`.github/workflows/release.yml`, `scripts/release-mac-store.sh` and
+`scripts/run-mac-sandbox-test.sh` — so `BibleText.app/Contents/MacOS/desktop` is
+what Activity Monitor, `ps`, Console and every crash report name.
+
+It was left alone on the stated grounds that the binary is "signed, notarised
+and shipped through the App Store". Two thirds of that is wrong and the record
+should not keep it: there is **no notarisation step anywhere in this
+repository** — `docs/MAC_APP_STORE.md` says the Store was chosen over plain
+notarisation — and the direct-download zip is not signed either, only the Mac
+App Store build is. So the real cost of renaming is a signing re-run on one
+channel, not a notarisation cycle on two.
+
+What a rename does NOT disturb, each keyed on the bundle id or on the
+`NewWithID` identifier rather than the executable name: the App Sandbox
+container, the Fyne preferences directory holding notes and reading position,
+the Keychain service, Universal Links, and the code-signing identifier. The app
+requests no TCC-gated capability. The Store update path replaces the bundle
+wholesale, so no orphan can remain there — the one real hazard is a reader who
+unzips the direct download *over* an existing `BibleText.app` instead of
+letting Finder replace it, and ends up with both binaries inside the bundle. `TestTheLinuxPackagesShipTheAppsOwnExecutableName`
 asserts the darwin line still reads `desktop`, so this entry cannot go stale
 silently.
 
