@@ -77,7 +77,7 @@ Status is separate: `shipping` (a release or store submission carries it),
 | Linux | x86_64 | Snap Store | ready | runner | 22, 23 |
 | Linux | arm64 | Snap Store | ready | hardware | 22, 23, 26 |
 | Linux | x86_64 | Flathub | ready | runner | 24 |
-| Linux | arm64 | Flathub | untried | none | D |
+| Linux | arm64 | Flathub | ready | runner | 22, 24, 26 |
 | Linux | any | AppImageHub catalogue | untried | none | — |
 
 ## Divergences
@@ -218,9 +218,10 @@ something nobody got round to.
   runtime are pinned by sha256 to the same standard as the x86_64 pair.
   Shipping an AppImage built with an unpinned tool would be worse than not
   shipping one.
-- **D. Flathub aarch64** — `flatpak/flathub.json` names `x86_64` until the
-  `aarch64` leg of `linux-stores.yml` has gone green. The manifest is built for
-  both there, so this is a **pending proof, not a policy**.
+- **D. Flathub aarch64** — *resolved 19 September 2026.* It was held until the
+  `aarch64` leg of `linux-stores.yml` had gone green rather than enabled on
+  optimism; both the build and the smoke passed, so `flatpak/flathub.json` now
+  names both architectures.
 
 ## Not yet proven
 
