@@ -564,7 +564,8 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	if state == nil || state.Bible == nil {
 		return "", 0, 0, -1, false
 	}
-	s := stripVerseMarkers(state, book, chapter, collapseSpaces(raw))
+	flat := collapseSpaces(raw)
+	s := stripVerseMarkers(state, book, chapter, flat)
 	corpus, spans := chapterProseIn(state, book, chapter)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
@@ -616,6 +617,40 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	}
 
 	idx := locate(s)
+	if idx < 0 {
+		// A selection that will not locate may be carrying a publisher's
+		// heading, which is drawn between verses but is in no verse and so is
+		// absent from the corpus. Remove it and try once more.
+		//
+		// It runs ONLY here, and only its result is adopted, which is a second
+		// line of defence rather than the first. The first is that every trim
+		// demands confirmation — the verse number the heading stands above, or
+		// a fragment that is genuinely a prefix or suffix of the heading's own
+		// words. Moving this up front does not break anything today, so the
+		// placement is not what makes it safe; it is what keeps it safe if the
+		// matching is ever loosened. A repair that can only touch a selection
+		// already known to be unresolvable cannot move an ordinary reader's
+		// note to the wrong verse, whatever the matching decides.
+		if h := stripHeadings(state, book, chapter, flat); h != flat {
+			if r := stripVerseMarkers(state, book, chapter, h); r != "" {
+				if j := locate(r); j >= 0 {
+					s, idx = r, j
+				}
+			}
+		}
+		// Nothing located, and nothing left after the headings were removed:
+		// the selection was ONLY editorial matter. It still belongs somewhere,
+		// and the model already says where — a heading stands above a verse.
+		if idx < 0 {
+			if v, ok := headingOnlySelectionVerse(state, book, chapter, flat, span); ok {
+				// No quotation: the reader selected a heading, so quoting the
+				// verse would attribute words they did not choose, and quoting
+				// the heading would put editorial matter into scripture. The
+				// reference alone is the honest answer.
+				return "", v, v, -1, true
+			}
+		}
+	}
 	if idx < 0 {
 		return "", 0, 0, -1, false
 	}
@@ -811,6 +846,183 @@ func completeTrailingSentenceIn(state *AppState, book string, chapter int, s str
 // short tails, which is how a marker once leaked into a shared card). A number
 // appearing inside verse prose never matches its own verse's opening, so it is
 // never touched.
+// stripHeadings removes the publisher's section headings from a raw selection.
+//
+// A heading is editorial matter. It is drawn between verses but belongs to no
+// verse, so it is absent from the prose corpus the normalize searches
+// (chapterProseIn builds that from verse text alone). A selection that opens at
+// a heading therefore cannot be located at all: the normalize declines, and the
+// caller keeps the raw span the native side reported — which began at the verse
+// ABOVE the heading, because a heading sits after that verse's text and before
+// the next verse's number. The note then highlights a verse nobody selected.
+//
+// Only an occurrence the rendered text CONFIRMS is removed: the heading must be
+// followed by the number of the verse it stands above (Heading.BeforeVerse).
+// That is what stops a heading whose words also occur in scripture from eating
+// them — Psalm 23's "The LORD Is My Shepherd" stands directly above a verse
+// that opens with those very words, and a looser match would delete the verse's
+// own opening and leave the selection unlocatable in a new way. The number is
+// left in place for stripVerseMarkers, which runs next and knows how to check
+// it against the verse body.
+func stripHeadings(state *AppState, book string, chapter int, s string) string {
+	if state == nil || state.Bible == nil {
+		return s
+	}
+	for _, h := range state.Bible.Headings[book][chapter] {
+		text := collapseSpaces(h.Text)
+		if text == "" || h.BeforeVerse <= 0 {
+			continue
+		}
+		num := strconv.Itoa(h.BeforeVerse)
+		s = trimLeadingHeading(s, text, num)
+		s = trimTrailingHeading(s, text)
+		s = removeWholeHeadings(s, text, num)
+	}
+	return strings.TrimSpace(s)
+}
+
+// headingOnlySelectionVerse reports the verse a selection belongs to when that
+// selection is nothing but a publisher's heading, or a piece of one.
+//
+// Heading.BeforeVerse already records the answer — "the verse this heading
+// stands above" — and it is the only answer that survives the note leaving this
+// device. A note anchored to a heading would not place for a reader on another
+// translation, and a shared link opens the public-domain web reader, whose
+// headings are not the licensed edition's.
+//
+// TWO conditions, and the second is what keeps this from stealing ordinary
+// selections. The words must be part of the heading, AND the span the native
+// side reported must name the verse immediately ABOVE that heading — which is
+// what a drag inside the heading produces, because the last verse number before
+// a heading belongs to the verse above it. A reader who selects the word
+// "Gentiles" down in a verse gets that verse's own span and is left alone, even
+// though the same word appears in the heading. Without the span test this would
+// quietly move such a selection to the heading's verse.
+func headingOnlySelectionVerse(state *AppState, book string, chapter int, s string, span selSpan) (int, bool) {
+	if state == nil || state.Bible == nil || !span.valid() {
+		return 0, false
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	for _, h := range state.Bible.Headings[book][chapter] {
+		text := collapseSpaces(h.Text)
+		if text == "" || h.BeforeVerse <= 0 || !strings.Contains(text, s) {
+			continue
+		}
+		if above, ok := verseAbove(state, book, chapter, h.BeforeVerse); ok && span.lo == above {
+			return h.BeforeVerse, true
+		}
+	}
+	return 0, false
+}
+
+// verseAbove is the chapter's last verse before n — the verse a heading that
+// stands above n sits after, and therefore the verse a drag inside that heading
+// is reported against.
+func verseAbove(state *AppState, book string, chapter, n int) (int, bool) {
+	best, found := 0, false
+	for _, v := range state.Bible.GetChapter(book, chapter) {
+		if v.Verse < n && v.Verse > best {
+			best, found = v.Verse, true
+		}
+	}
+	return best, found
+}
+
+// trimLeadingHeading removes PART of a heading from the front of a selection.
+//
+// A drag that began inside the heading's own words leaves a fragment of it at
+// the front, and because a drag can start in the middle of a word the fragment
+// is a byte suffix of the heading rather than a word-aligned one —
+// "pirit Falls on the Gentiles" is a shape a reader really produces.
+//
+// What separates such a fragment from a selection that began in the verse
+// ABOVE the heading is that the latter carries that verse's words first and
+// then the heading ENTIRE, so it is not a suffix of the heading at all. The
+// verse number still has to follow, as everywhere here, and the number is left
+// in place for stripVerseMarkers.
+func trimLeadingHeading(s, text, num string) string {
+	i := numberTokenIndex(s, num)
+	if i <= 0 {
+		return s
+	}
+	head := strings.TrimSpace(s[:i])
+	if head == "" || !strings.HasSuffix(text, head) {
+		return s
+	}
+	return strings.TrimSpace(s[i:])
+}
+
+// trimTrailingHeading removes a heading, or the FRONT of one, from the end of a
+// selection — the shape a drag makes when it begins in a verse and stops inside
+// the heading below it. It is the mirror of trimLeadingHeading: a fragment left
+// at the end is a byte prefix of the heading, where one left at the front is a
+// byte suffix.
+//
+// There is no verse number after a trailing heading to confirm the match, so
+// the confirmation is the caller's instead: this only runs when the selection
+// failed to locate, and the result is only adopted when the trimmed selection
+// locates. A trim that removed something real would not locate either, and is
+// discarded.
+func trimTrailingHeading(s, text string) string {
+	for n := len(text); n > 0; n-- {
+		frag := strings.TrimSpace(text[:n])
+		if frag == "" {
+			continue
+		}
+		if strings.HasSuffix(s, " "+frag) {
+			return strings.TrimSpace(s[:len(s)-len(frag)-1])
+		}
+	}
+	return s
+}
+
+// removeWholeHeadings removes complete headings wherever they sit in the
+// selection — a drag that runs from the verse above, through the heading, into
+// the verses below carries one in its middle.
+func removeWholeHeadings(s, text, num string) string {
+	marker := text + " " + num
+	for from := 0; from <= len(s)-len(marker); {
+		i := strings.Index(s[from:], marker)
+		if i < 0 {
+			break
+		}
+		i += from
+		end := i + len(marker)
+		// The heading must start at a word boundary, and the verse number must
+		// end at one — otherwise "4" would match inside "44", and a heading
+		// that happens to end a longer phrase would be clipped out of the
+		// middle of it.
+		if (i != 0 && s[i-1] != ' ') || (end < len(s) && s[end] != ' ') {
+			from = i + len(text)
+			continue
+		}
+		s = s[:i] + s[i+len(text)+1:]
+		from = i
+	}
+	return s
+}
+
+// numberTokenIndex is the offset of num in s as a whole space-delimited token,
+// or -1. It is what stops "4" being found inside "44".
+func numberTokenIndex(s, num string) int {
+	for from := 0; from <= len(s)-len(num); {
+		i := strings.Index(s[from:], num)
+		if i < 0 {
+			return -1
+		}
+		i += from
+		end := i + len(num)
+		if (i == 0 || s[i-1] == ' ') && (end == len(s) || s[end] == ' ') {
+			return i
+		}
+		from = i + len(num)
+	}
+	return -1
+}
+
 func stripVerseMarkers(state *AppState, book string, chapter int, s string) string {
 	for _, v := range state.Bible.GetChapter(book, chapter) {
 		body := collapseSpaces(v.Text)
