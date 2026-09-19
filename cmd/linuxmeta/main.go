@@ -316,7 +316,34 @@ func renderDesktop(in inputs, icon string) string {
 	}, "\n") + "\n"
 }
 
-func renderSnapcraft(in inputs) string {
+// snapArch carries the two things that genuinely differ between architectures
+// in the snap, and the second one is not cosmetic.
+//
+// `platforms` is what snapcraft builds for. The GNU triplet is the directory
+// ALSA looks in for its plugins, and the `layout` below binds a REAL path: an
+// arm64 snap carrying the x86_64 triplet compiles, packs, installs and launches
+// perfectly, and then has no narration audio at all — a defect visible only to a
+// reader who presses play. Verified on an arm64 machine by checking that the
+// bound directory actually resolves inside the snap's confined namespace.
+//
+// Snap layouts take no variables and snapcraft will not vary one per platform,
+// so a single committed snapcraft.yaml cannot serve both. The committed file is
+// the amd64 render; the arm64 build re-renders with -arch arm64 first.
+type snapArch struct {
+	Platform string // the snapcraft `platforms:` key
+	Triplet  string // the multiarch tuple under /usr/lib
+}
+
+var snapArches = map[string]snapArch{
+	"amd64": {Platform: "amd64", Triplet: "x86_64-linux-gnu"},
+	"arm64": {Platform: "arm64", Triplet: "aarch64-linux-gnu"},
+}
+
+// defaultSnapArch is what the committed outputs are rendered for, so that
+// TestCommittedFilesAreTheGeneratorsOutput keeps comparing like with like.
+const defaultSnapArch = "amd64"
+
+func renderSnapcraft(in inputs, a snapArch) string {
 	l, p := in.Listing, in.Product
 	var d strings.Builder
 	d.WriteString("  " + l.Intro + "\n\n")
@@ -345,7 +372,7 @@ source-code: %s
 confinement: strict
 grade: stable
 platforms:
-  amd64:
+  %s:
 
 apps:
   %s:
@@ -358,8 +385,8 @@ apps:
       - home
 
 layout:
-  /usr/lib/x86_64-linux-gnu/alsa-lib:
-    bind: $SNAP/usr/lib/x86_64-linux-gnu/alsa-lib
+  /usr/lib/%s/alsa-lib:
+    bind: $SNAP/usr/lib/%s/alsa-lib
   /usr/share/alsa:
     bind: $SNAP/usr/share/alsa
   /etc/asound.conf:
@@ -374,7 +401,10 @@ parts:
       - libasound2-data
 `, l.Executable, l.Executable, p.ProductName, in.Version, l.Summary, d.String(), l.ProjectLicense,
 		p.SiteBase, p.SiteBase, p.SourceRepo, p.SourceRepo,
-		l.Executable, l.Executable, l.Executable)
+		a.Platform,
+		l.Executable, l.Executable,
+		a.Triplet, a.Triplet,
+		l.Executable)
 }
 
 // flatpakSource is where the manifest's first source points: the checked-out
@@ -476,7 +506,7 @@ type output struct {
 	Image *image.NRGBA
 }
 
-func renderAll(repo string, in inputs) ([]output, error) {
+func renderAll(repo string, in inputs, a snapArch) ([]output, error) {
 	icon, err := loadIcon(filepath.Join(repo, "cmd", "desktop", "Icon.png"))
 	if err != nil {
 		return nil, err
@@ -491,7 +521,7 @@ func renderAll(repo string, in inputs) ([]output, error) {
 		{Path: filepath.Join("linux", "icons", "hicolor", "256x256", "apps", id+".png"), Image: renderIcon(icon, 256)},
 		{Path: filepath.Join("linux", "icons", "hicolor", "512x512", "apps", id+".png"), Image: renderIcon(icon, 512)},
 		{Path: filepath.Join("snap", "gui", "icon.png"), Image: renderIcon(icon, 256)},
-		{Path: filepath.Join("snap", "snapcraft.yaml"), Text: renderSnapcraft(in)},
+		{Path: filepath.Join("snap", "snapcraft.yaml"), Text: renderSnapcraft(in, a)},
 		{Path: filepath.Join("flatpak", id+".yml"), Text: renderFlatpakManifest(in, flatpakSource{})},
 	}, nil
 }
@@ -534,11 +564,17 @@ func main() {
 	case "render":
 		fs := flag.NewFlagSet("render", flag.ContinueOnError)
 		repo := fs.String("repo", ".", "repository root")
+		arch := fs.String("arch", defaultSnapArch, "architecture the snap is rendered for (amd64 or arm64)")
 		if err = fs.Parse(os.Args[2:]); err == nil {
+			a, ok := snapArches[*arch]
+			if !ok {
+				err = fmt.Errorf("unknown -arch %q; known: amd64, arm64", *arch)
+				break
+			}
 			var in inputs
 			if in, err = readInputs(*repo); err == nil {
 				var outs []output
-				if outs, err = renderAll(*repo, in); err == nil {
+				if outs, err = renderAll(*repo, in, a); err == nil {
 					err = writeOutputs(*repo, outs)
 				}
 			}

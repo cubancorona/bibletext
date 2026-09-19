@@ -29,7 +29,7 @@ func loadInputs(t *testing.T) inputs {
 // hand edit, a stale render or a stray file fails here, and the fix is to
 // run `go run ./cmd/linuxmeta render` again.
 func TestCommittedFilesAreTheGeneratorsOutput(t *testing.T) {
-	outs, err := renderAll(repo, loadInputs(t))
+	outs, err := renderAll(repo, loadInputs(t), snapArches[defaultSnapArch])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,4 +353,57 @@ func readFile(t *testing.T, rel string) string {
 		t.Fatal(err)
 	}
 	return strings.ReplaceAll(string(b), "\r\n", "\n")
+}
+
+// The snap's ALSA layout binds a real path, and the path is architecture
+// specific. This is the defect it exists for: an arm64 snap rendered with the
+// x86_64 triplet builds, packs, installs and LAUNCHES perfectly, and then has
+// no narration audio — nothing in a build or a launch smoke can see it, because
+// nothing goes looking for a sound plugin until a reader presses play.
+//
+// So every architecture must bind its own triplet, and must NOT carry another
+// architecture's. Asserting only the first half would pass on a template that
+// emitted both.
+func TestEverySnapArchitectureBindsItsOwnAlsaPath(t *testing.T) {
+	in := loadInputs(t)
+	for name, a := range snapArches {
+		got := renderSnapcraft(in, a)
+
+		wantPlatform := "platforms:\n  " + name + ":"
+		if !strings.Contains(got, wantPlatform) {
+			t.Errorf("%s: snapcraft.yaml does not declare %q; snapcraft would build the wrong architecture",
+				name, wantPlatform)
+		}
+
+		wantBind := "bind: $SNAP/usr/lib/" + a.Triplet + "/alsa-lib"
+		if !strings.Contains(got, wantBind) {
+			t.Errorf("%s: no layout binding %s — the snap would ship without reachable ALSA plugins",
+				name, a.Triplet)
+		}
+
+		for other, b := range snapArches {
+			if other == name {
+				continue
+			}
+			if strings.Contains(got, b.Triplet) {
+				t.Errorf("%s: carries %s's triplet %q as well; snapd binds a path that does not exist on this architecture",
+					name, other, b.Triplet)
+			}
+		}
+	}
+}
+
+// The committed snapcraft.yaml is one architecture's render, so the flag has to
+// actually change something. A generator that ignored -arch would satisfy the
+// test above for whichever arch it hard-coded.
+func TestTheArchitectureFlagChangesTheRender(t *testing.T) {
+	in := loadInputs(t)
+	amd := renderSnapcraft(in, snapArches["amd64"])
+	arm := renderSnapcraft(in, snapArches["arm64"])
+	if amd == arm {
+		t.Fatal("amd64 and arm64 render identically; the architecture is being ignored")
+	}
+	if !strings.Contains(amd, "x86_64-linux-gnu") || !strings.Contains(arm, "aarch64-linux-gnu") {
+		t.Error("the renders do not carry their own triplets")
+	}
 }

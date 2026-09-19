@@ -29,8 +29,19 @@ permissions:
 
 jobs:
   binary:
-    name: build the keyed executable (amd64)
-    runs-on: ubuntu-24.04
+    name: build the keyed executable (${{ matrix.arch }})
+    # A matrix rather than a second job, so the two architectures cannot drift
+    # apart: anything added here is added to both by construction. arm64
+    # runners are free on public repositories.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -58,20 +69,20 @@ jobs:
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
           trap clear_release_bible_key EXIT
-          (cd cmd/desktop && CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
+          (cd cmd/desktop && CGO_ENABLED=1 GOARCH=${{ matrix.arch }} go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh build/linux/bibletext build/linux
           scripts/check-glibc-floor.sh build/linux/bibletext 2.35
           install -Dm755 build/linux/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-binary
+          name: linux-binary-${{ matrix.arch }}
           path: build/linux/bibletext
           if-no-files-found: error
           retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
-          name: snap-stage
+          name: snap-stage-${{ matrix.arch }}
           path: build/snap-stage
           if-no-files-found: error
           retention-days: 3
@@ -87,7 +98,7 @@ jobs:
           go-version: "1.24"
       - uses: actions/download-artifact@v4
         with:
-          name: linux-binary
+          name: linux-binary-amd64
           path: build/linux
       - name: install the packaging and smoke tools
         run: |
@@ -137,9 +148,23 @@ jobs:
           if-no-files-found: ignore
 
   snap:
-    name: snap
+    name: snap (${{ matrix.arch }})
     needs: binary
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The triplet travels with the architecture because the ALSA assertion
+        # below checks a real path inside the squashfs. Deriving it here rather
+        # than hardcoding one is the difference between checking the arm64 snap
+        # and checking nothing on arm64 for ever.
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            triplet: x86_64-linux-gnu
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            triplet: aarch64-linux-gnu
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5 # verify-release-package.sh reads the build info with go version -m
@@ -147,9 +172,17 @@ jobs:
           go-version: "1.24"
       - uses: actions/download-artifact@v4
         with:
-          name: snap-stage
+          name: snap-stage-${{ matrix.arch }}
           path: build/snap-stage
       - run: chmod 755 build/snap-stage/bin/bibletext
+      # Snap layouts take no variables, so the committed manifest is the amd64
+      # render and every other architecture re-renders first. The layout binds a
+      # REAL path: a snap carrying another architecture's ALSA triplet builds,
+      # installs and launches perfectly, and is silent.
+      - name: render the snap for ${{ matrix.arch }}
+        run: |
+          go run ./cmd/linuxmeta render -arch ${{ matrix.arch }}
+          grep -q '^  ${{ matrix.arch }}:' snap/snapcraft.yaml
       - id: snapcraft
         uses: snapcore/action-build@v1
       - name: install, assert the entry, verify the executable, smoke
@@ -167,7 +200,7 @@ jobs:
           grep -q '^Exec=.*bibletext %u$' "$entry"
           grep -q '^Categories=Education;Spirituality;$' "$entry"
           unsquashfs -q -d "$RUNNER_TEMP/snapfs" "$SNAP_FILE"
-          test -f "$RUNNER_TEMP/snapfs/usr/lib/x86_64-linux-gnu/alsa-lib/libasound_module_pcm_pulse.so"
+          test -f "$RUNNER_TEMP/snapfs/usr/lib/${{ matrix.triplet }}/alsa-lib/libasound_module_pcm_pulse.so"
           unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
           source scripts/release-bible-key.sh
           load_encoded_release_bible_key
@@ -176,18 +209,29 @@ jobs:
           scripts/smoke-linux-launch.sh snap bibletext
       - uses: actions/upload-artifact@v4
         with:
-          name: bibletext-snap
+          name: bibletext-snap-${{ matrix.arch }}
           path: ${{ steps.snapcraft.outputs.snap }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: snap-smoke
+          name: snap-smoke-${{ matrix.arch }}
           path: smoke-snap-*.png
           if-no-files-found: ignore
 
   flatpak:
-    name: Flatpak (keyless, verification only)
-    runs-on: ubuntu-24.04
+    name: Flatpak ${{ matrix.arch }} (keyless, verification only)
+    # Flathub builds for x86_64 and aarch64. Building both here is what lets
+    # flatpak/flathub.json name both with evidence rather than optimism; until
+    # the aarch64 leg is green, that file stays x86_64 on purpose.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
@@ -199,10 +243,10 @@ jobs:
         with:
           manifest-path: flatpak/uk.co.bibletext.BibleText.yml
           bundle: uk.co.bibletext.BibleText.flatpak
-          arch: x86_64
+          arch: ${{ matrix.arch }}
           cache-key: flatpak-builder-${{ hashFiles('flatpak/**', 'go.sum') }}
           upload-artifact: true
-          artifact-name: uk.co.bibletext.BibleText-x86_64
+          artifact-name: uk.co.bibletext.BibleText-${{ matrix.arch }}
           mirror-screenshots-url: https://dl.flathub.org/media
       - name: lint the manifest, the metainfo and the repository
         shell: bash
@@ -219,14 +263,22 @@ jobs:
           fi
 
   flatpak-smoke:
-    name: smoke the Flatpak
+    name: smoke the Flatpak (${{ matrix.arch }})
     needs: flatpak
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: uk.co.bibletext.BibleText-x86_64
+          name: uk.co.bibletext.BibleText-${{ matrix.arch }}
           path: .
       - name: install the bundle, assert the exported entry, smoke, record
         shell: bash
@@ -249,7 +301,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: flatpak-smoke
+          name: flatpak-smoke-${{ matrix.arch }}
           path: |
             smoke-flatpak-*.png
             flatpak-demo.mp4
