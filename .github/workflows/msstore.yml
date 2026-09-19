@@ -55,12 +55,9 @@ jobs:
           - arch: x64
             goarch: amd64
             runner: windows-latest
-          # arm64 is NOT listed yet. The windows-11-arm runner image ships an
-          # x86_64 mingw gcc, so cgo hands runtime/cgo's gcc_arm64.S to an x86
-          # assembler and the build dies on "no such instruction: stp x29,x30".
-          # A native aarch64 toolchain (llvm-mingw) has to be installed and
-          # pinned first; see docs/BACKLOG.md. Everything else here is already
-          # per-architecture, so this becomes one line when that lands.
+          - arch: arm64
+            goarch: arm64
+            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +74,17 @@ jobs:
           go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
       - name: build BibleText.exe
         shell: bash
+      # The runner image's gcc is x86_64 even on the ARM machine, so cgo cannot
+      # assemble aarch64. This puts a native aarch64-targeting toolchain on PATH
+      # and points CC at it; it is a no-op on x64, which already has one.
+      - name: aarch64 C toolchain
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $bin = & scripts/fetch-llvm-mingw.ps1 -Dest "$env:RUNNER_TEMP\toolchains" | Select-Object -Last 1
+          "$bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "CC=$bin\aarch64-w64-mingw32-clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$bin\aarch64-w64-mingw32-clang.exe" --version
         env:
           BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
           WIN_GOARCH: ${{ matrix.goarch }}
