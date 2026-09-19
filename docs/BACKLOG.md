@@ -209,33 +209,29 @@ CW_USEDEFAULT cascade, the app never calls `CenterOnScreen`, and
 `doCenterOnScreen` (`window_desktop.go:155-177`) centres against `GetVideoMode`
 rather than the work area, so a clamped window is still a cascaded one.
 
-## Windows arm64 needs a native C toolchain on the runner
+## FIXED: Windows arm64
 
-Everything for a Windows arm64 package is in place and proven except the one
-thing that has to happen on the runner. Attempted on 19 September 2026 and
-withdrawn the same day, because it turned main red:
+Attempted, withdrawn and fixed on 19 September 2026. The `windows-11-arm` image
+ships an **x86_64 mingw gcc**, so cgo handed `runtime/cgo`'s aarch64 assembly to
+an x86 assembler:
 
-    # runtime/cgo
-    gcc_arm64.S: Assembler messages:
     gcc_arm64.S:30: Error: no such instruction: `stp x29,x30,[sp,'
 
-The `windows-11-arm` image ships an **x86_64 mingw gcc**, so cgo hands
-`runtime/cgo`'s aarch64 assembly to an x86 assembler and every instruction is
-unrecognised. The machine is ARM; its compiler is not.
+The machine is ARM; its compiler was not. `scripts/fetch-llvm-mingw.ps1`
+installs llvm-mingw's aarch64-hosted, aarch64-targeting toolchain, pinned by
+sha256 the way ANGLE and the AppImage tools are. Both the Store package and the
+release zip build it.
 
-What already works and stays in the tree: `scripts/fetch-angle.ps1 -Arch` with
-one pinned sha256 per architecture (the arm64 hash verified using the x64 hash
-as a control, and all three DLLs confirmed as genuine ARM64 PE binaries); the
-MSIX manifest's `ProcessorArchitecture` as a filled, validated placeholder; and
-`GOARCH` exported so the packager's rebuild sees it. Re-enabling is one matrix
-entry in each of msstore.yml and release.yml, plus the download button.
+Verified on the runner rather than assumed: the MSIX declares
+`ProcessorArchitecture="arm64"`, and `BibleText.exe`, `libEGL.dll`,
+`libGLESv2.dll` and `d3dcompiler_47.dll` are all genuine ARM64 images
+(`0xAA64`). It installed and passed the render smoke.
 
-What is needed first is a native aarch64 toolchain pinned by hash, the way the
-AppImage tools and ANGLE are — llvm-mingw publishes `aarch64-w64-mingw32-clang`
-for an ARM64 Windows host — with `CC` pointed at it.
+Neither blocker anyone expected was real: ANGLE publishes `angle-arm64` at the
+tag already pinned, and the compiler was solvable by shipping one.
 
-Do not re-enable without that: the x64 package already runs on Windows on ARM
-under emulation, so the cost of waiting is performance, not function.
+Still `runner`, not `field` — nobody has run it on a real Windows ARM machine.
+The local VM is the obvious next step.
 
 ## The site must not be published before the release that first ships ARM
 

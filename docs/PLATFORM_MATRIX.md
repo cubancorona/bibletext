@@ -23,6 +23,7 @@ sat in the to-do list where it belonged. So:
 | Proof | Means |
 | --- | --- |
 | `hardware` | the artefact we actually ship was run on a real machine of that architecture |
+| `field` | in real use — readers or testers are running the shipped artefact |
 | `runner` | run in CI only — headless, software OpenGL, no sound device, no store signing |
 | `builds` | compiles and packages; nothing has ever launched it |
 | `none` | never attempted |
@@ -31,6 +32,14 @@ Two rules keep the column honest. **The artefact must be the shipped one** — a
 locally-signed development build of the same source is not the Store package,
 and a simulator is not hardware. **Someone must have looked** — a job that
 compiles a thing and uploads it proves `builds`, however green it is.
+
+`field` is the strongest evidence and the weakest guarantee. It says the thing
+works for real people on real devices, which no runner can tell you. It says
+nothing about the NEXT build, because nobody is watching for a regression —
+so a `field` row still needs a repeatable check, and the absence of one is
+recorded under "Not yet proven" rather than pretended away. Where the repo
+itself evidences nothing, `field` rests on the maintainer's own knowledge of
+the store consoles; it is deliberately not a claim about anything in the tree.
 
 Status is separate: `shipping` (a release or store submission carries it),
 `ready` (built and smoked, not yet released), `proven` (runs, no release path),
@@ -46,20 +55,20 @@ Status is separate: `shipping` (a release or store submission carries it),
 | macOS | x86_64 | Direct download (.zip) | shipping | builds | 1, 2, 4 |
 | macOS | arm64 | Build from source (local checkout) | shipping | hardware | 5 |
 | macOS | x86_64 | Build from source | untried | none | 5 |
-| iOS | arm64 | App Store — iPhone | shipping | builds | 6, 7, 8 |
+| iOS | arm64 | App Store — iPhone | shipping | field | 6, 7, 8 |
 | iPadOS | arm64 | App Store — iPad | shipping | builds | 6, 7, 8 |
 | iOS | arm64 | Development install to a device | proven | hardware | 7 |
 | iOS | arm64 | Simulator | proven | runner | 9 |
 | iOS | x86_64 | anything | excluded | none | A |
-| Android | arm64-v8a | Play — closed testing (AAB) | shipping | builds | 10, 11, 12 |
+| Android | arm64-v8a | Play — closed testing (AAB) | shipping | field | 10, 11, 12 |
 | Android | armeabi-v7a, x86, x86_64 | Play — closed testing (AAB) | shipping | builds | 10, 11 |
 | Android | all four ABIs | GitHub Releases — universal APK | shipping | builds | 10, 12 |
 | Android | arm64-v8a | Local install / adb (debug APK) | proven | hardware | 11 |
 | Android | any | Play — production | untried | none | — |
 | Windows | x64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 18 |
 | Windows | x64 | Direct download (.zip) | shipping | builds | 14, 15 |
-| Windows | arm64 | Microsoft Store (MSIX) | untried | none | B, 17 |
-| Windows | arm64 | Direct download (.zip) | untried | none | B, 17 |
+| Windows | arm64 | Microsoft Store (MSIX) | ready | runner | 14, 15, 16, 17, 18 |
+| Windows | arm64 | Direct download (.zip) | ready | builds | 14, 15, 17 |
 | Windows | x86 (32-bit) | anything | untried | none | — |
 | Linux | x86_64 | Direct download (.tar.xz) | shipping | builds | 19, 20, 25 |
 | Linux | arm64 | Direct download (.tar.xz) | ready | hardware | 19, 20, 25, 26 |
@@ -143,13 +152,15 @@ place a fix on one does not reach the others.
     excluding Windows from the GLFW OpenGL path.
 16. The render is gated on a real capture by `scripts/check-reading-centred.py`,
     and the package manifest is `msstore/AppxManifest.xml.in`.
-17. Windows arm64 is **wired, attempted, and blocked on the runner's
-    compiler** (docs/BACKLOG.md): the `windows-11-arm` image ships an x86_64
-    gcc, so cgo cannot assemble aarch64. Everything else is per-architecture: `scripts/fetch-angle.ps1` takes
-    `-Arch` with a pinned hash per architecture, the MSIX manifest carries
-    `ProcessorArchitecture` as a filled placeholder, and the release and
-    Store workflows both matrix over `windows-11-arm`. Nothing has built or
-    run yet, which is why both rows remain `untried` / `none`.
+17. Windows arm64 needs a **toolchain we ship ourselves**. The
+    `windows-11-arm` image's gcc is x86_64, so cgo cannot assemble aarch64 —
+    `runtime/cgo` dies on its first instruction.
+    `scripts/fetch-llvm-mingw.ps1` installs a pinned llvm-mingw that both runs
+    on an ARM64 host and targets `aarch64-w64-mingw32`, with `CC` pointed at
+    it. A compiler is as much a part of what ships as a library is, so it is
+    pinned by sha256 like ANGLE and the AppImage tools. Verified on the runner:
+    the MSIX declares arm64 and its executable and all three ANGLE libraries
+    are genuine ARM64 images.
 18. **Native code for package identity** (`GetCurrentPackageFullName`) to tell
     Store-installed from loose builds, and the browser is started directly via
     `AssocQueryStringW` rather than `ShellExecute`.
@@ -199,12 +210,10 @@ something nobody got round to.
 
 - **A. iOS x86_64** — Apple ships no x86_64 iOS devices. The only x86_64 iOS
   target is the simulator on an Intel Mac host.
-- **B. Windows arm64** — **no longer excluded.** The blocker we assumed — that
-  ANGLE was x64-only — did not exist: `angle-arm64` is published at the tag
-  already pinned, and its hash was verified using the x64 hash as a control. The
-  pipeline is in place; see divergence 17 and "Not yet proven". It stays
-  `untried` until a build has actually run, because a workflow that has never
-  executed is not evidence of anything.
+- **B. Windows arm64** — **no longer excluded, and now built.** Neither
+  assumed blocker was real: ANGLE publishes `angle-arm64` at the tag already
+  pinned, and the runner's missing aarch64 compiler is supplied by a pinned
+  llvm-mingw. Both channels build it; see divergence 17.
 - **C. Linux arm64 AppImage** — held until an arm64 appimagetool and type-2
   runtime are pinned by sha256 to the same standard as the x86_64 pair.
   Shipping an AppImage built with an unpinned tool would be worse than not
@@ -225,20 +234,25 @@ The honest to-do list, in proof-level terms.
   19 September 2026 it applies the Fyne patches and refuses to launch a build
   whose atomic preferences writer is missing, measured against a control string.
   That closed the axis that mattered most, and left three.
-- **No shipped Android artefact has been run.** Every recorded run installs the
-  debug APK; the universal sideload APK and the Play AAB have never been
-  installed or launched, and the build is host-locked to one machine. The
-  compile gap is now closed — `scripts/check-android-pane.sh` cross-compiles
-  android/arm64 in CI, the twin of the iOS gate — but compiling is not running.
-- **The iOS store artefact has never been run on a device.** The on-device
-  evidence in the repo concerns development builds.
+- **Android and iOS are in real use, and neither has a repeatable check.**
+  The Play closed-testing build is with testers on real devices and the iOS App
+  Store build has many installs, so both work — that is `field`, and it is
+  better evidence than any runner could give. What neither has is anything that
+  would catch a regression before readers do: no Android CI beyond the new
+  compile gate, no automated launch of either shipped artefact, and an Android
+  build still host-locked to one machine. The armeabi-v7a, x86 and x86_64
+  slices of the AAB remain `builds`: they ship inside it, but nothing indicates
+  a tester is on one.
+- **The iPad build is `builds`, not `field`.** The universal binary ships and
+  iPhone use is established; nothing distinguishes an iPad install, and
+  `UIDeviceFamily` — the single property that makes it universal — is never
+  read back out of the exported `.ipa` (divergence 7).
 - **The Linux tarball's installer now runs on every packaged tarball**
   (`scripts/check-linux-package.sh`), and the first run of it found `make
   install` had always failed — see docs/BACKLOG.md. Fixed. What is still
   unproven is launching the installed application from where it installs.
-- **Windows arm64 has a complete pipeline that has never run.** Both
-  workflows matrix over `windows-11-arm`, but no arm64 executable, package
-  or render has been produced. The one machine that could smoke it is the
-  local Windows ARM VM.
+- **Windows arm64 has never been run by a person.** It builds, packs,
+  installs and renders on the runner, which is `runner` and not `field`. The
+  local Windows ARM VM is the machine that could change that.
 - The owner's outstanding Linux hardware pass needs **an x86_64 machine or a
   cloud desktop**: the arm64 VM explicitly cannot stand in for it.
