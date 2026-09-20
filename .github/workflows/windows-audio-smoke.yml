@@ -1,13 +1,24 @@
 # Windows audio smoke test — plays a REAL narration chapter through the REAL
-# desktop audio engine (oto/WASAPI) on a real Windows machine and walks the
-# whole controller state machine: download → buffering → playing → ±15s skip
-# → pause → resume → natural end → continuous-playback stop.
+# desktop audio engine (oto) and walks the whole controller state machine:
+# download → buffering → playing → ±15s skip → pause → resume → natural end →
+# continuous-playback stop.
 # Manual trigger: gh workflow run windows-audio-smoke.yml
 #
-# This is the strongest automated Windows-audio evidence available without
-# recording sound: samples are decoded and submitted to WASAPI, playback
-# position advances in real time, and the drain at the end fires the same
-# ENDED path that drives continuous chapter playback for real listeners.
+# WHERE IT CAN ACTUALLY PROVE ANYTHING. A GitHub-hosted Windows runner is a
+# headless VM with no audio endpoint. oto's Windows driver tries WASAPI, then
+# WinMM, and when neither finds a device it installs a silent nullContext
+# without returning an error — so every state above can go green with nothing
+# reaching a speaker, and the drain at the end, which is timed by a real
+# device, then fails in a way that reads as a defect in the app. The test now
+# asks which backend carried the samples and stops with that diagnosis rather
+# than continuing; the honest reading of a failure here is "this runner has no
+# audio", not "the app is broken".
+#
+# To exercise the real WASAPI path, run it on a Windows machine that has an
+# audio endpoint; a virtualised guest qualifies, and the test names the backend
+# it got so the evidence is in the log rather than assumed.
+# Kept on windows-latest so the compile and the state machine are still
+# covered, and so the null-sink diagnosis is what a dispatch reports.
 name: Windows audio smoke
 
 on:

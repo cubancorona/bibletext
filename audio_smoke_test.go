@@ -12,8 +12,14 @@ package bibletext
 // whole controller state machine: download → buffering → playing → ±15s skip
 // → pause → resume → seek to the end → natural ENDED → continuous-playback
 // advance (one-book Bible, so it stops cleanly at the "end of the Bible").
-// This is the closest an automated check gets to "the audio works on this
-// platform" short of recording the output.
+//
+// IT ONLY MEANS THAT ON A MACHINE WITH AN AUDIO ENDPOINT. oto's Windows driver
+// falls back to a silent nullContext when neither WASAPI nor WinMM finds a
+// device, without returning an error, so on a headless runner every state
+// above can go green with nothing reaching a speaker — and the drain at the
+// end, which is timed by a real device, then fails and looks like a defect in
+// the app. The backend is checked below for exactly that reason: this test
+// says "the audio works here" only when it can show which backend carried it.
 
 import (
 	"testing"
@@ -63,6 +69,20 @@ func TestDesktopAudioEndToEnd(t *testing.T) {
 	waitFor(t, "PLAYING (download + decode + device up)", 120*time.Second, func() bool {
 		return gAudio.isPlaying() && gAudio.playingFingerprint() == fp
 	})
+
+	// WHAT IS ACTUALLY CARRYING THE SAMPLES. Asked here, once playback has
+	// started, because the driver is chosen asynchronously while the first
+	// buffer is prepared — ask any earlier and the answer is "nothing yet".
+	if mods, probed := audioBackendModules(); probed {
+		if len(mods) == 0 {
+			t.Fatalf("no audio backend is loaded in this process: oto found no endpoint and " +
+				"installed its silent nullContext, so every state this test checks can pass " +
+				"with nothing reaching a speaker. Run it where an audio endpoint exists " +
+				"and the backend names itself: AUDIOSES.DLL and MMDevAPI.dll for WASAPI, " +
+				"winmm.dll for WinMM.")
+		}
+		t.Logf("✓ audio backend in use: %v", mods)
+	}
 
 	t.Log("skip +15s while playing…")
 	engineSkip(15)

@@ -105,7 +105,12 @@ into.
   countingSeeker seek, natural-end chapter advance — and below them the WASAPI
   backend, the ALSA `dlopen` and its missing-`libasound` failure mode, and
   platform mixers — are provable only by `windows-audio-smoke.yml`, the
-  `audiosmoke` test, and the Linux ARM VM.
+  `audiosmoke` test, and the Linux ARM VM. With one caveat that was long
+  implicit: the WASAPI backend is NOT proved on a GitHub runner, which has no
+  audio endpoint and silently gets oto's nullContext instead. The smoke test
+  now names the backend it got and fails with that diagnosis, so the WASAPI
+  row needs a Windows machine with an audio endpoint; a virtualised guest
+  qualifies, and the backend identifies itself by the DLLs it loads.
 - **Pixels.** All three desktops share the Fyne/GLFW/GL code, but the Mac
   renders through Apple's Metal-backed GL while CI smokes render llvmpipe and
   real users render vendor drivers. Antialiasing, glyph rasterisation and
