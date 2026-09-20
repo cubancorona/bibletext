@@ -69,6 +69,13 @@ jobs:
       - name: Android cross-compile (android/arm64, no packaging)
         run: scripts/check-android-pane.sh
 
+      # And the JAVA on the other side of that boundary, which the step above
+      # does not reach: BtBridge and BtAudio are compiled only by a full
+      # build-android.sh run on a machine with the SDK, so a mistake there
+      # survived every green run until a release build.
+      - name: Android Java compile (android/*.java, no dexing)
+        run: scripts/check-android-java.sh
+
       - name: iOS deployment target regression
         run: scripts/test-ios-deployment-target.sh
 

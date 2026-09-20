@@ -31,6 +31,9 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
+import android.os.Build;
+import android.content.pm.PackageManager;
 import java.util.Arrays;
 
 /**
@@ -3193,10 +3196,59 @@ public final class BtBridge {
      * MediaStore and share that URI. Side effect: the card also lands in the
      * user's Pictures — which is reasonable for an image the user is exporting.
      */
+    /**
+     * A SHARE THE READER STARTED MUST NEVER END IN SILENCE.
+     *
+     * Publishing through MediaStore needs no permission from API 29, where
+     * each app owns what it inserts. Below that it writes to shared storage,
+     * so WRITE_EXTERNAL_STORAGE is needed — and it is a RUNTIME permission
+     * only from API 23. The app's floor is 21, where the manifest's
+     * maxSdkVersion="28" declaration is granted at install and nothing has to
+     * be asked; the window that was broken is 23..28, where the permission was
+     * declared, never requested, and the insert therefore refused. Every
+     * failure then returned quietly: the reader
+     * tapped Share as image and nothing happened at all — no sheet, no error,
+     * not even a wrong result to report. Two of the paths out of this method
+     * were a bare `return` and a `Log.w` nobody sees on a phone.
+     *
+     * The request is fire-and-forget, matching maybeRequestNotifPermission:
+     * GoNativeActivity overrides no onRequestPermissionsResult, so there is no
+     * callback to resume on, and the honest thing is to ask and say so rather
+     * than pretend the share is still coming.
+     */
+    private static void shareNotice(String msg) {
+        try {
+            if (activity != null) Toast.makeText(activity, msg, Toast.LENGTH_LONG).show();
+        } catch (Throwable ignored) {}
+    }
+
+    private static boolean needsLegacyStoragePermission() {
+        // 23 is the floor because checkSelfPermission and requestPermissions
+        // do not exist below it — and below it there is nothing to ask for,
+        // the manifest declaration having been granted at install.
+        if (Build.VERSION.SDK_INT < 23 || Build.VERSION.SDK_INT >= 29 || activity == null) {
+            return false;
+        }
+        try {
+            return activity.checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE")
+                    != PackageManager.PERMISSION_GRANTED;
+        } catch (Throwable t) {
+            return false; // cannot tell; let the insert speak for itself
+        }
+    }
+
     public static void shareImage(final String path) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (activity == null) return;
+                if (needsLegacyStoragePermission()) {
+                    try {
+                        activity.requestPermissions(
+                                new String[]{"android.permission.WRITE_EXTERNAL_STORAGE"}, 0xB1B8);
+                    } catch (Throwable ignored) {}
+                    shareNotice("BibleText needs permission to save the card. Allow it, then share again.");
+                    return;
+                }
                 android.net.Uri uri = null;
                 try {
                     java.io.File f = new java.io.File(path);
@@ -3206,7 +3258,10 @@ public final class BtBridge {
                     cv.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
                     android.content.ContentResolver cr = activity.getContentResolver();
                     uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
-                    if (uri == null) return;
+                    if (uri == null) {
+                        shareNotice("Could not prepare the card to share.");
+                        return;
+                    }
                     java.io.InputStream in = new java.io.FileInputStream(f);
                     java.io.OutputStream out = cr.openOutputStream(uri);
                     byte[] buf = new byte[8192];
@@ -3221,6 +3276,7 @@ public final class BtBridge {
                     activity.startActivity(Intent.createChooser(i, null));
                 } catch (Throwable t) {
                     android.util.Log.w("BtBridge", "shareImage failed", t);
+                    shareNotice("Could not share the card.");
                     if (uri != null) {
                         try { activity.getContentResolver().delete(uri, null, null); } catch (Throwable ignored) {}
                     }

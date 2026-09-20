@@ -960,7 +960,7 @@ off, John 3:1-3, Matthew 3:1 with parallels, Psalm 3:1 with a title note,
 Psalm 3:2 empty). Look at those before and after the change; the seven
 findings above are all visible in the "before" set.
 
-## Share as image fails silently on Android 6.0-9.0 (API 23-28)
+## FIXED: Share as image failed silently on Android 6.0-9.0 (API 23-28) — 20 September 2026
 
 Not a 1.2.7 regression: the behaviour is as old as the feature, and Android has
 never shipped through a store, so nothing in the wild is affected. It surfaced
@@ -994,6 +994,50 @@ Two things to fix, and they are separable:
 Whether to supersede the in-review build for this is a judgement call about
 reach: API 23-28 is a small and shrinking slice, and the closed testers will
 almost certainly be on API 29+. Fixing it in the next release is defensible.
+
+**FIXED 20 September 2026, both halves.**
+
+The silence went first, because it is the part that applies on every API: the
+two ways out of `shareImage` that said nothing — a bare `return` when the
+insert yields a null URI, and the `catch (Throwable)` that only reached logcat
+— now both put a message on screen. A share the reader started cannot end in
+silence, whatever the cause.
+
+The permission is requested on 23..28, fire-and-forget, matching
+`maybeRequestNotifPermission`: GoNativeActivity overrides no
+`onRequestPermissionsResult`, so there is no callback to resume on, and the
+honest behaviour is to ask and say "allow it, then share again" rather than
+leave a share the reader thinks is still coming. The feature was NOT gated off
+below 29 — the option that also drops the manifest declaration — because
+telling a reader why something needs permission is better than removing the
+action from under them; if the unused-permission concern returns, gating is
+still available and this entry records the trade.
+
+**The floor is 23, not 21.** `Context.checkSelfPermission` and
+`Activity.requestPermissions` do not exist below API 23, and the app's minSdk
+is 21 (asserted twice in `scripts/build-android.sh`). On 21-22 the manifest
+declaration is granted at install, so there is nothing to ask for; the guard
+reads `SDK_INT >= 23 && SDK_INT < 29`. This is the kind of detail that is
+invisible to reading and obvious to a compiler — which is why the second half
+of this fix is a new gate.
+
+### The gap that let it live: nothing compiled the Java
+
+`scripts/check-android-pane.sh` closed this gap for the android-tagged GO
+sources. The Java on the other side of the JNI boundary — `BtBridge` and
+`BtAudio`, 78 classes carrying the native selectable TextView, the selection
+menu, the media session and the foreground audio service — had no gate
+anywhere. `go build ./...`, `go vet`, the whole suite and both mobile pane
+checks are blind to it, and the only thing that ever compiled it was a full
+`scripts/build-android.sh` run on one machine with the SDK installed.
+
+`scripts/check-android-java.sh` now compiles it in seconds with the same recipe
+the real build uses (`javac --release 8 -Xlint:-options -cp android-36/android.jar`),
+fails rather than skips on a runner with no SDK, and refuses to pass if it
+produced implausibly few classes — a gate that compiles nothing reads as a
+pass. It runs in `ci.yml` beside its Go twin. Proved against two controls: an
+ordinary typo, and a Java 9 API used in an API 8 source, which is what makes
+`--release 8` load-bearing rather than decorative.
 
 
 ## Phone landscape reading — shipped on both phone platforms — DONE
