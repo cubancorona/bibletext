@@ -106,3 +106,33 @@ func stripVerseGapMarks(s string) string {
 	}
 	return b.String()
 }
+
+// verseOutboundText is a verse as it LEAVES the app: the publisher's words with
+// the app's own typography resolved exactly as outboundText resolves it.
+//
+// It exists because the share pipeline has to compare the two. A selection is
+// taken from the DRAWN page, where the divine name is set in small capitals;
+// the corpus it is located in is built from the publisher's Verse.Text, where
+// the same word is "Lord". Neither side can simply be stripped to the other:
+// outboundText deliberately resolves a small capital to the CAPITAL, so that a
+// pasted verse keeps the Tetragrammaton/Adonai distinction the small capitals
+// carry (small_caps_draw.go). "Lord" and "LORD" are both right, for different
+// places.
+//
+// So both sides are put in the SAME outbound form instead, and this is it: draw
+// the verse the way the page draws it, then resolve it the way the way out
+// resolves it. Running the real applySmallCaps rather than re-deriving the rule
+// is deliberate — a second implementation of which letters shrink would drift
+// from the first, and the locate would start failing on whichever verses the
+// two disagreed about.
+func verseOutboundText(v Verse) string {
+	if len(v.SmallCaps) == 0 {
+		return outboundText(v.Text)
+	}
+	var b strings.Builder
+	b.Grow(len(v.Text))
+	for _, r := range applySmallCaps(v, []verseRun{{Text: v.Text}}) {
+		b.WriteString(r.Text)
+	}
+	return outboundText(b.String())
+}

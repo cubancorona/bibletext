@@ -226,7 +226,11 @@ func shareQuoteForPassage(state *AppState, book string, chapter, lo, hi int) (qu
 		if v.Verse < lo || v.Verse > hi {
 			continue
 		}
-		t := collapseSpaces(v.Text)
+		// The same outbound form chapterProse is built in, for the same
+		// reason: this synthetic selection is matched against that corpus, and
+		// a passage holding a divine name would otherwise be assembled in the
+		// publisher's mixed case and never found.
+		t := collapseSpaces(verseOutboundText(v))
 		if t == "" {
 			continue
 		}
@@ -378,7 +382,10 @@ func chapterProseIn(state *AppState, book string, chapter int) (string, []verseS
 	var b strings.Builder
 	var spans []verseSpan
 	for _, v := range state.Bible.GetChapter(book, chapter) {
-		t := collapseSpaces(v.Text)
+		// The corpus is what a normalized selection is matched against, so it
+		// has to be in the same outbound form the selection is put into —
+		// see verseOutboundText.
+		t := collapseSpaces(verseOutboundText(v))
 		if t == "" {
 			continue
 		}
@@ -565,7 +572,20 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 		return "", 0, 0, -1, false
 	}
 	flat := collapseSpaces(raw)
-	s := stripVerseMarkers(state, book, chapter, flat)
+	// The app's own typography comes off here, and AFTER stripVerseMarkers
+	// rather than before it: that strip matches the SUPERSCRIPT verse tokens,
+	// and outboundText would have turned them into ordinary digits first,
+	// leaving bare numbers embedded in the quote.
+	//
+	// collapseSpaces has already dealt with the no-break join and the
+	// paragraph indent, because strings.Fields treats them as whitespace. What
+	// outboundText adds is the two the share path had no way to reach: the
+	// small capitals the divine name is DRAWN in, and an omitted verse's
+	// "[36]" mark. Both matter twice over — they would ride out into the
+	// reader's message as characters no publisher sent, and neither exists in
+	// chapterProse, so the locate below could never find a selection carrying
+	// one and every such share fell back to the legacy probe path.
+	s := outboundText(stripVerseMarkers(state, book, chapter, flat))
 	corpus, spans := chapterProseIn(state, book, chapter)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
