@@ -30,7 +30,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nThe Android APK is attached manually after the desktop assets land.\n\nmacOS note: the apps are unsigned - on first launch, right-click the app and choose Open.')"
+          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nThe Android APK is attached manually after the desktop assets land.\n\nmacOS note: the apps are unsigned - on first launch, right-click the app and choose Open.\n\nLinux note: the executable is now called bibletext, not desktop. If you installed an earlier tarball with make install, the old binary is left behind - remove it with sudo rm -f /usr/local/bin/desktop /usr/bin/desktop (or rm -f ~/.local/bin/desktop for a user install).')"
+          # The Linux note above is for the 19 September 2026 executable rename
+          # (cmd/desktop became cmd/bibletext, so the tarball stopped installing
+          # a generic /usr/bin/desktop). It tells a reader who installed an
+          # earlier tarball how to remove the binary the new package's
+          # `make uninstall` no longer names. Drop it once the releases that
+          # shipped `desktop` are far enough back to be unlikely - it is a
+          # migration note, not a standing one.
           # --draft is load-bearing: publishing immediately reassigns
           # /releases/latest to this tag while the build jobs are still running,
           # so the download page would point at assets that are not available

@@ -378,8 +378,13 @@ releases**, and until 19 September 2026 `make install` exited non-zero on the
 icon line, so the population that completed an install is smaller still. The
 orphan is inert — the new install overwrites the desktop entry, so nothing
 launches it; the only live harm is someone typing `desktop` from shell history
-and silently running 1.2.12 forever. **Action: one sentence in the next
-release's notes naming the exact `rm`.**
+and silently running 1.2.12 forever.
+
+**DONE 20 September 2026:** the line is in the release-notes string in
+`.github/workflows/release.yml`, so the first release carrying the rename tells
+a reader how to remove the binary the new package's `make uninstall` no longer
+names. It is a migration note, not a standing one — the comment beside it says
+to drop it once the releases that shipped `desktop` are far enough back.
 
 **Action before the next tag: the Fyne apps directory still prints the OLD
 command.** Verified live on 19 September 2026 — apps.fyne.io/apps/uk.co.bibletext/
